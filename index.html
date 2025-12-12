@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="HN Hotels Private Limited - A Bangalore-based hospitality company operating heritage restaurants and cafes including Hamza Hotel (Est. 1918), Hamza Express, and Nawabi Chai House.">
+    <meta name="keywords"
+        content="HN Hotels, Hamza Hotel, Hamza Express, Nawabi Chai House, Bangalore restaurants, heritage hospitality, biryani, Irani chai">
+    <meta name="author" content="HN Hotels Private Limited">
+    <meta name="theme-color" content="#1a1a2e">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://hnhotels.in/">
+    <meta property="og:title" content="HN Hotels Private Limited | Heritage Hospitality">
+    <meta property="og:description"
+        content="Operating Bangalore's beloved heritage brands - Hamza Hotel (Est. 1918), Hamza Express, and Nawabi Chai House.">
+    <meta property="og:image" content="https://hnhotels.in/assets/og-image.jpg">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://hnhotels.in/">
+    <meta property="twitter:title" content="HN Hotels Private Limited | Heritage Hospitality">
+    <meta property="twitter:description"
+        content="Operating Bangalore's beloved heritage brands - Hamza Hotel (Est. 1918), Hamza Express, and Nawabi Chai House.">
+
+    <title>HN Hotels Private Limited | Heritage Hospitality Company</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* ═══════════════════════════════════════════════════════════
+           CSS CUSTOM PROPERTIES
+           ═══════════════════════════════════════════════════════════ */
+        :root {
+            /* Corporate Colors */
+            --primary-dark: #1a1a2e;
+            --primary-accent: #16213e;
+            --gold: #c9a050;
+            --gold-light: #d4b06a;
+            --white: #ffffff;
+            --off-white: #f8f9fa;
+            --gray-100: #f1f3f5;
+            --gray-200: #e9ecef;
+            --gray-500: #6c757d;
+            --gray-700: #495057;
+            --gray-900: #212529;
+
+            /* Brand Colors */
+            --hamza-brown: #713520;
+            --hamza-tan: #D2B48C;
+            --nawabi-brown: #AC7E54;
+            --nawabi-wheat: #E9D1A9;
+
+            /* Typography */
+            --font-display: 'Playfair Display', Georgia, serif;
+            --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+            /* Spacing */
+            --space-xs: 0.5rem;
+            --space-sm: 1rem;
+            --space-md: 2rem;
+            --space-lg: 4rem;
+            --space-xl: 8rem;
+
+            /* Animation */
+            --ease: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           RESET & BASE
+           ═══════════════════════════════════════════════════════════ */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--white);
+            color: var(--gray-900);
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+            transition: all 0.3s var(--ease);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           NAVIGATION
+           ═══════════════════════════════════════════════════════════ */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            z-index: 1000;
+            transition: all 0.4s var(--ease);
+            background: transparent;
+        }
+
+        .nav.scrolled {
+            background: rgba(26, 26, 46, 0.98);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-logo {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--white);
+            letter-spacing: 0.05em;
+        }
+
+        .nav-logo span {
+            color: var(--gold);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: var(--space-md);
+            list-style: none;
+        }
+
+        .nav-links a {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.85);
+            letter-spacing: 0.02em;
+            padding: var(--space-xs) 0;
+            position: relative;
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--gold);
+            transition: width 0.3s var(--ease);
+        }
+
+        .nav-links a:hover {
+            color: var(--white);
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        .nav-toggle {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            cursor: pointer;
+            padding: 10px;
+        }
+
+        .nav-toggle span {
+            width: 25px;
+            height: 2px;
+            background: var(--white);
+            transition: all 0.3s var(--ease);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           HERO SECTION
+           ═══════════════════════════════════════════════════════════ */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-accent) 100%);
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c9a050' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+
+        .hero-content {
+            text-align: center;
+            max-width: 900px;
+            padding: var(--space-md);
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            color: var(--gold);
+            padding: 0.6rem 1.5rem;
+            border: 1px solid var(--gold);
+            margin-bottom: var(--space-md);
+            opacity: 0;
+            animation: fadeUp 1s var(--ease) 0.3s forwards;
+        }
+
+        .hero-title {
+            font-family: var(--font-display);
+            font-size: clamp(3rem, 8vw, 6rem);
+            font-weight: 700;
+            color: var(--white);
+            line-height: 1.1;
+            margin-bottom: var(--space-sm);
+            opacity: 0;
+            animation: fadeUp 1s var(--ease) 0.5s forwards;
+        }
+
+        .hero-title span {
+            color: var(--gold);
+        }
+
+        .hero-subtitle {
+            font-family: var(--font-display);
+            font-size: clamp(1.2rem, 3vw, 1.8rem);
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: var(--space-md);
+            opacity: 0;
+            animation: fadeUp 1s var(--ease) 0.7s forwards;
+        }
+
+        .hero-divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
+            margin: var(--space-md) auto;
+            opacity: 0;
+            animation: fadeUp 1s var(--ease) 0.9s forwards;
+        }
+
+        .hero-divider-line {
+            width: 60px;
+            height: 1px;
+            background: var(--gold);
+            opacity: 0.5;
+        }
+
+        .hero-divider-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--gold);
+            transform: rotate(45deg);
+        }
+
+        .hero-tagline {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 600px;
+            margin: 0 auto;
+            opacity: 0;
+            animation: fadeUp 1s var(--ease) 1.1s forwards;
+        }
+
+        .hero-cta {
+            margin-top: var(--space-lg);
+            opacity: 0;
+            animation: fadeUp 1s var(--ease) 1.3s forwards;
+        }
+
+        .btn {
+            font-family: var(--font-body);
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            padding: 1rem 2.5rem;
+            border: 2px solid var(--gold);
+            background: transparent;
+            color: var(--gold);
+            cursor: pointer;
+            transition: all 0.4s var(--ease);
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: var(--gold);
+            color: var(--primary-dark);
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-xs);
+            opacity: 0;
+            animation: fadeUp 1s var(--ease) 1.5s forwards;
+        }
+
+        .scroll-indicator span {
+            font-size: 0.7rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .scroll-indicator .arrow {
+            width: 16px;
+            height: 16px;
+            border-right: 2px solid var(--gold);
+            border-bottom: 2px solid var(--gold);
+            transform: rotate(45deg);
+            animation: scrollBounce 2s infinite;
+        }
+
+        @keyframes fadeUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes scrollBounce {
+
+            0%,
+            100% {
+                transform: rotate(45deg) translateY(0);
+            }
+
+            50% {
+                transform: rotate(45deg) translateY(8px);
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           SECTION COMMON
+           ═══════════════════════════════════════════════════════════ */
+        section {
+            padding: var(--space-xl) var(--space-md);
+        }
+
+        .section-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: var(--space-lg);
+        }
+
+        .section-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.25em;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: var(--space-sm);
+        }
+
+        .section-title {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 700;
+            color: var(--gray-900);
+            line-height: 1.2;
+        }
+
+        .section-divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
+            margin: var(--space-md) auto;
+        }
+
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s var(--ease);
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           ABOUT SECTION
+           ═══════════════════════════════════════════════════════════ */
+        .about {
+            background: var(--off-white);
+        }
+
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-lg);
+            align-items: center;
+        }
+
+        .about-content h3 {
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+            color: var(--gray-900);
+            margin-bottom: var(--space-md);
+        }
+
+        .about-content p {
+            font-size: 1.05rem;
+            color: var(--gray-700);
+            margin-bottom: var(--space-sm);
+            line-height: 1.8;
+        }
+
+        .about-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-md);
+            margin-top: var(--space-lg);
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: var(--space-md);
+            background: var(--white);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-number {
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--gold);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: var(--space-xs);
+        }
+
+        .about-image {
+            position: relative;
+        }
+
+        .about-image-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-sm);
+        }
+
+        .about-image-grid img {
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .about-image-grid img:first-child {
+            grid-row: span 2;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           BRANDS SECTION
+           ═══════════════════════════════════════════════════════════ */
+        .brands {
+            background: var(--white);
+        }
+
+        .brands-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-md);
+        }
+
+        .brand-card {
+            background: var(--off-white);
+            padding: var(--space-lg);
+            text-align: center;
+            border-radius: 12px;
+            transition: all 0.4s var(--ease);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .brand-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            transition: height 0.4s var(--ease);
+        }
+
+        .brand-card.hamza-hotel::before {
+            background: var(--gray-900);
+        }
+
+        .brand-card.hamza-express::before {
+            background: var(--hamza-brown);
+        }
+
+        .brand-card.nawabi::before {
+            background: var(--nawabi-brown);
+        }
+
+        .brand-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+        }
+
+        .brand-card:hover::before {
+            height: 6px;
+        }
+
+        .brand-logo {
+            height: 120px;
+            width: auto;
+            max-width: 200px;
+            margin: 0 auto var(--space-md);
+            object-fit: contain;
+        }
+
+        .brand-name {
+            font-family: var(--font-display);
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: var(--space-xs);
+        }
+
+        .brand-tagline {
+            font-size: 0.9rem;
+            color: var(--gray-500);
+            font-style: italic;
+            margin-bottom: var(--space-sm);
+        }
+
+        .brand-description {
+            font-size: 0.95rem;
+            color: var(--gray-700);
+            line-height: 1.7;
+            margin-bottom: var(--space-md);
+        }
+
+        .brand-link {
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--gold);
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        .brand-link:hover {
+            color: var(--gray-900);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           COMPANY INFO SECTION
+           ═══════════════════════════════════════════════════════════ */
+        .company-info {
+            background: var(--primary-dark);
+            color: var(--white);
+        }
+
+        .company-info .section-title {
+            color: var(--white);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--space-lg);
+        }
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: var(--space-lg);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-card h3 {
+            font-family: var(--font-display);
+            font-size: 1.3rem;
+            color: var(--gold);
+            margin-bottom: var(--space-md);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .info-card h3::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: var(--gold);
+            border-radius: 2px;
+        }
+
+        .info-table {
+            width: 100%;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: var(--space-sm) 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .info-value {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--white);
+            text-align: right;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           LEGAL SECTION
+           ═══════════════════════════════════════════════════════════ */
+        .legal {
+            background: var(--off-white);
+        }
+
+        .legal-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-md);
+        }
+
+        .legal-card {
+            background: var(--white);
+            padding: var(--space-lg);
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s var(--ease);
+        }
+
+        .legal-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .legal-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--gold);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto var(--space-md);
+            font-size: 1.5rem;
+        }
+
+        .legal-card h4 {
+            font-family: var(--font-display);
+            font-size: 1.1rem;
+            color: var(--gray-900);
+            margin-bottom: var(--space-xs);
+        }
+
+        .legal-card p {
+            font-size: 0.9rem;
+            color: var(--gray-500);
+            margin-bottom: var(--space-sm);
+        }
+
+        .legal-value {
+            font-family: monospace;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            background: var(--gray-100);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: 4px;
+            word-break: break-all;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           CONTACT SECTION
+           ═══════════════════════════════════════════════════════════ */
+        .contact {
+            background: var(--white);
+        }
+
+        .contact-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-lg);
+        }
+
+        .contact-info h3 {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            color: var(--gray-900);
+            margin-bottom: var(--space-md);
+        }
+
+        .contact-item {
+            display: flex;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+            padding: var(--space-md);
+            background: var(--off-white);
+            border-radius: 8px;
+        }
+
+        .contact-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--gold);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .contact-details h4 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--gray-500);
+            margin-bottom: 4px;
+        }
+
+        .contact-details p {
+            font-size: 1rem;
+            color: var(--gray-900);
+            line-height: 1.6;
+        }
+
+        .contact-details a {
+            color: var(--gold);
+        }
+
+        .contact-details a:hover {
+            text-decoration: underline;
+        }
+
+        .contact-map {
+            background: var(--gray-200);
+            border-radius: 12px;
+            overflow: hidden;
+            min-height: 400px;
+        }
+
+        .contact-map iframe {
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+            border: 0;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           FOOTER
+           ═══════════════════════════════════════════════════════════ */
+        .footer {
+            background: var(--primary-dark);
+            color: var(--white);
+            padding: var(--space-lg) var(--space-md) var(--space-md);
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: var(--space-lg);
+            margin-bottom: var(--space-lg);
+        }
+
+        .footer-brand h3 {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            color: var(--white);
+            margin-bottom: var(--space-sm);
+        }
+
+        .footer-brand h3 span {
+            color: var(--gold);
+        }
+
+        .footer-brand p {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.7;
+            margin-bottom: var(--space-md);
+        }
+
+        .footer-column h4 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: var(--space-md);
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-links li {
+            margin-bottom: var(--space-xs);
+        }
+
+        .footer-links a {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .footer-links a:hover {
+            color: var(--white);
+        }
+
+        .footer-bottom {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: var(--space-md);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+        }
+
+        .footer-copyright {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .footer-legal-links {
+            display: flex;
+            gap: var(--space-md);
+        }
+
+        .footer-legal-links a {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .footer-legal-links a:hover {
+            color: var(--white);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           RESPONSIVE
+           ═══════════════════════════════════════════════════════════ */
+        @media (max-width: 1024px) {
+
+            .about-grid,
+            .contact-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .brands-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .legal-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --space-lg: 3rem;
+                --space-xl: 5rem;
+            }
+
+            .nav-links {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                width: 100%;
+                background: var(--primary-dark);
+                flex-direction: column;
+                padding: var(--space-md);
+                gap: var(--space-sm);
+            }
+
+            .nav-links.active {
+                display: flex;
+            }
+
+            .nav-toggle {
+                display: flex;
+            }
+
+            .about-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .footer-bottom {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+
+        /* Reduce motion */
+        @media (prefers-reduced-motion: reduce) {
+
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="nav" id="nav">
+        <div class="nav-container">
+            <a href="#" class="nav-logo">HN <span>Hotels</span></a>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="#about">About</a></li>
+                <li><a href="#brands">Our Brands</a></li>
+                <li><a href="#company">Company Info</a></li>
+                <li><a href="#legal">Legal</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+            <div class="nav-toggle" id="navToggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero" id="hero">
+        <div class="hero-content">
+            <span class="hero-badge">Incorporated December 2023</span>
+            <h1 class="hero-title">HN <span>Hotels</span></h1>
+            <p class="hero-subtitle">Private Limited</p>
+            <div class="hero-divider">
+                <div class="hero-divider-line"></div>
+                <div class="hero-divider-dot"></div>
+                <div class="hero-divider-line"></div>
+            </div>
+            <p class="hero-tagline">A Bangalore-based hospitality company operating heritage restaurants and cafes,
+                carrying forward over 100 years of culinary legacy.</p>
+            <div class="hero-cta">
+                <a href="#brands" class="btn">Explore Our Brands</a>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <span>Scroll</span>
+            <div class="arrow"></div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section class="about" id="about">
+        <div class="section-container">
+            <div class="about-grid">
+                <div class="about-content reveal">
+                    <span class="section-label">About Us</span>
+                    <h3>Heritage Hospitality, Modern Excellence</h3>
+                    <p>
+                        HN Hotels Private Limited is a Bangalore-based hospitality company that operates a portfolio of
+                        heritage food and beverage brands. Incorporated in December 2023, the company was established to
+                        formalize and scale the operations of family-owned hospitality ventures with deep roots in
+                        Karnataka's culinary heritage.
+                    </p>
+                    <p>
+                        Our flagship property, Hamza Hotel, has been serving Bangalore since 1918 — making it one of the
+                        oldest continuously operating restaurants in the city. Today, HN Hotels operates multiple brands
+                        including Hamza Express (QSR Biryani) and Nawabi Chai House (Irani Chai Cafe), each carrying
+                        forward the legacy of authentic, time-tested recipes.
+                    </p>
+                    <p>
+                        As a registered Micro Enterprise under the MSME Act, we are committed to maintaining the highest
+                        standards of quality while embracing modern operational practices and technology to serve our
+                        customers better.
+                    </p>
+                    <div class="about-stats">
+                        <div class="stat-item">
+                            <div class="stat-number">106+</div>
+                            <div class="stat-label">Years of Legacy</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">3</div>
+                            <div class="stat-label">Active Brands</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">14+</div>
+                            <div class="stat-label">Team Members</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="about-image reveal">
+                    <div class="about-image-grid">
+                        <img src="assets/Hamza_Hotel_Logo.png" alt="Hamza Hotel - Since 1918" width="1000" height="500"
+                            loading="lazy" decoding="async" style="background: #f8f9fa; padding: 20px;">
+                        <img src="assets/Hamza_Express_Logo.jpg" alt="Hamza Express" width="800" height="450"
+                            loading="lazy" decoding="async">
+                        <img src="assets/Nawabi_Chai_House_Logo.png" alt="Nawabi Chai House" width="1000" height="1500"
+                            loading="lazy" decoding="async" style="background: #E9D1A9; padding: 20px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Brands Section -->
+    <section class="brands" id="brands">
+        <div class="section-container">
+            <div class="section-header reveal">
+                <span class="section-label">Our Portfolio</span>
+                <h2 class="section-title">Brands We Operate</h2>
+                <div class="section-divider">
+                    <div class="hero-divider-line"></div>
+                    <div class="hero-divider-dot"></div>
+                    <div class="hero-divider-line"></div>
+                </div>
+            </div>
+            <div class="brands-grid">
+                <div class="brand-card hamza-hotel reveal" style="transition-delay: 0.1s;">
+                    <img src="assets/Hamza_Hotel_Logo.png" alt="Hamza Hotel Logo" class="brand-logo" width="1000"
+                        height="500" loading="lazy" decoding="async">
+                    <h3 class="brand-name">Hamza Hotel</h3>
+                    <p class="brand-tagline">Since 1918 · Over 100 Years of Legendary Taste</p>
+                    <p class="brand-description">
+                        Our flagship heritage property — a 12-room boutique hotel and restaurant that has been a
+                        Bangalore institution for over a century. Famous for authentic biryani and traditional Deccani
+                        cuisine.
+                    </p>
+                    <span class="brand-link">Heritage Property →</span>
+                </div>
+                <div class="brand-card hamza-express reveal" style="transition-delay: 0.2s;">
+                    <img src="assets/Hamza_Express_Logo.jpg" alt="Hamza Express Logo" class="brand-logo" width="800"
+                        height="450" loading="lazy" decoding="async">
+                    <h3 class="brand-name">Hamza Express</h3>
+                    <p class="brand-tagline">Over 100 Years of Taste, Delivered · Est. 1918</p>
+                    <p class="brand-description">
+                        The QSR extension of Hamza Hotel, bringing legendary biryani to customers through delivery and
+                        quick service formats. Same recipes, modern convenience.
+                    </p>
+                    <a href="https://hamzaexpress.in" target="_blank" class="brand-link">Visit Website →</a>
+                </div>
+                <div class="brand-card nawabi reveal" style="transition-delay: 0.3s;">
+                    <img src="assets/Nawabi_Chai_House_Logo.png" alt="Nawabi Chai House Logo" class="brand-logo"
+                        width="1000" height="1500" loading="lazy" decoding="async"
+                        style="background: #E9D1A9; padding: 15px; border-radius: 8px;">
+                    <h3 class="brand-name">Nawabi Chai House</h3>
+                    <p class="brand-tagline">The Art of Irani Chai</p>
+                    <p class="brand-description">
+                        An Irani chai cafe celebrating the royal (Nawabi) essence of Hyderabadi tea culture. Traditional
+                        preparation methods, heritage ambiance, authentic taste.
+                    </p>
+                    <a href="https://nawabichai.in" target="_blank" class="brand-link">Visit Website →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Company Information Section -->
+    <section class="company-info" id="company">
+        <div class="section-container">
+            <div class="section-header reveal">
+                <span class="section-label">Official Information</span>
+                <h2 class="section-title">Company Details</h2>
+                <div class="section-divider">
+                    <div class="hero-divider-line" style="background: var(--gold);"></div>
+                    <div class="hero-divider-dot" style="background: var(--gold);"></div>
+                    <div class="hero-divider-line" style="background: var(--gold);"></div>
+                </div>
+            </div>
+            <div class="info-grid">
+                <div class="info-card reveal">
+                    <h3>Corporate Information</h3>
+                    <div class="info-table">
+                        <div class="info-row">
+                            <span class="info-label">Legal Name</span>
+                            <span class="info-value">HN Hotels Private Limited</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Type</span>
+                            <span class="info-value">Private Limited Company</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Date of Incorporation</span>
+                            <span class="info-value">11th December 2023</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">CIN</span>
+                            <span class="info-value">U55101KA2023PTC182051</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Registered State</span>
+                            <span class="info-value">Karnataka, India</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Industry Classification</span>
+                            <span class="info-value">Restaurants (NIC 56101)</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-card reveal">
+                    <h3>Registration Details</h3>
+                    <div class="info-table">
+                        <div class="info-row">
+                            <span class="info-label">PAN</span>
+                            <span class="info-value">AAHCH1024M</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">TAN</span>
+                            <span class="info-value">BLRH15862A</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">UDYAM Registration</span>
+                            <span class="info-value">UDYAM-KR-03-0606827</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Enterprise Type</span>
+                            <span class="info-value">Micro Enterprise</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Major Activity</span>
+                            <span class="info-value">Food & Beverage Services</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">ROC</span>
+                            <span class="info-value">Registrar of Companies, Bangalore</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-card reveal">
+                    <h3>Registered Office</h3>
+                    <div class="info-table">
+                        <div class="info-row" style="flex-direction: column; align-items: flex-start;">
+                            <span class="info-label" style="margin-bottom: 8px;">Address</span>
+                            <span class="info-value" style="text-align: left; line-height: 1.6;">
+                                #22, 3rd Floor<br>
+                                H.K.P. Road, Shivajinagar<br>
+                                Bangalore North<br>
+                                Bangalore - 560051<br>
+                                Karnataka, India
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-card reveal">
+                    <h3>Banking Details</h3>
+                    <div class="info-table">
+                        <div class="info-row">
+                            <span class="info-label">Bank Name</span>
+                            <span class="info-value">Federal Bank</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Account Number</span>
+                            <span class="info-value">11040200034570</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">IFSC Code</span>
+                            <span class="info-value">FDRL0001104</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Account Type</span>
+                            <span class="info-value">Current Account</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Legal Section -->
+    <section class="legal" id="legal">
+        <div class="section-container">
+            <div class="section-header reveal">
+                <span class="section-label">Compliance</span>
+                <h2 class="section-title">Legal & Regulatory</h2>
+                <div class="section-divider">
+                    <div class="hero-divider-line"></div>
+                    <div class="hero-divider-dot"></div>
+                    <div class="hero-divider-line"></div>
+                </div>
+            </div>
+            <div class="legal-grid">
+                <div class="legal-card reveal">
+                    <div class="legal-icon">🏛️</div>
+                    <h4>Corporate Identity Number</h4>
+                    <p>Ministry of Corporate Affairs</p>
+                    <div class="legal-value">U55101KA2023PTC182051</div>
+                </div>
+                <div class="legal-card reveal">
+                    <div class="legal-icon">📋</div>
+                    <h4>Permanent Account Number</h4>
+                    <p>Income Tax Department</p>
+                    <div class="legal-value">AAHCH1024M</div>
+                </div>
+                <div class="legal-card reveal">
+                    <div class="legal-icon">🏭</div>
+                    <h4>UDYAM Registration</h4>
+                    <p>Ministry of MSME</p>
+                    <div class="legal-value">UDYAM-KR-03-0606827</div>
+                </div>
+                <div class="legal-card reveal">
+                    <div class="legal-icon">📑</div>
+                    <h4>Tax Deduction Account</h4>
+                    <p>Income Tax Department</p>
+                    <div class="legal-value">BLRH15862A</div>
+                </div>
+                <div class="legal-card reveal">
+                    <div class="legal-icon">™️</div>
+                    <h4>Trademark - Hamza Express</h4>
+                    <p>Intellectual Property India</p>
+                    <div class="legal-value">Registered</div>
+                </div>
+                <div class="legal-card reveal">
+                    <div class="legal-icon">™️</div>
+                    <h4>Trademark - Nawabi Chai</h4>
+                    <p>Intellectual Property India</p>
+                    <div class="legal-value">Registered</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section class="contact" id="contact">
+        <div class="section-container">
+            <div class="section-header reveal">
+                <span class="section-label">Get In Touch</span>
+                <h2 class="section-title">Contact Us</h2>
+                <div class="section-divider">
+                    <div class="hero-divider-line"></div>
+                    <div class="hero-divider-dot"></div>
+                    <div class="hero-divider-line"></div>
+                </div>
+            </div>
+            <div class="contact-grid">
+                <div class="contact-info reveal">
+                    <h3>Registered Office</h3>
+                    <div class="contact-item">
+                        <div class="contact-icon">📍</div>
+                        <div class="contact-details">
+                            <h4>Address</h4>
+                            <p>
+                                #22, 3rd Floor, H.K.P. Road<br>
+                                Shivajinagar, Bangalore North<br>
+                                Bangalore - 560051, Karnataka, India
+                            </p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-icon">📞</div>
+                        <div class="contact-details">
+                            <h4>Phone</h4>
+                            <p><a href="tel:+917010426808">+91 70104 26808</a></p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-icon">✉️</div>
+                        <div class="contact-details">
+                            <h4>Email</h4>
+                            <p><a href="mailto:contact@hnhotels.in">contact@hnhotels.in</a></p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-icon">💼</div>
+                        <div class="contact-details">
+                            <h4>Business Inquiries</h4>
+                            <p><a href="mailto:nihafwork@gmail.com">nihafwork@gmail.com</a></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="contact-map reveal">
+                    <iframe
+                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3887.8!2d77.6043!3d12.9869!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bae1787a1cf8c3f%3A0x7e3f0c7ce7c7ed15!2sShivaji%20Nagar%2C%20Bengaluru%2C%20Karnataka!5e0!3m2!1sen!2sin!4v1702300000000!5m2!1sen!2sin"
+                        loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="HN Hotels Location">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <h3>HN <span>Hotels</span></h3>
+                <p>
+                    A Bangalore-based hospitality company operating heritage restaurants and cafes. Carrying forward
+                    over 100 years of culinary legacy through our portfolio of beloved brands.
+                </p>
+                <p style="margin-top: var(--space-sm); font-size: 0.8rem;">
+                    <strong>CIN:</strong> U55101KA2023PTC182051
+                </p>
+            </div>
+            <div class="footer-column">
+                <h4>Our Brands</h4>
+                <ul class="footer-links">
+                    <li><a href="#">Hamza Hotel</a></li>
+                    <li><a href="https://hamzaexpress.in" target="_blank">Hamza Express</a></li>
+                    <li><a href="https://nawabichai.in" target="_blank">Nawabi Chai House</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Company</h4>
+                <ul class="footer-links">
+                    <li><a href="#about">About Us</a></li>
+                    <li><a href="#company">Company Info</a></li>
+                    <li><a href="#legal">Legal</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Legal</h4>
+                <ul class="footer-links">
+                    <li><a href="#">Privacy Policy</a></li>
+                    <li><a href="#">Terms of Service</a></li>
+                    <li><a href="#">Refund Policy</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p class="footer-copyright">
+                © 2024 HN Hotels Private Limited. All rights reserved.<br>
+                <small>Registered Office: #22, 3rd Floor, H.K.P. Road, Shivajinagar, Bangalore - 560051, Karnataka,
+                    India</small>
+            </p>
+            <div class="footer-legal-links">
+                <a href="#">Privacy</a>
+                <a href="#">Terms</a>
+                <a href="#">Sitemap</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // Navigation scroll effect
+        const nav = document.getElementById('nav');
+        window.addEventListener('scroll', () => {
+            nav.classList.toggle('scrolled', window.scrollY > 50);
+        });
+
+        // Mobile menu toggle
+        const navToggle = document.getElementById('navToggle');
+        const navLinks = document.getElementById('navLinks');
+        navToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+        });
+
+        navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                navLinks.classList.remove('active');
+            });
+        });
+
+        // Scroll reveal
+        const revealElements = document.querySelectorAll('.reveal');
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+        revealElements.forEach(el => revealObserver.observe(el));
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
