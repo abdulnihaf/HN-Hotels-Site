@@ -167,6 +167,72 @@ async function handleGet(url, env) {
     });
   }
 
+  // ── Candidate stats: count by role, sent vs unsent ──
+  if (action === "candidate_stats") {
+    const rows = await db
+      .prepare(
+        `SELECT he_role,
+           COUNT(*) as total,
+           SUM(CASE WHEN campaign_status = 'none' THEN 1 ELSE 0 END) as available,
+           SUM(CASE WHEN campaign_status != 'none' THEN 1 ELSE 0 END) as contacted,
+           SUM(has_personalization) as with_personalization,
+           he_salary
+         FROM candidates
+         GROUP BY he_role
+         ORDER BY total DESC`
+      )
+      .all();
+
+    const overall = await db
+      .prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN campaign_status = 'none' THEN 1 ELSE 0 END) as available FROM candidates`)
+      .first();
+
+    return json({
+      roles: rows.results,
+      total_candidates: overall?.total || 0,
+      total_available: overall?.available || 0,
+    });
+  }
+
+  // ── Candidates list: browse/filter candidates ──
+  if (action === "candidates") {
+    const role = url.searchParams.get("role");
+    const status = url.searchParams.get("status"); // none, sent, all
+    const page = parseInt(url.searchParams.get("page") || "1");
+    const limit = 50;
+    const offset = (page - 1) * limit;
+
+    let query = `SELECT * FROM candidates WHERE 1=1`;
+    const params = [];
+
+    if (role) {
+      query += ` AND he_role = ?`;
+      params.push(role);
+    }
+    if (status && status !== "all") {
+      query += ` AND campaign_status = ?`;
+      params.push(status);
+    }
+
+    query += ` ORDER BY has_personalization DESC, id ASC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    const rows = await db.prepare(query).bind(...params).all();
+
+    let countQuery = `SELECT COUNT(*) as total FROM candidates WHERE 1=1`;
+    const countParams = [];
+    if (role) { countQuery += ` AND he_role = ?`; countParams.push(role); }
+    if (status && status !== "all") { countQuery += ` AND campaign_status = ?`; countParams.push(status); }
+    const count = await db.prepare(countQuery).bind(...countParams).first();
+
+    return json({
+      candidates: rows.results,
+      total: count?.total || 0,
+      page,
+      pages: Math.ceil((count?.total || 0) / limit),
+    });
+  }
+
   // ── Inbox: list conversations with latest message ──
   if (action === "inbox") {
     const status = url.searchParams.get("status") || "all";
@@ -308,7 +374,9 @@ async function handlePost(request, env) {
 
   // ── Create Campaign ──
   if (action === "create_campaign") {
-    const { name, template_name, role, salary, campaign_type, brand, category } = body;
+    const { name, template_name, role, salary, campaign_type, brand, category, source } = body;
+
+    // Create the campaign record
     const result = await db
       .prepare(
         `INSERT INTO campaigns (name, template_name, role, salary, campaign_type, brand, category)
@@ -325,7 +393,83 @@ async function handlePost(request, env) {
       )
       .run();
 
-    return json({ id: result.meta.last_row_id, success: true });
+    const campaignId = result.meta.last_row_id;
+
+    // ── If source is "database", auto-populate messages from candidates table ──
+    if (source === "database" && role) {
+      const isPersonalized = (campaign_type || "personalized") === "personalized";
+      const templateName = template_name || (isPersonalized ? "he_hiring_mar26" : "he_hiring_generic_mar26");
+
+      // Get available candidates for this role
+      let candidateQuery = `SELECT * FROM candidates WHERE he_role = ? AND campaign_status = 'none'`;
+      const candidateParams = [role];
+
+      const candidates = await db.prepare(candidateQuery).bind(...candidateParams).all();
+      const rows = candidates.results || [];
+
+      if (rows.length > 0) {
+        // Build template params for each candidate and insert messages
+        const msgStmt = db.prepare(
+          `INSERT INTO messages (campaign_id, phone, candidate_name, template_params, status)
+           VALUES (?, ?, ?, ?, 'queued')`
+        );
+
+        const batch = rows.map((c) => {
+          let params;
+          if (isPersonalized && c.has_personalization) {
+            // Personalized: first_name, current_title, current_company, role, salary
+            params = [
+              c.first_name || c.name || "",
+              c.current_title || "",
+              c.current_company || "",
+              c.he_role || role,
+              c.he_salary || salary || "",
+            ];
+          } else {
+            // Generic: role, salary
+            params = [c.he_role || role, c.he_salary || salary || ""];
+          }
+
+          return msgStmt.bind(
+            campaignId,
+            c.phone,
+            c.name || c.first_name || "",
+            JSON.stringify(params)
+          );
+        });
+
+        // Insert in batches of 100
+        for (let i = 0; i < batch.length; i += 100) {
+          await db.batch(batch.slice(i, i + 100));
+        }
+
+        // Update campaign total
+        await db
+          .prepare(`UPDATE campaigns SET total_candidates = ? WHERE id = ?`)
+          .bind(rows.length, campaignId)
+          .run();
+
+        // Mark candidates as contacted
+        const updateStmt = db.prepare(
+          `UPDATE candidates SET campaign_status = 'queued', last_campaign_id = ? WHERE phone = ?`
+        );
+        const updateBatch = rows.map((c) =>
+          updateStmt.bind(campaignId, c.phone)
+        );
+        for (let i = 0; i < updateBatch.length; i += 100) {
+          await db.batch(updateBatch.slice(i, i + 100));
+        }
+
+        return json({
+          id: campaignId,
+          success: true,
+          candidates_queued: rows.length,
+          source: "database",
+        });
+      }
+    }
+
+    return json({ id: campaignId, success: true });
   }
 
   // ── Import candidates from CSV data ──

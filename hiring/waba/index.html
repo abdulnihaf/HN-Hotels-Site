@@ -140,46 +140,63 @@
 <div id="modal-new-campaign" class="hidden fixed inset-0 z-50">
   <div class="overlay absolute inset-0" onclick="closeAllModals()"></div>
   <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
-    <div class="glass rounded-2xl w-full max-w-lg pointer-events-auto slide-up">
-      <div class="p-5 border-b border-white/[.04]">
+    <div class="glass rounded-2xl w-full max-w-2xl pointer-events-auto slide-up max-h-[90vh] overflow-hidden flex flex-col">
+      <div class="p-5 border-b border-white/[.04] shrink-0">
         <h3 class="font-bold">New Campaign</h3>
-        <p class="text-xs text-white/30 mt-0.5">Create a WhatsApp hiring campaign</p>
+        <p class="text-xs text-white/30 mt-0.5">Select a role from the database to create a campaign</p>
       </div>
-      <form id="form-new" class="p-5 space-y-3.5" onsubmit="handleCreateCampaign(event)">
+      <form id="form-new" class="p-5 space-y-3.5 scroll-y flex-1" onsubmit="handleCreateCampaign(event)">
+        <!-- Role Picker (loaded from DB) -->
+        <div>
+          <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-2">Select Role</label>
+          <div id="role-picker" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[250px] scroll-y">
+            <div class="text-center py-4 text-white/20 text-xs col-span-full">Loading roles...</div>
+          </div>
+          <input type="hidden" name="role" id="selected-role" required>
+          <input type="hidden" name="salary" id="selected-salary">
+        </div>
+
+        <!-- Selected Role Summary -->
+        <div id="role-summary" class="hidden rounded-lg bg-brand-500/[.06] border border-brand-500/10 p-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <span id="summary-role" class="text-sm font-semibold text-brand-400"></span>
+              <span id="summary-salary" class="text-xs text-white/30 ml-2"></span>
+            </div>
+            <div class="text-right">
+              <span id="summary-count" class="text-lg font-bold text-brand-400"></span>
+              <span class="text-[10px] text-white/25 block">available</span>
+            </div>
+          </div>
+          <div class="flex gap-3 mt-2 text-[10px]">
+            <span id="summary-personalized" class="text-blue-400"></span>
+            <span id="summary-contacted" class="text-white/25"></span>
+          </div>
+        </div>
+
+        <!-- Campaign Name (auto-generated, editable) -->
         <div>
           <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Campaign Name</label>
-          <input name="name" required placeholder="e.g. HE Captain — March 2026" class="w-full rounded-lg px-3 py-2 text-sm placeholder-white/15">
+          <input name="name" id="campaign-name" required placeholder="Auto-generated when you select a role..." class="w-full rounded-lg px-3 py-2 text-sm placeholder-white/15">
         </div>
+
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Template</label>
-            <select name="template_name" class="w-full rounded-lg px-3 py-2 text-sm">
+            <select name="template_name" id="template-select" class="w-full rounded-lg px-3 py-2 text-sm">
               <option value="he_hiring_mar26">he_hiring_mar26 (Personal)</option>
               <option value="he_hiring_generic_mar26">he_hiring_generic_mar26 (Generic)</option>
             </select>
           </div>
           <div>
             <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Type</label>
-            <select name="campaign_type" class="w-full rounded-lg px-3 py-2 text-sm">
+            <select name="campaign_type" id="type-select" class="w-full rounded-lg px-3 py-2 text-sm">
               <option value="personalized">Personalized</option>
               <option value="generic">Generic</option>
             </select>
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Position</label>
-            <select name="role" class="w-full rounded-lg px-3 py-2 text-sm">
-              <option>Captain</option><option>Kitchen Helper</option><option>Cashier</option>
-              <option>Counter Staff</option><option>Waiter</option><option>Juice Master</option>
-              <option>Tandoor Assistant</option><option>Cleaner</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Salary</label>
-            <input name="salary" value="₹18,000" class="w-full rounded-lg px-3 py-2 text-sm">
-          </div>
-        </div>
+
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Brand</label>
@@ -190,22 +207,30 @@
             <input name="category" value="hiring" class="w-full rounded-lg px-3 py-2 text-sm">
           </div>
         </div>
+
+        <!-- CSV Upload (optional, collapsible) -->
         <div>
-          <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Upload Candidates CSV</label>
-          <div id="drop-zone" class="border border-dashed border-white/10 rounded-lg p-4 text-center cursor-pointer hover:border-brand-500/40 hover:bg-brand-500/[.02] transition"
-               onclick="this.querySelector('input').click()"
-               ondragover="event.preventDefault();this.classList.add('border-brand-500/40','bg-brand-500/[.02]')"
-               ondragleave="this.classList.remove('border-brand-500/40','bg-brand-500/[.02]')"
-               ondrop="handleDrop(event)">
-            <svg class="w-6 h-6 mx-auto text-white/15 mb-1" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
-            <p class="text-xs text-white/30">Drop CSV here or <span class="text-brand-400">browse</span></p>
-            <p id="file-name" class="text-[10px] text-brand-400 mt-1 hidden"></p>
-            <input type="file" name="csv" accept=".csv" class="hidden" onchange="handleFileSelect(this)">
+          <button type="button" onclick="toggleCsvUpload()" class="text-[10px] text-white/25 hover:text-white/40 transition flex items-center gap-1">
+            <svg id="csv-chevron" class="w-3 h-3 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+            Advanced: Upload CSV instead
+          </button>
+          <div id="csv-section" class="hidden mt-2">
+            <div id="drop-zone" class="border border-dashed border-white/10 rounded-lg p-3 text-center cursor-pointer hover:border-brand-500/40 hover:bg-brand-500/[.02] transition"
+                 onclick="this.querySelector('input').click()"
+                 ondragover="event.preventDefault();this.classList.add('border-brand-500/40','bg-brand-500/[.02]')"
+                 ondragleave="this.classList.remove('border-brand-500/40','bg-brand-500/[.02]')"
+                 ondrop="handleDrop(event)">
+              <svg class="w-5 h-5 mx-auto text-white/15 mb-1" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+              <p class="text-[10px] text-white/30">Drop CSV or <span class="text-brand-400">browse</span> (overrides DB selection)</p>
+              <p id="file-name" class="text-[10px] text-brand-400 mt-1 hidden"></p>
+              <input type="file" name="csv" accept=".csv" class="hidden" onchange="handleFileSelect(this)">
+            </div>
           </div>
         </div>
+
         <div class="flex justify-end gap-2 pt-1">
           <button type="button" onclick="closeAllModals()" class="btn-ghost text-xs px-4 py-2 rounded-lg transition">Cancel</button>
-          <button type="submit" id="btn-create" class="btn-primary text-xs px-5 py-2 rounded-lg transition">Create & Import</button>
+          <button type="submit" id="btn-create" class="btn-primary text-xs px-5 py-2 rounded-lg transition">Create & Queue</button>
         </div>
       </form>
     </div>
@@ -733,9 +758,11 @@ async function pauseCampaign(id) {
 }
 
 // ===============================================================
-// Create Campaign
+// Create Campaign — DB-backed role picker
 // ===============================================================
 let selectedFile = null;
+let roleStats = [];
+let selectedRoleData = null;
 
 function handleFileSelect(input) {
   selectedFile = input.files[0];
@@ -756,6 +783,77 @@ function handleDrop(e) {
   }
 }
 
+function toggleCsvUpload() {
+  const section = document.getElementById("csv-section");
+  const chevron = document.getElementById("csv-chevron");
+  section.classList.toggle("hidden");
+  chevron.style.transform = section.classList.contains("hidden") ? "" : "rotate(90deg)";
+}
+
+async function loadRolePicker() {
+  const picker = document.getElementById("role-picker");
+  try {
+    const data = await apiGet({ action: "candidate_stats" });
+    roleStats = data.roles || [];
+
+    if (!roleStats.length) {
+      picker.innerHTML = `<div class="text-center py-4 text-white/20 text-xs col-span-full">No candidates in database yet</div>`;
+      return;
+    }
+
+    picker.innerHTML = roleStats.map(r => `
+      <div class="role-card rounded-lg p-2.5 cursor-pointer transition border ${selectedRoleData?.he_role === r.he_role ? 'border-brand-500/40 bg-brand-500/[.06]' : 'border-white/[.04] bg-white/[.02] hover:border-white/[.08] hover:bg-white/[.04]'}"
+           onclick="selectRole('${esc(r.he_role)}')">
+        <div class="text-[12px] font-semibold truncate ${selectedRoleData?.he_role === r.he_role ? 'text-brand-400' : 'text-white/60'}">${esc(r.he_role)}</div>
+        <div class="flex items-center justify-between mt-1.5">
+          <span class="text-base font-bold ${r.available > 0 ? 'text-emerald-400' : 'text-white/15'}">${r.available}</span>
+          <span class="text-[9px] text-white/20">/ ${r.total}</span>
+        </div>
+        <div class="text-[9px] text-white/20 mt-0.5">${r.he_salary || ''}</div>
+        ${r.with_personalization > 0 ? `<div class="text-[8px] text-blue-400/50 mt-0.5">${r.with_personalization} personalized</div>` : ''}
+      </div>
+    `).join("");
+  } catch(e) {
+    picker.innerHTML = `<div class="text-center py-4 text-red-400/60 text-xs col-span-full">Failed to load roles</div>`;
+    console.error(e);
+  }
+}
+
+function selectRole(roleName) {
+  const role = roleStats.find(r => r.he_role === roleName);
+  if (!role) return;
+  selectedRoleData = role;
+
+  // Update hidden fields
+  document.getElementById("selected-role").value = role.he_role;
+  document.getElementById("selected-salary").value = role.he_salary || "";
+
+  // Auto-generate campaign name
+  const month = new Date().toLocaleString("en", { month: "short", year: "numeric" });
+  document.getElementById("campaign-name").value = `HE ${role.he_role} — ${month}`;
+
+  // Show summary
+  const summary = document.getElementById("role-summary");
+  summary.classList.remove("hidden");
+  document.getElementById("summary-role").textContent = role.he_role;
+  document.getElementById("summary-salary").textContent = role.he_salary || "";
+  document.getElementById("summary-count").textContent = role.available;
+  document.getElementById("summary-personalized").textContent = `${role.with_personalization || 0} with personalization`;
+  document.getElementById("summary-contacted").textContent = `${role.contacted || 0} already contacted`;
+
+  // Auto-select template type based on personalization ratio
+  if (role.with_personalization > 0 && role.with_personalization >= role.available * 0.5) {
+    document.getElementById("template-select").value = "he_hiring_mar26";
+    document.getElementById("type-select").value = "personalized";
+  } else {
+    document.getElementById("template-select").value = "he_hiring_generic_mar26";
+    document.getElementById("type-select").value = "generic";
+  }
+
+  // Re-render picker to highlight selected
+  loadRolePicker();
+}
+
 async function handleCreateCampaign(e) {
   e.preventDefault();
   const form = e.target;
@@ -763,23 +861,36 @@ async function handleCreateCampaign(e) {
   const btn = document.getElementById("btn-create");
   btn.disabled = true; btn.textContent = "Creating...";
 
+  const role = fd.get("role");
+  if (!role) {
+    alert("Please select a role first");
+    btn.disabled = false; btn.textContent = "Create & Queue";
+    return;
+  }
+
   try {
+    const file = selectedFile || form.querySelector('input[type=file]')?.files?.[0];
+
+    // Determine source
+    const source = file ? "csv" : "database";
+
     const r = await apiPost({
-      action:"create_campaign",
+      action: "create_campaign",
       name: fd.get("name"),
       template_name: fd.get("template_name"),
-      role: fd.get("role"),
-      salary: fd.get("salary"),
+      role: role,
+      salary: fd.get("salary") || selectedRoleData?.he_salary || "",
       campaign_type: fd.get("campaign_type"),
       brand: fd.get("brand"),
       category: fd.get("category"),
+      source: source,
     });
 
     if (!r.id) throw new Error(JSON.stringify(r));
 
-    const file = selectedFile || form.querySelector('input[type=file]').files[0];
+    // If CSV was provided, import from CSV (overrides DB)
     if (file) {
-      btn.textContent = "Importing...";
+      btn.textContent = "Importing CSV...";
       const text = await file.text();
       const lines = text.split("\n").filter(l => l.trim());
       const headers = parseCSVLine(lines[0]);
@@ -801,8 +912,8 @@ async function handleCreateCampaign(e) {
         if (phone.length !== 10) continue;
 
         const params = isP
-          ? [cols[nameI]||"", cols[titleI]||"", cols[companyI]||"", cols[roleI]||fd.get("role"), cols[salaryI]||fd.get("salary")]
-          : [cols[roleI]||fd.get("role"), cols[salaryI]||fd.get("salary")];
+          ? [cols[nameI]||"", cols[titleI]||"", cols[companyI]||"", cols[roleI]||role, cols[salaryI]||fd.get("salary")]
+          : [cols[roleI]||role, cols[salaryI]||fd.get("salary")];
 
         candidates.push({ phone, name: cols[nameI]||"", params });
       }
@@ -811,17 +922,24 @@ async function handleCreateCampaign(e) {
         btn.textContent = `Importing ${Math.min(i+200, candidates.length)}/${candidates.length}...`;
         await apiPost({ action:"import_candidates", campaign_id:r.id, candidates: candidates.slice(i,i+200) });
       }
+    } else {
+      // DB source — show result
+      if (r.candidates_queued) {
+        btn.textContent = `Queued ${r.candidates_queued} candidates!`;
+      }
     }
 
     closeAllModals();
     form.reset();
     selectedFile = null;
-    document.getElementById("file-name").classList.add("hidden");
+    selectedRoleData = null;
+    document.getElementById("file-name")?.classList.add("hidden");
+    document.getElementById("role-summary")?.classList.add("hidden");
     await loadDashboard();
   } catch(err) {
     alert("Error: " + err.message);
   } finally {
-    btn.disabled = false; btn.textContent = "Create & Import";
+    btn.disabled = false; btn.textContent = "Create & Queue";
   }
 }
 
@@ -851,7 +969,10 @@ function timeAgo(d) {
   if(h<24) return h+"h"; return Math.floor(h/24)+"d";
 }
 
-function showModal(name) { document.getElementById("modal-"+name).classList.remove("hidden"); }
+function showModal(name) {
+  document.getElementById("modal-"+name).classList.remove("hidden");
+  if (name === "new-campaign") { selectedRoleData = null; loadRolePicker(); }
+}
 function closeAllModals() { document.querySelectorAll("[id^=modal-]").forEach(m=>m.classList.add("hidden")); }
 
 // ===============================================================
