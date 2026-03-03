@@ -446,7 +446,7 @@ function renderInbox(convos, total) {
               </div>
               <div class="flex items-center gap-2 mt-0.5">
                 ${c.campaign_role ? `<span class="text-[10px] text-brand-400/60">${esc(c.campaign_role)}</span>` : ''}
-                <span class="text-[11px] text-white/30 truncate">${c.last_direction === 'inbound' ? '' : 'You: '}${esc(truncate(c.last_message, 50))}</span>
+                <span class="text-[11px] text-white/30 truncate">${c.last_direction === 'inbound' ? '' : 'You: '}${formatInboxPreview(c)}</span>
               </div>
             </div>
             <div class="text-right shrink-0">
@@ -486,6 +486,94 @@ async function openChat(phone) {
   const statsData = await apiGet({ action: "stats" });
   unreadCount = statsData.unread_conversations || 0;
   updateInboxBadge();
+}
+
+// ── Inbox preview for media messages ──
+function formatInboxPreview(c) {
+  const t = c.msg_type;
+  const body = c.last_message || "";
+  if (t === "image") return body ? `\uD83D\uDCF7 ${esc(truncate(body,40))}` : "\uD83D\uDCF7 Photo";
+  if (t === "video") return body ? `\uD83C\uDFA5 ${esc(truncate(body,40))}` : "\uD83C\uDFA5 Video";
+  if (t === "audio") return "\uD83C\uDF99\uFE0F Voice message";
+  if (t === "document") return body ? `\uD83D\uDCC4 ${esc(truncate(body,40))}` : "\uD83D\uDCC4 Document";
+  if (t === "sticker") return "\uD83E\uDEE8 Sticker";
+  if (t === "location") return "\uD83D\uDCCD Location";
+  if (t === "contacts") return "\uD83D\uDC64 Contact";
+  if (t === "reaction") return body || "\u2764\uFE0F";
+  return esc(truncate(body, 50));
+}
+
+// ── Media rendering helper ──
+function renderMediaContent(msg) {
+  const mediaUrl = msg.media_id ? `/api/hiring?action=media&id=${encodeURIComponent(msg.media_id)}` : null;
+  const t = msg.msg_type;
+
+  if (t === "image" || t === "sticker") {
+    if (mediaUrl) {
+      return `<img src="${mediaUrl}" alt="Image" class="rounded-lg max-w-full max-h-64 mb-1.5 cursor-pointer" onclick="window.open('${mediaUrl}','_blank')" loading="lazy" onerror="this.outerHTML='<div class=\\'text-[10px] text-white/30 italic mb-1\\'>Image unavailable</div>'">`;
+    }
+    return `<div class="flex items-center gap-1.5 text-[11px] text-white/40 italic mb-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M6.75 7.5a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>${t === 'sticker' ? 'Sticker' : 'Image'}</div>`;
+  }
+
+  if (t === "video") {
+    if (mediaUrl) {
+      return `<video src="${mediaUrl}" controls preload="metadata" class="rounded-lg max-w-full max-h-64 mb-1.5" onerror="this.outerHTML='<div class=\\'text-[10px] text-white/30 italic mb-1\\'>Video unavailable</div>'"></video>`;
+    }
+    return `<div class="flex items-center gap-1.5 text-[11px] text-white/40 italic mb-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/></svg>Video</div>`;
+  }
+
+  if (t === "audio") {
+    if (mediaUrl) {
+      return `<audio src="${mediaUrl}" controls preload="metadata" class="w-full max-w-[250px] mb-1.5 h-10" style="filter:invert(0.85) hue-rotate(180deg);" onerror="this.outerHTML='<div class=\\'text-[10px] text-white/30 italic mb-1\\'>Voice message unavailable</div>'"></audio>`;
+    }
+    return `<div class="flex items-center gap-1.5 text-[11px] text-white/40 italic mb-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/></svg>Voice message</div>`;
+  }
+
+  if (t === "document") {
+    const filename = msg.body || "Document";
+    if (mediaUrl) {
+      return `<a href="${mediaUrl}" target="_blank" class="flex items-center gap-2 rounded-lg bg-white/[.04] p-2.5 mb-1.5 hover:bg-white/[.08] transition no-underline">
+        <div class="w-9 h-9 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[12px] text-white/60 truncate font-medium">${esc(filename)}</div>
+          <div class="text-[9px] text-blue-400/50">Tap to download</div>
+        </div>
+      </a>`;
+    }
+    return `<div class="flex items-center gap-1.5 text-[11px] text-white/40 italic mb-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>${esc(filename)}</div>`;
+  }
+
+  if (t === "location") {
+    const parts = (msg.body || "").split(",");
+    if (parts.length === 2) {
+      const [lat, lng] = parts;
+      return `<a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="flex items-center gap-2 rounded-lg bg-white/[.04] p-2.5 mb-1.5 hover:bg-white/[.08] transition no-underline">
+        <div class="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[12px] text-white/60 font-medium">Location shared</div>
+          <div class="text-[9px] text-emerald-400/50">Tap to open in Maps</div>
+        </div>
+      </a>`;
+    }
+  }
+
+  if (t === "reaction") {
+    return `<div class="text-2xl mb-0.5">${msg.body || ''}</div>`;
+  }
+
+  if (t === "contacts") {
+    return `<div class="flex items-center gap-1.5 text-[11px] text-white/40 mb-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/></svg>Contact shared</div>`;
+  }
+
+  // For text or unknown types, no media block
+  if (t === "text" || t === "button" || t === "interactive") return "";
+
+  // Fallback for unknown media types
+  return `<div class="text-[10px] text-white/30 italic mb-1">[${esc(t)}]</div>`;
 }
 
 function renderChat(data, phone) {
@@ -531,12 +619,13 @@ function renderChat(data, phone) {
 
   // Thread messages
   for (const msg of thread) {
+    const mediaContent = renderMediaContent(msg);
     if (msg.direction === "inbound") {
       html += `
         <div class="flex justify-start">
           <div class="bubble-in max-w-[85%] px-3.5 py-2.5">
-            ${msg.msg_type !== 'text' ? `<div class="text-[9px] text-blue-400/50 font-semibold uppercase tracking-wider mb-0.5">${esc(msg.msg_type)}</div>` : ''}
-            <div class="text-[13px] text-white/80 whitespace-pre-wrap">${esc(msg.body)}</div>
+            ${mediaContent}
+            ${msg.body ? `<div class="text-[13px] text-white/80 whitespace-pre-wrap">${esc(msg.body)}</div>` : ''}
             <div class="text-[10px] text-white/20 mt-1">${timeAgo(msg.created_at)}</div>
           </div>
         </div>`;
@@ -544,7 +633,8 @@ function renderChat(data, phone) {
       html += `
         <div class="flex justify-end">
           <div class="bubble-out max-w-[85%] px-3.5 py-2.5">
-            <div class="text-[13px] text-white/80 whitespace-pre-wrap">${esc(msg.body)}</div>
+            ${mediaContent}
+            ${msg.body ? `<div class="text-[13px] text-white/80 whitespace-pre-wrap">${esc(msg.body)}</div>` : ''}
             <div class="flex items-center justify-end gap-1.5 mt-1">
               <span class="text-[10px] text-white/20">${timeAgo(msg.created_at)}</span>
               <span class="text-[10px] ${msg.status === 'sent' ? 'text-blue-400/40' : 'text-emerald-400/40'}">

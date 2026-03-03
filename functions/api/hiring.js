@@ -233,6 +233,49 @@ async function handleGet(url, env) {
     });
   }
 
+  // ── Media proxy: fetch WhatsApp media by ID ──
+  if (action === "media") {
+    const mediaId = url.searchParams.get("id");
+    if (!mediaId) return json({ error: "Media ID required" }, 400);
+
+    const WA_TOKEN = env.WA_ACCESS_TOKEN;
+    if (!WA_TOKEN) return json({ error: "WhatsApp credentials not configured" }, 500);
+
+    try {
+      // Step 1: Get the download URL from WhatsApp
+      const metaResp = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+        headers: { Authorization: `Bearer ${WA_TOKEN}` },
+      });
+      const metaData = await metaResp.json();
+
+      if (!metaData.url) {
+        return json({ error: "Media not found or expired", details: metaData.error?.message }, 404);
+      }
+
+      // Step 2: Download the actual binary from the media URL
+      const mediaResp = await fetch(metaData.url, {
+        headers: { Authorization: `Bearer ${WA_TOKEN}` },
+      });
+
+      if (!mediaResp.ok) {
+        return json({ error: "Failed to download media" }, 502);
+      }
+
+      // Step 3: Stream the binary back with correct Content-Type
+      const contentType = metaData.mime_type || mediaResp.headers.get("Content-Type") || "application/octet-stream";
+      return new Response(mediaResp.body, {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=86400",
+          ...CORS_HEADERS,
+        },
+      });
+    } catch (err) {
+      return json({ error: "Media fetch failed: " + err.message }, 500);
+    }
+  }
+
   // ── Inbox: list conversations with latest message ──
   if (action === "inbox") {
     const status = url.searchParams.get("status") || "all";
@@ -891,8 +934,9 @@ async function handleWebhook(db, body) {
           ? new Date(parseInt(msg.timestamp) * 1000).toISOString()
           : new Date().toISOString();
 
-        // Extract message body based on type
+        // Extract message body and media ID based on type
         let messageBody = "";
+        let mediaId = null;
         if (msgType === "text") {
           messageBody = msg.text?.body || "";
         } else if (msgType === "button") {
@@ -903,17 +947,27 @@ async function handleWebhook(db, body) {
             msg.interactive?.list_reply?.title ||
             "[interactive]";
         } else if (msgType === "image") {
-          messageBody = msg.image?.caption || "[Image]";
+          messageBody = msg.image?.caption || "";
+          mediaId = msg.image?.id || null;
         } else if (msgType === "document") {
-          messageBody = msg.document?.caption || "[Document]";
+          messageBody = msg.document?.filename || msg.document?.caption || "";
+          mediaId = msg.document?.id || null;
         } else if (msgType === "audio") {
-          messageBody = "[Voice message]";
+          messageBody = "";
+          mediaId = msg.audio?.id || null;
         } else if (msgType === "video") {
-          messageBody = msg.video?.caption || "[Video]";
+          messageBody = msg.video?.caption || "";
+          mediaId = msg.video?.id || null;
+        } else if (msgType === "sticker") {
+          messageBody = "";
+          mediaId = msg.sticker?.id || null;
         } else if (msgType === "location") {
-          messageBody = `[Location: ${msg.location?.latitude}, ${msg.location?.longitude}]`;
+          messageBody = `${msg.location?.latitude},${msg.location?.longitude}`;
         } else if (msgType === "reaction") {
-          messageBody = msg.reaction?.emoji || "[Reaction]";
+          messageBody = msg.reaction?.emoji || "";
+        } else if (msgType === "contacts") {
+          const contact = msg.contacts?.[0];
+          messageBody = contact ? `${contact.name?.formatted_name || "Contact"}: ${contact.phones?.[0]?.phone || ""}` : "[Contact]";
         } else {
           messageBody = `[${msgType}]`;
         }
@@ -945,8 +999,8 @@ async function handleWebhook(db, body) {
         // Insert conversation record
         await db
           .prepare(
-            `INSERT INTO conversations (phone, campaign_id, message_id, candidate_name, direction, msg_type, body, wamid, status, created_at)
-             VALUES (?, ?, ?, ?, 'inbound', ?, ?, ?, 'unread', ?)`
+            `INSERT INTO conversations (phone, campaign_id, message_id, candidate_name, direction, msg_type, body, wamid, status, created_at, media_id)
+             VALUES (?, ?, ?, ?, 'inbound', ?, ?, ?, 'unread', ?, ?)`
           )
           .bind(
             senderPhone,
@@ -956,7 +1010,8 @@ async function handleWebhook(db, body) {
             msgType,
             messageBody,
             wamid,
-            timestamp
+            timestamp,
+            mediaId
           )
           .run();
 
