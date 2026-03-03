@@ -279,12 +279,14 @@ async function loadDashboard() {
 }
 
 function renderOverview(t) {
+  const totalReplies = t.total_replies || 0;
   const items = [
     { l:"Campaigns", v:campaigns.length, c:"white/70", bg:"white/[.03]" },
     { l:"Queued",    v:t.total_queued,    c:"white/40", bg:"white/[.03]" },
     { l:"Sent",      v:t.total_sent,      c:"blue-400", bg:"blue-500/[.06]" },
     { l:"Delivered", v:t.total_delivered,  c:"emerald-400", bg:"emerald-500/[.06]" },
     { l:"Read",      v:t.total_read,       c:"brand-400", bg:"brand-500/[.06]" },
+    { l:"Replies",   v:totalReplies,       c: totalReplies > 0 ? "violet-400" : "white/30", bg: totalReplies > 0 ? "violet-500/[.08]" : "white/[.03]" },
     { l:"Failed",    v:t.total_failed,     c:"red-400", bg:"red-500/[.06]" },
     { l:"Inbox", v:unreadCount, c: unreadCount > 0 ? "brand-400" : "white/30", bg: unreadCount > 0 ? "brand-500/[.08]" : "white/[.03]", click:"switchView('inbox')" },
   ];
@@ -368,6 +370,7 @@ function renderCampaigns() {
           <span class="text-blue-400">${sent} sent</span>
           <span class="text-emerald-400">${dlvd} dlvrd</span>
           <span class="text-brand-400">${read} read</span>
+          ${(c.reply_count || 0) > 0 ? `<span class="text-violet-400">${c.reply_count} replies</span>` : ""}
           ${fail ? `<span class="text-red-400">${fail} fail</span>` : ""}
         </div>
         <span class="text-white/15">${queued > 0 ? queued+" queued" : ""}</span>
@@ -445,6 +448,7 @@ function renderInbox(convos, total) {
                 ${c.unread_count > 0 ? `<span class="unread-badge">${c.unread_count}</span>` : ''}
               </div>
               <div class="flex items-center gap-2 mt-0.5">
+                ${c.campaign_name ? `<span class="text-[10px] text-white/20 truncate max-w-[120px]">${esc(c.campaign_name)}</span>` : ''}
                 ${c.campaign_role ? `<span class="text-[10px] text-brand-400/60">${esc(c.campaign_role)}</span>` : ''}
                 <span class="text-[11px] text-white/30 truncate">${c.last_direction === 'inbound' ? '' : 'You: '}${formatInboxPreview(c)}</span>
               </div>

@@ -108,10 +108,20 @@ async function handleGet(url, env) {
            SUM(CASE WHEN status='delivered' OR status='read' THEN 1 ELSE 0 END) as total_delivered,
            SUM(CASE WHEN status='read' THEN 1 ELSE 0 END) as total_read,
            SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) as total_failed,
-           SUM(CASE WHEN status='queued' THEN 1 ELSE 0 END) as total_queued
+           SUM(CASE WHEN status='queued' THEN 1 ELSE 0 END) as total_queued,
+           SUM(CASE WHEN has_reply = 1 THEN 1 ELSE 0 END) as total_replies
          FROM messages`
       )
       .first();
+
+    // Reply count per campaign
+    const replyCounts = await db
+      .prepare(`SELECT campaign_id, COUNT(*) as reply_count FROM messages WHERE has_reply = 1 GROUP BY campaign_id`)
+      .all();
+    const replyMap = {};
+    for (const r of (replyCounts.results || [])) {
+      replyMap[r.campaign_id] = r.reply_count;
+    }
 
     // Inbox unread count
     const unread = await db
@@ -119,7 +129,7 @@ async function handleGet(url, env) {
       .first();
 
     return json({
-      campaigns: campaigns.results,
+      campaigns: campaigns.results.map(c => ({ ...c, reply_count: replyMap[c.id] || 0 })),
       totals: totals || {
         total_messages: 0,
         total_sent: 0,
@@ -127,6 +137,7 @@ async function handleGet(url, env) {
         total_read: 0,
         total_failed: 0,
         total_queued: 0,
+        total_replies: 0,
       },
       unread_conversations: unread?.count || 0,
     });
