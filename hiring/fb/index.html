@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FB Group Posting — HN Hotels Hiring</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#fef7ed',100:'#fdecd4',200:'#f9d5a8',400:'#f0a944',500:'#e8930c',600:'#c97508' },
+            surface: { 1:'#111118', 2:'#16161f', 3:'#1c1c27', 4:'#22222e' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #0c0c14; color: #e4e4ed; }
+    .glass { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.04); backdrop-filter: blur(20px); }
+    .glass-hover:hover { border-color: rgba(255,255,255,0.08); background: rgba(28,28,39,0.8); }
+    .progress-track { background: rgba(255,255,255,0.04); }
+    .bar-success  { background: linear-gradient(90deg, #10b981, #34d399); }
+    .bar-failed   { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .bar-queued   { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    [data-bar] { transition: width 0.8s cubic-bezier(.4,0,.2,1); }
+    @keyframes live { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .live-dot { animation: live 1.4s ease-in-out infinite; }
+    @keyframes slideUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    .slide-up { animation: slideUp .3s ease-out; }
+    .scroll-y { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent; }
+    .scroll-y::-webkit-scrollbar { width: 3px; }
+    .scroll-y::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 3px; }
+    .badge { font-size:.6rem; padding:2px 7px; border-radius:999px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
+    input, select, textarea { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
+    input:focus, select:focus, textarea:focus { border-color: rgba(232,147,12,.5); outline: none; box-shadow: 0 0 0 2px rgba(232,147,12,.1); }
+    .btn-primary { background:#e8930c; color:#0c0c14; font-weight:600; }
+    .btn-primary:hover { background:#f0a944; }
+    .btn-ghost { background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.5); }
+    .btn-ghost:hover { background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.7); }
+    .overlay { background:rgba(0,0,0,0.5); backdrop-filter:blur(6px); }
+    .tab-active { color:#e8930c; border-bottom:2px solid #e8930c; }
+    .tab-inactive { color:rgba(255,255,255,0.3); border-bottom:2px solid transparent; }
+    .tab-inactive:hover { color:rgba(255,255,255,0.5); }
+    select option { background:#1c1c27; color:#e4e4ed; }
+    .ring-glow { box-shadow: 0 0 0 1px rgba(232,147,12,.2), 0 0 20px rgba(232,147,12,.08); }
+    .row-hover:hover { background: rgba(255,255,255,0.02); }
+    .checkbox-brand { accent-color: #e8930c; }
+  </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+<!-- Top Bar -->
+<nav class="sticky top-0 z-40 glass border-b border-white/[.03] px-4 sm:px-6 h-14 flex items-center justify-between">
+  <div class="flex items-center gap-2.5">
+    <div class="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center text-blue-400">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+    </div>
+    <div>
+      <h1 class="text-sm font-bold tracking-tight leading-none">FB Group Posting</h1>
+      <p class="text-[10px] text-white/25 leading-none mt-0.5">HN Hotels Hiring</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <button onclick="loadDashboard()" title="Refresh" class="btn-ghost text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      <span class="hidden sm:inline">Refresh</span>
+    </button>
+    <button onclick="showModal('import-csv')" class="btn-ghost text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+      Import CSV
+    </button>
+    <button onclick="showModal('new-creative')" class="btn-primary text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+      New Creative
+    </button>
+  </div>
+</nav>
+
+<!-- Main Layout -->
+<div class="max-w-[1400px] mx-auto px-4 sm:px-6 py-5">
+
+  <!-- Overview Stats -->
+  <section id="overview" class="grid grid-cols-3 sm:grid-cols-6 gap-2.5 mb-6"></section>
+
+  <!-- Tabs -->
+  <div class="flex items-center gap-6 border-b border-white/[.04] mb-5">
+    <button onclick="switchTab('groups')" class="view-tab tab-active text-xs font-semibold pb-2.5 transition" data-tab="groups">
+      <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197"/></svg>
+      Groups
+    </button>
+    <button onclick="switchTab('creatives')" class="view-tab tab-inactive text-xs font-semibold pb-2.5 transition" data-tab="creatives">
+      <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"/></svg>
+      Creatives
+    </button>
+    <button onclick="switchTab('history')" class="view-tab tab-inactive text-xs font-semibold pb-2.5 transition" data-tab="history">
+      <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Post History
+    </button>
+    <button onclick="switchTab('live')" class="view-tab tab-inactive text-xs font-semibold pb-2.5 transition flex items-center gap-1" data-tab="live">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 live-dot"></span>
+      Live
+    </button>
+  </div>
+
+  <!-- Tab Content -->
+  <section id="tab-groups" class="tab-content"></section>
+  <section id="tab-creatives" class="tab-content hidden"></section>
+  <section id="tab-history" class="tab-content hidden"></section>
+  <section id="tab-live" class="tab-content hidden"></section>
+</div>
+
+<!-- Import CSV Modal -->
+<div id="modal-import-csv" class="fixed inset-0 z-50 hidden overlay flex items-center justify-center p-4">
+  <div class="glass rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col ring-glow slide-up">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-white/[.04]">
+      <h2 class="text-sm font-bold">Import Groups from CSV</h2>
+      <button onclick="hideModal('import-csv')" class="text-white/30 hover:text-white/60 text-lg">&times;</button>
+    </div>
+    <div class="p-5 scroll-y flex-1">
+      <div class="border-2 border-dashed border-white/10 rounded-xl p-8 text-center mb-4 hover:border-brand-500/30 transition" id="csv-dropzone">
+        <input type="file" accept=".csv" id="csv-file" class="hidden" onchange="handleCSVFile(this)">
+        <svg class="w-8 h-8 mx-auto mb-2 text-white/15" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <p class="text-white/30 text-sm mb-2">Drop CSV file here or <button onclick="document.getElementById('csv-file').click()" class="text-brand-400 underline">browse</button></p>
+        <p class="text-white/15 text-xs">Expected columns: Group_URL, Group_Name, Visibility, Members_Raw, Members_Parsed, Posts_Activity</p>
+      </div>
+      <div id="csv-preview" class="hidden">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs text-white/40">Preview — <span id="csv-count" class="text-brand-400 font-semibold">0</span> groups</span>
+          <select id="csv-category" class="text-xs rounded-lg px-3 py-1.5 text-white/60">
+            <option value="">No category</option>
+            <option value="Restaurant Jobs">Restaurant Jobs</option>
+            <option value="Hotel Jobs">Hotel Jobs</option>
+            <option value="Bangalore Jobs">Bangalore Jobs</option>
+            <option value="General Jobs">General Jobs</option>
+            <option value="Kerala Jobs">Kerala Jobs</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="rounded-xl overflow-hidden border border-white/[.04] max-h-[300px] scroll-y">
+          <table class="w-full text-xs">
+            <thead class="bg-white/[.02] sticky top-0">
+              <tr>
+                <th class="text-left px-3 py-2 text-white/30 font-medium">Group Name</th>
+                <th class="text-right px-3 py-2 text-white/30 font-medium">Members</th>
+                <th class="text-left px-3 py-2 text-white/30 font-medium">Activity</th>
+              </tr>
+            </thead>
+            <tbody id="csv-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="px-5 py-3 border-t border-white/[.04] flex justify-end gap-2">
+      <button onclick="hideModal('import-csv')" class="btn-ghost text-xs px-4 py-2 rounded-lg">Cancel</button>
+      <button onclick="importCSV()" id="btn-import" class="btn-primary text-xs px-5 py-2 rounded-lg" disabled>Import Groups</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Creative Modal -->
+<div id="modal-new-creative" class="fixed inset-0 z-50 hidden overlay flex items-center justify-center p-4">
+  <div class="glass rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col ring-glow slide-up">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-white/[.04]">
+      <h2 class="text-sm font-bold">New Creative</h2>
+      <button onclick="hideModal('new-creative')" class="text-white/30 hover:text-white/60 text-lg">&times;</button>
+    </div>
+    <div class="p-5 scroll-y flex-1 space-y-4">
+      <div>
+        <label class="text-xs text-white/40 mb-1 block">Creative Name</label>
+        <input type="text" id="cr-name" placeholder="e.g. HE Hiring Mar 2026" class="w-full rounded-lg px-3 py-2 text-sm text-white/80">
+      </div>
+      <div>
+        <label class="text-xs text-white/40 mb-1 block">Brand</label>
+        <input type="text" id="cr-brand" value="Hamza Express" class="w-full rounded-lg px-3 py-2 text-sm text-white/80">
+      </div>
+      <div>
+        <label class="text-xs text-white/40 mb-1 block">Image Filename (in /hiring/fb/media/)</label>
+        <input type="text" id="cr-image" placeholder="e.g. he-hiring-mar26.jpg" class="w-full rounded-lg px-3 py-2 text-sm text-white/80">
+      </div>
+      <div>
+        <label class="text-xs text-white/40 mb-1 block">Post Type</label>
+        <select id="cr-type" class="w-full rounded-lg px-3 py-2 text-sm text-white/80">
+          <option value="text_photo">Text + Photo</option>
+          <option value="text">Text Only</option>
+          <option value="photo">Photo Only</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-white/40 mb-1 block">Caption Text</label>
+        <textarea id="cr-text" rows="8" placeholder="Post caption..." class="w-full rounded-lg px-3 py-2 text-sm text-white/80 resize-none"></textarea>
+      </div>
+    </div>
+    <div class="px-5 py-3 border-t border-white/[.04] flex justify-end gap-2">
+      <button onclick="hideModal('new-creative')" class="btn-ghost text-xs px-4 py-2 rounded-lg">Cancel</button>
+      <button onclick="saveCreative()" class="btn-primary text-xs px-5 py-2 rounded-lg">Save Creative</button>
+    </div>
+  </div>
+</div>
+
+<!-- Start Posting Session Modal -->
+<div id="modal-start-session" class="fixed inset-0 z-50 hidden overlay flex items-center justify-center p-4">
+  <div class="glass rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col ring-glow slide-up">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-white/[.04]">
+      <h2 class="text-sm font-bold">Start Posting Session</h2>
+      <button onclick="hideModal('start-session')" class="text-white/30 hover:text-white/60 text-lg">&times;</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="text-xs text-white/40 mb-1 block">Creative</label>
+        <select id="ss-creative" class="w-full rounded-lg px-3 py-2 text-sm text-white/80" onchange="previewQueue()"></select>
+      </div>
+      <div>
+        <label class="text-xs text-white/40 mb-1 block">Account</label>
+        <input type="text" id="ss-account" value="default" class="w-full rounded-lg px-3 py-2 text-sm text-white/80">
+      </div>
+      <div id="ss-queue-info" class="glass rounded-xl p-4 text-center">
+        <p class="text-white/30 text-xs">Select a creative to see available groups</p>
+      </div>
+    </div>
+    <div class="px-5 py-3 border-t border-white/[.04] flex justify-end gap-2">
+      <button onclick="hideModal('start-session')" class="btn-ghost text-xs px-4 py-2 rounded-lg">Cancel</button>
+      <button onclick="startSession()" id="btn-start-session" class="btn-primary text-xs px-5 py-2 rounded-lg">Start Session</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Config ────────────────────────────────────────────────
+const API = '/api/fb-posting';
+let state = { stats: null, groups: [], creatives: [], posts: [], currentTab: 'groups', csvData: null, groupPage: 1, postPage: 1 };
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function fmt(n) { if (n >= 1e6) return (n/1e6).toFixed(1)+'M'; if (n >= 1e3) return (n/1e3).toFixed(1)+'K'; return String(n); }
+
+// ─── API Calls ─────────────────────────────────────────────
+async function api(action, params = {}) {
+  const url = new URL(API, location.origin);
+  url.searchParams.set('action', action);
+  for (const [k,v] of Object.entries(params)) if (v !== undefined && v !== null) url.searchParams.set(k, v);
+  const r = await fetch(url);
+  return r.json();
+}
+
+async function apiPost(body) {
+  const r = await fetch(API, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  return r.json();
+}
+
+// ─── Dashboard Load ────────────────────────────────────────
+async function loadDashboard() {
+  const [statsRes, groupsRes, creativesRes, postsRes] = await Promise.all([
+    api('stats'),
+    api('groups', { page: state.groupPage, limit: 50 }),
+    api('creatives'),
+    api('posts', { page: state.postPage, limit: 50 }),
+  ]);
+
+  if (statsRes.ok) state.stats = statsRes.stats;
+  if (groupsRes.ok) { state.groups = groupsRes.groups; state.groupsTotal = groupsRes.total; state.groupPages = groupsRes.pages; }
+  if (creativesRes.ok) state.creatives = creativesRes.creatives;
+  if (postsRes.ok) { state.posts = postsRes.posts; state.postsTotal = postsRes.total; }
+
+  renderOverview();
+  renderTab();
+}
+
+// ─── Overview Stats ────────────────────────────────────────
+function renderOverview() {
+  const s = state.stats;
+  if (!s) return;
+  const g = s.groups || {};
+  const p = s.posts || {};
+
+  const metrics = [
+    { l:'Groups',     v: g.total_groups || 0, c:'blue-400',    bg:'blue-500/[.08]' },
+    { l:'Members',    v: fmt(g.total_members || 0), c:'cyan-400', bg:'cyan-500/[.08]' },
+    { l:'Creatives',  v: s.creatives_count || 0, c:'violet-400', bg:'violet-500/[.08]' },
+    { l:'Posted',     v: p.successful || 0, c:'emerald-400',  bg:'emerald-500/[.08]' },
+    { l:'Failed',     v: p.failed || 0, c: (p.failed||0)>0 ? 'red-400':'white/30', bg: (p.failed||0)>0 ? 'red-500/[.08]':'white/[.03]' },
+    { l:'Today',      v: p.today_posted || 0, c:'brand-400',   bg:'brand-500/[.08]' },
+  ];
+
+  document.getElementById('overview').innerHTML = metrics.map(m => `
+    <div class="glass rounded-xl px-3.5 py-3 slide-up">
+      <p class="text-[10px] text-white/25 mb-1 uppercase tracking-wider">${m.l}</p>
+      <p class="text-lg font-bold text-${m.c}">${m.v}</p>
+    </div>
+  `).join('');
+}
+
+// ─── Tab Switching ─────────────────────────────────────────
+function switchTab(tab) {
+  state.currentTab = tab;
+  document.querySelectorAll('.view-tab').forEach(t => {
+    t.classList.toggle('tab-active', t.dataset.tab === tab);
+    t.classList.toggle('tab-inactive', t.dataset.tab !== tab);
+  });
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.getElementById('tab-' + tab)?.classList.remove('hidden');
+  renderTab();
+}
+
+function renderTab() {
+  switch(state.currentTab) {
+    case 'groups':    renderGroups(); break;
+    case 'creatives': renderCreatives(); break;
+    case 'history':   renderHistory(); break;
+    case 'live':      renderLive(); break;
+  }
+}
+
+// ─── Groups Tab ────────────────────────────────────────────
+function renderGroups() {
+  const el = document.getElementById('tab-groups');
+  const groups = state.groups;
+
+  // Category counts
+  const cats = (state.stats?.categories || []);
+  const catFilter = state.groupCatFilter || '';
+  const statusFilter = state.groupStatusFilter || '';
+
+  el.innerHTML = `
+    <div class="flex flex-wrap items-center gap-2 mb-4">
+      <select onchange="state.groupCatFilter=this.value; state.groupPage=1; reloadGroups()" class="text-xs rounded-lg px-3 py-1.5 text-white/60">
+        <option value="">All Categories</option>
+        ${cats.map(c => `<option value="${esc(c.category)}" ${catFilter===c.category?'selected':''}>${esc(c.category)} (${c.count})</option>`).join('')}
+      </select>
+      <select onchange="state.groupStatusFilter=this.value; state.groupPage=1; reloadGroups()" class="text-xs rounded-lg px-3 py-1.5 text-white/60">
+        <option value="">All Statuses</option>
+        <option value="active" ${statusFilter==='active'?'selected':''}>Active</option>
+        <option value="blocked" ${statusFilter==='blocked'?'selected':''}>Blocked</option>
+        <option value="joined" ${statusFilter==='joined'?'selected':''}>Joined</option>
+        <option value="pending" ${statusFilter==='pending'?'selected':''}>Pending</option>
+      </select>
+      <input type="text" id="group-search" placeholder="Search groups..." onkeyup="debounceSearch(this.value)" class="text-xs rounded-lg px-3 py-1.5 text-white/60 w-48">
+      <span class="text-xs text-white/20 ml-auto">${state.groupsTotal || 0} groups</span>
+    </div>
+
+    <div class="rounded-xl overflow-hidden border border-white/[.04]">
+      <table class="w-full text-xs">
+        <thead class="bg-white/[.02]">
+          <tr>
+            <th class="text-left px-3 py-2.5 text-white/30 font-medium w-[40%]">Group Name</th>
+            <th class="text-right px-3 py-2.5 text-white/30 font-medium">Members</th>
+            <th class="text-left px-3 py-2.5 text-white/30 font-medium">Activity</th>
+            <th class="text-center px-3 py-2.5 text-white/30 font-medium">Posts</th>
+            <th class="text-left px-3 py-2.5 text-white/30 font-medium">Last Posted</th>
+            <th class="text-center px-3 py-2.5 text-white/30 font-medium">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${groups.length === 0 ? `<tr><td colspan="6" class="text-center py-8 text-white/20">No groups found</td></tr>` :
+            groups.map(g => `
+              <tr class="border-t border-white/[.02] row-hover cursor-pointer" onclick="window.open('${esc(g.group_url)}','_blank')">
+                <td class="px-3 py-2.5">
+                  <div class="font-medium text-white/70 truncate max-w-[300px]">${esc(g.name)}</div>
+                  ${g.category ? `<span class="text-[10px] text-white/20">${esc(g.category)}</span>` : ''}
+                </td>
+                <td class="px-3 py-2.5 text-right">
+                  <span class="font-semibold text-cyan-400">${fmt(g.members_parsed)}</span>
+                </td>
+                <td class="px-3 py-2.5 text-white/30">${esc(g.posts_activity || '—')}</td>
+                <td class="px-3 py-2.5 text-center">
+                  ${g.total_posts > 0 ? `<span class="text-emerald-400 font-semibold">${g.total_posts}</span>` : '<span class="text-white/15">0</span>'}
+                </td>
+                <td class="px-3 py-2.5 text-white/25">${g.last_posted_at ? timeAgo(g.last_posted_at) : '—'}</td>
+                <td class="px-3 py-2.5 text-center">
+                  ${g.is_blocked ? '<span class="badge bg-red-500/10 text-red-400">Blocked</span>' :
+                    g.status === 'active' ? '<span class="badge bg-emerald-500/10 text-emerald-400">Active</span>' :
+                    `<span class="badge bg-white/5 text-white/30">${esc(g.status)}</span>`}
+                </td>
+              </tr>
+            `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    ${(state.groupPages || 1) > 1 ? `
+      <div class="flex items-center justify-center gap-2 mt-4">
+        <button onclick="state.groupPage=Math.max(1,state.groupPage-1);reloadGroups()" class="btn-ghost text-xs px-3 py-1.5 rounded-lg" ${state.groupPage<=1?'disabled':''}>Prev</button>
+        <span class="text-xs text-white/30">Page ${state.groupPage} of ${state.groupPages}</span>
+        <button onclick="state.groupPage=Math.min(state.groupPages,state.groupPage+1);reloadGroups()" class="btn-ghost text-xs px-3 py-1.5 rounded-lg" ${state.groupPage>=state.groupPages?'disabled':''}>Next</button>
+      </div>
+    ` : ''}
+  `;
+}
+
+let searchTimer;
+function debounceSearch(val) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { state.groupSearch = val; state.groupPage = 1; reloadGroups(); }, 300);
+}
+
+async function reloadGroups() {
+  const res = await api('groups', {
+    page: state.groupPage, limit: 50,
+    category: state.groupCatFilter || undefined,
+    status: state.groupStatusFilter || undefined,
+    search: state.groupSearch || undefined,
+  });
+  if (res.ok) { state.groups = res.groups; state.groupsTotal = res.total; state.groupPages = res.pages; }
+  renderGroups();
+}
+
+// ─── Creatives Tab ─────────────────────────────────────────
+function renderCreatives() {
+  const el = document.getElementById('tab-creatives');
+  const cr = state.creatives;
+
+  if (cr.length === 0) {
+    el.innerHTML = `<div class="py-16 text-center"><p class="text-white/20 text-sm">No creatives yet. Create one to start posting.</p></div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      ${cr.map(c => `
+        <div class="glass rounded-xl p-4 glass-hover transition slide-up">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-bold text-white/80">${esc(c.name)}</h3>
+              <p class="text-[10px] text-white/25">${esc(c.brand)} · ${esc(c.post_type)}</p>
+            </div>
+            <span class="badge bg-brand-500/10 text-brand-400">${c.times_used} posts</span>
+          </div>
+          ${c.image_filename ? `
+            <div class="rounded-lg overflow-hidden mb-3 bg-white/[.02] h-32 flex items-center justify-center">
+              <img src="/hiring/fb/media/${esc(c.image_filename)}" alt="" class="max-h-full max-w-full object-contain" onerror="this.parentElement.innerHTML='<span class=\\'text-white/10 text-xs\\'>Image not found</span>'">
+            </div>
+          ` : ''}
+          <div class="text-[11px] text-white/30 leading-relaxed mb-3 max-h-20 overflow-hidden">
+            ${esc(c.post_text || '').slice(0, 200)}${(c.post_text||'').length > 200 ? '...' : ''}
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="openStartSession(${c.id})" class="btn-primary text-[11px] px-3 py-1.5 rounded-lg flex-1">Start Posting</button>
+            <button onclick="viewQueue(${c.id})" class="btn-ghost text-[11px] px-3 py-1.5 rounded-lg">Queue</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ─── Post History Tab ──────────────────────────────────────
+function renderHistory() {
+  const el = document.getElementById('tab-history');
+  const posts = state.posts;
+
+  // Summary counts
+  const summary = state.stats?.posts || {};
+
+  el.innerHTML = `
+    <div class="flex items-center gap-4 mb-4">
+      <div class="flex gap-3">
+        <span class="text-xs text-emerald-400 font-semibold">${summary.successful || 0} posted</span>
+        <span class="text-xs text-red-400">${summary.failed || 0} failed</span>
+        <span class="text-xs text-blue-400">${summary.queued || 0} queued</span>
+      </div>
+      <span class="text-xs text-white/20 ml-auto">${state.postsTotal || 0} total</span>
+    </div>
+
+    <div class="rounded-xl overflow-hidden border border-white/[.04]">
+      <table class="w-full text-xs">
+        <thead class="bg-white/[.02]">
+          <tr>
+            <th class="text-left px-3 py-2.5 text-white/30 font-medium">Group</th>
+            <th class="text-left px-3 py-2.5 text-white/30 font-medium">Creative</th>
+            <th class="text-center px-3 py-2.5 text-white/30 font-medium">Status</th>
+            <th class="text-left px-3 py-2.5 text-white/30 font-medium">Time</th>
+            <th class="text-left px-3 py-2.5 text-white/30 font-medium">Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${posts.length === 0 ? `<tr><td colspan="5" class="text-center py-8 text-white/20">No posts yet</td></tr>` :
+            posts.map(p => `
+              <tr class="border-t border-white/[.02] row-hover">
+                <td class="px-3 py-2.5">
+                  <div class="text-white/60 truncate max-w-[200px]">${esc(p.group_name)}</div>
+                  <span class="text-[10px] text-white/15">${fmt(p.members_parsed)} members</span>
+                </td>
+                <td class="px-3 py-2.5 text-white/40">${esc(p.creative_name)}</td>
+                <td class="px-3 py-2.5 text-center">
+                  ${p.status === 'success' ? '<span class="badge bg-emerald-500/10 text-emerald-400">Success</span>' :
+                    p.status === 'failed' ? '<span class="badge bg-red-500/10 text-red-400">Failed</span>' :
+                    p.status === 'posting' ? '<span class="badge bg-blue-500/10 text-blue-400">Posting</span>' :
+                    p.status === 'skipped' ? '<span class="badge bg-yellow-500/10 text-yellow-400">Skipped</span>' :
+                    '<span class="badge bg-white/5 text-white/30">Queued</span>'}
+                </td>
+                <td class="px-3 py-2.5 text-white/25">${p.posted_at ? timeAgo(p.posted_at) : '—'}</td>
+                <td class="px-3 py-2.5 text-red-400/60 text-[11px] truncate max-w-[200px]">${esc(p.error_message || '')}</td>
+              </tr>
+            `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ─── Live Tab ──────────────────────────────────────────────
+async function renderLive() {
+  const el = document.getElementById('tab-live');
+  const activeSession = state.stats?.active_session;
+
+  if (!activeSession) {
+    el.innerHTML = `
+      <div class="py-16 text-center">
+        <span class="w-2 h-2 rounded-full bg-white/10 inline-block mb-3"></span>
+        <p class="text-white/20 text-sm mb-1">No active posting session</p>
+        <p class="text-white/10 text-xs">Create a session from the Creatives tab to start posting</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Fetch session details
+  const res = await api('session', { id: activeSession.id });
+  if (!res.ok) { el.innerHTML = `<p class="text-red-400 text-sm">Error loading session</p>`; return; }
+
+  const s = res.session;
+  const posts = res.posts;
+  const total = s.total_groups;
+  const done = s.posted_count + s.failed_count + s.skipped_count;
+  const pct = total > 0 ? Math.round(done / total * 100) : 0;
+
+  el.innerHTML = `
+    <div class="glass rounded-xl p-5 mb-4">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-sm font-bold text-white/80 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full ${s.status==='active'?'bg-emerald-400 live-dot':'bg-yellow-400'}"></span>
+            Session #${s.id} — ${esc(s.creative_name)}
+          </h3>
+          <p class="text-[10px] text-white/25 mt-0.5">${s.account_name} · Started ${timeAgo(s.started_at)}</p>
+        </div>
+        <div class="flex gap-2">
+          ${s.status === 'active' ? `<button onclick="pauseSession(${s.id})" class="btn-ghost text-xs px-3 py-1.5 rounded-lg">Pause</button>` :
+            s.status === 'paused' ? `<button onclick="resumeSession(${s.id})" class="btn-primary text-xs px-3 py-1.5 rounded-lg">Resume</button>` : ''}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-4 gap-3 mb-4">
+        <div class="text-center">
+          <p class="text-lg font-bold text-white/80">${total}</p>
+          <p class="text-[10px] text-white/25">Total</p>
+        </div>
+        <div class="text-center">
+          <p class="text-lg font-bold text-emerald-400">${s.posted_count}</p>
+          <p class="text-[10px] text-white/25">Posted</p>
+        </div>
+        <div class="text-center">
+          <p class="text-lg font-bold text-red-400">${s.failed_count}</p>
+          <p class="text-[10px] text-white/25">Failed</p>
+        </div>
+        <div class="text-center">
+          <p class="text-lg font-bold text-yellow-400">${s.skipped_count}</p>
+          <p class="text-[10px] text-white/25">Skipped</p>
+        </div>
+      </div>
+
+      <div class="progress-track rounded-full h-2.5 overflow-hidden">
+        <div class="bar-success h-full rounded-full transition-all duration-700" style="width:${pct}%"></div>
+      </div>
+      <p class="text-right text-[10px] text-white/25 mt-1">${pct}% complete · ${done}/${total}</p>
+    </div>
+
+    <div class="rounded-xl overflow-hidden border border-white/[.04] max-h-[400px] scroll-y">
+      <table class="w-full text-xs">
+        <thead class="bg-white/[.02] sticky top-0">
+          <tr>
+            <th class="text-left px-3 py-2.5 text-white/30 font-medium">Group</th>
+            <th class="text-center px-3 py-2.5 text-white/30 font-medium">Status</th>
+            <th class="text-left px-3 py-2.5 text-white/30 font-medium">Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${posts.map(p => `
+            <tr class="border-t border-white/[.02]">
+              <td class="px-3 py-2">${esc(p.group_name)}</td>
+              <td class="px-3 py-2 text-center">
+                ${p.status === 'success' ? '<span class="badge bg-emerald-500/10 text-emerald-400">Success</span>' :
+                  p.status === 'failed' ? '<span class="badge bg-red-500/10 text-red-400">Failed</span>' :
+                  p.status === 'posting' ? '<span class="badge bg-blue-500/10 text-blue-400">Posting...</span>' :
+                  '<span class="badge bg-white/5 text-white/30">Queued</span>'}
+              </td>
+              <td class="px-3 py-2 text-white/25">${p.posted_at ? timeAgo(p.posted_at) : '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ─── CSV Import ────────────────────────────────────────────
+function handleCSVFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => parseCSV(e.target.result);
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return;
+
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const rows = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const vals = parseCSVLine(lines[i]);
+    if (vals.length < 2) continue;
+    const row = {};
+    headers.forEach((h, idx) => row[h] = (vals[idx] || '').trim());
+    if (row.Group_URL || row.group_url) rows.push(row);
+  }
+
+  state.csvData = rows;
+  document.getElementById('csv-count').textContent = rows.length;
+  document.getElementById('csv-preview').classList.remove('hidden');
+  document.getElementById('btn-import').disabled = false;
+
+  const tbody = document.getElementById('csv-table');
+  tbody.innerHTML = rows.slice(0, 50).map(r => `
+    <tr class="border-t border-white/[.02]">
+      <td class="px-3 py-1.5 text-white/60 truncate max-w-[250px]">${esc(r.Group_Name || r.name || '—')}</td>
+      <td class="px-3 py-1.5 text-right text-cyan-400 font-semibold">${fmt(parseInt(r.Members_Parsed || r.members_parsed || 0))}</td>
+      <td class="px-3 py-1.5 text-white/30">${esc(r.Posts_Activity || r.posts_activity || '—')}</td>
+    </tr>
+  `).join('') + (rows.length > 50 ? `<tr><td colspan="3" class="px-3 py-2 text-center text-white/15 text-[10px]">...and ${rows.length-50} more</td></tr>` : '');
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQuotes = !inQuotes; }
+    else if (c === ',' && !inQuotes) { result.push(current); current = ''; }
+    else { current += c; }
+  }
+  result.push(current);
+  return result;
+}
+
+async function importCSV() {
+  if (!state.csvData || state.csvData.length === 0) return;
+  const btn = document.getElementById('btn-import');
+  btn.textContent = 'Importing...';
+  btn.disabled = true;
+
+  const category = document.getElementById('csv-category').value;
+  const groups = state.csvData.map(r => ({
+    group_url: r.Group_URL || r.group_url,
+    name: r.Group_Name || r.name,
+    visibility: r.Visibility || r.visibility || 'Public',
+    members_raw: r.Members_Raw || r.members_raw || '',
+    members_parsed: r.Members_Parsed || r.members_parsed || 0,
+    posts_activity: r.Posts_Activity || r.posts_activity || '',
+    category: category || null,
+  }));
+
+  const res = await apiPost({ action: 'import_groups', groups });
+
+  if (res.ok) {
+    btn.textContent = `Done! ${res.imported} imported`;
+    setTimeout(() => { hideModal('import-csv'); loadDashboard(); }, 1500);
+  } else {
+    btn.textContent = 'Error: ' + (res.error || 'unknown');
+    setTimeout(() => { btn.textContent = 'Import Groups'; btn.disabled = false; }, 3000);
+  }
+}
+
+// ─── Creative Actions ──────────────────────────────────────
+async function saveCreative() {
+  const name = document.getElementById('cr-name').value.trim();
+  const brand = document.getElementById('cr-brand').value.trim();
+  const image_filename = document.getElementById('cr-image').value.trim();
+  const post_type = document.getElementById('cr-type').value;
+  const post_text = document.getElementById('cr-text').value.trim();
+
+  if (!name) return alert('Name is required');
+
+  const res = await apiPost({ action: 'create_creative', name, brand, image_filename, post_type, post_text });
+  if (res.ok) {
+    hideModal('new-creative');
+    loadDashboard();
+  } else {
+    alert('Error: ' + (res.error || 'unknown'));
+  }
+}
+
+// ─── Session Actions ───────────────────────────────────────
+async function openStartSession(creativeId) {
+  const select = document.getElementById('ss-creative');
+  select.innerHTML = state.creatives.map(c =>
+    `<option value="${c.id}" ${c.id === creativeId ? 'selected':''}>${esc(c.name)}</option>`
+  ).join('');
+  showModal('start-session');
+  previewQueue();
+}
+
+async function previewQueue() {
+  const cid = document.getElementById('ss-creative').value;
+  const info = document.getElementById('ss-queue-info');
+  info.innerHTML = '<p class="text-white/30 text-xs">Loading...</p>';
+
+  const res = await api('queue', { creative_id: cid, limit: 500 });
+  if (res.ok) {
+    info.innerHTML = `
+      <p class="text-2xl font-bold text-brand-400">${res.count}</p>
+      <p class="text-xs text-white/30 mt-1">groups available to post this creative</p>
+    `;
+  }
+}
+
+async function viewQueue(creativeId) {
+  state.groupCatFilter = '';
+  state.groupStatusFilter = '';
+  state.groupSearch = '';
+  state.groupPage = 1;
+  // Reload groups with not_posted_creative filter
+  const res = await api('groups', { page: 1, limit: 50, not_posted_creative: creativeId });
+  if (res.ok) { state.groups = res.groups; state.groupsTotal = res.total; state.groupPages = res.pages; }
+  switchTab('groups');
+}
+
+async function startSession() {
+  const creative_id = parseInt(document.getElementById('ss-creative').value);
+  const account_name = document.getElementById('ss-account').value.trim();
+
+  const btn = document.getElementById('btn-start-session');
+  btn.textContent = 'Creating...';
+  btn.disabled = true;
+
+  const res = await apiPost({ action: 'create_session', creative_id, account_name });
+  if (res.ok) {
+    hideModal('start-session');
+    loadDashboard();
+    switchTab('live');
+  } else {
+    alert('Error: ' + (res.error || 'unknown'));
+    btn.textContent = 'Start Session';
+    btn.disabled = false;
+  }
+}
+
+async function pauseSession(id) {
+  await apiPost({ action: 'pause_session', session_id: id });
+  loadDashboard();
+}
+
+async function resumeSession(id) {
+  await apiPost({ action: 'resume_session', session_id: id });
+  loadDashboard();
+}
+
+// ─── Modal Helpers ─────────────────────────────────────────
+function showModal(id) { document.getElementById('modal-' + id).classList.remove('hidden'); }
+function hideModal(id) {
+  document.getElementById('modal-' + id).classList.add('hidden');
+  // Reset state
+  if (id === 'import-csv') {
+    state.csvData = null;
+    document.getElementById('csv-preview').classList.add('hidden');
+    document.getElementById('csv-file').value = '';
+    document.getElementById('btn-import').disabled = true;
+    document.getElementById('btn-import').textContent = 'Import Groups';
+  }
+  if (id === 'new-creative') {
+    document.getElementById('cr-name').value = '';
+    document.getElementById('cr-brand').value = 'Hamza Express';
+    document.getElementById('cr-image').value = '';
+    document.getElementById('cr-text').value = '';
+  }
+}
+
+// ─── Utility ───────────────────────────────────────────────
+function timeAgo(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + (dateStr.includes('Z') ? '' : 'Z'));
+  const now = new Date();
+  const diff = Math.floor((now - d) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
+// CSV drag-drop
+const dropzone = document.getElementById('csv-dropzone');
+if (dropzone) {
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('border-brand-500/40'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('border-brand-500/40'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('border-brand-500/40');
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith('.csv')) {
+      const reader = new FileReader();
+      reader.onload = (ev) => parseCSV(ev.target.result);
+      reader.readAsText(file);
+    }
+  });
+}
+
+// ─── Auto-refresh live tab every 10s ───────────────────────
+setInterval(() => {
+  if (state.currentTab === 'live') renderLive();
+}, 10000);
+
+// ─── Init ──────────────────────────────────────────────────
+loadDashboard();
+</script>
+</body>
+</html>
