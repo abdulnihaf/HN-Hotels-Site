@@ -202,8 +202,26 @@ async function handleGet(url, env) {
     });
   }
 
+  // ── Candidate cities: distinct cities with counts (optionally filtered by role) ──
+  if (action === "candidate_cities") {
+    const role = url.searchParams.get("role");
+    let q = `SELECT city, COUNT(*) as cnt FROM candidates`;
+    const p = [];
+    if (role) { q += ` WHERE he_role = ?`; p.push(role); }
+    q += ` GROUP BY city ORDER BY cnt DESC`;
+    const rows = p.length
+      ? await db.prepare(q).bind(...p).all()
+      : await db.prepare(q).all();
+    return json({ cities: rows.results });
+  }
+
   // ── Candidate stats: count by role, sent vs unsent, personalization tiers ──
   if (action === "candidate_stats") {
+    const cityFilter = url.searchParams.get("city");
+    const cityWhere = cityFilter ? ` WHERE city = ?` : ``;
+    const cityAnd = cityFilter ? ` AND city = ?` : ``;
+
+    const roleParams = cityFilter ? [cityFilter] : [];
     const rows = await db
       .prepare(
         `SELECT he_role,
@@ -216,10 +234,11 @@ async function handleGet(url, env) {
            SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND (current_title IS NULL OR current_title = '' OR current_title = 'Not Available') THEN 1 ELSE 0 END) as tier_name_only,
            SUM(CASE WHEN first_name IS NULL OR first_name = '' THEN 1 ELSE 0 END) as tier_minimal,
            he_salary
-         FROM candidates
+         FROM candidates${cityWhere}
          GROUP BY he_role
          ORDER BY total DESC`
       )
+      .bind(...roleParams)
       .all();
 
     const overall = await db
@@ -230,8 +249,9 @@ async function handleGet(url, env) {
            SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND (current_company IS NULL OR current_company = '') THEN 1 ELSE 0 END) as tier_name_title,
            SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND (current_title IS NULL OR current_title = '' OR current_title = 'Not Available') THEN 1 ELSE 0 END) as tier_name_only,
            SUM(CASE WHEN first_name IS NULL OR first_name = '' THEN 1 ELSE 0 END) as tier_minimal
-         FROM candidates`
+         FROM candidates${cityWhere}`
       )
+      .bind(...roleParams)
       .first();
 
     return json({
@@ -250,6 +270,7 @@ async function handleGet(url, env) {
   // ── Candidates list: browse/filter candidates ──
   if (action === "candidates") {
     const role = url.searchParams.get("role");
+    const city = url.searchParams.get("city");
     const status = url.searchParams.get("status"); // none, sent, all
     const tier = url.searchParams.get("tier"); // full, name_title, name_only, minimal
     const search = url.searchParams.get("search"); // search by name/phone/title
@@ -263,6 +284,10 @@ async function handleGet(url, env) {
     if (role) {
       query += ` AND he_role = ?`;
       params.push(role);
+    }
+    if (city) {
+      query += ` AND city = ?`;
+      params.push(city);
     }
     if (status && status !== "all") {
       query += ` AND campaign_status = ?`;
@@ -291,6 +316,7 @@ async function handleGet(url, env) {
     let countQuery = `SELECT COUNT(*) as total FROM candidates WHERE 1=1`;
     const countParams = [];
     if (role) { countQuery += ` AND he_role = ?`; countParams.push(role); }
+    if (city) { countQuery += ` AND city = ?`; countParams.push(city); }
     if (status && status !== "all") { countQuery += ` AND campaign_status = ?`; countParams.push(status); }
     if (tier === "full") {
       countQuery += ` AND first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND current_company IS NOT NULL AND current_company != ''`;
@@ -516,7 +542,7 @@ async function handlePost(request, env) {
 
   // ── Create Campaign ──
   if (action === "create_campaign") {
-    const { name, template_name, role, salary, campaign_type, brand, category, source } = body;
+    const { name, template_name, role, salary, campaign_type, brand, category, source, city } = body;
 
     // Create the campaign record
     const result = await db
@@ -542,9 +568,13 @@ async function handlePost(request, env) {
       const isPersonalized = (campaign_type || "personalized") === "personalized";
       const templateName = template_name || (isPersonalized ? "he_hiring_mar26" : "he_hiring_generic_mar26");
 
-      // Get available candidates for this role
+      // Get available candidates for this role (optionally filtered by city)
       let candidateQuery = `SELECT * FROM candidates WHERE he_role = ? AND campaign_status = 'none'`;
       const candidateParams = [role];
+      if (city) {
+        candidateQuery += ` AND city = ?`;
+        candidateParams.push(city);
+      }
 
       const candidates = await db.prepare(candidateQuery).bind(...candidateParams).all();
       const rows = candidates.results || [];
