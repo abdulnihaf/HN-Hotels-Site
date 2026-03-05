@@ -39,6 +39,7 @@
     .mono { font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace; }
     @keyframes pulse-bar { 0%,100%{opacity:0.6} 50%{opacity:1} }
     .animate-pulse-bar { animation: pulse-bar 1.5s ease-in-out infinite; }
+    .settings-open .settings-chevron { transform: rotate(180deg); }
   </style>
 </head>
 <body class="min-h-screen font-sans antialiased">
@@ -54,75 +55,146 @@
       <p class="text-[10px] text-white/25 leading-none mt-0.5">Apna Candidate Phones</p>
     </div>
   </div>
-  <a href="/hiring/waba/" class="btn-ghost text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition no-underline">
-    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
-    WABA Dashboard
-  </a>
+  <div class="flex items-center gap-2">
+    <!-- Settings Toggle -->
+    <button onclick="toggleSettings()" class="btn-ghost text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition relative" title="API Settings">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span id="settings-badge" class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-surface-1"></span>
+    </button>
+    <a href="/hiring/waba/" class="btn-ghost text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition no-underline">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
+      Dashboard
+    </a>
+  </div>
 </nav>
 
 <div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-5">
 
-  <!-- Step 1: Auth Headers -->
-  <div class="glass rounded-xl p-5">
-    <div class="flex items-center gap-2 mb-3">
-      <span class="w-6 h-6 rounded-full bg-brand-500/15 text-brand-400 text-[10px] font-bold flex items-center justify-center">1</span>
-      <h2 class="text-sm font-semibold">Apna Auth Headers</h2>
-      <span class="text-[9px] text-white/20 ml-auto">From browser DevTools → Network → Copy request headers as JSON</span>
+  <!-- Settings Panel (Collapsible) -->
+  <div id="settings-panel" class="hidden">
+    <div class="glass rounded-xl overflow-hidden">
+      <div class="p-4 border-b border-white/[.04] flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-white/30" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><circle cx="12" cy="12" r="3"/></svg>
+          <h2 class="text-sm font-semibold">API Settings</h2>
+          <span class="text-[9px] text-white/20">Saved in browser — only re-enter when expired</span>
+        </div>
+        <button onclick="toggleSettings()" class="text-white/20 hover:text-white/50 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="p-5 space-y-4">
+        <!-- Auth Headers -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold">Apna Auth Headers</label>
+            <span class="text-[9px] text-white/15">DevTools → Network → Copy request headers as JSON</span>
+          </div>
+          <textarea id="auth-headers" rows="4" placeholder='{"authorization": "Bearer eyJ...", "cookie": "connect.sid=...", ...}' class="w-full rounded-lg px-3 py-2 text-xs mono placeholder-white/10 scroll-y"></textarea>
+          <div id="auth-status" class="mt-1 text-[10px] text-white/20"></div>
+        </div>
+        <!-- Search Context -->
+        <div>
+          <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1.5">Search Context</label>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="text-[10px] text-white/20 block mb-0.5">search_id</label>
+              <input id="search-id" type="text" placeholder="68cc1d142c8ceb..." class="w-full rounded-lg px-3 py-1.5 text-xs mono">
+            </div>
+            <div>
+              <label class="text-[10px] text-white/20 block mb-0.5">base_query_id</label>
+              <input id="base-query-id" type="text" placeholder="ae0a50ed727..." class="w-full rounded-lg px-3 py-1.5 text-xs mono">
+            </div>
+            <div>
+              <label class="text-[10px] text-white/20 block mb-0.5">sub_query_id</label>
+              <input id="sub-query-id" type="text" placeholder="d1cb6585d74..." class="w-full rounded-lg px-3 py-1.5 text-xs mono">
+            </div>
+          </div>
+        </div>
+        <!-- Default Save Settings -->
+        <div>
+          <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1.5">Default Save Settings</label>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="text-[10px] text-white/20 block mb-0.5">Default Role</label>
+              <select id="settings-role" class="w-full rounded-lg px-3 py-1.5 text-xs">
+                <option value="">Select role...</option>
+                <option value="Manager">Manager</option>
+                <option value="Supervisor">Supervisor</option>
+                <option value="Captain">Captain</option>
+                <option value="Waiter">Waiter</option>
+                <option value="Cashier">Cashier</option>
+                <option value="Kitchen Helper">Kitchen Helper</option>
+                <option value="Tea Master">Tea Master</option>
+                <option value="Indian Cook">Indian Cook</option>
+                <option value="Chinese Cook">Chinese Cook</option>
+                <option value="Cleaners">Cleaners</option>
+                <option value="Fried Chicken Cook">Fried Chicken Cook</option>
+                <option value="Juice Maker">Juice Maker</option>
+                <option value="Tandoor Cook">Tandoor Cook</option>
+                <option value="Counter Staff">Counter Staff</option>
+                <option value="Food Packing Person">Food Packing Person</option>
+                <option value="Grill Cook">Grill Cook</option>
+                <option value="Shawarma Maker">Shawarma Maker</option>
+                <option value="Tea Master Assistant">Tea Master Assistant</option>
+                <option value="Dish Washer">Dish Washer</option>
+                <option value="Not Relevant">Not Relevant</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-white/20 block mb-0.5">Default City</label>
+              <input id="settings-city" type="text" value="Bangalore" placeholder="City" class="w-full rounded-lg px-3 py-1.5 text-xs">
+            </div>
+            <div>
+              <label class="text-[10px] text-white/20 block mb-0.5">Source Tag</label>
+              <input id="settings-source" type="text" value="apna_enrich" placeholder="Source" class="w-full rounded-lg px-3 py-1.5 text-xs">
+            </div>
+          </div>
+        </div>
+        <!-- Save Settings Button -->
+        <div class="flex items-center gap-3 pt-1">
+          <button onclick="saveSettings()" class="btn-primary text-xs px-4 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+            Save Settings
+          </button>
+          <button onclick="clearSettings()" class="btn-ghost text-xs px-3 py-1.5 rounded-lg transition">Clear All</button>
+          <span id="settings-save-status" class="text-[10px] text-white/20"></span>
+        </div>
+      </div>
     </div>
-    <textarea id="auth-headers" rows="5" placeholder='{"authorization": "Bearer eyJ...", "cookie": "connect.sid=...", ...}' class="w-full rounded-lg px-3 py-2 text-xs mono placeholder-white/10 scroll-y"></textarea>
-    <div id="auth-status" class="mt-2 text-[10px] text-white/20"></div>
   </div>
 
-  <!-- Step 2: Search Context -->
-  <div class="glass rounded-xl p-5">
-    <div class="flex items-center gap-2 mb-3">
-      <span class="w-6 h-6 rounded-full bg-brand-500/15 text-brand-400 text-[10px] font-bold flex items-center justify-center">2</span>
-      <h2 class="text-sm font-semibold">Search Context</h2>
-      <span class="text-[9px] text-white/20 ml-auto">From the Apna API call payload</span>
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <div>
-        <label class="text-[10px] text-white/30 block mb-1">search_id</label>
-        <input id="search-id" type="text" value="" placeholder="68cc1d142c8ceb..." class="w-full rounded-lg px-3 py-1.5 text-xs mono">
-      </div>
-      <div>
-        <label class="text-[10px] text-white/30 block mb-1">base_query_id</label>
-        <input id="base-query-id" type="text" value="" placeholder="ae0a50ed727..." class="w-full rounded-lg px-3 py-1.5 text-xs mono">
-      </div>
-      <div>
-        <label class="text-[10px] text-white/30 block mb-1">sub_query_id</label>
-        <input id="sub-query-id" type="text" value="" placeholder="d1cb6585d74..." class="w-full rounded-lg px-3 py-1.5 text-xs mono">
-      </div>
-    </div>
+  <!-- Config Status Banner (shown when settings panel is closed) -->
+  <div id="config-banner" class="hidden">
+    <!-- Filled dynamically -->
   </div>
 
-  <!-- Step 3: User IDs -->
+  <!-- Main: Paste IDs + Enrich -->
   <div class="glass rounded-xl p-5">
-    <div class="flex items-center gap-2 mb-3">
-      <span class="w-6 h-6 rounded-full bg-brand-500/15 text-brand-400 text-[10px] font-bold flex items-center justify-center">3</span>
-      <h2 class="text-sm font-semibold">Apna User IDs</h2>
-      <span id="id-count" class="text-[10px] text-white/20 ml-auto">0 IDs</span>
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2">
+        <h2 class="text-sm font-semibold">Paste Apna User IDs</h2>
+        <span id="id-count" class="text-[10px] text-white/20 bg-white/[.03] px-2 py-0.5 rounded-full">0 IDs</span>
+      </div>
     </div>
-    <textarea id="user-ids" rows="8" placeholder="Paste Apna user IDs, one per line...
+    <textarea id="user-ids" rows="10" placeholder="Paste user IDs, one per line...
 
 50315268
 23339998
 61618139
 ..." oninput="updateIdCount()" class="w-full rounded-lg px-3 py-2 text-xs mono placeholder-white/10 scroll-y"></textarea>
-  </div>
-
-  <!-- Controls -->
-  <div class="flex items-center gap-3">
-    <button id="btn-start" onclick="startEnrichment()" class="btn-primary text-xs px-5 py-2 rounded-lg flex items-center gap-2 transition">
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"/></svg>
-      Start Enrichment
-    </button>
-    <button id="btn-stop" onclick="stopEnrichment()" class="btn-danger text-xs px-4 py-2 rounded-lg hidden transition">Stop</button>
-    <div id="progress-wrap" class="hidden flex-1 flex items-center gap-3">
-      <div class="flex-1 h-2 rounded-full bg-white/[.04] overflow-hidden">
-        <div id="progress-bar" class="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all duration-300" style="width:0%"></div>
+    <div class="flex items-center gap-3 mt-3">
+      <button id="btn-start" onclick="startEnrichment()" class="btn-primary text-xs px-5 py-2.5 rounded-lg flex items-center gap-2 transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"/></svg>
+        Enrich Phones
+      </button>
+      <button id="btn-stop" onclick="stopEnrichment()" class="btn-danger text-xs px-4 py-2.5 rounded-lg hidden transition">Stop</button>
+      <div id="progress-wrap" class="hidden flex-1 flex items-center gap-3">
+        <div class="flex-1 h-2 rounded-full bg-white/[.04] overflow-hidden">
+          <div id="progress-bar" class="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all duration-300" style="width:0%"></div>
+        </div>
+        <span id="progress-text" class="text-[10px] text-white/40 shrink-0">0/0</span>
       </div>
-      <span id="progress-text" class="text-[10px] text-white/40 shrink-0">0/0</span>
     </div>
   </div>
 
@@ -139,9 +211,7 @@
   <div id="results-section" class="hidden glass rounded-xl overflow-hidden">
     <div class="p-4 border-b border-white/[.04] flex items-center justify-between">
       <h3 class="text-sm font-semibold">Enriched Results</h3>
-      <div class="flex items-center gap-3">
-        <span id="results-stats" class="text-[10px] text-white/30"></span>
-      </div>
+      <span id="results-stats" class="text-[10px] text-white/30"></span>
     </div>
     <div class="max-h-[400px] overflow-y-auto scroll-y">
       <table class="w-full text-xs">
@@ -167,7 +237,7 @@
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
       <div>
-        <label class="text-[10px] text-white/30 block mb-1">Assign Role *</label>
+        <label class="text-[10px] text-white/30 block mb-1">Role *</label>
         <select id="save-role" class="w-full rounded-lg px-3 py-1.5 text-xs">
           <option value="">Select role...</option>
           <option value="Manager">Manager</option>
@@ -181,7 +251,6 @@
           <option value="Chinese Cook">Chinese Cook</option>
           <option value="Cleaners">Cleaners</option>
           <option value="Fried Chicken Cook">Fried Chicken Cook</option>
-          <option value="Fried Snacks Cook">Fried Snacks Cook</option>
           <option value="Juice Maker">Juice Maker</option>
           <option value="Tandoor Cook">Tandoor Cook</option>
           <option value="Counter Staff">Counter Staff</option>
@@ -190,15 +259,16 @@
           <option value="Shawarma Maker">Shawarma Maker</option>
           <option value="Tea Master Assistant">Tea Master Assistant</option>
           <option value="Dish Washer">Dish Washer</option>
+          <option value="Not Relevant">Not Relevant</option>
         </select>
       </div>
       <div>
         <label class="text-[10px] text-white/30 block mb-1">City</label>
-        <input id="save-city" type="text" value="Bangalore" placeholder="City" class="w-full rounded-lg px-3 py-1.5 text-xs">
+        <input id="save-city" type="text" placeholder="City" class="w-full rounded-lg px-3 py-1.5 text-xs">
       </div>
       <div>
-        <label class="text-[10px] text-white/30 block mb-1">Source Tag</label>
-        <input id="save-source" type="text" value="apna_enrich" placeholder="Source" class="w-full rounded-lg px-3 py-1.5 text-xs">
+        <label class="text-[10px] text-white/30 block mb-1">Source</label>
+        <input id="save-source" type="text" placeholder="Source" class="w-full rounded-lg px-3 py-1.5 text-xs">
       </div>
     </div>
     <div class="flex items-center gap-3">
@@ -214,9 +284,11 @@
 
 <script>
 const API = "/api/hiring";
+const LS_KEY = "apna_enrich_settings";
 let enrichResults = [];
 let isRunning = false;
 let shouldStop = false;
+let settingsOpen = false;
 
 function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
@@ -225,39 +297,219 @@ async function apiPost(data) {
   return r.json();
 }
 
+// ─── localStorage Settings ─────────────────────────────────────
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function saveSettings() {
+  const authRaw = document.getElementById("auth-headers").value.trim();
+  let authHeaders = null;
+  if (authRaw) {
+    try { authHeaders = JSON.parse(authRaw); } catch {
+      document.getElementById("settings-save-status").innerHTML = '<span class="text-red-400">Invalid auth headers JSON</span>';
+      return;
+    }
+  }
+
+  const settings = {
+    auth_headers: authHeaders,
+    auth_raw: authRaw,
+    search_id: document.getElementById("search-id").value.trim(),
+    base_query_id: document.getElementById("base-query-id").value.trim(),
+    sub_query_id: document.getElementById("sub-query-id").value.trim(),
+    default_role: document.getElementById("settings-role").value,
+    default_city: document.getElementById("settings-city").value.trim(),
+    default_source: document.getElementById("settings-source").value.trim(),
+    saved_at: new Date().toISOString(),
+  };
+
+  localStorage.setItem(LS_KEY, JSON.stringify(settings));
+  document.getElementById("settings-save-status").innerHTML = '<span class="text-emerald-400">Saved to browser</span>';
+  setTimeout(() => { document.getElementById("settings-save-status").innerHTML = ""; }, 2000);
+  updateConfigBadge();
+  updateConfigBanner();
+
+  // Apply defaults to save section
+  applySaveDefaults(settings);
+}
+
+function clearSettings() {
+  localStorage.removeItem(LS_KEY);
+  document.getElementById("auth-headers").value = "";
+  document.getElementById("search-id").value = "";
+  document.getElementById("base-query-id").value = "";
+  document.getElementById("sub-query-id").value = "";
+  document.getElementById("settings-role").value = "";
+  document.getElementById("settings-city").value = "Bangalore";
+  document.getElementById("settings-source").value = "apna_enrich";
+  document.getElementById("auth-status").innerHTML = "";
+  document.getElementById("settings-save-status").innerHTML = '<span class="text-amber-400">Settings cleared</span>';
+  setTimeout(() => { document.getElementById("settings-save-status").innerHTML = ""; }, 2000);
+  updateConfigBadge();
+  updateConfigBanner();
+}
+
+function restoreSettings() {
+  const s = loadSettings();
+  if (!s) return;
+
+  if (s.auth_raw) {
+    document.getElementById("auth-headers").value = s.auth_raw;
+    // Trigger validation display
+    validateAuthHeaders();
+  }
+  if (s.search_id) document.getElementById("search-id").value = s.search_id;
+  if (s.base_query_id) document.getElementById("base-query-id").value = s.base_query_id;
+  if (s.sub_query_id) document.getElementById("sub-query-id").value = s.sub_query_id;
+  if (s.default_role) document.getElementById("settings-role").value = s.default_role;
+  if (s.default_city) document.getElementById("settings-city").value = s.default_city;
+  if (s.default_source) document.getElementById("settings-source").value = s.default_source;
+
+  applySaveDefaults(s);
+}
+
+function applySaveDefaults(s) {
+  if (s.default_role) document.getElementById("save-role").value = s.default_role;
+  if (s.default_city) document.getElementById("save-city").value = s.default_city;
+  if (s.default_source) document.getElementById("save-source").value = s.default_source || "apna_enrich";
+}
+
+// ─── Config Badge & Banner ─────────────────────────────────────
+function updateConfigBadge() {
+  const badge = document.getElementById("settings-badge");
+  const s = loadSettings();
+  if (s && s.auth_headers) {
+    badge.className = "absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-surface-1 bg-emerald-400";
+  } else {
+    badge.className = "absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-surface-1 bg-red-400 animate-pulse";
+  }
+}
+
+function updateConfigBanner() {
+  const banner = document.getElementById("config-banner");
+  const s = loadSettings();
+
+  if (settingsOpen) {
+    banner.classList.add("hidden");
+    return;
+  }
+
+  if (!s || !s.auth_headers) {
+    banner.classList.remove("hidden");
+    banner.innerHTML = `
+      <div class="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-red-500/[.06] border border-red-500/10 cursor-pointer hover:bg-red-500/[.1] transition" onclick="toggleSettings()">
+        <span class="w-2 h-2 rounded-full bg-red-400 animate-pulse shrink-0"></span>
+        <span class="text-xs text-red-400/80">API not configured — click to set up auth headers</span>
+        <svg class="w-3 h-3 text-red-400/40 ml-auto" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+      </div>`;
+  } else {
+    const ago = timeSince(new Date(s.saved_at));
+    banner.classList.remove("hidden");
+    banner.innerHTML = `
+      <div class="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-emerald-500/[.04] border border-emerald-500/[.06] cursor-pointer hover:bg-emerald-500/[.08] transition" onclick="toggleSettings()">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+        <span class="text-[11px] text-emerald-400/60">API configured ${ago}</span>
+        <span class="text-[10px] text-white/15 ml-auto">click to edit</span>
+      </div>`;
+  }
+}
+
+function timeSince(date) {
+  const s = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+// ─── Settings Panel Toggle ─────────────────────────────────────
+function toggleSettings() {
+  settingsOpen = !settingsOpen;
+  const panel = document.getElementById("settings-panel");
+  if (settingsOpen) {
+    panel.classList.remove("hidden");
+  } else {
+    panel.classList.add("hidden");
+  }
+  updateConfigBanner();
+}
+
+// ─── User IDs ──────────────────────────────────────────────────
 function updateIdCount() {
   const ids = parseUserIds();
-  document.getElementById("id-count").textContent = `${ids.length} IDs`;
+  document.getElementById("id-count").textContent = `${ids.length} ID${ids.length !== 1 ? 's' : ''}`;
 }
 
 function parseUserIds() {
   return document.getElementById("user-ids").value.trim().split(/[\n\r,\s]+/).filter(id => id && /^\d+$/.test(id.trim()));
 }
 
-function getApnaHeaders() {
+// ─── Auth Validation ───────────────────────────────────────────
+function validateAuthHeaders() {
   const raw = document.getElementById("auth-headers").value.trim();
-  if (!raw) return null;
+  if (!raw) { document.getElementById("auth-status").innerHTML = ""; return; }
   try {
     const h = JSON.parse(raw);
-    document.getElementById("auth-status").innerHTML = '<span class="text-emerald-400">Valid JSON</span>';
-    return h;
+    const keys = Object.keys(h);
+    const hasAuth = keys.some(k => k.toLowerCase() === "authorization" || k.toLowerCase() === "cookie");
+    if (hasAuth) {
+      document.getElementById("auth-status").innerHTML = `<span class="text-emerald-400">Valid \u00b7 ${keys.length} headers</span>`;
+    } else {
+      document.getElementById("auth-status").innerHTML = `<span class="text-amber-400">Valid JSON but no auth/cookie found</span>`;
+    }
   } catch {
-    document.getElementById("auth-status").innerHTML = '<span class="text-red-400">Invalid JSON — paste the full headers object</span>';
-    return null;
+    document.getElementById("auth-status").innerHTML = `<span class="text-red-400">Invalid JSON</span>`;
   }
 }
 
-function getSearchParams() {
-  return {
-    search_id: document.getElementById("search-id").value.trim(),
-    base_query_id: document.getElementById("base-query-id").value.trim(),
-    sub_query_id: document.getElementById("sub-query-id").value.trim(),
-    enterprise_member_id: "",
-    workspace_id: "",
-    job_id: "",
-  };
+function getApnaHeaders() {
+  // Try from form first, then from localStorage
+  const raw = document.getElementById("auth-headers").value.trim();
+  if (raw) {
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+  const s = loadSettings();
+  return s?.auth_headers || null;
 }
 
+function getSearchParams() {
+  // Try from form first, then from localStorage
+  const searchId = document.getElementById("search-id").value.trim();
+  const baseQueryId = document.getElementById("base-query-id").value.trim();
+  const subQueryId = document.getElementById("sub-query-id").value.trim();
+
+  if (searchId || baseQueryId || subQueryId) {
+    return {
+      search_id: searchId,
+      base_query_id: baseQueryId,
+      sub_query_id: subQueryId,
+      enterprise_member_id: "",
+      workspace_id: "",
+      job_id: "",
+    };
+  }
+
+  const s = loadSettings();
+  if (s) {
+    return {
+      search_id: s.search_id || "",
+      base_query_id: s.base_query_id || "",
+      sub_query_id: s.sub_query_id || "",
+      enterprise_member_id: "",
+      workspace_id: "",
+      job_id: "",
+    };
+  }
+
+  return { search_id: "", base_query_id: "", sub_query_id: "", enterprise_member_id: "", workspace_id: "", job_id: "" };
+}
+
+// ─── Enrichment Logic ──────────────────────────────────────────
 function addLog(msg, type = "info") {
   const log = document.getElementById("log-body");
   const colors = { info: "text-white/40", success: "text-emerald-400", error: "text-red-400", warn: "text-amber-400" };
@@ -268,13 +520,23 @@ function addLog(msg, type = "info") {
 
 async function startEnrichment() {
   const headers = getApnaHeaders();
-  if (!headers) { alert("Please paste valid Apna auth headers (JSON)"); return; }
+  if (!headers) {
+    toggleSettings();
+    if (!settingsOpen) toggleSettings();
+    alert("Please configure Apna auth headers in Settings first");
+    return;
+  }
 
   const ids = parseUserIds();
-  if (!ids.length) { alert("Please paste at least one user ID"); return; }
+  if (!ids.length) { alert("Paste at least one user ID"); return; }
 
   const searchParams = getSearchParams();
-  if (!searchParams.search_id) { alert("Please enter the search_id"); return; }
+  if (!searchParams.search_id) {
+    toggleSettings();
+    if (!settingsOpen) toggleSettings();
+    alert("Please configure search_id in Settings first");
+    return;
+  }
 
   // Reset
   enrichResults = [];
@@ -321,25 +583,24 @@ async function startEnrichment() {
           candidate_data: result.candidate_data,
           name: result.candidate_data?.name || result.candidate_data?.candidate_name || "",
         });
-        addLog(`${uid} → ${result.phone}`, "success");
+        addLog(`${uid} \u2192 ${result.phone}`, "success");
       } else if (result.error) {
         errorCount++;
         enrichResults.push({ user_id: uid, phone: "", error: result.error });
-        addLog(`${uid} → Error: ${result.error}`, "error");
+        addLog(`${uid} \u2192 Error: ${result.error}`, "error");
       } else {
         errorCount++;
         enrichResults.push({ user_id: uid, phone: "", error: "No phone returned" });
-        addLog(`${uid} → No phone number found`, "warn");
+        addLog(`${uid} \u2192 No phone number found`, "warn");
       }
     } catch (e) {
       errorCount++;
       enrichResults.push({ user_id: uid, phone: "", error: e.message });
-      addLog(`${uid} → Network error: ${e.message}`, "error");
+      addLog(`${uid} \u2192 Network error: ${e.message}`, "error");
     }
 
-    // Update results table
     renderResults();
-    document.getElementById("log-stats").textContent = `${successCount} found · ${errorCount} failed`;
+    document.getElementById("log-stats").textContent = `${successCount} found \u00b7 ${errorCount} failed`;
 
     // Rate limit: 500ms between requests
     if (i < ids.length - 1 && !shouldStop) {
@@ -375,8 +636,8 @@ function renderResults() {
     return `<tr class="border-b border-white/[.02] ${r.phone ? '' : 'opacity-40'}">
       <td class="py-1.5 px-3 text-white/20">${i + 1}</td>
       <td class="py-1.5 px-2 mono text-white/40">${esc(r.user_id)}</td>
-      <td class="py-1.5 px-2 mono ${r.phone ? 'text-emerald-400 font-medium' : 'text-white/15'}">${r.phone || '—'}</td>
-      <td class="py-1.5 px-2 text-white/50">${esc(r.name || '—')}</td>
+      <td class="py-1.5 px-2 mono ${r.phone ? 'text-emerald-400 font-medium' : 'text-white/15'}">${r.phone || '\u2014'}</td>
+      <td class="py-1.5 px-2 text-white/50">${esc(r.name || '\u2014')}</td>
       <td class="py-1.5 px-2">${statusBadge}</td>
     </tr>`;
   }).join("");
@@ -398,7 +659,6 @@ async function saveToDatabase() {
   document.getElementById("btn-save").disabled = true;
   document.getElementById("save-status").textContent = "Saving...";
 
-  // Build candidates array in upload_candidates format
   const candidates = withPhone.map(r => ({
     phone: r.phone,
     name: r.name || "",
@@ -434,23 +694,13 @@ async function saveToDatabase() {
   document.getElementById("btn-save").disabled = false;
 }
 
-// Auto-detect headers validity on paste
-document.getElementById("auth-headers").addEventListener("input", () => {
-  const raw = document.getElementById("auth-headers").value.trim();
-  if (!raw) { document.getElementById("auth-status").innerHTML = ""; return; }
-  try {
-    const h = JSON.parse(raw);
-    const keys = Object.keys(h);
-    const hasAuth = keys.some(k => k.toLowerCase() === "authorization" || k.toLowerCase() === "cookie");
-    if (hasAuth) {
-      document.getElementById("auth-status").innerHTML = `<span class="text-emerald-400">Valid · ${keys.length} headers (auth detected)</span>`;
-    } else {
-      document.getElementById("auth-status").innerHTML = `<span class="text-amber-400">Valid JSON but no auth/cookie header found</span>`;
-    }
-  } catch {
-    document.getElementById("auth-status").innerHTML = `<span class="text-red-400">Invalid JSON</span>`;
-  }
-});
+// ─── Init ──────────────────────────────────────────────────────
+document.getElementById("auth-headers").addEventListener("input", validateAuthHeaders);
+
+// Restore saved settings on load
+restoreSettings();
+updateConfigBadge();
+updateConfigBanner();
 </script>
 </body>
 </html>
