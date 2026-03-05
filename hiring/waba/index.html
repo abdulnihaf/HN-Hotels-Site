@@ -1468,6 +1468,15 @@ async function loadTemplatesList() {
   container.innerHTML = '<div class="text-center py-8 text-white/20 text-xs">Loading templates from Meta...</div>';
   try {
     const data = await apiGet({ action: "templates" });
+    if (data.error) {
+      container.innerHTML = `
+        <div class="text-center py-8">
+          <p class="text-red-400/70 text-sm mb-2">Could not load templates</p>
+          <p class="text-xs text-white/30">${esc(data.error)}</p>
+          <p class="text-[10px] text-white/15 mt-3">Fix: <code class="bg-white/[.04] px-1.5 py-0.5 rounded font-mono">wrangler pages secret put WABA_ID</code> with your WhatsApp Business Account ID</p>
+        </div>`;
+      return;
+    }
     const templates = data.templates || [];
     cachedTemplates = templates;
     if (templates.length === 0) {
