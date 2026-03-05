@@ -522,6 +522,8 @@ async function loadDashboard() {
     updateInboxBadge();
     if (currentView === "inbox") {
       loadInbox();
+    } else if (currentView === "database") {
+      // skip — database view manages its own data
     } else {
       renderCampaigns();
     }
