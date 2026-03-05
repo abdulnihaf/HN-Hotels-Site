@@ -202,7 +202,7 @@ async function handleGet(url, env) {
     });
   }
 
-  // ── Candidate stats: count by role, sent vs unsent ──
+  // ── Candidate stats: count by role, sent vs unsent, personalization tiers ──
   if (action === "candidate_stats") {
     const rows = await db
       .prepare(
@@ -211,6 +211,10 @@ async function handleGet(url, env) {
            SUM(CASE WHEN campaign_status = 'none' THEN 1 ELSE 0 END) as available,
            SUM(CASE WHEN campaign_status != 'none' THEN 1 ELSE 0 END) as contacted,
            SUM(has_personalization) as with_personalization,
+           SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND current_company IS NOT NULL AND current_company != '' THEN 1 ELSE 0 END) as tier_full,
+           SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND (current_company IS NULL OR current_company = '') THEN 1 ELSE 0 END) as tier_name_title,
+           SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND (current_title IS NULL OR current_title = '' OR current_title = 'Not Available') THEN 1 ELSE 0 END) as tier_name_only,
+           SUM(CASE WHEN first_name IS NULL OR first_name = '' THEN 1 ELSE 0 END) as tier_minimal,
            he_salary
          FROM candidates
          GROUP BY he_role
@@ -219,13 +223,27 @@ async function handleGet(url, env) {
       .all();
 
     const overall = await db
-      .prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN campaign_status = 'none' THEN 1 ELSE 0 END) as available FROM candidates`)
+      .prepare(
+        `SELECT COUNT(*) as total,
+           SUM(CASE WHEN campaign_status = 'none' THEN 1 ELSE 0 END) as available,
+           SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND current_company IS NOT NULL AND current_company != '' THEN 1 ELSE 0 END) as tier_full,
+           SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND (current_company IS NULL OR current_company = '') THEN 1 ELSE 0 END) as tier_name_title,
+           SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND (current_title IS NULL OR current_title = '' OR current_title = 'Not Available') THEN 1 ELSE 0 END) as tier_name_only,
+           SUM(CASE WHEN first_name IS NULL OR first_name = '' THEN 1 ELSE 0 END) as tier_minimal
+         FROM candidates`
+      )
       .first();
 
     return json({
       roles: rows.results,
       total_candidates: overall?.total || 0,
       total_available: overall?.available || 0,
+      tiers: {
+        full: overall?.tier_full || 0,
+        name_title: overall?.tier_name_title || 0,
+        name_only: overall?.tier_name_only || 0,
+        minimal: overall?.tier_minimal || 0,
+      },
     });
   }
 
@@ -233,8 +251,10 @@ async function handleGet(url, env) {
   if (action === "candidates") {
     const role = url.searchParams.get("role");
     const status = url.searchParams.get("status"); // none, sent, all
+    const tier = url.searchParams.get("tier"); // full, name_title, name_only, minimal
+    const search = url.searchParams.get("search"); // search by name/phone/title
     const page = parseInt(url.searchParams.get("page") || "1");
-    const limit = 50;
+    const limit = parseInt(url.searchParams.get("limit") || "50");
     const offset = (page - 1) * limit;
 
     let query = `SELECT * FROM candidates WHERE 1=1`;
@@ -248,6 +268,20 @@ async function handleGet(url, env) {
       query += ` AND campaign_status = ?`;
       params.push(status);
     }
+    if (tier === "full") {
+      query += ` AND first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND current_company IS NOT NULL AND current_company != ''`;
+    } else if (tier === "name_title") {
+      query += ` AND first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND (current_company IS NULL OR current_company = '')`;
+    } else if (tier === "name_only") {
+      query += ` AND first_name IS NOT NULL AND first_name != '' AND (current_title IS NULL OR current_title = '' OR current_title = 'Not Available')`;
+    } else if (tier === "minimal") {
+      query += ` AND (first_name IS NULL OR first_name = '')`;
+    }
+    if (search) {
+      query += ` AND (name LIKE ? OR first_name LIKE ? OR phone LIKE ? OR current_title LIKE ? OR current_company LIKE ?)`;
+      const s = `%${search}%`;
+      params.push(s, s, s, s, s);
+    }
 
     query += ` ORDER BY has_personalization DESC, id ASC LIMIT ? OFFSET ?`;
     params.push(limit, offset);
@@ -258,6 +292,20 @@ async function handleGet(url, env) {
     const countParams = [];
     if (role) { countQuery += ` AND he_role = ?`; countParams.push(role); }
     if (status && status !== "all") { countQuery += ` AND campaign_status = ?`; countParams.push(status); }
+    if (tier === "full") {
+      countQuery += ` AND first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND current_company IS NOT NULL AND current_company != ''`;
+    } else if (tier === "name_title") {
+      countQuery += ` AND first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND (current_company IS NULL OR current_company = '')`;
+    } else if (tier === "name_only") {
+      countQuery += ` AND first_name IS NOT NULL AND first_name != '' AND (current_title IS NULL OR current_title = '' OR current_title = 'Not Available')`;
+    } else if (tier === "minimal") {
+      countQuery += ` AND (first_name IS NULL OR first_name = '')`;
+    }
+    if (search) {
+      countQuery += ` AND (name LIKE ? OR first_name LIKE ? OR phone LIKE ? OR current_title LIKE ? OR current_company LIKE ?)`;
+      const s = `%${search}%`;
+      countParams.push(s, s, s, s, s);
+    }
     const count = await db.prepare(countQuery).bind(...countParams).first();
 
     return json({
@@ -599,6 +647,68 @@ async function handlePost(request, env) {
       .run();
 
     return json({ imported: candidates.length, success: true });
+  }
+
+  // ── Upload candidates directly to candidates table (CSV import) ──
+  if (action === "upload_candidates") {
+    const { candidates: rows } = body;
+    if (!rows || !rows.length) return json({ error: "No candidate rows" }, 400);
+
+    let inserted = 0, skipped = 0, errors = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const c = rows[i];
+      if (!c.phone) { skipped++; continue; }
+      const phone = c.phone.toString().replace(/\D/g, "").replace(/^91/, "").slice(-10);
+      if (phone.length !== 10) { skipped++; errors.push(`Row ${i+1}: invalid phone ${c.phone}`); continue; }
+
+      const hasFirst = c.first_name && c.first_name.trim();
+      const hasTitle = c.current_title && c.current_title.trim() && c.current_title.trim() !== "Not Available";
+      const hasCompany = c.current_company && c.current_company.trim();
+      const personalized = (hasFirst && hasTitle && hasCompany) ? 1 : 0;
+
+      try {
+        await db.prepare(
+          `INSERT INTO candidates (phone, name, first_name, he_role, he_salary, db_role, current_title, current_company, previous_title, previous_company, city, is_bangalore, experience, current_salary, skills, english_level, education, age, gender, has_personalization, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(phone) DO UPDATE SET
+             name = COALESCE(excluded.name, candidates.name),
+             first_name = COALESCE(excluded.first_name, candidates.first_name),
+             he_role = COALESCE(excluded.he_role, candidates.he_role),
+             current_title = COALESCE(excluded.current_title, candidates.current_title),
+             current_company = COALESCE(excluded.current_company, candidates.current_company),
+             has_personalization = MAX(candidates.has_personalization, excluded.has_personalization)`
+        ).bind(
+          phone,
+          c.name || c.first_name || "",
+          c.first_name || "",
+          c.he_role || "Kitchen Helper",
+          c.he_salary || "",
+          c.db_role || "",
+          c.current_title || "",
+          c.current_company || "",
+          c.previous_title || "",
+          c.previous_company || "",
+          c.city || "",
+          (c.city && c.city.toLowerCase().includes("bangalore")) || (c.city && c.city.toLowerCase().includes("bengaluru")) ? 1 : 0,
+          c.experience || "",
+          parseInt(c.current_salary) || 0,
+          c.skills || "",
+          c.english_level || "",
+          c.education || "",
+          c.age || "",
+          c.gender || "",
+          personalized,
+          c.source || "csv_upload"
+        ).run();
+        inserted++;
+      } catch (e) {
+        skipped++;
+        errors.push(`Row ${i+1} (${phone}): ${e.message}`);
+      }
+    }
+
+    return json({ inserted, skipped, errors: errors.slice(0, 20), success: true });
   }
 
   // ── Import historical send log (one-time bootstrap) ──
