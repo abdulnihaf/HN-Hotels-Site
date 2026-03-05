@@ -1667,12 +1667,24 @@ let dbSearchQuery = "";
 let dbPage = 1;
 let dbRoleStats = [];
 let dbSearchTimeout = null;
+const CANONICAL_ROLES = [
+  "Manager","Supervisor","Captain","Waiter","Cashier","Kitchen Helper","Tea Master",
+  "Indian Cook","Chinese Cook","Cleaners","Fried Chicken Cook","Fried Snacks Cook",
+  "Juice Maker","Tandoor Cook","Counter Staff","Food Packing Person","Grill Cook",
+  "Shawarma Maker","Tea Master Assistant","Dish Washer","Not Relevant"
+];
 
 async function loadDatabase() {
   try {
     const data = await apiGet({ action: "candidate_stats" });
-    dbRoleStats = data.roles || [];
+    const apiRoles = data.roles || [];
     const tiers = data.tiers || {};
+
+    // Merge API roles with canonical roles (show 0 count for empty ones)
+    const roleMap = {};
+    apiRoles.forEach(r => { roleMap[r.he_role] = r.total; });
+    dbRoleStats = CANONICAL_ROLES.map(role => ({ he_role: role, total: roleMap[role] || 0 }))
+      .sort((a, b) => b.total - a.total);
 
     // Update tier cards
     document.getElementById("db-total").textContent = (data.total_candidates || 0).toLocaleString();
@@ -1681,10 +1693,10 @@ async function loadDatabase() {
     document.getElementById("db-tier-no").textContent = (tiers.name_only || 0).toLocaleString();
     document.getElementById("db-tier-min").textContent = (tiers.minimal || 0).toLocaleString();
 
-    // Build role pills
+    // Build role pills — show all 19 canonical roles
     const pillContainer = document.getElementById("db-role-pills");
     pillContainer.innerHTML = `<button onclick="filterDbRole('')" class="db-role-pill text-[10px] px-2.5 py-1 rounded-full transition ${!dbRoleFilter ? 'bg-brand-500/15 text-brand-400 font-semibold' : 'bg-white/[.03] text-white/30 hover:text-white/50'}">All (${data.total_candidates})</button>` +
-      dbRoleStats.map(r => `<button onclick="filterDbRole('${esc(r.he_role)}')" class="db-role-pill text-[10px] px-2.5 py-1 rounded-full transition ${dbRoleFilter === r.he_role ? 'bg-brand-500/15 text-brand-400 font-semibold' : 'bg-white/[.03] text-white/30 hover:text-white/50'}">${esc(r.he_role)} (${r.total})</button>`).join("");
+      dbRoleStats.map(r => `<button onclick="filterDbRole('${esc(r.he_role)}')" class="db-role-pill text-[10px] px-2.5 py-1 rounded-full transition ${dbRoleFilter === r.he_role ? 'bg-brand-500/15 text-brand-400 font-semibold' : 'bg-white/[.03] text-white/30 hover:text-white/50'} ${r.total === 0 ? 'opacity-40' : ''}">${esc(r.he_role)} (${r.total})</button>`).join("");
 
     loadDbCandidates();
   } catch(e) {
