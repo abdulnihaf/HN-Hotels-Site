@@ -77,6 +77,10 @@
       <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
       <span class="hidden sm:inline">Refresh</span>
     </button>
+    <button onclick="showModal('templates-list');loadTemplatesList()" class="btn-ghost text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+      <span class="hidden sm:inline">Templates</span>
+    </button>
     <button onclick="showModal('new-campaign')" class="btn-primary text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition">
       <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
       New Campaign
@@ -233,6 +237,166 @@
           <button type="submit" id="btn-create" class="btn-primary text-xs px-5 py-2 rounded-lg transition">Create & Queue</button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+<!-- Template Builder Modal -->
+<div id="modal-template-builder" class="hidden fixed inset-0 z-50">
+  <div class="overlay absolute inset-0" onclick="closeAllModals()"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+    <div class="glass rounded-2xl w-full max-w-4xl pointer-events-auto slide-up max-h-[92vh] overflow-hidden flex flex-col">
+      <div class="p-5 border-b border-white/[.04] shrink-0 flex items-center justify-between">
+        <div>
+          <h3 class="font-bold">Template Builder</h3>
+          <p class="text-xs text-white/30 mt-0.5">Create a new WhatsApp message template — submitted to Meta for approval</p>
+        </div>
+        <button onclick="closeAllModals()" class="btn-ghost text-xs px-2 py-1 rounded-lg">✕</button>
+      </div>
+      <div class="flex flex-1 overflow-hidden">
+        <!-- Left: Form -->
+        <form id="form-template" class="p-5 space-y-3 scroll-y flex-1 border-r border-white/[.04]" onsubmit="handleCreateTemplate(event)">
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Template Name</label>
+              <input name="tpl_name" id="tpl-name" required placeholder="e.g. he_hiring_shawaya_mar26"
+                     pattern="[a-z0-9_]+" title="Lowercase letters, numbers, underscores only"
+                     oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,''); updateTemplatePreview()"
+                     class="w-full rounded-lg px-3 py-2 text-sm placeholder-white/15 font-mono">
+            </div>
+            <div>
+              <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Category</label>
+              <select name="tpl_category" class="w-full rounded-lg px-3 py-2 text-sm">
+                <option value="MARKETING" selected>Marketing</option>
+                <option value="UTILITY">Utility</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Header -->
+          <div>
+            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Header Image URL</label>
+            <input name="tpl_header_url" id="tpl-header-url" type="url" placeholder="https://hamzaexpress.in/assets/creative.jpg"
+                   oninput="updateTemplatePreview()"
+                   class="w-full rounded-lg px-3 py-2 text-sm placeholder-white/15">
+            <p class="text-[9px] text-white/20 mt-0.5">Public HTTPS URL to JPG/PNG (max 5MB). Leave empty for text-only template.</p>
+          </div>
+
+          <!-- Body -->
+          <div>
+            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold flex items-center justify-between mb-1">
+              <span>Body Text</span>
+              <span class="flex gap-1">
+                <button type="button" onclick="insertVariable()" class="text-brand-400 hover:text-brand-200 transition text-[10px] font-normal bg-brand-500/10 px-2 py-0.5 rounded">+ Add Variable</button>
+              </span>
+            </label>
+            <textarea name="tpl_body" id="tpl-body" required rows="5"
+                      placeholder="Hi {{1}}! 🔥&#10;&#10;Hamza Express (Est. 1918) is hiring!&#10;&#10;Position: {{2}}&#10;Salary: Up to {{3}}/month&#10;&#10;Free Stay + Food + Incentives&#10;&#10;Interested? Reply YES!"
+                      oninput="updateTemplatePreview()"
+                      class="w-full rounded-lg px-3 py-2 text-sm placeholder-white/15 font-mono leading-relaxed resize-none"></textarea>
+            <div class="flex justify-between mt-1">
+              <p class="text-[9px] text-white/20">Use {{1}}, {{2}}, etc. for variables. Max 1024 chars.</p>
+              <p id="body-char-count" class="text-[9px] text-white/20">0 / 1024</p>
+            </div>
+          </div>
+
+          <!-- Variable Examples -->
+          <div id="var-examples-section" class="hidden">
+            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Variable Examples <span class="text-white/20 normal-case">(required by Meta for review)</span></label>
+            <div id="var-examples" class="space-y-1.5"></div>
+          </div>
+
+          <!-- Footer -->
+          <div>
+            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Footer <span class="text-white/20 font-normal">(optional, 60 chars max)</span></label>
+            <input name="tpl_footer" id="tpl-footer" maxlength="60" placeholder="Hamza Express — Since 1918"
+                   oninput="updateTemplatePreview()"
+                   class="w-full rounded-lg px-3 py-2 text-sm placeholder-white/15">
+          </div>
+
+          <!-- Buttons -->
+          <div>
+            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold flex items-center justify-between mb-1">
+              <span>Quick Reply Buttons <span class="text-white/20 font-normal">(optional, max 3)</span></span>
+              <button type="button" onclick="addQuickReplyBtn()" id="add-btn-trigger" class="text-brand-400 hover:text-brand-200 transition text-[10px] font-normal bg-brand-500/10 px-2 py-0.5 rounded">+ Add Button</button>
+            </label>
+            <div id="quick-reply-buttons" class="space-y-1.5"></div>
+          </div>
+
+          <!-- Submit -->
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" onclick="closeAllModals()" class="btn-ghost text-xs px-4 py-2 rounded-lg transition">Cancel</button>
+            <button type="submit" id="btn-create-template" class="btn-primary text-xs px-5 py-2 rounded-lg transition flex items-center gap-1.5">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
+              Submit to Meta
+            </button>
+          </div>
+        </form>
+
+        <!-- Right: Live Preview -->
+        <div class="w-80 shrink-0 p-5 scroll-y bg-surface-2/50">
+          <p class="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-3">WhatsApp Preview</p>
+          <div id="template-preview" class="rounded-2xl overflow-hidden" style="background:#e5ddd5; font-family:-apple-system,system-ui,sans-serif;">
+            <div class="p-2.5">
+              <div class="rounded-lg overflow-hidden" style="background:#fff; box-shadow:0 1px 1px rgba(0,0,0,0.08);">
+                <!-- Header Image -->
+                <div id="preview-header" class="hidden">
+                  <div style="background:#c4c4c4; height:140px; display:flex; align-items:center; justify-content:center;">
+                    <svg style="width:32px;height:32px;color:#999" fill="currentColor" viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                  </div>
+                </div>
+                <div id="preview-header-img" class="hidden">
+                  <img id="preview-img" src="" style="width:100%; height:140px; object-fit:cover;">
+                </div>
+                <!-- Body -->
+                <div class="p-2.5" style="font-size:13px; line-height:1.4; color:#111b21;">
+                  <p id="preview-body" style="white-space:pre-wrap; word-break:break-word;">Your message preview will appear here...</p>
+                </div>
+                <!-- Footer -->
+                <div id="preview-footer" class="hidden px-2.5 pb-1" style="font-size:11px; color:#8696a0;">
+                  <p id="preview-footer-text"></p>
+                </div>
+                <!-- Timestamp -->
+                <div class="px-2.5 pb-1.5 text-right" style="font-size:10px; color:#8696a0;">12:00 PM</div>
+              </div>
+              <!-- Quick Reply Buttons -->
+              <div id="preview-buttons" class="hidden mt-1 space-y-1"></div>
+            </div>
+          </div>
+
+          <!-- Template Status -->
+          <div id="template-status-section" class="hidden mt-4 rounded-lg p-3 bg-white/[.03] border border-white/[.04]">
+            <p class="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-2">Submission Status</p>
+            <div id="template-status-content"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Templates List Modal -->
+<div id="modal-templates-list" class="hidden fixed inset-0 z-50">
+  <div class="overlay absolute inset-0" onclick="closeAllModals()"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+    <div class="glass rounded-2xl w-full max-w-2xl pointer-events-auto slide-up max-h-[80vh] overflow-hidden flex flex-col">
+      <div class="p-5 border-b border-white/[.04] shrink-0 flex items-center justify-between">
+        <div>
+          <h3 class="font-bold">WhatsApp Templates</h3>
+          <p class="text-xs text-white/30 mt-0.5">All templates synced from Meta Business Manager</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="closeAllModals();showModal('template-builder')" class="btn-primary text-xs px-3 py-1.5 rounded-lg flex items-center gap-1">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            New Template
+          </button>
+          <button onclick="closeAllModals()" class="btn-ghost text-xs px-2 py-1 rounded-lg">✕</button>
+        </div>
+      </div>
+      <div id="templates-list-body" class="p-5 scroll-y flex-1">
+        <div class="text-center py-8 text-white/20 text-xs">Loading templates...</div>
+      </div>
     </div>
   </div>
 </div>
@@ -1065,9 +1229,334 @@ function timeAgo(d) {
 
 function showModal(name) {
   document.getElementById("modal-"+name).classList.remove("hidden");
-  if (name === "new-campaign") { selectedRoleData = null; loadRolePicker(); }
+  if (name === "new-campaign") { selectedRoleData = null; loadRolePicker(); loadTemplatesForDropdown?.(); }
+  if (name === "template-builder") { resetTemplateBuilder?.(); }
 }
 function closeAllModals() { document.querySelectorAll("[id^=modal-]").forEach(m=>m.classList.add("hidden")); }
+
+// ===============================================================
+// Template Builder
+// ===============================================================
+let tplVarCount = 0;
+let tplButtonCount = 0;
+let cachedTemplates = null;
+
+function insertVariable() {
+  const body = document.getElementById("tpl-body");
+  tplVarCount++;
+  const tag = `{{${tplVarCount}}}`;
+  const pos = body.selectionStart;
+  const text = body.value;
+  body.value = text.slice(0, pos) + tag + text.slice(pos);
+  body.focus();
+  body.setSelectionRange(pos + tag.length, pos + tag.length);
+  updateTemplatePreview();
+}
+
+function addQuickReplyBtn() {
+  if (tplButtonCount >= 3) return;
+  tplButtonCount++;
+  const container = document.getElementById("quick-reply-buttons");
+  const div = document.createElement("div");
+  div.className = "flex gap-2 items-center";
+  div.id = `qr-btn-${tplButtonCount}`;
+  div.innerHTML = `
+    <input name="qr_btn_${tplButtonCount}" maxlength="25" placeholder="Button text (e.g. I'm Interested)"
+           oninput="updateTemplatePreview()"
+           class="flex-1 rounded-lg px-3 py-1.5 text-sm placeholder-white/15">
+    <button type="button" onclick="removeQuickReplyBtn(${tplButtonCount})" class="text-red-400/50 hover:text-red-400 text-xs transition">✕</button>`;
+  container.appendChild(div);
+  if (tplButtonCount >= 3) document.getElementById("add-btn-trigger").classList.add("hidden");
+  updateTemplatePreview();
+}
+
+function removeQuickReplyBtn(n) {
+  const el = document.getElementById(`qr-btn-${n}`);
+  if (el) el.remove();
+  tplButtonCount--;
+  document.getElementById("add-btn-trigger").classList.remove("hidden");
+  updateTemplatePreview();
+}
+
+function updateTemplatePreview() {
+  const body = document.getElementById("tpl-body").value;
+  const footer = document.getElementById("tpl-footer").value;
+  const headerUrl = document.getElementById("tpl-header-url").value;
+
+  // Body
+  const charCount = document.getElementById("body-char-count");
+  charCount.textContent = `${body.length} / 1024`;
+  charCount.style.color = body.length > 1024 ? "#ef4444" : "";
+
+  // Replace variable tags with styled placeholders
+  const previewBody = esc(body || "Your message preview will appear here...").replace(
+    /\{\{(\d+)\}\}/g,
+    '<span style="background:#e8930c22;color:#e8930c;padding:1px 4px;border-radius:3px;font-size:12px;">{{$1}}</span>'
+  );
+  document.getElementById("preview-body").innerHTML = previewBody;
+
+  // Header image
+  const previewHeader = document.getElementById("preview-header");
+  const previewHeaderImg = document.getElementById("preview-header-img");
+  if (headerUrl) {
+    previewHeader.classList.add("hidden");
+    previewHeaderImg.classList.remove("hidden");
+    document.getElementById("preview-img").src = headerUrl;
+  } else if (body) {
+    previewHeader.classList.add("hidden");
+    previewHeaderImg.classList.add("hidden");
+  } else {
+    previewHeader.classList.remove("hidden");
+    previewHeaderImg.classList.add("hidden");
+  }
+
+  // Footer
+  const previewFooter = document.getElementById("preview-footer");
+  if (footer) {
+    previewFooter.classList.remove("hidden");
+    document.getElementById("preview-footer-text").textContent = footer;
+  } else {
+    previewFooter.classList.add("hidden");
+  }
+
+  // Buttons
+  const previewBtns = document.getElementById("preview-buttons");
+  const btnInputs = document.querySelectorAll("[name^=qr_btn_]");
+  const btns = Array.from(btnInputs).map(i => i.value).filter(Boolean);
+  if (btns.length > 0) {
+    previewBtns.classList.remove("hidden");
+    previewBtns.innerHTML = btns.map(b => `
+      <div style="background:#fff; border-radius:8px; padding:8px; text-align:center; font-size:13px; color:#00a884; font-weight:500; box-shadow:0 1px 1px rgba(0,0,0,0.08);">
+        ${esc(b)}
+      </div>`).join("");
+  } else {
+    previewBtns.classList.add("hidden");
+  }
+
+  // Variable examples
+  const varMatches = body.match(/\{\{(\d+)\}\}/g) || [];
+  const uniqueVars = [...new Set(varMatches)].sort();
+  const exSection = document.getElementById("var-examples-section");
+  const exContainer = document.getElementById("var-examples");
+  if (uniqueVars.length > 0) {
+    exSection.classList.remove("hidden");
+    // Only add new ones, keep existing
+    const existing = new Set(Array.from(exContainer.querySelectorAll("input")).map(i => i.dataset.var));
+    uniqueVars.forEach(v => {
+      const varNum = v.replace(/[{}]/g, "");
+      if (!existing.has(varNum)) {
+        const row = document.createElement("div");
+        row.className = "flex items-center gap-2";
+        row.dataset.varRow = varNum;
+        row.innerHTML = `
+          <span class="text-[10px] text-brand-400 font-mono w-10 shrink-0">${v}</span>
+          <input data-var="${varNum}" placeholder="Example value (e.g. Nihaf, Shawaya Master, ₹30,000)"
+                 class="flex-1 rounded-lg px-2.5 py-1.5 text-xs placeholder-white/15">`;
+        exContainer.appendChild(row);
+      }
+    });
+    // Remove vars no longer in body
+    const varNums = new Set(uniqueVars.map(v => v.replace(/[{}]/g, "")));
+    exContainer.querySelectorAll("[data-var-row]").forEach(row => {
+      if (!varNums.has(row.dataset.varRow)) row.remove();
+    });
+  } else {
+    exSection.classList.add("hidden");
+  }
+}
+
+async function handleCreateTemplate(e) {
+  e.preventDefault();
+  const btn = document.getElementById("btn-create-template");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="live-dot inline-block w-1.5 h-1.5 rounded-full bg-brand-400 mr-1.5"></span>Submitting...';
+
+  const name = document.getElementById("tpl-name").value;
+  const category = document.querySelector("[name=tpl_category]").value;
+  const bodyText = document.getElementById("tpl-body").value;
+  const footer = document.getElementById("tpl-footer").value;
+  const headerUrl = document.getElementById("tpl-header-url").value;
+
+  // Build components array
+  const components = [];
+
+  // Header
+  if (headerUrl) {
+    components.push({
+      type: "HEADER",
+      format: "IMAGE",
+      example: { header_url: [headerUrl] },
+    });
+  }
+
+  // Body + examples
+  const varMatches = bodyText.match(/\{\{(\d+)\}\}/g) || [];
+  const uniqueVars = [...new Set(varMatches)].sort();
+  const examples = uniqueVars.map(v => {
+    const varNum = v.replace(/[{}]/g, "");
+    const input = document.querySelector(`input[data-var="${varNum}"]`);
+    return input?.value || `example_${varNum}`;
+  });
+
+  const bodyComponent = { type: "BODY", text: bodyText };
+  if (examples.length > 0) {
+    bodyComponent.example = { body_text: [examples] };
+  }
+  components.push(bodyComponent);
+
+  // Footer
+  if (footer) {
+    components.push({ type: "FOOTER", text: footer });
+  }
+
+  // Quick reply buttons
+  const btnInputs = document.querySelectorAll("[name^=qr_btn_]");
+  const buttons = Array.from(btnInputs).map(i => i.value).filter(Boolean);
+  if (buttons.length > 0) {
+    components.push({
+      type: "BUTTONS",
+      buttons: buttons.map(text => ({ type: "QUICK_REPLY", text })),
+    });
+  }
+
+  try {
+    const result = await apiPost({
+      action: "create_template",
+      name,
+      category,
+      language: "en",
+      components,
+    });
+
+    const statusSection = document.getElementById("template-status-section");
+    const statusContent = document.getElementById("template-status-content");
+    statusSection.classList.remove("hidden");
+
+    if (result.success) {
+      statusContent.innerHTML = `
+        <div class="flex items-center gap-2 mb-2">
+          <span class="badge bg-yellow-500/15 text-yellow-400">${esc(result.status)}</span>
+          <span class="text-xs text-white/50">ID: ${esc(result.template_id)}</span>
+        </div>
+        <p class="text-xs text-emerald-400">✓ Template submitted successfully! It will be reviewed by Meta (usually 10 min – 24 hours).</p>
+        <p class="text-[10px] text-white/30 mt-1">Once approved, it will appear in the template dropdown when creating new campaigns.</p>`;
+      btn.innerHTML = '✓ Submitted';
+      btn.className = 'text-xs px-5 py-2 rounded-lg bg-emerald-500/20 text-emerald-400';
+      // Refresh cached templates
+      cachedTemplates = null;
+    } else {
+      statusContent.innerHTML = `
+        <div class="flex items-center gap-2 mb-2">
+          <span class="badge bg-red-500/15 text-red-400">FAILED</span>
+        </div>
+        <p class="text-xs text-red-400">${esc(result.error)}</p>
+        ${result.meta_error ? `<pre class="text-[10px] text-white/20 mt-1 overflow-x-auto">${esc(JSON.stringify(result.meta_error, null, 2))}</pre>` : ""}`;
+      btn.disabled = false;
+      btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg> Retry';
+      btn.className = 'btn-primary text-xs px-5 py-2 rounded-lg transition flex items-center gap-1.5';
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Submit to Meta";
+    btn.className = 'btn-primary text-xs px-5 py-2 rounded-lg transition flex items-center gap-1.5';
+    alert("Error: " + err.message);
+  }
+}
+
+async function loadTemplatesList() {
+  const container = document.getElementById("templates-list-body");
+  container.innerHTML = '<div class="text-center py-8 text-white/20 text-xs">Loading templates from Meta...</div>';
+  try {
+    const data = await apiGet({ action: "templates" });
+    const templates = data.templates || [];
+    cachedTemplates = templates;
+    if (templates.length === 0) {
+      container.innerHTML = '<div class="text-center py-8 text-white/20 text-xs">No templates found.</div>';
+      return;
+    }
+
+    const statusColors = {
+      APPROVED: "bg-emerald-500/15 text-emerald-400",
+      PENDING: "bg-yellow-500/15 text-yellow-400",
+      REJECTED: "bg-red-500/15 text-red-400",
+      PAUSED: "bg-orange-500/15 text-orange-400",
+      DISABLED: "bg-white/[.06] text-white/30",
+    };
+
+    container.innerHTML = templates.map(t => {
+      const bodyComp = (t.components || []).find(c => c.type === "BODY");
+      const hasHeader = (t.components || []).some(c => c.type === "HEADER");
+      const hasButtons = (t.components || []).some(c => c.type === "BUTTONS");
+      const bodyPreview = bodyComp?.text ? truncate(bodyComp.text, 100) : "—";
+      const sc = statusColors[t.status] || statusColors.DISABLED;
+      return `
+        <div class="rounded-xl p-3.5 bg-white/[.02] border border-white/[.04] hover:border-white/[.08] transition mb-2">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-sm font-semibold font-mono">${esc(t.name)}</span>
+                <span class="badge ${sc}">${t.status}</span>
+                <span class="badge bg-white/[.04] text-white/30">${t.category}</span>
+                <span class="badge bg-white/[.04] text-white/20">${t.language}</span>
+                ${hasHeader ? '<span class="badge bg-blue-500/10 text-blue-400">IMAGE</span>' : ""}
+                ${hasButtons ? '<span class="badge bg-violet-500/10 text-violet-400">BUTTONS</span>' : ""}
+              </div>
+              <p class="text-xs text-white/30 mt-1.5 leading-relaxed">${esc(bodyPreview)}</p>
+            </div>
+            <span class="text-[10px] text-white/15 shrink-0 font-mono">${t.id}</span>
+          </div>
+        </div>`;
+    }).join("");
+  } catch (err) {
+    container.innerHTML = `<div class="text-center py-8 text-red-400/60 text-xs">Error: ${esc(err.message)}</div>`;
+  }
+}
+
+// Dynamic template dropdown in New Campaign modal
+async function loadTemplatesForDropdown() {
+  const select = document.getElementById("template-select");
+  try {
+    if (!cachedTemplates) {
+      const data = await apiGet({ action: "templates" });
+      cachedTemplates = data.templates || [];
+    }
+    const approved = cachedTemplates.filter(t => t.status === "APPROVED");
+    if (approved.length === 0) return; // Keep hardcoded fallback options
+
+    select.innerHTML = "";
+    approved.forEach(t => {
+      const bodyComp = (t.components || []).find(c => c.type === "BODY");
+      const varCount = (bodyComp?.text?.match(/\{\{\d+\}\}/g) || []).length;
+      const opt = document.createElement("option");
+      opt.value = t.name;
+      opt.textContent = `${t.name} (${varCount} vars)`;
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    console.warn("Could not load templates for dropdown:", e);
+  }
+}
+
+function resetTemplateBuilder() {
+  tplVarCount = 0;
+  tplButtonCount = 0;
+  document.getElementById("form-template").reset();
+  document.getElementById("quick-reply-buttons").innerHTML = "";
+  document.getElementById("var-examples").innerHTML = "";
+  document.getElementById("var-examples-section").classList.add("hidden");
+  document.getElementById("template-status-section").classList.add("hidden");
+  document.getElementById("preview-header").classList.add("hidden");
+  document.getElementById("preview-header-img").classList.add("hidden");
+  document.getElementById("preview-footer").classList.add("hidden");
+  document.getElementById("preview-buttons").classList.add("hidden");
+  document.getElementById("preview-body").innerHTML = "Your message preview will appear here...";
+  document.getElementById("body-char-count").textContent = "0 / 1024";
+  const btn = document.getElementById("btn-create-template");
+  btn.disabled = false;
+  btn.className = 'btn-primary text-xs px-5 py-2 rounded-lg transition flex items-center gap-1.5';
+  btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg> Submit to Meta';
+  document.getElementById("add-btn-trigger").classList.remove("hidden");
+}
 
 // ===============================================================
 // Init

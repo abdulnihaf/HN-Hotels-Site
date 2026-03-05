@@ -16,6 +16,9 @@
  *   POST /api/hiring  { action: "pause_campaign", ... }
  *   POST /api/hiring  { action: "reply", phone, text }
  *   POST /api/hiring  { action: "mark_read", phone }
+ *   GET  /api/hiring?action=templates              → list Meta templates
+ *   POST /api/hiring  { action: "create_template", name, components, ... }
+ *   POST /api/hiring  { action: "delete_template", name }
  *   POST /api/hiring  (raw Meta webhook payload)
  */
 
@@ -30,6 +33,27 @@ function json(data, status = 200) {
     status,
     headers: { "Content-Type": "application/json", ...CORS_HEADERS },
   });
+}
+
+// ─── Helper: call Meta Graph API (generic) ──────────────────
+async function metaGraphAPI(env, path, method = "GET", body = null) {
+  const opts = {
+    method,
+    headers: {
+      Authorization: `Bearer ${env.WA_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+  };
+  if (body && method !== "GET") opts.body = JSON.stringify(body);
+  const resp = await fetch(`https://graph.facebook.com/v21.0/${path}`, opts);
+  return resp.json();
+}
+
+// ─── Helper: get WABA ID from Phone ID ──────────────────────
+async function getWabaId(env) {
+  if (env.WABA_ID) return env.WABA_ID;
+  const data = await metaGraphAPI(env, `${env.WA_PHONE_ID}?fields=whatsapp_business_account`);
+  return data.whatsapp_business_account?.id || null;
 }
 
 // ─── Helper: send a WhatsApp message ────────────────────────
@@ -401,6 +425,22 @@ async function handleGet(url, env) {
           }
         : null,
     });
+  }
+
+  // ── List WhatsApp Templates from Meta ──
+  if (action === "templates") {
+    try {
+      const wabaId = await getWabaId(env);
+      if (!wabaId) return json({ error: "WABA_ID not found. Set WABA_ID secret or ensure WA_PHONE_ID is valid." }, 500);
+      const nameFilter = url.searchParams.get("name");
+      let path = `${wabaId}/message_templates?limit=100&fields=name,status,category,language,components,id`;
+      if (nameFilter) path += `&name=${encodeURIComponent(nameFilter)}`;
+      const data = await metaGraphAPI(env, path);
+      if (data.error) return json({ error: data.error.message, meta_error: data.error }, 400);
+      return json({ templates: data.data || [], paging: data.paging });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
   }
 
   return json({ error: "Unknown action" }, 400);
@@ -845,6 +885,81 @@ async function handlePost(request, env) {
       .run();
 
     return json({ success: true });
+  }
+
+  // ── Create WhatsApp Template via Meta API ──
+  if (action === "create_template") {
+    try {
+      const wabaId = await getWabaId(env);
+      if (!wabaId) return json({ error: "WABA_ID not found" }, 500);
+
+      const { name, language, category, components } = body;
+      if (!name || !components) return json({ error: "name and components required" }, 400);
+
+      const payload = {
+        name: name.toLowerCase().replace(/[^a-z0-9_]/g, "_"),
+        language: language || "en",
+        category: category || "MARKETING",
+        components,
+      };
+
+      const result = await metaGraphAPI(env, `${wabaId}/message_templates`, "POST", payload);
+
+      if (result.error) {
+        return json({
+          success: false,
+          error: result.error.message,
+          error_subcode: result.error.error_subcode,
+          meta_error: result.error,
+        }, 400);
+      }
+
+      return json({
+        success: true,
+        template_id: result.id,
+        status: result.status,
+        category: result.category,
+      });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
+  // ── Delete WhatsApp Template via Meta API ──
+  if (action === "delete_template") {
+    try {
+      const wabaId = await getWabaId(env);
+      if (!wabaId) return json({ error: "WABA_ID not found" }, 500);
+      const { name } = body;
+      if (!name) return json({ error: "template name required" }, 400);
+      const result = await metaGraphAPI(env, `${wabaId}/message_templates?name=${encodeURIComponent(name)}`, "DELETE");
+      if (result.error) return json({ success: false, error: result.error.message }, 400);
+      return json({ success: true });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
+  // ── Upload media for template header ──
+  if (action === "upload_session") {
+    try {
+      const { file_length, file_type } = body;
+      if (!file_length || !file_type) return json({ error: "file_length and file_type required" }, 400);
+      // Get app ID from WABA
+      const wabaId = await getWabaId(env);
+      if (!wabaId) return json({ error: "WABA_ID not found" }, 500);
+      const appData = await metaGraphAPI(env, `${wabaId}?fields=on_behalf_of_business_info,owner_business_info`);
+      const appId = env.META_APP_ID || appData.id;
+      const result = await metaGraphAPI(env, `${appId}/uploads`, "POST", {
+        file_length,
+        file_type,
+        file_name: body.file_name || "template-header.jpg",
+      });
+      if (result.error) return json({ success: false, error: result.error.message }, 400);
+      return json({ success: true, upload_session_id: result.id });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
   }
 
   // ── Legacy webhook format (action: "webhook") ──
