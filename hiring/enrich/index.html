@@ -40,6 +40,21 @@
     @keyframes pulse-bar { 0%,100%{opacity:0.6} 50%{opacity:1} }
     .animate-pulse-bar { animation: pulse-bar 1.5s ease-in-out infinite; }
     .settings-open .settings-chevron { transform: rotate(180deg); }
+    .drop-zone { border: 2px dashed rgba(255,255,255,0.08); transition: all 0.2s; }
+    .drop-zone.drag-over { border-color: rgba(232,147,12,0.5); background: rgba(232,147,12,0.04); }
+    .confidence-high { background: rgba(16,185,129,0.15); color: #34d399; }
+    .confidence-medium { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .confidence-low { background: rgba(239,68,68,0.15); color: #f87171; }
+    .step-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+    .step-dot.done { background: rgba(16,185,129,0.2); color: #34d399; }
+    .step-dot.active { background: rgba(232,147,12,0.2); color: #f0a944; }
+    .step-dot.pending { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.2); }
+    .step-line { height: 2px; flex: 1; }
+    .step-line.done { background: rgba(16,185,129,0.3); }
+    .step-line.active { background: linear-gradient(90deg, rgba(16,185,129,0.3), rgba(232,147,12,0.3)); }
+    .step-line.pending { background: rgba(255,255,255,0.04); }
+    .role-select-sm { padding: 2px 4px; font-size: 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); color: #e4e4ed; }
+    .role-select-sm:focus { border-color: rgba(232,147,12,0.5); outline: none; }
   </style>
 </head>
 <body class="min-h-screen font-sans antialiased">
@@ -69,6 +84,31 @@
 </nav>
 
 <div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+  <!-- Step Indicator -->
+  <div id="step-indicator" class="hidden">
+    <div class="flex items-center gap-1 px-2">
+      <div class="flex items-center gap-1.5">
+        <div id="step-dot-1" class="step-dot active">1</div>
+        <span id="step-label-1" class="text-[10px] text-brand-400 font-semibold">Enrich</span>
+      </div>
+      <div id="step-line-1" class="step-line pending"></div>
+      <div class="flex items-center gap-1.5">
+        <div id="step-dot-2" class="step-dot pending">2</div>
+        <span id="step-label-2" class="text-[10px] text-white/20 font-semibold">CSV Upload</span>
+      </div>
+      <div id="step-line-2" class="step-line pending"></div>
+      <div class="flex items-center gap-1.5">
+        <div id="step-dot-3" class="step-dot pending">3</div>
+        <span id="step-label-3" class="text-[10px] text-white/20 font-semibold">AI Mapping</span>
+      </div>
+      <div id="step-line-3" class="step-line pending"></div>
+      <div class="flex items-center gap-1.5">
+        <div id="step-dot-4" class="step-dot pending">4</div>
+        <span id="step-label-4" class="text-[10px] text-white/20 font-semibold">Save</span>
+      </div>
+    </div>
+  </div>
 
   <!-- Settings Panel (Collapsible) -->
   <div id="settings-panel" class="hidden">
@@ -114,33 +154,7 @@
         <!-- Default Save Settings -->
         <div>
           <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1.5">Default Save Settings</label>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label class="text-[10px] text-white/20 block mb-0.5">Default Role</label>
-              <select id="settings-role" class="w-full rounded-lg px-3 py-1.5 text-xs">
-                <option value="">Select role...</option>
-                <option value="Manager">Manager</option>
-                <option value="Supervisor">Supervisor</option>
-                <option value="Captain">Captain</option>
-                <option value="Waiter">Waiter</option>
-                <option value="Cashier">Cashier</option>
-                <option value="Kitchen Helper">Kitchen Helper</option>
-                <option value="Tea Master">Tea Master</option>
-                <option value="Indian Cook">Indian Cook</option>
-                <option value="Chinese Cook">Chinese Cook</option>
-                <option value="Cleaners">Cleaners</option>
-                <option value="Fried Chicken Cook">Fried Chicken Cook</option>
-                <option value="Juice Maker">Juice Maker</option>
-                <option value="Tandoor Cook">Tandoor Cook</option>
-                <option value="Counter Staff">Counter Staff</option>
-                <option value="Food Packing Person">Food Packing Person</option>
-                <option value="Grill Cook">Grill Cook</option>
-                <option value="Shawarma Maker">Shawarma Maker</option>
-                <option value="Tea Master Assistant">Tea Master Assistant</option>
-                <option value="Dish Washer">Dish Washer</option>
-                <option value="Not Relevant">Not Relevant</option>
-              </select>
-            </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="text-[10px] text-white/20 block mb-0.5">Default City</label>
               <input id="settings-city" type="text" value="Bangalore" placeholder="City" class="w-full rounded-lg px-3 py-1.5 text-xs">
@@ -169,7 +183,7 @@
     <!-- Filled dynamically -->
   </div>
 
-  <!-- Main: Paste IDs + Enrich -->
+  <!-- STEP 1: Paste IDs + Enrich -->
   <div class="glass rounded-xl p-5">
     <div class="flex items-center justify-between mb-3">
       <div class="flex items-center gap-2">
@@ -229,37 +243,144 @@
     </div>
   </div>
 
-  <!-- Save to Database -->
-  <div id="save-section" class="hidden glass rounded-xl p-5">
+  <!-- STEP 2: CSV Upload + JOIN -->
+  <div id="csv-section" class="hidden glass rounded-xl p-5">
+    <div class="flex items-center gap-2 mb-3">
+      <svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+      <h3 class="text-sm font-semibold">Upload Apna CSV Export</h3>
+      <span class="text-[10px] text-white/20">Match enriched phones with candidate data</span>
+    </div>
+
+    <!-- Drop Zone -->
+    <div id="csv-drop-zone" class="drop-zone rounded-xl p-8 text-center cursor-pointer" onclick="document.getElementById('csv-file-input').click()">
+      <input type="file" id="csv-file-input" accept=".csv" class="hidden" onchange="handleCsvFile(this.files[0])">
+      <svg class="w-8 h-8 mx-auto mb-2 text-white/15" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+      <p class="text-xs text-white/30">Drop Apna CSV file here or <span class="text-brand-400">click to browse</span></p>
+      <p class="text-[10px] text-white/15 mt-1">Expects: userId, fullName, currentExperience_jobTitle, skills, etc.</p>
+    </div>
+
+    <!-- CSV Match Results -->
+    <div id="csv-match-info" class="hidden mt-4">
+      <div class="flex items-center justify-between px-1 mb-3">
+        <div id="csv-match-stats" class="text-xs text-white/50"></div>
+        <button onclick="clearCsv()" class="btn-ghost text-[10px] px-2 py-1 rounded-lg">Clear CSV</button>
+      </div>
+      <div class="max-h-[300px] overflow-y-auto scroll-y rounded-lg border border-white/[.04]">
+        <table class="w-full text-xs">
+          <thead class="sticky top-0 bg-surface-2">
+            <tr class="border-b border-white/[.04] text-white/30 text-[10px] uppercase tracking-wider">
+              <th class="text-left py-2 px-3 font-semibold">#</th>
+              <th class="text-left py-2 px-2 font-semibold">Name</th>
+              <th class="text-left py-2 px-2 font-semibold">Phone</th>
+              <th class="text-left py-2 px-2 font-semibold">Current Title</th>
+              <th class="text-left py-2 px-2 font-semibold">Skills</th>
+              <th class="text-left py-2 px-2 font-semibold">Exp</th>
+            </tr>
+          </thead>
+          <tbody id="csv-match-body"></tbody>
+        </table>
+      </div>
+      <div class="mt-3 flex items-center gap-3">
+        <button id="btn-ai-map" onclick="startAiMapping()" class="btn-primary text-xs px-5 py-2.5 rounded-lg flex items-center gap-2 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/></svg>
+          Map Roles with AI <span id="ai-map-count" class="ml-0.5 opacity-70"></span>
+        </button>
+        <span class="text-[10px] text-white/20">Uses Gemini 2.5 Pro to classify candidates</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: AI Role Mapping Results -->
+  <div id="ai-section" class="hidden glass rounded-xl p-5">
+    <div class="flex items-center gap-2 mb-3">
+      <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+      <h3 class="text-sm font-semibold">AI Role Mapping</h3>
+      <span id="ai-status-badge" class="text-[10px] text-white/20"></span>
+    </div>
+
+    <!-- Progress -->
+    <div id="ai-progress-wrap" class="mb-4">
+      <div class="flex items-center gap-3 mb-1.5">
+        <div class="flex-1 h-2 rounded-full bg-white/[.04] overflow-hidden">
+          <div id="ai-progress-bar" class="h-full rounded-full bg-gradient-to-r from-purple-500 to-brand-400 transition-all duration-500" style="width:0%"></div>
+        </div>
+        <span id="ai-progress-text" class="text-[10px] text-white/40 shrink-0">0/0</span>
+      </div>
+      <div id="ai-progress-detail" class="text-[10px] text-white/20"></div>
+    </div>
+
+    <!-- AI Results Table -->
+    <div id="ai-results-wrap" class="hidden">
+      <div class="flex items-center justify-between mb-2">
+        <div id="ai-results-stats" class="text-[10px] text-white/30"></div>
+        <div class="flex items-center gap-2">
+          <button onclick="filterAiResults('all')" class="btn-ghost text-[10px] px-2 py-0.5 rounded" id="ai-filter-all">All</button>
+          <button onclick="filterAiResults('relevant')" class="btn-ghost text-[10px] px-2 py-0.5 rounded" id="ai-filter-relevant">Relevant</button>
+          <button onclick="filterAiResults('not-relevant')" class="btn-ghost text-[10px] px-2 py-0.5 rounded" id="ai-filter-not-relevant">Not Relevant</button>
+        </div>
+      </div>
+      <div class="max-h-[400px] overflow-y-auto scroll-y rounded-lg border border-white/[.04]">
+        <table class="w-full text-xs">
+          <thead class="sticky top-0 bg-surface-2">
+            <tr class="border-b border-white/[.04] text-white/30 text-[10px] uppercase tracking-wider">
+              <th class="text-left py-2 px-3 font-semibold">#</th>
+              <th class="text-left py-2 px-2 font-semibold">Name</th>
+              <th class="text-left py-2 px-2 font-semibold">Current Title</th>
+              <th class="text-left py-2 px-2 font-semibold">AI Role</th>
+              <th class="text-left py-2 px-2 font-semibold">Conf.</th>
+              <th class="text-left py-2 px-2 font-semibold">Override</th>
+            </tr>
+          </thead>
+          <tbody id="ai-results-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 4: Save to Database (AI-mapped, individual roles) -->
+  <div id="ai-save-section" class="hidden glass rounded-xl p-5">
     <div class="flex items-center gap-2 mb-4">
       <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375"/></svg>
       <h3 class="text-sm font-semibold">Save to Database</h3>
+      <span class="text-[10px] text-white/20">Individual AI-mapped roles per candidate</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+      <div>
+        <label class="text-[10px] text-white/30 block mb-1">City</label>
+        <input id="ai-save-city" type="text" placeholder="City" class="w-full rounded-lg px-3 py-1.5 text-xs">
+      </div>
+      <div>
+        <label class="text-[10px] text-white/30 block mb-1">Source</label>
+        <input id="ai-save-source" type="text" placeholder="Source" class="w-full rounded-lg px-3 py-1.5 text-xs">
+      </div>
+      <div class="flex items-end gap-2">
+        <label class="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" id="ai-save-skip-irrelevant" checked class="w-3.5 h-3.5 rounded accent-brand-500">
+          <span class="text-[10px] text-white/40">Skip "Not Relevant"</span>
+        </label>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button id="btn-ai-save" onclick="saveAiMappedCandidates()" class="btn-primary text-xs px-5 py-2 rounded-lg flex items-center gap-2 transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+        Save <span id="ai-save-count">0</span> candidates to DB
+      </button>
+      <span id="ai-save-status" class="text-[10px] text-white/30"></span>
+    </div>
+  </div>
+
+  <!-- Legacy Save to Database (basic enrichment without CSV/AI) -->
+  <div id="save-section" class="hidden glass rounded-xl p-5">
+    <div class="flex items-center gap-2 mb-4">
+      <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375"/></svg>
+      <h3 class="text-sm font-semibold">Quick Save (Single Role)</h3>
+      <span class="text-[10px] text-white/20">Save without CSV — same role for all</span>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
       <div>
         <label class="text-[10px] text-white/30 block mb-1">Role *</label>
         <select id="save-role" class="w-full rounded-lg px-3 py-1.5 text-xs">
           <option value="">Select role...</option>
-          <option value="Manager">Manager</option>
-          <option value="Supervisor">Supervisor</option>
-          <option value="Captain">Captain</option>
-          <option value="Waiter">Waiter</option>
-          <option value="Cashier">Cashier</option>
-          <option value="Kitchen Helper">Kitchen Helper</option>
-          <option value="Tea Master">Tea Master</option>
-          <option value="Indian Cook">Indian Cook</option>
-          <option value="Chinese Cook">Chinese Cook</option>
-          <option value="Cleaners">Cleaners</option>
-          <option value="Fried Chicken Cook">Fried Chicken Cook</option>
-          <option value="Juice Maker">Juice Maker</option>
-          <option value="Tandoor Cook">Tandoor Cook</option>
-          <option value="Counter Staff">Counter Staff</option>
-          <option value="Food Packing Person">Food Packing Person</option>
-          <option value="Grill Cook">Grill Cook</option>
-          <option value="Shawarma Maker">Shawarma Maker</option>
-          <option value="Tea Master Assistant">Tea Master Assistant</option>
-          <option value="Dish Washer">Dish Washer</option>
-          <option value="Not Relevant">Not Relevant</option>
         </select>
       </div>
       <div>
@@ -276,6 +397,11 @@
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
         Save <span id="save-count">0</span> candidates to DB
       </button>
+      <span class="text-[10px] text-white/15 mx-1">or</span>
+      <button onclick="showCsvUpload()" class="btn-ghost text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 transition">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+        Upload CSV + AI Map
+      </button>
       <span id="save-status" class="text-[10px] text-white/30"></span>
     </div>
   </div>
@@ -285,10 +411,47 @@
 <script>
 const API = "/api/hiring";
 const LS_KEY = "apna_enrich_settings";
+
+// ─── Canonical Roles ──────────────────────────────────────────
+const CANONICAL_ROLES = [
+  "Manager","Supervisor","Captain","Waiter","Cashier","Kitchen Helper",
+  "Tea Master","Indian Cook","Chinese Cook","Cleaners","Fried Chicken Cook",
+  "Fried Snacks Cook","Juice Maker","Tandoor Cook","Counter Staff",
+  "Food Packing Person","Grill Cook","Shawarma Maker","Tea Master Assistant",
+  "Dish Washer","Not Relevant"
+];
+
+// ─── State ────────────────────────────────────────────────────
 let enrichResults = [];
 let isRunning = false;
 let shouldStop = false;
 let settingsOpen = false;
+let csvData = [];      // Parsed CSV rows
+let matchedData = [];  // Enriched IDs joined with CSV
+let aiMappings = {};   // userId → { role, confidence, overridden }
+let aiFilter = "all";
+let aiFlowActive = false; // True once CSV is uploaded (hides legacy save)
+
+// ─── CSV Column Map (Apna export schema) ──────────────────────
+const CSV_COL = {
+  userId: "userId",
+  fullName: "fullName",
+  currentTitle: "currentExperience_jobTitle",
+  currentCompany: "currentExperience_companyName",
+  previousTitle: "previousExperience_jobTitle",
+  previousCompany: "previousExperience_companyName",
+  currentSalary: "currentSalary",
+  experience: "experience",
+  totalYears: "totalExperienceInYears",
+  experienceDepartments: "experienceDepartments",
+  skills: "skills",
+  city: "location_cityNameV2",
+  state: "location_state",
+  education: "highest_education_level",
+  englishLevel: "englishLevel_level",
+  gender: "gender",
+  resumeSummary: "resume_summary",
+};
 
 function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
@@ -322,7 +485,6 @@ function saveSettings() {
     search_id: document.getElementById("search-id").value.trim(),
     base_query_id: document.getElementById("base-query-id").value.trim(),
     sub_query_id: document.getElementById("sub-query-id").value.trim(),
-    default_role: document.getElementById("settings-role").value,
     default_city: document.getElementById("settings-city").value.trim(),
     default_source: document.getElementById("settings-source").value.trim(),
     saved_at: new Date().toISOString(),
@@ -333,8 +495,6 @@ function saveSettings() {
   setTimeout(() => { document.getElementById("settings-save-status").innerHTML = ""; }, 2000);
   updateConfigBadge();
   updateConfigBanner();
-
-  // Apply defaults to save section
   applySaveDefaults(settings);
 }
 
@@ -344,7 +504,6 @@ function clearSettings() {
   document.getElementById("search-id").value = "";
   document.getElementById("base-query-id").value = "";
   document.getElementById("sub-query-id").value = "";
-  document.getElementById("settings-role").value = "";
   document.getElementById("settings-city").value = "Bangalore";
   document.getElementById("settings-source").value = "apna_enrich";
   document.getElementById("auth-status").innerHTML = "";
@@ -360,13 +519,11 @@ function restoreSettings() {
 
   if (s.auth_raw) {
     document.getElementById("auth-headers").value = s.auth_raw;
-    // Trigger validation display
     validateAuthHeaders();
   }
   if (s.search_id) document.getElementById("search-id").value = s.search_id;
   if (s.base_query_id) document.getElementById("base-query-id").value = s.base_query_id;
   if (s.sub_query_id) document.getElementById("sub-query-id").value = s.sub_query_id;
-  if (s.default_role) document.getElementById("settings-role").value = s.default_role;
   if (s.default_city) document.getElementById("settings-city").value = s.default_city;
   if (s.default_source) document.getElementById("settings-source").value = s.default_source;
 
@@ -374,9 +531,13 @@ function restoreSettings() {
 }
 
 function applySaveDefaults(s) {
-  if (s.default_role) document.getElementById("save-role").value = s.default_role;
-  if (s.default_city) document.getElementById("save-city").value = s.default_city;
-  if (s.default_source) document.getElementById("save-source").value = s.default_source || "apna_enrich";
+  if (s.default_city) {
+    document.getElementById("save-city").value = s.default_city;
+    document.getElementById("ai-save-city").value = s.default_city;
+  }
+  const src = s.default_source || "apna_enrich";
+  document.getElementById("save-source").value = src;
+  document.getElementById("ai-save-source").value = src + "_ai";
 }
 
 // ─── Config Badge & Banner ─────────────────────────────────────
@@ -439,6 +600,22 @@ function toggleSettings() {
   updateConfigBanner();
 }
 
+// ─── Step Indicator ────────────────────────────────────────────
+function setStep(stepNum) {
+  document.getElementById("step-indicator").classList.remove("hidden");
+  for (let i = 1; i <= 4; i++) {
+    const dot = document.getElementById(`step-dot-${i}`);
+    const label = document.getElementById(`step-label-${i}`);
+    dot.className = "step-dot " + (i < stepNum ? "done" : i === stepNum ? "active" : "pending");
+    label.className = "text-[10px] font-semibold " + (i < stepNum ? "text-emerald-400" : i === stepNum ? "text-brand-400" : "text-white/20");
+    // Step lines
+    if (i < 4) {
+      const line = document.getElementById(`step-line-${i}`);
+      line.className = "step-line " + (i < stepNum ? "done" : i === stepNum ? "active" : "pending");
+    }
+  }
+}
+
 // ─── User IDs ──────────────────────────────────────────────────
 function updateIdCount() {
   const ids = parseUserIds();
@@ -468,7 +645,6 @@ function validateAuthHeaders() {
 }
 
 function getApnaHeaders() {
-  // Try from form first, then from localStorage
   const raw = document.getElementById("auth-headers").value.trim();
   if (raw) {
     try { return JSON.parse(raw); } catch { return null; }
@@ -478,32 +654,17 @@ function getApnaHeaders() {
 }
 
 function getSearchParams() {
-  // Try from form first, then from localStorage
   const searchId = document.getElementById("search-id").value.trim();
   const baseQueryId = document.getElementById("base-query-id").value.trim();
   const subQueryId = document.getElementById("sub-query-id").value.trim();
 
   if (searchId || baseQueryId || subQueryId) {
-    return {
-      search_id: searchId,
-      base_query_id: baseQueryId,
-      sub_query_id: subQueryId,
-      enterprise_member_id: "",
-      workspace_id: "",
-      job_id: "",
-    };
+    return { search_id: searchId, base_query_id: baseQueryId, sub_query_id: subQueryId, enterprise_member_id: "", workspace_id: "", job_id: "" };
   }
 
   const s = loadSettings();
   if (s) {
-    return {
-      search_id: s.search_id || "",
-      base_query_id: s.base_query_id || "",
-      sub_query_id: s.sub_query_id || "",
-      enterprise_member_id: "",
-      workspace_id: "",
-      job_id: "",
-    };
+    return { search_id: s.search_id || "", base_query_id: s.base_query_id || "", sub_query_id: s.sub_query_id || "", enterprise_member_id: "", workspace_id: "", job_id: "" };
   }
 
   return { search_id: "", base_query_id: "", sub_query_id: "", enterprise_member_id: "", workspace_id: "", job_id: "" };
@@ -542,9 +703,11 @@ async function startEnrichment() {
   enrichResults = [];
   shouldStop = false;
   isRunning = true;
+  aiFlowActive = false;
   let successCount = 0, errorCount = 0;
 
   // UI states
+  setStep(1);
   document.getElementById("btn-start").disabled = true;
   document.getElementById("btn-stop").classList.remove("hidden");
   document.getElementById("progress-wrap").classList.remove("hidden");
@@ -552,6 +715,11 @@ async function startEnrichment() {
   document.getElementById("results-section").classList.remove("hidden");
   document.getElementById("log-body").innerHTML = "";
   document.getElementById("results-body").innerHTML = "";
+  // Hide downstream sections
+  document.getElementById("csv-section").classList.add("hidden");
+  document.getElementById("ai-section").classList.add("hidden");
+  document.getElementById("ai-save-section").classList.add("hidden");
+  document.getElementById("save-section").classList.add("hidden");
 
   addLog(`Starting enrichment for ${ids.length} user IDs...`);
 
@@ -617,8 +785,10 @@ async function startEnrichment() {
 
   // Show save section if we have results
   if (withPhone > 0) {
+    // Show both: legacy save + CSV upload option
     document.getElementById("save-section").classList.remove("hidden");
     document.getElementById("save-count").textContent = withPhone;
+    setStep(2);
   }
 }
 
@@ -646,6 +816,484 @@ function renderResults() {
   document.getElementById("results-stats").textContent = `${withPhone} found / ${enrichResults.length - withPhone} failed`;
 }
 
+// ─── Show CSV Upload ───────────────────────────────────────────
+function showCsvUpload() {
+  aiFlowActive = true;
+  document.getElementById("save-section").classList.add("hidden");
+  document.getElementById("csv-section").classList.remove("hidden");
+  setStep(2);
+}
+
+// ─── CSV Parsing (vanilla, handles quoted fields) ──────────────
+function parseCSVLine(line) {
+  const result = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i++; // Skip escaped quote
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function parseCSV(text) {
+  // Remove BOM
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+  // Split into lines, handling \r\n and \n
+  // But we need to handle newlines inside quoted fields
+  const rows = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      current += ch;
+    } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (current.trim()) rows.push(current);
+      current = "";
+      // Skip \r\n as single line break
+      if (ch === '\r' && i + 1 < text.length && text[i + 1] === '\n') i++;
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) rows.push(current);
+
+  if (rows.length < 2) return [];
+
+  const headers = parseCSVLine(rows[0]);
+  const data = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const values = parseCSVLine(rows[i]);
+    const obj = {};
+    headers.forEach((h, idx) => {
+      obj[h] = values[idx] || "";
+    });
+    data.push(obj);
+  }
+
+  return data;
+}
+
+// ─── CSV File Handling ─────────────────────────────────────────
+function handleCsvFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      csvData = parseCSV(e.target.result);
+      if (!csvData.length) {
+        alert("CSV file is empty or could not be parsed");
+        return;
+      }
+
+      // Validate: check for userId column
+      const firstRow = csvData[0];
+      if (!(CSV_COL.userId in firstRow)) {
+        alert(`CSV must have a "${CSV_COL.userId}" column. Found columns: ${Object.keys(firstRow).slice(0, 8).join(", ")}...`);
+        return;
+      }
+
+      joinCsvWithEnriched();
+    } catch (err) {
+      alert("Error parsing CSV: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function joinCsvWithEnriched() {
+  // Build lookup: userId → enriched phone
+  const phoneMap = {};
+  enrichResults.forEach(r => {
+    if (r.phone) phoneMap[r.user_id] = r.phone;
+  });
+
+  // JOIN: only keep CSV rows where phone was enriched
+  matchedData = [];
+  let csvWithId = 0;
+
+  csvData.forEach(row => {
+    const uid = (row[CSV_COL.userId] || "").toString().trim();
+    if (!uid) return;
+    csvWithId++;
+    if (phoneMap[uid]) {
+      matchedData.push({
+        user_id: uid,
+        phone: phoneMap[uid],
+        fullName: row[CSV_COL.fullName] || "",
+        currentTitle: row[CSV_COL.currentTitle] || "",
+        currentCompany: row[CSV_COL.currentCompany] || "",
+        previousTitle: row[CSV_COL.previousTitle] || "",
+        previousCompany: row[CSV_COL.previousCompany] || "",
+        currentSalary: row[CSV_COL.currentSalary] || "",
+        experience: row[CSV_COL.totalYears] || row[CSV_COL.experience] || "",
+        experienceDepartments: row[CSV_COL.experienceDepartments] || "",
+        skills: row[CSV_COL.skills] || "",
+        city: row[CSV_COL.city] || "",
+        state: row[CSV_COL.state] || "",
+        education: row[CSV_COL.education] || "",
+        englishLevel: row[CSV_COL.englishLevel] || "",
+        gender: row[CSV_COL.gender] || "",
+        resumeSummary: row[CSV_COL.resumeSummary] || "",
+      });
+    }
+  });
+
+  const enrichedCount = Object.keys(phoneMap).length;
+
+  // Show match info
+  document.getElementById("csv-match-info").classList.remove("hidden");
+  document.getElementById("csv-match-stats").innerHTML = `
+    <span class="text-emerald-400 font-semibold">${matchedData.length}</span>
+    <span class="text-white/30">of ${enrichedCount} enriched IDs found in CSV</span>
+    <span class="text-white/15">(${csvData.length} total CSV rows)</span>
+  `;
+
+  // Render preview table
+  const tbody = document.getElementById("csv-match-body");
+  tbody.innerHTML = matchedData.map((m, i) => `
+    <tr class="border-b border-white/[.02]">
+      <td class="py-1.5 px-3 text-white/20">${i + 1}</td>
+      <td class="py-1.5 px-2 text-white/60">${esc(m.fullName || '\u2014')}</td>
+      <td class="py-1.5 px-2 mono text-emerald-400/70 text-[10px]">${esc(m.phone)}</td>
+      <td class="py-1.5 px-2 text-white/40">${esc(m.currentTitle || '\u2014')}</td>
+      <td class="py-1.5 px-2 text-white/30 text-[10px]">${esc((m.skills || '').slice(0, 60))}${(m.skills || '').length > 60 ? '...' : ''}</td>
+      <td class="py-1.5 px-2 text-white/30">${esc(m.experience || '\u2014')}</td>
+    </tr>
+  `).join("");
+
+  document.getElementById("ai-map-count").textContent = `(${matchedData.length})`;
+
+  if (!matchedData.length) {
+    document.getElementById("btn-ai-map").disabled = true;
+    document.getElementById("csv-match-stats").innerHTML += `<br><span class="text-amber-400 text-[10px]">No matches found. Make sure the CSV has the same user IDs that were enriched.</span>`;
+  }
+
+  aiFlowActive = true;
+  document.getElementById("save-section").classList.add("hidden");
+}
+
+function clearCsv() {
+  csvData = [];
+  matchedData = [];
+  aiMappings = {};
+  document.getElementById("csv-match-info").classList.add("hidden");
+  document.getElementById("csv-file-input").value = "";
+  document.getElementById("ai-section").classList.add("hidden");
+  document.getElementById("ai-save-section").classList.add("hidden");
+  aiFlowActive = false;
+  // Re-show legacy save if there are results
+  const withPhone = enrichResults.filter(r => r.phone).length;
+  if (withPhone > 0) {
+    document.getElementById("save-section").classList.remove("hidden");
+  }
+}
+
+// ─── CSV Drag & Drop ───────────────────────────────────────────
+const dropZone = document.getElementById("csv-drop-zone");
+if (dropZone) {
+  dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+  dropZone.addEventListener("dragleave", () => { dropZone.classList.remove("drag-over"); });
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropZone.classList.remove("drag-over");
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith(".csv")) handleCsvFile(file);
+    else alert("Please drop a .csv file");
+  });
+}
+
+// ─── AI Role Mapping ───────────────────────────────────────────
+async function startAiMapping() {
+  if (!matchedData.length) return;
+
+  aiMappings = {};
+  const BATCH_SIZE = 10;
+  const batches = [];
+
+  for (let i = 0; i < matchedData.length; i += BATCH_SIZE) {
+    batches.push(matchedData.slice(i, i + BATCH_SIZE));
+  }
+
+  // Show AI section
+  document.getElementById("ai-section").classList.remove("hidden");
+  document.getElementById("ai-results-wrap").classList.add("hidden");
+  document.getElementById("ai-progress-wrap").classList.remove("hidden");
+  document.getElementById("btn-ai-map").disabled = true;
+  document.getElementById("ai-status-badge").textContent = "Processing...";
+  setStep(3);
+
+  let processed = 0;
+  let errors = 0;
+
+  for (let b = 0; b < batches.length; b++) {
+    const batch = batches[b];
+    const pct = Math.round(((b + 1) / batches.length) * 100);
+    document.getElementById("ai-progress-bar").style.width = pct + "%";
+    document.getElementById("ai-progress-text").textContent = `Batch ${b + 1}/${batches.length}`;
+    document.getElementById("ai-progress-detail").textContent = `Mapping ${batch.length} candidates with Gemini 2.5 Pro...`;
+
+    // Prepare candidates for API
+    const candidates = batch.map(m => ({
+      user_id: m.user_id,
+      fullName: m.fullName,
+      currentTitle: m.currentTitle,
+      currentCompany: m.currentCompany,
+      previousTitle: m.previousTitle,
+      skills: m.skills,
+      experience: m.experience,
+      experienceDepartments: m.experienceDepartments,
+      resumeSummary: m.resumeSummary,
+      education: m.education,
+    }));
+
+    try {
+      const result = await apiPost({
+        action: "gemini_role_map",
+        candidates: candidates,
+      });
+
+      if (result.success && result.mappings) {
+        result.mappings.forEach(m => {
+          aiMappings[m.user_id] = {
+            role: m.role,
+            confidence: m.confidence || "medium",
+            overridden: false,
+          };
+        });
+        processed += batch.length;
+      } else {
+        // Fallback: mark all as Not Relevant with error
+        batch.forEach(m => {
+          aiMappings[m.user_id] = { role: "Not Relevant", confidence: "error", overridden: false };
+        });
+        errors += batch.length;
+        console.error("AI mapping error:", result.error);
+      }
+    } catch (e) {
+      batch.forEach(m => {
+        aiMappings[m.user_id] = { role: "Not Relevant", confidence: "error", overridden: false };
+      });
+      errors += batch.length;
+      console.error("AI mapping network error:", e);
+    }
+
+    // 1-second pause between batches
+    if (b < batches.length - 1) {
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
+  // Done
+  document.getElementById("btn-ai-map").disabled = false;
+  document.getElementById("ai-progress-detail").textContent = "";
+  document.getElementById("ai-status-badge").innerHTML = `<span class="text-emerald-400">Done</span> — ${processed - errors} mapped${errors > 0 ? `, <span class="text-red-400">${errors} errors</span>` : ''}`;
+
+  renderAiResults();
+
+  // Show save section
+  updateAiSaveCount();
+  document.getElementById("ai-save-section").classList.remove("hidden");
+  setStep(4);
+}
+
+function renderAiResults() {
+  document.getElementById("ai-results-wrap").classList.remove("hidden");
+
+  const filtered = matchedData.filter(m => {
+    const mapping = aiMappings[m.user_id];
+    if (!mapping) return false;
+    if (aiFilter === "relevant") return mapping.role !== "Not Relevant";
+    if (aiFilter === "not-relevant") return mapping.role === "Not Relevant";
+    return true;
+  });
+
+  // Update filter buttons
+  ["all", "relevant", "not-relevant"].forEach(f => {
+    const btn = document.getElementById(`ai-filter-${f}`);
+    if (f === aiFilter) {
+      btn.className = "text-[10px] px-2 py-0.5 rounded bg-brand-500/20 text-brand-400 font-semibold";
+    } else {
+      btn.className = "btn-ghost text-[10px] px-2 py-0.5 rounded";
+    }
+  });
+
+  // Stats
+  const total = matchedData.length;
+  const relevant = matchedData.filter(m => aiMappings[m.user_id]?.role !== "Not Relevant").length;
+  const notRel = total - relevant;
+  document.getElementById("ai-results-stats").textContent = `${relevant} relevant / ${notRel} not relevant / ${total} total`;
+
+  // Build role options HTML once
+  const roleOptions = CANONICAL_ROLES.map(r => `<option value="${r}">${r}</option>`).join("");
+
+  const tbody = document.getElementById("ai-results-body");
+  tbody.innerHTML = filtered.map((m, idx) => {
+    const mapping = aiMappings[m.user_id] || {};
+    const role = mapping.role || "Not Relevant";
+    const conf = mapping.confidence || "low";
+    const confClass = conf === "high" ? "confidence-high" : conf === "medium" ? "confidence-medium" : conf === "error" ? "confidence-low" : "confidence-low";
+    const confLabel = conf === "error" ? "ERR" : conf;
+    const isNotRelevant = role === "Not Relevant";
+
+    return `<tr class="border-b border-white/[.02] ${isNotRelevant ? 'opacity-40' : ''}">
+      <td class="py-1.5 px-3 text-white/20">${idx + 1}</td>
+      <td class="py-1.5 px-2 text-white/60">${esc(m.fullName || '\u2014')}</td>
+      <td class="py-1.5 px-2 text-white/40 text-[10px]">${esc(m.currentTitle || '\u2014')}</td>
+      <td class="py-1.5 px-2 text-white/70 font-medium">${esc(role)}</td>
+      <td class="py-1.5 px-2"><span class="${confClass} text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase">${confLabel}</span></td>
+      <td class="py-1.5 px-2">
+        <select class="role-select-sm" onchange="overrideRole('${m.user_id}', this.value)" data-uid="${m.user_id}">
+          ${roleOptions}
+        </select>
+      </td>
+    </tr>`;
+  }).join("");
+
+  // Set current role values in override dropdowns
+  filtered.forEach(m => {
+    const sel = tbody.querySelector(`select[data-uid="${m.user_id}"]`);
+    if (sel) {
+      const mapping = aiMappings[m.user_id];
+      sel.value = mapping?.role || "Not Relevant";
+    }
+  });
+}
+
+function filterAiResults(filter) {
+  aiFilter = filter;
+  renderAiResults();
+}
+
+function overrideRole(userId, newRole) {
+  if (aiMappings[userId]) {
+    aiMappings[userId].role = newRole;
+    aiMappings[userId].overridden = true;
+    aiMappings[userId].confidence = "manual";
+  }
+  updateAiSaveCount();
+}
+
+function updateAiSaveCount() {
+  const skipIrrelevant = document.getElementById("ai-save-skip-irrelevant").checked;
+  const count = matchedData.filter(m => {
+    const mapping = aiMappings[m.user_id];
+    if (!mapping) return false;
+    if (skipIrrelevant && mapping.role === "Not Relevant") return false;
+    return true;
+  }).length;
+  document.getElementById("ai-save-count").textContent = count;
+}
+
+// ─── Save AI-Mapped Candidates ─────────────────────────────────
+async function saveAiMappedCandidates() {
+  const city = document.getElementById("ai-save-city").value.trim();
+  const source = document.getElementById("ai-save-source").value.trim() || "apna_enrich_ai";
+  const skipIrrelevant = document.getElementById("ai-save-skip-irrelevant").checked;
+
+  const toSave = matchedData.filter(m => {
+    const mapping = aiMappings[m.user_id];
+    if (!mapping) return false;
+    if (skipIrrelevant && mapping.role === "Not Relevant") return false;
+    return true;
+  });
+
+  if (!toSave.length) {
+    alert("No candidates to save");
+    return;
+  }
+
+  document.getElementById("btn-ai-save").disabled = true;
+  document.getElementById("ai-save-status").textContent = "Saving...";
+
+  const candidates = toSave.map(m => {
+    const mapping = aiMappings[m.user_id] || {};
+    return {
+      phone: m.phone,
+      name: m.fullName || "",
+      first_name: (m.fullName || "").split(" ")[0] || "",
+      he_role: mapping.role || "Not Relevant",
+      current_title: m.currentTitle || "",
+      current_company: m.currentCompany || "",
+      previous_title: m.previousTitle || "",
+      previous_company: m.previousCompany || "",
+      city: m.city || city,
+      source: source,
+      experience: m.experience || "",
+      current_salary: m.currentSalary || "",
+      skills: m.skills || "",
+      english_level: m.englishLevel || "",
+      education: m.education || "",
+      gender: m.gender || "",
+    };
+  });
+
+  // Batch in groups of 50
+  const BATCH = 50;
+  let totalInserted = 0, totalSkipped = 0;
+  const allErrors = [];
+
+  for (let i = 0; i < candidates.length; i += BATCH) {
+    const batch = candidates.slice(i, i + BATCH);
+    document.getElementById("ai-save-status").textContent = `Saving batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(candidates.length / BATCH)}...`;
+
+    try {
+      const result = await apiPost({
+        action: "upload_candidates",
+        candidates: batch,
+      });
+
+      if (result.success) {
+        totalInserted += result.inserted || 0;
+        totalSkipped += result.skipped || 0;
+        if (result.errors?.length) allErrors.push(...result.errors);
+      } else {
+        allErrors.push(result.error || "Unknown error");
+      }
+    } catch (e) {
+      allErrors.push("Network error: " + e.message);
+    }
+  }
+
+  document.getElementById("ai-save-status").innerHTML = `
+    <span class="text-emerald-400">Done! ${totalInserted} inserted, ${totalSkipped} skipped</span>
+    ${allErrors.length ? `<span class="text-amber-400 ml-2">(${allErrors.length} warnings)</span>` : ''}
+  `;
+  document.getElementById("btn-ai-save").disabled = false;
+
+  if (allErrors.length) {
+    console.warn("Save errors:", allErrors);
+  }
+}
+
+// ─── Legacy Save (single role for all) ─────────────────────────
 async function saveToDatabase() {
   const role = document.getElementById("save-role").value;
   if (!role) { alert("Please select a role"); return; }
@@ -694,10 +1342,20 @@ async function saveToDatabase() {
   document.getElementById("btn-save").disabled = false;
 }
 
+// ─── Populate role dropdowns ───────────────────────────────────
+function populateRoleDropdowns() {
+  const selects = [document.getElementById("save-role")];
+  selects.forEach(sel => {
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Select role...</option>' + CANONICAL_ROLES.map(r => `<option value="${r}">${r}</option>`).join("");
+  });
+}
+
 // ─── Init ──────────────────────────────────────────────────────
 document.getElementById("auth-headers").addEventListener("input", validateAuthHeaders);
+document.getElementById("ai-save-skip-irrelevant").addEventListener("change", updateAiSaveCount);
 
-// Restore saved settings on load
+populateRoleDropdowns();
 restoreSettings();
 updateConfigBadge();
 updateConfigBanner();

@@ -7,6 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 # WA_ACCESS_TOKEN     — Meta WhatsApp Cloud API bearer token
 # WA_PHONE_ID         — WhatsApp phone number ID
 # DASHBOARD_KEY       — Dashboard authentication key
+# GEMINI_API_KEY      — Google Gemini API key for AI role mapping
 
 [[d1_databases]]
 binding = "DB"

@@ -520,6 +520,67 @@ async function handleGet(url, env) {
   return json({ error: "Unknown action" }, 400);
 }
 
+// ─── Gemini AI Role Mapping Prompt ─────────────────────────
+function buildRoleMappingPrompt(candidates) {
+  const ROLES = `1. Manager - Restaurant/outlet general manager, GM, area manager, regional manager, operations head
+2. Supervisor - Shift supervisor, floor supervisor, shift incharge, team lead, assistant manager, restaurant manager, store manager, hotel manager, outlet manager, kitchen manager, F&B manager
+3. Captain - Floor captain, F&B captain, senior service staff who leads waiters, banquet captain, steward captain. NOT a manager.
+4. Waiter - Waiter, steward, server, food service staff, room service, hostess, dining room server, food & beverage associate/attendant
+5. Cashier - Cashier, billing executive, front desk receptionist, data entry operator, accountant, computer operator, bookkeeper, back office, hotel/restaurant cashier
+6. Kitchen Helper - Commis, helper, kitchen staff, food prep, junior line cook, bakery helper, crew member, multi-skilled worker, restaurant helper, hotel staff, casual worker
+7. Tea Master - Tea maker, chai master, coffee maker, barista, brew master, coffee specialist, dosa coffee, erani tea master, tea & coffee maker
+8. Indian Cook - Indian chef, biryani cook, south/north Indian cook, head chef, sous chef, chef de partie (Indian), executive chef, chef de cuisine, bakery chef, unit chef. Senior cooking roles.
+9. Chinese Cook - Chinese chef, wok cook, continental cook, Chinese sous chef, continental/Mexican/Chinese chef
+10. Cleaners - Cleaner, housekeeping staff, house cleaner, office boy, sweeper, janitor, housekeeper
+11. Fried Chicken Cook - Fried chicken specialist, fryer, chicken cutting specialist
+12. Fried Snacks Cook - Snacks maker, display food creator, quick bites cook, chaat maker, fast food cook
+13. Juice Maker - Juice maker, fresh juice specialist, mocktail maker, smoothie maker, juice counter staff
+14. Tandoor Cook - Tandoor specialist, tandoori cook, naan maker, roti maker
+15. Counter Staff - Counter sales, order taker, service crew at counter, counter boy
+16. Food Packing Person - Packing staff, packaging, dispatch, warehouse helper, store helper, store assistant, picker/packer
+17. Grill Cook - Grill specialist, shawaya cook, Arabian grill, alfam cook, BBQ cook, grill chef
+18. Shawarma Maker - Shawarma specialist, shawarma cook, shawarma roller
+19. Tea Master Assistant - Junior tea maker, tea stall assistant, tea helper
+20. Dish Washer - Dish washing, vessel cleaning, utensil cleaner, kitchen cleaning
+21. Not Relevant - Candidates from non-restaurant/non-food industries: IT, software, sales, marketing, delivery boy, driver, security guard, tailor, mechanic, construction, retail (non-food), BPO, telecalling, data science, etc.`;
+
+  const candidateList = candidates.map((c, i) => {
+    const parts = [`#${i + 1} (userId: ${c.user_id})`];
+    if (c.fullName) parts.push(`  Name: ${c.fullName}`);
+    if (c.currentTitle) parts.push(`  Current Job: ${c.currentTitle}`);
+    if (c.currentCompany) parts.push(`  Company: ${c.currentCompany}`);
+    if (c.previousTitle) parts.push(`  Previous Job: ${c.previousTitle}`);
+    if (c.skills) parts.push(`  Skills: ${c.skills.slice(0, 150)}`);
+    if (c.experience) parts.push(`  Experience: ${c.experience} years`);
+    if (c.experienceDepartments) parts.push(`  Department: ${c.experienceDepartments}`);
+    if (c.resumeSummary) parts.push(`  Resume: ${c.resumeSummary.slice(0, 200)}`);
+    if (c.education) parts.push(`  Education: ${c.education}`);
+    return parts.join("\n");
+  }).join("\n\n");
+
+  return `You are classifying job candidates for Hamza Express, a large multi-station restaurant in Bangalore, India (est. 1918). Assign each candidate to exactly ONE of these 21 roles based on their profile.
+
+ROLES:
+${ROLES}
+
+CLASSIFICATION RULES:
+- PRIMARY signal: current job title. SECONDARY: skills, experience department. TERTIARY: resume summary.
+- If candidate has ZERO restaurant/food/hospitality experience (e.g., IT engineer, sales executive, delivery driver, security guard, tailor, mechanic) → "Not Relevant"
+- Generic "Cook" or "Chef" with no cuisine specialization → "Kitchen Helper"
+- All coffee/barista/brew roles → "Tea Master" (we group tea & coffee together)
+- "Captain" means floor captain who leads waiters — NOT a manager. If title says "Restaurant Manager" that is "Supervisor".
+- Head Chef, Sous Chef, Executive Chef, Chef De Partie in Indian cuisine context → "Indian Cook"
+- Bartender → "Juice Maker" (we don't serve alcohol, bartenders handle mocktails/juices)
+
+CANDIDATES:
+${candidateList}
+
+Return a JSON array with exactly ${candidates.length} objects. Each must have:
+- "user_id": string (exact userId from above)
+- "role": string (MUST be exactly one of the 21 role names listed above, case-sensitive)
+- "confidence": "high" | "medium" | "low"`;
+}
+
 // ─── POST handlers ─────────────────────────────────────────
 async function handlePost(request, env) {
   const db = env.DB;
@@ -1147,6 +1208,67 @@ async function handlePost(request, env) {
       });
     } catch (e) {
       return json({ user_id, error: e.message, phone: "" }, 500);
+    }
+  }
+
+  // ── Gemini AI Role Mapping ──
+  if (action === "gemini_role_map") {
+    const { candidates } = body;
+    if (!candidates || !candidates.length) return json({ error: "No candidates provided" }, 400);
+    if (candidates.length > 15) return json({ error: "Max 15 candidates per batch" }, 400);
+
+    const GEMINI_KEY = env.GEMINI_API_KEY;
+    if (!GEMINI_KEY) return json({ error: "GEMINI_API_KEY not configured" }, 500);
+
+    const prompt = buildRoleMappingPrompt(candidates);
+
+    try {
+      const geminiResp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    user_id: { type: "STRING" },
+                    role: { type: "STRING" },
+                    confidence: { type: "STRING" },
+                  },
+                  required: ["user_id", "role", "confidence"],
+                },
+              },
+              temperature: 0.1,
+            },
+          }),
+        }
+      );
+
+      if (!geminiResp.ok) {
+        const errText = await geminiResp.text();
+        return json({ error: `Gemini API ${geminiResp.status}: ${errText.slice(0, 300)}` }, 502);
+      }
+
+      const geminiData = await geminiResp.json();
+      const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) return json({ error: "Gemini returned empty response", raw: geminiData }, 502);
+
+      let mappings;
+      try {
+        mappings = JSON.parse(text);
+      } catch (parseErr) {
+        return json({ error: "Failed to parse Gemini JSON response", raw_text: text.slice(0, 500) }, 502);
+      }
+
+      return json({ success: true, mappings });
+    } catch (e) {
+      return json({ error: "Gemini API error: " + e.message }, 500);
     }
   }
 
