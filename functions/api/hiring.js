@@ -1102,6 +1102,54 @@ async function handlePost(request, env) {
     }
   }
 
+  // ── Enrich phone: proxy single Apna API call ──
+  if (action === "enrich_phone") {
+    const { user_id, apna_headers, search_params } = body;
+    if (!user_id) return json({ error: "user_id required" }, 400);
+    if (!apna_headers) return json({ error: "apna_headers required" }, 400);
+
+    try {
+      const apnaResp = await fetch(
+        "https://production.apna.co/cerebro/api/v1/employer-user-activity/performCreditAction/VIEW_PHONE_NUMBER",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...apna_headers,
+          },
+          body: JSON.stringify({
+            candidate_ids: [String(user_id)],
+            enterprise_member_id: search_params?.enterprise_member_id || "",
+            workspace_id: search_params?.workspace_id || "",
+            search_id: search_params?.search_id || "",
+            base_query_id: search_params?.base_query_id || "",
+            sub_query_id: search_params?.sub_query_id || "",
+            job_id: search_params?.job_id || "",
+            route: "cerebro",
+          }),
+        }
+      );
+
+      const data = await apnaResp.json();
+      let phone = "";
+      let candidate_data = null;
+      try {
+        candidate_data = data?.data?.data?.[0] || null;
+        phone = candidate_data?.phone_number || "";
+      } catch (_) {}
+
+      return json({
+        user_id,
+        phone,
+        candidate_data,
+        raw: data,
+        apna_status: apnaResp.status,
+      });
+    } catch (e) {
+      return json({ user_id, error: e.message, phone: "" }, 500);
+    }
+  }
+
   // ── Legacy webhook format (action: "webhook") ──
   if (action === "webhook") {
     return handleWebhook(db, body);

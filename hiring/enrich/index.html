@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phone Enrichment — HN Hotels Hiring</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#fef7ed',100:'#fdecd4',200:'#f9d5a8',400:'#f0a944',500:'#e8930c',600:'#c97508' },
+            surface: { 1:'#111118', 2:'#16161f', 3:'#1c1c27', 4:'#22222e' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #0c0c14; color: #e4e4ed; }
+    .glass { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.04); backdrop-filter: blur(20px); }
+    input, select, textarea { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); color: #e4e4ed; }
+    input:focus, select:focus, textarea:focus { border-color: rgba(232,147,12,.5); outline: none; box-shadow: 0 0 0 2px rgba(232,147,12,.1); }
+    .btn-primary { background:#e8930c; color:#0c0c14; font-weight:600; }
+    .btn-primary:hover:not(:disabled) { background:#f0a944; }
+    .btn-primary:disabled { opacity:0.4; cursor:not-allowed; }
+    .btn-ghost { background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.5); }
+    .btn-ghost:hover { background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.7); }
+    .btn-danger { background:rgba(239,68,68,0.15); color:#f87171; font-weight:600; }
+    .btn-danger:hover { background:rgba(239,68,68,0.25); }
+    .scroll-y { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent; }
+    .scroll-y::-webkit-scrollbar { width: 3px; }
+    .scroll-y::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 3px; }
+    select option { background:#1c1c27; color:#e4e4ed; }
+    .mono { font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace; }
+    @keyframes pulse-bar { 0%,100%{opacity:0.6} 50%{opacity:1} }
+    .animate-pulse-bar { animation: pulse-bar 1.5s ease-in-out infinite; }
+  </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+<!-- Top Bar -->
+<nav class="sticky top-0 z-40 glass border-b border-white/[.03] px-4 sm:px-6 h-14 flex items-center justify-between">
+  <div class="flex items-center gap-2.5">
+    <div class="w-8 h-8 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+    </div>
+    <div>
+      <h1 class="text-sm font-bold tracking-tight leading-none">Phone Enrichment</h1>
+      <p class="text-[10px] text-white/25 leading-none mt-0.5">Apna Candidate Phones</p>
+    </div>
+  </div>
+  <a href="/hiring/waba/" class="btn-ghost text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition no-underline">
+    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
+    WABA Dashboard
+  </a>
+</nav>
+
+<div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+  <!-- Step 1: Auth Headers -->
+  <div class="glass rounded-xl p-5">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="w-6 h-6 rounded-full bg-brand-500/15 text-brand-400 text-[10px] font-bold flex items-center justify-center">1</span>
+      <h2 class="text-sm font-semibold">Apna Auth Headers</h2>
+      <span class="text-[9px] text-white/20 ml-auto">From browser DevTools → Network → Copy request headers as JSON</span>
+    </div>
+    <textarea id="auth-headers" rows="5" placeholder='{"authorization": "Bearer eyJ...", "cookie": "connect.sid=...", ...}' class="w-full rounded-lg px-3 py-2 text-xs mono placeholder-white/10 scroll-y"></textarea>
+    <div id="auth-status" class="mt-2 text-[10px] text-white/20"></div>
+  </div>
+
+  <!-- Step 2: Search Context -->
+  <div class="glass rounded-xl p-5">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="w-6 h-6 rounded-full bg-brand-500/15 text-brand-400 text-[10px] font-bold flex items-center justify-center">2</span>
+      <h2 class="text-sm font-semibold">Search Context</h2>
+      <span class="text-[9px] text-white/20 ml-auto">From the Apna API call payload</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div>
+        <label class="text-[10px] text-white/30 block mb-1">search_id</label>
+        <input id="search-id" type="text" value="" placeholder="68cc1d142c8ceb..." class="w-full rounded-lg px-3 py-1.5 text-xs mono">
+      </div>
+      <div>
+        <label class="text-[10px] text-white/30 block mb-1">base_query_id</label>
+        <input id="base-query-id" type="text" value="" placeholder="ae0a50ed727..." class="w-full rounded-lg px-3 py-1.5 text-xs mono">
+      </div>
+      <div>
+        <label class="text-[10px] text-white/30 block mb-1">sub_query_id</label>
+        <input id="sub-query-id" type="text" value="" placeholder="d1cb6585d74..." class="w-full rounded-lg px-3 py-1.5 text-xs mono">
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: User IDs -->
+  <div class="glass rounded-xl p-5">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="w-6 h-6 rounded-full bg-brand-500/15 text-brand-400 text-[10px] font-bold flex items-center justify-center">3</span>
+      <h2 class="text-sm font-semibold">Apna User IDs</h2>
+      <span id="id-count" class="text-[10px] text-white/20 ml-auto">0 IDs</span>
+    </div>
+    <textarea id="user-ids" rows="8" placeholder="Paste Apna user IDs, one per line...
+
+50315268
+23339998
+61618139
+..." oninput="updateIdCount()" class="w-full rounded-lg px-3 py-2 text-xs mono placeholder-white/10 scroll-y"></textarea>
+  </div>
+
+  <!-- Controls -->
+  <div class="flex items-center gap-3">
+    <button id="btn-start" onclick="startEnrichment()" class="btn-primary text-xs px-5 py-2 rounded-lg flex items-center gap-2 transition">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"/></svg>
+      Start Enrichment
+    </button>
+    <button id="btn-stop" onclick="stopEnrichment()" class="btn-danger text-xs px-4 py-2 rounded-lg hidden transition">Stop</button>
+    <div id="progress-wrap" class="hidden flex-1 flex items-center gap-3">
+      <div class="flex-1 h-2 rounded-full bg-white/[.04] overflow-hidden">
+        <div id="progress-bar" class="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all duration-300" style="width:0%"></div>
+      </div>
+      <span id="progress-text" class="text-[10px] text-white/40 shrink-0">0/0</span>
+    </div>
+  </div>
+
+  <!-- Live Log -->
+  <div id="log-section" class="hidden glass rounded-xl p-4">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-xs font-semibold text-white/50">Enrichment Log</h3>
+      <span id="log-stats" class="text-[10px] text-white/20"></span>
+    </div>
+    <div id="log-body" class="max-h-40 overflow-y-auto scroll-y space-y-0.5 text-[10px] mono"></div>
+  </div>
+
+  <!-- Results Table -->
+  <div id="results-section" class="hidden glass rounded-xl overflow-hidden">
+    <div class="p-4 border-b border-white/[.04] flex items-center justify-between">
+      <h3 class="text-sm font-semibold">Enriched Results</h3>
+      <div class="flex items-center gap-3">
+        <span id="results-stats" class="text-[10px] text-white/30"></span>
+      </div>
+    </div>
+    <div class="max-h-[400px] overflow-y-auto scroll-y">
+      <table class="w-full text-xs">
+        <thead class="sticky top-0 bg-surface-2">
+          <tr class="border-b border-white/[.04] text-white/30 text-[10px] uppercase tracking-wider">
+            <th class="text-left py-2 px-3 font-semibold">#</th>
+            <th class="text-left py-2 px-2 font-semibold">Apna ID</th>
+            <th class="text-left py-2 px-2 font-semibold">Phone</th>
+            <th class="text-left py-2 px-2 font-semibold">Name</th>
+            <th class="text-left py-2 px-2 font-semibold">Status</th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Save to Database -->
+  <div id="save-section" class="hidden glass rounded-xl p-5">
+    <div class="flex items-center gap-2 mb-4">
+      <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375"/></svg>
+      <h3 class="text-sm font-semibold">Save to Database</h3>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+      <div>
+        <label class="text-[10px] text-white/30 block mb-1">Assign Role *</label>
+        <select id="save-role" class="w-full rounded-lg px-3 py-1.5 text-xs">
+          <option value="">Select role...</option>
+          <option value="Manager">Manager</option>
+          <option value="Supervisor">Supervisor</option>
+          <option value="Captain">Captain</option>
+          <option value="Waiter">Waiter</option>
+          <option value="Cashier">Cashier</option>
+          <option value="Kitchen Helper">Kitchen Helper</option>
+          <option value="Tea Master">Tea Master</option>
+          <option value="Indian Cook">Indian Cook</option>
+          <option value="Chinese Cook">Chinese Cook</option>
+          <option value="Cleaners">Cleaners</option>
+          <option value="Fried Chicken Cook">Fried Chicken Cook</option>
+          <option value="Fried Snacks Cook">Fried Snacks Cook</option>
+          <option value="Juice Maker">Juice Maker</option>
+          <option value="Tandoor Cook">Tandoor Cook</option>
+          <option value="Counter Staff">Counter Staff</option>
+          <option value="Food Packing Person">Food Packing Person</option>
+          <option value="Grill Cook">Grill Cook</option>
+          <option value="Shawarma Maker">Shawarma Maker</option>
+          <option value="Tea Master Assistant">Tea Master Assistant</option>
+          <option value="Dish Washer">Dish Washer</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] text-white/30 block mb-1">City</label>
+        <input id="save-city" type="text" value="Bangalore" placeholder="City" class="w-full rounded-lg px-3 py-1.5 text-xs">
+      </div>
+      <div>
+        <label class="text-[10px] text-white/30 block mb-1">Source Tag</label>
+        <input id="save-source" type="text" value="apna_enrich" placeholder="Source" class="w-full rounded-lg px-3 py-1.5 text-xs">
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button id="btn-save" onclick="saveToDatabase()" class="btn-primary text-xs px-5 py-2 rounded-lg flex items-center gap-2 transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+        Save <span id="save-count">0</span> candidates to DB
+      </button>
+      <span id="save-status" class="text-[10px] text-white/30"></span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = "/api/hiring";
+let enrichResults = [];
+let isRunning = false;
+let shouldStop = false;
+
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+async function apiPost(data) {
+  const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  return r.json();
+}
+
+function updateIdCount() {
+  const ids = parseUserIds();
+  document.getElementById("id-count").textContent = `${ids.length} IDs`;
+}
+
+function parseUserIds() {
+  return document.getElementById("user-ids").value.trim().split(/[\n\r,\s]+/).filter(id => id && /^\d+$/.test(id.trim()));
+}
+
+function getApnaHeaders() {
+  const raw = document.getElementById("auth-headers").value.trim();
+  if (!raw) return null;
+  try {
+    const h = JSON.parse(raw);
+    document.getElementById("auth-status").innerHTML = '<span class="text-emerald-400">Valid JSON</span>';
+    return h;
+  } catch {
+    document.getElementById("auth-status").innerHTML = '<span class="text-red-400">Invalid JSON — paste the full headers object</span>';
+    return null;
+  }
+}
+
+function getSearchParams() {
+  return {
+    search_id: document.getElementById("search-id").value.trim(),
+    base_query_id: document.getElementById("base-query-id").value.trim(),
+    sub_query_id: document.getElementById("sub-query-id").value.trim(),
+    enterprise_member_id: "",
+    workspace_id: "",
+    job_id: "",
+  };
+}
+
+function addLog(msg, type = "info") {
+  const log = document.getElementById("log-body");
+  const colors = { info: "text-white/40", success: "text-emerald-400", error: "text-red-400", warn: "text-amber-400" };
+  const time = new Date().toLocaleTimeString("en-IN", { hour12: false });
+  log.innerHTML += `<div class="${colors[type] || colors.info}"><span class="text-white/15">${time}</span> ${msg}</div>`;
+  log.scrollTop = log.scrollHeight;
+}
+
+async function startEnrichment() {
+  const headers = getApnaHeaders();
+  if (!headers) { alert("Please paste valid Apna auth headers (JSON)"); return; }
+
+  const ids = parseUserIds();
+  if (!ids.length) { alert("Please paste at least one user ID"); return; }
+
+  const searchParams = getSearchParams();
+  if (!searchParams.search_id) { alert("Please enter the search_id"); return; }
+
+  // Reset
+  enrichResults = [];
+  shouldStop = false;
+  isRunning = true;
+  let successCount = 0, errorCount = 0;
+
+  // UI states
+  document.getElementById("btn-start").disabled = true;
+  document.getElementById("btn-stop").classList.remove("hidden");
+  document.getElementById("progress-wrap").classList.remove("hidden");
+  document.getElementById("log-section").classList.remove("hidden");
+  document.getElementById("results-section").classList.remove("hidden");
+  document.getElementById("log-body").innerHTML = "";
+  document.getElementById("results-body").innerHTML = "";
+
+  addLog(`Starting enrichment for ${ids.length} user IDs...`);
+
+  for (let i = 0; i < ids.length; i++) {
+    if (shouldStop) {
+      addLog("Stopped by user.", "warn");
+      break;
+    }
+
+    const uid = ids[i].trim();
+    const pct = Math.round(((i + 1) / ids.length) * 100);
+    document.getElementById("progress-bar").style.width = pct + "%";
+    document.getElementById("progress-text").textContent = `${i + 1}/${ids.length}`;
+
+    try {
+      addLog(`Fetching ${uid}...`);
+      const result = await apiPost({
+        action: "enrich_phone",
+        user_id: uid,
+        apna_headers: headers,
+        search_params: searchParams,
+      });
+
+      if (result.phone) {
+        successCount++;
+        enrichResults.push({
+          user_id: uid,
+          phone: result.phone,
+          candidate_data: result.candidate_data,
+          name: result.candidate_data?.name || result.candidate_data?.candidate_name || "",
+        });
+        addLog(`${uid} → ${result.phone}`, "success");
+      } else if (result.error) {
+        errorCount++;
+        enrichResults.push({ user_id: uid, phone: "", error: result.error });
+        addLog(`${uid} → Error: ${result.error}`, "error");
+      } else {
+        errorCount++;
+        enrichResults.push({ user_id: uid, phone: "", error: "No phone returned" });
+        addLog(`${uid} → No phone number found`, "warn");
+      }
+    } catch (e) {
+      errorCount++;
+      enrichResults.push({ user_id: uid, phone: "", error: e.message });
+      addLog(`${uid} → Network error: ${e.message}`, "error");
+    }
+
+    // Update results table
+    renderResults();
+    document.getElementById("log-stats").textContent = `${successCount} found · ${errorCount} failed`;
+
+    // Rate limit: 500ms between requests
+    if (i < ids.length - 1 && !shouldStop) {
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
+  isRunning = false;
+  document.getElementById("btn-start").disabled = false;
+  document.getElementById("btn-stop").classList.add("hidden");
+
+  const withPhone = enrichResults.filter(r => r.phone).length;
+  addLog(`Done. ${withPhone}/${ids.length} phones enriched.`, withPhone > 0 ? "success" : "warn");
+
+  // Show save section if we have results
+  if (withPhone > 0) {
+    document.getElementById("save-section").classList.remove("hidden");
+    document.getElementById("save-count").textContent = withPhone;
+  }
+}
+
+function stopEnrichment() {
+  shouldStop = true;
+  addLog("Stopping...", "warn");
+}
+
+function renderResults() {
+  const tbody = document.getElementById("results-body");
+  tbody.innerHTML = enrichResults.map((r, i) => {
+    const statusBadge = r.phone
+      ? `<span class="text-emerald-400">Found</span>`
+      : `<span class="text-red-400/60">${esc(r.error || 'Failed')}</span>`;
+    return `<tr class="border-b border-white/[.02] ${r.phone ? '' : 'opacity-40'}">
+      <td class="py-1.5 px-3 text-white/20">${i + 1}</td>
+      <td class="py-1.5 px-2 mono text-white/40">${esc(r.user_id)}</td>
+      <td class="py-1.5 px-2 mono ${r.phone ? 'text-emerald-400 font-medium' : 'text-white/15'}">${r.phone || '—'}</td>
+      <td class="py-1.5 px-2 text-white/50">${esc(r.name || '—')}</td>
+      <td class="py-1.5 px-2">${statusBadge}</td>
+    </tr>`;
+  }).join("");
+
+  const withPhone = enrichResults.filter(r => r.phone).length;
+  document.getElementById("results-stats").textContent = `${withPhone} found / ${enrichResults.length - withPhone} failed`;
+}
+
+async function saveToDatabase() {
+  const role = document.getElementById("save-role").value;
+  if (!role) { alert("Please select a role"); return; }
+
+  const city = document.getElementById("save-city").value.trim();
+  const source = document.getElementById("save-source").value.trim() || "apna_enrich";
+
+  const withPhone = enrichResults.filter(r => r.phone);
+  if (!withPhone.length) { alert("No candidates with phone numbers to save"); return; }
+
+  document.getElementById("btn-save").disabled = true;
+  document.getElementById("save-status").textContent = "Saving...";
+
+  // Build candidates array in upload_candidates format
+  const candidates = withPhone.map(r => ({
+    phone: r.phone,
+    name: r.name || "",
+    first_name: (r.name || "").split(" ")[0] || "",
+    he_role: role,
+    current_title: r.candidate_data?.current_job_title || r.candidate_data?.job_title || "",
+    current_company: r.candidate_data?.current_company || r.candidate_data?.company || "",
+    city: city,
+    source: source,
+  }));
+
+  try {
+    const result = await apiPost({
+      action: "upload_candidates",
+      candidates: candidates,
+    });
+
+    if (result.success) {
+      document.getElementById("save-status").innerHTML =
+        `<span class="text-emerald-400">Saved! ${result.inserted} inserted, ${result.skipped} skipped</span>`;
+      if (result.errors?.length) {
+        result.errors.forEach(e => addLog(`DB: ${e}`, "warn"));
+      }
+    } else {
+      document.getElementById("save-status").innerHTML =
+        `<span class="text-red-400">Error: ${result.error || 'Unknown'}</span>`;
+    }
+  } catch (e) {
+    document.getElementById("save-status").innerHTML =
+      `<span class="text-red-400">Network error: ${e.message}</span>`;
+  }
+
+  document.getElementById("btn-save").disabled = false;
+}
+
+// Auto-detect headers validity on paste
+document.getElementById("auth-headers").addEventListener("input", () => {
+  const raw = document.getElementById("auth-headers").value.trim();
+  if (!raw) { document.getElementById("auth-status").innerHTML = ""; return; }
+  try {
+    const h = JSON.parse(raw);
+    const keys = Object.keys(h);
+    const hasAuth = keys.some(k => k.toLowerCase() === "authorization" || k.toLowerCase() === "cookie");
+    if (hasAuth) {
+      document.getElementById("auth-status").innerHTML = `<span class="text-emerald-400">Valid · ${keys.length} headers (auth detected)</span>`;
+    } else {
+      document.getElementById("auth-status").innerHTML = `<span class="text-amber-400">Valid JSON but no auth/cookie header found</span>`;
+    }
+  } catch {
+    document.getElementById("auth-status").innerHTML = `<span class="text-red-400">Invalid JSON</span>`;
+  }
+});
+</script>
+</body>
+</html>
