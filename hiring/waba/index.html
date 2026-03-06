@@ -1932,7 +1932,8 @@ async function handleCreateTemplate(e) {
         </div>
         <p class="text-xs text-red-400">${esc(result.error)}</p>
         ${helpText ? `<p class="text-[10px] text-orange-400/70 mt-1.5">💡 ${esc(helpText)}</p>` : ""}
-        ${result.meta_error ? `<details class="mt-2"><summary class="text-[10px] text-white/20 cursor-pointer hover:text-white/40 transition">Show full Meta error</summary><pre class="text-[10px] text-white/20 mt-1 overflow-x-auto bg-white/[.02] rounded p-2">${esc(JSON.stringify(result.meta_error, null, 2))}</pre></details>` : ""}`;
+        ${result.meta_error ? `<details class="mt-2"><summary class="text-[10px] text-white/20 cursor-pointer hover:text-white/40 transition">Show full Meta error</summary><pre class="text-[10px] text-white/20 mt-1 overflow-x-auto bg-white/[.02] rounded p-2">${esc(JSON.stringify(result.meta_error, null, 2))}</pre></details>` : ""}
+        ${result.debug ? `<details class="mt-1"><summary class="text-[10px] text-white/15 cursor-pointer hover:text-white/30 transition">Show debug info</summary><pre class="text-[10px] text-white/15 mt-1 overflow-x-auto bg-white/[.02] rounded p-2">${esc(JSON.stringify(result.debug, null, 2))}</pre></details>` : ""}`;
       btn.disabled = false;
       btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg> Retry';
       btn.className = 'btn-primary text-xs px-5 py-2 rounded-lg transition flex items-center gap-1.5';

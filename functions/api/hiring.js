@@ -566,6 +566,63 @@ async function handleGet(url, env) {
     }
   }
 
+  // ── Debug: Check token permissions & WABA config ──
+  if (action === "debug_token") {
+    try {
+      const wabaId = await getWabaId(env);
+      const phoneId = env.WA_PHONE_ID;
+      const hasWabaIdSecret = !!env.WABA_ID;
+
+      // Check token info via debug_token endpoint
+      const tokenCheck = await fetch(
+        `https://graph.facebook.com/v21.0/debug_token?input_token=${env.WA_ACCESS_TOKEN}`,
+        { headers: { Authorization: `Bearer ${env.WA_ACCESS_TOKEN}` } }
+      );
+      const tokenData = await tokenCheck.json();
+
+      // Try fetching WABA info
+      const wabaInfo = wabaId
+        ? await metaGraphAPI(env, `${wabaId}?fields=id,name,account_review_status,message_template_namespace,on_behalf_of_business_info`)
+        : null;
+
+      // Try a minimal text-only template creation (dry run — we'll use a throwaway name)
+      const testPayload = {
+        name: `_debug_test_${Date.now()}`,
+        language: "en",
+        category: "UTILITY",
+        components: [{ type: "BODY", text: "Debug test — please ignore." }],
+      };
+      const testResult = wabaId
+        ? await metaGraphAPI(env, `${wabaId}/message_templates`, "POST", testPayload)
+        : { error: "No WABA ID" };
+
+      // If test template was created, delete it immediately
+      if (testResult.id) {
+        await metaGraphAPI(env, `${wabaId}/message_templates?name=${testPayload.name}`, "DELETE");
+      }
+
+      return json({
+        waba_id: wabaId,
+        waba_id_from_secret: hasWabaIdSecret,
+        phone_id: phoneId,
+        token_debug: tokenData.data ? {
+          app_id: tokenData.data.app_id,
+          type: tokenData.data.type,
+          is_valid: tokenData.data.is_valid,
+          expires_at: tokenData.data.expires_at,
+          scopes: tokenData.data.scopes,
+          granular_scopes: tokenData.data.granular_scopes,
+        } : { error: tokenData.error?.message || "Could not debug token" },
+        waba_info: wabaInfo?.error ? { error: wabaInfo.error.message } : wabaInfo,
+        test_create_result: testResult.id
+          ? { success: true, id: testResult.id, status: testResult.status, deleted: true }
+          : { success: false, error: testResult.error?.message, code: testResult.error?.code, subcode: testResult.error?.error_subcode },
+      });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
   return json({ error: "Unknown action" }, 400);
 }
 
@@ -1169,14 +1226,29 @@ async function handlePost(request, env) {
       const { name, language, category, components } = body;
       if (!name || !components) return json({ error: "name and components required" }, 400);
 
+      // Fix header component: Meta requires header_handle, not header_url
+      const fixedComponents = components.map(c => {
+        if (c.type === "HEADER" && c.format === "IMAGE" && c.example?.header_url) {
+          return {
+            ...c,
+            example: { header_handle: c.example.header_url },
+          };
+        }
+        return c;
+      });
+
       const payload = {
         name: name.toLowerCase().replace(/[^a-z0-9_]/g, "_"),
         language: language || "en",
         category: category || "MARKETING",
-        components,
+        components: fixedComponents,
       };
 
+      console.log("[create_template] WABA:", wabaId, "Payload:", JSON.stringify(payload));
+
       const result = await metaGraphAPI(env, `${wabaId}/message_templates`, "POST", payload);
+
+      console.log("[create_template] Meta response:", JSON.stringify(result));
 
       if (result.error) {
         return json({
@@ -1184,6 +1256,7 @@ async function handlePost(request, env) {
           error: result.error.message,
           error_subcode: result.error.error_subcode,
           meta_error: result.error,
+          debug: { waba_id: wabaId, payload_sent: payload },
         }, 400);
       }
 
