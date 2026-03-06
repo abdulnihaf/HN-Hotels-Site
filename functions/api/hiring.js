@@ -205,9 +205,11 @@ async function handleGet(url, env) {
   // ── Candidate cities: distinct cities with counts (optionally filtered by role) ──
   if (action === "candidate_cities") {
     const role = url.searchParams.get("role");
-    let q = `SELECT city, COUNT(*) as cnt FROM candidates`;
+    const state = url.searchParams.get("state");
+    let q = `SELECT city, COUNT(*) as cnt FROM candidates WHERE 1=1`;
     const p = [];
-    if (role) { q += ` WHERE he_role = ?`; p.push(role); }
+    if (role) { q += ` AND he_role = ?`; p.push(role); }
+    if (state) { q += ` AND state = ?`; p.push(state); }
     q += ` GROUP BY city ORDER BY cnt DESC`;
     const rows = p.length
       ? await db.prepare(q).bind(...p).all()
@@ -215,13 +217,36 @@ async function handleGet(url, env) {
     return json({ cities: rows.results });
   }
 
+  if (action === "candidate_states") {
+    const role = url.searchParams.get("role");
+    let q = `SELECT state, COUNT(*) as cnt FROM candidates WHERE state IS NOT NULL AND state != ''`;
+    const p = [];
+    if (role) { q += ` AND he_role = ?`; p.push(role); }
+    q += ` GROUP BY state ORDER BY cnt DESC`;
+    const rows = p.length
+      ? await db.prepare(q).bind(...p).all()
+      : await db.prepare(q).all();
+    return json({ states: rows.results });
+  }
+
+  if (action === "candidate_batches") {
+    let q = `SELECT upload_batch, upload_label, COUNT(*) as cnt FROM candidates WHERE upload_batch IS NOT NULL AND upload_batch != '' GROUP BY upload_batch, upload_label ORDER BY cnt DESC`;
+    const rows = await db.prepare(q).all();
+    return json({ batches: rows.results });
+  }
+
   // ── Candidate stats: count by role, sent vs unsent, personalization tiers ──
   if (action === "candidate_stats") {
     const cityFilter = url.searchParams.get("city");
-    const cityWhere = cityFilter ? ` WHERE city = ?` : ``;
-    const cityAnd = cityFilter ? ` AND city = ?` : ``;
+    const stateFilter = url.searchParams.get("state");
+    const batchFilter = url.searchParams.get("batch");
 
-    const roleParams = cityFilter ? [cityFilter] : [];
+    const conditions = [];
+    const roleParams = [];
+    if (cityFilter) { conditions.push(`city = ?`); roleParams.push(cityFilter); }
+    if (stateFilter) { conditions.push(`state = ?`); roleParams.push(stateFilter); }
+    if (batchFilter) { conditions.push(`upload_batch = ?`); roleParams.push(batchFilter); }
+    const cityWhere = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : ``;
     const rows = await db
       .prepare(
         `SELECT he_role,
@@ -271,6 +296,8 @@ async function handleGet(url, env) {
   if (action === "candidates") {
     const role = url.searchParams.get("role");
     const city = url.searchParams.get("city");
+    const state = url.searchParams.get("state");
+    const batch = url.searchParams.get("batch");
     const status = url.searchParams.get("status"); // none, sent, all
     const tier = url.searchParams.get("tier"); // full, name_title, name_only, minimal
     const search = url.searchParams.get("search"); // search by name/phone/title
@@ -288,6 +315,14 @@ async function handleGet(url, env) {
     if (city) {
       query += ` AND city = ?`;
       params.push(city);
+    }
+    if (state) {
+      query += ` AND state = ?`;
+      params.push(state);
+    }
+    if (batch) {
+      query += ` AND upload_batch = ?`;
+      params.push(batch);
     }
     if (status && status !== "all") {
       query += ` AND campaign_status = ?`;
@@ -317,6 +352,8 @@ async function handleGet(url, env) {
     const countParams = [];
     if (role) { countQuery += ` AND he_role = ?`; countParams.push(role); }
     if (city) { countQuery += ` AND city = ?`; countParams.push(city); }
+    if (state) { countQuery += ` AND state = ?`; countParams.push(state); }
+    if (batch) { countQuery += ` AND upload_batch = ?`; countParams.push(batch); }
     if (status && status !== "all") { countQuery += ` AND campaign_status = ?`; countParams.push(status); }
     if (tier === "full") {
       countQuery += ` AND first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND current_company IS NOT NULL AND current_company != ''`;
@@ -759,15 +796,22 @@ async function handlePost(request, env) {
       const personalized = (hasFirst && hasTitle && hasCompany) ? 1 : 0;
 
       try {
+        const cityLower = (c.city || "").toLowerCase();
+        const isBangalore = cityLower.includes("bangalore") || cityLower.includes("bengaluru") ? 1 : 0;
+
         await db.prepare(
-          `INSERT INTO candidates (phone, name, first_name, he_role, he_salary, db_role, current_title, current_company, previous_title, previous_company, city, is_bangalore, experience, current_salary, skills, english_level, education, age, gender, has_personalization, source)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO candidates (phone, name, first_name, he_role, he_salary, db_role, current_title, current_company, previous_title, previous_company, city, state, is_bangalore, experience, current_salary, skills, english_level, education, age, gender, has_personalization, source, upload_batch, upload_label, original_tier)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(phone) DO UPDATE SET
              name = COALESCE(excluded.name, candidates.name),
              first_name = COALESCE(excluded.first_name, candidates.first_name),
              he_role = COALESCE(excluded.he_role, candidates.he_role),
              current_title = COALESCE(excluded.current_title, candidates.current_title),
              current_company = COALESCE(excluded.current_company, candidates.current_company),
+             state = COALESCE(excluded.state, candidates.state),
+             upload_batch = COALESCE(excluded.upload_batch, candidates.upload_batch),
+             upload_label = COALESCE(excluded.upload_label, candidates.upload_label),
+             original_tier = COALESCE(excluded.original_tier, candidates.original_tier),
              has_personalization = MAX(candidates.has_personalization, excluded.has_personalization)`
         ).bind(
           phone,
@@ -781,7 +825,8 @@ async function handlePost(request, env) {
           c.previous_title || "",
           c.previous_company || "",
           c.city || "",
-          (c.city && c.city.toLowerCase().includes("bangalore")) || (c.city && c.city.toLowerCase().includes("bengaluru")) ? 1 : 0,
+          c.state || "",
+          isBangalore,
           c.experience || "",
           parseInt(c.current_salary) || 0,
           c.skills || "",
@@ -790,7 +835,10 @@ async function handlePost(request, env) {
           c.age || "",
           c.gender || "",
           personalized,
-          c.source || "csv_upload"
+          c.source || "csv_upload",
+          c.upload_batch || "",
+          c.upload_label || "",
+          c.original_tier || ""
         ).run();
         inserted++;
       } catch (e) {

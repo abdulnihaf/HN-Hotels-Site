@@ -151,6 +151,16 @@
         <button onclick="filterDbRole('')" class="db-role-pill text-[10px] px-2.5 py-1 rounded-full transition bg-brand-500/15 text-brand-400 font-semibold">All Roles</button>
       </div>
       <div class="flex gap-2 items-center shrink-0">
+        <!-- State Filter -->
+        <div class="relative" id="db-state-wrap">
+          <div class="flex items-center gap-1">
+            <svg class="w-3 h-3 text-white/20 absolute left-2.5 pointer-events-none z-10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z"/></svg>
+            <input id="db-state-input" type="text" placeholder="Filter state..." oninput="debounceStateSearch()" onfocus="showStateDropdown()" class="rounded-lg pl-7 pr-3 py-1.5 text-xs w-32 placeholder-white/15">
+            <button id="db-state-clear" onclick="clearStateFilter()" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50 text-sm leading-none">&times;</button>
+          </div>
+          <div id="db-state-dropdown" class="hidden absolute top-full left-0 mt-1 w-48 max-h-64 overflow-y-auto glass rounded-lg border border-white/[.06] z-50 scroll-y shadow-xl">
+          </div>
+        </div>
         <!-- City Filter -->
         <div class="relative" id="db-city-wrap">
           <div class="flex items-center gap-1">
@@ -1677,12 +1687,16 @@ function resetTemplateBuilder() {
 let dbRoleFilter = "";
 let dbTierFilter = "";
 let dbCityFilter = "";
+let dbStateFilter = "";
+let dbBatchFilter = "";
 let dbSearchQuery = "";
 let dbPage = 1;
 let dbRoleStats = [];
 let dbCities = []; // cached city list for dropdown
+let dbStates = []; // cached state list for dropdown
 let dbSearchTimeout = null;
 let dbCityTimeout = null;
+let dbStateTimeout = null;
 const CANONICAL_ROLES = [
   "Manager","Supervisor","Captain","Waiter","Cashier","Kitchen Helper","Tea Master",
   "Indian Cook","Chinese Cook","Cleaners","Fried Chicken Cook","Fried Snacks Cook",
@@ -1694,14 +1708,18 @@ async function loadDatabase() {
   try {
     const statsParams = { action: "candidate_stats" };
     if (dbCityFilter) statsParams.city = dbCityFilter;
+    if (dbStateFilter) statsParams.state = dbStateFilter;
+    if (dbBatchFilter) statsParams.batch = dbBatchFilter;
 
-    const [data, citiesData] = await Promise.all([
+    const [data, citiesData, statesData] = await Promise.all([
       apiGet(statsParams),
-      dbCities.length ? Promise.resolve({ cities: dbCities }) : apiGet({ action: "candidate_cities" })
+      dbCities.length ? Promise.resolve({ cities: dbCities }) : apiGet({ action: "candidate_cities" }),
+      dbStates.length ? Promise.resolve({ states: dbStates }) : apiGet({ action: "candidate_states" })
     ]);
 
-    // Cache the full city list (only fetched once)
+    // Cache the full city + state lists (only fetched once)
     if (!dbCities.length && citiesData.cities) dbCities = citiesData.cities;
+    if (!dbStates.length && statesData.states) dbStates = statesData.states;
 
     const apiRoles = data.roles || [];
     const tiers = data.tiers || {};
@@ -1724,8 +1742,9 @@ async function loadDatabase() {
     pillContainer.innerHTML = `<button onclick="filterDbRole('')" class="db-role-pill text-[10px] px-2.5 py-1 rounded-full transition ${!dbRoleFilter ? 'bg-brand-500/15 text-brand-400 font-semibold' : 'bg-white/[.03] text-white/30 hover:text-white/50'}">All (${data.total_candidates})</button>` +
       dbRoleStats.map(r => `<button onclick="filterDbRole('${esc(r.he_role)}')" class="db-role-pill text-[10px] px-2.5 py-1 rounded-full transition ${dbRoleFilter === r.he_role ? 'bg-brand-500/15 text-brand-400 font-semibold' : 'bg-white/[.03] text-white/30 hover:text-white/50'} ${r.total === 0 ? 'opacity-40' : ''}">${esc(r.he_role)} (${r.total})</button>`).join("");
 
-    // Update city clear button visibility
+    // Update city/state clear button visibility
     document.getElementById("db-city-clear").classList.toggle("hidden", !dbCityFilter);
+    document.getElementById("db-state-clear").classList.toggle("hidden", !dbStateFilter);
 
     loadDbCandidates();
   } catch(e) {
@@ -1737,6 +1756,8 @@ async function loadDbCandidates() {
   const params = { action: "candidates", page: dbPage, limit: 50 };
   if (dbRoleFilter) params.role = dbRoleFilter;
   if (dbCityFilter) params.city = dbCityFilter;
+  if (dbStateFilter) params.state = dbStateFilter;
+  if (dbBatchFilter) params.batch = dbBatchFilter;
   if (dbTierFilter) params.tier = dbTierFilter;
   if (dbSearchQuery) params.search = dbSearchQuery;
 
@@ -1830,7 +1851,9 @@ function updateDbFilterTags() {
   const tags = document.getElementById("db-filter-tags");
   const active = [];
   if (dbRoleFilter) active.push(`<span class="text-[10px] px-2 py-0.5 rounded-full bg-white/[.04] text-white/50">Role: ${esc(dbRoleFilter)} <button onclick="filterDbRole('')" class="ml-1 text-red-400/60">✕</button></span>`);
+  if (dbStateFilter) active.push(`<span class="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400">🗺 ${esc(dbStateFilter)} <button onclick="clearStateFilter()" class="ml-1 text-red-400/60">✕</button></span>`);
   if (dbCityFilter) active.push(`<span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400">📍 ${esc(dbCityFilter)} <button onclick="clearCityFilter()" class="ml-1 text-red-400/60">✕</button></span>`);
+  if (dbBatchFilter) active.push(`<span class="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400">📦 ${esc(dbBatchFilter)} <button onclick="clearBatchFilter()" class="ml-1 text-red-400/60">✕</button></span>`);
   if (dbTierFilter) active.push(`<span class="text-[10px] px-2 py-0.5 rounded-full bg-white/[.04] text-white/50">Tier: ${dbTierFilter.replace("_"," ")} <button onclick="filterDbTier('${dbTierFilter}')" class="ml-1 text-red-400/60">✕</button></span>`);
   if (dbSearchQuery) active.push(`<span class="text-[10px] px-2 py-0.5 rounded-full bg-white/[.04] text-white/50">Search: "${esc(dbSearchQuery)}" <button onclick="clearDbSearch()" class="ml-1 text-red-400/60">✕</button></span>`);
   bar.classList.toggle("hidden", !active.length);
@@ -1841,10 +1864,13 @@ function clearDbFilters() {
   dbRoleFilter = "";
   dbTierFilter = "";
   dbCityFilter = "";
+  dbStateFilter = "";
+  dbBatchFilter = "";
   dbSearchQuery = "";
   dbPage = 1;
   document.getElementById("db-search").value = "";
   document.getElementById("db-city-input").value = "";
+  document.getElementById("db-state-input").value = "";
   loadDatabase();
 }
 
@@ -1927,7 +1953,73 @@ document.addEventListener("click", (e) => {
   if (wrap && !wrap.contains(e.target)) {
     document.getElementById("db-city-dropdown").classList.add("hidden");
   }
+  const stateWrap = document.getElementById("db-state-wrap");
+  if (stateWrap && !stateWrap.contains(e.target)) {
+    document.getElementById("db-state-dropdown").classList.add("hidden");
+  }
 });
+
+// ── State filter functions ──
+function filterDbState(state) {
+  if (!state) return;
+  dbStateFilter = state;
+  dbPage = 1;
+  document.getElementById("db-state-input").value = state;
+  document.getElementById("db-state-dropdown").classList.add("hidden");
+  document.getElementById("db-state-clear").classList.remove("hidden");
+  loadDatabase();
+}
+
+function clearStateFilter() {
+  dbStateFilter = "";
+  dbPage = 1;
+  document.getElementById("db-state-input").value = "";
+  document.getElementById("db-state-clear").classList.add("hidden");
+  document.getElementById("db-state-dropdown").classList.add("hidden");
+  loadDatabase();
+}
+
+function clearBatchFilter() {
+  dbBatchFilter = "";
+  dbPage = 1;
+  loadDatabase();
+}
+
+function debounceStateSearch() {
+  clearTimeout(dbStateTimeout);
+  dbStateTimeout = setTimeout(() => {
+    const q = document.getElementById("db-state-input").value.trim().toLowerCase();
+    renderStateDropdown(q);
+  }, 200);
+}
+
+function showStateDropdown() {
+  const q = document.getElementById("db-state-input").value.trim().toLowerCase();
+  renderStateDropdown(q);
+}
+
+function renderStateDropdown(query) {
+  const dd = document.getElementById("db-state-dropdown");
+  if (!dbStates.length) { dd.classList.add("hidden"); return; }
+
+  let filtered = dbStates.filter(s => s.state && s.state.trim());
+  if (query) {
+    filtered = filtered.filter(s => s.state.toLowerCase().includes(query));
+  }
+  filtered = filtered.slice(0, 20);
+
+  if (!filtered.length) {
+    dd.innerHTML = `<div class="px-3 py-2 text-[10px] text-white/20">No states match</div>`;
+  } else {
+    dd.innerHTML = filtered.map(s =>
+      `<button onclick="filterDbState('${esc(s.state)}')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-white/[.04] transition flex justify-between items-center ${dbStateFilter === s.state ? 'text-brand-400' : 'text-white/60'}">
+        <span>${esc(s.state)}</span>
+        <span class="text-[9px] text-white/20">${s.cnt}</span>
+      </button>`
+    ).join("");
+  }
+  dd.classList.remove("hidden");
+}
 
 function dbPrevPage() { if (dbPage > 1) { dbPage--; loadDbCandidates(); } }
 function dbNextPage() { dbPage++; loadDbCandidates(); }
