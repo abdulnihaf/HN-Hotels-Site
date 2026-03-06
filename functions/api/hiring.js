@@ -662,13 +662,17 @@ async function handlePost(request, env) {
     const campaignId = result.meta.last_row_id;
 
     // ── If source is "database", auto-populate messages from candidates table ──
-    if (source === "database" && role) {
+    if (source === "database" && (role || batch || state)) {
       const isPersonalized = (campaign_type || "personalized") === "personalized";
       const templateName = template_name || (isPersonalized ? "he_hiring_mar26" : "he_hiring_generic_mar26");
 
-      // Get available candidates for this role (optionally filtered by city/state/batch)
-      let candidateQuery = `SELECT * FROM candidates WHERE he_role = ? AND campaign_status = 'none'`;
-      const candidateParams = [role];
+      // Get available candidates (filtered by role/city/state/batch)
+      let candidateQuery = `SELECT * FROM candidates WHERE campaign_status = 'none'`;
+      const candidateParams = [];
+      if (role) {
+        candidateQuery += ` AND he_role = ?`;
+        candidateParams.push(role);
+      }
       if (city) {
         candidateQuery += ` AND city = ?`;
         candidateParams.push(city);
@@ -692,7 +696,7 @@ async function handlePost(request, env) {
            VALUES (?, ?, ?, ?, 'queued')`
         );
 
-        const batch = rows.map((c) => {
+        const msgBatch = rows.map((c) => {
           let params;
           if (isPersonalized && c.has_personalization) {
             // Personalized: first_name, current_title, current_company, role, salary
@@ -717,8 +721,8 @@ async function handlePost(request, env) {
         });
 
         // Insert in batches of 100
-        for (let i = 0; i < batch.length; i += 100) {
-          await db.batch(batch.slice(i, i + 100));
+        for (let i = 0; i < msgBatch.length; i += 100) {
+          await db.batch(msgBatch.slice(i, i + 100));
         }
 
         // Update campaign total
