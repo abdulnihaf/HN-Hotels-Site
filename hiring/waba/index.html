@@ -459,11 +459,27 @@
 
           <!-- Buttons -->
           <div>
-            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold flex items-center justify-between mb-1">
-              <span>Quick Reply Buttons <span class="text-white/20 font-normal">(optional, max 3)</span></span>
-              <button type="button" onclick="addQuickReplyBtn()" id="add-btn-trigger" class="text-brand-400 hover:text-brand-200 transition text-[10px] font-normal bg-brand-500/10 px-2 py-0.5 rounded">+ Add Button</button>
-            </label>
-            <div id="quick-reply-buttons" class="space-y-1.5"></div>
+            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-2">Buttons <span class="text-white/20 font-normal">(optional)</span></label>
+
+            <!-- CTA Buttons -->
+            <div class="mb-2">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[9px] text-white/30 uppercase tracking-wider">Call-to-Action</span>
+                <button type="button" onclick="addCtaBtn()" id="add-cta-trigger" class="text-sky-400 hover:text-sky-200 transition text-[9px] font-normal bg-sky-500/10 px-2 py-0.5 rounded">+ Add CTA</button>
+              </div>
+              <div id="cta-buttons" class="space-y-1.5"></div>
+              <p class="text-[8px] text-white/15 mt-0.5">Max 1 Phone + 2 URL buttons. Phone format: +91XXXXXXXXXX</p>
+            </div>
+
+            <!-- Quick Reply Buttons -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[9px] text-white/30 uppercase tracking-wider">Quick Reply</span>
+                <button type="button" onclick="addQuickReplyBtn()" id="add-btn-trigger" class="text-brand-400 hover:text-brand-200 transition text-[9px] font-normal bg-brand-500/10 px-2 py-0.5 rounded">+ Add Reply</button>
+              </div>
+              <div id="quick-reply-buttons" class="space-y-1.5"></div>
+              <p class="text-[8px] text-white/15 mt-0.5">Max 3 quick replies. User taps to send the button text back.</p>
+            </div>
           </div>
 
           <!-- Submit -->
@@ -502,7 +518,9 @@
                 <!-- Timestamp -->
                 <div class="px-2.5 pb-1.5 text-right" style="font-size:10px; color:#8696a0;">12:00 PM</div>
               </div>
-              <!-- Quick Reply Buttons -->
+              <!-- CTA Buttons (inside message bubble) -->
+              <div id="preview-cta-buttons" class="hidden border-t" style="border-color:#e9e9e9;"></div>
+              <!-- Quick Reply Buttons (outside bubble) -->
               <div id="preview-buttons" class="hidden mt-1 space-y-1"></div>
             </div>
           </div>
@@ -1551,6 +1569,7 @@ function closeAllModals() { document.querySelectorAll("[id^=modal-]").forEach(m=
 // ===============================================================
 let tplVarCount = 0;
 let tplButtonCount = 0;
+let tplCtaCount = 0;
 let cachedTemplates = null;
 
 function insertVariable() {
@@ -1565,6 +1584,7 @@ function insertVariable() {
   updateTemplatePreview();
 }
 
+// ── Quick Reply Buttons ──
 function addQuickReplyBtn() {
   if (tplButtonCount >= 3) return;
   tplButtonCount++;
@@ -1590,6 +1610,94 @@ function removeQuickReplyBtn(n) {
   updateTemplatePreview();
 }
 
+// ── CTA Buttons (Phone Number / URL) ──
+function getCtaButtonData() {
+  const ctaBtns = [];
+  document.querySelectorAll("[data-cta-row]").forEach(row => {
+    const type = row.querySelector("[name^=cta_type_]")?.value;
+    const text = row.querySelector("[name^=cta_text_]")?.value;
+    const value = row.querySelector("[name^=cta_value_]")?.value;
+    if (type && text) ctaBtns.push({ type, text, value: value || "" });
+  });
+  return ctaBtns;
+}
+
+function countCtaByType(type) {
+  return document.querySelectorAll(`[data-cta-row] [name^=cta_type_]`).length
+    ? Array.from(document.querySelectorAll(`[data-cta-row] [name^=cta_type_]`)).filter(s => s.value === type).length
+    : 0;
+}
+
+function addCtaBtn() {
+  const totalCta = document.querySelectorAll("[data-cta-row]").length;
+  if (totalCta >= 3) return; // Meta allows max 2 URL + 1 phone = 3 CTA total
+  tplCtaCount++;
+  const container = document.getElementById("cta-buttons");
+  const div = document.createElement("div");
+  div.className = "flex gap-1.5 items-start";
+  div.dataset.ctaRow = tplCtaCount;
+  div.innerHTML = `
+    <select name="cta_type_${tplCtaCount}" onchange="onCtaTypeChange(${tplCtaCount}); updateTemplatePreview()"
+            class="shrink-0 rounded-lg px-2 py-1.5 text-xs w-[85px]">
+      <option value="PHONE_NUMBER">Phone</option>
+      <option value="URL">URL</option>
+    </select>
+    <input name="cta_text_${tplCtaCount}" maxlength="25" placeholder="Button label"
+           oninput="updateTemplatePreview()"
+           class="rounded-lg px-2.5 py-1.5 text-xs placeholder-white/15 w-[110px]" value="Call Now">
+    <input name="cta_value_${tplCtaCount}" placeholder="+918008002049"
+           oninput="updateTemplatePreview()"
+           class="flex-1 rounded-lg px-2.5 py-1.5 text-xs placeholder-white/15 font-mono" id="cta-value-${tplCtaCount}">
+    <button type="button" onclick="removeCtaBtn(${tplCtaCount})" class="text-red-400/50 hover:text-red-400 text-xs transition mt-1">✕</button>`;
+  container.appendChild(div);
+  enforceCtaLimits();
+  updateTemplatePreview();
+}
+
+function onCtaTypeChange(n) {
+  const typeEl = document.querySelector(`[name=cta_type_${n}]`);
+  const textEl = document.querySelector(`[name=cta_text_${n}]`);
+  const valueEl = document.querySelector(`[name=cta_value_${n}]`);
+  if (!typeEl) return;
+  if (typeEl.value === "PHONE_NUMBER") {
+    textEl.value = textEl.value || "Call Now";
+    valueEl.placeholder = "+918008002049";
+    valueEl.value = valueEl.value || "";
+  } else {
+    textEl.value = textEl.value || "Apply Now";
+    valueEl.placeholder = "https://example.com/apply";
+    valueEl.value = valueEl.value || "";
+  }
+  enforceCtaLimits();
+}
+
+function removeCtaBtn(n) {
+  const el = document.querySelector(`[data-cta-row="${n}"]`);
+  if (el) el.remove();
+  enforceCtaLimits();
+  updateTemplatePreview();
+}
+
+function enforceCtaLimits() {
+  const phoneCount = countCtaByType("PHONE_NUMBER");
+  const urlCount = countCtaByType("URL");
+  const totalCta = document.querySelectorAll("[data-cta-row]").length;
+  // Hide add button if: 3 total CTA, or already 1 phone + 2 URL
+  const atLimit = totalCta >= 3 || (phoneCount >= 1 && urlCount >= 2);
+  const addBtn = document.getElementById("add-cta-trigger");
+  if (atLimit) addBtn.classList.add("hidden");
+  else addBtn.classList.remove("hidden");
+  // Disable phone option in selects if already have 1
+  document.querySelectorAll("[data-cta-row] select").forEach(sel => {
+    const phoneOpt = sel.querySelector('option[value="PHONE_NUMBER"]');
+    if (phoneOpt) {
+      if (phoneCount >= 1 && sel.value !== "PHONE_NUMBER") phoneOpt.disabled = true;
+      else phoneOpt.disabled = false;
+    }
+  });
+}
+
+// ── Template Preview ──
 function updateTemplatePreview() {
   const body = document.getElementById("tpl-body").value;
   const footer = document.getElementById("tpl-footer").value;
@@ -1631,7 +1739,24 @@ function updateTemplatePreview() {
     previewFooter.classList.add("hidden");
   }
 
-  // Buttons
+  // CTA Buttons (inside bubble, with icons)
+  const previewCtaBtns = document.getElementById("preview-cta-buttons");
+  const ctaData = getCtaButtonData();
+  if (ctaData.length > 0) {
+    previewCtaBtns.classList.remove("hidden");
+    previewCtaBtns.innerHTML = ctaData.map(b => {
+      const icon = b.type === "PHONE_NUMBER"
+        ? `<svg style="width:14px;height:14px;margin-right:4px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>`
+        : `<svg style="width:14px;height:14px;margin-right:4px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>`;
+      return `<div style="padding:8px; text-align:center; font-size:13px; color:#00a884; font-weight:500; display:flex; align-items:center; justify-content:center; border-top:1px solid #e9e9e9;">
+        ${icon}${esc(b.text || (b.type === "PHONE_NUMBER" ? "Call Now" : "Visit"))}
+      </div>`;
+    }).join("");
+  } else {
+    previewCtaBtns.classList.add("hidden");
+  }
+
+  // Quick Reply Buttons (outside bubble)
   const previewBtns = document.getElementById("preview-buttons");
   const btnInputs = document.querySelectorAll("[name^=qr_btn_]");
   const btns = Array.from(btnInputs).map(i => i.value).filter(Boolean);
@@ -1721,14 +1846,33 @@ async function handleCreateTemplate(e) {
     components.push({ type: "FOOTER", text: footer });
   }
 
+  // Buttons — combine CTA + Quick Reply into one BUTTONS component
+  const allButtons = [];
+
+  // CTA buttons (Phone / URL)
+  const ctaData = getCtaButtonData();
+  ctaData.forEach(cta => {
+    if (cta.type === "PHONE_NUMBER" && cta.text && cta.value) {
+      allButtons.push({ type: "PHONE_NUMBER", text: cta.text, phone_number: cta.value });
+    } else if (cta.type === "URL" && cta.text && cta.value) {
+      const urlBtn = { type: "URL", text: cta.text, url: cta.value };
+      // If URL contains {{1}}, add example
+      if (cta.value.includes("{{1}}")) {
+        urlBtn.example = [cta.value.replace(/\{\{1\}\}/, "example")];
+      }
+      allButtons.push(urlBtn);
+    }
+  });
+
   // Quick reply buttons
   const btnInputs = document.querySelectorAll("[name^=qr_btn_]");
-  const buttons = Array.from(btnInputs).map(i => i.value).filter(Boolean);
-  if (buttons.length > 0) {
-    components.push({
-      type: "BUTTONS",
-      buttons: buttons.map(text => ({ type: "QUICK_REPLY", text })),
-    });
+  const qrButtons = Array.from(btnInputs).map(i => i.value).filter(Boolean);
+  qrButtons.forEach(text => {
+    allButtons.push({ type: "QUICK_REPLY", text });
+  });
+
+  if (allButtons.length > 0) {
+    components.push({ type: "BUTTONS", buttons: allButtons });
   }
 
   try {
@@ -1861,8 +2005,10 @@ async function loadTemplatesForDropdown() {
 function resetTemplateBuilder() {
   tplVarCount = 0;
   tplButtonCount = 0;
+  tplCtaCount = 0;
   document.getElementById("form-template").reset();
   document.getElementById("quick-reply-buttons").innerHTML = "";
+  document.getElementById("cta-buttons").innerHTML = "";
   document.getElementById("var-examples").innerHTML = "";
   document.getElementById("var-examples-section").classList.add("hidden");
   document.getElementById("template-status-section").classList.add("hidden");
@@ -1870,6 +2016,7 @@ function resetTemplateBuilder() {
   document.getElementById("preview-header-img").classList.add("hidden");
   document.getElementById("preview-footer").classList.add("hidden");
   document.getElementById("preview-buttons").classList.add("hidden");
+  document.getElementById("preview-cta-buttons").classList.add("hidden");
   document.getElementById("preview-body").innerHTML = "Your message preview will appear here...";
   document.getElementById("body-char-count").textContent = "0 / 1024";
   const btn = document.getElementById("btn-create-template");
@@ -1877,6 +2024,7 @@ function resetTemplateBuilder() {
   btn.className = 'btn-primary text-xs px-5 py-2 rounded-lg transition flex items-center gap-1.5';
   btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg> Submit to Meta';
   document.getElementById("add-btn-trigger").classList.remove("hidden");
+  document.getElementById("add-cta-trigger").classList.remove("hidden");
 }
 
 // ===============================================================
