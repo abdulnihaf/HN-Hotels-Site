@@ -556,7 +556,7 @@ async function handleGet(url, env) {
       const wabaId = await getWabaId(env);
       if (!wabaId) return json({ error: "WABA_ID not found. Set WABA_ID secret or ensure WA_PHONE_ID is valid." }, 500);
       const nameFilter = url.searchParams.get("name");
-      let path = `${wabaId}/message_templates?limit=100&fields=name,status,category,language,components,id`;
+      let path = `${wabaId}/message_templates?limit=100&fields=name,status,category,language,components,id,quality_score,rejected_reason`;
       if (nameFilter) path += `&name=${encodeURIComponent(nameFilter)}`;
       const data = await metaGraphAPI(env, path);
       if (data.error) return json({ error: data.error.message, meta_error: data.error }, 400);

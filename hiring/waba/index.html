@@ -1889,24 +1889,50 @@ async function handleCreateTemplate(e) {
     statusSection.classList.remove("hidden");
 
     if (result.success) {
+      const statusBadge = {
+        APPROVED: { class: "bg-emerald-500/15 text-emerald-400", icon: "✓" },
+        PENDING: { class: "bg-yellow-500/15 text-yellow-400", icon: "⏳" },
+        REJECTED: { class: "bg-red-500/15 text-red-400", icon: "✕" },
+      }[result.status] || { class: "bg-yellow-500/15 text-yellow-400", icon: "⏳" };
+
       statusContent.innerHTML = `
         <div class="flex items-center gap-2 mb-2">
-          <span class="badge bg-yellow-500/15 text-yellow-400">${esc(result.status)}</span>
+          <span class="badge ${statusBadge.class}">${statusBadge.icon} ${esc(result.status)}</span>
           <span class="text-xs text-white/50">ID: ${esc(result.template_id)}</span>
         </div>
-        <p class="text-xs text-emerald-400">✓ Template submitted successfully! It will be reviewed by Meta (usually 10 min – 24 hours).</p>
-        <p class="text-[10px] text-white/30 mt-1">Once approved, it will appear in the template dropdown when creating new campaigns.</p>`;
+        ${result.status === "APPROVED" ? `
+          <p class="text-xs text-emerald-400">✓ Template approved instantly! Ready to use in campaigns.</p>
+        ` : result.status === "REJECTED" ? `
+          <p class="text-xs text-red-400">Template was rejected by Meta.</p>
+          <p class="text-[10px] text-white/30 mt-1">Open the Templates list to see the rejection reason, then delete & resubmit with fixes.</p>
+        ` : `
+          <p class="text-xs text-emerald-400">✓ Template submitted! Meta review usually takes 10 min – 24 hours.</p>
+          <p class="text-[10px] text-white/30 mt-1">Check status in the Templates list. Once approved, it will appear in the campaign template dropdown.</p>
+          <button onclick="checkTemplateStatus('${esc(result.template_id)}', '${esc(name)}')" class="mt-2 text-[10px] text-brand-400 hover:text-brand-300 transition underline underline-offset-2">Check status now ↻</button>
+        `}`;
       btn.innerHTML = '✓ Submitted';
       btn.className = 'text-xs px-5 py-2 rounded-lg bg-emerald-500/20 text-emerald-400';
       // Refresh cached templates
       cachedTemplates = null;
     } else {
+      // Parse common Meta error subcodes for human-readable messages
+      const errorHelp = {
+        2388023: "Template with this name already exists. Use a different name or delete the existing one first.",
+        100: "Invalid parameter — check your body text variables, header URL, or button configuration.",
+        368: "Temporarily blocked from creating templates. Wait and retry later.",
+        190: "Access token expired or invalid. Re-authenticate with Meta.",
+      };
+      const subcode = result.error_subcode || result.meta_error?.error_subcode;
+      const helpText = subcode ? errorHelp[subcode] : null;
+
       statusContent.innerHTML = `
         <div class="flex items-center gap-2 mb-2">
           <span class="badge bg-red-500/15 text-red-400">FAILED</span>
+          ${subcode ? `<span class="text-[10px] text-white/20 font-mono">Error ${subcode}</span>` : ""}
         </div>
         <p class="text-xs text-red-400">${esc(result.error)}</p>
-        ${result.meta_error ? `<pre class="text-[10px] text-white/20 mt-1 overflow-x-auto">${esc(JSON.stringify(result.meta_error, null, 2))}</pre>` : ""}`;
+        ${helpText ? `<p class="text-[10px] text-orange-400/70 mt-1.5">💡 ${esc(helpText)}</p>` : ""}
+        ${result.meta_error ? `<details class="mt-2"><summary class="text-[10px] text-white/20 cursor-pointer hover:text-white/40 transition">Show full Meta error</summary><pre class="text-[10px] text-white/20 mt-1 overflow-x-auto bg-white/[.02] rounded p-2">${esc(JSON.stringify(result.meta_error, null, 2))}</pre></details>` : ""}`;
       btn.disabled = false;
       btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg> Retry';
       btn.className = 'btn-primary text-xs px-5 py-2 rounded-lg transition flex items-center gap-1.5';
@@ -1948,14 +1974,40 @@ async function loadTemplatesList() {
       DISABLED: "bg-white/[.06] text-white/30",
     };
 
+    // Human-readable rejection reason mapping
+    const rejectionReasons = {
+      ABUSIVE_CONTENT: "Content flagged as abusive or threatening",
+      INCORRECT_CATEGORY: "Template category doesn't match content — try switching between Marketing/Utility",
+      INVALID_FORMAT: "Template format is invalid — check header, body variables, or button configuration",
+      SCAM: "Content flagged as potential scam or misleading",
+      TAG_CONTENT_MISMATCH: "Template tag doesn't match the message content",
+      NONE: "",
+    };
+
+    const qualityLabels = {
+      GREEN: { text: "High", class: "bg-emerald-500/15 text-emerald-400" },
+      YELLOW: { text: "Medium", class: "bg-yellow-500/15 text-yellow-400" },
+      RED: { text: "Low", class: "bg-red-500/15 text-red-400" },
+      UNKNOWN: { text: "Unknown", class: "bg-white/[.06] text-white/30" },
+    };
+
     container.innerHTML = templates.map(t => {
       const bodyComp = (t.components || []).find(c => c.type === "BODY");
       const hasHeader = (t.components || []).some(c => c.type === "HEADER");
       const hasButtons = (t.components || []).some(c => c.type === "BUTTONS");
       const bodyPreview = bodyComp?.text ? truncate(bodyComp.text, 100) : "—";
       const sc = statusColors[t.status] || statusColors.DISABLED;
+
+      // Rejection reason
+      const rejReason = t.rejected_reason && t.rejected_reason !== "NONE" ? t.rejected_reason : null;
+      const rejHuman = rejReason ? (rejectionReasons[rejReason] || rejReason.replace(/_/g, " ").toLowerCase()) : "";
+
+      // Quality score
+      const qualScore = t.quality_score?.score;
+      const qual = qualScore ? qualityLabels[qualScore] || qualityLabels.UNKNOWN : null;
+
       return `
-        <div class="rounded-xl p-3.5 bg-white/[.02] border border-white/[.04] hover:border-white/[.08] transition mb-2">
+        <div class="rounded-xl p-3.5 bg-white/[.02] border ${t.status === 'REJECTED' ? 'border-red-500/20' : 'border-white/[.04]'} hover:border-white/[.08] transition mb-2">
           <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
@@ -1965,10 +2017,28 @@ async function loadTemplatesList() {
                 <span class="badge bg-white/[.04] text-white/20">${t.language}</span>
                 ${hasHeader ? '<span class="badge bg-blue-500/10 text-blue-400">IMAGE</span>' : ""}
                 ${hasButtons ? '<span class="badge bg-violet-500/10 text-violet-400">BUTTONS</span>' : ""}
+                ${qual ? `<span class="badge ${qual.class}">Quality: ${qual.text}</span>` : ""}
               </div>
               <p class="text-xs text-white/30 mt-1.5 leading-relaxed">${esc(bodyPreview)}</p>
+              ${rejReason ? `
+              <div class="mt-2 rounded-lg bg-red-500/[.06] border border-red-500/10 px-3 py-2">
+                <div class="flex items-start gap-2">
+                  <span class="text-red-400 text-xs shrink-0 mt-px">✕</span>
+                  <div>
+                    <p class="text-xs text-red-400 font-medium">${esc(rejReason.replace(/_/g, " "))}</p>
+                    ${rejHuman ? `<p class="text-[10px] text-red-400/60 mt-0.5">${esc(rejHuman)}</p>` : ""}
+                  </div>
+                </div>
+              </div>` : ""}
+              ${t.status === 'REJECTED' && !rejReason ? `
+              <div class="mt-2 rounded-lg bg-red-500/[.06] border border-red-500/10 px-3 py-2">
+                <p class="text-[10px] text-red-400/60">Rejected by Meta — no specific reason provided. Try resubmitting with different content or category.</p>
+              </div>` : ""}
             </div>
-            <span class="text-[10px] text-white/15 shrink-0 font-mono">${t.id}</span>
+            <div class="flex flex-col items-end gap-1.5 shrink-0">
+              <span class="text-[10px] text-white/15 font-mono">${t.id}</span>
+              ${t.status === 'REJECTED' ? `<button onclick="deleteAndResubmit('${esc(t.name)}')" class="text-[9px] text-orange-400/60 hover:text-orange-400 transition">Delete & Resubmit ↻</button>` : ""}
+            </div>
           </div>
         </div>`;
     }).join("");
@@ -1999,6 +2069,70 @@ async function loadTemplatesForDropdown() {
     });
   } catch (e) {
     console.warn("Could not load templates for dropdown:", e);
+  }
+}
+
+async function checkTemplateStatus(templateId, templateName) {
+  const statusContent = document.getElementById("template-status-content");
+  const existingBtn = statusContent.querySelector("button");
+  if (existingBtn) { existingBtn.textContent = "Checking..."; existingBtn.disabled = true; }
+  try {
+    const data = await apiGet({ action: "templates", name: templateName });
+    const tpl = (data.templates || []).find(t => t.name === templateName);
+    if (!tpl) {
+      statusContent.querySelector("button").textContent = "Template not found ✕";
+      return;
+    }
+    cachedTemplates = null;
+    const rejReasons = {
+      ABUSIVE_CONTENT: "Content flagged as abusive or threatening",
+      INCORRECT_CATEGORY: "Category doesn't match content — try switching Marketing ↔ Utility",
+      INVALID_FORMAT: "Format invalid — check header, body variables, or buttons",
+      SCAM: "Flagged as potential scam or misleading content",
+      TAG_CONTENT_MISMATCH: "Template tag doesn't match message content",
+    };
+    if (tpl.status === "APPROVED") {
+      statusContent.innerHTML = `
+        <div class="flex items-center gap-2 mb-2"><span class="badge bg-emerald-500/15 text-emerald-400">✓ APPROVED</span><span class="text-xs text-white/50">ID: ${esc(templateId)}</span></div>
+        <p class="text-xs text-emerald-400">Template approved! Ready to use in campaigns.</p>`;
+    } else if (tpl.status === "REJECTED") {
+      const reason = tpl.rejected_reason && tpl.rejected_reason !== "NONE" ? tpl.rejected_reason : null;
+      const humanReason = reason ? (rejReasons[reason] || reason.replace(/_/g, " ").toLowerCase()) : "No specific reason provided by Meta";
+      statusContent.innerHTML = `
+        <div class="flex items-center gap-2 mb-2"><span class="badge bg-red-500/15 text-red-400">✕ REJECTED</span><span class="text-xs text-white/50">ID: ${esc(templateId)}</span></div>
+        <div class="rounded-lg bg-red-500/[.06] border border-red-500/10 px-3 py-2 mt-1">
+          ${reason ? `<p class="text-xs text-red-400 font-medium">${esc(reason.replace(/_/g, " "))}</p>` : ""}
+          <p class="text-[10px] text-red-400/60 mt-0.5">${esc(humanReason)}</p>
+        </div>
+        <p class="text-[10px] text-white/30 mt-2">Delete this template and resubmit with fixes from the Templates list.</p>`;
+    } else {
+      statusContent.innerHTML = `
+        <div class="flex items-center gap-2 mb-2"><span class="badge bg-yellow-500/15 text-yellow-400">⏳ ${esc(tpl.status)}</span><span class="text-xs text-white/50">ID: ${esc(templateId)}</span></div>
+        <p class="text-xs text-white/40">Still under review by Meta.</p>
+        <button onclick="checkTemplateStatus('${esc(templateId)}', '${esc(templateName)}')" class="mt-2 text-[10px] text-brand-400 hover:text-brand-300 transition underline underline-offset-2">Check again ↻</button>`;
+    }
+  } catch (e) {
+    if (existingBtn) { existingBtn.textContent = "Check failed — retry ↻"; existingBtn.disabled = false; }
+  }
+}
+
+async function deleteAndResubmit(templateName) {
+  if (!confirm(`Delete template "${templateName}" so you can resubmit it with changes?`)) return;
+  try {
+    const result = await apiPost({ action: "delete_template", name: templateName });
+    if (result.success) {
+      // Refresh the list
+      cachedTemplates = null;
+      loadTemplatesList();
+      // Open template builder with the name pre-filled
+      closeAllModals();
+      showModal("template-builder");
+      document.getElementById("tpl-name").value = templateName;
+    } else {
+      alert("Delete failed: " + (result.error || "Unknown error"));
+    }
+  } catch (e) {
+    alert("Error: " + e.message);
   }
 }
 
