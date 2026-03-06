@@ -14,6 +14,7 @@
  *   POST /api/hiring  { action: "import_send_log", ... }
  *   POST /api/hiring  { action: "send_batch", campaign_id, ... }
  *   POST /api/hiring  { action: "pause_campaign", ... }
+ *   POST /api/hiring  { action: "retry_failed", campaign_id }
  *   POST /api/hiring  { action: "reply", phone, text }
  *   POST /api/hiring  { action: "mark_read", phone }
  *   GET  /api/hiring?action=templates              → list Meta templates
@@ -1112,6 +1113,55 @@ async function handlePost(request, env) {
       return json({ sent: 0, remaining: 0, status: "completed" });
     }
 
+    // ── Fetch template structure from Meta to build components dynamically ──
+    let tplComponents = null;
+    let tplLanguage = "en";
+    try {
+      const wabaId = await getWabaId(env);
+      if (wabaId) {
+        const tplData = await metaGraphAPI(
+          env,
+          `${wabaId}/message_templates?name=${encodeURIComponent(campaign.template_name)}&fields=name,status,language,components`
+        );
+        const approved = (tplData.data || []).find(
+          (t) => t.status === "APPROVED" && t.name === campaign.template_name
+        );
+        if (approved) {
+          tplComponents = approved.components || [];
+          tplLanguage = approved.language || "en";
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch template structure:", e.message);
+    }
+
+    // Parse template structure: determine what each component needs
+    const headerComp = tplComponents?.find((c) => c.type === "HEADER");
+    const bodyComp = tplComponents?.find((c) => c.type === "BODY");
+    const buttonComps = (tplComponents || []).filter((c) => c.type === "BUTTONS");
+    const bodyVarCount = (bodyComp?.text?.match(/\{\{\d+\}\}/g) || []).length;
+
+    // Check for URL button variables (e.g., {{1}} in button URL)
+    let urlButtonVarCount = 0;
+    if (buttonComps.length > 0) {
+      for (const bc of buttonComps) {
+        for (const btn of (bc.buttons || [])) {
+          if (btn.type === "URL" && btn.url?.includes("{{")) {
+            urlButtonVarCount++;
+          }
+        }
+      }
+    }
+
+    // Guard: if template has IMAGE/VIDEO/DOCUMENT header but no media ID configured
+    const needsMedia = headerComp && ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerComp.format);
+    if (needsMedia && !env.WA_MEDIA_ID) {
+      return json({
+        error: `Template "${campaign.template_name}" has a ${headerComp.format} header but WA_MEDIA_ID secret is not configured. Upload the media and set the secret first.`,
+        template_info: { header: headerComp.format, body_vars: bodyVarCount, button_vars: urlButtonVarCount },
+      }, 400);
+    }
+
     let sentCount = 0;
     let failedCount = 0;
 
@@ -1120,17 +1170,84 @@ async function handlePost(request, env) {
         const params = JSON.parse(msg.template_params || "[]");
         const components = [];
 
-        components.push({
-          type: "header",
-          parameters: [
-            { type: "image", image: { id: env.WA_MEDIA_ID || "" } },
-          ],
-        });
+        // ── Header: only include if template has a HEADER component ──
+        if (headerComp) {
+          if (headerComp.format === "IMAGE") {
+            const mediaId = env.WA_MEDIA_ID || "";
+            if (mediaId) {
+              components.push({
+                type: "header",
+                parameters: [{ type: "image", image: { id: mediaId } }],
+              });
+            }
+          } else if (headerComp.format === "VIDEO") {
+            const mediaId = env.WA_MEDIA_ID || "";
+            if (mediaId) {
+              components.push({
+                type: "header",
+                parameters: [{ type: "video", video: { id: mediaId } }],
+              });
+            }
+          } else if (headerComp.format === "DOCUMENT") {
+            const mediaId = env.WA_MEDIA_ID || "";
+            if (mediaId) {
+              components.push({
+                type: "header",
+                parameters: [{ type: "document", document: { id: mediaId } }],
+              });
+            }
+          } else if (headerComp.format === "TEXT" && headerComp.text?.includes("{{")) {
+            // Text header with variable — use first param
+            components.push({
+              type: "header",
+              parameters: [{ type: "text", text: params[0] || "" }],
+            });
+          }
+          // If header is TEXT without variables or LOCATION, no parameters needed
+        }
 
-        if (params.length > 0) {
+        // ── Body: only include if template has body variables ──
+        if (bodyVarCount > 0 && params.length > 0) {
+          // If header consumed a text param, offset body params
+          const headerConsumed = (headerComp?.format === "TEXT" && headerComp.text?.includes("{{")) ? 1 : 0;
+          const bodyParams = params.slice(headerConsumed, headerConsumed + bodyVarCount);
+
+          if (bodyParams.length > 0) {
+            components.push({
+              type: "body",
+              parameters: bodyParams.map((p) => ({ type: "text", text: String(p || "") })),
+            });
+          }
+        }
+
+        // ── URL Button variables ──
+        if (urlButtonVarCount > 0) {
+          const headerConsumed = (headerComp?.format === "TEXT" && headerComp.text?.includes("{{")) ? 1 : 0;
+          const buttonParams = params.slice(headerConsumed + bodyVarCount);
+          let btnIdx = 0;
+          for (const bc of buttonComps) {
+            for (let i = 0; i < (bc.buttons || []).length; i++) {
+              const btn = bc.buttons[i];
+              if (btn.type === "URL" && btn.url?.includes("{{")) {
+                components.push({
+                  type: "button",
+                  sub_type: "url",
+                  index: String(i),
+                  parameters: [{ type: "text", text: String(buttonParams[btnIdx] || "") }],
+                });
+                btnIdx++;
+              }
+            }
+          }
+        }
+
+        // ── Fallback: if we couldn't fetch template, use all params as body ──
+        if (!tplComponents && params.length > 0) {
+          // Legacy fallback: send all params as body (no header)
+          components.length = 0;
           components.push({
             type: "body",
-            parameters: params.map((p) => ({ type: "text", text: p })),
+            parameters: params.map((p) => ({ type: "text", text: String(p || "") })),
           });
         }
 
@@ -1138,8 +1255,8 @@ async function handlePost(request, env) {
           type: "template",
           template: {
             name: campaign.template_name,
-            language: { code: "en" },
-            components,
+            language: { code: tplLanguage },
+            components: components.length > 0 ? components : undefined,
           },
         });
 
@@ -1213,6 +1330,30 @@ async function handlePost(request, env) {
       .bind(campaign_id)
       .run();
     return json({ success: true });
+  }
+
+  // ── Retry failed messages (reset to queued) ──
+  if (action === "retry_failed") {
+    const { campaign_id } = body;
+    if (!campaign_id) return json({ error: "campaign_id required" }, 400);
+
+    const result = await db
+      .prepare(
+        `UPDATE messages SET status = 'queued', error_code = NULL, error_message = NULL, failed_at = NULL
+         WHERE campaign_id = ? AND status = 'failed'`
+      )
+      .bind(campaign_id)
+      .run();
+
+    // Reset campaign status so it can be sent again
+    await db
+      .prepare(`UPDATE campaigns SET status = 'draft' WHERE id = ?`)
+      .bind(campaign_id)
+      .run();
+
+    await refreshCampaignCounts(db, campaign_id);
+
+    return json({ success: true, reset_count: result.meta.changes });
   }
 
   // ── Send reply to candidate ──

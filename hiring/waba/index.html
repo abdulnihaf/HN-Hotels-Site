@@ -1088,15 +1088,20 @@ async function openDrawer(id) {
     </div>`;
 
   const canSend = c.status === "draft" || c.status === "paused" || c.status === "sending";
+  const canRetry = fail > 0;
   document.getElementById("drawer-footer").innerHTML = `
     <div class="flex items-center gap-2">
-      ${canSend ? `
+      ${canSend || canRetry ? `
         <label class="text-[10px] text-white/30">Batch:</label>
         <select id="batch-size" class="rounded px-2 py-1 text-[11px] w-16">
           <option>20</option><option selected>30</option><option>50</option><option>100</option>
         </select>` : ""}
     </div>
     <div class="flex gap-2">
+      ${canRetry ? `<button onclick="retryFailed(${id})" id="btn-retry" class="bg-red-600/80 hover:bg-red-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Retry ${fail} Failed
+      </button>` : ""}
       ${c.status === "sending" ? `<button onclick="pauseCampaign(${id})" class="btn-ghost text-xs px-3 py-1.5 rounded-lg transition">Pause</button>` : ""}
       ${canSend && queued > 0 ? `<button onclick="sendBatch(${id})" id="btn-send" class="btn-primary text-xs px-4 py-1.5 rounded-lg transition flex items-center gap-1.5">
         <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
@@ -1180,6 +1185,18 @@ async function pauseCampaign(id) {
   await apiPost({ action:"pause_campaign", campaign_id:id });
   await loadDashboard();
   await openDrawer(id);
+}
+
+async function retryFailed(id) {
+  const btn = document.getElementById("btn-retry");
+  if (!btn) return;
+  if (!confirm("Reset all failed messages to queued and retry?")) return;
+  btn.disabled = true; btn.textContent = "Resetting...";
+  try {
+    const r = await apiPost({ action:"retry_failed", campaign_id:id });
+    await loadDashboard();
+    await openDrawer(id);
+  } catch(e) { alert("Error: "+e.message); }
 }
 
 // ===============================================================
