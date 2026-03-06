@@ -254,41 +254,76 @@
     <div class="glass rounded-2xl w-full max-w-2xl pointer-events-auto slide-up max-h-[90vh] overflow-hidden flex flex-col">
       <div class="p-5 border-b border-white/[.04] shrink-0">
         <h3 class="font-bold">New Campaign</h3>
-        <p class="text-xs text-white/30 mt-0.5">Select a role from the database to create a campaign</p>
+        <p class="text-xs text-white/30 mt-0.5">Filter candidates, pick a role, then create a campaign</p>
       </div>
       <form id="form-new" class="p-5 space-y-3.5 scroll-y flex-1" onsubmit="handleCreateCampaign(event)">
-        <!-- Role Picker (loaded from DB) -->
+
+        <!-- Target Audience Filters -->
         <div>
-          <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-2">Select Role</label>
-          <div id="role-picker" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[250px] scroll-y">
+          <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-2">Target Audience</label>
+          <div class="grid grid-cols-3 gap-2">
+            <!-- State Filter -->
+            <div class="relative">
+              <select id="cmp-state" onchange="onCampaignFilterChange()" class="w-full rounded-lg px-2.5 py-2 text-xs appearance-none bg-white/[.03] border border-white/[.06] focus:border-brand-500/30 transition">
+                <option value="">All States</option>
+              </select>
+              <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-white/20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+            <!-- City Filter -->
+            <div class="relative">
+              <select id="cmp-city" onchange="onCampaignFilterChange()" class="w-full rounded-lg px-2.5 py-2 text-xs appearance-none bg-white/[.03] border border-white/[.06] focus:border-brand-500/30 transition">
+                <option value="">All Cities</option>
+              </select>
+              <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-white/20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+            <!-- Upload Batch Filter -->
+            <div class="relative">
+              <select id="cmp-batch" onchange="onCampaignFilterChange()" class="w-full rounded-lg px-2.5 py-2 text-xs appearance-none bg-white/[.03] border border-white/[.06] focus:border-brand-500/30 transition">
+                <option value="">All Batches</option>
+              </select>
+              <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-white/20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+          </div>
+          <!-- Active filter tags -->
+          <div id="cmp-filter-tags" class="flex flex-wrap gap-1.5 mt-2 hidden"></div>
+        </div>
+
+        <!-- Role Picker (loaded from DB, respects filters) -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold">Select Role <span class="text-white/20 normal-case">(optional)</span></label>
+            <button type="button" id="btn-clear-role" onclick="clearCampaignRole()" class="text-[9px] text-white/20 hover:text-white/40 hidden">Clear role</button>
+          </div>
+          <div id="role-picker" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[200px] scroll-y">
             <div class="text-center py-4 text-white/20 text-xs col-span-full">Loading roles...</div>
           </div>
-          <input type="hidden" name="role" id="selected-role" required>
+          <input type="hidden" name="role" id="selected-role">
           <input type="hidden" name="salary" id="selected-salary">
         </div>
 
-        <!-- Selected Role Summary -->
-        <div id="role-summary" class="hidden rounded-lg bg-brand-500/[.06] border border-brand-500/10 p-3">
+        <!-- Target Summary (shows matching candidate count) -->
+        <div id="role-summary" class="rounded-lg bg-brand-500/[.06] border border-brand-500/10 p-3">
           <div class="flex items-center justify-between">
             <div>
-              <span id="summary-role" class="text-sm font-semibold text-brand-400"></span>
+              <span id="summary-role" class="text-sm font-semibold text-brand-400">All Roles</span>
               <span id="summary-salary" class="text-xs text-white/30 ml-2"></span>
             </div>
             <div class="text-right">
-              <span id="summary-count" class="text-lg font-bold text-brand-400"></span>
+              <span id="summary-count" class="text-lg font-bold text-brand-400">0</span>
               <span class="text-[10px] text-white/25 block">available</span>
             </div>
           </div>
           <div class="flex gap-3 mt-2 text-[10px]">
-            <span id="summary-personalized" class="text-blue-400"></span>
-            <span id="summary-contacted" class="text-white/25"></span>
+            <span id="summary-personalized" class="text-blue-400">0 with personalization</span>
+            <span id="summary-contacted" class="text-white/25">0 already contacted</span>
           </div>
+          <div id="summary-filter-desc" class="text-[9px] text-white/15 mt-1.5 hidden"></div>
         </div>
 
         <!-- Campaign Name (auto-generated, editable) -->
         <div>
           <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Campaign Name</label>
-          <input name="name" id="campaign-name" required placeholder="Auto-generated when you select a role..." class="w-full rounded-lg px-3 py-2 text-sm placeholder-white/15">
+          <input name="name" id="campaign-name" required placeholder="Auto-generated from your filters..." class="w-full rounded-lg px-3 py-2 text-sm placeholder-white/15">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -1130,11 +1165,14 @@ async function pauseCampaign(id) {
 }
 
 // ===============================================================
-// Create Campaign — DB-backed role picker
+// Create Campaign — flexible filter-driven targeting
 // ===============================================================
 let selectedFile = null;
 let roleStats = [];
 let selectedRoleData = null;
+let cmpStates = [];
+let cmpCities = [];
+let cmpBatches = [];
 
 function handleFileSelect(input) {
   selectedFile = input.files[0];
@@ -1162,14 +1200,166 @@ function toggleCsvUpload() {
   chevron.style.transform = section.classList.contains("hidden") ? "" : "rotate(90deg)";
 }
 
+// ── Campaign Filter Helpers ──
+function getCmpFilters() {
+  return {
+    state: document.getElementById("cmp-state")?.value || "",
+    city: document.getElementById("cmp-city")?.value || "",
+    batch: document.getElementById("cmp-batch")?.value || "",
+    role: document.getElementById("selected-role")?.value || "",
+  };
+}
+
+async function loadCampaignFilters() {
+  try {
+    const [stateData, batchData] = await Promise.all([
+      apiGet({ action: "candidate_states" }),
+      apiGet({ action: "candidate_batches" }),
+    ]);
+    cmpStates = stateData.states || [];
+    cmpBatches = batchData.batches || [];
+
+    // Populate state dropdown
+    const stateEl = document.getElementById("cmp-state");
+    stateEl.innerHTML = `<option value="">All States (${cmpStates.reduce((s,r) => s+r.cnt, 0)})</option>` +
+      cmpStates.map(s => `<option value="${esc(s.state)}">${esc(s.state)} (${s.cnt})</option>`).join("");
+
+    // Populate batch dropdown
+    const batchEl = document.getElementById("cmp-batch");
+    batchEl.innerHTML = `<option value="">All Batches</option>` +
+      cmpBatches.map(b => `<option value="${esc(b.upload_batch)}">${esc(b.upload_label || b.upload_batch)} (${b.cnt})</option>`).join("");
+
+    // Load cities (initially unfiltered)
+    await loadCampaignCities();
+  } catch(e) {
+    console.error("Failed to load campaign filters:", e);
+  }
+}
+
+async function loadCampaignCities() {
+  const f = getCmpFilters();
+  const params = { action: "candidate_cities" };
+  if (f.state) params.state = f.state;
+  if (f.role) params.role = f.role;
+  if (f.batch) params.batch = f.batch;
+  try {
+    const data = await apiGet(params);
+    cmpCities = data.cities || [];
+    const cityEl = document.getElementById("cmp-city");
+    const prev = cityEl.value;
+    cityEl.innerHTML = `<option value="">All Cities (${cmpCities.reduce((s,r) => s+r.cnt, 0)})</option>` +
+      cmpCities.map(c => `<option value="${esc(c.city)}">${esc(c.city)} (${c.cnt})</option>`).join("");
+    // Restore previous selection if still valid
+    if (prev && cmpCities.some(c => c.city === prev)) cityEl.value = prev;
+  } catch(e) { console.error(e); }
+}
+
+async function onCampaignFilterChange() {
+  // When state changes, reload cities (filtered by state)
+  await loadCampaignCities();
+  // Reload role picker with filters
+  await loadRolePicker();
+  updateCampaignSummary();
+  updateCmpFilterTags();
+  autoGenerateCampaignName();
+}
+
+function updateCmpFilterTags() {
+  const f = getCmpFilters();
+  const tags = document.getElementById("cmp-filter-tags");
+  const parts = [];
+  if (f.state) parts.push(`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 text-[9px]">${esc(f.state)} <button type="button" onclick="document.getElementById('cmp-state').value='';onCampaignFilterChange()" class="hover:text-white">&times;</button></span>`);
+  if (f.city) parts.push(`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 text-[9px]">${esc(f.city)} <button type="button" onclick="document.getElementById('cmp-city').value='';onCampaignFilterChange()" class="hover:text-white">&times;</button></span>`);
+  if (f.batch) {
+    const label = cmpBatches.find(b => b.upload_batch === f.batch)?.upload_label || f.batch;
+    parts.push(`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 text-[9px]">${esc(label)} <button type="button" onclick="document.getElementById('cmp-batch').value='';onCampaignFilterChange()" class="hover:text-white">&times;</button></span>`);
+  }
+  if (parts.length) {
+    tags.innerHTML = parts.join("");
+    tags.classList.remove("hidden");
+  } else {
+    tags.classList.add("hidden");
+  }
+}
+
+function updateCampaignSummary() {
+  const f = getCmpFilters();
+  let totalAvailable = 0, totalPersonalized = 0, totalContacted = 0;
+
+  if (f.role) {
+    const role = roleStats.find(r => r.he_role === f.role);
+    if (role) {
+      totalAvailable = role.available;
+      totalPersonalized = role.with_personalization || 0;
+      totalContacted = role.contacted || 0;
+    }
+    document.getElementById("summary-role").textContent = f.role;
+    document.getElementById("summary-salary").textContent = role?.he_salary || "";
+  } else {
+    // Sum across all filtered roles
+    for (const r of roleStats) {
+      totalAvailable += r.available;
+      totalPersonalized += (r.with_personalization || 0);
+      totalContacted += (r.contacted || 0);
+    }
+    document.getElementById("summary-role").textContent = "All Roles";
+    document.getElementById("summary-salary").textContent = "";
+  }
+
+  document.getElementById("summary-count").textContent = totalAvailable;
+  document.getElementById("summary-personalized").textContent = `${totalPersonalized} with personalization`;
+  document.getElementById("summary-contacted").textContent = `${totalContacted} already contacted`;
+
+  // Filter description
+  const desc = document.getElementById("summary-filter-desc");
+  const parts = [];
+  if (f.state) parts.push(f.state);
+  if (f.city) parts.push(f.city);
+  if (f.batch) parts.push(cmpBatches.find(b => b.upload_batch === f.batch)?.upload_label || f.batch);
+  if (parts.length) {
+    desc.textContent = "Filtered by: " + parts.join(" + ");
+    desc.classList.remove("hidden");
+  } else {
+    desc.classList.add("hidden");
+  }
+
+  // Auto-select template type
+  if (totalPersonalized > 0 && totalPersonalized >= totalAvailable * 0.5) {
+    document.getElementById("template-select").value = "he_hiring_mar26";
+    document.getElementById("type-select").value = "personalized";
+  } else {
+    document.getElementById("template-select").value = "he_hiring_generic_mar26";
+    document.getElementById("type-select").value = "generic";
+  }
+}
+
+function autoGenerateCampaignName() {
+  const f = getCmpFilters();
+  const month = new Date().toLocaleString("en", { month: "short", year: "numeric" });
+  const parts = ["HE"];
+  if (f.role) parts.push(f.role);
+  if (f.state) parts.push(f.state);
+  if (f.city) parts.push(f.city);
+  if (f.batch) parts.push(cmpBatches.find(b => b.upload_batch === f.batch)?.upload_label?.split("(")[0]?.trim() || f.batch);
+  parts.push(month);
+  document.getElementById("campaign-name").value = parts.join(" — ");
+}
+
+// ── Role Picker (filter-aware) ──
 async function loadRolePicker() {
   const picker = document.getElementById("role-picker");
+  const f = getCmpFilters();
   try {
-    const data = await apiGet({ action: "candidate_stats" });
+    const params = { action: "candidate_stats" };
+    if (f.state) params.state = f.state;
+    if (f.city) params.city = f.city;
+    if (f.batch) params.batch = f.batch;
+
+    const data = await apiGet(params);
     roleStats = data.roles || [];
 
     if (!roleStats.length) {
-      picker.innerHTML = `<div class="text-center py-4 text-white/20 text-xs col-span-full">No candidates in database yet</div>`;
+      picker.innerHTML = `<div class="text-center py-4 text-white/20 text-xs col-span-full">No candidates match these filters</div>`;
       return;
     }
 
@@ -1192,37 +1382,44 @@ async function loadRolePicker() {
 }
 
 function selectRole(roleName) {
+  if (selectedRoleData?.he_role === roleName) {
+    // Deselect on second click
+    clearCampaignRole();
+    return;
+  }
   const role = roleStats.find(r => r.he_role === roleName);
   if (!role) return;
   selectedRoleData = role;
 
-  // Update hidden fields
   document.getElementById("selected-role").value = role.he_role;
   document.getElementById("selected-salary").value = role.he_salary || "";
+  document.getElementById("btn-clear-role").classList.remove("hidden");
 
-  // Auto-generate campaign name
-  const month = new Date().toLocaleString("en", { month: "short", year: "numeric" });
-  document.getElementById("campaign-name").value = `HE ${role.he_role} — ${month}`;
-
-  // Show summary
-  const summary = document.getElementById("role-summary");
-  summary.classList.remove("hidden");
-  document.getElementById("summary-role").textContent = role.he_role;
-  document.getElementById("summary-salary").textContent = role.he_salary || "";
-  document.getElementById("summary-count").textContent = role.available;
-  document.getElementById("summary-personalized").textContent = `${role.with_personalization || 0} with personalization`;
-  document.getElementById("summary-contacted").textContent = `${role.contacted || 0} already contacted`;
-
-  // Auto-select template type based on personalization ratio
-  if (role.with_personalization > 0 && role.with_personalization >= role.available * 0.5) {
-    document.getElementById("template-select").value = "he_hiring_mar26";
-    document.getElementById("type-select").value = "personalized";
-  } else {
-    document.getElementById("template-select").value = "he_hiring_generic_mar26";
-    document.getElementById("type-select").value = "generic";
-  }
+  updateCampaignSummary();
+  autoGenerateCampaignName();
 
   // Re-render picker to highlight selected
+  const picker = document.getElementById("role-picker");
+  picker.querySelectorAll(".role-card").forEach(card => {
+    const name = card.querySelector(".text-\\[12px\\]")?.textContent;
+    if (name === roleName) {
+      card.className = card.className.replace(/border-white\/\[\.04\] bg-white\/\[\.02\] hover:border-white\/\[\.08\] hover:bg-white\/\[\.04\]/g, "border-brand-500/40 bg-brand-500/[.06]");
+      card.querySelector(".text-\\[12px\\]")?.classList.replace("text-white/60", "text-brand-400");
+    } else {
+      card.className = card.className.replace(/border-brand-500\/40 bg-brand-500\/\[\.06\]/g, "border-white/[.04] bg-white/[.02] hover:border-white/[.08] hover:bg-white/[.04]");
+      card.querySelector(".text-\\[12px\\]")?.classList.replace("text-brand-400", "text-white/60");
+    }
+  });
+}
+
+function clearCampaignRole() {
+  selectedRoleData = null;
+  document.getElementById("selected-role").value = "";
+  document.getElementById("selected-salary").value = "";
+  document.getElementById("btn-clear-role").classList.add("hidden");
+  updateCampaignSummary();
+  autoGenerateCampaignName();
+  // Re-render picker to remove highlight
   loadRolePicker();
 }
 
@@ -1233,29 +1430,31 @@ async function handleCreateCampaign(e) {
   const btn = document.getElementById("btn-create");
   btn.disabled = true; btn.textContent = "Creating...";
 
-  const role = fd.get("role");
-  if (!role) {
-    alert("Please select a role first");
+  const f = getCmpFilters();
+  // Need at least one targeting criterion
+  if (!f.role && !f.state && !f.city && !f.batch) {
+    alert("Please select at least one filter (role, state, city, or batch) to target candidates.");
     btn.disabled = false; btn.textContent = "Create & Queue";
     return;
   }
 
   try {
     const file = selectedFile || form.querySelector('input[type=file]')?.files?.[0];
-
-    // Determine source
     const source = file ? "csv" : "database";
 
     const r = await apiPost({
       action: "create_campaign",
       name: fd.get("name"),
       template_name: fd.get("template_name"),
-      role: role,
+      role: f.role || "",
       salary: fd.get("salary") || selectedRoleData?.he_salary || "",
       campaign_type: fd.get("campaign_type"),
       brand: fd.get("brand"),
       category: fd.get("category"),
       source: source,
+      state: f.state || "",
+      city: f.city || "",
+      batch: f.batch || "",
     });
 
     if (!r.id) throw new Error(JSON.stringify(r));
@@ -1284,8 +1483,8 @@ async function handleCreateCampaign(e) {
         if (phone.length !== 10) continue;
 
         const params = isP
-          ? [cols[nameI]||"", cols[titleI]||"", cols[companyI]||"", cols[roleI]||role, cols[salaryI]||fd.get("salary")]
-          : [cols[roleI]||role, cols[salaryI]||fd.get("salary")];
+          ? [cols[nameI]||"", cols[titleI]||"", cols[companyI]||"", cols[roleI]||f.role, cols[salaryI]||fd.get("salary")]
+          : [cols[roleI]||f.role, cols[salaryI]||fd.get("salary")];
 
         candidates.push({ phone, name: cols[nameI]||"", params });
       }
@@ -1306,7 +1505,6 @@ async function handleCreateCampaign(e) {
     selectedFile = null;
     selectedRoleData = null;
     document.getElementById("file-name")?.classList.add("hidden");
-    document.getElementById("role-summary")?.classList.add("hidden");
     await loadDashboard();
   } catch(err) {
     alert("Error: " + err.message);
@@ -1343,7 +1541,7 @@ function timeAgo(d) {
 
 function showModal(name) {
   document.getElementById("modal-"+name).classList.remove("hidden");
-  if (name === "new-campaign") { selectedRoleData = null; loadRolePicker(); loadTemplatesForDropdown?.(); }
+  if (name === "new-campaign") { selectedRoleData = null; document.getElementById("selected-role").value = ""; document.getElementById("selected-salary").value = ""; document.getElementById("btn-clear-role")?.classList.add("hidden"); loadCampaignFilters().then(() => { loadRolePicker().then(() => updateCampaignSummary()); }); loadTemplatesForDropdown?.(); }
   if (name === "template-builder") { resetTemplateBuilder?.(); }
 }
 function closeAllModals() { document.querySelectorAll("[id^=modal-]").forEach(m=>m.classList.add("hidden")); }

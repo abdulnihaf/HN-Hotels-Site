@@ -202,36 +202,48 @@ async function handleGet(url, env) {
     });
   }
 
-  // ── Candidate cities: distinct cities with counts (optionally filtered by role) ──
+  // ── Candidate cities: distinct cities with counts (cross-filtered) ──
   if (action === "candidate_cities") {
-    const role = url.searchParams.get("role");
-    const state = url.searchParams.get("state");
     let q = `SELECT city, COUNT(*) as cnt FROM candidates WHERE 1=1`;
     const p = [];
+    const role = url.searchParams.get("role");
+    const state = url.searchParams.get("state");
+    const batch = url.searchParams.get("batch");
     if (role) { q += ` AND he_role = ?`; p.push(role); }
     if (state) { q += ` AND state = ?`; p.push(state); }
+    if (batch) { q += ` AND upload_batch = ?`; p.push(batch); }
     q += ` GROUP BY city ORDER BY cnt DESC`;
-    const rows = p.length
-      ? await db.prepare(q).bind(...p).all()
-      : await db.prepare(q).all();
+    const rows = p.length ? await db.prepare(q).bind(...p).all() : await db.prepare(q).all();
     return json({ cities: rows.results });
   }
 
+  // ── Candidate states: distinct states with counts (cross-filtered) ──
   if (action === "candidate_states") {
-    const role = url.searchParams.get("role");
     let q = `SELECT state, COUNT(*) as cnt FROM candidates WHERE state IS NOT NULL AND state != ''`;
     const p = [];
+    const role = url.searchParams.get("role");
+    const batch = url.searchParams.get("batch");
+    const city = url.searchParams.get("city");
     if (role) { q += ` AND he_role = ?`; p.push(role); }
+    if (batch) { q += ` AND upload_batch = ?`; p.push(batch); }
+    if (city) { q += ` AND city = ?`; p.push(city); }
     q += ` GROUP BY state ORDER BY cnt DESC`;
-    const rows = p.length
-      ? await db.prepare(q).bind(...p).all()
-      : await db.prepare(q).all();
+    const rows = p.length ? await db.prepare(q).bind(...p).all() : await db.prepare(q).all();
     return json({ states: rows.results });
   }
 
+  // ── Candidate batches: distinct upload batches with counts (cross-filtered) ──
   if (action === "candidate_batches") {
-    let q = `SELECT upload_batch, upload_label, COUNT(*) as cnt FROM candidates WHERE upload_batch IS NOT NULL AND upload_batch != '' GROUP BY upload_batch, upload_label ORDER BY cnt DESC`;
-    const rows = await db.prepare(q).all();
+    let q = `SELECT upload_batch, upload_label, COUNT(*) as cnt FROM candidates WHERE upload_batch IS NOT NULL AND upload_batch != ''`;
+    const p = [];
+    const role = url.searchParams.get("role");
+    const state = url.searchParams.get("state");
+    const city = url.searchParams.get("city");
+    if (role) { q += ` AND he_role = ?`; p.push(role); }
+    if (state) { q += ` AND state = ?`; p.push(state); }
+    if (city) { q += ` AND city = ?`; p.push(city); }
+    q += ` GROUP BY upload_batch, upload_label ORDER BY cnt DESC`;
+    const rows = p.length ? await db.prepare(q).bind(...p).all() : await db.prepare(q).all();
     return json({ batches: rows.results });
   }
 
@@ -662,7 +674,7 @@ async function handlePost(request, env) {
     const campaignId = result.meta.last_row_id;
 
     // ── If source is "database", auto-populate messages from candidates table ──
-    if (source === "database" && (role || batch || state)) {
+    if (source === "database" && (role || batch || state || city)) {
       const isPersonalized = (campaign_type || "personalized") === "personalized";
       const templateName = template_name || (isPersonalized ? "he_hiring_mar26" : "he_hiring_generic_mar26");
 
