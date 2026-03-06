@@ -56,6 +56,79 @@ async function getWabaId(env) {
   return data.whatsapp_business_account?.id || null;
 }
 
+// ─── Helper: get App ID from access token ────────────────────
+async function getAppId(env) {
+  const data = await fetch(
+    `https://graph.facebook.com/v21.0/debug_token?input_token=${env.WA_ACCESS_TOKEN}`,
+    { headers: { Authorization: `Bearer ${env.WA_ACCESS_TOKEN}` } }
+  );
+  const result = await data.json();
+  return result.data?.app_id || null;
+}
+
+// ─── Helper: Upload image to Meta via Resumable Upload API ───
+// Returns the upload handle (h) for use in template header_handle
+async function uploadImageToMeta(env, imageUrl) {
+  // Step 1: Fetch the image from the public URL
+  const imgResp = await fetch(imageUrl);
+  if (!imgResp.ok) throw new Error(`Failed to fetch image: ${imgResp.status} ${imgResp.statusText}`);
+
+  const imgBuffer = await imgResp.arrayBuffer();
+  const contentType = imgResp.headers.get("content-type") || "image/png";
+  const fileSize = imgBuffer.byteLength;
+  const fileName = imageUrl.split("/").pop().split("?")[0] || "header.png";
+
+  console.log(`[uploadImage] Fetched ${fileName}: ${fileSize} bytes, type: ${contentType}`);
+
+  // Step 2: Get app ID for the upload session
+  const appId = await getAppId(env);
+  if (!appId) throw new Error("Could not determine App ID from access token");
+
+  // Step 3: Create upload session
+  const sessionResp = await fetch(
+    `https://graph.facebook.com/v21.0/${appId}/uploads`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.WA_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        file_length: fileSize,
+        file_type: contentType,
+        file_name: fileName,
+      }),
+    }
+  );
+  const session = await sessionResp.json();
+  console.log("[uploadImage] Upload session:", JSON.stringify(session));
+
+  if (session.error) throw new Error(`Upload session failed: ${session.error.message}`);
+  const uploadSessionId = session.id;
+  if (!uploadSessionId) throw new Error("No upload session ID returned");
+
+  // Step 4: Upload binary data (NOTE: "OAuth" not "Bearer")
+  const uploadResp = await fetch(
+    `https://graph.facebook.com/v21.0/${uploadSessionId}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `OAuth ${env.WA_ACCESS_TOKEN}`,
+        file_offset: "0",
+        "Content-Type": "application/octet-stream",
+      },
+      body: imgBuffer,
+    }
+  );
+  const uploadResult = await uploadResp.json();
+  console.log("[uploadImage] Upload result:", JSON.stringify(uploadResult));
+
+  if (uploadResult.error) throw new Error(`File upload failed: ${uploadResult.error.message}`);
+  if (!uploadResult.h) throw new Error("No handle returned from upload");
+
+  return uploadResult.h;
+}
+
 // ─── Helper: send a WhatsApp message ────────────────────────
 async function sendWhatsApp(env, to, payload) {
   const resp = await fetch(
@@ -1226,16 +1299,23 @@ async function handlePost(request, env) {
       const { name, language, category, components } = body;
       if (!name || !components) return json({ error: "name and components required" }, 400);
 
-      // Fix header component: Meta requires header_handle, not header_url
-      const fixedComponents = components.map(c => {
+      // Process header: if IMAGE header has a URL, upload it to Meta first to get a handle
+      const fixedComponents = [];
+      for (const c of components) {
         if (c.type === "HEADER" && c.format === "IMAGE" && c.example?.header_url) {
-          return {
-            ...c,
-            example: { header_handle: c.example.header_url },
-          };
+          const imageUrl = c.example.header_url[0];
+          console.log("[create_template] Uploading header image:", imageUrl);
+          const handle = await uploadImageToMeta(env, imageUrl);
+          console.log("[create_template] Got handle:", handle.substring(0, 50) + "...");
+          fixedComponents.push({
+            type: "HEADER",
+            format: "IMAGE",
+            example: { header_handle: [handle] },
+          });
+        } else {
+          fixedComponents.push(c);
         }
-        return c;
-      });
+      }
 
       const payload = {
         name: name.toLowerCase().replace(/[^a-z0-9_]/g, "_"),
@@ -1244,7 +1324,7 @@ async function handlePost(request, env) {
         components: fixedComponents,
       };
 
-      console.log("[create_template] WABA:", wabaId, "Payload:", JSON.stringify(payload));
+      console.log("[create_template] WABA:", wabaId, "Payload keys:", Object.keys(payload));
 
       const result = await metaGraphAPI(env, `${wabaId}/message_templates`, "POST", payload);
 
@@ -1267,7 +1347,7 @@ async function handlePost(request, env) {
         category: result.category,
       });
     } catch (e) {
-      return json({ error: e.message }, 500);
+      return json({ error: e.message, stack: e.stack }, 500);
     }
   }
 
