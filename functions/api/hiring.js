@@ -640,7 +640,7 @@ async function handlePost(request, env) {
 
   // ── Create Campaign ──
   if (action === "create_campaign") {
-    const { name, template_name, role, salary, campaign_type, brand, category, source, city } = body;
+    const { name, template_name, role, salary, campaign_type, brand, category, source, city, state, batch } = body;
 
     // Create the campaign record
     const result = await db
@@ -666,12 +666,20 @@ async function handlePost(request, env) {
       const isPersonalized = (campaign_type || "personalized") === "personalized";
       const templateName = template_name || (isPersonalized ? "he_hiring_mar26" : "he_hiring_generic_mar26");
 
-      // Get available candidates for this role (optionally filtered by city)
+      // Get available candidates for this role (optionally filtered by city/state/batch)
       let candidateQuery = `SELECT * FROM candidates WHERE he_role = ? AND campaign_status = 'none'`;
       const candidateParams = [role];
       if (city) {
         candidateQuery += ` AND city = ?`;
         candidateParams.push(city);
+      }
+      if (state) {
+        candidateQuery += ` AND state = ?`;
+        candidateParams.push(state);
+      }
+      if (batch) {
+        candidateQuery += ` AND upload_batch = ?`;
+        candidateParams.push(batch);
       }
 
       const candidates = await db.prepare(candidateQuery).bind(...candidateParams).all();
