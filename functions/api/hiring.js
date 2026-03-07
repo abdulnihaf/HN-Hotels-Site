@@ -783,13 +783,16 @@ async function handlePost(request, env) {
 
   // ── Create Campaign ──
   if (action === "create_campaign") {
-    const { name, template_name, role, salary, campaign_type, brand, category, source, city, state, batch } = body;
+    const { name, template_name, role, salary, campaign_type, brand, category, source, city, state, batch, variable_mapping } = body;
+
+    // Store variable_mapping as JSON string if provided
+    const variableMappingJson = variable_mapping && variable_mapping.length > 0 ? JSON.stringify(variable_mapping) : null;
 
     // Create the campaign record
     const result = await db
       .prepare(
-        `INSERT INTO campaigns (name, template_name, role, salary, campaign_type, brand, category)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO campaigns (name, template_name, role, salary, campaign_type, brand, category, variable_mapping)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         name,
@@ -798,7 +801,8 @@ async function handlePost(request, env) {
         salary || "",
         campaign_type || "personalized",
         brand || "Hamza Express",
-        category || "hiring"
+        category || "hiring",
+        variableMappingJson
       )
       .run();
 
@@ -839,10 +843,20 @@ async function handlePost(request, env) {
            VALUES (?, ?, ?, ?, 'queued')`
         );
 
+        // Parse variable mapping if present
+        const mapping = variableMappingJson ? JSON.parse(variableMappingJson) : null;
+
         const msgBatch = rows.map((c) => {
           let params;
-          if (isPersonalized && c.has_personalization) {
-            // Personalized: first_name, current_title, current_company, role, salary
+          if (mapping && mapping.length > 0) {
+            // Use explicit variable mapping
+            params = mapping.map(col => {
+              if (col === 'role') return c.he_role || role || '';
+              if (col === 'salary') return c.he_salary || salary || '';
+              return c[col] || '';
+            });
+          } else if (isPersonalized && c.has_personalization) {
+            // Legacy: Personalized: first_name, current_title, current_company, role, salary
             params = [
               c.first_name || c.name || "",
               c.current_title || "",
@@ -851,7 +865,7 @@ async function handlePost(request, env) {
               c.he_salary || salary || "",
             ];
           } else {
-            // Generic: role, salary
+            // Legacy: Generic: role, salary
             params = [c.he_role || role, c.he_salary || salary || ""];
           }
 

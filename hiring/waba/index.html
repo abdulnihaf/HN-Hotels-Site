@@ -329,7 +329,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-1">Template</label>
-            <select name="template_name" id="template-select" class="w-full rounded-lg px-3 py-2 text-sm">
+            <select name="template_name" id="template-select" onchange="renderVariableMapping(this.value)" class="w-full rounded-lg px-3 py-2 text-sm">
               <option value="he_hiring_mar26">he_hiring_mar26 (Personal)</option>
               <option value="he_hiring_generic_mar26">he_hiring_generic_mar26 (Generic)</option>
             </select>
@@ -341,6 +341,13 @@
               <option value="generic">Generic</option>
             </select>
           </div>
+        </div>
+
+        <!-- Variable Mapping (populated dynamically when template is selected) -->
+        <div id="variable-mapping-section" class="hidden">
+          <label class="text-[10px] text-white/40 uppercase tracking-wider font-semibold block mb-2">Variable Mapping</label>
+          <div id="variable-mapping-preview" class="rounded-lg bg-white/[.02] border border-white/[.04] p-3 mb-2 text-xs text-white/40 leading-relaxed font-mono hidden"></div>
+          <div id="variable-mapping-rows" class="space-y-2"></div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -1490,6 +1497,7 @@ async function handleCreateCampaign(e) {
       state: f.state || "",
       city: f.city || "",
       batch: f.batch || "",
+      variable_mapping: getVariableMapping(),
     });
 
     if (!r.id) throw new Error(JSON.stringify(r));
@@ -2085,9 +2093,84 @@ async function loadTemplatesForDropdown() {
       opt.textContent = `${t.name} (${varCount} vars)`;
       select.appendChild(opt);
     });
+    // Render variable mapping for the initially selected template
+    renderVariableMapping(select.value);
   } catch (e) {
     console.warn("Could not load templates for dropdown:", e);
   }
+}
+
+// ── Variable Mapping for New Campaign ──
+const CANDIDATE_COLUMNS = [
+  { value: 'first_name', label: 'First Name' },
+  { value: 'name', label: 'Full Name' },
+  { value: 'current_title', label: 'Current Title' },
+  { value: 'current_company', label: 'Current Company' },
+  { value: 'previous_title', label: 'Previous Title' },
+  { value: 'previous_company', label: 'Previous Company' },
+  { value: 'he_role', label: 'HE Role (candidate)' },
+  { value: 'he_salary', label: 'HE Salary (candidate)' },
+  { value: 'role', label: 'Campaign Role' },
+  { value: 'salary', label: 'Campaign Salary' },
+  { value: 'city', label: 'City' },
+  { value: 'state', label: 'State' },
+  { value: 'experience', label: 'Experience' },
+  { value: 'education', label: 'Education' },
+  { value: 'skills', label: 'Skills' },
+  { value: 'age', label: 'Age' },
+  { value: 'gender', label: 'Gender' },
+];
+
+const VAR_DEFAULTS = ['first_name', 'he_role', 'he_salary', 'current_title', 'current_company'];
+
+function renderVariableMapping(templateName) {
+  const section = document.getElementById('variable-mapping-section');
+  const preview = document.getElementById('variable-mapping-preview');
+  const rows = document.getElementById('variable-mapping-rows');
+
+  if (!cachedTemplates || !templateName) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  const tpl = cachedTemplates.find(t => t.name === templateName);
+  if (!tpl) { section.classList.add('hidden'); return; }
+
+  const bodyComp = (tpl.components || []).find(c => c.type === 'BODY');
+  if (!bodyComp || !bodyComp.text) { section.classList.add('hidden'); return; }
+
+  const vars = bodyComp.text.match(/\{\{\d+\}\}/g) || [];
+  if (vars.length === 0) { section.classList.add('hidden'); return; }
+
+  // Show template body preview with highlighted variables
+  const highlighted = esc(bodyComp.text).replace(/\{\{(\d+)\}\}/g, '<span class="text-brand-400 font-semibold">{{$1}}</span>');
+  preview.innerHTML = highlighted;
+  preview.classList.remove('hidden');
+
+  // Build dropdown rows
+  rows.innerHTML = vars.map((v, i) => {
+    const varNum = v.replace(/[{}]/g, '');
+    const defaultCol = VAR_DEFAULTS[i] || '';
+    const options = CANDIDATE_COLUMNS.map(c =>
+      `<option value="${c.value}" ${c.value === defaultCol ? 'selected' : ''}>${c.label}</option>`
+    ).join('');
+    return `
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-brand-400 font-mono font-semibold w-10 shrink-0">{{${varNum}}}</span>
+        <svg class="w-3 h-3 text-white/15 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+        <select data-var-index="${i}" class="var-mapping-select flex-1 rounded-lg px-2.5 py-1.5 text-xs appearance-none bg-white/[.03] border border-white/[.06] focus:border-brand-500/30 transition">
+          ${options}
+        </select>
+      </div>`;
+  }).join('');
+
+  section.classList.remove('hidden');
+}
+
+function getVariableMapping() {
+  const selects = document.querySelectorAll('.var-mapping-select');
+  if (selects.length === 0) return null;
+  return Array.from(selects).map(s => s.value);
 }
 
 async function checkTemplateStatus(templateId, templateName) {
