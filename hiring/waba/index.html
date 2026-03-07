@@ -1975,7 +1975,10 @@ async function loadTemplatesList() {
   const container = document.getElementById("templates-list-body");
   container.innerHTML = '<div class="text-center py-8 text-white/20 text-xs">Loading templates from Meta...</div>';
   try {
-    const data = await apiGet({ action: "templates" });
+    const [data, mediaData] = await Promise.all([
+      apiGet({ action: "templates" }),
+      apiGet({ action: "template_media" }),
+    ]);
     if (data.error) {
       container.innerHTML = `
         <div class="text-center py-8">
@@ -1986,6 +1989,11 @@ async function loadTemplatesList() {
       return;
     }
     const templates = data.templates || [];
+    // Build media map: template_name → image_url
+    const mediaMap = {};
+    for (const m of (mediaData.media || [])) {
+      mediaMap[m.template_name] = m.header_image_url;
+    }
     cachedTemplates = templates;
     if (templates.length === 0) {
       container.innerHTML = '<div class="text-center py-8 text-white/20 text-xs">No templates found.</div>';
@@ -2019,8 +2027,11 @@ async function loadTemplatesList() {
 
     container.innerHTML = templates.map(t => {
       const bodyComp = (t.components || []).find(c => c.type === "BODY");
-      const hasHeader = (t.components || []).some(c => c.type === "HEADER");
+      const headerComp = (t.components || []).find(c => c.type === "HEADER");
+      const hasImageHeader = headerComp?.format === "IMAGE";
+      const hasHeader = !!headerComp;
       const hasButtons = (t.components || []).some(c => c.type === "BUTTONS");
+      const hasMedia = !!mediaMap[t.name];
       const bodyPreview = bodyComp?.text ? truncate(bodyComp.text, 100) : "—";
       const sc = statusColors[t.status] || statusColors.DISABLED;
 
@@ -2041,7 +2052,7 @@ async function loadTemplatesList() {
                 <span class="badge ${sc}">${t.status}</span>
                 <span class="badge bg-white/[.04] text-white/30">${t.category}</span>
                 <span class="badge bg-white/[.04] text-white/20">${t.language}</span>
-                ${hasHeader ? '<span class="badge bg-blue-500/10 text-blue-400">IMAGE</span>' : ""}
+                ${hasImageHeader ? `<span class="badge ${hasMedia ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}">IMAGE${hasMedia ? ' ✓' : ''}</span>` : hasHeader ? '<span class="badge bg-blue-500/10 text-blue-400">HEADER</span>' : ""}
                 ${hasButtons ? '<span class="badge bg-violet-500/10 text-violet-400">BUTTONS</span>' : ""}
                 ${qual ? `<span class="badge ${qual.class}">Quality: ${qual.text}</span>` : ""}
               </div>
@@ -2063,10 +2074,12 @@ async function loadTemplatesList() {
             </div>
             <div class="flex flex-col items-end gap-1.5 shrink-0">
               <span class="text-[10px] text-white/15 font-mono">${t.id}</span>
+              ${t.status === 'APPROVED' && hasImageHeader ? `<button onclick="toggleMediaForm('${esc(t.name)}')" class="text-[9px] ${hasMedia ? 'text-emerald-400/60 hover:text-emerald-400' : 'text-blue-400/60 hover:text-blue-400'} transition">${hasMedia ? 'Image ✓' : 'Set Image'}</button>` : ""}
               ${t.status === 'APPROVED' ? `<button onclick="toggleTestForm('${esc(t.name)}')" class="text-[9px] text-emerald-400/60 hover:text-emerald-400 transition">Test ▸</button>` : ""}
               ${t.status === 'REJECTED' ? `<button onclick="deleteAndResubmit('${esc(t.name)}')" class="text-[9px] text-orange-400/60 hover:text-orange-400 transition">Delete & Resubmit ↻</button>` : ""}
             </div>
           </div>
+          ${t.status === 'APPROVED' && hasImageHeader ? `<div id="media-form-${esc(t.name)}" class="hidden mt-2 pt-2 border-t border-white/[.04]"></div>` : ""}
           ${t.status === 'APPROVED' ? `<div id="test-form-${esc(t.name)}" class="hidden mt-2 pt-2 border-t border-white/[.04]"></div>` : ""}
         </div>`;
     }).join("");
@@ -2237,6 +2250,60 @@ async function deleteAndResubmit(templateName) {
   } catch (e) {
     alert("Error: " + e.message);
   }
+}
+
+function toggleMediaForm(templateName) {
+  const el = document.getElementById(`media-form-${templateName}`);
+  if (!el) return;
+  if (!el.classList.contains("hidden")) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+
+  // Fetch current URL and pre-fill
+  el.innerHTML = '<div class="text-[10px] text-white/20">Loading...</div>';
+  el.classList.remove("hidden");
+  apiGet({ action: "template_media", name: templateName }).then(data => {
+    const currentUrl = data.media?.header_image_url || "";
+    el.innerHTML = `
+      <div class="space-y-2">
+        <p class="text-[10px] text-white/30">Header image URL for <span class="font-mono text-white/50">${esc(templateName)}</span></p>
+        <input id="media-url-${esc(templateName)}" value="${esc(currentUrl)}" placeholder="https://example.com/image.jpg"
+               class="w-full rounded-lg px-2.5 py-1.5 text-xs font-mono placeholder-white/15 bg-white/[.04] border border-white/[.06]">
+        <div class="flex items-center gap-2">
+          <button onclick="saveTemplateMedia('${esc(templateName)}')"
+                  class="btn-primary text-[10px] px-3 py-1 rounded-lg transition" id="media-btn-${esc(templateName)}">Save</button>
+          <span id="media-status-${esc(templateName)}" class="text-[10px]"></span>
+        </div>
+      </div>`;
+  });
+}
+
+async function saveTemplateMedia(templateName) {
+  const url = document.getElementById(`media-url-${templateName}`)?.value?.trim();
+  const statusEl = document.getElementById(`media-status-${templateName}`);
+  const btn = document.getElementById(`media-btn-${templateName}`);
+
+  if (!url) { statusEl.textContent = "URL required"; statusEl.className = "text-[10px] text-red-400"; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+  statusEl.textContent = "";
+
+  try {
+    const result = await apiPost({ action: "set_template_media", template_name: templateName, image_url: url });
+    if (result.success) {
+      statusEl.textContent = "✓ Saved";
+      statusEl.className = "text-[10px] text-emerald-400";
+      // Refresh the templates list to update badges
+      setTimeout(() => loadTemplatesList(), 500);
+    } else {
+      statusEl.textContent = result.error || "Failed";
+      statusEl.className = "text-[10px] text-red-400";
+    }
+  } catch (e) {
+    statusEl.textContent = e.message;
+    statusEl.className = "text-[10px] text-red-400";
+  }
+  btn.disabled = false;
+  btn.textContent = "Save";
 }
 
 function toggleTestForm(templateName) {

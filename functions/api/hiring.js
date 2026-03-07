@@ -142,6 +142,14 @@ async function uploadImageToMeta(env, imageUrl) {
   return uploadResult.h;
 }
 
+// ─── Helper: get per-template header image URL from D1 ──────
+async function getTemplateMediaUrl(db, templateName) {
+  const row = await db.prepare(
+    `SELECT header_image_url FROM template_media WHERE template_name = ?`
+  ).bind(templateName).first();
+  return row?.header_image_url || null;
+}
+
 // ─── Helper: send a WhatsApp message ────────────────────────
 async function sendWhatsApp(env, to, payload) {
   const resp = await fetch(
@@ -709,6 +717,19 @@ async function handleGet(url, env) {
     }
   }
 
+  // ── Template media: per-template header image URLs ──
+  if (action === "template_media") {
+    const name = url.searchParams.get("name");
+    if (name) {
+      const row = await db.prepare(
+        `SELECT * FROM template_media WHERE template_name = ?`
+      ).bind(name).first();
+      return json({ media: row || null });
+    }
+    const rows = await db.prepare(`SELECT * FROM template_media ORDER BY updated_at DESC`).all();
+    return json({ media: rows.results || [] });
+  }
+
   return json({ error: "Unknown action" }, 400);
 }
 
@@ -1179,13 +1200,17 @@ async function handlePost(request, env) {
       }
     }
 
-    // Guard: if template has IMAGE/VIDEO/DOCUMENT header but no media ID configured
+    // Resolve per-template media: D1 URL first, then fallback to env.WA_MEDIA_ID
     const needsMedia = headerComp && ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerComp.format);
-    if (needsMedia && !env.WA_MEDIA_ID) {
-      return json({
-        error: `Template "${campaign.template_name}" has a ${headerComp.format} header but WA_MEDIA_ID secret is not configured. Upload the media and set the secret first.`,
-        template_info: { header: headerComp.format, body_vars: bodyVarCount, button_vars: urlButtonVarCount },
-      }, 400);
+    let templateMediaUrl = null;
+    if (needsMedia) {
+      templateMediaUrl = await getTemplateMediaUrl(db, campaign.template_name);
+      if (!templateMediaUrl && !env.WA_MEDIA_ID) {
+        return json({
+          error: `Template "${campaign.template_name}" has a ${headerComp.format} header but no image URL is set and WA_MEDIA_ID fallback is not configured. Set an image URL in Templates or configure WA_MEDIA_ID.`,
+          template_info: { header: headerComp.format, body_vars: bodyVarCount, button_vars: urlButtonVarCount },
+        }, 400);
+      }
     }
 
     let sentCount = 0;
@@ -1198,28 +1223,19 @@ async function handlePost(request, env) {
 
         // ── Header: only include if template has a HEADER component ──
         if (headerComp) {
-          if (headerComp.format === "IMAGE") {
-            const mediaId = env.WA_MEDIA_ID || "";
-            if (mediaId) {
+          if (["IMAGE", "VIDEO", "DOCUMENT"].includes(headerComp.format)) {
+            const mediaType = headerComp.format.toLowerCase();
+            if (templateMediaUrl) {
+              // Per-template URL from D1 — use link format
               components.push({
                 type: "header",
-                parameters: [{ type: "image", image: { id: mediaId } }],
+                parameters: [{ type: mediaType, [mediaType]: { link: templateMediaUrl } }],
               });
-            }
-          } else if (headerComp.format === "VIDEO") {
-            const mediaId = env.WA_MEDIA_ID || "";
-            if (mediaId) {
+            } else if (env.WA_MEDIA_ID) {
+              // Fallback to global media ID
               components.push({
                 type: "header",
-                parameters: [{ type: "video", video: { id: mediaId } }],
-              });
-            }
-          } else if (headerComp.format === "DOCUMENT") {
-            const mediaId = env.WA_MEDIA_ID || "";
-            if (mediaId) {
-              components.push({
-                type: "header",
-                parameters: [{ type: "document", document: { id: mediaId } }],
+                parameters: [{ type: mediaType, [mediaType]: { id: env.WA_MEDIA_ID } }],
               });
             }
           } else if (headerComp.format === "TEXT" && headerComp.text?.includes("{{")) {
@@ -1507,6 +1523,20 @@ async function handlePost(request, env) {
         }, 400);
       }
 
+      // Auto-save header image URL for per-template media resolution
+      const imageHeader = components.find(c => c.type === "HEADER" && c.format === "IMAGE" && c.example?.header_url);
+      if (imageHeader) {
+        try {
+          await db.prepare(
+            `INSERT INTO template_media (template_name, header_image_url, updated_at)
+             VALUES (?, ?, datetime('now'))
+             ON CONFLICT(template_name) DO UPDATE SET header_image_url = excluded.header_image_url, updated_at = datetime('now')`
+          ).bind(payload.name, imageHeader.example.header_url[0]).run();
+        } catch (e) {
+          console.error("[create_template] Failed to save template media:", e.message);
+        }
+      }
+
       return json({
         success: true,
         template_id: result.id,
@@ -1562,15 +1592,25 @@ async function handlePost(request, env) {
       const userParams = params || [];
       const components = [];
 
+      // Resolve per-template media
+      let testMediaUrl = null;
+      if (headerComp && ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerComp.format)) {
+        testMediaUrl = await getTemplateMediaUrl(db, template_name);
+      }
+
       // Header
       if (headerComp) {
         if (["IMAGE", "VIDEO", "DOCUMENT"].includes(headerComp.format)) {
-          const mediaId = env.WA_MEDIA_ID || "";
-          if (mediaId) {
-            const mediaType = headerComp.format.toLowerCase();
+          const mediaType = headerComp.format.toLowerCase();
+          if (testMediaUrl) {
             components.push({
               type: "header",
-              parameters: [{ type: mediaType, [mediaType]: { id: mediaId } }],
+              parameters: [{ type: mediaType, [mediaType]: { link: testMediaUrl } }],
+            });
+          } else if (env.WA_MEDIA_ID) {
+            components.push({
+              type: "header",
+              parameters: [{ type: mediaType, [mediaType]: { id: env.WA_MEDIA_ID } }],
             });
           }
         } else if (headerComp.format === "TEXT" && headerComp.text?.includes("{{")) {
@@ -1765,6 +1805,33 @@ async function handlePost(request, env) {
     } catch (e) {
       return json({ error: "Gemini API error: " + e.message }, 500);
     }
+  }
+
+  // ── Set per-template header image URL ──
+  if (action === "set_template_media") {
+    const { template_name, image_url } = body;
+    if (!template_name) return json({ error: "template_name required" }, 400);
+    if (!image_url) return json({ error: "image_url required" }, 400);
+
+    // Validate URL is an image via HEAD probe
+    try {
+      const probe = await fetch(image_url, { method: "HEAD" });
+      if (!probe.ok) return json({ error: `URL returned ${probe.status}` }, 400);
+      const ct = (probe.headers.get("content-type") || "").split(";")[0].trim();
+      if (!ct.startsWith("image/")) {
+        return json({ error: `URL is not an image (got ${ct}). Use a direct image link.` }, 400);
+      }
+    } catch (e) {
+      return json({ error: `Could not reach URL: ${e.message}` }, 400);
+    }
+
+    await db.prepare(
+      `INSERT INTO template_media (template_name, header_image_url, updated_at)
+       VALUES (?, ?, datetime('now'))
+       ON CONFLICT(template_name) DO UPDATE SET header_image_url = excluded.header_image_url, updated_at = datetime('now')`
+    ).bind(template_name, image_url).run();
+
+    return json({ success: true, template_name, image_url });
   }
 
   // ── Legacy webhook format (action: "webhook") ──
