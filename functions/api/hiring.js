@@ -75,9 +75,21 @@ async function uploadImageToMeta(env, imageUrl) {
   if (!imgResp.ok) throw new Error(`Failed to fetch image: ${imgResp.status} ${imgResp.statusText}`);
 
   const imgBuffer = await imgResp.arrayBuffer();
-  const contentType = imgResp.headers.get("content-type") || "image/png";
+  const rawContentType = imgResp.headers.get("content-type") || "image/png";
+  const contentType = rawContentType.split(";")[0].trim(); // strip charset params
   const fileSize = imgBuffer.byteLength;
-  const fileName = imageUrl.split("/").pop().split("?")[0] || "header.png";
+
+  // Validate: must be an actual image, not an HTML page (common with share links)
+  if (!contentType.startsWith("image/")) {
+    throw new Error(`URL did not return an image (got ${contentType}). Use a direct image link, not a share/preview page.`);
+  }
+  if (fileSize > 5 * 1024 * 1024) {
+    throw new Error(`Image too large (${(fileSize / 1024 / 1024).toFixed(1)}MB). Max 5MB.`);
+  }
+
+  // Safe filename: never parse from URL — use static name with correct extension
+  const ext = contentType.includes("png") ? "png" : contentType.includes("gif") ? "gif" : "jpg";
+  const fileName = `template-header.${ext}`;
 
   console.log(`[uploadImage] Fetched ${fileName}: ${fileSize} bytes, type: ${contentType}`);
 
@@ -1521,6 +1533,109 @@ async function handlePost(request, env) {
     }
   }
 
+  // ── Test WhatsApp Template — send single message ──
+  if (action === "test_template") {
+    try {
+      const { phone, template_name, params } = body;
+      if (!phone || !/^\d{10}$/.test(phone)) return json({ error: "Valid 10-digit phone required" }, 400);
+      if (!template_name) return json({ error: "template_name required" }, 400);
+
+      // Fetch template structure from Meta
+      const wabaId = await getWabaId(env);
+      if (!wabaId) return json({ error: "WABA_ID not found" }, 500);
+      const tplData = await metaGraphAPI(
+        env,
+        `${wabaId}/message_templates?name=${encodeURIComponent(template_name)}&fields=name,status,language,components`
+      );
+      const approved = (tplData.data || []).find(
+        (t) => t.status === "APPROVED" && t.name === template_name
+      );
+      if (!approved) return json({ error: `Template "${template_name}" not found or not APPROVED` }, 400);
+
+      const tplComponents = approved.components || [];
+      const tplLanguage = approved.language || "en";
+      const headerComp = tplComponents.find((c) => c.type === "HEADER");
+      const bodyComp = tplComponents.find((c) => c.type === "BODY");
+      const buttonComps = tplComponents.filter((c) => c.type === "BUTTONS");
+      const bodyVarCount = (bodyComp?.text?.match(/\{\{\d+\}\}/g) || []).length;
+
+      const userParams = params || [];
+      const components = [];
+
+      // Header
+      if (headerComp) {
+        if (["IMAGE", "VIDEO", "DOCUMENT"].includes(headerComp.format)) {
+          const mediaId = env.WA_MEDIA_ID || "";
+          if (mediaId) {
+            const mediaType = headerComp.format.toLowerCase();
+            components.push({
+              type: "header",
+              parameters: [{ type: mediaType, [mediaType]: { id: mediaId } }],
+            });
+          }
+        } else if (headerComp.format === "TEXT" && headerComp.text?.includes("{{")) {
+          components.push({
+            type: "header",
+            parameters: [{ type: "text", text: userParams[0] || "" }],
+          });
+        }
+      }
+
+      // Body
+      if (bodyVarCount > 0 && userParams.length > 0) {
+        const headerConsumed = (headerComp?.format === "TEXT" && headerComp.text?.includes("{{")) ? 1 : 0;
+        const bodyParams = userParams.slice(headerConsumed, headerConsumed + bodyVarCount);
+        if (bodyParams.length > 0) {
+          components.push({
+            type: "body",
+            parameters: bodyParams.map((p) => ({ type: "text", text: String(p || "") })),
+          });
+        }
+      }
+
+      // URL Button variables
+      let urlButtonVarCount = 0;
+      for (const bc of buttonComps) {
+        for (const btn of (bc.buttons || [])) {
+          if (btn.type === "URL" && btn.url?.includes("{{")) urlButtonVarCount++;
+        }
+      }
+      if (urlButtonVarCount > 0) {
+        const headerConsumed = (headerComp?.format === "TEXT" && headerComp.text?.includes("{{")) ? 1 : 0;
+        const buttonParams = userParams.slice(headerConsumed + bodyVarCount);
+        let btnIdx = 0;
+        for (const bc of buttonComps) {
+          for (let i = 0; i < (bc.buttons || []).length; i++) {
+            const btn = bc.buttons[i];
+            if (btn.type === "URL" && btn.url?.includes("{{")) {
+              components.push({
+                type: "button",
+                sub_type: "url",
+                index: String(i),
+                parameters: [{ type: "text", text: String(buttonParams[btnIdx] || "") }],
+              });
+              btnIdx++;
+            }
+          }
+        }
+      }
+
+      const result = await sendWhatsApp(env, `91${phone}`, {
+        type: "template",
+        template: {
+          name: template_name,
+          language: { code: tplLanguage },
+          components: components.length > 0 ? components : undefined,
+        },
+      });
+
+      if (result.error) return json({ success: false, error: result.error.message, meta_error: result.error }, 400);
+      return json({ success: true, response: result });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
   // ── Upload media for template header ──
   if (action === "upload_session") {
     try {
@@ -1534,7 +1649,7 @@ async function handlePost(request, env) {
       const result = await metaGraphAPI(env, `${appId}/uploads`, "POST", {
         file_length,
         file_type,
-        file_name: body.file_name || "template-header.jpg",
+        file_name: (body.file_name || "template-header.jpg").replace(/[\\/<@%]/g, "_"),
       });
       if (result.error) return json({ success: false, error: result.error.message }, 400);
       return json({ success: true, upload_session_id: result.id });

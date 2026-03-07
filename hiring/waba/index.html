@@ -2063,9 +2063,11 @@ async function loadTemplatesList() {
             </div>
             <div class="flex flex-col items-end gap-1.5 shrink-0">
               <span class="text-[10px] text-white/15 font-mono">${t.id}</span>
+              ${t.status === 'APPROVED' ? `<button onclick="toggleTestForm('${esc(t.name)}')" class="text-[9px] text-emerald-400/60 hover:text-emerald-400 transition">Test ▸</button>` : ""}
               ${t.status === 'REJECTED' ? `<button onclick="deleteAndResubmit('${esc(t.name)}')" class="text-[9px] text-orange-400/60 hover:text-orange-400 transition">Delete & Resubmit ↻</button>` : ""}
             </div>
           </div>
+          ${t.status === 'APPROVED' ? `<div id="test-form-${esc(t.name)}" class="hidden mt-2 pt-2 border-t border-white/[.04]"></div>` : ""}
         </div>`;
     }).join("");
   } catch (err) {
@@ -2235,6 +2237,92 @@ async function deleteAndResubmit(templateName) {
   } catch (e) {
     alert("Error: " + e.message);
   }
+}
+
+function toggleTestForm(templateName) {
+  const el = document.getElementById(`test-form-${templateName}`);
+  if (!el) return;
+  if (!el.classList.contains("hidden")) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+
+  // Find template from cache
+  const tpl = cachedTemplates?.find(t => t.name === templateName);
+  if (!tpl) return;
+
+  const bodyComp = (tpl.components || []).find(c => c.type === "BODY");
+  const bodyText = bodyComp?.text || "";
+  const varMatches = bodyText.match(/\{\{(\d+)\}\}/g) || [];
+  const uniqueVars = [...new Set(varMatches)].sort();
+
+  // Build context labels: extract text around each variable
+  const varLabels = uniqueVars.map(v => {
+    const idx = bodyText.indexOf(v);
+    const before = bodyText.substring(Math.max(0, idx - 30), idx).trim();
+    const after = bodyText.substring(idx + v.length, idx + v.length + 30).trim();
+    return `${before ? "..." + before + " " : ""}${v}${after ? " " + after + "..." : ""}`;
+  });
+
+  const varInputs = uniqueVars.length > 0
+    ? uniqueVars.map((v, i) => `
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] text-brand-400 font-mono w-8 shrink-0">${esc(v)}</span>
+        <input id="test-var-${esc(templateName)}-${i}" placeholder="${esc(varLabels[i])}"
+               class="flex-1 rounded-lg px-2.5 py-1.5 text-xs placeholder-white/15 bg-white/[.04] border border-white/[.06]">
+      </div>`).join("")
+    : '<p class="text-[10px] text-white/20">No variables in this template</p>';
+
+  el.innerHTML = `
+    <div class="space-y-2">
+      <div class="flex items-center gap-2">
+        <input id="test-phone-${esc(templateName)}" placeholder="10-digit phone" maxlength="10"
+               class="w-32 rounded-lg px-2.5 py-1.5 text-xs font-mono placeholder-white/15 bg-white/[.04] border border-white/[.06]">
+        <span class="text-[10px] text-white/20">+91</span>
+      </div>
+      ${varInputs}
+      <div class="flex items-center gap-2">
+        <button onclick="sendTestTemplate('${esc(templateName)}', ${uniqueVars.length})"
+                class="btn-primary text-[10px] px-3 py-1 rounded-lg transition" id="test-btn-${esc(templateName)}">Send Test</button>
+        <span id="test-status-${esc(templateName)}" class="text-[10px]"></span>
+      </div>
+    </div>`;
+  el.classList.remove("hidden");
+}
+
+async function sendTestTemplate(templateName, varCount) {
+  const phone = document.getElementById(`test-phone-${templateName}`)?.value?.trim();
+  const statusEl = document.getElementById(`test-status-${templateName}`);
+  const btn = document.getElementById(`test-btn-${templateName}`);
+
+  if (!phone || !/^\d{10}$/.test(phone)) {
+    statusEl.textContent = "Enter valid 10-digit phone";
+    statusEl.className = "text-[10px] text-red-400";
+    return;
+  }
+
+  const params = [];
+  for (let i = 0; i < varCount; i++) {
+    const val = document.getElementById(`test-var-${templateName}-${i}`)?.value?.trim() || "";
+    params.push(val);
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Sending...";
+  statusEl.textContent = "";
+
+  try {
+    const result = await apiPost({ action: "test_template", phone, template_name: templateName, params });
+    if (result.success) {
+      statusEl.textContent = "✓ Sent to +91" + phone;
+      statusEl.className = "text-[10px] text-emerald-400";
+    } else {
+      statusEl.textContent = result.error || "Failed";
+      statusEl.className = "text-[10px] text-red-400";
+    }
+  } catch (e) {
+    statusEl.textContent = e.message;
+    statusEl.className = "text-[10px] text-red-400";
+  }
+  btn.disabled = false;
+  btn.textContent = "Send Test";
 }
 
 function resetTemplateBuilder() {
