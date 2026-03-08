@@ -341,11 +341,51 @@ async function handleGet(url, env) {
     return json({ batches: rows.results });
   }
 
+  // ── Template send stats: campaign history + aggregate for a template ──
+  if (action === "template_send_stats") {
+    const templateName = url.searchParams.get("template_name");
+    if (!templateName) return json({ error: "template_name required" }, 400);
+
+    // Campaign history for this template
+    const campaigns = await db
+      .prepare(
+        `SELECT id, name, role, created_at, status, total_candidates, sent_count, delivered_count, read_count, failed_count
+         FROM campaigns WHERE template_name = ? ORDER BY created_at DESC`
+      )
+      .bind(templateName)
+      .all();
+
+    // Aggregate: unique phones successfully sent this template
+    const stats = await db
+      .prepare(
+        `SELECT
+           COUNT(DISTINCT m.phone) as unique_recipients,
+           COUNT(*) as total_messages,
+           SUM(CASE WHEN m.status IN ('sent','delivered','read') THEN 1 ELSE 0 END) as successful,
+           SUM(CASE WHEN m.status IN ('delivered','read') THEN 1 ELSE 0 END) as delivered,
+           SUM(CASE WHEN m.status = 'read' THEN 1 ELSE 0 END) as read_count,
+           SUM(CASE WHEN m.status = 'failed' THEN 1 ELSE 0 END) as failed
+         FROM messages m
+         JOIN campaigns camp ON camp.id = m.campaign_id
+         WHERE camp.template_name = ?`
+      )
+      .bind(templateName)
+      .first();
+
+    return json({
+      template_name: templateName,
+      campaigns: campaigns.results || [],
+      stats: stats || { unique_recipients: 0, total_messages: 0, successful: 0, delivered: 0, read_count: 0, failed: 0 },
+    });
+  }
+
   // ── Candidate stats: count by role, sent vs unsent, personalization tiers ──
   if (action === "candidate_stats") {
     const cityFilter = url.searchParams.get("city");
     const stateFilter = url.searchParams.get("state");
     const batchFilter = url.searchParams.get("batch");
+    const audience = url.searchParams.get("audience") || "all";
+    const templateName = url.searchParams.get("template_name") || "";
 
     const conditions = [];
     const roleParams = [];
@@ -357,7 +397,7 @@ async function handleGet(url, env) {
       .prepare(
         `SELECT he_role,
            COUNT(*) as total,
-           SUM(CASE WHEN campaign_status = 'none' THEN 1 ELSE 0 END) as available,
+           SUM(CASE WHEN campaign_status = 'none' THEN 1 ELSE 0 END) as never_contacted,
            SUM(CASE WHEN campaign_status != 'none' THEN 1 ELSE 0 END) as contacted,
            SUM(has_personalization) as with_personalization,
            SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND current_company IS NOT NULL AND current_company != '' THEN 1 ELSE 0 END) as tier_full,
@@ -372,10 +412,43 @@ async function handleGet(url, env) {
       .bind(...roleParams)
       .all();
 
+    // If audience is "not_this_template" and template_name provided, compute per-role not_sent_template counts
+    let notSentByRole = {};
+    if (audience === "not_this_template" && templateName) {
+      const notSentConditions = [...conditions];
+      const notSentParams = [...roleParams];
+      const notSentWhere = notSentConditions.length ? ` AND ${notSentConditions.join(' AND ')}` : ``;
+      const notSentRows = await db
+        .prepare(
+          `SELECT he_role, COUNT(*) as cnt FROM candidates
+           WHERE phone NOT IN (
+             SELECT m.phone FROM messages m
+             JOIN campaigns camp ON camp.id = m.campaign_id
+             WHERE camp.template_name = ? AND m.status != 'failed'
+           )${notSentWhere}
+           GROUP BY he_role`
+        )
+        .bind(templateName, ...notSentParams)
+        .all();
+      for (const r of (notSentRows.results || [])) {
+        notSentByRole[r.he_role] = r.cnt;
+      }
+    }
+
+    // Attach not_sent_template and targetable to each role
+    const roles = (rows.results || []).map(r => {
+      const notSent = notSentByRole[r.he_role] ?? r.total;
+      let targetable;
+      if (audience === "available") targetable = r.never_contacted;
+      else if (audience === "not_this_template" && templateName) targetable = notSent;
+      else targetable = r.total; // "all"
+      return { ...r, not_sent_template: notSent, targetable };
+    });
+
     const overall = await db
       .prepare(
         `SELECT COUNT(*) as total,
-           SUM(CASE WHEN campaign_status = 'none' THEN 1 ELSE 0 END) as available,
+           SUM(CASE WHEN campaign_status = 'none' THEN 1 ELSE 0 END) as never_contacted,
            SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND current_company IS NOT NULL AND current_company != '' THEN 1 ELSE 0 END) as tier_full,
            SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND current_title IS NOT NULL AND current_title != '' AND current_title != 'Not Available' AND (current_company IS NULL OR current_company = '') THEN 1 ELSE 0 END) as tier_name_title,
            SUM(CASE WHEN first_name IS NOT NULL AND first_name != '' AND (current_title IS NULL OR current_title = '' OR current_title = 'Not Available') THEN 1 ELSE 0 END) as tier_name_only,
@@ -386,9 +459,10 @@ async function handleGet(url, env) {
       .first();
 
     return json({
-      roles: rows.results,
+      roles,
+      audience,
       total_candidates: overall?.total || 0,
-      total_available: overall?.available || 0,
+      total_available: overall?.never_contacted || 0,
       tiers: {
         full: overall?.tier_full || 0,
         name_title: overall?.tier_name_title || 0,
@@ -816,7 +890,7 @@ async function handlePost(request, env) {
 
   // ── Create Campaign ──
   if (action === "create_campaign") {
-    const { name, template_name, role, salary, campaign_type, brand, category, source, city, state, batch, variable_mapping } = body;
+    const { name, template_name, role, salary, campaign_type, brand, category, source, city, state, batch, variable_mapping, audience } = body;
 
     // Store variable_mapping as JSON string if provided
     const variableMappingJson = variable_mapping && variable_mapping.length > 0 ? JSON.stringify(variable_mapping) : null;
@@ -846,9 +920,21 @@ async function handlePost(request, env) {
       const isPersonalized = (campaign_type || "personalized") === "personalized";
       const templateName = template_name || (isPersonalized ? "he_hiring_mar26" : "he_hiring_generic_mar26");
 
-      // Get available candidates (filtered by role/city/state/batch)
-      let candidateQuery = `SELECT * FROM candidates WHERE campaign_status = 'none'`;
+      // Get candidates filtered by audience mode + role/city/state/batch
+      const audienceMode = audience || "available";
+      let candidateQuery = `SELECT * FROM candidates WHERE 1=1`;
       const candidateParams = [];
+      if (audienceMode === "available") {
+        candidateQuery += ` AND campaign_status = 'none'`;
+      } else if (audienceMode === "not_this_template" && templateName) {
+        candidateQuery += ` AND phone NOT IN (
+          SELECT m.phone FROM messages m
+          JOIN campaigns camp ON camp.id = m.campaign_id
+          WHERE camp.template_name = ? AND m.status != 'failed'
+        )`;
+        candidateParams.push(templateName);
+      }
+      // audienceMode === "all" → no campaign_status filter
       if (role) {
         candidateQuery += ` AND he_role = ?`;
         candidateParams.push(role);
