@@ -4,10 +4,11 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
 # Secrets (set via: wrangler pages secret put <NAME>)
-# WA_ACCESS_TOKEN     — Meta WhatsApp Cloud API bearer token
-# WA_PHONE_ID         — WhatsApp phone number ID
-# DASHBOARD_KEY       — Dashboard authentication key
-# GEMINI_API_KEY      — Google Gemini API key for AI role mapping
+# WA_ACCESS_TOKEN        — Meta WhatsApp Cloud API bearer token
+# WA_PHONE_ID            — WhatsApp phone number ID
+# DASHBOARD_KEY          — Dashboard authentication key
+# GEMINI_API_KEY         — Google Gemini API key for AI role mapping
+# GOOGLE_PLACES_API_KEY  — Google Places API (New) for expansion intelligence
 
 [[d1_databases]]
 binding = "DB"

@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expansion Intelligence — HN Hotels</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#fef7ed',100:'#fdecd4',200:'#f9d5a8',400:'#f0a944',500:'#e8930c',600:'#c97508' },
+            surface: { 1:'#111118', 2:'#16161f', 3:'#1c1c27', 4:'#22222e' },
+            score: { hot:'#ef4444', warm:'#f59e0b', cold:'#3b82f6' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #0c0c14; color: #e4e4ed; }
+    .glass { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.04); backdrop-filter: blur(20px); }
+    input, select, textarea { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); color: #e4e4ed; }
+    input:focus, select:focus { border-color: rgba(232,147,12,.5); outline: none; box-shadow: 0 0 0 2px rgba(232,147,12,.1); }
+    .btn-primary { background:#e8930c; color:#0c0c14; font-weight:600; }
+    .btn-primary:hover:not(:disabled) { background:#f0a944; }
+    .btn-primary:disabled { opacity:0.4; cursor:not-allowed; }
+    .btn-ghost { background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.5); }
+    .btn-ghost:hover { background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.7); }
+    .btn-ghost.active { background:rgba(232,147,12,0.12); color:#f0a944; border-color:rgba(232,147,12,0.3); }
+    .scroll-y { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent; }
+    .scroll-y::-webkit-scrollbar { width: 3px; }
+    .scroll-y::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 3px; }
+    @keyframes pulse-bar { 0%,100%{opacity:0.6} 50%{opacity:1} }
+    .animate-pulse-bar { animation: pulse-bar 1.5s ease-in-out infinite; }
+    @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+    .shimmer { background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.02) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+    .chip { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer; transition:all 0.15s; border:1px solid transparent; }
+    .chip:hover { opacity:0.85; }
+    .chip-zone { background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.5); }
+    .chip-zone:hover, .chip-zone.active { background:rgba(232,147,12,0.12); color:#f0a944; border-color:rgba(232,147,12,0.2); }
+    .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+    .badge-hot { background:rgba(239,68,68,0.15); color:#f87171; }
+    .badge-warm { background:rgba(245,158,11,0.15); color:#fbbf24; }
+    .badge-cold { background:rgba(59,130,246,0.15); color:#60a5fa; }
+    .badge-he { background:rgba(168,85,247,0.15); color:#c084fc; }
+    .badge-nch { background:rgba(16,185,129,0.15); color:#34d399; }
+    .badge-available { background:rgba(16,185,129,0.15); color:#34d399; }
+    .badge-replaced { background:rgba(245,158,11,0.15); color:#fbbf24; }
+    .badge-temp { background:rgba(251,146,60,0.15); color:#fb923c; }
+    .badge-perm { background:rgba(239,68,68,0.15); color:#f87171; }
+    .lead-card { transition: all 0.15s; }
+    .lead-card:hover { border-color: rgba(255,255,255,0.08); transform: translateY(-1px); }
+    .stat-card { min-width: 0; }
+    select option { background:#1c1c27; color:#e4e4ed; }
+    a.link { color:#60a5fa; text-decoration:none; }
+    a.link:hover { text-decoration:underline; }
+  </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+<!-- ─── Nav Bar ──────────────────────────────────────── -->
+<nav class="sticky top-0 z-40 glass border-b border-white/[.03] px-4 sm:px-6 h-14 flex items-center justify-between">
+  <div class="flex items-center gap-2.5">
+    <div class="w-8 h-8 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
+    </div>
+    <div>
+      <h1 class="text-sm font-bold tracking-tight leading-none">Expansion Intelligence</h1>
+      <p class="text-[10px] text-white/25 leading-none mt-0.5">HN Hotels — Find Closed Spaces</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="/" class="btn-ghost text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition no-underline">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>
+      Home
+    </a>
+  </div>
+</nav>
+
+<!-- ─── Main Content ─────────────────────────────────── -->
+<main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+  <!-- ── Search Panel ── -->
+  <div class="glass rounded-xl p-5 space-y-4">
+    <!-- Location Input -->
+    <div>
+      <label class="text-xs text-white/40 font-medium mb-1.5 block">Search Location</label>
+      <div class="flex gap-2">
+        <div class="flex-1 relative">
+          <input id="locationInput" type="text" placeholder="Type any Bangalore area — e.g. Indiranagar, JP Nagar, Koramangala..."
+            class="w-full px-3 py-2.5 rounded-lg text-sm pr-20" onkeydown="if(event.key==='Enter')resolveLocation()">
+          <div id="geoStatus" class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/20"></div>
+        </div>
+        <button onclick="resolveLocation()" class="btn-primary px-4 py-2.5 rounded-lg text-sm flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          Locate
+        </button>
+      </div>
+    </div>
+
+    <!-- Preset Zones -->
+    <div>
+      <label class="text-xs text-white/40 font-medium mb-1.5 block">Quick Zones <span class="text-white/20">(click to select)</span></label>
+      <div id="zoneChips" class="flex flex-wrap gap-1.5"></div>
+    </div>
+
+    <!-- Radius + Types -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="text-xs text-white/40 font-medium mb-1.5 block">Search Radius</label>
+        <div class="flex gap-1.5" id="radiusGroup">
+          <button onclick="setRadius(1000)" data-r="1000" class="chip chip-zone">1 km</button>
+          <button onclick="setRadius(2000)" data-r="2000" class="chip chip-zone">2 km</button>
+          <button onclick="setRadius(3000)" data-r="3000" class="chip chip-zone active">3 km</button>
+          <button onclick="setRadius(5000)" data-r="5000" class="chip chip-zone">5 km</button>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-white/40 font-medium mb-1.5 block">Space Types</label>
+        <div class="flex flex-wrap gap-1.5" id="typeChecks">
+          <label class="chip chip-zone cursor-pointer"><input type="checkbox" value="restaurant" checked class="hidden type-cb"><span>Restaurant</span></label>
+          <label class="chip chip-zone cursor-pointer"><input type="checkbox" value="cafe" checked class="hidden type-cb"><span>Cafe</span></label>
+          <label class="chip chip-zone cursor-pointer"><input type="checkbox" value="bakery" checked class="hidden type-cb"><span>Bakery</span></label>
+          <label class="chip chip-zone cursor-pointer"><input type="checkbox" value="bar" checked class="hidden type-cb"><span>Bar / Pub</span></label>
+          <label class="chip chip-zone cursor-pointer"><input type="checkbox" value="meal_takeaway" checked class="hidden type-cb"><span>Takeaway</span></label>
+          <label class="chip chip-zone cursor-pointer"><input type="checkbox" value="meal_delivery" checked class="hidden type-cb"><span>Cloud Kitchen</span></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scan Button -->
+    <div class="flex items-center gap-3">
+      <button id="scanBtn" onclick="startScan()" disabled
+        class="btn-primary px-6 py-2.5 rounded-lg text-sm flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.651a3.75 3.75 0 010-5.303m5.304 0a3.75 3.75 0 010 5.303m-7.425 2.122a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.808-3.808-9.98 0-13.788m13.788 0c3.808 3.808 3.808 9.98 0 13.788M12 12h.008v.008H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
+        Scan for Closed Spaces
+      </button>
+      <span id="scanHint" class="text-xs text-white/20">Select a location first</span>
+    </div>
+  </div>
+
+  <!-- ── Progress ── -->
+  <div id="progressPanel" class="glass rounded-xl p-4 hidden">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></div>
+      <span id="progressLabel" class="text-sm font-medium animate-pulse-bar">Scanning...</span>
+    </div>
+    <div class="w-full h-1.5 rounded-full bg-white/[.04] overflow-hidden">
+      <div id="progressBar" class="h-full bg-brand-500 rounded-full transition-all duration-300" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- ── Summary Stats ── -->
+  <div id="summaryPanel" class="hidden">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
+      <div class="stat-card glass rounded-lg p-3 text-center">
+        <div id="statTotal" class="text-2xl font-extrabold text-white">0</div>
+        <div class="text-[10px] text-white/30 mt-0.5">Total Closed</div>
+      </div>
+      <div class="stat-card glass rounded-lg p-3 text-center">
+        <div id="statAvailable" class="text-2xl font-extrabold text-emerald-400">0</div>
+        <div class="text-[10px] text-white/30 mt-0.5">Space Available</div>
+      </div>
+      <div class="stat-card glass rounded-lg p-3 text-center">
+        <div id="statHot" class="text-2xl font-extrabold text-red-400">0</div>
+        <div class="text-[10px] text-white/30 mt-0.5">HOT Leads</div>
+      </div>
+      <div class="stat-card glass rounded-lg p-3 text-center">
+        <div id="statWarm" class="text-2xl font-extrabold text-amber-400">0</div>
+        <div class="text-[10px] text-white/30 mt-0.5">WARM Leads</div>
+      </div>
+      <div class="stat-card glass rounded-lg p-3 text-center">
+        <div id="statCold" class="text-2xl font-extrabold text-blue-400">0</div>
+        <div class="text-[10px] text-white/30 mt-0.5">COLD Leads</div>
+      </div>
+      <div class="stat-card glass rounded-lg p-3 text-center">
+        <div id="statHE" class="text-2xl font-extrabold text-purple-400">0</div>
+        <div class="text-[10px] text-white/30 mt-0.5">HE Fit</div>
+      </div>
+      <div class="stat-card glass rounded-lg p-3 text-center">
+        <div id="statNCH" class="text-2xl font-extrabold text-emerald-400">0</div>
+        <div class="text-[10px] text-white/30 mt-0.5">NCH Fit</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Filters & Sort ── -->
+  <div id="filterBar" class="glass rounded-xl p-3 hidden">
+    <div class="flex flex-wrap items-center gap-3">
+      <!-- Score Filter -->
+      <div class="flex items-center gap-1">
+        <span class="text-[10px] text-white/25 mr-1">Score:</span>
+        <button onclick="setFilter('score','all')" data-f="score-all" class="chip chip-zone active text-[10px]">All</button>
+        <button onclick="setFilter('score','HOT')" data-f="score-HOT" class="chip chip-zone text-[10px]">HOT</button>
+        <button onclick="setFilter('score','WARM')" data-f="score-WARM" class="chip chip-zone text-[10px]">WARM</button>
+        <button onclick="setFilter('score','COLD')" data-f="score-COLD" class="chip chip-zone text-[10px]">COLD</button>
+      </div>
+      <!-- Brand Filter -->
+      <div class="flex items-center gap-1">
+        <span class="text-[10px] text-white/25 mr-1">Brand:</span>
+        <button onclick="setFilter('brand','all')" data-f="brand-all" class="chip chip-zone active text-[10px]">All</button>
+        <button onclick="setFilter('brand','HE Fit')" data-f="brand-HE Fit" class="chip chip-zone text-[10px]">HE</button>
+        <button onclick="setFilter('brand','NCH Fit')" data-f="brand-NCH Fit" class="chip chip-zone text-[10px]">NCH</button>
+      </div>
+      <!-- Availability Filter -->
+      <div class="flex items-center gap-1">
+        <span class="text-[10px] text-white/25 mr-1">Space:</span>
+        <button onclick="setFilter('avail','all')" data-f="avail-all" class="chip chip-zone active text-[10px]">All</button>
+        <button onclick="setFilter('avail','available')" data-f="avail-available" class="chip chip-zone text-[10px]">Available</button>
+        <button onclick="setFilter('avail','replaced')" data-f="avail-replaced" class="chip chip-zone text-[10px]">Replaced</button>
+      </div>
+      <!-- Sort -->
+      <div class="flex items-center gap-1 ml-auto">
+        <span class="text-[10px] text-white/25 mr-1">Sort:</span>
+        <select id="sortSelect" onchange="applyFilters()" class="text-[11px] px-2 py-1 rounded-lg">
+          <option value="score">Score (HOT first)</option>
+          <option value="rating">Rating (highest)</option>
+          <option value="reviews">Reviews (most)</option>
+          <option value="recent">Recently Closed</option>
+        </select>
+      </div>
+      <!-- Export -->
+      <button onclick="exportCSV()" class="btn-ghost text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+        Export CSV
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Results Grid ── -->
+  <div id="resultsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+
+  <!-- ── Empty State ── -->
+  <div id="emptyState" class="hidden glass rounded-xl p-12 text-center">
+    <div class="text-4xl mb-3 opacity-30">&#x1F50D;</div>
+    <p class="text-white/30 text-sm" id="emptyMsg">Search a location to find closed restaurant spaces for expansion</p>
+  </div>
+
+</main>
+
+<script>
+// ─── State ──────────────────────────────────────────────
+let resolvedLocation = null;  // { lat, lng, name, formatted_address }
+let selectedRadius = 3000;
+let allLeads = [];
+let filteredLeads = [];
+let filters = { score: 'all', brand: 'all', avail: 'all' };
+let presetZones = [];
+
+const API = '/api/expansion-scan';
+
+// ─── Init ───────────────────────────────────────────────
+async function init() {
+  // Load presets
+  try {
+    const res = await fetch(`${API}?action=presets`);
+    const data = await res.json();
+    if (data.ok) presetZones = data.zones;
+  } catch { /* use empty */ }
+  renderZoneChips();
+  initTypeChips();
+}
+
+function renderZoneChips() {
+  const container = document.getElementById('zoneChips');
+  container.innerHTML = presetZones.map(z =>
+    `<button onclick="selectZone('${z.name}',${z.lat},${z.lng})" class="chip chip-zone" data-zone="${z.name}">${z.name}</button>`
+  ).join('');
+}
+
+function initTypeChips() {
+  document.querySelectorAll('.type-cb').forEach(cb => {
+    const label = cb.closest('label');
+    if (cb.checked) label.classList.add('active');
+    cb.addEventListener('change', () => {
+      label.classList.toggle('active', cb.checked);
+    });
+    label.addEventListener('click', (e) => {
+      if (e.target === cb) return;
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event('change'));
+    });
+  });
+}
+
+function getSelectedTypes() {
+  return [...document.querySelectorAll('.type-cb:checked')].map(cb => cb.value);
+}
+
+// ─── Location Resolution ────────────────────────────────
+function selectZone(name, lat, lng) {
+  document.getElementById('locationInput').value = name;
+  document.querySelectorAll('[data-zone]').forEach(el => el.classList.remove('active'));
+  document.querySelector(`[data-zone="${name}"]`)?.classList.add('active');
+  resolvedLocation = { lat, lng, name, formatted_address: name + ', Bangalore' };
+  showGeoStatus(`${lat.toFixed(4)}, ${lng.toFixed(4)}`, true);
+  enableScan();
+}
+
+async function resolveLocation() {
+  const q = document.getElementById('locationInput').value.trim();
+  if (!q) return;
+
+  showGeoStatus('Locating...', false);
+  document.querySelectorAll('[data-zone]').forEach(el => {
+    el.classList.toggle('active', el.dataset.zone.toLowerCase() === q.toLowerCase());
+  });
+
+  try {
+    const res = await fetch(`${API}?action=geocode&q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (data.ok) {
+      resolvedLocation = { lat: data.lat, lng: data.lng, name: data.name || q, formatted_address: data.formatted_address };
+      showGeoStatus(`${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`, true);
+      enableScan();
+    } else {
+      showGeoStatus('Not found', false);
+      resolvedLocation = null;
+      disableScan();
+    }
+  } catch (e) {
+    showGeoStatus('Error', false);
+  }
+}
+
+function showGeoStatus(text, ok) {
+  const el = document.getElementById('geoStatus');
+  el.textContent = text;
+  el.className = `absolute right-2 top-1/2 -translate-y-1/2 text-[10px] ${ok ? 'text-emerald-400' : 'text-white/30'}`;
+}
+
+function setRadius(r) {
+  selectedRadius = r;
+  document.querySelectorAll('#radiusGroup button').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.r) === r);
+  });
+}
+
+function enableScan() {
+  document.getElementById('scanBtn').disabled = false;
+  document.getElementById('scanHint').textContent = `Ready — ${resolvedLocation.name}`;
+  document.getElementById('scanHint').classList.add('text-emerald-400/50');
+  document.getElementById('scanHint').classList.remove('text-white/20');
+}
+
+function disableScan() {
+  document.getElementById('scanBtn').disabled = true;
+  document.getElementById('scanHint').textContent = 'Select a location first';
+  document.getElementById('scanHint').classList.remove('text-emerald-400/50');
+  document.getElementById('scanHint').classList.add('text-white/20');
+}
+
+// ─── Scan Execution ─────────────────────────────────────
+async function startScan() {
+  if (!resolvedLocation) return;
+
+  const types = getSelectedTypes();
+  if (types.length === 0) { alert('Select at least one space type'); return; }
+
+  // Show progress
+  document.getElementById('progressPanel').classList.remove('hidden');
+  document.getElementById('summaryPanel').classList.add('hidden');
+  document.getElementById('filterBar').classList.add('hidden');
+  document.getElementById('resultsGrid').innerHTML = '';
+  document.getElementById('emptyState').classList.add('hidden');
+  document.getElementById('scanBtn').disabled = true;
+  setProgress(5, 'Starting scan...');
+
+  // Animate progress while waiting
+  let pct = 5;
+  const ticker = setInterval(() => {
+    pct = Math.min(pct + 2, 90);
+    const phase = pct < 25 ? 'Nearby Search — finding all places...'
+      : pct < 50 ? 'Text Search — casting wider net for closed spots...'
+      : pct < 70 ? 'Fetching details & reviews...'
+      : 'Checking if spaces have been replaced...';
+    setProgress(pct, phase);
+  }, 800);
+
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'scan',
+        lat: resolvedLocation.lat,
+        lng: resolvedLocation.lng,
+        radius: selectedRadius,
+        types,
+        location_name: resolvedLocation.name,
+      }),
+    });
+    const data = await res.json();
+    clearInterval(ticker);
+
+    if (data.ok) {
+      setProgress(100, 'Done!');
+      allLeads = data.leads;
+      renderSummary(data.summary);
+      applyFilters();
+      setTimeout(() => {
+        document.getElementById('progressPanel').classList.add('hidden');
+      }, 600);
+    } else {
+      clearInterval(ticker);
+      setProgress(0, `Error: ${data.error}`);
+    }
+  } catch (e) {
+    clearInterval(ticker);
+    setProgress(0, `Network error: ${e.message}`);
+  }
+
+  document.getElementById('scanBtn').disabled = false;
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = label;
+}
+
+// ─── Summary ────────────────────────────────────────────
+function renderSummary(s) {
+  document.getElementById('summaryPanel').classList.remove('hidden');
+  document.getElementById('filterBar').classList.remove('hidden');
+  document.getElementById('statTotal').textContent = s.total;
+  document.getElementById('statAvailable').textContent = s.space_available;
+  document.getElementById('statHot').textContent = s.by_score.HOT || 0;
+  document.getElementById('statWarm').textContent = s.by_score.WARM || 0;
+  document.getElementById('statCold').textContent = s.by_score.COLD || 0;
+  document.getElementById('statHE').textContent = s.by_brand['HE Fit'] || 0;
+  document.getElementById('statNCH').textContent = (s.by_brand['NCH Fit'] || 0) + (s.by_brand['HE + NCH'] || 0);
+}
+
+// ─── Filters & Sort ─────────────────────────────────────
+function setFilter(group, value) {
+  filters[group] = value;
+  document.querySelectorAll(`[data-f^="${group}-"]`).forEach(b => {
+    b.classList.toggle('active', b.dataset.f === `${group}-${value}`);
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  let leads = [...allLeads];
+
+  // Filter
+  if (filters.score !== 'all') leads = leads.filter(l => l.score === filters.score);
+  if (filters.brand !== 'all') leads = leads.filter(l => l.brand_fit.includes(filters.brand.replace(' Fit', '')));
+  if (filters.avail === 'available') leads = leads.filter(l => l.space_available);
+  if (filters.avail === 'replaced') leads = leads.filter(l => !l.space_available);
+
+  // Sort
+  const sort = document.getElementById('sortSelect').value;
+  const scoreOrd = { HOT: 0, WARM: 1, COLD: 2 };
+  if (sort === 'score') {
+    leads.sort((a, b) => {
+      const s = scoreOrd[a.score] - scoreOrd[b.score];
+      if (s !== 0) return s;
+      if (a.space_available !== b.space_available) return a.space_available ? -1 : 1;
+      return (b.rating || 0) - (a.rating || 0);
+    });
+  } else if (sort === 'rating') {
+    leads.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  } else if (sort === 'reviews') {
+    leads.sort((a, b) => b.user_ratings_total - a.user_ratings_total);
+  } else if (sort === 'recent') {
+    leads.sort((a, b) => (a.days_closed || 9999) - (b.days_closed || 9999));
+  }
+
+  filteredLeads = leads;
+  renderCards(leads);
+}
+
+// ─── Card Rendering ─────────────────────────────────────
+function renderCards(leads) {
+  const grid = document.getElementById('resultsGrid');
+  const empty = document.getElementById('emptyState');
+
+  if (leads.length === 0) {
+    grid.innerHTML = '';
+    empty.classList.remove('hidden');
+    document.getElementById('emptyMsg').textContent = allLeads.length > 0
+      ? 'No leads match current filters'
+      : 'No closed spaces found in this area. Try a wider radius or different location.';
+    return;
+  }
+
+  empty.classList.add('hidden');
+  grid.innerHTML = leads.map(l => cardHTML(l)).join('');
+}
+
+function cardHTML(l) {
+  const scoreBadge = `<span class="badge badge-${l.score.toLowerCase()}">${l.score}</span>`;
+  const brandBadge = l.brand_fit.includes('NCH')
+    ? `<span class="badge badge-nch">${l.brand_fit}</span>`
+    : `<span class="badge badge-he">${l.brand_fit}</span>`;
+  const statusBadge = l.business_status === 'CLOSED_TEMPORARILY'
+    ? `<span class="badge badge-temp">Temporarily Closed</span>`
+    : `<span class="badge badge-perm">Permanently Closed</span>`;
+  const availBadge = l.space_available
+    ? `<span class="badge badge-available">Space Likely Available</span>`
+    : `<span class="badge badge-replaced">Replaced</span>`;
+
+  // Closure duration
+  let closureInfo = '';
+  if (l.days_closed) {
+    const months = Math.floor(l.days_closed / 30);
+    closureInfo = months > 0 ? `~${months} month${months > 1 ? 's' : ''} ago` : `${l.days_closed} days ago`;
+  }
+
+  // Stars
+  const stars = l.rating ? `${'★'.repeat(Math.round(l.rating))}${'☆'.repeat(5 - Math.round(l.rating))}` : '';
+
+  // Replacement info
+  let replacedInfo = '';
+  if (l.replaced_by) {
+    replacedInfo = `
+      <div class="mt-2 p-2 rounded-lg bg-amber-500/[.06] border border-amber-500/10">
+        <div class="text-[10px] text-amber-400/60 font-medium mb-0.5">New Business at This Location</div>
+        <div class="text-xs text-amber-300">${esc(l.replaced_by.name)}</div>
+        ${l.replaced_by.rating ? `<div class="text-[10px] text-white/30">Rating: ${l.replaced_by.rating}</div>` : ''}
+      </div>`;
+  }
+
+  // Zone chips
+  const zones = (l.nearby_zones || []).map(z => `<span class="text-[9px] px-1.5 py-0.5 rounded bg-white/[.04] text-white/30">${z}</span>`).join(' ');
+
+  return `
+    <div class="lead-card glass rounded-xl p-4 space-y-3 border border-transparent">
+      <!-- Top badges -->
+      <div class="flex flex-wrap items-center gap-1.5">
+        ${scoreBadge} ${brandBadge} ${statusBadge} ${availBadge}
+      </div>
+
+      <!-- Name + Address -->
+      <div>
+        <h3 class="text-sm font-bold text-white leading-tight">${esc(l.name)}</h3>
+        <p class="text-xs text-white/35 mt-1 leading-relaxed">${esc(l.address)}</p>
+      </div>
+
+      <!-- Key Metrics -->
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div class="p-1.5 rounded-lg bg-white/[.02]">
+          <div class="text-xs font-bold text-white">${l.rating || '—'}</div>
+          <div class="text-[9px] text-white/25">${stars}</div>
+        </div>
+        <div class="p-1.5 rounded-lg bg-white/[.02]">
+          <div class="text-xs font-bold text-white">${l.user_ratings_total.toLocaleString()}</div>
+          <div class="text-[9px] text-white/25">Reviews</div>
+        </div>
+        <div class="p-1.5 rounded-lg bg-white/[.02]">
+          <div class="text-xs font-bold text-white">${closureInfo || '—'}</div>
+          <div class="text-[9px] text-white/25">Last Active</div>
+        </div>
+      </div>
+
+      <!-- Zones -->
+      ${zones ? `<div class="flex flex-wrap gap-1">${zones}</div>` : ''}
+
+      <!-- Phone -->
+      ${l.phone ? `
+      <div class="flex items-center gap-2 text-xs">
+        <svg class="w-3 h-3 text-white/25" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+        <a href="tel:${l.phone}" class="link">${l.phone}</a>
+        <span class="text-[9px] text-white/20">Landlord / Previous Operator</span>
+      </div>` : ''}
+
+      <!-- Replaced info -->
+      ${replacedInfo}
+
+      <!-- Action Links -->
+      <div class="flex flex-wrap gap-2 pt-1 border-t border-white/[.04]">
+        <a href="${l.google_maps_url}" target="_blank" rel="noopener"
+          class="btn-ghost text-[10px] px-2.5 py-1.5 rounded-lg flex items-center gap-1 no-underline">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
+          View on Maps
+        </a>
+        <a href="${l.nobroker_url}" target="_blank" rel="noopener"
+          class="btn-ghost text-[10px] px-2.5 py-1.5 rounded-lg flex items-center gap-1 no-underline">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 4.5H21"/></svg>
+          NoBroker Rentals
+        </a>
+        ${l.phone ? `
+        <a href="https://wa.me/91${l.phone.replace(/\D/g,'').replace(/^91/,'')}" target="_blank" rel="noopener"
+          class="btn-ghost text-[10px] px-2.5 py-1.5 rounded-lg flex items-center gap-1 no-underline">
+          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+          WhatsApp
+        </a>` : ''}
+      </div>
+    </div>`;
+}
+
+function esc(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── CSV Export ─────────────────────────────────────────
+function exportCSV() {
+  if (!filteredLeads.length) return;
+  const headers = ['Name','Status','Score','Brand Fit','Space Available','Address','Zones','Rating','Reviews','Phone','Last Active','Replaced By','Google Maps','NoBroker URL'];
+  const rows = filteredLeads.map(l => [
+    `"${(l.name||'').replace(/"/g,'""')}"`,
+    l.business_status,
+    l.score,
+    l.brand_fit,
+    l.space_available ? 'Yes' : 'No',
+    `"${(l.address||'').replace(/"/g,'""')}"`,
+    `"${(l.nearby_zones||[]).join(', ')}"`,
+    l.rating || '',
+    l.user_ratings_total,
+    l.phone || '',
+    l.last_review_date || '',
+    l.replaced_by ? `"${l.replaced_by.name}"` : '',
+    l.google_maps_url,
+    l.nobroker_url,
+  ].join(','));
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `expansion_leads_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Boot ───────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hn-hotels-dev",
+      "runtimeExecutable": "/usr/local/bin/node",
+      "runtimeArgs": ["/usr/local/bin/wrangler", "pages", "dev", ".", "--port", "8788", "--compatibility-date", "2024-09-23", "--compatibility-flag", "nodejs_compat"],
+      "env": { "GOOGLE_PLACES_API_KEY": "AIzaSyDfA9fiGDcv-TCKuHVy664_5XukpZFj-Do" },
+      "port": 8788
+    }
+  ]
+}
