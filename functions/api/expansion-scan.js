@@ -2,12 +2,14 @@
  * HN Hotels — Expansion Intelligence API
  * Cloudflare Pages Function
  *
- * Scans Google Places API (New) for closed restaurant/cafe spaces
- * that could be leased for Hamza Express or Nawabi Chai House outlets.
+ * Two-source expansion scouting:
+ *   1. NoBroker — commercial rental listings (primary, most accurate)
+ *   2. Google Places — closed business markers (supplementary signal)
  *
  * Endpoints:
  *   GET  /api/expansion-scan?action=geocode&q=Indiranagar   → lat/lng lookup
  *   GET  /api/expansion-scan?action=presets                  → preset zone list
+ *   POST /api/expansion-scan { action:"scan_nobroker", lat, lng, location_name }
  *   POST /api/expansion-scan { action:"scan", lat, lng, radius, types, location_name }
  */
 
@@ -343,6 +345,154 @@ async function runScan(apiKey, { lat, lng, radius, types, location_name }) {
   return { leads, summary, search: { lat, lng, radius: radiusM, types: searchTypes, location_name: locName } };
 }
 
+// ─── NoBroker Scan Engine ─────────────────────────────────
+const NB_API = "https://www.nobroker.in/api/v3/multi/property/COMMERCIAL_RENT/filter";
+const NB_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Accept": "application/json",
+};
+
+// Food-service suitable property types on NoBroker
+const NB_FOOD_TYPES = new Set(["SHOP", "RESTAURANT_CAFE", "SHOWROOM", "OTHER_BUSINESS"]);
+
+function buildSearchParam(lat, lng, placeName) {
+  const payload = [{ lat, lon: lng, placeId: "", placeName: placeName || "Search Area", showMap: false }];
+  // btoa for base64 in Workers
+  return btoa(JSON.stringify(payload));
+}
+
+function classifyNBBrandFit(rent, sqft, propType) {
+  // NCH: smaller spaces, lower rent — chai cafe footprint ~500 sqft
+  // HE: larger spaces, full restaurant — ~1000 sqft
+  if (propType === "RESTAURANT_CAFE") return rent <= 50000 ? "HE + NCH" : "HE Fit";
+  if (sqft > 0 && sqft <= 600 && rent <= 50000) return "NCH Fit";
+  if (sqft > 800 || rent > 50000) return "HE Fit";
+  return "HE + NCH"; // Unknown size — could work for either
+}
+
+function nbListingURL(id) {
+  return `https://www.nobroker.in/property/commercial/rent/bangalore/${id}`;
+}
+
+async function runNoBrokerScan({ lat, lng, location_name }) {
+  const searchParam = buildSearchParam(lat, lng, location_name);
+  const allListings = [];
+  let page = 1;
+  const maxPages = 8; // ~200 listings max, avoid excessive calls
+
+  while (page <= maxPages) {
+    const url = `${NB_API}?pageNo=${page}&searchParam=${searchParam}&city=bangalore`;
+    try {
+      const res = await fetch(url, { headers: NB_HEADERS });
+      const data = await res.json();
+      if (data.status !== "success" || !data.data || data.data.length === 0) break;
+      allListings.push(...data.data);
+      // Check if we've fetched all
+      const totalCount = data.otherParams?.total_count || 0;
+      if (allListings.length >= totalCount) break;
+      page++;
+      await sleep(200);
+    } catch (e) {
+      break;
+    }
+  }
+
+  // Filter for food-service suitable property types
+  const leads = [];
+  for (const p of allListings) {
+    const propType = p.commercialPropertyType || "";
+    if (!NB_FOOD_TYPES.has(propType)) continue;
+
+    const rent = p.rent || 0;
+    const sqft = p.propertySize || 0;
+    const deposit = p.deposit || 0;
+    const pLat = p.latitude;
+    const pLng = p.longitude;
+    const situation = p.aea__?.CURRENT_SITUATION?.display_value || "";
+    const directions = p.aea__?.DIRECTIONS?.value || "";
+    const furnishing = p.furnishingDesc || "";
+    const floor = p.floorNo;
+    const totalFloor = p.totalFloor;
+    const negotiable = p.negotiable || false;
+    const availFrom = p.availableFrom ? new Date(p.availableFrom).toISOString().slice(0, 10) : null;
+    const lastUpdated = p.lastUpdateDate ? new Date(p.lastUpdateDate).toISOString().slice(0, 10) : null;
+    const photos = (p.photos || []).slice(0, 4).map(ph => {
+      const thumb = ph.imagesMap?.thumbnail || ph.imagesMap?.medium || "";
+      return thumb ? `https:${thumb}` : null;
+    }).filter(Boolean);
+
+    const nearbyZones = matchesZones(pLat, pLng, 3);
+    const brandFit = classifyNBBrandFit(rent, sqft, propType);
+
+    // Score: Vacant + recent listing = HOT, etc.
+    let score = "WARM";
+    if (situation === "Vacant") score = "HOT";
+    else if (situation === "Own Business") score = "COLD"; // owner running own business, may not actually vacate
+    // Boost if listing is very fresh (updated in last 7 days)
+    if (lastUpdated) {
+      const daysSince = (Date.now() - new Date(lastUpdated).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSince <= 7 && score !== "HOT") score = "HOT";
+    }
+
+    leads.push({
+      source: "nobroker",
+      id: p.id,
+      title: p.propertyTitle || "",
+      property_type: propType,
+      property_type_label: propType.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase()),
+      sqft,
+      rent,
+      deposit,
+      brand_fit: brandFit,
+      score,
+      situation, // Vacant, Own Business, or empty
+      address: p.street || "",
+      locality: p.localityTruncated || "",
+      owner_name: p.ownerName || "",
+      furnishing,
+      floor: floor != null ? floor : null,
+      total_floor: totalFloor || null,
+      negotiable,
+      available_from: availFrom,
+      last_updated: lastUpdated,
+      photos,
+      lat: pLat,
+      lng: pLng,
+      nearby_zones: nearbyZones,
+      nobroker_url: nbListingURL(p.id),
+      google_maps_url: `https://www.google.com/maps?q=${pLat},${pLng}`,
+      parking: p.parkingDesc || "",
+    });
+  }
+
+  // Sort: HOT first, then by rent ascending (cheapest first for budget consciousness)
+  const ord = { HOT: 0, WARM: 1, COLD: 2 };
+  leads.sort((a, b) => {
+    const s = ord[a.score] - ord[b.score];
+    if (s !== 0) return s;
+    return a.rent - b.rent;
+  });
+
+  // Summary
+  const summary = {
+    total: leads.length,
+    total_commercial: allListings.length,
+    pages_fetched: page,
+    by_score: { HOT: 0, WARM: 0, COLD: 0 },
+    by_type: {},
+    by_brand: {},
+    avg_rent: leads.length ? Math.round(leads.reduce((s, l) => s + l.rent, 0) / leads.length) : 0,
+    vacant_count: leads.filter(l => l.situation === "Vacant").length,
+  };
+  for (const l of leads) {
+    summary.by_score[l.score] = (summary.by_score[l.score] || 0) + 1;
+    summary.by_type[l.property_type_label] = (summary.by_type[l.property_type_label] || 0) + 1;
+    summary.by_brand[l.brand_fit] = (summary.by_brand[l.brand_fit] || 0) + 1;
+  }
+
+  return { leads, summary, search: { lat, lng, location_name } };
+}
+
 // ─── Request Handler ───────────────────────────────────────
 export async function onRequest(context) {
   const { request, env } = context;
@@ -381,6 +531,14 @@ export async function onRequest(context) {
     // ── POST handlers ──
     if (request.method === "POST") {
       const body = await request.json();
+
+      if (body.action === "scan_nobroker") {
+        if (!body.lat || !body.lng) {
+          return json({ ok: false, error: "lat and lng are required" }, 400);
+        }
+        const result = await runNoBrokerScan(body);
+        return json({ ok: true, ...result });
+      }
 
       if (body.action === "scan") {
         if (!body.lat || !body.lng) {
