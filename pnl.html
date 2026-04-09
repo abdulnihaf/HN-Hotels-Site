@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HN Group — Surgical P&L Structure</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #6366f1;
+    --green: #22c55e;
+    --red: #ef4444;
+    --orange: #f97316;
+    --yellow: #eab308;
+    --purple: #a855f7;
+    --teal: #14b8a6;
+    --blue: #3b82f6;
+    --pink: #ec4899;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .header {
+    padding: 40px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #12121a 0%, #0a0a0f 100%);
+  }
+
+  .header h1 {
+    font-size: 36px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+
+  .header p { color: var(--text-dim); font-size: 16px; }
+
+  .hierarchy-label {
+    display: inline-block;
+    margin-top: 16px;
+    padding: 8px 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 13px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  /* Navigation */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10, 10, 15, 0.9);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 4px;
+    padding: 8px 20px;
+    overflow-x: auto;
+  }
+
+  .nav a {
+    padding: 8px 16px;
+    border-radius: 8px;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .nav a:hover { background: var(--surface2); color: var(--text); }
+  .nav a.rev { border-left: 3px solid var(--green); }
+  .nav a.cogs { border-left: 3px solid var(--purple); }
+  .nav a.labor { border-left: 3px solid var(--blue); }
+  .nav a.opex { border-left: 3px solid var(--orange); }
+  .nav a.mkt { border-left: 3px solid var(--yellow); }
+  .nav a.tax { border-left: 3px solid var(--red); }
+  .nav a.unit { border-left: 3px solid var(--teal); }
+  .nav a.leak { border-left: 3px solid var(--pink); }
+
+  /* Master Tree */
+  .master-tree {
+    padding: 60px 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+  }
+
+  .tree-node {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 32px;
+    text-align: center;
+    position: relative;
+  }
+
+  .tree-node.root {
+    background: linear-gradient(135deg, #1a1a3e, #2a1a4e);
+    border-color: var(--accent);
+    font-size: 20px;
+    font-weight: 800;
+  }
+
+  .tree-node .label { font-weight: 700; font-size: 16px; }
+  .tree-node .sub { color: var(--text-dim); font-size: 12px; margin-top: 4px; }
+
+  .tree-row {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .connector {
+    width: 2px;
+    height: 30px;
+    background: var(--border);
+    margin: 0 auto;
+  }
+
+  .branch-line {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    position: relative;
+  }
+
+  .branch-line::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 25%;
+    right: 25%;
+    height: 2px;
+    background: var(--border);
+  }
+
+  /* Sections */
+  .section {
+    padding: 60px 40px;
+    border-top: 1px solid var(--border);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .section-num {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 20px;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .section-title { font-size: 28px; font-weight: 800; }
+  .section-target {
+    margin-left: auto;
+    padding: 6px 16px;
+    background: var(--surface2);
+    border-radius: 20px;
+    font-size: 13px;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+
+  /* Category Grid */
+  .cat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+  }
+
+  .cat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .cat-card:hover { border-color: var(--accent); }
+
+  .cat-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cat-card-header .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .cat-card-header .title {
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .cat-card-body { padding: 16px 20px; }
+
+  .cat-item {
+    padding: 6px 0;
+    font-size: 13px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .cat-item::before {
+    content: '>';
+    color: var(--accent);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .cat-item.alert { color: var(--red); }
+  .cat-item.alert::before { content: '!'; color: var(--red); }
+
+  .cat-item.money { color: var(--green); }
+  .cat-item.money::before { content: '$'; color: var(--green); }
+
+  /* Channel Comparison Table */
+  .channel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin-top: 20px;
+  }
+
+  .channel-table th, .channel-table td {
+    padding: 12px 16px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .channel-table th {
+    background: var(--surface2);
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  .channel-table td:first-child, .channel-table th:first-child {
+    text-align: left;
+    font-weight: 600;
+  }
+
+  .channel-table tr:hover { background: var(--surface2); }
+
+  .positive { color: var(--green); }
+  .negative { color: var(--red); }
+  .warning { color: var(--orange); }
+  .highlight-row { background: var(--surface2); }
+  .highlight-row td { font-weight: 700; }
+
+  /* Leakage Cards */
+  .leak-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    border-left: 4px solid var(--red);
+  }
+
+  .leak-card h4 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .leak-signal {
+    padding: 8px 12px;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--red);
+    margin-bottom: 8px;
+  }
+
+  .leak-fix {
+    padding: 8px 12px;
+    background: rgba(34, 197, 94, 0.1);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--green);
+  }
+
+  .leak-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 20px;
+  }
+
+  /* KPI Grid */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+  }
+
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .kpi-card .kpi-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .kpi-card .kpi-formula {
+    font-size: 13px;
+    font-family: monospace;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .kpi-card .kpi-target {
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  /* GST Box */
+  .gst-box {
+    background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.05));
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 20px;
+  }
+
+  .gst-box h4 { color: var(--red); margin-bottom: 12px; }
+
+  .gst-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(239,68,68,0.1);
+    font-size: 14px;
+  }
+
+  .gst-row .lost { color: var(--red); font-weight: 700; }
+  .gst-row .saved { color: var(--green); font-weight: 700; }
+
+  /* AI Section */
+  .ai-section {
+    background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(168,85,247,0.1));
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 16px;
+    padding: 32px;
+    margin-top: 40px;
+  }
+
+  .ai-section h3 {
+    font-size: 24px;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 20px;
+  }
+
+  .ai-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .ai-card {
+    background: rgba(99,102,241,0.05);
+    border: 1px solid rgba(99,102,241,0.2);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .ai-card h5 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--accent);
+  }
+
+  .ai-card p { font-size: 13px; color: var(--text-dim); }
+
+  .alert-example {
+    background: var(--surface);
+    border-left: 3px solid var(--orange);
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 8px;
+    font-style: italic;
+  }
+
+  /* Menu Engineering */
+  .matrix-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 4px;
+    max-width: 700px;
+    margin: 20px auto;
+    aspect-ratio: 1.4;
+  }
+
+  .matrix-cell {
+    padding: 24px;
+    border-radius: 12px;
+    text-align: center;
+  }
+
+  .matrix-cell h4 { font-size: 18px; margin-bottom: 8px; }
+  .matrix-cell p { font-size: 13px; opacity: 0.8; }
+
+  .matrix-cell.star { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); }
+  .matrix-cell.puzzle { background: rgba(234,179,8,0.15); border: 1px solid rgba(234,179,8,0.3); }
+  .matrix-cell.plow { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); }
+  .matrix-cell.dog { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); }
+
+  .matrix-labels {
+    text-align: center;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    margin: 8px 0;
+  }
+
+  @media (max-width: 768px) {
+    .cat-grid, .leak-grid, .ai-grid, .kpi-grid { grid-template-columns: 1fr; }
+    .section { padding: 40px 20px; }
+    .header { padding: 30px 20px; }
+    .header h1 { font-size: 24px; }
+    .channel-table { font-size: 12px; }
+    .channel-table th, .channel-table td { padding: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <h1>HN Group — Surgical P&L Structure</h1>
+  <p>Hamza Express (QSR) + Nawabi Chai House (Chai & Snacks)</p>
+  <div class="hierarchy-label">GROUP → BRAND → OUTLET → CHANNEL</div>
+</div>
+
+<!-- NAV -->
+<div class="nav">
+  <a href="#master" class="rev">Master Tree</a>
+  <a href="#revenue" class="rev">1. Revenue</a>
+  <a href="#cogs" class="cogs">2. COGS</a>
+  <a href="#labor" class="labor">3. Labor</a>
+  <a href="#opex" class="opex">4. OPEX</a>
+  <a href="#marketing" class="mkt">5. Marketing</a>
+  <a href="#taxes" class="tax">6. Taxes</a>
+  <a href="#unit" class="unit">Unit Economics</a>
+  <a href="#leakage" class="leak">Leakage Zones</a>
+  <a href="#kpi">KPIs</a>
+  <a href="#ai">AI Layer</a>
+</div>
+
+<!-- MASTER TREE -->
+<div id="master" class="master-tree">
+  <div class="tree-node root">
+    <div class="label">HN GROUP</div>
+    <div class="sub">Parent Entity</div>
+  </div>
+  <div class="connector"></div>
+  <div class="tree-row">
+    <div class="tree-node" style="border-color: var(--blue);">
+      <div class="label" style="color: var(--blue);">HAMZA EXPRESS</div>
+      <div class="sub">QSR — Target: 10-15% Net Margin</div>
+    </div>
+    <div class="tree-node" style="border-color: var(--teal);">
+      <div class="label" style="color: var(--teal);">NAWABI CHAI HOUSE</div>
+      <div class="sub">Chai & Snacks — Target: 15-20% Net Margin</div>
+    </div>
+  </div>
+  <div class="connector"></div>
+  <div class="tree-row">
+    <div class="tree-node" style="border-color: var(--green);"><div class="label">1. Revenue</div></div>
+    <div class="tree-node" style="border-color: var(--purple);"><div class="label">2. COGS</div></div>
+    <div class="tree-node" style="border-color: var(--blue);"><div class="label">3. Labor</div></div>
+    <div class="tree-node" style="border-color: var(--orange);"><div class="label">4. OPEX</div></div>
+    <div class="tree-node" style="border-color: var(--yellow);"><div class="label">5. Marketing</div></div>
+    <div class="tree-node" style="border-color: var(--red);"><div class="label">6. Taxes</div></div>
+    <div class="tree-node" style="border-color: var(--text-dim);"><div class="label">7. Depreciation</div></div>
+    <div class="tree-node" style="border-color: var(--text-dim);"><div class="label">8. Finance</div></div>
+  </div>
+</div>
+
+<!-- 1. REVENUE -->
+<div id="revenue" class="section">
+  <div class="section-header">
+    <div class="section-num" style="background: var(--green);">1</div>
+    <div class="section-title">Revenue</div>
+    <div class="section-target">Track by: Channel + Category + Day</div>
+  </div>
+  <div class="cat-grid">
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--green);"></div>
+        <div class="title">1.1 Dine-in</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Food sales (by menu category)</div>
+        <div class="cat-item">Beverage sales (chai, juices, water)</div>
+        <div class="cat-item">Add-on / upsell revenue</div>
+        <div class="cat-item">GST collected (5%)</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--blue);"></div>
+        <div class="title">1.2 Takeaway / Counter</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Food sales (tracked separately from dine-in)</div>
+        <div class="cat-item">Beverage sales</div>
+        <div class="cat-item">GST collected (5%)</div>
+      </div>
+    </div>
+    <div class="cat-card" style="border-color: rgba(239,68,68,0.3);">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--red);"></div>
+        <div class="title">1.3 Zomato Delivery</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item money">Gross Order Value (GOV)</div>
+        <div class="cat-item alert">(-) Commission 18-25%</div>
+        <div class="cat-item alert">(-) GST on commission 18%</div>
+        <div class="cat-item alert">(-) Payment gateway ~1.5%</div>
+        <div class="cat-item alert">(-) TDS 1%</div>
+        <div class="cat-item alert">(-) Restaurant-funded discounts</div>
+        <div class="cat-item alert">(-) Refund deductions (customer complaints)</div>
+        <div class="cat-item alert">(-) Adjustment / penalty charges</div>
+        <div class="cat-item money">(+) Platform promo reimbursements</div>
+        <div class="cat-item" style="color: var(--yellow); font-weight: 700;">= NET ZOMATO PAYOUT</div>
+        <div class="cat-item alert">Reconciliation variance (payout vs calculated)</div>
+      </div>
+    </div>
+    <div class="cat-card" style="border-color: rgba(249,115,22,0.3);">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--orange);"></div>
+        <div class="title">1.4 Swiggy Delivery</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Same structure as Zomato (mirror all 11 lines)</div>
+        <div class="cat-item alert">Commission 17-25%</div>
+        <div class="cat-item" style="color: var(--yellow); font-weight: 700;">= NET SWIGGY PAYOUT</div>
+        <div class="cat-item alert">72% of restaurants report payout discrepancies</div>
+      </div>
+    </div>
+    <div class="cat-card" style="border-color: rgba(34,197,94,0.3);">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--green);"></div>
+        <div class="title">1.5 Direct Delivery</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item money">Gross order value (100% retained)</div>
+        <div class="cat-item">(-) Payment gateway 1.5-2%</div>
+        <div class="cat-item">(-) Delivery rider cost</div>
+        <div class="cat-item money" style="font-weight:700;">= NET DIRECT REVENUE (highest margin)</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--purple);"></div>
+        <div class="title">1.6 Catering / Bulk</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Corporate / office orders</div>
+        <div class="cat-item">Event catering</div>
+        <div class="cat-item">Party packs / bulk takeaway</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--text-dim);"></div>
+        <div class="title">1.7 Other Revenue</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Franchise fees (future)</div>
+        <div class="cat-item">Merchandise sales</div>
+        <div class="cat-item">Supplier co-branding income</div>
+        <div class="cat-item">Loyalty wallet float</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 2. COGS -->
+<div id="cogs" class="section">
+  <div class="section-header">
+    <div class="section-num" style="background: var(--purple);">2</div>
+    <div class="section-title">Cost of Goods Sold</div>
+    <div class="section-target">HE: 28-33% | NCH: 20-28%</div>
+  </div>
+  <div class="cat-grid">
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="dot" style="background: #ef4444;"></div>
+        <div class="title">2.1 Proteins</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Chicken (whole, boneless, marinated)</div>
+        <div class="cat-item">Mutton</div>
+        <div class="cat-item">Eggs</div>
+        <div class="cat-item">Paneer</div>
+        <div class="cat-item">Fish / Prawns</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="dot" style="background: #60a5fa;"></div>
+        <div class="title">2.2 Dairy</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Milk (critical for NCH)</div>
+        <div class="cat-item">Cream / Cheese</div>
+        <div class="cat-item">Butter / Ghee</div>
+        <div class="cat-item">Curd / Yogurt</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="dot" style="background: #fbbf24;"></div>
+        <div class="title">2.3 Grains & Staples</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Basmati rice</div>
+        <div class="cat-item">Flour (atta / maida)</div>
+        <div class="cat-item">Cooking oil</div>
+        <div class="cat-item">Bread / Buns</div>
+        <div class="cat-item">Pulses / Lentils</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="dot" style="background: #34d399;"></div>
+        <div class="title">2.4 Vegetables & Fruits</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Daily perishables (onion, tomato, potato)</div>
+        <div class="cat-item">Seasonal vegetables</div>
+        <div class="cat-item">Ginger, garlic, lemon</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="dot" style="background: #f97316;"></div>
+        <div class="title">2.5 Spices & Condiments</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Whole spices</div>
+        <div class="cat-item">Ground spices / masala blends</div>
+        <div class="cat-item">Sauces & chutneys</div>
+        <div class="cat-item">Salt, sugar, food colour</div>
+      </div>
+    </div>
+    <div class="cat-card" style="border-color: rgba(20,184,166,0.3);">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--teal);"></div>
+        <div class="title">2.6 Tea & Coffee (NCH Critical)</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Tea leaves (different grades)</div>
+        <div class="cat-item">Tea masala blend</div>
+        <div class="cat-item">Coffee powder / beans</div>
+        <div class="cat-item">Sugar / Jaggery</div>
+        <div class="cat-item">Milk allocated to tea production</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="dot" style="background: #a78bfa;"></div>
+        <div class="title">2.7 Packaging</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Dine-in disposables (plates, cups, napkins)</div>
+        <div class="cat-item">Takeaway containers (boxes, bags, foil)</div>
+        <div class="cat-item">Delivery packaging (tamper-evident, carriers)</div>
+        <div class="cat-item">Branded packaging premium</div>
+        <div class="cat-item">Chai cups — cutting / regular / kulhad</div>
+      </div>
+    </div>
+    <div class="cat-card" style="border-color: rgba(239,68,68,0.3);">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--red);"></div>
+        <div class="title">2.8 Wastage & Spoilage (Target: &lt;3%)</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item alert">Pre-production (trimming, peeling, defrost loss)</div>
+        <div class="cat-item alert">Production (overcooked, wrong orders, dropped)</div>
+        <div class="cat-item alert">Post-production (unsold, expired prepared food)</div>
+        <div class="cat-item alert">Perishable spoilage (veg, dairy, bread)</div>
+      </div>
+    </div>
+    <div class="cat-card" style="border-color: rgba(239,68,68,0.3);">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--red);"></div>
+        <div class="title">2.9 Inventory Shrinkage (Avg: 2-6%)</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item alert">Theft / pilferage</div>
+        <div class="cat-item alert">Measurement / portioning errors</div>
+        <div class="cat-item alert">Receiving errors (short deliveries)</div>
+        <div class="cat-item alert">Administrative / recording errors</div>
+      </div>
+    </div>
+    <div class="cat-card" style="border-color: rgba(249,115,22,0.3);">
+      <div class="cat-card-header">
+        <div class="dot" style="background: var(--orange);"></div>
+        <div class="title">2.10 Supplier Pricing Variance</div>
+      </div>
+      <div class="cat-card-body">
+        <div class="cat-item">Actual vs budgeted cost per ingredient</div>
+        <div class="cat-item warning">Seasonal swings (tomato, onion, oil: 50-200%)</div>
+        <div class="cat-item">Bulk vs emergency purchase gap</div>
+        <div class="cat-item">Vendor discounts / credits</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 3. LABOR -->
+<div id="labor" class="section">
+  <div class="section-header">
+    <div class="section-num" style="background: var(--blue);">3</div>
+    <div class="section-title">Labor Costs</div>
+    <div class="section-target">HE: 20-28% | NCH: 15-22%</div>
+  </div>
+  <div class="cat-grid">
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--blue);"></div><div class="title">3.1 Kitchen Staff</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Head Cook / Chef</div>
+        <div class="cat-item">Line Cooks / Assistants</div>
+        <div class="cat-item">Prep Cooks</div>
+        <div class="cat-item">Dishwashers / Kitchen Helpers</div>
+        <div class="cat-item">Chai Maker / Barista (NCH)</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--teal);"></div><div class="title">3.2 Front-of-House</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Cashiers / Counter staff</div>
+        <div class="cat-item">Servers (dine-in)</div>
+        <div class="cat-item">Cleaners / Housekeeping</div>
+        <div class="cat-item">Security</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--purple);"></div><div class="title">3.3 Management</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Store Manager</div>
+        <div class="cat-item">Shift Supervisors</div>
+        <div class="cat-item">Area Manager (multi-outlet)</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--green);"></div><div class="title">3.4 Delivery Staff</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">In-house riders (salary)</div>
+        <div class="cat-item">Per-delivery incentives</div>
+        <div class="cat-item">Fuel / vehicle maintenance</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--orange);"></div><div class="title">3.5 Variable Labor</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Overtime pay</div>
+        <div class="cat-item">Festival / peak bonuses</div>
+        <div class="cat-item">Performance incentives</div>
+        <div class="cat-item">Temporary / casual staff</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--red);"></div><div class="title">3.6 Statutory & Benefits</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">PF (Provident Fund) — employer share</div>
+        <div class="cat-item">ESI (Employee State Insurance)</div>
+        <div class="cat-item">Gratuity provision</div>
+        <div class="cat-item alert">Staff meals (free food — TRACK the cost!)</div>
+        <div class="cat-item">Uniforms</div>
+        <div class="cat-item">Training / onboarding / FSSAI</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4. OPEX -->
+<div id="opex" class="section">
+  <div class="section-header">
+    <div class="section-num" style="background: var(--orange);">4</div>
+    <div class="section-title">Operating Expenses</div>
+    <div class="section-target">Target: 10-20% of Revenue</div>
+  </div>
+  <div class="cat-grid">
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--purple);"></div><div class="title">4.1 Rent & Occupancy</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Monthly rent (fixed)</div>
+        <div class="cat-item">CAM charges</div>
+        <div class="cat-item">Security deposit amortization</div>
+        <div class="cat-item">Property tax</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--yellow);"></div><div class="title">4.2 Utilities</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Electricity (cooking, AC, fridge, lighting)</div>
+        <div class="cat-item">Water</div>
+        <div class="cat-item">Gas / LPG cylinders</div>
+        <div class="cat-item">Internet / WiFi</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--orange);"></div><div class="title">4.3 Equipment & Maintenance</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Kitchen equipment repair</div>
+        <div class="cat-item">Refrigeration maintenance</div>
+        <div class="cat-item">AC / HVAC</div>
+        <div class="cat-item">Small equipment replacement</div>
+        <div class="cat-item">AMC contracts</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--blue);"></div><div class="title">4.4 Technology</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">POS system (Petpooja / Posist)</div>
+        <div class="cat-item">Inventory management software</div>
+        <div class="cat-item">Aggregator tablets / devices</div>
+        <div class="cat-item">Accounting (Tally / Zoho)</div>
+        <div class="cat-item">Payment gateway fees 1.5-2%</div>
+        <div class="cat-item">Internal tools / custom software</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--teal);"></div><div class="title">4.5 Insurance</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Fire insurance</div>
+        <div class="cat-item">General liability</div>
+        <div class="cat-item">Product liability</div>
+        <div class="cat-item">Workers compensation</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--red);"></div><div class="title">4.6 Licenses & Compliance</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">FSSAI license</div>
+        <div class="cat-item">Trade license</div>
+        <div class="cat-item">Fire NOC</div>
+        <div class="cat-item">Health / Eating house license</div>
+        <div class="cat-item">Municipal corporation license</div>
+        <div class="cat-item">Shop & Establishment Act</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--text-dim);"></div><div class="title">4.7 Miscellaneous</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Pest control</div>
+        <div class="cat-item">Laundry (uniforms)</div>
+        <div class="cat-item">Cleaning supplies</div>
+        <div class="cat-item">Transportation (market runs)</div>
+        <div class="cat-item">Printing (menus, bills, labels)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 5. MARKETING -->
+<div id="marketing" class="section">
+  <div class="section-header">
+    <div class="section-num" style="background: var(--yellow); color: #000;">5</div>
+    <div class="section-title">Marketing & Sales</div>
+    <div class="section-target">Target: 3-8% of Revenue</div>
+  </div>
+  <div class="cat-grid">
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--red);"></div><div class="title">5.1 Aggregator Marketing</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Zomato promoted listings / ads</div>
+        <div class="cat-item">Swiggy priority placement</div>
+        <div class="cat-item alert">Restaurant-funded discounts on aggregators</div>
+        <div class="cat-item">First-order discount programs</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--blue);"></div><div class="title">5.2 Digital Marketing</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Instagram / Facebook ads</div>
+        <div class="cat-item">Google Ads / Local SEO</div>
+        <div class="cat-item">WhatsApp Business marketing</div>
+        <div class="cat-item">YouTube / Reels production</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--orange);"></div><div class="title">5.3 Offline + Influencer</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Leaflets / flyer distribution</div>
+        <div class="cat-item">Signage and branding</div>
+        <div class="cat-item">Local food influencer collabs</div>
+        <div class="cat-item">Food photography sessions</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--green);"></div><div class="title">5.4 Promotions & Loyalty</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Direct channel coupons / offers</div>
+        <div class="cat-item">Loyalty points liability</div>
+        <div class="cat-item">Referral program costs</div>
+        <div class="cat-item">Festival / seasonal promos</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 6. TAXES -->
+<div id="taxes" class="section">
+  <div class="section-header">
+    <div class="section-num" style="background: var(--red);">6</div>
+    <div class="section-title">Taxes & Statutory</div>
+  </div>
+  <div class="cat-grid">
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--red);"></div><div class="title">6.1 GST Structure</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item money">GST collected on sales: 5%</div>
+        <div class="cat-item alert">Input GST NOT claimable (5% scheme = no ITC)</div>
+        <div class="cat-item money">EXCEPTION: GST on aggregator commission IS claimable</div>
+        <div class="cat-item">Net GST liability = Collected - Claimable ITC</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--orange);"></div><div class="title">6.2 Income Tax</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Corporate / proprietorship tax</div>
+        <div class="cat-item">TDS deducted by aggregators (1%)</div>
+        <div class="cat-item">Advance tax payments</div>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-card-header"><div class="dot" style="background: var(--text-dim);"></div><div class="title">7 + 8: Depreciation & Finance</div></div>
+      <div class="cat-card-body">
+        <div class="cat-item">Kitchen equipment depreciation</div>
+        <div class="cat-item">Furniture & fixtures</div>
+        <div class="cat-item">Interior fit-out amortization</div>
+        <div class="cat-item">Business loan EMIs</div>
+        <div class="cat-item">Working capital interest</div>
+        <div class="cat-item">Bank charges</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GST Dead Cost Box -->
+  <div class="gst-box">
+    <h4>THE HIDDEN GST TAX — Dead Cost at 5% Scheme (No ITC)</h4>
+    <div class="gst-row"><span>Rent (18% GST on Rs 60K/month)</span><span class="lost">Rs 10,800/mo LOST</span></div>
+    <div class="gst-row"><span>Equipment repairs (18% GST on Rs 10K)</span><span class="lost">Rs 1,800/mo LOST</span></div>
+    <div class="gst-row"><span>Software/POS (18% GST on Rs 5K)</span><span class="lost">Rs 900/mo LOST</span></div>
+    <div class="gst-row"><span>Raw materials (5-18% GST on Rs 3L)</span><span class="lost">Rs 15,000-30,000/mo LOST</span></div>
+    <div class="gst-row" style="font-weight: 700; font-size: 16px; border-top: 2px solid rgba(239,68,68,0.3);"><span>TOTAL DEAD GST PER YEAR</span><span class="lost">Rs 3.6 — 5.4 LAKH</span></div>
+    <div class="gst-row" style="border: none;"><span>Aggregator commission GST (18%)</span><span class="saved">CLAIMABLE as ITC</span></div>
+  </div>
+</div>
+
+<!-- UNIT ECONOMICS -->
+<div id="unit" class="section">
+  <div class="section-header">
+    <div class="section-num" style="background: var(--teal);">$</div>
+    <div class="section-title">Unit Economics — Per Order</div>
+  </div>
+
+  <h3 style="margin-bottom: 12px; color: var(--blue);">Hamza Express — Rs 350 Order</h3>
+  <table class="channel-table">
+    <tr>
+      <th>Line Item</th>
+      <th>Dine-in</th>
+      <th>Takeaway</th>
+      <th>Zomato</th>
+      <th>Swiggy</th>
+      <th>Direct</th>
+    </tr>
+    <tr>
+      <td>Gross Order Value</td>
+      <td>350</td><td>350</td><td>350</td><td>350</td><td>350</td>
+    </tr>
+    <tr>
+      <td>Commission</td>
+      <td class="positive">0</td><td class="positive">0</td><td class="negative">-77</td><td class="negative">-70</td><td class="positive">0</td>
+    </tr>
+    <tr>
+      <td>GST on commission</td>
+      <td>0</td><td>0</td><td class="negative">-14</td><td class="negative">-13</td><td>0</td>
+    </tr>
+    <tr>
+      <td>Gateway + TDS</td>
+      <td>0</td><td class="negative">-5</td><td class="negative">-9</td><td class="negative">-9</td><td class="negative">-5</td>
+    </tr>
+    <tr>
+      <td>Delivery rider</td>
+      <td>0</td><td>0</td><td>0</td><td>0</td><td class="negative">-30</td>
+    </tr>
+    <tr class="highlight-row">
+      <td>NET REVENUE</td>
+      <td class="positive">350</td><td class="positive">345</td><td class="warning">250</td><td class="warning">258</td><td class="positive">315</td>
+    </tr>
+    <tr>
+      <td>Food cost (30%)</td>
+      <td class="negative">-105</td><td class="negative">-105</td><td class="negative">-105</td><td class="negative">-105</td><td class="negative">-105</td>
+    </tr>
+    <tr>
+      <td>Packaging</td>
+      <td>-3</td><td>-8</td><td>-12</td><td>-12</td><td>-12</td>
+    </tr>
+    <tr>
+      <td>Allocated labor</td>
+      <td>-45</td><td>-30</td><td>-35</td><td>-35</td><td>-35</td>
+    </tr>
+    <tr>
+      <td>Allocated overhead</td>
+      <td>-25</td><td>-25</td><td>-25</td><td>-25</td><td>-25</td>
+    </tr>
+    <tr class="highlight-row" style="font-size: 16px;">
+      <td>NET PROFIT / ORDER</td>
+      <td class="positive">Rs 172</td><td class="positive">Rs 177</td><td class="warning">Rs 73</td><td class="warning">Rs 81</td><td class="positive">Rs 138</td>
+    </tr>
+    <tr class="highlight-row" style="font-size: 16px;">
+      <td>MARGIN %</td>
+      <td class="positive">49%</td><td class="positive">51%</td><td class="negative">21%</td><td class="warning">23%</td><td class="positive">39%</td>
+    </tr>
+  </table>
+
+  <h3 style="margin: 32px 0 12px; color: var(--teal);">Nawabi Chai House — Rs 80 Order (Chai + Snack)</h3>
+  <table class="channel-table">
+    <tr>
+      <th>Line Item</th>
+      <th>Dine-in</th>
+      <th>Takeaway</th>
+      <th>Aggregator</th>
+      <th>Direct</th>
+    </tr>
+    <tr><td>Gross Order Value</td><td>80</td><td>80</td><td>80</td><td>80</td></tr>
+    <tr><td>Commission + fees</td><td class="positive">0</td><td>0</td><td class="negative">-22</td><td class="negative">-5</td></tr>
+    <tr class="highlight-row"><td>NET REVENUE</td><td class="positive">80</td><td class="positive">78</td><td class="warning">58</td><td class="positive">75</td></tr>
+    <tr><td>COGS (25%)</td><td class="negative">-20</td><td class="negative">-20</td><td class="negative">-20</td><td class="negative">-20</td></tr>
+    <tr><td>Packaging</td><td>-1</td><td>-4</td><td>-8</td><td>-8</td></tr>
+    <tr><td>Allocated labor</td><td>-12</td><td>-8</td><td>-10</td><td>-10</td></tr>
+    <tr><td>Allocated overhead</td><td>-8</td><td>-8</td><td>-8</td><td>-8</td></tr>
+    <tr class="highlight-row" style="font-size: 16px;">
+      <td>NET PROFIT / ORDER</td>
+      <td class="positive">Rs 39</td><td class="positive">Rs 38</td><td class="negative">Rs 12</td><td class="positive">Rs 29</td>
+    </tr>
+    <tr class="highlight-row" style="font-size: 16px;">
+      <td>MARGIN %</td>
+      <td class="positive">49%</td><td class="positive">48%</td><td class="negative">15%</td><td class="positive">36%</td>
+    </tr>
+  </table>
+
+  <div style="margin-top: 24px; padding: 16px; background: rgba(239,68,68,0.1); border-radius: 12px; border: 1px solid rgba(239,68,68,0.2);">
+    <strong style="color: var(--red);">Key Insight:</strong> <span style="color: var(--text-dim);">NCH on aggregators at Rs 80 AOV makes only Rs 12 profit (15%). Below Rs 60 AOV on aggregators, you may be losing money per order. Direct channel = 2.4x more profit than aggregator.</span>
+  </div>
+</div>
+
+<!-- LEAKAGE ZONES -->
+<div id="leakage" class="section">
+  <div class="section-header">
+    <div class="section-num" style="background: var(--pink);">!</div>
+    <div class="section-title">Leakage Detection Framework</div>
+    <div class="section-target">Where money disappears</div>
+  </div>
+  <div class="leak-grid">
+    <div class="leak-card">
+      <h4>1. Portion Control Drift</h4>
+      <div class="leak-signal">Signal: Actual food cost > theoretical by >3%</div>
+      <div class="leak-fix">Fix: Recipe cards with gram weights, calibrated scoops, spot checks</div>
+    </div>
+    <div class="leak-card">
+      <h4>2. Theft & Pilferage</h4>
+      <div class="leak-signal">Signal: Shrinkage >3%, unexplained stock-outs</div>
+      <div class="leak-fix">Fix: CCTV, daily counts on high-value items (chicken, oil, cheese), POS void tracking</div>
+    </div>
+    <div class="leak-card">
+      <h4>3. Aggregator Reconciliation Gaps</h4>
+      <div class="leak-signal">Signal: Payout < expected by >2% — 72% of restaurants affected</div>
+      <div class="leak-fix">Fix: Weekly line-by-line reconciliation, dispute unverified refunds within 7 days</div>
+    </div>
+    <div class="leak-card">
+      <h4>4. Energy Waste</h4>
+      <div class="leak-signal">Signal: Utility bills >5% of revenue</div>
+      <div class="leak-fix">Fix: Equipment checklists, timer switches, energy audit</div>
+    </div>
+    <div class="leak-card">
+      <h4>5. Over-Ordering / Spoilage</h4>
+      <div class="leak-signal">Signal: Spoilage >3%, dead stock accumulation</div>
+      <div class="leak-fix">Fix: Par level system, purchase orders tied to sales forecast, FIFO</div>
+    </div>
+    <div class="leak-card">
+      <h4>6. Discount Leakage</h4>
+      <div class="leak-signal">Signal: Unexplained margin erosion on specific items</div>
+      <div class="leak-fix">Fix: Discount approval workflow, weekly promo cost analysis</div>
+    </div>
+    <div class="leak-card">
+      <h4>7. Cash Leakage</h4>
+      <div class="leak-signal">Signal: Cash register short by >Rs 100/day</div>
+      <div class="leak-fix">Fix: Daily cash reconciliation, surprise audits, push digital payments</div>
+    </div>
+  </div>
+</div>
+
+<!-- KPIs -->
+<div id="kpi" class="section">
+  <div class="section-header">
+    <div class="section-num" style="background: var(--accent);">K</div>
+    <div class="section-title">Key Performance Indicators</div>
+  </div>
+
+  <h3 style="margin-bottom: 16px;">Daily Tracking</h3>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Food Cost %</div><div class="kpi-formula">COGS / Revenue</div><div class="kpi-target" style="color: var(--green);">HE: <33% | NCH: <28%</div></div>
+    <div class="kpi-card"><div class="kpi-label">AOV by Channel</div><div class="kpi-formula">Revenue / Orders per channel</div><div class="kpi-target">HE: Rs 250-400 | NCH: Rs 50-120</div></div>
+    <div class="kpi-card"><div class="kpi-label">Cash Reconciliation</div><div class="kpi-formula">Cash in drawer vs POS total</div><div class="kpi-target" style="color: var(--red);">Variance < Rs 100</div></div>
+    <div class="kpi-card"><div class="kpi-label">Order Count</div><div class="kpi-formula">Total orders by channel</div><div class="kpi-target">Track daily trend</div></div>
+  </div>
+
+  <h3 style="margin: 32px 0 16px;">Weekly Tracking</h3>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Actual vs Theoretical Food Cost</div><div class="kpi-formula">(Open + Purchase - Close) vs (Recipe x Sold)</div><div class="kpi-target" style="color: var(--red);">Gap < 3%</div></div>
+    <div class="kpi-card"><div class="kpi-label">Prime Cost %</div><div class="kpi-formula">(COGS + Labor) / Revenue</div><div class="kpi-target" style="color: var(--green);">< 55%</div></div>
+    <div class="kpi-card"><div class="kpi-label">Labor Cost %</div><div class="kpi-formula">Total labor / Revenue</div><div class="kpi-target">HE: <25% | NCH: <20%</div></div>
+    <div class="kpi-card"><div class="kpi-label">Aggregator Reconciliation</div><div class="kpi-formula">Calculated vs actual payout</div><div class="kpi-target" style="color: var(--red);">Variance < 1%</div></div>
+  </div>
+
+  <h3 style="margin: 32px 0 16px;">Monthly Tracking</h3>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Gross Profit Margin</div><div class="kpi-formula">(Revenue - COGS) / Revenue</div><div class="kpi-target" style="color: var(--green);">HE: >67% | NCH: >72%</div></div>
+    <div class="kpi-card"><div class="kpi-label">EBITDA Margin</div><div class="kpi-formula">EBITDA / Revenue</div><div class="kpi-target" style="color: var(--green);">> 15%</div></div>
+    <div class="kpi-card"><div class="kpi-label">Net Profit Margin</div><div class="kpi-formula">Net Profit / Revenue</div><div class="kpi-target">HE: 10-15% | NCH: 15-20%</div></div>
+    <div class="kpi-card"><div class="kpi-label">Break-even Orders/Day</div><div class="kpi-formula">Fixed Costs / (AOV - Variable/Order)</div><div class="kpi-target">Recalculate monthly</div></div>
+    <div class="kpi-card"><div class="kpi-label">Channel Mix %</div><div class="kpi-formula">Revenue per channel / Total</div><div class="kpi-target">Optimize for high-margin</div></div>
+    <div class="kpi-card"><div class="kpi-label">Revenue per Sq Ft</div><div class="kpi-formula">Revenue / Outlet Area</div><div class="kpi-target">Maximize</div></div>
+  </div>
+
+  <!-- Menu Engineering Matrix -->
+  <h3 style="margin: 40px 0 8px;">Menu Engineering Matrix</h3>
+  <p style="color: var(--text-dim); margin-bottom: 16px;">Classify every menu item quarterly into one of four quadrants:</p>
+  <div class="matrix-labels">HIGH PROFITABILITY</div>
+  <div class="matrix-grid">
+    <div class="matrix-cell puzzle">
+      <h4 style="color: var(--yellow);">PUZZLES</h4>
+      <p>Low popularity + High profit</p>
+      <p style="margin-top: 8px; font-weight: 700;">Action: Market more, better menu placement, combo with popular items</p>
+    </div>
+    <div class="matrix-cell star">
+      <h4 style="color: var(--green);">STARS</h4>
+      <p>High popularity + High profit</p>
+      <p style="margin-top: 8px; font-weight: 700;">Action: Feature prominently, train staff to upsell, NEVER discount</p>
+    </div>
+    <div class="matrix-cell dog">
+      <h4 style="color: var(--red);">DOGS</h4>
+      <p>Low popularity + Low profit</p>
+      <p style="margin-top: 8px; font-weight: 700;">Action: Remove from menu or completely redesign</p>
+    </div>
+    <div class="matrix-cell plow">
+      <h4 style="color: var(--blue);">PLOWHORSES</h4>
+      <p>High popularity + Low profit</p>
+      <p style="margin-top: 8px; font-weight: 700;">Action: Reduce portion, swap cheaper ingredients, raise price 5-10%</p>
+    </div>
+  </div>
+  <div style="display: flex; justify-content: space-between; max-width: 700px; margin: 0 auto;">
+    <span class="matrix-labels">LOW POPULARITY</span>
+    <span class="matrix-labels">HIGH POPULARITY</span>
+  </div>
+</div>
+
+<!-- AI LAYER -->
+<div id="ai" class="section">
+  <div class="ai-section">
+    <h3>AI-Powered Automation Layer (Phase 3)</h3>
+    <p style="color: var(--text-dim); margin-bottom: 24px;">Once the structure is in place and data flows in, here is where AI becomes 100x more efficient:</p>
+
+    <div class="ai-grid">
+      <div class="ai-card">
+        <h5>Automatic Anomaly Detection</h5>
+        <p>Flag if food cost % deviates >2% from 7-day average. Flag if aggregator order count mismatches POS by >2 orders. Flag if actual vs theoretical food cost gap >3%.</p>
+        <div class="alert-example">"Chicken cost up 15% this week — supplier issue or waste?"</div>
+      </div>
+      <div class="ai-card">
+        <h5>Predictive Intelligence</h5>
+        <p>Demand forecasting by day of week, weather, festivals. Supplier price prediction — buy when cheap. Labor scheduling optimized to expected demand.</p>
+        <div class="alert-example">"Tomorrow is rainy + Thursday = 40% fewer dine-in, increase delivery prep"</div>
+      </div>
+      <div class="ai-card">
+        <h5>Automated Reconciliation</h5>
+        <p>Match every aggregator order to POS transaction. Auto-calculate expected vs actual payout. Auto-flag refund deductions for dispute.</p>
+        <div class="alert-example">"Zomato payout Rs 3,200 less than expected — 4 disputed refunds found"</div>
+      </div>
+      <div class="ai-card">
+        <h5>Menu Intelligence</h5>
+        <p>Real-time contribution margin per item. Auto-classify into Stars/Plowhorses/Puzzles/Dogs. Suggest price adjustments based on demand elasticity.</p>
+        <div class="alert-example">"Paneer Tikka margin dropped from 68% to 52% — portion drift detected"</div>
+      </div>
+      <div class="ai-card">
+        <h5>Owner Dashboard Alerts</h5>
+        <p>Push notifications when something is off. No need to chase discrepancies — the system finds them for you.</p>
+        <div class="alert-example">"Tuesday labor cost 32% — overstaffed for 67 orders. Reduce 1 shift."</div>
+      </div>
+      <div class="ai-card">
+        <h5>Marketing ROI Tracker</h5>
+        <p>Track customer acquisition cost by channel. Measure campaign ROI. Identify which items to promote for maximum margin impact.</p>
+        <div class="alert-example">"Instagram campaign brought 23 new orders, Rs 45 CAC, 3.2x ROAS"</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align: center; padding: 40px; color: var(--text-dim); font-size: 13px;">
+  HN Group P&L Structure — Built for surgical-level financial tracking
+</div>
+
+</body>
+</html>
