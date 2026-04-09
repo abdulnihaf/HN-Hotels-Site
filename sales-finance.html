@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HN Hotels — Sales Finance Guide</title>
+<style>
+:root{--bg:#0a0a0f;--s1:#12121a;--s2:#1a1a26;--s3:#222233;--bd:#2a2a3a;--tx:#e0e0e8;--dm:#8888a0;--ac:#6366f1;--gn:#22c55e;--rd:#ef4444;--or:#f97316;--yl:#eab308;--pr:#a855f7;--tl:#14b8a6;--bl:#3b82f6;--pk:#ec4899}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--tx);line-height:1.6}
+.hdr{padding:40px;text-align:center;border-bottom:1px solid var(--bd);background:linear-gradient(180deg,#12121a,#0a0a0f)}
+.hdr h1{font-size:32px;font-weight:800;background:linear-gradient(135deg,#6366f1,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr p{color:var(--dm);font-size:15px;margin-top:6px}
+.nav{position:sticky;top:0;z-index:100;background:rgba(10,10,15,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--bd);display:flex;gap:4px;padding:8px 16px;overflow-x:auto}
+.nav a{padding:8px 14px;border-radius:8px;color:var(--dm);text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap;transition:.2s}
+.nav a:hover{background:var(--s2);color:var(--tx)}
+.sec{padding:50px 40px;border-top:1px solid var(--bd)}
+.sec-t{font-size:26px;font-weight:800;margin-bottom:24px;display:flex;align-items:center;gap:12px}
+.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700}
+/* Channel Cards */
+.ch-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:24px 0}
+.ch-card{background:var(--s1);border:2px solid var(--bd);border-radius:16px;overflow:hidden;transition:.2s}
+.ch-card:hover{border-color:var(--ac)}
+.ch-hdr{padding:20px;border-bottom:1px solid var(--bd);text-align:center}
+.ch-hdr h3{font-size:20px;font-weight:800}
+.ch-hdr .rate{font-size:36px;font-weight:800;margin:8px 0}
+.ch-hdr .sub{font-size:13px;color:var(--dm)}
+.ch-body{padding:20px}
+.ch-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:14px}
+.ch-row:last-child{border:none}
+.ch-row .lab{color:var(--dm)}
+.ch-row .val{font-weight:700}
+.grn{color:var(--gn)}.red{color:var(--rd)}.orn{color:var(--or)}.ylw{color:var(--yl)}
+/* Platform breakdown */
+.plat{background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:28px;margin:20px 0}
+.plat h3{font-size:20px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.plat-logo{width:28px;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff}
+.fee-stack{margin:16px 0}
+.fee-bar{display:flex;align-items:center;margin:6px 0;font-size:14px}
+.fee-bar .label{width:220px;color:var(--dm)}
+.fee-bar .bar-wrap{flex:1;height:28px;background:var(--s2);border-radius:6px;position:relative;overflow:hidden}
+.fee-bar .bar{height:100%;border-radius:6px;display:flex;align-items:center;padding:0 8px;font-size:12px;font-weight:700;color:#fff;min-width:fit-content}
+.fee-bar .amt{width:100px;text-align:right;font-weight:700;font-size:14px}
+/* Order value table */
+.ov-table{width:100%;border-collapse:collapse;font-size:14px;margin:16px 0}
+.ov-table th{background:var(--s2);padding:12px 14px;text-align:right;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--dm);border-bottom:2px solid var(--bd)}
+.ov-table th:first-child{text-align:left}
+.ov-table td{padding:10px 14px;text-align:right;border-bottom:1px solid var(--bd)}
+.ov-table td:first-child{text-align:left;font-weight:600}
+.ov-table tr:hover{background:var(--s2)}
+.ov-table .best{background:rgba(34,197,94,.08)}
+.ov-table .best td{color:var(--gn)}
+.ov-table .worst td:not(:first-child){color:var(--rd)}
+/* Visual flow */
+.flow{display:flex;gap:16px;align-items:stretch;margin:20px 0;flex-wrap:wrap}
+.flow-box{flex:1;min-width:180px;background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:16px;text-align:center}
+.flow-box h4{font-size:14px;margin-bottom:8px}
+.flow-arrow{display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--dm);min-width:30px}
+/* Waterfall */
+.wf{margin:20px 0}
+.wf-row{display:flex;align-items:center;margin:4px 0;font-size:14px}
+.wf-label{width:260px}
+.wf-bar-area{flex:1;position:relative;height:32px}
+.wf-bar{position:absolute;height:100%;border-radius:4px;display:flex;align-items:center;padding:0 8px;font-size:12px;font-weight:700;color:#fff}
+.wf-amt{width:90px;text-align:right;font-weight:700}
+/* Insight box */
+.insight{padding:20px;border-radius:12px;margin:16px 0;border-left:4px solid}
+.insight.green{background:rgba(34,197,94,.08);border-color:var(--gn)}
+.insight.red{background:rgba(239,68,68,.08);border-color:var(--rd)}
+.insight.blue{background:rgba(99,102,241,.08);border-color:var(--ac)}
+.insight.orange{background:rgba(249,115,22,.08);border-color:var(--or)}
+.insight h4{font-size:15px;font-weight:700;margin-bottom:6px}
+.insight p{font-size:14px;color:var(--dm)}
+/* Rule cards */
+.rule-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin:20px 0}
+.rule{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:20px}
+.rule h4{font-size:15px;font-weight:700;margin-bottom:8px}
+.rule p{font-size:13px;color:var(--dm)}
+.rule .num{font-size:28px;font-weight:800;margin:8px 0}
+@media(max-width:900px){.ch-grid{grid-template-columns:1fr}.sec{padding:30px 16px}.flow{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+<h1>Sales Finance Guide — HN Hotels</h1>
+<p>How commission works on every platform, for every order value. Know exactly what you keep.</p>
+<p style="margin-top:12px;color:var(--ac);font-weight:700">For: Sales Head & Operations Team | Based on verified contracts only</p>
+</div>
+
+<div class="nav">
+<a href="#channels">Sales Channels</a>
+<a href="#zomato-del">Zomato Delivery</a>
+<a href="#swiggy-del">Swiggy Delivery</a>
+<a href="#zomato-din">Zomato Dining</a>
+<a href="#eazydiner">EazyDiner</a>
+<a href="#waba">WABA Direct</a>
+<a href="#ranges">Order Value Ranges</a>
+<a href="#rules">Golden Rules</a>
+</div>
+
+<!-- ==================== SECTION 1: ALL CHANNELS ==================== -->
+<div id="channels" class="sec">
+<div class="sec-t">All Sales Channels — What You Keep Per Rs 350 Order</div>
+
+<div class="ch-grid">
+<!-- Dine-in Direct -->
+<div class="ch-card" style="border-color:var(--gn)">
+<div class="ch-hdr" style="background:rgba(34,197,94,.08)">
+<h3>Dine-in Direct</h3>
+<div class="rate grn">Rs 350</div>
+<div class="sub">You keep everything</div>
+</div>
+<div class="ch-body">
+<div class="ch-row"><span class="lab">Commission</span><span class="val grn">0%</span></div>
+<div class="ch-row"><span class="lab">Payment fee</span><span class="val grn">0% (Cash/UPI)</span></div>
+<div class="ch-row"><span class="lab">Total deducted</span><span class="val grn">Rs 0</span></div>
+<div class="ch-row"><span class="lab">You receive</span><span class="val grn">Rs 350</span></div>
+<div class="ch-row"><span class="lab">Margin kept</span><span class="val grn">100%</span></div>
+</div>
+</div>
+
+<!-- WABA Direct -->
+<div class="ch-card" style="border-color:var(--tl)">
+<div class="ch-hdr" style="background:rgba(20,184,166,.08)">
+<h3>WhatsApp Direct</h3>
+<div class="rate" style="color:var(--tl)">Rs 342</div>
+<div class="sub">Razorpay 2% + GST only</div>
+</div>
+<div class="ch-body">
+<div class="ch-row"><span class="lab">Commission</span><span class="val grn">0%</span></div>
+<div class="ch-row"><span class="lab">Razorpay fee</span><span class="val">2% + 18% GST = 2.36%</span></div>
+<div class="ch-row"><span class="lab">Total deducted</span><span class="val">Rs 8.26</span></div>
+<div class="ch-row"><span class="lab">You receive</span><span class="val" style="color:var(--tl)">Rs 341.74</span></div>
+<div class="ch-row"><span class="lab">Margin kept</span><span class="val" style="color:var(--tl)">97.6%</span></div>
+</div>
+</div>
+
+<!-- Zomato Dining -->
+<div class="ch-card">
+<div class="ch-hdr" style="background:rgba(99,102,241,.08)">
+<h3>Zomato Dining</h3>
+<div class="rate" style="color:var(--ac)">Rs 309</div>
+<div class="sub">7% commission (HE)</div>
+</div>
+<div class="ch-body">
+<div class="ch-row"><span class="lab">Commission</span><span class="val">7% of bill</span></div>
+<div class="ch-row"><span class="lab">GST on commission</span><span class="val">18% of 7%</span></div>
+<div class="ch-row"><span class="lab">Total deducted</span><span class="val">Rs 41.30</span></div>
+<div class="ch-row"><span class="lab">You receive</span><span class="val" style="color:var(--ac)">Rs 308.70</span></div>
+<div class="ch-row"><span class="lab">Margin kept</span><span class="val" style="color:var(--ac)">88.2%</span></div>
+</div>
+</div>
+
+<!-- EazyDiner -->
+<div class="ch-card">
+<div class="ch-hdr" style="background:rgba(234,179,8,.08)">
+<h3>EazyDiner</h3>
+<div class="rate ylw">~Rs 280</div>
+<div class="sub">10% discount + Rs 30/pax + fees</div>
+</div>
+<div class="ch-body">
+<div class="ch-row"><span class="lab">Discount you fund</span><span class="val red">10% of bill</span></div>
+<div class="ch-row"><span class="lab">Booking fee</span><span class="val">Rs 30/pax + GST</span></div>
+<div class="ch-row"><span class="lab">PayEazy (if used)</span><span class="val">5% + 1.8% + GST</span></div>
+<div class="ch-row"><span class="lab">Approx deducted (2 pax)</span><span class="val ylw">~Rs 70</span></div>
+<div class="ch-row"><span class="lab">Margin kept</span><span class="val ylw">~80%</span></div>
+</div>
+</div>
+
+<!-- Zomato Delivery -->
+<div class="ch-card" style="border-color:rgba(239,68,68,.3)">
+<div class="ch-hdr" style="background:rgba(239,68,68,.08)">
+<h3>Zomato Delivery</h3>
+<div class="rate red">Rs 268</div>
+<div class="sub">18% + 1.84% + GST (within 4km)</div>
+</div>
+<div class="ch-body">
+<div class="ch-row"><span class="lab">Service fee</span><span class="val red">18% of Gross Sales</span></div>
+<div class="ch-row"><span class="lab">Payment fee</span><span class="val">1.84%</span></div>
+<div class="ch-row"><span class="lab">GST on both fees</span><span class="val">18%</span></div>
+<div class="ch-row"><span class="lab">Total deducted</span><span class="val red">Rs 81.94</span></div>
+<div class="ch-row"><span class="lab">You receive</span><span class="val red">Rs 268.06</span></div>
+<div class="ch-row"><span class="lab">Margin kept</span><span class="val red">76.6%</span></div>
+</div>
+</div>
+
+<!-- Swiggy Delivery -->
+<div class="ch-card" style="border-color:rgba(249,115,22,.3)">
+<div class="ch-hdr" style="background:rgba(249,115,22,.08)">
+<h3>Swiggy Delivery</h3>
+<div class="rate orn">Rs 264</div>
+<div class="sub">18% + 2% + 1% TCS + GST</div>
+</div>
+<div class="ch-body">
+<div class="ch-row"><span class="lab">Service fee</span><span class="val orn">18% of Gross Value</span></div>
+<div class="ch-row"><span class="lab">Collection fee</span><span class="val">2.00%</span></div>
+<div class="ch-row"><span class="lab">TCS</span><span class="val">1% (reclaimable on ITR)</span></div>
+<div class="ch-row"><span class="lab">GST on fees</span><span class="val">18%</span></div>
+<div class="ch-row"><span class="lab">Total deducted</span><span class="val orn">Rs 86.10</span></div>
+<div class="ch-row"><span class="lab">You receive</span><span class="val orn">Rs 263.90</span></div>
+<div class="ch-row"><span class="lab">Margin kept</span><span class="val orn">75.4%</span></div>
+</div>
+</div>
+</div>
+
+<div class="insight green">
+<h4>Key Insight for Sales Team</h4>
+<p>Every Rs 100 of dine-in sales = Rs 100 in your pocket. Every Rs 100 of Zomato delivery = Rs 76.60. Every Rs 100 of WhatsApp direct = Rs 97.60. <strong>Push dine-in and WhatsApp orders first, aggregators second.</strong></p>
+</div>
+</div>
+
+<!-- ==================== ZOMATO DELIVERY DEEP DIVE ==================== -->
+<div id="zomato-del" class="sec">
+<div class="sec-t"><span class="plat-logo" style="background:#e23744">Z</span> Zomato Delivery — How They Take Their Cut</div>
+
+<p style="color:var(--dm);margin-bottom:20px">Contract signed 28 Mar 2026 | Res ID: 22632449 (HE) & 22632430 (NCH) | Settlement: Weekly to HDFC</p>
+
+<h4 style="margin:20px 0 10px">Step-by-step: What happens to a Rs 500 order</h4>
+
+<div class="wf">
+<div class="wf-row">
+<div class="wf-label"><strong>Customer pays</strong></div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:100%;background:var(--bl);left:0">Rs 500</div></div>
+<div class="wf-amt grn">Rs 500</div>
+</div>
+<div class="wf-row">
+<div class="wf-label" style="color:var(--rd)">(-) Service Fee: 18%</div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:18%;background:var(--rd);left:0">18%</div></div>
+<div class="wf-amt red">-Rs 90.00</div>
+</div>
+<div class="wf-row">
+<div class="wf-label" style="color:var(--rd)">(-) GST on Service Fee: 18% of Rs 90</div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:3.2%;background:#c0392b;left:0">GST</div></div>
+<div class="wf-amt red">-Rs 16.20</div>
+</div>
+<div class="wf-row">
+<div class="wf-label" style="color:var(--or)">(-) Payment Fee: 1.84%</div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:1.84%;background:var(--or);left:0">1.84%</div></div>
+<div class="wf-amt orn">-Rs 9.20</div>
+</div>
+<div class="wf-row">
+<div class="wf-label" style="color:var(--or)">(-) GST on Payment Fee: 18% of Rs 9.20</div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:.33%;background:#e67e22;left:0"></div></div>
+<div class="wf-amt orn">-Rs 1.66</div>
+</div>
+<div class="wf-row" style="margin-top:8px;padding-top:8px;border-top:2px solid var(--gn)">
+<div class="wf-label"><strong style="color:var(--gn)">= YOU RECEIVE</strong></div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:76.6%;background:var(--gn);left:0">76.6% kept</div></div>
+<div class="wf-amt grn" style="font-size:18px">Rs 382.94</div>
+</div>
+</div>
+
+<div class="insight orange">
+<h4>What is "Gross Sales"? This is critical.</h4>
+<p>Gross Sales = Your menu price on Zomato + GST (5%) + Packaging charge (if customer-facing) <strong>MINUS</strong> any discounts YOU fund on the platform. Since Zomato delivers (their rider), delivery charges are NOT deducted. So Zomato's 18% applies to almost the full order value.</p>
+</div>
+
+<h4 style="margin:24px 0 10px">Distance-based fees (on top of 18% + 1.84%)</h4>
+<div class="rule-grid">
+<div class="rule">
+<h4 style="color:var(--gn)">Within 4 km</h4>
+<div class="num grn">Rs 0</div>
+<p>No additional fee. Most of your Shivajinagar orders fall here.</p>
+</div>
+<div class="rule">
+<h4 style="color:var(--or)">4-6 km (order < Rs 150)</h4>
+<div class="num orn">Rs 0</div>
+<p>No additional fee for small orders in this range.</p>
+</div>
+<div class="rule">
+<h4 style="color:var(--or)">4-6 km (order > Rs 150)</h4>
+<div class="num orn">+Rs 15</div>
+<p>Per order. Added on top of the 18% + 1.84%.</p>
+</div>
+<div class="rule">
+<h4 style="color:var(--rd)">Beyond 6 km</h4>
+<div class="num red">+Rs 35</div>
+<p>Per order, regardless of order value. This makes far orders very expensive.</p>
+</div>
+</div>
+
+<h4 style="margin:24px 0 10px">Hidden penalty costs that can destroy your margins</h4>
+<div class="rule-grid">
+<div class="rule" style="border-left:4px solid var(--rd)">
+<h4>Customer Complaint Refund</h4>
+<p><strong>50% of refund amount</strong> charged to you. If Zomato refunds Rs 350 to customer, you lose Rs 175. Applies after first 2 weeks.</p>
+</div>
+<div class="rule" style="border-left:4px solid var(--rd)">
+<h4>Order Rejection Penalty</h4>
+<p>If weekly rejections > 0.5% of orders: <strong>10% of rejected order value</strong>. If > 2%: <strong>25%</strong>. Never reject unless absolutely necessary.</p>
+</div>
+<div class="rule" style="border-left:4px solid var(--rd)">
+<h4>Price Disparity</h4>
+<p><strong>3x the price difference</strong> per order. If your biryani is Rs 250 on Zomato but Rs 220 dine-in, they charge 3 x Rs 30 = Rs 90 PER ORDER until you fix it.</p>
+</div>
+<div class="rule" style="border-left:4px solid var(--rd)">
+<h4>Discouraged Practices</h4>
+<p>Sending flyers/discounts to Zomato customers to divert them: <strong>Up to Rs 1,00,000</strong> per contravention.</p>
+</div>
+</div>
+</div>
+
+<!-- ==================== SWIGGY DELIVERY DEEP DIVE ==================== -->
+<div id="swiggy-del" class="sec">
+<div class="sec-t"><span class="plat-logo" style="background:#fc8019">S</span> Swiggy Delivery — How They Take Their Cut</div>
+
+<p style="color:var(--dm);margin-bottom:20px">Contract signed 02 Mar 2026 | Both HE & NCH | Duration: 12 months | Settlement: Weekly to HDFC</p>
+
+<h4 style="margin:20px 0 10px">Step-by-step: What happens to a Rs 500 order</h4>
+
+<div class="wf">
+<div class="wf-row">
+<div class="wf-label"><strong>Customer pays</strong></div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:100%;background:var(--bl);left:0">Rs 500</div></div>
+<div class="wf-amt grn">Rs 500</div>
+</div>
+<div class="wf-row">
+<div class="wf-label" style="color:var(--rd)">(-) Service Fee: 18%</div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:18%;background:var(--rd);left:0">18%</div></div>
+<div class="wf-amt red">-Rs 90.00</div>
+</div>
+<div class="wf-row">
+<div class="wf-label" style="color:var(--rd)">(-) GST on Service Fee: 18% of Rs 90</div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:3.2%;background:#c0392b;left:0">GST</div></div>
+<div class="wf-amt red">-Rs 16.20</div>
+</div>
+<div class="wf-row">
+<div class="wf-label" style="color:var(--or)">(-) Collection Fee: 2.00%</div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:2%;background:var(--or);left:0">2%</div></div>
+<div class="wf-amt orn">-Rs 10.00</div>
+</div>
+<div class="wf-row">
+<div class="wf-label" style="color:var(--or)">(-) GST on Collection Fee: 18%</div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:.36%;background:#e67e22;left:0"></div></div>
+<div class="wf-amt orn">-Rs 1.80</div>
+</div>
+<div class="wf-row">
+<div class="wf-label" style="color:var(--yl)">(-) TCS: 1% (reclaimable on ITR)</div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:1%;background:var(--yl);left:0">TCS</div></div>
+<div class="wf-amt ylw">-Rs 5.00</div>
+</div>
+<div class="wf-row" style="margin-top:8px;padding-top:8px;border-top:2px solid var(--gn)">
+<div class="wf-label"><strong style="color:var(--gn)">= YOU RECEIVE</strong></div>
+<div class="wf-bar-area"><div class="wf-bar" style="width:74.2%;background:var(--gn);left:0">74.2% kept</div></div>
+<div class="wf-amt grn" style="font-size:18px">Rs 377.00</div>
+</div>
+</div>
+
+<div class="insight blue">
+<h4>TCS is NOT a cost — it's a tax advance</h4>
+<p>The 1% TCS (Tax Collected at Source) is deducted by Swiggy and deposited with the government on your behalf. You claim it back when filing your income tax return. So the <strong>real cost difference</strong> between Swiggy and Zomato is only about 0.19% (Collection Fee 2% vs Payment Fee 1.84%).</p>
+</div>
+
+<h4 style="margin:24px 0 10px">Swiggy One — extra per-order fee</h4>
+<p style="color:var(--dm);margin-bottom:12px">When a Swiggy One member orders, you pay an additional per-order fee based on what % of your weekly orders are from Swiggy One:</p>
+<div class="rule-grid">
+<div class="rule"><h4>0-20% are Swiggy One</h4><div class="num">Rs 2<span style="font-size:14px;color:var(--dm)">/order</span></div></div>
+<div class="rule"><h4>21-40% are Swiggy One</h4><div class="num orn">Rs 3<span style="font-size:14px;color:var(--dm)">/order</span></div></div>
+<div class="rule"><h4>41-60% are Swiggy One</h4><div class="num orn">Rs 4<span style="font-size:14px;color:var(--dm)">/order</span></div></div>
+<div class="rule"><h4>Above 60% are Swiggy One</h4><div class="num red">Rs 5<span style="font-size:14px;color:var(--dm)">/order</span></div></div>
+</div>
+</div>
+
+<!-- ==================== ZOMATO DINING ==================== -->
+<div id="zomato-din" class="sec">
+<div class="sec-t"><span class="plat-logo" style="background:#e23744">Z</span> Zomato Dining (District) — Dine-in Payments</div>
+
+<p style="color:var(--dm);margin-bottom:20px">When customers pay at the restaurant via Zomato app. Contract valid till 2046.</p>
+
+<div class="ch-grid" style="grid-template-columns:1fr 1fr">
+<div class="plat">
+<h3>Hamza Express — 7%</h3>
+<div class="wf">
+<div class="wf-row"><div class="wf-label">Customer pays via Zomato app</div><div class="wf-amt grn">Rs 500</div></div>
+<div class="wf-row"><div class="wf-label red">(-) Commission: 7%</div><div class="wf-amt red">-Rs 35.00</div></div>
+<div class="wf-row"><div class="wf-label red">(-) GST on commission: 18%</div><div class="wf-amt red">-Rs 6.30</div></div>
+<div class="wf-row" style="border-top:2px solid var(--gn);margin-top:8px;padding-top:8px"><div class="wf-label"><strong>You receive</strong></div><div class="wf-amt grn" style="font-size:18px">Rs 458.70</div></div>
+</div>
+<p style="margin-top:12px;text-align:center;color:var(--gn);font-weight:700;font-size:18px">Effective rate: 8.26% — You keep 91.74%</p>
+</div>
+
+<div class="plat">
+<h3>Nawabi Chai House — 6.84%</h3>
+<div class="wf">
+<div class="wf-row"><div class="wf-label">Customer pays via Zomato app</div><div class="wf-amt grn">Rs 500</div></div>
+<div class="wf-row"><div class="wf-label red">(-) Commission: 6.84%</div><div class="wf-amt red">-Rs 34.20</div></div>
+<div class="wf-row"><div class="wf-label red">(-) GST on commission: 18%</div><div class="wf-amt red">-Rs 6.16</div></div>
+<div class="wf-row" style="border-top:2px solid var(--gn);margin-top:8px;padding-top:8px"><div class="wf-label"><strong>You receive</strong></div><div class="wf-amt grn" style="font-size:18px">Rs 459.64</div></div>
+</div>
+<p style="margin-top:12px;text-align:center;color:var(--gn);font-weight:700;font-size:18px">Effective rate: 8.07% — You keep 91.93%</p>
+</div>
+</div>
+
+<div class="insight green">
+<h4>Zomato Dining is your best aggregator deal</h4>
+<p>At 7-8% effective cost, Zomato Dining is 3x cheaper than Zomato Delivery (23.4%). If a customer is in the restaurant and wants to pay via Zomato app for their rewards — that's fine, it only costs you 8%. Encourage dine-in customers who discover you on Zomato.</p>
+</div>
+
+<div class="insight red">
+<h4>Warning: Forfeited cover charges = 100% to Zomato</h4>
+<p>If a customer books a paid table reservation and doesn't show up, the entire forfeited cover charge goes to Zomato. You get nothing. This applies to non-offer, offer-based, and peak-hour reservations. For 20 years (till 2046).</p>
+</div>
+</div>
+
+<!-- ==================== EAZYDINER ==================== -->
+<div id="eazydiner" class="sec">
+<div class="sec-t"><span class="plat-logo" style="background:var(--pr)">E</span> EazyDiner — Dine-in Bookings (HE only)</div>
+
+<p style="color:var(--dm);margin-bottom:20px">Signed 31 Mar 2026. Multiple fee layers make this the most complex commission structure.</p>
+
+<div class="plat">
+<h3>Fee Layer Breakdown — 4 people, Rs 2000 bill</h3>
+<div class="wf">
+<div class="wf-row"><div class="wf-label"><strong>Original bill</strong></div><div class="wf-amt grn">Rs 2,000</div></div>
+<div class="wf-row"><div class="wf-label red">(-) EazyDeal 10% discount (you fund)</div><div class="wf-amt red">-Rs 200</div></div>
+<div class="wf-row"><div class="wf-label" style="color:var(--dm)">Customer pays (post-discount)</div><div class="wf-amt">Rs 1,800</div></div>
+<div class="wf-row"><div class="wf-label red">(-) Booking fee: Rs 30 x 4 pax</div><div class="wf-amt red">-Rs 120</div></div>
+<div class="wf-row"><div class="wf-label red">(-) GST on booking fee: 18%</div><div class="wf-amt red">-Rs 21.60</div></div>
+<div class="wf-row"><div class="wf-label orn">(-) PayEazy: 5% of Rs 1,800</div><div class="wf-amt orn">-Rs 90.00</div></div>
+<div class="wf-row"><div class="wf-label orn">(-) Gateway: 1.8% of Rs 1,800</div><div class="wf-amt orn">-Rs 32.40</div></div>
+<div class="wf-row"><div class="wf-label orn">(-) GST on PayEazy+Gateway: 18%</div><div class="wf-amt orn">-Rs 22.03</div></div>
+<div class="wf-row" style="border-top:2px solid var(--gn);margin-top:8px;padding-top:8px"><div class="wf-label"><strong>Net revenue to you</strong></div><div class="wf-amt ylw" style="font-size:18px">Rs 1,513.97</div></div>
+<div class="wf-row"><div class="wf-label"><strong>Total cost</strong></div><div class="wf-amt red" style="font-size:18px">Rs 486.03 (24.3%)</div></div>
+</div>
+</div>
+
+<div class="insight orange">
+<h4>EazyDiner can cost as much as delivery platforms!</h4>
+<p>With the 10% discount + booking fees + PayEazy commission, EazyDiner effectively costs 20-25% — similar to Zomato/Swiggy delivery. The 10% discount is especially painful because YOU fund it, not EazyDiner. Consider whether the footfall justifies this cost.</p>
+</div>
+</div>
+
+<!-- ==================== WABA DIRECT ==================== -->
+<div id="waba" class="sec">
+<div class="sec-t"><span class="plat-logo" style="background:var(--gn)">W</span> WhatsApp Direct Orders — Your Best Margin Channel</div>
+
+<div class="plat" style="border-color:rgba(34,197,94,.3)">
+<h3 style="color:var(--gn)">How it works</h3>
+<div class="flow">
+<div class="flow-box"><h4>Customer</h4><p style="font-size:13px;color:var(--dm)">Finds you via Instagram, Google, Station QR, Meta ads</p></div>
+<div class="flow-arrow">&#8594;</div>
+<div class="flow-box"><h4>WhatsApp</h4><p style="font-size:13px;color:var(--dm)">Browses menu MPM, selects items</p></div>
+<div class="flow-arrow">&#8594;</div>
+<div class="flow-box"><h4>Razorpay UPI</h4><p style="font-size:13px;color:var(--dm)">Pays via payment link (2% + GST = 2.36%)</p></div>
+<div class="flow-arrow">&#8594;</div>
+<div class="flow-box" style="border-color:var(--gn)"><h4 style="color:var(--gn)">KDS Kitchen</h4><p style="font-size:13px;color:var(--dm)">Order appears, customer picks up</p></div>
+</div>
+
+<div class="wf" style="margin-top:20px">
+<div class="wf-row"><div class="wf-label"><strong>Customer pays (Rs 500)</strong></div><div class="wf-amt grn">Rs 500</div></div>
+<div class="wf-row"><div class="wf-label">(-) Razorpay: 2% + 18% GST</div><div class="wf-amt">-Rs 11.80</div></div>
+<div class="wf-row" style="border-top:2px solid var(--gn);margin-top:8px;padding-top:8px"><div class="wf-label"><strong>You receive</strong></div><div class="wf-amt grn" style="font-size:20px">Rs 488.20</div></div>
+</div>
+<p style="text-align:center;margin-top:12px;font-size:20px;font-weight:800;color:var(--gn)">You keep 97.64% of every rupee</p>
+</div>
+
+<div class="insight green">
+<h4>The math is simple: push WhatsApp orders</h4>
+<p>On a Rs 500 order: Zomato Delivery pays you Rs 383. Swiggy pays Rs 377. <strong>WhatsApp Direct pays you Rs 488.</strong> That's Rs 105-111 MORE per order. On 10 orders/day, that's Rs 1,000+/day or Rs 30,000+/month extra profit by shifting just 10 orders from aggregators to direct.</p>
+</div>
+</div>
+
+<!-- ==================== ORDER VALUE RANGES ==================== -->
+<div id="ranges" class="sec">
+<div class="sec-t">What You Actually Receive — By Order Value</div>
+
+<h4 style="margin-bottom:12px">Hamza Express — Delivery Orders</h4>
+<table class="ov-table">
+<tr>
+<th>Order Value</th>
+<th>Dine-in Direct</th>
+<th>WABA Direct</th>
+<th>Zomato Dining (7%)</th>
+<th>Zomato Del (<4km)</th>
+<th>Swiggy Del</th>
+<th>Zomato Del (6km+)</th>
+</tr>
+<tr class="best"><td>Rs 150</td><td class="grn">Rs 150</td><td>Rs 146</td><td>Rs 138</td><td>Rs 115</td><td>Rs 113</td><td>Rs 80</td></tr>
+<tr class="best"><td>Rs 200</td><td class="grn">Rs 200</td><td>Rs 195</td><td>Rs 183</td><td>Rs 153</td><td>Rs 151</td><td>Rs 118</td></tr>
+<tr class="best"><td>Rs 300</td><td class="grn">Rs 300</td><td>Rs 293</td><td>Rs 275</td><td>Rs 230</td><td>Rs 226</td><td>Rs 195</td></tr>
+<tr><td>Rs 350</td><td class="grn">Rs 350</td><td>Rs 342</td><td>Rs 309</td><td>Rs 268</td><td>Rs 264</td><td>Rs 233</td></tr>
+<tr><td>Rs 500</td><td class="grn">Rs 500</td><td>Rs 488</td><td>Rs 459</td><td>Rs 383</td><td>Rs 377</td><td>Rs 348</td></tr>
+<tr><td>Rs 700</td><td class="grn">Rs 700</td><td>Rs 683</td><td>Rs 642</td><td>Rs 536</td><td>Rs 528</td><td>Rs 501</td></tr>
+<tr><td>Rs 1000</td><td class="grn">Rs 1000</td><td>Rs 976</td><td>Rs 917</td><td>Rs 766</td><td>Rs 754</td><td>Rs 731</td></tr>
+<tr><td>Rs 1500</td><td class="grn">Rs 1500</td><td>Rs 1465</td><td>Rs 1376</td><td>Rs 1149</td><td>Rs 1131</td><td>Rs 1114</td></tr>
+</table>
+
+<h4 style="margin:32px 0 12px">Nawabi Chai House — Typical Order Values</h4>
+<table class="ov-table">
+<tr>
+<th>Order Value</th>
+<th>Counter Direct</th>
+<th>WABA Direct</th>
+<th>Zomato Dining (6.84%)</th>
+<th>Zomato Delivery</th>
+<th>Swiggy Delivery</th>
+</tr>
+<tr class="best"><td>Rs 30 (Chai)</td><td class="grn">Rs 30</td><td>Rs 29</td><td>Rs 28</td><td>Rs 23</td><td>Rs 23</td></tr>
+<tr class="best"><td>Rs 60 (2 Chai)</td><td class="grn">Rs 60</td><td>Rs 59</td><td>Rs 55</td><td>Rs 46</td><td>Rs 45</td></tr>
+<tr><td>Rs 80 (Chai+Snack)</td><td class="grn">Rs 80</td><td>Rs 78</td><td>Rs 74</td><td>Rs 61</td><td>Rs 60</td></tr>
+<tr><td>Rs 150 (Combo)</td><td class="grn">Rs 150</td><td>Rs 146</td><td>Rs 138</td><td>Rs 115</td><td>Rs 113</td></tr>
+<tr><td>Rs 300 (Group)</td><td class="grn">Rs 300</td><td>Rs 293</td><td>Rs 276</td><td>Rs 230</td><td>Rs 226</td></tr>
+</table>
+
+<div class="insight red">
+<h4>NCH on aggregators at low AOV is barely profitable</h4>
+<p>A Rs 30 chai order on Zomato/Swiggy: you receive only Rs 23. After COGS (~Rs 6 for tea) and packaging (~Rs 5), you're left with Rs 12. After allocated labor and overhead — <strong>you may be losing money on small delivery orders</strong>. Set a minimum order value on aggregators or create combos that push AOV above Rs 150.</p>
+</div>
+</div>
+
+<!-- ==================== GOLDEN RULES ==================== -->
+<div id="rules" class="sec">
+<div class="sec-t">Golden Rules for Profitable Selling</div>
+
+<div class="rule-grid">
+<div class="rule" style="border-top:4px solid var(--gn)">
+<h4 style="color:var(--gn)">RULE 1: Channel Priority</h4>
+<div class="num grn">Direct &gt; Dining &gt; Delivery</div>
+<p>Always push dine-in and WhatsApp first. Zomato Dining second. Delivery aggregators last. The margin difference is 3-4x.</p>
+</div>
+
+<div class="rule" style="border-top:4px solid var(--bl)">
+<h4 style="color:var(--bl)">RULE 2: Price Parity is Mandatory</h4>
+<div class="num" style="color:var(--bl)">3x Penalty</div>
+<p>Both Zomato and Swiggy contractually require equal or lower prices on platform vs dine-in. Zomato charges 3x the price difference per order. Never price differently.</p>
+</div>
+
+<div class="rule" style="border-top:4px solid var(--or)">
+<h4 style="color:var(--or)">RULE 3: Never Reject Orders</h4>
+<div class="num orn">&lt; 0.5%</div>
+<p>Keep weekly order rejection below 0.5%. Above that, Zomato charges 10% of rejected order values. Above 2%, it's 25%. Train kitchen to accept everything.</p>
+</div>
+
+<div class="rule" style="border-top:4px solid var(--rd)">
+<h4 style="color:var(--rd)">RULE 4: Complaint Refunds Cost You 50%</h4>
+<div class="num red">50%</div>
+<p>If Zomato refunds a customer Rs 350, they take Rs 175 from you. Quality control and correct packaging directly impact your bottom line.</p>
+</div>
+
+<div class="rule" style="border-top:4px solid var(--pr)">
+<h4 style="color:var(--pr)">RULE 5: Push Combos on Low-AOV Channels</h4>
+<div class="num" style="color:var(--pr)">Rs 150+</div>
+<p>Below Rs 150, delivery orders are barely profitable after COGS + packaging + labor. Design combos that push average order value above Rs 200 on aggregators.</p>
+</div>
+
+<div class="rule" style="border-top:4px solid var(--tl)">
+<h4 style="color:var(--tl)">RULE 6: Recover Drops</h4>
+<div class="num" style="color:var(--tl)">72h</div>
+<p>WhatsApp leads that don't convert in 24h get 3 follow-ups over 72h. Mumtaz recovers dine-in drops by call. Every recovered order is a direct-channel order (2.36% vs 24%).</p>
+</div>
+</div>
+
+<div class="insight blue" style="margin-top:32px">
+<h4>The Bottom Line for Sales Team</h4>
+<p style="font-size:15px;color:var(--tx)">
+<strong>For every Rs 1,00,000 in monthly sales:</strong><br><br>
+If 100% via Dine-in Direct → You keep <strong style="color:var(--gn)">Rs 1,00,000</strong><br>
+If 100% via WhatsApp Direct → You keep <strong style="color:var(--tl)">Rs 97,640</strong><br>
+If 100% via Zomato Dining → You keep <strong style="color:var(--ac)">Rs 91,740</strong><br>
+If 100% via Zomato Delivery → You keep <strong style="color:var(--or)">Rs 76,590</strong><br>
+If 100% via Swiggy Delivery → You keep <strong style="color:var(--rd)">Rs 75,400</strong><br><br>
+<strong>Shifting just 20% of delivery orders to WhatsApp saves Rs 4,000-5,000/month per lakh of revenue.</strong>
+</p>
+</div>
+</div>
+
+<div style="text-align:center;padding:40px;color:var(--dm);font-size:12px">
+HN Hotels Pvt Ltd — Sales Finance Guide | Based on verified contracts signed Mar-Apr 2026 | For internal use only
+</div>
+
+</body>
+</html>
