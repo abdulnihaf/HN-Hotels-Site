@@ -837,7 +837,7 @@ async function cleanupRename(apiKey, db, userName) {
   return out;
 }
 
-/* --- Fix D1: after all Odoo renames, sync correct odoo_ids into D1 --- */
+/* --- Fix D1: sync correct odoo_ids + reset missing products for creation --- */
 
 async function cleanupFixD1(apiKey, db) {
   await odooAuth(apiKey);
@@ -847,19 +847,30 @@ async function cleanupFixD1(apiKey, db) {
   for (const p of prods) byCode[p.default_code] = p.id;
 
   const d1 = (await db.prepare('SELECT hn_code, odoo_id FROM rm_products WHERE is_active=1').all()).results;
-  const fixed = [], ok = [], notInOdoo = [];
+  const fixed = [], ok = [], resetForCreate = [];
 
   for (const d of d1) {
     const cid = byCode[d.hn_code];
     const d1id = d.odoo_id ? parseInt(d.odoo_id) : null;
-    if (!cid) { notInOdoo.push(d.hn_code); continue; }
+    if (!cid) {
+      // Product doesn't exist in Odoo — reset to CREATE so sync-step/products will create it
+      await db.prepare("UPDATE rm_products SET odoo_id=NULL, action='CREATE', updated_at=datetime('now') WHERE hn_code=?")
+        .bind(d.hn_code).run();
+      resetForCreate.push(d.hn_code);
+      continue;
+    }
     if (d1id === cid) { ok.push(d.hn_code); continue; }
     await db.prepare("UPDATE rm_products SET odoo_id=?, updated_at=datetime('now') WHERE hn_code=?")
       .bind(cid, d.hn_code).run();
     fixed.push({ c: d.hn_code, was: d1id, now: cid });
   }
 
-  return { fixed: fixed.length, ok: ok.length, not_in_odoo: notInOdoo, details: fixed };
+  return {
+    fixed: fixed.length, ok: ok.length,
+    reset_for_create: resetForCreate,
+    details: fixed,
+    next: resetForCreate.length ? 'Run sync-step/products to create missing items' : null,
+  };
 }
 
 /* --- Categories: deprecate old HE/NCH Raw Materials categories once empty --- */
