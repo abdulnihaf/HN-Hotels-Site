@@ -423,7 +423,7 @@ async function syncUoms(apiKey) {
 async function syncVendors(apiKey, db, userName) {
   const d1 = (await db.prepare('SELECT * FROM rm_vendors WHERE is_active=1').all()).results;
   const odooV = await odoo(apiKey, 'res.partner', 'search_read',
-    [[['supplier_rank', '>', 0]]], { fields: ['name', 'phone', 'mobile', 'company_id'] });
+    [[['supplier_rank', '>', 0]]], { fields: ['name', 'phone', 'company_id'] });
 
   const out = { renamed: [], created: [], linked: [], skipped: [] };
   const t0 = Date.now();
