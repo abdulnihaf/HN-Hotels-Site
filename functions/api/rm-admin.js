@@ -486,10 +486,13 @@ async function syncProducts(apiKey, db, userName) {
   const catMap = {};
   for (const c of odooCats) catMap[c.name] = c.id;
 
-  // Detect Odoo 19 field compatibility
-  const meta = await odoo(apiKey, 'product.product', 'fields_get', [], { attributes: ['type'] });
-  const isV19 = !!meta.is_storable;
-  const typeVal = isV19 ? 'goods' : 'product';
+  // Detect Odoo field compatibility — check actual selection values
+  const meta = await odoo(apiKey, 'product.product', 'fields_get', [], { attributes: ['type', 'selection'] });
+  const hasIsStorable = !!meta.is_storable;
+  const typeSelection = meta.type?.selection || [];
+  const typeOptions = typeSelection.map(s => s[0]);
+  // Use whatever storable type this Odoo has: 'goods', 'consu', or 'product'
+  const typeVal = typeOptions.includes('goods') ? 'goods' : typeOptions.includes('consu') ? 'consu' : 'product';
 
   // Load D1 products by action
   const creates = (await db.prepare("SELECT * FROM rm_products WHERE action='CREATE' AND is_active=1").all()).results;
@@ -522,7 +525,7 @@ async function syncProducts(apiKey, db, userName) {
       sale_ok: false,
       company_id: BRAND_COMPANY[p.brand] ?? false,
     };
-    if (isV19) vals.is_storable = true;
+    if (hasIsStorable) vals.is_storable = true;
     return vals;
   }
 
