@@ -329,7 +329,7 @@ async function doExtract(env) {
 
   const [categories, uoms, vendors, products, fields] = await Promise.all([
     odoo(apiKey, 'product.category', 'search_read', [[]], { fields: ['name', 'parent_id', 'complete_name'] }),
-    odoo(apiKey, 'uom.uom', 'search_read', [[]], { fields: ['name', 'category_id', 'uom_type', 'factor'] }),
+    odoo(apiKey, 'uom.uom', 'search_read', [[]], { fields: ['name'] }),
     odoo(apiKey, 'res.partner', 'search_read',
       [[['supplier_rank', '>', 0]]],
       { fields: ['name', 'phone', 'supplier_rank', 'company_id', 'active'] }),
@@ -405,7 +405,7 @@ async function syncCategories(apiKey, db, userName) {
 /* --- UoMs (read-only — just build the mapping) --- */
 
 async function syncUoms(apiKey) {
-  const existing = await odoo(apiKey, 'uom.uom', 'search_read', [[]], { fields: ['name', 'category_id'] });
+  const existing = await odoo(apiKey, 'uom.uom', 'search_read', [[]], { fields: ['name'] });
   const byName = {};
   for (const u of existing) byName[u.name.toLowerCase()] = u.id;
 
