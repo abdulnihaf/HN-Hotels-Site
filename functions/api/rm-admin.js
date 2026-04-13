@@ -314,6 +314,14 @@ async function handlePost(request, env) {
     return json({ success: !results._stopped_at, results });
   }
 
+  if (action === 'cleanup') {
+    const { step } = body;
+    const valid = ['audit', 'dupes', 'rename', 'fix-d1', 'categories'];
+    if (!step || !valid.includes(step))
+      return json({ error: `Required: step (${valid.join('|')})` }, 400);
+    return json(await runCleanup(env, db, step, user.name));
+  }
+
   return json({ error: 'Unknown action' }, 400);
 }
 
@@ -684,6 +692,203 @@ async function syncArchive(apiKey, db, userName) {
   }
 
   return out;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Cleanup — fix post-sync duplicates, wrong codes, bad D1 IDs
+ * Run order: audit → dupes → rename (repeat until 0 remaining) → fix-d1 → categories
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+async function runCleanup(env, db, step, userName) {
+  const apiKey = env.ODOO_API_KEY;
+  if (!apiKey) throw new Error('ODOO_API_KEY not set');
+  switch (step) {
+    case 'audit':      return cleanupAudit(apiKey, db);
+    case 'dupes':      return cleanupDupes(apiKey, db, userName);
+    case 'rename':     return cleanupRename(apiKey, db, userName);
+    case 'fix-d1':     return cleanupFixD1(apiKey, db);
+    case 'categories': return cleanupCategories(apiKey, db, userName);
+  }
+}
+
+async function fetchCleanupState(apiKey, db) {
+  await odooAuth(apiKey);
+  const [prods, cats] = await Promise.all([
+    odoo(apiKey, 'product.product', 'search_read',
+      [['|', ['default_code', 'like', 'RM-'], ['default_code', 'like', 'NCH-']]],
+      { fields: ['id', 'default_code', 'name', 'categ_id', 'product_tmpl_id'] }),
+    odoo(apiKey, 'product.category', 'search_read',
+      [[['complete_name', 'like', 'Goods /']]], { fields: ['id', 'name'] }),
+  ]);
+  const d1 = (await db.prepare('SELECT * FROM rm_products WHERE is_active=1 ORDER BY hn_code').all()).results;
+  const byCode = {};
+  for (const p of prods) if (p.default_code) byCode[p.default_code] = p;
+  const catMap = {};
+  for (const c of cats) catMap[c.name] = c.id;
+  return { prods, byCode, catMap, d1 };
+}
+
+/* --- Audit: read-only analysis of what needs fixing --- */
+
+async function cleanupAudit(apiKey, db) {
+  const { byCode, d1 } = await fetchCleanupState(apiKey, db);
+  const dupes = [], renames = [], clean = [], missing = [], d1Wrong = [];
+
+  for (const d of d1) {
+    const hn = byCode[d.hn_code];
+    const old = d.old_code ? byCode[d.old_code] : null;
+    const oid = d.odoo_id ? parseInt(d.odoo_id) : null;
+    const correct = old?.id || hn?.id;
+
+    if (hn && old)
+      dupes.push({ c: d.hn_code, hn_id: hn.id, old: d.old_code, old_id: old.id });
+    else if (!hn && old)
+      renames.push({ c: d.hn_code, old: d.old_code, id: old.id, cat: old.categ_id?.[1] });
+    else if (hn)
+      clean.push(d.hn_code);
+    else
+      missing.push({ c: d.hn_code, old: d.old_code, oid });
+
+    if (correct && oid !== correct)
+      d1Wrong.push({ c: d.hn_code, has: oid, need: correct });
+  }
+
+  return {
+    summary: {
+      dupes: dupes.length, renames: renames.length,
+      clean: clean.length, missing: missing.length, d1_wrong: d1Wrong.length,
+    },
+    dupes, renames, missing,
+    d1_wrong_sample: d1Wrong.slice(0, 15),
+  };
+}
+
+/* --- Dupes: archive HN-RM duplicate, rename HE-RM original → HN-RM --- */
+
+async function cleanupDupes(apiKey, db, userName) {
+  const { byCode, catMap, d1 } = await fetchCleanupState(apiKey, db);
+  const out = { archived: [], renamed: [], d1_fixed: [], errors: [] };
+
+  for (const d of d1) {
+    const hn = byCode[d.hn_code];
+    const old = d.old_code ? byCode[d.old_code] : null;
+    if (!hn || !old) continue;
+
+    try {
+      // Archive the duplicate (new HN-RM product created by sync)
+      await odoo(apiKey, 'product.product', 'write', [[hn.id], { active: false }]);
+      out.archived.push({ code: d.hn_code, id: hn.id });
+
+      // Rename original (HE-RM/old → HN-RM) + recategorize
+      const vals = { default_code: d.hn_code };
+      if (catMap[d.category]) vals.categ_id = catMap[d.category];
+      if (d.name && d.name !== old.name) vals.name = d.name;
+      await odoo(apiKey, 'product.product', 'write', [[old.id], vals]);
+      out.renamed.push({ from: d.old_code, to: d.hn_code, id: old.id });
+
+      // Fix D1 odoo_id to point to the original product
+      if (parseInt(d.odoo_id) !== old.id) {
+        await db.prepare("UPDATE rm_products SET odoo_id=?, updated_at=datetime('now') WHERE hn_code=?")
+          .bind(old.id, d.hn_code).run();
+        out.d1_fixed.push(d.hn_code);
+      }
+
+      await logSync(db, 'cleanup_dupe', 'product.product', old.id, d.hn_code,
+        { archived: hn.id, from: d.old_code }, userName);
+    } catch (e) {
+      out.errors.push({ c: d.hn_code, err: e.message });
+    }
+  }
+
+  return out;
+}
+
+/* --- Rename: HE-RM/NCH old codes → HN-RM (batched, re-run until remaining=0) --- */
+
+async function cleanupRename(apiKey, db, userName) {
+  const { byCode, catMap, d1 } = await fetchCleanupState(apiKey, db);
+  const todo = d1.filter(d => !byCode[d.hn_code] && d.old_code && byCode[d.old_code]);
+  const BATCH = 20;
+  const batch = todo.slice(0, BATCH);
+  const out = { renamed: [], d1_fixed: [], errors: [], remaining: todo.length - batch.length };
+
+  for (const d of batch) {
+    const old = byCode[d.old_code];
+    try {
+      const vals = { default_code: d.hn_code };
+      if (catMap[d.category]) vals.categ_id = catMap[d.category];
+      if (d.name && d.name !== old.name) vals.name = d.name;
+      await odoo(apiKey, 'product.product', 'write', [[old.id], vals]);
+      out.renamed.push({ from: d.old_code, to: d.hn_code, id: old.id });
+
+      if (parseInt(d.odoo_id) !== old.id) {
+        await db.prepare("UPDATE rm_products SET odoo_id=?, updated_at=datetime('now') WHERE hn_code=?")
+          .bind(old.id, d.hn_code).run();
+        out.d1_fixed.push(d.hn_code);
+      }
+
+      await logSync(db, 'cleanup_rename', 'product.product', old.id, d.hn_code,
+        { from: d.old_code }, userName);
+    } catch (e) {
+      out.errors.push({ c: d.hn_code, err: e.message });
+    }
+  }
+
+  return out;
+}
+
+/* --- Fix D1: after all Odoo renames, sync correct odoo_ids into D1 --- */
+
+async function cleanupFixD1(apiKey, db) {
+  await odooAuth(apiKey);
+  const prods = await odoo(apiKey, 'product.product', 'search_read',
+    [[['default_code', 'like', 'HN-RM-']]], { fields: ['id', 'default_code'] });
+  const byCode = {};
+  for (const p of prods) byCode[p.default_code] = p.id;
+
+  const d1 = (await db.prepare('SELECT hn_code, odoo_id FROM rm_products WHERE is_active=1').all()).results;
+  const fixed = [], ok = [], notInOdoo = [];
+
+  for (const d of d1) {
+    const cid = byCode[d.hn_code];
+    const d1id = d.odoo_id ? parseInt(d.odoo_id) : null;
+    if (!cid) { notInOdoo.push(d.hn_code); continue; }
+    if (d1id === cid) { ok.push(d.hn_code); continue; }
+    await db.prepare("UPDATE rm_products SET odoo_id=?, updated_at=datetime('now') WHERE hn_code=?")
+      .bind(cid, d.hn_code).run();
+    fixed.push({ c: d.hn_code, was: d1id, now: cid });
+  }
+
+  return { fixed: fixed.length, ok: ok.length, not_in_odoo: notInOdoo, details: fixed };
+}
+
+/* --- Categories: deprecate old HE/NCH Raw Materials categories once empty --- */
+
+async function cleanupCategories(apiKey, db, userName) {
+  await odooAuth(apiKey);
+  const oldCats = await odoo(apiKey, 'product.category', 'search_read',
+    [['|', ['complete_name', 'like', 'HE Raw Materials'], ['complete_name', 'like', 'NCH Raw Materials']]],
+    { fields: ['id', 'name', 'complete_name'] });
+  if (!oldCats.length) return { message: 'No old categories found' };
+
+  const ids = oldCats.map(c => c.id);
+  const activeCount = await odoo(apiKey, 'product.product', 'search_count',
+    [[['categ_id', 'in', ids], ['active', '=', true]]]);
+
+  if (activeCount > 0)
+    return { error: `${activeCount} active products still in old categories — run rename first`, categories: oldCats };
+
+  const deprecated = [];
+  for (const c of oldCats) {
+    if (!c.name.startsWith('[DEP')) {
+      await odoo(apiKey, 'product.category', 'write', [[c.id], { name: `[DEPRECATED] ${c.name}` }]);
+      deprecated.push(c.complete_name);
+    }
+  }
+
+  await logSync(db, 'cleanup_categories', 'product.category', 0, 'deprecated',
+    { count: deprecated.length, ids }, userName);
+  return { deprecated: deprecated.length, categories: deprecated };
 }
 
 /* ━━━ Main entry ━━━ */
