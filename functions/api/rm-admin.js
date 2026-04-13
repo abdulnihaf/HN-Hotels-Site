@@ -494,12 +494,17 @@ async function syncProducts(apiKey, db, userName) {
   // Use whatever storable type this Odoo has: 'goods', 'consu', or 'product'
   const typeVal = typeOptions.includes('goods') ? 'goods' : typeOptions.includes('consu') ? 'consu' : 'product';
 
-  // Load D1 products by action
-  const creates = (await db.prepare("SELECT * FROM rm_products WHERE action='CREATE' AND is_active=1").all()).results;
-  const updates = (await db.prepare("SELECT * FROM rm_products WHERE action='UPDATE' AND is_active=1").all()).results;
+  // Load D1 products by action — limit per call to avoid CF 50-subrequest limit
+  const BATCH = 15;
+  const creates = (await db.prepare("SELECT * FROM rm_products WHERE action='CREATE' AND is_active=1 LIMIT ?").bind(BATCH).all()).results;
+  const updates = (await db.prepare("SELECT * FROM rm_products WHERE action='UPDATE' AND is_active=1 LIMIT ?").bind(BATCH).all()).results;
 
-  const out = { created: [], updated: [], verified: [], errors: [] };
-  const t0 = Date.now();
+  const out = { created: [], updated: [], verified: [], errors: [], remaining: 0 };
+
+  // Count remaining
+  const remC = await db.prepare("SELECT COUNT(*) as c FROM rm_products WHERE action='CREATE' AND is_active=1").first();
+  const remU = await db.prepare("SELECT COUNT(*) as c FROM rm_products WHERE action='UPDATE' AND is_active=1").first();
+  out.remaining = (remC?.c || 0) + (remU?.c || 0);
 
   // Helper: resolve or create category
   async function resolveCat(name) {
@@ -513,40 +518,45 @@ async function syncProducts(apiKey, db, userName) {
   async function buildVals(p) {
     const categId = await resolveCat(p.category);
     const uom = uomMap[p.uom] || { odoo_id: 1 };
-    const vals = {
+    return {
       name: p.name,
       default_code: p.hn_code,
       type: typeVal,
       categ_id: categId,
       uom_id: uom.odoo_id,
-      uom_po_id: uom.odoo_id,
       standard_price: p.avg_cost || 0,
       purchase_ok: true,
       sale_ok: false,
       company_id: BRAND_COMPANY[p.brand] ?? false,
+      ...(hasIsStorable ? { is_storable: true } : {}),
     };
-    if (hasIsStorable) vals.is_storable = true;
-    return vals;
   }
+
+  // Batch-search existing codes in ONE Odoo call (saves subrequests)
+  const allCodes = [];
+  for (const p of [...creates, ...updates]) {
+    allCodes.push(p.hn_code);
+    if (p.old_code) allCodes.push(p.old_code);
+  }
+  const existingOdoo = allCodes.length
+    ? await odoo(apiKey, 'product.product', 'search_read',
+        [[['default_code', 'in', allCodes]]], { fields: ['id', 'default_code'] })
+    : [];
+  const byCode = {};
+  for (const e of existingOdoo) byCode[e.default_code] = e.id;
 
   // --- CREATE ---
   for (const p of creates) {
-    if (Date.now() - t0 > MAX_RUNTIME_MS) { out.partial = true; break; }
     try {
-      // Idempotent: search by new code OR old code
-      const codes = [p.hn_code];
-      if (p.old_code) codes.push(p.old_code);
-      const existing = await odoo(apiKey, 'product.product', 'search_read',
-        [[['default_code', 'in', codes]]], { fields: ['id', 'default_code'], limit: 1 });
-
-      if (existing.length) {
+      const existId = byCode[p.hn_code] || (p.old_code && byCode[p.old_code]);
+      if (existId) {
         await db.prepare("UPDATE rm_products SET odoo_id=?, action='KEEP', updated_at=datetime('now') WHERE hn_code=?")
-          .bind(existing[0].id, p.hn_code).run();
-        // Rename code if needed
-        if (existing[0].default_code !== p.hn_code) {
-          await odoo(apiKey, 'product.product', 'write', [[existing[0].id], { default_code: p.hn_code }]);
+          .bind(existId, p.hn_code).run();
+        // Rename code in Odoo if still using old code
+        if (!byCode[p.hn_code] && p.old_code && byCode[p.old_code]) {
+          await odoo(apiKey, 'product.product', 'write', [[existId], { default_code: p.hn_code }]);
         }
-        out.verified.push({ code: p.hn_code, odoo_id: existing[0].id });
+        out.verified.push({ code: p.hn_code, odoo_id: existId });
         continue;
       }
 
@@ -563,7 +573,6 @@ async function syncProducts(apiKey, db, userName) {
 
   // --- UPDATE ---
   for (const p of updates) {
-    if (Date.now() - t0 > MAX_RUNTIME_MS) { out.partial = true; break; }
     try {
       if (!p.odoo_id) { out.errors.push({ code: p.hn_code, error: 'no odoo_id' }); continue; }
 
