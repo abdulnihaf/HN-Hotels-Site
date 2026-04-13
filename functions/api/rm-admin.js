@@ -332,7 +332,7 @@ async function doExtract(env) {
     odoo(apiKey, 'uom.uom', 'search_read', [[]], { fields: ['name', 'category_id', 'uom_type', 'factor'] }),
     odoo(apiKey, 'res.partner', 'search_read',
       [[['supplier_rank', '>', 0]]],
-      { fields: ['name', 'phone', 'mobile', 'supplier_rank', 'company_id', 'active'] }),
+      { fields: ['name', 'phone', 'supplier_rank', 'company_id', 'active'] }),
     odoo(apiKey, 'product.product', 'search_read',
       [[['default_code', '!=', false], ['default_code', 'like', 'RM-']]],
       { fields: ['name', 'default_code', 'categ_id', 'uom_id', 'standard_price', 'type', 'company_id', 'active', 'product_tmpl_id'] }),
@@ -448,7 +448,7 @@ async function syncVendors(apiKey, db, userName) {
     // Try to match existing Odoo vendor by name or phone
     const match = odooV.find(o =>
       o.name.toLowerCase() === v.name.toLowerCase() ||
-      (v.phone && (o.phone === v.phone || o.mobile === v.phone))
+      (v.phone && o.phone === v.phone)
     );
 
     if (match) {
