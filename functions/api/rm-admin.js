@@ -593,6 +593,8 @@ async function syncProducts(apiKey, db, userName) {
 /* --- Supplierinfo --- */
 
 async function syncSupplierInfo(apiKey, db, userName) {
+  // Batch: max 35 per call to stay under CF 50-subrequest limit (2 initial + 35 creates = 37)
+  const BATCH = 35;
   const rows = (await db.prepare(`
     SELECT vp.*, p.odoo_id AS p_oid, v.odoo_id AS v_oid
     FROM rm_vendor_products vp
@@ -603,42 +605,46 @@ async function syncSupplierInfo(apiKey, db, userName) {
 
   if (!rows.length) return { skipped: 'no synced product-vendor pairs' };
 
-  // Resolve product_tmpl_id for each product
+  // Resolve product_tmpl_id for each product (1 Odoo call)
   const pIds = [...new Set(rows.map(r => r.p_oid))];
   const pRecs = await odoo(apiKey, 'product.product', 'search_read',
     [[['id', 'in', pIds]]], { fields: ['id', 'product_tmpl_id'] });
   const tmplOf = {};
   for (const r of pRecs) tmplOf[r.id] = r.product_tmpl_id[0];
 
-  // Load existing supplierinfo
+  // Load ALL existing supplierinfo in 1 call
   const tmplIds = [...new Set(Object.values(tmplOf))];
   const existingInfo = tmplIds.length
     ? await odoo(apiKey, 'product.supplierinfo', 'search_read',
         [[['product_tmpl_id', 'in', tmplIds]]], { fields: ['partner_id', 'product_tmpl_id', 'price'] })
     : [];
 
-  const out = { created: [], updated: [], skipped: [] };
-  const t0 = Date.now();
-
+  // Filter to only rows that need action (not already in existingInfo)
+  const needsAction = [];
+  const alreadySkipped = [];
   for (const m of rows) {
-    if (Date.now() - t0 > MAX_RUNTIME_MS) { out.partial = true; break; }
-
     const tmplId = tmplOf[m.p_oid];
-    if (!tmplId) { out.skipped.push({ p: m.product_code, v: m.vendor_key, why: 'no tmpl' }); continue; }
-
+    if (!tmplId) continue;
     const exists = existingInfo.find(s =>
       s.partner_id[0] === m.v_oid && s.product_tmpl_id[0] === tmplId
     );
-
-    if (exists) {
-      if (m.last_price && Math.abs(exists.price - m.last_price) > 0.01) {
-        await odoo(apiKey, 'product.supplierinfo', 'write', [[exists.id], { price: m.last_price }]);
-        out.updated.push({ p: m.product_code, v: m.vendor_key });
-      } else {
-        out.skipped.push({ p: m.product_code, v: m.vendor_key, why: 'exists' });
-      }
+    if (exists && (!m.last_price || Math.abs(exists.price - m.last_price) <= 0.01)) {
+      alreadySkipped.push({ p: m.product_code, v: m.vendor_key });
     } else {
-      const vals = { partner_id: m.v_oid, product_tmpl_id: tmplId, price: m.last_price || 0, min_qty: 1 };
+      needsAction.push({ ...m, tmplId, existsId: exists?.id });
+    }
+  }
+
+  const out = { created: [], updated: [], skipped: alreadySkipped, remaining: needsAction.length };
+  const batch = needsAction.slice(0, BATCH);
+  out.remaining = needsAction.length - batch.length;
+
+  for (const m of batch) {
+    if (m.existsId) {
+      await odoo(apiKey, 'product.supplierinfo', 'write', [[m.existsId], { price: m.last_price }]);
+      out.updated.push({ p: m.product_code, v: m.vendor_key });
+    } else {
+      const vals = { partner_id: m.v_oid, product_tmpl_id: m.tmplId, price: m.last_price || 0, min_qty: 1 };
       const id = await odoo(apiKey, 'product.supplierinfo', 'create', [vals]);
       out.created.push({ p: m.product_code, v: m.vendor_key, id });
       await logSync(db, 'create_supplierinfo', 'product.supplierinfo', id,
