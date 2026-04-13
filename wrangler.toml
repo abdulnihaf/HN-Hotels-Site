@@ -9,6 +9,7 @@ compatibility_flags = ["nodejs_compat"]
 # DASHBOARD_KEY          — Dashboard authentication key
 # GEMINI_API_KEY         — Google Gemini API key for AI role mapping
 # GOOGLE_PLACES_API_KEY  — Google Places API (New) for expansion intelligence
+# ODOO_API_KEY           — Odoo 19 API key (user: yash@gmail.com) for RM sync
 
 [[d1_databases]]
 binding = "DB"
