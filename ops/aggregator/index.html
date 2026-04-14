@@ -6,218 +6,405 @@
 <title>Aggregator Pulse — HN Hotels</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a14; color: #e0e0e0; min-height: 100vh; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 16px; }
 
-  /* PIN Gate */
-  #pin-gate { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  .pin-box { text-align: center; }
-  .pin-box h2 { color: #ff6b35; margin-bottom: 16px; font-size: 20px; }
-  .pin-input { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
-  .pin-input input { width: 48px; height: 56px; text-align: center; font-size: 24px; border: 2px solid #333; border-radius: 8px; background: #1a1a2e; color: #fff; }
-  .pin-input input:focus { border-color: #ff6b35; outline: none; }
-  .pin-error { color: #f44336; font-size: 13px; min-height: 20px; }
+  /* Header */
+  .hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #1a1a2e; padding-bottom: 12px; }
+  .hdr h1 { font-size: 20px; color: #ff6b35; }
+  .hdr .meta { font-size: 11px; color: #555; }
+  .hdr .status { display: flex; gap: 12px; align-items: center; }
+  .hdr button { background: #ff6b35; color: white; border: none; padding: 6px 14px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot-on { background: #4caf50; }
+  .dot-off { background: #f44336; }
+  .dot-wait { background: #ff9800; }
 
-  /* Dashboard */
-  #dashboard { display: none; padding: 20px; max-width: 1200px; margin: 0 auto; }
-  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-  .header h1 { font-size: 22px; color: #ff6b35; }
-  .header .meta { font-size: 12px; color: #666; }
-  .refresh-btn { background: #ff6b35; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  /* Platform Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab { padding: 8px 20px; background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .tab.active { background: #16213e; border-bottom-color: #16213e; color: #ff6b35; }
+  .tab.swiggy { border-top: 2px solid #fc8019; }
+  .tab.zomato { border-top: 2px solid #e23744; }
 
-  /* Cards Grid */
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  /* Sections */
+  .platform { display: none; }
+  .platform.active { display: block; }
+  .section { background: #111122; border: 1px solid #1e1e3a; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+  .section-hdr { background: #161630; padding: 10px 16px; font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+  .section-hdr .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .badge-swiggy { background: #fc801920; color: #fc8019; }
+  .badge-zomato { background: #e2374420; color: #e23744; }
+  .section-body { padding: 12px 16px; }
 
-  .card { background: #1a1a2e; border-radius: 12px; padding: 20px; border: 1px solid #2a2a4a; }
-  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .card-title { font-size: 15px; font-weight: 700; }
-  .card-platform { font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
-  .platform-swiggy { background: #ff6b0020; color: #ff6b35; }
-  .platform-zomato { background: #e2363620; color: #e23636; }
-  .brand-he { border-left: 3px solid #ff6b35; }
-  .brand-nch { border-left: 3px solid #4caf50; }
+  /* Metric Grid */
+  .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .mcard { background: #0d0d1a; border: 1px solid #1a1a2e; border-radius: 6px; padding: 10px 12px; }
+  .mcard .label { font-size: 11px; color: #666; margin-bottom: 4px; line-height: 1.3; }
+  .mcard .value { font-size: 18px; font-weight: 700; }
+  .mcard .change { font-size: 10px; margin-top: 2px; }
+  .up { color: #4caf50; }
+  .down { color: #f44336; }
+  .neutral { color: #666; }
+  .warn { color: #ff9800; }
+  .good { color: #4caf50; }
+  .bad { color: #f44336; }
 
-  .metric-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #2a2a4a; }
-  .metric-row:last-child { border-bottom: none; }
-  .metric-label { font-size: 13px; color: #888; }
-  .metric-value { font-size: 14px; font-weight: 600; }
-  .metric-value.highlight { color: #4caf50; }
-  .metric-value.warn { color: #ff9800; }
-  .metric-value.bad { color: #f44336; }
+  /* Status bar */
+  .sbar { display: flex; gap: 16px; font-size: 11px; color: #555; margin-bottom: 16px; flex-wrap: wrap; }
+  .sbar span { display: flex; align-items: center; gap: 4px; }
 
-  .last-updated { font-size: 11px; color: #555; margin-top: 12px; text-align: right; }
-
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-  .status-online { background: #4caf50; }
-  .status-offline { background: #f44336; }
-  .status-unknown { background: #666; }
-
-  /* Empty State */
-  .empty { text-align: center; padding: 60px 20px; color: #555; }
-  .empty h3 { margin-bottom: 8px; color: #888; }
-
-  /* History Table */
-  .history { margin-top: 24px; }
-  .history h3 { margin-bottom: 12px; color: #ccc; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; padding: 8px 12px; background: #1a1a2e; color: #888; border-bottom: 1px solid #2a2a4a; }
-  td { padding: 8px 12px; border-bottom: 1px solid #1a1a2e; }
-  tr:hover { background: #16213e; }
+  /* Snapshot log */
+  .log { margin-top: 20px; }
+  .log h3 { font-size: 14px; margin-bottom: 8px; color: #888; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; padding: 6px 10px; background: #111122; color: #666; }
+  td { padding: 6px 10px; border-bottom: 1px solid #0d0d1a; }
+  tr:hover { background: #111128; }
+  .empty { text-align: center; padding: 30px; color: #444; font-size: 13px; }
 </style>
 </head>
 <body>
+<div class="container">
 
-<!-- Dashboard (no PIN — read-only) -->
-<div id="dashboard" style="display:block">
-  <div class="header">
+  <!-- Header -->
+  <div class="hdr">
     <div>
       <h1>Aggregator Pulse</h1>
-      <div class="meta">Swiggy + Zomato | HE + NCH | Auto-refreshes every 60s</div>
+      <div class="meta">Swiggy + Zomato | Hamza Express + Nawabi Chai House</div>
     </div>
-    <div>
-      <span class="meta" id="last-refresh"></span>
-      <button class="refresh-btn" onclick="loadData()">Refresh</button>
+    <div class="status">
+      <span class="meta" id="ts"></span>
+      <span id="swiggy-status"><span class="dot dot-wait"></span> Swiggy</span>
+      <span id="zomato-status"><span class="dot dot-wait"></span> Zomato</span>
+      <button onclick="load()">Refresh</button>
     </div>
   </div>
 
-  <div class="grid" id="cards"></div>
+  <!-- Status Bar -->
+  <div class="sbar" id="sbar"></div>
 
-  <div class="history">
-    <h3>Recent Snapshots</h3>
+  <!-- Platform Tabs -->
+  <div class="tabs">
+    <div class="tab swiggy active" onclick="showPlatform('swiggy')">Swiggy</div>
+    <div class="tab zomato" onclick="showPlatform('zomato')">Zomato</div>
+  </div>
+
+  <!-- SWIGGY -->
+  <div class="platform active" id="p-swiggy">
+    <div class="section">
+      <div class="section-hdr">Sales <span class="badge badge-swiggy">Today</span></div>
+      <div class="section-body"><div class="mgrid" id="s-sales"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Bolt (Quick Delivery)</div>
+      <div class="section-body"><div class="mgrid" id="s-bolt"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Funnel</div>
+      <div class="section-body"><div class="mgrid" id="s-funnel"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Customers <span class="badge badge-swiggy">48h lag</span></div>
+      <div class="section-body"><div class="mgrid" id="s-customers"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Ratings & Complaints</div>
+      <div class="section-body"><div class="mgrid" id="s-ratings"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Ads — CPC + Banner</div>
+      <div class="section-body"><div class="mgrid" id="s-ads"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Discounts</div>
+      <div class="section-body"><div class="mgrid" id="s-discounts"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Operations</div>
+      <div class="section-body"><div class="mgrid" id="s-ops"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Menu Health</div>
+      <div class="section-body"><div class="mgrid" id="s-menu"></div></div>
+    </div>
+  </div>
+
+  <!-- ZOMATO -->
+  <div class="platform" id="p-zomato">
+    <div class="section">
+      <div class="section-hdr">Sales Overview <span class="badge badge-zomato">Today</span></div>
+      <div class="section-body"><div class="mgrid" id="z-sales"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Customer Experience</div>
+      <div class="section-body"><div class="mgrid" id="z-cx"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Customer Funnel</div>
+      <div class="section-body"><div class="mgrid" id="z-funnel"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Ads & Offers</div>
+      <div class="section-body"><div class="mgrid" id="z-ads"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Weekly History <span class="badge badge-zomato">Business Reports</span></div>
+      <div class="section-body"><div class="mgrid" id="z-weekly"></div></div>
+    </div>
+  </div>
+
+  <!-- Snapshot Log -->
+  <div class="log">
+    <h3>Recent Captures (<span id="snap-count">0</span>)</h3>
     <table>
-      <thead>
-        <tr><th>Time</th><th>Platform</th><th>Brand</th><th>Type</th><th>Key Metrics</th></tr>
-      </thead>
-      <tbody id="history-body"></tbody>
+      <thead><tr><th>Time (IST)</th><th>Platform</th><th>Page</th><th>Metrics Captured</th></tr></thead>
+      <tbody id="log-body"></tbody>
     </table>
   </div>
 </div>
 
 <script>
 const API = '/api/aggregator-pulse';
-const API_KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
+const KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
 
-// No PIN — read-only dashboard, loads immediately
-loadData();
-setInterval(loadData, 60_000);
+function showPlatform(p) {
+  document.querySelectorAll('.platform').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('p-' + p).classList.add('active');
+  document.querySelector('.tab.' + p).classList.add('active');
+}
 
-// --- Load Data ---
-async function loadData() {
+async function load() {
   try {
-    const [latestRes, historyRes] = await Promise.all([
-      fetch(`${API}?action=latest&key=${API_KEY}`),
-      fetch(`${API}?action=history&key=${API_KEY}&hours=24&limit=30`),
+    const [latestRes, histRes, statsRes] = await Promise.all([
+      fetch(`${API}?action=latest&key=${KEY}`),
+      fetch(`${API}?action=history&key=${KEY}&hours=24&limit=50`),
+      fetch(`${API}?action=stats&key=${KEY}`),
     ]);
     const latest = await latestRes.json();
-    const history = await historyRes.json();
+    const hist = await histRes.json();
+    const stats = await statsRes.json();
 
-    renderCards(latest.outlets || []);
-    renderHistory(history.snapshots || []);
-    document.getElementById('last-refresh').textContent = `Updated: ${new Date().toLocaleTimeString('en-IN')}`;
+    renderMetrics(latest.outlets || []);
+    renderLog(hist.snapshots || []);
+    renderStatus(stats.stats || [], latest.generated_at);
   } catch (e) {
     console.error('Load failed:', e);
   }
 }
 
-function renderCards(outlets) {
-  const container = document.getElementById('cards');
+function renderStatus(stats, ts) {
+  document.getElementById('ts').textContent = 'Updated: ' + new Date().toLocaleTimeString('en-IN');
+  const total = stats.reduce((s, x) => s + x.total_snapshots, 0);
 
-  if (outlets.length === 0) {
-    container.innerHTML = `<div class="empty"><h3>No data yet</h3><p>Install the Chrome extension on your VM and open the partner portals.</p></div>`;
-    return;
+  // Status dots
+  const swiggy = stats.find(s => s.platform === 'swiggy');
+  const zomato = stats.find(s => s.platform === 'zomato');
+  setDot('swiggy-status', swiggy?.total_snapshots > 0);
+  setDot('zomato-status', zomato?.total_snapshots > 0);
+
+  // Status bar
+  const sbar = document.getElementById('sbar');
+  sbar.innerHTML = stats.map(s => {
+    const ago = timeAgo(s.last_capture);
+    return `<span><span class="dot ${ago.includes('m ago') || ago === 'just now' ? 'dot-on' : 'dot-off'}"></span>${s.platform}/${s.brand}: ${s.total_snapshots} snaps, last ${ago}</span>`;
+  }).join('') + `<span style="margin-left:auto">Total: ${total} snapshots</span>`;
+}
+
+function setDot(id, active) {
+  const el = document.getElementById(id);
+  const dot = el?.querySelector('.dot');
+  if (dot) { dot.className = 'dot ' + (active ? 'dot-on' : 'dot-off'); }
+}
+
+function renderMetrics(outlets) {
+  // Merge all metrics for each platform into one flat object
+  const swiggy = {}, zomato = {};
+  for (const o of outlets) {
+    const target = o.platform === 'swiggy' ? swiggy : zomato;
+    for (const [mtype, mdata] of Object.entries(o.metrics || {})) {
+      const d = mdata.data;
+      if (d && typeof d === 'object') Object.assign(target, d);
+    }
   }
 
-  // Ensure all 4 cards exist (even if no data)
-  const expected = [
-    { platform: 'swiggy', brand: 'he', name: 'Hamza Express', outlet_id: '1342888' },
-    { platform: 'swiggy', brand: 'nch', name: 'Nawabi Chai House', outlet_id: '1342887' },
-    { platform: 'zomato', brand: 'he', name: 'Hamza Express', outlet_id: '22632449' },
-    { platform: 'zomato', brand: 'nch', name: 'Nawabi Chai House', outlet_id: '22632430' },
-  ];
+  // === SWIGGY SECTIONS ===
+  renderGrid('s-sales', [
+    mc('Net Sales', swiggy.net_sales, '₹'),
+    mc('Delivered Orders', swiggy.delivered_orders),
+    mc('Net AOV', swiggy.net_aov, '₹'),
+    mc('Cancelled Orders', swiggy.cancelled_orders, '', 'warn-if'),
+    mc('Cancelled Loss', swiggy.cancelled_loss, '₹', 'warn-if'),
+  ]);
 
-  container.innerHTML = expected.map(exp => {
-    const outlet = outlets.find(o => o.platform === exp.platform && o.brand === exp.brand);
-    return renderCard(exp, outlet);
+  renderGrid('s-bolt', [
+    mc('Bolt Orders', swiggy.bolt_orders),
+    mc('% Bolt', swiggy.bolt_pct, '', '', '%'),
+    mc('Bolt AOV', swiggy.bolt_aov, '₹'),
+    mc('Avg Prep Time', swiggy.avg_prep_time, '', '', ' min'),
+    mc('Fast Prep (<6 min)', swiggy.fast_prep_pct, '', 'good-if', '%'),
+    mc('Delayed (>5 min)', swiggy.delayed_bolt_pct, '', 'warn-if', '%'),
+  ]);
+
+  renderGrid('s-funnel', [
+    mc('Impressions', swiggy.impressions),
+    mc('Menu Opens', swiggy.menu_opens),
+    mc('Cart Builds', swiggy.cart_builds),
+    mc('Orders Placed', swiggy.orders_placed),
+  ]);
+
+  renderGrid('s-customers', [
+    mc('New Customers', swiggy.new_customers),
+    mc('Repeat Customers', swiggy.repeat_customers),
+    mc('Dormant Customers', swiggy.dormant_customers),
+    mc('New Cust Order %', swiggy.new_cust_order_pct, '', '', '%'),
+    mc('Repeat Cust Order %', swiggy.repeat_cust_order_pct, '', '', '%'),
+    mc('Dormant Cust Order %', swiggy.dormant_cust_order_pct, '', '', '%'),
+  ]);
+
+  renderGrid('s-ratings', [
+    mc('Rated Orders', swiggy.rated_orders),
+    mc('Poor Rated', swiggy.poor_rated_orders, '', 'warn-if'),
+    mc('Complaint %', swiggy.complaint_pct, '', 'warn-if', '%'),
+    mc('Complaint Orders', swiggy.complaint_orders, '', 'warn-if'),
+    mc('Unresolved', swiggy.unresolved_complaints, '', 'warn-if'),
+    mc('Wrong Items', swiggy.wrong_items, '', 'warn-if'),
+    mc('Missing Items', swiggy.missing_items, '', 'warn-if'),
+    mc('Quality Issues', swiggy.quality_issues, '', 'warn-if'),
+    mc('Packaging Issues', swiggy.packaging_issues, '', 'warn-if'),
+  ]);
+
+  renderGrid('s-ads', [
+    mc('CPC Sales', swiggy.cpc_sales, '₹'),
+    mc('CPC Orders', swiggy.cpc_orders),
+    mc('CPC Spend', swiggy.cpc_spends, '₹'),
+    mc('CPC Menu Visits', swiggy.cpc_menu_visits),
+    mc('ROAS', swiggy.roas, '', '', 'x'),
+    mc('CPC Depth', swiggy.cpc_depth, '', '', '%'),
+    mc('Banner Sales', swiggy.cba_sales, '₹'),
+    mc('Banner Orders', swiggy.cba_orders),
+    mc('Banner Spend', swiggy.cba_spends, '₹'),
+    mc('Banner Impressions', swiggy.cba_impressions),
+    mc('Banner Menu Visits', swiggy.cba_menu_visits),
+    mc('Banner Depth', swiggy.cba_depth, '', '', '%'),
+  ]);
+
+  renderGrid('s-discounts', [
+    mc('Sales via Discounts', swiggy.disc_sales, '₹'),
+    mc('Discounted Orders %', swiggy.disc_orders_pct, '', '', '%'),
+    mc('Restaurant Discount (RDGMV)', swiggy.rdgmv, '₹'),
+    mc('Discount GMV %', swiggy.disc_gmv_pct, '', '', '%'),
+    mc('Discount Per Order (RDPO)', swiggy.rdpo, '₹'),
+  ]);
+
+  renderGrid('s-ops', [
+    mc('Online Availability', swiggy.online_availability, '', swiggy.online_availability >= 95 ? 'good' : 'bad', '%'),
+    mc('Kitchen Prep Time', swiggy.kitchen_prep_time, '', '', ' min'),
+    mc('Food Ready Accuracy (MFR)', swiggy.mfr_accuracy, '', '', '%'),
+    mc('Delayed (>10 min)', swiggy.delayed_10min, '', 'warn-if', '%'),
+  ]);
+
+  renderGrid('s-menu', [
+    mc('Menu Score', swiggy.menu_score, '', swiggy.menu_score >= 50 ? '' : 'bad', '/100'),
+    mc('Items with Photos', swiggy.items_with_photos, '', 'good-if', '%'),
+    mc('Items with Descriptions', swiggy.items_with_desc, '', 'good-if', '%'),
+    mc('Category Score', swiggy.category_score, '', '', '/100'),
+    mc('Item Score', swiggy.item_score, '', '', '/100'),
+    mc('Addon Score', swiggy.addon_score, '', '', '/100'),
+    mc('Combo Score', swiggy.combo_score, '', '', '/100'),
+  ]);
+
+  // === ZOMATO SECTIONS ===
+  renderGrid('z-sales', [
+    mc('Sales', zomato.sales, '₹'),
+    mc('Delivered Orders', zomato.delivered_orders),
+    mc('AOV', zomato.aov, '₹'),
+    mc('Lost Sales', zomato.lost_sales, '₹', 'warn-if'),
+    mc('HE Sales', zomato.he_sales, '₹'),
+    mc('NCH Sales', zomato.nch_sales, '₹'),
+  ]);
+
+  renderGrid('z-cx', [
+    mc('Rejected Orders', zomato.rejected_pct, '', 'warn-if', '%'),
+    mc('Delayed Orders', zomato.delayed_pct, '', 'warn-if', '%'),
+    mc('Poor Rated Orders', zomato.poor_rated_pct, '', 'warn-if', '%'),
+    mc('Sales from Offers', zomato.sales_from_offers, '₹'),
+  ]);
+
+  renderGrid('z-funnel', [
+    mc('Impressions', zomato.impressions),
+    mc('Impression → Menu', zomato.imp_to_menu, '', '', '%'),
+    mc('Menu → Cart', zomato.menu_to_cart, '', '', '%'),
+    mc('Cart → Order', zomato.cart_to_order, '', '', '%'),
+  ]);
+
+  renderGrid('z-ads', [
+    mc('Sales from Offers', zomato.sales_from_offers, '₹'),
+  ]);
+
+  renderGrid('z-weekly', [
+    mc('Weekly Sales', zomato.weekly_sales, '₹'),
+    mc('Weekly Orders', zomato.weekly_orders),
+    mc('Weekly AOV', zomato.weekly_aov, '₹'),
+    mc('Bad Orders %', zomato.weekly_bad_orders, '', 'warn-if', '%'),
+    mc('Online %', zomato.weekly_online_pct, '', '', '%'),
+    mc('Lost Sales', zomato.weekly_lost_sales, '₹'),
+  ]);
+}
+
+function mc(label, value, prefix, colorRule, suffix) {
+  prefix = prefix || '';
+  suffix = suffix || '';
+  let cls = '';
+  const v = value !== undefined && value !== null && value !== '' ? value : null;
+
+  if (v !== null && colorRule) {
+    const num = parseFloat(v);
+    if (colorRule === 'warn-if' && num > 0) cls = 'warn';
+    if (colorRule === 'good-if' && num > 80) cls = 'good';
+    if (colorRule === 'good') cls = 'good';
+    if (colorRule === 'bad') cls = 'bad';
+  }
+  return { label, value: v !== null ? prefix + v + suffix : '—', cls };
+}
+
+function renderGrid(id, items) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = items.map(m =>
+    `<div class="mcard"><div class="label">${m.label}</div><div class="value ${m.cls}">${m.value}</div></div>`
+  ).join('');
+}
+
+function renderLog(snapshots) {
+  document.getElementById('snap-count').textContent = snapshots.length;
+  const tbody = document.getElementById('log-body');
+  if (!snapshots.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">No captures in last 24h</td></tr>';
+    return;
+  }
+  tbody.innerHTML = snapshots.slice(0, 30).map(s => {
+    const d = JSON.parse(s.data || '{}');
+    const keys = Object.keys(d).filter(k => !['view','date_range','active_tab','user_minimal'].includes(k));
+    const summary = keys.slice(0, 4).map(k => `<b>${k}</b>: ${d[k]}`).join(', ');
+    const more = keys.length > 4 ? ` +${keys.length - 4} more` : '';
+    const time = new Date(s.captured_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return `<tr><td>${time}</td><td>${s.platform}</td><td>${s.metric_type}</td><td>${summary}${more}</td></tr>`;
   }).join('');
 }
 
-function renderCard(exp, outlet) {
-  const platformClass = `platform-${exp.platform}`;
-  const brandClass = `brand-${exp.brand}`;
-  const metrics = outlet?.metrics || {};
-
-  // Flatten all metric data into one object
-  const flat = {};
-  let lastCaptured = null;
-  Object.values(metrics).forEach(m => {
-    if (m.data && typeof m.data === 'object') Object.assign(flat, m.data);
-    if (m.captured_at) lastCaptured = m.captured_at;
-  });
-
-  const rows = [];
-  if (flat.net_sales || flat.sales) rows.push(metricRow('Sales', `₹${flat.net_sales || flat.sales || '0'}`, 'highlight'));
-  if (flat.delivered_orders !== undefined) rows.push(metricRow('Orders', flat.delivered_orders));
-  if (flat.net_aov || flat.aov) rows.push(metricRow('AOV', `₹${flat.net_aov || flat.aov || '0'}`));
-  if (flat.avg_rating) rows.push(metricRow('Rating', flat.avg_rating));
-  if (flat.avg_prep_time) rows.push(metricRow('Prep Time', `${flat.avg_prep_time} min`));
-  if (flat.cancelled_orders) rows.push(metricRow('Cancelled', flat.cancelled_orders, 'warn'));
-  if (flat.poor_rated_orders) rows.push(metricRow('Poor Rated', flat.poor_rated_orders, 'bad'));
-  if (flat.delayed_orders_pct) rows.push(metricRow('Delayed', `${flat.delayed_orders_pct}%`, flat.delayed_orders_pct > 5 ? 'bad' : ''));
-  if (flat.online_pct) rows.push(metricRow('Online %', `${flat.online_pct}%`, flat.online_pct < 50 ? 'bad' : 'highlight'));
-  if (flat.lost_sales) rows.push(metricRow('Lost Sales', `₹${flat.lost_sales}`, flat.lost_sales > 0 ? 'warn' : ''));
-  if (flat.menu_score) rows.push(metricRow('Menu Score', `${flat.menu_score}%`));
-  if (flat.disabled_items) rows.push(metricRow('Disabled Items', flat.disabled_items, flat.disabled_items > 0 ? 'warn' : ''));
-  if (flat.out_of_stock) rows.push(metricRow('Out of Stock', flat.out_of_stock, flat.out_of_stock > 0 ? 'bad' : ''));
-
-  if (rows.length === 0) rows.push(metricRow('Status', 'Waiting for data...'));
-
-  const statusClass = lastCaptured && (Date.now() - new Date(lastCaptured).getTime() < 20 * 60 * 1000) ? 'status-online' : lastCaptured ? 'status-offline' : 'status-unknown';
-  const ago = lastCaptured ? timeAgo(lastCaptured) : 'never';
-
-  return `
-    <div class="card ${brandClass}">
-      <div class="card-header">
-        <span class="card-title"><span class="status-dot ${statusClass}"></span>${exp.name}</span>
-        <span class="card-platform ${platformClass}">${exp.platform.toUpperCase()}</span>
-      </div>
-      ${rows.join('')}
-      <div class="last-updated">Last capture: ${ago}</div>
-    </div>
-  `;
+function timeAgo(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  return Math.floor(m / 60) + 'h ago';
 }
 
-function metricRow(label, value, cls) {
-  return `<div class="metric-row"><span class="metric-label">${label}</span><span class="metric-value ${cls || ''}">${value}</span></div>`;
-}
-
-function renderHistory(snapshots) {
-  const tbody = document.getElementById('history-body');
-  if (snapshots.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:#555;text-align:center;padding:20px;">No snapshots in last 24h</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = snapshots.map(s => {
-    const data = JSON.parse(s.data || '{}');
-    const summary = Object.entries(data).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(', ');
-    return `<tr>
-      <td>${new Date(s.captured_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
-      <td><span class="card-platform platform-${s.platform}">${s.platform}</span></td>
-      <td>${s.brand.toUpperCase()}</td>
-      <td>${s.metric_type}</td>
-      <td style="font-size:11px;color:#888;">${summary}</td>
-    </tr>`;
-  }).join('');
-}
-
-function timeAgo(isoStr) {
-  const diff = Date.now() - new Date(isoStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
+// Auto-refresh every 60s
+load();
+setInterval(load, 60_000);
 </script>
 </body>
 </html>
