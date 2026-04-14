@@ -3,294 +3,245 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aggregator Pulse v2 — HN Hotels</title>
+<title>Aggregator Pulse — HN Hotels</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a14; color: #e0e0e0; }
-  .c { max-width: 1400px; margin: 0 auto; padding: 16px; }
-  .hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #1a1a2e; padding-bottom: 10px; }
-  .hdr h1 { font-size: 18px; color: #ff6b35; }
-  .hdr .sub { font-size: 11px; color: #555; }
-  .hdr button { background: #ff6b35; color: #fff; border: none; padding: 6px 14px; border-radius: 5px; cursor: pointer; font-size: 12px; }
-  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 4px; }
-  .dot-on { background: #4caf50; } .dot-off { background: #f44336; } .dot-wait { background: #ff9800; }
-  .sbar { display: flex; gap: 12px; font-size: 11px; color: #555; margin-bottom: 14px; flex-wrap: wrap; }
-  .sbar span { display: flex; align-items: center; gap: 3px; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a14;color:#e0e0e0}
+.c{max-width:1400px;margin:0 auto;padding:12px}
+.hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #1a1a2e}
+.hdr h1{font-size:18px;color:#ff6b35}
+.hdr .sub{font-size:10px;color:#555}
+.hdr button{background:#ff6b35;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:11px}
 
-  /* Orders Section — the PRIMARY data */
-  .orders-section { background: #0f1528; border: 1px solid #1a2a4a; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-  .orders-section h2 { font-size: 15px; color: #4caf50; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-  .orders-section h2 .badge { font-size: 9px; background: #4caf5020; color: #4caf50; padding: 2px 6px; border-radius: 4px; }
-  .order-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-  .order-card { background: #111a2e; border: 1px solid #1e2e4a; border-radius: 8px; padding: 12px; }
-  .order-card .brand { font-size: 11px; font-weight: 700; margin-bottom: 6px; }
-  .brand-he { color: #ff6b35; } .brand-nch { color: #4caf50; }
-  .order-card .platform { font-size: 10px; padding: 2px 6px; border-radius: 3px; float: right; }
-  .p-swiggy { background: #fc801915; color: #fc8019; } .p-zomato { background: #e2374415; color: #e23744; }
-  .order-card .big { font-size: 22px; font-weight: 700; margin: 4px 0; }
-  .order-card .row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
-  .order-card .label { color: #666; } .order-card .val { font-weight: 600; }
+/* Date filters */
+.filters{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.fbtn{padding:6px 14px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:5px;color:#aaa;cursor:pointer;font-size:12px;font-weight:500}
+.fbtn.active{background:#ff6b35;color:#fff;border-color:#ff6b35}
+.fbtn:hover{border-color:#ff6b35}
 
-  /* Order list */
-  .order-list { margin-top: 12px; }
-  .order-item { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #1a1a2e; font-size: 12px; }
-  .order-item:last-child { border-bottom: none; }
-  .status-tag { padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
-  .st-delivered { background: #4caf5020; color: #4caf50; }
-  .st-preparing, .st-ready { background: #ff980020; color: #ff9800; }
-  .st-cancelled, .st-rejected { background: #f4433620; color: #f44336; }
-  .order-item .amt { margin-left: auto; font-weight: 600; }
-  .order-item .issue { color: #f44336; font-size: 10px; }
+/* Summary cards */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+@media(max-width:800px){.cards{grid-template-columns:repeat(2,1fr)}}
+.card{background:#111a2e;border:1px solid #1e2e4a;border-radius:8px;padding:12px}
+.card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.card .name{font-size:12px;font-weight:700}
+.card .plat{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:600}
+.sw{background:#fc801915;color:#fc8019}.zm{background:#e2374415;color:#e23744}
+.card .big{font-size:24px;font-weight:700;margin:4px 0}
+.card .row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0}
+.card .lbl{color:#666}.card .val{font-weight:600}
+.he{border-left:3px solid #ff6b35}.nch{border-left:3px solid #4caf50}
 
-  /* Ops sections */
-  .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
-  .tab { padding: 7px 16px; background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 12px; font-weight: 600; }
-  .tab.active { background: #16213e; border-bottom-color: #16213e; color: #ff6b35; }
-  .platform { display: none; } .platform.active { display: block; }
-  .section { background: #111122; border: 1px solid #1e1e3a; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
-  .section-hdr { background: #161630; padding: 8px 14px; font-size: 12px; font-weight: 700; display: flex; justify-content: space-between; }
-  .section-hdr .src { font-size: 9px; color: #555; font-weight: 400; }
-  .section-body { padding: 10px 14px; }
-  .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
-  .mcard { background: #0d0d1a; border: 1px solid #1a1a2e; border-radius: 5px; padding: 8px 10px; }
-  .mcard .label { font-size: 10px; color: #666; margin-bottom: 3px; }
-  .mcard .value { font-size: 16px; font-weight: 700; }
-  .good { color: #4caf50; } .warn { color: #ff9800; } .bad { color: #f44336; }
+/* Order table */
+.otbl{margin-bottom:16px}
+.otbl h3{font-size:14px;margin-bottom:8px;color:#ccc}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:6px 8px;background:#111122;color:#666;position:sticky;top:0}
+td{padding:6px 8px;border-bottom:1px solid #0d0d1a}
+tr:hover{background:#111128}
+.st{padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600}
+.st-d{background:#4caf5020;color:#4caf50}.st-p{background:#ff980020;color:#ff9800}.st-c{background:#f4433620;color:#f44336}
+.issue-tag{color:#f44336;font-size:10px}
+.empty{text-align:center;padding:30px;color:#444;font-size:12px}
 
-  /* Log */
-  .log { margin-top: 16px; }
-  .log h3 { font-size: 13px; margin-bottom: 6px; color: #888; }
-  table { width: 100%; border-collapse: collapse; font-size: 11px; }
-  th { text-align: left; padding: 5px 8px; background: #111122; color: #666; }
-  td { padding: 5px 8px; border-bottom: 1px solid #0d0d1a; }
-  .empty { text-align: center; padding: 20px; color: #444; font-size: 12px; }
+/* Ops sections */
+.tabs{display:flex;gap:4px;margin-bottom:12px}
+.tab{padding:6px 14px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:5px 5px 0 0;cursor:pointer;font-size:12px;font-weight:600}
+.tab.active{background:#16213e;border-bottom-color:#16213e;color:#ff6b35}
+.platform{display:none}.platform.active{display:block}
+.section{background:#111122;border:1px solid #1e1e3a;border-radius:8px;margin-bottom:10px;overflow:hidden}
+.section-hdr{background:#161630;padding:7px 12px;font-size:11px;font-weight:700;display:flex;justify-content:space-between}
+.section-hdr .src{font-size:9px;color:#444;font-weight:400}
+.section-body{padding:8px 12px}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px}
+.mcard{background:#0d0d1a;border:1px solid #1a1a2e;border-radius:4px;padding:6px 8px}
+.mcard .label{font-size:9px;color:#666;margin-bottom:2px}.mcard .value{font-size:14px;font-weight:700}
+.good{color:#4caf50}.warn{color:#ff9800}.bad{color:#f44336}
 </style>
 </head>
 <body>
 <div class="c">
   <div class="hdr">
-    <div>
-      <h1>Aggregator Pulse v2</h1>
-      <div class="sub">Real-time from Finance (Swiggy) + Order History (Zomato) | Auto-refresh 60s</div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <span class="sub" id="ts"></span>
-      <button onclick="load()">Refresh</button>
-    </div>
-  </div>
-  <div class="sbar" id="sbar"></div>
-
-  <!-- ORDERS & REVENUE — PRIMARY DATA -->
-  <div class="orders-section">
-    <h2>Orders & Revenue <span class="badge">REAL-TIME from Finance + Order History</span></h2>
-    <div class="order-grid" id="order-grid"></div>
-    <div class="order-list" id="order-list"></div>
+    <div><h1>Aggregator Pulse</h1><div class="sub">Swiggy + Zomato | Hamza Express + Nawabi Chai House</div></div>
+    <div style="display:flex;gap:8px;align-items:center"><span class="sub" id="ts"></span><button onclick="load()">Refresh</button></div>
   </div>
 
-  <!-- OPERATIONAL METRICS -->
+  <div class="filters" id="filters">
+    <div class="fbtn active" data-d="today">Today</div>
+    <div class="fbtn" data-d="yesterday">Yesterday</div>
+    <div class="fbtn" data-d="week">This Week</div>
+    <div class="fbtn" data-d="month">This Month</div>
+    <div class="fbtn" data-d="all">All Time</div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="otbl">
+    <h3>Orders</h3>
+    <div style="max-height:400px;overflow-y:auto">
+      <table><thead><tr><th>Date</th><th>Time</th><th>Platform</th><th>Outlet</th><th>Customer</th><th>Items</th><th>Amount</th><th>Status</th><th>Issues</th></tr></thead>
+      <tbody id="otbody"></tbody></table>
+    </div>
+  </div>
+
   <div class="tabs">
-    <div class="tab active" onclick="showP('swiggy')">Swiggy Ops</div>
-    <div class="tab" onclick="showP('zomato')">Zomato Metrics</div>
+    <div class="tab active" onclick="showP('swiggy',this)">Swiggy Ops</div>
+    <div class="tab" onclick="showP('zomato',this)">Zomato Metrics</div>
+    <div class="tab" onclick="showP('finance',this)">Finance</div>
   </div>
 
   <div class="platform active" id="p-swiggy">
-    <div class="section"><div class="section-hdr">Funnel & Customers <span class="src">Source: Business Reports (may lag 48h)</span></div><div class="section-body"><div class="mgrid" id="s-funnel"></div></div></div>
-    <div class="section"><div class="section-hdr">Ratings & Complaints <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ratings"></div></div></div>
-    <div class="section"><div class="section-hdr">Ads (CPC + Banner) <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ads"></div></div></div>
-    <div class="section"><div class="section-hdr">Discounts <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-disc"></div></div></div>
-    <div class="section"><div class="section-hdr">Operations <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ops"></div></div></div>
-    <div class="section"><div class="section-hdr">Menu Health <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-menu"></div></div></div>
+    <div class="section"><div class="section-hdr">Funnel & Customers<span class="src">Business Reports (may lag 48h)</span></div><div class="section-body"><div class="mgrid" id="s-fun"></div></div></div>
+    <div class="section"><div class="section-hdr">Ratings & Complaints<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-rat"></div></div></div>
+    <div class="section"><div class="section-hdr">Ads<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ads"></div></div></div>
+    <div class="section"><div class="section-hdr">Operations<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ops"></div></div></div>
+    <div class="section"><div class="section-hdr">Menu Health<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-menu"></div></div></div>
   </div>
-
   <div class="platform" id="p-zomato">
-    <div class="section"><div class="section-hdr">Live Tracking (Today) <span class="src">Source: Zomato Live Tracking</span></div><div class="section-body"><div class="mgrid" id="z-live"></div></div></div>
-    <div class="section"><div class="section-hdr">Customer Funnel <span class="src">Source: Live Tracking</span></div><div class="section-body"><div class="mgrid" id="z-funnel"></div></div></div>
-    <div class="section"><div class="section-hdr">Weekly Trends <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="z-weekly"></div></div></div>
+    <div class="section"><div class="section-hdr">Live Tracking (Today)<span class="src">Zomato Live Tracking — accurate</span></div><div class="section-body"><div class="mgrid" id="z-live"></div></div></div>
+    <div class="section"><div class="section-hdr">Customer Funnel<span class="src">Live Tracking</span></div><div class="section-body"><div class="mgrid" id="z-fun"></div></div></div>
+    <div class="section"><div class="section-hdr">Weekly Trends<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="z-wk"></div></div></div>
   </div>
-
-  <!-- Log removed — debug data, not for ops UI -->
+  <div class="platform" id="p-finance">
+    <div class="section"><div class="section-hdr">Swiggy HE Payout<span class="src">Finance Page</span></div><div class="section-body"><div class="mgrid" id="f-he"></div></div></div>
+    <div class="section"><div class="section-hdr">Swiggy NCH Payout<span class="src">Finance Page</span></div><div class="section-body"><div class="mgrid" id="f-nch"></div></div></div>
+  </div>
 </div>
 
 <script>
-const API = '/api/aggregator-pulse';
-const KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
+const API='/api/aggregator-pulse';
+const KEY='MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
+let dateFilter='today';
 
-function showP(p) {
-  document.querySelectorAll('.platform').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-  document.getElementById('p-' + p).classList.add('active');
-  event.target.classList.add('active');
+document.querySelectorAll('.fbtn').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('.fbtn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    dateFilter=b.dataset.d;
+    load();
+  };
+});
+
+function showP(p,el){
+  document.querySelectorAll('.platform').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+  document.getElementById('p-'+p).classList.add('active');
+  el.classList.add('active');
 }
 
-async function load() {
-  try {
-    const [latR, hisR, stR] = await Promise.all([
+async function load(){
+  try{
+    const [ordR,latR,finR]=await Promise.all([
+      fetch(`${API}?action=orders&date=${dateFilter}&key=${KEY}`),
       fetch(`${API}?action=latest&key=${KEY}`),
-      fetch(`${API}?action=history&key=${KEY}&hours=24&limit=40`),
-      fetch(`${API}?action=stats&key=${KEY}`),
+      fetch(`${API}?action=finance&key=${KEY}`),
     ]);
-    const lat = await latR.json();
-    const his = await hisR.json();
-    const st = await stR.json();
-    render(lat.outlets || [], his.snapshots || [], st.stats || []);
-    document.getElementById('ts').textContent = new Date().toLocaleTimeString('en-IN');
-  } catch (e) { console.error(e); }
+    const ord=await ordR.json();
+    const lat=await latR.json();
+    const fin=await finR.json();
+    renderCards(ord);
+    renderOrders(ord.orders||[]);
+    renderOps(lat.outlets||[]);
+    renderFinance(fin.finance||[]);
+    document.getElementById('ts').textContent=new Date().toLocaleTimeString('en-IN');
+  }catch(e){console.error(e)}
 }
 
-function render(outlets, snapshots, stats) {
-  // Flatten all metrics by type
-  const data = {};
-  for (const o of outlets) {
-    for (const [mtype, mdata] of Object.entries(o.metrics || {})) {
-      data[mtype] = { ...(data[mtype] || {}), ...mdata.data, _ts: mdata.captured_at };
-    }
-  }
-
-  // Status bar
-  const total = stats.reduce((s, x) => s + x.total_snapshots, 0);
-  document.getElementById('sbar').innerHTML = stats.map(s =>
-    `<span><span class="dot ${isRecent(s.last_capture) ? 'dot-on' : 'dot-off'}"></span>${s.platform}/${s.brand}: ${s.total_snapshots} snaps</span>`
-  ).join('') + `<span style="margin-left:auto">Total: ${total}</span>`;
-
-  // === ORDERS & REVENUE (PRIMARY) ===
-  const heF = data.finance_he || {};
-  const nchF = data.finance_nch || {};
-  const zOrders = data.orders_zomato || {};
-  const zLive = data.live_tracking || {};
-
-  const grid = document.getElementById('order-grid');
-  grid.innerHTML = [
-    orderCard('Hamza Express', 'he', 'swiggy', heF.order_count || '0', heF.customer_paid, heF.net_payout, heF.total_fees, heF._ts),
-    orderCard('Nawabi Chai House', 'nch', 'swiggy', nchF.order_count || '0', nchF.customer_paid, nchF.net_payout, nchF.total_fees, nchF._ts),
-    orderCard('Both Outlets', 'all', 'zomato',
-      zLive.delivered_orders || zOrders.total_orders || '0',
-      zLive.sales ? '₹' + zLive.sales : zOrders.total_revenue ? '₹' + zOrders.total_revenue : '—',
-      null,
-      null,
-      zLive._ts || zOrders._ts,
-      { delivered: zOrders.delivered, rejected: zOrders.rejected, delayed: zOrders.delayed }
-    ),
-  ].join('');
-
-  // Order list from Zomato Order History
-  const orderList = document.getElementById('order-list');
-  const orders = zOrders.orders || [];
-  if (orders.length > 0) {
-    orderList.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px;">Recent Orders (Zomato Order History)</div>' +
-      orders.slice(0, 10).map(o => {
-        const stCls = (o.status || '').toLowerCase().replace(/\s/g, '-');
-        return `<div class="order-item">
-          <span class="status-tag st-${stCls}">${o.status}</span>
-          <span>${o.time || ''} ${o.date || ''}</span>
-          <span style="color:#888">${o.customer || ''}</span>
-          <span style="flex:1;color:#aaa;font-size:11px">${(o.items || '').substring(0, 50)}</span>
-          ${o.issue ? '<span class="issue">⚠️</span>' : ''}
-          <span class="amt">₹${o.amount || '—'}</span>
-        </div>`;
-      }).join('');
-  } else {
-    orderList.innerHTML = '<div class="empty">No order data yet — waiting for Order History capture</div>';
-  }
-
-  // === SWIGGY OPS ===
-  const sr = data.reports_swiggy || {};
-  renderGrid('s-funnel', [
-    mc('Impressions', sr.impressions), mc('Menu Opens', sr.menu_opens), mc('Cart Builds', sr.cart_builds), mc('Orders Placed', sr.orders_placed),
-    mc('New Customers', sr.new_customers), mc('Repeat', sr.repeat_customers), mc('Dormant', sr.dormant_customers),
-    mc('New Cust Order %', sr.new_cust_order_pct, '', '', '%'), mc('Repeat Cust %', sr.repeat_cust_order_pct, '', '', '%'),
-  ]);
-  renderGrid('s-ratings', [
-    mc('Rated', sr.rated_orders), mc('Poor Rated', sr.poor_rated_orders, '', 'w'),
-    mc('Complaint %', sr.complaint_pct, '', 'w', '%'), mc('Complaints', sr.complaint_orders, '', 'w'),
-    mc('Unresolved', sr.unresolved_complaints, '', 'w'), mc('Wrong Items', sr.wrong_items, '', 'w'),
-    mc('Missing', sr.missing_items, '', 'w'), mc('Quality', sr.quality_issues, '', 'w'), mc('Packaging', sr.packaging_issues, '', 'w'),
-  ]);
-  renderGrid('s-ads', [
-    mc('CPC Sales', sr.cpc_sales, '₹'), mc('CPC Orders', sr.cpc_orders), mc('CPC Spend', sr.cpc_spends, '₹'),
-    mc('ROAS', sr.roas, '', '', 'x'), mc('CPC Visits', sr.cpc_menu_visits),
-    mc('Banner Sales', sr.cba_sales, '₹'), mc('Banner Orders', sr.cba_orders), mc('Banner Spend', sr.cba_spends, '₹'),
-  ]);
-  renderGrid('s-disc', [
-    mc('Disc Sales', sr.disc_sales, '₹'), mc('Disc Orders %', sr.disc_orders_pct, '', '', '%'), mc('RDPO', sr.rdpo, '₹'),
-  ]);
-  renderGrid('s-ops', [
-    mc('Online %', sr.online_availability, '', parseFloat(sr.online_availability) >= 95 ? 'g' : 'b', '%'),
-    mc('Prep Time', sr.kitchen_prep_time, '', '', ' min'),
-    mc('MFR Accuracy', sr.mfr_accuracy, '', '', '%'), mc('Delayed >10m', sr.delayed_10min, '', 'w', '%'),
-  ]);
-  renderGrid('s-menu', [
-    mc('Menu Score', sr.menu_score, '', parseFloat(sr.menu_score) >= 50 ? '' : 'b', '/100'),
-    mc('Photos', sr.items_with_photos, '', 'g', '%'), mc('Descriptions', sr.items_with_desc, '', 'g', '%'),
-    mc('Category', sr.category_score, '', '', '/100'), mc('Addon', sr.addon_score, '', '', '/100'), mc('Combo', sr.combo_score, '', '', '/100'),
-  ]);
-
-  // === ZOMATO METRICS ===
-  renderGrid('z-live', [
-    mc('Sales', zLive.sales, '₹'), mc('Orders', zLive.delivered_orders), mc('AOV', zLive.aov, '₹'),
-    mc('Rejected %', zLive.rejected_pct, '', 'w', '%'), mc('Delayed %', zLive.delayed_pct, '', 'w', '%'),
-    mc('Poor Rated %', zLive.poor_rated_pct, '', 'w', '%'), mc('Lost Sales', zLive.lost_sales, '₹', 'w'),
-    mc('HE Sales', zLive.he_sales, '₹'), mc('NCH Sales', zLive.nch_sales, '₹'),
-  ]);
-  renderGrid('z-funnel', [
-    mc('Impressions', zLive.impressions), mc('I→Menu', zLive.imp_to_menu, '', '', '%'),
-    mc('Menu→Cart', zLive.menu_to_cart, '', '', '%'), mc('Cart→Order', zLive.cart_to_order, '', '', '%'),
-    mc('Offers Sales', zLive.sales_from_offers, '₹'),
-  ]);
-  const zb = data.biz_reports || {};
-  renderGrid('z-weekly', [
-    mc('Weekly Sales', zb.weekly_sales, '₹'), mc('Weekly Orders', zb.weekly_orders),
-    mc('Weekly AOV', zb.weekly_aov, '₹'), mc('Bad Orders', zb.weekly_bad_orders, '', 'w', '%'),
-    mc('Online %', zb.weekly_online_pct, '', '', '%'),
-  ]);
-
-  // Log
-  document.getElementById('sc').textContent = snapshots.length;
-  const tbody = document.getElementById('log-body');
-  tbody.innerHTML = snapshots.slice(0, 20).map(s => {
-    const d = JSON.parse(s.data || '{}');
-    const keys = Object.keys(d).filter(k => !['view','date_range','orders','past_payouts','_ts'].includes(k));
-    const sum = keys.slice(0, 3).map(k => `${k}:${typeof d[k] === 'object' ? JSON.stringify(d[k]).substring(0,30) : d[k]}`).join(', ');
-    const t = new Date(s.captured_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
-    return `<tr><td>${t}</td><td>${s.platform}</td><td>${s.metric_type}</td><td>${sum}</td></tr>`;
+function renderCards(data){
+  const outlets=data.by_outlet||[];
+  const el=document.getElementById('cards');
+  // Ensure 4 cards: swiggy_he, swiggy_nch, zomato_he, zomato_nch
+  const expected=[
+    {platform:'swiggy',brand:'he',name:'Hamza Express',cls:'he sw'},
+    {platform:'swiggy',brand:'nch',name:'Nawabi Chai House',cls:'nch sw'},
+    {platform:'zomato',brand:'he',name:'Hamza Express',cls:'he zm'},
+    {platform:'zomato',brand:'nch',name:'Nawabi Chai House',cls:'nch zm'},
+  ];
+  el.innerHTML=expected.map(e=>{
+    const o=outlets.find(x=>x.platform===e.platform&&x.brand===e.brand)||{orders:0,delivered:0,revenue:0,payout:0};
+    const pCls=e.platform==='swiggy'?'sw':'zm';
+    return `<div class="card ${e.brand}">
+      <div class="top"><span class="name">${e.name}</span><span class="plat ${pCls}">${e.platform.toUpperCase()}</span></div>
+      <div class="big">${o.delivered} delivered</div>
+      <div class="row"><span class="lbl">Total orders</span><span class="val">${o.orders}</span></div>
+      <div class="row"><span class="lbl">Revenue</span><span class="val">₹${Math.round(o.revenue)}</span></div>
+      ${o.payout?`<div class="row"><span class="lbl">Net payout</span><span class="val">₹${Math.round(o.payout)}</span></div>`:''}
+    </div>`;
   }).join('');
 }
 
-function orderCard(name, brand, platform, orders, revenue, netPayout, fees, ts, extra) {
-  const brandCls = brand === 'he' ? 'brand-he' : brand === 'nch' ? 'brand-nch' : '';
-  const pCls = platform === 'swiggy' ? 'p-swiggy' : 'p-zomato';
-  const ago = ts ? timeAgo(ts) : 'no data';
-  let extraHtml = '';
-  if (extra) {
-    if (extra.rejected) extraHtml += `<div class="row"><span class="label">Rejected</span><span class="val bad">${extra.rejected}</span></div>`;
-    if (extra.delayed) extraHtml += `<div class="row"><span class="label">Delayed</span><span class="val warn">${extra.delayed}</span></div>`;
-  }
-  return `<div class="order-card">
-    <span class="platform ${pCls}">${platform.toUpperCase()}</span>
-    <div class="brand ${brandCls}">${name}</div>
-    <div class="big">${orders} orders</div>
-    <div class="row"><span class="label">Revenue</span><span class="val">${revenue || '—'}</span></div>
-    ${netPayout ? `<div class="row"><span class="label">Net Payout</span><span class="val">${netPayout}</span></div>` : ''}
-    ${fees ? `<div class="row"><span class="label">Fees</span><span class="val">${fees}</span></div>` : ''}
-    ${extraHtml}
-    <div style="font-size:10px;color:#444;margin-top:6px">Updated ${ago}</div>
-  </div>`;
+function renderOrders(orders){
+  const tb=document.getElementById('otbody');
+  if(!orders.length){tb.innerHTML='<tr><td colspan="9" class="empty">No orders for this period</td></tr>';return}
+  tb.innerHTML=orders.map(o=>{
+    const s=o.status||'';
+    const sc=s.match(/deliver/i)?'st-d':s.match(/prepar|ready/i)?'st-p':'st-c';
+    const outlet=o.brand==='he'?'HE':o.brand==='nch'?'NCH':o.outlet_name||'—';
+    const plat=o.platform==='swiggy'?'<span class="plat sw">S</span>':'<span class="plat zm">Z</span>';
+    return `<tr>
+      <td>${o.order_date||'—'}</td>
+      <td>${o.order_time||'—'}</td>
+      <td>${plat}</td>
+      <td>${outlet}</td>
+      <td>${o.customer_name||'—'}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.items||'—'}</td>
+      <td>₹${o.order_value||'—'}</td>
+      <td><span class="st ${sc}">${s}</span></td>
+      <td>${o.issues?'<span class="issue-tag">⚠️ '+o.issues.substring(0,30)+'</span>':''}</td>
+    </tr>`;
+  }).join('');
 }
 
-function mc(label, val, pre, cls, suf) {
-  const v = val != null && val !== '' ? (pre||'') + val + (suf||'') : '—';
-  const c = cls === 'w' && parseFloat(val) > 0 ? 'warn' : cls === 'b' ? 'bad' : cls === 'g' ? 'good' : '';
-  return { label, value: v, cls: c };
+function renderOps(outlets){
+  const flat={};
+  for(const o of outlets){
+    for(const[mt,md]of Object.entries(o.metrics||{})){
+      if(typeof md.data==='object')Object.assign(flat,md.data);
+    }
+  }
+  const sr=flat; // reports_swiggy metrics
+  const zl=flat; // live_tracking metrics (merged)
+
+  // Swiggy
+  rg('s-fun',[m('Impressions',sr.impressions),m('Menu Opens',sr.menu_opens),m('Cart Builds',sr.cart_builds),m('Orders Placed',sr.orders_placed),m('New Cust',sr.new_customers),m('Repeat',sr.repeat_customers),m('Dormant',sr.dormant_customers),m('New Cust %',sr.new_cust_order_pct,'','','%'),m('Repeat %',sr.repeat_cust_order_pct,'','','%')]);
+  rg('s-rat',[m('Rated',sr.rated_orders),m('Poor Rated',sr.poor_rated_orders,'','w'),m('Complaint %',sr.complaint_pct,'','w','%'),m('Complaints',sr.complaint_orders,'','w'),m('Unresolved',sr.unresolved_complaints,'','w'),m('Wrong Items',sr.wrong_items,'','w'),m('Missing',sr.missing_items,'','w'),m('Quality',sr.quality_issues,'','w'),m('Packaging',sr.packaging_issues,'','w')]);
+  rg('s-ads',[m('CPC Sales',sr.cpc_sales,'₹'),m('CPC Orders',sr.cpc_orders),m('CPC Spend',sr.cpc_spends,'₹'),m('ROAS',sr.roas,'','','x'),m('Banner Sales',sr.cba_sales,'₹'),m('Banner Spend',sr.cba_spends,'₹')]);
+  rg('s-ops',[m('Online %',sr.online_availability,'',parseFloat(sr.online_availability)>=95?'g':'b','%'),m('Prep Time',sr.kitchen_prep_time,'','',' min'),m('MFR',sr.mfr_accuracy,'','','%'),m('Delayed >10m',sr.delayed_10min,'','w','%')]);
+  rg('s-menu',[m('Menu Score',sr.menu_score,'',parseFloat(sr.menu_score)>=50?'':'b','/100'),m('Photos',sr.items_with_photos,'','g','%'),m('Descriptions',sr.items_with_desc,'','g','%')]);
+
+  // Zomato
+  rg('z-live',[m('Sales',zl.sales,'₹'),m('Orders',zl.delivered_orders),m('AOV',zl.aov,'₹'),m('Rejected',zl.rejected_pct,'','w','%'),m('Delayed',zl.delayed_pct,'','w','%'),m('Poor Rated',zl.poor_rated_pct,'','w','%'),m('Lost Sales',zl.lost_sales,'₹','w'),m('HE Sales',zl.he_sales,'₹'),m('NCH Sales',zl.nch_sales,'₹')]);
+  rg('z-fun',[m('Impressions',zl.impressions),m('I→Menu',zl.imp_to_menu,'','','%'),m('Menu→Cart',zl.menu_to_cart,'','','%'),m('Cart→Order',zl.cart_to_order,'','','%'),m('Offer Sales',zl.sales_from_offers,'₹')]);
+  const zb=flat;
+  rg('z-wk',[m('Wk Sales',zb.weekly_sales,'₹'),m('Wk Orders',zb.weekly_orders),m('Wk AOV',zb.weekly_aov,'₹'),m('Bad Orders',zb.weekly_bad_orders,'','w','%'),m('Online',zb.weekly_online_pct,'','','%')]);
 }
-function renderGrid(id, items) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.innerHTML = items.map(m => `<div class="mcard"><div class="label">${m.label}</div><div class="value ${m.cls}">${m.value}</div></div>`).join('');
+
+function renderFinance(finance){
+  for(const f of finance){
+    const d=f.data||{};
+    const brand=f.brand;
+    const id=brand==='he'?'f-he':brand==='nch'?'f-nch':null;
+    if(!id)continue;
+    rg(id,[
+      m('Orders',d.order_count),m('Customer Paid',d.customer_paid,'₹'),m('Fees',d.total_fees),
+      m('Complaints',d.complaint_charges),m('Taxes',d.total_taxes),m('Other Charges',d.other_charges),
+      m('Net Payout',d.net_payout),m('Payout Date',d.payout_date),
+    ]);
+  }
 }
-function isRecent(ts) { return ts && (Date.now() - new Date(ts).getTime() < 15 * 60 * 1000); }
-function timeAgo(iso) { const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? 'just now' : m < 60 ? m + 'm ago' : Math.floor(m/60) + 'h ago'; }
+
+function m(label,val,pre,cls,suf){
+  const v=val!=null&&val!==''?(pre||'')+val+(suf||''):'—';
+  const c=cls==='w'&&parseFloat(val)>0?'warn':cls==='b'?'bad':cls==='g'?'good':'';
+  return{label,value:v,cls:c};
+}
+function rg(id,items){
+  const el=document.getElementById(id);if(!el)return;
+  el.innerHTML=items.map(i=>`<div class="mcard"><div class="label">${i.label}</div><div class="value ${i.cls}">${i.value}</div></div>`).join('');
+}
 
 load();
-setInterval(load, 60_000);
+setInterval(load,60000);
 </script>
 </body>
 </html>
