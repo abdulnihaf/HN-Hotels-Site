@@ -799,9 +799,16 @@ async function deletePOLine(body, user, creds, cfg, brand, DB) {
     return json({ success: true, po_name: check.po.name, action: 'po_cancelled', reason: 'Last line removed — PO cancelled' });
   }
 
-  // Delete the line: command [2, id, 0] removes and deletes
+  // Confirmed POs don't allow line deletion directly.
+  // Cycle: cancel → draft → delete line → reconfirm
+  await odooCall(creds.uid, creds.key,
+    'purchase.order', 'button_cancel', [[po_id]]);
+  await odooCall(creds.uid, creds.key,
+    'purchase.order', 'button_draft', [[po_id]]);
   await odooCall(creds.uid, creds.key,
     'purchase.order', 'write', [[po_id], { order_line: [[2, line_id, 0]] }]);
+  await odooCall(creds.uid, creds.key,
+    'purchase.order', 'button_confirm', [[po_id]]);
 
   if (DB) {
     await DB.prepare(
