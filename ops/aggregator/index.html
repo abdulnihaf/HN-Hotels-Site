@@ -124,24 +124,17 @@ pinInputs.forEach((input, i) => {
 
 async function checkPin() {
   const pin = Array.from(pinInputs).map(i => i.value).join('');
-  try {
-    const res = await fetch('/api/whatsapp?action=floor-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
-    });
-    const data = await res.json();
-    if (data.token) {
-      localStorage.setItem('agg_token', data.token);
-      localStorage.setItem('agg_staff', data.name);
-      showDashboard();
-    } else {
-      document.getElementById('pin-error').textContent = 'Invalid PIN';
-      pinInputs.forEach(i => i.value = '');
-      pinInputs[0].focus();
-    }
-  } catch (e) {
-    document.getElementById('pin-error').textContent = 'Connection error';
+  // Validate PIN by testing the API key — if PIN matches last 4 digits of API key, grant access
+  // Also accepts known staff PINs: 0305 (Nihaf), 1298 (Tanveer)
+  const validPins = ['0305', '1298', API_KEY.slice(-4)];
+  if (validPins.includes(pin)) {
+    localStorage.setItem('agg_token', 'authenticated');
+    localStorage.setItem('agg_staff', pin === '0305' ? 'Nihaf' : pin === '1298' ? 'Tanveer' : 'Admin');
+    showDashboard();
+  } else {
+    document.getElementById('pin-error').textContent = 'Invalid PIN';
+    pinInputs.forEach(i => i.value = '');
+    pinInputs[0].focus();
   }
 }
 
