@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aggregator Pulse — HN Hotels</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+
+  /* PIN Gate */
+  #pin-gate { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .pin-box { text-align: center; }
+  .pin-box h2 { color: #ff6b35; margin-bottom: 16px; font-size: 20px; }
+  .pin-input { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
+  .pin-input input { width: 48px; height: 56px; text-align: center; font-size: 24px; border: 2px solid #333; border-radius: 8px; background: #1a1a2e; color: #fff; }
+  .pin-input input:focus { border-color: #ff6b35; outline: none; }
+  .pin-error { color: #f44336; font-size: 13px; min-height: 20px; }
+
+  /* Dashboard */
+  #dashboard { display: none; padding: 20px; max-width: 1200px; margin: 0 auto; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .header h1 { font-size: 22px; color: #ff6b35; }
+  .header .meta { font-size: 12px; color: #666; }
+  .refresh-btn { background: #ff6b35; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+
+  /* Cards Grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+
+  .card { background: #1a1a2e; border-radius: 12px; padding: 20px; border: 1px solid #2a2a4a; }
+  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .card-title { font-size: 15px; font-weight: 700; }
+  .card-platform { font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
+  .platform-swiggy { background: #ff6b0020; color: #ff6b35; }
+  .platform-zomato { background: #e2363620; color: #e23636; }
+  .brand-he { border-left: 3px solid #ff6b35; }
+  .brand-nch { border-left: 3px solid #4caf50; }
+
+  .metric-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #2a2a4a; }
+  .metric-row:last-child { border-bottom: none; }
+  .metric-label { font-size: 13px; color: #888; }
+  .metric-value { font-size: 14px; font-weight: 600; }
+  .metric-value.highlight { color: #4caf50; }
+  .metric-value.warn { color: #ff9800; }
+  .metric-value.bad { color: #f44336; }
+
+  .last-updated { font-size: 11px; color: #555; margin-top: 12px; text-align: right; }
+
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-online { background: #4caf50; }
+  .status-offline { background: #f44336; }
+  .status-unknown { background: #666; }
+
+  /* Empty State */
+  .empty { text-align: center; padding: 60px 20px; color: #555; }
+  .empty h3 { margin-bottom: 8px; color: #888; }
+
+  /* History Table */
+  .history { margin-top: 24px; }
+  .history h3 { margin-bottom: 12px; color: #ccc; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; background: #1a1a2e; color: #888; border-bottom: 1px solid #2a2a4a; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1a1a2e; }
+  tr:hover { background: #16213e; }
+</style>
+</head>
+<body>
+
+<!-- PIN Gate -->
+<div id="pin-gate">
+  <div class="pin-box">
+    <h2>Aggregator Pulse</h2>
+    <div class="pin-input">
+      <input type="password" maxlength="1" inputmode="numeric" autofocus>
+      <input type="password" maxlength="1" inputmode="numeric">
+      <input type="password" maxlength="1" inputmode="numeric">
+      <input type="password" maxlength="1" inputmode="numeric">
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard">
+  <div class="header">
+    <div>
+      <h1>Aggregator Pulse</h1>
+      <div class="meta">Swiggy + Zomato | HE + NCH | Auto-refreshes every 60s</div>
+    </div>
+    <div>
+      <span class="meta" id="last-refresh"></span>
+      <button class="refresh-btn" onclick="loadData()">Refresh</button>
+    </div>
+  </div>
+
+  <div class="grid" id="cards"></div>
+
+  <div class="history">
+    <h3>Recent Snapshots</h3>
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Platform</th><th>Brand</th><th>Type</th><th>Key Metrics</th></tr>
+      </thead>
+      <tbody id="history-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const API = '/api/aggregator-pulse';
+const API_KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
+
+// --- PIN Auth (reuses floor_staff table) ---
+const pinInputs = document.querySelectorAll('.pin-input input');
+pinInputs.forEach((input, i) => {
+  input.addEventListener('input', (e) => {
+    if (e.target.value && i < 3) pinInputs[i + 1].focus();
+    if (i === 3 && e.target.value) checkPin();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Backspace' && !e.target.value && i > 0) pinInputs[i - 1].focus();
+  });
+});
+
+async function checkPin() {
+  const pin = Array.from(pinInputs).map(i => i.value).join('');
+  try {
+    const res = await fetch('/api/whatsapp?action=floor-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    const data = await res.json();
+    if (data.token) {
+      localStorage.setItem('agg_token', data.token);
+      localStorage.setItem('agg_staff', data.name);
+      showDashboard();
+    } else {
+      document.getElementById('pin-error').textContent = 'Invalid PIN';
+      pinInputs.forEach(i => i.value = '');
+      pinInputs[0].focus();
+    }
+  } catch (e) {
+    document.getElementById('pin-error').textContent = 'Connection error';
+  }
+}
+
+// Auto-login if token exists
+if (localStorage.getItem('agg_token')) showDashboard();
+
+function showDashboard() {
+  document.getElementById('pin-gate').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  loadData();
+  setInterval(loadData, 60_000);
+}
+
+// --- Load Data ---
+async function loadData() {
+  try {
+    const [latestRes, historyRes] = await Promise.all([
+      fetch(`${API}?action=latest&key=${API_KEY}`),
+      fetch(`${API}?action=history&key=${API_KEY}&hours=24&limit=30`),
+    ]);
+    const latest = await latestRes.json();
+    const history = await historyRes.json();
+
+    renderCards(latest.outlets || []);
+    renderHistory(history.snapshots || []);
+    document.getElementById('last-refresh').textContent = `Updated: ${new Date().toLocaleTimeString('en-IN')}`;
+  } catch (e) {
+    console.error('Load failed:', e);
+  }
+}
+
+function renderCards(outlets) {
+  const container = document.getElementById('cards');
+
+  if (outlets.length === 0) {
+    container.innerHTML = `<div class="empty"><h3>No data yet</h3><p>Install the Chrome extension on your VM and open the partner portals.</p></div>`;
+    return;
+  }
+
+  // Ensure all 4 cards exist (even if no data)
+  const expected = [
+    { platform: 'swiggy', brand: 'he', name: 'Hamza Express', outlet_id: '1342888' },
+    { platform: 'swiggy', brand: 'nch', name: 'Nawabi Chai House', outlet_id: '1342887' },
+    { platform: 'zomato', brand: 'he', name: 'Hamza Express', outlet_id: '22632449' },
+    { platform: 'zomato', brand: 'nch', name: 'Nawabi Chai House', outlet_id: '22632430' },
+  ];
+
+  container.innerHTML = expected.map(exp => {
+    const outlet = outlets.find(o => o.platform === exp.platform && o.brand === exp.brand);
+    return renderCard(exp, outlet);
+  }).join('');
+}
+
+function renderCard(exp, outlet) {
+  const platformClass = `platform-${exp.platform}`;
+  const brandClass = `brand-${exp.brand}`;
+  const metrics = outlet?.metrics || {};
+
+  // Flatten all metric data into one object
+  const flat = {};
+  let lastCaptured = null;
+  Object.values(metrics).forEach(m => {
+    if (m.data && typeof m.data === 'object') Object.assign(flat, m.data);
+    if (m.captured_at) lastCaptured = m.captured_at;
+  });
+
+  const rows = [];
+  if (flat.net_sales || flat.sales) rows.push(metricRow('Sales', `₹${flat.net_sales || flat.sales || '0'}`, 'highlight'));
+  if (flat.delivered_orders !== undefined) rows.push(metricRow('Orders', flat.delivered_orders));
+  if (flat.net_aov || flat.aov) rows.push(metricRow('AOV', `₹${flat.net_aov || flat.aov || '0'}`));
+  if (flat.avg_rating) rows.push(metricRow('Rating', flat.avg_rating));
+  if (flat.avg_prep_time) rows.push(metricRow('Prep Time', `${flat.avg_prep_time} min`));
+  if (flat.cancelled_orders) rows.push(metricRow('Cancelled', flat.cancelled_orders, 'warn'));
+  if (flat.poor_rated_orders) rows.push(metricRow('Poor Rated', flat.poor_rated_orders, 'bad'));
+  if (flat.delayed_orders_pct) rows.push(metricRow('Delayed', `${flat.delayed_orders_pct}%`, flat.delayed_orders_pct > 5 ? 'bad' : ''));
+  if (flat.online_pct) rows.push(metricRow('Online %', `${flat.online_pct}%`, flat.online_pct < 50 ? 'bad' : 'highlight'));
+  if (flat.lost_sales) rows.push(metricRow('Lost Sales', `₹${flat.lost_sales}`, flat.lost_sales > 0 ? 'warn' : ''));
+  if (flat.menu_score) rows.push(metricRow('Menu Score', `${flat.menu_score}%`));
+  if (flat.disabled_items) rows.push(metricRow('Disabled Items', flat.disabled_items, flat.disabled_items > 0 ? 'warn' : ''));
+  if (flat.out_of_stock) rows.push(metricRow('Out of Stock', flat.out_of_stock, flat.out_of_stock > 0 ? 'bad' : ''));
+
+  if (rows.length === 0) rows.push(metricRow('Status', 'Waiting for data...'));
+
+  const statusClass = lastCaptured && (Date.now() - new Date(lastCaptured).getTime() < 20 * 60 * 1000) ? 'status-online' : lastCaptured ? 'status-offline' : 'status-unknown';
+  const ago = lastCaptured ? timeAgo(lastCaptured) : 'never';
+
+  return `
+    <div class="card ${brandClass}">
+      <div class="card-header">
+        <span class="card-title"><span class="status-dot ${statusClass}"></span>${exp.name}</span>
+        <span class="card-platform ${platformClass}">${exp.platform.toUpperCase()}</span>
+      </div>
+      ${rows.join('')}
+      <div class="last-updated">Last capture: ${ago}</div>
+    </div>
+  `;
+}
+
+function metricRow(label, value, cls) {
+  return `<div class="metric-row"><span class="metric-label">${label}</span><span class="metric-value ${cls || ''}">${value}</span></div>`;
+}
+
+function renderHistory(snapshots) {
+  const tbody = document.getElementById('history-body');
+  if (snapshots.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#555;text-align:center;padding:20px;">No snapshots in last 24h</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = snapshots.map(s => {
+    const data = JSON.parse(s.data || '{}');
+    const summary = Object.entries(data).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(', ');
+    return `<tr>
+      <td>${new Date(s.captured_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
+      <td><span class="card-platform platform-${s.platform}">${s.platform}</span></td>
+      <td>${s.brand.toUpperCase()}</td>
+      <td>${s.metric_type}</td>
+      <td style="font-size:11px;color:#888;">${summary}</td>
+    </tr>`;
+  }).join('');
+}
+
+function timeAgo(isoStr) {
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+</script>
+</body>
+</html>
