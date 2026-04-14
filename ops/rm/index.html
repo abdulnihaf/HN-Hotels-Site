@@ -408,7 +408,7 @@ function verifyPin() {
       // Default tab based on role
       if (d.role === 'settlement') { currentTab = 'settlement'; }
       else if (d.role === 'purchase') { currentTab = 'purchase'; }
-      setBrand(currentBrand);
+      setBrand(currentBrand, true);
       setTab(currentTab);
     })
     .catch(() => showPinError());
@@ -424,13 +424,13 @@ document.getElementById('pinInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') verifyPin();
 });
 
-function setBrand(b) {
+function setBrand(b, skipRefresh) {
   currentBrand = b;
   document.getElementById('brandHE').className = `brand-toggle flex-1 ${b === 'HE' ? 'active-he' : ''}`;
   document.getElementById('brandNCH').className = `brand-toggle flex-1 ${b === 'NCH' ? 'active-nch' : ''}`;
   cart = [];
   renderCart();
-  refreshCurrentTab();
+  if (!skipRefresh) refreshCurrentTab();
 }
 
 function setTab(tab) {
@@ -455,7 +455,10 @@ function refreshCurrentTab() {
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 async function loadPurchaseData() {
   const res = await apiFetch('purchase-catalog');
-  if (!res.success) return;
+  if (!res.success) {
+    document.getElementById('recentPOs').innerHTML = `<p class="text-red-400/60 text-xs">${res.error || 'Failed to load'}</p>`;
+    return;
+  }
   catalog = res;
   renderProducts();
   renderRecentPOs(res.recentPOs);
@@ -865,6 +868,8 @@ async function loadSettlementData() {
     } else {
       renderHESettlement(prepRes);
     }
+  } else {
+    document.getElementById('settlementInfo').innerHTML = `<p class="text-red-400/60 text-sm">${prepRes.error || 'Failed to load settlement data'}</p>`;
   }
 
   if (histRes.success) {
@@ -984,16 +989,30 @@ function renderNCHSettlement(data) {
       </div>`;
   }
 
-  // Build zone → fields from intelligence
-  const fieldZones = data.intelligence?.fieldZones || {};
-  const vessels = data.intelligence?.vessels || {};
-  const densities = data.intelligence?.densities || {};
+  // Build zone → fields from intelligence (arrays from D1)
+  const fieldZonesArr = data.intelligence?.fieldZones || [];
+  const vesselsArr = data.intelligence?.vessels || [];
+  const densitiesArr = data.intelligence?.densities || [];
+
+  // Index vessels by code for lookup
+  const vessels = {};
+  for (const v of vesselsArr) vessels[v.vessel_code] = v;
+
+  // Index densities by material type (also store on settlementData for calcVesselNet)
+  const densities = {};
+  for (const d of densitiesArr) densities[d.material_type] = d.density;
+  data._densityMap = densities;
+
+  // Index fieldZones: field_name → zone_name (also store on settlementData for timestamp capture)
+  const fieldZoneMap = {};
+  for (const fz of fieldZonesArr) fieldZoneMap[fz.field_name] = fz.zone_name;
+  data._fieldZoneMap = fieldZoneMap;
 
   // Group fields by zone
   const zoneFields = {};
-  for (const [field, zone] of Object.entries(fieldZones)) {
-    if (!zoneFields[zone]) zoneFields[zone] = [];
-    zoneFields[zone].push(field);
+  for (const fz of fieldZonesArr) {
+    if (!zoneFields[fz.zone_name]) zoneFields[fz.zone_name] = [];
+    zoneFields[fz.zone_name].push(fz.field_name);
   }
 
   // Zone order
@@ -1020,7 +1039,7 @@ function renderNCHSettlement(data) {
             ${matchingVessels.map(([code, v]) => `
               <div class="vessel-card" data-field="${field}" data-vessel="${code}" data-tare="${v.tare_weight_kg}" data-liquid="${meta.liquidType}">
                 <div class="flex items-center justify-between mb-1">
-                  <span class="text-xs font-medium">${v.name}</span>
+                  <span class="text-xs font-medium">${v.vessel_name || v.name}</span>
                   <span class="text-[10px] text-white/25">Tare: ${v.tare_weight_kg} kg</span>
                 </div>
                 <div class="flex items-center gap-2">
@@ -1090,7 +1109,7 @@ function calcVesselNet(input) {
   const card = input.closest('.vessel-card');
   const tare = parseFloat(card.dataset.tare) || 0;
   const liquidType = card.dataset.liquid;
-  const density = (settlementData?.intelligence?.densities || {})[liquidType] || 1.0;
+  const density = (settlementData?._densityMap || {})[liquidType] || 1.0;
   const netKg = Math.max(0, gross - tare);
   const netL = netKg / density;
 
@@ -1100,8 +1119,7 @@ function calcVesselNet(input) {
   if (netEl) netEl.textContent = netL > 0 ? netL.toFixed(2) : '--';
 
   // Auto-record zone timestamp
-  const fieldZones = settlementData?.intelligence?.fieldZones || {};
-  const zone = fieldZones[field];
+  const zone = (settlementData?._fieldZoneMap || {})[field];
   if (zone && !zoneTimestamps[zone]) {
     zoneTimestamps[zone] = new Date().toISOString();
     const tsEl = document.getElementById(`ts-${zone}`);
