@@ -177,7 +177,7 @@ function renderOrders(orders){
     const s=o.status||'';
     const sc=s.match(/deliver/i)?'st-d':s.match(/prepar|ready/i)?'st-p':'st-c';
     const outlet=o.brand==='he'?'HE':o.brand==='nch'?'NCH':o.outlet_name||'—';
-    const plat=o.platform==='swiggy'?'<span class="plat sw">S</span>':'<span class="plat zm">Z</span>';
+    const plat=o.platform==='swiggy'?'<span class="plat sw">Swiggy</span>':'<span class="plat zm">Zomato</span>';
     return `<tr>
       <td>${o.order_date||'—'}</td>
       <td>${o.order_time||'—'}</td>
