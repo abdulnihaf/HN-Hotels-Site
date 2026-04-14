@@ -3,164 +3,114 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aggregator Pulse — HN Hotels</title>
+<title>Aggregator Pulse v2 — HN Hotels</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a14; color: #e0e0e0; min-height: 100vh; }
-  .container { max-width: 1400px; margin: 0 auto; padding: 16px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a14; color: #e0e0e0; }
+  .c { max-width: 1400px; margin: 0 auto; padding: 16px; }
+  .hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #1a1a2e; padding-bottom: 10px; }
+  .hdr h1 { font-size: 18px; color: #ff6b35; }
+  .hdr .sub { font-size: 11px; color: #555; }
+  .hdr button { background: #ff6b35; color: #fff; border: none; padding: 6px 14px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  .dot-on { background: #4caf50; } .dot-off { background: #f44336; } .dot-wait { background: #ff9800; }
+  .sbar { display: flex; gap: 12px; font-size: 11px; color: #555; margin-bottom: 14px; flex-wrap: wrap; }
+  .sbar span { display: flex; align-items: center; gap: 3px; }
 
-  /* Header */
-  .hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #1a1a2e; padding-bottom: 12px; }
-  .hdr h1 { font-size: 20px; color: #ff6b35; }
-  .hdr .meta { font-size: 11px; color: #555; }
-  .hdr .status { display: flex; gap: 12px; align-items: center; }
-  .hdr button { background: #ff6b35; color: white; border: none; padding: 6px 14px; border-radius: 5px; cursor: pointer; font-size: 12px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-  .dot-on { background: #4caf50; }
-  .dot-off { background: #f44336; }
-  .dot-wait { background: #ff9800; }
+  /* Orders Section — the PRIMARY data */
+  .orders-section { background: #0f1528; border: 1px solid #1a2a4a; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .orders-section h2 { font-size: 15px; color: #4caf50; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .orders-section h2 .badge { font-size: 9px; background: #4caf5020; color: #4caf50; padding: 2px 6px; border-radius: 4px; }
+  .order-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .order-card { background: #111a2e; border: 1px solid #1e2e4a; border-radius: 8px; padding: 12px; }
+  .order-card .brand { font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+  .brand-he { color: #ff6b35; } .brand-nch { color: #4caf50; }
+  .order-card .platform { font-size: 10px; padding: 2px 6px; border-radius: 3px; float: right; }
+  .p-swiggy { background: #fc801915; color: #fc8019; } .p-zomato { background: #e2374415; color: #e23744; }
+  .order-card .big { font-size: 22px; font-weight: 700; margin: 4px 0; }
+  .order-card .row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+  .order-card .label { color: #666; } .order-card .val { font-weight: 600; }
 
-  /* Platform Tabs */
-  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
-  .tab { padding: 8px 20px; background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 13px; font-weight: 600; }
+  /* Order list */
+  .order-list { margin-top: 12px; }
+  .order-item { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #1a1a2e; font-size: 12px; }
+  .order-item:last-child { border-bottom: none; }
+  .status-tag { padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+  .st-delivered { background: #4caf5020; color: #4caf50; }
+  .st-preparing, .st-ready { background: #ff980020; color: #ff9800; }
+  .st-cancelled, .st-rejected { background: #f4433620; color: #f44336; }
+  .order-item .amt { margin-left: auto; font-weight: 600; }
+  .order-item .issue { color: #f44336; font-size: 10px; }
+
+  /* Ops sections */
+  .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+  .tab { padding: 7px 16px; background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 12px; font-weight: 600; }
   .tab.active { background: #16213e; border-bottom-color: #16213e; color: #ff6b35; }
-  .tab.swiggy { border-top: 2px solid #fc8019; }
-  .tab.zomato { border-top: 2px solid #e23744; }
+  .platform { display: none; } .platform.active { display: block; }
+  .section { background: #111122; border: 1px solid #1e1e3a; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+  .section-hdr { background: #161630; padding: 8px 14px; font-size: 12px; font-weight: 700; display: flex; justify-content: space-between; }
+  .section-hdr .src { font-size: 9px; color: #555; font-weight: 400; }
+  .section-body { padding: 10px 14px; }
+  .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+  .mcard { background: #0d0d1a; border: 1px solid #1a1a2e; border-radius: 5px; padding: 8px 10px; }
+  .mcard .label { font-size: 10px; color: #666; margin-bottom: 3px; }
+  .mcard .value { font-size: 16px; font-weight: 700; }
+  .good { color: #4caf50; } .warn { color: #ff9800; } .bad { color: #f44336; }
 
-  /* Sections */
-  .platform { display: none; }
-  .platform.active { display: block; }
-  .section { background: #111122; border: 1px solid #1e1e3a; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
-  .section-hdr { background: #161630; padding: 10px 16px; font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
-  .section-hdr .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
-  .badge-swiggy { background: #fc801920; color: #fc8019; }
-  .badge-zomato { background: #e2374420; color: #e23744; }
-  .section-body { padding: 12px 16px; }
-
-  /* Metric Grid */
-  .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-  .mcard { background: #0d0d1a; border: 1px solid #1a1a2e; border-radius: 6px; padding: 10px 12px; }
-  .mcard .label { font-size: 11px; color: #666; margin-bottom: 4px; line-height: 1.3; }
-  .mcard .value { font-size: 18px; font-weight: 700; }
-  .mcard .change { font-size: 10px; margin-top: 2px; }
-  .up { color: #4caf50; }
-  .down { color: #f44336; }
-  .neutral { color: #666; }
-  .warn { color: #ff9800; }
-  .good { color: #4caf50; }
-  .bad { color: #f44336; }
-
-  /* Status bar */
-  .sbar { display: flex; gap: 16px; font-size: 11px; color: #555; margin-bottom: 16px; flex-wrap: wrap; }
-  .sbar span { display: flex; align-items: center; gap: 4px; }
-
-  /* Snapshot log */
-  .log { margin-top: 20px; }
-  .log h3 { font-size: 14px; margin-bottom: 8px; color: #888; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th { text-align: left; padding: 6px 10px; background: #111122; color: #666; }
-  td { padding: 6px 10px; border-bottom: 1px solid #0d0d1a; }
-  tr:hover { background: #111128; }
-  .empty { text-align: center; padding: 30px; color: #444; font-size: 13px; }
+  /* Log */
+  .log { margin-top: 16px; }
+  .log h3 { font-size: 13px; margin-bottom: 6px; color: #888; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { text-align: left; padding: 5px 8px; background: #111122; color: #666; }
+  td { padding: 5px 8px; border-bottom: 1px solid #0d0d1a; }
+  .empty { text-align: center; padding: 20px; color: #444; font-size: 12px; }
 </style>
 </head>
 <body>
-<div class="container">
-
-  <!-- Header -->
+<div class="c">
   <div class="hdr">
     <div>
-      <h1>Aggregator Pulse</h1>
-      <div class="meta">Swiggy + Zomato | Hamza Express + Nawabi Chai House</div>
+      <h1>Aggregator Pulse v2</h1>
+      <div class="sub">Real-time from Finance (Swiggy) + Order History (Zomato) | Auto-refresh 60s</div>
     </div>
-    <div class="status">
-      <span class="meta" id="ts"></span>
-      <span id="swiggy-status"><span class="dot dot-wait"></span> Swiggy</span>
-      <span id="zomato-status"><span class="dot dot-wait"></span> Zomato</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="sub" id="ts"></span>
       <button onclick="load()">Refresh</button>
     </div>
   </div>
-
-  <!-- Status Bar -->
   <div class="sbar" id="sbar"></div>
 
-  <!-- Platform Tabs -->
+  <!-- ORDERS & REVENUE — PRIMARY DATA -->
+  <div class="orders-section">
+    <h2>Orders & Revenue <span class="badge">REAL-TIME from Finance + Order History</span></h2>
+    <div class="order-grid" id="order-grid"></div>
+    <div class="order-list" id="order-list"></div>
+  </div>
+
+  <!-- OPERATIONAL METRICS -->
   <div class="tabs">
-    <div class="tab swiggy active" onclick="showPlatform('swiggy')">Swiggy</div>
-    <div class="tab zomato" onclick="showPlatform('zomato')">Zomato</div>
+    <div class="tab active" onclick="showP('swiggy')">Swiggy Ops</div>
+    <div class="tab" onclick="showP('zomato')">Zomato Metrics</div>
   </div>
 
-  <!-- SWIGGY -->
   <div class="platform active" id="p-swiggy">
-    <div class="section">
-      <div class="section-hdr">Sales <span class="badge badge-swiggy">Today</span></div>
-      <div class="section-body"><div class="mgrid" id="s-sales"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Bolt (Quick Delivery)</div>
-      <div class="section-body"><div class="mgrid" id="s-bolt"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Funnel</div>
-      <div class="section-body"><div class="mgrid" id="s-funnel"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Customers <span class="badge badge-swiggy">48h lag</span></div>
-      <div class="section-body"><div class="mgrid" id="s-customers"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Ratings & Complaints</div>
-      <div class="section-body"><div class="mgrid" id="s-ratings"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Ads — CPC + Banner</div>
-      <div class="section-body"><div class="mgrid" id="s-ads"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Discounts</div>
-      <div class="section-body"><div class="mgrid" id="s-discounts"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Operations</div>
-      <div class="section-body"><div class="mgrid" id="s-ops"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Menu Health</div>
-      <div class="section-body"><div class="mgrid" id="s-menu"></div></div>
-    </div>
+    <div class="section"><div class="section-hdr">Funnel & Customers <span class="src">Source: Business Reports (may lag 48h)</span></div><div class="section-body"><div class="mgrid" id="s-funnel"></div></div></div>
+    <div class="section"><div class="section-hdr">Ratings & Complaints <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ratings"></div></div></div>
+    <div class="section"><div class="section-hdr">Ads (CPC + Banner) <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ads"></div></div></div>
+    <div class="section"><div class="section-hdr">Discounts <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-disc"></div></div></div>
+    <div class="section"><div class="section-hdr">Operations <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ops"></div></div></div>
+    <div class="section"><div class="section-hdr">Menu Health <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-menu"></div></div></div>
   </div>
 
-  <!-- ZOMATO -->
   <div class="platform" id="p-zomato">
-    <div class="section">
-      <div class="section-hdr">Sales Overview <span class="badge badge-zomato">Today</span></div>
-      <div class="section-body"><div class="mgrid" id="z-sales"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Customer Experience</div>
-      <div class="section-body"><div class="mgrid" id="z-cx"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Customer Funnel</div>
-      <div class="section-body"><div class="mgrid" id="z-funnel"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Ads & Offers</div>
-      <div class="section-body"><div class="mgrid" id="z-ads"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Weekly History <span class="badge badge-zomato">Business Reports</span></div>
-      <div class="section-body"><div class="mgrid" id="z-weekly"></div></div>
-    </div>
+    <div class="section"><div class="section-hdr">Live Tracking (Today) <span class="src">Source: Zomato Live Tracking</span></div><div class="section-body"><div class="mgrid" id="z-live"></div></div></div>
+    <div class="section"><div class="section-hdr">Customer Funnel <span class="src">Source: Live Tracking</span></div><div class="section-body"><div class="mgrid" id="z-funnel"></div></div></div>
+    <div class="section"><div class="section-hdr">Weekly Trends <span class="src">Source: Business Reports</span></div><div class="section-body"><div class="mgrid" id="z-weekly"></div></div></div>
   </div>
 
-  <!-- Snapshot Log -->
   <div class="log">
-    <h3>Recent Captures (<span id="snap-count">0</span>)</h3>
-    <table>
-      <thead><tr><th>Time (IST)</th><th>Platform</th><th>Page</th><th>Metrics Captured</th></tr></thead>
-      <tbody id="log-body"></tbody>
-    </table>
+    <h3>Recent Captures (<span id="sc">0</span>)</h3>
+    <table><thead><tr><th>Time</th><th>Platform</th><th>Source</th><th>Key Data</th></tr></thead><tbody id="log-body"></tbody></table>
   </div>
 </div>
 
@@ -168,241 +118,180 @@
 const API = '/api/aggregator-pulse';
 const KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
 
-function showPlatform(p) {
+function showP(p) {
   document.querySelectorAll('.platform').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById('p-' + p).classList.add('active');
-  document.querySelector('.tab.' + p).classList.add('active');
+  event.target.classList.add('active');
 }
 
 async function load() {
   try {
-    const [latestRes, histRes, statsRes] = await Promise.all([
+    const [latR, hisR, stR] = await Promise.all([
       fetch(`${API}?action=latest&key=${KEY}`),
-      fetch(`${API}?action=history&key=${KEY}&hours=24&limit=50`),
+      fetch(`${API}?action=history&key=${KEY}&hours=24&limit=40`),
       fetch(`${API}?action=stats&key=${KEY}`),
     ]);
-    const latest = await latestRes.json();
-    const hist = await histRes.json();
-    const stats = await statsRes.json();
-
-    renderMetrics(latest.outlets || []);
-    renderLog(hist.snapshots || []);
-    renderStatus(stats.stats || [], latest.generated_at);
-  } catch (e) {
-    console.error('Load failed:', e);
-  }
+    const lat = await latR.json();
+    const his = await hisR.json();
+    const st = await stR.json();
+    render(lat.outlets || [], his.snapshots || [], st.stats || []);
+    document.getElementById('ts').textContent = new Date().toLocaleTimeString('en-IN');
+  } catch (e) { console.error(e); }
 }
 
-function renderStatus(stats, ts) {
-  document.getElementById('ts').textContent = 'Updated: ' + new Date().toLocaleTimeString('en-IN');
-  const total = stats.reduce((s, x) => s + x.total_snapshots, 0);
-
-  // Status dots
-  const swiggy = stats.find(s => s.platform === 'swiggy');
-  const zomato = stats.find(s => s.platform === 'zomato');
-  setDot('swiggy-status', swiggy?.total_snapshots > 0);
-  setDot('zomato-status', zomato?.total_snapshots > 0);
-
-  // Status bar
-  const sbar = document.getElementById('sbar');
-  sbar.innerHTML = stats.map(s => {
-    const ago = timeAgo(s.last_capture);
-    return `<span><span class="dot ${ago.includes('m ago') || ago === 'just now' ? 'dot-on' : 'dot-off'}"></span>${s.platform}/${s.brand}: ${s.total_snapshots} snaps, last ${ago}</span>`;
-  }).join('') + `<span style="margin-left:auto">Total: ${total} snapshots</span>`;
-}
-
-function setDot(id, active) {
-  const el = document.getElementById(id);
-  const dot = el?.querySelector('.dot');
-  if (dot) { dot.className = 'dot ' + (active ? 'dot-on' : 'dot-off'); }
-}
-
-function renderMetrics(outlets) {
-  // Merge all metrics for each platform into one flat object
-  const swiggy = {}, zomato = {};
+function render(outlets, snapshots, stats) {
+  // Flatten all metrics by type
+  const data = {};
   for (const o of outlets) {
-    const target = o.platform === 'swiggy' ? swiggy : zomato;
     for (const [mtype, mdata] of Object.entries(o.metrics || {})) {
-      const d = mdata.data;
-      if (d && typeof d === 'object') Object.assign(target, d);
+      data[mtype] = { ...(data[mtype] || {}), ...mdata.data, _ts: mdata.captured_at };
     }
   }
 
-  // === SWIGGY SECTIONS ===
-  renderGrid('s-sales', [
-    mc('Net Sales', swiggy.net_sales, '₹'),
-    mc('Delivered Orders', swiggy.delivered_orders),
-    mc('Net AOV', swiggy.net_aov, '₹'),
-    mc('Cancelled Orders', swiggy.cancelled_orders, '', 'warn-if'),
-    mc('Cancelled Loss', swiggy.cancelled_loss, '₹', 'warn-if'),
-  ]);
+  // Status bar
+  const total = stats.reduce((s, x) => s + x.total_snapshots, 0);
+  document.getElementById('sbar').innerHTML = stats.map(s =>
+    `<span><span class="dot ${isRecent(s.last_capture) ? 'dot-on' : 'dot-off'}"></span>${s.platform}/${s.brand}: ${s.total_snapshots} snaps</span>`
+  ).join('') + `<span style="margin-left:auto">Total: ${total}</span>`;
 
-  renderGrid('s-bolt', [
-    mc('Bolt Orders', swiggy.bolt_orders),
-    mc('% Bolt', swiggy.bolt_pct, '', '', '%'),
-    mc('Bolt AOV', swiggy.bolt_aov, '₹'),
-    mc('Avg Prep Time', swiggy.avg_prep_time, '', '', ' min'),
-    mc('Fast Prep (<6 min)', swiggy.fast_prep_pct, '', 'good-if', '%'),
-    mc('Delayed (>5 min)', swiggy.delayed_bolt_pct, '', 'warn-if', '%'),
-  ]);
+  // === ORDERS & REVENUE (PRIMARY) ===
+  const heF = data.finance_he || {};
+  const nchF = data.finance_nch || {};
+  const zOrders = data.orders_zomato || {};
+  const zLive = data.live_tracking || {};
 
+  const grid = document.getElementById('order-grid');
+  grid.innerHTML = [
+    orderCard('Hamza Express', 'he', 'swiggy', heF.order_count || '0', heF.customer_paid, heF.net_payout, heF.total_fees, heF._ts),
+    orderCard('Nawabi Chai House', 'nch', 'swiggy', nchF.order_count || '0', nchF.customer_paid, nchF.net_payout, nchF.total_fees, nchF._ts),
+    orderCard('Both Outlets', 'all', 'zomato',
+      zLive.delivered_orders || zOrders.total_orders || '0',
+      zLive.sales ? '₹' + zLive.sales : zOrders.total_revenue ? '₹' + zOrders.total_revenue : '—',
+      null,
+      null,
+      zLive._ts || zOrders._ts,
+      { delivered: zOrders.delivered, rejected: zOrders.rejected, delayed: zOrders.delayed }
+    ),
+  ].join('');
+
+  // Order list from Zomato Order History
+  const orderList = document.getElementById('order-list');
+  const orders = zOrders.orders || [];
+  if (orders.length > 0) {
+    orderList.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px;">Recent Orders (Zomato Order History)</div>' +
+      orders.slice(0, 10).map(o => {
+        const stCls = (o.status || '').toLowerCase().replace(/\s/g, '-');
+        return `<div class="order-item">
+          <span class="status-tag st-${stCls}">${o.status}</span>
+          <span>${o.time || ''} ${o.date || ''}</span>
+          <span style="color:#888">${o.customer || ''}</span>
+          <span style="flex:1;color:#aaa;font-size:11px">${(o.items || '').substring(0, 50)}</span>
+          ${o.issue ? '<span class="issue">⚠️</span>' : ''}
+          <span class="amt">₹${o.amount || '—'}</span>
+        </div>`;
+      }).join('');
+  } else {
+    orderList.innerHTML = '<div class="empty">No order data yet — waiting for Order History capture</div>';
+  }
+
+  // === SWIGGY OPS ===
+  const sr = data.reports_swiggy || {};
   renderGrid('s-funnel', [
-    mc('Impressions', swiggy.impressions),
-    mc('Menu Opens', swiggy.menu_opens),
-    mc('Cart Builds', swiggy.cart_builds),
-    mc('Orders Placed', swiggy.orders_placed),
+    mc('Impressions', sr.impressions), mc('Menu Opens', sr.menu_opens), mc('Cart Builds', sr.cart_builds), mc('Orders Placed', sr.orders_placed),
+    mc('New Customers', sr.new_customers), mc('Repeat', sr.repeat_customers), mc('Dormant', sr.dormant_customers),
+    mc('New Cust Order %', sr.new_cust_order_pct, '', '', '%'), mc('Repeat Cust %', sr.repeat_cust_order_pct, '', '', '%'),
   ]);
-
-  renderGrid('s-customers', [
-    mc('New Customers', swiggy.new_customers),
-    mc('Repeat Customers', swiggy.repeat_customers),
-    mc('Dormant Customers', swiggy.dormant_customers),
-    mc('New Cust Order %', swiggy.new_cust_order_pct, '', '', '%'),
-    mc('Repeat Cust Order %', swiggy.repeat_cust_order_pct, '', '', '%'),
-    mc('Dormant Cust Order %', swiggy.dormant_cust_order_pct, '', '', '%'),
-  ]);
-
   renderGrid('s-ratings', [
-    mc('Rated Orders', swiggy.rated_orders),
-    mc('Poor Rated', swiggy.poor_rated_orders, '', 'warn-if'),
-    mc('Complaint %', swiggy.complaint_pct, '', 'warn-if', '%'),
-    mc('Complaint Orders', swiggy.complaint_orders, '', 'warn-if'),
-    mc('Unresolved', swiggy.unresolved_complaints, '', 'warn-if'),
-    mc('Wrong Items', swiggy.wrong_items, '', 'warn-if'),
-    mc('Missing Items', swiggy.missing_items, '', 'warn-if'),
-    mc('Quality Issues', swiggy.quality_issues, '', 'warn-if'),
-    mc('Packaging Issues', swiggy.packaging_issues, '', 'warn-if'),
+    mc('Rated', sr.rated_orders), mc('Poor Rated', sr.poor_rated_orders, '', 'w'),
+    mc('Complaint %', sr.complaint_pct, '', 'w', '%'), mc('Complaints', sr.complaint_orders, '', 'w'),
+    mc('Unresolved', sr.unresolved_complaints, '', 'w'), mc('Wrong Items', sr.wrong_items, '', 'w'),
+    mc('Missing', sr.missing_items, '', 'w'), mc('Quality', sr.quality_issues, '', 'w'), mc('Packaging', sr.packaging_issues, '', 'w'),
   ]);
-
   renderGrid('s-ads', [
-    mc('CPC Sales', swiggy.cpc_sales, '₹'),
-    mc('CPC Orders', swiggy.cpc_orders),
-    mc('CPC Spend', swiggy.cpc_spends, '₹'),
-    mc('CPC Menu Visits', swiggy.cpc_menu_visits),
-    mc('ROAS', swiggy.roas, '', '', 'x'),
-    mc('CPC Depth', swiggy.cpc_depth, '', '', '%'),
-    mc('Banner Sales', swiggy.cba_sales, '₹'),
-    mc('Banner Orders', swiggy.cba_orders),
-    mc('Banner Spend', swiggy.cba_spends, '₹'),
-    mc('Banner Impressions', swiggy.cba_impressions),
-    mc('Banner Menu Visits', swiggy.cba_menu_visits),
-    mc('Banner Depth', swiggy.cba_depth, '', '', '%'),
+    mc('CPC Sales', sr.cpc_sales, '₹'), mc('CPC Orders', sr.cpc_orders), mc('CPC Spend', sr.cpc_spends, '₹'),
+    mc('ROAS', sr.roas, '', '', 'x'), mc('CPC Visits', sr.cpc_menu_visits),
+    mc('Banner Sales', sr.cba_sales, '₹'), mc('Banner Orders', sr.cba_orders), mc('Banner Spend', sr.cba_spends, '₹'),
   ]);
-
-  renderGrid('s-discounts', [
-    mc('Sales via Discounts', swiggy.disc_sales, '₹'),
-    mc('Discounted Orders %', swiggy.disc_orders_pct, '', '', '%'),
-    mc('Restaurant Discount (RDGMV)', swiggy.rdgmv, '₹'),
-    mc('Discount GMV %', swiggy.disc_gmv_pct, '', '', '%'),
-    mc('Discount Per Order (RDPO)', swiggy.rdpo, '₹'),
+  renderGrid('s-disc', [
+    mc('Disc Sales', sr.disc_sales, '₹'), mc('Disc Orders %', sr.disc_orders_pct, '', '', '%'), mc('RDPO', sr.rdpo, '₹'),
   ]);
-
   renderGrid('s-ops', [
-    mc('Online Availability', swiggy.online_availability, '', swiggy.online_availability >= 95 ? 'good' : 'bad', '%'),
-    mc('Kitchen Prep Time', swiggy.kitchen_prep_time, '', '', ' min'),
-    mc('Food Ready Accuracy (MFR)', swiggy.mfr_accuracy, '', '', '%'),
-    mc('Delayed (>10 min)', swiggy.delayed_10min, '', 'warn-if', '%'),
+    mc('Online %', sr.online_availability, '', parseFloat(sr.online_availability) >= 95 ? 'g' : 'b', '%'),
+    mc('Prep Time', sr.kitchen_prep_time, '', '', ' min'),
+    mc('MFR Accuracy', sr.mfr_accuracy, '', '', '%'), mc('Delayed >10m', sr.delayed_10min, '', 'w', '%'),
   ]);
-
   renderGrid('s-menu', [
-    mc('Menu Score', swiggy.menu_score, '', swiggy.menu_score >= 50 ? '' : 'bad', '/100'),
-    mc('Items with Photos', swiggy.items_with_photos, '', 'good-if', '%'),
-    mc('Items with Descriptions', swiggy.items_with_desc, '', 'good-if', '%'),
-    mc('Category Score', swiggy.category_score, '', '', '/100'),
-    mc('Item Score', swiggy.item_score, '', '', '/100'),
-    mc('Addon Score', swiggy.addon_score, '', '', '/100'),
-    mc('Combo Score', swiggy.combo_score, '', '', '/100'),
+    mc('Menu Score', sr.menu_score, '', parseFloat(sr.menu_score) >= 50 ? '' : 'b', '/100'),
+    mc('Photos', sr.items_with_photos, '', 'g', '%'), mc('Descriptions', sr.items_with_desc, '', 'g', '%'),
+    mc('Category', sr.category_score, '', '', '/100'), mc('Addon', sr.addon_score, '', '', '/100'), mc('Combo', sr.combo_score, '', '', '/100'),
   ]);
 
-  // === ZOMATO SECTIONS ===
-  renderGrid('z-sales', [
-    mc('Sales', zomato.sales, '₹'),
-    mc('Delivered Orders', zomato.delivered_orders),
-    mc('AOV', zomato.aov, '₹'),
-    mc('Lost Sales', zomato.lost_sales, '₹', 'warn-if'),
-    mc('HE Sales', zomato.he_sales, '₹'),
-    mc('NCH Sales', zomato.nch_sales, '₹'),
+  // === ZOMATO METRICS ===
+  renderGrid('z-live', [
+    mc('Sales', zLive.sales, '₹'), mc('Orders', zLive.delivered_orders), mc('AOV', zLive.aov, '₹'),
+    mc('Rejected %', zLive.rejected_pct, '', 'w', '%'), mc('Delayed %', zLive.delayed_pct, '', 'w', '%'),
+    mc('Poor Rated %', zLive.poor_rated_pct, '', 'w', '%'), mc('Lost Sales', zLive.lost_sales, '₹', 'w'),
+    mc('HE Sales', zLive.he_sales, '₹'), mc('NCH Sales', zLive.nch_sales, '₹'),
   ]);
-
-  renderGrid('z-cx', [
-    mc('Rejected Orders', zomato.rejected_pct, '', 'warn-if', '%'),
-    mc('Delayed Orders', zomato.delayed_pct, '', 'warn-if', '%'),
-    mc('Poor Rated Orders', zomato.poor_rated_pct, '', 'warn-if', '%'),
-    mc('Sales from Offers', zomato.sales_from_offers, '₹'),
-  ]);
-
   renderGrid('z-funnel', [
-    mc('Impressions', zomato.impressions),
-    mc('Impression → Menu', zomato.imp_to_menu, '', '', '%'),
-    mc('Menu → Cart', zomato.menu_to_cart, '', '', '%'),
-    mc('Cart → Order', zomato.cart_to_order, '', '', '%'),
+    mc('Impressions', zLive.impressions), mc('I→Menu', zLive.imp_to_menu, '', '', '%'),
+    mc('Menu→Cart', zLive.menu_to_cart, '', '', '%'), mc('Cart→Order', zLive.cart_to_order, '', '', '%'),
+    mc('Offers Sales', zLive.sales_from_offers, '₹'),
   ]);
-
-  renderGrid('z-ads', [
-    mc('Sales from Offers', zomato.sales_from_offers, '₹'),
-  ]);
-
+  const zb = data.biz_reports || {};
   renderGrid('z-weekly', [
-    mc('Weekly Sales', zomato.weekly_sales, '₹'),
-    mc('Weekly Orders', zomato.weekly_orders),
-    mc('Weekly AOV', zomato.weekly_aov, '₹'),
-    mc('Bad Orders %', zomato.weekly_bad_orders, '', 'warn-if', '%'),
-    mc('Online %', zomato.weekly_online_pct, '', '', '%'),
-    mc('Lost Sales', zomato.weekly_lost_sales, '₹'),
+    mc('Weekly Sales', zb.weekly_sales, '₹'), mc('Weekly Orders', zb.weekly_orders),
+    mc('Weekly AOV', zb.weekly_aov, '₹'), mc('Bad Orders', zb.weekly_bad_orders, '', 'w', '%'),
+    mc('Online %', zb.weekly_online_pct, '', '', '%'),
   ]);
-}
 
-function mc(label, value, prefix, colorRule, suffix) {
-  prefix = prefix || '';
-  suffix = suffix || '';
-  let cls = '';
-  const v = value !== undefined && value !== null && value !== '' ? value : null;
-
-  if (v !== null && colorRule) {
-    const num = parseFloat(v);
-    if (colorRule === 'warn-if' && num > 0) cls = 'warn';
-    if (colorRule === 'good-if' && num > 80) cls = 'good';
-    if (colorRule === 'good') cls = 'good';
-    if (colorRule === 'bad') cls = 'bad';
-  }
-  return { label, value: v !== null ? prefix + v + suffix : '—', cls };
-}
-
-function renderGrid(id, items) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.innerHTML = items.map(m =>
-    `<div class="mcard"><div class="label">${m.label}</div><div class="value ${m.cls}">${m.value}</div></div>`
-  ).join('');
-}
-
-function renderLog(snapshots) {
-  document.getElementById('snap-count').textContent = snapshots.length;
+  // Log
+  document.getElementById('sc').textContent = snapshots.length;
   const tbody = document.getElementById('log-body');
-  if (!snapshots.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty">No captures in last 24h</td></tr>';
-    return;
-  }
-  tbody.innerHTML = snapshots.slice(0, 30).map(s => {
+  tbody.innerHTML = snapshots.slice(0, 20).map(s => {
     const d = JSON.parse(s.data || '{}');
-    const keys = Object.keys(d).filter(k => !['view','date_range','active_tab','user_minimal'].includes(k));
-    const summary = keys.slice(0, 4).map(k => `<b>${k}</b>: ${d[k]}`).join(', ');
-    const more = keys.length > 4 ? ` +${keys.length - 4} more` : '';
-    const time = new Date(s.captured_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    return `<tr><td>${time}</td><td>${s.platform}</td><td>${s.metric_type}</td><td>${summary}${more}</td></tr>`;
+    const keys = Object.keys(d).filter(k => !['view','date_range','orders','past_payouts','_ts'].includes(k));
+    const sum = keys.slice(0, 3).map(k => `${k}:${typeof d[k] === 'object' ? JSON.stringify(d[k]).substring(0,30) : d[k]}`).join(', ');
+    const t = new Date(s.captured_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
+    return `<tr><td>${t}</td><td>${s.platform}</td><td>${s.metric_type}</td><td>${sum}</td></tr>`;
   }).join('');
 }
 
-function timeAgo(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return m + 'm ago';
-  return Math.floor(m / 60) + 'h ago';
+function orderCard(name, brand, platform, orders, revenue, netPayout, fees, ts, extra) {
+  const brandCls = brand === 'he' ? 'brand-he' : brand === 'nch' ? 'brand-nch' : '';
+  const pCls = platform === 'swiggy' ? 'p-swiggy' : 'p-zomato';
+  const ago = ts ? timeAgo(ts) : 'no data';
+  let extraHtml = '';
+  if (extra) {
+    if (extra.rejected) extraHtml += `<div class="row"><span class="label">Rejected</span><span class="val bad">${extra.rejected}</span></div>`;
+    if (extra.delayed) extraHtml += `<div class="row"><span class="label">Delayed</span><span class="val warn">${extra.delayed}</span></div>`;
+  }
+  return `<div class="order-card">
+    <span class="platform ${pCls}">${platform.toUpperCase()}</span>
+    <div class="brand ${brandCls}">${name}</div>
+    <div class="big">${orders} orders</div>
+    <div class="row"><span class="label">Revenue</span><span class="val">${revenue || '—'}</span></div>
+    ${netPayout ? `<div class="row"><span class="label">Net Payout</span><span class="val">${netPayout}</span></div>` : ''}
+    ${fees ? `<div class="row"><span class="label">Fees</span><span class="val">${fees}</span></div>` : ''}
+    ${extraHtml}
+    <div style="font-size:10px;color:#444;margin-top:6px">Updated ${ago}</div>
+  </div>`;
 }
 
-// Auto-refresh every 60s
+function mc(label, val, pre, cls, suf) {
+  const v = val != null && val !== '' ? (pre||'') + val + (suf||'') : '—';
+  const c = cls === 'w' && parseFloat(val) > 0 ? 'warn' : cls === 'b' ? 'bad' : cls === 'g' ? 'good' : '';
+  return { label, value: v, cls: c };
+}
+function renderGrid(id, items) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = items.map(m => `<div class="mcard"><div class="label">${m.label}</div><div class="value ${m.cls}">${m.value}</div></div>`).join('');
+}
+function isRecent(ts) { return ts && (Date.now() - new Date(ts).getTime() < 15 * 60 * 1000); }
+function timeAgo(iso) { const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? 'just now' : m < 60 ? m + 'm ago' : Math.floor(m/60) + 'h ago'; }
+
 load();
 setInterval(load, 60_000);
 </script>
