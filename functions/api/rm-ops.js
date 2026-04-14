@@ -40,7 +40,7 @@ const BRAND_CONFIG = {
 const USERS = {
   '0305': { name: 'Nihaf',   role: 'admin',      odoo: 'system' },
   '2026': { name: 'Zoya',    role: 'purchase',    odoo: 'zoya' },
-  '3678': { name: 'Farooq',  role: 'settlement',  odoo: 'faheem' },
+  '3678': { name: 'Faheem',  role: 'settlement',  odoo: 'faheem' },
   '6890': { name: 'Tanveer', role: 'staff',       odoo: 'system' },
   '7115': { name: 'Kesmat',  role: 'staff',       odoo: 'system' },
   '3946': { name: 'Jafar',   role: 'staff',       odoo: 'system' },
