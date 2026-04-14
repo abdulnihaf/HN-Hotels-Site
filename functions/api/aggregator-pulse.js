@@ -73,18 +73,26 @@ async function storeOrders(db, orders, headers) {
   for (const o of orders) {
     if (!o.order_id || !o.platform) continue;
 
+    // Auto-detect brand from items if not provided
+    let brand = o.brand || 'unknown';
+    if (brand === 'unknown' && o.items) {
+      brand = /chai|tea|coffee|bun|irani/i.test(o.items) ? 'nch' : 'he';
+    }
+
     await db.prepare(`
       INSERT INTO aggregator_orders (platform, brand, order_id, status, order_time, order_date, customer_name, items, order_value, net_payout, fees, issues, rating, outlet_name, captured_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(platform, order_id) DO UPDATE SET
         status = excluded.status,
+        brand = CASE WHEN excluded.brand != 'unknown' THEN excluded.brand ELSE brand END,
+        outlet_name = CASE WHEN excluded.outlet_name IS NOT NULL THEN excluded.outlet_name ELSE outlet_name END,
         net_payout = COALESCE(excluded.net_payout, net_payout),
         fees = COALESCE(excluded.fees, fees),
         issues = COALESCE(excluded.issues, issues),
         rating = COALESCE(excluded.rating, rating),
         captured_at = excluded.captured_at
     `).bind(
-      o.platform, o.brand || 'unknown', o.order_id, o.status || null,
+      o.platform, brand, o.order_id, o.status || null,
       o.order_time || null, o.order_date || null, o.customer_name || null,
       o.items || null, o.order_value || null, o.net_payout || null,
       o.fees || null, o.issues || null, o.rating || null,
@@ -107,17 +115,19 @@ async function handleGet(db, url, headers) {
     const brand = url.searchParams.get('brand');
     const platform = url.searchParams.get('platform');
 
-    let dateFilter;
+    // Use IST offset (+5:30) for date calculations
+    const IST = "'+5 hours', '+30 minutes'";
+    let dateWhere;
     switch (date) {
-      case 'today': dateFilter = "date('now')"; break;
-      case 'yesterday': dateFilter = "date('now', '-1 day')"; break;
-      case 'week': dateFilter = "date('now', '-7 days')"; break;
-      case 'month': dateFilter = "date('now', '-30 days')"; break;
-      case 'all': dateFilter = "date('2020-01-01')"; break;
-      default: dateFilter = "date('now')";
+      case 'today': dateWhere = `order_date = date('now', ${IST})`; break;
+      case 'yesterday': dateWhere = `order_date = date('now', ${IST}, '-1 day')`; break;
+      case 'week': dateWhere = `order_date >= date('now', ${IST}, '-7 days')`; break;
+      case 'month': dateWhere = `order_date >= date('now', ${IST}, '-30 days')`; break;
+      case 'all': dateWhere = `1=1`; break;
+      default: dateWhere = `order_date = date('now', ${IST})`;
     }
 
-    let sql = `SELECT * FROM aggregator_orders WHERE order_date >= ${dateFilter}`;
+    let sql = `SELECT * FROM aggregator_orders WHERE ${dateWhere}`;
     const params = [];
 
     if (brand && brand !== 'all') { sql += ' AND brand = ?'; params.push(brand); }
