@@ -229,3 +229,4 @@ function classifyUrl(url) {
   if (/restaurant.*config/i.test(url)) return 'config';
   return 'other';
 }
+// v3.0.1 Tue Apr 14 18:50:52 IST 2026
