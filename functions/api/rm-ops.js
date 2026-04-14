@@ -152,6 +152,7 @@ async function handleGet(action, url, env, DB) {
     case 'recent-pos':  return getRecentPOs(creds, cfg, url);
     case 'purchase-catalog': return getPurchaseCatalog(creds, cfg, brand, url, DB);
     case 'po-detail':       return getPODetail(creds, cfg, url);
+    case 'pending-deliveries': return getPendingDeliveries(creds, cfg);
     case 'consumption': return getConsumption(creds, cfg, url);
     case 'kitchen-stock': return getKitchenStock(creds, cfg);
     case 'settlement-prepare': return settlementPrepare(creds, cfg, brand, DB);
@@ -245,7 +246,7 @@ async function getRecentPOs(creds, cfg, url) {
 /* ── Purchase Catalog (one-stop for purchase UI) ── */
 
 async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
-  const [odooProducts, odooVendors, vendorMappings, lastPricesAll, recentPOsRaw] =
+  const [odooProducts, odooVendors, vendorMappings, lastPricesAll, recentPOsRaw, pendingPickings] =
     await Promise.all([
       odooCall(creds.uid, creds.key, 'product.product', 'search_read',
         [[['default_code', 'like', 'HN-RM-'], ['company_id', 'in', [cfg.company_id, false]]]],
@@ -263,6 +264,11 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
         [[['company_id', '=', cfg.company_id]]],
         { fields: ['id', 'name', 'partner_id', 'date_order', 'state', 'amount_total', 'create_uid'],
           order: 'date_order desc', limit: 15 }),
+      odooCall(creds.uid, creds.key, 'stock.picking', 'search_read',
+        [[['picking_type_code', '=', 'incoming'], ['state', '=', 'assigned'],
+          ['company_id', '=', cfg.company_id]]],
+        { fields: ['id', 'name', 'partner_id', 'scheduled_date', 'origin', 'purchase_id'],
+          order: 'scheduled_date desc', limit: 20 }),
     ]);
 
   // vendor mappings: product_code → [{key, name, odoo_id, is_primary}]
@@ -283,6 +289,27 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
     }
   }
 
+  // Fetch move lines for pending pickings (one batch call)
+  let pendingMoves = [];
+  const pendingPickingIds = (pendingPickings || []).map(p => p.id);
+  if (pendingPickingIds.length > 0) {
+    pendingMoves = await odooCall(creds.uid, creds.key,
+      'stock.move', 'search_read',
+      [[['picking_id', 'in', pendingPickingIds], ['state', '!=', 'cancel']]],
+      { fields: ['id', 'picking_id', 'product_id', 'product_uom_qty', 'product_uom'] }
+    );
+  }
+  const movesByPicking = {};
+  for (const m of pendingMoves) {
+    const pid = m.picking_id[0];
+    if (!movesByPicking[pid]) movesByPicking[pid] = [];
+    movesByPicking[pid].push({
+      product_name: m.product_id ? m.product_id[1] : 'Unknown',
+      qty: m.product_uom_qty,
+      uom: m.product_uom ? m.product_uom[1] : 'Units',
+    });
+  }
+
   return json({
     success: true,
     products: odooProducts.map(p => ({
@@ -298,6 +325,15 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
       vendor: p.partner_id ? p.partner_id[1] : 'Unknown',
       date: p.date_order, state: p.state, total: p.amount_total,
       created_by: p.create_uid ? p.create_uid[1] : '',
+    })),
+    pendingDeliveries: (pendingPickings || []).map(p => ({
+      picking_id: p.id,
+      name: p.name,
+      vendor: p.partner_id ? p.partner_id[1] : 'Unknown',
+      date: p.scheduled_date,
+      po_name: p.origin || '',
+      po_id: p.purchase_id ? p.purchase_id[0] : null,
+      items: movesByPicking[p.id] || [],
     })),
   });
 }
@@ -588,6 +624,7 @@ async function handlePost(action, context, env, DB) {
     case 'edit-po-line':    return editPOLine(body, user, creds, cfg, brand, DB);
     case 'delete-po-line':  return deletePOLine(body, user, creds, cfg, brand, DB);
     case 'cancel-po':       return cancelPO(body, user, creds, cfg, brand, DB);
+    case 'receive-delivery': return receiveDelivery(body, user, creds, cfg, brand, DB);
     case 'add-product':     return addProduct(body, user, creds, cfg, brand, env, DB);
     case 'update-price':    return updatePrice(body, user, brand, DB);
     case 'link-vendor':     return linkVendor(body, user, creds, cfg, brand, env, DB);
@@ -799,9 +836,16 @@ async function deletePOLine(body, user, creds, cfg, brand, DB) {
     return json({ success: true, po_name: check.po.name, action: 'po_cancelled', reason: 'Last line removed — PO cancelled' });
   }
 
-  // Delete the line: command [2, id, 0] removes and deletes
+  // Confirmed POs don't allow line deletion directly.
+  // Cycle: cancel → draft → delete line → reconfirm
+  await odooCall(creds.uid, creds.key,
+    'purchase.order', 'button_cancel', [[po_id]]);
+  await odooCall(creds.uid, creds.key,
+    'purchase.order', 'button_draft', [[po_id]]);
   await odooCall(creds.uid, creds.key,
     'purchase.order', 'write', [[po_id], { order_line: [[2, line_id, 0]] }]);
+  await odooCall(creds.uid, creds.key,
+    'purchase.order', 'button_confirm', [[po_id]]);
 
   if (DB) {
     await DB.prepare(
@@ -839,6 +883,149 @@ async function cancelPO(body, user, creds, cfg, brand, DB) {
   }
 
   return json({ success: true, po_name: check.po.name, action: 'cancelled' });
+}
+
+/* ── Pending Deliveries (receipts waiting to be received) ── */
+
+async function getPendingDeliveries(creds, cfg) {
+  // Find incoming pickings in 'assigned' (Ready) state for this company
+  const pickings = await odooCall(creds.uid, creds.key,
+    'stock.picking', 'search_read',
+    [[
+      ['picking_type_code', '=', 'incoming'],
+      ['state', '=', 'assigned'],
+      ['company_id', '=', cfg.company_id],
+    ]],
+    {
+      fields: ['id', 'name', 'partner_id', 'scheduled_date', 'origin', 'state', 'purchase_id'],
+      order: 'scheduled_date desc',
+      limit: 30,
+    }
+  );
+
+  if (!pickings || pickings.length === 0) {
+    return json({ success: true, deliveries: [] });
+  }
+
+  // Fetch move lines for all pickings in one call
+  const pickingIds = pickings.map(p => p.id);
+  const moves = await odooCall(creds.uid, creds.key,
+    'stock.move', 'search_read',
+    [[['picking_id', 'in', pickingIds], ['state', '!=', 'cancel']]],
+    { fields: ['id', 'picking_id', 'product_id', 'product_uom_qty', 'product_uom'] }
+  );
+
+  // Group moves by picking
+  const movesByPicking = {};
+  for (const m of moves) {
+    const pid = m.picking_id[0];
+    if (!movesByPicking[pid]) movesByPicking[pid] = [];
+    movesByPicking[pid].push({
+      id: m.id,
+      product_id: m.product_id ? m.product_id[0] : null,
+      product_name: m.product_id ? m.product_id[1] : 'Unknown',
+      qty: m.product_uom_qty,
+      uom: m.product_uom ? m.product_uom[1] : 'Units',
+    });
+  }
+
+  return json({
+    success: true,
+    deliveries: pickings.map(p => ({
+      picking_id: p.id,
+      name: p.name,
+      vendor: p.partner_id ? p.partner_id[1] : 'Unknown',
+      vendor_id: p.partner_id ? p.partner_id[0] : null,
+      date: p.scheduled_date,
+      po_name: p.origin || '',
+      po_id: p.purchase_id ? p.purchase_id[0] : null,
+      items: movesByPicking[p.id] || [],
+    })),
+  });
+}
+
+/* ── Receive Delivery (validate incoming picking) ── */
+
+async function receiveDelivery(body, user, creds, cfg, brand, DB) {
+  if (user.role !== 'admin' && user.role !== 'purchase') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const { picking_id } = body;
+  if (!picking_id) return json({ error: 'Missing picking_id' }, 400);
+
+  // Verify picking exists and is in the right state
+  const pickArr = await odooCall(creds.uid, creds.key,
+    'stock.picking', 'read', [[picking_id]],
+    { fields: ['id', 'name', 'state', 'company_id', 'origin'] }
+  );
+
+  if (!pickArr || pickArr.length === 0) return json({ error: 'Receipt not found' }, 404);
+  const picking = pickArr[0];
+
+  if (picking.state === 'done') return json({ error: 'Already received' }, 400);
+  if (picking.state === 'cancel') return json({ error: 'Receipt is cancelled' }, 400);
+  if (picking.state !== 'assigned') return json({ error: `Receipt state "${picking.state}" cannot be validated` }, 400);
+
+  // Use action_set_quantities_to_reservation to copy reserved → done qty,
+  // then set lots where needed, then validate.
+  // This avoids needing to know exact field names for reserved qty.
+  const moves = await odooCall(creds.uid, creds.key,
+    'stock.move', 'search_read',
+    [[['picking_id', '=', picking_id], ['state', 'not in', ['done', 'cancel']]]],
+    { fields: ['id', 'product_id', 'product_uom_qty', 'quantity'] }
+  );
+
+  // Set done quantity on each move to match demand
+  for (const mv of moves) {
+    await odooCall(creds.uid, creds.key,
+      'stock.move', 'write', [[mv.id], { quantity: mv.product_uom_qty }]);
+  }
+
+  // Handle lot/serial requirements: read move lines and create lots where missing
+  const moveLines = await odooCall(creds.uid, creds.key,
+    'stock.move.line', 'search_read',
+    [[['picking_id', '=', picking_id], ['state', 'not in', ['done', 'cancel']]]],
+    { fields: ['id', 'lot_id', 'product_id'] }
+  );
+
+  for (const ml of moveLines) {
+    if (!ml.lot_id) {
+      const prodInfo = await odooCall(creds.uid, creds.key,
+        'product.product', 'read', [[ml.product_id[0]]],
+        { fields: ['tracking'] }
+      );
+      if (prodInfo[0] && prodInfo[0].tracking && prodInfo[0].tracking !== 'none') {
+        const lotName = `RCV-${picking.name.replace(/\//g, '-')}-${ml.id}`;
+        const lotId = await odooCall(creds.uid, creds.key,
+          'stock.lot', 'create',
+          [{ name: lotName, product_id: ml.product_id[0], company_id: cfg.company_id }]
+        );
+        await odooCall(creds.uid, creds.key,
+          'stock.move.line', 'write', [[ml.id], { lot_id: lotId }]);
+      }
+    }
+  }
+
+  // Validate with context to skip backorder wizard
+  await odooCall(creds.uid, creds.key,
+    'stock.picking', 'button_validate', [[picking_id]],
+    { context: { skip_backorder: true, skip_immediate: true } });
+
+  if (DB) {
+    await DB.prepare(
+      'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind('receive_delivery', brand, user.name, JSON.stringify({
+      picking_id, picking_name: picking.name, origin: picking.origin,
+    }), istNow().toISOString()).run();
+  }
+
+  return json({
+    success: true,
+    picking_name: picking.name,
+    origin: picking.origin,
+    action: 'received',
+  });
 }
 
 /* ── Add New Product ── */
