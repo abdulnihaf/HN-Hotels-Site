@@ -136,6 +136,9 @@ async function handleGet(action, url, env, DB) {
   const user = pin ? USERS[pin] : null;
   if (!user) return json({ error: 'Invalid PIN' }, 401);
 
+  // verify-pin doesn't need brand — used by dashboard PIN gate
+  if (action === 'verify-pin') return json({ success: true, user: user.name, role: user.role });
+
   const brand = url.searchParams.get('brand');
   if (!brand || !BRAND_CONFIG[brand]) return json({ error: 'Missing or invalid brand (HE|NCH)' }, 400);
 
@@ -143,7 +146,6 @@ async function handleGet(action, url, env, DB) {
   const creds = getOdooCredentials({ odoo: 'system' }, env);
 
   switch (action) {
-    case 'verify-pin':  return json({ success: true, user: user.name, role: user.role });
     case 'vendors':     return getVendors(creds, cfg);
     case 'products':    return getProducts(creds, cfg);
     case 'last-prices': return getLastPrices(creds, cfg, url);
