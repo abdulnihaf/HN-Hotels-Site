@@ -71,6 +71,61 @@ CREATE TABLE IF NOT EXISTS rm_sync_log (
   synced_at TEXT DEFAULT (datetime('now'))
 );
 
+-- ============================================================
+-- OPERATIONAL TABLES (Purchase → Consumption → Settlement)
+-- ============================================================
+
+-- Daily prices (auto-recorded from POs, or manual entry)
+CREATE TABLE IF NOT EXISTS rm_daily_prices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_code TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  price REAL NOT NULL,
+  recorded_by TEXT,
+  source TEXT,                        -- 'po:PO00123' or 'manual'
+  recorded_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Settlement records (per brand, per period)
+CREATE TABLE IF NOT EXISTS rm_settlements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  brand TEXT NOT NULL,
+  settlement_date TEXT NOT NULL,
+  settled_by TEXT NOT NULL,
+  period_start TEXT NOT NULL,
+  period_end TEXT NOT NULL,
+  opening_stock TEXT,                 -- JSON {HN-RM-001: qty, ...}
+  closing_stock TEXT,                 -- JSON (physical count)
+  purchased TEXT,                     -- JSON (received in period)
+  consumed TEXT,                      -- JSON (opening + purchased - closing)
+  pos_revenue TEXT,                   -- JSON summary
+  cost_summary TEXT,                  -- JSON {total, per_item: {code: cost}}
+  notes TEXT,
+  status TEXT DEFAULT 'completed',
+  settled_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Which items each brand counts (priority tiers)
+CREATE TABLE IF NOT EXISTS rm_tracked_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_code TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  tier INTEGER DEFAULT 1,             -- 1=daily, 2=every 2-3 days, 3=weekly
+  count_method TEXT DEFAULT 'direct',  -- 'direct','vessel','container'
+  is_active INTEGER DEFAULT 1,
+  UNIQUE(product_code, brand)
+);
+
+-- Audit log for all operational actions
+CREATE TABLE IF NOT EXISTS rm_ops_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  action TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  details TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_products_brand ON rm_products(brand);
 CREATE INDEX IF NOT EXISTS idx_products_category ON rm_products(category);
@@ -78,3 +133,7 @@ CREATE INDEX IF NOT EXISTS idx_products_action ON rm_products(action);
 CREATE INDEX IF NOT EXISTS idx_vendor_products_product ON rm_vendor_products(product_code);
 CREATE INDEX IF NOT EXISTS idx_vendor_products_vendor ON rm_vendor_products(vendor_key);
 CREATE INDEX IF NOT EXISTS idx_sync_log_ref ON rm_sync_log(reference);
+CREATE INDEX IF NOT EXISTS idx_daily_prices_code ON rm_daily_prices(product_code, brand);
+CREATE INDEX IF NOT EXISTS idx_settlements_brand ON rm_settlements(brand, settled_at);
+CREATE INDEX IF NOT EXISTS idx_tracked_items_brand ON rm_tracked_items(brand, is_active);
+CREATE INDEX IF NOT EXISTS idx_ops_log_brand ON rm_ops_log(brand, created_at);

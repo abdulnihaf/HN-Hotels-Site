@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Raw Materials Ops — HN Hotels</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#fef7ed',100:'#fdecd4',200:'#f9d5a8',400:'#f0a944',500:'#e8930c',600:'#c97508' },
+            surface: { 1:'#111118', 2:'#16161f', 3:'#1c1c27', 4:'#22222e' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #0c0c14; color: #e4e4ed; }
+    .glass { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.04); backdrop-filter: blur(20px); }
+    input, select, textarea { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); color: #e4e4ed; }
+    input:focus, select:focus, textarea:focus { border-color: rgba(232,147,12,.5); outline: none; box-shadow: 0 0 0 2px rgba(232,147,12,.1); }
+    .btn-primary { background:#e8930c; color:#0c0c14; font-weight:600; }
+    .btn-primary:hover:not(:disabled) { background:#f0a944; }
+    .btn-primary:disabled { opacity:0.4; cursor:not-allowed; }
+    .btn-ghost { background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.5); }
+    .btn-ghost:hover { background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.7); }
+    .btn-ghost.active { background:rgba(232,147,12,0.12); color:#f0a944; border-color:rgba(232,147,12,0.3); }
+    .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+    .badge-he { background:rgba(168,85,247,0.15); color:#c084fc; }
+    .badge-nch { background:rgba(16,185,129,0.15); color:#34d399; }
+    .badge-success { background:rgba(16,185,129,0.15); color:#34d399; }
+    .badge-warn { background:rgba(245,158,11,0.15); color:#fbbf24; }
+    .badge-error { background:rgba(239,68,68,0.15); color:#f87171; }
+    .tab-btn { padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+    .tab-btn.active { background: rgba(232,147,12,0.12); color: #f0a944; border-color: rgba(232,147,12,0.2); }
+    .tab-btn:not(.active) { background: transparent; color: rgba(255,255,255,0.3); }
+    .tab-btn:not(.active):hover { color: rgba(255,255,255,0.5); }
+    .brand-toggle { cursor:pointer; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; transition:all 0.15s; border:1px solid transparent; }
+    .brand-toggle.active-he { background:rgba(168,85,247,0.15); color:#c084fc; border-color:rgba(168,85,247,0.3); }
+    .brand-toggle.active-nch { background:rgba(16,185,129,0.15); color:#34d399; border-color:rgba(16,185,129,0.3); }
+    .brand-toggle:not(.active-he):not(.active-nch) { background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.3); }
+    select option { background:#1c1c27; color:#e4e4ed; }
+    .stat-card { padding:16px; border-radius:12px; }
+    .po-line { display:grid; grid-template-columns:1fr 80px 90px 40px; gap:8px; align-items:center; }
+    .count-row { display:grid; grid-template-columns:1fr 80px 80px 100px; gap:8px; align-items:center; font-size:13px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 1s linear infinite; }
+    .fade-in { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+  </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+<!-- Nav -->
+<nav class="sticky top-0 z-40 glass border-b border-white/[.03] px-4 sm:px-6 h-14 flex items-center justify-between">
+  <div class="flex items-center gap-2.5">
+    <div class="w-8 h-8 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+    </div>
+    <div>
+      <h1 class="text-sm font-bold tracking-tight leading-none">Raw Materials Ops</h1>
+      <p class="text-[10px] text-white/25 leading-none mt-0.5">HN Hotels — Purchase, Consumption, Settlement</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <span id="userBadge" class="text-xs text-white/30 hidden"></span>
+    <a href="/" class="btn-ghost text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition no-underline">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>
+      Home
+    </a>
+  </div>
+</nav>
+
+<!-- PIN Gate -->
+<div id="pinGate" class="flex items-center justify-center" style="min-height:calc(100vh - 56px)">
+  <div class="glass rounded-2xl p-8 w-full max-w-xs text-center">
+    <div class="w-12 h-12 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-400 mx-auto mb-4">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+    </div>
+    <p class="text-white/40 text-sm mb-4">Enter your PIN to continue</p>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"
+      class="w-full px-4 py-3 rounded-xl text-center text-lg tracking-[0.3em] font-mono mb-3">
+    <button onclick="verifyPin()" class="btn-primary w-full py-3 rounded-xl text-sm">Unlock</button>
+    <p id="pinError" class="text-red-400 text-xs mt-2 hidden">Invalid PIN</p>
+  </div>
+</div>
+
+<!-- Main App (hidden until PIN verified) -->
+<div id="mainApp" class="hidden px-4 sm:px-6 py-4 max-w-5xl mx-auto">
+
+  <!-- Brand Toggle + Tab Bar -->
+  <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+    <div class="flex gap-2">
+      <button onclick="setBrand('HE')" id="brandHE" class="brand-toggle">Hamza Express</button>
+      <button onclick="setBrand('NCH')" id="brandNCH" class="brand-toggle">Nawabi Chai House</button>
+    </div>
+    <div class="flex gap-1">
+      <button onclick="setTab('purchase')" data-tab="purchase" class="tab-btn">Purchase</button>
+      <button onclick="setTab('settlement')" data-tab="settlement" class="tab-btn">Settlement</button>
+      <button onclick="setTab('analytics')" data-tab="analytics" class="tab-btn">Analytics</button>
+    </div>
+  </div>
+
+  <!-- ═══ PURCHASE TAB ═══ -->
+  <div id="tab-purchase" class="tab-content hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+      <!-- Left: Vendor + Product Selection -->
+      <div class="lg:col-span-2 space-y-4">
+        <!-- Vendor Select -->
+        <div class="glass rounded-xl p-4">
+          <label class="text-xs text-white/40 font-semibold uppercase tracking-wider">Select Vendor</label>
+          <select id="vendorSelect" onchange="onVendorChange()" class="w-full mt-2 px-3 py-2.5 rounded-lg text-sm">
+            <option value="">-- Choose vendor --</option>
+          </select>
+        </div>
+
+        <!-- Product Lines -->
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <label class="text-xs text-white/40 font-semibold uppercase tracking-wider">Order Lines</label>
+            <button onclick="addPOLine()" class="btn-ghost text-xs px-3 py-1.5 rounded-lg">+ Add Line</button>
+          </div>
+          <div class="space-y-2 text-xs text-white/30 mb-2">
+            <div class="po-line font-semibold">
+              <span>Product</span><span>Qty</span><span>Price/unit</span><span></span>
+            </div>
+          </div>
+          <div id="poLines" class="space-y-2"></div>
+          <div class="mt-4 flex items-center justify-between">
+            <span class="text-sm text-white/40">Total: <span id="poTotal" class="text-white font-bold">0.00</span></span>
+            <button onclick="submitPO()" id="btnSubmitPO" class="btn-primary px-6 py-2.5 rounded-xl text-sm" disabled>Create PO</button>
+          </div>
+        </div>
+
+        <!-- Add New Product -->
+        <details class="glass rounded-xl">
+          <summary class="p-4 cursor-pointer text-xs text-white/40 font-semibold uppercase tracking-wider hover:text-white/60">
+            + Add New Product to Registry
+          </summary>
+          <div class="px-4 pb-4 space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <input id="newProdName" type="text" placeholder="Product name" class="px-3 py-2 rounded-lg text-sm">
+              <input id="newProdCategory" type="text" placeholder="Category (e.g. Spices)" class="px-3 py-2 rounded-lg text-sm">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <select id="newProdUom" class="px-3 py-2 rounded-lg text-sm">
+                <option value="kg">kg</option><option value="L">L</option><option value="g">g</option>
+                <option value="ml">ml</option><option value="pcs">pcs</option><option value="Units">Units</option>
+                <option value="bundle">bundle</option><option value="cylinder">cylinder</option><option value="load">load</option>
+              </select>
+              <select id="newProdVendor" class="px-3 py-2 rounded-lg text-sm">
+                <option value="">-- Vendor (required) --</option>
+              </select>
+            </div>
+            <button onclick="addNewProduct()" class="btn-primary px-5 py-2 rounded-lg text-sm">Add Product</button>
+            <p id="newProdResult" class="text-xs hidden"></p>
+          </div>
+        </details>
+      </div>
+
+      <!-- Right: Recent POs -->
+      <div class="glass rounded-xl p-4">
+        <label class="text-xs text-white/40 font-semibold uppercase tracking-wider mb-3 block">Recent POs</label>
+        <div id="recentPOs" class="space-y-2 text-sm">
+          <p class="text-white/20 text-xs">Loading...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SETTLEMENT TAB ═══ -->
+  <div id="tab-settlement" class="tab-content hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+      <!-- Left: Settlement Form -->
+      <div class="lg:col-span-2 space-y-4">
+        <!-- Period Info -->
+        <div id="settlementInfo" class="glass rounded-xl p-4">
+          <p class="text-white/30 text-sm">Loading settlement data...</p>
+        </div>
+
+        <!-- Count Form -->
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <label class="text-xs text-white/40 font-semibold uppercase tracking-wider">Physical Counts</label>
+            <span id="countTier" class="badge badge-warn">Tier 1 — Daily</span>
+          </div>
+          <div class="count-row text-xs text-white/30 font-semibold mb-2">
+            <span>Item</span><span>Opening</span><span>Purchased</span><span>Closing</span>
+          </div>
+          <div id="countRows" class="space-y-1.5"></div>
+          <div class="mt-4 flex items-center gap-3">
+            <textarea id="settlementNotes" placeholder="Notes (optional)" rows="2" class="flex-1 px-3 py-2 rounded-lg text-sm"></textarea>
+            <button onclick="submitSettlement()" id="btnSubmitSettlement" class="btn-primary px-6 py-2.5 rounded-xl text-sm" disabled>Submit</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Settlement Result / History -->
+      <div class="space-y-4">
+        <div id="settlementResult" class="glass rounded-xl p-4 hidden">
+          <label class="text-xs text-white/40 font-semibold uppercase tracking-wider mb-3 block">Settlement Result</label>
+          <div id="settlementResultBody"></div>
+        </div>
+        <div class="glass rounded-xl p-4">
+          <label class="text-xs text-white/40 font-semibold uppercase tracking-wider mb-3 block">History</label>
+          <div id="settlementHistory" class="space-y-2 text-sm">
+            <p class="text-white/20 text-xs">Loading...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ANALYTICS TAB ═══ -->
+  <div id="tab-analytics" class="tab-content hidden">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div class="glass stat-card rounded-xl">
+        <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Tracked Items</p>
+        <p id="statTracked" class="text-2xl font-bold mt-1">—</p>
+      </div>
+      <div class="glass stat-card rounded-xl">
+        <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Settlements</p>
+        <p id="statSettlements" class="text-2xl font-bold mt-1">—</p>
+      </div>
+      <div class="glass stat-card rounded-xl">
+        <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Price Records</p>
+        <p id="statPrices" class="text-2xl font-bold mt-1">—</p>
+      </div>
+      <div class="glass stat-card rounded-xl">
+        <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Last Settlement</p>
+        <p id="statLastSettlement" class="text-sm font-semibold mt-1 text-white/50">—</p>
+      </div>
+    </div>
+
+    <!-- Consumption View -->
+    <div class="glass rounded-xl p-4 mb-4">
+      <div class="flex items-center justify-between mb-3">
+        <label class="text-xs text-white/40 font-semibold uppercase tracking-wider">Today's Consumption (POS + Transfers)</label>
+        <button onclick="loadConsumption()" class="btn-ghost text-xs px-3 py-1.5 rounded-lg">Refresh</button>
+      </div>
+      <div id="consumptionData" class="text-sm">
+        <p class="text-white/20 text-xs">Click refresh to load</p>
+      </div>
+    </div>
+
+    <!-- Recent Ops Log -->
+    <div class="glass rounded-xl p-4">
+      <label class="text-xs text-white/40 font-semibold uppercase tracking-wider mb-3 block">Ops Activity</label>
+      <div id="opsLog" class="space-y-2 text-sm">
+        <p class="text-white/20 text-xs">Loading...</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = '/api/rm-ops';
+let currentPin = '';
+let currentUser = null;
+let currentBrand = 'NCH';
+let currentTab = 'purchase';
+
+// Cached data
+let vendors = [];
+let products = [];
+let lastPrices = {};
+let poLineCount = 0;
+
+/* ━━━ PIN ━━━ */
+
+function verifyPin() {
+  const pin = document.getElementById('pinInput').value.trim();
+  if (pin.length !== 4) { showPinError(); return; }
+  currentPin = pin;
+  fetch(`${API}?action=verify-pin&brand=${currentBrand}&pin=${pin}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) { showPinError(); return; }
+      currentUser = d.user;
+      document.getElementById('pinGate').classList.add('hidden');
+      document.getElementById('mainApp').classList.remove('hidden');
+      document.getElementById('userBadge').classList.remove('hidden');
+      document.getElementById('userBadge').textContent = d.user;
+      setBrand(currentBrand);
+      setTab(currentTab);
+    })
+    .catch(() => showPinError());
+}
+
+function showPinError() {
+  const el = document.getElementById('pinError');
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 2000);
+}
+
+document.getElementById('pinInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') verifyPin();
+});
+
+/* ━━━ Brand Toggle ━━━ */
+
+function setBrand(b) {
+  currentBrand = b;
+  document.getElementById('brandHE').className = `brand-toggle ${b === 'HE' ? 'active-he' : ''}`;
+  document.getElementById('brandNCH').className = `brand-toggle ${b === 'NCH' ? 'active-nch' : ''}`;
+  refreshCurrentTab();
+}
+
+/* ━━━ Tab Navigation ━━━ */
+
+function setTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  const tabEl = document.getElementById(`tab-${tab}`);
+  if (tabEl) { tabEl.classList.remove('hidden'); tabEl.classList.add('fade-in'); }
+  document.querySelector(`[data-tab="${tab}"]`)?.classList.add('active');
+  refreshCurrentTab();
+}
+
+function refreshCurrentTab() {
+  if (!currentPin) return;
+  if (currentTab === 'purchase') loadPurchaseData();
+  if (currentTab === 'settlement') loadSettlementData();
+  if (currentTab === 'analytics') loadAnalytics();
+}
+
+/* ━━━ PURCHASE ━━━ */
+
+async function loadPurchaseData() {
+  const [vRes, pRes, rRes] = await Promise.all([
+    apiFetch('vendors'), apiFetch('products'), apiFetch('recent-pos&limit=15'),
+  ]);
+
+  if (vRes.success) {
+    vendors = vRes.vendors;
+    const sel = document.getElementById('vendorSelect');
+    sel.innerHTML = '<option value="">-- Choose vendor --</option>' +
+      vendors.map(v => `<option value="${v.id}">${v.name}${v.phone ? ' (' + v.phone + ')' : ''}</option>`).join('');
+    // Also populate new product vendor dropdown
+    document.getElementById('newProdVendor').innerHTML = '<option value="">-- Vendor (required) --</option>' +
+      vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+  }
+
+  if (pRes.success) {
+    products = pRes.products;
+  }
+
+  if (rRes.success) {
+    renderRecentPOs(rRes.orders);
+  }
+}
+
+async function onVendorChange() {
+  const vendorId = document.getElementById('vendorSelect').value;
+  if (!vendorId) { lastPrices = {}; return; }
+  const res = await apiFetch(`last-prices&vendor_id=${vendorId}`);
+  lastPrices = res.success ? res.prices : {};
+  // Auto-add one line if empty
+  if (poLineCount === 0) addPOLine();
+}
+
+function addPOLine() {
+  poLineCount++;
+  const div = document.createElement('div');
+  div.className = 'po-line';
+  div.id = `po-line-${poLineCount}`;
+  const n = poLineCount;
+  div.innerHTML = `
+    <select onchange="onProductSelect(${n})" id="prod-${n}" class="px-2 py-2 rounded-lg text-sm">
+      <option value="">Select product</option>
+      ${products.map(p => `<option value="${p.id}" data-code="${p.code}">${p.name} (${p.uom})</option>`).join('')}
+    </select>
+    <input type="number" id="qty-${n}" placeholder="Qty" min="0" step="0.1" onchange="calcTotal()" class="px-2 py-2 rounded-lg text-sm text-right">
+    <input type="number" id="price-${n}" placeholder="Price" min="0" step="0.01" onchange="calcTotal()" class="px-2 py-2 rounded-lg text-sm text-right">
+    <button onclick="removePOLine(${n})" class="text-red-400/50 hover:text-red-400 text-lg leading-none">&times;</button>
+  `;
+  document.getElementById('poLines').appendChild(div);
+  updateSubmitBtn();
+}
+
+function removePOLine(n) {
+  document.getElementById(`po-line-${n}`)?.remove();
+  calcTotal();
+}
+
+function onProductSelect(n) {
+  const sel = document.getElementById(`prod-${n}`);
+  const pid = sel.value;
+  if (pid && lastPrices[pid]) {
+    document.getElementById(`price-${n}`).value = lastPrices[pid].price || lastPrices[pid];
+    calcTotal();
+  }
+}
+
+function calcTotal() {
+  let total = 0;
+  document.querySelectorAll('#poLines > div').forEach(div => {
+    const id = div.id.split('-')[2];
+    const qty = parseFloat(document.getElementById(`qty-${id}`)?.value) || 0;
+    const price = parseFloat(document.getElementById(`price-${id}`)?.value) || 0;
+    total += qty * price;
+  });
+  document.getElementById('poTotal').textContent = total.toFixed(2);
+  updateSubmitBtn();
+}
+
+function updateSubmitBtn() {
+  const vendorId = document.getElementById('vendorSelect').value;
+  let hasLines = false;
+  document.querySelectorAll('#poLines > div').forEach(div => {
+    const id = div.id.split('-')[2];
+    const prod = document.getElementById(`prod-${id}`)?.value;
+    const qty = parseFloat(document.getElementById(`qty-${id}`)?.value) || 0;
+    if (prod && qty > 0) hasLines = true;
+  });
+  document.getElementById('btnSubmitPO').disabled = !vendorId || !hasLines;
+}
+
+async function submitPO() {
+  const vendorId = parseInt(document.getElementById('vendorSelect').value);
+  const lines = [];
+  document.querySelectorAll('#poLines > div').forEach(div => {
+    const id = div.id.split('-')[2];
+    const product_id = parseInt(document.getElementById(`prod-${id}`)?.value);
+    const qty = parseFloat(document.getElementById(`qty-${id}`)?.value) || 0;
+    const price_unit = parseFloat(document.getElementById(`price-${id}`)?.value) || 0;
+    const name = document.getElementById(`prod-${id}`)?.selectedOptions[0]?.text || 'Purchase';
+    if (product_id && qty > 0) lines.push({ product_id, qty, price_unit, name });
+  });
+
+  if (!lines.length) return;
+
+  const btn = document.getElementById('btnSubmitPO');
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+
+  const res = await apiPost({ action: 'create-po', pin: currentPin, brand: currentBrand, vendor_id: vendorId, lines });
+
+  if (res.success) {
+    btn.textContent = `Created ${res.po_name}`;
+    btn.className = 'btn-primary px-6 py-2.5 rounded-xl text-sm bg-emerald-600';
+    setTimeout(() => {
+      btn.textContent = 'Create PO';
+      btn.className = 'btn-primary px-6 py-2.5 rounded-xl text-sm';
+      btn.disabled = false;
+      // Clear lines
+      document.getElementById('poLines').innerHTML = '';
+      poLineCount = 0;
+      calcTotal();
+      loadPurchaseData();
+    }, 2000);
+  } else {
+    btn.textContent = res.error || 'Failed';
+    btn.className = 'btn-primary px-6 py-2.5 rounded-xl text-sm bg-red-600';
+    setTimeout(() => {
+      btn.textContent = 'Create PO';
+      btn.className = 'btn-primary px-6 py-2.5 rounded-xl text-sm';
+      btn.disabled = false;
+    }, 3000);
+  }
+}
+
+async function addNewProduct() {
+  const name = document.getElementById('newProdName').value.trim();
+  const category = document.getElementById('newProdCategory').value.trim();
+  const uom = document.getElementById('newProdUom').value;
+  const vendor_key = document.getElementById('newProdVendor').value;
+
+  if (!name || !category || !vendor_key) {
+    showNewProdResult('Name, category, and vendor are required', true);
+    return;
+  }
+
+  const res = await apiPost({ action: 'add-product', pin: currentPin, brand: currentBrand, name, category, uom, vendor_key });
+  if (res.success) {
+    showNewProdResult(`Created ${res.hn_code}: ${name}`, false);
+    document.getElementById('newProdName').value = '';
+    document.getElementById('newProdCategory').value = '';
+    loadPurchaseData();
+  } else {
+    showNewProdResult(res.error || 'Failed', true);
+  }
+}
+
+function showNewProdResult(msg, isError) {
+  const el = document.getElementById('newProdResult');
+  el.textContent = msg;
+  el.className = `text-xs ${isError ? 'text-red-400' : 'text-emerald-400'}`;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 4000);
+}
+
+function renderRecentPOs(orders) {
+  const el = document.getElementById('recentPOs');
+  if (!orders.length) { el.innerHTML = '<p class="text-white/20 text-xs">No recent POs</p>'; return; }
+  el.innerHTML = orders.map(o => `
+    <div class="p-2 rounded-lg bg-white/[.02] flex items-center justify-between">
+      <div>
+        <span class="text-xs font-mono text-brand-400">${o.name}</span>
+        <p class="text-[11px] text-white/40">${o.vendor}</p>
+      </div>
+      <div class="text-right">
+        <p class="text-xs font-semibold">${fmt(o.total)}</p>
+        <p class="text-[10px] text-white/25">${fmtDate(o.date)}</p>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ━━━ SETTLEMENT ━━━ */
+
+let settlementData = null;
+
+async function loadSettlementData() {
+  const [prepRes, histRes] = await Promise.all([
+    apiFetch('settlement-prepare'),
+    apiFetch('settlement-history&limit=10'),
+  ]);
+
+  if (prepRes.success) {
+    settlementData = prepRes;
+    renderSettlementForm(prepRes);
+  }
+
+  if (histRes.success) {
+    renderSettlementHistory(histRes.settlements);
+  }
+}
+
+function renderSettlementForm(data) {
+  const info = document.getElementById('settlementInfo');
+  if (data.needsBootstrap) {
+    info.innerHTML = `
+      <div class="flex items-center gap-2 text-amber-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z"/></svg>
+        <span class="text-sm font-semibold">Bootstrap Required</span>
+      </div>
+      <p class="text-xs text-white/40 mt-1">No previous settlement found. Enter current stock counts to establish baseline.</p>
+    `;
+  } else {
+    info.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-xs text-white/30">Period</p>
+          <p class="text-sm">${fmtDate(data.period.start)} → <span class="text-brand-400">Now</span></p>
+        </div>
+        <div class="text-right">
+          <p class="text-xs text-white/30">Date</p>
+          <p class="text-sm font-semibold">${data.settlementDate}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  // Render count rows
+  const rows = document.getElementById('countRows');
+  if (!data.trackedItems || !data.trackedItems.length) {
+    rows.innerHTML = '<p class="text-white/20 text-xs">No tracked items for this brand. Seed rm_tracked_items first.</p>';
+    return;
+  }
+
+  rows.innerHTML = data.trackedItems.map(item => `
+    <div class="count-row" data-code="${item.code}">
+      <div>
+        <span class="text-sm">${item.name}</span>
+        <span class="text-[10px] text-white/25 ml-1">${item.code} · ${item.uom}</span>
+      </div>
+      <span class="text-xs text-white/30 text-right">${round2(item.opening)}</span>
+      <span class="text-xs text-emerald-400/60 text-right">+${round2(item.purchased)}</span>
+      <input type="number" class="closing-input px-2 py-1.5 rounded-lg text-sm text-right" data-code="${item.code}"
+        placeholder="Count" min="0" step="0.1" onchange="updateSettlementBtn()">
+    </div>
+  `).join('');
+
+  document.getElementById('btnSubmitSettlement').disabled = false;
+}
+
+function updateSettlementBtn() {
+  let hasAny = false;
+  document.querySelectorAll('.closing-input').forEach(inp => {
+    if (inp.value !== '') hasAny = true;
+  });
+  document.getElementById('btnSubmitSettlement').disabled = !hasAny;
+}
+
+async function submitSettlement() {
+  const counts = {};
+  document.querySelectorAll('.closing-input').forEach(inp => {
+    const code = inp.dataset.code;
+    const val = parseFloat(inp.value);
+    if (!isNaN(val)) counts[code] = val;
+  });
+
+  if (!Object.keys(counts).length) return;
+
+  const btn = document.getElementById('btnSubmitSettlement');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+
+  const isBootstrap = settlementData?.needsBootstrap || false;
+  const notes = document.getElementById('settlementNotes').value.trim();
+
+  const res = await apiPost({
+    action: 'settlement-submit', pin: currentPin, brand: currentBrand,
+    counts, notes, is_bootstrap: isBootstrap,
+  });
+
+  if (res.success) {
+    btn.textContent = 'Done';
+    renderSettlementResult(res);
+    setTimeout(() => { btn.textContent = 'Submit'; btn.disabled = false; loadSettlementData(); }, 2000);
+  } else {
+    btn.textContent = res.error || 'Failed';
+    setTimeout(() => { btn.textContent = 'Submit'; btn.disabled = false; }, 3000);
+  }
+}
+
+function renderSettlementResult(res) {
+  const el = document.getElementById('settlementResult');
+  el.classList.remove('hidden');
+  const body = document.getElementById('settlementResultBody');
+
+  if (res.status === 'bootstrap') {
+    body.innerHTML = `<p class="text-emerald-400 text-sm">Baseline established. Next settlement will calculate consumption.</p>`;
+    return;
+  }
+
+  const items = Object.entries(res.costSummary?.per_item || {});
+  body.innerHTML = `
+    <div class="space-y-1.5 mb-3">
+      ${items.map(([code, d]) => `
+        <div class="flex justify-between text-xs">
+          <span class="text-white/50">${code}</span>
+          <span>${round2(d.consumed)} × ${fmt(d.price)} = <span class="font-semibold text-white">${fmt(d.cost)}</span></span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="border-t border-white/5 pt-2 flex justify-between">
+      <span class="text-sm font-semibold text-white/60">Total Cost</span>
+      <span class="text-lg font-bold text-brand-400">${fmt(res.costSummary?.total || 0)}</span>
+    </div>
+  `;
+}
+
+function renderSettlementHistory(settlements) {
+  const el = document.getElementById('settlementHistory');
+  if (!settlements.length) { el.innerHTML = '<p class="text-white/20 text-xs">No settlements yet</p>'; return; }
+  el.innerHTML = settlements.map(s => {
+    const cost = s.cost_summary ? JSON.parse(s.cost_summary) : null;
+    return `
+      <div class="p-2 rounded-lg bg-white/[.02]">
+        <div class="flex justify-between items-center">
+          <span class="text-xs font-semibold">${s.settlement_date}</span>
+          <span class="badge ${s.status === 'bootstrap' ? 'badge-warn' : 'badge-success'}">${s.status}</span>
+        </div>
+        <div class="flex justify-between text-[11px] text-white/40 mt-1">
+          <span>${s.settled_by}</span>
+          ${cost ? `<span class="text-white/60 font-semibold">${fmt(cost.total)}</span>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ━━━ ANALYTICS ━━━ */
+
+async function loadAnalytics() {
+  const res = await apiFetch('status');
+  if (res.success) {
+    document.getElementById('statTracked').textContent = res.trackedItems;
+    document.getElementById('statSettlements').textContent = res.settlements;
+    document.getElementById('statPrices').textContent = res.priceRecords;
+    if (res.lastSettlement) {
+      document.getElementById('statLastSettlement').textContent =
+        `${res.lastSettlement.settlement_date} by ${res.lastSettlement.settled_by}`;
+    }
+  }
+}
+
+async function loadConsumption() {
+  const el = document.getElementById('consumptionData');
+  el.innerHTML = '<p class="text-white/30 text-xs">Loading...</p>';
+
+  const res = await apiFetch('consumption');
+  if (!res.success) { el.innerHTML = `<p class="text-red-400 text-xs">${res.error}</p>`; return; }
+
+  const salesHtml = res.sales?.items?.length
+    ? `<div class="mb-3">
+        <p class="text-xs text-white/30 mb-1">POS Sales: <span class="text-white/60">${res.sales.orders} orders, ${fmt(res.sales.revenue)} revenue</span></p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-1">
+          ${res.sales.items.slice(0, 12).map(i => `
+            <span class="text-[11px] text-white/40">${i.name}: <span class="text-white/60">${i.qty}</span></span>
+          `).join('')}
+        </div>
+      </div>`
+    : '<p class="text-xs text-white/30 mb-2">No POS sales in period</p>';
+
+  const consEntries = Object.entries(res.consumption || {});
+  const consHtml = consEntries.length
+    ? `<div>
+        <p class="text-xs text-white/30 mb-1">Material Movement (Transfers)</p>
+        ${consEntries.map(([pid, d]) => `
+          <div class="flex justify-between text-[11px] py-0.5">
+            <span class="text-white/40">Product #${pid}</span>
+            <span>In: ${d.sentToKitchen} | Ret: ${d.returned} | Waste: ${d.wasted} | <span class="text-white/70 font-semibold">Net: ${d.netConsumed}</span></span>
+          </div>
+        `).join('')}
+      </div>`
+    : '<p class="text-xs text-white/30">No transfers in period</p>';
+
+  el.innerHTML = salesHtml + consHtml;
+}
+
+/* ━━━ API Helpers ━━━ */
+
+async function apiFetch(actionParams) {
+  try {
+    const r = await fetch(`${API}?action=${actionParams}&brand=${currentBrand}&pin=${currentPin}`);
+    return await r.json();
+  } catch (e) { return { error: e.message }; }
+}
+
+async function apiPost(body) {
+  try {
+    const r = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return await r.json();
+  } catch (e) { return { error: e.message }; }
+}
+
+/* ━━━ Formatters ━━━ */
+
+function fmt(n) { return '₹' + (parseFloat(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+function round2(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+}
+</script>
+</body>
+</html>
