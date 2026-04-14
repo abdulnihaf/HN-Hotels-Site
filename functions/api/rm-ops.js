@@ -151,6 +151,7 @@ async function handleGet(action, url, env, DB) {
     case 'last-prices': return getLastPrices(creds, cfg, url);
     case 'recent-pos':  return getRecentPOs(creds, cfg, url);
     case 'purchase-catalog': return getPurchaseCatalog(creds, cfg, brand, url, DB);
+    case 'po-detail':       return getPODetail(creds, cfg, url);
     case 'consumption': return getConsumption(creds, cfg, url);
     case 'kitchen-stock': return getKitchenStock(creds, cfg);
     case 'settlement-prepare': return settlementPrepare(creds, cfg, brand, DB);
@@ -298,6 +299,60 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
       date: p.date_order, state: p.state, total: p.amount_total,
       created_by: p.create_uid ? p.create_uid[1] : '',
     })),
+  });
+}
+
+/* ── PO Detail (for edit/delete flow) ── */
+
+async function getPODetail(creds, cfg, url) {
+  const poId = parseInt(url.searchParams.get('po_id'));
+  if (!poId) return json({ error: 'Missing po_id' }, 400);
+
+  // Read PO header + lines + linked pickings in parallel
+  const [poArr, poLines, pickings] = await Promise.all([
+    odooCall(creds.uid, creds.key, 'purchase.order', 'read', [[poId]],
+      { fields: ['id', 'name', 'partner_id', 'state', 'amount_total', 'date_order', 'company_id'] }),
+    odooCall(creds.uid, creds.key, 'purchase.order.line', 'search_read',
+      [[['order_id', '=', poId]]],
+      { fields: ['id', 'product_id', 'product_qty', 'price_unit', 'price_subtotal', 'name', 'product_uom'] }),
+    odooCall(creds.uid, creds.key, 'stock.picking', 'search_read',
+      [[['purchase_id', '=', poId]]],
+      { fields: ['id', 'name', 'state'] }),
+  ]);
+
+  if (!poArr || poArr.length === 0) return json({ error: 'PO not found' }, 404);
+  const po = poArr[0];
+
+  // Determine if PO is editable: must be confirmed AND picking not yet done
+  const pickingDone = pickings.some(p => p.state === 'done');
+  const editable = po.state === 'purchase' && !pickingDone;
+
+  return json({
+    success: true,
+    po: {
+      id: po.id, name: po.name,
+      vendor: po.partner_id ? po.partner_id[1] : 'Unknown',
+      vendor_id: po.partner_id ? po.partner_id[0] : null,
+      state: po.state, total: po.amount_total,
+      date: po.date_order,
+    },
+    lines: poLines.map(l => ({
+      id: l.id,
+      product_id: l.product_id ? l.product_id[0] : null,
+      product_name: l.product_id ? l.product_id[1] : l.name,
+      qty: l.product_qty,
+      price_unit: l.price_unit,
+      subtotal: l.price_subtotal,
+      uom: l.product_uom ? l.product_uom[1] : 'Units',
+    })),
+    pickings: pickings.map(p => ({ id: p.id, name: p.name, state: p.state })),
+    editable,
+    editableReason: !editable
+      ? (po.state === 'cancel' ? 'PO is cancelled'
+        : po.state === 'draft' ? 'PO is still in draft'
+        : pickingDone ? 'Stock already received — cannot modify'
+        : 'PO state does not allow editing')
+      : null,
   });
 }
 
@@ -530,6 +585,9 @@ async function handlePost(action, context, env, DB) {
 
   switch (body.action || action) {
     case 'create-po':       return createPO(body, user, creds, cfg, brand, DB);
+    case 'edit-po-line':    return editPOLine(body, user, creds, cfg, brand, DB);
+    case 'delete-po-line':  return deletePOLine(body, user, creds, cfg, brand, DB);
+    case 'cancel-po':       return cancelPO(body, user, creds, cfg, brand, DB);
     case 'add-product':     return addProduct(body, user, creds, cfg, brand, env, DB);
     case 'update-price':    return updatePrice(body, user, brand, DB);
     case 'link-vendor':     return linkVendor(body, user, creds, cfg, brand, env, DB);
@@ -618,6 +676,169 @@ async function createPO(body, user, creds, cfg, brand, DB) {
     success: true, po_id: poId, po_name: poName,
     created_by: user.name, brand,
   });
+}
+
+/* ── PO Safety Check (shared by edit/delete/cancel) ── */
+
+async function checkPOEditable(creds, poId) {
+  const [poArr, pickings] = await Promise.all([
+    odooCall(creds.uid, creds.key, 'purchase.order', 'read', [[poId]],
+      { fields: ['id', 'name', 'state'] }),
+    odooCall(creds.uid, creds.key, 'stock.picking', 'search_read',
+      [[['purchase_id', '=', poId]]],
+      { fields: ['id', 'state'] }),
+  ]);
+
+  if (!poArr || poArr.length === 0) return { ok: false, error: 'PO not found' };
+  const po = poArr[0];
+
+  if (po.state === 'cancel') return { ok: false, error: 'PO is already cancelled' };
+  if (po.state === 'done') return { ok: false, error: 'PO is already done' };
+  if (po.state !== 'purchase') return { ok: false, error: `PO state "${po.state}" does not allow editing` };
+
+  const pickingDone = pickings.some(p => p.state === 'done');
+  if (pickingDone) return { ok: false, error: 'Stock already received — cannot modify this PO' };
+
+  return { ok: true, po, pickings };
+}
+
+/* ── Edit PO Line (qty / price) ── */
+
+async function editPOLine(body, user, creds, cfg, brand, DB) {
+  if (user.role !== 'admin' && user.role !== 'purchase') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const { po_id, line_id, qty, price_unit } = body;
+  if (!po_id || !line_id) return json({ error: 'Missing po_id or line_id' }, 400);
+  if (qty == null && price_unit == null) return json({ error: 'Nothing to update — provide qty or price_unit' }, 400);
+
+  // Safety check: PO editable?
+  const check = await checkPOEditable(creds, po_id);
+  if (!check.ok) return json({ error: check.error }, 400);
+
+  // Build update fields
+  const updates = {};
+  if (qty != null) {
+    if (qty <= 0) return json({ error: 'Quantity must be positive' }, 400);
+    updates.product_qty = qty;
+  }
+  if (price_unit != null) {
+    if (price_unit < 0) return json({ error: 'Price cannot be negative' }, 400);
+    updates.price_unit = price_unit;
+  }
+
+  // Write to Odoo
+  await odooCall(creds.uid, creds.key,
+    'purchase.order.line', 'write', [[line_id], updates]);
+
+  // If price changed, update D1 daily prices
+  if (price_unit != null && DB) {
+    // Get the product code for this line
+    const lineData = await odooCall(creds.uid, creds.key,
+      'purchase.order.line', 'read', [[line_id]],
+      { fields: ['product_id'] });
+    if (lineData[0]) {
+      const productId = lineData[0].product_id[0];
+      const d1Product = await DB.prepare(
+        'SELECT hn_code FROM rm_products WHERE odoo_id = ?'
+      ).bind(productId).first();
+      if (d1Product) {
+        const now = istNow().toISOString();
+        await DB.prepare(
+          'INSERT INTO rm_daily_prices (product_code, brand, price, recorded_by, source, recorded_at) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(d1Product.hn_code, brand, price_unit, user.name, `po-edit:${check.po.name}`, now).run();
+      }
+    }
+  }
+
+  // Log
+  if (DB) {
+    await DB.prepare(
+      'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind('edit_po_line', brand, user.name, JSON.stringify({
+      po_id, po_name: check.po.name, line_id, changes: updates,
+    }), istNow().toISOString()).run();
+  }
+
+  return json({ success: true, po_name: check.po.name, line_id, updated: updates });
+}
+
+/* ── Delete PO Line ── */
+
+async function deletePOLine(body, user, creds, cfg, brand, DB) {
+  if (user.role !== 'admin' && user.role !== 'purchase') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const { po_id, line_id } = body;
+  if (!po_id || !line_id) return json({ error: 'Missing po_id or line_id' }, 400);
+
+  const check = await checkPOEditable(creds, po_id);
+  if (!check.ok) return json({ error: check.error }, 400);
+
+  // Count remaining lines — if this is the last one, cancel PO instead
+  const existingLines = await odooCall(creds.uid, creds.key,
+    'purchase.order.line', 'search_read',
+    [[['order_id', '=', po_id]]],
+    { fields: ['id'] });
+
+  if (existingLines.length <= 1) {
+    // Last line — cancel the entire PO
+    await odooCall(creds.uid, creds.key,
+      'purchase.order', 'button_cancel', [[po_id]]);
+
+    if (DB) {
+      await DB.prepare(
+        'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).bind('cancel_po', brand, user.name, JSON.stringify({
+        po_id, po_name: check.po.name, reason: 'last_line_deleted',
+      }), istNow().toISOString()).run();
+    }
+
+    return json({ success: true, po_name: check.po.name, action: 'po_cancelled', reason: 'Last line removed — PO cancelled' });
+  }
+
+  // Delete the line: command [2, id, 0] removes and deletes
+  await odooCall(creds.uid, creds.key,
+    'purchase.order', 'write', [[po_id], { order_line: [[2, line_id, 0]] }]);
+
+  if (DB) {
+    await DB.prepare(
+      'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind('delete_po_line', brand, user.name, JSON.stringify({
+      po_id, po_name: check.po.name, line_id,
+    }), istNow().toISOString()).run();
+  }
+
+  return json({ success: true, po_name: check.po.name, line_id, action: 'line_deleted' });
+}
+
+/* ── Cancel PO ── */
+
+async function cancelPO(body, user, creds, cfg, brand, DB) {
+  if (user.role !== 'admin' && user.role !== 'purchase') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const { po_id } = body;
+  if (!po_id) return json({ error: 'Missing po_id' }, 400);
+
+  const check = await checkPOEditable(creds, po_id);
+  if (!check.ok) return json({ error: check.error }, 400);
+
+  await odooCall(creds.uid, creds.key,
+    'purchase.order', 'button_cancel', [[po_id]]);
+
+  if (DB) {
+    await DB.prepare(
+      'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind('cancel_po', brand, user.name, JSON.stringify({
+      po_id, po_name: check.po.name, reason: body.reason || 'user_cancelled',
+    }), istNow().toISOString()).run();
+  }
+
+  return json({ success: true, po_name: check.po.name, action: 'cancelled' });
 }
 
 /* ── Add New Product ── */
