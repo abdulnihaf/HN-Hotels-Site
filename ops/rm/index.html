@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Raw Materials Ops — HN Hotels</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -20,200 +20,212 @@
     }
   </script>
   <style>
-    * { box-sizing: border-box; }
-    body { background: #0c0c14; color: #e4e4ed; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background: #0c0c14; color: #e4e4ed; overscroll-behavior: none; }
     .glass { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.04); backdrop-filter: blur(20px); }
-    input, select, textarea { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); color: #e4e4ed; }
-    input:focus, select:focus, textarea:focus { border-color: rgba(232,147,12,.5); outline: none; box-shadow: 0 0 0 2px rgba(232,147,12,.1); }
-    .btn-primary { background:#e8930c; color:#0c0c14; font-weight:600; }
+    input, select, textarea { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #e4e4ed; border-radius: 10px; font-size: 15px; }
+    input:focus, select:focus, textarea:focus { border-color: rgba(232,147,12,.5); outline: none; box-shadow: 0 0 0 2px rgba(232,147,12,.15); }
+    input::placeholder { color: rgba(255,255,255,0.2); }
+    select option { background:#1c1c27; color:#e4e4ed; }
+    .btn { padding: 12px 20px; border-radius: 12px; font-weight: 600; font-size: 14px; text-align: center; cursor: pointer; transition: all 0.15s; border: none; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn-primary { background:#e8930c; color:#0c0c14; }
     .btn-primary:hover:not(:disabled) { background:#f0a944; }
-    .btn-primary:disabled { opacity:0.4; cursor:not-allowed; }
+    .btn-primary:disabled { opacity:0.35; cursor:not-allowed; }
     .btn-ghost { background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.5); }
     .btn-ghost:hover { background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.7); }
-    .btn-ghost.active { background:rgba(232,147,12,0.12); color:#f0a944; border-color:rgba(232,147,12,0.3); }
-    .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+    .btn-danger { background:rgba(239,68,68,0.15); color:#f87171; }
+    .btn-sm { padding: 8px 14px; font-size: 12px; min-height: 36px; border-radius: 8px; }
+    .badge { display:inline-flex; align-items:center; padding:3px 8px; border-radius:6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
     .badge-he { background:rgba(168,85,247,0.15); color:#c084fc; }
     .badge-nch { background:rgba(16,185,129,0.15); color:#34d399; }
     .badge-success { background:rgba(16,185,129,0.15); color:#34d399; }
     .badge-warn { background:rgba(245,158,11,0.15); color:#fbbf24; }
     .badge-error { background:rgba(239,68,68,0.15); color:#f87171; }
-    .tab-btn { padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+    .tab-btn { padding: 10px 16px; font-size: 13px; font-weight: 600; border-radius: 10px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; min-height: 40px; }
     .tab-btn.active { background: rgba(232,147,12,0.12); color: #f0a944; border-color: rgba(232,147,12,0.2); }
     .tab-btn:not(.active) { background: transparent; color: rgba(255,255,255,0.3); }
-    .tab-btn:not(.active):hover { color: rgba(255,255,255,0.5); }
-    .brand-toggle { cursor:pointer; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; transition:all 0.15s; border:1px solid transparent; }
+    .brand-toggle { cursor:pointer; padding:8px 16px; border-radius:10px; font-size:13px; font-weight:600; transition:all 0.15s; border:1px solid transparent; min-height:40px; }
     .brand-toggle.active-he { background:rgba(168,85,247,0.15); color:#c084fc; border-color:rgba(168,85,247,0.3); }
     .brand-toggle.active-nch { background:rgba(16,185,129,0.15); color:#34d399; border-color:rgba(16,185,129,0.3); }
     .brand-toggle:not(.active-he):not(.active-nch) { background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.3); }
-    select option { background:#1c1c27; color:#e4e4ed; }
-    .stat-card { padding:16px; border-radius:12px; }
-    .po-line { display:grid; grid-template-columns:1fr 80px 90px 40px; gap:8px; align-items:center; }
-    .count-row { display:grid; grid-template-columns:1fr 80px 80px 100px; gap:8px; align-items:center; font-size:13px; }
+    .search-input { padding: 12px 12px 12px 40px; width: 100%; font-size: 15px; border-radius: 12px; background: rgba(255,255,255,0.05); }
+    .search-wrap { position: relative; }
+    .search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.25); pointer-events: none; }
+    .card { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.04); border-radius: 14px; padding: 14px; }
+    .card-item { padding: 12px; border-radius: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); transition: all 0.15s; }
+    .card-item:active { background: rgba(232,147,12,0.06); border-color: rgba(232,147,12,0.15); }
+    .zone-section { border: 1px solid rgba(255,255,255,0.04); border-radius: 14px; overflow: hidden; margin-bottom: 12px; }
+    .zone-header { padding: 14px 16px; background: rgba(255,255,255,0.03); cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+    .zone-header:active { background: rgba(255,255,255,0.06); }
+    .zone-body { padding: 12px 14px; }
+    .zone-body.collapsed { display: none; }
+    .vessel-card { background: rgba(232,147,12,0.04); border: 1px solid rgba(232,147,12,0.1); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+    .count-input { width: 90px; padding: 10px 8px; text-align: center; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .vessel-input { width: 100px; padding: 10px 8px; text-align: center; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .cart-badge { position:absolute; top:-4px; right:-4px; width:18px; height:18px; border-radius:50%; background:#e8930c; color:#0c0c14; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+    .toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); padding:10px 20px; border-radius:10px; font-size:13px; font-weight:600; z-index:100; animation:slideUp .2s ease; }
+    @keyframes slideUp { from { opacity:0; transform:translate(-50%,10px); } to { opacity:1; transform:translate(-50%,0); } }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner { animation: spin 1s linear infinite; }
-    .fade-in { animation: fadeIn 0.2s ease; }
+    .fade-in { animation: fadeIn 0.15s ease; }
     @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+    .empty-state { text-align:center; padding:40px 20px; color:rgba(255,255,255,0.2); }
+    .empty-state svg { margin:0 auto 12px; }
+    /* Bottom cart bar for purchase */
+    .cart-bar { position:fixed; bottom:0; left:0; right:0; z-index:50; padding:12px 16px; backdrop-filter:blur(20px); background:rgba(12,12,20,0.9); border-top:1px solid rgba(255,255,255,0.06); }
+    /* Numeric input arrows hide on mobile */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
   </style>
 </head>
 <body class="min-h-screen font-sans antialiased">
 
-<!-- Nav -->
-<nav class="sticky top-0 z-40 glass border-b border-white/[.03] px-4 sm:px-6 h-14 flex items-center justify-between">
+<!-- ═══ NAV ═══ -->
+<nav class="sticky top-0 z-40 glass border-b border-white/[.03] px-4 h-14 flex items-center justify-between">
   <div class="flex items-center gap-2.5">
     <div class="w-8 h-8 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
     </div>
     <div>
-      <h1 class="text-sm font-bold tracking-tight leading-none">Raw Materials Ops</h1>
-      <p class="text-[10px] text-white/25 leading-none mt-0.5">HN Hotels — Purchase, Consumption, Settlement</p>
+      <h1 class="text-sm font-bold tracking-tight leading-none">RM Ops</h1>
+      <p class="text-[10px] text-white/25 leading-none mt-0.5" id="navSubtitle">Enter PIN to start</p>
     </div>
   </div>
   <div class="flex items-center gap-2">
     <span id="userBadge" class="text-xs text-white/30 hidden"></span>
-    <a href="/" class="btn-ghost text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition no-underline">
-      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>
-      Home
-    </a>
+    <a href="/" class="btn-ghost btn-sm no-underline text-xs">Home</a>
   </div>
 </nav>
 
-<!-- PIN Gate -->
+<!-- ═══ PIN GATE ═══ -->
 <div id="pinGate" class="flex items-center justify-center" style="min-height:calc(100vh - 56px)">
   <div class="glass rounded-2xl p-8 w-full max-w-xs text-center">
-    <div class="w-12 h-12 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-400 mx-auto mb-4">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+    <div class="w-14 h-14 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-400 mx-auto mb-4">
+      <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
     </div>
-    <p class="text-white/40 text-sm mb-4">Enter your PIN to continue</p>
-    <input id="pinInput" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"
-      class="w-full px-4 py-3 rounded-xl text-center text-lg tracking-[0.3em] font-mono mb-3">
-    <button onclick="verifyPin()" class="btn-primary w-full py-3 rounded-xl text-sm">Unlock</button>
+    <p class="text-white/40 text-sm mb-4">Enter your 4-digit PIN</p>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="4" placeholder="----"
+      class="w-full px-4 py-4 rounded-xl text-center text-xl tracking-[0.5em] font-mono mb-3">
+    <button onclick="verifyPin()" class="btn btn-primary w-full text-sm">Unlock</button>
     <p id="pinError" class="text-red-400 text-xs mt-2 hidden">Invalid PIN</p>
   </div>
 </div>
 
-<!-- Main App (hidden until PIN verified) -->
-<div id="mainApp" class="hidden px-4 sm:px-6 py-4 max-w-5xl mx-auto">
+<!-- ═══ MAIN APP ═══ -->
+<div id="mainApp" class="hidden">
 
-  <!-- Brand Toggle + Tab Bar -->
-  <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+  <!-- Brand Toggle + Tabs -->
+  <div class="px-4 py-3 flex flex-col gap-3 border-b border-white/[.03]">
     <div class="flex gap-2">
-      <button onclick="setBrand('HE')" id="brandHE" class="brand-toggle">Hamza Express</button>
-      <button onclick="setBrand('NCH')" id="brandNCH" class="brand-toggle">Nawabi Chai House</button>
+      <button onclick="setBrand('HE')" id="brandHE" class="brand-toggle flex-1">HE</button>
+      <button onclick="setBrand('NCH')" id="brandNCH" class="brand-toggle flex-1">NCH</button>
     </div>
     <div class="flex gap-1">
-      <button onclick="setTab('purchase')" data-tab="purchase" class="tab-btn">Purchase</button>
-      <button onclick="setTab('settlement')" data-tab="settlement" class="tab-btn">Settlement</button>
-      <button onclick="setTab('analytics')" data-tab="analytics" class="tab-btn">Analytics</button>
+      <button onclick="setTab('purchase')" data-tab="purchase" class="tab-btn flex-1">Purchase</button>
+      <button onclick="setTab('settlement')" data-tab="settlement" class="tab-btn flex-1">Settlement</button>
+      <button onclick="setTab('analytics')" data-tab="analytics" class="tab-btn flex-1">Analytics</button>
     </div>
   </div>
 
   <!-- ═══ PURCHASE TAB ═══ -->
   <div id="tab-purchase" class="tab-content hidden">
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-      <!-- Left: Vendor + Product Selection -->
-      <div class="lg:col-span-2 space-y-4">
-        <!-- Vendor Select -->
-        <div class="glass rounded-xl p-4">
-          <label class="text-xs text-white/40 font-semibold uppercase tracking-wider">Select Vendor</label>
-          <select id="vendorSelect" onchange="onVendorChange()" class="w-full mt-2 px-3 py-2.5 rounded-lg text-sm">
-            <option value="">-- Choose vendor --</option>
-          </select>
-        </div>
-
-        <!-- Product Lines -->
-        <div class="glass rounded-xl p-4">
-          <div class="flex items-center justify-between mb-3">
-            <label class="text-xs text-white/40 font-semibold uppercase tracking-wider">Order Lines</label>
-            <button onclick="addPOLine()" class="btn-ghost text-xs px-3 py-1.5 rounded-lg">+ Add Line</button>
-          </div>
-          <div class="space-y-2 text-xs text-white/30 mb-2">
-            <div class="po-line font-semibold">
-              <span>Product</span><span>Qty</span><span>Price/unit</span><span></span>
-            </div>
-          </div>
-          <div id="poLines" class="space-y-2"></div>
-          <div class="mt-4 flex items-center justify-between">
-            <span class="text-sm text-white/40">Total: <span id="poTotal" class="text-white font-bold">0.00</span></span>
-            <button onclick="submitPO()" id="btnSubmitPO" class="btn-primary px-6 py-2.5 rounded-xl text-sm" disabled>Create PO</button>
-          </div>
-        </div>
-
-        <!-- Add New Product -->
-        <details class="glass rounded-xl">
-          <summary class="p-4 cursor-pointer text-xs text-white/40 font-semibold uppercase tracking-wider hover:text-white/60">
-            + Add New Product to Registry
-          </summary>
-          <div class="px-4 pb-4 space-y-3">
-            <div class="grid grid-cols-2 gap-3">
-              <input id="newProdName" type="text" placeholder="Product name" class="px-3 py-2 rounded-lg text-sm">
-              <input id="newProdCategory" type="text" placeholder="Category (e.g. Spices)" class="px-3 py-2 rounded-lg text-sm">
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <select id="newProdUom" class="px-3 py-2 rounded-lg text-sm">
-                <option value="kg">kg</option><option value="L">L</option><option value="g">g</option>
-                <option value="ml">ml</option><option value="pcs">pcs</option><option value="Units">Units</option>
-                <option value="bundle">bundle</option><option value="cylinder">cylinder</option><option value="load">load</option>
-              </select>
-              <select id="newProdVendor" class="px-3 py-2 rounded-lg text-sm">
-                <option value="">-- Vendor (required) --</option>
-              </select>
-            </div>
-            <button onclick="addNewProduct()" class="btn-primary px-5 py-2 rounded-lg text-sm">Add Product</button>
-            <p id="newProdResult" class="text-xs hidden"></p>
-          </div>
-        </details>
+    <div class="px-4 pt-3 pb-32">
+      <!-- Search -->
+      <div class="search-wrap mb-3">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input id="purchaseSearch" type="search" class="search-input" placeholder="Search products..."
+          oninput="filterProducts()">
       </div>
 
-      <!-- Right: Recent POs -->
-      <div class="glass rounded-xl p-4">
-        <label class="text-xs text-white/40 font-semibold uppercase tracking-wider mb-3 block">Recent POs</label>
-        <div id="recentPOs" class="space-y-2 text-sm">
+      <!-- Product list / search results -->
+      <div id="productList" class="space-y-2 mb-4"></div>
+      <div id="productEmpty" class="empty-state hidden">
+        <svg class="w-10 h-10 text-white/10" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <p class="text-sm">No products found</p>
+      </div>
+
+      <!-- Cart items -->
+      <div id="cartSection" class="hidden mt-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs font-bold text-white/40 uppercase tracking-wider">Order Items</h3>
+          <button onclick="clearCart()" class="text-xs text-red-400/60 hover:text-red-400">Clear All</button>
+        </div>
+        <div id="cartItems" class="space-y-2"></div>
+      </div>
+
+      <!-- Recent POs -->
+      <div class="mt-6">
+        <h3 class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">Recent Purchase Orders</h3>
+        <div id="recentPOs" class="space-y-2">
           <p class="text-white/20 text-xs">Loading...</p>
         </div>
+      </div>
+    </div>
+
+    <!-- Bottom cart bar -->
+    <div id="cartBar" class="cart-bar hidden">
+      <div class="flex items-center justify-between max-w-lg mx-auto">
+        <div>
+          <span id="cartCount" class="text-sm font-bold text-white/60">0 items</span>
+          <span class="text-lg font-bold text-brand-400 ml-2" id="cartTotal">&#8377;0</span>
+        </div>
+        <button onclick="submitPurchase()" id="btnSubmitPO" class="btn btn-primary btn-sm" disabled>
+          Create PO
+        </button>
       </div>
     </div>
   </div>
 
   <!-- ═══ SETTLEMENT TAB ═══ -->
   <div id="tab-settlement" class="tab-content hidden">
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="px-4 pt-3 pb-8">
+      <!-- Status banner -->
+      <div id="settlementInfo" class="card mb-3">
+        <p class="text-white/30 text-sm">Loading...</p>
+      </div>
 
-      <!-- Left: Settlement Form -->
-      <div class="lg:col-span-2 space-y-4">
-        <!-- Period Info -->
-        <div id="settlementInfo" class="glass rounded-xl p-4">
-          <p class="text-white/30 text-sm">Loading settlement data...</p>
-        </div>
+      <!-- Search (for direct mode) -->
+      <div id="settlementSearchWrap" class="search-wrap mb-3 hidden">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input id="settlementSearch" type="search" class="search-input" placeholder="Search items..."
+          oninput="filterSettlement()">
+      </div>
 
-        <!-- Count Form -->
-        <div class="glass rounded-xl p-4">
+      <!-- Settlement form (populated dynamically) -->
+      <div id="settlementForm"></div>
+
+      <!-- Wastage section (NCH full mode) -->
+      <div id="wastageSection" class="hidden mt-4">
+        <div class="card">
           <div class="flex items-center justify-between mb-3">
-            <label class="text-xs text-white/40 font-semibold uppercase tracking-wider">Physical Counts</label>
-            <span id="countTier" class="badge badge-warn">Tier 1 — Daily</span>
+            <h3 class="text-xs font-bold text-white/40 uppercase tracking-wider">Wastage</h3>
+            <button onclick="addWastageRow()" class="btn btn-ghost btn-sm">+ Add</button>
           </div>
-          <div class="count-row text-xs text-white/30 font-semibold mb-2">
-            <span>Item</span><span>Opening</span><span>Purchased</span><span>Closing</span>
-          </div>
-          <div id="countRows" class="space-y-1.5"></div>
-          <div class="mt-4 flex items-center gap-3">
-            <textarea id="settlementNotes" placeholder="Notes (optional)" rows="2" class="flex-1 px-3 py-2 rounded-lg text-sm"></textarea>
-            <button onclick="submitSettlement()" id="btnSubmitSettlement" class="btn-primary px-6 py-2.5 rounded-xl text-sm" disabled>Submit</button>
-          </div>
+          <div id="wastageRows" class="space-y-2"></div>
         </div>
       </div>
 
-      <!-- Right: Settlement Result / History -->
-      <div class="space-y-4">
-        <div id="settlementResult" class="glass rounded-xl p-4 hidden">
-          <label class="text-xs text-white/40 font-semibold uppercase tracking-wider mb-3 block">Settlement Result</label>
-          <div id="settlementResultBody"></div>
-        </div>
-        <div class="glass rounded-xl p-4">
-          <label class="text-xs text-white/40 font-semibold uppercase tracking-wider mb-3 block">History</label>
-          <div id="settlementHistory" class="space-y-2 text-sm">
-            <p class="text-white/20 text-xs">Loading...</p>
-          </div>
+      <!-- Notes + Submit -->
+      <div class="mt-4 space-y-3">
+        <textarea id="settlementNotes" placeholder="Notes (optional)" rows="2"
+          class="w-full px-4 py-3 rounded-xl text-sm"></textarea>
+        <button onclick="submitSettlement()" id="btnSubmitSettlement" class="btn btn-primary w-full" disabled>
+          Submit Settlement
+        </button>
+      </div>
+
+      <!-- Settlement result -->
+      <div id="settlementResult" class="card mt-4 hidden">
+        <h3 class="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Result</h3>
+        <div id="settlementResultBody"></div>
+      </div>
+
+      <!-- History -->
+      <div class="mt-6">
+        <h3 class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">History</h3>
+        <div id="settlementHistory" class="space-y-2">
+          <p class="text-white/20 text-xs">Loading...</p>
         </div>
       </div>
     </div>
@@ -221,75 +233,181 @@
 
   <!-- ═══ ANALYTICS TAB ═══ -->
   <div id="tab-analytics" class="tab-content hidden">
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-      <div class="glass stat-card rounded-xl">
-        <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Tracked Items</p>
-        <p id="statTracked" class="text-2xl font-bold mt-1">—</p>
+    <div class="px-4 pt-3 pb-8">
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <div class="card">
+          <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Tracked Items</p>
+          <p id="statTracked" class="text-2xl font-bold mt-1">--</p>
+        </div>
+        <div class="card">
+          <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Settlements</p>
+          <p id="statSettlements" class="text-2xl font-bold mt-1">--</p>
+        </div>
+        <div class="card">
+          <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Price Records</p>
+          <p id="statPrices" class="text-2xl font-bold mt-1">--</p>
+        </div>
+        <div class="card">
+          <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Last Settlement</p>
+          <p id="statLastSettlement" class="text-sm font-semibold mt-1 text-white/50">--</p>
+        </div>
       </div>
-      <div class="glass stat-card rounded-xl">
-        <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Settlements</p>
-        <p id="statSettlements" class="text-2xl font-bold mt-1">—</p>
+      <div class="card mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-bold text-white/40 uppercase tracking-wider">Today's Consumption</h3>
+          <button onclick="loadConsumption()" class="btn btn-ghost btn-sm">Refresh</button>
+        </div>
+        <div id="consumptionData" class="text-sm">
+          <p class="text-white/20 text-xs">Tap Refresh to load</p>
+        </div>
       </div>
-      <div class="glass stat-card rounded-xl">
-        <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Price Records</p>
-        <p id="statPrices" class="text-2xl font-bold mt-1">—</p>
-      </div>
-      <div class="glass stat-card rounded-xl">
-        <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider">Last Settlement</p>
-        <p id="statLastSettlement" class="text-sm font-semibold mt-1 text-white/50">—</p>
-      </div>
-    </div>
-
-    <!-- Consumption View -->
-    <div class="glass rounded-xl p-4 mb-4">
-      <div class="flex items-center justify-between mb-3">
-        <label class="text-xs text-white/40 font-semibold uppercase tracking-wider">Today's Consumption (POS + Transfers)</label>
-        <button onclick="loadConsumption()" class="btn-ghost text-xs px-3 py-1.5 rounded-lg">Refresh</button>
-      </div>
-      <div id="consumptionData" class="text-sm">
-        <p class="text-white/20 text-xs">Click refresh to load</p>
-      </div>
-    </div>
-
-    <!-- Recent Ops Log -->
-    <div class="glass rounded-xl p-4">
-      <label class="text-xs text-white/40 font-semibold uppercase tracking-wider mb-3 block">Ops Activity</label>
-      <div id="opsLog" class="space-y-2 text-sm">
-        <p class="text-white/20 text-xs">Loading...</p>
+      <div class="card">
+        <h3 class="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Activity Log</h3>
+        <div id="opsLog" class="space-y-2 text-sm">
+          <p class="text-white/20 text-xs">Loading...</p>
+        </div>
       </div>
     </div>
   </div>
 
 </div>
 
+<!-- ═══ VENDOR PICKER MODAL ═══ -->
+<div id="vendorModal" class="fixed inset-0 z-60 hidden" style="background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);">
+  <div class="flex items-end sm:items-center justify-center min-h-screen p-4">
+    <div class="glass rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+      <div class="p-4 border-b border-white/[.05] flex items-center justify-between">
+        <h3 class="text-sm font-bold">Choose Vendor</h3>
+        <button onclick="closeVendorModal()" class="text-white/30 hover:text-white/60 text-xl leading-none">&times;</button>
+      </div>
+      <div class="p-3">
+        <div class="search-wrap">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input id="vendorSearch" type="search" class="search-input" placeholder="Search vendors..." oninput="filterVendors()">
+        </div>
+      </div>
+      <div id="vendorList" class="overflow-y-auto flex-1 px-3 pb-3 space-y-1" style="max-height:50vh;"></div>
+      <div id="vendorKnown" class="px-3 pb-2">
+        <p id="vendorKnownLabel" class="text-[10px] text-white/25 uppercase tracking-wider mb-1 hidden">Known vendors for this product</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADD PRODUCT MODAL ═══ -->
+<div id="addProductModal" class="fixed inset-0 z-60 hidden" style="background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);">
+  <div class="flex items-end sm:items-center justify-center min-h-screen p-4">
+    <div class="glass rounded-2xl w-full max-w-md p-5 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold">Add New Product</h3>
+        <button onclick="closeAddProduct()" class="text-white/30 hover:text-white/60 text-xl leading-none">&times;</button>
+      </div>
+      <input id="newProdName" type="text" placeholder="Product name" class="w-full px-4 py-3">
+      <div class="grid grid-cols-2 gap-3">
+        <input id="newProdCategory" type="text" placeholder="Category" class="px-4 py-3">
+        <select id="newProdUom" class="px-4 py-3">
+          <option value="kg">kg</option><option value="L">L</option><option value="g">g</option>
+          <option value="ml">ml</option><option value="pcs">pcs</option><option value="Units">Units</option>
+          <option value="bundle">bundle</option><option value="cylinder">cylinder</option><option value="load">load</option>
+        </select>
+      </div>
+      <button onclick="openVendorModalFor('new-product')" id="newProdVendorBtn" class="btn btn-ghost w-full text-sm">
+        Pick vendor (required)
+      </button>
+      <button onclick="submitNewProduct()" class="btn btn-primary w-full">Add Product</button>
+      <p id="newProdResult" class="text-xs hidden text-center"></p>
+    </div>
+  </div>
+</div>
+
 <script>
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * STATE
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 const API = '/api/rm-ops';
 let currentPin = '';
 let currentUser = null;
-let currentBrand = 'NCH';
+let currentRole = null;
+let currentBrand = 'HE';
 let currentTab = 'purchase';
 
-// Cached data
-let vendors = [];
-let products = [];
-let lastPrices = {};
-let poLineCount = 0;
+// Purchase state
+let catalog = { products: [], vendors: [], recentPOs: [] };
+let cart = []; // [{product, qty, price, vendor}]
+let vendorPickerCallback = null;
+let vendorPickerProductCode = null;
 
-/* ━━━ PIN ━━━ */
+// Settlement state
+let settlementData = null;
 
+/* ━━━ NCH Field Config ━━━
+ * Maps field names to human-readable labels + input types.
+ * Zone grouping comes from D1 (fieldZones). This just controls display. */
+const FIELD_META = {
+  raw_buffalo_milk:    { label: 'Raw Buffalo Milk', unit: 'L', icon: '' },
+  raw_cutlets:         { label: 'Raw Cutlets (Frozen)', unit: 'pcs', icon: '' },
+  raw_samosa:          { label: 'Raw Samosa (Frozen)', unit: 'pcs', icon: '' },
+  raw_cheese_balls:    { label: 'Raw Cheese Balls (Frozen)', unit: 'pcs', icon: '' },
+  butter:              { label: 'Butter', unit: 'kg', icon: '' },
+  raw_sugar:           { label: 'Sugar', unit: 'kg', icon: '' },
+  raw_milkmaid:        { label: 'Condensed Milk', unit: 'kg', icon: '' },
+  raw_smp:             { label: 'SMP', unit: 'kg', icon: '' },
+  raw_tea_powder:      { label: 'Tea Powder', unit: 'kg', icon: '' },
+  tea_sugar_boxes:     { label: 'Tea-Sugar Boxes', unit: 'boxes', icon: '' },
+  coffee_powder:       { label: 'Coffee Powder', unit: 'kg', icon: '' },
+  honey:               { label: 'Honey', unit: 'kg', icon: '' },
+  lemons:              { label: 'Lemons', unit: 'pcs', icon: '' },
+  oil:                 { label: 'Frying Oil', unit: 'L', icon: '' },
+  plain_buns:          { label: 'Plain Buns', unit: 'pcs', icon: '' },
+  malai:               { label: 'Malai', unit: 'kg', icon: '' },
+  water_bottles_kitchen:   { label: 'Water Bottles', unit: 'pcs', icon: '' },
+  water_bottles_display:   { label: 'Water Bottles', unit: 'pcs', icon: '' },
+  niloufer_kitchen:        { label: 'Niloufer Boxes', unit: 'pcs', icon: '' },
+  niloufer_display:        { label: 'Niloufer Boxes', unit: 'pcs', icon: '' },
+  osmania_packets_kitchen: { label: 'Osmania Packets', unit: 'pkts', icon: '' },
+  osmania_packets_display: { label: 'Osmania Packets', unit: 'pkts', icon: '' },
+  osmania_loose_display:   { label: 'Osmania Loose', unit: 'pcs', icon: '' },
+  fried_cutlets_kitchen:   { label: 'Fried Cutlets', unit: 'pcs', icon: '' },
+  fried_cutlets_display:   { label: 'Fried Cutlets', unit: 'pcs', icon: '' },
+  fried_samosa_kitchen:    { label: 'Fried Samosa', unit: 'pcs', icon: '' },
+  fried_samosa_display:    { label: 'Fried Samosa', unit: 'pcs', icon: '' },
+  fried_cheese_balls_kitchen:  { label: 'Fried Cheese Balls', unit: 'pcs', icon: '' },
+  fried_cheese_balls_display:  { label: 'Fried Cheese Balls', unit: 'pcs', icon: '' },
+  prepared_bun_maska:      { label: 'Prepared Bun Maska', unit: 'pcs', icon: '' },
+  boiled_milk_kitchen:     { label: 'Boiled Milk', type: 'vessel', liquidType: 'boiled_milk' },
+  boiled_milk_counter:     { label: 'Boiled Milk', type: 'vessel', liquidType: 'boiled_milk' },
+  tea_decoction_kitchen:   { label: 'Tea Decoction', type: 'vessel', liquidType: 'tea_decoction' },
+  tea_decoction_counter:   { label: 'Tea Decoction', type: 'vessel', liquidType: 'tea_decoction' },
+};
+
+const ZONE_LABELS = {
+  freezer: { label: 'Freezer', icon: '&#10052;', color: 'text-blue-400' },
+  kitchen: { label: 'Kitchen', icon: '&#9881;', color: 'text-amber-400' },
+  display_counter: { label: 'Display Counter', icon: '&#9741;', color: 'text-purple-400' },
+  tea_counter: { label: 'Tea Counter', icon: '&#9749;', color: 'text-emerald-400' },
+};
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * PIN + NAVIGATION
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 function verifyPin() {
   const pin = document.getElementById('pinInput').value.trim();
   if (pin.length !== 4) { showPinError(); return; }
   currentPin = pin;
-  fetch(`${API}?action=verify-pin&brand=${currentBrand}&pin=${pin}`)
+  fetch(`${API}?action=verify-pin&pin=${pin}`)
     .then(r => r.json())
     .then(d => {
       if (!d.success) { showPinError(); return; }
       currentUser = d.user;
+      currentRole = d.role;
       document.getElementById('pinGate').classList.add('hidden');
       document.getElementById('mainApp').classList.remove('hidden');
-      document.getElementById('userBadge').classList.remove('hidden');
       document.getElementById('userBadge').textContent = d.user;
+      document.getElementById('userBadge').classList.remove('hidden');
+      document.getElementById('navSubtitle').textContent = `${d.user} - ${d.role}`;
+      // Default tab based on role
+      if (d.role === 'settlement') { currentTab = 'settlement'; }
+      else if (d.role === 'purchase') { currentTab = 'purchase'; }
       setBrand(currentBrand);
       setTab(currentTab);
     })
@@ -306,16 +424,14 @@ document.getElementById('pinInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') verifyPin();
 });
 
-/* ━━━ Brand Toggle ━━━ */
-
 function setBrand(b) {
   currentBrand = b;
-  document.getElementById('brandHE').className = `brand-toggle ${b === 'HE' ? 'active-he' : ''}`;
-  document.getElementById('brandNCH').className = `brand-toggle ${b === 'NCH' ? 'active-nch' : ''}`;
+  document.getElementById('brandHE').className = `brand-toggle flex-1 ${b === 'HE' ? 'active-he' : ''}`;
+  document.getElementById('brandNCH').className = `brand-toggle flex-1 ${b === 'NCH' ? 'active-nch' : ''}`;
+  cart = [];
+  renderCart();
   refreshCurrentTab();
 }
-
-/* ━━━ Tab Navigation ━━━ */
 
 function setTab(tab) {
   currentTab = tab;
@@ -334,193 +450,408 @@ function refreshCurrentTab() {
   if (currentTab === 'analytics') loadAnalytics();
 }
 
-/* ━━━ PURCHASE ━━━ */
-
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * PURCHASE — Product-first flow
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 async function loadPurchaseData() {
-  const [vRes, pRes, rRes] = await Promise.all([
-    apiFetch('vendors'), apiFetch('products'), apiFetch('recent-pos&limit=15'),
-  ]);
-
-  if (vRes.success) {
-    vendors = vRes.vendors;
-    const sel = document.getElementById('vendorSelect');
-    sel.innerHTML = '<option value="">-- Choose vendor --</option>' +
-      vendors.map(v => `<option value="${v.id}">${v.name}${v.phone ? ' (' + v.phone + ')' : ''}</option>`).join('');
-    // Also populate new product vendor dropdown
-    document.getElementById('newProdVendor').innerHTML = '<option value="">-- Vendor (required) --</option>' +
-      vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
-  }
-
-  if (pRes.success) {
-    products = pRes.products;
-  }
-
-  if (rRes.success) {
-    renderRecentPOs(rRes.orders);
-  }
+  const res = await apiFetch('purchase-catalog');
+  if (!res.success) return;
+  catalog = res;
+  renderProducts();
+  renderRecentPOs(res.recentPOs);
 }
 
-async function onVendorChange() {
-  const vendorId = document.getElementById('vendorSelect').value;
-  if (!vendorId) { lastPrices = {}; return; }
-  const res = await apiFetch(`last-prices&vendor_id=${vendorId}`);
-  lastPrices = res.success ? res.prices : {};
-  // Auto-add one line if empty
-  if (poLineCount === 0) addPOLine();
+function filterProducts() {
+  renderProducts();
 }
 
-function addPOLine() {
-  poLineCount++;
-  const div = document.createElement('div');
-  div.className = 'po-line';
-  div.id = `po-line-${poLineCount}`;
-  const n = poLineCount;
-  div.innerHTML = `
-    <select onchange="onProductSelect(${n})" id="prod-${n}" class="px-2 py-2 rounded-lg text-sm">
-      <option value="">Select product</option>
-      ${products.map(p => `<option value="${p.id}" data-code="${p.code}">${p.name} (${p.uom})</option>`).join('')}
-    </select>
-    <input type="number" id="qty-${n}" placeholder="Qty" min="0" step="0.1" onchange="calcTotal()" class="px-2 py-2 rounded-lg text-sm text-right">
-    <input type="number" id="price-${n}" placeholder="Price" min="0" step="0.01" onchange="calcTotal()" class="px-2 py-2 rounded-lg text-sm text-right">
-    <button onclick="removePOLine(${n})" class="text-red-400/50 hover:text-red-400 text-lg leading-none">&times;</button>
-  `;
-  document.getElementById('poLines').appendChild(div);
-  updateSubmitBtn();
-}
+function renderProducts() {
+  const q = (document.getElementById('purchaseSearch')?.value || '').toLowerCase().trim();
+  const el = document.getElementById('productList');
+  const emptyEl = document.getElementById('productEmpty');
 
-function removePOLine(n) {
-  document.getElementById(`po-line-${n}`)?.remove();
-  calcTotal();
-}
-
-function onProductSelect(n) {
-  const sel = document.getElementById(`prod-${n}`);
-  const pid = sel.value;
-  if (pid && lastPrices[pid]) {
-    document.getElementById(`price-${n}`).value = lastPrices[pid].price || lastPrices[pid];
-    calcTotal();
-  }
-}
-
-function calcTotal() {
-  let total = 0;
-  document.querySelectorAll('#poLines > div').forEach(div => {
-    const id = div.id.split('-')[2];
-    const qty = parseFloat(document.getElementById(`qty-${id}`)?.value) || 0;
-    const price = parseFloat(document.getElementById(`price-${id}`)?.value) || 0;
-    total += qty * price;
-  });
-  document.getElementById('poTotal').textContent = total.toFixed(2);
-  updateSubmitBtn();
-}
-
-function updateSubmitBtn() {
-  const vendorId = document.getElementById('vendorSelect').value;
-  let hasLines = false;
-  document.querySelectorAll('#poLines > div').forEach(div => {
-    const id = div.id.split('-')[2];
-    const prod = document.getElementById(`prod-${id}`)?.value;
-    const qty = parseFloat(document.getElementById(`qty-${id}`)?.value) || 0;
-    if (prod && qty > 0) hasLines = true;
-  });
-  document.getElementById('btnSubmitPO').disabled = !vendorId || !hasLines;
-}
-
-async function submitPO() {
-  const vendorId = parseInt(document.getElementById('vendorSelect').value);
-  const lines = [];
-  document.querySelectorAll('#poLines > div').forEach(div => {
-    const id = div.id.split('-')[2];
-    const product_id = parseInt(document.getElementById(`prod-${id}`)?.value);
-    const qty = parseFloat(document.getElementById(`qty-${id}`)?.value) || 0;
-    const price_unit = parseFloat(document.getElementById(`price-${id}`)?.value) || 0;
-    const name = document.getElementById(`prod-${id}`)?.selectedOptions[0]?.text || 'Purchase';
-    if (product_id && qty > 0) lines.push({ product_id, qty, price_unit, name });
-  });
-
-  if (!lines.length) return;
-
-  const btn = document.getElementById('btnSubmitPO');
-  btn.disabled = true;
-  btn.textContent = 'Creating...';
-
-  const res = await apiPost({ action: 'create-po', pin: currentPin, brand: currentBrand, vendor_id: vendorId, lines });
-
-  if (res.success) {
-    btn.textContent = `Created ${res.po_name}`;
-    btn.className = 'btn-primary px-6 py-2.5 rounded-xl text-sm bg-emerald-600';
-    setTimeout(() => {
-      btn.textContent = 'Create PO';
-      btn.className = 'btn-primary px-6 py-2.5 rounded-xl text-sm';
-      btn.disabled = false;
-      // Clear lines
-      document.getElementById('poLines').innerHTML = '';
-      poLineCount = 0;
-      calcTotal();
-      loadPurchaseData();
-    }, 2000);
+  let filtered = catalog.products;
+  if (q.length > 0) {
+    filtered = filtered.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      (p.code || '').toLowerCase().includes(q) ||
+      (p.category || '').toLowerCase().includes(q)
+    );
   } else {
-    btn.textContent = res.error || 'Failed';
-    btn.className = 'btn-primary px-6 py-2.5 rounded-xl text-sm bg-red-600';
-    setTimeout(() => {
-      btn.textContent = 'Create PO';
-      btn.className = 'btn-primary px-6 py-2.5 rounded-xl text-sm';
-      btn.disabled = false;
-    }, 3000);
-  }
-}
-
-async function addNewProduct() {
-  const name = document.getElementById('newProdName').value.trim();
-  const category = document.getElementById('newProdCategory').value.trim();
-  const uom = document.getElementById('newProdUom').value;
-  const vendor_key = document.getElementById('newProdVendor').value;
-
-  if (!name || !category || !vendor_key) {
-    showNewProdResult('Name, category, and vendor are required', true);
+    // Show nothing until user searches — less overwhelming
+    el.innerHTML = '';
+    emptyEl.classList.add('hidden');
+    if (catalog.products.length > 0) {
+      el.innerHTML = `<p class="text-center text-white/20 text-xs py-4">Search above to find products (${catalog.products.length} available)</p>`;
+    }
     return;
   }
 
-  const res = await apiPost({ action: 'add-product', pin: currentPin, brand: currentBrand, name, category, uom, vendor_key });
-  if (res.success) {
-    showNewProdResult(`Created ${res.hn_code}: ${name}`, false);
-    document.getElementById('newProdName').value = '';
-    document.getElementById('newProdCategory').value = '';
-    loadPurchaseData();
+  emptyEl.classList.toggle('hidden', filtered.length > 0);
+
+  el.innerHTML = filtered.slice(0, 30).map(p => {
+    const inCart = cart.find(c => c.product.id === p.id);
+    const vendorNames = p.vendors.map(v => v.name).join(', ') || 'No vendor linked';
+    const priceStr = p.lastPrice ? `Last: ${fmt(p.lastPrice.price)}` : '';
+    return `
+      <div class="card-item ${inCart ? 'border-brand-500/30 bg-brand-500/5' : ''}" id="prod-card-${p.id}">
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold truncate">${p.name}</p>
+            <p class="text-[11px] text-white/30 mt-0.5">${p.code} &middot; ${p.uom} &middot; ${p.category || ''}</p>
+            <p class="text-[11px] text-white/20 mt-0.5 truncate">${vendorNames}</p>
+          </div>
+          <div class="text-right shrink-0">
+            ${priceStr ? `<p class="text-[11px] text-white/40">${priceStr}</p>` : ''}
+            ${inCart
+              ? `<span class="badge badge-success mt-1">In cart</span>`
+              : `<button onclick="addToCart(${p.id})" class="btn btn-primary btn-sm mt-1">+ Add</button>`
+            }
+          </div>
+        </div>
+        ${inCart ? renderCartInline(inCart) : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderCartInline(item) {
+  const idx = cart.indexOf(item);
+  return `
+    <div class="mt-3 pt-3 border-t border-white/[.05] space-y-2 fade-in">
+      <div class="flex gap-2 items-center">
+        <div class="flex-1">
+          <label class="text-[10px] text-white/30 uppercase">Qty (${item.product.uom})</label>
+          <input type="number" inputmode="decimal" value="${item.qty || ''}" placeholder="0"
+            onchange="updateCartItem(${idx},'qty',this.value)"
+            class="w-full px-3 py-2 mt-0.5" step="any" min="0">
+        </div>
+        <div class="flex-1">
+          <label class="text-[10px] text-white/30 uppercase">Price/unit</label>
+          <input type="number" inputmode="decimal" value="${item.price || ''}" placeholder="0"
+            onchange="updateCartItem(${idx},'price',this.value)"
+            class="w-full px-3 py-2 mt-0.5" step="any" min="0">
+        </div>
+        <button onclick="removeFromCart(${idx})" class="btn btn-danger btn-sm mt-4 px-2" title="Remove">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </div>
+      <button onclick="openVendorModalFor('cart',${idx})" class="btn btn-ghost btn-sm w-full text-left">
+        ${item.vendor
+          ? `<span class="text-emerald-400">${item.vendor.name}</span>`
+          : `<span class="text-amber-400">Pick vendor &rarr;</span>`
+        }
+      </button>
+    </div>
+  `;
+}
+
+function addToCart(productId) {
+  const product = catalog.products.find(p => p.id === productId);
+  if (!product) return;
+  if (cart.find(c => c.product.id === productId)) return;
+
+  // Auto-assign primary vendor if available
+  const primaryVendor = product.vendors.find(v => v.is_primary) || product.vendors[0] || null;
+  const vendorObj = primaryVendor
+    ? catalog.vendors.find(v => v.id === primaryVendor.odoo_id) || { id: primaryVendor.odoo_id, name: primaryVendor.name }
+    : null;
+
+  cart.push({
+    product,
+    qty: '',
+    price: product.lastPrice ? product.lastPrice.price : '',
+    vendor: vendorObj,
+  });
+
+  renderProducts();
+  renderCart();
+  // Focus the qty input
+  setTimeout(() => {
+    const card = document.getElementById(`prod-card-${productId}`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const qtyInput = card.querySelector('input[type=number]');
+      if (qtyInput) qtyInput.focus();
+    }
+  }, 100);
+}
+
+function removeFromCart(idx) {
+  cart.splice(idx, 1);
+  renderProducts();
+  renderCart();
+}
+
+function clearCart() {
+  cart = [];
+  renderProducts();
+  renderCart();
+}
+
+function updateCartItem(idx, field, value) {
+  if (field === 'qty') cart[idx].qty = parseFloat(value) || '';
+  if (field === 'price') cart[idx].price = parseFloat(value) || '';
+  renderCart();
+}
+
+function renderCart() {
+  const section = document.getElementById('cartSection');
+  const bar = document.getElementById('cartBar');
+  const cartEl = document.getElementById('cartItems');
+
+  if (cart.length === 0) {
+    section.classList.add('hidden');
+    bar.classList.add('hidden');
+    return;
+  }
+
+  section.classList.remove('hidden');
+  bar.classList.remove('hidden');
+
+  // Summary in cart section
+  cartEl.innerHTML = cart.map((item, idx) => {
+    const total = (parseFloat(item.qty) || 0) * (parseFloat(item.price) || 0);
+    return `
+      <div class="card-item flex items-center justify-between gap-2">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium truncate">${item.product.name}</p>
+          <p class="text-[11px] text-white/30">
+            ${item.qty || '?'} ${item.product.uom} &times; ${item.price ? fmt(item.price) : '?'}
+            ${item.vendor ? ` &middot; <span class="text-emerald-400/70">${item.vendor.name}</span>` : ' &middot; <span class="text-amber-400">No vendor</span>'}
+          </p>
+        </div>
+        <span class="text-sm font-bold shrink-0">${total > 0 ? fmt(total) : '--'}</span>
+      </div>
+    `;
+  }).join('');
+
+  // Bottom bar totals
+  const validItems = cart.filter(c => c.qty > 0 && c.vendor);
+  let total = 0;
+  cart.forEach(c => { total += (parseFloat(c.qty) || 0) * (parseFloat(c.price) || 0); });
+  document.getElementById('cartCount').textContent = `${cart.length} item${cart.length !== 1 ? 's' : ''}`;
+  document.getElementById('cartTotal').textContent = fmt(total);
+
+  // Enable submit only if all items have qty > 0 AND vendor
+  const allReady = cart.length > 0 && cart.every(c => parseFloat(c.qty) > 0 && c.vendor);
+  document.getElementById('btnSubmitPO').disabled = !allReady;
+}
+
+/* ── Vendor Modal ── */
+function openVendorModalFor(context, idx) {
+  const modal = document.getElementById('vendorModal');
+  modal.classList.remove('hidden');
+  document.getElementById('vendorSearch').value = '';
+
+  if (context === 'cart') {
+    vendorPickerCallback = (vendor) => {
+      cart[idx].vendor = vendor;
+      // Auto-link if product has no vendor mapping
+      const product = cart[idx].product;
+      const hasVendor = product.vendors.some(v => v.odoo_id === vendor.id);
+      if (!hasVendor && product.code) {
+        apiPost({ action: 'link-vendor', pin: currentPin, brand: currentBrand,
+          product_code: product.code, vendor_odoo_id: vendor.id });
+        product.vendors.push({ key: '', name: vendor.name, odoo_id: vendor.id, is_primary: false });
+      }
+      renderProducts();
+      renderCart();
+    };
+    vendorPickerProductCode = cart[idx].product.code;
+  } else if (context === 'new-product') {
+    vendorPickerCallback = (vendor) => {
+      document.getElementById('newProdVendorBtn').innerHTML =
+        `<span class="text-emerald-400">${vendor.name}</span>`;
+      document.getElementById('newProdVendorBtn').dataset.vendorId = vendor.id;
+      document.getElementById('newProdVendorBtn').dataset.vendorName = vendor.name;
+    };
+    vendorPickerProductCode = null;
+  }
+
+  filterVendors();
+  setTimeout(() => document.getElementById('vendorSearch').focus(), 100);
+}
+
+function closeVendorModal() {
+  document.getElementById('vendorModal').classList.add('hidden');
+  vendorPickerCallback = null;
+}
+
+function filterVendors() {
+  const q = (document.getElementById('vendorSearch')?.value || '').toLowerCase().trim();
+  const list = document.getElementById('vendorList');
+
+  let vendors = catalog.vendors;
+  if (q) {
+    vendors = vendors.filter(v => v.name.toLowerCase().includes(q) || (v.phone || '').includes(q));
+  }
+
+  // Show known vendors for this product at top
+  const knownLabel = document.getElementById('vendorKnownLabel');
+  if (vendorPickerProductCode) {
+    const product = catalog.products.find(p => p.code === vendorPickerProductCode);
+    if (product && product.vendors.length > 0) {
+      knownLabel.classList.remove('hidden');
+      const knownIds = new Set(product.vendors.map(v => v.odoo_id));
+      // Sort: known vendors first
+      vendors = [
+        ...vendors.filter(v => knownIds.has(v.id)),
+        ...vendors.filter(v => !knownIds.has(v.id)),
+      ];
+    } else {
+      knownLabel.classList.add('hidden');
+    }
   } else {
-    showNewProdResult(res.error || 'Failed', true);
+    knownLabel.classList.add('hidden');
+  }
+
+  list.innerHTML = vendors.slice(0, 40).map(v => {
+    const product = vendorPickerProductCode ? catalog.products.find(p => p.code === vendorPickerProductCode) : null;
+    const isKnown = product && product.vendors.some(pv => pv.odoo_id === v.id);
+    return `
+      <button onclick="pickVendor(${v.id})" class="w-full text-left p-3 rounded-lg hover:bg-white/[.05] active:bg-brand-500/10 flex items-center justify-between transition">
+        <div>
+          <p class="text-sm font-medium">${v.name}</p>
+          ${v.phone ? `<p class="text-[11px] text-white/25">${v.phone}</p>` : ''}
+        </div>
+        ${isKnown ? '<span class="badge badge-success">Linked</span>' : ''}
+      </button>
+    `;
+  }).join('');
+}
+
+function pickVendor(vendorId) {
+  const vendor = catalog.vendors.find(v => v.id === vendorId);
+  if (vendor && vendorPickerCallback) vendorPickerCallback(vendor);
+  closeVendorModal();
+}
+
+/* ── Submit Purchase ── */
+async function submitPurchase() {
+  // Group cart by vendor
+  const byVendor = {};
+  for (const item of cart) {
+    if (!item.vendor || !item.qty) continue;
+    const vid = item.vendor.id;
+    if (!byVendor[vid]) byVendor[vid] = { vendor: item.vendor, lines: [] };
+    byVendor[vid].lines.push({
+      product_id: item.product.id,
+      qty: parseFloat(item.qty),
+      price_unit: parseFloat(item.price) || 0,
+      name: item.product.name,
+    });
+  }
+
+  const groups = Object.values(byVendor);
+  if (groups.length === 0) return;
+
+  const btn = document.getElementById('btnSubmitPO');
+  btn.disabled = true;
+  btn.textContent = `Creating ${groups.length} PO${groups.length > 1 ? 's' : ''}...`;
+
+  const results = [];
+  for (const group of groups) {
+    const res = await apiPost({
+      action: 'create-po', pin: currentPin, brand: currentBrand,
+      vendor_id: group.vendor.id, lines: group.lines,
+    });
+    results.push({ vendor: group.vendor.name, ...res });
+  }
+
+  const successes = results.filter(r => r.success);
+  const failures = results.filter(r => !r.success);
+
+  if (successes.length > 0) {
+    const names = successes.map(r => r.po_name).join(', ');
+    showToast(`Created: ${names}`, 'success');
+    cart = [];
+    renderProducts();
+    renderCart();
+    document.getElementById('purchaseSearch').value = '';
+    loadPurchaseData();
+  }
+  if (failures.length > 0) {
+    showToast(`Failed: ${failures.map(r => r.vendor + ' - ' + (r.error||'error')).join('; ')}`, 'error');
+  }
+
+  btn.textContent = 'Create PO';
+  btn.disabled = false;
+}
+
+/* ── Add New Product ── */
+function openAddProduct() {
+  document.getElementById('addProductModal').classList.remove('hidden');
+  document.getElementById('newProdName').value = '';
+  document.getElementById('newProdCategory').value = '';
+  document.getElementById('newProdVendorBtn').innerHTML = 'Pick vendor (required)';
+  delete document.getElementById('newProdVendorBtn').dataset.vendorId;
+  document.getElementById('newProdResult').classList.add('hidden');
+  setTimeout(() => document.getElementById('newProdName').focus(), 100);
+}
+
+function closeAddProduct() {
+  document.getElementById('addProductModal').classList.add('hidden');
+}
+
+async function submitNewProduct() {
+  const name = document.getElementById('newProdName').value.trim();
+  const category = document.getElementById('newProdCategory').value.trim();
+  const uom = document.getElementById('newProdUom').value;
+  const vendorBtn = document.getElementById('newProdVendorBtn');
+  const vendorId = vendorBtn.dataset.vendorId;
+
+  if (!name) { showNewProdMsg('Enter product name', true); return; }
+  if (!category) { showNewProdMsg('Enter category', true); return; }
+  if (!vendorId) { showNewProdMsg('Pick a vendor first', true); return; }
+
+  const res = await apiPost({
+    action: 'add-product', pin: currentPin, brand: currentBrand,
+    name, category, uom, vendor_key: vendorId,
+  });
+
+  if (res.success) {
+    showNewProdMsg(`Created ${res.hn_code}: ${name}`, false);
+    setTimeout(() => { closeAddProduct(); loadPurchaseData(); }, 1500);
+  } else {
+    showNewProdMsg(res.error || 'Failed', true);
   }
 }
 
-function showNewProdResult(msg, isError) {
+function showNewProdMsg(msg, isError) {
   const el = document.getElementById('newProdResult');
   el.textContent = msg;
-  el.className = `text-xs ${isError ? 'text-red-400' : 'text-emerald-400'}`;
+  el.className = `text-xs text-center ${isError ? 'text-red-400' : 'text-emerald-400'}`;
   el.classList.remove('hidden');
-  setTimeout(() => el.classList.add('hidden'), 4000);
 }
 
 function renderRecentPOs(orders) {
   const el = document.getElementById('recentPOs');
-  if (!orders.length) { el.innerHTML = '<p class="text-white/20 text-xs">No recent POs</p>'; return; }
+  if (!orders || !orders.length) { el.innerHTML = '<p class="text-white/20 text-xs">No recent POs</p>'; return; }
   el.innerHTML = orders.map(o => `
-    <div class="p-2 rounded-lg bg-white/[.02] flex items-center justify-between">
-      <div>
+    <div class="card-item flex items-center justify-between">
+      <div class="min-w-0">
         <span class="text-xs font-mono text-brand-400">${o.name}</span>
-        <p class="text-[11px] text-white/40">${o.vendor}</p>
+        <p class="text-[11px] text-white/30 truncate">${o.vendor}</p>
       </div>
-      <div class="text-right">
-        <p class="text-xs font-semibold">${fmt(o.total)}</p>
-        <p class="text-[10px] text-white/25">${fmtDate(o.date)}</p>
+      <div class="text-right shrink-0">
+        <p class="text-sm font-bold">${fmt(o.total)}</p>
+        <p class="text-[10px] text-white/20">${fmtDate(o.date)}</p>
       </div>
     </div>
   `).join('');
+
+  // Add "new product" button after recent POs
+  el.innerHTML += `
+    <button onclick="openAddProduct()" class="w-full mt-2 btn btn-ghost btn-sm">
+      + Add New Product to Registry
+    </button>
+  `;
 }
 
-/* ━━━ SETTLEMENT ━━━ */
-
-let settlementData = null;
-
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * SETTLEMENT
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 async function loadSettlementData() {
   const [prepRes, histRes] = await Promise.all([
     apiFetch('settlement-prepare'),
@@ -529,7 +860,11 @@ async function loadSettlementData() {
 
   if (prepRes.success) {
     settlementData = prepRes;
-    renderSettlementForm(prepRes);
+    if (prepRes.mode === 'full') {
+      renderNCHSettlement(prepRes);
+    } else {
+      renderHESettlement(prepRes);
+    }
   }
 
   if (histRes.success) {
@@ -537,52 +872,285 @@ async function loadSettlementData() {
   }
 }
 
-function renderSettlementForm(data) {
+function filterSettlement() {
+  const q = (document.getElementById('settlementSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('.settle-item-row').forEach(row => {
+    const name = row.dataset.name || '';
+    row.style.display = name.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+/* ── HE Direct Mode: category-grouped tracked items ── */
+function renderHESettlement(data) {
   const info = document.getElementById('settlementInfo');
+  const form = document.getElementById('settlementForm');
+  const searchWrap = document.getElementById('settlementSearchWrap');
+  const wastageSection = document.getElementById('wastageSection');
+
+  searchWrap.classList.remove('hidden');
+  wastageSection.classList.add('hidden');
+
+  // Info banner
   if (data.needsBootstrap) {
     info.innerHTML = `
       <div class="flex items-center gap-2 text-amber-400">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z"/></svg>
-        <span class="text-sm font-semibold">Bootstrap Required</span>
-      </div>
-      <p class="text-xs text-white/40 mt-1">No previous settlement found. Enter current stock counts to establish baseline.</p>
-    `;
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z"/></svg>
+        <div>
+          <p class="text-sm font-bold">First Settlement</p>
+          <p class="text-xs text-white/40">Enter current stock to set the baseline. No consumption will be calculated.</p>
+        </div>
+      </div>`;
   } else {
     info.innerHTML = `
       <div class="flex items-center justify-between">
         <div>
-          <p class="text-xs text-white/30">Period</p>
-          <p class="text-sm">${fmtDate(data.period.start)} → <span class="text-brand-400">Now</span></p>
+          <p class="text-[10px] text-white/30 uppercase">Period</p>
+          <p class="text-sm">${fmtDate(data.period.start)} &rarr; Now</p>
         </div>
         <div class="text-right">
-          <p class="text-xs text-white/30">Date</p>
-          <p class="text-sm font-semibold">${data.settlementDate}</p>
+          <p class="text-[10px] text-white/30 uppercase">Date</p>
+          <p class="text-sm font-bold text-brand-400">${data.settlementDate}</p>
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
-  // Render count rows
-  const rows = document.getElementById('countRows');
-  if (!data.trackedItems || !data.trackedItems.length) {
-    rows.innerHTML = '<p class="text-white/20 text-xs">No tracked items for this brand. Seed rm_tracked_items first.</p>';
-    return;
+  // Group by category
+  const categories = {};
+  for (const item of (data.trackedItems || [])) {
+    const cat = item.category || 'Other';
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(item);
   }
 
-  rows.innerHTML = data.trackedItems.map(item => `
-    <div class="count-row" data-code="${item.code}">
-      <div>
-        <span class="text-sm">${item.name}</span>
-        <span class="text-[10px] text-white/25 ml-1">${item.code} · ${item.uom}</span>
+  form.innerHTML = Object.entries(categories).map(([cat, items]) => `
+    <div class="zone-section">
+      <div class="zone-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+        <span class="text-sm font-bold">${cat}</span>
+        <span class="text-xs text-white/30">${items.length} items</span>
       </div>
-      <span class="text-xs text-white/30 text-right">${round2(item.opening)}</span>
-      <span class="text-xs text-emerald-400/60 text-right">+${round2(item.purchased)}</span>
-      <input type="number" class="closing-input px-2 py-1.5 rounded-lg text-sm text-right" data-code="${item.code}"
-        placeholder="Count" min="0" step="0.1" onchange="updateSettlementBtn()">
+      <div class="zone-body">
+        ${items.map(item => `
+          <div class="settle-item-row flex items-center gap-2 py-2 border-b border-white/[.03] last:border-0" data-name="${item.name}" data-code="${item.code}">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm truncate">${item.name}</p>
+              <p class="text-[10px] text-white/25">
+                Open: <span class="text-white/50">${r2(item.opening)}</span>
+                &nbsp;Purch: <span class="text-emerald-400/60">+${r2(item.purchased)}</span>
+                &nbsp;(${item.uom})
+              </p>
+            </div>
+            <input type="number" inputmode="decimal" class="count-input closing-input" data-code="${item.code}"
+              placeholder="--" step="any" min="0" onchange="updateSettlementBtn()">
+          </div>
+        `).join('')}
+      </div>
     </div>
   `).join('');
 
-  document.getElementById('btnSubmitSettlement').disabled = false;
+  document.getElementById('btnSubmitSettlement').disabled = true;
+}
+
+/* ── NCH Full Intelligence Mode: zone-based with vessels ── */
+function renderNCHSettlement(data) {
+  const info = document.getElementById('settlementInfo');
+  const form = document.getElementById('settlementForm');
+  const searchWrap = document.getElementById('settlementSearchWrap');
+  const wastageSection = document.getElementById('wastageSection');
+
+  searchWrap.classList.add('hidden');
+  wastageSection.classList.remove('hidden');
+
+  // Info banner
+  if (data.needsBootstrap) {
+    info.innerHTML = `
+      <div class="flex items-center gap-2 text-amber-400">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z"/></svg>
+        <div>
+          <p class="text-sm font-bold">First Settlement (Baseline)</p>
+          <p class="text-xs text-white/40">Enter current stock across all zones. This sets the baseline.</p>
+        </div>
+      </div>`;
+  } else {
+    info.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-[10px] text-white/30 uppercase">Period</p>
+          <p class="text-sm">${fmtDate(data.period.start)} &rarr; Now</p>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] text-white/30 uppercase">Date</p>
+          <p class="text-sm font-bold text-brand-400">${data.settlementDate}</p>
+        </div>
+      </div>`;
+  }
+
+  // Build zone → fields from intelligence
+  const fieldZones = data.intelligence?.fieldZones || {};
+  const vessels = data.intelligence?.vessels || {};
+  const densities = data.intelligence?.densities || {};
+
+  // Group fields by zone
+  const zoneFields = {};
+  for (const [field, zone] of Object.entries(fieldZones)) {
+    if (!zoneFields[zone]) zoneFields[zone] = [];
+    zoneFields[zone].push(field);
+  }
+
+  // Zone order
+  const zoneOrder = ['freezer', 'kitchen', 'display_counter', 'tea_counter'];
+
+  form.innerHTML = zoneOrder.filter(z => zoneFields[z]).map(zoneName => {
+    const zl = ZONE_LABELS[zoneName] || { label: zoneName, icon: '', color: 'text-white' };
+    const fields = zoneFields[zoneName];
+
+    const fieldsHtml = fields.map(field => {
+      const meta = FIELD_META[field] || { label: field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), unit: '' };
+
+      if (meta.type === 'vessel') {
+        // Vessel weight input — find matching vessels by liquidType + location
+        const loc = field.includes('kitchen') ? 'kitchen' : field.includes('counter') ? 'counter' : null;
+        const matchingVessels = Object.entries(vessels).filter(([code, v]) =>
+          v.liquid_type === meta.liquidType && (!loc || v.location === loc)
+        );
+        if (matchingVessels.length === 0) return '';
+
+        return `
+          <div class="mb-3">
+            <p class="text-xs font-semibold text-white/50 mb-1.5">${meta.label}</p>
+            ${matchingVessels.map(([code, v]) => `
+              <div class="vessel-card" data-field="${field}" data-vessel="${code}" data-tare="${v.tare_weight_kg}" data-liquid="${meta.liquidType}">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs font-medium">${v.name}</span>
+                  <span class="text-[10px] text-white/25">Tare: ${v.tare_weight_kg} kg</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-white/30 shrink-0">Gross:</span>
+                  <input type="number" inputmode="decimal" class="vessel-input vessel-gross" data-field="${field}" data-vessel="${code}"
+                    placeholder="kg" step="0.1" min="0" onchange="calcVesselNet(this)">
+                  <span class="text-xs text-white/30 shrink-0">Net:</span>
+                  <span class="text-sm font-bold vessel-net text-brand-400" data-field="${field}" data-vessel="${code}">--</span>
+                  <span class="text-xs text-white/25">L</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      // Direct number input
+      return `
+        <div class="settle-item-row flex items-center justify-between py-2 border-b border-white/[.03] last:border-0" data-name="${meta.label}">
+          <div class="flex-1 min-w-0">
+            <span class="text-sm">${meta.label}</span>
+            ${meta.unit ? `<span class="text-[10px] text-white/20 ml-1">${meta.unit}</span>` : ''}
+          </div>
+          <input type="number" inputmode="decimal" class="count-input nch-field-input" data-field="${field}"
+            placeholder="--" step="any" min="0" onchange="updateSettlementBtn()">
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="zone-section" id="zone-${zoneName}">
+        <div class="zone-header" onclick="toggleZone('${zoneName}')">
+          <div class="flex items-center gap-2">
+            <span class="${zl.color}">${zl.icon}</span>
+            <span class="text-sm font-bold">${zl.label}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-white/20 zone-timestamp" id="ts-${zoneName}"></span>
+            <svg class="w-4 h-4 text-white/20 zone-chevron" id="chev-${zoneName}" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+          </div>
+        </div>
+        <div class="zone-body" id="body-${zoneName}">
+          ${fieldsHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Wastage items
+  renderWastageOptions(data.intelligence?.wastageItems || []);
+  document.getElementById('btnSubmitSettlement').disabled = true;
+}
+
+const zoneTimestamps = {};
+function toggleZone(zoneName) {
+  const body = document.getElementById(`body-${zoneName}`);
+  body.classList.toggle('collapsed');
+  // Record timestamp when zone is first opened for input
+  if (!body.classList.contains('collapsed') && !zoneTimestamps[zoneName]) {
+    zoneTimestamps[zoneName] = new Date().toISOString();
+    document.getElementById(`ts-${zoneName}`).textContent = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  }
+}
+
+function calcVesselNet(input) {
+  const gross = parseFloat(input.value) || 0;
+  const card = input.closest('.vessel-card');
+  const tare = parseFloat(card.dataset.tare) || 0;
+  const liquidType = card.dataset.liquid;
+  const density = (settlementData?.intelligence?.densities || {})[liquidType] || 1.0;
+  const netKg = Math.max(0, gross - tare);
+  const netL = netKg / density;
+
+  const field = card.dataset.field;
+  const vessel = card.dataset.vessel;
+  const netEl = card.querySelector('.vessel-net');
+  if (netEl) netEl.textContent = netL > 0 ? netL.toFixed(2) : '--';
+
+  // Auto-record zone timestamp
+  const fieldZones = settlementData?.intelligence?.fieldZones || {};
+  const zone = fieldZones[field];
+  if (zone && !zoneTimestamps[zone]) {
+    zoneTimestamps[zone] = new Date().toISOString();
+    const tsEl = document.getElementById(`ts-${zone}`);
+    if (tsEl) tsEl.textContent = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  updateSettlementBtn();
+}
+
+/* ── Wastage ── */
+let wastageItemOptions = [];
+
+function renderWastageOptions(items) {
+  wastageItemOptions = items;
+  document.getElementById('wastageRows').innerHTML = '';
+}
+
+function addWastageRow() {
+  if (wastageItemOptions.length === 0) return;
+  const el = document.getElementById('wastageRows');
+  const idx = el.children.length;
+  const div = document.createElement('div');
+  div.className = 'card-item flex items-center gap-2';
+  div.innerHTML = `
+    <select class="flex-1 px-3 py-2 text-sm wastage-item" data-idx="${idx}">
+      <option value="">Item...</option>
+      ${wastageItemOptions.map(w => `<option value="${w.item}">${w.item.replace(/_/g, ' ')}</option>`).join('')}
+    </select>
+    <select class="px-3 py-2 text-sm wastage-state" data-idx="${idx}" disabled>
+      <option value="">State...</option>
+    </select>
+    <input type="number" inputmode="decimal" class="count-input wastage-qty" data-idx="${idx}" placeholder="Qty" step="any" min="0">
+    <button onclick="this.parentElement.remove()" class="text-red-400/50 hover:text-red-400 text-lg px-1">&times;</button>
+  `;
+  el.appendChild(div);
+
+  // Wire up item → state dropdown
+  div.querySelector('.wastage-item').addEventListener('change', function() {
+    const item = wastageItemOptions.find(w => w.item === this.value);
+    const stateSelect = div.querySelector('.wastage-state');
+    if (item) {
+      stateSelect.disabled = false;
+      stateSelect.innerHTML = '<option value="">State...</option>' +
+        item.states.map(s => `<option value="${s.state}">${s.label} (${s.uom})</option>`).join('');
+    } else {
+      stateSelect.disabled = true;
+      stateSelect.innerHTML = '<option value="">State...</option>';
+    }
+  });
 }
 
 function updateSettlementBtn() {
@@ -590,39 +1158,85 @@ function updateSettlementBtn() {
   document.querySelectorAll('.closing-input').forEach(inp => {
     if (inp.value !== '') hasAny = true;
   });
+  document.querySelectorAll('.nch-field-input').forEach(inp => {
+    if (inp.value !== '') hasAny = true;
+  });
+  document.querySelectorAll('.vessel-gross').forEach(inp => {
+    if (inp.value !== '') hasAny = true;
+  });
   document.getElementById('btnSubmitSettlement').disabled = !hasAny;
 }
 
+/* ── Submit Settlement ── */
 async function submitSettlement() {
-  const counts = {};
-  document.querySelectorAll('.closing-input').forEach(inp => {
-    const code = inp.dataset.code;
-    const val = parseFloat(inp.value);
-    if (!isNaN(val)) counts[code] = val;
-  });
-
-  if (!Object.keys(counts).length) return;
-
   const btn = document.getElementById('btnSubmitSettlement');
   btn.disabled = true;
   btn.textContent = 'Submitting...';
 
   const isBootstrap = settlementData?.needsBootstrap || false;
   const notes = document.getElementById('settlementNotes').value.trim();
+  const mode = settlementData?.mode || 'direct';
 
-  const res = await apiPost({
+  let payload = {
     action: 'settlement-submit', pin: currentPin, brand: currentBrand,
-    counts, notes, is_bootstrap: isBootstrap,
-  });
+    notes, is_bootstrap: isBootstrap,
+  };
+
+  if (mode === 'full') {
+    // NCH: build raw_input from zone fields + vessels
+    const rawInput = {};
+
+    // Direct number fields
+    document.querySelectorAll('.nch-field-input').forEach(inp => {
+      const val = parseFloat(inp.value);
+      if (!isNaN(val)) rawInput[inp.dataset.field] = val;
+    });
+
+    // Vessel entries: group by field → [{vessel_code, weight_kg}]
+    document.querySelectorAll('.vessel-gross').forEach(inp => {
+      const val = parseFloat(inp.value);
+      if (!isNaN(val) && val > 0) {
+        const field = inp.dataset.field;
+        const vessel = inp.dataset.vessel;
+        if (!rawInput[field]) rawInput[field] = [];
+        rawInput[field].push({ vessel_code: vessel, weight_kg: val });
+      }
+    });
+
+    payload.raw_input = rawInput;
+    payload.field_timestamps = { ...zoneTimestamps };
+
+    // Wastage items
+    const wastage = [];
+    document.querySelectorAll('#wastageRows > div').forEach(row => {
+      const item = row.querySelector('.wastage-item')?.value;
+      const state = row.querySelector('.wastage-state')?.value;
+      const qty = parseFloat(row.querySelector('.wastage-qty')?.value);
+      if (item && state && qty > 0) wastage.push({ item, state, qty });
+    });
+    if (wastage.length > 0) payload.wastage_items = wastage;
+  } else {
+    // HE: direct counts
+    const counts = {};
+    document.querySelectorAll('.closing-input').forEach(inp => {
+      const val = parseFloat(inp.value);
+      if (!isNaN(val)) counts[inp.dataset.code] = val;
+    });
+    payload.counts = counts;
+  }
+
+  const res = await apiPost(payload);
 
   if (res.success) {
-    btn.textContent = 'Done';
+    showToast(isBootstrap ? 'Baseline established' : 'Settlement saved', 'success');
     renderSettlementResult(res);
-    setTimeout(() => { btn.textContent = 'Submit'; btn.disabled = false; loadSettlementData(); }, 2000);
+    loadSettlementData();
   } else {
-    btn.textContent = res.error || 'Failed';
-    setTimeout(() => { btn.textContent = 'Submit'; btn.disabled = false; }, 3000);
+    showToast(res.error || 'Settlement failed', 'error');
   }
+
+  btn.textContent = 'Submit Settlement';
+  btn.disabled = false;
 }
 
 function renderSettlementResult(res) {
@@ -631,49 +1245,50 @@ function renderSettlementResult(res) {
   const body = document.getElementById('settlementResultBody');
 
   if (res.status === 'bootstrap') {
-    body.innerHTML = `<p class="text-emerald-400 text-sm">Baseline established. Next settlement will calculate consumption.</p>`;
+    body.innerHTML = '<p class="text-emerald-400 text-sm font-semibold">Baseline set. Tomorrow\'s settlement will calculate consumption.</p>';
     return;
   }
 
   const items = Object.entries(res.costSummary?.per_item || {});
   body.innerHTML = `
-    <div class="space-y-1.5 mb-3">
+    <div class="space-y-1 mb-3">
       ${items.map(([code, d]) => `
         <div class="flex justify-between text-xs">
-          <span class="text-white/50">${code}</span>
-          <span>${round2(d.consumed)} × ${fmt(d.price)} = <span class="font-semibold text-white">${fmt(d.cost)}</span></span>
+          <span class="text-white/40 truncate mr-2">${code}</span>
+          <span class="shrink-0">${r2(d.consumed)} &times; ${fmt(d.price)} = <span class="font-bold text-white">${fmt(d.cost)}</span></span>
         </div>
       `).join('')}
     </div>
-    <div class="border-t border-white/5 pt-2 flex justify-between">
-      <span class="text-sm font-semibold text-white/60">Total Cost</span>
-      <span class="text-lg font-bold text-brand-400">${fmt(res.costSummary?.total || 0)}</span>
+    <div class="border-t border-white/5 pt-2 flex justify-between items-center">
+      <span class="text-sm font-semibold text-white/60">Total COGS</span>
+      <span class="text-xl font-bold text-brand-400">${fmt(res.costSummary?.total || 0)}</span>
     </div>
   `;
 }
 
 function renderSettlementHistory(settlements) {
   const el = document.getElementById('settlementHistory');
-  if (!settlements.length) { el.innerHTML = '<p class="text-white/20 text-xs">No settlements yet</p>'; return; }
+  if (!settlements || !settlements.length) { el.innerHTML = '<p class="text-white/20 text-xs">No settlements yet</p>'; return; }
   el.innerHTML = settlements.map(s => {
     const cost = s.cost_summary ? JSON.parse(s.cost_summary) : null;
     return `
-      <div class="p-2 rounded-lg bg-white/[.02]">
+      <div class="card-item">
         <div class="flex justify-between items-center">
-          <span class="text-xs font-semibold">${s.settlement_date}</span>
+          <span class="text-sm font-semibold">${s.settlement_date}</span>
           <span class="badge ${s.status === 'bootstrap' ? 'badge-warn' : 'badge-success'}">${s.status}</span>
         </div>
         <div class="flex justify-between text-[11px] text-white/40 mt-1">
           <span>${s.settled_by}</span>
-          ${cost ? `<span class="text-white/60 font-semibold">${fmt(cost.total)}</span>` : ''}
+          ${cost ? `<span class="text-white/60 font-bold">${fmt(cost.total)}</span>` : ''}
         </div>
       </div>
     `;
   }).join('');
 }
 
-/* ━━━ ANALYTICS ━━━ */
-
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * ANALYTICS
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 async function loadAnalytics() {
   const res = await apiFetch('status');
   if (res.success) {
@@ -696,33 +1311,34 @@ async function loadConsumption() {
 
   const salesHtml = res.sales?.items?.length
     ? `<div class="mb-3">
-        <p class="text-xs text-white/30 mb-1">POS Sales: <span class="text-white/60">${res.sales.orders} orders, ${fmt(res.sales.revenue)} revenue</span></p>
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-1">
-          ${res.sales.items.slice(0, 12).map(i => `
-            <span class="text-[11px] text-white/40">${i.name}: <span class="text-white/60">${i.qty}</span></span>
-          `).join('')}
+        <p class="text-xs text-white/30 mb-1">POS: <span class="text-white/60">${res.sales.orders} orders, ${fmt(res.sales.revenue)}</span></p>
+        <div class="grid grid-cols-2 gap-1">
+          ${res.sales.items.slice(0, 12).map(i =>
+            `<span class="text-[11px] text-white/40">${i.name}: <span class="text-white/60">${i.qty}</span></span>`
+          ).join('')}
         </div>
       </div>`
-    : '<p class="text-xs text-white/30 mb-2">No POS sales in period</p>';
+    : '<p class="text-xs text-white/30 mb-2">No POS sales</p>';
 
   const consEntries = Object.entries(res.consumption || {});
   const consHtml = consEntries.length
     ? `<div>
-        <p class="text-xs text-white/30 mb-1">Material Movement (Transfers)</p>
-        ${consEntries.map(([pid, d]) => `
-          <div class="flex justify-between text-[11px] py-0.5">
-            <span class="text-white/40">Product #${pid}</span>
-            <span>In: ${d.sentToKitchen} | Ret: ${d.returned} | Waste: ${d.wasted} | <span class="text-white/70 font-semibold">Net: ${d.netConsumed}</span></span>
-          </div>
-        `).join('')}
+        <p class="text-xs text-white/30 mb-1">Material Movement</p>
+        ${consEntries.map(([pid, d]) =>
+          `<div class="flex justify-between text-[11px] py-0.5">
+            <span class="text-white/40">#${pid}</span>
+            <span>In:${d.sentToKitchen} Ret:${d.returned} Waste:${d.wasted} <span class="font-bold text-white/70">Net:${d.netConsumed}</span></span>
+          </div>`
+        ).join('')}
       </div>`
-    : '<p class="text-xs text-white/30">No transfers in period</p>';
+    : '<p class="text-xs text-white/30">No transfers</p>';
 
   el.innerHTML = salesHtml + consHtml;
 }
 
-/* ━━━ API Helpers ━━━ */
-
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * API HELPERS
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 async function apiFetch(actionParams) {
   try {
     const r = await fetch(`${API}?action=${actionParams}&brand=${currentBrand}&pin=${currentPin}`);
@@ -742,13 +1358,22 @@ async function apiPost(body) {
 }
 
 /* ━━━ Formatters ━━━ */
-
-function fmt(n) { return '₹' + (parseFloat(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
-function round2(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
+function fmt(n) { return '\u20B9' + (parseFloat(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+function r2(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
 function fmtDate(d) {
-  if (!d) return '—';
+  if (!d) return '--';
   const dt = new Date(d);
   return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+}
+
+function showToast(msg, type) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const div = document.createElement('div');
+  div.className = `toast ${type === 'success' ? 'bg-emerald-600 text-white' : type === 'error' ? 'bg-red-600 text-white' : 'glass text-white'}`;
+  div.textContent = msg;
+  document.body.appendChild(div);
+  setTimeout(() => div.remove(), 3000);
 }
 </script>
 </body>

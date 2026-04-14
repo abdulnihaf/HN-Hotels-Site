@@ -150,6 +150,7 @@ async function handleGet(action, url, env, DB) {
     case 'products':    return getProducts(creds, cfg);
     case 'last-prices': return getLastPrices(creds, cfg, url);
     case 'recent-pos':  return getRecentPOs(creds, cfg, url);
+    case 'purchase-catalog': return getPurchaseCatalog(creds, cfg, brand, url, DB);
     case 'consumption': return getConsumption(creds, cfg, url);
     case 'kitchen-stock': return getKitchenStock(creds, cfg);
     case 'settlement-prepare': return settlementPrepare(creds, cfg, brand, DB);
@@ -232,6 +233,66 @@ async function getRecentPOs(creds, cfg, url) {
   return json({
     success: true,
     orders: pos.map(p => ({
+      id: p.id, name: p.name,
+      vendor: p.partner_id ? p.partner_id[1] : 'Unknown',
+      date: p.date_order, state: p.state, total: p.amount_total,
+      created_by: p.create_uid ? p.create_uid[1] : '',
+    })),
+  });
+}
+
+/* ── Purchase Catalog (one-stop for purchase UI) ── */
+
+async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
+  const [odooProducts, odooVendors, vendorMappings, lastPricesAll, recentPOsRaw] =
+    await Promise.all([
+      odooCall(creds.uid, creds.key, 'product.product', 'search_read',
+        [[['default_code', 'like', 'HN-RM-'], ['company_id', 'in', [cfg.company_id, false]]]],
+        { fields: ['id', 'name', 'default_code', 'uom_id', 'categ_id'], order: 'name asc' }),
+      odooCall(creds.uid, creds.key, 'res.partner', 'search_read',
+        [[['supplier_rank', '>', 0], ['company_id', 'in', [cfg.company_id, false]]]],
+        { fields: ['id', 'name', 'phone'], order: 'name asc' }),
+      DB ? DB.prepare(
+        'SELECT vp.product_code, vp.vendor_key, vp.is_primary, v.name as vendor_name, v.odoo_id as vendor_odoo_id FROM rm_vendor_products vp JOIN rm_vendors v ON vp.vendor_key = v.key'
+      ).all() : { results: [] },
+      DB ? DB.prepare(
+        'SELECT product_code, price, source, recorded_at FROM rm_daily_prices WHERE brand = ? ORDER BY recorded_at DESC'
+      ).bind(brand).all() : { results: [] },
+      odooCall(creds.uid, creds.key, 'purchase.order', 'search_read',
+        [[['company_id', '=', cfg.company_id]]],
+        { fields: ['id', 'name', 'partner_id', 'date_order', 'state', 'amount_total', 'create_uid'],
+          order: 'date_order desc', limit: 15 }),
+    ]);
+
+  // vendor mappings: product_code → [{key, name, odoo_id, is_primary}]
+  const vendorMap = {};
+  for (const m of (vendorMappings.results || [])) {
+    if (!vendorMap[m.product_code]) vendorMap[m.product_code] = [];
+    vendorMap[m.product_code].push({
+      key: m.vendor_key, name: m.vendor_name,
+      odoo_id: m.vendor_odoo_id, is_primary: !!m.is_primary,
+    });
+  }
+
+  // latest price per product (first occurrence = most recent due to ORDER BY)
+  const priceMap = {};
+  for (const p of (lastPricesAll.results || [])) {
+    if (!priceMap[p.product_code]) {
+      priceMap[p.product_code] = { price: p.price, source: p.source, date: p.recorded_at };
+    }
+  }
+
+  return json({
+    success: true,
+    products: odooProducts.map(p => ({
+      id: p.id, name: p.name, code: p.default_code || '',
+      uom: p.uom_id ? p.uom_id[1] : 'Units',
+      category: p.categ_id ? p.categ_id[1] : '',
+      vendors: vendorMap[p.default_code] || [],
+      lastPrice: priceMap[p.default_code] || null,
+    })),
+    vendors: odooVendors.map(v => ({ id: v.id, name: v.name, phone: v.phone || '' })),
+    recentPOs: recentPOsRaw.map(p => ({
       id: p.id, name: p.name,
       vendor: p.partner_id ? p.partner_id[1] : 'Unknown',
       date: p.date_order, state: p.state, total: p.amount_total,
@@ -389,6 +450,7 @@ async function settlementPrepare(creds, cfg, brand, DB) {
       vessels: intelligence.vessels,
       densities: intelligence.densities,
       zones: intelligence.zones,
+      fieldZones: intelligence.fieldZones,
       wastageItems: intelligence.wastageItems,
     },
   });
@@ -470,6 +532,7 @@ async function handlePost(action, context, env, DB) {
     case 'create-po':       return createPO(body, user, creds, cfg, brand, DB);
     case 'add-product':     return addProduct(body, user, creds, cfg, brand, env, DB);
     case 'update-price':    return updatePrice(body, user, brand, DB);
+    case 'link-vendor':     return linkVendor(body, user, creds, cfg, brand, env, DB);
     case 'settlement-submit': return settlementSubmit(body, user, creds, cfg, brand, env, DB);
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
@@ -666,6 +729,55 @@ async function updatePrice(body, user, brand, DB) {
   ).bind('price_update', brand, user.name, JSON.stringify({ product_code, price }), now).run();
 
   return json({ success: true, product_code, brand, price, recorded_by: user.name });
+}
+
+/* ── Link Vendor to Product ── */
+
+async function linkVendor(body, user, creds, cfg, brand, env, DB) {
+  if (!DB) return json({ error: 'Database not configured' }, 500);
+  if (user.role !== 'admin' && user.role !== 'purchase') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const { product_code, vendor_odoo_id } = body;
+  if (!product_code || !vendor_odoo_id) return json({ error: 'Missing product_code or vendor_odoo_id' }, 400);
+
+  // Find vendor in D1 by odoo_id, or create from Odoo
+  let vendor = await DB.prepare('SELECT * FROM rm_vendors WHERE odoo_id = ?').bind(vendor_odoo_id).first();
+
+  if (!vendor) {
+    const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
+    const v = await odooCall(sysCreds.uid, sysCreds.key, 'res.partner', 'read',
+      [[vendor_odoo_id]], { fields: ['name', 'phone'] });
+    if (!v.length) return json({ error: 'Vendor not found in Odoo' }, 404);
+
+    const key = v[0].name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    await DB.prepare('INSERT OR IGNORE INTO rm_vendors (key, name, phone, odoo_id) VALUES (?, ?, ?, ?)')
+      .bind(key, v[0].name, v[0].phone || '', vendor_odoo_id).run();
+    vendor = await DB.prepare('SELECT * FROM rm_vendors WHERE odoo_id = ?').bind(vendor_odoo_id).first();
+  }
+
+  // Create product↔vendor mapping
+  await DB.prepare('INSERT OR IGNORE INTO rm_vendor_products (product_code, vendor_key, is_primary) VALUES (?, ?, 0)')
+    .bind(product_code, vendor.key).run();
+
+  // Also link in Odoo (supplierinfo)
+  const product = await DB.prepare('SELECT odoo_id FROM rm_products WHERE hn_code = ?').bind(product_code).first();
+  if (product?.odoo_id && vendor.odoo_id) {
+    try {
+      await odooCall(creds.uid, creds.key, 'product.supplierinfo', 'create',
+        [{ partner_id: vendor.odoo_id, product_id: product.odoo_id, company_id: cfg.company_id }]);
+    } catch (_) { /* supplierinfo may already exist */ }
+  }
+
+  const now = istNow().toISOString();
+  await DB.prepare(
+    'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind('link_vendor', brand, user.name, JSON.stringify({
+    product_code, vendor_key: vendor.key, vendor_odoo_id,
+  }), now).run();
+
+  return json({ success: true, product_code, vendor_key: vendor.key, vendor_name: vendor.name });
 }
 
 /* ── Settlement Submit (intelligence-driven) ── */
