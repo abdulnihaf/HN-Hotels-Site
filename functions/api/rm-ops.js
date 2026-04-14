@@ -316,8 +316,8 @@ async function settlementPrepare(creds, cfg, brand, DB) {
 
   // Previous settlement
   const previous = DB ? await DB.prepare(
-    'SELECT * FROM rm_settlements WHERE brand = ? AND status = ? ORDER BY settled_at DESC LIMIT 1'
-  ).bind(brand, 'completed').first() : null;
+    'SELECT * FROM rm_settlements WHERE brand = ? AND status IN (?, ?) ORDER BY settled_at DESC LIMIT 1'
+  ).bind(brand, 'completed', 'bootstrap').first() : null;
 
   const periodStart = previous ? previous.settled_at : nowISO;
   const periodEnd = nowISO;
@@ -328,18 +328,16 @@ async function settlementPrepare(creds, cfg, brand, DB) {
     openingStock = JSON.parse(previous.closing_stock);
   }
 
-  // Tracked items for this brand
-  const tracked = DB ? await DB.prepare(
-    'SELECT ti.*, p.name, p.uom, p.category, p.avg_cost FROM rm_tracked_items ti JOIN rm_products p ON ti.product_code = p.hn_code WHERE ti.brand = ? AND ti.is_active = 1 ORDER BY ti.tier, p.name'
-  ).bind(brand).all() : { results: [] };
-
-  // Purchases received in period
-  const fromUTC = istToUTC(periodStart);
-  const toUTC = istToUTC(periodEnd);
-  const fromOdoo = toOdooDatetime(fromUTC);
-  const toOdoo = toOdooDatetime(toUTC);
-
-  const purchases = await fetchPurchasesReceived(creds, cfg, fromOdoo, toOdoo);
+  // Load intelligence + tracked items + purchases in parallel
+  const [intelligence, tracked, purchases] = await Promise.all([
+    loadIntelligence(brand, DB),
+    DB ? DB.prepare(
+      'SELECT ti.*, p.name, p.uom, p.category, p.avg_cost FROM rm_tracked_items ti JOIN rm_products p ON ti.product_code = p.hn_code WHERE ti.brand = ? AND ti.is_active = 1 ORDER BY ti.tier, p.name'
+    ).bind(brand).all() : { results: [] },
+    fetchPurchasesReceived(creds, cfg,
+      toOdooDatetime(istToUTC(periodStart)),
+      toOdooDatetime(istToUTC(periodEnd))),
+  ]);
 
   // Latest prices per tracked item
   const latestPrices = {};
@@ -356,12 +354,16 @@ async function settlementPrepare(creds, cfg, brand, DB) {
     }
   }
 
+  // Determine settlement mode based on intelligence data
+  const hasDecomposition = intelligence.ratios.length > 0;
+
   return json({
     success: true,
     brand,
     settlementDate: nowISO.slice(0, 10),
     period: { start: periodStart, end: periodEnd },
     needsBootstrap: !previous,
+    mode: hasDecomposition ? 'full' : 'direct',
     previousSettlement: previous ? {
       id: previous.id,
       date: previous.settlement_date,
@@ -381,6 +383,14 @@ async function settlementPrepare(creds, cfg, brand, DB) {
     })),
     purchases,
     latestPrices,
+    intelligence: {
+      recipes: intelligence.recipes.length,
+      ratios: intelligence.ratios.length,
+      vessels: intelligence.vessels,
+      densities: intelligence.densities,
+      zones: intelligence.zones,
+      wastageItems: intelligence.wastageItems,
+    },
   });
 }
 
@@ -460,7 +470,7 @@ async function handlePost(action, context, env, DB) {
     case 'create-po':       return createPO(body, user, creds, cfg, brand, DB);
     case 'add-product':     return addProduct(body, user, creds, cfg, brand, env, DB);
     case 'update-price':    return updatePrice(body, user, brand, DB);
-    case 'settlement-submit': return settlementSubmit(body, user, creds, cfg, brand, DB);
+    case 'settlement-submit': return settlementSubmit(body, user, creds, cfg, brand, env, DB);
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
 }
@@ -658,14 +668,18 @@ async function updatePrice(body, user, brand, DB) {
   return json({ success: true, product_code, brand, price, recorded_by: user.name });
 }
 
-/* ── Settlement Submit ── */
+/* ── Settlement Submit (intelligence-driven) ── */
 
-async function settlementSubmit(body, user, creds, cfg, brand, DB) {
+async function settlementSubmit(body, user, creds, cfg, brand, env, DB) {
   if (!DB) return json({ error: 'Database not configured' }, 500);
 
-  const { counts, notes, is_bootstrap } = body;
-  if (!counts || typeof counts !== 'object' || Object.keys(counts).length === 0) {
-    return json({ error: 'Missing counts object' }, 400);
+  const { counts, raw_input, wastage_items, field_timestamps, notes, is_bootstrap } = body;
+
+  // Must have either counts (direct mode) or raw_input (full decomposition mode)
+  const hasCounts = counts && typeof counts === 'object' && Object.keys(counts).length > 0;
+  const hasRawInput = raw_input && typeof raw_input === 'object' && Object.keys(raw_input).length > 0;
+  if (!hasCounts && !hasRawInput) {
+    return json({ error: 'Missing counts or raw_input' }, 400);
   }
 
   const now = istNow();
@@ -683,6 +697,11 @@ async function settlementSubmit(body, user, creds, cfg, brand, DB) {
     }
   }
 
+  // Load intelligence from D1
+  const intelligence = await loadIntelligence(brand, DB);
+  const hasDecomposition = intelligence.ratios.length > 0;
+  const mode = hasRawInput && hasDecomposition ? 'full' : 'direct';
+
   // Get previous settlement for opening stock
   const previous = await DB.prepare(
     'SELECT * FROM rm_settlements WHERE brand = ? AND status IN (?, ?) ORDER BY settled_at DESC LIMIT 1'
@@ -696,24 +715,106 @@ async function settlementSubmit(body, user, creds, cfg, brand, DB) {
     openingStock = JSON.parse(previous.closing_stock);
   }
 
-  // Fetch purchases received in period
-  const fromUTC = istToUTC(periodStart);
-  const toUTC = istToUTC(periodEnd);
-  const fromOdoo = toOdooDatetime(fromUTC);
-  const toOdoo = toOdooDatetime(toUTC);
+  // ── Step 1: Build closing stock ──
+  let closingStock;
+  let decomposedRawInput = null;
 
-  const sysCreds = getOdooCredentials({ odoo: 'system' }, { ...creds, ODOO_API_KEY: creds.key });
-  const purchased = await fetchPurchasesReceived(
-    { uid: 2, key: DB ? creds.key : creds.key }, cfg, fromOdoo, toOdoo
-  );
+  if (mode === 'full') {
+    // Full decomposition: convert physical forms → raw materials
+    decomposedRawInput = decomposeInput(raw_input, intelligence);
+    closingStock = { ...decomposedRawInput };
+  } else {
+    // Direct mode: counts ARE the closing stock
+    closingStock = { ...counts };
+  }
 
-  // Calculate consumption: opening + purchased - closing
+  // ── Step 2: Gap adjustment (full mode only) ──
+  let timestampAdjustments = {};
+  if (mode === 'full' && field_timestamps && Object.keys(field_timestamps).length > 0) {
+    const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
+    const adjResult = await adjustForGaps(
+      closingStock, field_timestamps, intelligence, sysCreds, cfg
+    );
+    closingStock = adjResult.closingStock;
+    timestampAdjustments = adjResult.adjustments;
+  }
+
+  // ── Bootstrap: just store the count, no consumption/P&L ──
+  if (is_bootstrap) {
+    await DB.prepare(`INSERT INTO rm_settlements
+      (brand, settlement_date, settled_by, period_start, period_end,
+       opening_stock, closing_stock, purchased, consumed, cost_summary, notes, status, settled_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'bootstrap', ?)`
+    ).bind(
+      brand, settlementDate, user.name, nowISO, nowISO,
+      JSON.stringify(closingStock), JSON.stringify(closingStock),
+      '{}', '{}', '{}', notes || '', nowISO
+    ).run();
+
+    await DB.prepare(
+      'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind('settlement_bootstrap', brand, user.name,
+      JSON.stringify({ settlement_date: settlementDate, items: Object.keys(closingStock).length, mode }),
+      nowISO).run();
+
+    return json({
+      success: true, brand, settlementDate, settledBy: user.name,
+      status: 'bootstrap', mode,
+      inventory: closingStock,
+      rawInput: raw_input || null,
+    });
+  }
+
+  // ── Step 3: Fetch purchases received in period ──
+  const fromOdoo = toOdooDatetime(istToUTC(periodStart));
+  const toOdoo = toOdooDatetime(istToUTC(periodEnd));
+  const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
+  const purchased = await fetchPurchasesReceived(sysCreds, cfg, fromOdoo, toOdoo);
+
+  // ── Step 4: Calculate ACTUAL consumption ──
   const consumed = {};
-  const costSummary = { total: 0, per_item: {} };
+  const consumptionWarnings = [];
+  const allCodes = new Set([
+    ...Object.keys(openingStock),
+    ...Object.keys(purchased),
+    ...Object.keys(closingStock),
+  ]);
 
-  // Get latest prices
+  for (const code of allCodes) {
+    const opening = openingStock[code] || 0;
+    const purch = purchased[code] || 0;
+    const closing = closingStock[code] || 0;
+    const used = round(opening + purch - closing, 4);
+    if (used !== 0 || opening > 0 || purch > 0) {
+      consumed[code] = used;
+      if (used < -0.001) {
+        consumptionWarnings.push({
+          code, opening, purchased: purch, closing, used,
+          message: `Negative: closing (${closing}) > opening (${opening}) + purchased (${purch})`
+        });
+      }
+    }
+  }
+
+  // ── Step 5: Calculate EXPECTED consumption from recipes ──
+  let expectedConsumption = {};
+  let posSales = null;
+  if (intelligence.recipes.length > 0) {
+    posSales = await fetchPOSSales(sysCreds, cfg, fromOdoo, toOdoo);
+    expectedConsumption = calculateExpected(posSales, intelligence.recipesMap);
+  }
+
+  // ── Step 6: Decompose wastage → raw materials ──
+  const wastedRaw = decomposeWastage(wastage_items, intelligence.wastageRulesMap);
+
+  // ── Step 7: Discrepancy = consumed - expected - wastage ──
+  const discrepancy = {};
+  let discrepancyValue = 0;
+  const allDiscCodes = new Set([...Object.keys(consumed), ...Object.keys(expectedConsumption)]);
+
+  // Get latest prices for cost calculations
   const priceMap = {};
-  for (const code of Object.keys(counts)) {
+  for (const code of allCodes) {
     const price = await DB.prepare(
       'SELECT price FROM rm_daily_prices WHERE product_code = ? AND brand = ? ORDER BY recorded_at DESC LIMIT 1'
     ).bind(code, brand).first();
@@ -725,71 +826,458 @@ async function settlementSubmit(body, user, creds, cfg, brand, DB) {
     }
   }
 
-  for (const [code, closingQty] of Object.entries(counts)) {
-    const opening = openingStock[code] || 0;
-    const purchasedQty = purchased[code] || 0;
-    const consumedQty = is_bootstrap ? 0 : round(opening + purchasedQty - closingQty);
-
-    consumed[code] = consumedQty;
-
-    const unitPrice = priceMap[code] || 0;
-    const itemCost = round(consumedQty * unitPrice);
-    costSummary.per_item[code] = { consumed: consumedQty, price: unitPrice, cost: itemCost };
-    costSummary.total += itemCost;
+  for (const code of allDiscCodes) {
+    const actual = consumed[code] || 0;
+    const expected = expectedConsumption[code] || 0;
+    const wasted = wastedRaw[code] || 0;
+    const disc = round(actual - expected - wasted, 4);
+    if (Math.abs(disc) > 0.001) {
+      const cost = priceMap[code] || 0;
+      const discValue = round(disc * cost, 2);
+      discrepancy[code] = { qty: disc, value: discValue };
+      discrepancyValue += discValue;
+    }
   }
-  costSummary.total = round(costSummary.total);
+  discrepancyValue = round(discrepancyValue, 2);
 
-  // Store settlement
+  // ── Step 8: COGS ──
+  let cogsActual = 0;
+  for (const [code, qty] of Object.entries(consumed)) {
+    cogsActual += Math.max(0, qty) * (priceMap[code] || 0);
+  }
+  cogsActual = round(cogsActual, 2);
+
+  let cogsExpected = 0;
+  for (const [code, qty] of Object.entries(expectedConsumption)) {
+    cogsExpected += qty * (priceMap[code] || 0);
+  }
+  cogsExpected = round(cogsExpected, 2);
+
+  let wastageValue = 0;
+  for (const [code, qty] of Object.entries(wastedRaw)) {
+    wastageValue += qty * (priceMap[code] || 0);
+  }
+  wastageValue = round(wastageValue, 2);
+
+  // ── Step 9: P&L ──
+  const revenue = posSales ? posSales.revenue : 0;
+  const grossProfit = round(revenue - cogsActual, 2);
+  const netProfit = round(grossProfit - wastageValue, 2);
+
+  // ── Step 10: Build cost summary ──
+  const costSummary = { total: cogsActual, per_item: {} };
+  for (const code of allCodes) {
+    const qty = consumed[code] || 0;
+    const price = priceMap[code] || 0;
+    costSummary.per_item[code] = { consumed: qty, price, cost: round(qty * price, 2) };
+  }
+
+  // ── Step 11: Store settlement ──
+  const fullDetails = JSON.stringify({
+    mode, cogsActual, cogsExpected, revenue, grossProfit, netProfit,
+    wastageValue, discrepancyValue,
+    expectedConsumption, wastedRaw, discrepancy,
+    timestampAdjustments: Object.keys(timestampAdjustments).length > 0 ? timestampAdjustments : null,
+    warnings: consumptionWarnings.length > 0 ? consumptionWarnings : null,
+    rawInput: raw_input || null,
+    decomposed: decomposedRawInput,
+    posSales: posSales ? { orders: posSales.orders, revenue: posSales.revenue } : null,
+  });
+
   await DB.prepare(`INSERT INTO rm_settlements
     (brand, settlement_date, settled_by, period_start, period_end,
-     opening_stock, closing_stock, purchased, consumed, cost_summary, notes, status, settled_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     opening_stock, closing_stock, purchased, consumed, pos_revenue, cost_summary, notes, status, settled_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)`
   ).bind(
     brand, settlementDate, user.name, periodStart, periodEnd,
     JSON.stringify(openingStock),
-    JSON.stringify(counts),
+    JSON.stringify(closingStock),
     JSON.stringify(purchased),
     JSON.stringify(consumed),
+    fullDetails,
     JSON.stringify(costSummary),
-    notes || '',
-    is_bootstrap ? 'bootstrap' : 'completed',
-    nowISO
+    notes || '', nowISO
   ).run();
 
-  // Sync closing stock to Odoo (update stock.quant)
-  if (!is_bootstrap) {
-    const syncResults = await syncStockToOdoo(creds, cfg, counts, DB);
-    // Log sync
-    await DB.prepare(
-      'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).bind('settlement_sync', brand, user.name, JSON.stringify({
-      items_synced: syncResults.length, settlement_date: settlementDate,
-    }), nowISO).run();
+  // ── Step 12: Sync closing stock to Odoo ──
+  let odooSyncResult = null;
+  try {
+    odooSyncResult = await syncStockToOdoo(creds, cfg, closingStock, DB);
+  } catch (syncErr) {
+    odooSyncResult = { error: syncErr.message };
   }
 
-  // Log settlement
+  // Log
   await DB.prepare(
     'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).bind(
-    is_bootstrap ? 'settlement_bootstrap' : 'settlement',
-    brand, user.name,
-    JSON.stringify({ settlement_date: settlementDate, items: Object.keys(counts).length, total_cost: costSummary.total }),
-    nowISO
-  ).run();
+  ).bind('settlement', brand, user.name,
+    JSON.stringify({ settlement_date: settlementDate, items: Object.keys(closingStock).length,
+      mode, cogs: cogsActual, revenue, net: netProfit }),
+    nowISO).run();
 
   return json({
-    success: true,
-    brand,
-    settlementDate,
-    settledBy: user.name,
-    status: is_bootstrap ? 'bootstrap' : 'completed',
+    success: true, brand, settlementDate, settledBy: user.name,
+    status: 'completed', mode,
+    pnl: { revenue, cogs: cogsActual, cogsExpected, grossProfit, netProfit,
+            wastage: wastageValue, discrepancy: discrepancyValue },
     period: { start: periodStart, end: periodEnd },
-    openingStock,
-    closingStock: counts,
-    purchased,
-    consumed,
+    inventory: { opening: openingStock, purchased, closing: closingStock, consumed,
+                 expected: expectedConsumption, discrepancy, wastedRaw },
     costSummary,
+    warnings: consumptionWarnings.length > 0 ? consumptionWarnings : undefined,
+    timestampAdjustments: Object.keys(timestampAdjustments).length > 0 ? timestampAdjustments : undefined,
+    odooSyncResult,
   });
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Intelligence Engine — data-driven from D1 tables
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ── Load all intelligence for a brand from D1 ── */
+
+async function loadIntelligence(brand, DB) {
+  if (!DB) return { recipes: [], recipesMap: {}, ratios: [], ratiosMap: {},
+    vessels: [], densities: {}, zones: {}, fieldZones: {}, fieldProducts: {},
+    wastageRules: [], wastageRulesMap: {}, wastageItems: [] };
+
+  const [recipesR, ratiosR, vesselsR, densitiesR, zonesR, fieldZonesR, fieldProductsR, wastageR] =
+    await Promise.all([
+      DB.prepare('SELECT * FROM rm_recipes WHERE brand = ?').bind(brand).all(),
+      DB.prepare('SELECT * FROM rm_decomposition_ratios WHERE brand = ?').bind(brand).all(),
+      DB.prepare('SELECT * FROM rm_vessels WHERE brand = ?').bind(brand).all(),
+      DB.prepare('SELECT * FROM rm_density_constants WHERE brand = ?').bind(brand).all(),
+      DB.prepare('SELECT * FROM rm_zones WHERE brand = ?').bind(brand).all(),
+      DB.prepare('SELECT * FROM rm_field_zones WHERE brand = ?').bind(brand).all(),
+      DB.prepare('SELECT * FROM rm_field_products WHERE brand = ?').bind(brand).all(),
+      DB.prepare('SELECT * FROM rm_wastage_rules WHERE brand = ?').bind(brand).all(),
+    ]);
+
+  // Build recipesMap: { pos_product_id: { name, materials: { material_code: qty_per_unit } } }
+  const recipesMap = {};
+  for (const r of (recipesR.results || [])) {
+    if (!recipesMap[r.pos_product_id]) {
+      recipesMap[r.pos_product_id] = { name: r.pos_product_name, materials: {} };
+    }
+    recipesMap[r.pos_product_id].materials[r.material_code] = r.qty_per_unit;
+  }
+
+  // Build ratiosMap: { ratio_name: { material_code: factor } }
+  const ratiosMap = {};
+  for (const r of (ratiosR.results || [])) {
+    if (!ratiosMap[r.ratio_name]) ratiosMap[r.ratio_name] = {};
+    ratiosMap[r.ratio_name][r.material_code] = r.factor;
+  }
+
+  // Build vessels: { vessel_code: { name, liquid_type, location, tare_weight_kg } }
+  const vessels = {};
+  for (const v of (vesselsR.results || [])) {
+    vessels[v.vessel_code] = {
+      name: v.vessel_name, liquid_type: v.liquid_type,
+      location: v.location, tare_weight_kg: v.tare_weight_kg,
+    };
+  }
+
+  // Build densities: { material_type: density }
+  const densities = {};
+  for (const d of (densitiesR.results || [])) {
+    densities[d.material_type] = d.density;
+  }
+
+  // Build zones: { zone_name: threshold_seconds }
+  const zones = {};
+  for (const z of (zonesR.results || [])) {
+    zones[z.zone_name] = z.gap_threshold_seconds;
+  }
+
+  // Build fieldZones: { field_name: zone_name }
+  const fieldZones = {};
+  for (const fz of (fieldZonesR.results || [])) {
+    fieldZones[fz.field_name] = fz.zone_name;
+  }
+
+  // Build fieldProducts: { field_name: [pos_product_id, ...] }
+  const fieldProducts = {};
+  for (const fp of (fieldProductsR.results || [])) {
+    if (!fieldProducts[fp.field_name]) fieldProducts[fp.field_name] = [];
+    fieldProducts[fp.field_name].push(fp.pos_product_id);
+  }
+
+  // Build wastageRulesMap: { wastage_item: { states: { state: { label, decomp: { code: factor } } } } }
+  const wastageRulesMap = {};
+  const wastageItemSet = new Set();
+  for (const w of (wastageR.results || [])) {
+    if (!wastageRulesMap[w.wastage_item]) {
+      wastageRulesMap[w.wastage_item] = { states: {} };
+    }
+    if (!wastageRulesMap[w.wastage_item].states[w.wastage_state]) {
+      wastageRulesMap[w.wastage_item].states[w.wastage_state] = {
+        label: w.label || w.wastage_state, uom: w.uom, decomp: {},
+      };
+    }
+    wastageRulesMap[w.wastage_item].states[w.wastage_state].decomp[w.material_code] = w.factor;
+    wastageItemSet.add(w.wastage_item);
+  }
+
+  // wastageItems: summary for UI (which items + states available)
+  const wastageItems = [];
+  for (const item of wastageItemSet) {
+    const states = Object.entries(wastageRulesMap[item].states).map(([s, v]) => ({
+      state: s, label: v.label, uom: v.uom,
+    }));
+    wastageItems.push({ item, states });
+  }
+
+  return {
+    recipes: recipesR.results || [],
+    recipesMap,
+    ratios: ratiosR.results || [],
+    ratiosMap,
+    vessels,
+    densities,
+    zones,
+    fieldZones,
+    fieldProducts,
+    wastageRules: wastageR.results || [],
+    wastageRulesMap,
+    wastageItems,
+  };
+}
+
+/* ── Decompose raw input → raw material totals (reads from D1 intelligence) ── */
+
+function decomposeInput(input, intelligence) {
+  const { ratiosMap, vessels, densities } = intelligence;
+  const totals = {};
+  const add = (code, qty) => {
+    totals[code] = round((totals[code] || 0) + qty, 4);
+  };
+
+  // Helper: process vessel weight entries → litres
+  const processVessels = (entries, liquidType) => {
+    if (!entries || !Array.isArray(entries) || entries.length === 0) return 0;
+    const density = densities[liquidType] || 1.0;
+    let totalLitres = 0;
+    for (const entry of entries) {
+      const vessel = vessels[entry.vessel_code];
+      const tare = vessel ? vessel.tare_weight_kg : 0;
+      const netKg = Math.max(0, (entry.weight_kg || 0) - tare);
+      totalLitres += netKg / density;
+    }
+    return round(totalLitres, 4);
+  };
+
+  // Helper: apply a named decomposition ratio
+  const applyRatio = (ratioName, qty) => {
+    const ratio = ratiosMap[ratioName];
+    if (!ratio || qty <= 0) return;
+    for (const [code, factor] of Object.entries(ratio)) {
+      add(code, qty * factor);
+    }
+  };
+
+  // ── RAW MATERIALS (direct kg/L/units) ──
+  if (input.raw_buffalo_milk) add('HN-RM-200', input.raw_buffalo_milk);
+  if (input.raw_milkmaid) add('HN-RM-209', input.raw_milkmaid);
+  if (input.raw_smp) add('HN-RM-201', input.raw_smp);
+
+  // Sugar: container weighing or direct
+  if (input.sugar_container && Array.isArray(input.sugar_container) && input.sugar_container.length > 0) {
+    const netKg = processVessels(input.sugar_container, 'dry_goods');
+    if (netKg > 0) add('HN-RM-029', netKg);
+  } else if (input.raw_sugar) {
+    add('HN-RM-029', input.raw_sugar);
+  }
+
+  // Tea Powder: container weighing or direct
+  if (input.tea_powder_container && Array.isArray(input.tea_powder_container) && input.tea_powder_container.length > 0) {
+    const netKg = processVessels(input.tea_powder_container, 'dry_goods');
+    if (netKg > 0) add('HN-RM-202', netKg);
+  } else if (input.raw_tea_powder) {
+    add('HN-RM-202', input.raw_tea_powder);
+  }
+
+  if (input.butter) add('HN-RM-213', input.butter);
+  if (input.coffee_powder) add('HN-RM-214', input.coffee_powder);
+  if (input.honey) add('HN-RM-215', input.honey);
+  if (input.lemons) add('HN-RM-065', input.lemons);
+  if (input.oil) add('HN-RM-211', input.oil);
+
+  // ── WATER BOTTLES (kitchen + display) ──
+  const waterTotal = (input.water_bottles_kitchen || 0) + (input.water_bottles_display || 0) + (input.water_bottles || 0);
+  if (waterTotal) add('HN-RM-207', waterTotal);
+
+  // ── BOILED MILK (vessel weight → litres → decompose) ──
+  const boiledMilkL = processVessels(input.boiled_milk_kitchen, 'boiled_milk')
+    + processVessels(input.boiled_milk_counter, 'boiled_milk');
+  if (boiledMilkL > 0) applyRatio('boiled_milk', boiledMilkL);
+
+  // ── TEA DECOCTION (vessel weight → litres → decompose) ──
+  const decoctionL = processVessels(input.tea_decoction_kitchen, 'tea_decoction')
+    + processVessels(input.tea_decoction_counter, 'tea_decoction')
+    + processVessels(input.tea_decoction, 'tea_decoction');
+  if (decoctionL > 0) applyRatio('tea_decoction', decoctionL);
+
+  // ── TEA-SUGAR BOXES ──
+  if (input.tea_sugar_boxes) applyRatio('tea_sugar_box', input.tea_sugar_boxes);
+
+  // ── PLAIN BUNS ──
+  if (input.plain_buns) add('HN-RM-204', input.plain_buns);
+
+  // ── PREPARED BUN MASKA → decompose ──
+  if (input.prepared_bun_maska) applyRatio('bun_maska', input.prepared_bun_maska);
+
+  // ── FRIED ITEMS (kitchen + display, count → raw + oil) ──
+  if (input.raw_cutlets) add('HN-RM-206', input.raw_cutlets);
+  const friedCutlets = (input.fried_cutlets_kitchen || 0) + (input.fried_cutlets_display || 0) + (input.fried_cutlets || 0);
+  if (friedCutlets) {
+    add('HN-RM-206', friedCutlets);
+    const oilRatio = ratiosMap['fried_cutlet_oil'];
+    if (oilRatio) for (const [code, factor] of Object.entries(oilRatio)) add(code, friedCutlets * factor);
+  }
+
+  if (input.raw_samosa) add('HN-RM-210', input.raw_samosa);
+  const friedSamosa = (input.fried_samosa_kitchen || 0) + (input.fried_samosa_display || 0) + (input.fried_samosa || 0);
+  if (friedSamosa) {
+    add('HN-RM-210', friedSamosa);
+    const oilRatio = ratiosMap['fried_samosa_oil'];
+    if (oilRatio) for (const [code, factor] of Object.entries(oilRatio)) add(code, friedSamosa * factor);
+  }
+
+  if (input.raw_cheese_balls) add('HN-RM-212', input.raw_cheese_balls);
+  const friedCheese = (input.fried_cheese_balls_kitchen || 0) + (input.fried_cheese_balls_display || 0) + (input.fried_cheese_balls || 0);
+  if (friedCheese) {
+    add('HN-RM-212', friedCheese);
+    const oilRatio = ratiosMap['fried_cheese_ball_oil'];
+    if (oilRatio) for (const [code, factor] of Object.entries(oilRatio)) add(code, friedCheese * factor);
+  }
+
+  // ── OSMANIA BISCUITS (packets + loose) ──
+  const osmaniaPackets = (input.osmania_packets_kitchen || 0) + (input.osmania_packets_display || 0) + (input.osmania_packets || 0);
+  if (osmaniaPackets) {
+    const packetRatio = ratiosMap['osmania_packet'];
+    if (packetRatio && packetRatio['HN-RM-205']) {
+      add('HN-RM-205', osmaniaPackets * packetRatio['HN-RM-205']);
+    } else {
+      add('HN-RM-205', osmaniaPackets * 24); // fallback 24 per packet
+    }
+  }
+  const osmaniaLoose = (input.osmania_loose_display || 0) + (input.osmania_loose || 0);
+  if (osmaniaLoose) add('HN-RM-205', osmaniaLoose);
+
+  // ── NILOUFER BOXES ──
+  const nilouferTotal = (input.niloufer_kitchen || 0) + (input.niloufer_display || 0) + (input.niloufer_storage || 0);
+  if (nilouferTotal) add('HN-RM-208', nilouferTotal);
+
+  return totals;
+}
+
+/* ── Gap adjustment: compensate for items counted at different times ── */
+
+async function adjustForGaps(closingStock, fieldTimestamps, intelligence, creds, cfg) {
+  const { zones, fieldZones, fieldProducts, recipesMap } = intelligence;
+  const adjustments = {};
+  const adjusted = { ...closingStock };
+
+  // Find the latest timestamp (effective submission time)
+  let latestTs = 0;
+  for (const isoStr of Object.values(fieldTimestamps)) {
+    const t = new Date(isoStr).getTime();
+    if (t > latestTs) latestTs = t;
+  }
+  if (latestTs === 0) return { closingStock: adjusted, adjustments };
+
+  // Build gap queries
+  const gapQueries = [];
+  for (const [fieldId, isoStr] of Object.entries(fieldTimestamps)) {
+    const productIds = fieldProducts[fieldId];
+    if (!productIds || productIds.length === 0) continue;
+
+    const fieldTs = new Date(isoStr).getTime();
+    const gapSeconds = (latestTs - fieldTs) / 1000;
+    const zone = fieldZones[fieldId] || 'kitchen';
+    const threshold = zones[zone] || 600;
+
+    if (gapSeconds >= threshold) {
+      gapQueries.push({
+        fieldId, gapSeconds: Math.round(gapSeconds), productIds,
+        fromUTC: new Date(fieldTs).toISOString().slice(0, 19).replace('T', ' '),
+        toUTC: new Date(latestTs).toISOString().slice(0, 19).replace('T', ' '),
+      });
+    }
+  }
+
+  if (gapQueries.length === 0) return { closingStock: adjusted, adjustments };
+
+  // Execute gap queries in parallel
+  const gapResults = await Promise.all(
+    gapQueries.map(gq =>
+      fetchGapSalesForProducts(creds, cfg, gq.productIds, gq.fromUTC, gq.toUTC)
+        .then(sales => ({ ...gq, sales }))
+        .catch(e => ({ ...gq, sales: {}, error: e.message }))
+    )
+  );
+
+  // Decompose gap sales into raw materials and subtract from closing
+  for (const gq of gapResults) {
+    const fieldAdj = { gapSeconds: gq.gapSeconds, productsSold: {}, rawAdjusted: {} };
+
+    for (const [pid, salesData] of Object.entries(gq.sales)) {
+      const recipe = recipesMap[parseInt(pid)];
+      if (!recipe || salesData.qty <= 0) continue;
+
+      fieldAdj.productsSold[pid] = { name: salesData.name, qty: salesData.qty };
+
+      for (const [code, qtyPerUnit] of Object.entries(recipe.materials)) {
+        const rawQty = round(salesData.qty * qtyPerUnit, 4);
+        if (adjusted[code] !== undefined) {
+          adjusted[code] = round(adjusted[code] - rawQty, 4);
+          if (adjusted[code] < 0) adjusted[code] = 0;
+        }
+        fieldAdj.rawAdjusted[code] = round((fieldAdj.rawAdjusted[code] || 0) + rawQty, 4);
+      }
+    }
+
+    if (Object.keys(fieldAdj.productsSold).length > 0) {
+      adjustments[gq.fieldId] = fieldAdj;
+    }
+  }
+
+  return { closingStock: adjusted, adjustments };
+}
+
+/* ── Calculate expected consumption: POS sales × recipes ── */
+
+function calculateExpected(posSales, recipesMap) {
+  const expected = {};
+  if (!posSales || !posSales.items) return expected;
+
+  for (const item of posSales.items) {
+    const recipe = recipesMap[item.productId];
+    if (!recipe) continue;
+    for (const [code, qtyPerUnit] of Object.entries(recipe.materials)) {
+      expected[code] = round((expected[code] || 0) + item.qty * qtyPerUnit, 4);
+    }
+  }
+  return expected;
+}
+
+/* ── Decompose wastage items → raw material equivalents ── */
+
+function decomposeWastage(wastageItems, wastageRulesMap) {
+  const wastedRaw = {};
+  if (!wastageItems || !Array.isArray(wastageItems)) return wastedRaw;
+
+  for (const w of wastageItems) {
+    if (!w.item || !w.state || !w.qty) continue;
+    const rule = wastageRulesMap[w.item];
+    if (!rule || !rule.states[w.state]) continue;
+
+    for (const [code, factor] of Object.entries(rule.states[w.state].decomp)) {
+      wastedRaw[code] = round((wastedRaw[code] || 0) + w.qty * factor, 4);
+    }
+  }
+  return wastedRaw;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -831,6 +1319,34 @@ async function fetchPOSSales(creds, cfg, fromOdoo, toOdoo) {
     revenue: round(totalRevenue),
     items: Object.values(grouped).sort((a, b) => b.amount - a.amount),
   };
+}
+
+/* ── Gap Sales for Products (used by gap adjustment) ── */
+
+async function fetchGapSalesForProducts(creds, cfg, productIds, fromOdoo, toOdoo) {
+  const orderIds = await odooCall(creds.uid, creds.key,
+    'pos.order', 'search',
+    [[['config_id', 'in', cfg.pos_configs],
+      ['date_order', '>=', fromOdoo],
+      ['date_order', '<=', toOdoo],
+      ['state', 'in', ['paid', 'done', 'invoiced', 'posted']]]]
+  );
+
+  if (!orderIds || orderIds.length === 0) return {};
+
+  const lines = await odooCall(creds.uid, creds.key,
+    'pos.order.line', 'search_read',
+    [[['order_id', 'in', orderIds], ['product_id', 'in', productIds]]],
+    { fields: ['product_id', 'qty'] }
+  );
+
+  const sales = {};
+  for (const line of lines) {
+    const pid = line.product_id[0];
+    if (!sales[pid]) sales[pid] = { name: line.product_id[1], qty: 0 };
+    sales[pid].qty += line.qty;
+  }
+  return sales;
 }
 
 /* ── Stock Transfers ── */
@@ -1014,6 +1530,6 @@ async function syncStockToOdoo(creds, cfg, counts, DB) {
 
 /* ━━━ Utility ━━━ */
 
-function round(v, d = 2) {
+function round(v, d = 4) {
   return Math.round(v * Math.pow(10, d)) / Math.pow(10, d);
 }

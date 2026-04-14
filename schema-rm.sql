@@ -126,6 +126,96 @@ CREATE TABLE IF NOT EXISTS rm_ops_log (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- ============================================================
+-- INTELLIGENCE TABLES (data-driven recipes, decomposition, vessels, zones, wastage)
+-- Logic lives in code; data lives here — deploy brand by brand
+-- ============================================================
+
+-- POS Product → Raw Material recipes (qty per 1 unit sold)
+CREATE TABLE IF NOT EXISTS rm_recipes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pos_product_id INTEGER NOT NULL,
+  pos_product_name TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  material_code TEXT NOT NULL,
+  qty_per_unit REAL NOT NULL,
+  unit TEXT,
+  notes TEXT,
+  UNIQUE(pos_product_id, material_code, brand)
+);
+
+-- Decomposition ratios: intermediate product → raw materials
+-- e.g., 1L boiled_milk = 0.957L buffalo_milk + 0.02392kg SMP + 0.01914kg condensed_milk
+CREATE TABLE IF NOT EXISTS rm_decomposition_ratios (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ratio_name TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  material_code TEXT NOT NULL,
+  factor REAL NOT NULL,
+  UNIQUE(ratio_name, brand, material_code)
+);
+
+-- Physical vessels with tare weights for vessel weighing
+CREATE TABLE IF NOT EXISTS rm_vessels (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vessel_code TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  vessel_name TEXT NOT NULL,
+  liquid_type TEXT,
+  location TEXT,
+  tare_weight_kg REAL NOT NULL,
+  UNIQUE(vessel_code, brand)
+);
+
+-- Density constants: kg per litre for weight→volume conversion
+CREATE TABLE IF NOT EXISTS rm_density_constants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  material_type TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  density REAL NOT NULL,
+  UNIQUE(material_type, brand)
+);
+
+-- Zone-based gap adjustment thresholds
+CREATE TABLE IF NOT EXISTS rm_zones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  zone_name TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  gap_threshold_seconds INTEGER NOT NULL,
+  UNIQUE(zone_name, brand)
+);
+
+-- Maps count input fields to zones
+CREATE TABLE IF NOT EXISTS rm_field_zones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  field_name TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  zone_name TEXT NOT NULL,
+  UNIQUE(field_name, brand)
+);
+
+-- Maps count fields to POS products affected by gap sales
+CREATE TABLE IF NOT EXISTS rm_field_products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  field_name TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  pos_product_id INTEGER NOT NULL,
+  UNIQUE(field_name, brand, pos_product_id)
+);
+
+-- Wastage decomposition: item + state → raw material breakdown
+CREATE TABLE IF NOT EXISTS rm_wastage_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  wastage_item TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  wastage_state TEXT NOT NULL,
+  material_code TEXT NOT NULL,
+  factor REAL NOT NULL,
+  label TEXT,
+  uom TEXT,
+  UNIQUE(wastage_item, brand, wastage_state, material_code)
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_products_brand ON rm_products(brand);
 CREATE INDEX IF NOT EXISTS idx_products_category ON rm_products(category);
@@ -137,3 +227,9 @@ CREATE INDEX IF NOT EXISTS idx_daily_prices_code ON rm_daily_prices(product_code
 CREATE INDEX IF NOT EXISTS idx_settlements_brand ON rm_settlements(brand, settled_at);
 CREATE INDEX IF NOT EXISTS idx_tracked_items_brand ON rm_tracked_items(brand, is_active);
 CREATE INDEX IF NOT EXISTS idx_ops_log_brand ON rm_ops_log(brand, created_at);
+CREATE INDEX IF NOT EXISTS idx_recipes_brand ON rm_recipes(brand, pos_product_id);
+CREATE INDEX IF NOT EXISTS idx_decomp_brand ON rm_decomposition_ratios(brand, ratio_name);
+CREATE INDEX IF NOT EXISTS idx_vessels_brand ON rm_vessels(brand);
+CREATE INDEX IF NOT EXISTS idx_field_zones_brand ON rm_field_zones(brand, field_name);
+CREATE INDEX IF NOT EXISTS idx_field_products_brand ON rm_field_products(brand, field_name);
+CREATE INDEX IF NOT EXISTS idx_wastage_brand ON rm_wastage_rules(brand, wastage_item);
