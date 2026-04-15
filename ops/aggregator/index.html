@@ -12,7 +12,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .hdr h1{font-size:18px;color:#ff6b35}
 .hdr .sub{font-size:10px;color:#555}
 .hdr button{background:#ff6b35;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:11px}
-.status-bar{display:flex;gap:12px;align-items:center;margin-bottom:10px;padding:6px 10px;background:#0e0e1e;border-radius:6px;border:1px solid #1a1a2e;font-size:11px}
+.status-bar{display:flex;gap:12px;align-items:center;margin-bottom:10px;padding:6px 10px;background:#0e0e1e;border-radius:6px;border:1px solid #1a1a2e;font-size:11px;flex-wrap:wrap}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#4caf50;flex-shrink:0}
 .status-dot.stale{background:#ff9800}.status-dot.dead{background:#f44336}
 .status-bar .si{color:#666}
@@ -58,13 +58,16 @@ tr:hover{background:#111128}
 .tab.active{background:#16213e;border-bottom-color:#16213e;color:#ff6b35}
 .platform{display:none}.platform.active{display:block}
 .section{background:#111122;border:1px solid #1e1e3a;border-radius:8px;margin-bottom:10px;overflow:hidden}
-.section-hdr{background:#161630;padding:7px 12px;font-size:11px;font-weight:700;display:flex;justify-content:space-between}
+.section-hdr{background:#161630;padding:7px 12px;font-size:11px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .section-hdr .src{font-size:9px;color:#444;font-weight:400}
+.section-hdr .age{font-size:9px;color:#555;font-weight:400;margin-left:auto}
 .section-body{padding:8px 12px}
 .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px}
 .mcard{background:#0d0d1a;border:1px solid #1a1a2e;border-radius:4px;padding:6px 8px}
 .mcard .label{font-size:9px;color:#666;margin-bottom:2px}.mcard .value{font-size:14px;font-weight:700}
-.good{color:#4caf50}.warn{color:#ff9800}.bad{color:#f44336}
+.good{color:#4caf50}.warn{color:#ff9800}.bad{color:#f44336}.muted{color:#555}
+/* lag notice */
+.lag-note{font-size:10px;color:#555;padding:6px 12px 0;font-style:italic}
 </style>
 </head>
 <body>
@@ -76,10 +79,10 @@ tr:hover{background:#111128}
 
   <div class="status-bar" id="statusBar">
     <div class="status-dot" id="statusDot"></div>
-    <span class="si">Last capture:</span><span class="sv" id="statusCapture">—</span>
-    <span class="si" style="margin-left:8px">Swiggy:</span><span class="sv" id="statusSwiggy">—</span>
-    <span class="si" style="margin-left:8px">Zomato:</span><span class="sv" id="statusZomato">—</span>
-    <span class="si" style="margin-left:8px">Total orders:</span><span class="sv" id="statusTotal">—</span>
+    <span class="si">Pipeline:</span><span class="sv" id="statusCapture">—</span>
+    <span class="si" style="margin-left:8px">Swiggy last order:</span><span class="sv" id="statusSwiggy">—</span>
+    <span class="si" style="margin-left:8px">Zomato last order:</span><span class="sv" id="statusZomato">—</span>
+    <span class="si" style="margin-left:8px">Orders (all-time):</span><span class="sv" id="statusTotal">—</span>
   </div>
 
   <div class="filters" id="filters">
@@ -107,20 +110,37 @@ tr:hover{background:#111128}
   </div>
 
   <div class="platform active" id="p-swiggy">
-    <div class="section"><div class="section-hdr">Funnel & Customers<span class="src">Business Reports (may lag 48h)</span></div><div class="section-body"><div class="mgrid" id="s-fun"></div></div></div>
+    <div class="section">
+      <div class="section-hdr">Sales Summary<span class="src">Business Reports</span><span class="age" id="sw-age"></span></div>
+      <div class="section-body"><div class="mgrid" id="s-sales"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Funnel & Customers<span class="src">Business Reports — lags 24-48h</span><span class="age" id="sw-age2"></span></div>
+      <div class="lag-note" id="s-fun-lag"></div>
+      <div class="section-body"><div class="mgrid" id="s-fun"></div></div>
+    </div>
     <div class="section"><div class="section-hdr">Ratings & Complaints<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-rat"></div></div></div>
     <div class="section"><div class="section-hdr">Ads<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ads"></div></div></div>
     <div class="section"><div class="section-hdr">Operations<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ops"></div></div></div>
     <div class="section"><div class="section-hdr">Menu Health<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-menu"></div></div></div>
   </div>
   <div class="platform" id="p-zomato">
-    <div class="section"><div class="section-hdr">Live Tracking (Today)<span class="src">Zomato Live Tracking — accurate</span></div><div class="section-body"><div class="mgrid" id="z-live"></div></div></div>
-    <div class="section"><div class="section-hdr">Customer Funnel<span class="src">Live Tracking</span></div><div class="section-body"><div class="mgrid" id="z-fun"></div></div></div>
-    <div class="section"><div class="section-hdr">Weekly Trends<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="z-wk"></div></div></div>
+    <div class="section">
+      <div class="section-hdr">Live Tracking<span class="src">Zomato Live Tracking — snapshot at capture time, not running total</span><span class="age" id="zm-age"></span></div>
+      <div class="section-body"><div class="mgrid" id="z-live"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Customer Funnel<span class="src">Live Tracking</span></div>
+      <div class="section-body"><div class="mgrid" id="z-fun"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-hdr">Weekly Trends<span class="src">Business Reports — requires page to fully load</span><span class="age" id="zm-biz-age"></span></div>
+      <div class="section-body"><div class="mgrid" id="z-wk"></div></div>
+    </div>
   </div>
   <div class="platform" id="p-finance">
-    <div class="section"><div class="section-hdr">Swiggy HE Payout<span class="src">Finance Page</span></div><div class="section-body"><div class="mgrid" id="f-he"></div></div></div>
-    <div class="section"><div class="section-hdr">Swiggy NCH Payout<span class="src">Finance Page</span></div><div class="section-body"><div class="mgrid" id="f-nch"></div></div></div>
+    <div class="section"><div class="section-hdr">Swiggy HE — Weekly Payout<span class="src">Finance Page</span></div><div class="section-body"><div class="mgrid" id="f-he"></div></div></div>
+    <div class="section"><div class="section-hdr">Swiggy NCH — Weekly Payout<span class="src">Finance Page</span></div><div class="section-body"><div class="mgrid" id="f-nch"></div></div></div>
   </div>
 </div>
 
@@ -129,11 +149,9 @@ const API='/api/aggregator-pulse';
 const KEY='MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
 const LS_KEY='hn_agg_filter';
 
-// Restore saved filter (localStorage → URL hash → default 'yesterday')
 let dateFilter = localStorage.getItem(LS_KEY) || (location.hash.slice(1) || 'yesterday');
 if(!['today','yesterday','week','month','all'].includes(dateFilter)) dateFilter='yesterday';
 
-// Mark active button
 function setFilter(f){
   dateFilter=f;
   localStorage.setItem(LS_KEY,f);
@@ -145,7 +163,6 @@ function setFilter(f){
 document.querySelectorAll('.fbtn').forEach(b=>{
   b.onclick=()=>setFilter(b.dataset.d);
 });
-// Set initial active state
 document.querySelectorAll('.fbtn').forEach(b=>b.classList.toggle('active',b.dataset.d===dateFilter));
 
 function showP(p,el){
@@ -153,6 +170,14 @@ function showP(p,el){
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
   document.getElementById('p-'+p).classList.add('active');
   el.classList.add('active');
+}
+
+// Extract just the time from Swiggy's "15th Apr | 10:32 AM" format
+function extractTime(s){
+  if(!s) return '—';
+  s = String(s).trim();
+  if(s.includes('|')) return s.split('|')[1]?.trim() || s;
+  return s;
 }
 
 async function load(){
@@ -168,10 +193,10 @@ async function load(){
     const fin=await finR.json();
     const stats=await statsR.json();
 
-    renderStatus(stats, ord);
+    renderStatus(stats, ord, lat);
     renderCards(ord);
     renderOrders(ord.orders||[]);
-    renderOps(lat.outlets||[]);
+    renderOps(lat.outlets||[], lat.last_snapshot_at);
     renderFinance(fin.finance||[]);
     document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
   }catch(e){
@@ -181,47 +206,38 @@ async function load(){
   }
 }
 
-function renderStatus(stats, ord){
-  // Find most recent capture across all platforms
+function renderStatus(stats, ord, lat){
   const allSnaps = stats.snapshots||[];
   const allOrders = stats.orders||[];
-  let lastCapture = null;
-  for(const s of allSnaps){
-    if(!lastCapture||s.last>lastCapture) lastCapture=s.last;
-  }
-  for(const o of allOrders){
-    if(!lastCapture||o.last>lastCapture) lastCapture=o.last;
-  }
 
-  const swiggySnap = allSnaps.find(s=>s.platform==='swiggy');
-  const zomatoSnap = allSnaps.find(s=>s.platform==='zomato')||allSnaps.find(s=>s.platform==='zomato');
-
-  const totalOrders = allOrders.reduce((a,b)=>a+(b.orders||0),0);
-
-  // Per-platform last ORDER time — use actual order_time from orders list (sorted newest first)
-  // This shows WHEN the last order was placed, not when the extension captured it
-  const allOrderRows = ord.orders || [];
-  const swLastOrder = allOrderRows.find(o=>o.platform==='swiggy');
-  const zmLastOrder = allOrderRows.find(o=>o.platform==='zomato');
-
-  // Pipeline staleness uses captured_at (is the extension alive?)
-  let pipelineLast = null;
-  for(const s of allSnaps){
-    if(!pipelineLast||s.last>pipelineLast) pipelineLast=s.last;
-  }
+  // Pipeline health: last time the extension pushed ANYTHING (snapshot OR order)
+  let pipelineLast = lat.last_snapshot_at || null;
   for(const o of allOrders){
     if(!pipelineLast||o.last>pipelineLast) pipelineLast=o.last;
   }
 
+  const totalOrders = allOrders.reduce((a,b)=>a+(b.orders||0),0);
+
+  // Per-platform last order time from the filtered orders list (sorted newest first)
+  // Use extractTime() to handle Swiggy's "15th Apr | 10:32 AM" format
+  const allOrderRows = ord.orders || [];
+  const swLastOrder = allOrderRows.find(o=>o.platform==='swiggy');
+  const zmLastOrder = allOrderRows.find(o=>o.platform==='zomato');
+
   const dot=document.getElementById('statusDot');
   const minsAgo = pipelineLast ? Math.round((Date.now()-new Date(pipelineLast).getTime())/60000) : 9999;
   dot.className='status-dot'+(minsAgo>120?' dead':minsAgo>30?' stale':'');
-  document.getElementById('statusCapture').textContent = pipelineLast ? fmtAgo(pipelineLast) : '—';
+  document.getElementById('statusCapture').textContent = pipelineLast ? fmtAgo(pipelineLast) : 'no data';
 
-  // Show last order time per platform (e.g. "8:18 PM") — actual order placed time
-  document.getElementById('statusSwiggy').textContent = swLastOrder ? (swLastOrder.order_time||'—') : '—';
-  document.getElementById('statusZomato').textContent = zmLastOrder ? (zmLastOrder.order_time||'—') : '—';
-  document.getElementById('statusTotal').textContent = totalOrders+' all-time';
+  // For Swiggy, show date+time since the stored format is "15th Apr | 10:32 AM"
+  // extractTime strips the date prefix and shows just the time
+  document.getElementById('statusSwiggy').textContent = swLastOrder
+    ? (extractTime(swLastOrder.order_time) + (swLastOrder.order_date ? ' · '+swLastOrder.order_date : ''))
+    : '—';
+  document.getElementById('statusZomato').textContent = zmLastOrder
+    ? (extractTime(zmLastOrder.order_time) + (zmLastOrder.order_date ? ' · '+zmLastOrder.order_date : ''))
+    : '—';
+  document.getElementById('statusTotal').textContent = totalOrders;
 }
 
 function fmtAgo(isoStr){
@@ -259,7 +275,6 @@ function renderCards(data){
 
 function cleanStr(s){
   if(!s) return '';
-  // Replace non-breaking spaces and other whitespace variants
   return String(s).replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
 }
 
@@ -279,10 +294,11 @@ function renderOrders(orders){
       :'<span class="plat-tag zm">Zomato</span>';
     const items=cleanStr(o.items);
     const issues=cleanStr(o.issues);
-    const time=cleanStr(o.order_time);
+    // Fix: extract just the time portion for Swiggy orders stored as "15th Apr | 10:32 AM"
+    const time=extractTime(cleanStr(o.order_time));
     return `<tr>
       <td>${o.order_date||'—'}</td>
-      <td style="white-space:nowrap;font-size:11px">${time||'—'}</td>
+      <td style="white-space:nowrap;font-size:11px">${time}</td>
       <td>${platTag}</td>
       <td><strong>${outlet}</strong></td>
       <td>${cleanStr(o.customer_name)||'—'}</td>
@@ -295,19 +311,56 @@ function renderOrders(orders){
   }).join('');
 }
 
-function renderOps(outlets){
+function renderOps(outlets, lastSnapshotAt){
   // CRITICAL: keep Swiggy and Zomato metrics SEPARATE — never merge platforms
   const sw={}, zm={};
+  const swAge={}, zmAge={};
+
   for(const o of outlets){
-    const target = o.platform==='zomato' ? zm : sw;
-    for(const[,md]of Object.entries(o.metrics||{})){
-      if(md&&typeof md.data==='object') Object.assign(target, md.data);
+    const isSw = o.platform!=='zomato';
+    const target = isSw ? sw : zm;
+    const ageMap = isSw ? swAge : zmAge;
+    for(const[mtype,md]of Object.entries(o.metrics||{})){
+      if(md&&typeof md.data==='object'){
+        Object.assign(target, md.data);
+        ageMap[mtype] = md.captured_at;
+      }
     }
   }
 
-  // ── SWIGGY ──────────────────────────────────────────────────────────────────
+  // Age labels
+  const swReportsAge = swAge['reports_swiggy'];
+  const zmLiveAge = zmAge['live_tracking'];
+  const zmBizAge = zmAge['biz_reports'];
+
+  const ageLabel = (ts) => ts ? '· ' + fmtAgo(ts) : (lastSnapshotAt ? '· ' + fmtAgo(lastSnapshotAt) : '');
+  const setAge = (id, ts) => { const el=document.getElementById(id); if(el) el.textContent=ageLabel(ts); };
+
+  setAge('sw-age', swReportsAge);
+  setAge('sw-age2', swReportsAge);
+  setAge('zm-age', zmLiveAge);
+  setAge('zm-biz-age', zmBizAge);
+
+  // ── SWIGGY Sales Summary (rpt_ fields — captured but previously not shown) ──
+  rg('s-sales',[
+    m('Net Sales',sw.rpt_net_sales,'₹'),
+    m('Delivered Orders',sw.rpt_delivered_orders),
+    m('Net AOV',sw.rpt_net_aov,'₹'),
+    m('Cancelled Orders',sw.rpt_cancelled_orders,'','w'),
+    m('Cancelled Loss',sw.rpt_cancelled_loss,'₹','w'),
+    m('Date Range',sw.date_range),
+  ]);
+
+  // ── SWIGGY Funnel — check if all zeros (means data not available yet, 24-48h lag) ──
+  const funnelHasData = [sw.impressions,sw.menu_opens,sw.cart_builds,sw.orders_placed].some(v=>v&&parseFloat(v)>0);
+  const funLag = document.getElementById('s-fun-lag');
+  if(funLag) funLag.textContent = funnelHasData ? '' : '⏳ Swiggy funnel data lags 24-48h — showing zeros because today\'s data isn\'t available yet.';
+
   rg('s-fun',[
-    m('Impressions',sw.impressions),m('Menu Opens',sw.menu_opens),m('Cart Builds',sw.cart_builds),m('Orders Placed',sw.orders_placed),
+    m('Impressions', funnelHasData?sw.impressions:null),
+    m('Menu Opens',  funnelHasData?sw.menu_opens:null),
+    m('Cart Builds', funnelHasData?sw.cart_builds:null),
+    m('Orders Placed',funnelHasData?sw.orders_placed:null),
     m('New Cust',sw.new_customers),m('Repeat',sw.repeat_customers),m('Dormant',sw.dormant_customers),
     m('New Cust %',sw.new_cust_order_pct,'','','%'),m('Repeat %',sw.repeat_cust_order_pct,'','','%'),
   ]);
@@ -324,16 +377,16 @@ function renderOps(outlets){
   rg('s-ops',[
     m('Online %',sw.online_availability,'',parseFloat(sw.online_availability)>=95?'g':'b','%'),
     m('Prep Time',sw.kitchen_prep_time,'','',' min'),m('MFR',sw.mfr_accuracy,'','','%'),
-    m('Delayed >10m',sw.delayed_10min,'','w','%'),m('Date Range',sw.date_range),
+    m('Delayed >10m',sw.delayed_10min,'','w','%'),
   ]);
   rg('s-menu',[
     m('Menu Score',sw.menu_score,'',parseFloat(sw.menu_score)>=50?'':'b','/100'),
     m('Photos',sw.items_with_photos,'','g','%'),m('Descriptions',sw.items_with_desc,'','g','%'),
   ]);
 
-  // ── ZOMATO (Combined HE+NCH — platform shows merged data) ──────────────────
+  // ── ZOMATO — Live Tracking is a snapshot at capture time, NOT running total ──
   rg('z-live',[
-    m('Sales',zm.sales,'₹'),m('Orders',zm.delivered_orders),m('AOV',zm.aov,'₹'),
+    m('Sales (snapshot)',zm.sales,'₹'),m('Orders (snapshot)',zm.delivered_orders),m('AOV',zm.aov,'₹'),
     m('Rejected',zm.rejected_pct,'','w','%'),m('Delayed',zm.delayed_pct,'','w','%'),
     m('Poor Rated',zm.poor_rated_pct,'','w','%'),m('Lost Sales',zm.lost_sales,'₹','w'),
     m('HE Sales',zm.he_sales,'₹'),m('NCH Sales',zm.nch_sales,'₹'),
@@ -350,6 +403,12 @@ function renderOps(outlets){
 }
 
 function renderFinance(finance){
+  // Clean ₹ symbol from values that have it embedded (e.g. "₹108.94" → shows correctly)
+  function fv(v){
+    if(v==null||v==='') return null;
+    // Values like "-₹35.92" or "₹108.94" — return as-is, already display-ready
+    return String(v);
+  }
   let heSet=false,nchSet=false;
   for(const f of finance){
     const d=f.data||{};
@@ -357,9 +416,14 @@ function renderFinance(finance){
     const id=brand==='he'?'f-he':brand==='nch'?'f-nch':null;
     if(!id)continue;
     rg(id,[
-      m('Orders',d.order_count),m('Customer Paid',d.customer_paid,'₹'),m('Fees',d.total_fees),
-      m('Complaint Chg',d.complaint_charges),m('Taxes',d.total_taxes),m('Other Charges',d.other_charges),
-      m('Net Payout',d.net_payout),m('Payout Date',d.payout_date),
+      m('Orders',d.order_count||d.total_orders),
+      m('Customer Paid',fv(d.customer_paid),'₹'),
+      m('Platform Fees',fv(d.total_fees)),
+      m('Complaint Chg',fv(d.complaint_charges)),
+      m('Taxes',fv(d.total_taxes)),
+      m('Other Charges',fv(d.other_charges)),
+      m('Net Payout',fv(d.net_payout)),
+      m('Payout Date',d.payout_date),
     ]);
     if(brand==='he') heSet=true;
     if(brand==='nch') nchSet=true;

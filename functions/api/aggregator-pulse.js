@@ -194,15 +194,19 @@ async function handleGet(db, url, headers) {
 
   // --- LATEST: operational metrics ---
   if (action === 'latest') {
+    // No 24h filter — always return latest snapshot per metric_type regardless of age
+    // Exclude junk API captures (config payloads, heartbeats, session alerts)
+    const JUNK_TYPES = ["'heartbeat'","'api_finance'","'api_config'","'api_orders'","'alert_session_redirect'","'orders'","'business-metrics'","'live-tracking'","'business-reports'"];
     const { results } = await db.prepare(`
       SELECT a.* FROM aggregator_snapshots a
       INNER JOIN (
         SELECT platform, brand, metric_type, MAX(id) as max_id
         FROM aggregator_snapshots
-        WHERE captured_at > datetime('now', '-24 hours')
+        WHERE platform NOT IN ('system')
+          AND metric_type NOT IN (${JUNK_TYPES.join(',')})
         GROUP BY platform, brand, metric_type
       ) b ON a.id = b.max_id
-      ORDER BY a.platform, a.brand
+      ORDER BY a.captured_at DESC
     `).all();
 
     const grouped = {};
@@ -212,7 +216,10 @@ async function handleGet(db, url, headers) {
       grouped[key].metrics[row.metric_type] = { data: JSON.parse(row.data), captured_at: row.captured_at };
     }
 
-    return new Response(JSON.stringify({ ok: true, outlets: Object.values(grouped) }), { headers });
+    // Find overall last snapshot time across all platforms
+    const lastAt = results.length ? results[0].captured_at : null;
+
+    return new Response(JSON.stringify({ ok: true, outlets: Object.values(grouped), last_snapshot_at: lastAt }), { headers });
   }
 
   // --- STATS ---
