@@ -1019,61 +1019,54 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB, env) {
   if (picking.state === 'cancel') return json({ error: 'Receipt is cancelled' }, 400);
   if (picking.state !== 'assigned') return json({ error: `Receipt state "${picking.state}" cannot be validated` }, 400);
 
-  // Detect field names — both changed between Odoo versions:
-  //
-  //   Done-qty field on stock.move.line:
-  //     Odoo 15-  → 'qty_done'
-  //     Odoo 16+  → 'quantity'
-  //
-  //   Reserved-qty field on stock.move.line:
-  //     Odoo 15-  → 'product_uom_qty'
-  //     Odoo 16+  → 'reserved_uom_qty'
-  //
-  // action_set_quantities_to_reservation was introduced in Odoo 16 and removed in
-  // Odoo 18/19 — confirmed absent on this instance. We write done qty directly.
+  // Detect done-qty field name on stock.move.line.
+  // 'product_uom_qty' / 'reserved_uom_qty' on stock.move.line have been renamed
+  // multiple times across Odoo versions and are unreliable — DO NOT read from them.
+  // Instead: read product_uom_qty from the parent stock.move (stable across all versions),
+  // then write done qty directly to each move line.
   const mlFieldDef = await odooCall(sysCreds.uid, sysCreds.key,
-    'stock.move.line', 'fields_get',
-    [['quantity', 'qty_done', 'reserved_uom_qty', 'product_uom_qty']],
-    { attributes: ['type'] });
-  const doneField     = mlFieldDef.quantity      ? 'quantity'      : 'qty_done';
-  const reservedField = mlFieldDef.reserved_uom_qty ? 'reserved_uom_qty' : 'product_uom_qty';
+    'stock.move.line', 'fields_get', [['quantity', 'qty_done']], { attributes: ['type'] });
+  const doneField = mlFieldDef.quantity ? 'quantity' : 'qty_done';
 
-  // Read all pending move lines for this picking
-  const moveLines = await odooCall(sysCreds.uid, sysCreds.key,
-    'stock.move.line', 'search_read',
+  // Read stock.move records (demand qty lives here, stable in all Odoo versions)
+  const moves = await odooCall(sysCreds.uid, sysCreds.key,
+    'stock.move', 'search_read',
     [[['picking_id', '=', picking_id], ['state', 'not in', ['done', 'cancel']]]],
-    { fields: ['id', reservedField, 'lot_id', 'product_id'] }
+    { fields: ['id', 'product_uom_qty', 'move_line_ids', 'product_id'] }
   );
 
-  // For each line: copy reserved → done qty, auto-create lot if product is tracked
-  for (const ml of moveLines) {
-    const writeVals = {};
-    const reservedQty = ml[reservedField] || 0;
-
-    // Set done qty = reserved qty (receive full delivery)
-    if (reservedQty > 0) {
-      writeVals[doneField] = reservedQty;
-    }
-
-    // Auto-create lot/serial for tracked products that don't have one yet
-    if (!ml.lot_id) {
-      const prodInfo = await odooCall(sysCreds.uid, sysCreds.key,
-        'product.product', 'read', [[ml.product_id[0]]],
-        { fields: ['tracking'] }
-      );
-      if (prodInfo[0]?.tracking && prodInfo[0].tracking !== 'none') {
-        const lotName = `RCV-${picking.name.replace(/\//g, '-')}-${ml.id}`;
-        const lotId = await odooCall(sysCreds.uid, sysCreds.key,
-          'stock.lot', 'create',
-          [{ name: lotName, product_id: ml.product_id[0], company_id: cfg.company_id }]
-        );
-        writeVals.lot_id = lotId;
-      }
-    }
-
-    if (Object.keys(writeVals).length > 0) {
+  // Write done qty on every move line, then handle lots
+  const allMlIds = [];
+  for (const mv of moves) {
+    if (!mv.move_line_ids?.length) continue;
+    allMlIds.push(...mv.move_line_ids);
+    // Single line (typical): full qty. Multi-line (multi-location): split evenly.
+    const qtyPerLine = mv.product_uom_qty / mv.move_line_ids.length;
+    for (const mlId of mv.move_line_ids) {
       await odooCall(sysCreds.uid, sysCreds.key,
-        'stock.move.line', 'write', [[ml.id], writeVals]);
+        'stock.move.line', 'write', [[mlId], { [doneField]: qtyPerLine }]);
+    }
+  }
+
+  // Auto-create lot/serial numbers for tracked products that have no lot set yet
+  if (allMlIds.length > 0) {
+    const moveLines = await odooCall(sysCreds.uid, sysCreds.key,
+      'stock.move.line', 'read', [allMlIds],
+      { fields: ['id', 'lot_id', 'product_id'] }
+    );
+    for (const ml of moveLines) {
+      if (!ml.lot_id) {
+        const prodInfo = await odooCall(sysCreds.uid, sysCreds.key,
+          'product.product', 'read', [[ml.product_id[0]]], { fields: ['tracking'] });
+        if (prodInfo[0]?.tracking && prodInfo[0].tracking !== 'none') {
+          const lotName = `RCV-${picking.name.replace(/\//g, '-')}-${ml.id}`;
+          const lotId = await odooCall(sysCreds.uid, sysCreds.key,
+            'stock.lot', 'create',
+            [{ name: lotName, product_id: ml.product_id[0], company_id: cfg.company_id }]);
+          await odooCall(sysCreds.uid, sysCreds.key,
+            'stock.move.line', 'write', [[ml.id], { lot_id: lotId }]);
+        }
+      }
     }
   }
 
