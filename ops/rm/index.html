@@ -297,33 +297,25 @@
       <!-- Stat cards -->
       <div class="grid grid-cols-3 gap-2 mb-4">
         <div class="card text-center">
-          <p class="text-[10px] text-white/30 uppercase tracking-wider">Checked</p>
+          <p class="text-[10px] text-white/30 uppercase tracking-wider">Tracked</p>
           <p id="priceStatChecked" class="text-xl font-bold mt-0.5">--</p>
         </div>
         <div class="card text-center">
-          <p class="text-[10px] text-white/30 uppercase tracking-wider">Savings &gt;10%</p>
+          <p class="text-[10px] text-white/30 uppercase tracking-wider">Switch Now</p>
           <p id="priceStatSavings" class="text-xl font-bold mt-0.5 text-emerald-400">--</p>
         </div>
         <div class="card text-center">
-          <p class="text-[10px] text-white/30 uppercase tracking-wider">Best Deal</p>
+          <p class="text-[10px] text-white/30 uppercase tracking-wider">Top Save</p>
           <p id="priceStatBest" class="text-[11px] font-bold mt-0.5 text-amber-400 leading-tight">--</p>
         </div>
       </div>
-      <!-- Filters -->
-      <div class="flex gap-2 mb-3">
-        <div class="search-wrap flex-1">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          <input id="priceSearch" type="search" class="search-input" placeholder="Search items..." oninput="filterPriceTable()">
-        </div>
-        <select id="priceFilterSavings" onchange="filterPriceTable()" class="px-3 py-2 text-xs rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);">
-          <option value="">All</option>
-          <option value="10">≥10% saving</option>
-          <option value="5">≥5% saving</option>
-          <option value="any">Any saving</option>
-        </select>
+      <!-- Search -->
+      <div class="search-wrap mb-4">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input id="priceSearch" type="search" class="search-input" placeholder="Search items..." oninput="filterPriceTable()">
       </div>
-      <!-- Items list -->
-      <div id="priceList" class="space-y-2">
+      <!-- Sections -->
+      <div id="priceList">
         <p class="text-white/20 text-xs text-center py-4">Loading price data...</p>
       </div>
     </div>
@@ -1788,22 +1780,21 @@ async function loadPrices() {
     }
     priceData = data.summary || [];
 
-    // Header stats
     const runDate = data.lastRun?.last_run_date;
     const checked = data.lastRun?.items_checked || 0;
     document.getElementById('priceLastRun').textContent =
-      runDate ? `Last run: ${runDate} · ${checked} items` : 'No run yet today';
+      runDate ? `Last run: ${runDate} · ${checked} items checked` : 'No run yet today';
     document.getElementById('priceStatChecked').textContent = priceData.length;
 
-    const bigSavers = priceData.filter(i => (i.savings_pct || 0) >= 10);
-    document.getElementById('priceStatSavings').textContent = bigSavers.length;
+    const switchNow = priceData.filter(i => (i.savings_pct || 0) >= 15);
+    document.getElementById('priceStatSavings').textContent = switchNow.length;
 
     const topItem = priceData[0];
     document.getElementById('priceStatBest').textContent = topItem
-      ? `${topItem.item_name.split(' ').slice(0, 2).join(' ')} -${topItem.savings_pct}%`
+      ? `-${topItem.savings_pct}%`
       : '--';
 
-    renderPriceList(priceData);
+    renderPriceSections(priceData);
   } catch (e) {
     listEl.innerHTML = `<p class="text-red-400/60 text-xs text-center py-4">${e.message}</p>`;
   }
@@ -1811,67 +1802,104 @@ async function loadPrices() {
 
 function filterPriceTable() {
   const q = (document.getElementById('priceSearch')?.value || '').toLowerCase();
-  const savingsFilter = document.getElementById('priceFilterSavings')?.value || '';
-  let filtered = priceData;
-  if (q) filtered = filtered.filter(i => i.item_name.toLowerCase().includes(q));
-  if (savingsFilter === '10') filtered = filtered.filter(i => (i.savings_pct || 0) >= 10);
-  else if (savingsFilter === '5') filtered = filtered.filter(i => (i.savings_pct || 0) >= 5);
-  else if (savingsFilter === 'any') filtered = filtered.filter(i => (i.savings_pct || 0) > 0);
-  renderPriceList(filtered);
+  const filtered = q ? priceData.filter(i => i.item_name.toLowerCase().includes(q)) : priceData;
+  renderPriceSections(filtered);
 }
 
-function renderPriceList(items) {
+function renderPriceSections(items) {
   const el = document.getElementById('priceList');
   if (!items.length) {
     el.innerHTML = '<p class="text-white/20 text-xs text-center py-4">No items match</p>';
     return;
   }
 
-  const PLATFORM_LABELS = { HYPERPURE: 'HP', BLINKIT: 'BL', ZEPTO: 'ZP', BIGBASKET: 'BB' };
-  const PLATFORM_COLORS = { HYPERPURE: 'text-orange-400', BLINKIT: 'text-yellow-400', ZEPTO: 'text-purple-400', BIGBASKET: 'text-red-400' };
+  const switchNow  = items.filter(i => (i.savings_pct || 0) >= 15);
+  const watching   = items.filter(i => (i.savings_pct || 0) >= 5 && (i.savings_pct || 0) < 15);
+  const ok         = items.filter(i => (i.savings_pct || 0) < 5);
 
-  el.innerHTML = items.map(item => {
-    const sav = item.savings_pct || 0;
-    const savBadge = sav >= 15
-      ? `<span class="text-emerald-400 font-bold">-${sav}% ⚡</span>`
-      : sav >= 5
-      ? `<span class="text-emerald-400/80 font-semibold">-${sav}%</span>`
-      : sav > 0
-      ? `<span class="text-white/40">-${sav}%</span>`
-      : `<span class="text-white/20">—</span>`;
+  const PLATFORM_NAMES = { HYPERPURE: 'HyperPure', BLINKIT: 'Blinkit', ZEPTO: 'Zepto', BIGBASKET: 'Bigbasket' };
 
-    const cheapColor = PLATFORM_COLORS[item.cheapest_platform] || 'text-white/60';
-    const cheapLabel = PLATFORM_LABELS[item.cheapest_platform] || item.cheapest_platform || '—';
-
-    // Build platform price chips
-    const platformRows = [
-      { key: 'HYPERPURE', price: item.price_hyperpure },
-      { key: 'BLINKIT',   price: item.price_blinkit },
-      { key: 'ZEPTO',     price: item.price_zepto },
-      { key: 'BIGBASKET', price: item.price_bigbasket },
-    ].filter(p => p.price != null);
-
-    const chips = platformRows.map(p => {
-      const isCheapest = p.key === item.cheapest_platform;
-      const color = isCheapest ? PLATFORM_COLORS[p.key] : 'text-white/30';
-      const bold = isCheapest ? 'font-bold' : '';
-      return `<span class="${color} ${bold} text-[10px]">${PLATFORM_LABELS[p.key]} ₹${p.price}</span>`;
-    }).join('<span class="text-white/10 mx-0.5">·</span>');
-
-    return `<div class="card px-3 py-2.5">
-      <div class="flex items-start justify-between gap-2">
-        <div class="flex-1 min-w-0">
-          <p class="text-[13px] font-semibold text-white/85 leading-tight truncate">${item.item_name}</p>
-          <p class="text-[10px] text-white/25 mt-0.5">${item.category || ''} · ₹${item.odoo_avg_cost || '?'}/${item.base_unit}</p>
-        </div>
-        <div class="text-right shrink-0">
-          ${savBadge}
-          ${sav > 0 ? `<p class="text-[10px] ${cheapColor} mt-0.5">${cheapLabel} ₹${item.cheapest_price}/${item.base_unit}</p>` : ''}
-        </div>
-      </div>
-      ${chips ? `<div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">${chips}</div>` : ''}
+  function sectionHeader(label, count, color) {
+    return `<div class="flex items-center gap-2 mb-2 ${count > 0 ? 'mt-5 first:mt-0' : 'mt-5'}">
+      <span class="text-[10px] font-bold ${color} uppercase tracking-wider">${label}</span>
+      <span class="text-[10px] text-white/20">· ${count} item${count !== 1 ? 's' : ''}</span>
     </div>`;
-  }).join('');
+  }
+
+  function switchCard(item) {
+    const sav = item.savings_pct || 0;
+    const saveAmt = item.odoo_avg_cost && item.cheapest_price
+      ? Math.round(item.odoo_avg_cost - item.cheapest_price)
+      : null;
+    const platform = PLATFORM_NAMES[item.cheapest_platform] || item.cheapest_platform;
+    const searchQ = encodeURIComponent(item.item_name);
+    const hpUrl = `https://www.hyperpure.com/buyer/search?q=${searchQ}&cityName=bengaluru`;
+
+    return `<div class="card mb-2" style="border-left:3px solid rgba(52,211,153,0.5);">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="flex-1 min-w-0">
+          <p class="text-[13px] font-semibold text-white/90 leading-tight">${item.item_name}</p>
+          <p class="text-[10px] text-white/25 mt-0.5">${item.category || 'General'} · ${item.brand || ''}</p>
+        </div>
+        <span class="text-emerald-400 font-bold text-sm shrink-0">-${sav}% ⚡</span>
+      </div>
+      <div class="flex items-center justify-between mb-2.5">
+        <div>
+          <p class="text-[10px] text-white/35">Currently paying</p>
+          <p class="text-[13px] text-white/50 font-medium">₹${item.odoo_avg_cost || '?'}/${item.base_unit}</p>
+        </div>
+        <div class="text-white/20 text-lg">→</div>
+        <div class="text-right">
+          <p class="text-[10px] text-white/35">${platform}</p>
+          <p class="text-[13px] text-emerald-400 font-bold">₹${item.cheapest_price}/${item.base_unit}</p>
+        </div>
+        ${saveAmt !== null ? `<div class="text-right">
+          <p class="text-[10px] text-white/35">Save</p>
+          <p class="text-[13px] text-amber-400 font-bold">₹${saveAmt}/unit</p>
+        </div>` : ''}
+      </div>
+      <a href="${hpUrl}" target="_blank" class="btn btn-ghost btn-sm w-full text-[11px] text-center block">Open on HyperPure →</a>
+    </div>`;
+  }
+
+  function watchCard(item) {
+    const sav = item.savings_pct || 0;
+    const platform = PLATFORM_NAMES[item.cheapest_platform] || item.cheapest_platform;
+    return `<div class="card-item flex items-center justify-between gap-2 mb-1.5">
+      <div class="flex-1 min-w-0">
+        <p class="text-[12px] font-semibold text-white/75 truncate">${item.item_name}</p>
+        <p class="text-[10px] text-white/30">₹${item.odoo_avg_cost || '?'} → ${platform} ₹${item.cheapest_price}/${item.base_unit}</p>
+      </div>
+      <span class="text-[11px] text-emerald-400/70 font-semibold shrink-0">-${sav}% ✅</span>
+    </div>`;
+  }
+
+  let html = '';
+
+  if (switchNow.length) {
+    html += sectionHeader('Switch Today', switchNow.length, 'text-emerald-400/70');
+    html += switchNow.map(switchCard).join('');
+  }
+
+  if (watching.length) {
+    html += sectionHeader('Worth Watching', watching.length, 'text-amber-400/60');
+    html += watching.map(watchCard).join('');
+  }
+
+  if (ok.length) {
+    const okId = 'priceOkSection';
+    html += sectionHeader('Already Good / Higher on Platform', ok.length, 'text-white/20');
+    html += `<div id="${okId}" class="hidden space-y-1">` +
+      ok.map(i => `<div class="card-item flex items-center justify-between gap-2">
+        <p class="text-[12px] text-white/40 truncate flex-1">${i.item_name}</p>
+        <p class="text-[10px] text-white/20 shrink-0">${i.savings_pct > 0 ? '-'+i.savings_pct+'%' : '—'}</p>
+      </div>`).join('') +
+      '</div>' +
+      `<button onclick="document.getElementById('${okId}').classList.toggle('hidden');this.textContent=this.textContent.includes('Show')?'Hide ▴':'Show ▾';"
+        class="text-[10px] text-white/25 w-full text-center py-1.5 mt-1">Show ▾</button>`;
+  }
+
+  el.innerHTML = html;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
