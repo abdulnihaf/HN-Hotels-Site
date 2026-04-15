@@ -1019,42 +1019,67 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB, env) {
   if (picking.state === 'cancel') return json({ error: 'Receipt is cancelled' }, 400);
   if (picking.state !== 'assigned') return json({ error: `Receipt state "${picking.state}" cannot be validated` }, 400);
 
-  // Copy reserved → done quantities in one call (correct Odoo 17+ API).
-  // This replaces the old stock.move.write loop which wrote to a computed field
-  // and silently had no effect in Odoo 17/19, leaving done qty at 0.
-  await odooCall(sysCreds.uid, sysCreds.key,
-    'stock.picking', 'action_set_quantities_to_reservation', [[picking_id]]);
+  // Detect done-qty field name on stock.move.line:
+  //   Odoo 16+  → 'quantity'  (action_set_quantities_to_reservation also exists here)
+  //   Odoo 15-  → 'qty_done'  (action_set_quantities_to_reservation does NOT exist)
+  // We can't use action_set_quantities_to_reservation — it doesn't exist on this instance.
+  // Instead we read every move line and write the done qty directly.
+  const mlFieldDef = await odooCall(sysCreds.uid, sysCreds.key,
+    'stock.move.line', 'fields_get', [['quantity']], { attributes: ['type'] });
+  const doneField = (mlFieldDef && mlFieldDef.quantity) ? 'quantity' : 'qty_done';
 
-  // Handle lot/serial requirements: read move lines and create lots where missing
+  // Read all pending move lines for this picking
   const moveLines = await odooCall(sysCreds.uid, sysCreds.key,
     'stock.move.line', 'search_read',
     [[['picking_id', '=', picking_id], ['state', 'not in', ['done', 'cancel']]]],
-    { fields: ['id', 'lot_id', 'product_id'] }
+    { fields: ['id', 'product_uom_qty', 'lot_id', 'product_id'] }
   );
 
+  // For each line: copy reserved → done qty, auto-create lot if product is tracked
   for (const ml of moveLines) {
+    const writeVals = {};
+
+    // Set done qty = reserved qty (receive full delivery)
+    if (ml.product_uom_qty > 0) {
+      writeVals[doneField] = ml.product_uom_qty;
+    }
+
+    // Auto-create lot/serial for tracked products that don't have one yet
     if (!ml.lot_id) {
       const prodInfo = await odooCall(sysCreds.uid, sysCreds.key,
         'product.product', 'read', [[ml.product_id[0]]],
         { fields: ['tracking'] }
       );
-      if (prodInfo[0] && prodInfo[0].tracking && prodInfo[0].tracking !== 'none') {
+      if (prodInfo[0]?.tracking && prodInfo[0].tracking !== 'none') {
         const lotName = `RCV-${picking.name.replace(/\//g, '-')}-${ml.id}`;
         const lotId = await odooCall(sysCreds.uid, sysCreds.key,
           'stock.lot', 'create',
           [{ name: lotName, product_id: ml.product_id[0], company_id: cfg.company_id }]
         );
-        await odooCall(sysCreds.uid, sysCreds.key,
-          'stock.move.line', 'write', [[ml.id], { lot_id: lotId }]);
+        writeVals.lot_id = lotId;
       }
+    }
+
+    if (Object.keys(writeVals).length > 0) {
+      await odooCall(sysCreds.uid, sysCreds.key,
+        'stock.move.line', 'write', [[ml.id], writeVals]);
     }
   }
 
-  // Validate — skip_backorder creates no backorder for short-received items,
-  // skip_immediate tells Odoo not to reopen the "set quantities" dialog.
+  // Validate the picking.
+  // skip_immediate = don't show "Set Quantities" dialog (we just set them above)
+  // skip_backorder = don't create partial backorder (receive everything that was reserved)
   await odooCall(sysCreds.uid, sysCreds.key,
     'stock.picking', 'button_validate', [[picking_id]],
     { context: { skip_backorder: true, skip_immediate: true } });
+
+  // Verify the picking actually reached 'done' state — guard against Odoo returning
+  // a wizard action dict instead of completing the validation
+  const verifyArr = await odooCall(sysCreds.uid, sysCreds.key,
+    'stock.picking', 'read', [[picking_id]], { fields: ['state'] });
+  if (!verifyArr[0] || verifyArr[0].state !== 'done') {
+    return json({ error: `Picking validated but state is "${verifyArr[0]?.state}" — check Odoo` }, 500);
+  }
 
   if (DB) {
     await DB.prepare(
