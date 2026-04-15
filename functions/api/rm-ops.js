@@ -1019,29 +1019,40 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB, env) {
   if (picking.state === 'cancel') return json({ error: 'Receipt is cancelled' }, 400);
   if (picking.state !== 'assigned') return json({ error: `Receipt state "${picking.state}" cannot be validated` }, 400);
 
-  // Detect done-qty field name on stock.move.line:
-  //   Odoo 16+  → 'quantity'  (action_set_quantities_to_reservation also exists here)
-  //   Odoo 15-  → 'qty_done'  (action_set_quantities_to_reservation does NOT exist)
-  // We can't use action_set_quantities_to_reservation — it doesn't exist on this instance.
-  // Instead we read every move line and write the done qty directly.
+  // Detect field names — both changed between Odoo versions:
+  //
+  //   Done-qty field on stock.move.line:
+  //     Odoo 15-  → 'qty_done'
+  //     Odoo 16+  → 'quantity'
+  //
+  //   Reserved-qty field on stock.move.line:
+  //     Odoo 15-  → 'product_uom_qty'
+  //     Odoo 16+  → 'reserved_uom_qty'
+  //
+  // action_set_quantities_to_reservation was introduced in Odoo 16 and removed in
+  // Odoo 18/19 — confirmed absent on this instance. We write done qty directly.
   const mlFieldDef = await odooCall(sysCreds.uid, sysCreds.key,
-    'stock.move.line', 'fields_get', [['quantity']], { attributes: ['type'] });
-  const doneField = (mlFieldDef && mlFieldDef.quantity) ? 'quantity' : 'qty_done';
+    'stock.move.line', 'fields_get',
+    [['quantity', 'qty_done', 'reserved_uom_qty', 'product_uom_qty']],
+    { attributes: ['type'] });
+  const doneField     = mlFieldDef.quantity      ? 'quantity'      : 'qty_done';
+  const reservedField = mlFieldDef.reserved_uom_qty ? 'reserved_uom_qty' : 'product_uom_qty';
 
   // Read all pending move lines for this picking
   const moveLines = await odooCall(sysCreds.uid, sysCreds.key,
     'stock.move.line', 'search_read',
     [[['picking_id', '=', picking_id], ['state', 'not in', ['done', 'cancel']]]],
-    { fields: ['id', 'product_uom_qty', 'lot_id', 'product_id'] }
+    { fields: ['id', reservedField, 'lot_id', 'product_id'] }
   );
 
   // For each line: copy reserved → done qty, auto-create lot if product is tracked
   for (const ml of moveLines) {
     const writeVals = {};
+    const reservedQty = ml[reservedField] || 0;
 
     // Set done qty = reserved qty (receive full delivery)
-    if (ml.product_uom_qty > 0) {
-      writeVals[doneField] = ml.product_uom_qty;
+    if (reservedQty > 0) {
+      writeVals[doneField] = reservedQty;
     }
 
     // Auto-create lot/serial for tracked products that don't have one yet
