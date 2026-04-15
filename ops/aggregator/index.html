@@ -196,20 +196,25 @@ function renderStatus(stats, ord){
   const swiggySnap = allSnaps.find(s=>s.platform==='swiggy');
   const zomatoSnap = allSnaps.find(s=>s.platform==='zomato')||allSnaps.find(s=>s.platform==='zomato');
 
-  // Swiggy/Zomato last times
+  // Swiggy/Zomato last times — check BOTH snapshots AND orders
   let swLast=null, zmLast=null;
   for(const s of allSnaps){
     if(s.platform==='swiggy'&&(!swLast||s.last>swLast)) swLast=s.last;
     if(s.platform==='zomato'&&(!zmLast||s.last>zmLast)) zmLast=s.last;
   }
+  for(const o of allOrders){
+    if(o.platform==='swiggy'&&(!swLast||o.last>swLast)) swLast=o.last;
+    if(o.platform==='zomato'&&(!zmLast||o.last>zmLast)) zmLast=o.last;
+  }
 
   const totalOrders = allOrders.reduce((a,b)=>a+(b.orders||0),0);
 
   const dot=document.getElementById('statusDot');
-  const minsAgo = lastCapture ? Math.round((Date.now()-new Date(lastCapture).getTime())/60000) : 9999;
-  dot.className='status-dot'+(minsAgo>30?' stale':minsAgo>120?' dead':'');
-
-  document.getElementById('statusCapture').textContent = lastCapture ? fmtAgo(lastCapture) : '—';
+  // Use most recent of swLast/zmLast for overall staleness
+  const overallLast = [lastCapture,swLast,zmLast].filter(Boolean).sort().pop() || null;
+  const minsAgo = overallLast ? Math.round((Date.now()-new Date(overallLast).getTime())/60000) : 9999;
+  dot.className='status-dot'+(minsAgo>120?' dead':minsAgo>30?' stale':'');
+  document.getElementById('statusCapture').textContent = overallLast ? fmtAgo(overallLast) : '—';
   document.getElementById('statusSwiggy').textContent = swLast ? fmtAgo(swLast) : '—';
   document.getElementById('statusZomato').textContent = zmLast ? fmtAgo(zmLast) : '—';
   document.getElementById('statusTotal').textContent = totalOrders+' all-time';
