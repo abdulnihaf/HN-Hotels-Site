@@ -372,16 +372,21 @@ function renderOps(outlets, lastSnapshotAt){
   ]);
   rg('s-ads',[
     m('CPC Sales',sw.cpc_sales,'₹'),m('CPC Orders',sw.cpc_orders),m('CPC Spend',sw.cpc_spends,'₹'),
-    m('ROAS',sw.roas,'','','x'),m('Banner Sales',sw.cba_sales,'₹'),m('Banner Spend',sw.cba_spends,'₹'),
+    m('ROAS',sw.roas,'','','x'),m('CPC Menu Visits',sw.cpc_menu_visits),m('CPC Depth',sw.cpc_ads_depth,'','','%'),
+    m('Banner Sales',sw.cba_sales,'₹'),m('Banner Spend',sw.cba_spends,'₹'),
+    m('Banner Impressions',sw.ad_impressions_cba),m('Banner Menu Visits',sw.cba_menu_visits),m('Banner Depth',sw.cba_ads_depth,'','','%'),
   ]);
   rg('s-ops',[
     m('Online %',sw.online_availability,'',parseFloat(sw.online_availability)>=95?'g':'b','%'),
     m('Prep Time',sw.kitchen_prep_time,'','',' min'),m('MFR',sw.mfr_accuracy,'','','%'),
     m('Delayed >10m',sw.delayed_10min,'','w','%'),
+    m('Bolt Orders',sw.bolt_orders),m('Bolt %',sw.bolt_pct,'','','%'),m('Bolt AOV',sw.bolt_aov,'₹'),
   ]);
   rg('s-menu',[
     m('Menu Score',sw.menu_score,'',parseFloat(sw.menu_score)>=50?'':'b','/100'),
     m('Photos',sw.items_with_photos,'','g','%'),m('Descriptions',sw.items_with_desc,'','g','%'),
+    m('Category Score',sw.category_score,'','','/100'),m('Item Score',sw.item_score,'','','/100'),
+    m('Addon Score',sw.addon_score,'','','/100'),m('Combo Score',sw.combo_score,'','','/100'),
   ]);
 
   // ── ZOMATO — Live Tracking is a snapshot at capture time, NOT running total ──
