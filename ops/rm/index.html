@@ -1992,14 +1992,22 @@ async function apiFetch(actionParams) {
 }
 
 async function apiPost(body) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 25000); // 25s hard timeout
   try {
     const r = await fetch(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: ctrl.signal,
     });
+    clearTimeout(tid);
     return await r.json();
-  } catch (e) { return { error: e.message }; }
+  } catch (e) {
+    clearTimeout(tid);
+    if (e.name === 'AbortError') return { error: 'Request timed out — please try again' };
+    return { error: e.message };
+  }
 }
 
 /* ━━━ Formatters ━━━ */

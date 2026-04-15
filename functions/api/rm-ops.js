@@ -1013,20 +1013,11 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB) {
   if (picking.state === 'cancel') return json({ error: 'Receipt is cancelled' }, 400);
   if (picking.state !== 'assigned') return json({ error: `Receipt state "${picking.state}" cannot be validated` }, 400);
 
-  // Use action_set_quantities_to_reservation to copy reserved → done qty,
-  // then set lots where needed, then validate.
-  // This avoids needing to know exact field names for reserved qty.
-  const moves = await odooCall(creds.uid, creds.key,
-    'stock.move', 'search_read',
-    [[['picking_id', '=', picking_id], ['state', 'not in', ['done', 'cancel']]]],
-    { fields: ['id', 'product_id', 'product_uom_qty', 'quantity'] }
-  );
-
-  // Set done quantity on each move to match demand
-  for (const mv of moves) {
-    await odooCall(creds.uid, creds.key,
-      'stock.move', 'write', [[mv.id], { quantity: mv.product_uom_qty }]);
-  }
+  // Copy reserved → done quantities in one call (correct Odoo 17+ API).
+  // This replaces the old stock.move.write loop which wrote to a computed field
+  // and silently had no effect in Odoo 17/19, leaving done qty at 0.
+  await odooCall(creds.uid, creds.key,
+    'stock.picking', 'action_set_quantities_to_reservation', [[picking_id]]);
 
   // Handle lot/serial requirements: read move lines and create lots where missing
   const moveLines = await odooCall(creds.uid, creds.key,
@@ -1053,7 +1044,8 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB) {
     }
   }
 
-  // Validate with context to skip backorder wizard
+  // Validate — skip_backorder creates no backorder for short-received items,
+  // skip_immediate tells Odoo not to reopen the "set quantities" dialog.
   await odooCall(creds.uid, creds.key,
     'stock.picking', 'button_validate', [[picking_id]],
     { context: { skip_backorder: true, skip_immediate: true } });
