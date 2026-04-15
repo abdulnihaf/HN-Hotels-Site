@@ -19,3 +19,8 @@ compatibility_flags = ["nodejs_compat"]
 binding = "DB"
 database_name = "hn-hiring"
 database_id = "a0107321-790a-4d46-ac3c-a54a676c6bcb"
+
+# KV for storing Swiggy/Zomato auth sessions (captured by extension, read by cron worker)
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "1aa1acbca55544e59e428d248b928a67"

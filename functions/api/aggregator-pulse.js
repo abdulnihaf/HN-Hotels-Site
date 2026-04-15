@@ -37,9 +37,27 @@ export async function onRequest(context) {
 async function handlePost(db, request, headers) {
   const body = await request.json();
 
-  // Route: orders go to aggregator_orders, metrics go to aggregator_snapshots
+  // Route: orders → aggregator_orders, session → KV, metrics → aggregator_snapshots
   if (body.type === 'orders' && body.orders) {
     return storeOrders(db, body.orders, headers);
+  }
+
+  // Store auth session to KV for server-side Cron access
+  if (body.type === 'session' && body.platform) {
+    const sessions = env.SESSIONS;
+    if (sessions) {
+      const key = `session_${body.platform}`;
+      const existing = await sessions.get(key, 'json') || {};
+      const merged = {
+        ...existing,
+        platform: body.platform,
+        headers: { ...(existing.headers || {}), ...(body.headers || {}) },
+        urls: [...new Set([...(existing.urls || []), ...(body.urls || []), body.url].filter(Boolean))].slice(-50),
+        updated_at: new Date().toISOString(),
+      };
+      await sessions.put(key, JSON.stringify(merged), { expirationTtl: 86400 * 60 }); // 60 days
+    }
+    return new Response(JSON.stringify({ ok: true }), { headers });
   }
 
   // Default: store as metric snapshot
