@@ -38,6 +38,13 @@
     .badge { display:inline-flex; align-items:center; padding:3px 8px; border-radius:6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
     .badge-he { background:rgba(168,85,247,0.15); color:#c084fc; }
     .badge-nch { background:rgba(16,185,129,0.15); color:#34d399; }
+    .plt-pill { display:inline-flex; align-items:center; padding:2px 8px; border-radius:5px; font-size:10px; font-weight:700; letter-spacing:0.3px; white-space:nowrap; border:1px solid transparent; }
+    .plt-emerald { background:rgba(52,211,153,0.12); color:#6ee7b7; border-color:rgba(52,211,153,0.28); }
+    .plt-yellow  { background:rgba(234,179,8,0.12);  color:#fde68a; border-color:rgba(234,179,8,0.28);  }
+    .plt-purple  { background:rgba(168,85,247,0.12); color:#d8b4fe; border-color:rgba(168,85,247,0.28); }
+    .plt-orange  { background:rgba(249,115,22,0.12); color:#fed7aa; border-color:rgba(249,115,22,0.28); }
+    .plt-dim { opacity:0.28; }
+    .plt-best { box-shadow:0 0 0 1.5px rgba(52,211,153,0.5); }
     .badge-success { background:rgba(16,185,129,0.15); color:#34d399; }
     .badge-warn { background:rgba(245,158,11,0.15); color:#fbbf24; }
     .badge-error { background:rgba(239,68,68,0.15); color:#f87171; }
@@ -309,14 +316,30 @@
           <p id="priceStatBest" class="text-[11px] font-bold mt-0.5 text-amber-400 leading-tight">--</p>
         </div>
       </div>
-      <!-- Search -->
-      <div class="search-wrap mb-4">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <input id="priceSearch" type="search" class="search-input" placeholder="Search items..." oninput="filterPriceTable()">
+      <!-- Search + brand filter -->
+      <div class="flex gap-2 mb-3">
+        <div class="search-wrap flex-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input id="priceSearch" type="search" class="search-input" placeholder="Item or category..." oninput="filterPriceTable()">
+        </div>
+        <select id="priceBrand" onchange="filterPriceTable()" class="px-3 py-2 text-[12px] rounded-xl" style="min-width:68px">
+          <option value="">All</option>
+          <option value="HE">HE</option>
+          <option value="NCH">NCH</option>
+          <option value="BOTH">BOTH</option>
+        </select>
+      </div>
+      <!-- Platform legend -->
+      <div class="flex flex-wrap items-center gap-1.5 mb-4">
+        <span class="plt-pill plt-emerald">HP HyperPure ✓</span>
+        <span class="plt-pill plt-yellow plt-dim">BL Blinkit</span>
+        <span class="plt-pill plt-purple plt-dim">ZP Zepto</span>
+        <span class="plt-pill plt-orange plt-dim">BB BigBasket</span>
+        <span class="text-[9px] text-white/20 ml-1">3 more soon</span>
       </div>
       <!-- Sections -->
       <div id="priceList">
-        <p class="text-white/20 text-xs text-center py-4">Loading price data...</p>
+        <p class="text-white/20 text-xs text-center py-6">Loading price data...</p>
       </div>
     </div>
   </div>
@@ -1770,133 +1793,189 @@ let priceData = [];
 
 async function loadPrices() {
   const listEl = document.getElementById('priceList');
-  listEl.innerHTML = '<p class="text-white/20 text-xs text-center py-4">Loading...</p>';
+  listEl.innerHTML = '<p class="text-white/20 text-xs text-center py-6">Loading...</p>';
   try {
-    const r = await fetch(`${API}?action=market-prices&brand=${currentBrand}&pin=${currentPin}`);
+    const r = await fetch(`${API}?action=market-prices&pin=${currentPin}`);
     const data = await r.json();
     if (!data.success) {
       listEl.innerHTML = `<p class="text-red-400/60 text-xs text-center py-4">${data.error || 'Failed to load'}</p>`;
       return;
     }
     priceData = data.summary || [];
-
     const runDate = data.lastRun?.last_run_date;
     const checked = data.lastRun?.items_checked || 0;
     document.getElementById('priceLastRun').textContent =
-      runDate ? `Last run: ${runDate} · ${checked} items checked` : 'No run yet today';
-    document.getElementById('priceStatChecked').textContent = priceData.length;
-
-    const switchNow = priceData.filter(i => (i.savings_pct || 0) >= 15);
-    document.getElementById('priceStatSavings').textContent = switchNow.length;
-
-    const topItem = priceData[0];
-    document.getElementById('priceStatBest').textContent = topItem
-      ? `-${topItem.savings_pct}%`
-      : '--';
-
-    renderPriceSections(priceData);
+      runDate ? `${runDate} · ${checked} items · runs 7 AM daily` : 'No data yet';
+    filterPriceTable();
   } catch (e) {
     listEl.innerHTML = `<p class="text-red-400/60 text-xs text-center py-4">${e.message}</p>`;
   }
 }
 
 function filterPriceTable() {
-  const q = (document.getElementById('priceSearch')?.value || '').toLowerCase();
-  const filtered = q ? priceData.filter(i => i.item_name.toLowerCase().includes(q)) : priceData;
-  renderPriceSections(filtered);
+  const q     = (document.getElementById('priceSearch')?.value || '').toLowerCase();
+  const brand = document.getElementById('priceBrand')?.value || '';
+  let items = priceData;
+  if (q)     items = items.filter(i => i.item_name.toLowerCase().includes(q) || (i.category||'').toLowerCase().includes(q));
+  if (brand) items = items.filter(i => i.brand === brand);
+  renderPriceSections(items);
 }
 
 function renderPriceSections(items) {
   const el = document.getElementById('priceList');
-  if (!items.length) {
-    el.innerHTML = '<p class="text-white/20 text-xs text-center py-4">No items match</p>';
-    return;
+  if (!items.length) { el.innerHTML = '<p class="text-white/20 text-xs text-center py-6">No items match</p>'; return; }
+
+  // Separate reliable data from suspected odoo-price mismatches
+  const reliable = items.filter(i => Math.abs(i.savings_pct || 0) <= 100);
+  const mismatch = items.filter(i => Math.abs(i.savings_pct || 0) >  100);
+
+  const switchNow = reliable.filter(i => (i.savings_pct || 0) >= 15);
+  const watching  = reliable.filter(i => (i.savings_pct || 0) >= 5 && (i.savings_pct || 0) < 15);
+  const ok        = reliable.filter(i => (i.savings_pct || 0) < 5);
+
+  // Stat cards
+  document.getElementById('priceStatChecked').textContent = items.length;
+  document.getElementById('priceStatSavings').textContent = switchNow.length;
+  const top = switchNow[0];
+  document.getElementById('priceStatBest').textContent = top ? `-${top.savings_pct}%` : '--';
+
+  function pltPills(item) {
+    return [
+      { id:'HYPERPURE', lbl:'HP', cls:'emerald', v: item.price_hyperpure },
+      { id:'BLINKIT',   lbl:'BL', cls:'yellow',  v: item.price_blinkit  },
+      { id:'ZEPTO',     lbl:'ZP', cls:'purple',   v: item.price_zepto    },
+      { id:'BIGBASKET', lbl:'BB', cls:'orange',   v: item.price_bigbasket},
+    ].map(p => {
+      const best = item.cheapest_platform === p.id && p.v;
+      const dim  = p.v ? '' : ' plt-dim';
+      const bestCls = best ? ' plt-best' : '';
+      const pr   = p.v ? `₹${p.v}` : '—';
+      const chk  = best ? ' ✓' : '';
+      return `<span class="plt-pill plt-${p.cls}${dim}${bestCls}">${p.lbl} ${pr}${chk}</span>`;
+    }).join('');
   }
 
-  const switchNow  = items.filter(i => (i.savings_pct || 0) >= 15);
-  const watching   = items.filter(i => (i.savings_pct || 0) >= 5 && (i.savings_pct || 0) < 15);
-  const ok         = items.filter(i => (i.savings_pct || 0) < 5);
+  function brandBadge(b) {
+    if (b === 'HE')   return '<span class="badge badge-he mr-1">HE</span>';
+    if (b === 'NCH')  return '<span class="badge badge-nch mr-1">NCH</span>';
+    if (b === 'BOTH') return '<span class="badge mr-1" style="background:rgba(251,191,36,.15);color:#fbbf24">BOTH</span>';
+    return '';
+  }
 
-  const PLATFORM_NAMES = { HYPERPURE: 'HyperPure', BLINKIT: 'Blinkit', ZEPTO: 'Zepto', BIGBASKET: 'Bigbasket' };
+  function relDate(ts) {
+    if (!ts) return '';
+    const diff = Math.floor((Date.now() - new Date(ts)) / 86400000);
+    return diff === 0 ? 'today' : diff === 1 ? 'yesterday' : `${diff}d ago`;
+  }
 
-  function sectionHeader(label, count, color) {
-    return `<div class="flex items-center gap-2 mb-2 ${count > 0 ? 'mt-5 first:mt-0' : 'mt-5'}">
+  function secHdr(label, count, color) {
+    return `<div class="flex items-center gap-2 mt-5 mb-2">
       <span class="text-[10px] font-bold ${color} uppercase tracking-wider">${label}</span>
-      <span class="text-[10px] text-white/20">· ${count} item${count !== 1 ? 's' : ''}</span>
+      <span class="text-[10px] text-white/20">· ${count}</span>
     </div>`;
   }
 
   function switchCard(item) {
-    const sav = item.savings_pct || 0;
-    const saveAmt = item.odoo_avg_cost && item.cheapest_price
-      ? Math.round(item.odoo_avg_cost - item.cheapest_price)
-      : null;
-    const platform = PLATFORM_NAMES[item.cheapest_platform] || item.cheapest_platform;
-    const searchQ = encodeURIComponent(item.item_name);
-    const hpUrl = `https://www.hyperpure.com/buyer/search?q=${searchQ}&cityName=bengaluru`;
-
+    const sav = +(item.savings_pct||0).toFixed(1);
+    const saveAmt = (item.odoo_avg_cost && item.cheapest_price)
+      ? Math.round(item.odoo_avg_cost - item.cheapest_price) : null;
+    const hpUrl = `https://www.hyperpure.com/buyer/search?q=${encodeURIComponent(item.item_name)}&cityName=bengaluru`;
     return `<div class="card mb-2" style="border-left:3px solid rgba(52,211,153,0.5);">
-      <div class="flex items-start justify-between gap-2 mb-2">
+      <div class="flex items-start justify-between gap-2 mb-1.5">
         <div class="flex-1 min-w-0">
-          <p class="text-[13px] font-semibold text-white/90 leading-tight">${item.item_name}</p>
-          <p class="text-[10px] text-white/25 mt-0.5">${item.category || 'General'} · ${item.brand || ''}</p>
+          <div class="flex items-center flex-wrap gap-1 mb-0.5">${brandBadge(item.brand)}<p class="text-[13px] font-semibold text-white/90 leading-tight">${item.item_name}</p></div>
+          <p class="text-[10px] text-white/25">${item.category||'—'}</p>
         </div>
         <span class="text-emerald-400 font-bold text-sm shrink-0">-${sav}% ⚡</span>
       </div>
-      <div class="flex items-center justify-between mb-2.5">
+      <div class="flex items-end gap-4 mb-2.5">
         <div>
-          <p class="text-[10px] text-white/35">Currently paying</p>
-          <p class="text-[13px] text-white/50 font-medium">₹${item.odoo_avg_cost || '?'}/${item.base_unit}</p>
+          <p class="text-[9px] text-white/30 uppercase tracking-wider mb-0.5">Vendor now</p>
+          <p class="text-[13px] text-white/45 font-medium line-through">₹${item.odoo_avg_cost||'?'}/${item.base_unit}</p>
         </div>
-        <div class="text-white/20 text-lg">→</div>
-        <div class="text-right">
-          <p class="text-[10px] text-white/35">${platform}</p>
-          <p class="text-[13px] text-emerald-400 font-bold">₹${item.cheapest_price}/${item.base_unit}</p>
+        <div>
+          <p class="text-[9px] text-emerald-400/60 uppercase tracking-wider mb-0.5">Cheapest</p>
+          <p class="text-[14px] text-emerald-400 font-bold">₹${item.cheapest_price}/${item.base_unit}</p>
         </div>
-        ${saveAmt !== null ? `<div class="text-right">
-          <p class="text-[10px] text-white/35">Save</p>
-          <p class="text-[13px] text-amber-400 font-bold">₹${saveAmt}/unit</p>
-        </div>` : ''}
+        ${saveAmt!==null?`<div class="ml-auto">
+          <p class="text-[9px] text-amber-400/60 uppercase tracking-wider mb-0.5">Save</p>
+          <p class="text-[13px] text-amber-400 font-semibold">₹${saveAmt}/unit</p>
+        </div>`:''}
       </div>
-      <a href="${hpUrl}" target="_blank" class="btn btn-ghost btn-sm w-full text-[11px] text-center block">Open on HyperPure →</a>
+      <div class="flex flex-wrap gap-1 mb-2.5">${pltPills(item)}</div>
+      <div class="flex items-center justify-between">
+        <span class="text-[9px] text-white/20">Updated ${relDate(item.last_run_at)}</span>
+        <a href="${hpUrl}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm text-[11px]">Open HP →</a>
+      </div>
     </div>`;
   }
 
   function watchCard(item) {
-    const sav = item.savings_pct || 0;
-    const platform = PLATFORM_NAMES[item.cheapest_platform] || item.cheapest_platform;
-    return `<div class="card-item flex items-center justify-between gap-2 mb-1.5">
-      <div class="flex-1 min-w-0">
-        <p class="text-[12px] font-semibold text-white/75 truncate">${item.item_name}</p>
-        <p class="text-[10px] text-white/30">₹${item.odoo_avg_cost || '?'} → ${platform} ₹${item.cheapest_price}/${item.base_unit}</p>
+    const sav = +(item.savings_pct||0).toFixed(1);
+    return `<div class="card mb-1.5">
+      <div class="flex items-start justify-between gap-2 mb-1.5">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center flex-wrap gap-1 mb-0.5">${brandBadge(item.brand)}<p class="text-[12px] font-semibold text-white/75">${item.item_name}</p></div>
+          <p class="text-[10px] text-white/30">₹${item.odoo_avg_cost||'?'} → ₹${item.cheapest_price}/${item.base_unit} · ${item.category||''}</p>
+        </div>
+        <span class="text-emerald-400/70 font-semibold text-[12px] shrink-0">-${sav}% ✅</span>
       </div>
-      <span class="text-[11px] text-emerald-400/70 font-semibold shrink-0">-${sav}% ✅</span>
+      <div class="flex flex-wrap gap-1">${pltPills(item)}</div>
+    </div>`;
+  }
+
+  function okRow(item) {
+    const sav = item.savings_pct||0;
+    const savStr = sav>0 ? `-${sav.toFixed(1)}%` : sav<0 ? `HP +${Math.abs(sav).toFixed(0)}%` : 'par';
+    const savCls = sav>0 ? 'text-emerald-400/50' : sav<0 ? 'text-red-400/40' : 'text-white/20';
+    return `<div class="flex items-center justify-between gap-2 py-2 border-b border-white/[0.04] last:border-0 px-1">
+      <div class="flex items-center gap-1 min-w-0 flex-1">${brandBadge(item.brand)}<p class="text-[11px] text-white/40 truncate">${item.item_name}</p></div>
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="flex flex-wrap gap-0.5 justify-end">${pltPills(item)}</div>
+        <span class="text-[10px] ${savCls} font-semibold w-[52px] text-right">${savStr}</span>
+      </div>
+    </div>`;
+  }
+
+  function mmRow(item) {
+    const sav = (item.savings_pct||0).toFixed(0);
+    const sign = item.savings_pct<0 ? 'HP +' : '-';
+    return `<div class="flex items-center justify-between gap-2 py-2 border-b border-white/[0.04] last:border-0 px-1">
+      <div class="flex items-center gap-1 min-w-0 flex-1">${brandBadge(item.brand)}<p class="text-[11px] text-white/35 truncate">${item.item_name}</p></div>
+      <div class="shrink-0 text-right">
+        <p class="text-[10px] text-white/20">₹${item.odoo_avg_cost||'?'} → HP ₹${item.cheapest_price}/${item.base_unit}</p>
+        <p class="text-[10px] text-orange-400/60 font-semibold">${sign}${Math.abs(sav)}% — review odoo price</p>
+      </div>
     </div>`;
   }
 
   let html = '';
 
   if (switchNow.length) {
-    html += sectionHeader('Switch Today', switchNow.length, 'text-emerald-400/70');
+    html += secHdr('⚡ Switch Today', switchNow.length, 'text-emerald-400/80');
     html += switchNow.map(switchCard).join('');
   }
 
   if (watching.length) {
-    html += sectionHeader('Worth Watching', watching.length, 'text-amber-400/60');
+    html += secHdr('✅ Worth Watching', watching.length, 'text-amber-400/70');
     html += watching.map(watchCard).join('');
   }
 
   if (ok.length) {
-    const okId = 'priceOkSection';
-    html += sectionHeader('Already Good / Higher on Platform', ok.length, 'text-white/20');
-    html += `<div id="${okId}" class="hidden space-y-1">` +
-      ok.map(i => `<div class="card-item flex items-center justify-between gap-2">
-        <p class="text-[12px] text-white/40 truncate flex-1">${i.item_name}</p>
-        <p class="text-[10px] text-white/20 shrink-0">${i.savings_pct > 0 ? '-'+i.savings_pct+'%' : '—'}</p>
-      </div>`).join('') +
-      '</div>' +
-      `<button onclick="document.getElementById('${okId}').classList.toggle('hidden');this.textContent=this.textContent.includes('Show')?'Hide ▴':'Show ▾';"
-        class="text-[10px] text-white/25 w-full text-center py-1.5 mt-1">Show ▾</button>`;
+    const id = 'priceOkList';
+    html += secHdr('Already Good / HP Higher', ok.length, 'text-white/25');
+    html += `<div id="${id}" class="hidden card" style="padding:0 4px;">${ok.map(okRow).join('')}</div>`;
+    html += `<button onclick="const e=document.getElementById('${id}');e.classList.toggle('hidden');this.textContent=e.classList.contains('hidden')?'Show ${ok.length} items ▾':'Hide ▴'"
+      class="text-[10px] text-white/25 hover:text-white/50 w-full text-center py-2">Show ${ok.length} items ▾</button>`;
+  }
+
+  if (mismatch.length) {
+    const id = 'priceMmList';
+    html += secHdr('⚠ Price Data Review', mismatch.length, 'text-orange-400/50');
+    html += `<p class="text-[9px] text-white/20 mb-2 -mt-1">Odoo avg_cost may be per-bunch not per-kg, or HP matched wrong product.</p>`;
+    html += `<div id="${id}" class="hidden card" style="padding:0 4px;">${mismatch.map(mmRow).join('')}</div>`;
+    html += `<button onclick="const e=document.getElementById('${id}');e.classList.toggle('hidden');this.textContent=e.classList.contains('hidden')?'Show ${mismatch.length} items ▾':'Hide ▴'"
+      class="text-[10px] text-white/25 hover:text-white/50 w-full text-center py-2">Show ${mismatch.length} items ▾</button>`;
   }
 
   el.innerHTML = html;
