@@ -12,6 +12,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .hdr h1{font-size:18px;color:#ff6b35}
 .hdr .sub{font-size:10px;color:#555}
 .hdr button{background:#ff6b35;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:11px}
+.status-bar{display:flex;gap:12px;align-items:center;margin-bottom:10px;padding:6px 10px;background:#0e0e1e;border-radius:6px;border:1px solid #1a1a2e;font-size:11px}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#4caf50;flex-shrink:0}
+.status-dot.stale{background:#ff9800}.status-dot.dead{background:#f44336}
+.status-bar .si{color:#666}
+.status-bar .sv{color:#ccc;font-weight:600}
 
 /* Date filters */
 .filters{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
@@ -34,7 +39,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* Order table */
 .otbl{margin-bottom:16px}
-.otbl h3{font-size:14px;margin-bottom:8px;color:#ccc}
+.otbl-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.otbl-hdr h3{font-size:14px;color:#ccc}
+.otbl-hdr .oc{font-size:12px;color:#666}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{text-align:left;padding:6px 8px;background:#111122;color:#666;position:sticky;top:0}
 td{padding:6px 8px;border-bottom:1px solid #0d0d1a}
@@ -43,6 +50,7 @@ tr:hover{background:#111128}
 .st-d{background:#4caf5020;color:#4caf50}.st-p{background:#ff980020;color:#ff9800}.st-c{background:#f4433620;color:#f44336}
 .issue-tag{color:#f44336;font-size:10px}
 .empty{text-align:center;padding:30px;color:#444;font-size:12px}
+.plat-tag{font-size:9px;padding:2px 5px;border-radius:3px;font-weight:600;display:inline-block}
 
 /* Ops sections */
 .tabs{display:flex;gap:4px;margin-bottom:12px}
@@ -66,8 +74,16 @@ tr:hover{background:#111128}
     <div style="display:flex;gap:8px;align-items:center"><span class="sub" id="ts"></span><button onclick="load()">Refresh</button></div>
   </div>
 
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot" id="statusDot"></div>
+    <span class="si">Last capture:</span><span class="sv" id="statusCapture">—</span>
+    <span class="si" style="margin-left:8px">Swiggy:</span><span class="sv" id="statusSwiggy">—</span>
+    <span class="si" style="margin-left:8px">Zomato:</span><span class="sv" id="statusZomato">—</span>
+    <span class="si" style="margin-left:8px">Total orders:</span><span class="sv" id="statusTotal">—</span>
+  </div>
+
   <div class="filters" id="filters">
-    <div class="fbtn active" data-d="today">Today</div>
+    <div class="fbtn" data-d="today">Today</div>
     <div class="fbtn" data-d="yesterday">Yesterday</div>
     <div class="fbtn" data-d="week">This Week</div>
     <div class="fbtn" data-d="month">This Month</div>
@@ -77,9 +93,9 @@ tr:hover{background:#111128}
   <div class="cards" id="cards"></div>
 
   <div class="otbl">
-    <h3>Orders</h3>
-    <div style="max-height:400px;overflow-y:auto">
-      <table><thead><tr><th>Date</th><th>Time</th><th>Platform</th><th>Outlet</th><th>Customer</th><th>Items</th><th>Amount</th><th>Status</th><th>Issues</th></tr></thead>
+    <div class="otbl-hdr"><h3>Orders</h3><span class="oc" id="orderCount"></span></div>
+    <div style="max-height:420px;overflow-y:auto">
+      <table><thead><tr><th>Date</th><th>Time</th><th>Platform</th><th>Outlet</th><th>Customer</th><th>Items</th><th>Amount</th><th>Net Payout</th><th>Status</th><th>Issues</th></tr></thead>
       <tbody id="otbody"></tbody></table>
     </div>
   </div>
@@ -111,16 +127,26 @@ tr:hover{background:#111128}
 <script>
 const API='/api/aggregator-pulse';
 const KEY='MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
-let dateFilter='today';
+const LS_KEY='hn_agg_filter';
+
+// Restore saved filter (localStorage → URL hash → default 'yesterday')
+let dateFilter = localStorage.getItem(LS_KEY) || (location.hash.slice(1) || 'yesterday');
+if(!['today','yesterday','week','month','all'].includes(dateFilter)) dateFilter='yesterday';
+
+// Mark active button
+function setFilter(f){
+  dateFilter=f;
+  localStorage.setItem(LS_KEY,f);
+  location.hash=f;
+  document.querySelectorAll('.fbtn').forEach(b=>b.classList.toggle('active',b.dataset.d===f));
+  load();
+}
 
 document.querySelectorAll('.fbtn').forEach(b=>{
-  b.onclick=()=>{
-    document.querySelectorAll('.fbtn').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active');
-    dateFilter=b.dataset.d;
-    load();
-  };
+  b.onclick=()=>setFilter(b.dataset.d);
 });
+// Set initial active state
+document.querySelectorAll('.fbtn').forEach(b=>b.classList.toggle('active',b.dataset.d===dateFilter));
 
 function showP(p,el){
   document.querySelectorAll('.platform').forEach(e=>e.classList.remove('active'));
@@ -131,63 +157,131 @@ function showP(p,el){
 
 async function load(){
   try{
-    const [ordR,latR,finR]=await Promise.all([
+    const [ordR,latR,finR,statsR]=await Promise.all([
       fetch(`${API}?action=orders&date=${dateFilter}&key=${KEY}`),
       fetch(`${API}?action=latest&key=${KEY}`),
       fetch(`${API}?action=finance&key=${KEY}`),
+      fetch(`${API}?action=stats&key=${KEY}`),
     ]);
     const ord=await ordR.json();
     const lat=await latR.json();
     const fin=await finR.json();
+    const stats=await statsR.json();
+
+    renderStatus(stats, ord);
     renderCards(ord);
     renderOrders(ord.orders||[]);
     renderOps(lat.outlets||[]);
     renderFinance(fin.finance||[]);
-    document.getElementById('ts').textContent=new Date().toLocaleTimeString('en-IN');
-  }catch(e){console.error(e)}
+    document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){
+    console.error(e);
+    document.getElementById('statusCapture').textContent='Error: '+e.message;
+    document.getElementById('statusDot').className='status-dot dead';
+  }
+}
+
+function renderStatus(stats, ord){
+  // Find most recent capture across all platforms
+  const allSnaps = stats.snapshots||[];
+  const allOrders = stats.orders||[];
+  let lastCapture = null;
+  for(const s of allSnaps){
+    if(!lastCapture||s.last>lastCapture) lastCapture=s.last;
+  }
+  for(const o of allOrders){
+    if(!lastCapture||o.last>lastCapture) lastCapture=o.last;
+  }
+
+  const swiggySnap = allSnaps.find(s=>s.platform==='swiggy');
+  const zomatoSnap = allSnaps.find(s=>s.platform==='zomato')||allSnaps.find(s=>s.platform==='zomato');
+
+  // Swiggy/Zomato last times
+  let swLast=null, zmLast=null;
+  for(const s of allSnaps){
+    if(s.platform==='swiggy'&&(!swLast||s.last>swLast)) swLast=s.last;
+    if(s.platform==='zomato'&&(!zmLast||s.last>zmLast)) zmLast=s.last;
+  }
+
+  const totalOrders = allOrders.reduce((a,b)=>a+(b.orders||0),0);
+
+  const dot=document.getElementById('statusDot');
+  const minsAgo = lastCapture ? Math.round((Date.now()-new Date(lastCapture).getTime())/60000) : 9999;
+  dot.className='status-dot'+(minsAgo>30?' stale':minsAgo>120?' dead':'');
+
+  document.getElementById('statusCapture').textContent = lastCapture ? fmtAgo(lastCapture) : '—';
+  document.getElementById('statusSwiggy').textContent = swLast ? fmtAgo(swLast) : '—';
+  document.getElementById('statusZomato').textContent = zmLast ? fmtAgo(zmLast) : '—';
+  document.getElementById('statusTotal').textContent = totalOrders+' all-time';
+}
+
+function fmtAgo(isoStr){
+  const d=new Date(isoStr);
+  const mins=Math.round((Date.now()-d.getTime())/60000);
+  if(mins<2) return 'just now';
+  if(mins<60) return mins+'m ago';
+  const hrs=Math.round(mins/60);
+  if(hrs<24) return hrs+'h ago';
+  return Math.round(hrs/24)+'d ago';
 }
 
 function renderCards(data){
   const outlets=data.by_outlet||[];
   const el=document.getElementById('cards');
-  // Ensure 4 cards: swiggy_he, swiggy_nch, zomato_he, zomato_nch
+  const filter=dateFilter==='today'?'Today':dateFilter==='yesterday'?'Yesterday':dateFilter==='week'?'7 days':dateFilter==='month'?'30 days':'All time';
   const expected=[
-    {platform:'swiggy',brand:'he',name:'Hamza Express',cls:'he sw'},
-    {platform:'swiggy',brand:'nch',name:'Nawabi Chai House',cls:'nch sw'},
-    {platform:'zomato',brand:'he',name:'Hamza Express',cls:'he zm'},
-    {platform:'zomato',brand:'nch',name:'Nawabi Chai House',cls:'nch zm'},
+    {platform:'swiggy',brand:'he',name:'Hamza Express',pcls:'sw'},
+    {platform:'swiggy',brand:'nch',name:'Nawabi Chai House',pcls:'sw'},
+    {platform:'zomato',brand:'he',name:'Hamza Express',pcls:'zm'},
+    {platform:'zomato',brand:'nch',name:'Nawabi Chai House',pcls:'zm'},
   ];
   el.innerHTML=expected.map(e=>{
     const o=outlets.find(x=>x.platform===e.platform&&x.brand===e.brand)||{orders:0,delivered:0,revenue:0,payout:0};
-    const pCls=e.platform==='swiggy'?'sw':'zm';
     return `<div class="card ${e.brand}">
-      <div class="top"><span class="name">${e.name}</span><span class="plat ${pCls}">${e.platform.toUpperCase()}</span></div>
-      <div class="big">${o.delivered} delivered</div>
+      <div class="top"><span class="name">${e.name}</span><span class="plat ${e.pcls}">${e.platform==='swiggy'?'SWIGGY':'ZOMATO'}</span></div>
+      <div class="big">${o.delivered} <small style="font-size:12px;color:#666;font-weight:400">delivered</small></div>
       <div class="row"><span class="lbl">Total orders</span><span class="val">${o.orders}</span></div>
-      <div class="row"><span class="lbl">Revenue</span><span class="val">₹${Math.round(o.revenue)}</span></div>
-      ${o.payout?`<div class="row"><span class="lbl">Net payout</span><span class="val">₹${Math.round(o.payout)}</span></div>`:''}
+      <div class="row"><span class="lbl">Revenue</span><span class="val">₹${Math.round(o.revenue||0).toLocaleString('en-IN')}</span></div>
+      ${(o.payout||0)>0?`<div class="row"><span class="lbl">Net payout</span><span class="val">₹${Math.round(o.payout).toLocaleString('en-IN')}</span></div>`:''}
     </div>`;
   }).join('');
+  document.getElementById('orderCount').textContent=`${data.total_orders||0} orders · ₹${Math.round(data.total_revenue||0).toLocaleString('en-IN')} revenue · ${filter}`;
+}
+
+function cleanStr(s){
+  if(!s) return '';
+  // Replace non-breaking spaces and other whitespace variants
+  return String(s).replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
 }
 
 function renderOrders(orders){
   const tb=document.getElementById('otbody');
-  if(!orders.length){tb.innerHTML='<tr><td colspan="9" class="empty">No orders for this period</td></tr>';return}
+  if(!orders.length){
+    const isToday=dateFilter==='today';
+    tb.innerHTML=`<tr><td colspan="10" class="empty">${isToday?'No orders captured today yet — the VM extension will pick them up as they come in':'No orders for this period'}</td></tr>`;
+    return;
+  }
   tb.innerHTML=orders.map(o=>{
-    const s=o.status||'';
+    const s=cleanStr(o.status)||'';
     const sc=s.match(/deliver/i)?'st-d':s.match(/prepar|ready/i)?'st-p':'st-c';
-    const outlet=o.brand==='he'?'HE':o.brand==='nch'?'NCH':o.outlet_name||'—';
-    const plat=o.platform==='swiggy'?'<span class="plat sw">Swiggy</span>':'<span class="plat zm">Zomato</span>';
+    const outlet=o.brand==='he'?'HE':o.brand==='nch'?'NCH':cleanStr(o.outlet_name)||'—';
+    const platTag=o.platform==='swiggy'
+      ?'<span class="plat-tag sw">Swiggy</span>'
+      :'<span class="plat-tag zm">Zomato</span>';
+    const items=cleanStr(o.items);
+    const issues=cleanStr(o.issues);
+    const time=cleanStr(o.order_time);
     return `<tr>
       <td>${o.order_date||'—'}</td>
-      <td>${o.order_time||'—'}</td>
-      <td>${plat}</td>
-      <td>${outlet}</td>
-      <td>${o.customer_name||'—'}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.items||'—'}</td>
-      <td>₹${o.order_value||'—'}</td>
+      <td style="white-space:nowrap;font-size:11px">${time||'—'}</td>
+      <td>${platTag}</td>
+      <td><strong>${outlet}</strong></td>
+      <td>${cleanStr(o.customer_name)||'—'}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${items}">${items||'—'}</td>
+      <td style="white-space:nowrap">₹${o.order_value||'—'}</td>
+      <td style="white-space:nowrap">${o.net_payout?'₹'+o.net_payout:'—'}</td>
       <td><span class="st ${sc}">${s}</span></td>
-      <td>${o.issues?'<span class="issue-tag">⚠️ '+o.issues.substring(0,30)+'</span>':''}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${issues}">${issues?'<span class="issue-tag">⚠ '+issues.substring(0,35)+'</span>':''}</td>
     </tr>`;
   }).join('');
 }
@@ -195,28 +289,55 @@ function renderOrders(orders){
 function renderOps(outlets){
   const flat={};
   for(const o of outlets){
-    for(const[mt,md]of Object.entries(o.metrics||{})){
-      if(typeof md.data==='object')Object.assign(flat,md.data);
+    for(const[,md]of Object.entries(o.metrics||{})){
+      if(md&&typeof md.data==='object') Object.assign(flat, md.data);
     }
   }
-  const sr=flat; // reports_swiggy metrics
-  const zl=flat; // live_tracking metrics (merged)
 
-  // Swiggy
-  rg('s-fun',[m('Impressions',sr.impressions),m('Menu Opens',sr.menu_opens),m('Cart Builds',sr.cart_builds),m('Orders Placed',sr.orders_placed),m('New Cust',sr.new_customers),m('Repeat',sr.repeat_customers),m('Dormant',sr.dormant_customers),m('New Cust %',sr.new_cust_order_pct,'','','%'),m('Repeat %',sr.repeat_cust_order_pct,'','','%')]);
-  rg('s-rat',[m('Rated',sr.rated_orders),m('Poor Rated',sr.poor_rated_orders,'','w'),m('Complaint %',sr.complaint_pct,'','w','%'),m('Complaints',sr.complaint_orders,'','w'),m('Unresolved',sr.unresolved_complaints,'','w'),m('Wrong Items',sr.wrong_items,'','w'),m('Missing',sr.missing_items,'','w'),m('Quality',sr.quality_issues,'','w'),m('Packaging',sr.packaging_issues,'','w')]);
-  rg('s-ads',[m('CPC Sales',sr.cpc_sales,'₹'),m('CPC Orders',sr.cpc_orders),m('CPC Spend',sr.cpc_spends,'₹'),m('ROAS',sr.roas,'','','x'),m('Banner Sales',sr.cba_sales,'₹'),m('Banner Spend',sr.cba_spends,'₹')]);
-  rg('s-ops',[m('Online %',sr.online_availability,'',parseFloat(sr.online_availability)>=95?'g':'b','%'),m('Prep Time',sr.kitchen_prep_time,'','',' min'),m('MFR',sr.mfr_accuracy,'','','%'),m('Delayed >10m',sr.delayed_10min,'','w','%')]);
-  rg('s-menu',[m('Menu Score',sr.menu_score,'',parseFloat(sr.menu_score)>=50?'':'b','/100'),m('Photos',sr.items_with_photos,'','g','%'),m('Descriptions',sr.items_with_desc,'','g','%')]);
+  rg('s-fun',[
+    m('Impressions',flat.impressions),m('Menu Opens',flat.menu_opens),m('Cart Builds',flat.cart_builds),m('Orders Placed',flat.orders_placed),
+    m('New Cust',flat.new_customers),m('Repeat',flat.repeat_customers),m('Dormant',flat.dormant_customers),
+    m('New Cust %',flat.new_cust_order_pct,'','','%'),m('Repeat %',flat.repeat_cust_order_pct,'','','%'),
+  ]);
+  rg('s-rat',[
+    m('Rated',flat.rated_orders),m('Poor Rated',flat.poor_rated_orders,'','w'),
+    m('Complaint %',flat.complaint_pct,'','w','%'),m('Complaints',flat.complaint_orders,'','w'),
+    m('Unresolved',flat.unresolved_complaints,'','w'),m('Wrong Items',flat.wrong_items,'','w'),
+    m('Missing',flat.missing_items,'','w'),m('Quality',flat.quality_issues,'','w'),m('Packaging',flat.packaging_issues,'','w'),
+  ]);
+  rg('s-ads',[
+    m('CPC Sales',flat.cpc_sales,'₹'),m('CPC Orders',flat.cpc_orders),m('CPC Spend',flat.cpc_spends,'₹'),
+    m('ROAS',flat.roas,'','','x'),m('Banner Sales',flat.cba_sales,'₹'),m('Banner Spend',flat.cba_spends,'₹'),
+  ]);
+  rg('s-ops',[
+    m('Online %',flat.online_availability,'',parseFloat(flat.online_availability)>=95?'g':'b','%'),
+    m('Prep Time',flat.kitchen_prep_time,'','',' min'),m('MFR',flat.mfr_accuracy,'','','%'),
+    m('Delayed >10m',flat.delayed_10min,'','w','%'),m('Date Range',flat.date_range),
+  ]);
+  rg('s-menu',[
+    m('Menu Score',flat.menu_score,'',parseFloat(flat.menu_score)>=50?'':'b','/100'),
+    m('Photos',flat.items_with_photos,'','g','%'),m('Descriptions',flat.items_with_desc,'','g','%'),
+  ]);
 
-  // Zomato
-  rg('z-live',[m('Sales',zl.sales,'₹'),m('Orders',zl.delivered_orders),m('AOV',zl.aov,'₹'),m('Rejected',zl.rejected_pct,'','w','%'),m('Delayed',zl.delayed_pct,'','w','%'),m('Poor Rated',zl.poor_rated_pct,'','w','%'),m('Lost Sales',zl.lost_sales,'₹','w'),m('HE Sales',zl.he_sales,'₹'),m('NCH Sales',zl.nch_sales,'₹')]);
-  rg('z-fun',[m('Impressions',zl.impressions),m('I→Menu',zl.imp_to_menu,'','','%'),m('Menu→Cart',zl.menu_to_cart,'','','%'),m('Cart→Order',zl.cart_to_order,'','','%'),m('Offer Sales',zl.sales_from_offers,'₹')]);
-  const zb=flat;
-  rg('z-wk',[m('Wk Sales',zb.weekly_sales,'₹'),m('Wk Orders',zb.weekly_orders),m('Wk AOV',zb.weekly_aov,'₹'),m('Bad Orders',zb.weekly_bad_orders,'','w','%'),m('Online',zb.weekly_online_pct,'','','%')]);
+  rg('z-live',[
+    m('Sales',flat.sales,'₹'),m('Orders',flat.delivered_orders),m('AOV',flat.aov,'₹'),
+    m('Rejected',flat.rejected_pct,'','w','%'),m('Delayed',flat.delayed_pct,'','w','%'),
+    m('Poor Rated',flat.poor_rated_pct,'','w','%'),m('Lost Sales',flat.lost_sales,'₹','w'),
+    m('HE Sales',flat.he_sales,'₹'),m('NCH Sales',flat.nch_sales,'₹'),
+  ]);
+  rg('z-fun',[
+    m('Impressions',flat.impressions),m('I→Menu',flat.imp_to_menu,'','','%'),
+    m('Menu→Cart',flat.menu_to_cart,'','','%'),m('Cart→Order',flat.cart_to_order,'','','%'),
+    m('Offer Sales',flat.sales_from_offers,'₹'),
+  ]);
+  rg('z-wk',[
+    m('Wk Sales',flat.weekly_sales,'₹'),m('Wk Orders',flat.weekly_orders),m('Wk AOV',flat.weekly_aov,'₹'),
+    m('Bad Orders',flat.weekly_bad_orders,'','w','%'),m('Online',flat.weekly_online_pct,'','','%'),
+  ]);
 }
 
 function renderFinance(finance){
+  let heSet=false,nchSet=false;
   for(const f of finance){
     const d=f.data||{};
     const brand=f.brand;
@@ -224,10 +345,14 @@ function renderFinance(finance){
     if(!id)continue;
     rg(id,[
       m('Orders',d.order_count),m('Customer Paid',d.customer_paid,'₹'),m('Fees',d.total_fees),
-      m('Complaints',d.complaint_charges),m('Taxes',d.total_taxes),m('Other Charges',d.other_charges),
+      m('Complaint Chg',d.complaint_charges),m('Taxes',d.total_taxes),m('Other Charges',d.other_charges),
       m('Net Payout',d.net_payout),m('Payout Date',d.payout_date),
     ]);
+    if(brand==='he') heSet=true;
+    if(brand==='nch') nchSet=true;
   }
+  if(!heSet) rg('f-he',[m('Status','No finance data captured yet')]);
+  if(!nchSet) rg('f-nch',[m('Status','No finance data captured yet')]);
 }
 
 function m(label,val,pre,cls,suf){
