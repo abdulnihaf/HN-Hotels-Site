@@ -74,6 +74,13 @@ async function handlePost(db, request, headers) {
 
     if (data === '{}' || data === 'null') continue;
 
+    // Deduplication: skip if an identical metric_type was stored in the last 10 minutes
+    // Prevents thousands of duplicate rows from the 45-second read interval
+    const recent = await db.prepare(
+      `SELECT id FROM aggregator_snapshots WHERE platform=? AND brand=? AND metric_type=? AND captured_at > datetime('now', '-10 minutes') LIMIT 1`
+    ).bind(platform, brand, metricType).first();
+    if (recent) continue;
+
     await db.prepare(
       `INSERT INTO aggregator_snapshots (platform, brand, outlet_id, metric_type, data, captured_at)
        VALUES (?, ?, ?, ?, ?, ?)`
