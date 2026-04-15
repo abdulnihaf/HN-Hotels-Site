@@ -296,52 +296,56 @@ function renderOrders(orders){
 }
 
 function renderOps(outlets){
-  const flat={};
+  // CRITICAL: keep Swiggy and Zomato metrics SEPARATE — never merge platforms
+  const sw={}, zm={};
   for(const o of outlets){
+    const target = o.platform==='zomato' ? zm : sw;
     for(const[,md]of Object.entries(o.metrics||{})){
-      if(md&&typeof md.data==='object') Object.assign(flat, md.data);
+      if(md&&typeof md.data==='object') Object.assign(target, md.data);
     }
   }
 
+  // ── SWIGGY ──────────────────────────────────────────────────────────────────
   rg('s-fun',[
-    m('Impressions',flat.impressions),m('Menu Opens',flat.menu_opens),m('Cart Builds',flat.cart_builds),m('Orders Placed',flat.orders_placed),
-    m('New Cust',flat.new_customers),m('Repeat',flat.repeat_customers),m('Dormant',flat.dormant_customers),
-    m('New Cust %',flat.new_cust_order_pct,'','','%'),m('Repeat %',flat.repeat_cust_order_pct,'','','%'),
+    m('Impressions',sw.impressions),m('Menu Opens',sw.menu_opens),m('Cart Builds',sw.cart_builds),m('Orders Placed',sw.orders_placed),
+    m('New Cust',sw.new_customers),m('Repeat',sw.repeat_customers),m('Dormant',sw.dormant_customers),
+    m('New Cust %',sw.new_cust_order_pct,'','','%'),m('Repeat %',sw.repeat_cust_order_pct,'','','%'),
   ]);
   rg('s-rat',[
-    m('Rated',flat.rated_orders),m('Poor Rated',flat.poor_rated_orders,'','w'),
-    m('Complaint %',flat.complaint_pct,'','w','%'),m('Complaints',flat.complaint_orders,'','w'),
-    m('Unresolved',flat.unresolved_complaints,'','w'),m('Wrong Items',flat.wrong_items,'','w'),
-    m('Missing',flat.missing_items,'','w'),m('Quality',flat.quality_issues,'','w'),m('Packaging',flat.packaging_issues,'','w'),
+    m('Rated',sw.rated_orders),m('Poor Rated',sw.poor_rated_orders,'','w'),
+    m('Complaint %',sw.complaint_pct,'','w','%'),m('Complaints',sw.complaint_orders,'','w'),
+    m('Unresolved',sw.unresolved_complaints,'','w'),m('Wrong Items',sw.wrong_items,'','w'),
+    m('Missing',sw.missing_items,'','w'),m('Quality',sw.quality_issues,'','w'),m('Packaging',sw.packaging_issues,'','w'),
   ]);
   rg('s-ads',[
-    m('CPC Sales',flat.cpc_sales,'₹'),m('CPC Orders',flat.cpc_orders),m('CPC Spend',flat.cpc_spends,'₹'),
-    m('ROAS',flat.roas,'','','x'),m('Banner Sales',flat.cba_sales,'₹'),m('Banner Spend',flat.cba_spends,'₹'),
+    m('CPC Sales',sw.cpc_sales,'₹'),m('CPC Orders',sw.cpc_orders),m('CPC Spend',sw.cpc_spends,'₹'),
+    m('ROAS',sw.roas,'','','x'),m('Banner Sales',sw.cba_sales,'₹'),m('Banner Spend',sw.cba_spends,'₹'),
   ]);
   rg('s-ops',[
-    m('Online %',flat.online_availability,'',parseFloat(flat.online_availability)>=95?'g':'b','%'),
-    m('Prep Time',flat.kitchen_prep_time,'','',' min'),m('MFR',flat.mfr_accuracy,'','','%'),
-    m('Delayed >10m',flat.delayed_10min,'','w','%'),m('Date Range',flat.date_range),
+    m('Online %',sw.online_availability,'',parseFloat(sw.online_availability)>=95?'g':'b','%'),
+    m('Prep Time',sw.kitchen_prep_time,'','',' min'),m('MFR',sw.mfr_accuracy,'','','%'),
+    m('Delayed >10m',sw.delayed_10min,'','w','%'),m('Date Range',sw.date_range),
   ]);
   rg('s-menu',[
-    m('Menu Score',flat.menu_score,'',parseFloat(flat.menu_score)>=50?'':'b','/100'),
-    m('Photos',flat.items_with_photos,'','g','%'),m('Descriptions',flat.items_with_desc,'','g','%'),
+    m('Menu Score',sw.menu_score,'',parseFloat(sw.menu_score)>=50?'':'b','/100'),
+    m('Photos',sw.items_with_photos,'','g','%'),m('Descriptions',sw.items_with_desc,'','g','%'),
   ]);
 
+  // ── ZOMATO (Combined HE+NCH — platform shows merged data) ──────────────────
   rg('z-live',[
-    m('Sales',flat.sales,'₹'),m('Orders',flat.delivered_orders),m('AOV',flat.aov,'₹'),
-    m('Rejected',flat.rejected_pct,'','w','%'),m('Delayed',flat.delayed_pct,'','w','%'),
-    m('Poor Rated',flat.poor_rated_pct,'','w','%'),m('Lost Sales',flat.lost_sales,'₹','w'),
-    m('HE Sales',flat.he_sales,'₹'),m('NCH Sales',flat.nch_sales,'₹'),
+    m('Sales',zm.sales,'₹'),m('Orders',zm.delivered_orders),m('AOV',zm.aov,'₹'),
+    m('Rejected',zm.rejected_pct,'','w','%'),m('Delayed',zm.delayed_pct,'','w','%'),
+    m('Poor Rated',zm.poor_rated_pct,'','w','%'),m('Lost Sales',zm.lost_sales,'₹','w'),
+    m('HE Sales',zm.he_sales,'₹'),m('NCH Sales',zm.nch_sales,'₹'),
+    m('Offer Sales',zm.sales_from_offers,'₹'),
   ]);
   rg('z-fun',[
-    m('Impressions',flat.impressions),m('I→Menu',flat.imp_to_menu,'','','%'),
-    m('Menu→Cart',flat.menu_to_cart,'','','%'),m('Cart→Order',flat.cart_to_order,'','','%'),
-    m('Offer Sales',flat.sales_from_offers,'₹'),
+    m('Impressions',zm.impressions),m('I→Menu',zm.imp_to_menu,'','','%'),
+    m('Menu→Cart',zm.menu_to_cart,'','','%'),m('Cart→Order',zm.cart_to_order,'','','%'),
   ]);
   rg('z-wk',[
-    m('Wk Sales',flat.weekly_sales,'₹'),m('Wk Orders',flat.weekly_orders),m('Wk AOV',flat.weekly_aov,'₹'),
-    m('Bad Orders',flat.weekly_bad_orders,'','w','%'),m('Online',flat.weekly_online_pct,'','','%'),
+    m('Wk Sales',zm.weekly_sales,'₹'),m('Wk Orders',zm.weekly_orders),m('Wk AOV',zm.weekly_aov,'₹'),
+    m('Bad Orders',zm.weekly_bad_orders,'','w','%'),m('Online',zm.weekly_online_pct,'','','%'),
   ]);
 }
 
