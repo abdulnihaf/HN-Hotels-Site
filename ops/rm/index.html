@@ -125,6 +125,7 @@
       <button onclick="setTab('purchase')" data-tab="purchase" class="tab-btn flex-1">Purchase</button>
       <button onclick="setTab('settlement')" data-tab="settlement" class="tab-btn flex-1">Settlement</button>
       <button onclick="setTab('analytics')" data-tab="analytics" class="tab-btn flex-1">Analytics</button>
+      <button onclick="setTab('prices')" data-tab="prices" id="tab-btn-prices" class="tab-btn flex-1 hidden">💹</button>
     </div>
   </div>
 
@@ -282,6 +283,52 @@
   </div>
 
   <!-- ═══ ANALYTICS TAB ═══ -->
+  <!-- ═══ PRICES TAB ═══ -->
+  <div id="tab-prices" class="tab-content hidden">
+    <div class="px-4 pt-3 pb-32">
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h2 class="text-sm font-bold text-white/80">Price Intelligence</h2>
+          <p id="priceLastRun" class="text-[10px] text-white/30 mt-0.5">Loading...</p>
+        </div>
+        <button onclick="loadPrices()" class="btn btn-ghost btn-sm text-[11px]">↻ Refresh</button>
+      </div>
+      <!-- Stat cards -->
+      <div class="grid grid-cols-3 gap-2 mb-4">
+        <div class="card text-center">
+          <p class="text-[10px] text-white/30 uppercase tracking-wider">Checked</p>
+          <p id="priceStatChecked" class="text-xl font-bold mt-0.5">--</p>
+        </div>
+        <div class="card text-center">
+          <p class="text-[10px] text-white/30 uppercase tracking-wider">Savings &gt;10%</p>
+          <p id="priceStatSavings" class="text-xl font-bold mt-0.5 text-emerald-400">--</p>
+        </div>
+        <div class="card text-center">
+          <p class="text-[10px] text-white/30 uppercase tracking-wider">Best Deal</p>
+          <p id="priceStatBest" class="text-[11px] font-bold mt-0.5 text-amber-400 leading-tight">--</p>
+        </div>
+      </div>
+      <!-- Filters -->
+      <div class="flex gap-2 mb-3">
+        <div class="search-wrap flex-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input id="priceSearch" type="search" class="search-input" placeholder="Search items..." oninput="filterPriceTable()">
+        </div>
+        <select id="priceFilterSavings" onchange="filterPriceTable()" class="px-3 py-2 text-xs rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);">
+          <option value="">All</option>
+          <option value="10">≥10% saving</option>
+          <option value="5">≥5% saving</option>
+          <option value="any">Any saving</option>
+        </select>
+      </div>
+      <!-- Items list -->
+      <div id="priceList" class="space-y-2">
+        <p class="text-white/20 text-xs text-center py-4">Loading price data...</p>
+      </div>
+    </div>
+  </div>
+
   <div id="tab-analytics" class="tab-content hidden">
     <div class="px-4 pt-3 pb-8">
       <div class="grid grid-cols-2 gap-3 mb-4">
@@ -455,6 +502,10 @@ function verifyPin() {
       document.getElementById('userBadge').textContent = d.user;
       document.getElementById('userBadge').classList.remove('hidden');
       document.getElementById('navSubtitle').textContent = `${d.user} - ${d.role}`;
+      // Show Prices tab for admin only
+      if (d.role === 'admin') {
+        document.getElementById('tab-btn-prices').classList.remove('hidden');
+      }
       // Default tab based on role
       if (d.role === 'settlement') { currentTab = 'settlement'; }
       else if (d.role === 'purchase') { currentTab = 'purchase'; }
@@ -498,6 +549,7 @@ function refreshCurrentTab() {
   if (currentTab === 'purchase') loadPurchaseData();
   if (currentTab === 'settlement') loadSettlementData();
   if (currentTab === 'analytics') loadAnalytics();
+  if (currentTab === 'prices') loadPrices();
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1717,6 +1769,109 @@ async function loadConsumption() {
     : '<p class="text-xs text-white/30">No transfers</p>';
 
   el.innerHTML = salesHtml + consHtml;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * PRICE INTELLIGENCE
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+let priceData = [];
+
+async function loadPrices() {
+  const listEl = document.getElementById('priceList');
+  listEl.innerHTML = '<p class="text-white/20 text-xs text-center py-4">Loading...</p>';
+  try {
+    const r = await fetch(`${API}?action=market-prices&brand=${currentBrand}&pin=${currentPin}`);
+    const data = await r.json();
+    if (!data.success) {
+      listEl.innerHTML = `<p class="text-red-400/60 text-xs text-center py-4">${data.error || 'Failed to load'}</p>`;
+      return;
+    }
+    priceData = data.summary || [];
+
+    // Header stats
+    const runDate = data.lastRun?.last_run_date;
+    const checked = data.lastRun?.items_checked || 0;
+    document.getElementById('priceLastRun').textContent =
+      runDate ? `Last run: ${runDate} · ${checked} items` : 'No run yet today';
+    document.getElementById('priceStatChecked').textContent = priceData.length;
+
+    const bigSavers = priceData.filter(i => (i.savings_pct || 0) >= 10);
+    document.getElementById('priceStatSavings').textContent = bigSavers.length;
+
+    const topItem = priceData[0];
+    document.getElementById('priceStatBest').textContent = topItem
+      ? `${topItem.item_name.split(' ').slice(0, 2).join(' ')} -${topItem.savings_pct}%`
+      : '--';
+
+    renderPriceList(priceData);
+  } catch (e) {
+    listEl.innerHTML = `<p class="text-red-400/60 text-xs text-center py-4">${e.message}</p>`;
+  }
+}
+
+function filterPriceTable() {
+  const q = (document.getElementById('priceSearch')?.value || '').toLowerCase();
+  const savingsFilter = document.getElementById('priceFilterSavings')?.value || '';
+  let filtered = priceData;
+  if (q) filtered = filtered.filter(i => i.item_name.toLowerCase().includes(q));
+  if (savingsFilter === '10') filtered = filtered.filter(i => (i.savings_pct || 0) >= 10);
+  else if (savingsFilter === '5') filtered = filtered.filter(i => (i.savings_pct || 0) >= 5);
+  else if (savingsFilter === 'any') filtered = filtered.filter(i => (i.savings_pct || 0) > 0);
+  renderPriceList(filtered);
+}
+
+function renderPriceList(items) {
+  const el = document.getElementById('priceList');
+  if (!items.length) {
+    el.innerHTML = '<p class="text-white/20 text-xs text-center py-4">No items match</p>';
+    return;
+  }
+
+  const PLATFORM_LABELS = { HYPERPURE: 'HP', BLINKIT: 'BL', ZEPTO: 'ZP', BIGBASKET: 'BB' };
+  const PLATFORM_COLORS = { HYPERPURE: 'text-orange-400', BLINKIT: 'text-yellow-400', ZEPTO: 'text-purple-400', BIGBASKET: 'text-red-400' };
+
+  el.innerHTML = items.map(item => {
+    const sav = item.savings_pct || 0;
+    const savBadge = sav >= 15
+      ? `<span class="text-emerald-400 font-bold">-${sav}% ⚡</span>`
+      : sav >= 5
+      ? `<span class="text-emerald-400/80 font-semibold">-${sav}%</span>`
+      : sav > 0
+      ? `<span class="text-white/40">-${sav}%</span>`
+      : `<span class="text-white/20">—</span>`;
+
+    const cheapColor = PLATFORM_COLORS[item.cheapest_platform] || 'text-white/60';
+    const cheapLabel = PLATFORM_LABELS[item.cheapest_platform] || item.cheapest_platform || '—';
+
+    // Build platform price chips
+    const platformRows = [
+      { key: 'HYPERPURE', price: item.price_hyperpure },
+      { key: 'BLINKIT',   price: item.price_blinkit },
+      { key: 'ZEPTO',     price: item.price_zepto },
+      { key: 'BIGBASKET', price: item.price_bigbasket },
+    ].filter(p => p.price != null);
+
+    const chips = platformRows.map(p => {
+      const isCheapest = p.key === item.cheapest_platform;
+      const color = isCheapest ? PLATFORM_COLORS[p.key] : 'text-white/30';
+      const bold = isCheapest ? 'font-bold' : '';
+      return `<span class="${color} ${bold} text-[10px]">${PLATFORM_LABELS[p.key]} ₹${p.price}</span>`;
+    }).join('<span class="text-white/10 mx-0.5">·</span>');
+
+    return `<div class="card px-3 py-2.5">
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex-1 min-w-0">
+          <p class="text-[13px] font-semibold text-white/85 leading-tight truncate">${item.item_name}</p>
+          <p class="text-[10px] text-white/25 mt-0.5">${item.category || ''} · ₹${item.odoo_avg_cost || '?'}/${item.base_unit}</p>
+        </div>
+        <div class="text-right shrink-0">
+          ${savBadge}
+          ${sav > 0 ? `<p class="text-[10px] ${cheapColor} mt-0.5">${cheapLabel} ₹${item.cheapest_price}/${item.base_unit}</p>` : ''}
+        </div>
+      </div>
+      ${chips ? `<div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">${chips}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

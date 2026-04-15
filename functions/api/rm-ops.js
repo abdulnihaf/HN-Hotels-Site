@@ -139,6 +139,9 @@ async function handleGet(action, url, env, DB) {
   // verify-pin doesn't need brand — used by dashboard PIN gate
   if (action === 'verify-pin') return json({ success: true, user: user.name, role: user.role });
 
+  // market-prices is cross-brand — admin only
+  if (action === 'market-prices') return getMarketPrices(user, DB);
+
   const brand = url.searchParams.get('brand');
   if (!brand || !BRAND_CONFIG[brand]) return json({ error: 'Missing or invalid brand (HE|NCH)' }, 400);
 
@@ -601,6 +604,49 @@ async function getOpsStatus(brand, DB) {
     priceRecords: prices?.cnt || 0,
     opsLogs: logs?.cnt || 0,
     lastSettlement: lastSettlement || null,
+  });
+}
+
+/* ── Market Prices (Price Intelligence) ── */
+
+async function getMarketPrices(user, DB) {
+  if (!DB) return json({ error: 'Database not configured' }, 500);
+  if (user.role !== 'admin') return json({ error: 'Admin only' }, 403);
+
+  const [summaryResult, lastRunResult, trendResult] = await Promise.all([
+    DB.prepare(`
+      SELECT ps.material_code, ps.item_name, ps.base_unit,
+             ps.odoo_avg_cost, ps.cheapest_platform, ps.cheapest_price,
+             ps.savings_pct, ps.price_hyperpure, ps.price_blinkit,
+             ps.price_zepto, ps.price_bigbasket,
+             ps.items_checked, ps.last_run_at, ps.last_run_status,
+             rp.category, rp.brand
+      FROM rm_price_summary ps
+      LEFT JOIN rm_products rp ON rp.hn_code = ps.material_code
+      WHERE ps.cheapest_price IS NOT NULL
+      ORDER BY ps.savings_pct DESC
+    `).all(),
+
+    DB.prepare(`
+      SELECT MAX(checked_at) as last_run_date,
+             COUNT(*) as items_checked
+      FROM rm_market_prices
+      WHERE checked_at = DATE('now')
+    `).first(),
+
+    DB.prepare(`
+      SELECT material_code, platform, price_per_base, checked_at
+      FROM rm_market_prices
+      WHERE checked_at >= DATE('now', '-7 days')
+      ORDER BY material_code, platform, checked_at
+    `).all(),
+  ]);
+
+  return json({
+    success: true,
+    summary: summaryResult.results || [],
+    lastRun: lastRunResult || { last_run_date: null, items_checked: 0 },
+    trend: trendResult.results || [],
   });
 }
 
