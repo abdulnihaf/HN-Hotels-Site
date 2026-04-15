@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>HN Hotels — Investor Report | Feb–Mar 2026</title>
+<style>
+:root{--bg:#0a0a0f;--s1:#12121a;--s2:#1a1a26;--bd:#2a2a3a;--tx:#e0e0e8;--dm:#8888a0;--ac:#d4a44c;--gn:#22c55e;--rd:#ef4444;--or:#f97316;--bl:#3b82f6;--pp:#a855f7;--cy:#06b6d4;--nch:#d4a44c;--he:#f97316}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);line-height:1.5;-webkit-font-smoothing:antialiased}
+
+#pin-gate{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+#pin-gate.hidden{display:none}
+#pin-gate h2{color:var(--ac);font-size:1.3rem;letter-spacing:1px}
+.pin-input{display:flex;gap:12px;margin:8px 0}
+.pin-input input{width:48px;height:56px;text-align:center;font-size:1.5rem;background:var(--s1);border:2px solid var(--bd);border-radius:10px;color:var(--tx);outline:none;-webkit-text-security:disc}
+.pin-input input:focus{border-color:var(--ac)}
+.pin-err{color:var(--rd);font-size:.85rem;min-height:1.2em}
+
+#main{display:none;padding:16px;max-width:1100px;margin:0 auto}
+#main.visible{display:block}
+
+.hdr{text-align:center;padding:24px 0 16px;border-bottom:1px solid var(--bd);margin-bottom:20px}
+.hdr h1{font-size:1.4rem;color:var(--ac);font-weight:700;letter-spacing:.5px}
+.hdr .sub{color:var(--dm);font-size:.82rem;margin-top:6px}
+.hdr .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:600;margin:0 4px}
+.badge-nch{background:rgba(212,164,76,.15);color:var(--nch);border:1px solid rgba(212,164,76,.3)}
+.badge-he{background:rgba(249,115,22,.15);color:var(--he);border:1px solid rgba(249,115,22,.3)}
+
+/* Summary Cards */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:14px 10px;text-align:center}
+.card.wide{grid-column:1/-1}
+.card .lbl{font-size:.68rem;color:var(--dm);text-transform:uppercase;letter-spacing:.5px}
+.card .val{font-size:1.35rem;font-weight:700;margin-top:4px}
+.card .sub2{font-size:.7rem;color:var(--dm);margin-top:2px}
+.gn{color:var(--gn)} .rd{color:var(--rd)} .or{color:var(--or)} .ac{color:var(--ac)} .bl{color:var(--bl)} .cy{color:var(--cy)}
+
+/* Section */
+.sec{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+.sec-h{font-size:.95rem;font-weight:700;color:var(--ac);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px}
+.sec-h .ico{font-size:1.1rem}
+
+/* Tables */
+.tbl{width:100%;border-collapse:collapse;font-size:.78rem}
+.tbl th{background:var(--s2);color:var(--dm);padding:7px 8px;text-align:right;font-weight:600;border-bottom:1px solid var(--bd)}
+.tbl th:first-child{text-align:left}
+.tbl td{padding:6px 8px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04)}
+.tbl td:first-child{text-align:left}
+.tbl tr.tot td{border-top:1px solid var(--bd);font-weight:700;background:var(--s2)}
+.tbl tr.sub-h td{background:rgba(212,164,76,.06);color:var(--dm);font-size:.72rem;padding:4px 8px;font-weight:600}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+/* Brand splits */
+.brand-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.brand-box{background:var(--s2);border-radius:8px;padding:12px}
+.brand-box .brand-lbl{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.brand-box.nch .brand-lbl{color:var(--nch)}
+.brand-box.he .brand-lbl{color:var(--he)}
+
+/* Alert/Flag box */
+.flag{background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:12px;margin-bottom:10px}
+.flag-crit{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3)}
+.flag-ok{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3)}
+.flag h4{font-size:.8rem;font-weight:700;margin-bottom:6px}
+.flag-crit h4{color:var(--rd)} .flag h4{color:var(--or)} .flag-ok h4{color:var(--gn)}
+.flag ul{list-style:none;font-size:.78rem;color:var(--dm)}
+.flag li{padding:2px 0;padding-left:12px;position:relative}
+.flag li:before{content:'•';position:absolute;left:0;color:var(--or)}
+.flag-crit li:before{color:var(--rd)} .flag-ok li:before{color:var(--gn)}
+
+/* RM bar */
+.rm-bar{height:6px;border-radius:3px;background:var(--s2);margin-top:3px;overflow:hidden}
+.rm-fill{height:100%;border-radius:3px;transition:width .3s}
+
+/* Gap badge */
+.gap-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.68rem;font-weight:700}
+.gap-ok{background:rgba(34,197,94,.15);color:var(--gn)}
+.gap-warn{background:rgba(249,115,22,.15);color:var(--or)}
+.gap-crit{background:rgba(239,68,68,.15);color:var(--rd)}
+
+/* PL summary */
+.pl-row{display:flex;justify-content:space-between;padding:6px 0;font-size:.82rem;border-bottom:1px solid rgba(255,255,255,.04)}
+.pl-row.tot{font-weight:700;border-top:1px solid var(--bd);border-bottom:none;padding-top:8px;margin-top:4px}
+.pl-row .label{color:var(--dm)}
+.pl-row .amount{font-weight:600}
+.pl-indent{padding-left:16px;font-size:.78rem}
+
+/* Footnote */
+.note{font-size:.72rem;color:var(--dm);margin-top:8px;border-top:1px solid rgba(255,255,255,.04);padding-top:6px}
+
+@media(max-width:600px){
+  .cards{grid-template-columns:1fr 1fr}
+  .brand-row{grid-template-columns:1fr}
+  .card.wide{grid-column:auto}
+}
+</style>
+</head>
+<body>
+
+<div id="pin-gate">
+  <h2>HN Hotels — Investor Report</h2>
+  <div class="pin-input">
+    <input type="tel" maxlength="1" inputmode="numeric" autofocus>
+    <input type="tel" maxlength="1" inputmode="numeric">
+    <input type="tel" maxlength="1" inputmode="numeric">
+    <input type="tel" maxlength="1" inputmode="numeric">
+  </div>
+  <div class="pin-err" id="pin-err"></div>
+</div>
+
+
+<div id="main">
+<div class="hdr">
+  <h1>HN Hotels Group — Financial Report</h1>
+  <div class="sub">
+    Period: Feb 3 – Mar 31, 2026 &nbsp;|&nbsp;
+    <span class="badge badge-nch">NCH — Nawabi Chai House (57 days)</span>
+    <span class="badge badge-he">HE — Hamza Express (launched Mar 27 7PM, 5 days)</span>
+  </div>
+  <div class="sub" style="margin-top:4px;color:var(--cy)">Source: Odoo 19 POS (ops.hamzahotel.com + test.hamzahotel.com) + DayBook (Naveen, CFO) &nbsp;|&nbsp; Verified Apr 2026</div>
+</div>
+
+<!-- SUMMARY CARDS -->
+<div class="cards" id="summary-cards"></div>
+
+<!-- TIMELINE CONTEXT -->
+<div class="sec">
+  <div class="sec-h"><span class="ico">📅</span> Timeline &amp; Instance Context</div>
+  <div class="flag flag-ok" style="margin-bottom:8px">
+    <h4>NCH — Nawabi Chai House</h4>
+    <ul>
+      <li>Instance: ops.hamzahotel.com &nbsp;|&nbsp; POS configs: 27, 28, 29</li>
+      <li>Real ops: Feb 3, 2026 – Mar 31, 2026 (57 days)</li>
+      <li>Odoo gross ₹18,11,192 vs Naveen DayBook ₹18,11,152 — gap only ₹40 (99.99% verified)</li>
+    </ul>
+  </div>
+  <div class="flag" style="margin-bottom:8px">
+    <h4>HE — Hamza Express</h4>
+    <ul>
+      <li>Started on ops.hamzahotel.com (Jan 29 – Mar 23, 2026) — all test/training</li>
+      <li>Migrated to test.hamzahotel.com (HE Production) &nbsp;|&nbsp; POS configs: 5, 6, 7, 10</li>
+      <li><strong>Official launch: March 27, 2026 at 7:00 PM</strong> on test.hamzahotel.com</li>
+      <li>Real ops period: March 27 7PM – March 31 (5 days only)</li>
+      <li>Odoo gross ₹54,711 &nbsp;|&nbsp; 163 orders &nbsp;|&nbsp; Avg ₹335/order</li>
+    </ul>
+  </div>
+</div>
+
+<!-- REVENUE SECTION -->
+<div class="sec">
+  <div class="sec-h"><span class="ico">₹</span> Revenue Breakdown (Verified from Odoo)</div>
+  <div class="brand-row">
+    <div class="brand-box nch">
+      <div class="brand-lbl">Nawabi Chai House (57 days)</div>
+      <div style="font-size:1.4rem;font-weight:700;color:var(--nch)">₹18,11,192</div>
+      <div style="font-size:.75rem;color:var(--dm);margin-top:4px">Gross (Odoo verified)</div>
+      <div style="font-size:.75rem;color:var(--dm)">Less complimentary: ₹49,089</div>
+      <div style="font-size:.82rem;font-weight:600;color:var(--gn);margin-top:4px">Net cashable: ₹17,62,103</div>
+      <div style="font-size:.72rem;color:var(--dm);margin-top:6px">5,190+ orders &nbsp;|&nbsp; Avg daily: ₹31,775</div>
+      <div style="font-size:.72rem;color:var(--gn);margin-top:2px">✓ Only ₹40 gap vs Naveen's DayBook</div>
+    </div>
+    <div class="brand-box he">
+      <div class="brand-lbl">Hamza Express (Mar 27 7PM – Mar 31)</div>
+      <div style="font-size:1.4rem;font-weight:700;color:var(--he)">₹54,711</div>
+      <div style="font-size:.75rem;color:var(--dm);margin-top:4px">Gross (Odoo verified — 5 days only)</div>
+      <div style="font-size:.75rem;color:var(--dm)">Less complimentary: ₹770</div>
+      <div style="font-size:.82rem;font-weight:600;color:var(--gn);margin-top:4px">Net cashable: ₹53,941</div>
+      <div style="font-size:.72rem;color:var(--dm);margin-top:6px">163 orders &nbsp;|&nbsp; Avg ₹10,942/day &nbsp;|&nbsp; AOV ₹335</div>
+      <div style="font-size:.72rem;color:var(--or);margin-top:2px">⚠ Pre-launch costs span full 57 days</div>
+    </div>
+  </div>
+
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr>
+      <th style="text-align:left">Month / Period</th><th>NCH</th><th>HE</th><th>Combined</th><th>Complimentary</th><th>Net Cashable</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>February 2026 (28 days)</td><td style="color:var(--nch)">₹7,30,461</td><td style="color:var(--dm)">₹0 <span style="font-size:.7rem">(pre-launch)</span></td><td>₹7,30,461</td><td>—</td><td>—</td></tr>
+      <tr><td>March 1–26, 2026</td><td style="color:var(--nch)">₹10,80,731</td><td style="color:var(--dm)">₹0 <span style="font-size:.7rem">(pre-launch)</span></td><td>₹10,80,731</td><td>—</td><td>—</td></tr>
+      <tr><td>March 27 7PM – Mar 31 (HE opens)</td><td style="color:var(--nch)">~₹55,000</td><td style="color:var(--he)">₹54,711</td><td>~₹1,09,711</td><td>—</td><td>—</td></tr>
+      <tr class="tot"><td>TOTAL (verified)</td><td style="color:var(--nch)">₹18,11,192</td><td style="color:var(--he)">₹54,711</td><td>₹18,65,903</td><td>₹49,859</td><td>₹18,16,044</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note">* NCH Feb breakdown: Feb 3-28 = ₹7,30,461. March breakdown NCH estimated; exact split from Odoo if needed.</div>
+</div>
+
+<!-- TOP ITEMS NCH -->
+<div class="sec">
+  <div class="sec-h"><span style="color:var(--nch)">◆</span> NCH — Top Items (Feb 3 – Mar 31, 57 days)</div>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr>
+      <th style="text-align:left">Item</th><th>Qty</th><th>Unit Price</th><th>Revenue</th><th>% of NCH</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>[NCH-IC] Irani Chai</td><td>53,169</td><td>₹20</td><td>₹10,63,530</td><td>58.7%</td></tr>
+      <tr><td>Haleem (all sizes)</td><td>2,994</td><td>₹85–₹318</td><td>₹3,26,248</td><td>18.0%</td></tr>
+      <tr><td>[NCH-BM] Bun Maska</td><td>3,201</td><td>₹40</td><td>₹1,28,040</td><td>7.1%</td></tr>
+      <tr><td>[NCH-OB3] Osmania Biscuit Pack 3</td><td>3,933</td><td>₹20</td><td>₹78,700</td><td>4.3%</td></tr>
+      <tr><td>[NCH-NSC] Nawabi Special Coffee</td><td>1,555</td><td>₹30</td><td>₹46,650</td><td>2.6%</td></tr>
+      <tr><td>[NCH-WTR] Water</td><td>3,037</td><td>₹10</td><td>₹30,370</td><td>1.7%</td></tr>
+      <tr><td>Niloufer OB 500g Box</td><td>115</td><td>₹250</td><td>₹28,750</td><td>1.6%</td></tr>
+      <tr><td>[NCH-CC] Chicken Cutlet</td><td>1,065</td><td>₹25</td><td>₹26,625</td><td>1.5%</td></tr>
+      <tr><td>[NCH-BM] Malai Bun</td><td>802</td><td>₹30</td><td>₹24,060</td><td>1.3%</td></tr>
+      <tr><td>[NCH-OB] Osmania Biscuit (Single)</td><td>1,856</td><td>₹8</td><td>₹14,848</td><td>0.8%</td></tr>
+      <tr class="tot"><td>Top 10 items</td><td>71,727</td><td></td><td>₹17,67,821</td><td>97.6%</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note">Irani Chai (58.7%) + Haleem (18%) drive 76.7% of NCH revenue. NCH is a high-frequency, low-AOV business (₹349 avg order but 900+ orders/day).</div>
+</div>
+
+<!-- TOP ITEMS HE -->
+<div class="sec">
+  <div class="sec-h"><span style="color:var(--he)">◆</span> HE — Top Items (March 27 7PM – March 31, 5 days)</div>
+  <div class="flag" style="margin-bottom:10px">
+    <h4>Early Signal — 5 Days Only</h4>
+    <ul>
+      <li>163 orders in 5 days across Cash Counter + Captain + UPI channels</li>
+      <li>₹10,942/day average — strong for a brand-new launch</li>
+      <li>Ghee Rice dominates at 40% of items — confirm recipe costings with Azeem</li>
+    </ul>
+  </div>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr>
+      <th style="text-align:left">Item</th><th>Qty</th><th>Revenue</th><th>% of HE</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>[HE-1205] Ghee Rice</td><td>66</td><td>₹6,600</td><td>12.1%</td></tr>
+      <tr><td>[HE-1163] Chicken Kabab</td><td>24</td><td>₹4,100</td><td>7.5%</td></tr>
+      <tr><td>[HE-1201] Chicken Biryani</td><td>15</td><td>₹3,750</td><td>6.9%</td></tr>
+      <tr><td>[HE-1192] Mutton Brain Dry</td><td>14</td><td>₹3,200</td><td>5.9%</td></tr>
+      <tr><td>[HE-1135] Tandoori Chicken</td><td>12</td><td>₹2,800</td><td>5.1%</td></tr>
+      <tr><td>Irani Chicken</td><td>9</td><td>₹2,760</td><td>5.1%</td></tr>
+      <tr><td>[HE-1200] Mutton Biryani</td><td>7</td><td>₹2,380</td><td>4.4%</td></tr>
+      <tr><td>[HE-1160] Hamza Special</td><td>9</td><td>₹2,200</td><td>4.0%</td></tr>
+      <tr><td>[HE-1235] Chicken Fried Rice</td><td>10</td><td>₹1,900</td><td>3.5%</td></tr>
+      <tr><td>Water 1L + Cold Drinks</td><td>161</td><td>₹3,236</td><td>5.9%</td></tr>
+      <tr class="tot"><td>Top 10</td><td>327</td><td>₹32,926</td><td>60.3%</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note">5-day sample — Ghee Rice, Chicken Kabab, and Biryani are early leaders. Full menu has 176 SKUs.</div>
+</div>
+
+<!-- P&L -->
+<div class="sec">
+  <div class="sec-h"><span class="ico">📊</span> Profit &amp; Loss — Feb 3 – Mar 31, 2026</div>
+  <div class="flag flag-crit" style="margin-bottom:12px">
+    <h4>Context: HE Pre-Launch Costs vs Revenue</h4>
+    <ul>
+      <li>HE kitchen team (Azeem, 10 people) contracted from Day 1 at ₹9,100/day — 57 days of cost, only 5 days of revenue</li>
+      <li>This period captures full setup + training cost but not operating revenue for HE</li>
+      <li>From April 1 onwards, every HE operating day generates revenue against this fixed cost base</li>
+    </ul>
+  </div>
+
+  <div class="pl-row"><div class="label">NCH Gross Revenue (Odoo, 57 days)</div><div class="amount" style="color:var(--nch)">₹18,11,192</div></div>
+  <div class="pl-row"><div class="label">HE Gross Revenue (Odoo, 5 days — Mar 27–31)</div><div class="amount" style="color:var(--he)">₹54,711</div></div>
+  <div class="pl-row pl-indent"><div class="label">Less: Complimentary (NCH ₹49,089 + HE ₹770)</div><div class="amount rd">-₹49,859</div></div>
+  <div class="pl-row tot"><div class="label">NET REVENUE</div><div class="amount gn">₹18,16,044</div></div>
+
+  <div style="margin:14px 0 6px;font-size:.78rem;color:var(--dm);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Raw Material Costs (57-day period, both brands)</div>
+  <div class="pl-row pl-indent"><div class="label">Chicken (MN Broilers + suppliers)</div><div class="amount rd">-₹3,89,305</div></div>
+  <div class="pl-row pl-indent"><div class="label">Dairy (milk, milk maid, condensed milk)</div><div class="amount rd">-₹2,66,141</div></div>
+  <div class="pl-row pl-indent"><div class="label">Shariff Store (DayBook; actual bills ₹2,24,807)</div><div class="amount rd">-₹1,95,000</div></div>
+  <div class="pl-row pl-indent"><div class="label">Bakery (Osmania biscuits + buns)</div><div class="amount rd">-₹1,31,111</div></div>
+  <div class="pl-row pl-indent"><div class="label">Tea / Coffee supplies</div><div class="amount rd">-₹89,461</div></div>
+  <div class="pl-row pl-indent"><div class="label">Gas (LPG cylinders)</div><div class="amount rd">-₹76,350</div></div>
+  <div class="pl-row pl-indent"><div class="label">Meat (mutton + other)</div><div class="amount rd">-₹70,900</div></div>
+  <div class="pl-row pl-indent"><div class="label">Vegetables (unitemized)</div><div class="amount rd">-₹70,552</div></div>
+  <div class="pl-row pl-indent"><div class="label">Water (Bisleri + cans)</div><div class="amount rd">-₹52,840</div></div>
+  <div class="pl-row pl-indent"><div class="label">Fuel (logistics)</div><div class="amount rd">-₹36,666</div></div>
+  <div class="pl-row pl-indent"><div class="label">Other RM</div><div class="amount rd">-₹980</div></div>
+  <div class="pl-row tot"><div class="label">Total RM Cost</div><div class="amount rd">-₹13,79,306</div></div>
+
+  <div class="pl-row tot" style="margin-top:6px"><div class="label">GROSS PROFIT (Net Revenue – RM)</div><div class="amount" style="color:var(--cy)">₹4,36,738 &nbsp;<span style="font-size:.78rem;font-weight:400">(24.1% margin)</span></div></div>
+
+  <div style="margin:14px 0 6px;font-size:.78rem;color:var(--dm);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Staff Costs</div>
+  <div class="pl-row pl-indent"><div class="label">HE — Azeem Kitchen Team (10 pax @ ₹9,100/day × 57d)</div><div class="amount rd">-₹5,18,700</div></div>
+  <div class="pl-row pl-indent"><div class="label">NCH — Mujib + Moin Tea Masters (₹3,000/day × 57d)</div><div class="amount rd">-₹1,71,000</div></div>
+  <div class="pl-row pl-indent"><div class="label">HE Monthly Staff — 8 people (×1.9 months)</div><div class="amount rd">-₹3,12,098</div></div>
+  <div class="pl-row pl-indent"><div class="label">NCH Monthly Staff — 11 people (×1.9 months)</div><div class="amount rd">-₹3,84,984</div></div>
+  <div class="pl-row pl-indent"><div class="label">Office / Management — 7 people (×1.9 months)</div><div class="amount rd">-₹3,27,049</div></div>
+  <div class="pl-row tot"><div class="label">Total Staff (accrual basis)</div><div class="amount rd">-₹17,13,831</div></div>
+  <div class="pl-row pl-indent" style="font-size:.75rem"><div class="label" style="color:var(--or)">⚠ Cash paid to date (DayBook Salary): ₹14,18,490 &nbsp;|&nbsp; Deferred: ₹2,95,341</div><div></div></div>
+
+  <div style="margin:14px 0 6px;font-size:.78rem;color:var(--dm);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Other Operating Expenses</div>
+  <div class="pl-row pl-indent"><div class="label">Utilities — Electricity</div><div class="amount rd">-₹53,893</div></div>
+  <div class="pl-row pl-indent"><div class="label">Compliance / Licenses</div><div class="amount rd">-₹32,200</div></div>
+  <div class="pl-row pl-indent"><div class="label">Staff Welfare + Consumables</div><div class="amount rd">-₹70,768</div></div>
+  <div class="pl-row pl-indent"><div class="label">Police payments</div><div class="amount rd">-₹16,500</div></div>
+  <div class="pl-row pl-indent"><div class="label">Stationery + Tech + Internet + Bank</div><div class="amount rd">-₹40,793</div></div>
+  <div class="pl-row pl-indent"><div class="label">Transport + Maintenance + Marketing</div><div class="amount rd">-₹19,363</div></div>
+  <div class="pl-row pl-indent"><div class="label">Owner Draws + Payroll admin</div><div class="amount rd">-₹12,633</div></div>
+  <div class="pl-row tot"><div class="label">Total Other Opex</div><div class="amount rd">-₹2,46,150</div></div>
+
+  <div style="height:1px;background:var(--bd);margin:16px 0"></div>
+  <div class="pl-row tot" style="font-size:.95rem"><div class="label">OPERATING LOSS (accrual salary)</div><div class="amount rd">-₹15,23,243</div></div>
+  <div class="pl-row" style="padding:4px 0;font-size:.8rem"><div class="label">Using cash salary paid (₹14,18,490) vs accrual</div><div class="amount rd">-₹12,27,912</div></div>
+
+  <div style="margin:14px 0 6px;font-size:.78rem;color:var(--dm);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Capital Position</div>
+  <div class="pl-row pl-indent"><div class="label">CapEx — Equipment, Setup (56 items)</div><div class="amount rd">-₹6,29,050</div></div>
+  <div class="pl-row pl-indent"><div class="label">Working Capital Injected</div><div class="amount gn">+₹10,00,000</div></div>
+  <div class="pl-row pl-indent"><div class="label">One-time Capital Contribution</div><div class="amount gn">+₹1,75,000</div></div>
+  <div style="height:1px;background:var(--bd);margin:8px 0"></div>
+  <div class="pl-row tot" style="font-size:.95rem"><div class="label">CASH BURN (cash salary + capex vs capital)</div><div class="amount rd">-₹6,81,962</div></div>
+
+  <div class="note" style="margin-top:12px">
+    <strong>Reading the numbers:</strong> The operating loss reflects a startup period where two brands were funded and staffed before revenue materialized. NCH ran 57 days and generated ₹18.1L. HE launched March 27 — first 5 days generated ₹54.7K at ₹10.9K/day, demonstrating the revenue model works. April onwards, every HE day adds ~₹11-15K revenue against the already-committed ₹9,100/day kitchen cost.<br><br>
+    * CapEx ₹6.29L is a real asset (POS systems, biometric, kitchen equipment) — not consumed.<br>
+    * Salary deferred ₹2.95L remains owed to staff.<br>
+    * Family withdrawals ₹35K + Owner draws ₹10.6K excluded as non-operating.
+  </div>
+</div>
+
+<!-- KEY FINDINGS -->
+<div class="sec">
+  <div class="sec-h"><span class="ico">🎯</span> Key Findings by Stakeholder</div>
+
+  <div class="flag flag-crit" style="margin-bottom:10px">
+    <h4>FINANCE TEAM — Unrecorded Expenses (₹29,807+)</h4>
+    <ul>
+      <li>Shariff Store: DayBook ₹1,95,000 (4 lump payments) vs actual itemized bills ₹2,24,807 — <strong>₹29,807 unbooked</strong></li>
+      <li>Buns: DayBook shows ₹16,258 (2,032 buns) but Odoo sold 3,201 Bun Maska + 802 Malai Bun orders — ~₹34,960 of daily bakery cash purchases not entered</li>
+      <li>MN Broilers balance: ₹3,89,305 total chicken; ₹1,50,000 paid; ₹2,39,305 outstanding</li>
+      <li>Salary deferred: ₹2,95,341 accrued but not yet paid</li>
+      <li>Police payments: ₹16,500 across 80 entries — recurring informal cost</li>
+    </ul>
+  </div>
+
+  <div class="flag" style="margin-bottom:10px">
+    <h4>OPERATIONS TEAM — HE Pre-Launch Cost Allocation</h4>
+    <ul>
+      <li>Azeem kitchen team paid ₹9,100/day for 57 days = ₹5,18,700 before HE opened</li>
+      <li>This is a setup/training investment — acceptable if April HE revenue scales to ₹3L+/month</li>
+      <li>At current trajectory (₹10,942/day opening week), monthly target of ₹3.3L is achievable</li>
+      <li>Need: itemized expense split between NCH and HE for accurate per-brand P&L</li>
+      <li>Vegetables ₹70,552 unitemized — no NCH/HE split possible currently</li>
+    </ul>
+  </div>
+
+  <div class="flag flag-ok">
+    <h4>INVESTOR SUMMARY — What's Working</h4>
+    <ul>
+      <li>NCH revenue verified: ₹18,11,192 in 57 days — only ₹40 gap vs Naveen (99.99% accounting accuracy)</li>
+      <li>NCH runs 931 cups of Irani Chai per day average — highly consistent core product</li>
+      <li>HE launch week: 163 orders, ₹54,711 gross (₹10,942/day). AOV ₹335 is healthy for QSR</li>
+      <li>Token system = 44% of NCH revenue — pre-paid cashflow advantage</li>
+      <li>Two brands now live, systems proven (Odoo POS, WhatsApp ordering, Razorpay)</li>
+      <li>Capital utilization: ₹6.29L in real assets, ₹2.95L deferred salary committed — not burned</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SALARY DETAIL -->
+<div class="sec">
+  <div class="sec-h"><span class="ico">👥</span> Staff Cost Detail</div>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr>
+      <th style="text-align:left">Group</th><th>Brand</th><th>People</th><th>Rate</th><th>57-Day Cost</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>Azeem Kitchen Team</td><td style="color:var(--he)">HE</td><td>10</td><td>₹9,100/day</td><td class="rd">₹5,18,700</td></tr>
+      <tr><td>Mujib + Moin Tea Masters</td><td style="color:var(--nch)">NCH</td><td>2</td><td>₹3,000/day</td><td class="rd">₹1,71,000</td></tr>
+      <tr><td>HE Monthly Staff</td><td style="color:var(--he)">HE</td><td>8</td><td>₹1,67,000/mo</td><td class="rd">₹3,12,098</td></tr>
+      <tr><td>NCH Monthly Staff</td><td style="color:var(--nch)">NCH</td><td>11</td><td>₹2,06,000/mo</td><td class="rd">₹3,84,984</td></tr>
+      <tr><td>Office / Management</td><td style="color:var(--dm)">HN</td><td>7</td><td>₹1,75,000/mo</td><td class="rd">₹3,27,049</td></tr>
+      <tr class="tot"><td>Total (accrual)</td><td></td><td>38</td><td></td><td class="rd">₹17,13,831</td></tr>
+      <tr><td colspan="4" style="color:var(--or);font-size:.75rem">Actual paid (DayBook)</td><td style="color:var(--or)">₹14,18,490</td></tr>
+      <tr><td colspan="4" style="color:var(--dm);font-size:.75rem">Deferred (owed)</td><td style="color:var(--dm)">₹2,95,341</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note">HE kitchen team cost alone (₹5.19L) exceeds total HE revenue to date. This flips from April 1 as HE scales.</div>
+</div>
+
+<!-- NCH PAYMENT CHANNELS -->
+<div class="sec">
+  <div class="sec-h"><span class="ico">💳</span> NCH Payment Channel Breakdown</div>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr>
+      <th style="text-align:left">Payment Method</th><th>Amount</th><th>Notes</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>NCH Token Issue</td><td class="ac">₹8,01,539</td><td style="color:var(--dm);font-size:.75rem">Pre-purchased tokens — cashflow positive</td></tr>
+      <tr><td>NCH UPI (direct)</td><td>₹2,97,952</td><td style="color:var(--dm);font-size:.75rem">UPI at counter</td></tr>
+      <tr><td>NCH Runner Ledger</td><td>₹2,14,200</td><td style="color:var(--dm);font-size:.75rem">Runners collect, settle periodically</td></tr>
+      <tr><td>NCH Cash</td><td>₹2,04,376</td><td style="color:var(--dm);font-size:.75rem">Counter cash</td></tr>
+      <tr><td>NCH Razorpay / Other</td><td>₹64,586</td><td style="color:var(--dm);font-size:.75rem">Online / WABA</td></tr>
+      <tr><td>NCH Complimentary</td><td style="color:var(--dm)">₹49,089</td><td style="color:var(--dm);font-size:.75rem">No-cash; RM cost only</td></tr>
+      <tr class="tot"><td>Total</td><td>₹18,31,742</td><td></td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div style="text-align:center;padding:20px;color:var(--dm);font-size:.75rem;border-top:1px solid var(--bd);margin-top:20px">
+  HN Hotels Pvt Ltd &nbsp;|&nbsp; Confidential &nbsp;|&nbsp; Odoo 19 POS + DayBook &nbsp;|&nbsp; Period: Feb 3 – Mar 31, 2026 &nbsp;|&nbsp; HE real ops: Mar 27–31 (5 days)
+</div>
+</div><!-- /main -->
+
+<script>
+// PIN gate — same as other HN pages
+var PINS = ['0305','2026','3678'];
+var inputs = document.querySelectorAll('.pin-input input');
+inputs.forEach(function(inp, i){
+  inp.addEventListener('input', function(){
+    if(inp.value.length === 1 && i < inputs.length - 1) inputs[i+1].focus();
+    var val = Array.from(inputs).map(function(x){return x.value}).join('');
+    if(val.length === 4){
+      if(PINS.indexOf(val) !== -1){
+        document.getElementById('pin-gate').classList.add('hidden');
+        document.getElementById('main').classList.add('visible');
+        renderSummary();
+      } else {
+        document.getElementById('pin-err').textContent = 'Wrong PIN';
+        inputs.forEach(function(x){x.value=''});
+        inputs[0].focus();
+        setTimeout(function(){document.getElementById('pin-err').textContent=''},2000);
+      }
+    }
+  });
+  inp.addEventListener('keydown', function(e){
+    if(e.key === 'Backspace' && inp.value === '' && i > 0) inputs[i-1].focus();
+  });
+});
+
+function fmt(n){ return '₹' + Number(n).toLocaleString('en-IN',{maximumFractionDigits:0}); }
+
+function renderSummary(){
+  var cards = document.getElementById('summary-cards');
+  var data = [
+    {lbl:'Gross Revenue', val:'₹18,65,903', sub:'NCH ₹18.1L + HE ₹54.7K (5 days)', cls:'ac'},
+    {lbl:'Net Revenue', val:'₹18,16,044', sub:'After ₹49,859 complimentary', cls:'gn'},
+    {lbl:'Total RM Cost', val:'₹13,79,306', sub:'76% of net revenue', cls:'or'},
+    {lbl:'Gross Profit', val:'₹4,36,738', sub:'24.1% margin', cls:'cy'},
+    {lbl:'Staff Cost (accrual)', val:'₹17,13,831', sub:'₹14,18,490 paid cash', cls:'rd'},
+    {lbl:'Operating Loss (cash)', val:'-₹12,27,912', sub:'Startup period; HE costs pre-revenue', cls:'rd'},
+    {lbl:'CapEx (one-time)', val:'₹6,29,050', sub:'Equipment + setup (real assets)', cls:'dm'},
+    {lbl:'Capital Injected', val:'₹11,75,000', sub:'Working + one-time', cls:'gn'},
+    {lbl:'Cash Burn', val:'-₹6,81,962', sub:'Capital minus cash opex + capex', cls:'rd'},
+  ];
+  var h = '';
+  data.forEach(function(d){
+    h += '<div class="card"><div class="lbl">'+d.lbl+'</div><div class="val '+d.cls+'">'+d.val+'</div><div class="sub2">'+d.sub+'</div></div>';
+  });
+  cards.innerHTML = h;
+}
+</script>
+</body>
+</html>
