@@ -196,27 +196,31 @@ function renderStatus(stats, ord){
   const swiggySnap = allSnaps.find(s=>s.platform==='swiggy');
   const zomatoSnap = allSnaps.find(s=>s.platform==='zomato')||allSnaps.find(s=>s.platform==='zomato');
 
-  // Swiggy/Zomato last times — check BOTH snapshots AND orders
-  let swLast=null, zmLast=null;
-  for(const s of allSnaps){
-    if(s.platform==='swiggy'&&(!swLast||s.last>swLast)) swLast=s.last;
-    if(s.platform==='zomato'&&(!zmLast||s.last>zmLast)) zmLast=s.last;
-  }
-  for(const o of allOrders){
-    if(o.platform==='swiggy'&&(!swLast||o.last>swLast)) swLast=o.last;
-    if(o.platform==='zomato'&&(!zmLast||o.last>zmLast)) zmLast=o.last;
-  }
-
   const totalOrders = allOrders.reduce((a,b)=>a+(b.orders||0),0);
 
+  // Per-platform last ORDER time — use actual order_time from orders list (sorted newest first)
+  // This shows WHEN the last order was placed, not when the extension captured it
+  const allOrderRows = ord.orders || [];
+  const swLastOrder = allOrderRows.find(o=>o.platform==='swiggy');
+  const zmLastOrder = allOrderRows.find(o=>o.platform==='zomato');
+
+  // Pipeline staleness uses captured_at (is the extension alive?)
+  let pipelineLast = null;
+  for(const s of allSnaps){
+    if(!pipelineLast||s.last>pipelineLast) pipelineLast=s.last;
+  }
+  for(const o of allOrders){
+    if(!pipelineLast||o.last>pipelineLast) pipelineLast=o.last;
+  }
+
   const dot=document.getElementById('statusDot');
-  // Use most recent of swLast/zmLast for overall staleness
-  const overallLast = [lastCapture,swLast,zmLast].filter(Boolean).sort().pop() || null;
-  const minsAgo = overallLast ? Math.round((Date.now()-new Date(overallLast).getTime())/60000) : 9999;
+  const minsAgo = pipelineLast ? Math.round((Date.now()-new Date(pipelineLast).getTime())/60000) : 9999;
   dot.className='status-dot'+(minsAgo>120?' dead':minsAgo>30?' stale':'');
-  document.getElementById('statusCapture').textContent = overallLast ? fmtAgo(overallLast) : '—';
-  document.getElementById('statusSwiggy').textContent = swLast ? fmtAgo(swLast) : '—';
-  document.getElementById('statusZomato').textContent = zmLast ? fmtAgo(zmLast) : '—';
+  document.getElementById('statusCapture').textContent = pipelineLast ? fmtAgo(pipelineLast) : '—';
+
+  // Show last order time per platform (e.g. "8:18 PM") — actual order placed time
+  document.getElementById('statusSwiggy').textContent = swLastOrder ? (swLastOrder.order_time||'—') : '—';
+  document.getElementById('statusZomato').textContent = zmLastOrder ? (zmLastOrder.order_time||'—') : '—';
   document.getElementById('statusTotal').textContent = totalOrders+' all-time';
 }
 
