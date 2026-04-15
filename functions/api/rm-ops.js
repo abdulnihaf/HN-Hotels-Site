@@ -670,7 +670,7 @@ async function handlePost(action, context, env, DB) {
     case 'edit-po-line':    return editPOLine(body, user, creds, cfg, brand, DB);
     case 'delete-po-line':  return deletePOLine(body, user, creds, cfg, brand, DB);
     case 'cancel-po':       return cancelPO(body, user, creds, cfg, brand, DB);
-    case 'receive-delivery': return receiveDelivery(body, user, creds, cfg, brand, DB);
+    case 'receive-delivery': return receiveDelivery(body, user, creds, cfg, brand, DB, env);
     case 'add-product':     return addProduct(body, user, creds, cfg, brand, env, DB);
     case 'update-price':    return updatePrice(body, user, brand, DB);
     case 'link-vendor':     return linkVendor(body, user, creds, cfg, brand, env, DB);
@@ -992,7 +992,7 @@ async function getPendingDeliveries(creds, cfg) {
 
 /* ── Receive Delivery (validate incoming picking) ── */
 
-async function receiveDelivery(body, user, creds, cfg, brand, DB) {
+async function receiveDelivery(body, user, creds, cfg, brand, DB, env) {
   if (user.role !== 'admin' && user.role !== 'purchase') {
     return json({ error: 'Insufficient permissions' }, 403);
   }
@@ -1000,8 +1000,14 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB) {
   const { picking_id } = body;
   if (!picking_id) return json({ error: 'Missing picking_id' }, 400);
 
+  // stock.picking.button_validate requires Odoo Inventory/User group (stock.group_stock_user).
+  // Purchase users (Zoya) only have purchase.group_purchase_user — they can view receipts but
+  // cannot call stock validation methods directly. Use system credentials for all Odoo stock
+  // operations; dashboard-level auth is enforced by PIN + role check above.
+  const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
+
   // Verify picking exists and is in the right state
-  const pickArr = await odooCall(creds.uid, creds.key,
+  const pickArr = await odooCall(sysCreds.uid, sysCreds.key,
     'stock.picking', 'read', [[picking_id]],
     { fields: ['id', 'name', 'state', 'company_id', 'origin'] }
   );
@@ -1016,11 +1022,11 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB) {
   // Copy reserved → done quantities in one call (correct Odoo 17+ API).
   // This replaces the old stock.move.write loop which wrote to a computed field
   // and silently had no effect in Odoo 17/19, leaving done qty at 0.
-  await odooCall(creds.uid, creds.key,
+  await odooCall(sysCreds.uid, sysCreds.key,
     'stock.picking', 'action_set_quantities_to_reservation', [[picking_id]]);
 
   // Handle lot/serial requirements: read move lines and create lots where missing
-  const moveLines = await odooCall(creds.uid, creds.key,
+  const moveLines = await odooCall(sysCreds.uid, sysCreds.key,
     'stock.move.line', 'search_read',
     [[['picking_id', '=', picking_id], ['state', 'not in', ['done', 'cancel']]]],
     { fields: ['id', 'lot_id', 'product_id'] }
@@ -1028,17 +1034,17 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB) {
 
   for (const ml of moveLines) {
     if (!ml.lot_id) {
-      const prodInfo = await odooCall(creds.uid, creds.key,
+      const prodInfo = await odooCall(sysCreds.uid, sysCreds.key,
         'product.product', 'read', [[ml.product_id[0]]],
         { fields: ['tracking'] }
       );
       if (prodInfo[0] && prodInfo[0].tracking && prodInfo[0].tracking !== 'none') {
         const lotName = `RCV-${picking.name.replace(/\//g, '-')}-${ml.id}`;
-        const lotId = await odooCall(creds.uid, creds.key,
+        const lotId = await odooCall(sysCreds.uid, sysCreds.key,
           'stock.lot', 'create',
           [{ name: lotName, product_id: ml.product_id[0], company_id: cfg.company_id }]
         );
-        await odooCall(creds.uid, creds.key,
+        await odooCall(sysCreds.uid, sysCreds.key,
           'stock.move.line', 'write', [[ml.id], { lot_id: lotId }]);
       }
     }
@@ -1046,7 +1052,7 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB) {
 
   // Validate — skip_backorder creates no backorder for short-received items,
   // skip_immediate tells Odoo not to reopen the "set quantities" dialog.
-  await odooCall(creds.uid, creds.key,
+  await odooCall(sysCreds.uid, sysCreds.key,
     'stock.picking', 'button_validate', [[picking_id]],
     { context: { skip_backorder: true, skip_immediate: true } });
 

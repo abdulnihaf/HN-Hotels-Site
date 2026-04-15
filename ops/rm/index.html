@@ -2026,8 +2026,11 @@ function showToast(msg, type) {
   div.className = `toast ${type === 'success' ? 'bg-emerald-600 text-white' : type === 'error' ? 'bg-red-600 text-white' : 'glass text-white'}`;
   div.textContent = msg;
   document.body.appendChild(div);
-  setTimeout(() => div.remove(), 3000);
+  // Errors stay 6s so they're readable on mobile; success/neutral 3s
+  setTimeout(() => div.remove(), type === 'error' ? 6000 : 3000);
 }
+// Adapter: toast(msg) for success, toast(msg, true) for error
+const toast = (msg, isError) => showToast(msg, isError ? 'error' : 'success');
 </script>
 </body>
 </html>
