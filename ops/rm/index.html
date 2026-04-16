@@ -129,9 +129,9 @@
       <button onclick="setBrand('NCH')" id="brandNCH" class="brand-toggle flex-1">NCH</button>
     </div>
     <div class="flex gap-1">
-      <button onclick="setTab('purchase')" data-tab="purchase" class="tab-btn flex-1">Purchase</button>
-      <button onclick="setTab('settlement')" data-tab="settlement" class="tab-btn flex-1">Settlement</button>
-      <button onclick="setTab('analytics')" data-tab="analytics" class="tab-btn flex-1">Analytics</button>
+      <button onclick="setTab('purchase')" data-tab="purchase" id="tab-btn-purchase" class="tab-btn flex-1">Purchase</button>
+      <button onclick="setTab('settlement')" data-tab="settlement" id="tab-btn-settlement" class="tab-btn flex-1">Settlement</button>
+      <button onclick="setTab('analytics')" data-tab="analytics" id="tab-btn-analytics" class="tab-btn flex-1">Analytics</button>
       <button onclick="setTab('prices')" data-tab="prices" id="tab-btn-prices" class="tab-btn flex-1 hidden">💹</button>
     </div>
   </div>
@@ -517,9 +517,21 @@ function verifyPin() {
       document.getElementById('userBadge').textContent = d.user;
       document.getElementById('userBadge').classList.remove('hidden');
       document.getElementById('navSubtitle').textContent = `${d.user} - ${d.role}`;
-      // Show Prices tab for admin only
+      // Tab visibility by role:
+      // admin  → all tabs visible
+      // purchase (Zoya)     → Purchase + Analytics only
+      // settlement (Faheem) → Settlement + Analytics only
+      const show = id => document.getElementById(id)?.classList.remove('hidden');
+      const hide = id => document.getElementById(id)?.classList.add('hidden');
       if (d.role === 'admin') {
-        document.getElementById('tab-btn-prices').classList.remove('hidden');
+        show('tab-btn-prices');
+        show('tab-btn-purchase'); show('tab-btn-settlement'); show('tab-btn-analytics');
+      } else if (d.role === 'purchase') {
+        hide('tab-btn-settlement'); hide('tab-btn-prices');
+        show('tab-btn-purchase'); show('tab-btn-analytics');
+      } else if (d.role === 'settlement') {
+        hide('tab-btn-purchase'); hide('tab-btn-prices');
+        show('tab-btn-settlement'); show('tab-btn-analytics');
       }
       // Default tab based on role
       if (d.role === 'settlement') { currentTab = 'settlement'; }
