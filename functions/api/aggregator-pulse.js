@@ -78,7 +78,7 @@ async function handlePost(db, request, headers) {
     // Exception: mac_chrome_manual captures always store (they contain richer data like per-outlet splits)
     if (snap.source !== 'mac_chrome_manual') {
       const recent = await db.prepare(
-        `SELECT id FROM aggregator_snapshots WHERE platform=? AND brand=? AND metric_type=? AND captured_at > datetime('now', '-10 minutes') LIMIT 1`
+        `SELECT id FROM aggregator_snapshots WHERE platform=? AND brand=? AND metric_type=? AND datetime(captured_at) > datetime('now', '-10 minutes') LIMIT 1`
       ).bind(platform, brand, metricType).first();
       if (recent) continue;
     }
