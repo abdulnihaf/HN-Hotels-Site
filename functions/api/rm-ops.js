@@ -160,6 +160,7 @@ async function handleGet(action, url, env, DB) {
     case 'kitchen-stock': return getKitchenStock(creds, cfg);
     case 'settlement-prepare': return settlementPrepare(creds, cfg, brand, DB);
     case 'tracked-items': return getTrackedItems(brand, DB);
+    case 'search-products': return searchUntracked(brand, url, DB);
     case 'settlement-history': return getSettlementHistory(brand, url, DB);
     case 'price-history': return getPriceHistory(brand, url, DB);
     case 'status': return getOpsStatus(brand, DB);
@@ -463,6 +464,54 @@ async function getKitchenStock(creds, cfg) {
   return json({ success: true, stock });
 }
 
+/* ── Search untracked products (for add-item modal) ── */
+
+async function searchUntracked(brand, url, DB) {
+  if (!DB) return json({ success: true, products: [] });
+  const q = (url.searchParams.get('q') || '').trim();
+  const like = `%${q}%`;
+  const rows = await DB.prepare(`
+    SELECT hn_code, name, uom, category FROM rm_products
+    WHERE brand IN (?, 'BOTH')
+    AND (? = '' OR name LIKE ? OR hn_code LIKE ?)
+    AND hn_code NOT IN (
+      SELECT product_code FROM rm_tracked_items WHERE brand = ? AND is_active = 1
+    )
+    ORDER BY name LIMIT 20
+  `).bind(brand, q, like, like, brand).all();
+  return json({ success: true, products: rows.results || [] });
+}
+
+/* ── Add a product to tracked items (Faheem / admin) ── */
+
+async function addTrackedItem(body, user, brand, DB) {
+  if (user.role !== 'admin' && user.role !== 'settlement') {
+    return json({ error: 'Only admin or settlement role can add tracked items' }, 403);
+  }
+  const { product_code } = body;
+  if (!product_code) return json({ error: 'Missing product_code' }, 400);
+  if (!DB) return json({ error: 'DB unavailable' }, 503);
+
+  const product = await DB.prepare(
+    'SELECT hn_code, name, uom, category FROM rm_products WHERE hn_code = ?'
+  ).bind(product_code).first();
+  if (!product) return json({ error: `Product ${product_code} not found in registry` }, 404);
+
+  await DB.prepare(
+    "INSERT OR IGNORE INTO rm_tracked_items (product_code, brand, tier, count_method, is_active) VALUES (?, ?, 1, 'direct', 1)"
+  ).bind(product_code, brand).run();
+
+  // If it existed but was deactivated, re-activate it
+  await DB.prepare(
+    'UPDATE rm_tracked_items SET is_active = 1 WHERE product_code = ? AND brand = ?'
+  ).bind(product_code, brand).run();
+
+  return json({
+    success: true,
+    item: { code: product.hn_code, name: product.name, uom: product.uom, category: product.category },
+  });
+}
+
 /* ── Settlement Prepare ── */
 
 async function settlementPrepare(creds, cfg, brand, DB) {
@@ -481,6 +530,17 @@ async function settlementPrepare(creds, cfg, brand, DB) {
   let openingStock = {};
   if (previous && previous.closing_stock) {
     openingStock = JSON.parse(previous.closing_stock);
+  }
+
+  // Auto-sync: any product in rm_products tagged to this brand/BOTH that isn't yet tracked
+  // gets silently inserted so new products Zoya adds automatically appear for Faheem
+  if (DB) {
+    await DB.prepare(`
+      INSERT OR IGNORE INTO rm_tracked_items (product_code, brand, tier, count_method, is_active)
+      SELECT hn_code, ?, 1, 'direct', 1 FROM rm_products
+      WHERE brand IN (?, 'BOTH')
+      AND hn_code NOT IN (SELECT product_code FROM rm_tracked_items WHERE brand = ?)
+    `).bind(brand, brand, brand).run();
   }
 
   // Load intelligence + tracked items + purchases in parallel
@@ -682,6 +742,7 @@ async function handlePost(action, context, env, DB) {
     case 'update-price':    return updatePrice(body, user, brand, DB);
     case 'link-vendor':     return linkVendor(body, user, creds, cfg, brand, env, DB);
     case 'settlement-submit': return settlementSubmit(body, user, creds, cfg, brand, env, DB);
+    case 'add-tracked-item': return addTrackedItem(body, user, brand, DB);
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
 }

@@ -461,10 +461,10 @@ const FIELD_META = {
   raw_samosa:          { label: 'Raw Samosa (Frozen)', unit: 'pcs', icon: '' },
   raw_cheese_balls:    { label: 'Raw Cheese Balls (Frozen)', unit: 'pcs', icon: '' },
   butter:              { label: 'Butter', unit: 'kg', icon: '' },
-  raw_sugar:           { label: 'Sugar', unit: 'kg', icon: '' },
+  raw_sugar:           { label: 'Sugar (direct kg)', unit: 'kg', icon: '' },
   raw_milkmaid:        { label: 'Condensed Milk', unit: 'kg', icon: '' },
   raw_smp:             { label: 'SMP', unit: 'kg', icon: '' },
-  raw_tea_powder:      { label: 'Tea Powder', unit: 'kg', icon: '' },
+  raw_tea_powder:      { label: 'Tea Powder (direct kg)', unit: 'kg', icon: '' },
   tea_sugar_boxes:     { label: 'Tea-Sugar Boxes', unit: 'boxes', icon: '' },
   coffee_powder:       { label: 'Coffee Powder', unit: 'kg', icon: '' },
   honey:               { label: 'Honey', unit: 'kg', icon: '' },
@@ -490,6 +490,9 @@ const FIELD_META = {
   boiled_milk_counter:     { label: 'Boiled Milk', type: 'vessel', liquidType: 'boiled_milk' },
   tea_decoction_kitchen:   { label: 'Tea Decoction', type: 'vessel', liquidType: 'tea_decoction' },
   tea_decoction_counter:   { label: 'Tea Decoction', type: 'vessel', liquidType: 'tea_decoction' },
+  // Dry-goods container weighing (uses KIT-DRY-1 — weigh container, auto-subtracts tare 1.7 kg)
+  sugar_container:         { label: 'Sugar Container (weigh)', type: 'vessel', liquidType: 'dry_goods' },
+  tea_powder_container:    { label: 'Tea Powder Container (weigh)', type: 'vessel', liquidType: 'dry_goods' },
 };
 
 const ZONE_LABELS = {
@@ -1520,9 +1523,11 @@ function renderNCHSettlement(data) {
         );
         if (matchingVessels.length === 0) return '';
 
+        const isDry = meta.liquidType === 'dry_goods';
         return `
           <div class="mb-3">
             <p class="text-xs font-semibold text-white/50 mb-1.5">${meta.label}</p>
+            ${isDry ? `<p class="text-[10px] text-amber-400/50 mb-1.5">Weigh container → net ${field.includes('sugar') ? 'sugar' : 'tea powder'} kg auto-calculated</p>` : ''}
             ${matchingVessels.map(([code, v]) => `
               <div class="vessel-card" data-field="${field}" data-vessel="${code}" data-tare="${v.tare_weight_kg}" data-liquid="${meta.liquidType}">
                 <div class="flex items-center justify-between mb-1">
@@ -1535,7 +1540,7 @@ function renderNCHSettlement(data) {
                     placeholder="kg" step="0.1" min="0" onchange="calcVesselNet(this)">
                   <span class="text-xs text-white/30 shrink-0">Net:</span>
                   <span class="text-sm font-bold vessel-net text-brand-400" data-field="${field}" data-vessel="${code}">--</span>
-                  <span class="text-xs text-white/25">L</span>
+                  <span class="text-xs text-white/25">${isDry ? 'kg' : 'L'}</span>
                 </div>
               </div>
             `).join('')}
@@ -1545,11 +1550,13 @@ function renderNCHSettlement(data) {
 
       // Direct number input
       return `
-        <div class="settle-item-row flex items-center justify-between py-2 border-b border-white/[.03] last:border-0" data-name="${meta.label}">
+        <div class="settle-item-row flex items-center justify-between gap-2 py-2 border-b border-white/[.03] last:border-0" data-name="${meta.label}">
           <div class="flex-1 min-w-0">
             <span class="text-sm">${meta.label}</span>
             ${meta.unit ? `<span class="text-[10px] text-white/20 ml-1">${meta.unit}</span>` : ''}
           </div>
+          <button type="button" class="photo-btn btn btn-ghost btn-sm text-white/20 shrink-0"
+            id="photo-btn-field-${field}" onclick="capturePhoto('field:${field}','${meta.label}')">📷</button>
           <input type="number" inputmode="decimal" class="count-input nch-field-input" data-field="${field}"
             placeholder="--" step="any" min="0" onchange="updateSettlementBtn()">
         </div>
@@ -1605,6 +1612,8 @@ function renderNCHSettlement(data) {
                 &nbsp;<span class="text-white/15">${item.uom}</span>
               </p>
             </div>
+            <button type="button" class="photo-btn btn btn-ghost btn-sm text-white/20 shrink-0"
+              id="photo-btn-${item.code}" onclick="capturePhoto('${item.code}','${(item.name||'').replace(/'/g,"\\'")}')">📷</button>
             <input type="number" inputmode="decimal"
               class="count-input closing-input" data-code="${item.code}"
               placeholder="--" step="any" min="0" onchange="updateSettlementBtn()">
@@ -1619,12 +1628,16 @@ function renderNCHSettlement(data) {
             <span class="text-sm font-bold">Stock Count</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-[10px] text-white/20">${directItems.length} items</span>
+            <span class="text-[10px] text-white/20" id="direct-count-badge">${directItems.length} items</span>
             <svg class="w-4 h-4 text-white/20 zone-chevron" id="chev-direct-count" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
           </div>
         </div>
         <div class="zone-body" id="body-direct-count">
-          ${directHtml}
+          <div id="direct-count-items">${directHtml}</div>
+          <button class="w-full mt-3 py-2.5 border border-dashed border-white/10 rounded-xl text-[12px] text-white/30 hover:border-emerald-500/30 hover:text-emerald-400/60 transition-colors"
+            onclick="openAddItemModal()">
+            + Add item to track
+          </button>
         </div>
       </div>`;
   }
@@ -1793,9 +1806,17 @@ async function submitSettlement() {
     payload.counts = counts;
   }
 
+  // Include any photos that were captured (optional)
+  if (Object.keys(itemPhotos).length > 0) {
+    payload.item_photos = Object.entries(itemPhotos).map(([key, p]) => ({
+      key, label: p.label, base64: p.base64, timestamp: p.timestamp,
+    }));
+  }
+
   const res = await apiPost(payload);
 
   if (res.success) {
+    itemPhotos = {};  // clear photos after successful submit
     showToast(isBootstrap ? 'Baseline established' : 'Settlement saved', 'success');
     renderSettlementResult(res);
     loadSettlementData();
@@ -2231,6 +2252,219 @@ function showToast(msg, type) {
 }
 // Adapter: toast(msg) for success, toast(msg, true) for error
 const toast = (msg, isError) => showToast(msg, isError ? 'error' : 'success');
+
+/* ━━━ Photo Capture ━━━ */
+let itemPhotos = {};        // { photoKey: { base64, timestamp, label } }
+let cameraStream = null;
+let _activePhotoKey = null;
+let _activePhotoLabel = null;
+
+async function capturePhoto(key, label) {
+  _activePhotoKey = key;
+  _activePhotoLabel = label;
+  const overlay = document.getElementById('cameraOverlay');
+  overlay.classList.remove('hidden');
+  document.getElementById('camItemLabel').textContent = label;
+
+  // Clear old preview
+  document.getElementById('cameraPreview').classList.add('hidden');
+  document.getElementById('cameraVideo').classList.remove('hidden');
+  document.getElementById('btnCamCapture').classList.remove('hidden');
+  document.getElementById('btnCamRetake').classList.add('hidden');
+  document.getElementById('btnCamSave').classList.add('hidden');
+
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false,
+    });
+    document.getElementById('cameraVideo').srcObject = cameraStream;
+  } catch (e) {
+    closeCameraOverlay();
+    showToast('Camera unavailable: ' + e.message, 'error');
+  }
+}
+
+function doCapture() {
+  const video = document.getElementById('cameraVideo');
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+
+  // Resize to max 1024px
+  const maxDim = 1024;
+  let w = canvas.width, h = canvas.height;
+  if (w > maxDim || h > maxDim) {
+    if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+    else { w = Math.round(w * maxDim / h); h = maxDim; }
+  }
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  out.getContext('2d').drawImage(canvas, 0, 0, w, h);
+  const base64 = out.toDataURL('image/jpeg', 0.82).split(',')[1];
+
+  // Show preview
+  const preview = document.getElementById('cameraPreview');
+  preview.src = 'data:image/jpeg;base64,' + base64;
+  preview.classList.remove('hidden');
+  document.getElementById('cameraVideo').classList.add('hidden');
+  document.getElementById('btnCamCapture').classList.add('hidden');
+  document.getElementById('btnCamRetake').classList.remove('hidden');
+  document.getElementById('btnCamSave').classList.remove('hidden');
+
+  // Store temporarily
+  itemPhotos[_activePhotoKey] = { base64, timestamp: new Date().toISOString(), label: _activePhotoLabel };
+}
+
+function retakePhoto() {
+  document.getElementById('cameraPreview').classList.add('hidden');
+  document.getElementById('cameraVideo').classList.remove('hidden');
+  document.getElementById('btnCamCapture').classList.remove('hidden');
+  document.getElementById('btnCamRetake').classList.add('hidden');
+  document.getElementById('btnCamSave').classList.add('hidden');
+  delete itemPhotos[_activePhotoKey];
+}
+
+function savePhoto() {
+  // Photo already stored in itemPhotos during doCapture
+  const btnId = _activePhotoKey.startsWith('field:')
+    ? `photo-btn-field-${_activePhotoKey.slice(6)}`
+    : `photo-btn-${_activePhotoKey}`;
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.textContent = '✅'; btn.classList.add('text-emerald-400/80'); }
+  closeCameraOverlay();
+  showToast('Photo saved', 'success');
+}
+
+function closeCameraOverlay() {
+  document.getElementById('cameraOverlay').classList.add('hidden');
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+}
+
+/* ━━━ Add-Item Modal ━━━ */
+let addItemSearchTimeout = null;
+let _addItemBrand = null;
+
+function openAddItemModal() {
+  _addItemBrand = currentBrand || 'NCH';
+  document.getElementById('addItemModal').classList.remove('hidden');
+  document.getElementById('addItemSearch').value = '';
+  document.getElementById('addItemResults').innerHTML = '';
+  document.getElementById('addItemSearch').focus();
+  searchUntrackedItems('');
+}
+
+function closeAddItemModal() {
+  document.getElementById('addItemModal').classList.add('hidden');
+}
+
+function onAddItemSearchInput(e) {
+  clearTimeout(addItemSearchTimeout);
+  addItemSearchTimeout = setTimeout(() => searchUntrackedItems(e.target.value.trim()), 250);
+}
+
+async function searchUntrackedItems(q) {
+  const el = document.getElementById('addItemResults');
+  el.innerHTML = `<p class="text-center text-white/20 text-xs py-4">Searching…</p>`;
+  const data = await apiFetch(`search-products&brand=${_addItemBrand}&q=${encodeURIComponent(q)}`);
+  if (!data.products || data.products.length === 0) {
+    el.innerHTML = `<p class="text-center text-white/20 text-xs py-4">${q ? 'No untracked items match.' : 'All products already tracked.'}</p>`;
+    return;
+  }
+  el.innerHTML = data.products.map(p => `
+    <div class="flex items-center justify-between gap-2 py-2.5 px-3 rounded-lg hover:bg-white/[.03] cursor-pointer border-b border-white/[.03] last:border-0"
+         onclick="confirmAddItem('${p.hn_code}','${(p.name||'').replace(/'/g,"\\'")}','${p.uom}','${p.category||''}')">
+      <div class="min-w-0 flex-1">
+        <p class="text-sm text-white/80 truncate">${p.name}</p>
+        <p class="text-[10px] text-white/25">${p.category || ''} · ${p.uom} · ${p.hn_code}</p>
+      </div>
+      <span class="text-emerald-400/50 text-lg shrink-0">+</span>
+    </div>
+  `).join('');
+}
+
+async function confirmAddItem(code, name, uom, category) {
+  const el = document.getElementById('addItemResults');
+  el.innerHTML = `<p class="text-center text-white/20 text-xs py-4">Adding…</p>`;
+  const data = await apiPost({ action: 'add-tracked-item', pin: currentPin, brand: _addItemBrand, product_code: code });
+  if (data.error) { showToast(data.error, 'error'); searchUntrackedItems(''); return; }
+
+  // Inject new row directly into the live Direct Count zone body
+  const listEl = document.getElementById('direct-count-items');
+  const badgeEl = document.getElementById('direct-count-badge');
+  if (listEl) {
+    // Find or create category group
+    const catId = `dc-cat-${category.replace(/\W/g,'_')}`;
+    let catEl = document.getElementById(catId);
+    if (!catEl) {
+      const div = document.createElement('div');
+      div.className = 'mb-3';
+      div.id = catId;
+      div.innerHTML = `<p class="text-[10px] font-bold text-white/20 uppercase tracking-wider mb-1.5">${category} <span class="text-white/10 font-normal" id="${catId}-count">0</span></p>`;
+      listEl.insertBefore(div, listEl.firstChild);
+      catEl = div;
+    }
+    const row = document.createElement('div');
+    row.className = 'settle-item-row flex items-center gap-2 py-2 border-b border-white/[.03] last:border-0';
+    row.dataset.name = name;
+    row.dataset.code = code;
+    row.innerHTML = `
+      <div class="flex-1 min-w-0">
+        <p class="text-sm truncate">${name}</p>
+        <p class="text-[10px] text-white/25">Open -- &nbsp;+Purch -- &nbsp;${uom}</p>
+      </div>
+      <input type="number" inputmode="decimal" class="count-input closing-input" data-code="${code}"
+        placeholder="--" step="any" min="0" onchange="updateSettlementBtn()">`;
+    catEl.appendChild(row);
+    // Update badge count
+    if (badgeEl) {
+      const cur = parseInt(badgeEl.textContent) || 0;
+      badgeEl.textContent = `${cur + 1} items`;
+    }
+  }
+
+  closeAddItemModal();
+  showToast(`${name} added to tracking`, 'success');
+}
 </script>
+
+<!-- ── Camera Overlay ── -->
+<div id="cameraOverlay" class="hidden fixed inset-0 z-50 flex flex-col" style="background:#000">
+  <div class="flex items-center justify-between px-4 py-3 bg-black/80">
+    <div>
+      <p class="text-[10px] text-white/30 uppercase tracking-wider">Photo for</p>
+      <p class="text-sm font-semibold" id="camItemLabel"></p>
+    </div>
+    <button onclick="closeCameraOverlay()" class="btn btn-ghost btn-sm text-white/40">✕ Cancel</button>
+  </div>
+  <div class="flex-1 relative overflow-hidden flex items-center justify-center bg-black">
+    <video id="cameraVideo" autoplay playsinline class="max-h-full max-w-full object-contain"></video>
+    <img id="cameraPreview" class="hidden max-h-full max-w-full object-contain" alt="preview">
+  </div>
+  <div class="flex gap-3 px-4 py-4 bg-black/80">
+    <button id="btnCamCapture" onclick="doCapture()" class="btn btn-primary flex-1">📸 Capture</button>
+    <button id="btnCamRetake" onclick="retakePhoto()" class="btn btn-ghost flex-1 hidden">↩ Retake</button>
+    <button id="btnCamSave" onclick="savePhoto()" class="btn btn-primary flex-1 hidden">✓ Save Photo</button>
+  </div>
+</div>
+
+<!-- ── Add Item to Track Modal ── -->
+<div id="addItemModal" class="hidden fixed inset-0 z-50 flex items-end justify-center" style="background:rgba(0,0,0,0.7)">
+  <div class="w-full max-w-lg glass rounded-t-2xl p-5 pb-8" style="max-height:80vh;overflow-y:auto">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-bold">Add Item to Track</h3>
+      <button onclick="closeAddItemModal()" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <input id="addItemSearch" type="text" placeholder="Search by name or code…"
+      class="w-full px-4 py-3 rounded-xl text-sm mb-3" oninput="onAddItemSearchInput(event)">
+    <p class="text-[10px] text-white/20 mb-2">Only shows products not yet tracked. New Odoo products appear here automatically.</p>
+    <div id="addItemResults"></div>
+  </div>
+</div>
+
 </body>
 </html>
