@@ -1520,6 +1520,60 @@ function renderNCHSettlement(data) {
     `;
   }).join('');
 
+  // ── Direct Count section for items NOT covered by zone decomposition ──
+  // Zone-decomposed product codes (derived from fieldZones)
+  const zoneProductCodes = new Set([
+    'HN-RM-200','HN-RM-201','HN-RM-202','HN-RM-203','HN-RM-204','HN-RM-205',
+    'HN-RM-206','HN-RM-207','HN-RM-208','HN-RM-209','HN-RM-210','HN-RM-211',
+    'HN-RM-212','HN-RM-213','HN-RM-214','HN-RM-215','HN-RM-029','HN-RM-065',
+  ]);
+  const directItems = (data.trackedItems || []).filter(i => !zoneProductCodes.has(i.code));
+
+  if (directItems.length > 0) {
+    // Group by category
+    const cats = {};
+    for (const item of directItems) {
+      const c = item.category || 'Other';
+      if (!cats[c]) cats[c] = [];
+      cats[c].push(item);
+    }
+    const directHtml = Object.entries(cats).map(([cat, items]) => `
+      <div class="mb-3">
+        <p class="text-[10px] font-bold text-white/20 uppercase tracking-wider mb-1.5">${cat} <span class="text-white/10 font-normal">${items.length}</span></p>
+        ${items.map(item => `
+          <div class="settle-item-row flex items-center gap-2 py-2 border-b border-white/[.03] last:border-0" data-name="${item.name}" data-code="${item.code}">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm truncate">${item.name}</p>
+              <p class="text-[10px] text-white/25">
+                Open <span class="text-white/40">${r2(item.opening)}</span>
+                &nbsp;+Purch <span class="text-emerald-400/50">${r2(item.purchased)}</span>
+                &nbsp;<span class="text-white/15">${item.uom}</span>
+              </p>
+            </div>
+            <input type="number" inputmode="decimal"
+              class="count-input closing-input" data-code="${item.code}"
+              placeholder="--" step="any" min="0" onchange="updateSettlementBtn()">
+          </div>`).join('')}
+      </div>`).join('');
+
+    form.innerHTML += `
+      <div class="zone-section mt-3" id="zone-direct-count">
+        <div class="zone-header" onclick="toggleZone('direct-count')">
+          <div class="flex items-center gap-2">
+            <span class="text-white/60">📋</span>
+            <span class="text-sm font-bold">Stock Count</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-white/20">${directItems.length} items</span>
+            <svg class="w-4 h-4 text-white/20 zone-chevron" id="chev-direct-count" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+          </div>
+        </div>
+        <div class="zone-body" id="body-direct-count">
+          ${directHtml}
+        </div>
+      </div>`;
+  }
+
   // Wastage items
   renderWastageOptions(data.intelligence?.wastageItems || []);
   document.getElementById('btnSubmitSettlement').disabled = true;
@@ -1655,6 +1709,14 @@ async function submitSettlement() {
 
     payload.raw_input = rawInput;
     payload.field_timestamps = { ...zoneTimestamps };
+
+    // Also collect direct-count inputs (items not covered by zone decomposition)
+    const directCounts = {};
+    document.querySelectorAll('.closing-input').forEach(inp => {
+      const val = parseFloat(inp.value);
+      if (!isNaN(val)) directCounts[inp.dataset.code] = val;
+    });
+    if (Object.keys(directCounts).length > 0) payload.counts = directCounts;
 
     // Wastage items
     const wastage = [];

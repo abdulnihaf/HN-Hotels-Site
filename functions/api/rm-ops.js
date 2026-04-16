@@ -1315,7 +1315,8 @@ async function settlementSubmit(body, user, creds, cfg, brand, env, DB) {
   if (mode === 'full') {
     // Full decomposition: convert physical forms → raw materials
     decomposedRawInput = decomposeInput(raw_input, intelligence);
-    closingStock = { ...decomposedRawInput };
+    // Merge direct counts first, then overlay decomposed values (decomposed wins for covered items)
+    closingStock = { ...(counts || {}), ...decomposedRawInput };
   } else {
     // Direct mode: counts ARE the closing stock
     closingStock = { ...counts };
