@@ -30,7 +30,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn:hover{border-color:var(--accent);color:var(--accent)}
 
 /* ─── MAIN TABS ──────────────────────────────────────────────────────── */
-.nav{display:flex;border-bottom:1px solid var(--border);margin-bottom:20px}
+.nav{display:flex;border-bottom:1px solid var(--border);margin-bottom:20px;flex-wrap:wrap}
 .ntab{padding:12px 20px;cursor:pointer;font-size:13px;font-weight:600;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;user-select:none;display:flex;align-items:center;gap:7px}
 .ntab:hover{color:var(--text)}
 .ntab.active{color:var(--accent);border-bottom-color:var(--accent)}
@@ -161,6 +161,46 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .ci{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px}
 .ci .cl{font-size:10px;color:var(--dim);margin-bottom:3px}
 .ci .cv{font-size:16px;font-weight:700}
+
+/* ─── ANALYTICS ──────────────────────────────────────────────────────── */
+.funnel{display:flex;align-items:stretch;gap:0;margin:8px 0}
+.f-step{flex:1;background:var(--surface2);border:1px solid var(--border);padding:10px 8px;text-align:center;position:relative}
+.f-step .f-val{font-size:18px;font-weight:700}
+.f-step .f-lbl{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}
+.f-step .f-pct{font-size:11px;color:var(--green);margin-top:4px;font-weight:600}
+.f-arrow{display:flex;align-items:center;padding:0 4px;color:var(--faint);font-size:16px;flex-shrink:0}
+
+.ag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-bottom:4px}
+.agc{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:8px 10px}
+.agc .al{font-size:9px;color:var(--dim);margin-bottom:3px;text-transform:uppercase;letter-spacing:.2px}
+.agc .av{font-size:16px;font-weight:700}
+
+.an-section{margin-bottom:16px}
+.an-section-hdr{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.an-section-hdr::after{content:'';flex:1;height:1px;background:var(--border)}
+.an-note{font-size:10px;color:var(--faint);font-style:italic;margin-bottom:12px;padding:6px 10px;background:var(--surface2);border-radius:4px;border-left:2px solid var(--border2)}
+.an-freshness{font-size:11px;color:var(--dim);padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;margin-bottom:12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.an-freshness .fresh-ok{color:var(--green)}.an-freshness .fresh-warn{color:var(--orange)}.an-freshness .fresh-lag{color:var(--faint)}
+
+/* ─── REVIEWS ────────────────────────────────────────────────────────── */
+.rev-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+@media(max-width:700px){.rev-grid{grid-template-columns:1fr}}
+.rcard{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.rc-hdr{padding:10px 14px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.rc-rating{font-size:28px;font-weight:700;color:#ffd700}
+.rc-body{padding:12px 14px}
+.rc-stat{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(29,29,56,.5);font-size:12px}
+.rc-stat:last-child{border-bottom:none}
+.rc-stat .rs-l{color:var(--dim)}
+.rc-stat .rs-v{font-weight:600}
+.issues-tbl-wrap{border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:20px}
+.rev-review-item{padding:10px 0;border-bottom:1px solid rgba(29,29,56,.5)}
+.rev-review-item:last-child{border-bottom:none}
+.rev-review-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.rev-reviewer{font-size:12px;font-weight:600}
+.rev-stars{color:#ffd700;font-size:12px}
+.rev-date{font-size:10px;color:var(--faint)}
+.rev-text{font-size:11px;color:var(--dim);line-height:1.5}
 </style>
 </head>
 <body>
@@ -188,6 +228,14 @@ tr:hover td{background:rgba(255,255,255,.03)}
   <div class="ntab active" onclick="showSection('sales',this)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
     Live Sales &amp; Orders
+  </div>
+  <div class="ntab" onclick="showSection('analytics',this)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/></svg>
+    Analytics
+  </div>
+  <div class="ntab" onclick="showSection('reviews',this)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    Reviews
   </div>
   <div class="ntab" onclick="showSection('finance',this)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
@@ -273,6 +321,24 @@ tr:hover td{background:rgba(255,255,255,.03)}
 </div>
 
 <!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- ANALYTICS SECTION                                                   -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="section" id="sec-analytics">
+  <div id="analyticsBody">
+    <div class="empty-state">Loading analytics…</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- REVIEWS SECTION                                                     -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="section" id="sec-reviews">
+  <div id="reviewsBody">
+    <div class="empty-state">Loading reviews…</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
 <!-- FINANCE SECTION                                                     -->
 <!-- ════════════════════════════════════════════════════════════════════ -->
 <div class="section" id="sec-finance">
@@ -285,7 +351,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
   <div class="fin-label">Zomato — Payout</div>
   <div class="fin-note" id="zmPayoutNote">
     Zomato payout data not yet captured — the extension reads Swiggy Finance page only.<br>
-    <strong>To get Zomato payout data:</strong> navigate to Zomato Partner → Payments & Reconciliation.
+    <strong>To get Zomato payout data:</strong> navigate to Zomato Partner → Payments &amp; Reconciliation.
   </div>
 
   <!-- Commission reference -->
@@ -343,6 +409,10 @@ const fmtAgo = iso => {
   const h = Math.round(m / 60);
   return h < 24 ? h + 'h ago' : Math.round(h / 24) + 'd ago';
 };
+const fmtAgoMins = iso => {
+  if (!iso) return null;
+  return Math.round((Date.now() - new Date(iso)) / 60000);
+};
 
 function statusCls(s) {
   const u = (s || '').toUpperCase();
@@ -371,9 +441,36 @@ function fmtFin(v, forceSign = false) {
   return '₹' + abs;
 }
 
+// Color class helper — invert=true means lower is better
+function valCls(v, {good, warn, bad, invert=false}={}) {
+  const n = parseFloat(v) || 0;
+  if (invert) {
+    if (bad  != null && n >= bad)  return 'rv r';
+    if (warn != null && n >= warn) return 'rv o';
+    if (good != null && n <= good) return 'rv g';
+    return '';
+  } else {
+    if (good != null && n >= good) return 'rv g';
+    if (warn != null && n >= warn) return 'rv o';
+    if (bad  != null && n <= bad)  return 'rv r';
+    return '';
+  }
+}
+
+// Render a single analytics card
+function agCard(label, val, opts={}) {
+  const cls = opts.cls || valCls(val, opts);
+  return `<div class="agc"><div class="al">${label}</div><div class="av ${cls}">${val != null ? val : '—'}</div></div>`;
+}
+
+// Render an analytics section header
+function anHdr(title) {
+  return `<div class="an-section-hdr">${title}</div>`;
+}
+
 // ── LOAD ──────────────────────────────────────────────────────────────
 async function loadAll() {
-  await Promise.all([loadSales(), loadFinance()]);
+  await Promise.all([loadSales(), loadFinance(), loadAnalytics(), loadReviews()]);
   document.getElementById('updTime').textContent =
     'Updated ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
 }
@@ -658,10 +755,429 @@ function renderFinance(finance) {
   }).join('');
 }
 
+// ── ANALYTICS ─────────────────────────────────────────────────────────
+async function loadAnalytics() {
+  try {
+    const r   = await fetch(`${API}?action=latest&key=${KEY}`);
+    const lat = await r.json();
+    renderAnalytics(lat);
+  } catch (e) {
+    console.error('[Analytics]', e);
+    document.getElementById('analyticsBody').innerHTML = '<div class="empty-state">Error loading analytics data</div>';
+  }
+}
+
+function renderAnalytics(lat) {
+  const zmAllOutlet = lat.outlets?.find(o => o.platform === 'zomato' && o.brand === 'all');
+  const swAllOutlet = lat.outlets?.find(o => o.platform === 'swiggy' && o.brand === 'all');
+
+  const sw     = swAllOutlet?.metrics?.reports_swiggy?.data || null;
+  const swCap  = swAllOutlet?.metrics?.reports_swiggy?.captured_at || null;
+  const swAge  = fmtAgoMins(swCap);
+
+  const zm_live    = zmAllOutlet?.metrics?.live_tracking?.data || null;
+  const zm_liveCap = zmAllOutlet?.metrics?.live_tracking?.captured_at || null;
+  const zm_biz     = zmAllOutlet?.metrics?.biz_reports?.data || null;
+  const zm_bizCap  = zmAllOutlet?.metrics?.biz_reports?.captured_at || null;
+  const zm_res     = zmAllOutlet?.metrics?.restaurant_metrics?.data?.entities || [];
+
+  let html = '';
+
+  // ── SWIGGY ANALYTICS ──────────────────────────────────────────────
+  html += `<div class="plat-band" style="margin-top:0">
+    <span class="pb-tag sw">SWIGGY</span>
+    <div class="pb-line"></div>
+  </div>`;
+
+  if (!sw) {
+    html += `<div class="an-note">No Swiggy Business Reports data captured yet. Visit Swiggy Partner → Business Reports to seed.</div>`;
+  } else {
+    // Freshness banner
+    const freshCls = swAge == null ? 'fresh-warn' : swAge < 60 ? 'fresh-ok' : swAge < 300 ? 'fresh-warn' : 'fresh-lag';
+    const dateRange = sw.date_range || (sw.from_date && sw.to_date ? `${sw.from_date} – ${sw.to_date}` : '—');
+    html += `<div class="an-freshness">
+      <span>⏱ Period: <strong>${dateRange}</strong></span>
+      <span class="${freshCls}">Captured ${swAge != null ? swAge + 'm ago' : '—'}</span>
+      <span class="fresh-lag">Funnel &amp; Customer data lags 24–48h from Business Reports</span>
+    </div>`;
+
+    // Sales Performance
+    html += `<div class="an-section">${anHdr('Sales Performance')}<div class="ag-grid">
+      ${agCard('Net Sales', sw.rpt_net_sales != null ? '₹' + Math.round(sw.rpt_net_sales).toLocaleString('en-IN') : '—')}
+      ${agCard('Delivered Orders', sw.rpt_delivered_orders ?? '—')}
+      ${agCard('Net AOV', sw.rpt_net_aov != null ? '₹' + Math.round(sw.rpt_net_aov).toLocaleString('en-IN') : '—')}
+      ${agCard('Cancelled Orders', sw.rpt_cancelled_orders ?? 0, {warn:1, bad:5, invert:true})}
+      ${agCard('Cancelled Loss', sw.rpt_cancelled_loss != null ? '₹' + Math.round(sw.rpt_cancelled_loss).toLocaleString('en-IN') : '—', {cls: sw.rpt_cancelled_loss > 0 ? 'rv o' : ''})}
+    </div></div>`;
+
+    // Customer Funnel
+    const imp  = parseFloat(sw.impressions) || 0;
+    const mo   = parseFloat(sw.menu_opens)  || 0;
+    const cb   = parseFloat(sw.cart_builds) || 0;
+    const op   = parseFloat(sw.orders_placed) || parseFloat(sw.rpt_delivered_orders) || 0;
+    const menuRate  = imp  > 0 ? (mo / imp * 100).toFixed(1) : null;
+    const cartRate  = mo   > 0 ? (cb / mo  * 100).toFixed(1) : null;
+    const orderRate = cb   > 0 ? (op / cb  * 100).toFixed(1) : null;
+
+    html += `<div class="an-section">${anHdr('Customer Funnel')}
+      <div class="funnel">
+        <div class="f-step"><div class="f-val">${imp > 0 ? imp.toLocaleString('en-IN') : '—'}</div><div class="f-lbl">Impressions</div></div>
+        <div class="f-arrow">→</div>
+        <div class="f-step"><div class="f-val">${mo > 0 ? mo.toLocaleString('en-IN') : '—'}</div><div class="f-lbl">Menu Opens</div>${menuRate ? `<div class="f-pct">${menuRate}%</div>` : ''}</div>
+        <div class="f-arrow">→</div>
+        <div class="f-step"><div class="f-val">${cb > 0 ? cb.toLocaleString('en-IN') : '—'}</div><div class="f-lbl">Cart Builds</div>${cartRate ? `<div class="f-pct">${cartRate}%</div>` : ''}</div>
+        <div class="f-arrow">→</div>
+        <div class="f-step"><div class="f-val">${op > 0 ? op.toLocaleString('en-IN') : '—'}</div><div class="f-lbl">Orders Placed</div>${orderRate ? `<div class="f-pct">${orderRate}%</div>` : ''}</div>
+      </div>
+    </div>`;
+
+    // Customer Segments
+    html += `<div class="an-section">${anHdr('Customer Segments')}<div class="ag-grid">
+      ${agCard('New Customers', sw.new_customers ?? '—', {cls: 'rv g'})}
+      ${agCard('Repeat Customers', sw.repeat_customers ?? '—', {cls: 'rv g'})}
+      ${agCard('Dormant Customers', sw.dormant_customers ?? '—', {warn:10, bad:50, invert:true})}
+      ${agCard('New Cust Order %', sw.new_cust_order_pct != null ? sw.new_cust_order_pct + '%' : '—')}
+      ${agCard('Repeat Cust Order %', sw.repeat_cust_order_pct != null ? sw.repeat_cust_order_pct + '%' : '—', {cls: sw.repeat_cust_order_pct > 30 ? 'rv g' : ''})}
+    </div></div>`;
+
+    // Quality & Complaints
+    html += `<div class="an-section">${anHdr('Quality & Complaints')}<div class="ag-grid">
+      ${agCard('Complaint %', sw.complaint_pct != null ? sw.complaint_pct + '%' : '—', {warn:0.1, bad:2, invert:true})}
+      ${agCard('Complaint Orders', sw.complaint_orders ?? 0, {warn:1, bad:5, invert:true})}
+      ${agCard('Unresolved', sw.unresolved_complaints ?? 0, {cls: (sw.unresolved_complaints > 0) ? 'rv r' : ''})}
+      ${agCard('Wrong Items', sw.wrong_items ?? 0, {cls: (sw.wrong_items > 0) ? 'rv r' : ''})}
+      ${agCard('Missing Items', sw.missing_items ?? 0, {cls: (sw.missing_items > 0) ? 'rv r' : ''})}
+      ${agCard('Quality Issues', sw.quality_issues ?? 0, {cls: (sw.quality_issues > 0) ? 'rv r' : ''})}
+      ${agCard('Packaging Issues', sw.packaging_issues ?? 0, {cls: (sw.packaging_issues > 0) ? 'rv o' : ''})}
+      ${agCard('Rated Orders', sw.rated_orders ?? '—', {cls: 'rv g'})}
+      ${agCard('Poor Rated', sw.poor_rated_orders ?? 0, {cls: (sw.poor_rated_orders > 0) ? 'rv r' : ''})}
+    </div></div>`;
+
+    // Advertising — CPC
+    html += `<div class="an-section">${anHdr('Advertising — CPC')}<div class="ag-grid">
+      ${agCard('CPC Sales', sw.cpc_sales != null ? '₹' + Math.round(sw.cpc_sales).toLocaleString('en-IN') : '—')}
+      ${agCard('CPC Orders', sw.cpc_orders ?? '—')}
+      ${agCard('CPC Spend', sw.cpc_spends != null ? '₹' + Math.round(sw.cpc_spends).toLocaleString('en-IN') : '—')}
+      ${agCard('ROAS', sw.roas != null ? sw.roas + 'x' : '—', {cls: sw.roas >= 1 ? 'rv g' : sw.roas > 0 ? 'rv o' : ''})}
+    </div></div>`;
+
+    // Advertising — CBA & Discounts
+    html += `<div class="an-section">${anHdr('Advertising — CBA & Discounts')}<div class="ag-grid">
+      ${agCard('CBA Sales', sw.cba_sales != null ? '₹' + Math.round(sw.cba_sales).toLocaleString('en-IN') : '—')}
+      ${agCard('CBA Spend', sw.cba_spends != null ? '₹' + Math.round(sw.cba_spends).toLocaleString('en-IN') : '—')}
+      ${agCard('Sales via Discounts', sw.disc_sales != null ? '₹' + Math.round(sw.disc_sales).toLocaleString('en-IN') : '—')}
+    </div></div>`;
+
+    // Operations
+    const avail = parseFloat(sw.online_availability) || 0;
+    const availCls = avail >= 95 ? 'rv g' : avail >= 80 ? 'rv o' : avail > 0 ? 'rv r' : '';
+    const menuSc = parseFloat(sw.menu_score) || 0;
+    const menuScCls = menuSc >= 70 ? 'rv g' : menuSc >= 50 ? 'rv o' : menuSc > 0 ? 'rv r' : '';
+    html += `<div class="an-section">${anHdr('Operations')}<div class="ag-grid">
+      ${agCard('Online Availability', sw.online_availability != null ? sw.online_availability + '%' : '—', {cls: availCls})}
+      ${agCard('Kitchen Prep Time', sw.kitchen_prep_time != null ? sw.kitchen_prep_time + ' min' : '—', {warn:10, bad:15, invert:true})}
+      ${agCard('MFR Accuracy', sw.mfr_accuracy != null ? sw.mfr_accuracy + '%' : '—', {cls: sw.mfr_accuracy >= 95 ? 'rv g' : ''})}
+      ${agCard('Delayed >10min', sw.delayed_10min != null ? sw.delayed_10min + '%' : '—', {warn:5, bad:15, invert:true})}
+      ${agCard('Avg Prep Time', sw.avg_prep_time != null ? sw.avg_prep_time + ' min' : '—', {warn:12, bad:18, invert:true})}
+    </div></div>`;
+
+    // Menu Health
+    html += `<div class="an-section">${anHdr('Menu Health')}<div class="ag-grid">
+      ${agCard('Menu Score', sw.menu_score != null ? sw.menu_score + '/100' : '—', {cls: menuScCls})}
+      ${agCard('Items w/ Photos', sw.items_with_photos != null ? sw.items_with_photos + '%' : '—', {cls: 'rv g'})}
+      ${agCard('Items w/ Descriptions', sw.items_with_desc != null ? sw.items_with_desc + '%' : '—', {cls: 'rv g'})}
+    </div></div>`;
+  }
+
+  html += `<div class="an-note">Combined HE+NCH — Swiggy Business Reports does not split by outlet</div>`;
+
+  // ── ZOMATO ANALYTICS ──────────────────────────────────────────────
+  html += `<div class="plat-band" style="margin-top:20px">
+    <span class="pb-tag zm">ZOMATO</span>
+    <div class="pb-line"></div>
+  </div>`;
+
+  // Zomato Live Tracking
+  if (zm_live) {
+    const liveAge = fmtAgoMins(zm_liveCap);
+    html += `<div style="font-size:11px;font-weight:700;color:var(--dim);margin-bottom:8px">
+      Today — Live Tracking Snapshot
+      <span style="font-weight:400;color:var(--faint);margin-left:8px">captured ${liveAge != null ? liveAge + 'm ago' : fmtAgo(zm_liveCap)}</span>
+    </div>`;
+
+    // Today's Performance
+    html += `<div class="an-section">${anHdr("Today's Performance")}<div class="ag-grid">
+      ${agCard('Revenue', zm_live.sales != null ? '₹' + Math.round(zm_live.sales).toLocaleString('en-IN') : '—')}
+      ${agCard('Delivered Orders', zm_live.delivered_orders ?? '—')}
+      ${agCard('AOV', zm_live.aov != null ? '₹' + Math.round(zm_live.aov).toLocaleString('en-IN') : '—')}
+      ${agCard('Lost Sales', zm_live.lost_sales != null ? '₹' + Math.round(zm_live.lost_sales).toLocaleString('en-IN') : '—', {cls: zm_live.lost_sales > 0 ? 'rv r' : ''})}
+      ${agCard('Sales from Offers', zm_live.sales_from_offers != null ? '₹' + Math.round(zm_live.sales_from_offers).toLocaleString('en-IN') : '—')}
+    </div></div>`;
+
+    // Per Outlet Today
+    html += `<div class="an-section">${anHdr('Per Outlet — Today')}<div class="ag-grid">
+      <div class="agc"><div class="al">HE Sales</div><div class="av" style="color:var(--he)">${zm_live.he_sales != null ? '₹' + Math.round(zm_live.he_sales).toLocaleString('en-IN') : '—'}</div></div>
+      <div class="agc"><div class="al">NCH Sales</div><div class="av" style="color:var(--nch)">${zm_live.nch_sales != null ? '₹' + Math.round(zm_live.nch_sales).toLocaleString('en-IN') : '—'}</div></div>
+    </div></div>`;
+
+    // Zomato Funnel
+    const zImp  = parseFloat(zm_live.impressions)   || 0;
+    const zi2m  = parseFloat(zm_live.imp_to_menu)   || 0;
+    const zm2c  = parseFloat(zm_live.menu_to_cart)  || 0;
+    const zc2o  = parseFloat(zm_live.cart_to_order) || 0;
+    const zMenuOpens = zImp > 0 && zi2m > 0 ? Math.round(zImp * zi2m / 100) : 0;
+    const zCartBuilds = zMenuOpens > 0 && zm2c > 0 ? Math.round(zMenuOpens * zm2c / 100) : 0;
+    const zOrdersPlaced = zCartBuilds > 0 && zc2o > 0 ? Math.round(zCartBuilds * zc2o / 100) : 0;
+
+    html += `<div class="an-section">${anHdr('Customer Funnel')}
+      <div class="funnel">
+        <div class="f-step"><div class="f-val">${zImp > 0 ? zImp.toLocaleString('en-IN') : '—'}</div><div class="f-lbl">Impressions</div></div>
+        <div class="f-arrow">→</div>
+        <div class="f-step"><div class="f-val">${zMenuOpens > 0 ? zMenuOpens.toLocaleString('en-IN') : '—'}</div><div class="f-lbl">Menu Opens</div>${zi2m > 0 ? `<div class="f-pct">${zi2m}%</div>` : ''}</div>
+        <div class="f-arrow">→</div>
+        <div class="f-step"><div class="f-val">${zCartBuilds > 0 ? zCartBuilds.toLocaleString('en-IN') : '—'}</div><div class="f-lbl">Cart Builds</div>${zm2c > 0 ? `<div class="f-pct">${zm2c}%</div>` : ''}</div>
+        <div class="f-arrow">→</div>
+        <div class="f-step"><div class="f-val">${zOrdersPlaced > 0 ? zOrdersPlaced.toLocaleString('en-IN') : '—'}</div><div class="f-lbl">Orders Placed</div>${zc2o > 0 ? `<div class="f-pct">${zc2o}%</div>` : ''}</div>
+      </div>
+    </div>`;
+
+    // Quality Signals
+    html += `<div class="an-section">${anHdr('Quality Signals')}<div class="ag-grid">
+      ${agCard('Rejected %', zm_live.rejected_pct != null ? zm_live.rejected_pct + '%' : '—', {warn:1, bad:3, invert:true})}
+      ${agCard('Delayed %', zm_live.delayed_pct != null ? zm_live.delayed_pct + '%' : '—', {warn:5, bad:10, invert:true})}
+      ${agCard('Poor Rated %', zm_live.poor_rated_pct != null ? zm_live.poor_rated_pct + '%' : '—', {warn:5, bad:10, invert:true})}
+    </div></div>`;
+  } else {
+    html += `<div class="an-note">No Zomato live tracking data available.</div>`;
+  }
+
+  // Zomato Weekly Business Reports
+  if (zm_biz) {
+    const bizAge = fmtAgoMins(zm_bizCap);
+    html += `<div style="font-size:11px;font-weight:700;color:var(--dim);margin:16px 0 8px">
+      Weekly Business Reports
+      <span style="font-weight:400;color:var(--faint);margin-left:8px">captured ${bizAge != null ? bizAge + 'm ago' : fmtAgo(zm_bizCap)}</span>
+    </div>`;
+
+    html += `<div class="an-section">${anHdr('Weekly Performance')}<div class="ag-grid">
+      ${agCard('Weekly Sales', zm_biz.weekly_sales != null ? '₹' + Math.round(zm_biz.weekly_sales).toLocaleString('en-IN') : '—')}
+      ${agCard('Weekly Orders', zm_biz.weekly_orders ?? '—')}
+      ${agCard('Weekly AOV', zm_biz.weekly_aov != null ? '₹' + Math.round(zm_biz.weekly_aov).toLocaleString('en-IN') : '—')}
+      ${agCard('Bad Orders %', zm_biz.weekly_bad_orders != null ? zm_biz.weekly_bad_orders + '%' : '—', {warn:2, bad:5, invert:true})}
+      ${agCard('Online %', zm_biz.weekly_online_pct != null ? zm_biz.weekly_online_pct + '%' : '—', {cls: zm_biz.weekly_online_pct >= 95 ? 'rv g' : zm_biz.weekly_online_pct >= 80 ? 'rv o' : zm_biz.weekly_online_pct > 0 ? 'rv r' : ''})}
+      ${agCard('Lost Sales', zm_biz.weekly_lost_sales != null ? '₹' + Math.round(zm_biz.weekly_lost_sales).toLocaleString('en-IN') : '—', {cls: zm_biz.weekly_lost_sales > 0 ? 'rv o' : ''})}
+    </div></div>`;
+  }
+
+  html += `<div class="an-note">Per-outlet analytics split not available from Zomato Business Reports</div>`;
+
+  document.getElementById('analyticsBody').innerHTML = html;
+}
+
+// ── REVIEWS ───────────────────────────────────────────────────────────
+async function loadReviews() {
+  try {
+    const [latR, ordR, heRevR, nchRevR] = await Promise.all([
+      fetch(`${API}?action=latest&key=${KEY}`),
+      fetch(`${API}?action=orders&date=week&key=${KEY}`),
+      fetch('https://hamzaexpress.in/api/organic?action=get-reviews').catch(() => null),
+      fetch('https://nawabichaihouse.com/api/marketing?action=get-reviews&brand=nch').catch(() => null),
+    ]);
+
+    const lat    = await latR.json();
+    const ord    = await ordR.json();
+    const heRev  = heRevR  ? await heRevR.json().catch(() => null)  : null;
+    const nchRev = nchRevR ? await nchRevR.json().catch(() => null) : null;
+
+    renderReviews(lat, ord, heRev, nchRev);
+  } catch (e) {
+    console.error('[Reviews]', e);
+    document.getElementById('reviewsBody').innerHTML = '<div class="empty-state">Error loading reviews data</div>';
+  }
+}
+
+function renderReviews(lat, ord, heRev, nchRev) {
+  const zmAllOutlet = lat.outlets?.find(o => o.platform === 'zomato' && o.brand === 'all');
+  const swAllOutlet = lat.outlets?.find(o => o.platform === 'swiggy' && o.brand === 'all');
+
+  const sw     = swAllOutlet?.metrics?.reports_swiggy?.data || null;
+  const zmEnts = zmAllOutlet?.metrics?.restaurant_metrics?.data?.entities || [];
+  const zmLive = zmAllOutlet?.metrics?.live_tracking?.data || null;
+
+  let html = '';
+
+  // ── SECTION A: Aggregator Quality Signals ─────────────────────────
+  html += `<div style="font-size:11px;color:var(--dim);margin-bottom:14px;padding:8px 12px;background:var(--surface2);border-radius:5px;border-left:2px solid var(--border2)">
+    Platform ratings shown below. Both outlets are newly opened (&lt;60 days) — Zomato ratings appear after 60 days in operation.
+  </div>`;
+
+  html += `<div style="font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+    Aggregator Quality Signals <span style="flex:1;height:1px;display:block;background:var(--border)"></span>
+  </div>`;
+
+  html += `<div class="rev-grid" style="margin-bottom:24px">`;
+
+  // Swiggy quality card
+  html += `<div class="rcard">
+    <div class="rc-hdr">
+      <span style="font-weight:700;font-size:13px">Swiggy Quality</span>
+      <span class="pb-tag sw">SWIGGY</span>
+    </div>
+    <div class="rc-body">
+      ${sw ? `
+        <div class="rc-stat"><span class="rs-l">Rated Orders</span><span class="rs-v" style="color:var(--green)">${sw.rated_orders ?? '—'}</span></div>
+        <div class="rc-stat"><span class="rs-l">Poor Rated Orders</span><span class="rs-v ${sw.poor_rated_orders > 0 ? 'rv r' : ''}">${sw.poor_rated_orders ?? 0}</span></div>
+        <div class="rc-stat"><span class="rs-l">Complaint %</span><span class="rs-v ${sw.complaint_pct > 0 ? 'rv r' : ''}">${sw.complaint_pct != null ? sw.complaint_pct + '%' : '—'}</span></div>
+        <div class="rc-stat"><span class="rs-l">Complaint Orders</span><span class="rs-v ${sw.complaint_orders > 0 ? 'rv o' : ''}">${sw.complaint_orders ?? 0}</span></div>
+        <div class="rc-stat"><span class="rs-l">Unresolved</span><span class="rs-v ${sw.unresolved_complaints > 0 ? 'rv r' : ''}">${sw.unresolved_complaints ?? 0}</span></div>
+      ` : '<div style="color:var(--faint);font-size:12px;padding:8px 0">No Swiggy report data captured</div>'}
+    </div>
+  </div>`;
+
+  // Zomato quality card
+  const zmHE  = zmEnts.find(e => String(e.id) === '22632449') || null;
+  const zmNCH = zmEnts.find(e => String(e.id) === '22632430') || null;
+  html += `<div class="rcard">
+    <div class="rc-hdr">
+      <span style="font-weight:700;font-size:13px">Zomato Quality</span>
+      <span class="pb-tag zm">ZOMATO</span>
+    </div>
+    <div class="rc-body">
+      ${zmHE ? `
+        <div class="rc-stat"><span class="rs-l">HE Rating</span><span class="rs-v" style="color:#ffd700">${zmHE.rating_info?.aggregate_rating ?? '—'} ★ (${zmHE.rating_info?.votes ?? 0} votes)</span></div>
+        <div class="rc-stat"><span class="rs-l">HE Active Since</span><span class="rs-v">${zmHE.active_since ?? '—'}</span></div>
+      ` : '<div class="rc-stat"><span class="rs-l">HE Rating</span><span class="rs-v" style="color:var(--faint)">No data</span></div>'}
+      ${zmNCH ? `
+        <div class="rc-stat"><span class="rs-l">NCH Rating</span><span class="rs-v" style="color:#ffd700">${zmNCH.rating_info?.aggregate_rating ?? '—'} ★ (${zmNCH.rating_info?.votes ?? 0} votes)</span></div>
+        <div class="rc-stat"><span class="rs-l">NCH Active Since</span><span class="rs-v">${zmNCH.active_since ?? '—'}</span></div>
+      ` : '<div class="rc-stat"><span class="rs-l">NCH Rating</span><span class="rs-v" style="color:var(--faint)">No data</span></div>'}
+      ${zmLive ? `
+        <div class="rc-stat"><span class="rs-l">Poor Rated % (today)</span><span class="rs-v ${zmLive.poor_rated_pct > 10 ? 'rv r' : zmLive.poor_rated_pct > 5 ? 'rv o' : ''}">${zmLive.poor_rated_pct != null ? zmLive.poor_rated_pct + '%' : '—'}</span></div>
+      ` : ''}
+    </div>
+  </div>`;
+
+  html += `</div>`;
+
+  // ── SECTION B: Order Issues This Week ─────────────────────────────
+  html += `<div style="font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+    Order-Level Issues — This Week <span style="flex:1;height:1px;display:block;background:var(--border)"></span>
+  </div>`;
+
+  const issueOrders = (ord.orders || []).filter(o => o.issues && String(o.issues).trim());
+  if (!issueOrders.length) {
+    html += `<div style="padding:20px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;text-align:center;color:var(--green);font-size:12px;margin-bottom:20px">No order issues this week</div>`;
+  } else {
+    html += `<div class="issues-tbl-wrap" style="margin-bottom:24px">
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Date</th>
+            <th>Platform</th>
+            <th>Outlet</th>
+            <th>Order ID</th>
+            <th>Items</th>
+            <th>Issue</th>
+          </tr></thead>
+          <tbody>
+            ${issueOrders.map(o => {
+              const platCls = o.platform === 'swiggy' ? 'sw' : 'zm';
+              const platLabel = o.platform === 'swiggy' ? 'Swiggy' : 'Zomato';
+              const brandLabel = o.brand === 'he' ? 'HE' : 'NCH';
+              const brandCls = o.brand === 'he' ? 'he-txt' : 'nch-txt';
+              const ordId = o.order_id ? '#' + String(o.order_id).slice(-8) : '—';
+              return `<tr>
+                <td style="color:var(--faint);font-size:11px">${o.order_date || '—'}</td>
+                <td><span class="pltag ${platCls}">${platLabel}</span></td>
+                <td><span class="${brandCls}">${brandLabel}</span></td>
+                <td style="font-size:11px;color:var(--dim)">${ordId}</td>
+                <td class="items-cell">${clean(o.items) || '—'}</td>
+                <td style="color:var(--red);font-size:11px">${clean(o.issues)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  // ── SECTION C: Google Reviews ──────────────────────────────────────
+  html += `<div style="font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+    Google Reviews <span style="flex:1;height:1px;display:block;background:var(--border)"></span>
+  </div>`;
+
+  function googleReviewCard(brand, brandCls, data) {
+    const label = brand === 'he' ? 'Hamza Express' : 'Nawabi Chai House';
+    const fallback = brand === 'he'
+      ? { rating: '4.8', reviews: 145 }
+      : { rating: '4.9', reviews: 168 };
+
+    // Check if data is absent or has fallback indicator
+    const hasData = data && data.rating && data.rating !== '--' && !data.note?.includes('Could not fetch');
+    if (!hasData) {
+      return `<div class="rcard">
+        <div class="rc-hdr">
+          <span style="font-weight:700;font-size:13px">${label}</span>
+          <span style="font-size:10px;color:#4285f4;font-weight:700">GOOGLE</span>
+        </div>
+        <div class="rc-body">
+          <div style="text-align:center;padding:16px 0">
+            <div class="rc-rating">${fallback.rating}★</div>
+            <div style="font-size:12px;color:var(--dim);margin-top:4px">${fallback.reviews} reviews (as of Apr 2026)</div>
+          </div>
+          <div style="font-size:10px;color:var(--faint);font-style:italic;border-top:1px solid var(--border);padding-top:8px;margin-top:4px">
+            Google Reviews not currently synced — showing last known data
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const reviews = data.reviews || [];
+    const last5 = reviews.slice(0, 5);
+    const starsHtml = '★'.repeat(Math.round(parseFloat(data.rating) || 0));
+
+    return `<div class="rcard">
+      <div class="rc-hdr">
+        <span style="font-weight:700;font-size:13px">${label}</span>
+        <span style="font-size:10px;color:#4285f4;font-weight:700">GOOGLE</span>
+      </div>
+      <div class="rc-body">
+        <div style="text-align:center;padding:12px 0 16px">
+          <div class="rc-rating">${data.rating}★</div>
+          <div style="font-size:12px;color:var(--dim);margin-top:4px">${data.total_reviews || data.review_count || '—'} reviews</div>
+          ${data.new_today  != null ? `<div style="font-size:11px;color:var(--green);margin-top:4px">${data.new_today} new today</div>` : ''}
+          ${data.new_week   != null ? `<div style="font-size:11px;color:var(--dim)">${data.new_week} this week</div>` : ''}
+        </div>
+        ${last5.length ? `
+          <div style="border-top:1px solid var(--border);padding-top:10px">
+            ${last5.map(rv => `<div class="rev-review-item">
+              <div class="rev-review-meta">
+                <span class="rev-reviewer">${rv.author_name || rv.reviewer || '—'}</span>
+                <span class="rev-stars">${'★'.repeat(parseInt(rv.rating) || 0)}</span>
+              </div>
+              <div class="rev-date">${rv.relative_time || rv.date || ''}</div>
+              ${rv.text || rv.comment ? `<div class="rev-text">${(rv.text || rv.comment || '').substring(0, 200)}${(rv.text || rv.comment || '').length > 200 ? '…' : ''}</div>` : ''}
+            </div>`).join('')}
+          </div>
+        ` : ''}
+      </div>
+    </div>`;
+  }
+
+  html += `<div class="rev-grid">
+    ${googleReviewCard('he', 'he', heRev)}
+    ${googleReviewCard('nch', 'nch', nchRev)}
+  </div>`;
+
+  document.getElementById('reviewsBody').innerHTML = html;
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────
 loadAll();
-setInterval(loadSales, 60000);   // sales auto-refresh every 60s
-setInterval(loadFinance, 300000); // finance refresh every 5 min
+setInterval(loadSales,     60000);    // sales auto-refresh every 60s
+setInterval(loadFinance,   300000);   // finance refresh every 5 min
+setInterval(loadAnalytics, 300000);   // analytics refresh every 5 min
+setInterval(loadReviews,   600000);   // reviews refresh every 10 min
 </script>
 </body>
 </html>
