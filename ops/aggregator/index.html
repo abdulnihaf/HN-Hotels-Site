@@ -328,9 +328,10 @@ tr:hover td{background:rgba(255,255,255,.03)}
   <div class="dbar" id="anDbar" style="margin-bottom:14px">
     <span style="font-size:10px;color:var(--dim);align-self:center;margin-right:4px">Swiggy period:</span>
     <div class="dfbtn" data-ap="yesterday" onclick="setAnalyticsFilter('yesterday')">Yesterday</div>
-    <div class="dfbtn" data-ap="7d" onclick="setAnalyticsFilter('7d')">Last 7 Days</div>
-    <div class="dfbtn" data-ap="30d" onclick="setAnalyticsFilter('30d')">Last 30 Days</div>
-    <div class="dfbtn" data-ap="today" onclick="setAnalyticsFilter('today')">Today</div>
+    <div class="dfbtn" data-ap="thisweek"  onclick="setAnalyticsFilter('thisweek')">This Week</div>
+    <div class="dfbtn" data-ap="lastweek"  onclick="setAnalyticsFilter('lastweek')">Last Week</div>
+    <div class="dfbtn" data-ap="month"     onclick="setAnalyticsFilter('month')">This Month</div>
+    <div class="dfbtn" data-ap="today"     onclick="setAnalyticsFilter('today')">Today</div>
   </div>
   <div id="analyticsBody">
     <div class="empty-state">Loading analytics…</div>
@@ -385,9 +386,9 @@ const LS  = 'hn_agg_f3';
 let dateFilter = localStorage.getItem(LS) || 'today';
 if (!['today','yesterday','week','month','all'].includes(dateFilter)) dateFilter = 'today';
 
-const AN_LS = 'hn_agg_an_f1';
+const AN_LS = 'hn_agg_an_f2';
 let analyticsDateFilter = localStorage.getItem(AN_LS) || 'yesterday';
-if (!['today','yesterday','7d','30d'].includes(analyticsDateFilter)) analyticsDateFilter = 'yesterday';
+if (!['today','yesterday','thisweek','lastweek','month'].includes(analyticsDateFilter)) analyticsDateFilter = 'yesterday';
 
 // ── NAV ──────────────────────────────────────────────────────────────
 function showSection(id, el) {
@@ -793,16 +794,20 @@ function renderAnalytics(lat) {
   const swAllOutlet = lat.outlets?.find(o => o.platform === 'swiggy' && o.brand === 'all');
 
   // Pick period-tagged key (v4.9+), fall back to legacy untagged key for backward compat
+  // Map dashboard period selection → metric_type key (matches content-swiggy.js DATE_FILTERS)
   const swPeriodKey = {
-    today: 'reports_swiggy_today', yesterday: 'reports_swiggy_yesterday',
-    '7d': 'reports_swiggy_7d', '30d': 'reports_swiggy_30d',
+    today:     'reports_swiggy_today',
+    yesterday: 'reports_swiggy_yesterday',
+    thisweek:  'reports_swiggy_thisweek',
+    lastweek:  'reports_swiggy_lastweek',
+    month:     'reports_swiggy_month',
   }[analyticsDateFilter] || 'reports_swiggy_today';
-  const sw     = swAllOutlet?.metrics?.[swPeriodKey]?.data
-               || swAllOutlet?.metrics?.reports_swiggy?.data || null;
-  const swCap  = swAllOutlet?.metrics?.[swPeriodKey]?.captured_at
-               || swAllOutlet?.metrics?.reports_swiggy?.captured_at || null;
-  const swAge  = fmtAgoMins(swCap);
-  const swPeriodLabel = {today:'Today',yesterday:'Yesterday','7d':'Last 7 Days','30d':'Last 30 Days'}[analyticsDateFilter] || analyticsDateFilter;
+  const sw    = swAllOutlet?.metrics?.[swPeriodKey]?.data
+              || swAllOutlet?.metrics?.reports_swiggy?.data || null;
+  const swCap = swAllOutlet?.metrics?.[swPeriodKey]?.captured_at
+              || swAllOutlet?.metrics?.reports_swiggy?.captured_at || null;
+  const swAge = fmtAgoMins(swCap);
+  const swPeriodLabel = {today:'Today',yesterday:'Yesterday',thisweek:'This Week',lastweek:'Last Week',month:'This Month'}[analyticsDateFilter] || analyticsDateFilter;
 
   const zm_live    = zmAllOutlet?.metrics?.live_tracking?.data || null;
   const zm_liveCap = zmAllOutlet?.metrics?.live_tracking?.captured_at || null;
@@ -1031,8 +1036,9 @@ function renderReviews(lat, ord, heRev, nchRev) {
 
   // Use best available Swiggy quality data (yesterday preferred — most complete)
   const sw = swAllOutlet?.metrics?.reports_swiggy_yesterday?.data
-          || swAllOutlet?.metrics?.reports_swiggy_7d?.data
-          || swAllOutlet?.metrics?.reports_swiggy_30d?.data
+          || swAllOutlet?.metrics?.reports_swiggy_thisweek?.data
+          || swAllOutlet?.metrics?.reports_swiggy_lastweek?.data
+          || swAllOutlet?.metrics?.reports_swiggy_month?.data
           || swAllOutlet?.metrics?.reports_swiggy_today?.data
           || swAllOutlet?.metrics?.reports_swiggy?.data || null;
   const zmEnts = zmAllOutlet?.metrics?.restaurant_metrics?.data?.entities || [];
