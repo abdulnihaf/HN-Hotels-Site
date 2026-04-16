@@ -1695,25 +1695,107 @@ function renderSettlementResult(res) {
   const body = document.getElementById('settlementResultBody');
 
   if (res.status === 'bootstrap') {
-    body.innerHTML = '<p class="text-emerald-400 text-sm font-semibold">Baseline set. Tomorrow\'s settlement will calculate consumption.</p>';
+    const itemCount = Object.keys(res.inventory || {}).length;
+    body.innerHTML = `
+      <div class="text-center py-1">
+        <p class="text-emerald-400 font-bold text-sm">&#10003; Baseline established</p>
+        <p class="text-white/30 text-xs mt-1">${itemCount} items set &mdash; next settlement will calculate P&amp;L</p>
+      </div>`;
     return;
   }
 
-  const items = Object.entries(res.costSummary?.per_item || {});
-  body.innerHTML = `
-    <div class="space-y-1 mb-3">
-      ${items.map(([code, d]) => `
-        <div class="flex justify-between text-xs">
-          <span class="text-white/40 truncate mr-2">${code}</span>
-          <span class="shrink-0">${r2(d.consumed)} &times; ${fmt(d.price)} = <span class="font-bold text-white">${fmt(d.cost)}</span></span>
+  // Product name + UOM lookup from prepare data
+  const nameMap = {}, uomMap = {};
+  for (const item of (settlementData?.trackedItems || [])) {
+    nameMap[item.code] = item.name;
+    uomMap[item.code]  = item.uom;
+  }
+
+  const pnl    = res.pnl    || {};
+  const inv    = res.inventory || {};
+  const disc   = inv.discrepancy || {};
+  const period = res.period  || {};
+  const hasRev = (pnl.revenue || 0) > 0;
+
+  // ── P&L cards ──
+  const pnlCards = `
+    <div class="grid grid-cols-2 gap-2 mb-4">
+      ${hasRev ? `
+        <div class="card-item text-center">
+          <p class="text-[10px] text-white/30 uppercase tracking-wide">Revenue</p>
+          <p class="text-lg font-bold text-white">${fmt(pnl.revenue)}</p>
         </div>
-      `).join('')}
-    </div>
-    <div class="border-t border-white/5 pt-2 flex justify-between items-center">
-      <span class="text-sm font-semibold text-white/60">Total COGS</span>
-      <span class="text-xl font-bold text-brand-400">${fmt(res.costSummary?.total || 0)}</span>
-    </div>
-  `;
+        <div class="card-item text-center">
+          <p class="text-[10px] text-white/30 uppercase tracking-wide">Gross Profit</p>
+          <p class="text-lg font-bold ${(pnl.grossProfit||0) >= 0 ? 'text-emerald-400' : 'text-red-400'}">${fmt(pnl.grossProfit)}</p>
+        </div>
+      ` : ''}
+      <div class="card-item text-center ${hasRev ? '' : 'col-span-2'}">
+        <p class="text-[10px] text-white/30 uppercase tracking-wide">COGS</p>
+        <p class="text-lg font-bold text-brand-400">${fmt(pnl.cogs)}</p>
+      </div>
+      ${Math.abs(pnl.discrepancy||0) > 0 ? `
+        <div class="card-item text-center">
+          <p class="text-[10px] text-white/30 uppercase tracking-wide">Variance</p>
+          <p class="text-sm font-bold ${Math.abs(pnl.discrepancy) > 500 ? 'text-red-400' : 'text-amber-400'}">${fmt(Math.abs(pnl.discrepancy))}</p>
+        </div>` : ''}
+    </div>`;
+
+  // ── Period ──
+  const periodBadge = period.start ? `
+    <p class="text-[10px] text-white/20 mb-3 text-center">${fmtDate(period.start)} &rarr; ${fmtDate(period.end)} &nbsp;&middot;&nbsp; by ${res.settledBy}</p>` : '';
+
+  // ── Top material costs (sorted by cost, named) ──
+  const costEntries = Object.entries(res.costSummary?.per_item || {})
+    .filter(([, d]) => d.consumed > 0.001 && d.cost > 0)
+    .sort((a, b) => b[1].cost - a[1].cost)
+    .slice(0, 12);
+
+  const cogsTable = costEntries.length ? `
+    <div class="mb-4">
+      <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2">Material Costs</p>
+      <div class="space-y-0">
+        ${costEntries.map(([code, d]) => `
+          <div class="flex items-center justify-between py-1.5 border-b border-white/[.03] last:border-0">
+            <span class="text-xs text-white/50 truncate flex-1 mr-2">${nameMap[code] || code}</span>
+            <span class="text-[11px] text-white/25 shrink-0 mr-3">${r2(d.consumed)} ${uomMap[code]||''}</span>
+            <span class="text-xs font-semibold text-white shrink-0">${fmt(d.cost)}</span>
+          </div>`).join('')}
+      </div>
+      <div class="flex justify-between items-center pt-2 mt-1 border-t border-white/10">
+        <span class="text-xs text-white/50 font-semibold">Total COGS</span>
+        <span class="text-base font-bold text-brand-400">${fmt(res.costSummary?.total || 0)}</span>
+      </div>
+    </div>` : '';
+
+  // ── Discrepancy alerts (only meaningful ones > ₹50) ──
+  const discEntries = Object.entries(disc)
+    .filter(([, d]) => Math.abs(d.value) > 50)
+    .sort((a, b) => Math.abs(b[1].value) - Math.abs(a[1].value))
+    .slice(0, 6);
+
+  const discSection = discEntries.length ? `
+    <div class="mb-3">
+      <p class="text-[10px] text-amber-400/60 uppercase tracking-wide mb-2">&#9888; Discrepancy</p>
+      ${discEntries.map(([code, d]) => `
+        <div class="flex justify-between text-xs py-1 border-b border-white/[.03]">
+          <span class="text-white/40 truncate flex-1 mr-2">${nameMap[code] || code}</span>
+          <span class="shrink-0 ${d.qty > 0 ? 'text-amber-400' : 'text-emerald-400'} mr-3">${d.qty > 0 ? '+' : ''}${r2(d.qty)}</span>
+          <span class="shrink-0 text-red-400/70">${fmt(Math.abs(d.value))}</span>
+        </div>`).join('')}
+    </div>` : '';
+
+  // ── Warnings (negative consumption) ──
+  const warnings = res.warnings || [];
+  const warnSection = warnings.length ? `
+    <div class="rounded-xl bg-red-400/10 p-3 mb-3">
+      <p class="text-xs text-red-400/80 font-semibold mb-1">Data Issues (${warnings.length})</p>
+      ${warnings.slice(0, 3).map(w =>
+        `<p class="text-[10px] text-red-400/50 leading-4">${nameMap[w.code]||w.code}: closing &gt; opening+purchased</p>`
+      ).join('')}
+    </div>` : '';
+
+  body.innerHTML = periodBadge + pnlCards + warnSection + cogsTable + discSection;
 }
 
 function renderSettlementHistory(settlements) {
