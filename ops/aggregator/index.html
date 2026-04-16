@@ -324,6 +324,14 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <!-- ANALYTICS SECTION                                                   -->
 <!-- ════════════════════════════════════════════════════════════════════ -->
 <div class="section" id="sec-analytics">
+  <!-- Swiggy period selector — Zomato is always today/weekly -->
+  <div class="dbar" id="anDbar" style="margin-bottom:14px">
+    <span style="font-size:10px;color:var(--dim);align-self:center;margin-right:4px">Swiggy period:</span>
+    <div class="dfbtn" data-ap="yesterday" onclick="setAnalyticsFilter('yesterday')">Yesterday</div>
+    <div class="dfbtn" data-ap="7d" onclick="setAnalyticsFilter('7d')">Last 7 Days</div>
+    <div class="dfbtn" data-ap="30d" onclick="setAnalyticsFilter('30d')">Last 30 Days</div>
+    <div class="dfbtn" data-ap="today" onclick="setAnalyticsFilter('today')">Today</div>
+  </div>
   <div id="analyticsBody">
     <div class="empty-state">Loading analytics…</div>
   </div>
@@ -377,6 +385,10 @@ const LS  = 'hn_agg_f3';
 let dateFilter = localStorage.getItem(LS) || 'today';
 if (!['today','yesterday','week','month','all'].includes(dateFilter)) dateFilter = 'today';
 
+const AN_LS = 'hn_agg_an_f1';
+let analyticsDateFilter = localStorage.getItem(AN_LS) || 'yesterday';
+if (!['today','yesterday','7d','30d'].includes(analyticsDateFilter)) analyticsDateFilter = 'yesterday';
+
 // ── NAV ──────────────────────────────────────────────────────────────
 function showSection(id, el) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -396,6 +408,15 @@ document.querySelectorAll('.dfbtn').forEach(b => {
   b.classList.toggle('active', b.dataset.d === dateFilter);
   b.onclick = () => setFilter(b.dataset.d);
 });
+
+function setAnalyticsFilter(f) {
+  analyticsDateFilter = f;
+  localStorage.setItem(AN_LS, f);
+  document.querySelectorAll('[data-ap]').forEach(b => b.classList.toggle('active', b.dataset.ap === f));
+  loadAnalytics();
+}
+// Set initial state of analytics filter buttons
+document.querySelectorAll('[data-ap]').forEach(b => b.classList.toggle('active', b.dataset.ap === analyticsDateFilter));
 
 // ── UTILS ─────────────────────────────────────────────────────────────
 const rupee = v => '₹' + Math.round(v || 0).toLocaleString('en-IN');
@@ -771,9 +792,17 @@ function renderAnalytics(lat) {
   const zmAllOutlet = lat.outlets?.find(o => o.platform === 'zomato' && o.brand === 'all');
   const swAllOutlet = lat.outlets?.find(o => o.platform === 'swiggy' && o.brand === 'all');
 
-  const sw     = swAllOutlet?.metrics?.reports_swiggy?.data || null;
-  const swCap  = swAllOutlet?.metrics?.reports_swiggy?.captured_at || null;
+  // Pick period-tagged key (v4.9+), fall back to legacy untagged key for backward compat
+  const swPeriodKey = {
+    today: 'reports_swiggy_today', yesterday: 'reports_swiggy_yesterday',
+    '7d': 'reports_swiggy_7d', '30d': 'reports_swiggy_30d',
+  }[analyticsDateFilter] || 'reports_swiggy_today';
+  const sw     = swAllOutlet?.metrics?.[swPeriodKey]?.data
+               || swAllOutlet?.metrics?.reports_swiggy?.data || null;
+  const swCap  = swAllOutlet?.metrics?.[swPeriodKey]?.captured_at
+               || swAllOutlet?.metrics?.reports_swiggy?.captured_at || null;
   const swAge  = fmtAgoMins(swCap);
+  const swPeriodLabel = {today:'Today',yesterday:'Yesterday','7d':'Last 7 Days','30d':'Last 30 Days'}[analyticsDateFilter] || analyticsDateFilter;
 
   const zm_live    = zmAllOutlet?.metrics?.live_tracking?.data || null;
   const zm_liveCap = zmAllOutlet?.metrics?.live_tracking?.captured_at || null;
@@ -796,7 +825,7 @@ function renderAnalytics(lat) {
     const freshCls = swAge == null ? 'fresh-warn' : swAge < 60 ? 'fresh-ok' : swAge < 300 ? 'fresh-warn' : 'fresh-lag';
     const dateRange = sw.date_range || (sw.from_date && sw.to_date ? `${sw.from_date} – ${sw.to_date}` : '—');
     html += `<div class="an-freshness">
-      <span>⏱ Period: <strong>${dateRange}</strong></span>
+      <span>⏱ Period: <strong>${swPeriodLabel}</strong>${dateRange !== '—' ? ` (${dateRange})` : ''}</span>
       <span class="${freshCls}">Captured ${swAge != null ? swAge + 'm ago' : '—'}</span>
       <span class="fresh-lag">Funnel &amp; Customer data lags 24–48h from Business Reports</span>
     </div>`;
@@ -1000,7 +1029,12 @@ function renderReviews(lat, ord, heRev, nchRev) {
   const zmAllOutlet = lat.outlets?.find(o => o.platform === 'zomato' && o.brand === 'all');
   const swAllOutlet = lat.outlets?.find(o => o.platform === 'swiggy' && o.brand === 'all');
 
-  const sw     = swAllOutlet?.metrics?.reports_swiggy?.data || null;
+  // Use best available Swiggy quality data (yesterday preferred — most complete)
+  const sw = swAllOutlet?.metrics?.reports_swiggy_yesterday?.data
+          || swAllOutlet?.metrics?.reports_swiggy_7d?.data
+          || swAllOutlet?.metrics?.reports_swiggy_30d?.data
+          || swAllOutlet?.metrics?.reports_swiggy_today?.data
+          || swAllOutlet?.metrics?.reports_swiggy?.data || null;
   const zmEnts = zmAllOutlet?.metrics?.restaurant_metrics?.data?.entities || [];
   const zmLive = zmAllOutlet?.metrics?.live_tracking?.data || null;
 
