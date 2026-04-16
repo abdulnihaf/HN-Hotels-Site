@@ -1,454 +1,667 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aggregator Pulse — HN Hotels</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a14;color:#e0e0e0}
-.c{max-width:1400px;margin:0 auto;padding:12px}
-.hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #1a1a2e}
-.hdr h1{font-size:18px;color:#ff6b35}
-.hdr .sub{font-size:10px;color:#555}
-.hdr button{background:#ff6b35;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:11px}
-.status-bar{display:flex;gap:12px;align-items:center;margin-bottom:10px;padding:6px 10px;background:#0e0e1e;border-radius:6px;border:1px solid #1a1a2e;font-size:11px;flex-wrap:wrap}
-.status-dot{width:7px;height:7px;border-radius:50%;background:#4caf50;flex-shrink:0}
-.status-dot.stale{background:#ff9800}.status-dot.dead{background:#f44336}
-.status-bar .si{color:#666}
-.status-bar .sv{color:#ccc;font-weight:600}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#08080f;--surface:#0f0f1e;--surface2:#13132a;--surface3:#1a1a35;
+  --border:#1d1d38;--border2:#28284a;
+  --text:#e0e0e0;--dim:#888;--faint:#444;--very-faint:#2a2a2a;
+  --sw:#fc8019;--zm:#e23744;
+  --he:#ff7043;--nch:#26a69a;
+  --green:#4caf50;--orange:#ff9800;--red:#f44336;--accent:#ff6b35;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.4;min-height:100vh}
+.wrap{max-width:1480px;margin:0 auto;padding:0 16px 60px}
 
-/* Date filters */
-.filters{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
-.fbtn{padding:6px 14px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:5px;color:#aaa;cursor:pointer;font-size:12px;font-weight:500}
-.fbtn.active{background:#ff6b35;color:#fff;border-color:#ff6b35}
-.fbtn:hover{border-color:#ff6b35}
+/* ─── HEADER ─────────────────────────────────────────────────────────── */
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 0 12px;border-bottom:1px solid var(--border);margin-bottom:0}
+.hdr-brand{font-size:15px;font-weight:700;color:var(--accent);letter-spacing:-0.3px}
+.hdr-brand small{display:block;font-size:10px;font-weight:400;color:var(--dim);margin-top:1px;letter-spacing:0}
+.hdr-meta{display:flex;align-items:center;gap:14px}
+.pipeline{display:flex;align-items:center;gap:5px;font-size:11px}
+.pdot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;transition:background .3s}
+.pdot.stale{background:var(--orange)}.pdot.dead{background:var(--red)}
+.pipeline .lbl{color:var(--dim)}.pipeline strong{color:var(--text)}
+.upd{font-size:10px;color:var(--faint)}
+.btn{background:transparent;border:1px solid var(--border2);color:var(--dim);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:500;transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
 
-/* Summary cards */
-.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-@media(max-width:800px){.cards{grid-template-columns:repeat(2,1fr)}}
-.card{background:#111a2e;border:1px solid #1e2e4a;border-radius:8px;padding:12px}
-.card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.card .name{font-size:12px;font-weight:700}
-.card .plat{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:600}
-.sw{background:#fc801915;color:#fc8019}.zm{background:#e2374415;color:#e23744}
-.card .big{font-size:24px;font-weight:700;margin:4px 0}
-.card .row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0}
-.card .lbl{color:#666}.card .val{font-weight:600}
-.he{border-left:3px solid #ff6b35}.nch{border-left:3px solid #4caf50}
+/* ─── MAIN TABS ──────────────────────────────────────────────────────── */
+.nav{display:flex;border-bottom:1px solid var(--border);margin-bottom:20px}
+.ntab{padding:12px 20px;cursor:pointer;font-size:13px;font-weight:600;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;user-select:none;display:flex;align-items:center;gap:7px}
+.ntab:hover{color:var(--text)}
+.ntab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.ntab svg{opacity:.7}
+.ntab.active svg{opacity:1}
 
-/* Order table */
-.otbl{margin-bottom:16px}
-.otbl-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.otbl-hdr h3{font-size:14px;color:#ccc}
-.otbl-hdr .oc{font-size:12px;color:#666}
+/* ─── SECTION TOGGLE ────────────────────────────────────────────────── */
+.section{display:none}.section.active{display:block}
+
+/* ─── DATE FILTER ────────────────────────────────────────────────────── */
+.dbar{display:flex;gap:5px;margin-bottom:16px;flex-wrap:wrap}
+.dfbtn{padding:5px 14px;background:var(--surface);border:1px solid var(--border);border-radius:20px;color:var(--dim);cursor:pointer;font-size:11px;font-weight:500;transition:all .15s;white-space:nowrap}
+.dfbtn:hover{border-color:var(--border2);color:var(--text)}
+.dfbtn.active{background:rgba(255,107,53,.12);border-color:var(--accent);color:var(--accent);font-weight:600}
+
+/* ─── OUTLET STATUS STRIP ────────────────────────────────────────────── */
+.ostrip{display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap}
+.ostatus{display:flex;align-items:center;gap:6px;padding:5px 10px 5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:11px;gap:6px}
+.odot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.odot.on{background:var(--green)}.odot.off{background:var(--red)}.odot.unk{background:var(--faint)}
+.oplat{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px}
+.oplat.sw{background:rgba(252,128,25,.15);color:var(--sw)}
+.oplat.zm{background:rgba(226,55,68,.15);color:var(--zm)}
+.ostatus .oname{color:var(--dim)}
+.ostatus .ostate{font-weight:600;font-size:10px}
+.ostate.on{color:var(--green)}.ostate.off{color:var(--red)}.ostate.unk{color:var(--faint)}
+
+/* ─── PLATFORM BANDS (header for card groups) ───────────────────────── */
+.plat-band{display:flex;align-items:center;gap:8px;margin-bottom:8px;margin-top:4px}
+.plat-band .pb-tag{font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;letter-spacing:.3px}
+.pb-tag.sw{background:rgba(252,128,25,.15);color:var(--sw)}
+.pb-tag.zm{background:rgba(226,55,68,.15);color:var(--zm)}
+.plat-band .pb-line{flex:1;height:1px;background:var(--border)}
+
+/* ─── SUMMARY CARDS ──────────────────────────────────────────────────── */
+.cards2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px}
+@media(max-width:600px){.cards2{grid-template-columns:1fr}}
+
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;position:relative;overflow:hidden;transition:border-color .15s}
+.scard:hover{border-color:var(--border2)}
+.scard.he{border-left:3px solid var(--he)}
+.scard.nch{border-left:3px solid var(--nch)}
+.sc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.sc-name{font-size:12px;font-weight:700;color:var(--text)}
+.sc-name small{display:block;font-size:10px;font-weight:400;color:var(--dim);margin-top:1px}
+.sc-rev{font-size:24px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px}
+.sc-rev.zero{color:var(--faint)}
+.sc-rows{display:flex;flex-direction:column;gap:3px;padding-top:4px;border-top:1px solid var(--border)}
+.sc-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0}
+.sc-row .rl{color:var(--dim)}.sc-row .rv{font-weight:600}
+.rv.g{color:var(--green)}.rv.o{color:var(--orange)}.rv.r{color:var(--red)}
+.sc-issues{margin-top:8px;padding:4px 8px;background:rgba(244,67,54,.1);border:1px solid rgba(244,67,54,.2);border-radius:4px;font-size:10px;color:var(--red);font-weight:600}
+
+/* ─── ISSUES ALERT BAR ───────────────────────────────────────────────── */
+.issues-bar{display:none;align-items:flex-start;gap:8px;padding:9px 12px;background:rgba(244,67,54,.08);border:1px solid rgba(244,67,54,.25);border-radius:6px;margin-bottom:12px;flex-wrap:wrap}
+.issues-bar.show{display:flex}
+.ib-hd{font-size:11px;font-weight:700;color:var(--red);white-space:nowrap}
+.ib-body{font-size:11px;color:#ff9090;flex:1}
+
+/* ─── ZOMATO LIVE PULSE ──────────────────────────────────────────────── */
+.zm-pulse{display:flex;align-items:center;flex-wrap:wrap;gap:16px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:16px}
+.zp-hd{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;color:var(--dim);white-space:nowrap}
+.zp-hd .ztag{font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;background:rgba(226,55,68,.15);color:var(--zm)}
+.zp-items{display:flex;flex-wrap:wrap;gap:16px;flex:1}
+.zp-item{display:flex;flex-direction:column;align-items:center;min-width:60px}
+.zp-val{font-size:18px;font-weight:700}
+.zp-sub{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.3px;margin-top:1px}
+.zp-warn{color:var(--orange)}.zp-warn.bad{color:var(--red)}
+.zp-age{font-size:10px;color:var(--faint);margin-left:auto;white-space:nowrap;align-self:center}
+
+/* ─── ORDER TABLE ────────────────────────────────────────────────────── */
+.tbl-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.tbl-hdr h3{font-size:13px;font-weight:700}
+.tbl-meta{font-size:11px;color:var(--dim)}
+.tbl-wrap{border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.tbl-scroll{overflow-x:auto;max-height:460px;overflow-y:auto}
 table{width:100%;border-collapse:collapse;font-size:12px}
-th{text-align:left;padding:6px 8px;background:#111122;color:#666;position:sticky;top:0}
-td{padding:6px 8px;border-bottom:1px solid #0d0d1a}
-tr:hover{background:#111128}
-.st{padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600}
-.st-d{background:#4caf5020;color:#4caf50}.st-p{background:#ff980020;color:#ff9800}.st-c{background:#f4433620;color:#f44336}
-.issue-tag{color:#f44336;font-size:10px}
-.empty{text-align:center;padding:30px;color:#444;font-size:12px}
-.plat-tag{font-size:9px;padding:2px 5px;border-radius:3px;font-weight:600;display:inline-block}
+thead{position:sticky;top:0;z-index:1}
+th{padding:7px 10px;background:var(--surface2);color:var(--faint);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.3px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid rgba(29,29,56,.5);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.03)}
+.pltag{font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;display:inline-block;white-space:nowrap}
+.pltag.sw{background:rgba(252,128,25,.15);color:var(--sw)}
+.pltag.zm{background:rgba(226,55,68,.15);color:var(--zm)}
+.he-txt{color:var(--he);font-weight:700}.nch-txt{color:var(--nch);font-weight:700}
+.stag{font-size:10px;font-weight:600;padding:2px 8px;border-radius:12px;display:inline-block;white-space:nowrap}
+.stag.delivered{background:rgba(76,175,80,.15);color:var(--green)}
+.stag.preparing,.stag.ready,.stag.placed{background:rgba(255,152,0,.15);color:var(--orange)}
+.stag.picked{background:rgba(33,150,243,.15);color:#64b5f6}
+.stag.cancelled,.stag.rejected{background:rgba(244,67,54,.15);color:var(--red)}
+.stag.default{background:rgba(255,255,255,.06);color:var(--dim)}
+.items-cell{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
+.issue-cell{color:var(--red);font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty-state{text-align:center;padding:40px;color:var(--faint);font-size:12px}
 
-/* Ops sections */
-.tabs{display:flex;gap:4px;margin-bottom:12px}
-.tab{padding:6px 14px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:5px 5px 0 0;cursor:pointer;font-size:12px;font-weight:600}
-.tab.active{background:#16213e;border-bottom-color:#16213e;color:#ff6b35}
-.platform{display:none}.platform.active{display:block}
-.section{background:#111122;border:1px solid #1e1e3a;border-radius:8px;margin-bottom:10px;overflow:hidden}
-.section-hdr{background:#161630;padding:7px 12px;font-size:11px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
-.section-hdr .src{font-size:9px;color:#444;font-weight:400}
-.section-hdr .age{font-size:9px;color:#555;font-weight:400;margin-left:auto}
-.section-body{padding:8px 12px}
-.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px}
-.mcard{background:#0d0d1a;border:1px solid #1a1a2e;border-radius:4px;padding:6px 8px}
-.mcard .label{font-size:9px;color:#666;margin-bottom:2px}.mcard .value{font-size:14px;font-weight:700}
-.good{color:#4caf50}.warn{color:#ff9800}.bad{color:#f44336}.muted{color:#555}
-/* lag notice */
-.lag-note{font-size:10px;color:#555;padding:6px 12px 0;font-style:italic}
+/* ─── FINANCE SECTION ────────────────────────────────────────────────── */
+.fin-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.fin-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.payout-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
+@media(max-width:700px){.payout-grid{grid-template-columns:1fr}}
+.pccard{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pccard.he{border-top:3px solid var(--he)}.pccard.nch{border-top:3px solid var(--nch)}
+.pcc-hdr{padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.pcc-title{font-size:13px;font-weight:700}
+.pcc-sub{font-size:10px;color:var(--dim);margin-top:2px}
+.pcc-plat{font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px}
+.pcc-plat.sw{background:rgba(252,128,25,.15);color:var(--sw)}
+.pcc-plat.zm{background:rgba(226,55,68,.15);color:var(--zm)}
+.pcc-body{padding:0 16px 4px}
+.pc-line{display:flex;justify-content:space-between;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,29,56,.6);font-size:12px}
+.pc-line:last-child{border-bottom:none}
+.pcl{color:var(--dim)}.pcv{font-weight:600}
+.pcv.neg{color:var(--red)}.pcv.zero{color:var(--faint)}.pcv.pos{color:var(--green)}
+.pc-divider{height:1px;background:var(--border2);margin:4px 0}
+.pc-net{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--surface2);border-top:2px solid var(--border2)}
+.pcn-lbl{font-size:12px;font-weight:700}
+.pcn-val{font-size:22px;font-weight:700;letter-spacing:-0.5px}
+.pcn-val.pos{color:var(--green)}.pcn-val.neg{color:var(--red)}
+.pc-footer{display:flex;justify-content:space-between;padding:8px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:11px;color:var(--dim)}
+.pc-footer strong{color:var(--text)}
+.pc-empty{padding:28px 16px;text-align:center;color:var(--faint);font-size:12px}
+.fin-note{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:12px;color:var(--dim);margin-bottom:24px}
+.fin-note strong{color:var(--text)}
+
+/* ─── COMMISSION REFERENCE ───────────────────────────────────────────── */
+.comm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.ci{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px}
+.ci .cl{font-size:10px;color:var(--dim);margin-bottom:3px}
+.ci .cv{font-size:16px;font-weight:700}
 </style>
 </head>
 <body>
-<div class="c">
-  <div class="hdr">
-    <div><h1>Aggregator Pulse</h1><div class="sub">Swiggy + Zomato | Hamza Express + Nawabi Chai House</div></div>
-    <div style="display:flex;gap:8px;align-items:center"><span class="sub" id="ts"></span><button onclick="load()">Refresh</button></div>
-  </div>
+<div class="wrap">
 
-  <div class="status-bar" id="statusBar">
-    <div class="status-dot" id="statusDot"></div>
-    <span class="si">Pipeline:</span><span class="sv" id="statusCapture">—</span>
-    <span class="si" style="margin-left:8px">Swiggy last order:</span><span class="sv" id="statusSwiggy">—</span>
-    <span class="si" style="margin-left:8px">Zomato last order:</span><span class="sv" id="statusZomato">—</span>
-    <span class="si" style="margin-left:8px">Orders (all-time):</span><span class="sv" id="statusTotal">—</span>
+<!-- ── HEADER ─────────────────────────────────────────────────────────── -->
+<div class="hdr">
+  <div class="hdr-brand">
+    Aggregator Pulse
+    <small>Swiggy + Zomato · Hamza Express · Nawabi Chai House</small>
   </div>
-
-  <div class="filters" id="filters">
-    <div class="fbtn" data-d="today">Today</div>
-    <div class="fbtn" data-d="yesterday">Yesterday</div>
-    <div class="fbtn" data-d="week">This Week</div>
-    <div class="fbtn" data-d="month">This Month</div>
-    <div class="fbtn" data-d="all">All Time</div>
-  </div>
-
-  <div class="cards" id="cards"></div>
-
-  <div class="otbl">
-    <div class="otbl-hdr"><h3>Orders</h3><span class="oc" id="orderCount"></span></div>
-    <div style="max-height:420px;overflow-y:auto">
-      <table><thead><tr><th>Date</th><th>Time</th><th>Platform</th><th>Outlet</th><th>Customer</th><th>Items</th><th>Amount</th><th>Net Payout</th><th>Status</th><th>Issues</th></tr></thead>
-      <tbody id="otbody"></tbody></table>
+  <div class="hdr-meta">
+    <div class="pipeline">
+      <div class="pdot" id="pdot"></div>
+      <span class="lbl">Pipeline:</span>
+      <strong id="pipeAge">—</strong>
     </div>
-  </div>
-
-  <div class="tabs">
-    <div class="tab active" onclick="showP('swiggy',this)">Swiggy Ops</div>
-    <div class="tab" onclick="showP('zomato',this)">Zomato Metrics</div>
-    <div class="tab" onclick="showP('finance',this)">Finance</div>
-  </div>
-
-  <div class="platform active" id="p-swiggy">
-    <div class="section">
-      <div class="section-hdr">Sales Summary<span class="src">Business Reports</span><span class="age" id="sw-age"></span></div>
-      <div class="section-body"><div class="mgrid" id="s-sales"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Funnel & Customers<span class="src">Business Reports — lags 24-48h</span><span class="age" id="sw-age2"></span></div>
-      <div class="lag-note" id="s-fun-lag"></div>
-      <div class="section-body"><div class="mgrid" id="s-fun"></div></div>
-    </div>
-    <div class="section"><div class="section-hdr">Ratings & Complaints<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-rat"></div></div></div>
-    <div class="section"><div class="section-hdr">Ads<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ads"></div></div></div>
-    <div class="section"><div class="section-hdr">Operations<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-ops"></div></div></div>
-    <div class="section"><div class="section-hdr">Menu Health<span class="src">Business Reports</span></div><div class="section-body"><div class="mgrid" id="s-menu"></div></div></div>
-  </div>
-  <div class="platform" id="p-zomato">
-    <div class="section">
-      <div class="section-hdr">Live Tracking<span class="src">Zomato Live Tracking — snapshot at capture time, not running total</span><span class="age" id="zm-age"></span></div>
-      <div class="section-body"><div class="mgrid" id="z-live"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Customer Funnel<span class="src">Live Tracking</span></div>
-      <div class="section-body"><div class="mgrid" id="z-fun"></div></div>
-    </div>
-    <div class="section">
-      <div class="section-hdr">Weekly Trends<span class="src">Business Reports — requires page to fully load</span><span class="age" id="zm-biz-age"></span></div>
-      <div class="section-body"><div class="mgrid" id="z-wk"></div></div>
-    </div>
-  </div>
-  <div class="platform" id="p-finance">
-    <div class="section"><div class="section-hdr">Swiggy HE — Weekly Payout<span class="src">Finance Page</span></div><div class="section-body"><div class="mgrid" id="f-he"></div></div></div>
-    <div class="section"><div class="section-hdr">Swiggy NCH — Weekly Payout<span class="src">Finance Page</span></div><div class="section-body"><div class="mgrid" id="f-nch"></div></div></div>
+    <span class="upd" id="updTime"></span>
+    <button class="btn" onclick="loadAll()">↻ Refresh</button>
   </div>
 </div>
 
+<!-- ── MAIN NAV ───────────────────────────────────────────────────────── -->
+<div class="nav">
+  <div class="ntab active" onclick="showSection('sales',this)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+    Live Sales &amp; Orders
+  </div>
+  <div class="ntab" onclick="showSection('finance',this)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+    Finance &amp; Payouts
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- SALES SECTION                                                       -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="section active" id="sec-sales">
+
+  <!-- Date filter -->
+  <div class="dbar">
+    <div class="dfbtn" data-d="today">Today</div>
+    <div class="dfbtn" data-d="yesterday">Yesterday</div>
+    <div class="dfbtn" data-d="week">This Week</div>
+    <div class="dfbtn" data-d="month">This Month</div>
+    <div class="dfbtn" data-d="all">All Time</div>
+  </div>
+
+  <!-- Outlet online status -->
+  <div class="ostrip" id="ostrip"></div>
+
+  <!-- Issues alert -->
+  <div class="issues-bar" id="issuesBar">
+    <span class="ib-hd">⚠ Issues —</span>
+    <span class="ib-body" id="issuesList"></span>
+  </div>
+
+  <!-- Swiggy cards -->
+  <div class="plat-band">
+    <span class="pb-tag sw">SWIGGY</span>
+    <div class="pb-line"></div>
+  </div>
+  <div class="cards2" id="cards-sw" style="margin-bottom:16px"></div>
+
+  <!-- Zomato cards -->
+  <div class="plat-band">
+    <span class="pb-tag zm">ZOMATO</span>
+    <div class="pb-line"></div>
+  </div>
+  <div class="cards2" id="cards-zm" style="margin-bottom:16px"></div>
+
+  <!-- Zomato live tracking pulse (snapshot context) -->
+  <div class="zm-pulse" id="zmPulse" style="display:none">
+    <div class="zp-hd"><span class="ztag">ZOMATO</span>Live Snapshot</div>
+    <div class="zp-items">
+      <div class="zp-item"><div class="zp-val" id="zps">—</div><div class="zp-sub">Revenue</div></div>
+      <div class="zp-item"><div class="zp-val" id="zpd">—</div><div class="zp-sub">Delivered</div></div>
+      <div class="zp-item"><div class="zp-val" id="zpa">—</div><div class="zp-sub">AOV</div></div>
+      <div class="zp-item"><div class="zp-val zp-warn" id="zpr">—</div><div class="zp-sub">Rejected</div></div>
+      <div class="zp-item"><div class="zp-val zp-warn" id="zpd2">—</div><div class="zp-sub">Delayed</div></div>
+      <div class="zp-item"><div class="zp-val" id="zpi">—</div><div class="zp-sub">Impressions</div></div>
+    </div>
+    <div class="zp-age" id="zpAge"></div>
+  </div>
+
+  <!-- Order table -->
+  <div class="tbl-hdr">
+    <h3>Order Log</h3>
+    <span class="tbl-meta" id="tblMeta"></span>
+  </div>
+  <div class="tbl-wrap">
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr>
+          <th>Time</th>
+          <th>Date</th>
+          <th>Platform</th>
+          <th>Outlet</th>
+          <th>Customer</th>
+          <th>Items</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>Issues</th>
+        </tr></thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- FINANCE SECTION                                                     -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="section" id="sec-finance">
+
+  <!-- Swiggy payouts -->
+  <div class="fin-label">Swiggy — Weekly Payout Breakdown</div>
+  <div class="payout-grid" id="swPayoutGrid"></div>
+
+  <!-- Zomato payouts -->
+  <div class="fin-label">Zomato — Payout</div>
+  <div class="fin-note" id="zmPayoutNote">
+    Zomato payout data not yet captured — the extension reads Swiggy Finance page only.<br>
+    <strong>To get Zomato payout data:</strong> navigate to Zomato Partner → Payments & Reconciliation.
+  </div>
+
+  <!-- Commission reference -->
+  <div class="fin-label">Platform Commission Reference</div>
+  <div class="comm-grid">
+    <div class="ci"><div class="cl">Swiggy Delivery</div><div class="cv" style="color:var(--sw)">24.60%</div></div>
+    <div class="ci"><div class="cl">Zomato Delivery &lt;4km</div><div class="cv" style="color:var(--zm)">23.41%</div></div>
+    <div class="ci"><div class="cl">Zomato Dining (HE)</div><div class="cv" style="color:var(--zm)">8.26%</div></div>
+    <div class="ci"><div class="cl">WABA Direct</div><div class="cv" style="color:var(--green)">2.36%</div></div>
+    <div class="ci"><div class="cl">Dine-in</div><div class="cv" style="color:var(--green)">0%</div></div>
+    <div class="ci"><div class="cl">HE Effective (est.)</div><div class="cv" style="color:var(--he)">~24%</div></div>
+  </div>
+
+</div>
+
+</div><!-- /wrap -->
+
 <script>
-const API='/api/aggregator-pulse';
-const KEY='MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
-const LS_KEY='hn_agg_filter';
+const API = '/api/aggregator-pulse';
+const KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
+const LS  = 'hn_agg_f3';
 
-let dateFilter = localStorage.getItem(LS_KEY) || (location.hash.slice(1) || 'yesterday');
-if(!['today','yesterday','week','month','all'].includes(dateFilter)) dateFilter='yesterday';
+let dateFilter = localStorage.getItem(LS) || 'today';
+if (!['today','yesterday','week','month','all'].includes(dateFilter)) dateFilter = 'today';
 
-function setFilter(f){
-  dateFilter=f;
-  localStorage.setItem(LS_KEY,f);
-  location.hash=f;
-  document.querySelectorAll('.fbtn').forEach(b=>b.classList.toggle('active',b.dataset.d===f));
-  load();
-}
-
-document.querySelectorAll('.fbtn').forEach(b=>{
-  b.onclick=()=>setFilter(b.dataset.d);
-});
-document.querySelectorAll('.fbtn').forEach(b=>b.classList.toggle('active',b.dataset.d===dateFilter));
-
-function showP(p,el){
-  document.querySelectorAll('.platform').forEach(e=>e.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
-  document.getElementById('p-'+p).classList.add('active');
+// ── NAV ──────────────────────────────────────────────────────────────
+function showSection(id, el) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.ntab').forEach(t => t.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
   el.classList.add('active');
 }
 
-// Extract just the time from Swiggy's "15th Apr | 10:32 AM" format
-function extractTime(s){
-  if(!s) return '—';
-  s = String(s).trim();
-  if(s.includes('|')) return s.split('|')[1]?.trim() || s;
-  return s;
+// ── DATE FILTER ───────────────────────────────────────────────────────
+function setFilter(f) {
+  dateFilter = f;
+  localStorage.setItem(LS, f);
+  document.querySelectorAll('.dfbtn').forEach(b => b.classList.toggle('active', b.dataset.d === f));
+  loadSales();
+}
+document.querySelectorAll('.dfbtn').forEach(b => {
+  b.classList.toggle('active', b.dataset.d === dateFilter);
+  b.onclick = () => setFilter(b.dataset.d);
+});
+
+// ── UTILS ─────────────────────────────────────────────────────────────
+const rupee = v => '₹' + Math.round(v || 0).toLocaleString('en-IN');
+const pct   = v => (parseFloat(v) || 0).toFixed(1) + '%';
+const clean = s => s ? String(s).replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim() : '';
+const fmtAgo = iso => {
+  if (!iso) return '—';
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (m < 2)  return 'just now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.round(m / 60);
+  return h < 24 ? h + 'h ago' : Math.round(h / 24) + 'd ago';
+};
+
+function statusCls(s) {
+  const u = (s || '').toUpperCase();
+  if (/DELIVER/.test(u))             return 'delivered';
+  if (/PREPAR|PLACED|ACCEPT/.test(u)) return 'preparing';
+  if (/READY/.test(u))               return 'ready';
+  if (/PICK|DISPATCH/.test(u))       return 'picked';
+  if (/CANCEL|REJECT|TIMEOUT/.test(u)) return 'cancelled';
+  return 'default';
 }
 
-async function load(){
-  try{
-    const [ordR,latR,finR,statsR]=await Promise.all([
+// Parse finance value to a plain number (handles "₹405.65", "-₹133.81", 567)
+function toNum(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return v;
+  const n = parseFloat(String(v).replace(/[₹,\s]/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+// Format finance value for display: always show with 2 decimal places
+function fmtFin(v, forceSign = false) {
+  const n = toNum(v);
+  if (n == null) return '—';
+  const abs = Math.abs(n).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  if (forceSign) return (n < 0 ? '-₹' : '₹') + abs;
+  return '₹' + abs;
+}
+
+// ── LOAD ──────────────────────────────────────────────────────────────
+async function loadAll() {
+  await Promise.all([loadSales(), loadFinance()]);
+  document.getElementById('updTime').textContent =
+    'Updated ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+}
+
+// ── SALES ─────────────────────────────────────────────────────────────
+async function loadSales() {
+  try {
+    const [ordR, latR, statsR] = await Promise.all([
       fetch(`${API}?action=orders&date=${dateFilter}&key=${KEY}`),
       fetch(`${API}?action=latest&key=${KEY}`),
-      fetch(`${API}?action=finance&key=${KEY}`),
       fetch(`${API}?action=stats&key=${KEY}`),
     ]);
-    const ord=await ordR.json();
-    const lat=await latR.json();
-    const fin=await finR.json();
-    const stats=await statsR.json();
+    const ord   = await ordR.json();
+    const lat   = await latR.json();
+    const stats = await statsR.json();
 
-    renderStatus(stats, ord, lat);
+    renderPipeline(lat, stats, ord);
+    renderOutletStatus(lat);
     renderCards(ord);
-    renderOrders(ord.orders||[]);
-    renderOps(lat.outlets||[], lat.last_snapshot_at);
-    renderFinance(fin.finance||[]);
-    document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-  }catch(e){
-    console.error(e);
-    document.getElementById('statusCapture').textContent='Error: '+e.message;
-    document.getElementById('statusDot').className='status-dot dead';
+    renderIssues(ord.orders || []);
+    renderZmPulse(lat);
+    renderOrders(ord.orders || [], ord);
+  } catch (e) {
+    console.error('[Sales]', e);
+    document.getElementById('pdot').className = 'pdot dead';
+    document.getElementById('pipeAge').textContent = 'Error';
   }
 }
 
-function renderStatus(stats, ord, lat){
-  const allSnaps = stats.snapshots||[];
-  const allOrders = stats.orders||[];
+function renderPipeline(lat, stats, ord) {
+  let lastPush = lat.last_snapshot_at || null;
+  for (const o of (stats.orders || [])) {
+    if (!lastPush || o.last > lastPush) lastPush = o.last;
+  }
+  const mins = lastPush ? Math.round((Date.now() - new Date(lastPush)) / 60000) : 9999;
+  document.getElementById('pdot').className = 'pdot' + (mins > 60 ? ' dead' : mins > 20 ? ' stale' : '');
+  document.getElementById('pipeAge').textContent = lastPush ? fmtAgo(lastPush) : 'no data';
+}
 
-  // Pipeline health: last time the extension pushed ANYTHING (snapshot OR order)
-  let pipelineLast = lat.last_snapshot_at || null;
-  for(const o of allOrders){
-    if(!pipelineLast||o.last>pipelineLast) pipelineLast=o.last;
+function renderOutletStatus(lat) {
+  const strip = document.getElementById('ostrip');
+  const out   = [];
+
+  // Swiggy: from live_orders snapshot
+  const swAll  = lat.outlets?.find(o => o.platform === 'swiggy' && o.brand === 'all');
+  const swLive = swAll?.metrics?.live_orders?.data?.outlets || [];
+  const swAge  = swAll?.metrics?.live_orders?.captured_at;
+  const swNames = { 1342888: 'Hamza Express', 1342887: 'Nawabi Chai House' };
+  for (const s of swLive) {
+    out.push({ cls: 'sw', name: swNames[s.restaurantId] || 'Swiggy', online: s.isServiceable, extra: s.activeBatches ? `${s.activeBatches} active` : '', age: swAge });
+  }
+  if (!swLive.length) {
+    out.push({ cls: 'sw', name: 'Swiggy HE', online: null, age: null });
+    out.push({ cls: 'sw', name: 'Swiggy NCH', online: null, age: null });
   }
 
-  const totalOrders = allOrders.reduce((a,b)=>a+(b.orders||0),0);
+  // Zomato: from restaurant_metrics entities
+  const zmAll  = lat.outlets?.find(o => o.platform === 'zomato' && o.brand === 'all');
+  const zmEnts = zmAll?.metrics?.restaurant_metrics?.data?.entities || [];
+  const zmAge  = zmAll?.metrics?.restaurant_metrics?.captured_at;
+  for (const e of zmEnts) {
+    const on = e.delivery_status === 1 && e.logistics_partner_status === true;
+    out.push({ cls: 'zm', name: e.name, online: on, age: zmAge });
+  }
+  if (!zmEnts.length) {
+    out.push({ cls: 'zm', name: 'Zomato HE', online: null, age: null });
+    out.push({ cls: 'zm', name: 'Zomato NCH', online: null, age: null });
+  }
 
-  // Per-platform last order time from the filtered orders list (sorted newest first)
-  // Use extractTime() to handle Swiggy's "15th Apr | 10:32 AM" format
-  const allOrderRows = ord.orders || [];
-  const swLastOrder = allOrderRows.find(o=>o.platform==='swiggy');
-  const zmLastOrder = allOrderRows.find(o=>o.platform==='zomato');
-
-  const dot=document.getElementById('statusDot');
-  const minsAgo = pipelineLast ? Math.round((Date.now()-new Date(pipelineLast).getTime())/60000) : 9999;
-  dot.className='status-dot'+(minsAgo>120?' dead':minsAgo>30?' stale':'');
-  document.getElementById('statusCapture').textContent = pipelineLast ? fmtAgo(pipelineLast) : 'no data';
-
-  // For Swiggy, show date+time since the stored format is "15th Apr | 10:32 AM"
-  // extractTime strips the date prefix and shows just the time
-  document.getElementById('statusSwiggy').textContent = swLastOrder
-    ? (extractTime(swLastOrder.order_time) + (swLastOrder.order_date ? ' · '+swLastOrder.order_date : ''))
-    : '—';
-  document.getElementById('statusZomato').textContent = zmLastOrder
-    ? (extractTime(zmLastOrder.order_time) + (zmLastOrder.order_date ? ' · '+zmLastOrder.order_date : ''))
-    : '—';
-  document.getElementById('statusTotal').textContent = totalOrders;
-}
-
-function fmtAgo(isoStr){
-  const d=new Date(isoStr);
-  const mins=Math.round((Date.now()-d.getTime())/60000);
-  if(mins<2) return 'just now';
-  if(mins<60) return mins+'m ago';
-  const hrs=Math.round(mins/60);
-  if(hrs<24) return hrs+'h ago';
-  return Math.round(hrs/24)+'d ago';
-}
-
-function renderCards(data){
-  const outlets=data.by_outlet||[];
-  const el=document.getElementById('cards');
-  const filter=dateFilter==='today'?'Today':dateFilter==='yesterday'?'Yesterday':dateFilter==='week'?'7 days':dateFilter==='month'?'30 days':'All time';
-  const expected=[
-    {platform:'swiggy',brand:'he',name:'Hamza Express',pcls:'sw'},
-    {platform:'swiggy',brand:'nch',name:'Nawabi Chai House',pcls:'sw'},
-    {platform:'zomato',brand:'he',name:'Hamza Express',pcls:'zm'},
-    {platform:'zomato',brand:'nch',name:'Nawabi Chai House',pcls:'zm'},
-  ];
-  el.innerHTML=expected.map(e=>{
-    const o=outlets.find(x=>x.platform===e.platform&&x.brand===e.brand)||{orders:0,delivered:0,revenue:0,payout:0};
-    return `<div class="card ${e.brand}">
-      <div class="top"><span class="name">${e.name}</span><span class="plat ${e.pcls}">${e.platform==='swiggy'?'SWIGGY':'ZOMATO'}</span></div>
-      <div class="big">${o.delivered} <small style="font-size:12px;color:#666;font-weight:400">delivered</small></div>
-      <div class="row"><span class="lbl">Total orders</span><span class="val">${o.orders}</span></div>
-      <div class="row"><span class="lbl">Revenue</span><span class="val">₹${Math.round(o.revenue||0).toLocaleString('en-IN')}</span></div>
-      ${(o.payout||0)>0?`<div class="row"><span class="lbl">Net payout</span><span class="val">₹${Math.round(o.payout).toLocaleString('en-IN')}</span></div>`:''}
+  strip.innerHTML = out.map(o => {
+    const dotCls = o.online === null ? 'unk' : (o.online ? 'on' : 'off');
+    const state  = o.online === null ? '—' : (o.online ? 'ONLINE' : 'OFFLINE');
+    const stateCls = o.online === null ? 'unk' : (o.online ? 'on' : 'off');
+    const shortName = o.name.replace('Hamza Express', 'HE').replace('Nawabi Chai House', 'NCH');
+    const ageStr = o.age ? ` · ${fmtAgo(o.age)}` : '';
+    return `<div class="ostatus" title="Last checked${ageStr}">
+      <div class="odot ${dotCls}"></div>
+      <span class="oplat ${o.cls}">${o.cls === 'sw' ? 'SWIGGY' : 'ZOMATO'}</span>
+      <span class="oname">${shortName}</span>
+      <span class="ostate ${stateCls}">${state}${o.extra ? ' · ' + o.extra : ''}</span>
     </div>`;
   }).join('');
-  document.getElementById('orderCount').textContent=`${data.total_orders||0} orders · ₹${Math.round(data.total_revenue||0).toLocaleString('en-IN')} revenue · ${filter}`;
 }
 
-function cleanStr(s){
-  if(!s) return '';
-  return String(s).replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
+function renderCards(ord) {
+  const byOutlet = ord.by_outlet || [];
+  const orders   = ord.orders || [];
+  const period   = {today:'Today',yesterday:'Yesterday',week:'7 days',month:'30 days',all:'All time'}[dateFilter] || dateFilter;
+
+  // Count issues per outlet-platform
+  const issueCt = {};
+  for (const o of orders) {
+    if (o.issues) {
+      const k = o.platform + '_' + o.brand;
+      issueCt[k] = (issueCt[k] || 0) + 1;
+    }
+  }
+
+  function card(platform, brand, label) {
+    const d  = byOutlet.find(x => x.platform === platform && x.brand === brand) || {};
+    const ic = issueCt[platform + '_' + brand] || 0;
+    const rev = d.revenue || 0;
+    const total = d.orders || 0;
+    const del = d.delivered || 0;
+    const inprog = total - del;
+    return `<div class="scard ${brand}">
+      <div class="sc-top">
+        <div class="sc-name">${label}<small>${period}</small></div>
+      </div>
+      <div class="sc-rev ${rev === 0 ? 'zero' : ''}">
+        ${rev > 0 ? rupee(rev) : '₹0'}
+      </div>
+      <div class="sc-rows">
+        <div class="sc-row"><span class="rl">Total orders</span><span class="rv">${total}</span></div>
+        <div class="sc-row"><span class="rl">Delivered</span><span class="rv g">${del}</span></div>
+        ${inprog > 0 ? `<div class="sc-row"><span class="rl">In progress</span><span class="rv o">${inprog}</span></div>` : ''}
+        ${d.payout > 0 ? `<div class="sc-row"><span class="rl">Net payout</span><span class="rv">${rupee(d.payout)}</span></div>` : ''}
+      </div>
+      ${ic > 0 ? `<div class="sc-issues">⚠ ${ic} order${ic > 1 ? 's' : ''} with issues</div>` : ''}
+    </div>`;
+  }
+
+  document.getElementById('cards-sw').innerHTML =
+    card('swiggy', 'he',  'Hamza Express') +
+    card('swiggy', 'nch', 'Nawabi Chai House');
+
+  document.getElementById('cards-zm').innerHTML =
+    card('zomato', 'he',  'Hamza Express') +
+    card('zomato', 'nch', 'Nawabi Chai House');
 }
 
-function renderOrders(orders){
-  const tb=document.getElementById('otbody');
-  if(!orders.length){
-    const isToday=dateFilter==='today';
-    tb.innerHTML=`<tr><td colspan="10" class="empty">${isToday?'No orders captured today yet — the VM extension will pick them up as they come in':'No orders for this period'}</td></tr>`;
+function renderIssues(orders) {
+  const bar = document.getElementById('issuesBar');
+  const issues = orders
+    .filter(o => o.issues)
+    .map(o => {
+      const id  = o.order_id ? '#' + String(o.order_id).slice(-6) : '';
+      const brd = o.brand === 'he' ? 'HE' : 'NCH';
+      return `${id} [${brd}] ${clean(o.issues)}`;
+    });
+  if (!issues.length) { bar.classList.remove('show'); return; }
+  bar.classList.add('show');
+  document.getElementById('issuesList').textContent = issues.join('  ·  ');
+}
+
+function renderZmPulse(lat) {
+  const zmAll = lat.outlets?.find(o => o.platform === 'zomato' && o.brand === 'all');
+  const lt    = zmAll?.metrics?.live_tracking;
+  const el    = document.getElementById('zmPulse');
+  if (!lt?.data) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  const d = lt.data;
+  document.getElementById('zps').textContent  = rupee(d.sales || 0);
+  document.getElementById('zpd').textContent  = d.delivered_orders || 0;
+  document.getElementById('zpa').textContent  = d.aov > 0 ? rupee(d.aov) : '—';
+  const rejEl = document.getElementById('zpr');
+  rejEl.textContent = pct(d.rejected_pct || 0);
+  rejEl.className   = 'zp-val zp-warn' + ((d.rejected_pct || 0) > 5 ? ' bad' : '');
+  const delEl = document.getElementById('zpd2');
+  delEl.textContent = pct(d.delayed_pct || 0);
+  delEl.className   = 'zp-val zp-warn' + ((d.delayed_pct || 0) > 10 ? ' bad' : '');
+  document.getElementById('zpi').textContent  = (d.impressions || 0).toLocaleString('en-IN');
+  document.getElementById('zpAge').textContent = 'snapshot · ' + fmtAgo(lt.captured_at);
+}
+
+function renderOrders(orders, ord) {
+  document.getElementById('tblMeta').textContent =
+    `${ord.total_orders || 0} orders  ·  ${ord.total_delivered || 0} delivered  ·  ${rupee(ord.total_revenue || 0)} revenue`;
+
+  const tb = document.getElementById('ordersBody');
+  if (!orders.length) {
+    const msg = dateFilter === 'today'
+      ? 'No orders captured yet today — extension polls every 5 minutes'
+      : 'No orders for this period';
+    tb.innerHTML = `<tr><td colspan="9" class="empty-state">${msg}</td></tr>`;
     return;
   }
-  tb.innerHTML=orders.map(o=>{
-    const s=cleanStr(o.status)||'';
-    const sc=s.match(/deliver/i)?'st-d':s.match(/prepar|ready/i)?'st-p':'st-c';
-    const outlet=o.brand==='he'?'HE':o.brand==='nch'?'NCH':cleanStr(o.outlet_name)||'—';
-    const platTag=o.platform==='swiggy'
-      ?'<span class="plat-tag sw">Swiggy</span>'
-      :'<span class="plat-tag zm">Zomato</span>';
-    const items=cleanStr(o.items);
-    const issues=cleanStr(o.issues);
-    // Fix: extract just the time portion for Swiggy orders stored as "15th Apr | 10:32 AM"
-    const time=extractTime(cleanStr(o.order_time));
+
+  tb.innerHTML = orders.map(o => {
+    const sc       = statusCls(o.status);
+    const platCls  = o.platform === 'swiggy' ? 'sw' : 'zm';
+    const platLabel = o.platform === 'swiggy' ? 'Swiggy' : 'Zomato';
+    const brandCls  = o.brand === 'he' ? 'he-txt' : 'nch-txt';
+    const brandLabel = o.brand === 'he' ? 'HE' : o.brand === 'nch' ? 'NCH' : clean(o.outlet_name) || '—';
+    const items    = clean(o.items);
+    const issues   = clean(o.issues);
+    const time     = clean(o.order_time) || '—';
     return `<tr>
-      <td>${o.order_date||'—'}</td>
-      <td style="white-space:nowrap;font-size:11px">${time}</td>
-      <td>${platTag}</td>
-      <td><strong>${outlet}</strong></td>
-      <td>${cleanStr(o.customer_name)||'—'}</td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${items}">${items||'—'}</td>
-      <td style="white-space:nowrap">₹${o.order_value||'—'}</td>
-      <td style="white-space:nowrap">${o.net_payout?'₹'+o.net_payout:'—'}</td>
-      <td><span class="st ${sc}">${s}</span></td>
-      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${issues}">${issues?'<span class="issue-tag">⚠ '+issues.substring(0,35)+'</span>':''}</td>
+      <td style="white-space:nowrap;color:var(--dim)">${time}</td>
+      <td style="color:var(--faint);font-size:11px">${o.order_date || '—'}</td>
+      <td><span class="pltag ${platCls}">${platLabel}</span></td>
+      <td><span class="${brandCls}">${brandLabel}</span></td>
+      <td style="white-space:nowrap">${clean(o.customer_name) || '—'}</td>
+      <td class="items-cell" title="${items}">${items || '—'}</td>
+      <td style="white-space:nowrap;font-weight:600">${o.order_value != null ? '₹' + o.order_value : '—'}</td>
+      <td><span class="stag ${sc}">${clean(o.status) || '—'}</span></td>
+      <td class="issue-cell" title="${issues}">${issues ? '⚠ ' + issues.substring(0,50) : ''}</td>
     </tr>`;
   }).join('');
 }
 
-function renderOps(outlets, lastSnapshotAt){
-  // CRITICAL: keep Swiggy and Zomato metrics SEPARATE — never merge platforms
-  const sw={}, zm={};
-  const swAge={}, zmAge={};
-
-  for(const o of outlets){
-    const isSw = o.platform!=='zomato';
-    const target = isSw ? sw : zm;
-    const ageMap = isSw ? swAge : zmAge;
-    for(const[mtype,md]of Object.entries(o.metrics||{})){
-      if(md&&typeof md.data==='object'){
-        Object.assign(target, md.data);
-        ageMap[mtype] = md.captured_at;
-      }
-    }
+// ── FINANCE ───────────────────────────────────────────────────────────
+async function loadFinance() {
+  try {
+    const r   = await fetch(`${API}?action=finance&key=${KEY}`);
+    const fin = await r.json();
+    renderFinance(fin.finance || []);
+  } catch (e) {
+    console.error('[Finance]', e);
+    document.getElementById('swPayoutGrid').innerHTML = '<div class="pc-empty">Error loading finance data</div>';
   }
-
-  // Age labels
-  const swReportsAge = swAge['reports_swiggy'];
-  const zmLiveAge = zmAge['live_tracking'];
-  const zmBizAge = zmAge['biz_reports'];
-
-  const ageLabel = (ts) => ts ? '· ' + fmtAgo(ts) : (lastSnapshotAt ? '· ' + fmtAgo(lastSnapshotAt) : '');
-  const setAge = (id, ts) => { const el=document.getElementById(id); if(el) el.textContent=ageLabel(ts); };
-
-  setAge('sw-age', swReportsAge);
-  setAge('sw-age2', swReportsAge);
-  setAge('zm-age', zmLiveAge);
-  setAge('zm-biz-age', zmBizAge);
-
-  // ── SWIGGY Sales Summary (rpt_ fields — captured but previously not shown) ──
-  rg('s-sales',[
-    m('Net Sales',sw.rpt_net_sales,'₹'),
-    m('Delivered Orders',sw.rpt_delivered_orders),
-    m('Net AOV',sw.rpt_net_aov,'₹'),
-    m('Cancelled Orders',sw.rpt_cancelled_orders,'','w'),
-    m('Cancelled Loss',sw.rpt_cancelled_loss,'₹','w'),
-    m('Date Range',sw.date_range),
-  ]);
-
-  // ── SWIGGY Funnel — check if all zeros (means data not available yet, 24-48h lag) ──
-  const funnelHasData = [sw.impressions,sw.menu_opens,sw.cart_builds,sw.orders_placed].some(v=>v&&parseFloat(v)>0);
-  const funLag = document.getElementById('s-fun-lag');
-  if(funLag) funLag.textContent = funnelHasData ? '' : '⏳ Swiggy funnel data lags 24-48h — showing zeros because today\'s data isn\'t available yet.';
-
-  rg('s-fun',[
-    m('Impressions', funnelHasData?sw.impressions:null),
-    m('Menu Opens',  funnelHasData?sw.menu_opens:null),
-    m('Cart Builds', funnelHasData?sw.cart_builds:null),
-    m('Orders Placed',funnelHasData?sw.orders_placed:null),
-    m('New Cust',sw.new_customers),m('Repeat',sw.repeat_customers),m('Dormant',sw.dormant_customers),
-    m('New Cust %',sw.new_cust_order_pct,'','','%'),m('Repeat %',sw.repeat_cust_order_pct,'','','%'),
-  ]);
-  rg('s-rat',[
-    m('Rated',sw.rated_orders),m('Poor Rated',sw.poor_rated_orders,'','w'),
-    m('Complaint %',sw.complaint_pct,'','w','%'),m('Complaints',sw.complaint_orders,'','w'),
-    m('Unresolved',sw.unresolved_complaints,'','w'),m('Wrong Items',sw.wrong_items,'','w'),
-    m('Missing',sw.missing_items,'','w'),m('Quality',sw.quality_issues,'','w'),m('Packaging',sw.packaging_issues,'','w'),
-  ]);
-  rg('s-ads',[
-    m('CPC Sales',sw.cpc_sales,'₹'),m('CPC Orders',sw.cpc_orders),m('CPC Spend',sw.cpc_spends,'₹'),
-    m('ROAS',sw.roas,'','','x'),m('CPC Menu Visits',sw.cpc_menu_visits),m('CPC Depth',sw.cpc_ads_depth,'','','%'),
-    m('Banner Sales',sw.cba_sales,'₹'),m('Banner Spend',sw.cba_spends,'₹'),
-    m('Banner Impressions',sw.ad_impressions_cba),m('Banner Menu Visits',sw.cba_menu_visits),m('Banner Depth',sw.cba_ads_depth,'','','%'),
-  ]);
-  rg('s-ops',[
-    m('Online %',sw.online_availability,'',parseFloat(sw.online_availability)>=95?'g':'b','%'),
-    m('Prep Time',sw.kitchen_prep_time,'','',' min'),m('MFR',sw.mfr_accuracy,'','','%'),
-    m('Delayed >10m',sw.delayed_10min,'','w','%'),
-    m('Bolt Orders',sw.bolt_orders),m('Bolt %',sw.bolt_pct,'','','%'),m('Bolt AOV',sw.bolt_aov,'₹'),
-  ]);
-  rg('s-menu',[
-    m('Menu Score',sw.menu_score,'',parseFloat(sw.menu_score)>=50?'':'b','/100'),
-    m('Photos',sw.items_with_photos,'','g','%'),m('Descriptions',sw.items_with_desc,'','g','%'),
-    m('Category Score',sw.category_score,'','','/100'),m('Item Score',sw.item_score,'','','/100'),
-    m('Addon Score',sw.addon_score,'','','/100'),m('Combo Score',sw.combo_score,'','','/100'),
-  ]);
-
-  // ── ZOMATO — Live Tracking is a snapshot at capture time, NOT running total ──
-  rg('z-live',[
-    m('Sales (snapshot)',zm.sales,'₹'),m('Orders (snapshot)',zm.delivered_orders),m('AOV',zm.aov,'₹'),
-    m('Rejected',zm.rejected_pct,'','w','%'),m('Delayed',zm.delayed_pct,'','w','%'),
-    m('Poor Rated',zm.poor_rated_pct,'','w','%'),m('Lost Sales',zm.lost_sales,'₹','w'),
-    m('HE Sales',zm.he_sales,'₹'),m('NCH Sales',zm.nch_sales,'₹'),
-    m('Offer Sales',zm.sales_from_offers,'₹'),
-  ]);
-  rg('z-fun',[
-    m('Impressions',zm.impressions),m('I→Menu',zm.imp_to_menu,'','','%'),
-    m('Menu→Cart',zm.menu_to_cart,'','','%'),m('Cart→Order',zm.cart_to_order,'','','%'),
-  ]);
-  rg('z-wk',[
-    m('Wk Sales',zm.weekly_sales,'₹'),m('Wk Orders',zm.weekly_orders),m('Wk AOV',zm.weekly_aov,'₹'),
-    m('Bad Orders',zm.weekly_bad_orders,'','w','%'),m('Online',zm.weekly_online_pct,'','','%'),
-  ]);
 }
 
-function renderFinance(finance){
-  // Clean ₹ symbol from values that have it embedded (e.g. "₹108.94" → shows correctly)
-  function fv(v){
-    if(v==null||v==='') return null;
-    // Values like "-₹35.92" or "₹108.94" — return as-is, already display-ready
-    return String(v);
-  }
-  let heSet=false,nchSet=false;
-  for(const f of finance){
-    const d=f.data||{};
-    const brand=f.brand;
-    const id=brand==='he'?'f-he':brand==='nch'?'f-nch':null;
-    if(!id)continue;
-    rg(id,[
-      m('Orders',d.order_count||d.total_orders),
-      m('Customer Paid',fv(d.customer_paid),'₹'),
-      m('Platform Fees',fv(d.total_fees)),
-      m('Complaint Chg',fv(d.complaint_charges)),
-      m('Taxes',fv(d.total_taxes)),
-      m('Other Charges',fv(d.other_charges)),
-      m('Net Payout',fv(d.net_payout)),
-      m('Payout Date',d.payout_date),
-    ]);
-    if(brand==='he') heSet=true;
-    if(brand==='nch') nchSet=true;
-  }
-  if(!heSet) rg('f-he',[m('Status','No finance data captured yet')]);
-  if(!nchSet) rg('f-nch',[m('Status','No finance data captured yet')]);
+function renderFinance(finance) {
+  const cfg = [
+    { brand: 'he',  mtype: 'finance_he',  label: 'Hamza Express',    brandCls: 'he'  },
+    { brand: 'nch', mtype: 'finance_nch', label: 'Nawabi Chai House', brandCls: 'nch' },
+  ];
+
+  document.getElementById('swPayoutGrid').innerHTML = cfg.map(c => {
+    const entry = finance.find(f => f.metric_type === c.mtype || f.brand === c.brand);
+    const d = entry?.data;
+
+    if (!d) return `<div class="pccard ${c.brandCls}">
+      <div class="pcc-hdr">
+        <div><div class="pcc-title">${c.label}</div><div class="pcc-sub">Swiggy · Weekly Payout</div></div>
+        <span class="pcc-plat sw">SWIGGY</span>
+      </div>
+      <div class="pc-empty">No payout data captured — visit Swiggy Finance page to seed</div>
+    </div>`;
+
+    const custPaid    = toNum(d.customer_paid);
+    const fees        = toNum(d.total_fees);
+    const complaint   = toNum(d.complaint_charges);
+    const taxes       = toNum(d.total_taxes);
+    const otherChg    = toNum(d.other_charges);
+    const net         = toNum(d.net_payout);
+    const netNeg      = net != null && net < 0;
+
+    // Calculate effective commission
+    const effComm = (custPaid && fees) ? (Math.abs(fees) / custPaid * 100).toFixed(1) : null;
+
+    return `<div class="pccard ${c.brandCls}">
+      <div class="pcc-hdr">
+        <div>
+          <div class="pcc-title">${c.label}</div>
+          <div class="pcc-sub">Swiggy · Weekly Payout</div>
+        </div>
+        <span class="pcc-plat sw">SWIGGY</span>
+      </div>
+      <div class="pcc-body">
+        <div class="pc-line">
+          <span class="pcl">Customer Paid <span style="color:var(--faint);font-size:10px">(A)</span></span>
+          <span class="pcv">${fmtFin(custPaid)}</span>
+        </div>
+        <div class="pc-line">
+          <span class="pcl">Platform Fees <span style="color:var(--faint);font-size:10px">(B)</span>${effComm ? `<span style="font-size:10px;color:var(--dim);margin-left:4px">${effComm}%</span>` : ''}</span>
+          <span class="pcv ${fees != null && fees < 0 ? 'neg' : ''}">${fees != null ? (fees < 0 ? '-' : '') + fmtFin(Math.abs(fees)) : '—'}</span>
+        </div>
+        <div class="pc-line">
+          <span class="pcl">Complaint Charges <span style="color:var(--faint);font-size:10px">(C)</span></span>
+          <span class="pcv ${complaint != null && complaint < 0 ? 'neg' : complaint === 0 ? 'zero' : ''}">${complaint != null ? fmtFin(complaint) : '—'}</span>
+        </div>
+        <div class="pc-line">
+          <span class="pcl">Taxes <span style="color:var(--faint);font-size:10px">(D)</span></span>
+          <span class="pcv ${taxes != null && taxes < 0 ? 'neg' : ''}">${taxes != null ? (taxes < 0 ? '-' : '') + fmtFin(Math.abs(taxes)) : '—'}</span>
+        </div>
+        ${otherChg != null ? `<div class="pc-line">
+          <span class="pcl">Other Charges <span style="color:var(--faint);font-size:10px">(E)</span></span>
+          <span class="pcv ${otherChg < 0 ? 'neg' : otherChg === 0 ? 'zero' : ''}">${otherChg < 0 ? '-' : ''}${fmtFin(Math.abs(otherChg))}</span>
+        </div>` : ''}
+      </div>
+      <div class="pc-net">
+        <span class="pcn-lbl">Net Payout</span>
+        <span class="pcn-val ${netNeg ? 'neg' : 'pos'}">${net != null ? (netNeg ? '-₹' : '₹') + Math.abs(net).toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</span>
+      </div>
+      <div class="pc-footer">
+        <span>Orders: <strong>${d.order_count || d.total_orders || '—'}</strong></span>
+        ${d.payout_date ? `<span>Expected by <strong>${d.payout_date}</strong></span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function m(label,val,pre,cls,suf){
-  const v=val!=null&&val!==''?(pre||'')+val+(suf||''):'—';
-  const c=cls==='w'&&parseFloat(val)>0?'warn':cls==='b'?'bad':cls==='g'?'good':'';
-  return{label,value:v,cls:c};
-}
-function rg(id,items){
-  const el=document.getElementById(id);if(!el)return;
-  el.innerHTML=items.map(i=>`<div class="mcard"><div class="label">${i.label}</div><div class="value ${i.cls}">${i.value}</div></div>`).join('');
-}
-
-load();
-setInterval(load,60000);
+// ── INIT ──────────────────────────────────────────────────────────────
+loadAll();
+setInterval(loadSales, 60000);   // sales auto-refresh every 60s
+setInterval(loadFinance, 300000); // finance refresh every 5 min
 </script>
 </body>
 </html>
