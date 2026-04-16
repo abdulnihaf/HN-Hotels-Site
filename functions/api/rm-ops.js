@@ -491,8 +491,14 @@ async function settlementPrepare(creds, cfg, brand, DB) {
     ).bind(brand).all() : { results: [] },
     fetchPurchasesReceived(creds, cfg,
       toOdooDatetime(istToUTC(periodStart)),
-      toOdooDatetime(istToUTC(periodEnd))),
+      toOdooDatetime(istToUTC(periodEnd)), true),  // withDetail=true for delivery cards
   ]);
+
+  // Unpack purchases (now returns { purchased, deliveries } when withDetail=true)
+  const purchaseData = purchases && typeof purchases === 'object' && 'purchased' in purchases
+    ? purchases : { purchased: purchases, deliveries: [] };
+  const purchasedQtys = purchaseData.purchased;
+  const deliveries    = purchaseData.deliveries;
 
   // Latest prices per tracked item
   const latestPrices = {};
@@ -533,10 +539,11 @@ async function settlementPrepare(creds, cfg, brand, DB) {
       tier: t.tier,
       countMethod: t.count_method,
       opening: openingStock[t.product_code] || 0,
-      purchased: purchases[t.product_code] || 0,
+      purchased: purchasedQtys[t.product_code] || 0,
       latestPrice: latestPrices[t.product_code] || null,
     })),
-    purchases,
+    purchases: purchasedQtys,
+    deliveries,
     latestPrices,
     intelligence: {
       recipes: intelligence.recipes.length,
@@ -2017,8 +2024,12 @@ async function fetchKitchenStockRaw(creds, cfg) {
 
 /* ── Purchases Received in Period ── */
 
-async function fetchPurchasesReceived(creds, cfg, fromOdoo, toOdoo) {
+async function fetchPurchasesReceived(creds, cfg, fromOdoo, toOdoo, withDetail = false) {
   // Find incoming pickings (receipts) that were completed in the period
+  const pickingFields = withDetail
+    ? ['id', 'name', 'partner_id', 'date_done', 'move_ids']
+    : ['id', 'move_ids'];
+
   const pickings = await odooCall(creds.uid, creds.key,
     'stock.picking', 'search_read',
     [[['picking_type_id.code', '=', 'incoming'],
@@ -2026,31 +2037,38 @@ async function fetchPurchasesReceived(creds, cfg, fromOdoo, toOdoo) {
       ['date_done', '>=', fromOdoo],
       ['date_done', '<=', toOdoo],
       ['company_id', '=', cfg.company_id]]],
-    { fields: ['id', 'move_ids'] }
+    { fields: pickingFields, order: 'date_done desc' }
   );
 
-  if (!pickings || pickings.length === 0) return {};
+  if (!pickings || pickings.length === 0) return withDetail ? { purchased: {}, deliveries: [] } : {};
 
   const allMoveIds = pickings.flatMap(p => p.move_ids || []);
-  if (allMoveIds.length === 0) return {};
+  if (allMoveIds.length === 0) return withDetail ? { purchased: {}, deliveries: [] } : {};
+
+  const moveFields = withDetail
+    ? ['id', 'picking_id', 'product_id', 'quantity', 'price_unit', 'product_uom']
+    : ['product_id', 'quantity'];
 
   const moves = await odooCall(creds.uid, creds.key,
     'stock.move', 'read', [allMoveIds],
-    { fields: ['product_id', 'quantity'] }
+    { fields: moveFields }
   );
 
-  // Get HN-RM codes for products
-  const productIds = [...new Set(moves.map(m => m.product_id[0]))];
-  // We need to map Odoo product IDs to HN-RM codes
-  // Batch fetch product default_codes
-  const products = await odooCall(creds.uid, creds.key,
-    'product.product', 'read', [productIds],
-    { fields: ['id', 'default_code'] }
-  );
+  // Extract HN-RM code from product name "[HN-RM-XXX] Name" or via default_code
   const codeMap = {};
-  for (const p of products) {
-    if (p.default_code && p.default_code.startsWith('HN-RM-')) {
-      codeMap[p.id] = p.default_code;
+  for (const move of moves) {
+    const nameMatch = move.product_id[1]?.match(/\[([^\]]+)\]/);
+    if (nameMatch && nameMatch[1].startsWith('HN-RM-')) {
+      codeMap[move.product_id[0]] = nameMatch[1];
+    }
+  }
+  // Fallback: batch fetch default_code for any still unmapped
+  const unmapped = [...new Set(moves.map(m => m.product_id[0]).filter(id => !codeMap[id]))];
+  if (unmapped.length > 0) {
+    const products = await odooCall(creds.uid, creds.key,
+      'product.product', 'read', [unmapped], { fields: ['id', 'default_code'] });
+    for (const p of products) {
+      if (p.default_code?.startsWith('HN-RM-')) codeMap[p.id] = p.default_code;
     }
   }
 
@@ -2058,11 +2076,41 @@ async function fetchPurchasesReceived(creds, cfg, fromOdoo, toOdoo) {
   const purchased = {};
   for (const move of moves) {
     const code = codeMap[move.product_id[0]];
-    if (code) {
-      purchased[code] = (purchased[code] || 0) + (move.quantity || 0);
-    }
+    if (code) purchased[code] = (purchased[code] || 0) + (move.quantity || 0);
   }
-  return purchased;
+
+  if (!withDetail) return purchased;
+
+  // Build per-picking delivery detail
+  const movesByPicking = {};
+  for (const move of moves) {
+    const pid = move.picking_id?.[0] || move.picking_id;
+    if (!movesByPicking[pid]) movesByPicking[pid] = [];
+    movesByPicking[pid].push(move);
+  }
+
+  const deliveries = pickings.map(p => ({
+    picking_id: p.id,
+    picking_name: p.name,
+    vendor: p.partner_id?.[1] || 'Unknown',
+    date_done: p.date_done,
+    items: (movesByPicking[p.id] || [])
+      .map(m => {
+        const code = codeMap[m.product_id[0]];
+        const rawName = m.product_id[1] || '';
+        const name = rawName.replace(/^\[[^\]]+\]\s*/, ''); // strip [HN-RM-XXX] prefix
+        return code ? {
+          code, name,
+          qty: round(m.quantity || 0, 3),
+          uom: m.product_uom?.[1] || '',
+          unit_cost: round(m.price_unit || 0, 2),
+          total_cost: round((m.quantity || 0) * (m.price_unit || 0), 2),
+        } : null;
+      })
+      .filter(Boolean),
+  })).filter(d => d.items.length > 0);
+
+  return { purchased, deliveries };
 }
 
 /* ── Sync Stock to Odoo (after settlement) ── */
