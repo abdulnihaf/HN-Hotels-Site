@@ -1569,6 +1569,16 @@ async function settlementSubmit(body, user, creds, cfg, brand, env, DB) {
     odooSyncResult = { error: syncErr.message };
   }
 
+  // ── Step 13: Upload settlement photos to Google Drive ──
+  let drivePhotos = [];
+  if (body.item_photos?.length > 0) {
+    try {
+      drivePhotos = await uploadSettlementPhotos(body.item_photos, brand, user.name, now, env);
+    } catch (driveErr) {
+      drivePhotos = [{ error: driveErr.message }];
+    }
+  }
+
   // Log
   await DB.prepare(
     'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
@@ -1589,6 +1599,7 @@ async function settlementSubmit(body, user, creds, cfg, brand, env, DB) {
     warnings: consumptionWarnings.length > 0 ? consumptionWarnings : undefined,
     timestampAdjustments: Object.keys(timestampAdjustments).length > 0 ? timestampAdjustments : undefined,
     odooSyncResult,
+    drivePhotos: drivePhotos.length > 0 ? drivePhotos : undefined,
   });
 }
 
@@ -2226,6 +2237,140 @@ async function syncStockToOdoo(creds, cfg, counts, DB) {
         'stock.quant', 'action_apply_inventory', [[newQuant]]
       );
       results.push({ code, odoo_id: product.odoo_id, action: 'created', qty });
+    }
+  }
+  return results;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Google Drive — Settlement Photo Upload
+ * Uses service account JWT (RS256) — no OAuth redirect needed.
+ * Secrets: GDRIVE_SA_EMAIL, GDRIVE_SA_PRIVATE_KEY (PEM),
+ *          GDRIVE_ROOT_FOLDER_ID
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ── Build and sign a JWT, exchange for an access token ── */
+async function getGDriveToken(env) {
+  const email = env.GDRIVE_SA_EMAIL;
+  const pemRaw = env.GDRIVE_SA_PRIVATE_KEY;
+  if (!email || !pemRaw) throw new Error('GDRIVE secrets not configured');
+
+  // CF secrets store \n literally — convert to real newlines
+  const pem = pemRaw.replace(/\\n/g, '\n');
+
+  // Strip PEM header/footer and decode DER
+  const der = Uint8Array.from(
+    atob(pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')),
+    c => c.charCodeAt(0)
+  );
+
+  const key = await crypto.subtle.importKey(
+    'pkcs8', der.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false, ['sign']
+  );
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const claimB64 = btoa(JSON.stringify({
+    iss: email, scope: 'https://www.googleapis.com/auth/drive',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600, iat: now,
+  })).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  const sigInput = new TextEncoder().encode(`${header}.${claimB64}`);
+  const sigBuf = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, sigInput);
+  const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const jwt = `${header}.${claimB64}.${sig}`;
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error(`Drive token error: ${JSON.stringify(data)}`);
+  return data.access_token;
+}
+
+/* ── Find existing folder by name+parent, or create it ── */
+async function gdriveFindOrCreateFolder(token, name, parentId) {
+  const q = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${name.replace(/'/g,"\\'")}' and '${parentId}' in parents and trashed=false`);
+  const search = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const found = await search.json();
+  if (found.files?.length > 0) return found.files[0].id;
+
+  const create = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }),
+  });
+  const created = await create.json();
+  if (!created.id) throw new Error(`Folder create failed: ${JSON.stringify(created)}`);
+  return created.id;
+}
+
+/* ── Upload a single base64 JPEG via multipart ── */
+async function gdriveUploadPhoto(token, filename, base64Data, folderId) {
+  // Strip data-URI prefix if present
+  const b64 = base64Data.replace(/^data:image\/[a-z]+;base64,/, '');
+  const imgBytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+  const boundary = '------DriveUploadBoundary';
+  const meta = JSON.stringify({ name: filename, parents: [folderId] });
+  const metaBytes = new TextEncoder().encode(
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n` +
+    `--${boundary}\r\nContent-Type: image/jpeg\r\n\r\n`
+  );
+  const closeBytes = new TextEncoder().encode(`\r\n--${boundary}--`);
+
+  const body = new Uint8Array(metaBytes.length + imgBytes.length + closeBytes.length);
+  body.set(metaBytes, 0);
+  body.set(imgBytes, metaBytes.length);
+  body.set(closeBytes, metaBytes.length + imgBytes.length);
+
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': `multipart/related; boundary=${boundary}`,
+    },
+    body,
+  });
+  const result = await res.json();
+  if (!result.id) throw new Error(`Upload failed for ${filename}: ${JSON.stringify(result)}`);
+  return { filename, driveId: result.id, link: result.webViewLink };
+}
+
+/* ── Orchestrator: create folder path, upload all photos ── */
+async function uploadSettlementPhotos(photos, brand, userName, nowIST, env) {
+  const rootId = env.GDRIVE_ROOT_FOLDER_ID;
+  if (!rootId) throw new Error('GDRIVE_ROOT_FOLDER_ID not set');
+
+  const token = await getGDriveToken(env);
+
+  // Path: root / BRAND / YYYY-MM-DD / HHMM - Settlement - UserName
+  const dateStr = nowIST.toISOString().slice(0, 10); // YYYY-MM-DD
+  const hhmm = nowIST.toISOString().slice(11, 16).replace(':', ''); // HHMM (UTC — close enough for folder name)
+  const sessionFolderName = `${hhmm} - Settlement - ${userName}`;
+
+  const brandFolderId   = await gdriveFindOrCreateFolder(token, brand, rootId);
+  const dateFolderId    = await gdriveFindOrCreateFolder(token, dateStr, brandFolderId);
+  const sessionFolderId = await gdriveFindOrCreateFolder(token, sessionFolderName, dateFolderId);
+
+  const results = [];
+  for (const photo of photos) {
+    try {
+      // filename: "HN-RM-029 - Sugar - 143022.jpg"
+      const ts = photo.timestamp ? new Date(photo.timestamp).toISOString().slice(11, 19).replace(/:/g, '') : 'photo';
+      const safeName = (photo.label || photo.key || 'item').replace(/[^\w\s-]/g, '').trim().slice(0, 40);
+      const filename = `${photo.key} - ${safeName} - ${ts}.jpg`;
+      const uploaded = await gdriveUploadPhoto(token, filename, photo.base64, sessionFolderId);
+      results.push({ key: photo.key, label: photo.label, ...uploaded });
+    } catch (err) {
+      results.push({ key: photo.key, label: photo.label, error: err.message });
     }
   }
   return results;
