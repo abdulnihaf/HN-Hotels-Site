@@ -545,17 +545,15 @@ async function handlePost(request, env) {
   if (action === 'create-template-with-variants') {
     const {
       name, category_id, uom_id, company_id,
-      attr_lines,              // [{attribute_id, value_ids:[...]}, ...]
-      default_vendor_key,      // optional
-      default_price,           // optional — goes on supplierinfo for each variant
+      attr_lines,              // [{attribute_id, value_ids:[...]}, ...] — OPTIONAL
       default_code_prefix,     // optional — "HN-RM-XXX"
     } = body;
 
     if (!name || !String(name).trim()) return json({ error: 'name required' }, 400);
     if (!category_id) return json({ error: 'category_id required' }, 400);
     if (!uom_id) return json({ error: 'uom_id required' }, 400);
-    if (!Array.isArray(attr_lines) || !attr_lines.length)
-      return json({ error: 'attr_lines required (at least one attribute)' }, 400);
+    // attr_lines is OPTIONAL — raw materials without brand/pack variations
+    // (e.g. fresh vegetables, bulk flour) create a single plain product.
 
     const apiKey = env.ODOO_API_KEY;
     if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
@@ -567,19 +565,18 @@ async function handlePost(request, env) {
         [[['name', '=ilike', trimmedName], ['categ_id', '=', parseInt(category_id)]]]);
       if (dup) return json({ error: `Template "${trimmedName}" already exists in this category` }, 409);
 
-      // 2. Build attribute_line_ids payload
+      // 2. Build attribute_line_ids payload (may be empty = plain product)
       const attrLinePayload = [];
       let totalVariants = 1;
-      for (const line of attr_lines) {
+      for (const line of (Array.isArray(attr_lines) ? attr_lines : [])) {
         const aid = parseInt(line.attribute_id);
         const vids = (line.value_ids || []).map(v => parseInt(v)).filter(Boolean);
         if (!aid || !vids.length) continue;
         attrLinePayload.push([0, 0, { attribute_id: aid, value_ids: [[6, 0, vids]] }]);
         totalVariants *= vids.length;
       }
-      if (!attrLinePayload.length) return json({ error: 'No valid attribute values supplied' }, 400);
 
-      // 3. Create the template — Odoo auto-creates variants
+      // 3. Create the template — Odoo auto-creates variants (or one plain variant)
       const cid = company_id ? parseInt(company_id) : false;
       const tmplVals = {
         name: trimmedName,
@@ -591,8 +588,8 @@ async function handlePost(request, env) {
         sale_ok: false,
         company_id: cid,
         is_storable: true,
-        attribute_line_ids: attrLinePayload,
       };
+      if (attrLinePayload.length) tmplVals.attribute_line_ids = attrLinePayload;
       if (default_code_prefix) tmplVals.default_code = String(default_code_prefix).trim();
 
       const tmplId = await odoo(apiKey, 'product.template', 'create', [tmplVals]);
@@ -661,30 +658,16 @@ async function handlePost(request, env) {
           v.company_id?.[0] || null,
           JSON.stringify(attrs), brandVal, packVal, gradeVal,
           v.standard_price || 0,
-          default_price || null,
-          default_vendor_key || null,
+          null,
+          null,
         ).run();
         variantRows.push({
           id: v.id, code: v.default_code, name: v.display_name, attrs,
         });
       }
 
-      // 6. Optional: attach default vendor via product.supplierinfo (template-level)
-      let supplierinfoId = null;
-      if (default_vendor_key) {
-        const vRow = await db.prepare('SELECT odoo_id FROM rm_vendors WHERE key=?').bind(default_vendor_key).first();
-        if (vRow?.odoo_id) {
-          supplierinfoId = await odoo(apiKey, 'product.supplierinfo', 'create', [{
-            partner_id: vRow.odoo_id,
-            product_tmpl_id: tmplId,
-            price: default_price || 0,
-            min_qty: 1,
-          }]);
-        }
-      }
-
       await logSync(db, 'create_template_variants', 'product.template', tmplId, trimmedName,
-        { name: trimmedName, variants: variantRows.length, attr_lines: attrLinePayload.length, supplierinfoId },
+        { name: trimmedName, variants: variantRows.length, attr_lines: attrLinePayload.length },
         user.name);
 
       return json({
@@ -694,7 +677,6 @@ async function handlePost(request, env) {
         variant_count: variantRows.length,
         expected_variants: totalVariants,
         variants: variantRows,
-        supplierinfo_id: supplierinfoId,
       });
     } catch (e) {
       return json({ error: e.message }, 500);
@@ -702,16 +684,16 @@ async function handlePost(request, env) {
   }
 
   if (action === 'refresh-variants') {
-    // Re-sync Odoo → D1 cache. Covers templates that have attribute lines.
+    // Re-sync Odoo → D1 cache. Covers every active purchasable template —
+    // attribute-based variants AND plain products (single variant, no attrs).
     const apiKey = env.ODOO_API_KEY;
     if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
     try {
-      // Only templates with attribute lines (i.e., have variants)
       const tmpls = await odoo(apiKey, 'product.template', 'search_read',
-        [[['attribute_line_ids', '!=', false], ['active', '=', true], ['purchase_ok', '=', true]]],
+        [[['active', '=', true], ['purchase_ok', '=', true]]],
         { fields: ['id', 'name', 'categ_id', 'uom_id', 'company_id'], limit: 500 });
 
-      if (!tmpls.length) return json({ synced: 0, message: 'No templates with variants found' });
+      if (!tmpls.length) return json({ synced: 0, message: 'No purchasable templates found' });
 
       const tmplMeta = {};
       for (const t of tmpls) tmplMeta[t.id] = t;

@@ -475,16 +475,15 @@
           <div id="wz-dot-1" class="h-1 flex-1 rounded-full bg-brand-500"></div>
           <div id="wz-dot-2" class="h-1 flex-1 rounded-full bg-white/10"></div>
           <div id="wz-dot-3" class="h-1 flex-1 rounded-full bg-white/10"></div>
-          <div id="wz-dot-4" class="h-1 flex-1 rounded-full bg-white/10"></div>
         </div>
       </div>
 
       <!-- Body -->
       <div class="flex-1 overflow-y-auto p-4">
 
-        <!-- STEP 1: Category + Name + UOM -->
+        <!-- STEP 1: Identity -->
         <div id="wz-step-1" class="wz-step space-y-3">
-          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 1 / 4 · Identity</p>
+          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 1 / 3 · What is it?</p>
           <div>
             <label class="text-[10px] text-white/40 uppercase tracking-wider">Category</label>
             <select id="wzCategory" class="w-full px-3 py-2.5 mt-1 text-sm"></select>
@@ -492,10 +491,7 @@
           <div>
             <label class="text-[10px] text-white/40 uppercase tracking-wider">Product Name</label>
             <input id="wzName" type="text" class="w-full px-3 py-2.5 mt-1 text-sm"
-              placeholder="e.g. Refined Sunflower Oil">
-            <p class="text-[10px] text-white/25 mt-1">
-              The raw-material concept — <span class="text-white/40">not</span> brand or pack size.
-            </p>
+              placeholder="Product name">
           </div>
           <div>
             <label class="text-[10px] text-white/40 uppercase tracking-wider">Unit of Measure</label>
@@ -504,27 +500,27 @@
           <div>
             <label class="text-[10px] text-white/40 uppercase tracking-wider">Used In</label>
             <select id="wzCompany" class="w-full px-3 py-2.5 mt-1 text-sm">
-              <option value="">Both outlets (shared)</option>
+              <option value="">Both outlets</option>
               <option value="1">HE only</option>
               <option value="10">NCH only</option>
             </select>
           </div>
         </div>
 
-        <!-- STEP 2: Attributes (Brand / Pack / Grade) -->
+        <!-- STEP 2: Optional variants (Brand / Pack / Grade) -->
         <div id="wz-step-2" class="wz-step space-y-3 hidden">
-          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 2 / 4 · Variants</p>
+          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 2 / 3 · Variants (optional)</p>
           <p class="text-[11px] text-white/40">
-            Pick the brands and pack sizes you actually buy. One variant will be created per combination.
+            Skip if this item has no brand or pack variations. Otherwise pick the ones you actually buy.
           </p>
 
           <!-- Brand -->
           <div class="card">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold">Brand <span class="text-red-400/60">*</span></span>
+              <span class="text-xs font-semibold">Brand</span>
               <span id="wzBrandCount" class="text-[10px] text-white/25">0 selected</span>
             </div>
-            <input id="wzBrandSearch" type="search" placeholder="Search brands…"
+            <input id="wzBrandSearch" type="search" placeholder="Search"
               class="w-full px-3 py-2 text-xs mb-2" oninput="wzFilterAttr('brand')">
             <div id="wzBrandList" class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto"></div>
             <button onclick="wzQuickAddAttr('brand')" class="text-[10px] text-brand-400 mt-2">
@@ -535,10 +531,10 @@
           <!-- Pack Size -->
           <div class="card">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold">Pack Size <span class="text-red-400/60">*</span></span>
+              <span class="text-xs font-semibold">Pack Size</span>
               <span id="wzPackCount" class="text-[10px] text-white/25">0 selected</span>
             </div>
-            <input id="wzPackSearch" type="search" placeholder="Search pack sizes…"
+            <input id="wzPackSearch" type="search" placeholder="Search"
               class="w-full px-3 py-2 text-xs mb-2" oninput="wzFilterAttr('pack')">
             <div id="wzPackList" class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto"></div>
             <button onclick="wzQuickAddAttr('pack')" class="text-[10px] text-brand-400 mt-2">
@@ -546,13 +542,13 @@
             </button>
           </div>
 
-          <!-- Grade (optional) -->
+          <!-- Grade -->
           <div class="card">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold">Grade <span class="text-white/25 text-[10px]">optional</span></span>
+              <span class="text-xs font-semibold">Grade</span>
               <span id="wzGradeCount" class="text-[10px] text-white/25">0 selected</span>
             </div>
-            <input id="wzGradeSearch" type="search" placeholder="Search grades…"
+            <input id="wzGradeSearch" type="search" placeholder="Search"
               class="w-full px-3 py-2 text-xs mb-2" oninput="wzFilterAttr('grade')">
             <div id="wzGradeList" class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto"></div>
             <button onclick="wzQuickAddAttr('grade')" class="text-[10px] text-brand-400 mt-2">
@@ -561,45 +557,23 @@
           </div>
         </div>
 
-        <!-- STEP 3: Default vendor + price -->
+        <!-- STEP 3: Preview + Create -->
         <div id="wz-step-3" class="wz-step space-y-3 hidden">
-          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 3 / 4 · Default Vendor</p>
-          <p class="text-[11px] text-white/40">
-            Optional. You can skip this and assign vendors per-variant later.
-          </p>
-          <button onclick="openVendorModalFor('wizard')" id="wzVendorBtn"
-            class="btn btn-ghost w-full text-sm text-left">
-            <span class="text-white/40">Pick default vendor (optional)</span>
-          </button>
-          <div>
-            <label class="text-[10px] text-white/40 uppercase tracking-wider">Reference Price (₹)</label>
-            <input id="wzPrice" type="number" inputmode="decimal" step="any" min="0"
-              placeholder="Price per unit"
-              class="w-full px-3 py-2.5 mt-1 text-sm">
-            <p class="text-[10px] text-white/25 mt-1">
-              Applied to all variants as baseline. Actual PO prices will override.
-            </p>
-          </div>
-        </div>
-
-        <!-- STEP 4: Preview + Create -->
-        <div id="wz-step-4" class="wz-step space-y-3 hidden">
-          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 4 / 4 · Preview</p>
+          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 3 / 3 · Confirm</p>
           <div class="card">
             <p class="text-xs font-semibold mb-2"><span id="wzPreviewName">—</span></p>
             <div class="grid grid-cols-2 gap-2 text-[11px]">
               <div><span class="text-white/40">Category:</span> <span id="wzPreviewCat" class="text-white/70">—</span></div>
               <div><span class="text-white/40">UOM:</span> <span id="wzPreviewUom" class="text-white/70">—</span></div>
               <div><span class="text-white/40">Outlet:</span> <span id="wzPreviewCompany" class="text-white/70">—</span></div>
-              <div><span class="text-white/40">Vendor:</span> <span id="wzPreviewVendor" class="text-white/70">—</span></div>
             </div>
           </div>
           <div class="card">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold">Variants to create</span>
+              <span class="text-xs font-semibold" id="wzPreviewHeader">Variants</span>
               <span id="wzPreviewCount" class="badge badge-success">0</span>
             </div>
-            <div id="wzPreviewList" class="space-y-1 max-h-48 overflow-y-auto text-[11px]"></div>
+            <div id="wzPreviewList" class="space-y-1 max-h-56 overflow-y-auto text-[11px]"></div>
           </div>
           <p id="wzPreviewWarn" class="text-[10px] text-amber-400/70 hidden"></p>
         </div>
@@ -1137,13 +1111,6 @@ function openVendorModalFor(context, idx) {
       renderCart();
     };
     vendorPickerProductCode = cart[idx].product.code;
-  } else if (context === 'wizard') {
-    vendorPickerCallback = (vendor) => {
-      // Look up the D1 vendor key for this Odoo partner_id
-      const m = (masterCache.vendors || []).find(v => v.odoo_id === vendor.id);
-      wzSetVendor({ id: vendor.id, key: m?.key || null, name: vendor.name });
-    };
-    vendorPickerProductCode = null;
   }
 
   filterVendors();
@@ -1270,8 +1237,6 @@ const wzState = {
     brand: new Set(),   // attribute-value IDs
     pack: new Set(),
     grade: new Set(),
-    vendor_key: null, vendor_name: null,
-    price: null,
   },
 };
 
@@ -1285,12 +1250,9 @@ async function openAddProduct() {
     name: '', uom_id: null, uom_name: '',
     company_id: '',
     brand: new Set(), pack: new Set(), grade: new Set(),
-    vendor_key: null, vendor_name: null, price: null,
   };
   document.getElementById('wzName').value = '';
-  document.getElementById('wzPrice').value = '';
   document.getElementById('wzCompany').value = '';
-  document.getElementById('wzVendorBtn').innerHTML = '<span class="text-white/40">Pick default vendor (optional)</span>';
   document.getElementById('wzBrandSearch').value = '';
   document.getElementById('wzPackSearch').value = '';
   document.getElementById('wzGradeSearch').value = '';
@@ -1340,16 +1302,16 @@ function wzEsc(s) {
 
 function wzShowStep(n) {
   wzState.step = n;
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 3; i++) {
     const el = document.getElementById(`wz-step-${i}`);
     if (el) el.classList.toggle('hidden', i !== n);
     const dot = document.getElementById(`wz-dot-${i}`);
     if (dot) dot.className = `h-1 flex-1 rounded-full ${i <= n ? 'bg-brand-500' : 'bg-white/10'}`;
   }
   document.getElementById('wzBack').classList.toggle('hidden', n === 1);
-  document.getElementById('wzNext').classList.toggle('hidden', n === 4);
-  document.getElementById('wzCreate').classList.toggle('hidden', n !== 4);
-  if (n === 4) wzRenderPreview();
+  document.getElementById('wzNext').classList.toggle('hidden', n === 3);
+  document.getElementById('wzCreate').classList.toggle('hidden', n !== 3);
+  if (n === 3) wzRenderPreview();
 }
 
 function wzPrev() {
@@ -1372,15 +1334,8 @@ function wzNext() {
     wzState.picked.uom_name = uomSel.options[uomSel.selectedIndex]?.text || '';
     wzState.picked.company_id = document.getElementById('wzCompany').value;
   }
-  if (wzState.step === 2) {
-    if (!wzState.picked.brand.size) { showToast('Pick at least one brand', 'error'); return; }
-    if (!wzState.picked.pack.size) { showToast('Pick at least one pack size', 'error'); return; }
-  }
-  if (wzState.step === 3) {
-    const priceRaw = document.getElementById('wzPrice').value;
-    wzState.picked.price = priceRaw ? parseFloat(priceRaw) : null;
-  }
-  wzShowStep(Math.min(wzState.step + 1, 4));
+  // Step 2 (variants) is entirely optional — no validation
+  wzShowStep(Math.min(wzState.step + 1, 3));
 }
 
 /* Attribute multi-select chips */
@@ -1447,29 +1402,40 @@ async function wzQuickAddAttr(kind) {
   }
 }
 
-/* Preview: cartesian product */
+/* Preview: cartesian product (or plain product if no attributes picked) */
 function wzRenderPreview() {
   const p = wzState.picked;
   const brands = masterCache.brands.filter(b => p.brand.has(b.id));
   const packs  = masterCache.packs.filter(x => p.pack.has(x.id));
   const grades = masterCache.grades.filter(x => p.grade.has(x.id));
 
-  const total = brands.length * packs.length * (grades.length || 1);
+  const hasAttrs = brands.length || packs.length || grades.length;
+  const brandIter = brands.length ? brands : [null];
+  const packIter  = packs.length  ? packs  : [null];
+  const gradeIter = grades.length ? grades : [null];
+  const total = hasAttrs
+    ? brandIter.length * packIter.length * gradeIter.length
+    : 1;
 
   document.getElementById('wzPreviewName').textContent = p.name;
   document.getElementById('wzPreviewCat').textContent = p.category_name || '—';
   document.getElementById('wzPreviewUom').textContent = p.uom_name || '—';
   document.getElementById('wzPreviewCompany').textContent =
     p.company_id === '1' ? 'HE only' : p.company_id === '10' ? 'NCH only' : 'Shared';
-  document.getElementById('wzPreviewVendor').textContent =
-    p.vendor_name ? (p.vendor_name + (p.price ? ` @ ₹${p.price}` : '')) : '—';
   document.getElementById('wzPreviewCount').textContent = total;
+
+  const headerEl = document.getElementById('wzPreviewHeader');
+  if (headerEl) headerEl.textContent = hasAttrs ? 'Variants' : 'Plain product';
 
   // Build variant list (cap display at 40, warn if larger)
   const rows = [];
-  const gradeIter = grades.length ? grades : [null];
-  for (const b of brands) for (const pk of packs) for (const g of gradeIter) {
-    rows.push(g ? `${b.name} · ${pk.name} · ${g.name}` : `${b.name} · ${pk.name}`);
+  if (hasAttrs) {
+    for (const b of brandIter) for (const pk of packIter) for (const g of gradeIter) {
+      const parts = [b?.name, pk?.name, g?.name].filter(Boolean);
+      rows.push(parts.join(' · '));
+    }
+  } else {
+    rows.push('No variants — single product record');
   }
   const listEl = document.getElementById('wzPreviewList');
   listEl.innerHTML = rows.slice(0, 40).map(r =>
@@ -1477,11 +1443,11 @@ function wzRenderPreview() {
   ).join('');
 
   const warn = document.getElementById('wzPreviewWarn');
-  if (total > 40) {
-    warn.textContent = `Showing first 40. All ${total} will be created.`;
-    warn.classList.remove('hidden');
-  } else if (total > 100) {
+  if (total > 100) {
     warn.textContent = `⚠ Creating ${total} variants at once. Consider splitting.`;
+    warn.classList.remove('hidden');
+  } else if (total > 40) {
+    warn.textContent = `Showing first 40. All ${total} will be created.`;
     warn.classList.remove('hidden');
   } else {
     warn.classList.add('hidden');
@@ -1511,15 +1477,14 @@ async function wzCreate() {
         uom_id: p.uom_id,
         company_id: p.company_id || null,
         attr_lines,
-        default_vendor_key: p.vendor_key || null,
-        default_price: p.price || null,
       }),
     });
     const d = await r.json();
     if (d.error) { showToast(d.error, 'error'); createBtn.disabled = false; createBtn.textContent = 'Create Product'; return; }
-    showToast(`Created ${d.name} · ${d.variant_count} variants`, 'success');
+    const vc = d.variant_count || 0;
+    showToast(`Created ${d.name}${vc > 1 ? ` · ${vc} variants` : ''}`, 'success');
     closeAddProduct();
-    // Refresh purchase catalog so new variants appear
+    // Refresh purchase catalog so new item appears
     if (typeof loadPurchaseData === 'function') loadPurchaseData();
   } catch (e) {
     showToast(`Network: ${e.message}`, 'error');
@@ -1527,15 +1492,6 @@ async function wzCreate() {
     createBtn.disabled = false;
     createBtn.textContent = 'Create Product';
   }
-}
-
-/* Vendor picker integration — reuses existing openVendorModalFor('wizard') flow */
-function wzSetVendor(vendor) {
-  if (!vendor) return;
-  wzState.picked.vendor_key = vendor.key || vendor.id || null;
-  wzState.picked.vendor_name = vendor.name || null;
-  document.getElementById('wzVendorBtn').innerHTML =
-    `<span class="text-emerald-400">${wzEsc(vendor.name)}</span>`;
 }
 
 function renderRecentPOs(orders) {
@@ -3017,10 +2973,10 @@ let masterSub = 'categories';
 let masterCache = { categories: [], brands: [], packs: [], grades: [], vendors: [] };
 
 const MASTER_LABELS = {
-  categories: { title: 'Categories',  single: 'category', addLabel: 'Category',  placeholder: 'e.g. Packaging, Condiments' },
-  brands:     { title: 'Brands',      single: 'brand',    addLabel: 'Brand',     placeholder: 'e.g. Aashirvaad, Nandini, Dalda' },
-  packs:      { title: 'Pack Sizes',  single: 'pack',     addLabel: 'Pack Size', placeholder: 'e.g. 10kg, 2L, 50pc' },
-  grades:     { title: 'Grades',      single: 'grade',    addLabel: 'Grade',     placeholder: 'e.g. Premium, Standard, Baby' },
+  categories: { title: 'Categories',  single: 'category', addLabel: 'Category',  placeholder: 'Category name' },
+  brands:     { title: 'Brands',      single: 'brand',    addLabel: 'Brand',     placeholder: 'Brand name' },
+  packs:      { title: 'Pack Sizes',  single: 'pack',     addLabel: 'Pack Size', placeholder: 'Pack size' },
+  grades:     { title: 'Grades',      single: 'grade',    addLabel: 'Grade',     placeholder: 'Grade' },
   vendors:    { title: 'Vendors',     single: 'vendor',   addLabel: 'Vendor',    placeholder: 'Vendor name' },
 };
 
