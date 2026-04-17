@@ -558,19 +558,39 @@ async function handlePost(request, env) {
     const apiKey = env.ODOO_API_KEY;
     if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
 
-    let targets;
+    // Options (sync-all-employees only):
+    //   batch_size     default 8   — keeps subrequests well under CF per-invocation cap
+    //   offset         default 0   — paginate; frontend loops until done
+    //   only_unsynced  default 0   — if true, skip already-synced rows
+    //   with_contracts default 0   — if true, also create/update hr.contract
+    const batchSize = Math.max(1, Math.min(50, parseInt(body.batch_size) || 8));
+    const offset = Math.max(0, parseInt(body.offset) || 0);
+    const onlyUnsynced = !!body.only_unsynced;
+    const withContracts = !!body.with_contracts;
+
+    let targets = [];
+    let total = 0;
     if (action === 'sync-employee') {
       const { id } = body;
       if (!id) return json({ error: 'id required' }, 400);
       const row = await db.prepare('SELECT * FROM hr_employees WHERE id=?').bind(parseInt(id)).first();
       if (!row) return json({ error: 'Not found' }, 404);
       targets = [row];
+      total = 1;
     } else {
+      const where = onlyUnsynced
+        ? "is_active=1 AND brand_label != 'TBD' AND (sync_status != 'Synced' OR sync_status IS NULL)"
+        : "is_active=1 AND brand_label != 'TBD'";
+      const tot = await db.prepare(`SELECT COUNT(*) AS c FROM hr_employees WHERE ${where}`).first();
+      total = tot?.c || 0;
       const r = await db.prepare(
-        "SELECT * FROM hr_employees WHERE is_active=1 AND brand_label != 'TBD' ORDER BY brand_label, row_no"
-      ).all();
-      targets = r.results;
+        `SELECT * FROM hr_employees WHERE ${where} ORDER BY brand_label, row_no LIMIT ? OFFSET ?`
+      ).bind(batchSize, offset).all();
+      targets = r.results || [];
     }
+
+    // Pre-load dept + job maps once per invocation to save per-employee D1 lookups.
+    const maps = await loadHrMaps(db);
 
     const results = { created: 0, updated: 0, errors: 0, details: [] };
     const start = Date.now();
@@ -581,7 +601,7 @@ async function handlePost(request, env) {
         break;
       }
       try {
-        const r = await syncOneEmployee(apiKey, db, emp, user.name);
+        const r = await syncOneEmployee(apiKey, db, emp, user.name, { maps, withContracts });
         if (r.created) results.created++;
         else if (r.updated) results.updated++;
         results.details.push({ name: emp.name, pin: emp.pin, ...r });
@@ -590,12 +610,29 @@ async function handlePost(request, env) {
         await db.prepare(
           `UPDATE hr_employees SET sync_status='Error', sync_error=? WHERE id=?`
         ).bind(err.message, emp.id).run();
-        await logSync(db, 'sync_employee', 'hr.employee', null, emp.name, {}, user.name, 'error', err.message);
+        // Skip per-error logSync to conserve subrequests; bulk log at end
         results.details.push({ name: emp.name, pin: emp.pin, error: err.message });
       }
     }
 
-    return json({ success: true, ...results });
+    // One sync-log row per batch instead of per-employee
+    await logSync(db, 'sync_batch', 'hr.employee', null,
+      `batch offset=${offset} size=${targets.length}`,
+      { offset, batch_size: batchSize, total, results, withContracts }, user.name);
+
+    const processed = action === 'sync-employee' ? 1 : (offset + targets.length);
+    const done = action === 'sync-employee' ? true : (processed >= total || targets.length === 0);
+    return json({
+      success: true,
+      offset,
+      batch_size: batchSize,
+      batch_processed: targets.length,
+      processed,
+      total,
+      next_offset: processed,
+      done,
+      ...results,
+    });
   }
 
   if (action === 'pull-attendance') {
@@ -723,9 +760,48 @@ async function handlePost(request, env) {
  * Odoo sync: one employee → hr.employee + hr.contract
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-async function syncOneEmployee(apiKey, db, emp, userName) {
+/**
+ * Pre-load hr_department_map + hr_job_map once per sync batch so
+ * syncOneEmployee does NOT issue per-employee D1 lookups. Each map key is
+ * `${name}|${company_id}` (company_id may be 'null'), with a secondary
+ * `${name}|` fallback used when a row has a null company_id.
+ */
+async function loadHrMaps(db) {
+  const [dRes, jRes] = await Promise.all([
+    db.prepare('SELECT name, company_id, odoo_department_id FROM hr_department_map').all(),
+    db.prepare('SELECT name, company_id, odoo_job_id FROM hr_job_map').all(),
+  ]);
+  const depts = new Map();  // `${name}|${cid}` -> odoo_id
+  const deptsNullCid = new Map();  // `${name}` -> odoo_id (fallback)
+  for (const d of dRes.results || []) {
+    const cid = d.company_id == null ? '' : String(d.company_id);
+    depts.set(`${d.name}|${cid}`, d.odoo_department_id);
+    if (cid === '') deptsNullCid.set(d.name, d.odoo_department_id);
+  }
+  const jobs = new Map();
+  const jobsNullCid = new Map();
+  for (const j of jRes.results || []) {
+    const cid = j.company_id == null ? '' : String(j.company_id);
+    jobs.set(`${j.name}|${cid}`, j.odoo_job_id);
+    if (cid === '') jobsNullCid.set(j.name, j.odoo_job_id);
+  }
+  return { depts, deptsNullCid, jobs, jobsNullCid };
+}
+
+function resolveMap(map, nullMap, name, cid) {
+  if (!name) return null;
+  const hit = map.get(`${name}|${String(cid)}`);
+  if (hit) return hit;
+  return nullMap.get(name) || null;
+}
+
+async function syncOneEmployee(apiKey, db, emp, userName, opts = {}) {
   if (!emp.pin) throw new Error('pin missing — enroll in device first');
   if (emp.brand_label === 'TBD') throw new Error('brand_label is TBD');
+
+  const withContracts = !!opts.withContracts;
+  // If maps weren't pre-loaded (e.g. sync-employee single call), load them now
+  const maps = opts.maps || await loadHrMaps(db);
 
   // 1. Resolve relational IDs from D1 maps (fast). D1's company_id column wins
   //    when set — lets HR park specific people in non-default companies without
@@ -733,21 +809,10 @@ async function syncOneEmployee(apiKey, db, emp, userName) {
   const cidFromDb = emp.company_id ? parseInt(emp.company_id) : null;
   const cid = cidFromDb || BRAND_COMPANY[emp.brand_label];
 
-  const deptRow = emp.department_name
-    ? await db.prepare(
-        `SELECT odoo_department_id FROM hr_department_map
-         WHERE name = ? AND (company_id = ? OR company_id IS NULL)
-         ORDER BY CASE WHEN company_id IS NULL THEN 1 ELSE 0 END LIMIT 1`
-      ).bind(emp.department_name, cid === false ? null : String(cid)).first()
-    : null;
-
-  const jobRow = emp.job_name
-    ? await db.prepare(
-        `SELECT odoo_job_id FROM hr_job_map
-         WHERE name = ? AND (company_id = ? OR company_id IS NULL)
-         ORDER BY CASE WHEN company_id IS NULL THEN 1 ELSE 0 END LIMIT 1`
-      ).bind(emp.job_name, cid === false ? null : String(cid)).first()
-    : null;
+  const deptId = resolveMap(maps.depts, maps.deptsNullCid, emp.department_name, cid === false ? '' : cid);
+  const jobId  = resolveMap(maps.jobs,  maps.jobsNullCid,  emp.job_name,        cid === false ? '' : cid);
+  const deptRow = deptId ? { odoo_department_id: deptId } : null;
+  const jobRow  = jobId  ? { odoo_job_id: jobId }         : null;
 
   // 2. Get valid hr.employee fields (cache)
   const valid = await getValidFields(apiKey, 'hr.employee');
@@ -791,36 +856,40 @@ async function syncOneEmployee(apiKey, db, emp, userName) {
     created = true;
   }
 
-  // 5. hr.contract — create/update (gap Apps Script left open)
+  // 5. hr.contract — ONLY if explicitly requested (saves 2 subrequests/employee).
+  //    Most deployments use wage on hr.employee + CAMS attendance directly;
+  //    contracts module is optional. Callers pass with_contracts=true when needed.
   let contractId = emp.odoo_contract_id;
-  try {
-    const contractValid = await getValidFields(apiKey, 'hr.contract');
-    const cVals = {
-      name: `Contract — ${emp.name}`,
-      employee_id: odooId,
-      wage: emp.monthly_salary || 0,
-      date_start: emp.start_date || istDate(),
-      state: 'open',
-      company_id: cid || false,
-    };
-    const { clean: cClean } = filterFields(cVals, contractValid);
+  if (withContracts) {
+    try {
+      const contractValid = await getValidFields(apiKey, 'hr.contract');
+      const cVals = {
+        name: `Contract — ${emp.name}`,
+        employee_id: odooId,
+        wage: emp.monthly_salary || 0,
+        date_start: emp.start_date || istDate(),
+        state: 'open',
+        company_id: cid || false,
+      };
+      const { clean: cClean } = filterFields(cVals, contractValid);
 
-    const existingContract = await odoo(apiKey, 'hr.contract', 'search_read',
-      [[['employee_id','=',odooId],['state','in',['draft','open']]]],
-      { fields: ['id','name','state'], limit: 1 });
+      const existingContract = await odoo(apiKey, 'hr.contract', 'search_read',
+        [[['employee_id','=',odooId],['state','in',['draft','open']]]],
+        { fields: ['id','name','state'], limit: 1 });
 
-    if (existingContract && existingContract.length) {
-      contractId = existingContract[0].id;
-      await odoo(apiKey, 'hr.contract', 'write', [[contractId], cClean]);
-    } else {
-      contractId = await odoo(apiKey, 'hr.contract', 'create', [cClean]);
+      if (existingContract && existingContract.length) {
+        contractId = existingContract[0].id;
+        await odoo(apiKey, 'hr.contract', 'write', [[contractId], cClean]);
+      } else {
+        contractId = await odoo(apiKey, 'hr.contract', 'create', [cClean]);
+      }
+    } catch (err) {
+      // contract module may not be installed in all companies — don't hard-fail
+      contractId = null;
     }
-  } catch (err) {
-    // contract module may not be installed in all companies — don't hard-fail
-    contractId = null;
   }
 
-  // 6. Update D1 row
+  // 6. Update D1 row (preserve prior contract_id if we didn't touch contracts)
   await db.prepare(
     `UPDATE hr_employees SET
        odoo_employee_id = ?, odoo_contract_id = ?,
@@ -829,9 +898,7 @@ async function syncOneEmployee(apiKey, db, emp, userName) {
      WHERE id = ?`
   ).bind(odooId, contractId || null, emp.id).run();
 
-  await logSync(db, created ? 'create_employee' : 'update_employee',
-    'hr.employee', odooId, emp.name,
-    { pin: emp.pin, contract_id: contractId }, userName);
+  // No per-employee logSync — batch caller logs a single summary row to conserve subrequests
 
   return { created, updated: !created, odoo_employee_id: odooId, odoo_contract_id: contractId };
 }

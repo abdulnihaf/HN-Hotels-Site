@@ -248,7 +248,7 @@
       <h3 class="text-sm font-bold mb-3">Odoo sync</h3>
       <div class="space-y-2">
         <button onclick="pullMaps()"     class="btn btn-ghost w-full">1. Pull dept + job maps</button>
-        <button onclick="syncAllEmployees()" class="btn btn-primary w-full">2. Sync all employees → Odoo</button>
+        <button onclick="syncAllEmployees(event)" class="btn btn-primary w-full" title="Click = all · Alt+Click = only unsynced · Shift+Click = also contracts">2. Sync all employees → Odoo</button>
         <button onclick="pullAttendance(true)" class="btn btn-ghost w-full">3. Pull attendance (yesterday)</button>
         <button onclick="computeDeductions()"  class="btn btn-ghost w-full">4. Recompute deductions (this month)</button>
       </div>
@@ -726,12 +726,62 @@ async function pullMaps() {
   loadSyncLog();
 }
 
-async function syncAllEmployees() {
-  if (!confirm('Sync all active employees to Odoo? This will create/update hr.employee and hr.contract.')) return;
-  toast('Syncing... may take 30s');
-  const r = await apiPost('sync-all-employees');
-  if (r.error) return toast(r.error, 'error');
-  toast(`Created ${r.created}, updated ${r.updated}, errors ${r.errors}`);
+async function syncAllEmployees(ev) {
+  // Batched sync — loops /api/hr-admin until done. Stays under CF subrequest cap.
+  // Options:
+  //   Shift-click = also sync hr.contract (slower, rarely needed)
+  //   Alt-click   = only re-try previously unsynced rows
+  ev = ev || window.event || {};
+  const withContracts = !!ev.shiftKey;
+  const onlyUnsynced  = !!ev.altKey;
+  if (!confirm(
+      `Sync ${onlyUnsynced ? 'unsynced ' : 'all '}active employees to Odoo?` +
+      (withContracts ? '\n(Will also create/update hr.contract.)' : '')
+     )) return;
+
+  let offset = 0;
+  let total = null;
+  const totals = { created: 0, updated: 0, errors: 0, processed: 0 };
+  const logLine = document.getElementById('syncLog');
+
+  // Show a sticky progress toast we mutate
+  const t = document.createElement('div');
+  t.className = 'toast toast-success';
+  t.style.background = '#e8930c';
+  t.style.color = '#0c0c14';
+  t.textContent = 'Starting sync...';
+  document.body.appendChild(t);
+
+  try {
+    for (let i = 0; i < 50; i++) {   // safety guard — 50 batches × 8 = 400 emps max
+      t.textContent = total
+        ? `Syncing ${totals.processed}/${total} (+${totals.created} / ~${totals.updated}) ...`
+        : `Syncing batch ${i + 1}...`;
+
+      const r = await apiPost('sync-all-employees', {
+        offset,
+        batch_size: 8,
+        only_unsynced: onlyUnsynced,
+        with_contracts: withContracts,
+      });
+      if (r.error) { toast(r.error, 'error'); break; }
+
+      totals.created   += r.created   || 0;
+      totals.updated   += r.updated   || 0;
+      totals.errors    += r.errors    || 0;
+      totals.processed = r.processed  || totals.processed;
+      total = r.total;
+
+      if (r.done || !r.batch_processed) break;
+      offset = r.next_offset;
+    }
+    t.textContent = `Done — created ${totals.created}, updated ${totals.updated}, errors ${totals.errors}`;
+    setTimeout(() => t.remove(), 4500);
+  } catch (e) {
+    t.remove();
+    toast(e.message || 'Sync failed', 'error');
+  }
+
   loadSyncLog();
   loadRoster();
 }
