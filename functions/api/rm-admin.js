@@ -757,12 +757,22 @@ async function handlePost(request, env) {
         upserted++;
       }
 
-      // Deactivate variants that no longer exist in Odoo
+      // Deactivate variants that no longer exist in Odoo.
+      // D1 limits each statement to ~100 bound variables, so chunk the IN-list.
       const liveIds = variants.map(v => v.id);
       if (liveIds.length) {
-        await db.prepare(`UPDATE rm_product_variants SET is_active=0, updated_at=datetime('now')
-                          WHERE odoo_variant_id NOT IN (${liveIds.map(() => '?').join(',')})`)
-          .bind(...liveIds).run();
+        const CHUNK = 90;
+        // Mark everything inactive first, then flip live ones back on — uses
+        // two passes but each statement stays under the bind limit.
+        await db.prepare(`UPDATE rm_product_variants SET is_active=0,
+                          updated_at=datetime('now') WHERE is_active=1`).run();
+        for (let i = 0; i < liveIds.length; i += CHUNK) {
+          const slice = liveIds.slice(i, i + CHUNK);
+          await db.prepare(`UPDATE rm_product_variants SET is_active=1,
+                            updated_at=datetime('now')
+                            WHERE odoo_variant_id IN (${slice.map(() => '?').join(',')})`)
+            .bind(...slice).run();
+        }
       }
       await logSync(db, 'refresh_variants', 'product.product', 0, 'refresh',
         { templates: tmpls.length, variants: upserted }, user.name);
