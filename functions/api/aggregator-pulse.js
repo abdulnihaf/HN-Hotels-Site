@@ -167,22 +167,25 @@ async function handleGet(db, url, headers) {
     const fromParam = url.searchParams.get('from');   // v6.0: custom range YYYY-MM-DD
     const toParam = url.searchParams.get('to');
 
-    // Use IST offset (+5:30) for date calculations
+    // Use IST offset (+5:30) for date calculations.
+    // COALESCE falls back to captured_at (IST-adjusted) if order_date is NULL or empty
+    // so orders with unparseable date headers still appear on the day captured.
     const IST = "'+5 hours', '+30 minutes'";
+    const EFFECTIVE_DATE = `COALESCE(NULLIF(order_date, ''), date(captured_at, ${IST}))`;
     let dateWhere;
     const params = [];
 
     if (fromParam && toParam && /^\d{4}-\d{2}-\d{2}$/.test(fromParam) && /^\d{4}-\d{2}-\d{2}$/.test(toParam)) {
       // v6.0: custom date range takes precedence
-      dateWhere = `order_date >= ? AND order_date <= ?`;
+      dateWhere = `${EFFECTIVE_DATE} >= ? AND ${EFFECTIVE_DATE} <= ?`;
       params.push(fromParam, toParam);
     } else switch (date) {
-      case 'today': dateWhere = `order_date = date('now', ${IST})`; break;
-      case 'yesterday': dateWhere = `order_date = date('now', ${IST}, '-1 day')`; break;
-      case 'week': dateWhere = `order_date >= date('now', ${IST}, '-7 days')`; break;
-      case 'month': dateWhere = `order_date >= date('now', ${IST}, '-30 days')`; break;
-      case 'all': dateWhere = `1=1`; break;
-      default: dateWhere = `order_date = date('now', ${IST})`;
+      case 'today':     dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST})`; break;
+      case 'yesterday': dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST}, '-1 day')`; break;
+      case 'week':      dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, '-7 days')`; break;
+      case 'month':     dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, '-30 days')`; break;
+      case 'all':       dateWhere = `1=1`; break;
+      default:          dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST})`;
     }
 
     let sql = `SELECT * FROM aggregator_orders WHERE ${dateWhere}`;
@@ -344,6 +347,7 @@ async function handleGet(db, url, headers) {
   // --- v6.0 SNAPSHOTS: time-series query for analytics dashboards ---
   if (action === 'snapshots') {
     const metricType = url.searchParams.get('metric_type');
+    const metricPrefix = url.searchParams.get('metric_prefix'); // e.g. "api_finance"
     const platform = url.searchParams.get('platform');
     const brand = url.searchParams.get('brand');
     const fromP = url.searchParams.get('from');
@@ -352,7 +356,12 @@ async function handleGet(db, url, headers) {
 
     let sql = `SELECT * FROM aggregator_snapshots WHERE 1=1`;
     const params = [];
-    if (metricType) { sql += ' AND metric_type = ?'; params.push(metricType); }
+    if (metricType) {
+      // Support `%` wildcards (LIKE) or exact match
+      if (metricType.includes('%')) { sql += ' AND metric_type LIKE ?'; params.push(metricType); }
+      else { sql += ' AND metric_type = ?'; params.push(metricType); }
+    }
+    if (metricPrefix) { sql += ' AND metric_type LIKE ?'; params.push(metricPrefix + '%'); }
     if (platform && platform !== 'all') { sql += ' AND platform = ?'; params.push(platform); }
     if (brand && brand !== 'all') { sql += ' AND brand = ?'; params.push(brand); }
     if (fromP && /^\d{4}-\d{2}-\d{2}$/.test(fromP)) { sql += ` AND date(captured_at) >= ?`; params.push(fromP); }
@@ -431,30 +440,44 @@ const SWIGGY_OUTLET = {
   '1342888': 'he',
 };
 
+function extractResId(url) {
+  if (!url) return null;
+  // Query-string form: ?res_id=22632449 or &restaurant_id=22632449
+  let m = url.match(/[?&](?:res_id|restaurant_id|rest_id|outlet_id)=(\d+)/i);
+  if (m) return m[1];
+  // Path form: /finance/22632449/ or /restaurant/22632449
+  m = url.match(/\/(?:res|restaurant|outlet|finance|ads|reviews|nps|menu)\/(\d{6,})\b/i);
+  if (m) return m[1];
+  // Bare numeric segment that matches a known outlet
+  m = url.match(/\b(22632449|22632430|1342887|1342888)\b/);
+  if (m) return m[1];
+  return null;
+}
+
 function classifyUrl(url) {
   if (!url) return 'unknown';
-  const resMatch = url.match(/res_id=(\d+)/);
-  const resId = resMatch ? resMatch[1] : null;
+  const resId = extractResId(url);
   const brandSuffix = ZOMATO_OUTLET[resId] || SWIGGY_OUTLET[resId];
   const suffix = brandSuffix ? `_${brandSuffix}` : '';
 
-  if (/orders/i.test(url)) return `orders${suffix}`;
-  if (/nps|review/i.test(url)) return `reviews${suffix}`;
-  if (/rating/i.test(url)) return `ratings${suffix}`;
-  if (/sales|revenue|metrics/i.test(url)) return `sales${suffix}`;
+  // Check specific patterns BEFORE generic ones (order matters).
+  if (/\/nps\b|\/review|feedback|customer-voice/i.test(url)) return `reviews${suffix}`;
+  if (/\/ads\b|promot|campaign|marketing-tools/i.test(url)) return `ads${suffix}`;
+  if (/\/finance\b|payout|settlement|invoice|earning/i.test(url)) return `finance${suffix}`;
+  if (/\/rating\b/i.test(url)) return `ratings${suffix}`;
+  if (/order/i.test(url)) return `orders${suffix}`;
+  if (/sales|revenue|metrics|business.report/i.test(url)) return `sales${suffix}`;
   if (/menu/i.test(url)) return `menu${suffix}`;
   if (/funnel/i.test(url)) return `funnel${suffix}`;
   if (/customer/i.test(url)) return `customers${suffix}`;
-  if (/ads/i.test(url)) return `ads${suffix}`;
   if (/discount|offer/i.test(url)) return `discounts${suffix}`;
-  if (/finance|payout/i.test(url)) return `finance${suffix}`;
   if (/restaurant.*config/i.test(url)) return 'config';
   return 'other';
 }
 
 function inferBrandFromUrl(url) {
-  const m = url && url.match(/res_id=(\d+)/);
-  if (!m) return null;
-  return ZOMATO_OUTLET[m[1]] || SWIGGY_OUTLET[m[1]] || null;
+  const resId = extractResId(url);
+  if (!resId) return null;
+  return ZOMATO_OUTLET[resId] || SWIGGY_OUTLET[resId] || null;
 }
 // v3.0.1 Tue Apr 14 18:50:52 IST 2026
