@@ -255,6 +255,10 @@ tr:hover td{background:rgba(255,255,255,.03)}
     <div class="dfbtn" data-d="week">This Week</div>
     <div class="dfbtn" data-d="month">This Month</div>
     <div class="dfbtn" data-d="all">All Time</div>
+    <div class="dfbtn" data-d="custom">Custom</div>
+    <input type="date" id="customFrom" style="display:none;padding:4px 8px;background:var(--surface);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px">
+    <input type="date" id="customTo"   style="display:none;padding:4px 8px;background:var(--surface);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px">
+    <button class="btn" id="customApply" style="display:none" onclick="applyCustom()">Apply</button>
   </div>
 
   <!-- Outlet online status -->
@@ -384,7 +388,9 @@ const KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
 const LS  = 'hn_agg_f3';
 
 let dateFilter = localStorage.getItem(LS) || 'today';
-if (!['today','yesterday','week','month','all'].includes(dateFilter)) dateFilter = 'today';
+if (!['today','yesterday','week','month','all','custom'].includes(dateFilter)) dateFilter = 'today';
+let customFromDate = localStorage.getItem(LS + '_from') || '';
+let customToDate   = localStorage.getItem(LS + '_to')   || '';
 
 const AN_LS = 'hn_agg_an_f2';
 let analyticsDateFilter = localStorage.getItem(AN_LS) || 'yesterday';
@@ -407,6 +413,30 @@ function setFilter(f) {
   dateFilter = f;
   localStorage.setItem(LS, f);
   document.querySelectorAll('.dfbtn').forEach(b => b.classList.toggle('active', b.dataset.d === f));
+  // v6.0: Custom range — reveal inputs, defer load until Apply
+  const showCustom = f === 'custom';
+  const fromEl = document.getElementById('customFrom');
+  const toEl   = document.getElementById('customTo');
+  const btnEl  = document.getElementById('customApply');
+  if (fromEl && toEl && btnEl) {
+    [fromEl, toEl, btnEl].forEach(el => el.style.display = showCustom ? 'inline-block' : 'none');
+    if (showCustom) {
+      if (customFromDate) fromEl.value = customFromDate;
+      if (customToDate) toEl.value = customToDate;
+      if (customFromDate && customToDate) loadSales();
+      return;
+    }
+  }
+  loadSales();
+}
+function applyCustom() {
+  const fromEl = document.getElementById('customFrom');
+  const toEl   = document.getElementById('customTo');
+  if (!fromEl.value || !toEl.value) { alert('Pick both from + to dates'); return; }
+  customFromDate = fromEl.value; customToDate = toEl.value;
+  localStorage.setItem(LS + '_from', customFromDate);
+  localStorage.setItem(LS + '_to',   customToDate);
+  dateFilter = 'custom'; localStorage.setItem(LS, 'custom');
   loadSales();
 }
 document.querySelectorAll('.dfbtn').forEach(b => {
@@ -504,8 +534,14 @@ async function loadAll() {
 // ── SALES ─────────────────────────────────────────────────────────────
 async function loadSales() {
   try {
+    let ordUrl = `${API}?action=orders&key=${KEY}`;
+    if (dateFilter === 'custom' && customFromDate && customToDate) {
+      ordUrl += `&from=${customFromDate}&to=${customToDate}`;
+    } else {
+      ordUrl += `&date=${dateFilter}`;
+    }
     const [ordR, latR, statsR] = await Promise.all([
-      fetch(`${API}?action=orders&date=${dateFilter}&key=${KEY}`),
+      fetch(ordUrl),
       fetch(`${API}?action=latest&key=${KEY}`),
       fetch(`${API}?action=stats&key=${KEY}`),
     ]);
@@ -1216,12 +1252,34 @@ function renderReviews(lat, ord, heRev, nchRev) {
   document.getElementById('reviewsBody').innerHTML = html;
 }
 
+// ── HEALTH POLLING ────────────────────────────────────────────────────
+async function loadHealth() {
+  try {
+    const r = await fetch(`${API}?action=health&key=${KEY}`);
+    if (!r.ok) return;
+    const h = await r.json();
+    const dot = document.getElementById('pdot');
+    const age = document.getElementById('pipeAge');
+    if (!dot || !age) return;
+    const cls = h.status === 'ok' ? '' : h.status === 'degraded' ? ' stale' : ' dead';
+    dot.className = 'pdot' + cls;
+    const sw = h.age_minutes?.swiggy_order;
+    const zm = h.age_minutes?.zomato_order;
+    const parts = [];
+    if (sw != null) parts.push(`SW ${sw}m`);
+    if (zm != null) parts.push(`ZM ${zm}m`);
+    age.textContent = parts.length ? parts.join(' · ') : 'no data';
+  } catch (e) { /* silent */ }
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────
 loadAll();
+loadHealth();
 setInterval(loadSales,     60000);    // sales auto-refresh every 60s
 setInterval(loadFinance,   300000);   // finance refresh every 5 min
 setInterval(loadAnalytics, 300000);   // analytics refresh every 5 min
 setInterval(loadReviews,   600000);   // reviews refresh every 10 min
+setInterval(loadHealth,    30000);    // health pill every 30s
 </script>
 </body>
 </html>

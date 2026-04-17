@@ -1,7 +1,10 @@
-// aggregator-pulse.js v3 — Orders + Metrics for complete partner portal replacement
-// Orders stored individually with UPSERT (no duplicates)
-// Metrics stored as snapshots
-// Dashboard queries with date filters, outlet filters
+// aggregator-pulse.js v6.0 FINAL — Orders + Metrics API for HN aggregator pipeline
+// Changes vs v3:
+//   - classifyUrl now extracts Zomato res_id so per-outlet finance/ads/reviews
+//     captures don't collide under a single metric_type (was dedup-dropping NCH).
+//   - New GET actions: health, snapshots (time-series), reviews
+//   - Orders supports custom from/to date range (IST) in addition to presets
+//   - Health endpoint returns status = ok | degraded | down based on silence gaps
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -81,7 +84,12 @@ async function handlePost(db, request, headers, env) {
 
   for (const snap of snapshots) {
     const platform = snap.platform;
-    const brand = snap.outlet?.brand || snap.brand || 'unknown';
+    // v6.0: For api_intercept captures, infer brand from res_id in URL if body didn't supply it
+    let brand = snap.outlet?.brand || snap.brand || 'unknown';
+    if ((brand === 'all' || brand === 'unknown') && snap.source === 'api_intercept' && snap.url) {
+      const inferred = inferBrandFromUrl(snap.url);
+      if (inferred) brand = inferred;
+    }
     const outletId = snap.outlet?.outlet_id || snap.outlet_id || 'unknown';
     const metricType = snap.source === 'api_intercept' ? 'api_' + classifyUrl(snap.url) : snap.page || 'dom_read';
     const data = JSON.stringify(snap.metrics || snap.data || snap);
@@ -156,11 +164,19 @@ async function handleGet(db, url, headers) {
     const date = url.searchParams.get('date') || 'today';
     const brand = url.searchParams.get('brand');
     const platform = url.searchParams.get('platform');
+    const fromParam = url.searchParams.get('from');   // v6.0: custom range YYYY-MM-DD
+    const toParam = url.searchParams.get('to');
 
     // Use IST offset (+5:30) for date calculations
     const IST = "'+5 hours', '+30 minutes'";
     let dateWhere;
-    switch (date) {
+    const params = [];
+
+    if (fromParam && toParam && /^\d{4}-\d{2}-\d{2}$/.test(fromParam) && /^\d{4}-\d{2}-\d{2}$/.test(toParam)) {
+      // v6.0: custom date range takes precedence
+      dateWhere = `order_date >= ? AND order_date <= ?`;
+      params.push(fromParam, toParam);
+    } else switch (date) {
       case 'today': dateWhere = `order_date = date('now', ${IST})`; break;
       case 'yesterday': dateWhere = `order_date = date('now', ${IST}, '-1 day')`; break;
       case 'week': dateWhere = `order_date >= date('now', ${IST}, '-7 days')`; break;
@@ -170,7 +186,6 @@ async function handleGet(db, url, headers) {
     }
 
     let sql = `SELECT * FROM aggregator_orders WHERE ${dateWhere}`;
-    const params = [];
 
     if (brand && brand !== 'all') { sql += ' AND brand = ?'; params.push(brand); }
     if (platform && platform !== 'all') { sql += ' AND platform = ?'; params.push(platform); }
@@ -271,21 +286,175 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
-  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance'] }), { status: 400, headers });
+  // --- v6.0 HEALTH: silence detection + pipeline status ---
+  if (action === 'health') {
+    const [swiggyOrder, zomatoOrder, snapshots] = await Promise.all([
+      db.prepare(`SELECT MAX(captured_at) as last FROM aggregator_orders WHERE platform='swiggy'`).first(),
+      db.prepare(`SELECT MAX(captured_at) as last FROM aggregator_orders WHERE platform='zomato'`).first(),
+      db.prepare(`SELECT platform, metric_type, MAX(captured_at) as last FROM aggregator_snapshots WHERE platform IN ('swiggy','zomato') GROUP BY platform, metric_type`).all(),
+    ]);
+
+    const now = Date.now();
+    const ageMin = (iso) => iso ? Math.round((now - new Date(iso).getTime()) / 60000) : null;
+
+    const lastSwiggyOrderAt = swiggyOrder?.last || null;
+    const lastZomatoOrderAt = zomatoOrder?.last || null;
+    const lastSnapByPlatform = {};
+    for (const r of (snapshots.results || [])) {
+      const prev = lastSnapByPlatform[r.platform];
+      if (!prev || r.last > prev) lastSnapByPlatform[r.platform] = r.last;
+    }
+
+    // Business hours = 12pm IST to 1am IST next day. During those hours we require
+    // fresh Zomato data; outside them (1am-12pm IST) we allow silence.
+    const istNow = new Date(now + 5.5 * 3600 * 1000);
+    const istHour = istNow.getUTCHours();
+    const zomatoBusiness = istHour >= 12 || istHour < 1;
+
+    // Compute status
+    const swiggyAge = ageMin(lastSwiggyOrderAt);
+    const zomatoAge = ageMin(lastZomatoOrderAt);
+    const swiggySnapAge = ageMin(lastSnapByPlatform.swiggy);
+    const zomatoSnapAge = ageMin(lastSnapByPlatform.zomato);
+
+    let status = 'ok';
+    const issues = [];
+    if (swiggySnapAge !== null && swiggySnapAge > 30) { status = 'degraded'; issues.push(`swiggy snapshots silent ${swiggySnapAge}min`); }
+    if (zomatoBusiness && zomatoSnapAge !== null && zomatoSnapAge > 30) { status = 'degraded'; issues.push(`zomato snapshots silent ${zomatoSnapAge}min`); }
+    if (swiggySnapAge !== null && swiggySnapAge > 60) { status = 'down'; }
+    if (zomatoBusiness && zomatoSnapAge !== null && zomatoSnapAge > 60) { status = 'down'; }
+    if (swiggySnapAge === null && zomatoSnapAge === null) { status = 'down'; issues.push('no snapshots ever'); }
+
+    return new Response(JSON.stringify({
+      ok: true,
+      status,
+      issues,
+      last_swiggy_order_at: lastSwiggyOrderAt,
+      last_zomato_order_at: lastZomatoOrderAt,
+      last_snapshot_at: lastSnapByPlatform,
+      age_minutes: {
+        swiggy_order: swiggyAge, zomato_order: zomatoAge,
+        swiggy_snap: swiggySnapAge, zomato_snap: zomatoSnapAge,
+      },
+      zomato_business_hours: zomatoBusiness,
+      checked_at: new Date().toISOString(),
+    }), { headers });
+  }
+
+  // --- v6.0 SNAPSHOTS: time-series query for analytics dashboards ---
+  if (action === 'snapshots') {
+    const metricType = url.searchParams.get('metric_type');
+    const platform = url.searchParams.get('platform');
+    const brand = url.searchParams.get('brand');
+    const fromP = url.searchParams.get('from');
+    const toP = url.searchParams.get('to');
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
+
+    let sql = `SELECT * FROM aggregator_snapshots WHERE 1=1`;
+    const params = [];
+    if (metricType) { sql += ' AND metric_type = ?'; params.push(metricType); }
+    if (platform && platform !== 'all') { sql += ' AND platform = ?'; params.push(platform); }
+    if (brand && brand !== 'all') { sql += ' AND brand = ?'; params.push(brand); }
+    if (fromP && /^\d{4}-\d{2}-\d{2}$/.test(fromP)) { sql += ` AND date(captured_at) >= ?`; params.push(fromP); }
+    if (toP && /^\d{4}-\d{2}-\d{2}$/.test(toP)) { sql += ` AND date(captured_at) <= ?`; params.push(toP); }
+    sql += ` ORDER BY captured_at DESC LIMIT ?`;
+    params.push(limit);
+
+    const { results } = await db.prepare(sql).bind(...params).all();
+    const parsed = results.map(r => ({ ...r, data: safeJsonParse(r.data) }));
+    return new Response(JSON.stringify({ ok: true, count: parsed.length, snapshots: parsed }), { headers });
+  }
+
+  // --- v6.0 REVIEWS: per-review feed from Zomato NPS + Swiggy ratings captures ---
+  if (action === 'reviews') {
+    const platform = url.searchParams.get('platform');
+    const brand = url.searchParams.get('brand');
+    const date = url.searchParams.get('date') || 'month';
+    const fromP = url.searchParams.get('from');
+    const toP = url.searchParams.get('to');
+    const IST = "'+5 hours', '+30 minutes'";
+
+    let dateWhere;
+    if (fromP && toP && /^\d{4}-\d{2}-\d{2}$/.test(fromP) && /^\d{4}-\d{2}-\d{2}$/.test(toP)) {
+      dateWhere = `date(captured_at) BETWEEN ? AND ?`;
+    } else {
+      switch (date) {
+        case 'today': dateWhere = `date(captured_at) = date('now', ${IST})`; break;
+        case 'yesterday': dateWhere = `date(captured_at) = date('now', ${IST}, '-1 day')`; break;
+        case 'week': dateWhere = `date(captured_at) >= date('now', ${IST}, '-7 days')`; break;
+        case 'month': dateWhere = `date(captured_at) >= date('now', ${IST}, '-30 days')`; break;
+        default: dateWhere = `date(captured_at) >= date('now', ${IST}, '-30 days')`;
+      }
+    }
+
+    let sql = `SELECT * FROM aggregator_snapshots WHERE metric_type LIKE 'api_reviews%' OR metric_type LIKE 'api_ratings%'`;
+    const params = [];
+    if (fromP && toP && /^\d{4}-\d{2}-\d{2}$/.test(fromP) && /^\d{4}-\d{2}-\d{2}$/.test(toP)) {
+      params.push(fromP, toP);
+    }
+    sql += ` AND ${dateWhere}`;
+    if (platform && platform !== 'all') { sql += ' AND platform = ?'; params.push(platform); }
+    if (brand && brand !== 'all') { sql += ' AND brand = ?'; params.push(brand); }
+    sql += ` ORDER BY captured_at DESC LIMIT 100`;
+
+    const { results } = await db.prepare(sql).bind(...params).all();
+
+    // Also include order-level issues from aggregator_orders for the same range
+    const orderIssues = await db.prepare(`
+      SELECT platform, brand, order_id, customer_name, items, order_value, status, issues, rating, order_date, order_time, outlet_name
+      FROM aggregator_orders
+      WHERE issues IS NOT NULL AND issues != ''
+        AND ${dateWhere.replace('captured_at', 'order_date || \'T00:00:00\'')}
+      ORDER BY order_date DESC, order_time DESC LIMIT 200
+    `).bind(...(fromP && toP ? [fromP, toP] : [])).all().catch(() => ({ results: [] }));
+
+    return new Response(JSON.stringify({
+      ok: true,
+      reviews: results.map(r => ({ ...r, data: safeJsonParse(r.data) })),
+      order_issues: orderIssues.results || [],
+    }), { headers });
+  }
+
+  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance', 'health', 'snapshots', 'reviews'] }), { status: 400, headers });
 }
+
+function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
+
+// v6.0: Classify URL into a metric_type. For Zomato per-outlet endpoints we include
+// the res_id so HE and NCH captures don't collide in the 10-min dedup window.
+const ZOMATO_OUTLET = {
+  '22632449': 'he',   // Hamza Express
+  '22632430': 'nch',  // Nawabi Chai House
+};
+const SWIGGY_OUTLET = {
+  '1342887': 'nch',
+  '1342888': 'he',
+};
 
 function classifyUrl(url) {
   if (!url) return 'unknown';
-  if (/orders/i.test(url)) return 'orders';
-  if (/sales|revenue|metrics/i.test(url)) return 'sales';
-  if (/rating/i.test(url)) return 'ratings';
-  if (/menu/i.test(url)) return 'menu';
-  if (/funnel/i.test(url)) return 'funnel';
-  if (/customer/i.test(url)) return 'customers';
-  if (/ads/i.test(url)) return 'ads';
-  if (/discount|offer/i.test(url)) return 'discounts';
-  if (/finance|payout/i.test(url)) return 'finance';
+  const resMatch = url.match(/res_id=(\d+)/);
+  const resId = resMatch ? resMatch[1] : null;
+  const brandSuffix = ZOMATO_OUTLET[resId] || SWIGGY_OUTLET[resId];
+  const suffix = brandSuffix ? `_${brandSuffix}` : '';
+
+  if (/orders/i.test(url)) return `orders${suffix}`;
+  if (/nps|review/i.test(url)) return `reviews${suffix}`;
+  if (/rating/i.test(url)) return `ratings${suffix}`;
+  if (/sales|revenue|metrics/i.test(url)) return `sales${suffix}`;
+  if (/menu/i.test(url)) return `menu${suffix}`;
+  if (/funnel/i.test(url)) return `funnel${suffix}`;
+  if (/customer/i.test(url)) return `customers${suffix}`;
+  if (/ads/i.test(url)) return `ads${suffix}`;
+  if (/discount|offer/i.test(url)) return `discounts${suffix}`;
+  if (/finance|payout/i.test(url)) return `finance${suffix}`;
   if (/restaurant.*config/i.test(url)) return 'config';
   return 'other';
+}
+
+function inferBrandFromUrl(url) {
+  const m = url && url.match(/res_id=(\d+)/);
+  if (!m) return null;
+  return ZOMATO_OUTLET[m[1]] || SWIGGY_OUTLET[m[1]] || null;
 }
 // v3.0.1 Tue Apr 14 18:50:52 IST 2026
