@@ -242,13 +242,14 @@ async function handleGet(url, env) {
   }
 
   // --- Phase 2: UoM list (for wizard dropdown) ---
+  // Odoo 19 schema: relative_uom_id + relative_factor (not category_id/factor/uom_type)
   if (action === 'uoms') {
     const apiKey = env.ODOO_API_KEY;
     if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
     try {
       const uoms = await odoo(apiKey, 'uom.uom', 'search_read',
         [[]],
-        { fields: ['id', 'name', 'category_id', 'factor', 'uom_type'] });
+        { fields: ['id', 'name', 'relative_uom_id', 'relative_factor'] });
       uoms.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       return json({ uoms });
     } catch (e) {
