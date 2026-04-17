@@ -18,6 +18,12 @@ const ODOO_URL  = 'https://ops.hamzahotel.com/jsonrpc';
 const ODOO_DB   = 'main';
 const ODOO_USER = 'yash@gmail.com';
 
+// Master Data attribute IDs (created in Phase 1 — seeded in Odoo)
+const CAT_GOODS_ROOT = 1;   // product.category "Goods"
+const ATTR_BRAND     = 9;   // product.attribute "Brand"       — 40 values pre-seeded
+const ATTR_PACK      = 21;  // product.attribute "Pack Size"   — 17 canonical values
+const ATTR_GRADE     = 22;  // product.attribute "Grade"       — context-driven, starts empty
+
 const PINS = {
   '0305': { name: 'Nihaf', role: 'admin' },
   '2026': { name: 'Zoya',  role: 'read'  },
@@ -195,9 +201,49 @@ async function handleGet(url, env) {
     return json({ next_code: `HN-RM-${String(next).padStart(3, '0')}` });
   }
 
+  // --- Master Data: Categories + Brands + Pack Sizes + Grades (live from Odoo) ---
+  if (action === 'master-data') {
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+    try {
+      const [cats, brands, packs, grades, vendors] = await Promise.all([
+        odoo(apiKey, 'product.category', 'search_read',
+          [[['parent_id', '=', CAT_GOODS_ROOT]]],
+          { fields: ['id', 'name', 'complete_name', 'product_count'] }),
+        odoo(apiKey, 'product.attribute.value', 'search_read',
+          [[['attribute_id', '=', ATTR_BRAND]]],
+          { fields: ['id', 'name', 'sequence'] }),
+        odoo(apiKey, 'product.attribute.value', 'search_read',
+          [[['attribute_id', '=', ATTR_PACK]]],
+          { fields: ['id', 'name', 'sequence'] }),
+        odoo(apiKey, 'product.attribute.value', 'search_read',
+          [[['attribute_id', '=', ATTR_GRADE]]],
+          { fields: ['id', 'name', 'sequence'] }),
+        // vendors from D1 — already the source of truth for vendor master
+        db.prepare('SELECT key, name, phone, company_id, odoo_id, is_active FROM rm_vendors ORDER BY name').all(),
+      ]);
+      // Sort: cats alpha, brands alpha, packs by sequence, grades alpha
+      cats.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      brands.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      packs.sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+      grades.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      return json({
+        categories: cats,
+        brands,
+        packs,
+        grades,
+        vendors: vendors.results,
+        attr_ids: { brand: ATTR_BRAND, pack: ATTR_PACK, grade: ATTR_GRADE },
+        cat_root: CAT_GOODS_ROOT,
+      });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
   return json({
     error: 'Unknown action',
-    actions: 'products, vendors, mappings, archive-list, sync-log, status, categories, next-code',
+    actions: 'products, vendors, mappings, archive-list, sync-log, status, categories, next-code, master-data',
   }, 400);
 }
 
@@ -320,6 +366,103 @@ async function handlePost(request, env) {
     if (!step || !valid.includes(step))
       return json({ error: `Required: step (${valid.join('|')})` }, 400);
     return json(await runCleanup(env, db, step, user.name));
+  }
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   * Master Data: Categories + Brands + Pack Sizes + Grades
+   * Write path is custom UI → Odoo (source of truth) → log to D1
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+  if (action === 'master-create') {
+    const { type, name, parent_id } = body;
+    if (!type || !name) return json({ error: 'Required: type, name' }, 400);
+    const trimmed = String(name).trim();
+    if (!trimmed) return json({ error: 'Name cannot be empty' }, 400);
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+
+    const attrMap = { brand: ATTR_BRAND, pack: ATTR_PACK, grade: ATTR_GRADE };
+    try {
+      let odooId, model;
+      if (type === 'category') {
+        model = 'product.category';
+        // dup check under same parent
+        const pid = parent_id || CAT_GOODS_ROOT;
+        const dup = await odoo(apiKey, model, 'search_count',
+          [[['parent_id', '=', pid], ['name', '=ilike', trimmed]]]);
+        if (dup) return json({ error: `Category "${trimmed}" already exists here` }, 409);
+        odooId = await odoo(apiKey, model, 'create', [{ name: trimmed, parent_id: pid }]);
+      } else if (attrMap[type] !== undefined) {
+        model = 'product.attribute.value';
+        const attrId = attrMap[type];
+        const dup = await odoo(apiKey, model, 'search_count',
+          [[['attribute_id', '=', attrId], ['name', '=ilike', trimmed]]]);
+        if (dup) return json({ error: `${type} "${trimmed}" already exists` }, 409);
+        odooId = await odoo(apiKey, model, 'create',
+          [{ name: trimmed, attribute_id: attrId }]);
+      } else {
+        return json({ error: `Unknown type: ${type} (use category|brand|pack|grade)` }, 400);
+      }
+      await logSync(db, `create_${type}`, model, odooId, trimmed,
+        { name: trimmed, type }, user.name);
+      return json({ success: true, id: odooId, name: trimmed, type });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
+  if (action === 'master-rename') {
+    const { type, id, new_name } = body;
+    if (!type || !id || !new_name) return json({ error: 'Required: type, id, new_name' }, 400);
+    const trimmed = String(new_name).trim();
+    if (!trimmed) return json({ error: 'Name cannot be empty' }, 400);
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+    const model = type === 'category' ? 'product.category' : 'product.attribute.value';
+    try {
+      await odoo(apiKey, model, 'write', [[parseInt(id)], { name: trimmed }]);
+      await logSync(db, `rename_${type}`, model, parseInt(id), trimmed,
+        { new_name: trimmed, type }, user.name);
+      return json({ success: true, id: parseInt(id), new_name: trimmed });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
+  if (action === 'master-archive') {
+    const { type, id } = body;
+    if (!type || !id) return json({ error: 'Required: type, id' }, 400);
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+    const nid = parseInt(id);
+    try {
+      if (type === 'category') {
+        // Refuse if any template uses it (active or archived)
+        const used = await odoo(apiKey, 'product.template', 'search_count',
+          [[['categ_id', '=', nid], ['active', 'in', [true, false]]]]);
+        if (used) return json({
+          error: `Category has ${used} products — migrate them first`,
+          product_count: used,
+        }, 409);
+        await odoo(apiKey, 'product.category', 'unlink', [[nid]]);
+      } else if (['brand', 'pack', 'grade'].includes(type)) {
+        // Refuse if value is on any template attribute line
+        const used = await odoo(apiKey, 'product.template.attribute.line', 'search_count',
+          [[['value_ids', 'in', [nid]]]]);
+        if (used) return json({
+          error: `${type} value is in use on ${used} product(s) — remove from products first`,
+          usage_count: used,
+        }, 409);
+        await odoo(apiKey, 'product.attribute.value', 'unlink', [[nid]]);
+      } else {
+        return json({ error: `Unknown type: ${type}` }, 400);
+      }
+      const model = type === 'category' ? 'product.category' : 'product.attribute.value';
+      await logSync(db, `archive_${type}`, model, nid, String(nid), { type }, user.name);
+      return json({ success: true, id: nid });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
   }
 
   return json({ error: 'Unknown action' }, 400);

@@ -133,6 +133,7 @@
       <button onclick="setTab('settlement')" data-tab="settlement" id="tab-btn-settlement" class="tab-btn flex-1">Settlement</button>
       <button onclick="setTab('analytics')" data-tab="analytics" id="tab-btn-analytics" class="tab-btn flex-1">Analytics</button>
       <button onclick="setTab('prices')" data-tab="prices" id="tab-btn-prices" class="tab-btn flex-1 hidden">💹</button>
+      <button onclick="setTab('master')" data-tab="master" id="tab-btn-master" class="tab-btn flex-1 hidden" title="Master Data (admin)">⚙️</button>
     </div>
   </div>
 
@@ -382,6 +383,56 @@
     </div>
   </div>
 
+  <!-- ═══ MASTER DATA TAB (admin only) ═══ -->
+  <div id="tab-master" class="tab-content hidden">
+    <div class="px-4 pt-3 pb-8">
+      <div class="mb-3">
+        <p class="text-[10px] text-white/40 uppercase tracking-wider">Master Data</p>
+        <p class="text-[11px] text-white/30 mt-0.5">
+          Every category, brand, pack size, grade and vendor creation happens here.
+          Writes go to Odoo first, D1 mirrors. Odoo admin UI should not be used for these.
+        </p>
+      </div>
+
+      <!-- Sub-tab pills -->
+      <div class="flex gap-1 mb-3 text-[11px]">
+        <button onclick="setMasterSub('categories')" id="msub-categories" class="btn btn-ghost flex-1 py-1.5 active">Categories</button>
+        <button onclick="setMasterSub('brands')"     id="msub-brands"     class="btn btn-ghost flex-1 py-1.5">Brands</button>
+        <button onclick="setMasterSub('packs')"      id="msub-packs"      class="btn btn-ghost flex-1 py-1.5">Pack Sizes</button>
+        <button onclick="setMasterSub('grades')"     id="msub-grades"     class="btn btn-ghost flex-1 py-1.5">Grades</button>
+        <button onclick="setMasterSub('vendors')"    id="msub-vendors"    class="btn btn-ghost flex-1 py-1.5">Vendors</button>
+      </div>
+
+      <!-- Add-new bar -->
+      <div class="card mb-3">
+        <div class="flex gap-2">
+          <input id="masterNewName" type="text" placeholder="New entry…"
+            class="flex-1 px-3 py-2 text-sm"
+            onkeydown="if(event.key==='Enter') masterCreate()">
+          <button onclick="masterCreate()" class="btn btn-primary px-4 py-2 text-xs">+ Add</button>
+        </div>
+        <p id="masterNewHint" class="text-[10px] text-white/30 mt-1.5">
+          Adding to: <span id="masterSubLabel">Categories</span>
+        </p>
+      </div>
+
+      <!-- List panel -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-2">
+          <h3 id="masterListTitle" class="text-xs font-bold text-white/50 uppercase tracking-wider">Categories</h3>
+          <span id="masterListCount" class="text-[10px] text-white/25">0</span>
+        </div>
+        <div id="masterList" class="space-y-1">
+          <p class="text-white/20 text-xs py-2">Loading…</p>
+        </div>
+      </div>
+
+      <!-- Toast -->
+      <div id="masterToast" class="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-xs hidden"
+        style="background:rgba(0,0,0,0.9); border:1px solid rgba(255,255,255,0.1); z-index:100;"></div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ═══ VENDOR PICKER MODAL ═══ -->
@@ -528,6 +579,7 @@ function verifyPin() {
       const hide = id => document.getElementById(id)?.classList.add('hidden');
       if (d.role === 'admin') {
         show('tab-btn-prices');
+        show('tab-btn-master');
         show('tab-btn-purchase'); show('tab-btn-settlement'); show('tab-btn-analytics');
       } else if (d.role === 'purchase') {
         hide('tab-btn-settlement'); hide('tab-btn-prices');
@@ -580,6 +632,7 @@ function refreshCurrentTab() {
   if (currentTab === 'settlement') loadSettlementData();
   if (currentTab === 'analytics') loadAnalytics();
   if (currentTab === 'prices') loadPrices();
+  if (currentTab === 'master') loadMasterData();
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2429,6 +2482,168 @@ async function confirmAddItem(code, name, uom, category) {
 
   closeAddItemModal();
   showToast(`${name} added to tracking`, 'success');
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * MASTER DATA (admin-only)
+ * /api/rm-admin — Odoo is source of truth, D1 mirrors vendors
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+const ADMIN_API = '/api/rm-admin';
+let masterSub = 'categories';
+let masterCache = { categories: [], brands: [], packs: [], grades: [], vendors: [] };
+
+const MASTER_LABELS = {
+  categories: { title: 'Categories',  single: 'category', addLabel: 'Category',  placeholder: 'e.g. Packaging, Condiments' },
+  brands:     { title: 'Brands',      single: 'brand',    addLabel: 'Brand',     placeholder: 'e.g. Aashirvaad, Nandini, Dalda' },
+  packs:      { title: 'Pack Sizes',  single: 'pack',     addLabel: 'Pack Size', placeholder: 'e.g. 10kg, 2L, 50pc' },
+  grades:     { title: 'Grades',      single: 'grade',    addLabel: 'Grade',     placeholder: 'e.g. Premium, Standard, Baby' },
+  vendors:    { title: 'Vendors',     single: 'vendor',   addLabel: 'Vendor',    placeholder: 'Vendor name' },
+};
+
+async function loadMasterData() {
+  const listEl = document.getElementById('masterList');
+  listEl.innerHTML = `<p class="text-white/20 text-xs py-2">Loading…</p>`;
+  try {
+    const r = await fetch(`${ADMIN_API}?action=master-data`);
+    const d = await r.json();
+    if (d.error) { listEl.innerHTML = `<p class="text-red-400/60 text-xs">${d.error}</p>`; return; }
+    masterCache = {
+      categories: d.categories || [],
+      brands:     d.brands || [],
+      packs:      d.packs || [],
+      grades:     d.grades || [],
+      vendors:    d.vendors || [],
+    };
+    renderMasterList();
+  } catch (e) {
+    listEl.innerHTML = `<p class="text-red-400/60 text-xs">Network error: ${e.message}</p>`;
+  }
+}
+
+function setMasterSub(sub) {
+  masterSub = sub;
+  ['categories','brands','packs','grades','vendors'].forEach(k => {
+    const btn = document.getElementById(`msub-${k}`);
+    if (btn) btn.classList.toggle('active', k === sub);
+  });
+  const lbl = MASTER_LABELS[sub];
+  document.getElementById('masterListTitle').textContent = lbl.title;
+  document.getElementById('masterSubLabel').textContent  = lbl.addLabel;
+  document.getElementById('masterNewName').placeholder  = lbl.placeholder;
+  document.getElementById('masterNewName').value = '';
+  renderMasterList();
+}
+
+function renderMasterList() {
+  const listEl = document.getElementById('masterList');
+  const items  = masterCache[masterSub] || [];
+  document.getElementById('masterListCount').textContent = items.length;
+  if (!items.length) {
+    listEl.innerHTML = `<p class="text-white/20 text-xs py-4 text-center">No entries yet — add one above.</p>`;
+    return;
+  }
+  const escape = s => String(s || '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+  if (masterSub === 'vendors') {
+    listEl.innerHTML = items.map(v => `
+      <div class="flex items-center justify-between py-2 px-2 border-b border-white/[.03] last:border-0">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm truncate">${escape(v.name)}</p>
+          <p class="text-[10px] text-white/30">${escape(v.key)}${v.phone ? ' · '+escape(v.phone) : ''}${v.odoo_id ? ' · odoo#'+v.odoo_id : ' · not synced'}</p>
+        </div>
+        <span class="text-[10px] text-white/20">${v.company_id==1?'HE':v.company_id==10?'NCH':'BOTH'}</span>
+      </div>`).join('');
+    return;
+  }
+
+  const usageLabel = masterSub === 'categories' ? 'products' : 'uses';
+  listEl.innerHTML = items.map(x => {
+    const usage = masterSub === 'categories' ? (x.product_count ?? '') : '';
+    return `
+    <div class="flex items-center justify-between py-2 px-2 border-b border-white/[.03] last:border-0">
+      <div class="flex-1 min-w-0">
+        <p class="text-sm truncate">${escape(x.name)}</p>
+        ${x.complete_name && x.complete_name !== x.name
+          ? `<p class="text-[10px] text-white/30 truncate">${escape(x.complete_name)}</p>` : ''}
+        ${usage !== '' ? `<p class="text-[10px] text-white/25">${usage} ${usageLabel}</p>` : ''}
+      </div>
+      <div class="flex gap-1 shrink-0">
+        <button onclick="masterRename(${x.id}, ${JSON.stringify(x.name).replace(/"/g,'&quot;')})"
+          class="text-[10px] px-2 py-1 text-white/40 hover:text-white/80">Rename</button>
+        <button onclick="masterArchive(${x.id}, ${JSON.stringify(x.name).replace(/"/g,'&quot;')})"
+          class="text-[10px] px-2 py-1 text-red-400/50 hover:text-red-400">Archive</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function masterCreate() {
+  if (masterSub === 'vendors') {
+    showToast('Vendor creation uses the existing vendor sync flow — use /api/rm-admin add-vendor.', 'error');
+    return;
+  }
+  const input = document.getElementById('masterNewName');
+  const name  = (input.value || '').trim();
+  if (!name) { input.focus(); return; }
+  const type  = MASTER_LABELS[masterSub].single;
+  try {
+    const r = await fetch(ADMIN_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'master-create', pin: currentPin, type, name }),
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error, 'error'); return; }
+    input.value = '';
+    showToast(`Added ${type}: ${name}`, 'success');
+    await loadMasterData();
+  } catch (e) {
+    showToast(`Network: ${e.message}`, 'error');
+  }
+}
+
+async function masterRename(id, currentName) {
+  if (masterSub === 'vendors') return;
+  const type = MASTER_LABELS[masterSub].single;
+  const newName = prompt(`Rename ${type} "${currentName}" to:`, currentName);
+  if (!newName || newName.trim() === currentName) return;
+  try {
+    const r = await fetch(ADMIN_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'master-rename', pin: currentPin, type, id, new_name: newName.trim() }),
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error, 'error'); return; }
+    showToast(`Renamed to ${newName.trim()}`, 'success');
+    await loadMasterData();
+  } catch (e) {
+    showToast(`Network: ${e.message}`, 'error');
+  }
+}
+
+async function masterArchive(id, name) {
+  if (masterSub === 'vendors') return;
+  const type = MASTER_LABELS[masterSub].single;
+  if (!confirm(`Archive ${type} "${name}"?\n\nWill fail if any product is using it.`)) return;
+  try {
+    const r = await fetch(ADMIN_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'master-archive', pin: currentPin, type, id }),
+    });
+    const d = await r.json();
+    if (d.error) {
+      const detail = d.product_count ? ` (${d.product_count} products)` : d.usage_count ? ` (${d.usage_count} uses)` : '';
+      showToast(d.error + detail, 'error');
+      return;
+    }
+    showToast(`Archived: ${name}`, 'success');
+    await loadMasterData();
+  } catch (e) {
+    showToast(`Network: ${e.message}`, 'error');
+  }
 }
 </script>
 
