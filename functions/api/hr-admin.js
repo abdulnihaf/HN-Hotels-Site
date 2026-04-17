@@ -827,6 +827,11 @@ async function syncOneEmployee(apiKey, db, emp, userName, opts = {}) {
     job_id: jobRow?.odoo_job_id || false,
     job_title: emp.job_name || false,
     pin: String(emp.pin),
+    // CAMS F38+ device sends payload `PunchLog.UserId` — odoo_biometric_attendance
+    // module looks up hr.employee.biometric_user_id against that UserId. Must match
+    // the device enrollment number (== our D1 `pin`). Without this, every punch
+    // returns "Employee not found" even though pin is set.
+    biometric_user_id: String(emp.pin),
     tz: 'Asia/Kolkata',
     employee_type: 'employee',
     mobile_phone: emp.phone || false,
