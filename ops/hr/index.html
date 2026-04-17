@@ -773,7 +773,9 @@ async function syncAllEmployees(ev) {
       total = r.total;
 
       if (r.done || !r.batch_processed) break;
-      offset = r.next_offset;
+      // When only_unsynced=true, the pool shrinks as rows succeed, so keep
+      // offset at 0 and rely on the filter. For full-sync runs, advance.
+      offset = onlyUnsynced ? 0 : r.next_offset;
     }
     t.textContent = `Done — created ${totals.created}, updated ${totals.updated}, errors ${totals.errors}`;
     setTimeout(() => t.remove(), 4500);

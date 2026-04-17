@@ -578,8 +578,10 @@ async function handlePost(request, env) {
       targets = [row];
       total = 1;
     } else {
+      // only_unsynced also filters out rows that will definitely fail: no pin,
+      // or TBD brand. These need human action before a retry is useful.
       const where = onlyUnsynced
-        ? "is_active=1 AND brand_label != 'TBD' AND (sync_status != 'Synced' OR sync_status IS NULL)"
+        ? "is_active=1 AND brand_label != 'TBD' AND pin IS NOT NULL AND pin != '' AND (sync_status != 'Synced' OR sync_status IS NULL)"
         : "is_active=1 AND brand_label != 'TBD'";
       const tot = await db.prepare(`SELECT COUNT(*) AS c FROM hr_employees WHERE ${where}`).first();
       total = tot?.c || 0;
