@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>HR Ops — HN Hotels</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#fef7ed',100:'#fdecd4',200:'#f9d5a8',400:'#f0a944',500:'#e8930c',600:'#c97508' },
+            surface: { 1:'#111118', 2:'#16161f', 3:'#1c1c27', 4:'#22222e' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background: #0c0c14; color: #e4e4ed; overscroll-behavior: none; }
+    .glass { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.04); backdrop-filter: blur(20px); }
+    input, select, textarea { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #e4e4ed; border-radius: 10px; font-size: 14px; padding: 10px 12px; }
+    input:focus, select:focus, textarea:focus { border-color: rgba(232,147,12,.5); outline: none; box-shadow: 0 0 0 2px rgba(232,147,12,.15); }
+    input::placeholder { color: rgba(255,255,255,0.2); }
+    select option { background:#1c1c27; color:#e4e4ed; }
+    .btn { padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 13px; text-align: center; cursor: pointer; transition: all 0.15s; border: none; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn-primary { background:#e8930c; color:#0c0c14; }
+    .btn-primary:hover:not(:disabled) { background:#f0a944; }
+    .btn-primary:disabled { opacity:0.35; cursor:not-allowed; }
+    .btn-ghost { background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.6); }
+    .btn-ghost:hover { background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.9); }
+    .btn-danger { background:rgba(239,68,68,0.15); color:#f87171; }
+    .btn-danger:hover { background:rgba(239,68,68,0.25); }
+    .btn-success { background:rgba(16,185,129,0.15); color:#34d399; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; min-height: 32px; border-radius: 8px; }
+    .badge { display:inline-flex; align-items:center; padding:3px 8px; border-radius:6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+    .badge-he { background:rgba(168,85,247,0.15); color:#c084fc; }
+    .badge-nch { background:rgba(16,185,129,0.15); color:#34d399; }
+    .badge-hq { background:rgba(59,130,246,0.15); color:#60a5fa; }
+    .badge-tbd { background:rgba(245,158,11,0.15); color:#fbbf24; }
+    .badge-synced { background:rgba(16,185,129,0.15); color:#34d399; }
+    .badge-pending { background:rgba(245,158,11,0.15); color:#fbbf24; }
+    .badge-error { background:rgba(239,68,68,0.15); color:#f87171; }
+    .badge-archived { background:rgba(100,100,120,0.15); color:#9ca3af; }
+    .badge-present { background:rgba(16,185,129,0.15); color:#34d399; }
+    .badge-absent  { background:rgba(239,68,68,0.15); color:#f87171; }
+    .badge-half    { background:rgba(234,179,8,0.15); color:#fbbf24; }
+    .badge-ghost   { background:rgba(168,85,247,0.15); color:#c084fc; }
+    .badge-weekoff { background:rgba(100,100,120,0.15); color:#9ca3af; }
+    .badge-leave   { background:rgba(59,130,246,0.15); color:#60a5fa; }
+    .tab-btn { padding: 10px 14px; font-size: 13px; font-weight: 600; border-radius: 10px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; min-height: 40px; }
+    .tab-btn.active { background: rgba(232,147,12,0.12); color: #f0a944; border-color: rgba(232,147,12,0.2); }
+    .tab-btn:not(.active) { background: transparent; color: rgba(255,255,255,0.4); }
+    .card { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.04); border-radius: 14px; padding: 14px; }
+    .emp-row { padding: 12px 14px; border-radius: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); transition: all 0.15s; cursor: pointer; }
+    .emp-row:hover { background: rgba(232,147,12,0.04); border-color: rgba(232,147,12,0.2); }
+    .emp-row.no-pin { border-color: rgba(245,158,11,0.25); background: rgba(245,158,11,0.04); }
+    .toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); padding:12px 20px; border-radius:10px; font-size:13px; font-weight:600; z-index:100; max-width: 90vw; }
+    .toast-success { background:#10b981; color:#0c0c14; }
+    .toast-error { background:#ef4444; color:#fff; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 1s linear infinite; }
+    .fade-in { animation: fadeIn 0.15s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+    .empty-state { text-align:center; padding:40px 20px; color:rgba(255,255,255,0.3); }
+    .stat-tile { padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); }
+    .stat-num { font-size: 24px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stat-label { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+    .chip { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); cursor: pointer; }
+    .chip.active { background: rgba(232,147,12,0.15); color: #f0a944; border-color: rgba(232,147,12,0.3); }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px); z-index: 50; display: flex; align-items: flex-end; justify-content: center; padding: 16px; }
+    .modal-card { background: #16161f; border-radius: 16px 16px 0 0; width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto; padding: 20px; border: 1px solid rgba(255,255,255,0.05); }
+    @media (min-width: 640px) { .modal-overlay { align-items: center; } .modal-card { border-radius: 16px; } }
+    .row-label { font-size: 11px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .dl { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; font-size: 13px; }
+    .dl dt { color: rgba(255,255,255,0.35); }
+    .dl dd { color: rgba(255,255,255,0.9); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; padding: 8px 6px; font-weight: 600; color: rgba(255,255,255,0.4); text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    td { padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.03); font-variant-numeric: tabular-nums; }
+    tr:hover { background: rgba(255,255,255,0.02); }
+  </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+<!-- ═══ NAV ═══ -->
+<nav class="sticky top-0 z-40 glass border-b border-white/[.03] px-4 h-14 flex items-center justify-between">
+  <div class="flex items-center gap-2.5">
+    <div class="w-8 h-8 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+    </div>
+    <div>
+      <h1 class="text-sm font-bold tracking-tight leading-none">HR Ops</h1>
+      <p class="text-[10px] text-white/25 leading-none mt-0.5" id="navSubtitle">Enter PIN to start</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <span id="userBadge" class="text-xs text-white/30 hidden"></span>
+    <a href="/" class="btn-ghost btn-sm no-underline text-xs">Home</a>
+  </div>
+</nav>
+
+<!-- ═══ PIN GATE ═══ -->
+<div id="pinGate" class="flex items-center justify-center" style="min-height:calc(100vh - 56px)">
+  <div class="glass rounded-2xl p-8 w-full max-w-xs text-center">
+    <div class="w-14 h-14 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-400 mx-auto mb-4">
+      <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+    </div>
+    <p class="text-white/40 text-sm mb-4">HR Ops PIN</p>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="4" placeholder="----"
+      class="w-full text-center text-xl tracking-[0.5em] font-mono mb-3" style="padding:16px">
+    <button onclick="verifyPin()" class="btn btn-primary w-full">Unlock</button>
+    <p id="pinError" class="text-red-400 text-xs mt-2 hidden">Invalid PIN</p>
+  </div>
+</div>
+
+<!-- ═══ MAIN APP ═══ -->
+<div id="mainApp" class="hidden">
+
+  <!-- Tabs -->
+  <div class="px-3 py-3 flex gap-1 overflow-x-auto border-b border-white/[.03]">
+    <button onclick="setTab('roster')"      data-tab="roster"      class="tab-btn flex-shrink-0">Roster</button>
+    <button onclick="setTab('attendance')"  data-tab="attendance"  class="tab-btn flex-shrink-0">Attendance</button>
+    <button onclick="setTab('deductions')"  data-tab="deductions"  class="tab-btn flex-shrink-0">Deductions</button>
+    <button onclick="setTab('cams')"        data-tab="cams"        class="tab-btn flex-shrink-0">CAMS</button>
+    <button onclick="setTab('sync')"        data-tab="sync"        class="tab-btn flex-shrink-0">Sync</button>
+  </div>
+
+  <!-- ═══ ROSTER TAB ═══ -->
+  <div id="tab-roster" class="tab-content hidden px-4 py-4">
+    <!-- Status tiles -->
+    <div class="grid grid-cols-4 gap-2 mb-4" id="rosterStats">
+      <div class="stat-tile"><div class="stat-num" id="statTotal">–</div><div class="stat-label">Active</div></div>
+      <div class="stat-tile"><div class="stat-num text-emerald-400" id="statSynced">–</div><div class="stat-label">Synced</div></div>
+      <div class="stat-tile"><div class="stat-num text-amber-400" id="statPendingBio">–</div><div class="stat-label">No PIN</div></div>
+      <div class="stat-tile"><div class="stat-num text-blue-400" id="statUnsynced">–</div><div class="stat-label">Unsynced</div></div>
+    </div>
+
+    <!-- Filter chips -->
+    <div class="flex gap-2 mb-3 flex-wrap">
+      <span class="chip" data-filter="all" onclick="setFilter('all')">All</span>
+      <span class="chip" data-filter="HE" onclick="setFilter('HE')">HE</span>
+      <span class="chip" data-filter="NCH" onclick="setFilter('NCH')">NCH</span>
+      <span class="chip" data-filter="HQ" onclick="setFilter('HQ')">HQ</span>
+      <span class="chip" data-filter="TBD" onclick="setFilter('TBD')">TBD</span>
+      <span class="chip" data-filter="no-pin" onclick="setFilter('no-pin')">No PIN</span>
+      <span class="chip" data-filter="unsynced" onclick="setFilter('unsynced')">Unsynced</span>
+    </div>
+
+    <div class="flex gap-2 mb-3">
+      <input id="rosterSearch" type="search" class="flex-1" placeholder="Search name / pin..." oninput="renderRoster()">
+      <button onclick="openEmployeeModal()" class="btn btn-primary btn-sm">+ New</button>
+    </div>
+
+    <div id="rosterList" class="space-y-2"></div>
+  </div>
+
+  <!-- ═══ ATTENDANCE TAB ═══ -->
+  <div id="tab-attendance" class="tab-content hidden px-4 py-4">
+    <div class="flex gap-2 mb-4 items-center">
+      <input type="date" id="attendDate" class="flex-1" onchange="loadAttendance()">
+      <button onclick="pullAttendance()" class="btn btn-primary btn-sm" id="btnPullAtt">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0015 0m-15 0a7.5 7.5 0 1115 0m-15 0H3m16.5 0H21m-1.5 0H12m-8.457 3.077l1.41-.513m14.095-5.13l1.41-.513M5.106 17.785l1.15-.964m11.49-9.642l1.149-.964M7.501 19.795l.75-1.3m7.5-12.99l.75-1.3m-6.063 16.658l.26-1.477m2.605-14.772l.26-1.477m0 17.726l-.26-1.477M10.698 4.614l-.26-1.477M16.5 19.794l-.75-1.299M7.5 4.205L12 12m6.894 5.785l-1.149-.964M6.256 7.178l-1.15-.964m15.352 8.864l-1.41-.513M4.954 9.435l-1.41-.514M12.002 12l-3.75 6.495"/></svg>
+        Pull
+      </button>
+    </div>
+
+    <div class="grid grid-cols-6 gap-2 mb-4" id="attendStats">
+      <div class="stat-tile p-2"><div class="text-lg font-bold text-emerald-400" id="aPresent">–</div><div class="text-[9px] text-white/40 uppercase">Present</div></div>
+      <div class="stat-tile p-2"><div class="text-lg font-bold text-amber-400"  id="aHalf">–</div><div class="text-[9px] text-white/40 uppercase">Half</div></div>
+      <div class="stat-tile p-2"><div class="text-lg font-bold text-red-400"    id="aAbsent">–</div><div class="text-[9px] text-white/40 uppercase">Absent</div></div>
+      <div class="stat-tile p-2"><div class="text-lg font-bold text-purple-400" id="aGhost">–</div><div class="text-[9px] text-white/40 uppercase">Ghost</div></div>
+      <div class="stat-tile p-2"><div class="text-lg font-bold text-blue-400"   id="aLeave">–</div><div class="text-[9px] text-white/40 uppercase">Leave</div></div>
+      <div class="stat-tile p-2"><div class="text-lg font-bold text-white/50"   id="aOff">–</div><div class="text-[9px] text-white/40 uppercase">Off</div></div>
+    </div>
+
+    <div id="attendList" class="space-y-2"></div>
+  </div>
+
+  <!-- ═══ DEDUCTIONS TAB ═══ -->
+  <div id="tab-deductions" class="tab-content hidden px-4 py-4">
+    <div class="flex gap-2 mb-4">
+      <input type="month" id="deductMonth" class="flex-1" onchange="loadDeductions()">
+      <button onclick="loadDeductions()" class="btn btn-ghost btn-sm">Refresh</button>
+    </div>
+
+    <div class="card overflow-x-auto">
+      <table id="deductTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Brand</th>
+            <th>Pay</th>
+            <th class="text-right">Present</th>
+            <th class="text-right">½</th>
+            <th class="text-right">Abs</th>
+            <th class="text-right">Deducted ₹</th>
+            <th class="text-right">Net ₹</th>
+          </tr>
+        </thead>
+        <tbody id="deductRows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══ CAMS TAB ═══ -->
+  <div id="tab-cams" class="tab-content hidden px-4 py-4">
+    <div id="camsDeviceCards" class="space-y-3 mb-4"></div>
+
+    <div class="card mb-4">
+      <h3 class="text-sm font-bold mb-3">Remote commands</h3>
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <button onclick="camsCmd('get-users')"   class="btn btn-ghost btn-sm">List Users</button>
+        <button onclick="camsCmd('get-logs')"    class="btn btn-ghost btn-sm">Pull Logs</button>
+        <button onclick="camsAudit()"            class="btn btn-ghost btn-sm">Audit vs Roster</button>
+        <button onclick="camsCmd('clear-logs')"  class="btn btn-danger btn-sm">Clear Att Logs</button>
+        <button onclick="camsReboot()"           class="btn btn-danger btn-sm">Reboot Device</button>
+        <button onclick="camsSetReverify()"      class="btn btn-ghost btn-sm">Set Reverify</button>
+      </div>
+      <p class="text-[11px] text-white/40 leading-snug">
+        <strong class="text-amber-400">Reverify</strong> is the duplicate-punch guard (seconds).
+        CAMS recognises faces continuously — without reverify, a single pass in front of the
+        camera can log multiple punches. Recommended: 30s (current).
+      </p>
+    </div>
+
+    <div class="card">
+      <h3 class="text-sm font-bold mb-2">Operational notes</h3>
+      <ul class="text-xs text-white/60 space-y-1.5 leading-relaxed list-disc pl-4">
+        <li>Device pushes punches directly to Odoo via paid <em>Odoo Standard Edition API</em> (valid until 31-Jan-2027).</li>
+        <li>This dashboard pulls <code class="text-brand-400">hr.attendance</code> from Odoo — it does not intercept the device.</li>
+        <li>Ghost punches (&lt; 2h worked) are flagged <span class="badge badge-ghost">GHOST</span> and deducted as absent.</li>
+        <li>Single-punch days (IN but no OUT) are flagged and treated as half-day unless shift rule allows.</li>
+        <li>Staff who register and leave: caught by <em>min_daily_hours</em> rule + single-punch detection.</li>
+      </ul>
+    </div>
+
+    <div id="camsOutput" class="mt-4"></div>
+  </div>
+
+  <!-- ═══ SYNC TAB ═══ -->
+  <div id="tab-sync" class="tab-content hidden px-4 py-4">
+    <div class="card mb-3">
+      <h3 class="text-sm font-bold mb-3">Odoo sync</h3>
+      <div class="space-y-2">
+        <button onclick="pullMaps()"     class="btn btn-ghost w-full">1. Pull dept + job maps</button>
+        <button onclick="syncAllEmployees()" class="btn btn-primary w-full">2. Sync all employees → Odoo</button>
+        <button onclick="pullAttendance(true)" class="btn btn-ghost w-full">3. Pull attendance (yesterday)</button>
+        <button onclick="computeDeductions()"  class="btn btn-ghost w-full">4. Recompute deductions (this month)</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="text-sm font-bold mb-2">Recent sync log</h3>
+      <div id="syncLog" class="text-xs space-y-1.5 max-h-96 overflow-y-auto"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ EMPLOYEE MODAL ═══ -->
+<div id="empModal" class="modal-overlay hidden" onclick="if(event.target===this)closeEmpModal()">
+  <div class="modal-card">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-bold" id="empModalTitle">New employee</h2>
+      <button onclick="closeEmpModal()" class="text-white/40 hover:text-white">✕</button>
+    </div>
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="row-label">Name *</label><input id="f_name" class="w-full"></div>
+        <div><label class="row-label">PIN (bio ID)</label><input id="f_pin" class="w-full" placeholder="e.g. 12"></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="row-label">Brand *</label>
+          <select id="f_brand" class="w-full" onchange="updateCompanyFromBrand()">
+            <option value="TBD">TBD</option>
+            <option value="HE">HE</option>
+            <option value="NCH">NCH</option>
+            <option value="HQ">HQ</option>
+          </select>
+        </div>
+        <div>
+          <label class="row-label">Pay type</label>
+          <select id="f_paytype" class="w-full">
+            <option value="Monthly">Monthly</option>
+            <option value="Contract">Contract</option>
+            <option value="TBD">TBD</option>
+          </select>
+        </div>
+        <div><label class="row-label">Row #</label><input id="f_rowno" type="number" class="w-full"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="row-label">Monthly salary ₹</label><input id="f_salary" type="number" class="w-full"></div>
+        <div><label class="row-label">Daily rate ₹</label><input id="f_daily" type="number" step="0.01" class="w-full"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="row-label">Department</label><input id="f_dept" class="w-full" placeholder="e.g. HE - Kitchen"></div>
+        <div><label class="row-label">Job</label><input id="f_job" class="w-full" placeholder="e.g. Captain"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="row-label">Start date</label><input id="f_start" type="date" class="w-full"></div>
+        <div><label class="row-label">Phone</label><input id="f_phone" class="w-full"></div>
+      </div>
+      <div><label class="row-label">Notes</label><textarea id="f_notes" class="w-full" rows="2"></textarea></div>
+    </div>
+    <div class="flex gap-2 mt-5">
+      <button onclick="saveEmployee()" class="btn btn-primary flex-1">Save</button>
+      <button onclick="closeEmpModal()" class="btn btn-ghost flex-1">Cancel</button>
+      <button id="btnArchive" onclick="archiveEmployee()" class="btn btn-danger btn-sm hidden">Archive</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * HN Hotels — HR Ops Dashboard
+ * Mirrors /ops/rm conventions. PIN-gated.
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+const API = '/api/hr-admin';
+const state = {
+  pin: null,
+  user: null,
+  employees: [],
+  filter: 'all',
+  currentTab: 'roster',
+  editingId: null,
+};
+
+/* ━━━ PIN gate ━━━ */
+async function verifyPin() {
+  const pin = document.getElementById('pinInput').value.trim();
+  if (!pin) return;
+  state.pin = pin;
+  // probe with status — GET needs no auth but we want to verify pin via a write probe
+  const known = { '0305': 'Nihaf', '2026': 'Zoya', '3678': 'Farooq', '1111': 'Faheem' };
+  if (!known[pin]) {
+    document.getElementById('pinError').classList.remove('hidden');
+    return;
+  }
+  state.user = known[pin];
+  document.getElementById('pinGate').classList.add('hidden');
+  document.getElementById('mainApp').classList.remove('hidden');
+  document.getElementById('userBadge').classList.remove('hidden');
+  document.getElementById('userBadge').textContent = `${state.user} · ${pin}`;
+  document.getElementById('navSubtitle').textContent = 'HN Hotels HR';
+
+  // Defaults
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('attendDate').value = today;
+  document.getElementById('deductMonth').value = today.slice(0, 7);
+
+  setTab('roster');
+}
+
+/* ━━━ Tabs ━━━ */
+function setTab(t) {
+  state.currentTab = t;
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.getElementById('tab-' + t).classList.remove('hidden');
+  document.querySelectorAll('[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+  if (t === 'roster') loadRoster();
+  if (t === 'attendance') loadAttendance();
+  if (t === 'deductions') loadDeductions();
+  if (t === 'cams') loadCamsDevices();
+  if (t === 'sync') loadSyncLog();
+}
+
+/* ━━━ Toast ━━━ */
+function toast(msg, kind = 'success') {
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + kind;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+async function apiGet(action, params = {}) {
+  const q = new URLSearchParams({ action, ...params });
+  const r = await fetch(`${API}?${q}`);
+  return r.json();
+}
+
+async function apiPost(action, body = {}) {
+  const r = await fetch(API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, pin: state.pin, ...body }),
+  });
+  return r.json();
+}
+
+/* ━━━ ROSTER ━━━ */
+async function loadRoster() {
+  const list = document.getElementById('rosterList');
+  list.innerHTML = '<div class="empty-state">Loading...</div>';
+  const [rosterRes, statusRes] = await Promise.all([
+    apiGet('employees', { active: '1' }),
+    apiGet('status'),
+  ]);
+  state.employees = rosterRes.employees || [];
+  if (statusRes.employees) {
+    document.getElementById('statTotal').textContent = statusRes.employees.active;
+    document.getElementById('statSynced').textContent = statusRes.employees.synced;
+    document.getElementById('statPendingBio').textContent = statusRes.employees.pending_bio;
+    document.getElementById('statUnsynced').textContent = statusRes.employees.unsynced;
+  }
+  renderRoster();
+}
+
+function setFilter(f) {
+  state.filter = f;
+  document.querySelectorAll('[data-filter]').forEach(el => el.classList.toggle('active', el.dataset.filter === f));
+  renderRoster();
+}
+
+function brandBadge(b) {
+  const cls = b === 'HE' ? 'badge-he' : b === 'NCH' ? 'badge-nch' : b === 'HQ' ? 'badge-hq' : 'badge-tbd';
+  return `<span class="badge ${cls}">${b}</span>`;
+}
+
+function syncBadge(s) {
+  const cls = s === 'Synced' ? 'badge-synced' : s === 'Error' ? 'badge-error' : s === 'Archived' ? 'badge-archived' : 'badge-pending';
+  return `<span class="badge ${cls}">${s}</span>`;
+}
+
+function renderRoster() {
+  const q = document.getElementById('rosterSearch').value.trim().toLowerCase();
+  const list = document.getElementById('rosterList');
+  let rows = state.employees;
+
+  if (state.filter === 'no-pin') rows = rows.filter(e => !e.pin);
+  else if (state.filter === 'unsynced') rows = rows.filter(e => e.sync_status !== 'Synced');
+  else if (state.filter !== 'all') rows = rows.filter(e => e.brand_label === state.filter);
+
+  if (q) rows = rows.filter(e => (e.name || '').toLowerCase().includes(q) || (e.pin || '').toLowerCase().includes(q));
+
+  if (!rows.length) { list.innerHTML = '<div class="empty-state">No employees match</div>'; return; }
+
+  list.innerHTML = rows.map(e => `
+    <div class="emp-row ${!e.pin ? 'no-pin' : ''}" onclick="openEmployeeModal(${e.id})">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-semibold text-sm truncate">${escapeHtml(e.name)}</span>
+            ${brandBadge(e.brand_label)}
+            ${e.pay_type === 'Contract' ? '<span class="badge" style="background:rgba(249,115,22,0.12);color:#fb923c">CONTRACT</span>' : ''}
+          </div>
+          <div class="flex items-center gap-2 text-[11px] text-white/40">
+            <span>#${e.row_no || '–'}</span>
+            <span>·</span>
+            <span class="${e.pin ? 'text-white/60' : 'text-amber-400 font-semibold'}">
+              ${e.pin ? `PIN ${e.pin}` : 'NO PIN'}
+            </span>
+            <span>·</span>
+            <span>${e.job_name || '–'}</span>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-sm font-bold">₹${(e.monthly_salary || 0).toLocaleString('en-IN')}</div>
+          <div class="mt-1">${syncBadge(e.sync_status)}</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ━━━ Employee modal ━━━ */
+function openEmployeeModal(id) {
+  state.editingId = id || null;
+  document.getElementById('empModalTitle').textContent = id ? 'Edit employee' : 'New employee';
+  document.getElementById('btnArchive').classList.toggle('hidden', !id);
+
+  const fields = ['name','pin','brand','paytype','rowno','salary','daily','dept','job','start','phone','notes'];
+  fields.forEach(f => { const el = document.getElementById('f_' + f); if (el) el.value = ''; });
+
+  if (id) {
+    const e = state.employees.find(x => x.id === id);
+    if (e) {
+      document.getElementById('f_name').value = e.name || '';
+      document.getElementById('f_pin').value = e.pin || '';
+      document.getElementById('f_brand').value = e.brand_label || 'TBD';
+      document.getElementById('f_paytype').value = e.pay_type || 'Monthly';
+      document.getElementById('f_rowno').value = e.row_no || '';
+      document.getElementById('f_salary').value = e.monthly_salary || '';
+      document.getElementById('f_daily').value = e.daily_rate || '';
+      document.getElementById('f_dept').value = e.department_name || '';
+      document.getElementById('f_job').value = e.job_name || '';
+      document.getElementById('f_start').value = e.start_date || '';
+      document.getElementById('f_phone').value = e.phone || '';
+      document.getElementById('f_notes').value = e.notes || '';
+    }
+  }
+  document.getElementById('empModal').classList.remove('hidden');
+}
+
+function closeEmpModal() {
+  document.getElementById('empModal').classList.add('hidden');
+  state.editingId = null;
+}
+
+function updateCompanyFromBrand() {
+  const b = document.getElementById('f_brand').value;
+  // No direct company_id field in form — brand drives it server-side via BRAND_COMPANY.
+}
+
+async function saveEmployee() {
+  const brand = document.getElementById('f_brand').value;
+  const company_id = brand === 'HE' ? '1' : brand === 'NCH' ? '10' : null;
+  const body = {
+    id: state.editingId,
+    name: document.getElementById('f_name').value.trim(),
+    pin: document.getElementById('f_pin').value.trim() || null,
+    brand_label: brand,
+    company_id,
+    pay_type: document.getElementById('f_paytype').value,
+    row_no: parseInt(document.getElementById('f_rowno').value) || null,
+    monthly_salary: parseFloat(document.getElementById('f_salary').value) || 0,
+    daily_rate: parseFloat(document.getElementById('f_daily').value) || null,
+    department_name: document.getElementById('f_dept').value.trim() || null,
+    job_name: document.getElementById('f_job').value.trim() || null,
+    start_date: document.getElementById('f_start').value || null,
+    phone: document.getElementById('f_phone').value.trim() || null,
+    notes: document.getElementById('f_notes').value.trim() || null,
+  };
+  if (!body.name) return toast('Name required', 'error');
+  const r = await apiPost('employee-upsert', body);
+  if (r.error) return toast(r.error, 'error');
+  toast(state.editingId ? 'Updated' : 'Created');
+  closeEmpModal();
+  loadRoster();
+}
+
+async function archiveEmployee() {
+  if (!state.editingId) return;
+  const reason = prompt('Archive reason:');
+  if (reason === null) return;
+  const r = await apiPost('employee-archive', { id: state.editingId, reason });
+  if (r.error) return toast(r.error, 'error');
+  toast('Archived');
+  closeEmpModal();
+  loadRoster();
+}
+
+/* ━━━ ATTENDANCE ━━━ */
+async function loadAttendance() {
+  const date = document.getElementById('attendDate').value;
+  if (!date) return;
+  const list = document.getElementById('attendList');
+  list.innerHTML = '<div class="empty-state">Loading...</div>';
+  const r = await apiGet('attendance-daily', { date });
+  const rows = r.rows || [];
+
+  const counts = { present: 0, half: 0, absent: 0, ghost: 0, leave: 0, week_off: 0 };
+  rows.forEach(x => counts[x.status] = (counts[x.status] || 0) + 1);
+  document.getElementById('aPresent').textContent = counts.present;
+  document.getElementById('aHalf').textContent = counts.half;
+  document.getElementById('aAbsent').textContent = counts.absent;
+  document.getElementById('aGhost').textContent = counts.ghost;
+  document.getElementById('aLeave').textContent = counts.leave;
+  document.getElementById('aOff').textContent = counts.week_off;
+
+  if (!rows.length) {
+    list.innerHTML = '<div class="empty-state">No attendance for this date.<br>Click <strong>Pull</strong> to fetch from Odoo.</div>';
+    return;
+  }
+
+  list.innerHTML = rows.map(r => `
+    <div class="emp-row">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-semibold text-sm">${escapeHtml(r.name)}</span>
+            ${brandBadge(r.brand_label)}
+            <span class="badge badge-${r.status === 'week_off' ? 'weekoff' : r.status}">${r.status.toUpperCase()}</span>
+          </div>
+          <div class="text-[11px] text-white/40">
+            ${r.first_in_at ? `In: ${r.first_in_at.slice(11,16)}` : 'No in'}
+            · ${r.last_out_at ? `Out: ${r.last_out_at.slice(11,16)}` : 'No out'}
+            · ${(r.total_hours || 0).toFixed(1)}h
+            ${r.is_single_punch ? '· <span class="text-amber-400">single</span>' : ''}
+          </div>
+          ${r.deduction_reason ? `<div class="text-[11px] text-white/30 mt-0.5 italic">${escapeHtml(r.deduction_reason)}</div>` : ''}
+        </div>
+        <div class="text-right">
+          ${r.deducted_amount ? `<div class="text-sm font-bold text-red-400">-₹${r.deducted_amount}</div>` : '<div class="text-sm text-white/30">—</div>'}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function pullAttendance(silent = false) {
+  const date = document.getElementById('attendDate').value || new Date().toISOString().slice(0,10);
+  const btn = document.getElementById('btnPullAtt');
+  if (btn) { btn.disabled = true; btn.textContent = 'Pulling...'; }
+  const r = await apiPost('pull-attendance', { from: date, to: date });
+  if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0015 0"/></svg> Pull'; }
+  if (r.error) return toast(r.error, 'error');
+  if (!silent) toast(`Pulled ${r.punches} punches, wrote ${r.written?.total || 0} rows`);
+  loadAttendance();
+}
+
+/* ━━━ DEDUCTIONS ━━━ */
+async function loadDeductions() {
+  const month = document.getElementById('deductMonth').value;
+  if (!month) return;
+  const r = await apiGet('deductions', { month });
+  const rows = r.rows || [];
+  const tbody = document.getElementById('deductRows');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No data</td></tr>'; return; }
+  tbody.innerHTML = rows.map(e => `
+    <tr>
+      <td class="font-medium">${escapeHtml(e.name)}</td>
+      <td>${brandBadge(e.brand_label)}</td>
+      <td class="text-white/60">${e.pay_type || '–'}</td>
+      <td class="text-right text-emerald-400">${e.days_present || 0}</td>
+      <td class="text-right text-amber-400">${e.days_half || 0}</td>
+      <td class="text-right text-red-400">${(e.days_absent || 0) + (e.days_ghost || 0)}</td>
+      <td class="text-right text-red-400 font-semibold">${(e.total_deducted || 0).toLocaleString('en-IN')}</td>
+      <td class="text-right font-bold">${((e.monthly_salary || 0) - (e.total_deducted || 0)).toLocaleString('en-IN')}</td>
+    </tr>
+  `).join('');
+}
+
+async function computeDeductions() {
+  const month = document.getElementById('deductMonth').value || new Date().toISOString().slice(0,7);
+  const r = await apiPost('compute-deductions', { month });
+  if (r.error) return toast(r.error, 'error');
+  toast(`Recomputed for ${r.rows?.length || 0} employees`);
+  loadDeductions();
+}
+
+/* ━━━ CAMS ━━━ */
+async function loadCamsDevices() {
+  const r = await apiGet('cams-devices');
+  const cards = document.getElementById('camsDeviceCards');
+  if (!r.devices?.length) { cards.innerHTML = '<div class="empty-state">No CAMS devices registered</div>'; return; }
+  cards.innerHTML = r.devices.map(d => `
+    <div class="card">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-sm">${escapeHtml(d.label || d.serial_number)}</span>
+            ${brandBadge(d.brand_label || 'HQ')}
+          </div>
+          <div class="text-[11px] text-white/40 mt-0.5">SN ${d.serial_number} · UUID ${(d.device_uuid || '').slice(0,16)}...</div>
+        </div>
+        <div class="text-right">
+          <div class="text-[10px] text-white/40">Reverify</div>
+          <div class="text-sm font-bold">${d.reverify_seconds}s</div>
+        </div>
+      </div>
+      ${d.location ? `<div class="text-[11px] text-white/50 mb-1">📍 ${escapeHtml(d.location)}</div>` : ''}
+      ${d.notes ? `<div class="text-[11px] text-white/30 italic leading-snug">${escapeHtml(d.notes)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+async function camsCmd(cmd, params = {}) {
+  const out = document.getElementById('camsOutput');
+  out.innerHTML = `<div class="card text-xs"><div class="spinner inline-block w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full mr-2"></div>Running ${cmd}...</div>`;
+  const r = await apiPost('cams-remote', { cmd, params });
+  if (r.error) { out.innerHTML = `<div class="card text-xs text-red-400">${r.error}</div>`; return; }
+  out.innerHTML = `<div class="card"><div class="text-xs text-white/50 mb-2">${cmd} response:</div><pre class="text-[11px] text-emerald-400 overflow-x-auto">${escapeHtml(JSON.stringify(r.result, null, 2))}</pre></div>`;
+}
+
+async function camsAudit() {
+  const out = document.getElementById('camsOutput');
+  out.innerHTML = '<div class="card text-xs">Auditing device users vs roster...</div>';
+  const r = await apiPost('cams-pull-users');
+  if (r.error) { out.innerHTML = `<div class="card text-xs text-red-400">${r.error}</div>`; return; }
+  out.innerHTML = `
+    <div class="card">
+      <div class="text-sm font-bold mb-2">Audit result</div>
+      <div class="text-xs space-y-1">
+        <div>On device: <strong>${r.on_device}</strong> users</div>
+        <div>In roster: <strong>${r.roster}</strong> PINs</div>
+        <div class="text-amber-400">Ghosts (on device, not in roster): ${r.ghosts.join(', ') || '(none)'}</div>
+        <div class="text-red-400">Missing (in roster, not on device): ${r.missing.join(', ') || '(none)'}</div>
+      </div>
+    </div>`;
+}
+
+async function camsReboot() {
+  if (!confirm('Reboot CAMS device? Punches in queue will be lost.')) return;
+  camsCmd('reboot');
+}
+
+async function camsSetReverify() {
+  const s = prompt('Reverify seconds (0-300):', '30');
+  if (!s) return;
+  camsCmd('set-reverify', { ReVerify: parseInt(s) });
+}
+
+/* ━━━ SYNC ━━━ */
+async function loadSyncLog() {
+  const r = await apiGet('sync-log', { limit: '60' });
+  const log = document.getElementById('syncLog');
+  if (!r.log?.length) { log.innerHTML = '<div class="empty-state">No sync history</div>'; return; }
+  log.innerHTML = r.log.map(l => {
+    const color = l.status === 'ok' ? 'text-emerald-400' : 'text-red-400';
+    return `<div class="flex gap-2 items-start border-b border-white/5 pb-1.5">
+      <span class="${color} font-mono text-[10px] mt-0.5">●</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-[11px]"><span class="font-bold">${l.action}</span> <span class="text-white/40">${l.reference || ''}</span></div>
+        <div class="text-[10px] text-white/30">${new Date(l.created_at + 'Z').toLocaleString('en-IN')} · ${l.synced_by}</div>
+        ${l.error ? `<div class="text-[10px] text-red-400">${escapeHtml(l.error)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function pullMaps() {
+  toast('Pulling dept + job maps from Odoo...');
+  const r = await apiPost('pull-maps');
+  if (r.error) return toast(r.error, 'error');
+  toast(`${r.departments} departments, ${r.jobs} jobs cached`);
+  loadSyncLog();
+}
+
+async function syncAllEmployees() {
+  if (!confirm('Sync all active employees to Odoo? This will create/update hr.employee and hr.contract.')) return;
+  toast('Syncing... may take 30s');
+  const r = await apiPost('sync-all-employees');
+  if (r.error) return toast(r.error, 'error');
+  toast(`Created ${r.created}, updated ${r.updated}, errors ${r.errors}`);
+  loadSyncLog();
+  loadRoster();
+}
+
+/* ━━━ Init ━━━ */
+document.getElementById('pinInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') verifyPin();
+});
+</script>
+</body>
+</html>
