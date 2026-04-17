@@ -38,8 +38,10 @@ const PINS = {
   '1111': { name: 'Faheem', role: 'read'  },
 };
 
-// brand_label → Odoo company_id
-const BRAND_COMPANY = { HE: 1, NCH: 10, HQ: false, TBD: false };
+// brand_label → Odoo company_id. HQ maps to HE (company 1, the parent Pvt Ltd)
+// because Odoo hr.employee requires a non-null company_id. TBD stays false
+// (blocks sync — the user must resolve the brand/role first).
+const BRAND_COMPANY = { HE: 1, NCH: 10, HQ: 1, TBD: false };
 
 const MAX_RUNTIME_MS = 25000;
 
@@ -725,8 +727,11 @@ async function syncOneEmployee(apiKey, db, emp, userName) {
   if (!emp.pin) throw new Error('pin missing — enroll in device first');
   if (emp.brand_label === 'TBD') throw new Error('brand_label is TBD');
 
-  // 1. Resolve relational IDs from D1 maps (fast)
-  const cid = BRAND_COMPANY[emp.brand_label];
+  // 1. Resolve relational IDs from D1 maps (fast). D1's company_id column wins
+  //    when set — lets HR park specific people in non-default companies without
+  //    touching code. Falls back to the brand_label map otherwise.
+  const cidFromDb = emp.company_id ? parseInt(emp.company_id) : null;
+  const cid = cidFromDb || BRAND_COMPANY[emp.brand_label];
 
   const deptRow = emp.department_name
     ? await db.prepare(
