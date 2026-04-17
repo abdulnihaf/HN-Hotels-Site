@@ -933,7 +933,8 @@ async function pullAttendance(apiKey, db, from, to, userName) {
   const rosterRows = await db.prepare(
     `SELECT e.*, r.min_daily_hours, r.expected_daily_hours,
             r.full_day_threshold, r.half_day_threshold,
-            r.allow_single_punch, r.week_off, r.applies_to_office
+            r.allow_single_punch, r.week_off, r.applies_to_office,
+            r.scheduled_break_minutes, r.shift_start_time, r.shift_end_time
        FROM hr_employees e
        LEFT JOIN hr_shift_rules r
          ON r.brand_label = e.brand_label AND r.pay_type = e.pay_type
@@ -991,6 +992,9 @@ async function pullAttendance(apiKey, db, from, to, userName) {
         'SELECT leave_type, approved FROM hr_leaves WHERE employee_id=? AND ? BETWEEN start_date AND end_date LIMIT 1'
       ).bind(emp.id, date).first();
 
+      // Compute break gap from multi-pair punch data
+      const breakInfo = b ? computeBreakGap(b.punches) : { minutes: 0, start: null, end: null };
+
       let status, deduction = 0, reason = null, singlePunch = 0;
 
       if (leave) {
@@ -1021,12 +1025,18 @@ async function pullAttendance(apiKey, db, from, to, userName) {
         } else {
           status = 'present';
         }
-        if (singlePunch && !emp.allow_single_punch) {
-          // Single punch without permission — downgrade
-          if (status === 'present') {
-            status = 'half';
-            deduction = daily(emp) * 0.5;
-            reason = 'single punch — no checkout';
+        // Single-punch: check-in but no check-out yet (e.g. open shift at end of day)
+        if (singlePunch) {
+          if (emp.allow_single_punch) {
+            // allow_single_punch staff: ghost → present (one deliberate punch = full day)
+            if (status === 'ghost') { status = 'present'; deduction = 0; reason = 'single punch (approved)'; }
+          } else {
+            // Downgrade from present → half (didn't check out)
+            if (status === 'present') {
+              status = 'half';
+              deduction = daily(emp) * 0.5;
+              reason = 'single punch — no checkout';
+            }
           }
         }
       }
@@ -1035,8 +1045,10 @@ async function pullAttendance(apiKey, db, from, to, userName) {
         `INSERT OR REPLACE INTO hr_attendance_daily
           (pin, employee_id, odoo_employee_id, date, first_in_at, last_out_at,
            punch_count, total_hours, status, is_single_punch,
-           expected_hours, deducted_amount, deduction_reason, raw_punches_json, computed_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`
+           expected_hours, deducted_amount, deduction_reason, raw_punches_json,
+           break_taken_minutes, break_start_at, break_end_at,
+           computed_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`
       ).bind(
         emp.pin, emp.id, emp.odoo_employee_id, date,
         b?.firstIn || null, b?.lastOut || null,
@@ -1045,6 +1057,7 @@ async function pullAttendance(apiKey, db, from, to, userName) {
         emp.expected_daily_hours || 8,
         deduction, reason,
         JSON.stringify(b?.punches || []),
+        breakInfo.minutes, breakInfo.start, breakInfo.end,
       ).run();
 
       written[status] = (written[status] || 0) + 1;
@@ -1055,6 +1068,36 @@ async function pullAttendance(apiKey, db, from, to, userName) {
   await logSync(db, 'pull_attendance', 'hr.attendance', null, `${from}..${to}`,
     { employees: rosterRows.results.length, punches: atts.length, written }, userName);
   return { employees: rosterRows.results.length, punches: atts.length, written };
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Break gap: detect the mid-shift rest period from multi-pair punches.
+ * A "break" = gap between pair[i].check_out and pair[i+1].check_in.
+ * If staff does: IN→OUT (work) → gap (break) → IN→OUT (work), the
+ * bucket has 2 pairs; the gap is the break.
+ * Works for any number of pairs (split shifts etc.).
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function computeBreakGap(punches) {
+  if (!punches || punches.length < 2) return { minutes: 0, start: null, end: null };
+  // Sort by check_in ascending
+  const sorted = [...punches].sort((a, b) =>
+    new Date(a.in.replace(' ','T')+'Z') - new Date(b.in.replace(' ','T')+'Z')
+  );
+  let totalMinutes = 0, breakStart = null, breakEnd = null;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const outStr = sorted[i].out;
+    const nextInStr = sorted[i + 1].in;
+    if (!outStr || !nextInStr) continue;
+    const outMs  = new Date(outStr.replace(' ','T')+'Z').getTime();
+    const inMs   = new Date(nextInStr.replace(' ','T')+'Z').getTime();
+    const gapMin = Math.round((inMs - outMs) / 60000);
+    if (gapMin > 0) {
+      totalMinutes += gapMin;
+      if (!breakStart) breakStart = outStr;   // first break-out
+      breakEnd = nextInStr;                    // last break-in
+    }
+  }
+  return { minutes: totalMinutes, start: breakStart, end: breakEnd };
 }
 
 function isWeekOffDay(dateStr, weekOff) {
