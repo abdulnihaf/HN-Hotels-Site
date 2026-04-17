@@ -610,6 +610,24 @@
   </div>
 </div>
 
+<!-- ═══ PRICE INTELLIGENCE MODAL (Phase 3) ═══ -->
+<div id="priceIntelModal" class="fixed inset-0 z-70 hidden" style="background:rgba(0,0,0,0.75); backdrop-filter:blur(6px);">
+  <div class="flex items-end sm:items-center justify-center min-h-screen p-4">
+    <div class="glass rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div class="p-4 border-b border-white/[.05] flex items-center justify-between">
+        <div class="min-w-0">
+          <h3 id="piTitle" class="text-sm font-bold truncate">Price Intelligence</h3>
+          <p id="piSubtitle" class="text-[10px] text-white/30 truncate">—</p>
+        </div>
+        <button onclick="closePriceIntel()" class="text-white/30 hover:text-white/60 text-xl leading-none">&times;</button>
+      </div>
+      <div id="piBody" class="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+        <p class="text-white/20 text-xs py-4 text-center">Loading intelligence…</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * STATE
@@ -919,18 +937,141 @@ function openVariantPicker(tmplId) {
     if (v.pack_value)  attrs.push(v.pack_value);
     if (v.grade_value) attrs.push(v.grade_value);
     const price = v.last_price ? `Last: ${fmt(v.last_price)}` : '';
+    const intelDot = `<span id="intel-dot-${v.odoo_variant_id}" class="inline-block w-2 h-2 rounded-full bg-white/20 mr-1 align-middle" title="Loading intel…"></span>`;
     return `
-      <button onclick="addVariantToCart(${v.odoo_variant_id})" ${inCart ? 'disabled' : ''}
-        class="w-full text-left p-3 rounded-lg ${inCart ? 'bg-brand-500/10 border border-brand-500/30' : 'hover:bg-white/[.05] border border-transparent'} flex items-center justify-between transition">
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium truncate">${wzEsc(attrs.join(' · ') || v.display_name)}</p>
-          <p class="text-[10px] text-white/30">${wzEsc(v.default_code || '')}${price ? ' · ' + price : ''}</p>
-        </div>
-        ${inCart ? '<span class="badge badge-success">In cart</span>' : '<span class="text-brand-400 text-xs">+ Add</span>'}
-      </button>`;
+      <div class="flex items-stretch gap-1 ${inCart ? 'bg-brand-500/10 border border-brand-500/30 rounded-lg' : ''}">
+        <button onclick="addVariantToCart(${v.odoo_variant_id})" ${inCart ? 'disabled' : ''}
+          class="flex-1 text-left p-3 rounded-l-lg ${inCart ? '' : 'hover:bg-white/[.05]'} flex items-center justify-between transition">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium truncate">${intelDot}${wzEsc(attrs.join(' · ') || v.display_name)}</p>
+            <p class="text-[10px] text-white/30">${wzEsc(v.default_code || '')}${price ? ' · ' + price : ''}</p>
+          </div>
+          ${inCart ? '<span class="badge badge-success">In cart</span>' : '<span class="text-brand-400 text-xs">+ Add</span>'}
+        </button>
+        <button onclick="openPriceIntel(${v.odoo_variant_id}, ${JSON.stringify(tmplName).replace(/"/g, '&quot;')}, ${JSON.stringify(v.display_name).replace(/"/g, '&quot;')})"
+          class="px-3 rounded-r-lg text-white/40 hover:text-white hover:bg-white/[.05] transition text-xs" title="Price intel">
+          &#x2139;
+        </button>
+      </div>`;
   }).join('');
 
   document.getElementById('variantPickerModal').classList.remove('hidden');
+  // Lazy-load intel dots — one network hop per variant, but cheap.
+  for (const v of vs) hydrateVariantIntelDot(v.odoo_variant_id);
+}
+
+async function hydrateVariantIntelDot(variantId) {
+  const dot = document.getElementById('intel-dot-' + variantId);
+  if (!dot) return;
+  try {
+    const res = await apiFetch(`price-intel&variant_id=${variantId}&days=60`);
+    if (!res.success) { dot.classList.replace('bg-white/20', 'bg-white/10'); return; }
+    const colourMap = {
+      red:    ['bg-red-500',    'Above market price'],
+      yellow: ['bg-yellow-400', 'Price trending up'],
+      green:  ['bg-green-500',  'Good or stable'],
+      neutral:['bg-white/20',   'No signal yet'],
+    };
+    const [cls, defaultLbl] = colourMap[res.badge] || colourMap.neutral;
+    dot.className = `inline-block w-2 h-2 rounded-full mr-1 align-middle ${cls}`;
+    dot.title = res.badge_reason || defaultLbl;
+  } catch (e) { /* silent */ }
+}
+
+/* Price Intelligence modal (Phase 3) */
+async function openPriceIntel(variantId, templateName, variantLabel) {
+  document.getElementById('piTitle').textContent = templateName || 'Price Intelligence';
+  document.getElementById('piSubtitle').textContent = variantLabel || '';
+  document.getElementById('piBody').innerHTML = '<p class="text-white/20 text-xs py-4 text-center">Loading…</p>';
+  document.getElementById('priceIntelModal').classList.remove('hidden');
+
+  const res = await apiFetch(`price-intel&variant_id=${variantId}&days=90`);
+  const body = document.getElementById('piBody');
+  if (!res.success) {
+    body.innerHTML = `<p class="text-red-300 text-xs py-4 text-center">${wzEsc(res.error || 'Failed to load')}</p>`;
+    return;
+  }
+
+  const s = res.summary;
+  const h = res.history || [];
+  const m = res.market || [];
+  const vp = res.vendorPrices || [];
+
+  const badgeColour = { red: 'bg-red-500/20 text-red-300 border-red-500/40',
+                        yellow: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
+                        green: 'bg-green-500/20 text-green-300 border-green-500/40',
+                        neutral: 'bg-white/10 text-white/50 border-white/10' }[res.badge] || '';
+
+  const kpi = (label, val, unit = '') => `
+    <div class="rounded-lg p-2 bg-white/[.03] border border-white/[.05]">
+      <div class="text-[9px] text-white/30 uppercase tracking-wider">${label}</div>
+      <div class="text-sm font-bold font-mono">${val != null ? fmt(val) + unit : '—'}</div>
+    </div>`;
+
+  let html = `
+    <div class="rounded-xl border ${badgeColour} p-3">
+      <div class="text-[10px] uppercase tracking-wider opacity-60">Recommendation</div>
+      <div class="text-sm font-semibold">${wzEsc(res.badge_reason || 'No signal yet')}</div>
+    </div>
+
+    <div class="grid grid-cols-4 gap-1.5">
+      ${kpi('Last', s?.last_price)}
+      ${kpi('30d avg', s?.price_30d_avg)}
+      ${kpi('30d min', s?.price_30d_min)}
+      ${kpi('30d max', s?.price_30d_max)}
+    </div>
+
+    <div class="grid grid-cols-2 gap-1.5">
+      ${kpi('Trend vs 30d avg', s?.trend_pct, '%')}
+      ${kpi('vs Market', s?.market_savings_pct, '%')}
+    </div>
+  `;
+
+  if (m.length) {
+    html += `<div>
+      <div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Market benchmarks</div>
+      <div class="space-y-1">
+        ${m.slice(0, 6).map(x => `
+          <div class="flex justify-between text-xs bg-white/[.02] rounded px-2 py-1">
+            <span>${wzEsc(x.platform)}</span>
+            <span class="font-mono">${fmt(x.price_per_base)} / ${wzEsc(x.base_unit || '')}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  if (vp.length) {
+    html += `<div>
+      <div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Vendor history</div>
+      <div class="space-y-1">
+        ${vp.slice(0, 8).map(x => `
+          <div class="flex justify-between text-xs bg-white/[.02] rounded px-2 py-1">
+            <span>${wzEsc(x.vendor_name || x.vendor_key || x.recorded_by || '—')}</span>
+            <span class="font-mono">${fmt(x.price)} · <span class="text-white/30">${(x.recorded_at||'').slice(0,10)}</span></span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  if (h.length) {
+    html += `<div>
+      <div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Recent prices (last ${h.length})</div>
+      <div class="max-h-40 overflow-y-auto space-y-1">
+        ${h.map(x => `
+          <div class="flex justify-between text-xs bg-white/[.02] rounded px-2 py-0.5">
+            <span class="text-white/40">${(x.recorded_at||'').slice(0,10)}</span>
+            <span class="font-mono">${fmt(x.price)}</span>
+            <span class="text-white/30 truncate max-w-[100px]">${wzEsc(x.source||'')}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  body.innerHTML = html;
+}
+
+function closePriceIntel() {
+  document.getElementById('priceIntelModal').classList.add('hidden');
 }
 
 function closeVariantPicker() {
@@ -1179,12 +1320,20 @@ async function submitPurchase() {
     if (!item.vendor || !item.qty) continue;
     const vid = item.vendor.id;
     if (!byVendor[vid]) byVendor[vid] = { vendor: item.vendor, lines: [] };
-    byVendor[vid].lines.push({
+    const line = {
       product_id: item.product.id,
       qty: parseFloat(item.qty),
       price_unit: parseFloat(item.price) || 0,
       name: item.product.name,
-    });
+    };
+    // Phase 3: variant-aware line. For items added via variant picker we
+    // already know the variant id; attach it so the server records a
+    // variant-scoped price and refreshes rolling stats.
+    if (item.product._variant) {
+      line.odoo_variant_id = item.product.id;
+      line.variant_display = item.product.name;
+    }
+    byVendor[vid].lines.push(line);
   }
 
   const groups = Object.values(byVendor);

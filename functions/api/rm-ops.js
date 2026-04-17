@@ -164,6 +164,12 @@ async function handleGet(action, url, env, DB) {
     case 'settlement-history': return getSettlementHistory(brand, url, DB);
     case 'price-history': return getPriceHistory(brand, url, DB);
     case 'status': return getOpsStatus(brand, DB);
+
+    /* ── Phase 3: Variant-aware purchase + price intelligence ── */
+    case 'variant-pickers':  return getVariantPickers(brand, url, DB);
+    case 'price-intel':      return getPriceIntel(brand, url, DB);
+    case 'variant-price-summary': return getVariantPriceSummary(brand, url, DB);
+
     default: return json({ error: `Unknown GET action: ${action}` }, 400);
   }
 }
@@ -743,6 +749,10 @@ async function handlePost(action, context, env, DB) {
     case 'link-vendor':     return linkVendor(body, user, creds, cfg, brand, env, DB);
     case 'settlement-submit': return settlementSubmit(body, user, creds, cfg, brand, env, DB);
     case 'add-tracked-item': return addTrackedItem(body, user, brand, DB);
+
+    /* ── Phase 3: explicit variant summary refresh ── */
+    case 'refresh-variant-summary': return refreshVariantPriceSummary(body, brand, DB);
+
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
 }
@@ -797,22 +807,54 @@ async function createPO(body, user, creds, cfg, brand, DB) {
   );
   const poName = po[0] ? po[0].name : `PO#${poId}`;
 
-  // Record prices to D1
+  // Record prices to D1 — Phase 3: variant-aware when odoo_variant_id provided
+  // (line.product_id is ALWAYS a product.product/variant id in Odoo; when the
+  // product has no attribute variants it is effectively the template as well.
+  // line.odoo_variant_id is set by the UI when the user picks a specific
+  // variant from the variant modal; fall back to product_id otherwise.)
+  const touchedVariants = new Set();
   if (DB) {
     const now = istNow().toISOString();
     for (const line of lines) {
-      // Find HN-RM code for this product
       const prod = productData.find(p => p.id === line.product_id);
+      // Legacy flat path: map product.product → HN-RM code
+      let hnCode = null;
       if (prod) {
         const d1Product = await DB.prepare(
           'SELECT hn_code FROM rm_products WHERE odoo_id = ?'
         ).bind(line.product_id).first();
-        if (d1Product) {
-          await DB.prepare(
-            'INSERT INTO rm_daily_prices (product_code, brand, price, recorded_by, source, recorded_at) VALUES (?, ?, ?, ?, ?, ?)'
-          ).bind(d1Product.hn_code, brand, line.price_unit, user.name, `po:${poName}`, now).run();
-        }
+        if (d1Product) hnCode = d1Product.hn_code;
       }
+
+      // Phase 3: variant id (explicit from UI, else derive from product_id)
+      const variantId = line.odoo_variant_id || line.product_id;
+      let variantDisplay = line.variant_display || null;
+      if (!variantDisplay) {
+        const cachedVariant = await DB.prepare(
+          'SELECT display_name FROM rm_product_variants WHERE odoo_variant_id = ?'
+        ).bind(variantId).first();
+        variantDisplay = cachedVariant?.display_name || (prod ? prod.name : null);
+      }
+
+      if (hnCode || variantId) {
+        await DB.prepare(
+          `INSERT INTO rm_daily_prices
+             (product_code, brand, price, recorded_by, source, recorded_at,
+              odoo_variant_id, variant_display)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          hnCode || `VID-${variantId}`, brand, line.price_unit,
+          user.name, `po:${poName}`, now,
+          variantId || null, variantDisplay
+        ).run();
+
+        if (variantId) touchedVariants.add(variantId);
+      }
+    }
+
+    // Phase 3: refresh per-variant rolling stats for variants touched by this PO
+    for (const vid of touchedVariants) {
+      try { await refreshOneVariantSummary(DB, vid, brand); } catch (_) { /* non-fatal */ }
     }
 
     // Log the action
@@ -820,12 +862,14 @@ async function createPO(body, user, creds, cfg, brand, DB) {
       'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
     ).bind('create_po', brand, user.name, JSON.stringify({
       po_id: poId, po_name: poName, vendor_id, line_count: lines.length,
+      variant_ids: [...touchedVariants],
     }), now).run();
   }
 
   return json({
     success: true, po_id: poId, po_name: poName,
     created_by: user.name, brand,
+    variant_ids: [...touchedVariants],
   });
 }
 
@@ -2381,3 +2425,353 @@ async function uploadSettlementPhotos(photos, brand, userName, nowIST, env) {
 function round(v, d = 4) {
   return Math.round(v * Math.pow(10, d)) / Math.pow(10, d);
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Phase 3: Variant pickers, price intelligence, summary refresh
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/**
+ * GET /api/rm-ops?action=variant-pickers&brand=HE&q=oil&limit=50
+ *
+ * Returns variants grouped by template so the Purchase UI can render a
+ * two-step picker (tap template → pick variant). Feeds from the Phase-2
+ * rm_product_variants cache; unmigrated products surface via getProducts().
+ */
+async function getVariantPickers(brand, url, DB) {
+  if (!DB) return json({ error: 'Database not configured' }, 500);
+  const cfg = BRAND_CONFIG[brand];
+  const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
+
+  // Pull active variants; filter by company when company_id is set, and
+  // keep rows with company_id=NULL as cross-company (shared catalog).
+  let sql = `SELECT odoo_variant_id, odoo_template_id, template_name, display_name,
+                    default_code, category, uom, uom_id, company_id,
+                    brand_value, pack_value, grade_value,
+                    avg_cost, last_price, last_vendor_key
+             FROM rm_product_variants
+             WHERE is_active = 1
+               AND (company_id IS NULL OR company_id = ?)`;
+  const params = [cfg.company_id];
+
+  if (q) {
+    sql += ' AND (LOWER(template_name) LIKE ? OR LOWER(display_name) LIKE ? OR LOWER(default_code) LIKE ?)';
+    const pat = `%${q}%`;
+    params.push(pat, pat, pat);
+  }
+  sql += ' ORDER BY template_name ASC, display_name ASC LIMIT ?';
+  params.push(limit * 10); // fetch generously, we'll group + trim
+
+  const rows = await DB.prepare(sql).bind(...params).all();
+  const variants = rows.results || [];
+
+  // Merge latest per-brand summary so the picker can render badges
+  const variantIds = variants.map(v => v.odoo_variant_id).filter(Boolean);
+  const summaryMap = {};
+  if (variantIds.length) {
+    const placeholders = variantIds.map(() => '?').join(',');
+    const summaryRows = await DB.prepare(
+      `SELECT odoo_variant_id, last_price, price_30d_avg, price_30d_min,
+              price_30d_max, trend_pct, market_cheapest_platform,
+              market_cheapest_price, market_savings_pct, last_recorded_at
+       FROM rm_variant_price_summary
+       WHERE brand = ? AND odoo_variant_id IN (${placeholders})`
+    ).bind(brand, ...variantIds).all();
+    for (const s of (summaryRows.results || [])) summaryMap[s.odoo_variant_id] = s;
+  }
+
+  // Group by template
+  const groups = {};
+  for (const v of variants) {
+    const tid = v.odoo_template_id;
+    if (!groups[tid]) {
+      groups[tid] = {
+        template_id: tid,
+        template_name: v.template_name,
+        category: v.category,
+        variants: [],
+      };
+    }
+    groups[tid].variants.push({
+      variant_id: v.odoo_variant_id,
+      display_name: v.display_name,
+      default_code: v.default_code,
+      uom: v.uom,
+      uom_id: v.uom_id,
+      attrs: {
+        brand: v.brand_value || null,
+        pack: v.pack_value || null,
+        grade: v.grade_value || null,
+      },
+      avg_cost: v.avg_cost,
+      last_price: summaryMap[v.odoo_variant_id]?.last_price ?? v.last_price ?? null,
+      last_vendor_key: v.last_vendor_key,
+      intel: summaryMap[v.odoo_variant_id] || null,
+    });
+  }
+
+  const templates = Object.values(groups).slice(0, limit);
+  return json({
+    success: true, brand, count: templates.length, templates,
+  });
+}
+
+/**
+ * GET /api/rm-ops?action=price-intel&brand=HE&variant_id=12345&days=90
+ *
+ * Deep-dive intelligence for one variant:
+ *   - rolling stats from rm_variant_price_summary
+ *   - recent D1 price history
+ *   - market benchmarks (Hyperpure/Blinkit/Zepto/BigBasket) when captured
+ *   - vendor-by-vendor last price
+ */
+async function getPriceIntel(brand, url, DB) {
+  if (!DB) return json({ error: 'Database not configured' }, 500);
+  const variantId = parseInt(url.searchParams.get('variant_id') || '0');
+  if (!variantId) return json({ error: 'Missing variant_id' }, 400);
+  const days = Math.min(parseInt(url.searchParams.get('days') || '90'), 365);
+
+  const [variant, summary, history, market, vendorPrices] = await Promise.all([
+    DB.prepare(
+      `SELECT odoo_variant_id, odoo_template_id, template_name, display_name,
+              default_code, uom, category, brand_value, pack_value, grade_value
+       FROM rm_product_variants
+       WHERE odoo_variant_id = ?`
+    ).bind(variantId).first(),
+
+    DB.prepare(
+      `SELECT * FROM rm_variant_price_summary
+       WHERE odoo_variant_id = ? AND brand = ?`
+    ).bind(variantId, brand).first(),
+
+    DB.prepare(
+      `SELECT price, recorded_at, recorded_by, source, variant_display
+       FROM rm_daily_prices
+       WHERE odoo_variant_id = ? AND brand = ?
+         AND recorded_at >= datetime('now', '-' || ? || ' days')
+       ORDER BY recorded_at DESC
+       LIMIT 200`
+    ).bind(variantId, brand, days).all(),
+
+    DB.prepare(
+      `SELECT platform, price_per_base, base_unit, match_score, checked_at
+       FROM rm_market_prices
+       WHERE odoo_variant_id = ?
+         AND checked_at >= datetime('now', '-' || ? || ' days')
+       ORDER BY checked_at DESC`
+    ).bind(variantId, days).all(),
+
+    DB.prepare(
+      `SELECT dp.recorded_by, dp.source, dp.price, dp.recorded_at,
+              vp.vendor_key, rv.name as vendor_name
+       FROM rm_daily_prices dp
+       LEFT JOIN rm_vendor_products vp ON vp.odoo_variant_id = dp.odoo_variant_id
+       LEFT JOIN rm_vendors rv ON rv.key = vp.vendor_key
+       WHERE dp.odoo_variant_id = ? AND dp.brand = ?
+       ORDER BY dp.recorded_at DESC
+       LIMIT 50`
+    ).bind(variantId, brand).all(),
+  ]);
+
+  if (!variant) return json({ error: 'Variant not found' }, 404);
+
+  // Derive a recommendation badge colour
+  let badge = 'neutral';
+  let badgeReason = null;
+  if (summary) {
+    if (summary.market_savings_pct != null && summary.market_savings_pct > 10) {
+      badge = 'red';
+      badgeReason = `Paying ${round(summary.market_savings_pct, 1)}% over cheapest market price (${summary.market_cheapest_platform || 'market'})`;
+    } else if (summary.trend_pct != null && summary.trend_pct > 15) {
+      badge = 'yellow';
+      badgeReason = `Price up ${round(summary.trend_pct, 1)}% vs 30d average`;
+    } else if (summary.trend_pct != null && summary.trend_pct < -10) {
+      badge = 'green';
+      badgeReason = `Price down ${round(Math.abs(summary.trend_pct), 1)}% vs 30d average`;
+    } else if (summary.price_30d_count > 2) {
+      badge = 'green';
+      badgeReason = 'Stable pricing window';
+    }
+  }
+
+  return json({
+    success: true, brand,
+    variant,
+    summary: summary || null,
+    badge, badge_reason: badgeReason,
+    history: history.results || [],
+    market: market.results || [],
+    vendorPrices: vendorPrices.results || [],
+  });
+}
+
+/**
+ * GET /api/rm-ops?action=variant-price-summary&brand=HE&limit=100
+ *
+ * Dashboard listing: all variants with rolling stats + savings opportunities.
+ */
+async function getVariantPriceSummary(brand, url, DB) {
+  if (!DB) return json({ error: 'Database not configured' }, 500);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
+  const sortBy = url.searchParams.get('sort') || 'savings';
+
+  let orderClause = 'ORDER BY s.market_savings_pct DESC NULLS LAST';
+  if (sortBy === 'trend-up')    orderClause = 'ORDER BY s.trend_pct DESC NULLS LAST';
+  if (sortBy === 'trend-down')  orderClause = 'ORDER BY s.trend_pct ASC NULLS LAST';
+  if (sortBy === 'recent')      orderClause = 'ORDER BY s.last_recorded_at DESC NULLS LAST';
+
+  const rows = await DB.prepare(
+    `SELECT s.*, v.template_name, v.category, v.default_code
+     FROM rm_variant_price_summary s
+     LEFT JOIN rm_product_variants v ON v.odoo_variant_id = s.odoo_variant_id
+     WHERE s.brand = ?
+     ${orderClause}
+     LIMIT ?`
+  ).bind(brand, limit).all();
+
+  return json({
+    success: true, brand,
+    count: (rows.results || []).length,
+    summary: rows.results || [],
+  });
+}
+
+/**
+ * POST /api/rm-ops action=refresh-variant-summary body:{ variant_ids?: [], brand }
+ *
+ * Recomputes rm_variant_price_summary for one or more variants. When called
+ * without variant_ids, refreshes every variant that has a recent price.
+ */
+async function refreshVariantPriceSummary(body, brand, DB) {
+  if (!DB) return json({ error: 'Database not configured' }, 500);
+  const requested = Array.isArray(body.variant_ids) ? body.variant_ids.filter(Boolean) : [];
+
+  let ids = requested;
+  if (ids.length === 0) {
+    const res = await DB.prepare(
+      `SELECT DISTINCT odoo_variant_id
+       FROM rm_daily_prices
+       WHERE brand = ? AND odoo_variant_id IS NOT NULL
+         AND recorded_at >= datetime('now', '-90 days')`
+    ).bind(brand).all();
+    ids = (res.results || []).map(r => r.odoo_variant_id);
+  }
+
+  let refreshed = 0;
+  const errors = [];
+  for (const vid of ids) {
+    try {
+      await refreshOneVariantSummary(DB, vid, brand);
+      refreshed++;
+    } catch (e) {
+      errors.push({ variant_id: vid, error: e.message });
+    }
+  }
+
+  return json({ success: true, brand, refreshed, errors });
+}
+
+/**
+ * Internal: recompute rm_variant_price_summary for (variant_id × brand).
+ * Called automatically from createPO, plus on-demand via refresh endpoint.
+ */
+async function refreshOneVariantSummary(DB, variantId, brand) {
+  // Base variant identity (display name, uom)
+  const variant = await DB.prepare(
+    `SELECT display_name, uom FROM rm_product_variants WHERE odoo_variant_id = ?`
+  ).bind(variantId).first();
+
+  // Rolling stats for last 30d and prev 30d
+  const stats = await DB.prepare(
+    `SELECT
+       COUNT(*) as n,
+       AVG(price) as avg_p,
+       MIN(price) as min_p,
+       MAX(price) as max_p
+     FROM rm_daily_prices
+     WHERE odoo_variant_id = ? AND brand = ?
+       AND recorded_at >= datetime('now', '-30 days')`
+  ).bind(variantId, brand).first();
+
+  const prevStats = await DB.prepare(
+    `SELECT AVG(price) as avg_p
+     FROM rm_daily_prices
+     WHERE odoo_variant_id = ? AND brand = ?
+       AND recorded_at >= datetime('now', '-60 days')
+       AND recorded_at < datetime('now', '-30 days')`
+  ).bind(variantId, brand).first();
+
+  const latest = await DB.prepare(
+    `SELECT dp.price, dp.source, dp.recorded_at,
+            (SELECT vendor_key FROM rm_vendor_products
+             WHERE odoo_variant_id = dp.odoo_variant_id AND is_primary = 1 LIMIT 1) as vk
+     FROM rm_daily_prices dp
+     WHERE dp.odoo_variant_id = ? AND dp.brand = ?
+     ORDER BY recorded_at DESC LIMIT 1`
+  ).bind(variantId, brand).first();
+
+  // Cheapest market platform (most recent snapshot per platform, global)
+  const market = await DB.prepare(
+    `SELECT platform, price_per_base, checked_at
+     FROM rm_market_prices
+     WHERE odoo_variant_id = ?
+       AND checked_at >= datetime('now', '-14 days')
+     ORDER BY price_per_base ASC LIMIT 1`
+  ).bind(variantId).first();
+
+  const lastPrice = latest?.price ?? null;
+  const avg30 = stats?.avg_p ?? null;
+  const prev30 = prevStats?.avg_p ?? null;
+
+  let trendPct = null;
+  if (lastPrice != null && avg30 != null && avg30 > 0) {
+    trendPct = ((lastPrice - avg30) / avg30) * 100;
+  }
+
+  let savingsPct = null;
+  if (lastPrice != null && market?.price_per_base != null && lastPrice > 0) {
+    savingsPct = ((lastPrice - market.price_per_base) / lastPrice) * 100;
+  }
+
+  await DB.prepare(
+    `INSERT INTO rm_variant_price_summary
+       (odoo_variant_id, brand, display_name, uom,
+        last_price, last_vendor_key, last_source, last_recorded_at,
+        price_30d_avg, price_30d_min, price_30d_max, price_30d_count,
+        price_prev_30d_avg, trend_pct,
+        market_cheapest_platform, market_cheapest_price, market_savings_pct,
+        updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(odoo_variant_id, brand) DO UPDATE SET
+       display_name = excluded.display_name,
+       uom = excluded.uom,
+       last_price = excluded.last_price,
+       last_vendor_key = excluded.last_vendor_key,
+       last_source = excluded.last_source,
+       last_recorded_at = excluded.last_recorded_at,
+       price_30d_avg = excluded.price_30d_avg,
+       price_30d_min = excluded.price_30d_min,
+       price_30d_max = excluded.price_30d_max,
+       price_30d_count = excluded.price_30d_count,
+       price_prev_30d_avg = excluded.price_prev_30d_avg,
+       trend_pct = excluded.trend_pct,
+       market_cheapest_platform = excluded.market_cheapest_platform,
+       market_cheapest_price = excluded.market_cheapest_price,
+       market_savings_pct = excluded.market_savings_pct,
+       updated_at = datetime('now')`
+  ).bind(
+    variantId, brand,
+    variant?.display_name || null,
+    variant?.uom || null,
+    lastPrice,
+    latest?.vk || null,
+    latest?.source || null,
+    latest?.recorded_at || null,
+    avg30, stats?.min_p ?? null, stats?.max_p ?? null, stats?.n ?? 0,
+    prev30, trendPct,
+    market?.platform || null,
+    market?.price_per_base ?? null,
+    savingsPct
+  ).run();
+}
+
