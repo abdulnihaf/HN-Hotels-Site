@@ -832,6 +832,8 @@ async function loadAnalytics() {
 function renderAnalytics(lat) {
   const zmAllOutlet = lat.outlets?.find(o => o.platform === 'zomato' && o.brand === 'all');
   const swAllOutlet = lat.outlets?.find(o => o.platform === 'swiggy' && o.brand === 'all');
+  const swHeOutlet  = lat.outlets?.find(o => o.platform === 'swiggy' && o.brand === 'he');
+  const swNchOutlet = lat.outlets?.find(o => o.platform === 'swiggy' && o.brand === 'nch');
 
   // Pick period-tagged key (v4.9+), fall back to legacy untagged key for backward compat
   // Map dashboard period selection → metric_type key (matches content-swiggy.js DATE_FILTERS)
@@ -849,6 +851,22 @@ function renderAnalytics(lat) {
   const swAge = fmtAgoMins(swCap);
   const swPeriodLabel = {today:'Today',yesterday:'Yesterday',thisweek:'This Week',lastweek:'Last Week',month:'This Month'}[analyticsDateFilter] || analyticsDateFilter;
 
+  // Per-outlet Swiggy impressions (from cron business_metrics_he/nch_today)
+  const swHeBizKey  = analyticsDateFilter === 'yesterday' ? 'business_metrics_he_yesterday_cron'  : 'business_metrics_he_today_cron';
+  const swNchBizKey = analyticsDateFilter === 'yesterday' ? 'business_metrics_nch_yesterday_cron' : 'business_metrics_nch_today_cron';
+  const swHeBiz  = swHeOutlet?.metrics?.[swHeBizKey]?.data  || swHeOutlet?.metrics?.business_metrics_he_today_cron?.data  || null;
+  const swNchBiz = swNchOutlet?.metrics?.[swNchBizKey]?.data || swNchOutlet?.metrics?.business_metrics_nch_today_cron?.data || null;
+  // Extract impression counts from per-outlet biz data (try multiple field shapes)
+  function extractSwImp(biz) {
+    if (!biz) return null;
+    return biz.impressions ?? biz.total_impressions ?? biz.data?.impressions
+           ?? biz.metrics?.impressions ?? null;
+  }
+  const swHeImp  = extractSwImp(swHeBiz);
+  const swNchImp = extractSwImp(swNchBiz);
+  // Combined fallback (from business reports)
+  const swCombinedImp = parseFloat(sw?.impressions) || null;
+
   const zm_live    = zmAllOutlet?.metrics?.live_tracking?.data || null;
   const zm_liveCap = zmAllOutlet?.metrics?.live_tracking?.captured_at || null;
   const zm_biz     = zmAllOutlet?.metrics?.biz_reports?.data || null;
@@ -856,6 +874,44 @@ function renderAnalytics(lat) {
   const zm_res     = zmAllOutlet?.metrics?.restaurant_metrics?.data?.entities || [];
 
   let html = '';
+
+  // ── IMPRESSIONS OVERVIEW — 4 outlet cards ─────────────────────────
+  const zmLiveImp = parseFloat(zm_live?.impressions) || null;
+  // Zomato per-outlet impressions come from live_tracking_api outlet_filter_data
+  // or from get-outlet-data snapshot once user visits outlet-level tab.
+  // For now use combined Zomato impression with outlet split note.
+  const zmHeImpVal  = zmLiveImp != null ? '≈' + Math.round(zmLiveImp * 0.49).toLocaleString('en-IN') : null;
+  const zmNchImpVal = zmLiveImp != null ? '≈' + Math.round(zmLiveImp * 0.51).toLocaleString('en-IN') : null;
+
+  html += `<div class="an-section" style="margin-bottom:16px">
+    <div style="font-size:11px;font-weight:700;color:var(--dim);margin-bottom:8px;letter-spacing:.5px;text-transform:uppercase">
+      Impressions — ${swPeriodLabel}
+    </div>
+    <div class="ag-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="ag-card" style="border-top:3px solid var(--sw)">
+        <div class="ag-val">${swHeImp != null ? Number(swHeImp).toLocaleString('en-IN') : swCombinedImp != null ? '~' + Math.round(swCombinedImp / 2).toLocaleString('en-IN') : '—'}</div>
+        <div class="ag-lbl">Swiggy · HE</div>
+        ${swHeImp == null && swCombinedImp != null ? '<div style="font-size:9px;color:var(--faint);margin-top:2px">est. (combined÷2)</div>' : ''}
+        ${swHeImp == null && swCombinedImp == null ? '<div style="font-size:9px;color:var(--faint);margin-top:2px">data flowing…</div>' : ''}
+      </div>
+      <div class="ag-card" style="border-top:3px solid var(--sw)">
+        <div class="ag-val">${swNchImp != null ? Number(swNchImp).toLocaleString('en-IN') : swCombinedImp != null ? '~' + Math.round(swCombinedImp / 2).toLocaleString('en-IN') : '—'}</div>
+        <div class="ag-lbl">Swiggy · NCH</div>
+        ${swNchImp == null && swCombinedImp != null ? '<div style="font-size:9px;color:var(--faint);margin-top:2px">est. (combined÷2)</div>' : ''}
+        ${swNchImp == null && swCombinedImp == null ? '<div style="font-size:9px;color:var(--faint);margin-top:2px">data flowing…</div>' : ''}
+      </div>
+      <div class="ag-card" style="border-top:3px solid var(--zm)">
+        <div class="ag-val">${zmLiveImp != null ? Math.round(zmLiveImp).toLocaleString('en-IN') : '—'}</div>
+        <div class="ag-lbl">Zomato · HE+NCH</div>
+        <div style="font-size:9px;color:var(--faint);margin-top:2px">combined (live tracking)</div>
+      </div>
+      <div class="ag-card" style="border-top:3px solid var(--zm);opacity:0.5">
+        <div class="ag-val">—</div>
+        <div class="ag-lbl">Zomato · per-outlet</div>
+        <div style="font-size:9px;color:var(--faint);margin-top:2px">click "Outlet" tab in Zomato</div>
+      </div>
+    </div>
+  </div>`;
 
   // ── SWIGGY ANALYTICS ──────────────────────────────────────────────
   html += `<div class="plat-band" style="margin-top:0">
