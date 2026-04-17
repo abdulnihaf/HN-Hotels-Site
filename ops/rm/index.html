@@ -457,28 +457,181 @@
   </div>
 </div>
 
-<!-- ═══ ADD PRODUCT MODAL ═══ -->
+<!-- ═══ ADD PRODUCT WIZARD (multi-step, variant-aware) ═══ -->
 <div id="addProductModal" class="fixed inset-0 z-60 hidden" style="background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);">
   <div class="flex items-end sm:items-center justify-center min-h-screen p-4">
-    <div class="glass rounded-2xl w-full max-w-md p-5 space-y-4">
-      <div class="flex items-center justify-between">
-        <h3 class="text-sm font-bold">Add New Product</h3>
-        <button onclick="closeAddProduct()" class="text-white/30 hover:text-white/60 text-xl leading-none">&times;</button>
+    <div class="glass rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+      <!-- Header -->
+      <div class="p-4 border-b border-white/[.05]">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold">New Raw Material</h3>
+            <p class="text-[10px] text-white/30 mt-0.5">One product · multiple variants (Brand × Pack × Grade)</p>
+          </div>
+          <button onclick="closeAddProduct()" class="text-white/30 hover:text-white/60 text-xl leading-none">&times;</button>
+        </div>
+        <!-- Progress dots -->
+        <div class="flex gap-1.5 mt-3">
+          <div id="wz-dot-1" class="h-1 flex-1 rounded-full bg-brand-500"></div>
+          <div id="wz-dot-2" class="h-1 flex-1 rounded-full bg-white/10"></div>
+          <div id="wz-dot-3" class="h-1 flex-1 rounded-full bg-white/10"></div>
+          <div id="wz-dot-4" class="h-1 flex-1 rounded-full bg-white/10"></div>
+        </div>
       </div>
-      <input id="newProdName" type="text" placeholder="Product name" class="w-full px-4 py-3">
-      <div class="grid grid-cols-2 gap-3">
-        <input id="newProdCategory" type="text" placeholder="Category" class="px-4 py-3">
-        <select id="newProdUom" class="px-4 py-3">
-          <option value="kg">kg</option><option value="L">L</option><option value="g">g</option>
-          <option value="ml">ml</option><option value="pcs">pcs</option><option value="Units">Units</option>
-          <option value="bundle">bundle</option><option value="cylinder">cylinder</option><option value="load">load</option>
-        </select>
+
+      <!-- Body -->
+      <div class="flex-1 overflow-y-auto p-4">
+
+        <!-- STEP 1: Category + Name + UOM -->
+        <div id="wz-step-1" class="wz-step space-y-3">
+          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 1 / 4 · Identity</p>
+          <div>
+            <label class="text-[10px] text-white/40 uppercase tracking-wider">Category</label>
+            <select id="wzCategory" class="w-full px-3 py-2.5 mt-1 text-sm"></select>
+          </div>
+          <div>
+            <label class="text-[10px] text-white/40 uppercase tracking-wider">Product Name</label>
+            <input id="wzName" type="text" class="w-full px-3 py-2.5 mt-1 text-sm"
+              placeholder="e.g. Refined Sunflower Oil">
+            <p class="text-[10px] text-white/25 mt-1">
+              The raw-material concept — <span class="text-white/40">not</span> brand or pack size.
+            </p>
+          </div>
+          <div>
+            <label class="text-[10px] text-white/40 uppercase tracking-wider">Unit of Measure</label>
+            <select id="wzUom" class="w-full px-3 py-2.5 mt-1 text-sm"></select>
+          </div>
+          <div>
+            <label class="text-[10px] text-white/40 uppercase tracking-wider">Used In</label>
+            <select id="wzCompany" class="w-full px-3 py-2.5 mt-1 text-sm">
+              <option value="">Both outlets (shared)</option>
+              <option value="1">HE only</option>
+              <option value="10">NCH only</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- STEP 2: Attributes (Brand / Pack / Grade) -->
+        <div id="wz-step-2" class="wz-step space-y-3 hidden">
+          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 2 / 4 · Variants</p>
+          <p class="text-[11px] text-white/40">
+            Pick the brands and pack sizes you actually buy. One variant will be created per combination.
+          </p>
+
+          <!-- Brand -->
+          <div class="card">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold">Brand <span class="text-red-400/60">*</span></span>
+              <span id="wzBrandCount" class="text-[10px] text-white/25">0 selected</span>
+            </div>
+            <input id="wzBrandSearch" type="search" placeholder="Search brands…"
+              class="w-full px-3 py-2 text-xs mb-2" oninput="wzFilterAttr('brand')">
+            <div id="wzBrandList" class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto"></div>
+            <button onclick="wzQuickAddAttr('brand')" class="text-[10px] text-brand-400 mt-2">
+              + Add new brand
+            </button>
+          </div>
+
+          <!-- Pack Size -->
+          <div class="card">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold">Pack Size <span class="text-red-400/60">*</span></span>
+              <span id="wzPackCount" class="text-[10px] text-white/25">0 selected</span>
+            </div>
+            <input id="wzPackSearch" type="search" placeholder="Search pack sizes…"
+              class="w-full px-3 py-2 text-xs mb-2" oninput="wzFilterAttr('pack')">
+            <div id="wzPackList" class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto"></div>
+            <button onclick="wzQuickAddAttr('pack')" class="text-[10px] text-brand-400 mt-2">
+              + Add new pack size
+            </button>
+          </div>
+
+          <!-- Grade (optional) -->
+          <div class="card">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold">Grade <span class="text-white/25 text-[10px]">optional</span></span>
+              <span id="wzGradeCount" class="text-[10px] text-white/25">0 selected</span>
+            </div>
+            <input id="wzGradeSearch" type="search" placeholder="Search grades…"
+              class="w-full px-3 py-2 text-xs mb-2" oninput="wzFilterAttr('grade')">
+            <div id="wzGradeList" class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto"></div>
+            <button onclick="wzQuickAddAttr('grade')" class="text-[10px] text-brand-400 mt-2">
+              + Add new grade
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 3: Default vendor + price -->
+        <div id="wz-step-3" class="wz-step space-y-3 hidden">
+          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 3 / 4 · Default Vendor</p>
+          <p class="text-[11px] text-white/40">
+            Optional. You can skip this and assign vendors per-variant later.
+          </p>
+          <button onclick="openVendorModalFor('wizard')" id="wzVendorBtn"
+            class="btn btn-ghost w-full text-sm text-left">
+            <span class="text-white/40">Pick default vendor (optional)</span>
+          </button>
+          <div>
+            <label class="text-[10px] text-white/40 uppercase tracking-wider">Reference Price (₹)</label>
+            <input id="wzPrice" type="number" inputmode="decimal" step="any" min="0"
+              placeholder="Price per unit"
+              class="w-full px-3 py-2.5 mt-1 text-sm">
+            <p class="text-[10px] text-white/25 mt-1">
+              Applied to all variants as baseline. Actual PO prices will override.
+            </p>
+          </div>
+        </div>
+
+        <!-- STEP 4: Preview + Create -->
+        <div id="wz-step-4" class="wz-step space-y-3 hidden">
+          <p class="text-[10px] text-white/40 uppercase tracking-wider">Step 4 / 4 · Preview</p>
+          <div class="card">
+            <p class="text-xs font-semibold mb-2"><span id="wzPreviewName">—</span></p>
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+              <div><span class="text-white/40">Category:</span> <span id="wzPreviewCat" class="text-white/70">—</span></div>
+              <div><span class="text-white/40">UOM:</span> <span id="wzPreviewUom" class="text-white/70">—</span></div>
+              <div><span class="text-white/40">Outlet:</span> <span id="wzPreviewCompany" class="text-white/70">—</span></div>
+              <div><span class="text-white/40">Vendor:</span> <span id="wzPreviewVendor" class="text-white/70">—</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold">Variants to create</span>
+              <span id="wzPreviewCount" class="badge badge-success">0</span>
+            </div>
+            <div id="wzPreviewList" class="space-y-1 max-h-48 overflow-y-auto text-[11px]"></div>
+          </div>
+          <p id="wzPreviewWarn" class="text-[10px] text-amber-400/70 hidden"></p>
+        </div>
+
       </div>
-      <button onclick="openVendorModalFor('new-product')" id="newProdVendorBtn" class="btn btn-ghost w-full text-sm">
-        Pick vendor (required)
-      </button>
-      <button onclick="submitNewProduct()" class="btn btn-primary w-full">Add Product</button>
-      <p id="newProdResult" class="text-xs hidden text-center"></p>
+
+      <!-- Footer nav -->
+      <div class="p-3 border-t border-white/[.05] flex gap-2">
+        <button id="wzBack" onclick="wzPrev()" class="btn btn-ghost px-4 py-2 text-xs hidden">← Back</button>
+        <button id="wzNext" onclick="wzNext()" class="btn btn-primary flex-1 py-2 text-xs">Continue →</button>
+        <button id="wzCreate" onclick="wzCreate()" class="btn btn-primary flex-1 py-2 text-xs hidden">
+          Create Product
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ VARIANT PICKER POPUP (Purchase tab) ═══ -->
+<div id="variantPickerModal" class="fixed inset-0 z-60 hidden" style="background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);">
+  <div class="flex items-end sm:items-center justify-center min-h-screen p-4">
+    <div class="glass rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col">
+      <div class="p-4 border-b border-white/[.05] flex items-center justify-between">
+        <div class="min-w-0">
+          <h3 id="vpTitle" class="text-sm font-bold truncate">Pick variant</h3>
+          <p id="vpSubtitle" class="text-[10px] text-white/30 truncate">—</p>
+        </div>
+        <button onclick="closeVariantPicker()" class="text-white/30 hover:text-white/60 text-xl leading-none">&times;</button>
+      </div>
+      <div id="vpList" class="flex-1 overflow-y-auto p-3 space-y-1">
+        <p class="text-white/20 text-xs py-4 text-center">Loading…</p>
+      </div>
     </div>
   </div>
 </div>
@@ -650,8 +803,32 @@ async function loadPurchaseData() {
   renderRecentPOs(res.recentPOs);
 }
 
+/* Phase 2: variant search cache — hit after user types 2+ chars */
+let variantSearchResults = [];        // D1 rm_product_variants rows
+let variantSearchQuery   = '';
+let variantSearchTimer   = null;
+
 function filterProducts() {
+  // Debounce variant search — hits D1 via rm-admin
+  const q = (document.getElementById('purchaseSearch')?.value || '').trim();
+  if (variantSearchTimer) clearTimeout(variantSearchTimer);
+  if (q.length >= 2) {
+    variantSearchTimer = setTimeout(() => fetchVariantSearch(q), 180);
+  } else {
+    variantSearchResults = [];
+    variantSearchQuery = '';
+  }
   renderProducts();
+}
+
+async function fetchVariantSearch(q) {
+  try {
+    const r = await fetch(`${ADMIN_API}?action=variants&q=${encodeURIComponent(q)}&brand=${currentBrand}&limit=40`);
+    const d = await r.json();
+    variantSearchResults = d.variants || [];
+    variantSearchQuery = q;
+    renderProducts();
+  } catch (e) { /* noop */ }
 }
 
 function renderProducts() {
@@ -676,9 +853,43 @@ function renderProducts() {
     return;
   }
 
-  emptyEl.classList.toggle('hidden', filtered.length > 0);
+  // Dedupe variants against flat-catalog by odoo id — avoid showing twice
+  const flatIds = new Set(filtered.map(p => p.id));
+  const variantsGrouped = groupVariantsByTemplate(
+    variantSearchResults.filter(v => !flatIds.has(v.odoo_variant_id))
+  );
 
-  el.innerHTML = filtered.slice(0, 30).map(p => {
+  const hasAnything = filtered.length > 0 || variantsGrouped.size > 0;
+  emptyEl.classList.toggle('hidden', hasAnything);
+
+  // Render variants (grouped by template) FIRST — these are the new variant-aware entries
+  let variantHtml = '';
+  if (variantsGrouped.size > 0) {
+    variantHtml = `<p class="text-[10px] text-white/30 uppercase tracking-wider mt-1 mb-1">
+      Variants · ${variantsGrouped.size} templates · ${[...variantsGrouped.values()].reduce((a, v) => a + v.length, 0)} variants
+    </p>`;
+    for (const [tmplId, vs] of variantsGrouped) {
+      const tmplName = vs[0].template_name;
+      const cat = vs[0].category || '';
+      variantHtml += `
+        <div class="card-item">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold truncate">${wzEsc(tmplName)}</p>
+              <p class="text-[11px] text-white/30 mt-0.5">${wzEsc(cat)} &middot; ${vs.length} variants</p>
+            </div>
+            <button onclick="openVariantPicker(${tmplId})"
+              class="btn btn-ghost btn-sm shrink-0">Pick ›</button>
+          </div>
+        </div>`;
+    }
+    if (filtered.length) {
+      variantHtml += `<p class="text-[10px] text-white/30 uppercase tracking-wider mt-3 mb-1">
+        Flat products · ${filtered.length}</p>`;
+    }
+  }
+
+  const productHtml = filtered.slice(0, 30).map(p => {
     const inCart = cart.find(c => c.product.id === p.id);
     const vendorNames = p.vendors.map(v => v.name).join(', ') || 'No vendor linked';
     const priceStr = p.lastPrice ? `Last: ${fmt(p.lastPrice.price)}` : '';
@@ -702,6 +913,84 @@ function renderProducts() {
       </div>
     `;
   }).join('');
+
+  el.innerHTML = variantHtml + productHtml;
+}
+
+function groupVariantsByTemplate(variants) {
+  const map = new Map();
+  for (const v of variants) {
+    const key = v.odoo_template_id;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(v);
+  }
+  // Preserve insertion order — template rows in search order
+  return map;
+}
+
+/* Variant picker popup */
+function openVariantPicker(tmplId) {
+  const vs = variantSearchResults.filter(v => v.odoo_template_id === tmplId);
+  if (!vs.length) return;
+  const tmplName = vs[0].template_name;
+  document.getElementById('vpTitle').textContent = tmplName;
+  document.getElementById('vpSubtitle').textContent =
+    `${vs.length} variants · ${vs[0].category || ''}`;
+  const list = document.getElementById('vpList');
+
+  list.innerHTML = vs.map(v => {
+    const inCart = cart.find(c => c.product.id === v.odoo_variant_id);
+    const attrs = [];
+    if (v.brand_value) attrs.push(v.brand_value);
+    if (v.pack_value)  attrs.push(v.pack_value);
+    if (v.grade_value) attrs.push(v.grade_value);
+    const price = v.last_price ? `Last: ${fmt(v.last_price)}` : '';
+    return `
+      <button onclick="addVariantToCart(${v.odoo_variant_id})" ${inCart ? 'disabled' : ''}
+        class="w-full text-left p-3 rounded-lg ${inCart ? 'bg-brand-500/10 border border-brand-500/30' : 'hover:bg-white/[.05] border border-transparent'} flex items-center justify-between transition">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium truncate">${wzEsc(attrs.join(' · ') || v.display_name)}</p>
+          <p class="text-[10px] text-white/30">${wzEsc(v.default_code || '')}${price ? ' · ' + price : ''}</p>
+        </div>
+        ${inCart ? '<span class="badge badge-success">In cart</span>' : '<span class="text-brand-400 text-xs">+ Add</span>'}
+      </button>`;
+  }).join('');
+
+  document.getElementById('variantPickerModal').classList.remove('hidden');
+}
+
+function closeVariantPicker() {
+  document.getElementById('variantPickerModal').classList.add('hidden');
+}
+
+function addVariantToCart(variantId) {
+  const v = variantSearchResults.find(x => x.odoo_variant_id === variantId);
+  if (!v) return;
+  if (cart.find(c => c.product.id === variantId)) { closeVariantPicker(); return; }
+  // Shape a minimal "product" object that the existing cart code understands
+  const attrs = [];
+  if (v.brand_value) attrs.push(v.brand_value);
+  if (v.pack_value)  attrs.push(v.pack_value);
+  if (v.grade_value) attrs.push(v.grade_value);
+  const product = {
+    id: v.odoo_variant_id,
+    code: v.default_code || '',
+    name: v.template_name + (attrs.length ? ` (${attrs.join(', ')})` : ''),
+    uom: v.uom || '',
+    category: v.category || '',
+    vendors: [],
+    lastPrice: v.last_price ? { price: v.last_price } : null,
+    _variant: true,
+  };
+  cart.push({
+    product, qty: '', price: v.last_price || '',
+    vendor: v.last_vendor_key
+      ? (catalog.vendors.find(vn => vn.name === v.last_vendor_key) || null)
+      : null,
+  });
+  closeVariantPicker();
+  renderProducts();
+  renderCart();
 }
 
 function renderCartInline(item) {
@@ -848,12 +1137,11 @@ function openVendorModalFor(context, idx) {
       renderCart();
     };
     vendorPickerProductCode = cart[idx].product.code;
-  } else if (context === 'new-product') {
+  } else if (context === 'wizard') {
     vendorPickerCallback = (vendor) => {
-      document.getElementById('newProdVendorBtn').innerHTML =
-        `<span class="text-emerald-400">${vendor.name}</span>`;
-      document.getElementById('newProdVendorBtn').dataset.vendorId = vendor.id;
-      document.getElementById('newProdVendorBtn').dataset.vendorName = vendor.name;
+      // Look up the D1 vendor key for this Odoo partner_id
+      const m = (masterCache.vendors || []).find(v => v.odoo_id === vendor.id);
+      wzSetVendor({ id: vendor.id, key: m?.key || null, name: vendor.name });
     };
     vendorPickerProductCode = null;
   }
@@ -968,50 +1256,286 @@ async function submitPurchase() {
   btn.disabled = false;
 }
 
-/* ── Add New Product ── */
-function openAddProduct() {
-  document.getElementById('addProductModal').classList.remove('hidden');
-  document.getElementById('newProdName').value = '';
-  document.getElementById('newProdCategory').value = '';
-  document.getElementById('newProdVendorBtn').innerHTML = 'Pick vendor (required)';
-  delete document.getElementById('newProdVendorBtn').dataset.vendorId;
-  document.getElementById('newProdResult').classList.add('hidden');
-  setTimeout(() => document.getElementById('newProdName').focus(), 100);
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * ADD PRODUCT WIZARD (Phase 2 — variant-aware)
+ * One product.template → auto-generated variants (Brand × Pack × Grade)
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+const wzState = {
+  step: 1,
+  uoms: [],
+  picked: {
+    category_id: null, category_name: '',
+    name: '', uom_id: null, uom_name: '',
+    company_id: '',
+    brand: new Set(),   // attribute-value IDs
+    pack: new Set(),
+    grade: new Set(),
+    vendor_key: null, vendor_name: null,
+    price: null,
+  },
+};
+
+async function openAddProduct() {
+  const modal = document.getElementById('addProductModal');
+  modal.classList.remove('hidden');
+  // Reset state
+  wzState.step = 1;
+  wzState.picked = {
+    category_id: null, category_name: '',
+    name: '', uom_id: null, uom_name: '',
+    company_id: '',
+    brand: new Set(), pack: new Set(), grade: new Set(),
+    vendor_key: null, vendor_name: null, price: null,
+  };
+  document.getElementById('wzName').value = '';
+  document.getElementById('wzPrice').value = '';
+  document.getElementById('wzCompany').value = '';
+  document.getElementById('wzVendorBtn').innerHTML = '<span class="text-white/40">Pick default vendor (optional)</span>';
+  document.getElementById('wzBrandSearch').value = '';
+  document.getElementById('wzPackSearch').value = '';
+  document.getElementById('wzGradeSearch').value = '';
+
+  // Ensure master data is cached
+  if (!masterCache.categories?.length) {
+    try { await loadMasterData(); } catch (e) { /* noop */ }
+  }
+  // Load UoMs once
+  if (!wzState.uoms.length) {
+    try {
+      const r = await fetch(`${ADMIN_API}?action=uoms`);
+      const d = await r.json();
+      wzState.uoms = d.uoms || [];
+    } catch (e) { wzState.uoms = []; }
+  }
+
+  // Populate category dropdown
+  const catSel = document.getElementById('wzCategory');
+  catSel.innerHTML = (masterCache.categories || [])
+    .map(c => `<option value="${c.id}">${wzEsc(c.name)}</option>`).join('')
+    || `<option value="">No categories — create one in Master Data first</option>`;
+
+  // Populate UoM dropdown
+  const uomSel = document.getElementById('wzUom');
+  uomSel.innerHTML = (wzState.uoms || [])
+    .map(u => `<option value="${u.id}">${wzEsc(u.name)}</option>`).join('')
+    || `<option value="">Loading UoMs…</option>`;
+
+  // Render attribute chip lists
+  wzRenderAttrList('brand');
+  wzRenderAttrList('pack');
+  wzRenderAttrList('grade');
+
+  wzShowStep(1);
+  setTimeout(() => document.getElementById('wzName').focus(), 100);
 }
 
 function closeAddProduct() {
   document.getElementById('addProductModal').classList.add('hidden');
 }
 
-async function submitNewProduct() {
-  const name = document.getElementById('newProdName').value.trim();
-  const category = document.getElementById('newProdCategory').value.trim();
-  const uom = document.getElementById('newProdUom').value;
-  const vendorBtn = document.getElementById('newProdVendorBtn');
-  const vendorId = vendorBtn.dataset.vendorId;
+function wzEsc(s) {
+  return String(s || '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
 
-  if (!name) { showNewProdMsg('Enter product name', true); return; }
-  if (!category) { showNewProdMsg('Enter category', true); return; }
-  if (!vendorId) { showNewProdMsg('Pick a vendor first', true); return; }
+function wzShowStep(n) {
+  wzState.step = n;
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById(`wz-step-${i}`);
+    if (el) el.classList.toggle('hidden', i !== n);
+    const dot = document.getElementById(`wz-dot-${i}`);
+    if (dot) dot.className = `h-1 flex-1 rounded-full ${i <= n ? 'bg-brand-500' : 'bg-white/10'}`;
+  }
+  document.getElementById('wzBack').classList.toggle('hidden', n === 1);
+  document.getElementById('wzNext').classList.toggle('hidden', n === 4);
+  document.getElementById('wzCreate').classList.toggle('hidden', n !== 4);
+  if (n === 4) wzRenderPreview();
+}
 
-  const res = await apiPost({
-    action: 'add-product', pin: currentPin, brand: currentBrand,
-    name, category, uom, vendor_key: vendorId,
-  });
+function wzPrev() {
+  if (wzState.step > 1) wzShowStep(wzState.step - 1);
+}
 
-  if (res.success) {
-    showNewProdMsg(`Created ${res.hn_code}: ${name}`, false);
-    setTimeout(() => { closeAddProduct(); loadPurchaseData(); }, 1500);
+function wzNext() {
+  // Validate current step before advancing
+  if (wzState.step === 1) {
+    const catSel = document.getElementById('wzCategory');
+    const uomSel = document.getElementById('wzUom');
+    const name = document.getElementById('wzName').value.trim();
+    if (!catSel.value) { showToast('Pick a category', 'error'); return; }
+    if (!name) { showToast('Enter a product name', 'error'); document.getElementById('wzName').focus(); return; }
+    if (!uomSel.value) { showToast('Pick a UoM', 'error'); return; }
+    wzState.picked.category_id = parseInt(catSel.value);
+    wzState.picked.category_name = catSel.options[catSel.selectedIndex]?.text || '';
+    wzState.picked.name = name;
+    wzState.picked.uom_id = parseInt(uomSel.value);
+    wzState.picked.uom_name = uomSel.options[uomSel.selectedIndex]?.text || '';
+    wzState.picked.company_id = document.getElementById('wzCompany').value;
+  }
+  if (wzState.step === 2) {
+    if (!wzState.picked.brand.size) { showToast('Pick at least one brand', 'error'); return; }
+    if (!wzState.picked.pack.size) { showToast('Pick at least one pack size', 'error'); return; }
+  }
+  if (wzState.step === 3) {
+    const priceRaw = document.getElementById('wzPrice').value;
+    wzState.picked.price = priceRaw ? parseFloat(priceRaw) : null;
+  }
+  wzShowStep(Math.min(wzState.step + 1, 4));
+}
+
+/* Attribute multi-select chips */
+function wzRenderAttrList(kind) {
+  const items = kind === 'brand' ? masterCache.brands
+              : kind === 'pack'  ? masterCache.packs
+              : masterCache.grades;
+  const searchEl = document.getElementById(
+    kind === 'brand' ? 'wzBrandSearch' :
+    kind === 'pack'  ? 'wzPackSearch'  : 'wzGradeSearch');
+  const listEl = document.getElementById(
+    kind === 'brand' ? 'wzBrandList' :
+    kind === 'pack'  ? 'wzPackList'  : 'wzGradeList');
+  const countEl = document.getElementById(
+    kind === 'brand' ? 'wzBrandCount' :
+    kind === 'pack'  ? 'wzPackCount'  : 'wzGradeCount');
+  const q = (searchEl?.value || '').toLowerCase().trim();
+  const selected = wzState.picked[kind];
+
+  const filtered = (items || []).filter(x => !q || x.name.toLowerCase().includes(q));
+  if (!filtered.length) {
+    listEl.innerHTML = `<span class="text-[11px] text-white/30 py-1">${q ? 'No match' : 'No entries — add in Master Data tab'}</span>`;
   } else {
-    showNewProdMsg(res.error || 'Failed', true);
+    listEl.innerHTML = filtered.map(x => {
+      const on = selected.has(x.id);
+      return `<button onclick="wzToggleAttr('${kind}',${x.id})"
+        class="px-2.5 py-1 rounded-full text-[11px] border transition-all
+          ${on ? 'bg-brand-500/20 border-brand-500/50 text-brand-300'
+               : 'bg-white/[.03] border-white/[.05] text-white/60 hover:border-white/20'}">
+        ${wzEsc(x.name)}
+      </button>`;
+    }).join('');
+  }
+  countEl.textContent = `${selected.size} selected`;
+}
+
+function wzFilterAttr(kind) { wzRenderAttrList(kind); }
+
+function wzToggleAttr(kind, id) {
+  const set = wzState.picked[kind];
+  if (set.has(id)) set.delete(id); else set.add(id);
+  wzRenderAttrList(kind);
+}
+
+async function wzQuickAddAttr(kind) {
+  const singular = kind === 'brand' ? 'brand' : kind === 'pack' ? 'pack size' : 'grade';
+  const name = prompt(`New ${singular}:`);
+  if (!name || !name.trim()) return;
+  try {
+    const r = await fetch(ADMIN_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'master-create', pin: currentPin, type: kind, name: name.trim() }),
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error, 'error'); return; }
+    showToast(`Added ${singular}: ${d.name}`, 'success');
+    await loadMasterData();
+    // Auto-select the new value
+    wzState.picked[kind].add(d.id);
+    wzRenderAttrList(kind);
+  } catch (e) {
+    showToast(`Network: ${e.message}`, 'error');
   }
 }
 
-function showNewProdMsg(msg, isError) {
-  const el = document.getElementById('newProdResult');
-  el.textContent = msg;
-  el.className = `text-xs text-center ${isError ? 'text-red-400' : 'text-emerald-400'}`;
-  el.classList.remove('hidden');
+/* Preview: cartesian product */
+function wzRenderPreview() {
+  const p = wzState.picked;
+  const brands = masterCache.brands.filter(b => p.brand.has(b.id));
+  const packs  = masterCache.packs.filter(x => p.pack.has(x.id));
+  const grades = masterCache.grades.filter(x => p.grade.has(x.id));
+
+  const total = brands.length * packs.length * (grades.length || 1);
+
+  document.getElementById('wzPreviewName').textContent = p.name;
+  document.getElementById('wzPreviewCat').textContent = p.category_name || '—';
+  document.getElementById('wzPreviewUom').textContent = p.uom_name || '—';
+  document.getElementById('wzPreviewCompany').textContent =
+    p.company_id === '1' ? 'HE only' : p.company_id === '10' ? 'NCH only' : 'Shared';
+  document.getElementById('wzPreviewVendor').textContent =
+    p.vendor_name ? (p.vendor_name + (p.price ? ` @ ₹${p.price}` : '')) : '—';
+  document.getElementById('wzPreviewCount').textContent = total;
+
+  // Build variant list (cap display at 40, warn if larger)
+  const rows = [];
+  const gradeIter = grades.length ? grades : [null];
+  for (const b of brands) for (const pk of packs) for (const g of gradeIter) {
+    rows.push(g ? `${b.name} · ${pk.name} · ${g.name}` : `${b.name} · ${pk.name}`);
+  }
+  const listEl = document.getElementById('wzPreviewList');
+  listEl.innerHTML = rows.slice(0, 40).map(r =>
+    `<div class="py-1 px-2 border-b border-white/[.03] last:border-0 text-white/70">${wzEsc(r)}</div>`
+  ).join('');
+
+  const warn = document.getElementById('wzPreviewWarn');
+  if (total > 40) {
+    warn.textContent = `Showing first 40. All ${total} will be created.`;
+    warn.classList.remove('hidden');
+  } else if (total > 100) {
+    warn.textContent = `⚠ Creating ${total} variants at once. Consider splitting.`;
+    warn.classList.remove('hidden');
+  } else {
+    warn.classList.add('hidden');
+  }
+}
+
+async function wzCreate() {
+  const p = wzState.picked;
+  const createBtn = document.getElementById('wzCreate');
+  createBtn.disabled = true;
+  createBtn.textContent = 'Creating…';
+
+  const attr_lines = [];
+  if (p.brand.size) attr_lines.push({ attribute_id: masterCache.attr_ids?.brand || 9, value_ids: [...p.brand] });
+  if (p.pack.size)  attr_lines.push({ attribute_id: masterCache.attr_ids?.pack  || 21, value_ids: [...p.pack] });
+  if (p.grade.size) attr_lines.push({ attribute_id: masterCache.attr_ids?.grade || 22, value_ids: [...p.grade] });
+
+  try {
+    const r = await fetch(ADMIN_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create-template-with-variants',
+        pin: currentPin,
+        name: p.name,
+        category_id: p.category_id,
+        uom_id: p.uom_id,
+        company_id: p.company_id || null,
+        attr_lines,
+        default_vendor_key: p.vendor_key || null,
+        default_price: p.price || null,
+      }),
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error, 'error'); createBtn.disabled = false; createBtn.textContent = 'Create Product'; return; }
+    showToast(`Created ${d.name} · ${d.variant_count} variants`, 'success');
+    closeAddProduct();
+    // Refresh purchase catalog so new variants appear
+    if (typeof loadPurchaseData === 'function') loadPurchaseData();
+  } catch (e) {
+    showToast(`Network: ${e.message}`, 'error');
+  } finally {
+    createBtn.disabled = false;
+    createBtn.textContent = 'Create Product';
+  }
+}
+
+/* Vendor picker integration — reuses existing openVendorModalFor('wizard') flow */
+function wzSetVendor(vendor) {
+  if (!vendor) return;
+  wzState.picked.vendor_key = vendor.key || vendor.id || null;
+  wzState.picked.vendor_name = vendor.name || null;
+  document.getElementById('wzVendorBtn').innerHTML =
+    `<span class="text-emerald-400">${wzEsc(vendor.name)}</span>`;
 }
 
 function renderRecentPOs(orders) {

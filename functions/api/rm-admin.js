@@ -241,9 +241,79 @@ async function handleGet(url, env) {
     }
   }
 
+  // --- Phase 2: UoM list (for wizard dropdown) ---
+  if (action === 'uoms') {
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+    try {
+      const uoms = await odoo(apiKey, 'uom.uom', 'search_read',
+        [[]],
+        { fields: ['id', 'name', 'category_id', 'factor', 'uom_type'] });
+      uoms.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      return json({ uoms });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
+  // --- Phase 2: Templates list (grouped variant catalog) ---
+  // Returns product.templates that are raw-material (purchase_ok=true, in Goods tree)
+  if (action === 'templates') {
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+    try {
+      const q = (url.searchParams.get('q') || '').trim();
+      const domain = [['purchase_ok', '=', true], ['active', '=', true]];
+      if (q) domain.push(['name', 'ilike', q]);
+      const tmpls = await odoo(apiKey, 'product.template', 'search_read',
+        [domain],
+        { fields: ['id', 'name', 'categ_id', 'uom_id', 'company_id',
+                   'default_code', 'product_variant_count',
+                   'attribute_line_ids'],
+          order: 'name',
+          limit: 200 });
+      return json({ templates: tmpls, count: tmpls.length });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
+  // --- Phase 2: Variants cache (fast picker search) ---
+  if (action === 'variants') {
+    const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+    const brand = url.searchParams.get('brand'); // HE / NCH / BOTH
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 300);
+    let sql = 'SELECT * FROM rm_product_variants WHERE is_active=1';
+    const p = [];
+    if (q) {
+      sql += ' AND (LOWER(display_name) LIKE ? OR LOWER(template_name) LIKE ? OR LOWER(default_code) LIKE ?)';
+      const like = `%${q}%`;
+      p.push(like, like, like);
+    }
+    if (brand === 'HE') { sql += ' AND (company_id = 1 OR company_id IS NULL)'; }
+    else if (brand === 'NCH') { sql += ' AND (company_id = 10 OR company_id IS NULL)'; }
+    sql += ' ORDER BY template_name, display_name LIMIT ?';
+    p.push(limit);
+    const rows = await db.prepare(sql).bind(...p).all();
+    return json({ variants: rows.results, count: rows.results.length });
+  }
+
+  // --- Phase 2: Variant count / cache status ---
+  if (action === 'variants-status') {
+    const [total, active, byTmpl] = await Promise.all([
+      db.prepare('SELECT COUNT(*) as c FROM rm_product_variants').first(),
+      db.prepare('SELECT COUNT(*) as c FROM rm_product_variants WHERE is_active=1').first(),
+      db.prepare('SELECT odoo_template_id, template_name, COUNT(*) as c FROM rm_product_variants WHERE is_active=1 GROUP BY odoo_template_id ORDER BY c DESC LIMIT 10').all(),
+    ]);
+    return json({
+      total: total.c, active: active.c,
+      top_templates: byTmpl.results,
+    });
+  }
+
   return json({
     error: 'Unknown action',
-    actions: 'products, vendors, mappings, archive-list, sync-log, status, categories, next-code, master-data',
+    actions: 'products, vendors, mappings, archive-list, sync-log, status, categories, next-code, master-data, uoms, templates, variants, variants-status',
   }, 400);
 }
 
@@ -460,6 +530,260 @@ async function handlePost(request, env) {
       const model = type === 'category' ? 'product.category' : 'product.attribute.value';
       await logSync(db, `archive_${type}`, model, nid, String(nid), { type }, user.name);
       return json({ success: true, id: nid });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   * Phase 2: Variant-aware template creation
+   * One product.template = one raw-material concept.
+   * Brand / Pack Size / Grade are attribute lines — Odoo auto-generates variants.
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+  if (action === 'create-template-with-variants') {
+    const {
+      name, category_id, uom_id, company_id,
+      attr_lines,              // [{attribute_id, value_ids:[...]}, ...]
+      default_vendor_key,      // optional
+      default_price,           // optional — goes on supplierinfo for each variant
+      default_code_prefix,     // optional — "HN-RM-XXX"
+    } = body;
+
+    if (!name || !String(name).trim()) return json({ error: 'name required' }, 400);
+    if (!category_id) return json({ error: 'category_id required' }, 400);
+    if (!uom_id) return json({ error: 'uom_id required' }, 400);
+    if (!Array.isArray(attr_lines) || !attr_lines.length)
+      return json({ error: 'attr_lines required (at least one attribute)' }, 400);
+
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+
+    const trimmedName = String(name).trim();
+    try {
+      // 1. Duplicate check — refuse if template with same name exists under same category
+      const dup = await odoo(apiKey, 'product.template', 'search_count',
+        [[['name', '=ilike', trimmedName], ['categ_id', '=', parseInt(category_id)]]]);
+      if (dup) return json({ error: `Template "${trimmedName}" already exists in this category` }, 409);
+
+      // 2. Build attribute_line_ids payload
+      const attrLinePayload = [];
+      let totalVariants = 1;
+      for (const line of attr_lines) {
+        const aid = parseInt(line.attribute_id);
+        const vids = (line.value_ids || []).map(v => parseInt(v)).filter(Boolean);
+        if (!aid || !vids.length) continue;
+        attrLinePayload.push([0, 0, { attribute_id: aid, value_ids: [[6, 0, vids]] }]);
+        totalVariants *= vids.length;
+      }
+      if (!attrLinePayload.length) return json({ error: 'No valid attribute values supplied' }, 400);
+
+      // 3. Create the template — Odoo auto-creates variants
+      const cid = company_id ? parseInt(company_id) : false;
+      const tmplVals = {
+        name: trimmedName,
+        categ_id: parseInt(category_id),
+        uom_id: parseInt(uom_id),
+        uom_po_id: parseInt(uom_id),
+        type: 'consu', // product.template uses 'consu' + is_storable on newer Odoo
+        purchase_ok: true,
+        sale_ok: false,
+        company_id: cid,
+        is_storable: true,
+        attribute_line_ids: attrLinePayload,
+      };
+      if (default_code_prefix) tmplVals.default_code = String(default_code_prefix).trim();
+
+      const tmplId = await odoo(apiKey, 'product.template', 'create', [tmplVals]);
+
+      // 4. Read back the auto-generated variants
+      const variants = await odoo(apiKey, 'product.product', 'search_read',
+        [[['product_tmpl_id', '=', tmplId], ['active', '=', true]]],
+        { fields: ['id', 'default_code', 'display_name', 'product_template_attribute_value_ids',
+                   'categ_id', 'uom_id', 'company_id', 'standard_price'] });
+
+      // Pull attribute-value labels for each variant
+      const allPtavIds = [...new Set(variants.flatMap(v => v.product_template_attribute_value_ids || []))];
+      const ptavMap = {};
+      if (allPtavIds.length) {
+        const ptavs = await odoo(apiKey, 'product.template.attribute.value', 'search_read',
+          [[['id', 'in', allPtavIds]]],
+          { fields: ['id', 'name', 'attribute_id', 'product_attribute_value_id'] });
+        for (const pv of ptavs) ptavMap[pv.id] = pv;
+      }
+
+      // Fetch attribute meta (names) once
+      const attrIds = [...new Set(Object.values(ptavMap).map(v => v.attribute_id?.[0]).filter(Boolean))];
+      const attrMap = {};
+      if (attrIds.length) {
+        const attrs = await odoo(apiKey, 'product.attribute', 'search_read',
+          [[['id', 'in', attrIds]]], { fields: ['id', 'name'] });
+        for (const a of attrs) attrMap[a.id] = a.name;
+      }
+
+      // 5. Upsert each variant into D1 cache
+      const variantRows = [];
+      for (const v of variants) {
+        const attrs = {};
+        let brandVal = null, packVal = null, gradeVal = null;
+        for (const pvId of (v.product_template_attribute_value_ids || [])) {
+          const pv = ptavMap[pvId];
+          if (!pv) continue;
+          const attrName = attrMap[pv.attribute_id?.[0]] || `attr_${pv.attribute_id?.[0]}`;
+          const valLabel = pv.name || (pv.product_attribute_value_id?.[1]) || '';
+          attrs[attrName] = valLabel;
+          if (pv.attribute_id?.[0] === ATTR_BRAND) brandVal = valLabel;
+          else if (pv.attribute_id?.[0] === ATTR_PACK) packVal = valLabel;
+          else if (pv.attribute_id?.[0] === ATTR_GRADE) gradeVal = valLabel;
+        }
+        await db.prepare(`
+          INSERT INTO rm_product_variants
+            (odoo_variant_id, odoo_template_id, template_name, display_name,
+             default_code, category, category_id, uom, uom_id, company_id,
+             attrs_json, brand_value, pack_value, grade_value,
+             avg_cost, last_price, last_vendor_key, is_active)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+          ON CONFLICT(odoo_variant_id) DO UPDATE SET
+            template_name = excluded.template_name,
+            display_name  = excluded.display_name,
+            default_code  = excluded.default_code,
+            attrs_json    = excluded.attrs_json,
+            brand_value   = excluded.brand_value,
+            pack_value    = excluded.pack_value,
+            grade_value   = excluded.grade_value,
+            updated_at    = datetime('now')
+        `).bind(
+          v.id, tmplId, trimmedName, v.display_name || trimmedName,
+          v.default_code || null,
+          v.categ_id?.[1] || null, v.categ_id?.[0] || null,
+          v.uom_id?.[1] || null, v.uom_id?.[0] || null,
+          v.company_id?.[0] || null,
+          JSON.stringify(attrs), brandVal, packVal, gradeVal,
+          v.standard_price || 0,
+          default_price || null,
+          default_vendor_key || null,
+        ).run();
+        variantRows.push({
+          id: v.id, code: v.default_code, name: v.display_name, attrs,
+        });
+      }
+
+      // 6. Optional: attach default vendor via product.supplierinfo (template-level)
+      let supplierinfoId = null;
+      if (default_vendor_key) {
+        const vRow = await db.prepare('SELECT odoo_id FROM rm_vendors WHERE key=?').bind(default_vendor_key).first();
+        if (vRow?.odoo_id) {
+          supplierinfoId = await odoo(apiKey, 'product.supplierinfo', 'create', [{
+            partner_id: vRow.odoo_id,
+            product_tmpl_id: tmplId,
+            price: default_price || 0,
+            min_qty: 1,
+          }]);
+        }
+      }
+
+      await logSync(db, 'create_template_variants', 'product.template', tmplId, trimmedName,
+        { name: trimmedName, variants: variantRows.length, attr_lines: attrLinePayload.length, supplierinfoId },
+        user.name);
+
+      return json({
+        success: true,
+        template_id: tmplId,
+        name: trimmedName,
+        variant_count: variantRows.length,
+        expected_variants: totalVariants,
+        variants: variantRows,
+        supplierinfo_id: supplierinfoId,
+      });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
+  if (action === 'refresh-variants') {
+    // Re-sync Odoo → D1 cache. Covers templates that have attribute lines.
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+    try {
+      // Only templates with attribute lines (i.e., have variants)
+      const tmpls = await odoo(apiKey, 'product.template', 'search_read',
+        [[['attribute_line_ids', '!=', false], ['active', '=', true], ['purchase_ok', '=', true]]],
+        { fields: ['id', 'name', 'categ_id', 'uom_id', 'company_id'], limit: 500 });
+
+      if (!tmpls.length) return json({ synced: 0, message: 'No templates with variants found' });
+
+      const tmplMeta = {};
+      for (const t of tmpls) tmplMeta[t.id] = t;
+
+      const variants = await odoo(apiKey, 'product.product', 'search_read',
+        [[['product_tmpl_id', 'in', tmpls.map(t => t.id)], ['active', '=', true]]],
+        { fields: ['id', 'default_code', 'display_name', 'product_tmpl_id',
+                   'product_template_attribute_value_ids', 'standard_price'] });
+
+      // Batch read all PTAVs
+      const ptavIds = [...new Set(variants.flatMap(v => v.product_template_attribute_value_ids || []))];
+      const ptavMap = {};
+      if (ptavIds.length) {
+        const ptavs = await odoo(apiKey, 'product.template.attribute.value', 'search_read',
+          [[['id', 'in', ptavIds]]], { fields: ['id', 'name', 'attribute_id'] });
+        for (const pv of ptavs) ptavMap[pv.id] = pv;
+      }
+
+      let upserted = 0;
+      for (const v of variants) {
+        const tmpl = tmplMeta[v.product_tmpl_id?.[0]];
+        if (!tmpl) continue;
+        const attrs = {};
+        let brandVal = null, packVal = null, gradeVal = null;
+        for (const pvId of (v.product_template_attribute_value_ids || [])) {
+          const pv = ptavMap[pvId];
+          if (!pv) continue;
+          const aid = pv.attribute_id?.[0];
+          const aname = pv.attribute_id?.[1] || `attr_${aid}`;
+          attrs[aname] = pv.name;
+          if (aid === ATTR_BRAND) brandVal = pv.name;
+          else if (aid === ATTR_PACK) packVal = pv.name;
+          else if (aid === ATTR_GRADE) gradeVal = pv.name;
+        }
+        await db.prepare(`
+          INSERT INTO rm_product_variants
+            (odoo_variant_id, odoo_template_id, template_name, display_name,
+             default_code, category, category_id, uom, uom_id, company_id,
+             attrs_json, brand_value, pack_value, grade_value, avg_cost, is_active)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+          ON CONFLICT(odoo_variant_id) DO UPDATE SET
+            template_name = excluded.template_name,
+            display_name  = excluded.display_name,
+            default_code  = excluded.default_code,
+            attrs_json    = excluded.attrs_json,
+            brand_value   = excluded.brand_value,
+            pack_value    = excluded.pack_value,
+            grade_value   = excluded.grade_value,
+            avg_cost      = excluded.avg_cost,
+            is_active     = 1,
+            updated_at    = datetime('now')
+        `).bind(
+          v.id, tmpl.id, tmpl.name, v.display_name || tmpl.name,
+          v.default_code || null,
+          tmpl.categ_id?.[1] || null, tmpl.categ_id?.[0] || null,
+          tmpl.uom_id?.[1] || null, tmpl.uom_id?.[0] || null,
+          tmpl.company_id?.[0] || null,
+          JSON.stringify(attrs), brandVal, packVal, gradeVal,
+          v.standard_price || 0,
+        ).run();
+        upserted++;
+      }
+
+      // Deactivate variants that no longer exist in Odoo
+      const liveIds = variants.map(v => v.id);
+      if (liveIds.length) {
+        await db.prepare(`UPDATE rm_product_variants SET is_active=0, updated_at=datetime('now')
+                          WHERE odoo_variant_id NOT IN (${liveIds.map(() => '?').join(',')})`)
+          .bind(...liveIds).run();
+      }
+      await logSync(db, 'refresh_variants', 'product.product', 0, 'refresh',
+        { templates: tmpls.length, variants: upserted }, user.name);
+      return json({ success: true, templates: tmpls.length, synced: upserted });
     } catch (e) {
       return json({ error: e.message }, 500);
     }
