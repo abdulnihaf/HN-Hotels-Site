@@ -25,7 +25,7 @@ export async function onRequest(context) {
   const db = env.DB;
 
   try {
-    if (method === 'POST') return handlePost(db, request, headers);
+    if (method === 'POST') return handlePost(db, request, headers, env);
     if (method === 'GET') return handleGet(db, url, headers);
     return new Response(JSON.stringify({ error: 'method not allowed' }), { status: 405, headers });
   } catch (err) {
@@ -34,7 +34,7 @@ export async function onRequest(context) {
 }
 
 // ========= POST =========
-async function handlePost(db, request, headers) {
+async function handlePost(db, request, headers, env) {
   const body = await request.json();
 
   // Route: orders → aggregator_orders, session → KV, metrics → aggregator_snapshots
