@@ -444,6 +444,15 @@ async function handlePost(request, env) {
   /* ━━━ Re-scan Drive folder for new Aadhar/PAN/barcode files ━━━ */
   if (action === 'rescan-drive') {
     const ROOT = env.GDRIVE_HR_ROOT || '1IYoyfhByBR9_2n59Z5U-R_5rMeRnqufQ';
+    // Debug envelope
+    if (body.debug) {
+      return json({
+        env_keys_visible: Object.keys(env).sort(),
+        gdrive_email_present: !!env.GDRIVE_SA_EMAIL,
+        gdrive_key_present: !!env.GDRIVE_SA_PRIVATE_KEY,
+        gdrive_key_len: (env.GDRIVE_SA_PRIVATE_KEY || '').length,
+      });
+    }
     try {
       const token = await getGDriveToken(env);
       const list = (q) => fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,webViewLink)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true`,
