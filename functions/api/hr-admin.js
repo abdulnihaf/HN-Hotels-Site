@@ -300,6 +300,40 @@ async function handleGet(url, env) {
     return json({ devices: rows.results });
   }
 
+  // --- TEMP DEBUG: probe Odoo CAMS biometric model for stgid mismatch ---
+  if (action === 'cams-odoo-probe') {
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'no api key' }, 500);
+    const out = { models_found: [], records: {} };
+    const candidates = [
+      'cams.biometric.config', 'cams.biometric.device', 'cams.biometric',
+      'cams.device', 'cams.service.tag', 'cams.config', 'biometric.device',
+      'cams.machine', 'hr.attendance.cams.config',
+    ];
+    for (const model of candidates) {
+      try {
+        const all = await odoo(apiKey, model, 'search_read',
+          [[]], { fields: [], limit: 20 });
+        out.models_found.push(model);
+        out.records[model] = all;
+      } catch (e) {
+        // model doesn't exist — skip
+      }
+    }
+    // Also try ir.model search for any model with "cams" in name
+    try {
+      const models = await odoo(apiKey, 'ir.model', 'search_read',
+        [[['model', 'ilike', 'cams']]], { fields: ['model', 'name'], limit: 50 });
+      out.ir_model_cams = models;
+    } catch (e) { out.ir_model_err = e.message; }
+    try {
+      const models = await odoo(apiKey, 'ir.model', 'search_read',
+        [[['model', 'ilike', 'biometric']]], { fields: ['model', 'name'], limit: 50 });
+      out.ir_model_biometric = models;
+    } catch (e) {}
+    return json(out);
+  }
+
   // --- Status dashboard ---
   if (action === 'status') {
     const [total, active, synced, unsynced, pendingBio, byBrand, byPayType, lastSync, attendToday, leavesOpen] =
