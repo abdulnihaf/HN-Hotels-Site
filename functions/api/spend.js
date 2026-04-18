@@ -162,6 +162,65 @@ export async function onRequest(context) {
       return json({ success: true, employees: rows.results });
     }
 
+    // ── UoMs (for inline product creation) ─────────────────
+    if (action === 'uoms') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const uoms = await odoo(apiKey, 'uom.uom', 'search_read',
+        [[]], { fields: ['id', 'name', 'category_id'], limit: 50, order: 'name asc' });
+      return json({ success: true, uoms });
+    }
+
+    // ── CREATE EXPENSE PRODUCT (inline-add from cats 2-13) ─
+    if (action === 'create-expense-product' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, cat_id, name, uom_id } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      const cat = CATEGORIES.find(c => c.id === parseInt(cat_id, 10));
+      if (!cat) return json({ success: false, error: 'Unknown category' }, 400);
+      if (cat.backend !== 'hr.expense') return json({ success: false, error: 'Only expense categories support inline product creation' }, 400);
+      if (!name?.trim()) return json({ success: false, error: 'Name required' }, 400);
+
+      // Resolve parent category
+      const parentList = await odoo(apiKey, 'product.category', 'search_read',
+        [[['name', 'ilike', cat.parentName]]],
+        { fields: ['id', 'name'], limit: 1 });
+      if (!parentList.length) return json({ success: false, error: `Parent category "${cat.parentName}" not found in Odoo` }, 404);
+
+      const prodId = await odoo(apiKey, 'product.product', 'create', [{
+        name: name.trim(),
+        categ_id: parentList[0].id,
+        type: 'service',
+        can_be_expensed: true,
+        purchase_ok: true,
+        sale_ok: false,
+        uom_id: uom_id ? parseInt(uom_id, 10) : undefined,
+        uom_po_id: uom_id ? parseInt(uom_id, 10) : undefined,
+      }]);
+
+      return json({ success: true, product: { id: prodId, name: name.trim() } });
+    }
+
+    // ── CREATE VENDOR (inline-add for cats 1, 14, 15) ──────
+    if (action === 'create-vendor' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, name, phone } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!name?.trim()) return json({ success: false, error: 'Name required' }, 400);
+
+      const vendorId = await odoo(apiKey, 'res.partner', 'create', [{
+        name: name.trim(),
+        phone: phone?.trim() || false,
+        supplier_rank: 1,
+        is_company: true,
+      }]);
+
+      return json({ success: true, vendor: { id: vendorId, name: name.trim(), phone: phone?.trim() || '' } });
+    }
+
     // ── VENDORS (for Cat 1, 2, 14, 15) ─────────────────────
     if (action === 'vendors') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);

@@ -226,6 +226,45 @@
     </div>
   </div>
 
+  <!-- New Product inline-create modal -->
+  <div id="new-product-modal" class="modal hidden" onclick="if(event.target===this)closeNewProductModal()">
+    <div class="modal-card">
+      <h3>Add new item</h3>
+      <div class="sub" style="margin-bottom: 12px;" id="new-product-category-label"></div>
+      <div class="row">
+        <label>Item name *</label>
+        <input id="np-name" type="text" placeholder="e.g. Notion Enterprise">
+      </div>
+      <div class="row">
+        <label>Unit of measure</label>
+        <select id="np-uom"><option value="">Loading…</option></select>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn ghost" style="flex: 1;" onclick="closeNewProductModal()">Cancel</button>
+        <button class="btn" style="flex: 1;" onclick="submitNewProduct()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Vendor inline-create modal -->
+  <div id="new-vendor-modal" class="modal hidden" onclick="if(event.target===this)closeNewVendorModal()">
+    <div class="modal-card">
+      <h3>Add new vendor</h3>
+      <div class="row">
+        <label>Vendor name *</label>
+        <input id="nv-name" type="text" placeholder="e.g. Sharma Electrical">
+      </div>
+      <div class="row">
+        <label>Phone (optional)</label>
+        <input id="nv-phone" type="tel" inputmode="tel" placeholder="9xxxx xxxxx">
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn ghost" style="flex: 1;" onclick="closeNewVendorModal()">Cancel</button>
+        <button class="btn" style="flex: 1;" onclick="submitNewVendor()">Create</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ══════════ CAT 15 — BILL FROM PO ══════════ -->
   <div id="cat15-screen" class="hidden">
     <header>
@@ -412,9 +451,10 @@ async function buildGenericForm(cat) {
     fields.push(`
       <div class="row">
         <label>What</label>
-        <select id="f-product">
+        <select id="f-product" onchange="onProductPick(this, ${cat.id})">
           <option value="">— Select —</option>
           ${products.products.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+          <option value="__new__" style="color: var(--accent);">+ Add new item…</option>
         </select>
       </div>
     `);
@@ -439,9 +479,10 @@ async function buildGenericForm(cat) {
     fields.push(`
       <div class="row">
         <label>Vendor</label>
-        <select id="f-vendor">
+        <select id="f-vendor" onchange="onVendorPick(this)">
           <option value="">— Select —</option>
           ${(vend.vendors || []).map(v => `<option value="${v.id}">${v.name}</option>`).join('')}
+          <option value="__new__" style="color: var(--accent);">+ Add new vendor…</option>
         </select>
       </div>
       <div class="row">
@@ -751,6 +792,12 @@ function openVendorPicker(cartIdx) {
   document.getElementById('vendor-modal').classList.remove('hidden');
   filterVendorList();
 }
+
+// Open the new-vendor modal from cat 1's vendor picker (context: 'cart')
+function openNewVendorFromCart() {
+  _newVendorContext = 'cart';
+  openNewVendorModal();
+}
 function closeVendorModal() {
   document.getElementById('vendor-modal').classList.add('hidden');
   vendorPickerCtx = null;
@@ -765,7 +812,8 @@ function filterVendorList() {
     return a.name.localeCompare(b.name);
   });
   document.getElementById('vendor-known').classList.toggle('hidden', vendorKnownOdooIds.size === 0);
-  document.getElementById('vendor-list').innerHTML = list.slice(0, 80).map(v => `
+  const addNewBtn = `<div class="product-card" style="padding: 10px; cursor: pointer; border-style: dashed; color: var(--accent); text-align: center;" onclick="openNewVendorFromCart()">+ Add new vendor…</div>`;
+  document.getElementById('vendor-list').innerHTML = addNewBtn + list.slice(0, 80).map(v => `
     <div class="product-card" style="padding: 10px; cursor: pointer;" onclick="pickVendor(${v.id})">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
@@ -934,6 +982,126 @@ async function submitCat15() {
   if (!r.success) return toast(r.error || 'Failed', 'err');
   toast(`✓ Bill recorded for ${r.po_name}`, 'ok');
   setTimeout(showHome, 900);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Inline-create — new product / new vendor
+// ═══════════════════════════════════════════════════════════════
+let _newProductForCat = null;
+let _uomsCache = null;
+let _newVendorContext = 'generic'; // 'generic' (form-screen select) | 'cart' (cat 1 vendor modal)
+
+async function onProductPick(el, catId) {
+  if (el.value === '__new__') {
+    _newProductForCat = catId;
+    el.value = '';
+    openNewProductModal(catId);
+  }
+}
+function onVendorPick(el) {
+  if (el.value === '__new__') {
+    el.value = '';
+    _newVendorContext = 'generic';
+    openNewVendorModal();
+  }
+}
+
+async function openNewProductModal(catId) {
+  const cat = USER.categories.find(c => c.id === catId);
+  document.getElementById('new-product-category-label').textContent = cat ? `Adds to ${cat.label} (${cat.parentName || cat.label})` : '';
+  document.getElementById('np-name').value = '';
+
+  if (!_uomsCache) {
+    const r = await fetch(`${API}?action=uoms&pin=${PIN}`).then(x => x.json()).catch(() => null);
+    _uomsCache = r?.uoms || [];
+  }
+  const sel = document.getElementById('np-uom');
+  sel.innerHTML = `
+    <option value="">— Select —</option>
+    ${_uomsCache.map(u => `<option value="${u.id}" ${u.name === 'Units' ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
+  `;
+  document.getElementById('new-product-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('np-name').focus(), 50);
+}
+function closeNewProductModal() {
+  document.getElementById('new-product-modal').classList.add('hidden');
+}
+async function submitNewProduct() {
+  const name = document.getElementById('np-name').value.trim();
+  const uomId = document.getElementById('np-uom').value;
+  if (!name) { toast('Name required', 'err'); return; }
+
+  const r = await fetch(`${API}?action=create-expense-product`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, cat_id: _newProductForCat, name, uom_id: uomId || undefined }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+
+  if (!r.success) { toast(r.error || 'Failed', 'err'); return; }
+
+  // Add to dropdown + select it
+  const sel = document.getElementById('f-product');
+  if (sel) {
+    const opt = document.createElement('option');
+    opt.value  = r.product.id;
+    opt.textContent = r.product.name;
+    // Insert before the "__new__" option
+    const newOpt = Array.from(sel.options).find(o => o.value === '__new__');
+    if (newOpt) sel.insertBefore(opt, newOpt);
+    else        sel.appendChild(opt);
+    sel.value = r.product.id;
+  }
+  closeNewProductModal();
+  toast(`✓ Added "${r.product.name}"`, 'ok');
+}
+
+function openNewVendorModal() {
+  document.getElementById('nv-name').value = '';
+  document.getElementById('nv-phone').value = '';
+  document.getElementById('new-vendor-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('nv-name').focus(), 50);
+}
+function closeNewVendorModal() {
+  document.getElementById('new-vendor-modal').classList.add('hidden');
+}
+async function submitNewVendor() {
+  const name = document.getElementById('nv-name').value.trim();
+  const phone = document.getElementById('nv-phone').value.trim();
+  if (!name) { toast('Name required', 'err'); return; }
+
+  const r = await fetch(`${API}?action=create-vendor`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, name, phone }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+
+  if (!r.success) { toast(r.error || 'Failed', 'err'); return; }
+
+  const newVendor = r.vendor;
+
+  if (_newVendorContext === 'cart') {
+    // Cat 1 — add to catalog, auto-pick for current cart row
+    rmCatalog.vendors.push(newVendor);
+    if (vendorPickerCtx?.cartIdx != null) {
+      cart[vendorPickerCtx.cartIdx].vendor = newVendor;
+      renderRmProducts(); renderCart();
+    }
+    closeVendorModal();
+  } else {
+    // Generic form — add to dropdown + select
+    const sel = document.getElementById('f-vendor');
+    if (sel) {
+      const opt = document.createElement('option');
+      opt.value = newVendor.id;
+      opt.textContent = newVendor.name;
+      const newOpt = Array.from(sel.options).find(o => o.value === '__new__');
+      if (newOpt) sel.insertBefore(opt, newOpt);
+      else        sel.appendChild(opt);
+      sel.value = newVendor.id;
+    }
+  }
+  closeNewVendorModal();
+  toast(`✓ Added "${newVendor.name}"`, 'ok');
 }
 
 // ═══════════════════════════════════════════════════════════════
