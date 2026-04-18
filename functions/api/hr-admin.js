@@ -300,6 +300,34 @@ async function handleGet(url, env) {
     return json({ devices: rows.results });
   }
 
+  // --- TEMP ADMIN: delete + recreate device.service.tag to flush any corruption ---
+  if (action === 'cams-tag-recreate') {
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'no api key' }, 500);
+    try {
+      // 1. Read existing records (all, including archived)
+      const existing = await odoo(apiKey, 'device.service.tag', 'search_read',
+        [[['service_tag_id', '=', 'AYTH09089112']]],
+        { context: { active_test: false } });
+      const ids = existing.map(r => r.id);
+      // 2. Delete them
+      let deleted = 0;
+      if (ids.length) {
+        await odoo(apiKey, 'device.service.tag', 'unlink', [ids]);
+        deleted = ids.length;
+      }
+      // 3. Create fresh
+      const newId = await odoo(apiKey, 'device.service.tag', 'create',
+        [{ service_tag_id: 'AYTH09089112', authentication_token: 'zPnrBXmeNd6dTRlQ2ZC5dFov68V8gBh8' }]);
+      // 4. Read back for verification
+      const fresh = await odoo(apiKey, 'device.service.tag', 'search_read',
+        [[['id', '=', newId]]]);
+      return json({ deleted, new_id: newId, fresh });
+    } catch (e) {
+      return json({ error: e.message, stack: e.stack }, 500);
+    }
+  }
+
   // --- TEMP DEBUG: read + byte-inspect device.service.tag records ---
   if (action === 'cams-service-tags') {
     const apiKey = env.ODOO_API_KEY;
