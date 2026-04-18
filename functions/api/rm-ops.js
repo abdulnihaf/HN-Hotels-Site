@@ -47,16 +47,19 @@ const BRAND_CONFIG = {
 
 const USERS = {
   '0305': { name: 'Nihaf',   role: 'admin',      odoo: 'system' },
-  '2026': { name: 'Zoya',    role: 'purchase',    odoo: 'zoya' },
-  '3678': { name: 'Faheem',  role: 'settlement',  odoo: 'faheem' },
-  '6890': { name: 'Tanveer', role: 'staff',       odoo: 'system' },
-  '7115': { name: 'Kesmat',  role: 'staff',       odoo: 'system' },
-  '3946': { name: 'Jafar',   role: 'staff',       odoo: 'system' },
-  '9991': { name: 'Mujib',   role: 'staff',       odoo: 'system' },
-  '3697': { name: 'Yashwant',role: 'staff',       odoo: 'system' },
-  '3754': { name: 'Naveen',  role: 'staff',       odoo: 'system' },
-  '8241': { name: 'Nafees',  role: 'staff',       odoo: 'system' },
-  '8523': { name: 'Basheer', role: 'staff',       odoo: 'system' },
+  '5882': { name: 'Nihaf',   role: 'admin',      odoo: 'system' },  // /ops/spend/ alt
+  '2026': { name: 'Zoya',    role: 'purchase',   odoo: 'zoya' },
+  '8316': { name: 'Zoya',    role: 'purchase',   odoo: 'zoya' },     // /ops/spend/ alt
+  '3678': { name: 'Faheem',  role: 'settlement', odoo: 'faheem' },
+  '6045': { name: 'Faheem',  role: 'settlement', odoo: 'faheem' },   // /ops/spend/ alt
+  '6890': { name: 'Tanveer', role: 'staff',      odoo: 'system' },
+  '7115': { name: 'Kesmat',  role: 'staff',      odoo: 'system' },
+  '3946': { name: 'Jafar',   role: 'staff',      odoo: 'system' },
+  '9991': { name: 'Mujib',   role: 'staff',      odoo: 'system' },
+  '3697': { name: 'Yashwant',role: 'staff',      odoo: 'system' },
+  '3754': { name: 'Naveen',  role: 'staff',      odoo: 'system' },
+  '8241': { name: 'Nafees',  role: 'staff',      odoo: 'system' },
+  '8523': { name: 'Basheer', role: 'staff',      odoo: 'system' },
 };
 
 function getOdooCredentials(user, env) {
@@ -775,9 +778,9 @@ async function handlePost(action, context, env, DB) {
 /* ── Create Purchase Order ── */
 
 async function createPO(body, user, creds, cfg, brand, DB) {
-  if (user.role !== 'admin' && user.role !== 'purchase') {
-    return json({ error: 'Insufficient permissions for purchase' }, 403);
-  }
+  // Any authenticated user in USERS can create a PO — /ops/spend/ (unified UI)
+  // lets Nihaf/Naveen/Faheem/Basheer/Tanveer/Yashwant/Zoya all record RM purchases.
+  // PIN membership in USERS is the actual auth gate.
 
   const { vendor_id, lines } = body;
   if (!vendor_id || !lines || !Array.isArray(lines) || lines.length === 0) {

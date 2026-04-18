@@ -13,27 +13,38 @@
     --border: rgba(255,255,255,0.08);
     --text: #e8e8ee;
     --text-dim: rgba(232,232,238,0.55);
+    --text-mute: rgba(232,232,238,0.35);
     --accent: #f0a944;
     --accent-bg: rgba(240,169,68,0.12);
     --danger: #ef4444;
     --success: #22c55e;
+    --warn: #eab308;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
     font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-  .app { max-width: 900px; margin: 0 auto; padding: 16px; }
+  .app { max-width: 900px; margin: 0 auto; padding: 16px; padding-bottom: 100px; }
   header { display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 16px; gap: 12px; }
   h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
   .sub { color: var(--text-dim); font-size: 13px; }
+  .mute { color: var(--text-mute); font-size: 12px; }
   .btn { background: var(--accent); color: #000; border: 0; padding: 10px 16px;
-    border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px;
+    transition: opacity 0.15s; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
   .btn.danger { background: var(--danger); color: #fff; }
+  .btn.sm { padding: 6px 10px; font-size: 13px; }
+  .btn.full { width: 100%; padding: 14px; font-size: 16px; }
   input, select, textarea { background: var(--card); border: 1px solid var(--border);
     color: var(--text); padding: 10px 12px; border-radius: 10px; font-size: 15px;
     width: 100%; font-family: inherit; }
   input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   label { display: block; margin-bottom: 4px; color: var(--text-dim); font-size: 13px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 10px; }
@@ -46,13 +57,14 @@
   .cat-card .d { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
   .brand-chips { display: flex; gap: 6px; margin-bottom: 16px; }
   .chip { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--card); font-size: 13px; cursor: pointer; font-weight: 600; }
+    background: var(--card); font-size: 13px; cursor: pointer; font-weight: 600;
+    color: var(--text); }
   .chip.active { background: var(--accent); color: #000; border-color: var(--accent); }
   .hidden { display: none !important; }
   .row { margin-bottom: 12px; }
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
     padding: 12px 20px; border-radius: 10px; font-weight: 600; z-index: 99;
-    animation: fadein 0.2s; }
+    animation: fadein 0.2s; max-width: 90%; text-align: center; }
   .toast.ok { background: var(--success); color: #000; }
   .toast.err { background: var(--danger); color: #fff; }
   @keyframes fadein { from { opacity: 0; transform: translate(-50%, 10px); } }
@@ -67,13 +79,43 @@
   .back:hover { color: var(--text); }
   .form-title { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
   .form-title .e { font-size: 28px; }
+
+  /* Cat 1 — Purchase */
+  .product-card { background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
+  .product-card .title { font-weight: 600; font-size: 14px; }
+  .product-card .meta { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+  .product-card .add-row { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+  .product-card .add-row input { padding: 6px 8px; font-size: 13px; }
+  .product-card .variant-btn { background: var(--accent-bg); color: var(--accent);
+    border: 1px solid rgba(240,169,68,0.3); border-radius: 6px; padding: 4px 8px;
+    font-size: 11px; cursor: pointer; margin-top: 6px; }
+  .cart-bar { position: fixed; bottom: 0; left: 0; right: 0;
+    background: #0d0d14; border-top: 1px solid var(--border); padding: 12px 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    z-index: 50; max-width: 900px; margin: 0 auto; }
+  .cart-line { display: flex; gap: 6px; align-items: center; padding: 6px 0;
+    border-bottom: 1px dashed var(--border); font-size: 13px; }
+  .cart-line input { max-width: 80px; padding: 4px 6px; font-size: 12px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; background: var(--accent-bg); color: var(--accent); }
+  .badge.warn { background: rgba(234,179,8,0.12); color: var(--warn); }
+  .badge.ok   { background: rgba(34,197,94,0.12); color: var(--success); }
+
+  /* Modal overlay */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 80;
+    display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal-card { background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px; max-width: 500px; width: 100%;
+    max-height: 80vh; overflow-y: auto; }
+  .modal h3 { margin: 0 0 12px; font-size: 16px; }
 </style>
 </head>
 <body>
 
 <div id="app" class="app">
 
-  <!-- PIN GATE -->
+  <!-- ══════════ PIN GATE ══════════ -->
   <div id="pin-screen">
     <h1>HN Spend</h1>
     <p class="sub">Record any expense or purchase. PIN-gated.</p>
@@ -82,11 +124,11 @@
       <input id="pin-input" type="password" inputmode="numeric" maxlength="4"
              autocomplete="off" autofocus style="font-size: 20px; text-align: center;">
       <div id="pin-error" style="color: var(--danger); margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
-      <button class="btn" onclick="verifyPin()" style="width: 100%; margin-top: 12px;">Enter</button>
+      <button class="btn full" style="margin-top: 12px;" onclick="verifyPin()">Enter</button>
     </div>
   </div>
 
-  <!-- HOME (categories) -->
+  <!-- ══════════ HOME — category grid ══════════ -->
   <div id="home-screen" class="hidden">
     <header>
       <div>
@@ -97,7 +139,6 @@
     </header>
 
     <div class="brand-chips" id="brand-chips"></div>
-
     <div class="grid" id="cat-grid"></div>
 
     <div class="recent" id="recent">
@@ -106,11 +147,11 @@
     </div>
   </div>
 
-  <!-- FORM (dynamic per category) -->
+  <!-- ══════════ GENERIC FORM (cats 2-13, 14) ══════════ -->
   <div id="form-screen" class="hidden">
     <header>
       <button class="back" onclick="showHome()">← Back</button>
-      <span></span>
+      <span class="mute" id="form-brand-tag"></span>
     </header>
     <div class="form-title">
       <span class="e" id="form-emoji"></span>
@@ -119,29 +160,136 @@
         <div class="sub" id="form-desc"></div>
       </div>
     </div>
-
     <div id="form-fields"></div>
+    <button class="btn full" id="submit-btn" onclick="submitForm()">Record</button>
+  </div>
 
-    <button class="btn" id="submit-btn" onclick="submitForm()" style="width: 100%; padding: 14px; font-size: 16px;">Record</button>
+  <!-- ══════════ CAT 1 — RAW MATERIAL PURCHASE ══════════ -->
+  <div id="cat1-screen" class="hidden">
+    <header>
+      <button class="back" onclick="showHome()">← Back</button>
+      <span class="mute" id="cat1-brand-tag"></span>
+    </header>
+    <div class="form-title">
+      <span class="e">🥩</span>
+      <div>
+        <h1 style="margin: 0;">Raw Material Purchase</h1>
+        <div class="sub">Search → add to cart → submit PO per vendor</div>
+      </div>
+    </div>
+
+    <input id="rm-search" type="search" placeholder="Search products (name or code)…"
+           oninput="filterRmProducts()" style="margin-bottom: 12px;">
+
+    <div id="rm-product-list" style="margin-bottom: 20px;"></div>
+    <div id="rm-empty" class="mute hidden" style="text-align: center; padding: 20px;">No products match.</div>
+
+    <div id="rm-cart-section" class="hidden" style="margin-top: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <h3 style="margin: 0; font-size: 13px; color: var(--text-dim);">ORDER ITEMS</h3>
+        <button class="btn sm ghost" onclick="clearCart()" style="color: var(--danger);">Clear All</button>
+      </div>
+      <div id="rm-cart-items"></div>
+    </div>
+
+    <div class="recent" style="margin-top: 24px;">
+      <h3>Recent POs</h3>
+      <div id="rm-recent-pos"></div>
+    </div>
+  </div>
+
+  <!-- Cart bottom bar (for cat 1) -->
+  <div id="rm-cart-bar" class="cart-bar hidden">
+    <div>
+      <span id="rm-cart-count" style="font-weight: 600;">0 items</span>
+      <span style="color: var(--accent); font-weight: 700; margin-left: 8px;" id="rm-cart-total">₹0</span>
+    </div>
+    <button class="btn" id="rm-submit-btn" onclick="submitRmPurchase()" disabled>Create PO</button>
+  </div>
+
+  <!-- Vendor picker modal (cat 1) -->
+  <div id="vendor-modal" class="modal hidden" onclick="if(event.target===this)closeVendorModal()">
+    <div class="modal-card">
+      <h3>Choose Vendor</h3>
+      <input id="vendor-search" type="search" placeholder="Search vendors…" oninput="filterVendorList()" style="margin-bottom: 12px;">
+      <div id="vendor-known" class="mute hidden" style="margin-bottom: 8px;">Linked vendors first:</div>
+      <div id="vendor-list"></div>
+    </div>
+  </div>
+
+  <!-- Variant picker modal (cat 1) -->
+  <div id="variant-modal" class="modal hidden" onclick="if(event.target===this)closeVariantPicker()">
+    <div class="modal-card">
+      <h3 id="variant-title">Pick variant</h3>
+      <div class="sub" id="variant-subtitle" style="margin-bottom: 12px;"></div>
+      <div id="variant-list"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ CAT 15 — BILL FROM PO ══════════ -->
+  <div id="cat15-screen" class="hidden">
+    <header>
+      <button class="back" onclick="showHome()">← Back</button>
+      <span class="mute" id="cat15-brand-tag"></span>
+    </header>
+    <div class="form-title">
+      <span class="e">📄</span>
+      <div>
+        <h1 style="margin: 0;">Bill from PO (3-way match)</h1>
+        <div class="sub">Link vendor bill to an existing confirmed purchase order</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Pick Purchase Order</label>
+      <select id="cat15-po"><option value="">Loading confirmed POs…</option></select>
+      <div id="cat15-po-meta" class="mute" style="margin-top: 6px;"></div>
+    </div>
+    <div class="row">
+      <label>Bill number</label>
+      <input id="cat15-ref" type="text" placeholder="e.g. INV-2026-001">
+    </div>
+    <div class="row">
+      <label>Bill date</label>
+      <input id="cat15-date" type="date">
+    </div>
+    <div class="row">
+      <label>Amount (₹)</label>
+      <input id="cat15-amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+    </div>
+    <div class="row">
+      <label>Notes (optional)</label>
+      <textarea id="cat15-notes" rows="2"></textarea>
+    </div>
+    <button class="btn full" onclick="submitCat15()">Record Bill</button>
   </div>
 
 </div>
 
 <script>
-const API = '/api/spend';
+// ═══════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════
+const API    = '/api/spend';
+const RM_API = '/api/rm-ops';   // Cat 1 uses existing RM purchase pipeline
 let PIN = '';
 let USER = null;
 let BRAND = null;
 let CURRENT_CAT = null;
 
-// ══ PIN entry ══
+// Cat 1 state
+let rmCatalog = { products: [], vendors: [], recentPOs: [] };
+let cart = [];
+let variantSearch = { q: '', results: [], timer: null };
+let vendorPickerCtx = null;    // { cartIdx } — which cart row is picking
+let vendorKnownOdooIds = new Set();
+
+// ═══════════════════════════════════════════════════════════════
+// PIN entry
+// ═══════════════════════════════════════════════════════════════
 const pinInput = document.getElementById('pin-input');
-pinInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') verifyPin();
-});
-pinInput.addEventListener('input', () => {
-  if (pinInput.value.length === 4) verifyPin();
-});
+pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') verifyPin(); });
+pinInput.addEventListener('input', () => { if (pinInput.value.length === 4) verifyPin(); });
 
 async function verifyPin() {
   const pin = pinInput.value.trim();
@@ -165,30 +313,29 @@ async function verifyPin() {
 }
 
 function logout() {
-  PIN = ''; USER = null; BRAND = null; CURRENT_CAT = null;
+  PIN = ''; USER = null; BRAND = null; CURRENT_CAT = null; cart = [];
   pinInput.value = '';
   document.getElementById('pin-error').textContent = '';
-  document.getElementById('home-screen').classList.add('hidden');
-  document.getElementById('form-screen').classList.add('hidden');
+  ['home-screen','form-screen','cat1-screen','cat15-screen'].forEach(id => document.getElementById(id).classList.add('hidden'));
   document.getElementById('pin-screen').classList.remove('hidden');
   pinInput.focus();
 }
 
 function renderBrands() {
-  const chips = document.getElementById('brand-chips');
-  chips.innerHTML = USER.brands.map(b => `
+  document.getElementById('brand-chips').innerHTML = USER.brands.map(b => `
     <button class="chip ${b === BRAND ? 'active' : ''}" onclick="setBrand('${b}')">${b}</button>
   `).join('');
 }
 
 function setBrand(b) {
+  if (cart.length && !confirm('Switching brand clears the cart. Continue?')) return;
   BRAND = b;
+  cart = [];
   renderBrands();
 }
 
 function renderCategories() {
-  const grid = document.getElementById('cat-grid');
-  grid.innerHTML = USER.categories.map(c => `
+  document.getElementById('cat-grid').innerHTML = USER.categories.map(c => `
     <div class="cat-card" onclick="openCategory(${c.id})">
       <div class="e">${c.emoji}</div>
       <div class="l">${c.label}</div>
@@ -200,49 +347,64 @@ function renderCategories() {
 async function loadRecent() {
   const r = await fetch(`${API}?action=recent&pin=${PIN}`).then(x => x.json()).catch(() => null);
   const list = document.getElementById('recent-list');
-  if (!r?.success || !r.entries?.length) { list.innerHTML = '<div class="sub" style="font-size: 12px;">No recent entries.</div>'; return; }
+  if (!r?.success || !r.entries?.length) { list.innerHTML = '<div class="mute">No recent entries.</div>'; return; }
   list.innerHTML = r.entries.slice(0, 8).map(e => `
     <div class="entry">
       <div>
         <div>${e.product_name || e.category}</div>
-        <div class="sub" style="font-size: 11px;">${e.category} · ${e.payment_method || '-'} · PIN ${e.recorded_by_pin}</div>
+        <div class="mute">${e.category} · ${e.payment_method || '-'} · PIN ${e.recorded_by_pin}</div>
       </div>
       <div class="amt">₹${Number(e.amount).toLocaleString('en-IN')}</div>
     </div>
   `).join('');
 }
 
-async function openCategory(catId) {
+// ═══════════════════════════════════════════════════════════════
+// Category open dispatcher
+// ═══════════════════════════════════════════════════════════════
+function openCategory(catId) {
   const cat = USER.categories.find(c => c.id === catId);
   if (!cat) return;
   CURRENT_CAT = cat;
-  document.getElementById('home-screen').classList.add('hidden');
-  document.getElementById('form-screen').classList.remove('hidden');
-  document.getElementById('form-emoji').textContent = cat.emoji;
-  document.getElementById('form-label').textContent = cat.label;
-  document.getElementById('form-desc').textContent = `${cat.desc} · ${BRAND}`;
-  await buildForm(cat);
+  ['home-screen','form-screen','cat1-screen','cat15-screen'].forEach(id => document.getElementById(id).classList.add('hidden'));
+
+  if (cat.id === 1) {
+    openCat1();
+  } else if (cat.id === 15) {
+    openCat15();
+  } else {
+    openGenericForm(cat);
+  }
 }
 
 function showHome() {
-  document.getElementById('form-screen').classList.add('hidden');
+  ['form-screen','cat1-screen','cat15-screen'].forEach(id => document.getElementById(id).classList.add('hidden'));
   document.getElementById('home-screen').classList.remove('hidden');
+  document.getElementById('rm-cart-bar').classList.add('hidden');
   loadRecent();
 }
 
-// ══ Build form dynamically by category ══
-async function buildForm(cat) {
+// ═══════════════════════════════════════════════════════════════
+// Generic form (cats 2, 3-13, 14)
+// ═══════════════════════════════════════════════════════════════
+async function openGenericForm(cat) {
+  document.getElementById('form-screen').classList.remove('hidden');
+  document.getElementById('form-emoji').textContent = cat.emoji;
+  document.getElementById('form-label').textContent = cat.label;
+  document.getElementById('form-desc').textContent = cat.desc;
+  document.getElementById('form-brand-tag').textContent = BRAND;
+  await buildGenericForm(cat);
+}
+
+async function buildGenericForm(cat) {
   const container = document.getElementById('form-fields');
   container.innerHTML = '<div class="sub">Loading…</div>';
-
   const fields = [];
 
-  // Cats 3-13 → hr.expense path
   if (cat.backend === 'hr.expense') {
-    // Product picker
     const products = await fetch(`${API}?action=products&pin=${PIN}&cat=${cat.id}`).then(x => x.json()).catch(() => ({ products: [] }));
     if (!products.products || !products.products.length) {
-      container.innerHTML = `<div class="sub">No products configured in Odoo for this category yet.</div>`;
+      container.innerHTML = `<div class="mute" style="padding: 14px; background: var(--card); border-radius: 10px;">No products configured in Odoo under <b>${cat.parentName || cat.label}</b>. Ask Naveen to add them.</div>`;
       document.getElementById('submit-btn').classList.add('hidden');
       return;
     }
@@ -252,12 +414,11 @@ async function buildForm(cat) {
         <label>What</label>
         <select id="f-product">
           <option value="">— Select —</option>
-          ${products.products.map(p => `<option value="${p.id}" data-name="${p.name}">${p.name}</option>`).join('')}
+          ${products.products.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
         </select>
       </div>
     `);
 
-    // Employee picker (required for salary / advance)
     if (cat.id === 3 || cat.id === 4) {
       const emps = await fetch(`${API}?action=employees&pin=${PIN}`).then(x => x.json()).catch(() => ({ employees: [] }));
       const filtered = BRAND === 'HQ' ? emps.employees : emps.employees.filter(e => e.brand_label === BRAND || e.brand_label === 'HQ');
@@ -273,7 +434,6 @@ async function buildForm(cat) {
     }
   }
 
-  // Cat 14 — direct vendor bill
   if (cat.backend === 'account.move') {
     const vend = await fetch(`${API}?action=vendors&pin=${PIN}&brand=${BRAND}`).then(x => x.json()).catch(() => ({ vendors: [] }));
     fields.push(`
@@ -285,7 +445,7 @@ async function buildForm(cat) {
         </select>
       </div>
       <div class="row">
-        <label>Bill description</label>
+        <label>What was this for</label>
         <input id="f-vendor-name" type="text" placeholder="e.g. Maintenance service — Feb">
       </div>
       <div class="row">
@@ -295,23 +455,6 @@ async function buildForm(cat) {
     `);
   }
 
-  // Cat 1, 2 — purchase orders (deferred)
-  if (cat.backend === 'purchase.order') {
-    container.innerHTML = `
-      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; color: var(--text-dim);">
-        <b>Raw Material & Capex purchase orders</b><br>
-        This flow needs vendor + line items. Use the dedicated purchase UI for now:
-        <br><br>
-        <a href="/ops/purchase/" class="btn" style="text-decoration: none; display: inline-block;">Open /ops/purchase/</a>
-        <br><br>
-        <span style="font-size: 12px;">Coming to /ops/spend/ in Phase 2.</span>
-      </div>
-    `;
-    document.getElementById('submit-btn').classList.add('hidden');
-    return;
-  }
-
-  // Universal fields
   fields.push(`
     <div class="row">
       <label>Amount (₹)</label>
@@ -330,28 +473,20 @@ async function buildForm(cat) {
   `);
 
   container.innerHTML = fields.join('');
-  document.getElementById('submit-btn').classList.remove('hidden');
 }
 
 async function submitForm() {
   if (!CURRENT_CAT) return;
   const btn = document.getElementById('submit-btn');
-  btn.disabled = true;
-  btn.textContent = 'Recording…';
-
+  btn.disabled = true; btn.textContent = 'Recording…';
   try {
     const amount = parseFloat(document.getElementById('f-amount')?.value || '0');
     if (!amount || amount <= 0) throw new Error('Enter a valid amount');
-
     const body = {
-      pin: PIN,
-      category: CURRENT_CAT.id,
-      brand: BRAND,
-      amount,
+      pin: PIN, category: CURRENT_CAT.id, brand: BRAND, amount,
       payment_method: document.getElementById('f-payment')?.value || 'cash',
       notes: document.getElementById('f-notes')?.value || '',
     };
-
     if (CURRENT_CAT.backend === 'hr.expense') {
       body.product_id = document.getElementById('f-product')?.value;
       if (!body.product_id) throw new Error('Pick a product');
@@ -359,30 +494,454 @@ async function submitForm() {
       if (empEl) body.employee_id = parseInt(empEl.value, 10);
       if ((CURRENT_CAT.id === 3 || CURRENT_CAT.id === 4) && !body.employee_id) throw new Error('Pick an employee');
     }
-
     if (CURRENT_CAT.backend === 'account.move') {
       body.vendor_id = document.getElementById('f-vendor')?.value;
       body.vendor_name = document.getElementById('f-vendor-name')?.value || '';
       body.bill_ref = document.getElementById('f-bill-ref')?.value || '';
       if (!body.vendor_id) throw new Error('Pick a vendor');
     }
-
     const r = await fetch(`${API}?action=record`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then(x => x.json());
-
     if (!r.success) throw new Error(r.error || 'Record failed');
     toast(`✓ Recorded ₹${amount.toLocaleString('en-IN')} — ${CURRENT_CAT.label}`, 'ok');
     setTimeout(showHome, 800);
   } catch (e) {
     toast(e.message, 'err');
-    btn.disabled = false;
-    btn.textContent = 'Record';
+    btn.disabled = false; btn.textContent = 'Record';
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// CAT 1 — Raw Material Purchase (full port from /ops/rm/)
+// ═══════════════════════════════════════════════════════════════
+async function openCat1() {
+  cart = [];
+  document.getElementById('cat1-screen').classList.remove('hidden');
+  document.getElementById('cat1-brand-tag').textContent = BRAND;
+  document.getElementById('rm-search').value = '';
+  document.getElementById('rm-product-list').innerHTML = '<div class="mute">Loading catalog…</div>';
+
+  try {
+    const r = await fetch(`${RM_API}?action=purchase-catalog&brand=${BRAND}&pin=${PIN}`).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Load failed');
+    rmCatalog = { products: r.products || [], vendors: r.vendors || [], recentPOs: r.recentPOs || [] };
+    renderRmProducts();
+    renderRecentPOs();
+  } catch (e) {
+    document.getElementById('rm-product-list').innerHTML = `<div class="mute" style="color: var(--danger);">Load failed: ${e.message}</div>`;
+  }
+}
+
+async function filterRmProducts() {
+  const q = document.getElementById('rm-search').value.trim().toLowerCase();
+  // Debounced variant search (≥ 2 chars) from rm-admin
+  clearTimeout(variantSearch.timer);
+  if (q.length >= 2) {
+    variantSearch.timer = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/rm-admin?action=variants&q=${encodeURIComponent(q)}&brand=${BRAND}&limit=40&pin=${PIN}`).then(x => x.json());
+        variantSearch.q = q;
+        variantSearch.results = r.variants || [];
+        renderRmProducts();
+      } catch {}
+    }, 180);
+  } else {
+    variantSearch.results = [];
+  }
+  renderRmProducts();
+}
+
+function renderRmProducts() {
+  const q = document.getElementById('rm-search').value.trim().toLowerCase();
+  const list = document.getElementById('rm-product-list');
+  const empty = document.getElementById('rm-empty');
+
+  if (!q) {
+    list.innerHTML = `<div class="mute" style="padding: 14px; background: var(--card); border-radius: 10px;">Search above to find products (${rmCatalog.products.length} active in ${BRAND}).</div>`;
+    empty.classList.add('hidden');
+    return;
+  }
+
+  // Dedup variants vs flat catalog (agent note: variants above, flat below)
+  const flatOdooIds = new Set(rmCatalog.products.map(p => p.id));
+  const variantTemplates = new Map();
+  for (const v of variantSearch.results) {
+    if (flatOdooIds.has(v.odoo_variant_id)) continue;
+    const tid = v.odoo_template_id || v.template_id || v.id;
+    if (!variantTemplates.has(tid)) variantTemplates.set(tid, { name: v.template_name || v.name, variants: [] });
+    variantTemplates.get(tid).variants.push(v);
+  }
+
+  // Filter flat
+  const flatMatches = rmCatalog.products.filter(p => {
+    const hay = `${p.name} ${p.code || ''} ${p.category || ''}`.toLowerCase();
+    return hay.includes(q);
+  });
+
+  const html = [];
+  for (const [tid, group] of variantTemplates.entries()) {
+    html.push(`
+      <div class="product-card">
+        <div class="title">${esc(group.name)} <span class="badge">${group.variants.length} variants</span></div>
+        <button class="variant-btn" onclick="openVariantPicker(${JSON.stringify(tid).replace(/"/g,'&quot;')})">Pick variant ›</button>
+      </div>
+    `);
+  }
+  for (const p of flatMatches) {
+    const cartIdx = cart.findIndex(c => c.product.id === p.id && !c.product._variant);
+    html.push(renderProductRow(p, cartIdx));
+  }
+
+  if (html.length === 0) {
+    list.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  list.innerHTML = html.join('');
+}
+
+function renderProductRow(p, cartIdx) {
+  const vendorName = p.vendors?.[0]?.name || '';
+  const vendorLabel = p.vendors?.length > 1 ? `${vendorName} +${p.vendors.length - 1}` : vendorName;
+  const lastPrice = p.lastPrice ? `₹${p.lastPrice.price}` : '';
+
+  if (cartIdx === -1) {
+    return `
+      <div class="product-card" id="prod-${p.id}">
+        <div class="title">${esc(p.name)}</div>
+        <div class="meta">${esc(p.code || '')} · ${esc(p.uom || '')} · ${esc(vendorLabel)} ${lastPrice ? `· Last: ${lastPrice}` : ''}</div>
+        <div class="add-row">
+          <button class="btn sm" onclick="addToCart(${p.id})">+ Add</button>
+        </div>
+      </div>
+    `;
+  }
+  // In cart — render inline editor
+  const item = cart[cartIdx];
+  return `
+    <div class="product-card" id="prod-${p.id}">
+      <div class="title">${esc(p.name)}</div>
+      <div class="meta">${esc(p.code || '')} · ${esc(vendorLabel)}</div>
+      ${renderInlineCart(item, cartIdx)}
+    </div>
+  `;
+}
+
+function renderInlineCart(item, idx) {
+  return `
+    <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+      <div style="display: flex; gap: 6px;">
+        <input type="number" inputmode="decimal" placeholder="Qty" value="${item.qty ?? ''}" oninput="updateCart(${idx}, 'qty', this.value)" style="flex: 1;">
+        <input type="number" inputmode="decimal" placeholder="₹ / unit" value="${item.price ?? ''}" oninput="updateCart(${idx}, 'price', this.value)" style="flex: 1;">
+      </div>
+      <button class="btn sm ghost" onclick="openVendorPicker(${idx})">
+        ${item.vendor ? `🛒 ${esc(item.vendor.name)}` : 'Pick vendor'}
+      </button>
+      <button class="btn sm" style="background: var(--danger); color: #fff;" onclick="removeFromCart(${idx})">Remove</button>
+    </div>
+  `;
+}
+
+function addToCart(productId) {
+  const product = rmCatalog.products.find(p => p.id === productId);
+  if (!product) return;
+  // Auto-pick primary vendor if any
+  const primaryLink = product.vendors?.find(v => v.is_primary) || product.vendors?.[0];
+  const vendor = primaryLink ? rmCatalog.vendors.find(v => v.id === primaryLink.odoo_id) || { id: primaryLink.odoo_id, name: primaryLink.name } : null;
+  cart.push({
+    product, qty: '', price: product.lastPrice?.price || '', vendor,
+  });
+  renderRmProducts();
+  renderCart();
+  setTimeout(() => {
+    document.querySelector(`#prod-${productId} input[type=number]`)?.focus();
+  }, 50);
+}
+
+function addVariantToCart(variant) {
+  const product = {
+    id: variant.odoo_variant_id,
+    name: variant.template_name + (variant.variant_label ? ` · ${variant.variant_label}` : ''),
+    code: variant.default_code || '',
+    uom: variant.uom || '',
+    vendors: [],
+    _variant: true,
+  };
+  cart.push({ product, qty: '', price: variant.last_price || '', vendor: null });
+  closeVariantPicker();
+  renderCart();
+}
+
+function removeFromCart(idx) {
+  cart.splice(idx, 1);
+  renderRmProducts();
+  renderCart();
+}
+
+function clearCart() {
+  cart = [];
+  renderRmProducts();
+  renderCart();
+}
+
+function updateCart(idx, field, value) {
+  if (!cart[idx]) return;
+  cart[idx][field] = value;
+  updateCartTotals();
+}
+
+function renderCart() {
+  const section = document.getElementById('rm-cart-section');
+  const items   = document.getElementById('rm-cart-items');
+  const bar     = document.getElementById('rm-cart-bar');
+
+  if (!cart.length) {
+    section.classList.add('hidden');
+    bar.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  bar.classList.remove('hidden');
+
+  items.innerHTML = cart.map((c, i) => `
+    <div class="cart-line">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(c.product.name)}</div>
+        <div class="mute">${c.vendor ? esc(c.vendor.name) : 'No vendor'} · ${c.qty || '0'} × ₹${c.price || '0'}</div>
+      </div>
+      <div style="font-weight: 700; color: var(--accent);">₹${(parseFloat(c.qty || 0) * parseFloat(c.price || 0)).toLocaleString('en-IN')}</div>
+    </div>
+  `).join('');
+
+  updateCartTotals();
+}
+
+function updateCartTotals() {
+  const count = cart.length;
+  const total = cart.reduce((s, c) => s + (parseFloat(c.qty || 0) * parseFloat(c.price || 0)), 0);
+  const canSubmit = cart.every(c => parseFloat(c.qty || 0) > 0 && c.vendor);
+  document.getElementById('rm-cart-count').textContent = `${count} item${count !== 1 ? 's' : ''}`;
+  document.getElementById('rm-cart-total').textContent = `₹${total.toLocaleString('en-IN')}`;
+  document.getElementById('rm-submit-btn').disabled = !canSubmit || count === 0;
+}
+
+function renderRecentPOs() {
+  const el = document.getElementById('rm-recent-pos');
+  if (!rmCatalog.recentPOs?.length) { el.innerHTML = '<div class="mute">None.</div>'; return; }
+  el.innerHTML = rmCatalog.recentPOs.slice(0, 6).map(po => `
+    <div class="entry">
+      <div>
+        <div>${esc(po.name)}</div>
+        <div class="mute">${esc(po.vendor)} · ${(po.date || '').slice(0, 10)} · <span class="badge ${po.state === 'purchase' ? 'ok' : 'warn'}">${po.state}</span></div>
+      </div>
+      <div class="amt">₹${Number(po.total || 0).toLocaleString('en-IN')}</div>
+    </div>
+  `).join('');
+}
+
+// ── Vendor picker modal ───────────────────────────────────────────
+function openVendorPicker(cartIdx) {
+  vendorPickerCtx = { cartIdx };
+  const item = cart[cartIdx];
+  vendorKnownOdooIds = new Set(item?.product?.vendors?.map(v => v.odoo_id) || []);
+  document.getElementById('vendor-search').value = '';
+  document.getElementById('vendor-modal').classList.remove('hidden');
+  filterVendorList();
+}
+function closeVendorModal() {
+  document.getElementById('vendor-modal').classList.add('hidden');
+  vendorPickerCtx = null;
+}
+function filterVendorList() {
+  const q = document.getElementById('vendor-search').value.trim().toLowerCase();
+  let list = rmCatalog.vendors.filter(v => !q || v.name.toLowerCase().includes(q));
+  list.sort((a, b) => {
+    const ak = vendorKnownOdooIds.has(a.id) ? 0 : 1;
+    const bk = vendorKnownOdooIds.has(b.id) ? 0 : 1;
+    if (ak !== bk) return ak - bk;
+    return a.name.localeCompare(b.name);
+  });
+  document.getElementById('vendor-known').classList.toggle('hidden', vendorKnownOdooIds.size === 0);
+  document.getElementById('vendor-list').innerHTML = list.slice(0, 80).map(v => `
+    <div class="product-card" style="padding: 10px; cursor: pointer;" onclick="pickVendor(${v.id})">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <div style="font-weight: 600;">${esc(v.name)} ${vendorKnownOdooIds.has(v.id) ? '<span class="badge">linked</span>' : ''}</div>
+          ${v.phone ? `<div class="mute">${esc(v.phone)}</div>` : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+function pickVendor(vendorId) {
+  if (!vendorPickerCtx) return;
+  const vendor = rmCatalog.vendors.find(v => v.id === vendorId);
+  const item = cart[vendorPickerCtx.cartIdx];
+  if (item && vendor) {
+    item.vendor = vendor;
+    // Fire-and-forget link (matches /ops/rm/ behaviour) — non-primary, new link
+    if (!vendorKnownOdooIds.has(vendorId) && item.product.code) {
+      fetch(`${RM_API}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'link-vendor', pin: PIN, brand: BRAND,
+          product_code: item.product.code, vendor_odoo_id: vendorId }),
+      }).catch(() => {});
+    }
+  }
+  closeVendorModal();
+  renderRmProducts();
+  renderCart();
+}
+
+// ── Variant picker ─────────────────────────────────────────────────
+function openVariantPicker(tmplId) {
+  const variants = variantSearch.results.filter(v => (v.odoo_template_id || v.template_id || v.id) === tmplId);
+  if (!variants.length) return;
+  document.getElementById('variant-title').textContent = variants[0].template_name || 'Pick variant';
+  document.getElementById('variant-subtitle').textContent = `${variants.length} variants`;
+  document.getElementById('variant-list').innerHTML = variants.map(v => {
+    const label = [v.brand_value, v.pack_value, v.grade_value].filter(Boolean).join(' · ') || v.variant_label || v.default_code;
+    const price = v.last_price ? `₹${v.last_price}` : '';
+    return `
+      <div class="product-card" style="cursor: pointer;" onclick='addVariantToCart(${JSON.stringify(v).replace(/'/g,"\\'")})'>
+        <div style="display: flex; justify-content: space-between;">
+          <div>
+            <div class="title">${esc(label)}</div>
+            <div class="mute">${esc(v.default_code || '')} ${price ? `· Last: ${price}` : ''}</div>
+          </div>
+          <button class="btn sm">Add</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('variant-modal').classList.remove('hidden');
+}
+function closeVariantPicker() {
+  document.getElementById('variant-modal').classList.add('hidden');
+}
+
+// ── Submit PO (groups by vendor) ───────────────────────────────────
+async function submitRmPurchase() {
+  if (!cart.length) return;
+  const btn = document.getElementById('rm-submit-btn');
+  btn.disabled = true; btn.textContent = 'Creating…';
+
+  // Group by vendor
+  const byVendor = {};
+  for (const item of cart) {
+    if (!item.vendor || !item.qty) continue;
+    const vid = item.vendor.id;
+    if (!byVendor[vid]) byVendor[vid] = { vendor: item.vendor, lines: [] };
+    const line = {
+      product_id: item.product.id,
+      qty: parseFloat(item.qty),
+      price_unit: parseFloat(item.price) || 0,
+      name: item.product.name,
+    };
+    if (item.product._variant) {
+      line.odoo_variant_id = item.product.id;
+      line.variant_display = item.product.name;
+    }
+    byVendor[vid].lines.push(line);
+  }
+  const groups = Object.values(byVendor);
+
+  const successes = [], failures = [];
+  for (const g of groups) {
+    try {
+      const r = await fetch(`${RM_API}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create-po', pin: PIN, brand: BRAND,
+          vendor_id: g.vendor.id, lines: g.lines }),
+      }).then(x => x.json());
+      if (r.success) successes.push(r.po_name || 'PO');
+      else failures.push(`${g.vendor.name}: ${r.error || 'failed'}`);
+    } catch (e) {
+      failures.push(`${g.vendor.name}: ${e.message}`);
+    }
+  }
+
+  if (successes.length && !failures.length) {
+    toast(`✓ Created ${successes.length} PO: ${successes.join(', ')}`, 'ok');
+    cart = [];
+    setTimeout(showHome, 1100);
+  } else if (successes.length) {
+    toast(`Partial: ${successes.length} ok / ${failures.length} failed. ${failures[0]}`, 'err');
+    // Keep failed lines
+    cart = cart.filter(c => c.vendor && failures.some(f => f.startsWith(c.vendor.name + ':')));
+    renderCart();
+    btn.disabled = false; btn.textContent = 'Retry failed';
+  } else {
+    toast(failures[0] || 'Submit failed', 'err');
+    btn.disabled = false; btn.textContent = 'Create PO';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CAT 15 — Bill from PO
+// ═══════════════════════════════════════════════════════════════
+async function openCat15() {
+  document.getElementById('cat15-screen').classList.remove('hidden');
+  document.getElementById('cat15-brand-tag').textContent = BRAND;
+  document.getElementById('cat15-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('cat15-ref').value = '';
+  document.getElementById('cat15-amount').value = '';
+  document.getElementById('cat15-notes').value = '';
+  document.getElementById('cat15-po-meta').textContent = '';
+
+  const sel = document.getElementById('cat15-po');
+  sel.innerHTML = '<option value="">Loading confirmed POs…</option>';
+
+  const r = await fetch(`${API}?action=confirmed-pos&brand=${BRAND}&pin=${PIN}`).then(x => x.json()).catch(() => ({ pos: [] }));
+  const pos = r.pos || [];
+  sel.innerHTML = '<option value="">— Pick a PO —</option>' + pos.map(p =>
+    `<option value="${p.id}" data-total="${p.amount_total}" data-vendor="${esc(p.partner_id?.[1] || '')}">${esc(p.name)} · ${esc(p.partner_id?.[1] || '')} · ₹${Number(p.amount_total).toLocaleString('en-IN')}</option>`
+  ).join('');
+
+  sel.addEventListener('change', () => {
+    const opt = sel.selectedOptions[0];
+    if (!opt?.value) { document.getElementById('cat15-po-meta').textContent = ''; return; }
+    const total = opt.dataset.total;
+    const vendor = opt.dataset.vendor;
+    document.getElementById('cat15-po-meta').textContent = `Vendor: ${vendor} · PO total: ₹${Number(total).toLocaleString('en-IN')}`;
+    if (!document.getElementById('cat15-amount').value) {
+      document.getElementById('cat15-amount').value = total;
+    }
+  });
+}
+
+async function submitCat15() {
+  const po_id  = document.getElementById('cat15-po').value;
+  const amount = parseFloat(document.getElementById('cat15-amount').value || '0');
+  const bill_ref = document.getElementById('cat15-ref').value.trim();
+  const bill_date = document.getElementById('cat15-date').value;
+  const notes = document.getElementById('cat15-notes').value.trim();
+
+  if (!po_id)  return toast('Pick a PO', 'err');
+  if (!amount) return toast('Enter amount', 'err');
+
+  const r = await fetch(`${API}?action=record-bill-from-po`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, brand: BRAND, po_id, amount, bill_ref, bill_date, notes }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+
+  if (!r.success) return toast(r.error || 'Failed', 'err');
+  toast(`✓ Bill recorded for ${r.po_name}`, 'ok');
+  setTimeout(showHome, 900);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Util
+// ═══════════════════════════════════════════════════════════════
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 function toast(msg, kind) {
   const el = document.createElement('div');
   el.className = `toast ${kind}`;

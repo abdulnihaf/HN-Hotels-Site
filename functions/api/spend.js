@@ -59,7 +59,7 @@ const BRAND_COMPANY = { HE: 1, NCH: 10, HQ: 13 };
 // ━━━ 14 Spend Categories (locked spec) ━━━
 const CATEGORIES = [
   { id: 1,  label: 'Raw Material Purchase', emoji: '🥩', backend: 'purchase.order', desc: 'Vendor + items → RM PO' },
-  { id: 2,  label: 'Capex / Equipment',     emoji: '🏗️', backend: 'purchase.order', desc: 'Vendor + asset + outlet' },
+  { id: 2,  label: 'Capex / Equipment',     emoji: '🏗️', backend: 'hr.expense',      desc: 'Fridge / AC / Equipment', parentName: '14 · One-Time Capex' },
   { id: 3,  label: 'Salary Payment',        emoji: '💼', backend: 'hr.expense',     desc: 'Employee monthly salary', parentName: '02 · Salaries' },
   { id: 4,  label: 'Salary Advance',        emoji: '💰', backend: 'hr.expense',     desc: 'Employee advance (deducted later)', parentName: '02 · Salaries' },
   { id: 5,  label: 'Rent',                  emoji: '🏠', backend: 'hr.expense',     desc: 'Outlet rent', parentName: '03 · Rent' },
@@ -72,7 +72,7 @@ const CATEGORIES = [
   { id: 12, label: 'Audit / Legal / Compliance', emoji: '📋', backend: 'hr.expense', desc: 'Audit / MCA / FSSAI / Legal', parentName: '10 · Compliance & Legal' },
   { id: 13, label: 'Owner / Family Drawing', emoji: '👨‍👩‍👧', backend: 'hr.expense', desc: 'Excluded from P&L', parentName: '15 · Owner Drawings (Excl. P&L)' },
   { id: 14, label: 'Direct Vendor Bill (no PO)', emoji: '🧾', backend: 'account.move', desc: 'One-shot vendor bill, no PO' },
-  { id: 15, label: 'Bill from PO (3-way match)', emoji: '📄', backend: 'account.move', desc: 'Link bill to existing PO', hidden: true },
+  { id: 15, label: 'Bill from PO (3-way match)', emoji: '📄', backend: 'account.move.linked', desc: 'Link bill to existing PO' },
 ];
 
 const PAYMENT_METHODS = [
@@ -292,12 +292,67 @@ export async function onRequest(context) {
         return json({ success: true, odoo_id: moveId, backend: 'account.move', category: cat.label });
       }
 
-      // Cat 1, 2 → purchase.order (deferred — reuse /api/rm-ops create-po)
+      // Cat 1 (Raw Material PO) — UI submits directly to /api/rm-ops create-po
+      // (avoids duplicating the variant-aware purchase logic)
       if (cat.backend === 'purchase.order') {
-        return json({ success: false, error: 'Purchase order flow (cats 1, 2) — use /ops/purchase/ for now; /ops/spend/ cat 1/2 in next iteration' }, 501);
+        return json({ success: false, error: 'Cat 1 uses /api/rm-ops create-po directly from the UI' }, 501);
       }
 
       return json({ success: false, error: `Backend ${cat.backend} not implemented yet` }, 501);
+    }
+
+    // ── CAT 15 — Bill from PO (account.move linked to purchase.order) ──────
+    if (action === 'record-bill-from-po' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, brand, po_id, bill_ref, bill_date, amount, notes } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (user.cats !== 'all' && !user.cats.includes(15)) {
+        return json({ success: false, error: 'Not permitted' }, 403);
+      }
+      if (!po_id || !amount) return json({ success: false, error: 'PO + amount required' }, 400);
+      const companyId = BRAND_COMPANY[brand];
+      if (!companyId) return json({ success: false, error: 'Unknown brand' }, 400);
+
+      // Fetch PO to pull partner_id + link
+      const po = await odoo(apiKey, 'purchase.order', 'read',
+        [[parseInt(po_id, 10)]], { fields: ['id', 'name', 'partner_id', 'amount_total'] });
+      if (!po || !po.length) return json({ success: false, error: 'PO not found' }, 404);
+      const vendorId = po[0].partner_id[0];
+
+      const moveVals = {
+        move_type: 'in_invoice',
+        partner_id: vendorId,
+        company_id: companyId,
+        invoice_date: bill_date || new Date().toISOString().slice(0, 10),
+        ref: bill_ref || po[0].name,
+        narration: notes || `Linked to ${po[0].name}`,
+        invoice_origin: po[0].name,
+        invoice_line_ids: [[0, 0, {
+          name: `Bill for ${po[0].name}`,
+          quantity: 1,
+          price_unit: parseFloat(amount),
+          purchase_order_id: po[0].id,
+        }]],
+      };
+      const moveId = await odoo(apiKey, 'account.move', 'create', [moveVals]);
+      return json({ success: true, odoo_id: moveId, po_name: po[0].name, backend: 'account.move' });
+    }
+
+    // ── List confirmed POs for cat 15 picker ───────────────────────────────
+    if (action === 'confirmed-pos') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const brand = (url.searchParams.get('brand') || '').toUpperCase();
+      const companyId = BRAND_COMPANY[brand];
+      const domain = companyId
+        ? [['state', 'in', ['purchase', 'done']], ['company_id', '=', companyId]]
+        : [['state', 'in', ['purchase', 'done']]];
+      const pos = await odoo(apiKey, 'purchase.order', 'search_read',
+        [domain],
+        { fields: ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state'],
+          order: 'date_order desc', limit: 50 });
+      return json({ success: true, pos });
     }
 
     return json({ success: false, error: 'Unknown action', actions: ['verify-pin','products','employees','vendors','recent','record'] }, 400);
