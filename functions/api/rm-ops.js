@@ -2800,7 +2800,7 @@ async function listPOs(creds, cfg, brand, body) {
     [domain],
     {
       fields: ['id','name','partner_id','partner_ref','date_order','date_planned','amount_total',
-               'amount_untaxed','amount_tax','state','user_id','notes','invoice_status'],
+               'amount_untaxed','amount_tax','state','user_id','invoice_status'],
       order: 'id desc', limit: filters.limit || 100,
     });
   return json({ success: true, pos });
