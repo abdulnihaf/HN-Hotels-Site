@@ -166,7 +166,7 @@ export async function onRequest(context) {
     if (action === 'uoms') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
       const uoms = await odoo(apiKey, 'uom.uom', 'search_read',
-        [[]], { fields: ['id', 'name', 'category_id'], limit: 50, order: 'name asc' });
+        [[]], { fields: ['id', 'name'], limit: 50, order: 'name asc' });
       return json({ success: true, uoms });
     }
 
