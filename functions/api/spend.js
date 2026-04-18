@@ -139,11 +139,11 @@ export async function onRequest(context) {
       if (cat.backend !== 'hr.expense') return json({ success: true, products: [] });
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
 
-      // Find the Odoo product.category by name → get products
+      // Find the Odoo product.category by name — use ilike to tolerate whitespace / punctuation quirks
       const parentList = await odoo(apiKey, 'product.category', 'search_read',
-        [[['name', '=', cat.parentName]]],
-        { fields: ['id', 'name'], limit: 1 });
-      if (!parentList.length) return json({ success: true, products: [] });
+        [[['name', 'ilike', cat.parentName]]],
+        { fields: ['id', 'name'], limit: 5 });
+      if (!parentList.length) return json({ success: true, products: [], reason: `No category matching ${cat.parentName}` });
       const products = await odoo(apiKey, 'product.product', 'search_read',
         [[['categ_id', '=', parentList[0].id], ['can_be_expensed', '=', true], ['active', '=', true]]],
         { fields: ['id', 'name', 'default_code', 'standard_price'], order: 'name asc', limit: 200 });
