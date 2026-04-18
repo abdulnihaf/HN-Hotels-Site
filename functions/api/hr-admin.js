@@ -300,6 +300,29 @@ async function handleGet(url, env) {
     return json({ devices: rows.results });
   }
 
+  // --- TEMP DEBUG: check access rules + record rules on device.service.tag ---
+  if (action === 'cams-tag-rules') {
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'no api key' }, 500);
+    try {
+      const model = await odoo(apiKey, 'ir.model', 'search_read',
+        [[['model', '=', 'device.service.tag']]], { fields: ['id', 'model', 'name', 'modules'] });
+      const accesses = await odoo(apiKey, 'ir.model.access', 'search_read',
+        [[['model_id.model', '=', 'device.service.tag']]],
+        { fields: ['name', 'group_id', 'perm_read', 'perm_write', 'perm_create', 'perm_unlink', 'active'] });
+      const rules = await odoo(apiKey, 'ir.rule', 'search_read',
+        [[['model_id.model', '=', 'device.service.tag']]],
+        { fields: ['name', 'domain_force', 'groups', 'global', 'active', 'perm_read', 'perm_write', 'perm_create', 'perm_unlink'] });
+      // Also check hr.attendance for UserId=22 — verify Odoo can match it to an employee
+      const empMatch = await odoo(apiKey, 'hr.employee', 'search_read',
+        [[['pin', '=', '22']]],
+        { fields: ['id', 'name', 'pin', 'active', 'company_id', 'biometric_user_id'] });
+      return json({ model, accesses, rules, employee_pin_22: empMatch });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
   // --- TEMP ADMIN: delete + recreate device.service.tag to flush any corruption ---
   if (action === 'cams-tag-recreate') {
     const apiKey = env.ODOO_API_KEY;
