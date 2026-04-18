@@ -985,32 +985,78 @@ async function pullAttendance(apiKey, db, from, to, userName) {
         AND e.pin IS NOT NULL AND e.pin != ''`
   ).all();
   const byOdooId = new Map();
-  for (const e of rosterRows.results) byOdooId.set(e.odoo_employee_id, e);
+  const byPin = new Map();
+  for (const e of rosterRows.results) {
+    byOdooId.set(e.odoo_employee_id, e);
+    byPin.set(String(e.pin), e);
+  }
 
-  // Pull hr.attendance — Odoo stores UTC
-  const fromUTC = `${from} 00:00:00`;
-  const toDateEnd = new Date(to);
-  toDateEnd.setDate(toDateEnd.getDate() + 1);
-  const toUTC = `${toDateEnd.toISOString().slice(0,10)} 00:00:00`;
+  // ── Source: D1 hr_cams_punches (source='webhook') from /api/cams-ingest.
+  //    Odoo hr.attendance is bypassed — the CAMS→Odoo integration was flaky
+  //    ("service tag ID does not exist" 403s even though the record exists).
+  //    D1 is authoritative for attendance; Odoo mirror can be added later via
+  //    a side-car cron if payroll needs it.
+  const rawPunches = await db.prepare(
+    `SELECT pin, punch_time, punch_type
+       FROM hr_cams_punches
+       WHERE substr(punch_time, 1, 10) BETWEEN ? AND ?
+       ORDER BY pin, punch_time`
+  ).bind(from, to).all();
 
-  const atts = await odoo(apiKey, 'hr.attendance', 'search_read',
-    [[['check_in','>=',fromUTC],['check_in','<',toUTC]]],
-    { fields: ['id','employee_id','check_in','check_out','worked_hours'] });
+  // Bucket by employee + IST date — pair CheckIn→CheckOut into hour-bearing sessions
+  const buckets = new Map();  // key = `${odoo_id}|${date}` → { punches:[], hours, firstIn, lastOut }
+  const byKey = new Map();    // `${pin}|${date}` → [raw rows]
+  let punchCount = 0;
+  for (const r of rawPunches.results || []) {
+    const pin = String(r.pin);
+    if (!byPin.has(pin)) continue;  // skip punches for archived/unmapped employees
+    const date = String(r.punch_time).slice(0, 10);
+    if (date < from || date > to) continue;
+    const k = `${pin}|${date}`;
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(r);
+    punchCount++;
+  }
+  for (const [k, rows] of byKey.entries()) {
+    const [pin, date] = k.split('|');
+    const emp = byPin.get(pin);
+    rows.sort((a, b) => String(a.punch_time).localeCompare(String(b.punch_time)));
 
-  // Bucket by employee + IST date
-  const buckets = new Map();  // key = `${odoo_id}|${date}` → { punches:[], hours:0, firstIn, lastOut }
-  for (const a of atts) {
-    const oid = a.employee_id && a.employee_id[0];
-    if (!oid || !byOdooId.has(oid)) continue;
-    const checkIn = new Date(a.check_in.replace(' ','T') + 'Z');
-    const date = istDate(checkIn);
-    const key = `${oid}|${date}`;
-    if (!buckets.has(key)) buckets.set(key, { punches: [], hours: 0, firstIn: null, lastOut: null });
-    const b = buckets.get(key);
-    b.punches.push({ in: a.check_in, out: a.check_out, hours: a.worked_hours });
-    b.hours += Number(a.worked_hours || 0);
-    if (!b.firstIn || a.check_in < b.firstIn) b.firstIn = a.check_in;
-    if (a.check_out && (!b.lastOut || a.check_out > b.lastOut)) b.lastOut = a.check_out;
+    // Pair CheckIn → next CheckOut (CAMS emits one row per punch event)
+    const pairs = [];
+    let openIn = null;
+    for (const r of rows) {
+      const isCheckOut = String(r.punch_type || '').toLowerCase() === 'checkout';
+      if (!isCheckOut) {
+        if (openIn) pairs.push({ in: openIn, out: null });  // orphan CheckIn → single-punch
+        openIn = r.punch_time;
+      } else {
+        if (openIn) {
+          pairs.push({ in: openIn, out: r.punch_time });
+          openIn = null;
+        } else {
+          pairs.push({ in: null, out: r.punch_time });  // orphan CheckOut
+        }
+      }
+    }
+    if (openIn) pairs.push({ in: openIn, out: null });
+
+    let hours = 0, firstIn = null, lastOut = null;
+    for (const p of pairs) {
+      if (p.in && p.out) {
+        const ms = new Date(p.out.replace(' ', 'T') + '+05:30') - new Date(p.in.replace(' ', 'T') + '+05:30');
+        if (ms > 0) hours += ms / 3600000;
+      }
+      if (p.in && (!firstIn || p.in < firstIn)) firstIn = p.in;
+      if (p.out && (!lastOut || p.out > lastOut)) lastOut = p.out;
+    }
+
+    buckets.set(`${emp.odoo_employee_id}|${date}`, {
+      punches: pairs,
+      hours,
+      firstIn,
+      lastOut,
+    });
   }
 
   // Generate one row per (employee, date) across the range, including absent days
@@ -1110,8 +1156,8 @@ async function pullAttendance(apiKey, db, from, to, userName) {
   }
 
   await logSync(db, 'pull_attendance', 'hr.attendance', null, `${from}..${to}`,
-    { employees: rosterRows.results.length, punches: atts.length, written }, userName);
-  return { employees: rosterRows.results.length, punches: atts.length, written };
+    { employees: rosterRows.results.length, punches: punchCount, written }, userName);
+  return { employees: rosterRows.results.length, punches: punchCount, written };
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
