@@ -377,6 +377,7 @@ async function handlePost(request, env) {
     'cams-device-upsert': 'admin',
     'cams-remote': 'admin',
     'cams-pull-users': 'hr',
+    'rescan-drive': 'hr',
   };
   const need = permMap[action] || 'read';
   const user = checkPin(pin, need);
