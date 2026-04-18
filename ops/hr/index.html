@@ -619,7 +619,16 @@ async function saveEmployee() {
   if (!body.name) return toast('Name required', 'error');
   const r = await apiPost('employee-upsert', body);
   if (r.error) return toast(r.error, 'error');
-  toast(state.editingId ? 'Updated' : 'Created');
+
+  // Auto-sync to Odoo so add/edit lands in master ERP immediately
+  const empId = r.id || state.editingId;
+  if (empId) {
+    const sync = await apiPost('sync-employee', { id: empId });
+    if (sync.error) toast(`Saved to D1 but Odoo sync failed: ${sync.error}`, 'error');
+    else toast(state.editingId ? 'Updated + synced to Odoo ✓' : 'Created + synced to Odoo ✓');
+  } else {
+    toast(state.editingId ? 'Updated' : 'Created');
+  }
   closeEmpModal();
   loadRoster();
 }
