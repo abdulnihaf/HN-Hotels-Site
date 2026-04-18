@@ -43,10 +43,13 @@ export async function onRequest(context) {
   if (!db) return json({ status: 'error', message: 'database not configured' }, 500);
 
   const url = new URL(request.url);
-  const stgid = url.searchParams.get('stgid');
-  if (!stgid) {
-    return json({ status: 'error', message: 'Invalid stgid value. Must be a non-empty value' }, 400);
-  }
+  // Prefer body.SerialNumber over URL stgid — CAMS's callback URL mechanism
+  // can double-append ?stgid= and leave the URL param corrupted.
+  // We fall back to stgid query param if body SerialNumber is missing.
+  let stgid = url.searchParams.get('stgid') || '';
+  // If URL stgid contains embedded "?stgid=" (double-append), extract the first
+  // clean token: "AYTH09089112?stgid=AYTH09089112" → "AYTH09089112"
+  if (stgid.includes('?')) stgid = stgid.split('?')[0];
 
   // Auth: X-Auth-Token header OR body.RealTime.AuthToken must match secret
   const expectedToken = env.CAMS_AUTH_TOKEN;
@@ -61,6 +64,12 @@ export async function onRequest(context) {
 
   const rt = body?.RealTime;
   if (!rt) return json({ status: 'error', message: 'missing RealTime block' }, 400);
+
+  // Prefer SerialNumber from body over URL param
+  if (rt.SerialNumber) stgid = String(rt.SerialNumber).trim();
+  if (!stgid) {
+    return json({ status: 'error', message: 'Invalid stgid value. Must be a non-empty value' }, 400);
+  }
 
   const headerToken = request.headers.get('X-Auth-Token');
   const bodyToken = rt.AuthToken;
