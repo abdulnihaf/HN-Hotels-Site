@@ -300,6 +300,36 @@ async function handleGet(url, env) {
     return json({ devices: rows.results });
   }
 
+  // --- TEMP DEBUG: read + byte-inspect device.service.tag records ---
+  if (action === 'cams-service-tags') {
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'no api key' }, 500);
+    try {
+      // Get ALL records (including archived) — full field set
+      const tags = await odoo(apiKey, 'device.service.tag', 'search_read',
+        [[]], { limit: 100, context: { active_test: false } });
+      // Also list all fields of the model
+      const fields = await odoo(apiKey, 'device.service.tag', 'fields_get', [], {});
+      // Byte-inspect any AYTH-related field
+      const inspect = tags.map(t => {
+        const o = {};
+        for (const [k, v] of Object.entries(t)) {
+          if (typeof v === 'string' && (v.includes('AYTH') || k.toLowerCase().includes('stg') || k.toLowerCase().includes('tag'))) {
+            o[k] = v;
+            o[`${k}_length`] = v.length;
+            o[`${k}_bytes`] = Array.from(v).map(c => c.charCodeAt(0)).join(',');
+          } else {
+            o[k] = v;
+          }
+        }
+        return o;
+      });
+      return json({ count: tags.length, field_names: Object.keys(fields), records: inspect });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
+  }
+
   // --- TEMP DEBUG: probe Odoo CAMS biometric model for stgid mismatch ---
   if (action === 'cams-odoo-probe') {
     const apiKey = env.ODOO_API_KEY;
