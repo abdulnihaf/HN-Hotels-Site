@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Purchase Ops — HN Hotels</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = { theme: { extend: {
+  fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+  colors: { brand: { 400:'#f0a944', 500:'#e8930c', 600:'#c97508' } }
+}}}
+</script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#0c0c14;color:#e4e4ed;font-family:'Inter',sans-serif;overscroll-behavior:none}
+.glass{background:rgba(22,22,31,.7);border:1px solid rgba(255,255,255,.05);backdrop-filter:blur(16px)}
+input,select,textarea{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#e4e4ed;border-radius:10px;font-size:14px;padding:10px 12px;width:100%}
+input:focus,select:focus,textarea:focus{border-color:rgba(232,147,12,.5);outline:none;box-shadow:0 0 0 2px rgba(232,147,12,.15)}
+select option{background:#1c1c27;color:#e4e4ed}
+.btn{padding:10px 16px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;transition:all .15s;border:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn-primary{background:#e8930c;color:#0c0c14}
+.btn-primary:hover{background:#f0a944}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost{background:rgba(255,255,255,.05);color:rgba(255,255,255,.6)}
+.btn-ghost:hover{background:rgba(255,255,255,.1)}
+.btn-danger{background:rgba(239,68,68,.15);color:#f87171}
+.tab{padding:10px 14px;font-size:13px;font-weight:600;border-radius:10px;cursor:pointer;color:rgba(255,255,255,.4);border:1px solid transparent}
+.tab.active{background:rgba(232,147,12,.12);color:#f0a944;border-color:rgba(232,147,12,.2)}
+.brand-btn{padding:8px 14px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+.brand-btn.active{background:rgba(232,147,12,.15);color:#f0a944;border-color:rgba(232,147,12,.3)}
+.row{padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.04);margin-bottom:8px}
+.row:hover{background:rgba(232,147,12,.04);border-color:rgba(232,147,12,.2)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);display:flex;align-items:flex-end;justify-content:center;padding:0;z-index:50}
+.modal-card{background:#16161f;border-radius:16px 16px 0 0;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;padding:20px;border:1px solid rgba(255,255,255,.05)}
+@media(min-width:640px){.modal{align-items:center;padding:16px}.modal-card{border-radius:16px}}
+.label{font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block}
+.chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600}
+.chip-draft{background:rgba(245,158,11,.15);color:#fbbf24}
+.chip-purchase{background:rgba(16,185,129,.15);color:#34d399}
+.chip-cancel{background:rgba(239,68,68,.15);color:#f87171}
+.chip-direct{background:rgba(168,85,247,.15);color:#c084fc}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:100;max-width:90vw}
+.toast-ok{background:#10b981;color:#0c0c14}
+.toast-err{background:#ef4444;color:#fff}
+.line-item{background:rgba(255,255,255,.03);border-radius:10px;padding:10px;margin-bottom:8px;border:1px solid rgba(255,255,255,.05)}
+details summary{cursor:pointer;font-size:12px;color:#f0a944;padding:8px 0;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details[open] summary::after{content:'▲'}
+details summary::after{content:'▼ Show more options';margin-left:6px;font-size:11px}
+details[open] summary{color:#9ca3af}
+details[open] summary::after{content:' ▲ Hide options';font-size:11px}
+.advanced{padding-top:8px;border-top:1px solid rgba(255,255,255,.05);margin-top:8px}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .15s ease}
+</style>
+</head>
+<body>
+<!-- ━━━ PIN ━━━ -->
+<div id="pin-screen" class="min-h-screen flex items-center justify-center px-4">
+  <div class="glass rounded-2xl p-8 w-full max-w-sm">
+    <div class="text-center mb-6">
+      <div class="text-3xl font-extrabold text-brand-500 tracking-widest">HN PURCHASE</div>
+      <div class="text-xs text-white/50 mt-1">Enter 4-digit PIN</div>
+    </div>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="4" placeholder="----"
+      class="text-center text-xl tracking-[0.5em] font-mono" style="padding:16px">
+    <button onclick="verifyPin()" class="btn btn-primary w-full mt-3">Unlock</button>
+    <div id="pinErr" class="text-red-400 text-xs text-center mt-2 hidden"></div>
+  </div>
+</div>
+
+<!-- ━━━ APP ━━━ -->
+<div id="app" class="hidden">
+  <header class="glass sticky top-0 z-40 px-4 py-3 flex items-center gap-3 border-b border-white/5">
+    <div class="text-lg font-extrabold text-brand-500 tracking-wider">PURCHASE</div>
+    <div class="text-xs text-white/40 ml-2" id="userLabel">—</div>
+    <div class="ml-auto flex gap-2">
+      <button class="brand-btn active" data-brand="HE">HE</button>
+      <button class="brand-btn" data-brand="NCH">NCH</button>
+    </div>
+  </header>
+
+  <nav class="sticky top-[57px] z-30 bg-[#0c0c14]/95 backdrop-blur px-4 py-2 flex gap-2 overflow-x-auto border-b border-white/5">
+    <button class="tab active" data-tab="orders" onclick="setTab('orders')">📋 Orders</button>
+    <button class="tab" data-tab="bills" onclick="setTab('bills')">🧾 Bills</button>
+    <button class="tab" data-tab="outstanding" onclick="setTab('outstanding')">💰 Outstanding</button>
+    <button class="tab" data-tab="vendors" onclick="setTab('vendors')">🏪 Vendors</button>
+  </nav>
+
+  <main class="max-w-3xl mx-auto px-4 py-4">
+    <!-- ─── ORDERS TAB ─── -->
+    <section id="tab-orders" class="tab-body">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-sm text-white/60">Recent purchase orders</div>
+        <button class="btn btn-primary" onclick="openPOModal()">+ New PO</button>
+      </div>
+      <div id="poList" class="space-y-2"></div>
+    </section>
+
+    <!-- ─── BILLS TAB ─── -->
+    <section id="tab-bills" class="tab-body hidden">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-sm text-white/60">Vendor bills</div>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost btn-sm" onclick="openBillModal('direct')">+ Direct Bill</button>
+          <button class="btn btn-primary btn-sm" onclick="openBillModal('po')">+ Bill from PO</button>
+        </div>
+      </div>
+      <div id="billList" class="space-y-2"></div>
+    </section>
+
+    <!-- ─── OUTSTANDING TAB ─── -->
+    <section id="tab-outstanding" class="tab-body hidden">
+      <div class="text-sm text-white/60 mb-3">Outstanding payables (unpaid bills)</div>
+      <div id="outstandingList" class="space-y-2"></div>
+    </section>
+
+    <!-- ─── VENDORS TAB ─── -->
+    <section id="tab-vendors" class="tab-body hidden">
+      <input id="vendorSearch" placeholder="Search vendors…" class="mb-3" oninput="renderVendors()">
+      <div id="vendorList" class="space-y-2"></div>
+    </section>
+  </main>
+</div>
+
+<!-- ━━━━━━━━━━ PO MODAL ━━━━━━━━━━ -->
+<div id="poModal" class="modal hidden" onclick="if(event.target===this)closePO()">
+  <div class="modal-card">
+    <div class="flex items-center justify-between mb-4">
+      <div class="text-lg font-bold">New Purchase Order</div>
+      <button onclick="closePO()" class="text-white/40 hover:text-white text-xl">✕</button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="label">Vendor *</label>
+        <select id="po_vendor"></select>
+      </div>
+      <div>
+        <label class="label">Lines *</label>
+        <div id="po_lines"></div>
+        <button class="btn btn-ghost w-full mt-2" onclick="addLine()">+ Add line</button>
+      </div>
+      <div class="flex justify-between items-center text-base font-bold pt-2 border-t border-white/5">
+        <span>Total</span>
+        <span id="po_total">₹0</span>
+      </div>
+      <div>
+        <label class="label">Photo (quote/bill, optional)</label>
+        <input id="po_photo" type="file" accept="image/*">
+      </div>
+      <details>
+        <summary>Show more options</summary>
+        <div class="advanced space-y-3">
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="label">Order date</label><input id="po_date_order" type="date"></div>
+            <div><label class="label">Expected arrival</label><input id="po_date_planned" type="date"></div>
+          </div>
+          <div><label class="label">Vendor reference (their quote/invoice #)</label><input id="po_partner_ref"></div>
+          <div><label class="label">Internal notes</label><textarea id="po_notes" rows="2"></textarea></div>
+        </div>
+      </details>
+      <button class="btn btn-primary w-full mt-3" id="po_submit" onclick="submitPO()">Create PO</button>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━ BILL MODAL ━━━━━━━━━━ -->
+<div id="billModal" class="modal hidden" onclick="if(event.target===this)closeBill()">
+  <div class="modal-card">
+    <div class="flex items-center justify-between mb-4">
+      <div class="text-lg font-bold" id="billTitle">New Bill</div>
+      <button onclick="closeBill()" class="text-white/40 hover:text-white text-xl">✕</button>
+    </div>
+    <div class="space-y-3">
+      <!-- PO-linked bill -->
+      <div id="bill_po_section">
+        <label class="label">Pick PO *</label>
+        <select id="bill_po"></select>
+      </div>
+      <!-- Direct bill (no PO) -->
+      <div id="bill_direct_section" class="hidden space-y-3">
+        <div>
+          <label class="label">Vendor *</label>
+          <select id="bill_vendor"></select>
+        </div>
+        <div>
+          <label class="label">Description *</label>
+          <input id="bill_desc" placeholder="e.g. AMC service yearly">
+        </div>
+      </div>
+      <div>
+        <label class="label">Vendor Bill # (their invoice number) *</label>
+        <input id="bill_ref" placeholder="e.g. INV-2026-001">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="label">Bill date *</label><input id="bill_date" type="date"></div>
+        <div><label class="label">Due date</label><input id="bill_due"  type="date"></div>
+      </div>
+      <div>
+        <label class="label">Total amount (₹) *</label>
+        <input id="bill_total" type="number" step="0.01">
+      </div>
+      <div>
+        <label class="label">Bill photo</label>
+        <input id="bill_photo" type="file" accept="image/*">
+      </div>
+      <details>
+        <summary>Show more options</summary>
+        <div class="advanced">
+          <label class="label">Notes</label>
+          <textarea id="bill_notes" rows="2"></textarea>
+        </div>
+      </details>
+      <button class="btn btn-primary w-full mt-3" id="bill_submit" onclick="submitBill()">Post Bill</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/rm-ops';
+let state = { pin:'', user:'', brand:'HE', tab:'orders', vendors:[], products:[], pos:[], bills:[], billMode:'po' };
+
+document.querySelectorAll('.brand-btn').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.brand-btn').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  state.brand = b.dataset.brand;
+  loadAll();
+}));
+
+async function verifyPin() {
+  const pin = document.getElementById('pinInput').value;
+  if (pin.length !== 4) return;
+  try {
+    const r = await fetch(`${API}?action=verify-pin&pin=${pin}`).then(r=>r.json());
+    if (r.success) {
+      state.pin = pin; state.user = r.user;
+      document.getElementById('pin-screen').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      document.getElementById('userLabel').textContent = `· ${r.user}`;
+      loadAll();
+    } else {
+      const e = document.getElementById('pinErr');
+      e.textContent = 'Wrong PIN'; e.classList.remove('hidden');
+      setTimeout(()=>e.classList.add('hidden'), 2000);
+    }
+  } catch (e) { toast('Network error', 'err'); }
+}
+
+async function api(action, params={}, isPost=false) {
+  const url = `${API}?${new URLSearchParams({action, pin:state.pin, brand:state.brand, ...params}).toString()}`;
+  if (isPost) {
+    const r = await fetch(`${API}?action=${action}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action, pin:state.pin, brand:state.brand, ...params}),
+    });
+    return r.json();
+  }
+  return (await fetch(url)).json();
+}
+
+function setTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
+  document.querySelectorAll('.tab-body').forEach(b => b.classList.add('hidden'));
+  document.getElementById('tab-'+tab).classList.remove('hidden');
+  if (tab==='orders') renderPOs();
+  if (tab==='bills') loadBills();
+  if (tab==='outstanding') loadOutstanding();
+  if (tab==='vendors') renderVendors();
+}
+
+async function loadAll() {
+  const [v, p, pos] = await Promise.all([
+    api('vendors'), api('products'), api('list-pos', {state:'purchase', limit:50}, true),
+  ]);
+  state.vendors = v.vendors || [];
+  state.products = p.products || [];
+  state.pos = pos.pos || [];
+  if (state.tab==='orders') renderPOs();
+  if (state.tab==='vendors') renderVendors();
+}
+
+function renderPOs() {
+  const list = document.getElementById('poList');
+  if (!state.pos.length) { list.innerHTML = '<div class="text-center text-white/40 py-8">No POs yet</div>'; return; }
+  list.innerHTML = state.pos.map(p => {
+    const vendor = p.partner_id ? p.partner_id[1] : '-';
+    const date = (p.date_order||'').slice(0,10);
+    return `<div class="row" onclick="viewPO(${p.id})">
+      <div class="flex items-center justify-between">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-semibold text-sm">${esc(p.name)}</span>
+            <span class="chip chip-${p.state}">${p.state.toUpperCase()}</span>
+          </div>
+          <div class="text-[11px] text-white/50">${date} · ${esc(vendor)}</div>
+        </div>
+        <div class="text-right">
+          <div class="text-sm font-bold">₹${(p.amount_total||0).toLocaleString('en-IN')}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderVendors() {
+  const q = (document.getElementById('vendorSearch')?.value || '').toLowerCase();
+  const list = state.vendors.filter(v => !q || v.name.toLowerCase().includes(q));
+  document.getElementById('vendorList').innerHTML = list.map(v => `
+    <div class="row">
+      <div class="font-semibold text-sm">${esc(v.name)}</div>
+      <div class="text-[11px] text-white/40">${esc(v.phone||'')}</div>
+    </div>`).join('');
+}
+
+async function loadBills() {
+  const r = await api('list-bills', {from:'2026-04-01', to:'2026-12-31'}, true);
+  state.bills = r.bills || [];
+  document.getElementById('billList').innerHTML = state.bills.length
+    ? state.bills.map(b => `<div class="row">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="font-semibold text-sm">${esc(b.vendor_name)} <span class="text-white/40 text-xs">${esc(b.bill_ref)}</span> ${b.is_direct?'<span class="chip chip-direct">DIRECT</span>':''}</div>
+            <div class="text-[11px] text-white/50">${esc(b.bill_date)} ${b.odoo_po_name?'· '+esc(b.odoo_po_name):''}</div>
+          </div>
+          <div class="text-sm font-bold">₹${(b.amount_total||0).toLocaleString('en-IN')}</div>
+        </div>
+      </div>`).join('')
+    : '<div class="text-center text-white/40 py-8">No bills entered yet</div>';
+}
+
+async function loadOutstanding() {
+  const r = await api('vendor-outstanding', {}, true);
+  document.getElementById('outstandingList').innerHTML = (r.outstanding || []).map(o => `
+    <div class="row">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="font-semibold text-sm">${esc(o.vendor)}</div>
+          <div class="text-[11px] text-white/50">${o.count} bill${o.count>1?'s':''} · oldest due ${esc(o.oldest_due||'-')}</div>
+        </div>
+        <div class="text-sm font-bold text-amber-400">₹${(o.outstanding||0).toLocaleString('en-IN')}</div>
+      </div>
+    </div>`).join('') || '<div class="text-center text-white/40 py-8">No outstanding bills 🎉</div>';
+}
+
+/* ━━━ PO Modal ━━━ */
+function openPOModal() {
+  // populate vendor dropdown
+  const sel = document.getElementById('po_vendor');
+  sel.innerHTML = '<option value="">— Pick vendor —</option>' + state.vendors.map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('');
+  document.getElementById('po_lines').innerHTML = '';
+  addLine();
+  document.getElementById('po_partner_ref').value = '';
+  document.getElementById('po_notes').value = '';
+  document.getElementById('po_date_order').value = new Date().toISOString().slice(0,10);
+  document.getElementById('po_date_planned').value = '';
+  document.getElementById('po_total').textContent = '₹0';
+  document.getElementById('poModal').classList.remove('hidden');
+}
+function closePO() { document.getElementById('poModal').classList.add('hidden'); }
+
+let lineCounter = 0;
+function addLine() {
+  lineCounter++;
+  const id = lineCounter;
+  const html = `<div class="line-item" data-line="${id}">
+    <div class="grid grid-cols-12 gap-2 items-center">
+      <select class="col-span-6 product-select" onchange="updateLineTotal(${id})">
+        <option value="">— Product —</option>
+        ${state.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+      </select>
+      <input type="number" class="col-span-2 line-qty" placeholder="Qty" min="0" step="any" oninput="updateLineTotal(${id})">
+      <input type="number" class="col-span-3 line-price" placeholder="₹/unit" min="0" step="any" oninput="updateLineTotal(${id})">
+      <button class="col-span-1 text-red-400 text-lg" onclick="removeLine(${id})">✕</button>
+    </div>
+    <div class="text-right text-xs text-white/50 mt-1 line-subtotal">₹0</div>
+  </div>`;
+  document.getElementById('po_lines').insertAdjacentHTML('beforeend', html);
+}
+function removeLine(id) {
+  const el = document.querySelector(`[data-line="${id}"]`);
+  if (el) el.remove();
+  recalcTotal();
+}
+function updateLineTotal(id) {
+  const el = document.querySelector(`[data-line="${id}"]`);
+  const qty = parseFloat(el.querySelector('.line-qty').value) || 0;
+  const price = parseFloat(el.querySelector('.line-price').value) || 0;
+  el.querySelector('.line-subtotal').textContent = '₹' + (qty*price).toFixed(2);
+  recalcTotal();
+}
+function recalcTotal() {
+  let total = 0;
+  document.querySelectorAll('.line-item').forEach(el => {
+    const qty = parseFloat(el.querySelector('.line-qty').value) || 0;
+    const price = parseFloat(el.querySelector('.line-price').value) || 0;
+    total += qty*price;
+  });
+  document.getElementById('po_total').textContent = '₹' + total.toFixed(2);
+}
+
+async function submitPO() {
+  const vendor_id = parseInt(document.getElementById('po_vendor').value);
+  if (!vendor_id) return toast('Pick a vendor', 'err');
+  const lines = [];
+  document.querySelectorAll('.line-item').forEach(el => {
+    const product_id = parseInt(el.querySelector('.product-select').value);
+    const qty = parseFloat(el.querySelector('.line-qty').value) || 0;
+    const price = parseFloat(el.querySelector('.line-price').value) || 0;
+    if (product_id && qty>0 && price>=0) {
+      const opt = el.querySelector('.product-select').selectedOptions[0];
+      lines.push({ product_id, qty, price_unit: price, name: opt.textContent });
+    }
+  });
+  if (!lines.length) return toast('Add at least one valid line', 'err');
+
+  const btn = document.getElementById('po_submit');
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    const r = await api('create-po', { vendor_id, lines, partner_ref: document.getElementById('po_partner_ref').value || undefined,
+      notes: document.getElementById('po_notes').value || undefined }, true);
+    if (r.success) {
+      toast(`✓ Created ${r.po_name}`, 'ok');
+      closePO();
+      loadAll();
+    } else { toast(r.error || 'Failed', 'err'); }
+  } catch (e) { toast('Error: '+e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Create PO'; }
+}
+
+/* ━━━ BILL Modal ━━━ */
+function openBillModal(mode) {
+  state.billMode = mode;
+  document.getElementById('billTitle').textContent = mode==='direct' ? 'Direct Bill (no PO)' : 'Bill from PO';
+  document.getElementById('bill_po_section').classList.toggle('hidden', mode==='direct');
+  document.getElementById('bill_direct_section').classList.toggle('hidden', mode==='po');
+  if (mode==='po') {
+    const sel = document.getElementById('bill_po');
+    sel.innerHTML = '<option value="">— Pick PO —</option>' + state.pos.map(p=>{
+      const v = p.partner_id ? p.partner_id[1] : '-';
+      return `<option value="${p.id}" data-amount="${p.amount_total}">${esc(p.name)} · ${esc(v)} · ₹${(p.amount_total||0).toLocaleString('en-IN')}</option>`;
+    }).join('');
+    sel.onchange = () => {
+      const opt = sel.selectedOptions[0];
+      if (opt && opt.dataset.amount) document.getElementById('bill_total').value = opt.dataset.amount;
+    };
+  } else {
+    const sel = document.getElementById('bill_vendor');
+    sel.innerHTML = '<option value="">— Vendor —</option>' + state.vendors.map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('');
+  }
+  document.getElementById('bill_ref').value = '';
+  document.getElementById('bill_date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('bill_due').value = '';
+  document.getElementById('bill_total').value = '';
+  document.getElementById('bill_notes').value = '';
+  document.getElementById('billModal').classList.remove('hidden');
+}
+function closeBill() { document.getElementById('billModal').classList.add('hidden'); }
+
+async function submitBill() {
+  const ref = document.getElementById('bill_ref').value.trim();
+  const date = document.getElementById('bill_date').value;
+  const total = parseFloat(document.getElementById('bill_total').value);
+  if (!ref || !date || !total) return toast('Fill bill #, date, total', 'err');
+
+  const photo = await readPhoto(document.getElementById('bill_photo'));
+  const params = {
+    bill_ref: ref, bill_date: date,
+    due_date: document.getElementById('bill_due').value || undefined,
+    amount_total: total,
+    notes: document.getElementById('bill_notes').value || undefined,
+    photo_b64: photo,
+  };
+
+  const btn = document.getElementById('bill_submit');
+  btn.disabled = true; btn.textContent = 'Posting…';
+  try {
+    let r;
+    if (state.billMode==='po') {
+      const po_id = parseInt(document.getElementById('bill_po').value);
+      if (!po_id) { btn.disabled=false; btn.textContent='Post Bill'; return toast('Pick a PO', 'err'); }
+      r = await api('create-bill', { po_id, ...params }, true);
+    } else {
+      const vendor_id = parseInt(document.getElementById('bill_vendor').value);
+      const desc = document.getElementById('bill_desc').value.trim();
+      if (!vendor_id || !desc) { btn.disabled=false; btn.textContent='Post Bill'; return toast('Pick vendor + description', 'err'); }
+      r = await api('direct-bill', { vendor_id, description: desc, ...params }, true);
+    }
+    if (r.success) { toast(`✓ Bill posted (#${r.bill_id})`, 'ok'); closeBill(); loadBills(); }
+    else { toast(r.error || 'Failed', 'err'); }
+  } catch (e) { toast('Error: '+e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Post Bill'; }
+}
+
+function readPhoto(input) {
+  return new Promise(res => {
+    if (!input.files?.[0]) return res(null);
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.readAsDataURL(input.files[0]);
+  });
+}
+
+function viewPO(id) {
+  const p = state.pos.find(x => x.id===id);
+  if (p) toast(`${p.name} · ${(p.partner_id?.[1])||'-'} · ₹${(p.amount_total||0).toLocaleString('en-IN')}`);
+}
+
+function esc(s) { return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(msg, kind='ok') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (kind==='err' ? 'toast-err' : 'toast-ok');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 3000);
+}
+</script>
+</body>
+</html>

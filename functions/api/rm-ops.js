@@ -753,6 +753,13 @@ async function handlePost(action, context, env, DB) {
     /* ── Phase 3: explicit variant summary refresh ── */
     case 'refresh-variant-summary': return refreshVariantPriceSummary(body, brand, DB);
 
+    /* ── Phase 4 (unified Purchase UI): list/create/bill ── */
+    case 'list-pos':         return listPOs(creds, cfg, brand, body);
+    case 'create-bill':      return createBill(body, user, creds, cfg, brand, env, DB);
+    case 'direct-bill':      return directBill(body, user, creds, cfg, brand, env, DB);
+    case 'list-bills':       return listBills(brand, body, DB);
+    case 'vendor-outstanding': return vendorOutstanding(creds, cfg, brand);
+
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
 }
@@ -2775,3 +2782,188 @@ async function refreshOneVariantSummary(DB, variantId, brand) {
   ).run();
 }
 
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Phase 4 — Unified Purchase UI backends
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ── List POs with filters (state, vendor, date range) ── */
+async function listPOs(creds, cfg, brand, body) {
+  const filters = body || {};
+  const domain = [['company_id', '=', cfg.company_id]];
+  if (filters.state) domain.push(['state', '=', filters.state]);
+  if (filters.vendor_id) domain.push(['partner_id', '=', filters.vendor_id]);
+  if (filters.from) domain.push(['date_order', '>=', filters.from + ' 00:00:00']);
+  if (filters.to)   domain.push(['date_order', '<=', filters.to + ' 23:59:59']);
+
+  const pos = await odooCall(creds.uid, creds.key, 'purchase.order', 'search_read',
+    [domain],
+    {
+      fields: ['id','name','partner_id','partner_ref','date_order','date_planned','amount_total',
+               'amount_untaxed','amount_tax','state','user_id','notes','invoice_status'],
+      order: 'id desc', limit: filters.limit || 100,
+    });
+  return json({ success: true, pos });
+}
+
+/* ── Create vendor bill (3-way match: PO → Receipt → Bill) ── */
+async function createBill(body, user, creds, cfg, brand, env, DB) {
+  if (user.role !== 'admin' && user.role !== 'purchase') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+  const { po_id, bill_ref, bill_date, due_date, amount_total, notes, photo_b64 } = body;
+  if (!po_id || !bill_ref || !bill_date || !amount_total) {
+    return json({ error: 'po_id, bill_ref, bill_date, amount_total required' }, 400);
+  }
+
+  // Get PO lines for invoice creation
+  const po = await odooCall(creds.uid, creds.key, 'purchase.order', 'read',
+    [[po_id]], { fields: ['name','partner_id','order_line'] });
+  if (!po || !po[0]) return json({ error: 'PO not found' }, 404);
+
+  // Use Odoo's native action: action_create_invoice → returns dict with invoice_ids
+  let billId;
+  try {
+    const inv = await odooCall(creds.uid, creds.key, 'purchase.order', 'action_create_invoice', [[po_id]]);
+    // Sometimes returns {res_id} or {domain: [['id','in',[...]]]}
+    if (inv && inv.res_id) billId = inv.res_id;
+    else if (inv && inv.domain) {
+      const m = JSON.stringify(inv.domain).match(/\[(\d+)\]/);
+      if (m) billId = parseInt(m[1]);
+    }
+    // Fallback: search latest in_invoice for this PO
+    if (!billId) {
+      const found = await odooCall(creds.uid, creds.key, 'account.move', 'search',
+        [[['invoice_origin','=', po[0].name],['move_type','=','in_invoice']]],
+        { limit: 1, order: 'id desc' });
+      if (found && found.length) billId = found[0];
+    }
+  } catch (e) {
+    return json({ error: 'Bill creation failed: ' + e.message }, 500);
+  }
+  if (!billId) return json({ error: 'Bill not created (no id returned)' }, 500);
+
+  // Update bill with provided fields
+  await odooCall(creds.uid, creds.key, 'account.move', 'write',
+    [[billId], {
+      ref: bill_ref,
+      invoice_date: bill_date,
+      invoice_date_due: due_date || null,
+      narration: notes || '',
+    }]);
+
+  // Optionally upload photo to Drive (skip if no photo)
+  let photoLink = null, photoId = null;
+  if (photo_b64 && env.GDRIVE_SA_EMAIL && env.GDRIVE_SA_PRIVATE_KEY) {
+    try {
+      const token = await getGDriveToken(env);
+      const folderId = await gdriveFindOrCreateFolder(token, 'Bills', env.GDRIVE_ROOT_FOLDER_ID);
+      const dateFolder = await gdriveFindOrCreateFolder(token, bill_date, folderId);
+      const filename = `${po[0].name}-${bill_ref}.jpg`;
+      const result = await gdriveUploadPhoto(token, filename, photo_b64, dateFolder);
+      photoLink = result.link; photoId = result.driveId;
+    } catch (e) { /* don't block on photo failure */ }
+  }
+
+  // Mirror to D1
+  if (DB) {
+    await DB.prepare(
+      `INSERT INTO rm_vendor_bills
+        (brand, odoo_move_id, odoo_po_id, odoo_po_name, vendor_id, vendor_name,
+         bill_ref, bill_date, due_date, amount_total,
+         bill_photo_drive_id, bill_photo_link, notes, recorded_by, is_direct)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`
+    ).bind(brand, billId, po_id, po[0].name,
+           po[0].partner_id[0], po[0].partner_id[1],
+           bill_ref, bill_date, due_date, parseFloat(amount_total),
+           photoId, photoLink, notes || '', user.name).run();
+  }
+
+  return json({ success: true, bill_id: billId, photo_link: photoLink });
+}
+
+/* ── Direct bill (no PO) — for ad-hoc vendor invoices ── */
+async function directBill(body, user, creds, cfg, brand, env, DB) {
+  if (user.role !== 'admin' && user.role !== 'purchase') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+  const { vendor_id, bill_ref, bill_date, amount_total, description, notes, photo_b64 } = body;
+  if (!vendor_id || !bill_ref || !bill_date || !amount_total) {
+    return json({ error: 'vendor_id, bill_ref, bill_date, amount_total required' }, 400);
+  }
+
+  const billId = await odooCall(creds.uid, creds.key, 'account.move', 'create',
+    [{
+      move_type: 'in_invoice',
+      partner_id: vendor_id,
+      ref: bill_ref,
+      invoice_date: bill_date,
+      company_id: cfg.company_id,
+      narration: notes || '',
+      invoice_line_ids: [[0,0,{
+        name: description || 'Direct Vendor Bill',
+        quantity: 1,
+        price_unit: parseFloat(amount_total),
+      }]],
+    }]);
+  await odooCall(creds.uid, creds.key, 'account.move', 'action_post', [[billId]]);
+
+  // Vendor name for D1
+  const vp = await odooCall(creds.uid, creds.key, 'res.partner', 'read', [[vendor_id]], { fields: ['name'] });
+
+  let photoLink = null, photoId = null;
+  if (photo_b64 && env.GDRIVE_SA_EMAIL) {
+    try {
+      const token = await getGDriveToken(env);
+      const folderId = await gdriveFindOrCreateFolder(token, 'Bills', env.GDRIVE_ROOT_FOLDER_ID);
+      const dateFolder = await gdriveFindOrCreateFolder(token, bill_date, folderId);
+      const filename = `Direct-${bill_ref}.jpg`;
+      const result = await gdriveUploadPhoto(token, filename, photo_b64, dateFolder);
+      photoLink = result.link; photoId = result.driveId;
+    } catch (e) { /* ignore */ }
+  }
+
+  if (DB) {
+    await DB.prepare(
+      `INSERT INTO rm_vendor_bills
+        (brand, odoo_move_id, vendor_id, vendor_name, bill_ref, bill_date,
+         amount_total, bill_photo_drive_id, bill_photo_link, notes, recorded_by, is_direct)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`
+    ).bind(brand, billId, vendor_id, vp[0]?.name || 'Vendor',
+           bill_ref, bill_date, parseFloat(amount_total),
+           photoId, photoLink, notes || '', user.name).run();
+  }
+
+  return json({ success: true, bill_id: billId, photo_link: photoLink });
+}
+
+/* ── List bills (D1 cache) ── */
+async function listBills(brand, body, DB) {
+  if (!DB) return json({ error: 'DB not configured' }, 500);
+  const from = body.from || '2026-04-01';
+  const to = body.to || '2026-12-31';
+  const rows = await DB.prepare(
+    `SELECT * FROM rm_vendor_bills WHERE brand=? AND bill_date BETWEEN ? AND ? ORDER BY bill_date DESC, id DESC LIMIT 200`
+  ).bind(brand, from, to).all();
+  return json({ success: true, bills: rows.results });
+}
+
+/* ── Vendor outstanding payables ── */
+async function vendorOutstanding(creds, cfg, brand) {
+  const moves = await odooCall(creds.uid, creds.key, 'account.move', 'search_read',
+    [[['move_type','=','in_invoice'],['company_id','=',cfg.company_id],['payment_state','!=','paid'],['state','=','posted']]],
+    { fields: ['id','name','partner_id','amount_total','amount_residual','invoice_date','invoice_date_due','payment_state'],
+      order: 'invoice_date_due asc', limit: 200 });
+  const grouped = {};
+  for (const m of moves) {
+    const vname = m.partner_id ? m.partner_id[1] : 'Unknown';
+    if (!grouped[vname]) grouped[vname] = { vendor: vname, outstanding: 0, count: 0, oldest_due: null, bills: [] };
+    grouped[vname].outstanding += m.amount_residual || 0;
+    grouped[vname].count++;
+    if (!grouped[vname].oldest_due || m.invoice_date_due < grouped[vname].oldest_due) {
+      grouped[vname].oldest_due = m.invoice_date_due;
+    }
+    grouped[vname].bills.push({ id: m.id, ref: m.name, amount: m.amount_residual, due: m.invoice_date_due });
+  }
+  return json({ success: true, outstanding: Object.values(grouped).sort((a,b)=>b.outstanding-a.outstanding) });
+}
