@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance Ops — HN Hotels</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        colors: {
+          brand:   { 400:'#f0a944', 500:'#e8930c', 600:'#c97508' },
+          he:      { 500:'#f59e0b' },
+          nch:     { 500:'#8b5cf6' },
+          surface: { 1:'#111118', 2:'#16161f', 3:'#1c1c27', 4:'#22222e' },
+        }
+      }}
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background: #0c0c14; color: #e4e4ed; font-family: 'Inter', sans-serif; overscroll-behavior: none; }
+    .glass { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(16px); }
+    input, select, textarea { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #e4e4ed; border-radius: 10px; font-size: 14px; padding: 10px 12px; width:100%; }
+    input:focus, select:focus, textarea:focus { border-color: rgba(232,147,12,.5); outline: none; box-shadow: 0 0 0 2px rgba(232,147,12,.15); }
+    select option { background: #1c1c27; color: #e4e4ed; }
+    .btn { padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all .15s; border: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn-primary { background: #e8930c; color: #0c0c14; }
+    .btn-primary:hover { background: #f0a944; }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    .brand-btn { padding: 8px 16px; border-radius: 999px; font-weight: 600; font-size: 12px; border: 1px solid transparent; cursor: pointer; transition: all .15s; }
+    .brand-btn.active { background: rgba(232,147,12,.15); border-color: rgba(232,147,12,.4); color: #f0a944; }
+    .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .chip-he { background: rgba(245,158,11,.12); color: #f59e0b; border:1px solid rgba(245,158,11,.3); }
+    .chip-nch { background: rgba(139,92,246,.12); color: #a78bfa; border:1px solid rgba(139,92,246,.3); }
+    .chip-pool { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
+    .chip-pool.owner { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
+    .chip-pool.capex { background: rgba(99,102,241,.12); color: #818cf8; border:1px solid rgba(99,102,241,.3); }
+    .chip-odoo { background: rgba(212,164,76,.12); color: #d4a44c; border:1px solid rgba(212,164,76,.3); font-family: monospace; }
+    .modal-bg { position:fixed; inset:0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); display:flex; align-items:center; justify-content:center; z-index:100; }
+    .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:12px 20px; border-radius:10px; font-size:13px; font-weight:600; z-index:200; animation: slideUp .2s ease-out; }
+    @keyframes slideUp { from { opacity:0; transform:translate(-50%, 10px); } to { opacity:1; transform:translate(-50%, 0); } }
+    .pin-btn { background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 14px; font-size: 18px; font-weight: 600; color:#e4e4ed; cursor: pointer; transition: background .1s; }
+    .pin-btn:hover { background: rgba(255,255,255,.1); }
+    .pin-dot { width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,.1); transition: background .1s; }
+    .pin-dot.filled { background: #e8930c; }
+  </style>
+</head>
+<body>
+  <!-- PIN Gate -->
+  <div id="pin-screen" class="min-h-screen flex items-center justify-center px-4">
+    <div class="glass rounded-2xl p-8 w-full max-w-sm">
+      <div class="text-center mb-6">
+        <div class="text-3xl font-extrabold text-brand-500 tracking-widest">HN FINANCE</div>
+        <div class="text-xs text-white/50 mt-1">Enter 4-digit PIN</div>
+      </div>
+      <div class="flex justify-center gap-3 mb-6" id="pin-dots">
+        <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2" id="pin-pad">
+        <button class="pin-btn" data-d="1">1</button><button class="pin-btn" data-d="2">2</button><button class="pin-btn" data-d="3">3</button>
+        <button class="pin-btn" data-d="4">4</button><button class="pin-btn" data-d="5">5</button><button class="pin-btn" data-d="6">6</button>
+        <button class="pin-btn" data-d="7">7</button><button class="pin-btn" data-d="8">8</button><button class="pin-btn" data-d="9">9</button>
+        <button class="pin-btn opacity-40" disabled></button>
+        <button class="pin-btn" data-d="0">0</button>
+        <button class="pin-btn" id="pin-del">←</button>
+      </div>
+      <div class="text-center text-xs text-red-400 mt-3 h-4" id="pin-err"></div>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div id="app" class="hidden">
+    <header class="glass sticky top-0 z-40 px-4 py-3 flex items-center gap-3 border-b border-white/5">
+      <div class="text-lg font-extrabold text-brand-500 tracking-wider">HN FINANCE</div>
+      <div class="text-xs text-white/40 ml-2" id="user-label">—</div>
+      <div class="ml-auto flex gap-2">
+        <button class="brand-btn active" data-brand="all">All</button>
+        <button class="brand-btn" data-brand="nch">NCH</button>
+        <button class="brand-btn" data-brand="he">HE</button>
+      </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-6">
+      <!-- KPI cards -->
+      <div id="kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"></div>
+
+      <!-- Record expense CTA -->
+      <div class="glass rounded-xl p-5 mb-6 flex items-center justify-between">
+        <div>
+          <div class="text-base font-bold">Record an expense</div>
+          <div class="text-xs text-white/50 mt-1">Writes directly to Odoo master + mirrors to local cache.</div>
+        </div>
+        <button class="btn btn-primary" onclick="openExpenseModal()">+ New Expense</button>
+      </div>
+
+      <!-- Category breakdown -->
+      <div class="glass rounded-xl p-5 mb-6">
+        <div class="text-xs uppercase tracking-wider text-white/50 mb-3">By Category (period)</div>
+        <div id="byCategory" class="space-y-2"></div>
+      </div>
+
+      <!-- Brand split -->
+      <div class="glass rounded-xl p-5 mb-6">
+        <div class="text-xs uppercase tracking-wider text-white/50 mb-3">By Brand</div>
+        <div id="byBrand" class="grid grid-cols-2 gap-3"></div>
+      </div>
+
+      <!-- Recent ledger -->
+      <div class="glass rounded-xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs uppercase tracking-wider text-white/50">Recent Entries</div>
+          <button class="text-xs text-brand-400 hover:text-brand-500" onclick="loadData()">↻ Refresh</button>
+        </div>
+        <div id="ledger" class="space-y-2"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Expense modal -->
+  <div id="expModal" class="hidden modal-bg" onclick="if(event.target===this)closeExpense()">
+    <div class="glass rounded-2xl p-6 w-full max-w-lg mx-4">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="text-lg font-bold">Record Expense</div>
+          <div class="text-xs text-white/50">Odoo master + D1 cache</div>
+        </div>
+        <button class="text-white/40 hover:text-white" onclick="closeExpense()">✕</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-white/60 mb-1">Brand</label>
+          <select id="m-brand">
+            <option value="nch">Nawabi Chai House</option>
+            <option value="he">Hamza Express</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-white/60 mb-1">Description</label>
+          <input id="m-desc" type="text" placeholder="e.g. Electricity bill Mar 2026">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-white/60 mb-1">Amount (₹)</label>
+            <input id="m-amount" type="number" placeholder="3500">
+          </div>
+          <div>
+            <label class="block text-xs text-white/60 mb-1">Payment Method</label>
+            <select id="m-method">
+              <option value="cash">Cash</option>
+              <option value="hdfc_bank">HDFC Bank</option>
+              <option value="federal_bank">Federal Bank</option>
+              <option value="paytm_upi">Paytm UPI</option>
+              <option value="razorpay">Razorpay</option>
+              <option value="petty_pool">Petty Pool</option>
+              <option value="counter_pool">Counter Pool</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-white/60 mb-1">Category</label>
+            <select id="m-parent" onchange="onParentChange()"><option value="">Loading…</option></select>
+          </div>
+          <div>
+            <label class="block text-xs text-white/60 mb-1">Item</label>
+            <select id="m-product"><option value="">— pick category first —</option></select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-white/60 mb-1">Pool</label>
+            <select id="m-pool">
+              <option value="counter">Counter</option>
+              <option value="petty">Petty</option>
+              <option value="formal">Formal</option>
+              <option value="capex">Capex</option>
+              <option value="owner_drawing">Owner Drawing</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-white/60 mb-1">Location</label>
+            <select id="m-location">
+              <option value="nch_koramangala">NCH Koramangala</option>
+              <option value="he_koramangala">HE Koramangala</option>
+              <option value="hq">HQ</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="flex items-center gap-2 text-xs text-white/70 cursor-pointer">
+            <input id="m-excluded" type="checkbox" style="width:16px;height:16px;">
+            Exclude from P&amp;L (owner draws, capex, etc.)
+          </label>
+        </div>
+        <div>
+          <label class="block text-xs text-white/60 mb-1">Notes</label>
+          <input id="m-notes" type="text" placeholder="Vendor, bill #, etc.">
+        </div>
+        <button class="btn btn-primary w-full" id="m-submit" onclick="submitExpense()">Record Expense</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const API = '/api/finance';
+let currentPin = '';
+let currentUser = '';
+let selectedBrand = 'all'; // all | nch | he
+let taxonomy = null;
+let bufPin = '';
+
+// ─── PIN ───────────────────────────────────────────────
+document.querySelectorAll('#pin-pad .pin-btn[data-d]').forEach(b => b.addEventListener('click', () => {
+  if (bufPin.length < 4) { bufPin += b.dataset.d; renderPin(); if (bufPin.length === 4) tryPin(); }
+}));
+document.getElementById('pin-del').addEventListener('click', () => { bufPin = bufPin.slice(0, -1); renderPin(); });
+function renderPin() {
+  document.querySelectorAll('#pin-dots .pin-dot').forEach((d, i) => d.classList.toggle('filled', i < bufPin.length));
+}
+async function tryPin() {
+  try {
+    const r = await fetch(`${API}?action=verify-pin&pin=${bufPin}`);
+    const j = await r.json();
+    if (j.success) {
+      currentPin = bufPin; currentUser = j.user;
+      document.getElementById('pin-screen').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      document.getElementById('user-label').textContent = `· ${currentUser}`;
+      loadData();
+    } else {
+      document.getElementById('pin-err').textContent = 'Wrong PIN';
+      bufPin = ''; renderPin();
+      setTimeout(() => { document.getElementById('pin-err').textContent = ''; }, 2000);
+    }
+  } catch (e) {
+    document.getElementById('pin-err').textContent = 'Network error';
+    bufPin = ''; renderPin();
+  }
+}
+
+// ─── Brand toggle ──────────────────────────────────────
+document.querySelectorAll('.brand-btn').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.brand-btn').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  selectedBrand = b.dataset.brand;
+  loadData();
+}));
+
+// ─── Data ──────────────────────────────────────────────
+const fmt = n => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+
+function monthRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const iso = d => d.toISOString().slice(0, 10);
+  return { from: iso(from), to: iso(to) };
+}
+
+async function loadData() {
+  const { from, to } = monthRange();
+  const brandQ = selectedBrand === 'all' ? '' : `&brand=${selectedBrand}`;
+  try {
+    const [ov, ld] = await Promise.all([
+      fetch(`${API}?action=overview&from=${from}&to=${to}${brandQ}`).then(r => r.json()),
+      fetch(`${API}?action=ledger&from=${from}&to=${to}${brandQ}`).then(r => r.json()),
+    ]);
+    if (ov.success) renderOverview(ov);
+    if (ld.success) renderLedger(ld.entries);
+  } catch (e) { toast('Load failed: ' + e.message, 'err'); }
+}
+
+function renderOverview(ov) {
+  const s = ov.summary || {};
+  document.getElementById('kpis').innerHTML = `
+    <div class="glass rounded-xl p-4">
+      <div class="text-xs text-white/50">Total (${selectedBrand.toUpperCase()})</div>
+      <div class="text-2xl font-bold mt-1">${fmt(s.total)}</div>
+    </div>
+    <div class="glass rounded-xl p-4">
+      <div class="text-xs text-white/50">Cash</div>
+      <div class="text-2xl font-bold mt-1">${fmt(s.cash)}</div>
+    </div>
+    <div class="glass rounded-xl p-4">
+      <div class="text-xs text-white/50">Bank / UPI</div>
+      <div class="text-2xl font-bold mt-1">${fmt(s.bank)}</div>
+    </div>
+    <div class="glass rounded-xl p-4">
+      <div class="text-xs text-white/50">Entries</div>
+      <div class="text-2xl font-bold mt-1">${(ov.byCategory || []).reduce((s, r) => s + (r.cnt || 0), 0)}</div>
+    </div>`;
+
+  const cats = ov.byCategory || [];
+  const total = cats.reduce((s, r) => s + r.total, 0) || 1;
+  document.getElementById('byCategory').innerHTML = cats.length
+    ? cats.map(c => {
+        const pct = Math.round((c.total / total) * 100);
+        return `<div>
+          <div class="flex items-center justify-between text-sm mb-1">
+            <span>${escapeHtml(c.label || '—')}</span>
+            <span class="text-white/60 tabular-nums">${fmt(c.total)} <span class="text-white/40 text-xs">· ${pct}%</span></span>
+          </div>
+          <div class="h-1.5 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-brand-500" style="width:${pct}%"></div></div>
+        </div>`;
+      }).join('')
+    : '<div class="text-sm text-white/40">No entries yet this period.</div>';
+
+  document.getElementById('byBrand').innerHTML = (ov.byBrand || []).map(b => `
+    <div class="rounded-xl border border-white/5 p-4 ${b.brand === 'he' ? 'bg-amber-500/5' : b.brand === 'nch' ? 'bg-violet-500/5' : 'bg-white/5'}">
+      <div class="flex items-center justify-between">
+        <div class="text-xs text-white/60">${escapeHtml(b.name)}</div>
+        <span class="chip chip-${b.brand}">${(b.brand || '').toUpperCase()}</span>
+      </div>
+      <div class="text-xl font-bold mt-2">${fmt(b.total)}</div>
+      <div class="text-xs text-white/40 mt-1">${b.count} entries</div>
+    </div>`).join('');
+}
+
+function renderLedger(entries) {
+  if (!entries || !entries.length) {
+    document.getElementById('ledger').innerHTML = '<div class="text-sm text-white/40">No entries yet.</div>';
+    return;
+  }
+  document.getElementById('ledger').innerHTML = entries.map(e => {
+    const brand = e.company_id === 1 ? 'he' : e.company_id === 10 ? 'nch' : null;
+    const dt = new Date(e.recorded_at);
+    const when = dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `<div class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/[.02] border border-white/5">
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="font-medium truncate">${escapeHtml(e.description || '—')}</span>
+          ${brand ? `<span class="chip chip-${brand}">${brand.toUpperCase()}</span>` : ''}
+          ${e.x_pool ? `<span class="chip chip-pool ${e.x_pool === 'owner_drawing' ? 'owner' : e.x_pool === 'capex' ? 'capex' : ''}">${escapeHtml(e.x_pool)}</span>` : ''}
+          ${e.odoo_id ? `<span class="chip chip-odoo">#${e.odoo_id}</span>` : ''}
+        </div>
+        <div class="text-xs text-white/50">${when} · ${escapeHtml(e.product_name || e.category_parent || '—')} · ${escapeHtml(e.recorded_by || '')}</div>
+      </div>
+      <div class="text-right flex-shrink-0">
+        <div class="font-semibold tabular-nums">${fmt(e.amount)}</div>
+        <div class="text-xs text-white/40">${escapeHtml(e.x_payment_method || '—')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(s) { return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ─── Expense modal ─────────────────────────────────────
+async function openExpenseModal() {
+  document.getElementById('expModal').classList.remove('hidden');
+  if (selectedBrand === 'he') document.getElementById('m-brand').value = 'he';
+  else if (selectedBrand === 'nch') document.getElementById('m-brand').value = 'nch';
+  await loadTaxonomy();
+}
+function closeExpense() { document.getElementById('expModal').classList.add('hidden'); }
+
+async function loadTaxonomy() {
+  try {
+    if (!taxonomy) {
+      const r = await fetch(`${API}?action=expense-taxonomy`);
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error);
+      taxonomy = j;
+    }
+    const sel = document.getElementById('m-parent');
+    sel.innerHTML = '<option value="">— pick category —</option>' +
+      taxonomy.parents.map(p => `<option value="${p.id}" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join('');
+  } catch (e) {
+    document.getElementById('m-parent').innerHTML = '<option value="">Error — refresh</option>';
+    toast('Taxonomy load failed: ' + e.message, 'err');
+  }
+}
+
+function onParentChange() {
+  const ps = document.getElementById('m-parent');
+  const ds = document.getElementById('m-product');
+  const pid = parseInt(ps.value, 10);
+  if (!pid || !taxonomy) { ds.innerHTML = '<option value="">— pick category first —</option>'; return; }
+  const parent = taxonomy.parents.find(p => p.id === pid);
+  ds.innerHTML = parent && parent.products.length
+    ? '<option value="">— pick item —</option>' + parent.products.map(p => `<option value="${p.id}" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join('')
+    : '<option value="">(no items under this category)</option>';
+
+  const name = (parent?.name || '').toLowerCase();
+  const poolEl = document.getElementById('m-pool');
+  if (name.includes('owner drawings')) poolEl.value = 'owner_drawing';
+  else if (name.includes('capex')) poolEl.value = 'capex';
+  else if (name.includes('salaries') || name.includes('rent') || name.includes('compliance') || name.includes('technology')) poolEl.value = 'formal';
+  else if (name.includes('petty') || name.includes('police') || name.includes('welfare')) poolEl.value = 'petty';
+  else poolEl.value = 'counter';
+}
+
+async function submitExpense() {
+  const brand = document.getElementById('m-brand').value;
+  const desc = document.getElementById('m-desc').value.trim();
+  const amount = parseFloat(document.getElementById('m-amount').value);
+  const method = document.getElementById('m-method').value;
+  const ps = document.getElementById('m-parent');
+  const ds = document.getElementById('m-product');
+  const pid = parseInt(ps.value, 10);
+  const prodId = parseInt(ds.value, 10);
+  const parentName = ps.selectedOptions[0]?.dataset.name || '';
+  const productName = ds.selectedOptions[0]?.dataset.name || '';
+  const pool = document.getElementById('m-pool').value;
+  const location = document.getElementById('m-location').value;
+  const excluded = document.getElementById('m-excluded').checked;
+  const notes = document.getElementById('m-notes').value.trim();
+
+  if (!desc) return toast('Enter a description', 'err');
+  if (!amount || amount <= 0) return toast('Enter a valid amount', 'err');
+  if (!pid) return toast('Pick a category', 'err');
+  if (!prodId) return toast('Pick an item', 'err');
+
+  const btn = document.getElementById('m-submit');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const r = await fetch(`${API}?action=record-expense&brand=${brand}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        pin: currentPin, brand, amount, description: desc, notes,
+        product_id: prodId, product_name: productName, category_parent: parentName,
+        x_pool: pool, x_payment_method: method, x_location: location,
+        x_excluded_from_pnl: excluded,
+      })
+    });
+    const j = await r.json();
+    if (j.success) {
+      closeExpense();
+      toast(`✓ ${fmt(amount)} · Odoo #${j.odoo_id}`, 'ok');
+      // Clear form
+      document.getElementById('m-desc').value = '';
+      document.getElementById('m-amount').value = '';
+      document.getElementById('m-notes').value = '';
+      document.getElementById('m-excluded').checked = false;
+      loadData();
+    } else toast(j.error || 'Failed', 'err');
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Record Expense'; }
+}
+
+function toast(msg, kind = 'ok') {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.style.background = kind === 'err' ? '#dc2626' : '#16a34a';
+  t.style.color = '#fff';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+</script>
+</body>
+</html>
