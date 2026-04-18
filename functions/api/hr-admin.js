@@ -331,6 +331,32 @@ async function handleGet(url, env) {
         [[['model', 'ilike', 'biometric']]], { fields: ['model', 'name'], limit: 50 });
       out.ir_model_biometric = models;
     } catch (e) {}
+    // Search ir.model.fields for any field named stgid
+    try {
+      const fields = await odoo(apiKey, 'ir.model.fields', 'search_read',
+        [[['name', 'ilike', 'stgid']]], { fields: ['name', 'model'], limit: 50 });
+      out.fields_stgid = fields;
+    } catch (e) {}
+    // Search ir.config_parameter for AYTH or stgid
+    try {
+      const params = await odoo(apiKey, 'ir.config_parameter', 'search_read',
+        [[['key', 'ilike', 'cams']]], { fields: ['key', 'value'], limit: 50 });
+      out.config_params_cams = params;
+    } catch (e) {}
+    // Search installed modules for cams/biometric
+    try {
+      const mods = await odoo(apiKey, 'ir.module.module', 'search_read',
+        [[['state', '=', 'installed'], '|', ['name', 'ilike', 'cams'], ['name', 'ilike', 'biometric']]],
+        { fields: ['name', 'display_name', 'state'], limit: 50 });
+      out.installed_modules = mods;
+    } catch (e) {}
+    // Search for the actual controller — grep any model with "service" + "tag"
+    try {
+      const models = await odoo(apiKey, 'ir.model', 'search_read',
+        [['|', ['model', 'ilike', 'service'], ['model', 'ilike', 'tag']]],
+        { fields: ['model', 'name'], limit: 80 });
+      out.ir_model_service_or_tag = models;
+    } catch (e) {}
     return json(out);
   }
 
