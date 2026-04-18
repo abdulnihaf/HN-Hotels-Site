@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#0b0b10">
+<title>HN Spend</title>
+<style>
+  :root {
+    --bg: #0b0b10;
+    --card: #14141b;
+    --card-hover: #1b1b24;
+    --border: rgba(255,255,255,0.08);
+    --text: #e8e8ee;
+    --text-dim: rgba(232,232,238,0.55);
+    --accent: #f0a944;
+    --accent-bg: rgba(240,169,68,0.12);
+    --danger: #ef4444;
+    --success: #22c55e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .app { max-width: 900px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px; gap: 12px; }
+  h1 { font-size: 18px; margin: 0; }
+  .sub { color: var(--text-dim); font-size: 13px; }
+  .btn { background: var(--accent); color: #000; border: 0; padding: 10px 16px;
+    border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn.danger { background: var(--danger); color: #fff; }
+  input, select, textarea { background: var(--card); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 12px; border-radius: 10px; font-size: 15px;
+    width: 100%; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: 0; }
+  label { display: block; margin-bottom: 4px; color: var(--text-dim); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px; }
+  .cat-card { background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px 12px; text-align: center; cursor: pointer;
+    transition: all 0.15s; user-select: none; }
+  .cat-card:hover { background: var(--card-hover); border-color: var(--accent); }
+  .cat-card .e { font-size: 28px; line-height: 1; margin-bottom: 8px; }
+  .cat-card .l { font-size: 13px; font-weight: 600; line-height: 1.3; }
+  .cat-card .d { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
+  .brand-chips { display: flex; gap: 6px; margin-bottom: 16px; }
+  .chip { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--card); font-size: 13px; cursor: pointer; font-weight: 600; }
+  .chip.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .hidden { display: none !important; }
+  .row { margin-bottom: 12px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    padding: 12px 20px; border-radius: 10px; font-weight: 600; z-index: 99;
+    animation: fadein 0.2s; }
+  .toast.ok { background: var(--success); color: #000; }
+  .toast.err { background: var(--danger); color: #fff; }
+  @keyframes fadein { from { opacity: 0; transform: translate(-50%, 10px); } }
+  .recent { margin-top: 20px; }
+  .recent h3 { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
+  .entry { background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
+    display: flex; justify-content: space-between; font-size: 13px; }
+  .entry .amt { color: var(--accent); font-weight: 700; }
+  .back { background: transparent; border: 0; color: var(--text-dim);
+    font-size: 14px; cursor: pointer; padding: 0; }
+  .back:hover { color: var(--text); }
+  .form-title { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .form-title .e { font-size: 28px; }
+</style>
+</head>
+<body>
+
+<div id="app" class="app">
+
+  <!-- PIN GATE -->
+  <div id="pin-screen">
+    <h1>HN Spend</h1>
+    <p class="sub">Record any expense or purchase. PIN-gated.</p>
+    <div style="margin-top: 32px; max-width: 280px;">
+      <label>Enter PIN</label>
+      <input id="pin-input" type="password" inputmode="numeric" maxlength="4"
+             autocomplete="off" autofocus style="font-size: 20px; text-align: center;">
+      <div id="pin-error" style="color: var(--danger); margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
+      <button class="btn" onclick="verifyPin()" style="width: 100%; margin-top: 12px;">Enter</button>
+    </div>
+  </div>
+
+  <!-- HOME (categories) -->
+  <div id="home-screen" class="hidden">
+    <header>
+      <div>
+        <h1 id="user-greeting">HN Spend</h1>
+        <div class="sub" id="user-sub"></div>
+      </div>
+      <button class="btn ghost" onclick="logout()">Exit</button>
+    </header>
+
+    <div class="brand-chips" id="brand-chips"></div>
+
+    <div class="grid" id="cat-grid"></div>
+
+    <div class="recent" id="recent">
+      <h3>Recent entries</h3>
+      <div id="recent-list"></div>
+    </div>
+  </div>
+
+  <!-- FORM (dynamic per category) -->
+  <div id="form-screen" class="hidden">
+    <header>
+      <button class="back" onclick="showHome()">← Back</button>
+      <span></span>
+    </header>
+    <div class="form-title">
+      <span class="e" id="form-emoji"></span>
+      <div>
+        <h1 id="form-label" style="margin: 0;"></h1>
+        <div class="sub" id="form-desc"></div>
+      </div>
+    </div>
+
+    <div id="form-fields"></div>
+
+    <button class="btn" id="submit-btn" onclick="submitForm()" style="width: 100%; padding: 14px; font-size: 16px;">Record</button>
+  </div>
+
+</div>
+
+<script>
+const API = '/api/spend';
+let PIN = '';
+let USER = null;
+let BRAND = null;
+let CURRENT_CAT = null;
+
+// ══ PIN entry ══
+const pinInput = document.getElementById('pin-input');
+pinInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') verifyPin();
+});
+pinInput.addEventListener('input', () => {
+  if (pinInput.value.length === 4) verifyPin();
+});
+
+async function verifyPin() {
+  const pin = pinInput.value.trim();
+  if (!pin || pin.length < 4) return;
+  const r = await fetch(`${API}?action=verify-pin&pin=${pin}`).then(x => x.json()).catch(() => null);
+  if (!r || !r.success) {
+    document.getElementById('pin-error').textContent = r?.error || 'Invalid PIN';
+    pinInput.value = '';
+    return;
+  }
+  PIN = pin;
+  USER = r;
+  BRAND = r.brands[0];
+  document.getElementById('pin-screen').classList.add('hidden');
+  document.getElementById('home-screen').classList.remove('hidden');
+  document.getElementById('user-greeting').textContent = `Hi ${r.user.name}`;
+  document.getElementById('user-sub').textContent = `${r.user.role} · ${r.brands.join(' / ')}`;
+  renderBrands();
+  renderCategories();
+  loadRecent();
+}
+
+function logout() {
+  PIN = ''; USER = null; BRAND = null; CURRENT_CAT = null;
+  pinInput.value = '';
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('home-screen').classList.add('hidden');
+  document.getElementById('form-screen').classList.add('hidden');
+  document.getElementById('pin-screen').classList.remove('hidden');
+  pinInput.focus();
+}
+
+function renderBrands() {
+  const chips = document.getElementById('brand-chips');
+  chips.innerHTML = USER.brands.map(b => `
+    <button class="chip ${b === BRAND ? 'active' : ''}" onclick="setBrand('${b}')">${b}</button>
+  `).join('');
+}
+
+function setBrand(b) {
+  BRAND = b;
+  renderBrands();
+}
+
+function renderCategories() {
+  const grid = document.getElementById('cat-grid');
+  grid.innerHTML = USER.categories.map(c => `
+    <div class="cat-card" onclick="openCategory(${c.id})">
+      <div class="e">${c.emoji}</div>
+      <div class="l">${c.label}</div>
+      <div class="d">${c.desc}</div>
+    </div>
+  `).join('');
+}
+
+async function loadRecent() {
+  const r = await fetch(`${API}?action=recent&pin=${PIN}`).then(x => x.json()).catch(() => null);
+  const list = document.getElementById('recent-list');
+  if (!r?.success || !r.entries?.length) { list.innerHTML = '<div class="sub" style="font-size: 12px;">No recent entries.</div>'; return; }
+  list.innerHTML = r.entries.slice(0, 8).map(e => `
+    <div class="entry">
+      <div>
+        <div>${e.product_name || e.category}</div>
+        <div class="sub" style="font-size: 11px;">${e.category} · ${e.payment_method || '-'} · PIN ${e.recorded_by_pin}</div>
+      </div>
+      <div class="amt">₹${Number(e.amount).toLocaleString('en-IN')}</div>
+    </div>
+  `).join('');
+}
+
+async function openCategory(catId) {
+  const cat = USER.categories.find(c => c.id === catId);
+  if (!cat) return;
+  CURRENT_CAT = cat;
+  document.getElementById('home-screen').classList.add('hidden');
+  document.getElementById('form-screen').classList.remove('hidden');
+  document.getElementById('form-emoji').textContent = cat.emoji;
+  document.getElementById('form-label').textContent = cat.label;
+  document.getElementById('form-desc').textContent = `${cat.desc} · ${BRAND}`;
+  await buildForm(cat);
+}
+
+function showHome() {
+  document.getElementById('form-screen').classList.add('hidden');
+  document.getElementById('home-screen').classList.remove('hidden');
+  loadRecent();
+}
+
+// ══ Build form dynamically by category ══
+async function buildForm(cat) {
+  const container = document.getElementById('form-fields');
+  container.innerHTML = '<div class="sub">Loading…</div>';
+
+  const fields = [];
+
+  // Cats 3-13 → hr.expense path
+  if (cat.backend === 'hr.expense') {
+    // Product picker
+    const products = await fetch(`${API}?action=products&pin=${PIN}&cat=${cat.id}`).then(x => x.json()).catch(() => ({ products: [] }));
+    if (!products.products || !products.products.length) {
+      container.innerHTML = `<div class="sub">No products configured in Odoo for this category yet.</div>`;
+      document.getElementById('submit-btn').classList.add('hidden');
+      return;
+    }
+    document.getElementById('submit-btn').classList.remove('hidden');
+    fields.push(`
+      <div class="row">
+        <label>What</label>
+        <select id="f-product">
+          <option value="">— Select —</option>
+          ${products.products.map(p => `<option value="${p.id}" data-name="${p.name}">${p.name}</option>`).join('')}
+        </select>
+      </div>
+    `);
+
+    // Employee picker (required for salary / advance)
+    if (cat.id === 3 || cat.id === 4) {
+      const emps = await fetch(`${API}?action=employees&pin=${PIN}`).then(x => x.json()).catch(() => ({ employees: [] }));
+      const filtered = BRAND === 'HQ' ? emps.employees : emps.employees.filter(e => e.brand_label === BRAND || e.brand_label === 'HQ');
+      fields.push(`
+        <div class="row">
+          <label>Employee</label>
+          <select id="f-employee">
+            <option value="">— Select —</option>
+            ${filtered.map(e => `<option value="${e.odoo_employee_id}">${e.name} [${e.brand_label}]</option>`).join('')}
+          </select>
+        </div>
+      `);
+    }
+  }
+
+  // Cat 14 — direct vendor bill
+  if (cat.backend === 'account.move') {
+    const vend = await fetch(`${API}?action=vendors&pin=${PIN}&brand=${BRAND}`).then(x => x.json()).catch(() => ({ vendors: [] }));
+    fields.push(`
+      <div class="row">
+        <label>Vendor</label>
+        <select id="f-vendor">
+          <option value="">— Select —</option>
+          ${(vend.vendors || []).map(v => `<option value="${v.id}">${v.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="row">
+        <label>Bill description</label>
+        <input id="f-vendor-name" type="text" placeholder="e.g. Maintenance service — Feb">
+      </div>
+      <div class="row">
+        <label>Bill reference #</label>
+        <input id="f-bill-ref" type="text" placeholder="optional">
+      </div>
+    `);
+  }
+
+  // Cat 1, 2 — purchase orders (deferred)
+  if (cat.backend === 'purchase.order') {
+    container.innerHTML = `
+      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; color: var(--text-dim);">
+        <b>Raw Material & Capex purchase orders</b><br>
+        This flow needs vendor + line items. Use the dedicated purchase UI for now:
+        <br><br>
+        <a href="/ops/purchase/" class="btn" style="text-decoration: none; display: inline-block;">Open /ops/purchase/</a>
+        <br><br>
+        <span style="font-size: 12px;">Coming to /ops/spend/ in Phase 2.</span>
+      </div>
+    `;
+    document.getElementById('submit-btn').classList.add('hidden');
+    return;
+  }
+
+  // Universal fields
+  fields.push(`
+    <div class="row">
+      <label>Amount (₹)</label>
+      <input id="f-amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+    </div>
+    <div class="row">
+      <label>Payment method</label>
+      <select id="f-payment">
+        ${USER.payment_methods.map(p => `<option value="${p.key}">${p.label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="row">
+      <label>Notes (optional)</label>
+      <textarea id="f-notes" rows="2" placeholder="short context"></textarea>
+    </div>
+  `);
+
+  container.innerHTML = fields.join('');
+  document.getElementById('submit-btn').classList.remove('hidden');
+}
+
+async function submitForm() {
+  if (!CURRENT_CAT) return;
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Recording…';
+
+  try {
+    const amount = parseFloat(document.getElementById('f-amount')?.value || '0');
+    if (!amount || amount <= 0) throw new Error('Enter a valid amount');
+
+    const body = {
+      pin: PIN,
+      category: CURRENT_CAT.id,
+      brand: BRAND,
+      amount,
+      payment_method: document.getElementById('f-payment')?.value || 'cash',
+      notes: document.getElementById('f-notes')?.value || '',
+    };
+
+    if (CURRENT_CAT.backend === 'hr.expense') {
+      body.product_id = document.getElementById('f-product')?.value;
+      if (!body.product_id) throw new Error('Pick a product');
+      const empEl = document.getElementById('f-employee');
+      if (empEl) body.employee_id = parseInt(empEl.value, 10);
+      if ((CURRENT_CAT.id === 3 || CURRENT_CAT.id === 4) && !body.employee_id) throw new Error('Pick an employee');
+    }
+
+    if (CURRENT_CAT.backend === 'account.move') {
+      body.vendor_id = document.getElementById('f-vendor')?.value;
+      body.vendor_name = document.getElementById('f-vendor-name')?.value || '';
+      body.bill_ref = document.getElementById('f-bill-ref')?.value || '';
+      if (!body.vendor_id) throw new Error('Pick a vendor');
+    }
+
+    const r = await fetch(`${API}?action=record`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(x => x.json());
+
+    if (!r.success) throw new Error(r.error || 'Record failed');
+    toast(`✓ Recorded ₹${amount.toLocaleString('en-IN')} — ${CURRENT_CAT.label}`, 'ok');
+    setTimeout(showHome, 800);
+  } catch (e) {
+    toast(e.message, 'err');
+    btn.disabled = false;
+    btn.textContent = 'Record';
+  }
+}
+
+function toast(msg, kind) {
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+</script>
+</body>
+</html>
