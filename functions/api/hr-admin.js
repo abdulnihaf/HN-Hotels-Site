@@ -1094,17 +1094,16 @@ async function pullAttendance(apiKey, db, from, to, userName) {
           reason = 'unpaid leave';
         }
       } else if (isOffice) {
-        // Office staff MUST punch. Absent without punches (visible to management)
-        // but NO auto-deduction — salary adjustment is a payroll decision since
-        // HQ may be travelling / remote on any given day.
-        if (hours > 0) {
+        // Office staff MUST punch. Any punch (CheckIn without CheckOut counts)
+        // = present. No deduction — payroll decides on missing punches.
+        const hasPunches = b && b.punches.length > 0;
+        if (hasPunches) {
           status = 'present';
         } else if (isWeekOff) {
           status = 'week_off';
         } else {
           status = 'absent';
           reason = 'no punches';
-          // deduction stays 0 — payroll decides whether to dock office staff
         }
       } else if (isWeekOff) {
         status = 'week_off';
