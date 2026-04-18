@@ -33,6 +33,14 @@ const BRAND_CONFIG = {
     picking_types: { to_kitchen: 30, from_cold: 31, return: 32, wastage: 33 },
     pos_configs: [5, 6, 10],
   },
+  HQ: {
+    company_id: 13,
+    // HQ has no warehouse — service / capex / centralized purchases only.
+    // Inventory-related actions (settlement, stock count) skip HQ.
+    locations: {},
+    picking_types: {},
+    pos_configs: [],
+  },
 };
 
 /* ━━━ User / PIN → Odoo Credentials ━━━ */
