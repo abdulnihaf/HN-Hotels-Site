@@ -271,7 +271,11 @@
     </div>
     <div class="space-y-3">
       <div class="grid grid-cols-2 gap-2">
-        <div><label class="row-label">Name *</label><input id="f_name" class="w-full"></div>
+        <div><label class="row-label">Name (display)</label><input id="f_name" class="w-full"></div>
+        <div><label class="row-label">Legal name (Aadhar)</label><input id="f_name_legal" class="w-full"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="row-label">Known as</label><input id="f_known_as" class="w-full" placeholder="nickname"></div>
         <div><label class="row-label">PIN (bio ID)</label><input id="f_pin" class="w-full" placeholder="e.g. 12"></div>
       </div>
       <div class="grid grid-cols-3 gap-2">
@@ -305,6 +309,18 @@
       <div class="grid grid-cols-2 gap-2">
         <div><label class="row-label">Start date</label><input id="f_start" type="date" class="w-full"></div>
         <div><label class="row-label">Phone</label><input id="f_phone" class="w-full"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="row-label">Aadhar #</label><input id="f_aadhar_number" class="w-full" placeholder="0000 0000 0000"></div>
+        <div><label class="row-label">DOB (Aadhar)</label><input id="f_aadhar_dob" type="date" class="w-full"></div>
+      </div>
+      <div class="card" style="background:rgba(255,255,255,0.02);padding:10px">
+        <div class="row-label" style="margin-bottom:8px">Documents (Google Drive)</div>
+        <div id="docsArea" class="space-y-2"></div>
+        <div class="text-[11px] text-white/30 mt-2">
+          To upload missing docs: click <strong>Open folder</strong>, drop the file in Drive, then click <strong>↻ Re-scan</strong> below.
+        </div>
+        <button onclick="rescanDrive()" class="btn btn-ghost btn-sm w-full mt-2">↻ Re-scan Drive folder</button>
       </div>
       <div><label class="row-label">Notes</label><textarea id="f_notes" class="w-full" rows="2"></textarea></div>
     </div>
@@ -442,16 +458,19 @@ function renderRoster() {
 
   if (!rows.length) { list.innerHTML = '<div class="empty-state">No employees match</div>'; return; }
 
-  list.innerHTML = rows.map(e => `
+  list.innerHTML = rows.map(e => {
+    const displayName = e.name_legal || e.name;
+    const knownAs = e.known_as && e.known_as !== displayName ? ` <span class="text-white/40">(${escapeHtml(e.known_as)})</span>` : '';
+    return `
     <div class="emp-row ${!e.pin ? 'no-pin' : ''}" onclick="openEmployeeModal(${e.id})">
       <div class="flex items-center justify-between gap-3">
         <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="font-semibold text-sm truncate">${escapeHtml(e.name)}</span>
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <span class="font-semibold text-sm">${escapeHtml(displayName)}${knownAs}</span>
             ${brandBadge(e.brand_label)}
             ${e.pay_type === 'Contract' ? '<span class="badge" style="background:rgba(249,115,22,0.12);color:#fb923c">CONTRACT</span>' : ''}
           </div>
-          <div class="flex items-center gap-2 text-[11px] text-white/40">
+          <div class="flex items-center gap-2 text-[11px] text-white/40 flex-wrap">
             <span>#${e.row_no || '–'}</span>
             <span>·</span>
             <span class="${e.pin ? 'text-white/60' : 'text-amber-400 font-semibold'}">
@@ -460,14 +479,28 @@ function renderRoster() {
             <span>·</span>
             <span>${e.job_name || '–'}</span>
           </div>
+          <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            ${docBadge('Aadhar', e.aadhar_front_drive_id)}
+            ${e.aadhar_back_drive_id ? docBadge('Back', e.aadhar_back_drive_id) : ''}
+            ${docBadge('PAN', e.pan_drive_id, true)}
+            ${docBadge('Barcode', e.barcode_drive_id, true)}
+          </div>
         </div>
         <div class="text-right">
           <div class="text-sm font-bold">₹${(e.monthly_salary || 0).toLocaleString('en-IN')}</div>
           <div class="mt-1">${syncBadge(e.sync_status)}</div>
         </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+}
+
+function docBadge(label, fileId, optionalIfMissing = false) {
+  if (fileId) {
+    return `<a href="https://drive.google.com/file/d/${fileId}/view" target="_blank" onclick="event.stopPropagation()" class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;text-decoration:none">📎 ${label}</a>`;
+  }
+  if (optionalIfMissing) return `<span class="badge" style="background:rgba(100,100,120,0.12);color:#9ca3af">— ${label}</span>`;
+  return `<span class="badge" style="background:rgba(245,158,11,0.15);color:#fbbf24">⬆ ${label} missing</span>`;
 }
 
 function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -485,6 +518,8 @@ function openEmployeeModal(id) {
     const e = state.employees.find(x => x.id === id);
     if (e) {
       document.getElementById('f_name').value = e.name || '';
+      document.getElementById('f_name_legal').value = e.name_legal || '';
+      document.getElementById('f_known_as').value = e.known_as || '';
       document.getElementById('f_pin').value = e.pin || '';
       document.getElementById('f_brand').value = e.brand_label || 'TBD';
       document.getElementById('f_paytype').value = e.pay_type || 'Monthly';
@@ -495,10 +530,57 @@ function openEmployeeModal(id) {
       document.getElementById('f_job').value = e.job_name || '';
       document.getElementById('f_start').value = e.start_date || '';
       document.getElementById('f_phone').value = e.phone || '';
+      document.getElementById('f_aadhar_number').value = e.aadhar_number || '';
+      document.getElementById('f_aadhar_dob').value = e.aadhar_dob || '';
       document.getElementById('f_notes').value = e.notes || '';
+      renderDocs(e);
     }
+  } else {
+    document.getElementById('f_name_legal').value = '';
+    document.getElementById('f_known_as').value = '';
+    document.getElementById('f_aadhar_number').value = '';
+    document.getElementById('f_aadhar_dob').value = '';
+    renderDocs({});
   }
   document.getElementById('empModal').classList.remove('hidden');
+}
+
+function renderDocs(e) {
+  const area = document.getElementById('docsArea');
+  const folderLink = e.drive_folder_id
+    ? `<a href="https://drive.google.com/drive/folders/${e.drive_folder_id}" target="_blank" class="btn btn-ghost btn-sm">📁 Open folder</a>`
+    : '<span class="text-[11px] text-white/30">No folder yet (save to create)</span>';
+  const docs = [
+    ['Aadhar Front', e.aadhar_front_drive_id, true],
+    ['Aadhar Back',  e.aadhar_back_drive_id,  false],
+    ['PAN',          e.pan_drive_id,          false],
+    ['Barcode',      e.barcode_drive_id,      true],
+  ];
+  area.innerHTML = `
+    <div class="flex items-center justify-between gap-2">
+      <div class="text-[11px] text-white/50">Folder</div>
+      ${folderLink}
+    </div>
+    ${docs.map(([label, fid, required]) => `
+      <div class="flex items-center justify-between gap-2 text-[12px]">
+        <span class="text-white/60">${label}${required ? ' *' : ''}</span>
+        ${fid
+          ? `<a href="https://drive.google.com/file/d/${fid}/view" target="_blank" class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;text-decoration:none">📎 View</a>`
+          : `<span class="badge" style="background:rgba(245,158,11,0.15);color:#fbbf24">⬆ missing</span>`
+        }
+      </div>`).join('')}
+    ${e.barcode_value ? `<div class="text-[11px] text-white/40 pt-1 border-t border-white/5">Barcode: <code>${escapeHtml(e.barcode_value)}</code></div>` : ''}
+  `;
+}
+
+async function rescanDrive() {
+  toast('Re-scanning Drive...');
+  const r = await apiPost('rescan-drive', {});
+  if (r.error) return toast(r.error, 'error');
+  toast(`Found ${r.matched || 0} new files`);
+  await loadRoster();
+  // Re-open modal to show updated docs
+  if (state.editingId) openEmployeeModal(state.editingId);
 }
 
 function closeEmpModal() {
@@ -517,6 +599,8 @@ async function saveEmployee() {
   const body = {
     id: state.editingId,
     name: document.getElementById('f_name').value.trim(),
+    name_legal: document.getElementById('f_name_legal').value.trim() || null,
+    known_as: document.getElementById('f_known_as').value.trim() || null,
     pin: document.getElementById('f_pin').value.trim() || null,
     brand_label: brand,
     company_id,
@@ -524,6 +608,8 @@ async function saveEmployee() {
     row_no: parseInt(document.getElementById('f_rowno').value) || null,
     monthly_salary: parseFloat(document.getElementById('f_salary').value) || 0,
     daily_rate: parseFloat(document.getElementById('f_daily').value) || null,
+    aadhar_number: document.getElementById('f_aadhar_number').value.trim() || null,
+    aadhar_dob: document.getElementById('f_aadhar_dob').value || null,
     department_name: document.getElementById('f_dept').value.trim() || null,
     job_name: document.getElementById('f_job').value.trim() || null,
     start_date: document.getElementById('f_start').value || null,

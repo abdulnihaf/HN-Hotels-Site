@@ -398,10 +398,14 @@ async function handlePost(request, env) {
     if (e.id) {
       // UPDATE
       const allow = [
-        'pin','row_no','name','known_as','company_id','brand_label',
+        'pin','row_no','name','name_legal','known_as','company_id','brand_label',
         'department_name','job_name','pay_type','monthly_salary','daily_rate',
         'start_date','phone','aadhaar_last4','aadhaar_full','dob','gender',
         'address','emergency_contact','emergency_phone','notes','bio_enrolled',
+        // Aadhar / PAN / barcode (Drive-backed)
+        'aadhar_number','aadhar_dob',
+        'aadhar_front_drive_id','aadhar_back_drive_id','pan_drive_id',
+        'barcode_value','barcode_drive_id','drive_folder_id',
       ];
       const sets = [], vals = [];
       for (const k of allow) {
@@ -434,6 +438,43 @@ async function handlePost(request, env) {
     ).run();
     await logSync(db, 'create_employee', 'hr_employees', ins.meta?.last_row_id, e.name, { pin: e.pin }, user.name);
     return json({ success: true, id: ins.meta?.last_row_id });
+  }
+
+  /* ━━━ Re-scan Drive folder for new Aadhar/PAN/barcode files ━━━ */
+  if (action === 'rescan-drive') {
+    const ROOT = env.GDRIVE_HR_ROOT || '1IYoyfhByBR9_2n59Z5U-R_5rMeRnqufQ';
+    try {
+      const token = await getGDriveToken(env);
+      const list = (q) => fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,webViewLink)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+        { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json());
+
+      const brandFolders = await list(`'${ROOT}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'`);
+      let matched = 0; const updates = [];
+      for (const bf of (brandFolders.files || [])) {
+        if (bf.name.startsWith('_')) continue;
+        const staffFolders = await list(`'${bf.id}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'`);
+        for (const sf of (staffFolders.files || [])) {
+          const files = await list(`'${sf.id}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'`);
+          const fields = { drive_folder_id: sf.id };
+          for (const f of (files.files || [])) {
+            const n = f.name.toLowerCase();
+            if (n.startsWith('aadhar-front')) fields.aadhar_front_drive_id = f.id;
+            else if (n.startsWith('aadhar-back')) fields.aadhar_back_drive_id = f.id;
+            else if (n.startsWith('pan')) fields.pan_drive_id = f.id;
+            else if (n.startsWith('barcode')) fields.barcode_drive_id = f.id;
+          }
+          const sets = Object.keys(fields).map(k => `${k}=?`).join(', ');
+          const vals = [...Object.values(fields), sf.name, sf.name];
+          const res = await db.prepare(
+            `UPDATE hr_employees SET ${sets} WHERE name_legal=? OR name=?`
+          ).bind(...vals).run();
+          if (res.meta?.changes) { matched += res.meta.changes; updates.push({ name: sf.name, fields: Object.keys(fields) }); }
+        }
+      }
+      return json({ success: true, matched, updates: updates.slice(0, 10) });
+    } catch (e) {
+      return json({ error: 'Drive scan failed: ' + e.message }, 500);
+    }
   }
 
   if (action === 'employee-archive') {
@@ -1132,6 +1173,39 @@ async function computeDeductions(db, month, userName) {
   await logSync(db, 'compute_deductions', 'hr_attendance_daily', null, month,
     { employees: rows.results.length }, userName);
   return { rows: rows.results };
+}
+
+/* ━━━ Google Drive: SA JWT for read-only listing of staff documents ━━━ */
+async function getGDriveToken(env) {
+  const email = env.GDRIVE_SA_EMAIL;
+  const pemRaw = env.GDRIVE_SA_PRIVATE_KEY;
+  if (!email || !pemRaw) throw new Error('GDRIVE_SA_EMAIL/PRIVATE_KEY not configured on hr-admin');
+  const pem = pemRaw.replace(/\\n/g, '\n');
+  const der = Uint8Array.from(
+    atob(pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')),
+    c => c.charCodeAt(0)
+  );
+  const key = await crypto.subtle.importKey('pkcs8', der.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const now = Math.floor(Date.now() / 1000);
+  const b64u = (s) => btoa(s).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const header = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const claim = b64u(JSON.stringify({
+    iss: email, scope: 'https://www.googleapis.com/auth/drive.readonly',
+    aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now,
+  }));
+  const sigInput = new TextEncoder().encode(`${header}.${claim}`);
+  const sigBuf = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, sigInput);
+  const sig = b64u(String.fromCharCode(...new Uint8Array(sigBuf)));
+  const jwt = `${header}.${claim}.${sig}`;
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error(`Drive token error: ${JSON.stringify(data)}`);
+  return data.access_token;
 }
 
 /* ━━━ Main entry ━━━ */
