@@ -980,7 +980,8 @@ async function pullAttendance(apiKey, db, from, to, userName) {
        FROM hr_employees e
        LEFT JOIN hr_shift_rules r
          ON r.brand_label = e.brand_label AND r.pay_type = e.pay_type
-      WHERE e.is_active = 1 AND e.odoo_employee_id IS NOT NULL`
+      WHERE e.is_active = 1 AND e.odoo_employee_id IS NOT NULL
+        AND e.pin IS NOT NULL AND e.pin != ''`
   ).all();
   const byOdooId = new Map();
   for (const e of rosterRows.results) byOdooId.set(e.odoo_employee_id, e);
