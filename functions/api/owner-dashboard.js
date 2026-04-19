@@ -33,8 +33,9 @@ const OWNER_PINS = {
   '3678': { name: 'Faheem', role: 'asstmgr' },
 };
 
-const BRAND_COMPANY = { HE: 1, NCH: 10, HQ: 13 };
-const COMPANY_BRAND = { 1: 'HE', 10: 'NCH', 13: 'HQ' };
+// NEW odoo.hnhotels.in instance: 1=HN Hotels, 2=HE, 3=NCH
+const BRAND_COMPANY = { HE: 2, NCH: 3, HQ: 1 };
+const COMPANY_BRAND = { 1: 'HQ', 2: 'HE', 3: 'NCH' };
 
 const CAT_LABELS = {
   1: 'Kitchen RM Purchase',

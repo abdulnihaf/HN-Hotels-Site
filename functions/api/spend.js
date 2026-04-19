@@ -77,7 +77,11 @@ const PIN_TO_UID = {
 };
 function pinToUid(pin) { return PIN_TO_UID[pin] || 2; }  // fallback to admin
 
-const BRAND_COMPANY = { HE: 1, NCH: 10, HQ: 13 };
+// NEW odoo.hnhotels.in instance (Apr 18, 2026):
+//   1 = HN Hotels Pvt Ltd   (HQ)
+//   2 = Hamza Express       (HE)
+//   3 = Nawabi Chai House   (NCH)
+const BRAND_COMPANY = { HE: 2, NCH: 3, HQ: 1 };
 
 // ━━━ Attachment helper ━━━
 // Accepts { name, mimetype, data_b64 } and attaches to any Odoo record.
