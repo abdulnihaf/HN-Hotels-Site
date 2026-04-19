@@ -165,6 +165,7 @@
       <span class="tab" data-tab="photos" onclick="switchTab('photos')">Photos</span>
       <span class="tab" data-tab="pos" onclick="switchTab('pos')">POs</span>
       <span class="tab" data-tab="bills" onclick="switchTab('bills')">Bills</span>
+      <span class="tab" data-tab="nch-cash" onclick="switchTab('nch-cash')" style="background:rgba(124,86,247,.15);color:#a78bfa;border-color:rgba(124,86,247,.4);">🏪 NCH Cash Ops</span>
     </div>
 
     <div id="tab-content"></div>
@@ -299,6 +300,276 @@ function renderTab(t) {
   else if (t === 'photos') renderPhotos(el);
   else if (t === 'pos') renderPOs(el);
   else if (t === 'bills') renderBills(el);
+  else if (t === 'nch-cash') renderNchCash(el);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NCH CASH OPS — day-view of cashier trail + shortages + expenses
+// ═══════════════════════════════════════════════════════════════
+let NCH_DAY = new Date().toISOString().slice(0, 10);
+let NCH_SUBTAB = 'timeline';
+
+async function renderNchCash(el) {
+  el.innerHTML = `
+    <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="nchDayShift(-1)">◀ Prev</button>
+      <input id="nch-date" type="date" value="${NCH_DAY}" onchange="nchDayChange(this.value)" style="max-width: 160px;">
+      <button class="btn btn-ghost btn-sm" onclick="nchDayShift(1)">Next ▶</button>
+      <button class="btn btn-ghost btn-sm" onclick="nchDayChange('${new Date().toISOString().slice(0,10)}')">Today</button>
+      <span class="mute" style="margin-left: auto; font-size: 11px;">Nawabi Chai House · company_id=3</span>
+    </div>
+    <div id="nch-summary" style="margin-bottom: 12px;"><div class="empty-state">Loading…</div></div>
+    <div class="tabs" style="margin-bottom: 10px;">
+      <span class="tab ${NCH_SUBTAB==='timeline'?'active':''}" onclick="nchSubtab('timeline')">Timeline</span>
+      <span class="tab ${NCH_SUBTAB==='shortages'?'active':''}" onclick="nchSubtab('shortages')">Shortages</span>
+      <span class="tab ${NCH_SUBTAB==='settlements'?'active':''}" onclick="nchSubtab('settlements')">Settlements</span>
+      <span class="tab ${NCH_SUBTAB==='expenses'?'active':''}" onclick="nchSubtab('expenses')">Expenses</span>
+      <span class="tab ${NCH_SUBTAB==='collections'?'active':''}" onclick="nchSubtab('collections')">Collections</span>
+    </div>
+    <div id="nch-subcontent"><div class="empty-state">Loading…</div></div>
+  `;
+  await loadNchDay();
+}
+
+async function loadNchDay() {
+  try {
+    const r = await fetch(`${API}?action=nch-day&pin=${PIN}&date=${NCH_DAY}`).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Load failed');
+    window._nchData = r;
+    renderNchSummary(r.summary);
+    renderNchSubtab();
+  } catch (e) {
+    document.getElementById('nch-summary').innerHTML = `<div class="panel"><div class="empty-state">${e.message}</div></div>`;
+  }
+}
+
+function nchDayChange(d) { NCH_DAY = d; loadNchDay(); }
+function nchDayShift(delta) {
+  const d = new Date(NCH_DAY + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  NCH_DAY = d.toISOString().slice(0, 10);
+  document.getElementById('nch-date').value = NCH_DAY;
+  loadNchDay();
+}
+function nchSubtab(t) { NCH_SUBTAB = t; renderTab('nch-cash'); }
+
+function renderNchSummary(s) {
+  const box = document.getElementById('nch-summary');
+  const net = (s.runner_cash_in + s.counter_cash_live) - s.expenses_out - s.manager_collected;
+  box.innerHTML = `
+    <div class="panel">
+      <h3>Day Summary · ${NCH_DAY}</h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; font-size: 12px;">
+        <div style="padding:10px;background:rgba(124,86,247,.08);border:1px solid rgba(124,86,247,.25);border-radius:8px">
+          <div class="lbl mute" style="font-size:10px;font-weight:700">OPENING FLOAT</div>
+          <div class="mono" style="font-size:17px;font-weight:800;margin-top:3px">${fmt(s.opening_float_estimated)}</div>
+        </div>
+        <div style="padding:10px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:8px">
+          <div class="lbl mute" style="font-size:10px;font-weight:700">RUNNER CASH IN</div>
+          <div class="mono" style="font-size:17px;font-weight:800;color:#34d399;margin-top:3px">+${fmt(s.runner_cash_in)}</div>
+        </div>
+        <div style="padding:10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:8px">
+          <div class="lbl mute" style="font-size:10px;font-weight:700">COUNTER POS LIVE</div>
+          <div class="mono" style="font-size:17px;font-weight:800;color:#60a5fa;margin-top:3px">+${fmt(s.counter_cash_live)}</div>
+        </div>
+        <div style="padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:8px">
+          <div class="lbl mute" style="font-size:10px;font-weight:700">EXPENSES OUT</div>
+          <div class="mono" style="font-size:17px;font-weight:800;color:#f87171;margin-top:3px">−${fmt(s.expenses_out)}</div>
+        </div>
+        <div style="padding:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px">
+          <div class="lbl mute" style="font-size:10px;font-weight:700">MGR COLLECTED</div>
+          <div class="mono" style="font-size:17px;font-weight:800;color:#fbbf24;margin-top:3px">−${fmt(s.manager_collected)}</div>
+        </div>
+        <div style="padding:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
+          <div class="lbl mute" style="font-size:10px;font-weight:700">DRAWER NOW</div>
+          <div class="mono" style="font-size:17px;font-weight:800;margin-top:3px">${fmt(s.current_drawer_live)}</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 10px; font-size: 12px; flex-wrap: wrap;">
+        <span style="padding:4px 10px;background:rgba(239,68,68,.15);color:#f87171;border-radius:999px;font-weight:700">
+          Shortage open ₹${fmt(s.shortage_open).replace('₹','')} (${s.events_count ? s.events_count : 0})
+        </span>
+        <span style="padding:4px 10px;background:rgba(16,185,129,.15);color:#34d399;border-radius:999px;font-weight:700">
+          Cleared ${fmt(s.shortage_cleared)}
+        </span>
+        <span style="padding:4px 10px;background:rgba(100,100,120,.15);color:#9ca3af;border-radius:999px;font-weight:700">
+          Waived ${fmt(s.shortage_waived)}
+        </span>
+        <span style="padding:4px 10px;background:rgba(124,86,247,.15);color:#a78bfa;border-radius:999px;font-weight:700">
+          ${s.photos_attached} photos · ${s.photos_missing} missing
+        </span>
+      </div>
+    </div>`;
+}
+
+function renderNchSubtab() {
+  const el = document.getElementById('nch-subcontent');
+  const d = window._nchData;
+  if (!d) return;
+  if (NCH_SUBTAB === 'timeline') renderNchTimeline(el, d);
+  else if (NCH_SUBTAB === 'shortages') renderNchShortages(el, d);
+  else if (NCH_SUBTAB === 'settlements') renderNchSettlements(el, d);
+  else if (NCH_SUBTAB === 'expenses') renderNchExpenses(el, d);
+  else if (NCH_SUBTAB === 'collections') renderNchCollections(el, d);
+}
+
+function nchTime(ts) {
+  return new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+}
+
+function renderNchTimeline(el, d) {
+  if (!d.timeline.length) { el.innerHTML = '<div class="panel"><div class="empty-state">No events on this day</div></div>'; return; }
+  const rows = d.timeline.map(ev => {
+    const icon = {runner_settle:'💰', collection:'📥', expense:'💸', shortage:'⚠'}[ev.type] || '•';
+    const color = ev.direction === 'in' ? '#34d399' : ev.direction === 'out' ? '#f87171' : '#fbbf24';
+    const sign = ev.direction === 'in' ? '+' : ev.direction === 'out' ? '−' : '';
+    const variance = (ev.variance != null && Math.abs(ev.variance) >= 20)
+      ? `<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:${ev.variance < 0 ? 'rgba(239,68,68,.15)':'rgba(245,158,11,.15)'};color:${ev.variance < 0 ? '#f87171':'#fbbf24'};font-weight:700;margin-left:6px">${ev.variance < 0 ? '▼ SHORT' : '▲ OVER'} ₹${fmt(Math.abs(ev.variance)).replace('₹','')}</span>` : '';
+    const photo = ev.meta?.preview_url ? `<span style="cursor:pointer" onclick="event.stopPropagation(); openNchPhoto('${ev.meta.preview_url}', '${ev.meta.odoo_url}')">📎</span>` : '';
+    return `
+      <div class="panel" style="margin-bottom:6px;padding:10px 14px;cursor:pointer" onclick="alert(JSON.stringify(${JSON.stringify(ev.meta || {}).replace(/'/g, "\\'").replace(/"/g, '&quot;')}, null, 2))">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700">${icon} ${esc(ev.title)} ${variance} ${photo}</div>
+            <div class="mute" style="font-size:11px;margin-top:2px">${nchTime(ev.at)}</div>
+          </div>
+          <div class="mono" style="font-weight:800;font-size:15px;color:${color}">${sign}${fmt(ev.amount || 0)}</div>
+        </div>
+      </div>`;
+  }).join('');
+  el.innerHTML = `<div>${rows}</div>`;
+}
+
+function renderNchShortages(el, d) {
+  if (!d.shortages.length) { el.innerHTML = '<div class="panel"><div class="empty-state">✓ No shortages on this day</div></div>'; return; }
+  const rows = d.shortages.map(s => `
+    <tr>
+      <td class="mute" style="font-size:11px">${nchTime(s.created_at)}</td>
+      <td><span class="badge" style="background:rgba(245,158,11,.15);color:#fbbf24">${s.source.replace(/_/g,' ')}</span></td>
+      <td><b>${esc(s.staff_name || s.unmapped_code || 'unmapped')}</b>${s.pin ? `<div class="mute" style="font-size:10px">PIN ${s.pin}</div>` : ''}</td>
+      <td class="mute" style="font-size:11px">${esc(s.counterparty || '—')}</td>
+      <td class="amount mono" style="color:#f87171">${fmt(s.amount)}</td>
+      <td>${s.waived ? '<span class="badge badge-neutral">waived</span>' : s.cleared_at ? '<span class="badge badge-success">cleared</span>' : '<span class="badge badge-danger">open</span>'}</td>
+      <td>${!s.waived && !s.cleared_at ? `<button class="btn btn-ghost btn-sm" onclick="waiveShortage(${s.id})">Waive</button>` : ''}</td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div class="panel">
+      <h3>${d.shortages.length} shortage event${d.shortages.length!==1?'s':''} · ${NCH_DAY}</h3>
+      <table class="data">
+        <thead><tr><th>Time</th><th>Source</th><th>Accountable</th><th>Counterparty</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderNchSettlements(el, d) {
+  if (!d.settlements.length) { el.innerHTML = '<div class="panel"><div class="empty-state">No runner settlements today</div></div>'; return; }
+  const rows = d.settlements.map(s => {
+    const expected = (s.tokens_amount || 0) + (s.sales_amount || 0) - (s.upi_amount || 0);
+    const variance = (s.cash_settled || 0) - expected;
+    const varTag = Math.abs(variance) < 20 ? '<span class="badge badge-success">exact</span>' :
+      variance < 0 ? `<span class="badge badge-danger">SHORT ₹${fmt(Math.abs(variance)).replace('₹','')}</span>` :
+      `<span class="badge badge-warn">OVER ₹${fmt(variance).replace('₹','')}</span>`;
+    return `
+      <tr>
+        <td class="mute" style="font-size:11px">${nchTime(s.settled_at)}</td>
+        <td><b>${esc(s.runner_name)}</b><div class="mute" style="font-size:10px">→ ${esc(s.settled_by)}</div></td>
+        <td class="mono mute" style="font-size:11px">${fmt(s.tokens_amount || 0)}</td>
+        <td class="mono mute" style="font-size:11px">${fmt(s.sales_amount || 0)}</td>
+        <td class="mono mute" style="font-size:11px">−${fmt(s.upi_amount || 0)}</td>
+        <td class="mono" style="font-weight:700">${fmt(expected)}</td>
+        <td class="mono" style="font-weight:700">${fmt(s.cash_settled)}</td>
+        <td>${varTag}</td>
+      </tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="panel">
+      <h3>Runner Settlements · ${NCH_DAY}</h3>
+      <table class="data">
+        <thead><tr><th>Time</th><th>Runner → Cashier</th><th>Tokens</th><th>Sales</th><th>UPI</th><th style="text-align:right">Expected</th><th style="text-align:right">Received</th><th>Variance</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderNchExpenses(el, d) {
+  if (!d.expenses.length) { el.innerHTML = '<div class="panel"><div class="empty-state">No expenses logged this day</div></div>'; return; }
+  const cards = d.expenses.map(e => {
+    const photo = e.attachment?.preview_url
+      ? `<img src="${e.attachment.preview_url}" style="width:100%;height:120px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="openNchPhoto('${e.attachment.preview_url}', '${e.odoo_url}')">`
+      : `<div style="width:100%;height:120px;background:var(--surface-2);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:11px;border:1px dashed var(--border)">no photo</div>`;
+    return `
+      <div class="panel" style="padding:10px">
+        ${photo}
+        <div style="margin-top:8px">
+          <div style="font-weight:700;font-size:13px">${esc(e.category_parent || e.category)}</div>
+          <div class="mute" style="font-size:11px">${esc(e.product_name || '—')}</div>
+          <div class="amount mono" style="font-size:16px;font-weight:800;color:#f87171;margin-top:4px">−${fmt(e.amount)}</div>
+          <div class="mute" style="font-size:10px;margin-top:4px">${nchTime(e.recorded_at)} · ${esc(e.recorded_by)} · ${esc(e.x_payment_method || '—')}</div>
+          ${e.notes ? `<div class="mute" style="font-size:10px;margin-top:4px;font-style:italic">${esc(e.notes)}</div>` : ''}
+          ${e.odoo_url ? `<a href="${e.odoo_url}" target="_blank" class="btn btn-ghost btn-sm" style="margin-top:6px;width:100%;text-decoration:none">Open in Odoo</a>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">${cards}</div>`;
+}
+
+function renderNchCollections(el, d) {
+  if (!d.collections.length) { el.innerHTML = '<div class="panel"><div class="empty-state">No manager collections this day</div></div>'; return; }
+  const rows = d.collections.map(c => {
+    const disc = c.discrepancy || 0;
+    const discTag = Math.abs(disc) < 20 ? '<span class="badge badge-success">exact</span>' :
+      disc > 0 ? `<span class="badge badge-danger">SHORT ₹${fmt(disc).replace('₹','')}</span>` :
+      `<span class="badge badge-warn">OVER ₹${fmt(Math.abs(disc)).replace('₹','')}</span>`;
+    return `
+      <tr>
+        <td class="mute" style="font-size:11px">${nchTime(c.collected_at)}</td>
+        <td><b>${esc(c.collected_by)}</b></td>
+        <td class="mono">${fmt(c.expected || 0)}</td>
+        <td class="amount mono" style="font-weight:700">${fmt(c.amount)}</td>
+        <td class="mono">${fmt(c.petty_cash || 0)}</td>
+        <td>${discTag}</td>
+      </tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="panel">
+      <h3>Manager Collections · ${NCH_DAY}</h3>
+      <table class="data">
+        <thead><tr><th>Time</th><th>Taken By</th><th style="text-align:right">Expected</th><th style="text-align:right">Took</th><th style="text-align:right">Left as Float</th><th>Variance</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function openNchPhoto(previewUrl, odooUrl) {
+  const lb = document.createElement('div');
+  lb.className = 'lightbox';
+  lb.onclick = e => { if (e.target === lb || e.target.className === 'close') lb.remove(); };
+  lb.innerHTML = `
+    <button class="close">✕ Close</button>
+    <img src="${previewUrl}" alt="">
+    <div class="meta">
+      <div style="font-size: 13px;">Expense bill photo</div>
+      <div style="margin-top: 10px; display: flex; gap: 6px;">
+        ${odooUrl !== 'null' ? `<a href="${odooUrl}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration: none;">Open in Odoo</a>` : ''}
+        <a href="${previewUrl}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration: none;">Full size</a>
+      </div>
+    </div>`;
+  document.body.appendChild(lb);
+}
+
+async function waiveShortage(id) {
+  const reason = prompt('Reason to waive this shortage (visible in audit trail):');
+  if (!reason) return;
+  const r = await fetch(`/api/hr-deductions?action=waive`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, pin: PIN, reason }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) return toast(r.error || 'Waive failed', 'err');
+  toast('✓ Waived', 'ok');
+  loadNchDay();
 }
 
 // ─── PULSE ───────────────────────────────────────────────────

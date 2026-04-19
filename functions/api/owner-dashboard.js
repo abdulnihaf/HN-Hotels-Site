@@ -126,6 +126,8 @@ export async function onRequest(context) {
       case 'po-list':          return await poList(apiKey, { from, to, companyId });
       case 'bill-list':        return await billList(apiKey, { from, to, companyId });
       case 'entry-detail':     return await entryDetail(DB, apiKey, url);
+      case 'nch-day':          return await nchDay(DB, apiKey, url);
+      case 'shortages-list':   return await shortagesList(DB, url);
       case 'verify':           return json({ success: true, user });
       default: return json({ success: false, error: 'Unknown action' }, 400);
     }
@@ -613,5 +615,196 @@ async function entryDetail(DB, apiKey, url) {
       })),
       odoo_url: r.odoo_id ? `https://odoo.hnhotels.in/web#id=${r.odoo_id}&model=hr.expense&view_type=form` : null,
     },
+  });
+}
+
+/* ━━━ NCH CASH OPS — full day view ━━━ */
+async function nchDay(DB, apiKey, url) {
+  const date = url.searchParams.get('date') || new Date().toISOString().slice(0, 10);
+  const dayStart = `${date}T00:00:00`;
+  const dayEndExcl = `${date}T23:59:59`;
+
+  // 1. Shortages today (HN D1)
+  const shortagesRows = await DB.prepare(
+    `SELECT s.*, e.name AS staff_name
+       FROM hr_cash_shortages s
+       LEFT JOIN hr_employees e ON e.pin = s.pin
+      WHERE s.brand = 'NCH'
+        AND s.created_at >= ? AND s.created_at <= ?
+      ORDER BY s.created_at DESC`
+  ).bind(dayStart, dayEndExcl).all();
+
+  // 2. Expenses today (HN D1 mirror, filtered NCH)
+  const expensesRows = await DB.prepare(
+    `SELECT id, odoo_id, amount, product_name, category, category_parent,
+            x_payment_method, recorded_by, recorded_at, notes
+       FROM business_expenses
+      WHERE company_id = 3
+        AND recorded_at >= ? AND recorded_at <= ?
+      ORDER BY recorded_at DESC`
+  ).bind(dayStart, dayEndExcl).all();
+
+  // 3. Attachments for those expenses
+  const odooIds = (expensesRows.results || []).map(r => r.odoo_id).filter(Boolean);
+  const attMap = {};
+  if (apiKey && odooIds.length) {
+    try {
+      const atts = await odoo(apiKey, 'ir.attachment', 'search_read',
+        [[['res_model', '=', 'hr.expense'], ['res_id', 'in', odooIds],
+          ['mimetype', 'like', 'image/']]],
+        { fields: ['id', 'res_id', 'name'], limit: 500 });
+      for (const a of atts) if (!attMap[a.res_id]) attMap[a.res_id] = a;
+    } catch (e) { console.error('att fetch:', e.message); }
+  }
+
+  // 4. Fetch NCH outlet data (settlements, handovers, collections) via HTTP
+  const nchBase = 'https://nawabichaihouse.com';
+  let settlements = [], handovers = [], collections = [], counterBalance = null;
+  try {
+    const [settleRes, collectRes, balRes] = await Promise.all([
+      fetch(`${nchBase}/api/settlement?action=history&limit=200`).then(r => r.json()).catch(() => ({})),
+      fetch(`${nchBase}/api/settlement?action=collection-history&limit=100`).then(r => r.json()).catch(() => ({})),
+      fetch(`${nchBase}/api/settlement?action=counter-balance`).then(r => r.json()).catch(() => ({})),
+    ]);
+    // Filter to the requested date
+    const inDay = (ts) => ts && ts >= dayStart && ts <= dayEndExcl;
+    settlements = (settleRes.settlements || []).filter(s => inDay(s.settled_at));
+    collections = (collectRes.collections || []).filter(c => inDay(c.collected_at));
+    counterBalance = balRes.balance || null;
+  } catch (e) { console.error('nch fetch:', e.message); }
+
+  // 5. Build chronological timeline
+  const events = [];
+  for (const s of settlements) {
+    const expected = (s.tokens_amount || 0) + (s.sales_amount || 0) - (s.upi_amount || 0);
+    const variance = (s.cash_settled || 0) - expected;
+    events.push({
+      type: 'runner_settle',
+      at: s.settled_at,
+      title: `Settle Runner · ${s.runner_name} → ${s.settled_by}`,
+      amount: s.cash_settled,
+      direction: 'in',
+      expected, variance,
+      meta: {
+        tokens: s.tokens_amount, sales: s.sales_amount, upi: s.upi_amount,
+        runner_id: s.runner_id, settled_by: s.settled_by,
+      },
+    });
+  }
+  for (const c of collections) {
+    events.push({
+      type: 'collection',
+      at: c.collected_at,
+      title: `Manager Collect · ${c.collected_by}`,
+      amount: c.amount,
+      direction: 'out',
+      variance: -(c.discrepancy || 0),
+      meta: {
+        petty_left: c.petty_cash, expected: c.expected, notes: c.notes,
+      },
+    });
+  }
+  for (const e of (expensesRows.results || [])) {
+    const att = attMap[e.odoo_id];
+    events.push({
+      type: 'expense',
+      at: e.recorded_at,
+      title: `Expense · ${e.category_parent || e.category} · ${e.product_name || '—'}`,
+      amount: e.amount,
+      direction: 'out',
+      meta: {
+        payment: e.x_payment_method, recorded_by: e.recorded_by,
+        notes: e.notes, odoo_id: e.odoo_id,
+        attachment_id: att?.id || null,
+        preview_url: att ? `https://odoo.hnhotels.in/web/image/${att.id}` : null,
+        odoo_url: e.odoo_id ? `https://odoo.hnhotels.in/web#id=${e.odoo_id}&model=hr.expense&view_type=form` : null,
+      },
+    });
+  }
+  for (const sh of (shortagesRows.results || [])) {
+    events.push({
+      type: 'shortage',
+      at: sh.created_at,
+      title: `Shortage · ${sh.source.replace(/_/g, ' ')} · ${sh.staff_name || sh.unmapped_code || 'unmapped'}`,
+      amount: sh.amount,
+      direction: 'flag',
+      meta: {
+        pin: sh.pin, staff_name: sh.staff_name,
+        counterparty: sh.counterparty, source: sh.source,
+        waived: !!sh.waived, cleared_at: sh.cleared_at,
+        id: sh.id,
+      },
+    });
+  }
+  events.sort((a, b) => (a.at || '').localeCompare(b.at || ''));
+
+  // 6. Day summary
+  const totalSettled  = settlements.reduce((s, x) => s + (x.cash_settled || 0), 0);
+  const totalExpenses = (expensesRows.results || []).reduce((s, x) => s + (x.amount || 0), 0);
+  const totalCollected = collections.reduce((s, x) => s + (x.amount || 0), 0);
+  const openShortages  = (shortagesRows.results || []).filter(s => !s.cleared_at && !s.waived);
+  const waivedShortages= (shortagesRows.results || []).filter(s => s.waived);
+  const clearedShortages=(shortagesRows.results || []).filter(s => s.cleared_at && !s.waived);
+  const totalShortageOpen = openShortages.reduce((s, x) => s + (x.amount || 0), 0);
+  const totalShortageWaived = waivedShortages.reduce((s, x) => s + (x.amount || 0), 0);
+  const totalShortageCleared= clearedShortages.reduce((s, x) => s + (x.amount || 0), 0);
+
+  return json({
+    success: true,
+    date,
+    summary: {
+      opening_float_estimated: counterBalance?.pettyCash || 0,
+      runner_cash_in: Math.round(totalSettled),
+      counter_cash_live: counterBalance?.counterCashLive || 0,
+      expenses_out: Math.round(totalExpenses),
+      manager_collected: Math.round(totalCollected),
+      current_drawer_live: counterBalance?.total || 0,
+      shortage_open: Math.round(totalShortageOpen),
+      shortage_cleared: Math.round(totalShortageCleared),
+      shortage_waived: Math.round(totalShortageWaived),
+      events_count: events.length,
+      photos_attached: Object.keys(attMap).length,
+      photos_missing: (expensesRows.results || []).length - Object.keys(attMap).length,
+    },
+    timeline: events,
+    shortages: (shortagesRows.results || []).map(s => ({
+      ...s,
+      is_unmapped: !s.pin,
+    })),
+    expenses: (expensesRows.results || []).map(e => ({
+      ...e,
+      attachment: attMap[e.odoo_id] ? {
+        id: attMap[e.odoo_id].id,
+        preview_url: `https://odoo.hnhotels.in/web/image/${attMap[e.odoo_id].id}`,
+        download_url: `https://odoo.hnhotels.in/web/content/${attMap[e.odoo_id].id}?download=true`,
+      } : null,
+      odoo_url: e.odoo_id ? `https://odoo.hnhotels.in/web#id=${e.odoo_id}&model=hr.expense&view_type=form` : null,
+    })),
+    settlements,
+    collections,
+    counter_balance: counterBalance,
+  });
+}
+
+/* ━━━ SHORTAGES LIST ━━━ */
+async function shortagesList(DB, url) {
+  const brand = url.searchParams.get('brand') || 'NCH';
+  const month = url.searchParams.get('month');
+  const status = url.searchParams.get('status') || 'all';
+  let q = `SELECT s.*, e.name AS staff_name
+             FROM hr_cash_shortages s
+             LEFT JOIN hr_employees e ON e.pin = s.pin
+            WHERE s.brand = ?`;
+  const args = [brand];
+  if (month) { q += ` AND strftime('%Y-%m', s.created_at) = ?`; args.push(month); }
+  if (status === 'open')    q += ` AND s.cleared_at IS NULL AND s.waived = 0`;
+  else if (status === 'cleared') q += ` AND s.cleared_at IS NOT NULL AND s.waived = 0`;
+  else if (status === 'waived')  q += ` AND s.waived = 1`;
+  q += ` ORDER BY s.created_at DESC LIMIT 500`;
+  const rows = await DB.prepare(q).bind(...args).all();
+  return json({
+    success: true,
+    count: rows.results.length,
+    shortages: rows.results.map(r => ({ ...r, is_unmapped: !r.pin })),
   });
 }
