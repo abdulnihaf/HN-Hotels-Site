@@ -130,7 +130,11 @@ async function syncToDrive(env, meta) {
 
 // ━━━ 14 Spend Categories (locked spec) ━━━
 const CATEGORIES = [
-  { id: 1,  label: 'Raw Material Purchase', emoji: '🥩', backend: 'purchase.order', desc: 'Vendor + items → RM PO' },
+  // Cat 1 has two paths:
+  //   - Formal PO flow      → /api/rm-ops?action=create-po  (variant-aware cart at /ops/purchase/)
+  //   - Direct cash expense → /api/spend?action=record      (outlet app /ops/v2/)
+  // Backend here is hr.expense so the expense path works; PO path is explicit via rm-ops.
+  { id: 1,  label: 'Raw Material Purchase', emoji: '🥩', backend: 'hr.expense',     desc: 'Vendor + items (cash or PO)', parentName: '01 · Raw Materials' },
   { id: 2,  label: 'Capex / Equipment',     emoji: '🏗️', backend: 'hr.expense',      desc: 'Fridge / AC / Equipment', parentName: '14 · One-Time Capex' },
   { id: 3,  label: 'Salary Payment',        emoji: '💼', backend: 'hr.expense',     desc: 'Employee monthly salary', parentName: '02 · Salaries' },
   { id: 4,  label: 'Salary Advance',        emoji: '💰', backend: 'hr.expense',     desc: 'Employee advance (deducted later)', parentName: '02 · Salaries' },
@@ -570,12 +574,6 @@ export async function onRequest(context) {
           data_b64: body.attachment.data_b64,
         } : null);
         return json({ success: true, odoo_id: moveId, backend: 'account.move', category: cat.label, attachment_id: attId14, drive_file_id: drive14 });
-      }
-
-      // Cat 1 (Raw Material PO) — UI submits directly to /api/rm-ops create-po
-      // (avoids duplicating the variant-aware purchase logic)
-      if (cat.backend === 'purchase.order') {
-        return json({ success: false, error: 'Cat 1 uses /api/rm-ops create-po directly from the UI' }, 501);
       }
 
       return json({ success: false, error: `Backend ${cat.backend} not implemented yet` }, 501);
