@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <meta name="theme-color" content="#0b0b10">
-<title>HN Purchase</title>
+<title>HN Expense</title>
 <style>
   :root {
     --bg: #0b0b10;
@@ -117,7 +117,7 @@
 
   <!-- ══════════ PIN GATE ══════════ -->
   <div id="pin-screen">
-    <h1>HN Purchase</h1>
+    <h1>HN Expense</h1>
     <p class="sub">Record any expense or purchase. PIN-gated.</p>
     <div style="margin-top: 32px; max-width: 280px;">
       <label>Enter PIN</label>
@@ -314,7 +314,7 @@ const RM_API = '/api/rm-ops';   // Cat 1 uses existing RM purchase pipeline
 // ── Domain filtering ──
 // /ops/expense/ shows expense + capex + direct-bill categories.
 // /ops/purchase/ shows raw-material PO + bill-from-PO categories.
-const DOMAIN = 'purchase';
+const DOMAIN = 'expense';
 const DOMAIN_CATS = {
   expense:  [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
   purchase: [1, 15],

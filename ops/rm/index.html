@@ -129,7 +129,7 @@
       <button onclick="setBrand('NCH')" id="brandNCH" class="brand-toggle flex-1">NCH</button>
     </div>
     <div class="flex gap-1">
-      <button onclick="setTab('purchase')" data-tab="purchase" id="tab-btn-purchase" class="tab-btn flex-1">Purchase</button>
+      <a href="/ops/purchase/" class="tab-btn flex-1" style="text-align: center; text-decoration: none; line-height: 40px;" title="Raw material purchase moved to /ops/purchase/">🛒 Purchase ↗</a>
       <button onclick="setTab('settlement')" data-tab="settlement" id="tab-btn-settlement" class="tab-btn flex-1">Settlement</button>
       <button onclick="setTab('analytics')" data-tab="analytics" id="tab-btn-analytics" class="tab-btn flex-1">Analytics</button>
       <button onclick="setTab('prices')" data-tab="prices" id="tab-btn-prices" class="tab-btn flex-1 hidden">💹</button>
@@ -637,7 +637,7 @@ let currentPin = '';
 let currentUser = null;
 let currentRole = null;
 let currentBrand = 'HE';
-let currentTab = 'purchase';
+let currentTab = 'settlement';   // Purchase tab moved to /ops/purchase/
 
 // Purchase state
 let catalog = { products: [], vendors: [], recentPOs: [] };
