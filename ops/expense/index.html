@@ -2,113 +2,32 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<meta name="theme-color" content="#0b0b10">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>HN Expense</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
 <style>
-  :root {
-    --bg: #0b0b10;
-    --card: #14141b;
-    --card-hover: #1b1b24;
-    --border: rgba(255,255,255,0.08);
-    --text: #e8e8ee;
-    --text-dim: rgba(232,232,238,0.55);
-    --text-mute: rgba(232,232,238,0.35);
-    --accent: #f0a944;
-    --accent-bg: rgba(240,169,68,0.12);
-    --danger: #ef4444;
-    --success: #22c55e;
-    --warn: #eab308;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-  .app { max-width: 900px; margin: 0 auto; padding: 16px; padding-bottom: 100px; }
-  header { display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 16px; gap: 12px; }
-  h1 { font-size: 18px; margin: 0; }
-  h2 { font-size: 16px; margin: 0 0 8px; }
-  .sub { color: var(--text-dim); font-size: 13px; }
-  .mute { color: var(--text-mute); font-size: 12px; }
-  .btn { background: var(--accent); color: #000; border: 0; padding: 10px 16px;
-    border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px;
-    transition: opacity 0.15s; }
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-  .btn.danger { background: var(--danger); color: #fff; }
-  .btn.sm { padding: 6px 10px; font-size: 13px; }
-  .btn.full { width: 100%; padding: 14px; font-size: 16px; }
-  input, select, textarea { background: var(--card); border: 1px solid var(--border);
-    color: var(--text); padding: 10px 12px; border-radius: 10px; font-size: 15px;
-    width: 100%; font-family: inherit; }
-  input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: 0; }
-  input[type=number] { -moz-appearance: textfield; }
-  input[type=number]::-webkit-outer-spin-button,
-  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-  label { display: block; margin-bottom: 4px; color: var(--text-dim); font-size: 13px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 10px; }
-  .cat-card { background: var(--card); border: 1px solid var(--border);
-    border-radius: 14px; padding: 16px 12px; text-align: center; cursor: pointer;
-    transition: all 0.15s; user-select: none; }
-  .cat-card:hover { background: var(--card-hover); border-color: var(--accent); }
-  .cat-card .e { font-size: 28px; line-height: 1; margin-bottom: 8px; }
-  .cat-card .l { font-size: 13px; font-weight: 600; line-height: 1.3; }
-  .cat-card .d { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
-  .brand-chips { display: flex; gap: 6px; margin-bottom: 16px; }
-  .chip { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--card); font-size: 13px; cursor: pointer; font-weight: 600;
-    color: var(--text); }
-  .chip.active { background: var(--accent); color: #000; border-color: var(--accent); }
-  .hidden { display: none !important; }
+  /* Local overrides — design primitives come from /assets/ops-ui.css */
+  .brand-chips { margin-bottom: 14px; }
   .row { margin-bottom: 12px; }
-  .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-    padding: 12px 20px; border-radius: 10px; font-weight: 600; z-index: 99;
-    animation: fadein 0.2s; max-width: 90%; text-align: center; }
-  .toast.ok { background: var(--success); color: #000; }
-  .toast.err { background: var(--danger); color: #fff; }
-  @keyframes fadein { from { opacity: 0; transform: translate(-50%, 10px); } }
-  .recent { margin-top: 20px; }
-  .recent h3 { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
-  .entry { background: var(--card); border: 1px solid var(--border);
-    border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
-    display: flex; justify-content: space-between; font-size: 13px; }
-  .entry .amt { color: var(--accent); font-weight: 700; }
-  .back { background: transparent; border: 0; color: var(--text-dim);
-    font-size: 14px; cursor: pointer; padding: 0; }
-  .back:hover { color: var(--text); }
-  .form-title { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-  .form-title .e { font-size: 28px; }
+  .form-title { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .form-title .e { font-size: 30px; line-height: 1; }
 
-  /* Cat 1 — Purchase */
-  .product-card { background: var(--card); border: 1px solid var(--border);
-    border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
+  /* Cat 1 (purchase) — product + cart UI */
+  .product-card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
   .product-card .title { font-weight: 600; font-size: 14px; }
   .product-card .meta { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
-  .product-card .add-row { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
-  .product-card .add-row input { padding: 6px 8px; font-size: 13px; }
-  .product-card .variant-btn { background: var(--accent-bg); color: var(--accent);
-    border: 1px solid rgba(240,169,68,0.3); border-radius: 6px; padding: 4px 8px;
-    font-size: 11px; cursor: pointer; margin-top: 6px; }
-  .cart-bar { position: fixed; bottom: 0; left: 0; right: 0;
-    background: #0d0d14; border-top: 1px solid var(--border); padding: 12px 16px;
-    display: flex; justify-content: space-between; align-items: center;
-    z-index: 50; max-width: 900px; margin: 0 auto; }
-  .cart-line { display: flex; gap: 6px; align-items: center; padding: 6px 0;
+  .product-card .variant-btn { background: var(--brand-soft); color: var(--brand);
+    border: 1px solid var(--brand-ring); border-radius: var(--radius-sm);
+    padding: 6px 10px; font-size: 12px; cursor: pointer; margin-top: 6px;
+    font-weight: 600; min-height: 32px; }
+  .cart-line { display: flex; gap: 8px; align-items: center; padding: 8px 0;
     border-bottom: 1px dashed var(--border); font-size: 13px; }
-  .cart-line input { max-width: 80px; padding: 4px 6px; font-size: 12px; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px;
-    font-size: 10px; font-weight: 700; background: var(--accent-bg); color: var(--accent); }
-  .badge.warn { background: rgba(234,179,8,0.12); color: var(--warn); }
-  .badge.ok   { background: rgba(34,197,94,0.12); color: var(--success); }
-
-  /* Modal overlay */
-  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 80;
-    display: flex; align-items: center; justify-content: center; padding: 16px; }
-  .modal-card { background: var(--card); border: 1px solid var(--border);
-    border-radius: 14px; padding: 16px; max-width: 500px; width: 100%;
-    max-height: 80vh; overflow-y: auto; }
-  .modal h3 { margin: 0 0 12px; font-size: 16px; }
+  .cart-line input { max-width: 90px; padding: 6px 8px; font-size: 13px; min-height: 36px; }
 </style>
 </head>
 <body>
@@ -124,7 +43,7 @@
       <input id="pin-input" type="password" inputmode="numeric" maxlength="4"
              autocomplete="off" autofocus style="font-size: 20px; text-align: center;">
       <div id="pin-error" style="color: var(--danger); margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
-      <button class="btn full" style="margin-top: 12px;" onclick="verifyPin()">Enter</button>
+      <button class="btn btn-primary btn-full" style="margin-top: 12px;" onclick="verifyPin()">Enter</button>
     </div>
   </div>
 
@@ -132,14 +51,14 @@
   <div id="home-screen" class="hidden">
     <header>
       <div>
-        <h1 id="user-greeting">HN Spend</h1>
+        <h1 id="user-greeting">HN Expense</h1>
         <div class="sub" id="user-sub"></div>
       </div>
-      <button class="btn ghost" onclick="logout()">Exit</button>
+      <button class="btn btn-ghost" onclick="logout()">Exit</button>
     </header>
 
     <div class="brand-chips" id="brand-chips"></div>
-    <div class="grid" id="cat-grid"></div>
+    <div class="cat-grid" id="cat-grid"></div>
 
     <div class="recent" id="recent">
       <h3>Recent entries</h3>
@@ -150,7 +69,7 @@
   <!-- ══════════ GENERIC FORM (cats 2-13, 14) ══════════ -->
   <div id="form-screen" class="hidden">
     <header>
-      <button class="back" onclick="showHome()">← Back</button>
+      <button class="btn btn-back" onclick="showHome()">← Back</button>
       <span class="mute" id="form-brand-tag"></span>
     </header>
     <div class="form-title">
@@ -161,13 +80,13 @@
       </div>
     </div>
     <div id="form-fields"></div>
-    <button class="btn full" id="submit-btn" onclick="submitForm()">Record</button>
+    <button class="btn btn-primary btn-full" id="submit-btn" onclick="submitForm()">Record</button>
   </div>
 
   <!-- ══════════ CAT 1 — RAW MATERIAL PURCHASE ══════════ -->
   <div id="cat1-screen" class="hidden">
     <header>
-      <button class="back" onclick="showHome()">← Back</button>
+      <button class="btn btn-back" onclick="showHome()">← Back</button>
       <span class="mute" id="cat1-brand-tag"></span>
     </header>
     <div class="form-title">
@@ -187,7 +106,7 @@
     <div id="rm-cart-section" class="hidden" style="margin-top: 20px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
         <h3 style="margin: 0; font-size: 13px; color: var(--text-dim);">ORDER ITEMS</h3>
-        <button class="btn sm ghost" onclick="clearCart()" style="color: var(--danger);">Clear All</button>
+        <button class="btn btn-sm btn-ghost" onclick="clearCart()" style="color: var(--danger);">Clear All</button>
       </div>
       <div id="rm-cart-items"></div>
     </div>
@@ -199,16 +118,16 @@
   </div>
 
   <!-- Cart bottom bar (for cat 1) -->
-  <div id="rm-cart-bar" class="cart-bar hidden">
+  <div id="rm-cart-bar" class="sticky-bar hidden">
     <div>
       <span id="rm-cart-count" style="font-weight: 600;">0 items</span>
       <span style="color: var(--accent); font-weight: 700; margin-left: 8px;" id="rm-cart-total">₹0</span>
     </div>
-    <button class="btn" id="rm-submit-btn" onclick="submitRmPurchase()" disabled>Create PO</button>
+    <button class="btn btn-primary" id="rm-submit-btn" onclick="submitRmPurchase()" disabled>Create PO</button>
   </div>
 
   <!-- Vendor picker modal (cat 1) -->
-  <div id="vendor-modal" class="modal hidden" onclick="if(event.target===this)closeVendorModal()">
+  <div id="vendor-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeVendorModal()">
     <div class="modal-card">
       <h3>Choose Vendor</h3>
       <input id="vendor-search" type="search" placeholder="Search vendors…" oninput="filterVendorList()" style="margin-bottom: 12px;">
@@ -218,7 +137,7 @@
   </div>
 
   <!-- Variant picker modal (cat 1) -->
-  <div id="variant-modal" class="modal hidden" onclick="if(event.target===this)closeVariantPicker()">
+  <div id="variant-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeVariantPicker()">
     <div class="modal-card">
       <h3 id="variant-title">Pick variant</h3>
       <div class="sub" id="variant-subtitle" style="margin-bottom: 12px;"></div>
@@ -227,7 +146,7 @@
   </div>
 
   <!-- New Product inline-create modal -->
-  <div id="new-product-modal" class="modal hidden" onclick="if(event.target===this)closeNewProductModal()">
+  <div id="new-product-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeNewProductModal()">
     <div class="modal-card">
       <h3>Add new item</h3>
       <div class="sub" style="margin-bottom: 12px;" id="new-product-category-label"></div>
@@ -240,14 +159,14 @@
         <select id="np-uom"><option value="">Loading…</option></select>
       </div>
       <div style="display: flex; gap: 8px;">
-        <button class="btn ghost" style="flex: 1;" onclick="closeNewProductModal()">Cancel</button>
-        <button class="btn" style="flex: 1;" onclick="submitNewProduct()">Create</button>
+        <button class="btn btn-ghost" style="flex: 1;" onclick="closeNewProductModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex: 1;" onclick="submitNewProduct()">Create</button>
       </div>
     </div>
   </div>
 
   <!-- New Vendor inline-create modal -->
-  <div id="new-vendor-modal" class="modal hidden" onclick="if(event.target===this)closeNewVendorModal()">
+  <div id="new-vendor-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeNewVendorModal()">
     <div class="modal-card">
       <h3>Add new vendor</h3>
       <div class="row">
@@ -259,8 +178,8 @@
         <input id="nv-phone" type="tel" inputmode="tel" placeholder="9xxxx xxxxx">
       </div>
       <div style="display: flex; gap: 8px;">
-        <button class="btn ghost" style="flex: 1;" onclick="closeNewVendorModal()">Cancel</button>
-        <button class="btn" style="flex: 1;" onclick="submitNewVendor()">Create</button>
+        <button class="btn btn-ghost" style="flex: 1;" onclick="closeNewVendorModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex: 1;" onclick="submitNewVendor()">Create</button>
       </div>
     </div>
   </div>
@@ -268,7 +187,7 @@
   <!-- ══════════ CAT 15 — BILL FROM PO ══════════ -->
   <div id="cat15-screen" class="hidden">
     <header>
-      <button class="back" onclick="showHome()">← Back</button>
+      <button class="btn btn-back" onclick="showHome()">← Back</button>
       <span class="mute" id="cat15-brand-tag"></span>
     </header>
     <div class="form-title">
@@ -300,7 +219,7 @@
       <label>Notes (optional)</label>
       <textarea id="cat15-notes" rows="2"></textarea>
     </div>
-    <button class="btn full" onclick="submitCat15()">Record Bill</button>
+    <button class="btn btn-primary btn-full" onclick="submitCat15()">Record Bill</button>
   </div>
 
 </div>
@@ -406,8 +325,8 @@ async function loadRecent() {
         <div class="mute">${esc(e.category)} · ${esc(e.payment_method || '-')} · by ${esc(e.recorded_by_pin || 'unknown')}</div>
       </div>
       <div style="display: flex; align-items: center; gap: 10px;">
-        <div class="amt">₹${Number(e.amount).toLocaleString('en-IN')}</div>
-        ${canDelete && e.odoo_id ? `<button class="btn sm" style="background: var(--danger); color: #fff; padding: 4px 10px;" onclick="deleteEntry(${e.odoo_id})">×</button>` : ''}
+        <div class="amount">₹${Number(e.amount).toLocaleString('en-IN')}</div>
+        ${canDelete && e.odoo_id ? `<button class="btn btn-sm" style="background: var(--danger); color: #fff; padding: 4px 10px;" onclick="deleteEntry(${e.odoo_id})">×</button>` : ''}
       </div>
     </div>
   `).join('');
@@ -682,7 +601,7 @@ function renderProductRow(p, cartIdx) {
         <div class="title">${esc(p.name)}</div>
         <div class="meta">${esc(p.code || '')} · ${esc(p.uom || '')} · ${esc(vendorLabel)} ${lastPrice ? `· Last: ${lastPrice}` : ''}</div>
         <div class="add-row">
-          <button class="btn sm" onclick="addToCart(${p.id})">+ Add</button>
+          <button class="btn btn-sm" onclick="addToCart(${p.id})">+ Add</button>
         </div>
       </div>
     `;
@@ -705,10 +624,10 @@ function renderInlineCart(item, idx) {
         <input type="number" inputmode="decimal" placeholder="Qty" value="${item.qty ?? ''}" oninput="updateCart(${idx}, 'qty', this.value)" style="flex: 1;">
         <input type="number" inputmode="decimal" placeholder="₹ / unit" value="${item.price ?? ''}" oninput="updateCart(${idx}, 'price', this.value)" style="flex: 1;">
       </div>
-      <button class="btn sm ghost" onclick="openVendorPicker(${idx})">
+      <button class="btn btn-sm btn-ghost" onclick="openVendorPicker(${idx})">
         ${item.vendor ? `🛒 ${esc(item.vendor.name)}` : 'Pick vendor'}
       </button>
-      <button class="btn sm" style="background: var(--danger); color: #fff;" onclick="removeFromCart(${idx})">Remove</button>
+      <button class="btn btn-sm" style="background: var(--danger); color: #fff;" onclick="removeFromCart(${idx})">Remove</button>
     </div>
   `;
 }
@@ -805,7 +724,7 @@ function renderRecentPOs() {
         <div>${esc(po.name)}</div>
         <div class="mute">${esc(po.vendor)} · ${(po.date || '').slice(0, 10)} · <span class="badge ${po.state === 'purchase' ? 'ok' : 'warn'}">${po.state}</span></div>
       </div>
-      <div class="amt">₹${Number(po.total || 0).toLocaleString('en-IN')}</div>
+      <div class="amount">₹${Number(po.total || 0).toLocaleString('en-IN')}</div>
     </div>
   `).join('');
 }
@@ -888,7 +807,7 @@ function openVariantPicker(tmplId) {
             <div class="title">${esc(label)}</div>
             <div class="mute">${esc(v.default_code || '')} ${price ? `· Last: ${price}` : ''}</div>
           </div>
-          <button class="btn sm">Add</button>
+          <button class="btn btn-sm">Add</button>
         </div>
       </div>
     `;
@@ -1139,7 +1058,7 @@ function esc(s) {
 }
 function toast(msg, kind) {
   const el = document.createElement('div');
-  el.className = `toast ${kind}`;
+  el.className = `toast toast-${kind === 'ok' ? 'success' : 'error'}`;
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2600);
