@@ -161,24 +161,90 @@
 
   <!-- ═══ ATTENDANCE TAB ═══ -->
   <div id="tab-attendance" class="tab-content hidden px-4 py-4">
-    <div class="flex gap-2 mb-4 items-center">
-      <input type="date" id="attendDate" class="flex-1" onchange="loadAttendance()">
-      <button onclick="pullAttendance()" class="btn btn-primary btn-sm" id="btnPullAtt">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0015 0m-15 0a7.5 7.5 0 1115 0m-15 0H3m16.5 0H21m-1.5 0H12m-8.457 3.077l1.41-.513m14.095-5.13l1.41-.513M5.106 17.785l1.15-.964m11.49-9.642l1.149-.964M7.501 19.795l.75-1.3m7.5-12.99l.75-1.3m-6.063 16.658l.26-1.477m2.605-14.772l.26-1.477m0 17.726l-.26-1.477M10.698 4.614l-.26-1.477M16.5 19.794l-.75-1.299M7.5 4.205L12 12m6.894 5.785l-1.149-.964M6.256 7.178l-1.15-.964m15.352 8.864l-1.41-.513M4.954 9.435l-1.41-.514M12.002 12l-3.75 6.495"/></svg>
-        Pull
-      </button>
+    <!-- Date controls -->
+    <div class="flex gap-2 mb-3 items-center flex-wrap">
+      <button onclick="shiftDate(-1)" class="btn btn-ghost btn-sm" title="Previous day">‹</button>
+      <input type="date" id="attendDate" class="flex-1 min-w-[140px]" onchange="loadAttendance()">
+      <button onclick="shiftDate(1)" class="btn btn-ghost btn-sm" title="Next day">›</button>
+      <button onclick="jumpDate('today')"     class="btn btn-ghost btn-sm">Today</button>
+      <button onclick="jumpDate('yesterday')" class="btn btn-ghost btn-sm">Yesterday</button>
+      <button onclick="pullAttendance()"      class="btn btn-primary btn-sm" id="btnPullAtt" title="Force recompute">⟳ Pull</button>
     </div>
 
-    <div class="grid grid-cols-6 gap-2 mb-4" id="attendStats">
-      <div class="stat-tile p-2"><div class="text-lg font-bold text-emerald-400" id="aPresent">–</div><div class="text-[9px] text-white/40 uppercase">Present</div></div>
-      <div class="stat-tile p-2"><div class="text-lg font-bold text-amber-400"  id="aHalf">–</div><div class="text-[9px] text-white/40 uppercase">Half</div></div>
-      <div class="stat-tile p-2"><div class="text-lg font-bold text-red-400"    id="aAbsent">–</div><div class="text-[9px] text-white/40 uppercase">Absent</div></div>
-      <div class="stat-tile p-2"><div class="text-lg font-bold text-purple-400" id="aGhost">–</div><div class="text-[9px] text-white/40 uppercase">Ghost</div></div>
-      <div class="stat-tile p-2"><div class="text-lg font-bold text-blue-400"   id="aLeave">–</div><div class="text-[9px] text-white/40 uppercase">Leave</div></div>
-      <div class="stat-tile p-2"><div class="text-lg font-bold text-white/50"   id="aOff">–</div><div class="text-[9px] text-white/40 uppercase">Off</div></div>
+    <!-- Brand chips -->
+    <div class="flex gap-2 mb-3 flex-wrap">
+      <span class="chip active" data-brand="all" onclick="setAttendBrand('all')">All brands</span>
+      <span class="chip" data-brand="HE"  onclick="setAttendBrand('HE')">Hamza Express</span>
+      <span class="chip" data-brand="NCH" onclick="setAttendBrand('NCH')">Nawabi Chai House</span>
+      <span class="chip" data-brand="HQ"  onclick="setAttendBrand('HQ')">HQ Office</span>
+    </div>
+
+    <!-- Stats tiles (responsive grid) -->
+    <div class="grid grid-cols-4 md:grid-cols-8 gap-2 mb-3" id="attendStats">
+      <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('all')" data-filter-tile="all">
+        <div class="text-lg font-bold" id="aAll">–</div><div class="text-[9px] text-white/40 uppercase">All</div>
+      </div>
+      <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('present')" data-filter-tile="present">
+        <div class="text-lg font-bold text-emerald-400" id="aPresent">–</div><div class="text-[9px] text-white/40 uppercase">Present</div>
+      </div>
+      <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('pending')" data-filter-tile="pending">
+        <div class="text-lg font-bold text-amber-400" id="aPending">–</div><div class="text-[9px] text-white/40 uppercase">Pending</div>
+      </div>
+      <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('absent')" data-filter-tile="absent">
+        <div class="text-lg font-bold text-red-400" id="aAbsent">–</div><div class="text-[9px] text-white/40 uppercase">Absent</div>
+      </div>
+      <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('half')" data-filter-tile="half">
+        <div class="text-lg font-bold text-amber-400" id="aHalf">–</div><div class="text-[9px] text-white/40 uppercase">Half</div>
+      </div>
+      <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('ghost')" data-filter-tile="ghost">
+        <div class="text-lg font-bold text-purple-400" id="aGhost">–</div><div class="text-[9px] text-white/40 uppercase">Ghost</div>
+      </div>
+      <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('break')" data-filter-tile="break">
+        <div class="text-lg font-bold text-orange-400" id="aBreak">–</div><div class="text-[9px] text-white/40 uppercase">Break ⚠</div>
+      </div>
+      <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('off')" data-filter-tile="off">
+        <div class="text-lg font-bold text-white/50" id="aOff">–</div><div class="text-[9px] text-white/40 uppercase">Off / Leave</div>
+      </div>
+    </div>
+
+    <!-- Action row -->
+    <div class="flex gap-2 mb-3 flex-wrap items-center">
+      <input id="attendSearch" type="search" class="flex-1 min-w-[140px]" placeholder="Search name / PIN…" oninput="renderAttendance()">
+      <button onclick="downloadAttendanceCsv()" class="btn btn-ghost btn-sm" title="Download CSV">⬇ CSV</button>
+      <button onclick="window.print()" class="btn btn-ghost btn-sm" title="Print">🖨 Print</button>
+      <button onclick="openDigestModal()" class="btn btn-primary btn-sm admin-only" title="Preview + send WhatsApp digest">📨 Send digest</button>
     </div>
 
     <div id="attendList" class="space-y-2"></div>
+  </div>
+
+  <!-- Digest preview modal -->
+  <div id="digestModal" class="modal-overlay hidden" onclick="if(event.target===this)closeDigestModal()">
+    <div class="modal-card">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-bold">WhatsApp digest</h2>
+        <button onclick="closeDigestModal()" class="text-white/40 hover:text-white">✕</button>
+      </div>
+      <div class="flex gap-2 mb-3 flex-wrap">
+        <span class="chip active" data-digest-brand="HE"  onclick="setDigestBrand('HE')">Hamza Express</span>
+        <span class="chip" data-digest-brand="NCH" onclick="setDigestBrand('NCH')">Nawabi Chai House</span>
+      </div>
+      <div class="flex gap-2 mb-3">
+        <select id="digestMode" class="flex-1" onchange="loadDigestPreview()">
+          <option value="recap">Recap — yesterday's summary</option>
+          <option value="no_show">No-show check — today</option>
+        </select>
+      </div>
+      <pre id="digestText" class="text-[12px] whitespace-pre-wrap bg-black/30 rounded-lg p-3 max-h-[50vh] overflow-auto" style="color:#e4e4ed;font-family:system-ui,sans-serif">Loading…</pre>
+      <div class="flex gap-2 mt-4">
+        <button onclick="sendDigestWaba()"    class="btn btn-primary flex-1">Send via WABA</button>
+        <button onclick="copyDigestToClip()"  class="btn btn-ghost flex-1">Copy text</button>
+        <button onclick="openDigestWaLink()"  class="btn btn-ghost flex-1">Open wa.me</button>
+      </div>
+      <p class="text-[11px] text-white/40 mt-3 leading-snug">
+        "Send via WABA" uses each brand's WhatsApp Business account. Requires that Basheer has texted the number in the last 24h; otherwise use <strong>Copy text</strong> + <strong>Open wa.me</strong> to send manually.
+      </p>
+    </div>
   </div>
 
   <!-- ═══ DEDUCTIONS TAB ═══ -->
@@ -342,36 +408,85 @@ const API = '/api/hr-admin';
 const state = {
   pin: null,
   user: null,
+  role: null,
+  viewFinancials: false,
   employees: [],
   filter: 'all',
   currentTab: 'roster',
   editingId: null,
+  // Attendance state
+  attendRows: [],
+  attendBrand: 'all',
+  attendFilter: 'all',
+  // Digest state
+  digestBrand: 'HE',
+  digestPayload: null,
 };
 
 /* ━━━ PIN gate ━━━ */
+// Frontend role map. Mirrors backend PINS in hr-admin.js. Keep in sync.
+const USERS = {
+  '0305': { name: 'Nihaf',   role: 'admin',      view_financials: true  },
+  '8523': { name: 'Basheer', role: 'manager',    view_financials: false },
+  '2026': { name: 'Zoya',    role: 'onboarding', view_financials: false },
+};
+
 async function verifyPin() {
   const pin = document.getElementById('pinInput').value.trim();
   if (!pin) return;
-  state.pin = pin;
-  // probe with status — GET needs no auth but we want to verify pin via a write probe
-  const known = { '0305': 'Nihaf', '2026': 'Zoya', '3678': 'Farooq', '1111': 'Faheem' };
-  if (!known[pin]) {
+  const u = USERS[pin];
+  if (!u) {
     document.getElementById('pinError').classList.remove('hidden');
     return;
   }
-  state.user = known[pin];
+  state.pin = pin;
+  state.user = u.name;
+  state.role = u.role;
+  state.viewFinancials = u.view_financials;
+
   document.getElementById('pinGate').classList.add('hidden');
   document.getElementById('mainApp').classList.remove('hidden');
   document.getElementById('userBadge').classList.remove('hidden');
-  document.getElementById('userBadge').textContent = `${state.user} · ${pin}`;
+  document.getElementById('userBadge').textContent = `${state.user} · ${u.role}`;
   document.getElementById('navSubtitle').textContent = 'HN Hotels HR';
 
-  // Defaults
+  // Apply role-based hide/show on tabs and controls
+  applyRoleVisibility();
+
+  // Defaults — today's date
   const today = new Date().toISOString().slice(0, 10);
   document.getElementById('attendDate').value = today;
-  document.getElementById('deductMonth').value = today.slice(0, 7);
+  const dm = document.getElementById('deductMonth');
+  if (dm) dm.value = today.slice(0, 7);
 
-  setTab('roster');
+  // Landing tab: Attendance (everyone's priority), never Roster
+  setTab('attendance');
+}
+
+// Hide/show UI based on role.
+//   admin       → everything
+//   onboarding  → no financials, no CAMS, no Sync, no Deductions; CAN add/edit employees
+//   manager     → no financials, no CAMS, no Sync, no Deductions, no employee edit
+function applyRoleVisibility() {
+  const isAdmin = state.role === 'admin';
+  const canEdit = state.role === 'admin' || state.role === 'onboarding';
+
+  // Tabs visible to non-admin: Roster (view), Attendance
+  document.querySelectorAll('[data-tab]').forEach(el => {
+    const t = el.dataset.tab;
+    if (t === 'deductions' || t === 'cams' || t === 'sync') {
+      el.style.display = isAdmin ? '' : 'none';
+    }
+  });
+
+  // Employee-add button (Roster tab)
+  const newBtn = document.querySelector('[onclick="openEmployeeModal()"]');
+  if (newBtn) newBtn.style.display = canEdit ? '' : 'none';
+
+  // Hide any node marked .admin-only
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = isAdmin ? '' : 'none';
+  });
 }
 
 /* ━━━ Tabs ━━━ */
@@ -487,7 +602,7 @@ function renderRoster() {
           </div>
         </div>
         <div class="text-right">
-          <div class="text-sm font-bold">₹${(e.monthly_salary || 0).toLocaleString('en-IN')}</div>
+          ${state.viewFinancials ? `<div class="text-sm font-bold">₹${(e.monthly_salary || 0).toLocaleString('en-IN')}</div>` : ''}
           <div class="mt-1">${syncBadge(e.sync_status)}</div>
         </div>
       </div>
@@ -649,47 +764,215 @@ async function loadAttendance() {
   const date = document.getElementById('attendDate').value;
   if (!date) return;
   const list = document.getElementById('attendList');
-  list.innerHTML = '<div class="empty-state">Loading...</div>';
-  const r = await apiGet('attendance-daily', { date });
-  const rows = r.rows || [];
+  list.innerHTML = '<div class="empty-state">Loading…</div>';
+  const r = await apiGet('attendance-daily', { date, pin: state.pin });
+  state.attendRows = r.rows || [];
+  renderAttendance();
+}
 
-  const counts = { present: 0, half: 0, absent: 0, ghost: 0, leave: 0, week_off: 0 };
-  rows.forEach(x => counts[x.status] = (counts[x.status] || 0) + 1);
+function shiftDate(days) {
+  const el = document.getElementById('attendDate');
+  const d = new Date(el.value + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  el.value = d.toISOString().slice(0, 10);
+  loadAttendance();
+}
+function jumpDate(which) {
+  const el = document.getElementById('attendDate');
+  const now = new Date();
+  if (which === 'yesterday') now.setDate(now.getDate() - 1);
+  el.value = now.toISOString().slice(0, 10);
+  loadAttendance();
+}
+function setAttendBrand(b) {
+  state.attendBrand = b;
+  document.querySelectorAll('[data-brand]').forEach(el => el.classList.toggle('active', el.dataset.brand === b));
+  renderAttendance();
+}
+function setAttendFilter(f) {
+  state.attendFilter = f;
+  document.querySelectorAll('[data-filter-tile]').forEach(el =>
+    el.classList.toggle('ring-2', el.dataset.filterTile === f)
+  );
+  renderAttendance();
+}
+
+function fmtTime(iso) { return iso ? iso.slice(11, 16) : '—'; }
+function fmtDuration(mins) {
+  if (!mins) return '—';
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function renderAttendance() {
+  const rows = state.attendRows;
+  const q = (document.getElementById('attendSearch')?.value || '').trim().toLowerCase();
+
+  // Stats across ALL rows (unfiltered by brand so total roster count makes sense)
+  const scoped = state.attendBrand === 'all' ? rows : rows.filter(r => r.brand_label === state.attendBrand);
+  const counts = { present: 0, pending: 0, absent: 0, half: 0, ghost: 0, leave: 0, week_off: 0 };
+  let breakIssues = 0;
+  for (const r of scoped) {
+    counts[r.status] = (counts[r.status] || 0) + 1;
+    if (r.break_warning) breakIssues++;
+  }
+  document.getElementById('aAll').textContent     = scoped.length;
   document.getElementById('aPresent').textContent = counts.present;
-  document.getElementById('aHalf').textContent = counts.half;
-  document.getElementById('aAbsent').textContent = counts.absent;
-  document.getElementById('aGhost').textContent = counts.ghost;
-  document.getElementById('aLeave').textContent = counts.leave;
-  document.getElementById('aOff').textContent = counts.week_off;
+  document.getElementById('aPending').textContent = counts.pending;
+  document.getElementById('aAbsent').textContent  = counts.absent;
+  document.getElementById('aHalf').textContent    = counts.half;
+  document.getElementById('aGhost').textContent   = counts.ghost;
+  document.getElementById('aBreak').textContent   = breakIssues;
+  document.getElementById('aOff').textContent     = (counts.week_off || 0) + (counts.leave || 0);
 
-  if (!rows.length) {
-    list.innerHTML = '<div class="empty-state">No attendance for this date.<br>Click <strong>Pull</strong> to fetch from Odoo.</div>';
+  // Filter rows based on selected category
+  let filtered = scoped;
+  if (state.attendFilter === 'break') filtered = scoped.filter(r => r.break_warning);
+  else if (state.attendFilter === 'off') filtered = scoped.filter(r => r.status === 'week_off' || r.status === 'leave');
+  else if (state.attendFilter !== 'all') filtered = scoped.filter(r => r.status === state.attendFilter);
+
+  if (q) filtered = filtered.filter(r =>
+    (r.name || '').toLowerCase().includes(q) ||
+    (r.known_as || '').toLowerCase().includes(q) ||
+    String(r.pin || r.emp_pin || '').includes(q)
+  );
+
+  const list = document.getElementById('attendList');
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty-state">No rows for this filter.</div>';
     return;
   }
 
-  list.innerHTML = rows.map(r => `
+  list.innerHTML = filtered.map(r => renderAttendanceRow(r)).join('');
+}
+
+function renderAttendanceRow(r) {
+  const name = r.known_as && r.known_as !== r.name ? `${escapeHtml(r.name)} <span class="text-white/40">(${escapeHtml(r.known_as)})</span>` : escapeHtml(r.name);
+  const pin = r.pin || r.emp_pin;
+  const statusClass = r.status === 'week_off' ? 'weekoff' : r.status;
+  const statusLabel = r.status.toUpperCase();
+
+  const timeLine = (r.first_in_at || r.last_out_at)
+    ? `${fmtTime(r.first_in_at)} → ${fmtTime(r.last_out_at)}`
+    : '—';
+
+  let breakLine = '';
+  if (r.break_start_at && r.break_end_at && r.break_taken_minutes) {
+    breakLine = `☕ Break ${fmtTime(r.break_start_at)}–${fmtTime(r.break_end_at)} · ${fmtDuration(r.break_taken_minutes)}`;
+  } else if (r.break_warning === 'no_break') {
+    breakLine = `<span class="text-orange-400">⚠ No break (${(r.total_hours || 0).toFixed(1)}h worked)</span>`;
+  } else if (r.break_warning === 'short_break') {
+    breakLine = `<span class="text-amber-400">⚠ Short break — ${fmtDuration(r.break_taken_minutes)} on ${(r.total_hours || 0).toFixed(1)}h shift</span>`;
+  } else if (r.break_warning === 'long_break') {
+    const o = r.break_outliers?.[0];
+    breakLine = o ? `<span class="text-orange-400">⚠ Long gap ${fmtTime(o.start)}–${fmtTime(o.end)} (${fmtDuration(o.minutes)})</span>` : '';
+  }
+
+  const deductHtml = state.viewFinancials && r.deducted_amount
+    ? `<div class="text-sm font-bold text-red-400">-₹${Number(r.deducted_amount).toLocaleString('en-IN')}</div>`
+    : '';
+  const hoursHtml = r.total_hours ? `${(r.total_hours || 0).toFixed(1)}h` : '—';
+
+  return `
     <div class="emp-row">
-      <div class="flex items-center justify-between gap-3">
-        <div class="flex-1">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="font-semibold text-sm">${escapeHtml(r.name)}</span>
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <span class="font-semibold text-sm">${name}</span>
             ${brandBadge(r.brand_label)}
-            <span class="badge badge-${r.status === 'week_off' ? 'weekoff' : r.status}">${r.status.toUpperCase()}</span>
+            <span class="badge badge-${statusClass}">${statusLabel}</span>
+            ${pin ? `<span class="text-[10px] text-white/30">#${pin}</span>` : ''}
           </div>
-          <div class="text-[11px] text-white/40">
-            ${r.first_in_at ? `In: ${r.first_in_at.slice(11,16)}` : 'No in'}
-            · ${r.last_out_at ? `Out: ${r.last_out_at.slice(11,16)}` : 'No out'}
-            · ${(r.total_hours || 0).toFixed(1)}h
-            ${r.is_single_punch ? '· <span class="text-amber-400">single</span>' : ''}
-          </div>
+          <div class="text-[11px] text-white/60 mb-0.5">${escapeHtml(r.job_name || r.department_name || '—')}</div>
+          <div class="text-[12px] text-white/70">${timeLine} · <span class="text-white/90 font-semibold">${hoursHtml}</span></div>
+          ${breakLine ? `<div class="text-[11px] mt-0.5">${breakLine}</div>` : ''}
           ${r.deduction_reason ? `<div class="text-[11px] text-white/30 mt-0.5 italic">${escapeHtml(r.deduction_reason)}</div>` : ''}
         </div>
-        <div class="text-right">
-          ${r.deducted_amount ? `<div class="text-sm font-bold text-red-400">-₹${r.deducted_amount}</div>` : '<div class="text-sm text-white/30">—</div>'}
-        </div>
+        <div class="text-right">${deductHtml}</div>
       </div>
     </div>
-  `).join('');
+  `;
+}
+
+// ─── CSV download ───────────────────────────────────────
+function downloadAttendanceCsv() {
+  const date = document.getElementById('attendDate').value;
+  const scoped = state.attendBrand === 'all' ? state.attendRows : state.attendRows.filter(r => r.brand_label === state.attendBrand);
+  if (!scoped.length) { toast('No rows to export', 'error'); return; }
+
+  const cols = ['Date','Brand','PIN','Name','Known as','Role','Status','In','Out','Hours','Break (min)','Break start','Break end','Break warning','Reason'];
+  if (state.viewFinancials) cols.push('Deducted ₹');
+
+  const rows = scoped.map(r => {
+    const row = [
+      r.date, r.brand_label, r.pin || r.emp_pin || '',
+      r.name || '', r.known_as || '', r.job_name || r.department_name || '',
+      r.status, fmtTime(r.first_in_at), fmtTime(r.last_out_at),
+      (r.total_hours || 0).toFixed(2),
+      r.break_taken_minutes || 0,
+      fmtTime(r.break_start_at), fmtTime(r.break_end_at),
+      r.break_warning || '', r.deduction_reason || '',
+    ];
+    if (state.viewFinancials) row.push(r.deducted_amount || 0);
+    return row;
+  });
+
+  const csv = [cols, ...rows].map(row =>
+    row.map(v => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(',')
+  ).join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `attendance_${date}_${state.attendBrand}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ─── Digest modal ───────────────────────────────────────
+function openDigestModal() {
+  state.digestBrand = 'HE';
+  document.querySelectorAll('[data-digest-brand]').forEach(el => el.classList.toggle('active', el.dataset.digestBrand === 'HE'));
+  document.getElementById('digestMode').value = 'recap';
+  document.getElementById('digestModal').classList.remove('hidden');
+  loadDigestPreview();
+}
+function closeDigestModal() {
+  document.getElementById('digestModal').classList.add('hidden');
+}
+function setDigestBrand(b) {
+  state.digestBrand = b;
+  document.querySelectorAll('[data-digest-brand]').forEach(el => el.classList.toggle('active', el.dataset.digestBrand === b));
+  loadDigestPreview();
+}
+async function loadDigestPreview() {
+  const date = document.getElementById('attendDate').value || new Date().toISOString().slice(0,10);
+  const mode = document.getElementById('digestMode').value;
+  const out = document.getElementById('digestText');
+  out.textContent = 'Loading…';
+  const r = await apiGet('digest', { date, brand: state.digestBrand, mode, pin: state.pin });
+  state.digestPayload = r;
+  out.textContent = r.text || '(empty)';
+}
+async function copyDigestToClip() {
+  await navigator.clipboard.writeText(state.digestPayload?.text || '');
+  toast('Copied');
+}
+function openDigestWaLink() {
+  const text = encodeURIComponent(state.digestPayload?.text || '');
+  // Default to Basheer's number; you can change the recipient manually inside WhatsApp
+  window.open(`https://wa.me/919061906916?text=${text}`, '_blank');
+}
+async function sendDigestWaba() {
+  if (!state.digestPayload?.text) return toast('Nothing to send', 'error');
+  const date = document.getElementById('attendDate').value || new Date().toISOString().slice(0,10);
+  const mode = document.getElementById('digestMode').value;
+  const r = await apiPost('digest-send', { date, brand: state.digestBrand, mode });
+  if (r.error) return toast(r.error, 'error');
+  toast(r.summary || `Sent via ${state.digestBrand} WABA`);
 }
 
 async function pullAttendance(silent = false) {
