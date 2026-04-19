@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>HN Owner · Finance</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+  @media(min-width: 720px) { .kpi-grid { grid-template-columns: repeat(4, 1fr); } }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 14px; cursor: pointer; transition: border-color 0.15s; }
+  .kpi:hover { border-color: var(--brand-ring); }
+  .kpi .lbl { font-size: 10px; color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+  .kpi .val { font-size: 22px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi .sub { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  .kpi.out .val { color: #f87171; }
+  .kpi.pos .val { color: #34d399; }
+  .kpi.warn .val { color: #fbbf24; }
+
+  .tabs { display: flex; gap: 4px; overflow-x: auto; margin-bottom: 14px; -webkit-overflow-scrolling: touch; }
+  .tab { padding: 8px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+    font-size: 12px; font-weight: 600; color: var(--text-dim); cursor: pointer; white-space: nowrap;
+    min-height: 32px; display: inline-flex; align-items: center; -webkit-user-select: none; user-select: none; }
+  .tab.active { background: var(--brand); color: #0c0c14; border-color: var(--brand); }
+
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+  .range-pill { padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+    font-size: 12px; font-weight: 600; cursor: pointer; }
+  .range-pill.active { background: var(--brand-soft); color: var(--brand); border-color: var(--brand-ring); }
+  .brand-pill { padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+    font-size: 12px; font-weight: 600; cursor: pointer; }
+  .brand-pill.active { background: rgba(16,185,129,.12); color: #34d399; border-color: rgba(16,185,129,.4); }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 14px; margin-bottom: 10px; }
+  .panel h3 { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
+    font-weight: 700; margin: 0 0 10px; }
+
+  table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data th { text-align: left; padding: 8px; color: var(--text-dim); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid var(--border); }
+  table.data td { padding: 10px 8px; border-bottom: 1px solid var(--border); }
+  table.data tr:hover { background: rgba(255,255,255,0.02); cursor: pointer; }
+  table.data .amount { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .crumbs { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 12px; color: var(--text-dim); }
+  .crumbs a { color: var(--brand); cursor: pointer; text-decoration: none; }
+
+  .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .photo-tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; cursor: pointer; aspect-ratio: 1; position: relative; }
+  .photo-tile img { width: 100%; height: 100%; object-fit: cover; }
+  .photo-tile .ov { position: absolute; bottom: 0; left: 0; right: 0; padding: 6px;
+    background: linear-gradient(transparent, rgba(0,0,0,.8)); font-size: 10px; }
+
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.9); z-index: 100; display: flex;
+    align-items: center; justify-content: center; padding: 20px; }
+  .lightbox img { max-width: 90%; max-height: 80%; border-radius: 10px; }
+  .lightbox .meta { position: absolute; bottom: 20px; left: 20px; right: 20px; color: #fff;
+    background: rgba(0,0,0,.6); padding: 14px; border-radius: var(--radius); backdrop-filter: blur(8px); }
+  .lightbox .close { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,.1);
+    color: #fff; border: none; padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: 14px; }
+
+  .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34d399;
+    animation: pulse 1.5s infinite; margin-right: 6px; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .progress { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+  .progress .fill { height: 100%; background: var(--brand); transition: width 0.3s; }
+
+  .bill-row.unpaid { border-left: 3px solid var(--danger); }
+  .bill-row.partial { border-left: 3px solid var(--warn); }
+  .bill-row.paid { border-left: 3px solid var(--success); }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-mute); font-size: 13px; }
+  .chart-wrap { position: relative; height: 220px; }
+  .chart-wrap.small { height: 140px; }
+</style>
+</head>
+<body>
+
+<div id="app" class="app">
+  <!-- PIN gate -->
+  <div id="pin-screen">
+    <h1>HN Owner Finance</h1>
+    <p class="sub">Owner-only dashboard.</p>
+    <div style="margin-top: 32px; max-width: 280px;">
+      <label>Enter PIN</label>
+      <input id="pin-input" type="password" inputmode="numeric" maxlength="4"
+             autocomplete="off" autofocus style="font-size: 20px; text-align: center;">
+      <div id="pin-error" style="color: var(--danger); margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
+      <button class="btn btn-primary btn-full" style="margin-top: 12px;" onclick="verifyPin()">Enter</button>
+    </div>
+  </div>
+
+  <!-- Main dashboard -->
+  <div id="home-screen" class="hidden">
+    <header class="nav-header">
+      <div>
+        <h1 id="user-greeting">HN Finance</h1>
+        <div class="sub" id="user-sub"><span class="live-dot"></span>Live</div>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button class="btn btn-ghost btn-sm" onclick="hardRefresh()" title="Refresh">↻</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportCurrent()" title="Export">⬇</button>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Exit</button>
+      </div>
+    </header>
+
+    <!-- Filters -->
+    <div class="filters">
+      <span class="range-pill" data-range="today" onclick="setRange('today')">Today</span>
+      <span class="range-pill" data-range="yesterday" onclick="setRange('yesterday')">Yest</span>
+      <span class="range-pill" data-range="week" onclick="setRange('week')">7d</span>
+      <span class="range-pill active" data-range="mtd" onclick="setRange('mtd')">MTD</span>
+      <span class="range-pill" data-range="apr" onclick="setRange('apr')">Apr</span>
+      <span class="range-pill" data-range="custom" onclick="openCustomRange()">Custom…</span>
+      <div style="margin-left: auto; display: flex; gap: 4px;">
+        <span class="brand-pill active" data-brand="all" onclick="setBrand('all')">All</span>
+        <span class="brand-pill" data-brand="HE" onclick="setBrand('HE')">HE</span>
+        <span class="brand-pill" data-brand="NCH" onclick="setBrand('NCH')">NCH</span>
+        <span class="brand-pill" data-brand="HQ" onclick="setBrand('HQ')">HQ</span>
+      </div>
+    </div>
+
+    <div id="range-display" class="mute" style="margin-bottom: 12px; font-size: 11px;"></div>
+
+    <!-- Hero KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi out" onclick="switchTab('categories')">
+        <div class="lbl">Expense Out</div>
+        <div class="val mono" id="k-expense">₹—</div>
+        <div class="sub" id="k-expense-sub">— entries</div>
+      </div>
+      <div class="kpi out" onclick="switchTab('bills')">
+        <div class="lbl">Vendor Bills</div>
+        <div class="val mono" id="k-bills">₹—</div>
+        <div class="sub" id="k-bills-sub">— bills</div>
+      </div>
+      <div class="kpi" onclick="switchTab('pos')">
+        <div class="lbl">PO Committed</div>
+        <div class="val mono" id="k-po">₹—</div>
+        <div class="sub" id="k-po-sub">— POs</div>
+      </div>
+      <div class="kpi warn" onclick="switchTab('bills')">
+        <div class="lbl">Outstanding</div>
+        <div class="val mono" id="k-outstanding">₹—</div>
+        <div class="sub">unpaid bills</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <span class="tab active" data-tab="pulse" onclick="switchTab('pulse')">Pulse</span>
+      <span class="tab" data-tab="categories" onclick="switchTab('categories')">Categories</span>
+      <span class="tab" data-tab="vendors" onclick="switchTab('vendors')">Vendors</span>
+      <span class="tab" data-tab="people" onclick="switchTab('people')">People</span>
+      <span class="tab" data-tab="photos" onclick="switchTab('photos')">Photos</span>
+      <span class="tab" data-tab="pos" onclick="switchTab('pos')">POs</span>
+      <span class="tab" data-tab="bills" onclick="switchTab('bills')">Bills</span>
+    </div>
+
+    <div id="tab-content"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════
+const API = '/api/owner-dashboard';
+let PIN = '';
+let USER = null;
+let RANGE = { from: '', to: '', preset: 'mtd' };
+let BRAND = 'all';
+let DATA = null;          // overview payload
+let CURRENT_TAB = 'pulse';
+let CHART_INSTANCES = {};
+
+// ═══════════════════════════════════════════════════════════════
+// PIN entry
+// ═══════════════════════════════════════════════════════════════
+const pinInput = document.getElementById('pin-input');
+pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') verifyPin(); });
+pinInput.addEventListener('input', () => { if (pinInput.value.length === 4) verifyPin(); });
+
+async function verifyPin() {
+  const pin = pinInput.value.trim();
+  if (!pin || pin.length < 4) return;
+  const r = await fetch(`${API}?action=verify&pin=${pin}`).then(x => x.json()).catch(() => null);
+  if (!r?.success) {
+    document.getElementById('pin-error').textContent = r?.error || 'Invalid PIN';
+    pinInput.value = '';
+    return;
+  }
+  PIN = pin;
+  USER = r.user;
+  document.getElementById('pin-screen').classList.add('hidden');
+  document.getElementById('home-screen').classList.remove('hidden');
+  document.getElementById('user-greeting').textContent = `${USER.name}`;
+  setRange('mtd');
+}
+
+function logout() { location.reload(); }
+function hardRefresh() { location.href = location.pathname + '?v=' + Date.now(); }
+
+// ═══════════════════════════════════════════════════════════════
+// Filters
+// ═══════════════════════════════════════════════════════════════
+function setRange(preset) {
+  document.querySelectorAll('.range-pill').forEach(p => p.classList.toggle('active', p.dataset.range === preset));
+  const today = new Date();
+  const y2d = d => d.toISOString().slice(0,10);
+  const t = y2d(today);
+  const yest = new Date(today); yest.setDate(today.getDate() - 1);
+  const week = new Date(today); week.setDate(today.getDate() - 6);
+  const mtd = new Date(today.getFullYear(), today.getMonth(), 1);
+  const aprStart = '2026-04-01';
+
+  const map = {
+    today:     { from: t, to: t },
+    yesterday: { from: y2d(yest), to: y2d(yest) },
+    week:      { from: y2d(week), to: t },
+    mtd:       { from: y2d(mtd), to: t },
+    apr:       { from: aprStart, to: t },
+  };
+  if (map[preset]) {
+    RANGE = { ...map[preset], preset };
+    loadAll();
+  }
+}
+
+function openCustomRange() {
+  const from = prompt('From date (YYYY-MM-DD):', RANGE.from || '2026-04-01');
+  if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) return;
+  const to = prompt('To date (YYYY-MM-DD):', RANGE.to || new Date().toISOString().slice(0,10));
+  if (!to || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return;
+  document.querySelectorAll('.range-pill').forEach(p => p.classList.toggle('active', p.dataset.range === 'custom'));
+  RANGE = { from, to, preset: 'custom' };
+  loadAll();
+}
+
+function setBrand(b) {
+  BRAND = b;
+  document.querySelectorAll('.brand-pill').forEach(p => p.classList.toggle('active', p.dataset.brand === b));
+  loadAll();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Load overview
+// ═══════════════════════════════════════════════════════════════
+async function loadAll() {
+  document.getElementById('range-display').textContent =
+    `${RANGE.from} → ${RANGE.to} · Brand: ${BRAND === 'all' ? 'All' : BRAND}`;
+
+  const url = `${API}?action=overview&pin=${PIN}&from=${RANGE.from}&to=${RANGE.to}&brand=${BRAND}`;
+  const r = await fetch(url).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { toast(r.error || 'Load failed', 'err'); return; }
+  DATA = r;
+  renderHero();
+  renderTab(CURRENT_TAB);
+}
+
+function renderHero() {
+  const h = DATA.hero;
+  document.getElementById('k-expense').textContent = fmt(h.expense_total);
+  document.getElementById('k-expense-sub').textContent = `${h.expense_count} entries`;
+  document.getElementById('k-bills').textContent = fmt(h.bills_total);
+  document.getElementById('k-bills-sub').textContent = `${h.bills_count} bills`;
+  document.getElementById('k-po').textContent = fmt(h.po_total);
+  document.getElementById('k-po-sub').textContent = `${h.po_count} POs`;
+  document.getElementById('k-outstanding').textContent = fmt(h.outstanding_total);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Tabs
+// ═══════════════════════════════════════════════════════════════
+function switchTab(t) {
+  CURRENT_TAB = t;
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+  renderTab(t);
+}
+
+function renderTab(t) {
+  if (!DATA) return;
+  const el = document.getElementById('tab-content');
+  destroyCharts();
+  if (t === 'pulse') renderPulse(el);
+  else if (t === 'categories') renderCategories(el);
+  else if (t === 'vendors') renderVendors(el);
+  else if (t === 'people') renderPeople(el);
+  else if (t === 'photos') renderPhotos(el);
+  else if (t === 'pos') renderPOs(el);
+  else if (t === 'bills') renderBills(el);
+}
+
+// ─── PULSE ───────────────────────────────────────────────────
+function renderPulse(el) {
+  const brandBreakdown = DATA.by_brand.map(b =>
+    `<div style="display: flex; justify-content: space-between; padding: 8px; background: var(--surface); border-radius: 8px; margin-bottom: 6px;">
+      <span><b>${b.brand}</b> <span class="mute">(${b.count})</span></span>
+      <span class="amount mono">${fmt(b.total)}</span>
+    </div>`
+  ).join('') || '<div class="empty-state">No data</div>';
+
+  const feed = DATA.recent_feed.map(e => `
+    <tr onclick="openEntry(${e.id})">
+      <td class="mute" style="font-size: 11px;">${e.date}</td>
+      <td><span class="badge ${e.brand === 'HE' ? 'badge-warn' : e.brand === 'NCH' ? 'badge-info' : 'badge-neutral'}">${e.brand}</span></td>
+      <td>${esc(e.category || '—')}<div class="mute" style="font-size: 11px;">${esc(e.product || '')}</div></td>
+      <td class="mute" style="font-size: 11px;">${esc(e.operator)}</td>
+      <td class="amount mono">${fmt(e.amount)}</td>
+    </tr>
+  `).join('');
+
+  el.innerHTML = `
+    <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+      <div class="panel">
+        <h3>Daily expense trend</h3>
+        <div class="chart-wrap"><canvas id="ch-daily"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3>By brand</h3>
+        ${brandBreakdown}
+      </div>
+      <div class="panel">
+        <h3>Last 30 entries <span class="mute" style="font-weight: 400;">(click any to drill)</span></h3>
+        <table class="data">
+          <thead><tr><th>Date</th><th>Brand</th><th>Category</th><th>By</th><th style="text-align: right;">Amount</th></tr></thead>
+          <tbody>${feed || '<tr><td colspan="5" class="empty-state">No entries</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // Daily chart
+  const labels = DATA.daily_series.map(d => d.date.slice(5));
+  const vals = DATA.daily_series.map(d => d.total);
+  CHART_INSTANCES['daily'] = new Chart(document.getElementById('ch-daily'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Spend', data: vals, backgroundColor: '#e8930c', borderRadius: 4 }] },
+    options: chartOpts(),
+  });
+}
+
+// ─── CATEGORIES ───────────────────────────────────────────────
+function renderCategories(el) {
+  const totalAll = DATA.by_category.reduce((s, c) => s + c.total, 0);
+  const rows = DATA.by_category.map(c => {
+    const pct = totalAll ? (c.total / totalAll * 100).toFixed(1) : 0;
+    return `
+      <tr onclick="openCategoryDetail('${esc(c.parent).replace(/'/g, "\\'")}')">
+        <td><b>${esc(c.parent)}</b><div class="mute" style="font-size: 11px;">${c.items.length} items</div></td>
+        <td class="mute" style="font-size: 12px;">${c.count}</td>
+        <td class="amount mono">${fmt(c.total)}</td>
+        <td style="width: 120px;">
+          <div class="mute" style="font-size: 11px;">${pct}%</div>
+          <div class="progress"><div class="fill" style="width: ${pct}%"></div></div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="panel">
+      <h3>Category breakdown · click any to see items</h3>
+      <table class="data">
+        <thead><tr><th>Category</th><th>Entries</th><th style="text-align: right;">Spend</th><th>%</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="empty-state">No data</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>Share of spend</h3>
+      <div class="chart-wrap"><canvas id="ch-catpie"></canvas></div>
+    </div>
+  `;
+
+  CHART_INSTANCES['catpie'] = new Chart(document.getElementById('ch-catpie'), {
+    type: 'doughnut',
+    data: {
+      labels: DATA.by_category.slice(0,10).map(c => c.parent),
+      datasets: [{ data: DATA.by_category.slice(0,10).map(c => c.total),
+        backgroundColor: ['#e8930c','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1'] }],
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { color: '#e4e4ed', font: { size: 11 } } } } },
+  });
+}
+
+async function openCategoryDetail(catParent) {
+  const url = `${API}?action=category-items&pin=${PIN}&from=${RANGE.from}&to=${RANGE.to}&brand=${BRAND}&cat_parent=${encodeURIComponent(catParent)}`;
+  const r = await fetch(url).then(x => x.json());
+  if (!r.success) return toast(r.error || 'Load failed', 'err');
+
+  const el = document.getElementById('tab-content');
+  const rows = r.items.map(it => `
+    <tr onclick="openItemDetail('${esc(it.product_name).replace(/'/g, "\\'")}', '${esc(catParent).replace(/'/g, "\\'")}')">
+      <td><b>${esc(it.product_name)}</b><div class="mute" style="font-size: 11px;">last: ${(it.last_recorded || '').slice(0,10)}</div></td>
+      <td class="mute">${it.count}×</td>
+      <td class="amount mono">${fmt(it.total)}</td>
+    </tr>`).join('');
+
+  el.innerHTML = `
+    <div class="crumbs">
+      <a onclick="switchTab('categories')">← Categories</a>
+      <span>/</span>
+      <span>${esc(catParent)}</span>
+    </div>
+    <div class="panel">
+      <h3>${esc(catParent)} · items breakdown</h3>
+      <table class="data">
+        <thead><tr><th>Item</th><th>Count</th><th style="text-align: right;">Spend</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="3" class="empty-state">No items</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function openItemDetail(productName, catParent) {
+  const url = `${API}?action=item-entries&pin=${PIN}&from=${RANGE.from}&to=${RANGE.to}&brand=${BRAND}&product_name=${encodeURIComponent(productName)}`;
+  const r = await fetch(url).then(x => x.json());
+  if (!r.success) return toast(r.error || 'Load failed', 'err');
+
+  const el = document.getElementById('tab-content');
+  const rows = r.entries.map(e => {
+    const hasPhoto = e.attachments?.length > 0;
+    const photoBtn = hasPhoto ? `<span onclick="event.stopPropagation(); openAttachment(${e.attachments[0].id}, ${e.odoo_id})" style="cursor: pointer;">📎</span>` : '';
+    return `
+      <tr onclick="openEntry(${e.id})">
+        <td class="mute" style="font-size: 11px;">${e.date}</td>
+        <td><span class="badge ${e.brand === 'HE' ? 'badge-warn' : e.brand === 'NCH' ? 'badge-info' : 'badge-neutral'}">${e.brand}</span></td>
+        <td class="mute" style="font-size: 12px;">${esc(e.operator)}</td>
+        <td class="mute" style="font-size: 11px;">${esc(e.payment_method || '—')}</td>
+        <td class="amount mono">${fmt(e.amount)}</td>
+        <td>${photoBtn}</td>
+      </tr>
+    `;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="crumbs">
+      <a onclick="switchTab('categories')">← Categories</a>
+      <span>/</span>
+      <a onclick="openCategoryDetail('${esc(catParent).replace(/'/g, "\\'")}')">${esc(catParent)}</a>
+      <span>/</span>
+      <span>${esc(productName)}</span>
+    </div>
+    <div class="panel">
+      <h3>${esc(productName)} · ${r.entries.length} entries</h3>
+      <table class="data">
+        <thead><tr><th>Date</th><th>Brand</th><th>By</th><th>Payment</th><th style="text-align: right;">Amount</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" class="empty-state">No entries</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ─── VENDORS ──────────────────────────────────────────────────
+function renderVendors(el) {
+  const rows = DATA.by_vendor_top20.map(v => `
+    <tr onclick="openVendorDetail(${v.vendor_id})">
+      <td><b>${esc(v.vendor_name)}</b></td>
+      <td class="mute">${v.count} bills</td>
+      <td class="amount mono">${fmt(v.total)}</td>
+    </tr>`).join('');
+
+  el.innerHTML = `
+    <div class="panel">
+      <h3>Top 20 vendors by spend (bills only · cats 14+15)</h3>
+      <table class="data">
+        <thead><tr><th>Vendor</th><th>Bills</th><th style="text-align: right;">Spend</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="3" class="empty-state">No vendor bills in range. (hr.expense vendor tracking still being populated)</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function openVendorDetail(vendorId) {
+  const url = `${API}?action=vendor-detail&pin=${PIN}&from=${RANGE.from}&to=${RANGE.to}&brand=${BRAND}&vendor_id=${vendorId}`;
+  const r = await fetch(url).then(x => x.json());
+  if (!r.success) return toast(r.error || 'Load failed', 'err');
+
+  const bills = r.bills.map(b => `
+    <tr class="bill-row ${b.payment_state === 'paid' ? 'paid' : b.payment_state === 'partial' ? 'partial' : 'unpaid'}"
+        onclick="window.open('${b.odoo_url}', '_blank')">
+      <td class="mute" style="font-size: 11px;">${b.date || ''}</td>
+      <td>${esc(b.name)}<div class="mute" style="font-size: 11px;">${esc(b.ref || b.origin || '')}</div></td>
+      <td><span class="badge">${b.brand}</span></td>
+      <td><span class="badge ${b.payment_state === 'paid' ? 'badge-success' : b.payment_state === 'partial' ? 'badge-warn' : 'badge-danger'}">${b.payment_state || b.state}</span></td>
+      <td class="amount mono">${fmt(b.amount)}</td>
+      <td class="amount mono" style="color: #f87171;">${b.outstanding > 0 ? fmt(b.outstanding) : ''}</td>
+    </tr>`).join('');
+
+  const pos = r.pos.map(p => `
+    <tr onclick="window.open('${p.odoo_url}', '_blank')">
+      <td class="mute" style="font-size: 11px;">${p.date || ''}</td>
+      <td>${esc(p.name)}</td>
+      <td><span class="badge">${p.brand}</span></td>
+      <td><span class="badge ${p.state === 'purchase' ? 'badge-success' : 'badge-neutral'}">${p.state}</span></td>
+      <td class="amount mono">${fmt(p.amount)}</td>
+    </tr>`).join('');
+
+  const el = document.getElementById('tab-content');
+  el.innerHTML = `
+    <div class="crumbs">
+      <a onclick="switchTab('vendors')">← Vendors</a>
+      <span>/</span>
+      <span>${esc(r.vendor.name)}</span>
+    </div>
+    <div class="panel">
+      <h3>${esc(r.vendor.name)}</h3>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 12px;">
+        <div><span class="mute">Phone:</span> ${esc(r.vendor.phone || '—')}</div>
+        <div><span class="mute">Email:</span> ${esc(r.vendor.email || '—')}</div>
+        <div><span class="mute">GSTIN:</span> ${esc(r.vendor.vat || '—')}</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px;">
+        <div><div class="lbl mute" style="font-size: 10px;">TOTAL BILLED</div><div class="val mono" style="font-size: 16px; font-weight: 800;">${fmt(r.summary.bills_total)}</div></div>
+        <div><div class="lbl mute" style="font-size: 10px;">OUTSTANDING</div><div class="val mono" style="font-size: 16px; font-weight: 800; color: #f87171;">${fmt(r.summary.outstanding)}</div></div>
+        <div><div class="lbl mute" style="font-size: 10px;">PO TOTAL</div><div class="val mono" style="font-size: 16px; font-weight: 800;">${fmt(r.summary.po_total)}</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Bills (${r.bills.length})</h3>
+      <table class="data">
+        <thead><tr><th>Date</th><th>Bill #</th><th>Brand</th><th>Status</th><th style="text-align: right;">Amount</th><th style="text-align: right;">Unpaid</th></tr></thead>
+        <tbody>${bills || '<tr><td colspan="6" class="empty-state">No bills in range</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>POs (${r.pos.length})</h3>
+      <table class="data">
+        <thead><tr><th>Date</th><th>PO #</th><th>Brand</th><th>State</th><th style="text-align: right;">Amount</th></tr></thead>
+        <tbody>${pos || '<tr><td colspan="5" class="empty-state">No POs in range</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ─── PEOPLE ───────────────────────────────────────────────────
+function renderPeople(el) {
+  const rows = DATA.by_operator.map(o => `
+    <tr onclick="openOperatorDetail('${esc(o.name).replace(/'/g, "\\'")}')">
+      <td><b>${esc(o.name)}</b><div class="mute" style="font-size: 11px;">first: ${(o.first_entry || '').slice(0,10)} · last: ${(o.last_entry || '').slice(0,10)}</div></td>
+      <td class="mute">${o.count}×</td>
+      <td class="amount mono">${fmt(o.total)}</td>
+    </tr>`).join('');
+
+  el.innerHTML = `
+    <div class="panel">
+      <h3>Entry activity by operator</h3>
+      <table class="data">
+        <thead><tr><th>Operator</th><th>Entries</th><th style="text-align: right;">Total recorded</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="3" class="empty-state">No activity</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function openOperatorDetail(op) {
+  const url = `${API}?action=operator-detail&pin=${PIN}&from=${RANGE.from}&to=${RANGE.to}&brand=${BRAND}&operator=${encodeURIComponent(op)}`;
+  const r = await fetch(url).then(x => x.json());
+  if (!r.success) return toast(r.error || 'Load failed', 'err');
+  const rows = r.entries.map(e => `
+    <tr onclick="openEntry(${e.id})">
+      <td class="mute" style="font-size: 11px;">${e.date}</td>
+      <td><span class="badge">${e.brand}</span></td>
+      <td>${esc(e.category || '—')}<div class="mute" style="font-size: 11px;">${esc(e.product || '')}</div></td>
+      <td class="amount mono">${fmt(e.amount)}</td>
+    </tr>`).join('');
+  document.getElementById('tab-content').innerHTML = `
+    <div class="crumbs"><a onclick="switchTab('people')">← People</a><span>/</span><span>${esc(op)}</span></div>
+    <div class="panel">
+      <h3>${esc(op)} · ${r.count} entries · ${fmt(r.total)}</h3>
+      <table class="data">
+        <thead><tr><th>Date</th><th>Brand</th><th>Category</th><th style="text-align: right;">Amount</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="empty-state">No entries</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+// ─── PHOTOS ───────────────────────────────────────────────────
+async function renderPhotos(el) {
+  el.innerHTML = '<div class="panel"><div class="empty-state">Loading photos…</div></div>';
+  const url = `${API}?action=photo-grid&pin=${PIN}&from=${RANGE.from}&to=${RANGE.to}&brand=${BRAND}`;
+  const r = await fetch(url).then(x => x.json());
+  if (!r.success) { el.innerHTML = `<div class="panel"><div class="empty-state">${r.error}</div></div>`; return; }
+  const grid = r.photos.map(p => `
+    <div class="photo-tile" onclick="openLightbox(${p.attachment_id}, ${JSON.stringify(p).replace(/"/g, '&quot;')})">
+      <img src="${p.preview_url}" loading="lazy" alt="">
+      <div class="ov mono">${fmt(p.amount)} · ${p.brand}</div>
+    </div>`).join('');
+  el.innerHTML = `
+    <div class="panel">
+      <h3>${r.photos.length} photos · ${r.missing_count} entries without photos</h3>
+      <div class="photo-grid">${grid || '<div class="empty-state">No photos in range</div>'}</div>
+    </div>`;
+}
+
+function openLightbox(attId, metaStr) {
+  const meta = typeof metaStr === 'string' ? JSON.parse(metaStr.replace(/&quot;/g, '"')) : metaStr;
+  const lb = document.createElement('div');
+  lb.className = 'lightbox';
+  lb.onclick = e => { if (e.target === lb || e.target.className === 'close') lb.remove(); };
+  lb.innerHTML = `
+    <button class="close">✕ Close</button>
+    <img src="${meta.preview_url}" alt="">
+    <div class="meta">
+      <div style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">${fmt(meta.amount)} · ${esc(meta.category)}</div>
+      <div style="font-size: 12px; opacity: 0.8;">${esc(meta.product)} · ${meta.date} · ${meta.brand} · by ${esc(meta.operator)}</div>
+      <div style="margin-top: 10px; display: flex; gap: 6px;">
+        <a href="${meta.odoo_url}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration: none;">Open in Odoo</a>
+        <a href="https://odoo.hnhotels.in/web/content/${attId}?download=true" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration: none;">Download</a>
+      </div>
+    </div>`;
+  document.body.appendChild(lb);
+}
+
+function openAttachment(attId, odooId) {
+  window.open(`https://odoo.hnhotels.in/web/image/${attId}`, '_blank');
+}
+
+// ─── POs ──────────────────────────────────────────────────────
+async function renderPOs(el) {
+  el.innerHTML = '<div class="panel"><div class="empty-state">Loading POs…</div></div>';
+  const url = `${API}?action=po-list&pin=${PIN}&from=${RANGE.from}&to=${RANGE.to}&brand=${BRAND}`;
+  const r = await fetch(url).then(x => x.json());
+  if (!r.success) { el.innerHTML = `<div class="panel"><div class="empty-state">${r.error}</div></div>`; return; }
+  const rows = r.pos.map(p => `
+    <tr onclick="openVendorDetail(${p.vendor_id})">
+      <td class="mute" style="font-size: 11px;">${p.date || ''}</td>
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.vendor)}</td>
+      <td><span class="badge">${p.brand}</span></td>
+      <td><span class="badge ${p.state === 'purchase' ? 'badge-success' : p.state === 'cancel' ? 'badge-danger' : 'badge-neutral'}">${p.state}</span></td>
+      <td><span class="badge badge-info">${p.invoice_status}</span></td>
+      <td class="amount mono">${fmt(p.amount)}</td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div class="panel">
+      <h3>Purchase Orders (${r.pos.length})</h3>
+      <table class="data">
+        <thead><tr><th>Date</th><th>PO #</th><th>Vendor</th><th>Brand</th><th>State</th><th>Billed?</th><th style="text-align: right;">Amount</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" class="empty-state">No POs in range</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+// ─── BILLS ────────────────────────────────────────────────────
+async function renderBills(el) {
+  el.innerHTML = '<div class="panel"><div class="empty-state">Loading bills…</div></div>';
+  const url = `${API}?action=bill-list&pin=${PIN}&from=${RANGE.from}&to=${RANGE.to}&brand=${BRAND}`;
+  const r = await fetch(url).then(x => x.json());
+  if (!r.success) { el.innerHTML = `<div class="panel"><div class="empty-state">${r.error}</div></div>`; return; }
+  const rows = r.bills.map(b => `
+    <tr class="bill-row ${b.payment_state === 'paid' ? 'paid' : b.payment_state === 'partial' ? 'partial' : 'unpaid'}"
+        onclick="openVendorDetail(${b.vendor_id})">
+      <td class="mute" style="font-size: 11px;">${b.date}</td>
+      <td>${esc(b.name)}<div class="mute" style="font-size: 11px;">${esc(b.ref || b.origin || '')}</div></td>
+      <td>${esc(b.vendor)}</td>
+      <td><span class="badge">${b.brand}</span></td>
+      <td><span class="badge ${b.payment_state === 'paid' ? 'badge-success' : b.payment_state === 'partial' ? 'badge-warn' : 'badge-danger'}">${b.payment_state}</span></td>
+      <td class="amount mono">${fmt(b.amount)}</td>
+      <td class="amount mono" style="color: ${b.outstanding > 0 ? '#f87171' : 'var(--text-mute)'};">${b.outstanding > 0 ? fmt(b.outstanding) : '—'}</td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div class="panel">
+      <h3>Vendor Bills (${r.bills.length})</h3>
+      <table class="data">
+        <thead><tr><th>Date</th><th>Bill #</th><th>Vendor</th><th>Brand</th><th>Status</th><th style="text-align: right;">Amount</th><th style="text-align: right;">Unpaid</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" class="empty-state">No bills in range</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+// ─── ENTRY DETAIL (modal) ────────────────────────────────────
+async function openEntry(entryId) {
+  const url = `${API}?action=entry-detail&pin=${PIN}&entry_id=${entryId}`;
+  const r = await fetch(url).then(x => x.json());
+  if (!r.success) return toast(r.error || 'Load failed', 'err');
+  const e = r.entry;
+  const atts = e.attachments.map(a => `
+    <div style="display: flex; gap: 10px; align-items: center; padding: 8px; background: var(--surface-2); border-radius: 8px; margin-bottom: 6px;">
+      <img src="${a.preview_url}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis;">${esc(a.name)}</div>
+        <div class="mute" style="font-size: 11px;">${(a.size/1024).toFixed(0)} KB · ${esc(a.mimetype)}</div>
+      </div>
+      <a href="${a.download_url}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration: none;">⬇</a>
+      <a href="${a.preview_url}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration: none;">🔍</a>
+    </div>`).join('');
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.onclick = ev => { if (ev.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h3 style="margin-top: 0;">Entry #${e.id}</h3>
+      <div class="sub" style="margin-bottom: 12px;">${esc(e.category_parent || e.category)} · ${e.brand} · ${e.recorded_at?.slice(0,16)}</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+        <div><div class="lbl mute">Amount</div><div class="val mono" style="font-size: 20px; font-weight: 800;">${fmt(e.amount)}</div></div>
+        <div><div class="lbl mute">Payment</div><div style="font-size: 14px; font-weight: 600;">${esc(e.x_payment_method || '—')}</div></div>
+        <div><div class="lbl mute">Product</div><div style="font-size: 14px; font-weight: 600;">${esc(e.product_name || '—')}</div></div>
+        <div><div class="lbl mute">By</div><div style="font-size: 14px; font-weight: 600;">${esc(e.recorded_by)}</div></div>
+      </div>
+      ${e.notes ? `<div class="sub" style="margin-bottom: 10px;"><b>Notes:</b> ${esc(e.notes)}</div>` : ''}
+      ${atts ? `<h3 style="margin-top: 10px;">Attachments (${e.attachments.length})</h3>${atts}` : '<div class="mute">No photo attached</div>'}
+      <div style="display: flex; gap: 6px; margin-top: 14px;">
+        ${e.odoo_url ? `<a href="${e.odoo_url}" target="_blank" class="btn btn-ghost btn-full" style="text-decoration: none;">Open in Odoo</a>` : ''}
+        <button class="btn btn-ghost btn-full" onclick="this.closest('.modal-overlay').remove()">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────
+function exportCurrent() {
+  if (!DATA) return;
+  const wb = XLSX.utils.book_new();
+  // Sheet 1: Categories
+  const cat = [['Category', 'Entries', 'Total']].concat(DATA.by_category.map(c => [c.parent, c.count, c.total]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cat), 'Categories');
+  // Sheet 2: Vendors
+  const vend = [['Vendor', 'Bills', 'Total']].concat(DATA.by_vendor_top20.map(v => [v.vendor_name, v.count, v.total]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vend), 'Vendors');
+  // Sheet 3: Operators
+  const op = [['Operator', 'Entries', 'Total', 'First', 'Last']].concat(DATA.by_operator.map(o => [o.name, o.count, o.total, o.first_entry, o.last_entry]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(op), 'Operators');
+  // Sheet 4: Daily
+  const daily = [['Date', 'Total', 'Entries']].concat(DATA.daily_series.map(d => [d.date, d.total, d.count]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), 'Daily');
+  // Sheet 5: Recent feed
+  const feed = [['Date', 'Brand', 'Category', 'Product', 'Amount', 'Operator', 'Payment', 'Notes']]
+    .concat(DATA.recent_feed.map(e => [e.date, e.brand, e.category, e.product, e.amount, e.operator, e.payment_method, e.notes]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(feed), 'Recent');
+  XLSX.writeFile(wb, `HN-Finance-${RANGE.from}_to_${RANGE.to}.xlsx`);
+}
+
+// ─── Helpers ──────────────────────────────────────────────────
+function fmt(n) { return '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 }); }
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function toast(msg, kind) {
+  const el = document.createElement('div');
+  el.className = `toast toast-${kind === 'ok' ? 'success' : 'error'}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+function destroyCharts() {
+  Object.values(CHART_INSTANCES).forEach(c => { try { c.destroy(); } catch {} });
+  CHART_INSTANCES = {};
+}
+function chartOpts() {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#b5b5c5', font: { size: 10 } }, grid: { display: false } },
+      y: { ticks: { color: '#b5b5c5', font: { size: 10 }, callback: v => '₹' + (v/1000).toFixed(0) + 'k' },
+           grid: { color: 'rgba(255,255,255,0.04)' } },
+    },
+  };
+}
+</script>
+</body>
+</html>
