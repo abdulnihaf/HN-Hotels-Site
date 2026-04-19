@@ -660,24 +660,41 @@ async function nchDay(DB, apiKey, url) {
     } catch (e) { console.error('att fetch:', e.message); }
   }
 
-  // 4. Fetch NCH outlet data (settlements, handovers, collections) via HTTP
+  // 4. Fetch NCH outlet data (settlements, handovers, collections, current shift) via HTTP
   const nchBase = 'https://nawabichaihouse.com';
-  let settlements = [], handovers = [], collections = [], counterBalance = null;
+  let settlements = [], handovers = [], collections = [], counterBalance = null, currentShift = null, shiftTrail = [];
   try {
-    const [settleRes, collectRes, balRes] = await Promise.all([
+    const [settleRes, collectRes, balRes, shiftRes] = await Promise.all([
       fetch(`${nchBase}/api/settlement?action=history&limit=200`).then(r => r.json()).catch(() => ({})),
       fetch(`${nchBase}/api/settlement?action=collection-history&limit=100`).then(r => r.json()).catch(() => ({})),
       fetch(`${nchBase}/api/settlement?action=counter-balance`).then(r => r.json()).catch(() => ({})),
+      fetch(`${nchBase}/api/settlement?action=current-shift`).then(r => r.json()).catch(() => ({})),
     ]);
     // Filter to the requested date
     const inDay = (ts) => ts && ts >= dayStart && ts <= dayEndExcl;
     settlements = (settleRes.settlements || []).filter(s => inDay(s.settled_at));
     collections = (collectRes.collections || []).filter(c => inDay(c.collected_at));
     counterBalance = balRes.balance || null;
+    currentShift = shiftRes.current || null;
+    shiftTrail = shiftRes.trail_today || [];
   } catch (e) { console.error('nch fetch:', e.message); }
 
   // 5. Build chronological timeline
   const events = [];
+  // Add shift-change events first (bootstrap + handovers)
+  for (const t of shiftTrail) {
+    events.push({
+      type: t.type === 'bootstrap' ? 'shift_open' : 'shift_change',
+      at: t.at,
+      title: t.type === 'bootstrap'
+        ? `Shift open · ${t.to_name} on drawer · opening ₹${t.opening_float}`
+        : `Shift handover · ${t.from_name} → ${t.to_name}${t.drawer_variance ? ` · variance ${t.drawer_variance>0?'+':''}₹${Math.abs(t.drawer_variance)}` : ''}`,
+      amount: t.type === 'bootstrap' ? (t.opening_float || 0) : (t.drawer_counted || 0),
+      direction: 'flag',
+      variance: t.drawer_variance || null,
+      meta: { from_code: t.from_code, to_code: t.to_code, opening: t.opening_float, drawer_counted: t.drawer_counted },
+    });
+  }
   for (const s of settlements) {
     const expected = (s.tokens_amount || 0) + (s.sales_amount || 0) - (s.upi_amount || 0);
     const variance = (s.cash_settled || 0) - expected;
@@ -755,7 +772,14 @@ async function nchDay(DB, apiKey, url) {
   return json({
     success: true,
     date,
+    current_shift: currentShift,
+    shift_trail: shiftTrail,
     summary: {
+      current_cashier_code: currentShift?.code || null,
+      current_cashier_name: currentShift?.name || null,
+      current_shift_start: currentShift?.shift_start_at || null,
+      current_shift_minutes: currentShift?.shift_minutes || 0,
+      shifts_today: shiftTrail.length,
       opening_float_estimated: counterBalance?.pettyCash || 0,
       runner_cash_in: Math.round(totalSettled),
       counter_cash_live: counterBalance?.counterCashLive || 0,

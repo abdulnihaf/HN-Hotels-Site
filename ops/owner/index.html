@@ -359,7 +359,27 @@ function nchSubtab(t) { NCH_SUBTAB = t; renderTab('nch-cash'); }
 function renderNchSummary(s) {
   const box = document.getElementById('nch-summary');
   const net = (s.runner_cash_in + s.counter_cash_live) - s.expenses_out - s.manager_collected;
+  const shiftMins = s.current_shift_minutes || 0;
+  const shiftSince = s.current_shift_start
+    ? new Date(s.current_shift_start).toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12: true, timeZone: 'Asia/Kolkata'})
+    : null;
+  const shiftDur = shiftMins < 60 ? `${shiftMins}m` :
+    shiftMins < 1440 ? `${Math.floor(shiftMins/60)}h ${shiftMins%60}m` : `${Math.floor(shiftMins/1440)}d`;
+  const shiftBanner = s.current_cashier_name
+    ? `<div style="padding:12px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:10px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+         <div style="width:10px;height:10px;border-radius:50%;background:#34d399;box-shadow:0 0 0 4px rgba(16,185,129,0.2);animation:pulse 2s infinite;flex-shrink:0"></div>
+         <div style="flex:1;min-width:0">
+           <div style="font-size:10px;color:rgba(255,255,255,0.45);font-weight:700;letter-spacing:0.5px">ON SHIFT NOW</div>
+           <div style="font-size:16px;font-weight:800;color:#34d399;margin-top:2px">${esc(s.current_cashier_name)} <span style="color:rgba(255,255,255,0.4);font-weight:500;font-size:12px">(${esc(s.current_cashier_code)})</span></div>
+         </div>
+         <div style="text-align:right">
+           <div style="font-size:10px;color:rgba(255,255,255,0.4)">since ${shiftSince || '—'} · ${shiftDur}</div>
+           <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px">${s.shifts_today} shift${s.shifts_today===1?'':'s'} today</div>
+         </div>
+       </div>`
+    : '<div style="padding:10px;color:var(--text-mute);font-size:12px;text-align:center">No live cashier shift</div>';
   box.innerHTML = `
+    ${shiftBanner}
     <div class="panel">
       <h3>Day Summary · ${NCH_DAY}</h3>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; font-size: 12px;">
