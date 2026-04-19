@@ -51,10 +51,14 @@ const USERS = {
 // Outlet cashier PINs — scoped to their outlet only (brand chip auto-fixes, no switcher).
 // Cats [5,6,7,8,9] = Rent, Utility, Police/Hafta, Petty/Operations, Maintenance/Repair.
 // Populate real PINs when onboarding Noor / Kesmat / Nafees.
+// Cashiers: full expense-cat access (2,3,4,5,6,7,8,9,10,11,12,13,14) — all except
+// cat 1 (RM cart UI not in /ops/v2/) and cat 15 (Bill-from-PO picker not in /ops/v2/).
+// Brand scope stays outlet-locked so HE cashier can't post NCH entries.
+const CASHIER_CATS = [2,3,4,5,6,7,8,9,10,11,12,13,14];
 const CASHIER_PINS = {
-  '15': { name: 'Noor',    brands: ['HE'],  cats: [5,6,7,8,9], role: 'cashier' },
-  '14': { name: 'Kesmat',  brands: ['NCH'], cats: [5,6,7,8,9], role: 'cashier' },
-  '43': { name: 'Nafees',  brands: ['NCH'], cats: [5,6,7,8,9], role: 'cashier' },
+  '15': { name: 'Noor',    brands: ['HE'],  cats: CASHIER_CATS, role: 'cashier' },
+  '14': { name: 'Kesmat',  brands: ['NCH'], cats: CASHIER_CATS, role: 'cashier' },
+  '43': { name: 'Nafees',  brands: ['NCH'], cats: CASHIER_CATS, role: 'cashier' },
 };
 
 function resolveUser(pin) {
