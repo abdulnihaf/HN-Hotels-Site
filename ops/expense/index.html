@@ -231,6 +231,12 @@
       <label>Notes (optional)</label>
       <textarea id="cat15-notes" rows="2"></textarea>
     </div>
+    <div class="row">
+      <label>Bill photo (optional)</label>
+      <input id="cat15-photo" type="file" accept="image/*" capture="environment" onchange="previewPhoto(this, 'cat15-photo-preview')">
+      <div id="cat15-photo-preview"></div>
+      <div class="mute" style="margin-top: 4px;">Attaches the vendor invoice image to the bill in Odoo.</div>
+    </div>
     <button class="btn btn-primary btn-full" onclick="submitCat15()">Record Bill</button>
   </div>
 
@@ -475,6 +481,12 @@ async function buildGenericForm(cat) {
       <label>Notes (optional)</label>
       <textarea id="f-notes" rows="2" placeholder="short context"></textarea>
     </div>
+    <div class="row">
+      <label>Bill / receipt photo (optional)</label>
+      <input id="f-photo" type="file" accept="image/*" capture="environment" onchange="previewPhoto(this, 'f-photo-preview')">
+      <div id="f-photo-preview"></div>
+      <div class="mute" style="margin-top: 4px;">Snap the paper bill — attached to this entry in Odoo for audit.</div>
+    </div>
   `);
 
   container.innerHTML = fields.join('');
@@ -506,6 +518,8 @@ async function submitForm() {
       body.bill_ref = document.getElementById('f-bill-ref')?.value || '';
       if (!body.vendor_id) throw new Error('Pick a vendor');
     }
+    const photo = await readPhoto('f-photo');
+    if (photo) body.attachment = photo;
     const r = await fetch(`${API}?action=record`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -938,10 +952,12 @@ async function submitCat15() {
   if (!po_id)  return toast('Pick a PO', 'err');
   if (!amount) return toast('Enter amount', 'err');
 
+  const attachment = await readPhoto('cat15-photo');
+
   const r = await fetch(`${API}?action=record-bill-from-po`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pin: PIN, brand: BRAND, po_id, amount, bill_ref, bill_date, notes }),
+    body: JSON.stringify({ pin: PIN, brand: BRAND, po_id, amount, bill_ref, bill_date, notes, attachment }),
   }).then(x => x.json()).catch(e => ({ error: e.message }));
 
   if (!r.success) return toast(r.error || 'Failed', 'err');
@@ -1081,6 +1097,58 @@ function toast(msg, kind) {
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2600);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Photo capture — compress to max 1200px JPEG @ 0.85, then base64
+// ═══════════════════════════════════════════════════════════════
+function previewPhoto(input, previewId) {
+  const file = input.files && input.files[0];
+  const el = document.getElementById(previewId);
+  if (!el) return;
+  if (!file) { el.innerHTML = ''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    el.innerHTML = `<div style="margin-top: 8px;"><img src="${e.target.result}" style="max-width: 140px; max-height: 140px; border-radius: 8px; border: 1px solid var(--border); display: block;"><div class="mute" style="margin-top: 4px;">${esc(file.name)} · ${(file.size/1024).toFixed(0)} KB</div></div>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function readPhoto(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return null;
+  const file = input.files && input.files[0];
+  if (!file) return null;
+  try {
+    const dataUrl = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = e => res(e.target.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const img = await new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = rej;
+      im.src = dataUrl;
+    });
+    const maxW = 1200;
+    const scale = Math.min(1, maxW / img.width);
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    const jpeg = c.toDataURL('image/jpeg', 0.85);
+    return {
+      name: file.name.replace(/\.[^.]+$/, '') + '.jpg',
+      mimetype: 'image/jpeg',
+      data_b64: jpeg.split(',')[1],
+    };
+  } catch (e) {
+    console.error('photo read fail:', e);
+    return null;
+  }
 }
 </script>
 </body>

@@ -79,6 +79,27 @@ function pinToUid(pin) { return PIN_TO_UID[pin] || 2; }  // fallback to admin
 
 const BRAND_COMPANY = { HE: 1, NCH: 10, HQ: 13 };
 
+// ━━━ Attachment helper ━━━
+// Accepts { name, mimetype, data_b64 } and attaches to any Odoo record.
+// Silently logs on failure — attachment is best-effort, never blocks the main record.
+async function saveAttachment(apiKey, attachment, res_model, res_id) {
+  if (!attachment || !attachment.data_b64 || !res_id) return null;
+  try {
+    const attId = await odoo(apiKey, 'ir.attachment', 'create', [{
+      name: (attachment.name || 'bill.jpg').slice(0, 120),
+      datas: attachment.data_b64,
+      res_model,
+      res_id: parseInt(res_id, 10),
+      type: 'binary',
+      mimetype: attachment.mimetype || 'image/jpeg',
+    }]);
+    return attId;
+  } catch (e) {
+    console.error('attachment fail:', e.message);
+    return null;
+  }
+}
+
 // ━━━ 14 Spend Categories (locked spec) ━━━
 const CATEGORIES = [
   { id: 1,  label: 'Raw Material Purchase', emoji: '🥩', backend: 'purchase.order', desc: 'Vendor + items → RM PO' },
@@ -450,6 +471,9 @@ export async function onRequest(context) {
 
         const expenseId = await odoo(apiKey, 'hr.expense', 'create', [expenseVals]);
 
+        // Optional bill photo
+        const attId = await saveAttachment(apiKey, body.attachment, 'hr.expense', expenseId);
+
         // Mirror to D1 for fast reads (matches existing business_expenses schema)
         if (DB) {
           const payMode = payment_method === 'cash' ? 'cash' : 'bank';
@@ -468,7 +492,7 @@ export async function onRequest(context) {
           ).run().catch(e => console.error('mirror fail:', e.message));
         }
 
-        return json({ success: true, odoo_id: expenseId, backend: 'hr.expense', category: cat.label });
+        return json({ success: true, odoo_id: expenseId, backend: 'hr.expense', category: cat.label, attachment_id: attId });
       }
 
       // Cat 14 → account.move direct vendor bill
@@ -490,7 +514,8 @@ export async function onRequest(context) {
           }]],
         };
         const moveId = await odoo(apiKey, 'account.move', 'create', [moveVals]);
-        return json({ success: true, odoo_id: moveId, backend: 'account.move', category: cat.label });
+        const attId14 = await saveAttachment(apiKey, body.attachment, 'account.move', moveId);
+        return json({ success: true, odoo_id: moveId, backend: 'account.move', category: cat.label, attachment_id: attId14 });
       }
 
       // Cat 1 (Raw Material PO) — UI submits directly to /api/rm-ops create-po
@@ -598,7 +623,8 @@ export async function onRequest(context) {
         }]],
       };
       const moveId = await odoo(apiKey, 'account.move', 'create', [moveVals]);
-      return json({ success: true, odoo_id: moveId, po_name: po[0].name, backend: 'account.move' });
+      const attIdPo = await saveAttachment(apiKey, body.attachment, 'account.move', moveId);
+      return json({ success: true, odoo_id: moveId, po_name: po[0].name, backend: 'account.move', attachment_id: attIdPo });
     }
 
     // ── List confirmed POs for cat 15 picker ───────────────────────────────
