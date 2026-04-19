@@ -45,37 +45,12 @@ async function handlePost(db, request, headers, env) {
     return storeOrders(db, body.orders, headers);
   }
 
-  // Store auth session to KV for server-side Cron access.
-  // Only write if something actually changed — this caps KV writes at ~one per session-rotation
-  // rather than one per extension page-visit (which was blowing past the 1000/day free tier).
+  // Session posts: retired Apr 19 2026. v6.0 extension is appliance-mode and
+  // polls Swiggy directly from Chrome; cron's Swiggy path is disabled so no
+  // server-side consumer of KV sessions remains. We accept and discard the
+  // payload so older extension builds don't see errors, but no KV writes happen.
   if (body.type === 'session' && body.platform) {
-    const sessions = env.SESSIONS;
-    if (sessions) {
-      const key = `session_${body.platform}`;
-      const existing = await sessions.get(key, 'json') || {};
-      const mergedHeaders = { ...(existing.headers || {}), ...(body.headers || {}) };
-      const mergedUrls = [...new Set([...(existing.urls || []), ...(body.urls || []), body.url].filter(Boolean))].slice(-50);
-
-      // Change detection: compare headers JSON + url list length
-      const existingHeadersJson = JSON.stringify(existing.headers || {});
-      const mergedHeadersJson = JSON.stringify(mergedHeaders);
-      const headersChanged = existingHeadersJson !== mergedHeadersJson;
-      const urlsChanged = (existing.urls || []).length !== mergedUrls.length;
-
-      if (headersChanged || urlsChanged) {
-        const merged = {
-          ...existing,
-          platform: body.platform,
-          headers: mergedHeaders,
-          urls: mergedUrls,
-          updated_at: new Date().toISOString(),
-        };
-        await sessions.put(key, JSON.stringify(merged), { expirationTtl: 86400 * 60 }); // 60 days
-        return new Response(JSON.stringify({ ok: true, written: true }), { headers });
-      }
-      return new Response(JSON.stringify({ ok: true, written: false, reason: 'unchanged' }), { headers });
-    }
-    return new Response(JSON.stringify({ ok: true }), { headers });
+    return new Response(JSON.stringify({ ok: true, written: false, reason: 'kv session storage retired' }), { headers });
   }
 
   // Default: store as metric snapshot
