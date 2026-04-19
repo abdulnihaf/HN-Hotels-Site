@@ -1202,27 +1202,72 @@ async function pullAttendance(apiKey, db, from, to, userName) {
     punchCount++;
   }
 
-  // Pair CheckIn→CheckOut within each shift-day bucket
+  // Pair taps within each shift-day bucket using intelligent inference.
+  //
+  // CAMS F38+ sends every face-tap as punch_type="CheckIn" — the device
+  // doesn't distinguish IN from OUT direction (verified Apr 19 2026:
+  // 29/29 punches ever received have punch_type=CheckIn). So we infer
+  // direction from sequence + timing:
+  //
+  //   1. Re-verify dedup: two taps within REVERIFY_SECONDS of each
+  //      other = same person registered twice by the device (CAMS has
+  //      30s guard but we use 120s to absorb anything weird). Drop
+  //      the second tap.
+  //   2. Alternate-pair with max-session cap per brand: walking sorted
+  //      taps, first = IN, next = OUT, next = IN, next = OUT … BUT if
+  //      the gap between an open IN and the next tap exceeds the brand's
+  //      typical max session length, the next tap is NOT a close-out —
+  //      the IN becomes an orphan (worker left without tapping) and the
+  //      current tap starts a new session.
+  //
+  // Per-brand max-session (calibrated from actual operations):
+  //   HE  16h — biryani kitchen prep ~9 AM → close ~2 AM next day
+  //   NCH 12h — 24h operation with 2 shifts, individual shift ≤ 10h
+  //   HQ  10h — office staff flex
+  //
+  // Break detection then reads pair[i].out → pair[i+1].in gaps in
+  // computeBreakGap(). 30-300 min = qualifying break. <30 min = weird
+  // (shouldn't happen after reverify dedup). >300 min = flagged outlier.
+  const MAX_SESSION_H = { HE: 16, NCH: 12, HQ: 10 };
+  const REVERIFY_SECONDS = 120;
+
   const buckets = new Map();  // `${odoo_id}|${shiftDay}` → { punches, hours, firstIn, lastOut }
   for (const [k, rows] of byKey.entries()) {
     const [pin, shiftDay] = k.split('|');
     const emp = byPin.get(pin);
+    const maxSessionH = MAX_SESSION_H[emp.brand_label] || 14;
+
     rows.sort((a, b) => String(a.punch_time).localeCompare(String(b.punch_time)));
 
+    // Step 1: reverify dedup
+    const clean = [];
+    for (const r of rows) {
+      const last = clean[clean.length - 1];
+      if (last) {
+        const gapSec = (parseIstWall(r.punch_time) - parseIstWall(last.punch_time)) / 1000;
+        if (gapSec < REVERIFY_SECONDS) continue;   // drop echo
+      }
+      clean.push(r);
+    }
+
+    // Step 2: alternate-pair with max-session cap
     const pairs = [];
     let openIn = null;
-    for (const r of rows) {
-      const isCheckOut = String(r.punch_type || '').toLowerCase() === 'checkout';
-      if (!isCheckOut) {
-        if (openIn) pairs.push({ in: openIn, out: null });  // orphan CheckIn
+    for (const r of clean) {
+      if (!openIn) {
         openIn = r.punch_time;
+        continue;
+      }
+      const gapH = (parseIstWall(r.punch_time) - parseIstWall(openIn)) / 3600000;
+      if (gapH <= maxSessionH) {
+        // Close the pair — this tap is the session's OUT
+        pairs.push({ in: openIn, out: r.punch_time });
+        openIn = null;
       } else {
-        if (openIn) {
-          pairs.push({ in: openIn, out: r.punch_time });
-          openIn = null;
-        } else {
-          pairs.push({ in: null, out: r.punch_time });
-        }
+        // Gap too long — previous IN is an orphan (forgot to tap OUT),
+        // this tap begins a new session
+        pairs.push({ in: openIn, out: null });
+        openIn = r.punch_time;
       }
     }
     if (openIn) pairs.push({ in: openIn, out: null });
