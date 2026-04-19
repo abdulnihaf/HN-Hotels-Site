@@ -43,9 +43,9 @@ const USERS = {
   '2026': { name: 'Zoya',     brands: ['HE','NCH','HQ'], cats: [1, 15], role: 'purchase' },
   '8316': { name: 'Zoya',     brands: ['HE','NCH','HQ'], cats: [1, 15], role: 'purchase' },
   // HQ GMs — all daily ops categories, no drawings
-  '8523': { name: 'Basheer',  brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14], role: 'gm' },
-  '6890': { name: 'Tanveer',  brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14], role: 'gm' },
-  '3697': { name: 'Yashwant', brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14], role: 'gm' },
+  '8523': { name: 'Basheer',  brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14,15], role: 'gm' },
+  '6890': { name: 'Tanveer',  brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14,15], role: 'gm' },
+  '3697': { name: 'Yashwant', brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14,15], role: 'gm' },
 };
 
 // Outlet cashier PINs — scoped to their outlet only (brand chip auto-fixes, no switcher).
