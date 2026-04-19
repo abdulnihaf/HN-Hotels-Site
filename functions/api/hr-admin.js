@@ -22,20 +22,23 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const ODOO_URL  = 'https://odoo.hnhotels.in/jsonrpc';
+const ODOO_URL  = 'https://ops.hamzahotel.com/jsonrpc';
 const ODOO_DB   = 'main';
-const ODOO_USER = 'nihaf@gmail.com';
+const ODOO_USER = 'yash@gmail.com';
 
 // CAMS F38+ biometric device config (mirrors live dashboard)
 const CAMS_API_BASE = 'https://www.camsbiometrics.com/api3.0';
 const CAMS_DEVICE_SERIAL = 'AYTH09089112';
 
-// PIN-gated access (aligned with rm-admin + Nihaf memory)
+// PIN-gated access. Only 3 accounts as of Apr 19 2026:
+//   • Nihaf  (admin)      — full access including financials + deductions
+//   • Basheer (manager)   — full read of attendance + discipline view; NO financials
+//   • Zoya   (onboarding) — employee create/edit; same read-view as Basheer
+// Farooq/Faheem removed — their HR access was never used.
 const PINS = {
-  '0305': { name: 'Nihaf',  role: 'admin' },  // full write
-  '2026': { name: 'Zoya',   role: 'hr'    },  // roster + sync
-  '3678': { name: 'Farooq', role: 'read'  },
-  '1111': { name: 'Faheem', role: 'read'  },
+  '0305': { name: 'Nihaf',   role: 'admin',      phone: '917010426808', view_financials: true  },
+  '8523': { name: 'Basheer', role: 'manager',    phone: '919061906916', view_financials: false },
+  '2026': { name: 'Zoya',    role: 'onboarding', phone: null,           view_financials: false },
 };
 
 // brand_label → Odoo company_id. HQ maps to HE (company 1, the parent Pvt Ltd)
@@ -56,10 +59,16 @@ function json(data, status = 200) {
   });
 }
 
+// Role capability map. Higher rank = more privilege.
+//   admin (2)       → everything, including financials
+//   onboarding (1.5)→ create/edit employees + same read-view as manager
+//   manager (1)     → read attendance + discipline, no financials, no edits
+//   read (0)        → legacy (no one assigned today)
+// Required capability names align with above.
 function checkPin(pin, required = 'read') {
   const u = PINS[pin];
   if (!u) return null;
-  const rank = { read: 0, hr: 1, admin: 2 };
+  const rank = { read: 0, manager: 1, onboarding: 1.5, hr: 1.5, admin: 2 };
   const need = rank[required] ?? 0;
   const have = rank[u.role] ?? 0;
   if (have < need) return null;
@@ -238,16 +247,63 @@ async function handleGet(url, env) {
   }
 
   // --- Daily attendance roll-up for a date ---
+  //   Accepts: date=YYYY-MM-DD, brand=HE|NCH|HQ (optional), pin=XXXX (optional,
+  //     redacts financials if user is not admin).
+  //   Enriches each row with a computed `break_warning` (no_break/short_break/
+  //     long_break/null) so the UI + digest don't need to re-derive.
   if (action === 'attendance-daily') {
     const date = url.searchParams.get('date') || istDate();
-    const rows = await db.prepare(
-      `SELECT a.*, e.name, e.brand_label, e.pay_type, e.monthly_salary, e.daily_rate
-       FROM hr_attendance_daily a
-       JOIN hr_employees e ON e.id = a.employee_id
-       WHERE a.date = ? AND e.is_active = 1
-       ORDER BY e.brand_label, e.name`
-    ).bind(date).all();
-    return json({ date, rows: rows.results, count: rows.results.length });
+    const brand = url.searchParams.get('brand');
+    const viewerPin = url.searchParams.get('pin');
+    const viewer = viewerPin ? PINS[viewerPin] : null;
+    const redact = viewer ? !viewer.view_financials : false;
+
+    let q = `SELECT a.*, e.name, e.known_as, e.pin as emp_pin, e.brand_label, e.pay_type,
+                    e.monthly_salary, e.daily_rate, e.job_name, e.department_name
+             FROM hr_attendance_daily a
+             JOIN hr_employees e ON e.id = a.employee_id
+             WHERE a.date = ? AND e.is_active = 1`;
+    const params = [date];
+    if (brand) { q += ' AND e.brand_label = ?'; params.push(brand); }
+    q += ' ORDER BY e.brand_label, e.name';
+
+    const rows = await db.prepare(q).bind(...params).all();
+    const enriched = (rows.results || []).map(r => {
+      const punches = (() => { try { return JSON.parse(r.raw_punches_json || '[]'); } catch { return []; } })();
+      const bi = computeBreakGap(punches);
+      const warning = breakWarning(r.total_hours || 0, bi.minutes, bi.outliers);
+      const out = {
+        ...r,
+        break_warning: warning,
+        break_outliers: bi.outliers,
+        break_taken_minutes: bi.minutes,
+        break_start_at: bi.start,
+        break_end_at: bi.end,
+      };
+      if (redact) {
+        out.monthly_salary = null;
+        out.daily_rate = null;
+        out.deducted_amount = null;
+      }
+      return out;
+    });
+    return json({ date, brand: brand || 'all', viewer: viewer?.name || null, rows: enriched, count: enriched.length });
+  }
+
+  // --- Daily digest (WhatsApp-ready text for Nihaf + Basheer) ---
+  //   GET ?action=digest&date=YYYY-MM-DD&brand=HE|NCH&mode=recap|no_show
+  //   recap   → yesterday summary (who worked what, issues)
+  //   no_show → mid-day check for today (who hasn't punched yet after shift open)
+  if (action === 'digest') {
+    const date = url.searchParams.get('date') || istDate();
+    const brand = url.searchParams.get('brand') || 'HE';
+    const mode = url.searchParams.get('mode') || 'recap';
+    const viewerPin = url.searchParams.get('pin');
+    const viewer = viewerPin ? PINS[viewerPin] : null;
+    const includeFin = viewer ? !!viewer.view_financials : false;
+
+    const digest = await buildDigest(db, brand, date, mode, includeFin);
+    return json({ brand, date, mode, ...digest });
   }
 
   // --- Deductions for a month (YYYY-MM) ---
@@ -1242,33 +1298,63 @@ function shiftDayDelta(ymd, days) {
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * Break gap: detect the mid-shift rest period from multi-pair punches.
- * A "break" = gap between pair[i].check_out and pair[i+1].check_in.
- * If staff does: IN→OUT (work) → gap (break) → IN→OUT (work), the
- * bucket has 2 pairs; the gap is the break.
- * Works for any number of pairs (split shifts etc.).
+ * Break gap: detect qualifying rest periods from multi-pair punches.
+ * A qualifying break = gap between OUT and next IN of 30–300 minutes
+ * (business rule set by Nihaf Apr 19 2026).
+ *
+ *   < 30 min  → probably a bio re-verify, bathroom visit, or punch bounce.
+ *               Doesn't count as a break (but still subtracts from work hours
+ *               because those happen during paired-pair hours calc upstream).
+ *   30–300m   → legit break. Count toward break_taken_minutes.
+ *   > 300m    → split shift or forgotten checkout. Flagged as outlier.
+ *
+ * Output adds an `outliers` array with any oversized gaps for review.
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+const BREAK_MIN_MINUTES = 30;
+const BREAK_MAX_MINUTES = 300;  // 5 hours
+
 function computeBreakGap(punches) {
-  if (!punches || punches.length < 2) return { minutes: 0, start: null, end: null };
+  if (!punches || punches.length < 2) return { minutes: 0, start: null, end: null, outliers: [] };
   // Sort by check_in ascending
   const sorted = [...punches].sort((a, b) =>
-    new Date(a.in.replace(' ','T')+'Z') - new Date(b.in.replace(' ','T')+'Z')
+    new Date((a.in || a.out).replace(' ','T')+'Z') - new Date((b.in || b.out).replace(' ','T')+'Z')
   );
   let totalMinutes = 0, breakStart = null, breakEnd = null;
+  const outliers = [];
   for (let i = 0; i < sorted.length - 1; i++) {
     const outStr = sorted[i].out;
     const nextInStr = sorted[i + 1].in;
     if (!outStr || !nextInStr) continue;
-    const outMs  = new Date(outStr.replace(' ','T')+'Z').getTime();
-    const inMs   = new Date(nextInStr.replace(' ','T')+'Z').getTime();
+    const outMs = new Date(outStr.replace(' ','T')+'Z').getTime();
+    const inMs  = new Date(nextInStr.replace(' ','T')+'Z').getTime();
     const gapMin = Math.round((inMs - outMs) / 60000);
-    if (gapMin > 0) {
-      totalMinutes += gapMin;
-      if (!breakStart) breakStart = outStr;   // first break-out
-      breakEnd = nextInStr;                    // last break-in
+    if (gapMin <= 0) continue;
+    if (gapMin < BREAK_MIN_MINUTES) {
+      // too-short gap (punch bounce / bathroom) — ignore
+      continue;
     }
+    if (gapMin > BREAK_MAX_MINUTES) {
+      outliers.push({ start: outStr, end: nextInStr, minutes: gapMin });
+      continue;
+    }
+    // qualifying break
+    totalMinutes += gapMin;
+    if (!breakStart) breakStart = outStr;
+    breakEnd = nextInStr;
   }
-  return { minutes: totalMinutes, start: breakStart, end: breakEnd };
+  return { minutes: totalMinutes, start: breakStart, end: breakEnd, outliers };
+}
+
+// Break warning classifier — applied to a computed attendance row.
+//   'no_break'      worked ≥6h AND 0 qualifying break minutes
+//   'short_break'   worked ≥8h AND <30 qualifying minutes
+//   'long_break'    any single gap >300 min (split/missing-checkout hybrid)
+//   null            clean
+function breakWarning(hours, breakMinutes, outliers) {
+  if (outliers && outliers.length) return 'long_break';
+  if (hours >= 6 && breakMinutes === 0) return 'no_break';
+  if (hours >= 8 && breakMinutes < BREAK_MIN_MINUTES) return 'short_break';
+  return null;
 }
 
 function isWeekOffDay(dateStr, weekOff) {
@@ -1276,6 +1362,158 @@ function isWeekOffDay(dateStr, weekOff) {
   const dow = new Date(dateStr + 'T00:00:00').getDay();  // 0 = Sunday
   const map = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
   return map[weekOff.toLowerCase()] === dow;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Digest builder — produces a WhatsApp-ready text + structured data
+ * for Basheer (manager) and Nihaf (admin). Brand-scoped.
+ *
+ * mode = 'recap'   → closed-shift-day summary (previous day after both
+ *                    HE 09:00 and NCH 06:00 boundaries have passed).
+ *                    Present / Absent / Break issues / Missing checkout.
+ * mode = 'no_show' → intra-day check: who hasn't punched yet for the
+ *                    current shift-day (HE after 12:30, NCH after 06:30).
+ *
+ * Text is UTF-8 with emoji headers so it reads well in WhatsApp.
+ * Financial lines only appear when includeFin=true (Nihaf).
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+async function buildDigest(db, brand, date, mode, includeFin) {
+  // Fetch employees + attendance for this brand/date
+  const brandFilter = brand === 'ALL' ? '' : 'AND e.brand_label = ?';
+  const params = [date];
+  if (brand !== 'ALL') params.push(brand);
+
+  const rows = (await db.prepare(
+    `SELECT a.*, e.name, e.known_as, e.pin as emp_pin, e.brand_label, e.pay_type,
+            e.monthly_salary, e.daily_rate, e.job_name, e.department_name, e.row_no
+       FROM hr_employees e
+       LEFT JOIN hr_attendance_daily a ON a.employee_id = e.id AND a.date = ?
+      WHERE e.is_active = 1 ${brandFilter}
+      ORDER BY e.brand_label, e.row_no, e.name`
+  ).bind(...params).all()).results || [];
+
+  // Enrich break info per row
+  const enriched = rows.map(r => {
+    const punches = (() => { try { return JSON.parse(r.raw_punches_json || '[]'); } catch { return []; } })();
+    const bi = computeBreakGap(punches);
+    return {
+      ...r,
+      status: r.status || (mode === 'no_show' ? 'pending' : 'absent'),
+      break_minutes: bi.minutes,
+      break_start: bi.start,
+      break_end: bi.end,
+      break_warning: breakWarning(r.total_hours || 0, bi.minutes, bi.outliers),
+      long_break_outliers: bi.outliers || [],
+    };
+  });
+
+  // Categorise
+  const cat = {
+    present: [], absent: [], pending: [], half: [], ghost: [],
+    leave: [], week_off: [],
+    no_break: [], short_break: [], long_break: [], missing_checkout: [],
+  };
+  for (const r of enriched) {
+    (cat[r.status] || cat.absent).push(r);
+    if (r.break_warning) cat[r.break_warning].push(r);
+    if (r.is_single_punch && (r.status === 'ghost' || r.status === 'present' && !r.last_out_at)) {
+      cat.missing_checkout.push(r);
+    }
+  }
+
+  // Format helpers
+  const t = (iso) => iso ? iso.slice(11, 16) : '—';
+  const hm = (mins) => {
+    if (!mins) return '—';
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
+  const nameOf = (r) => r.known_as && r.known_as !== r.name ? `${r.known_as} (#${r.emp_pin || '—'})` : `${r.name} (#${r.emp_pin || '—'})`;
+
+  const prettyDate = date;
+  const brandLabel = brand === 'HE' ? 'Hamza Express' : brand === 'NCH' ? 'Nawabi Chai House' : brand;
+
+  let txt = '';
+
+  if (mode === 'no_show') {
+    txt += `⏰ *${brandLabel} — Attendance check ${prettyDate}*\n`;
+    txt += `Shift open, checking who hasn't clocked in yet.\n\n`;
+    if (cat.pending.length === 0) {
+      txt += `✅ All expected staff have punched in.\n`;
+    } else {
+      txt += `🟡 *Not punched yet (${cat.pending.length}):*\n`;
+      cat.pending.forEach(r => { txt += `• ${nameOf(r)} — ${r.job_name || r.department_name || '—'}\n`; });
+    }
+    if (cat.present.length) {
+      txt += `\n✅ *Present (${cat.present.length}):*\n`;
+      cat.present.slice(0, 15).forEach(r => { txt += `• ${nameOf(r)} — In ${t(r.first_in_at)}\n`; });
+    }
+  } else {
+    // recap
+    txt += `📊 *${brandLabel} — HR digest ${prettyDate}*\n\n`;
+
+    const total = enriched.length;
+    txt += `👥 Roster: ${total}  ·  ✅ ${cat.present.length}  ·  ❌ ${cat.absent.length}  ·  🕒 ${cat.half.length + cat.ghost.length}  ·  🌴 ${cat.leave.length}  ·  💤 ${cat.week_off.length}\n\n`;
+
+    if (cat.present.length) {
+      txt += `✅ *Present (${cat.present.length}):*\n`;
+      cat.present.forEach(r => {
+        const range = `${t(r.first_in_at)}–${t(r.last_out_at) || 'open'}`;
+        const brk = r.break_minutes ? `, break ${hm(r.break_minutes)}` : '';
+        txt += `• ${nameOf(r)} · ${range} · ${(r.total_hours || 0).toFixed(1)}h${brk}\n`;
+      });
+      txt += '\n';
+    }
+    if (cat.absent.length) {
+      txt += `❌ *Absent (${cat.absent.length}):*\n`;
+      cat.absent.forEach(r => { txt += `• ${nameOf(r)} — ${r.job_name || '—'}\n`; });
+      txt += '\n';
+    }
+    if (cat.half.length) {
+      txt += `🕒 *Half-day (${cat.half.length}):*\n`;
+      cat.half.forEach(r => { txt += `• ${nameOf(r)} · ${(r.total_hours || 0).toFixed(1)}h\n`; });
+      txt += '\n';
+    }
+    if (cat.ghost.length) {
+      txt += `👻 *Ghost / no checkout (${cat.ghost.length}):*\n`;
+      cat.ghost.forEach(r => {
+        txt += `• ${nameOf(r)} — In ${t(r.first_in_at)}, ${r.deduction_reason || 'suspect'}\n`;
+      });
+      txt += '\n';
+    }
+
+    // Break intelligence
+    const brkIssues = [...cat.no_break, ...cat.short_break, ...cat.long_break];
+    if (brkIssues.length) {
+      txt += `☕ *Break discipline:*\n`;
+      if (cat.no_break.length)    { txt += `  🚫 No break (${cat.no_break.length}) — worked ≥6h without qualifying 30-min break:\n`; cat.no_break.forEach(r => txt += `    • ${nameOf(r)} · ${(r.total_hours||0).toFixed(1)}h\n`); }
+      if (cat.short_break.length) { txt += `  ⚠ Insufficient break (${cat.short_break.length}) — worked ≥8h with <30m break:\n`; cat.short_break.forEach(r => txt += `    • ${nameOf(r)} · ${(r.total_hours||0).toFixed(1)}h, break ${hm(r.break_minutes)}\n`); }
+      if (cat.long_break.length)  { txt += `  ⏳ Unusually long break (${cat.long_break.length}) — gap >5h (split shift or missed punch):\n`; cat.long_break.forEach(r => r.long_break_outliers.forEach(o => txt += `    • ${nameOf(r)} · ${t(o.start)}–${t(o.end)} (${hm(o.minutes)})\n`)); }
+      txt += '\n';
+    }
+
+    if (cat.leave.length)    { txt += `🌴 *On leave (${cat.leave.length}):* ${cat.leave.map(r => r.known_as || r.name).join(', ')}\n`; }
+    if (cat.week_off.length) { txt += `💤 *Week off (${cat.week_off.length}):* ${cat.week_off.map(r => r.known_as || r.name).join(', ')}\n`; }
+
+    if (includeFin) {
+      const totalDed = enriched.reduce((s, r) => s + (Number(r.deducted_amount) || 0), 0);
+      if (totalDed > 0) {
+        txt += `\n💸 *Deductions today:* ₹${totalDed.toLocaleString('en-IN')}\n`;
+        const deducted = enriched.filter(r => (Number(r.deducted_amount) || 0) > 0);
+        deducted.forEach(r => {
+          txt += `  • ${nameOf(r)}: ₹${Number(r.deducted_amount).toLocaleString('en-IN')} — ${r.deduction_reason || '—'}\n`;
+        });
+      }
+    }
+
+    txt += `\n🔗 Full view: https://hnhotels.in/ops/hr/`;
+  }
+
+  return {
+    text: txt.trim(),
+    counts: Object.fromEntries(Object.entries(cat).map(([k, v]) => [k, v.length])),
+    roster_total: enriched.length,
+  };
 }
 
 function daily(emp) {
