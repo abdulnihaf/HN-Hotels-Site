@@ -310,6 +310,7 @@ let USER = null;
 let BRAND = null;
 let CURRENT_CAT = null;
 let MODE = 'live';  // 'live' | 'historical'
+let LAST_HISTORICAL_DATE = '';  // sticky across entries within one session
 
 // ═══════════════════════════════════════════════════════════════
 // Mode toggle — Live (today auto) vs Historical (date picker required)
@@ -319,6 +320,17 @@ function setMode(m) {
   document.getElementById('btn-mode-live').classList.toggle('active', m === 'live');
   document.getElementById('btn-mode-hist').classList.toggle('active', m === 'historical');
   document.getElementById('mode-banner-hist').classList.toggle('hidden', m !== 'historical');
+  updateHistBannerText();
+}
+function updateHistBannerText() {
+  const el = document.getElementById('mode-banner-hist');
+  if (!el || MODE !== 'historical') return;
+  if (LAST_HISTORICAL_DATE) {
+    const human = new Date(LAST_HISTORICAL_DATE + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    el.innerHTML = `HISTORICAL MODE — last entry dated <b>${human}</b>. Next entry pre-fills to same date — change if different.`;
+  } else {
+    el.textContent = 'HISTORICAL MODE — pick the original bill date on each entry. Finish by Monday.';
+  }
 }
 function setFormModePill() {
   const pill = document.getElementById('form-mode-pill');
@@ -544,11 +556,15 @@ async function buildGenericForm(cat) {
       </div>
     `);
   } else {
+    const prefill = LAST_HISTORICAL_DATE || '';
+    const prefillHint = prefill
+      ? `Pre-filled from last entry (${new Date(prefill+'T00:00:00').toLocaleDateString('en-IN', { day:'numeric', month:'short' })}) — change if this bill has a different date`
+      : 'Pick the actual date on the paper bill (not today)';
     fields.push(`
       <div class="row">
         <label style="color: #fbbf24;">Bill date *</label>
-        <input id="f-date" type="date" value="" max="${today}" required style="border-color: rgba(245,158,11,.4);">
-        <div class="mute" style="margin-top: 4px;">Pick the actual date on the paper bill (not today)</div>
+        <input id="f-date" type="date" value="${prefill}" max="${today}" required style="border-color: rgba(245,158,11,.4);">
+        <div class="mute" style="margin-top: 4px;">${prefillHint}</div>
       </div>
     `);
   }
@@ -624,6 +640,7 @@ async function submitForm() {
       body: JSON.stringify(body),
     }).then(x => x.json());
     if (!r.success) throw new Error(r.error || 'Record failed');
+    if (chosenDate) { LAST_HISTORICAL_DATE = chosenDate; updateHistBannerText(); }
     toast(`✓ Recorded ₹${amount.toLocaleString('en-IN')} — ${CURRENT_CAT.label}`, 'ok');
     setTimeout(showHome, 800);
   } catch (e) {
@@ -1017,7 +1034,9 @@ async function openCat15() {
   const pill = document.getElementById('cat15-mode-pill');
   pill.className = `mode-pill ${MODE === 'live' ? 'live' : 'hist'}`;
   pill.textContent = MODE === 'live' ? '● LIVE' : '● HISTORICAL';
-  document.getElementById('cat15-date').value = MODE === 'live' ? new Date().toISOString().slice(0, 10) : '';
+  document.getElementById('cat15-date').value = MODE === 'live'
+    ? new Date().toISOString().slice(0, 10)
+    : (LAST_HISTORICAL_DATE || '');
   document.getElementById('cat15-ref').value = '';
   document.getElementById('cat15-amount').value = '';
   document.getElementById('cat15-notes').value = '';
@@ -1063,6 +1082,7 @@ async function submitCat15() {
   }).then(x => x.json()).catch(e => ({ error: e.message }));
 
   if (!r.success) return toast(r.error || 'Failed', 'err');
+  if (MODE === 'historical' && bill_date) { LAST_HISTORICAL_DATE = bill_date; updateHistBannerText(); }
   toast(`✓ Bill recorded for ${r.po_name}`, 'ok');
   setTimeout(showHome, 900);
 }
