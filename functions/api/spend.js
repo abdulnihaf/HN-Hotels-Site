@@ -100,6 +100,26 @@ async function saveAttachment(apiKey, attachment, res_model, res_id) {
   }
 }
 
+// ━━━ Drive sync helper ━━━
+// POSTs to Google Apps Script webhook so the bill photo lands in a dated,
+// company-scoped Drive folder. Silently skipped if DRIVE_WEBHOOK_URL is unset.
+async function syncToDrive(env, meta) {
+  if (!env || !env.DRIVE_WEBHOOK_URL) return null;
+  if (!meta || !meta.data_b64) return null;
+  try {
+    const r = await fetch(env.DRIVE_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(meta),
+    });
+    const out = await r.json().catch(() => null);
+    return out?.file_id || null;
+  } catch (e) {
+    console.error('drive sync fail:', e.message);
+    return null;
+  }
+}
+
 // ━━━ 14 Spend Categories (locked spec) ━━━
 const CATEGORIES = [
   { id: 1,  label: 'Raw Material Purchase', emoji: '🥩', backend: 'purchase.order', desc: 'Vendor + items → RM PO' },
@@ -471,8 +491,19 @@ export async function onRequest(context) {
 
         const expenseId = await odoo(apiKey, 'hr.expense', 'create', [expenseVals]);
 
-        // Optional bill photo
+        // Optional bill photo — write to Odoo AND to Drive
         const attId = await saveAttachment(apiKey, body.attachment, 'hr.expense', expenseId);
+        const driveFileId = await syncToDrive(env, body.attachment ? {
+          date: customDate,
+          company: brand,
+          category: cat.label,
+          product: prodName,
+          amount: parseFloat(amount),
+          recorded_by: user.name,
+          filename: body.attachment.name,
+          mimetype: body.attachment.mimetype,
+          data_b64: body.attachment.data_b64,
+        } : null);
 
         // Mirror to D1 for fast reads (matches existing business_expenses schema)
         if (DB) {
@@ -492,7 +523,7 @@ export async function onRequest(context) {
           ).run().catch(e => console.error('mirror fail:', e.message));
         }
 
-        return json({ success: true, odoo_id: expenseId, backend: 'hr.expense', category: cat.label, attachment_id: attId });
+        return json({ success: true, odoo_id: expenseId, backend: 'hr.expense', category: cat.label, attachment_id: attId, drive_file_id: driveFileId });
       }
 
       // Cat 14 → account.move direct vendor bill
@@ -515,7 +546,18 @@ export async function onRequest(context) {
         };
         const moveId = await odoo(apiKey, 'account.move', 'create', [moveVals]);
         const attId14 = await saveAttachment(apiKey, body.attachment, 'account.move', moveId);
-        return json({ success: true, odoo_id: moveId, backend: 'account.move', category: cat.label, attachment_id: attId14 });
+        const drive14 = await syncToDrive(env, body.attachment ? {
+          date: customInvDate,
+          company: brand,
+          category: cat.label,
+          product: body.vendor_name || 'Vendor bill',
+          amount: parseFloat(amount),
+          recorded_by: user.name,
+          filename: body.attachment.name,
+          mimetype: body.attachment.mimetype,
+          data_b64: body.attachment.data_b64,
+        } : null);
+        return json({ success: true, odoo_id: moveId, backend: 'account.move', category: cat.label, attachment_id: attId14, drive_file_id: drive14 });
       }
 
       // Cat 1 (Raw Material PO) — UI submits directly to /api/rm-ops create-po
@@ -624,7 +666,18 @@ export async function onRequest(context) {
       };
       const moveId = await odoo(apiKey, 'account.move', 'create', [moveVals]);
       const attIdPo = await saveAttachment(apiKey, body.attachment, 'account.move', moveId);
-      return json({ success: true, odoo_id: moveId, po_name: po[0].name, backend: 'account.move', attachment_id: attIdPo });
+      const drivePo = await syncToDrive(env, body.attachment ? {
+        date: bill_date || new Date().toISOString().slice(0, 10),
+        company: brand,
+        category: 'Bill from PO',
+        product: `Bill ${bill_ref || po[0].name}`,
+        amount: parseFloat(amount),
+        recorded_by: user.name,
+        filename: body.attachment.name,
+        mimetype: body.attachment.mimetype,
+        data_b64: body.attachment.data_b64,
+      } : null);
+      return json({ success: true, odoo_id: moveId, po_name: po[0].name, backend: 'account.move', attachment_id: attIdPo, drive_file_id: drivePo });
     }
 
     // ── List confirmed POs for cat 15 picker ───────────────────────────────
