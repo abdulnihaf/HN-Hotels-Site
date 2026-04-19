@@ -1145,14 +1145,16 @@ async function pullAttendance(apiKey, db, from, to, userName) {
           deduction = daily(emp);
           reason = 'unpaid leave';
         }
-      } else if (isWeekOff) {
-        status = 'week_off';
       } else if (isOffice) {
+        // Office staff rule takes priority over week-off so Sunday office
+        // punches (ad-hoc work) still register as present. No auto-deduction.
         const hasPunches = b && b.punches.length > 0;
         if (hasPunches) status = 'present';
+        else if (isWeekOff) status = 'week_off';
         else if (!shiftClosed) status = 'pending';
         else { status = 'absent'; reason = 'no punches'; }
-        // Office: no auto-deduction; payroll handles missing punches.
+      } else if (isWeekOff) {
+        status = 'week_off';
       } else if (!b || b.punches.length === 0) {
         if (!shiftClosed) {
           status = 'pending';
