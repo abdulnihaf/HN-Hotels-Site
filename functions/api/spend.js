@@ -229,10 +229,49 @@ export async function onRequest(context) {
         for (const r of rmExtra) if (!categIds.includes(r.id)) categIds.push(r.id);
       }
       if (!categIds.length) return json({ success: true, products: [], reason: `No category matching ${cat.parentName}` });
-      const products = await odoo(apiKey, 'product.product', 'search_read',
+
+      // Base set: all active can-be-expensed products in those categories
+      const all = await odoo(apiKey, 'product.product', 'search_read',
         [[['categ_id', 'in', categIds], ['can_be_expensed', '=', true], ['active', '=', true]]],
-        { fields: ['id', 'name', 'default_code', 'standard_price'], order: 'name asc', limit: 500 });
-      return json({ success: true, products });
+        { fields: ['id', 'name', 'default_code', 'standard_price', 'create_date'], order: 'name asc', limit: 500 });
+
+      // Brand filter: if &brand=NCH|HE|HQ — keep only products that have been bought
+      // for that company (via purchase.order.line) OR are recently created (<7 days).
+      // Absent brand param → return all (back-compat for /ops/expense/ central view).
+      const brandParam = (url.searchParams.get('brand') || '').toUpperCase();
+      const wantCompanyId = BRAND_COMPANY[brandParam];
+      if (wantCompanyId && all.length) {
+        try {
+          const allIds = all.map(p => p.id);
+          // Pull all POs for this company that reference any of these products
+          const lines = await odoo(apiKey, 'purchase.order.line', 'search_read',
+            [[['company_id', '=', wantCompanyId], ['product_id', 'in', allIds]]],
+            { fields: ['product_id'], limit: 5000 });
+          const brandProductIds = new Set(lines.map(l => l.product_id?.[0]).filter(Boolean));
+
+          // Also check past hr.expense usage for this company (outlet cash purchases)
+          const exps = await odoo(apiKey, 'hr.expense', 'search_read',
+            [[['company_id', '=', wantCompanyId], ['product_id', 'in', allIds]]],
+            { fields: ['product_id'], limit: 5000 });
+          for (const e of exps) if (e.product_id?.[0]) brandProductIds.add(e.product_id[0]);
+
+          // Recently created products (< 7d) always pass the filter so new items don't disappear
+          const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().replace('T', ' ').slice(0, 19);
+
+          const filtered = all.filter(p =>
+            brandProductIds.has(p.id) ||
+            (p.create_date && p.create_date >= sevenDaysAgo)
+          );
+
+          // If filter collapsed to nothing sensible (<3 items), fall back to full set with a flag
+          if (filtered.length < 3) {
+            return json({ success: true, products: all, brand_filtered: false,
+                          reason: 'Not enough brand history — showing full registry' });
+          }
+          return json({ success: true, products: filtered, brand_filtered: true, brand: brandParam });
+        } catch (e) { console.error('brand filter fail:', e.message); }
+      }
+      return json({ success: true, products: all, brand_filtered: false });
     }
 
     // ── EMPLOYEES (for Salary / Advance categories) ────────
