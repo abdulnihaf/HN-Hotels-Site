@@ -243,8 +243,8 @@ export async function onRequest(context) {
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
       // Pull from business_expenses (hr.expense mirror) and rm purchase logs
       const rows = await DB.prepare(
-        `SELECT category, amount, product_name, company_id, x_payment_method as payment_method,
-                recorded_by as recorded_by_pin, recorded_at as created_at
+        `SELECT odoo_id, category, amount, product_name, company_id, x_payment_method as payment_method,
+                recorded_by as recorded_by_pin, recorded_at as created_at, notes
            FROM business_expenses
           ORDER BY recorded_at DESC LIMIT 20`
       ).all().catch(() => ({ results: [] }));
@@ -358,6 +358,65 @@ export async function onRequest(context) {
       }
 
       return json({ success: false, error: `Backend ${cat.backend} not implemented yet` }, 501);
+    }
+
+    // ── DELETE EXPENSE ENTRY (admin / cfo / asstmgr only) ──────────────────
+    if (action === 'delete-entry' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, odoo_id } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!['admin','cfo','asstmgr'].includes(user.role)) {
+        return json({ success: false, error: 'Only Nihaf/Naveen/Faheem can delete entries' }, 403);
+      }
+      if (!odoo_id) return json({ success: false, error: 'odoo_id required' }, 400);
+
+      // Delete from Odoo (soft-unlink if draft, hard-unlink OK for recent entries)
+      try {
+        await odoo(apiKey, 'hr.expense', 'unlink', [[parseInt(odoo_id, 10)]]);
+      } catch (e) {
+        // hr.expense might already be submitted/approved — report but continue D1 cleanup
+        return json({ success: false, error: `Odoo delete failed: ${e.message}. Entry may be already submitted — unlink in Odoo UI.` }, 400);
+      }
+
+      // Delete D1 mirror
+      if (DB) {
+        await DB.prepare('DELETE FROM business_expenses WHERE odoo_id = ?').bind(parseInt(odoo_id, 10)).run()
+          .catch(e => console.error('D1 delete fail:', e.message));
+      }
+
+      return json({ success: true, deleted_odoo_id: odoo_id });
+    }
+
+    // ── ARCHIVE PRODUCT (admin only) — marks active=false in Odoo ──────────
+    if (action === 'archive-product' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, product_id } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (user.role !== 'admin') {
+        return json({ success: false, error: 'Only admins can archive products' }, 403);
+      }
+      if (!product_id) return json({ success: false, error: 'product_id required' }, 400);
+      await odoo(apiKey, 'product.product', 'write', [[parseInt(product_id, 10)], { active: false }]);
+      return json({ success: true, archived_product_id: product_id });
+    }
+
+    // ── ARCHIVE VENDOR (admin only) ────────────────────────────────────────
+    if (action === 'archive-vendor' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, vendor_id } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (user.role !== 'admin') {
+        return json({ success: false, error: 'Only admins can archive vendors' }, 403);
+      }
+      if (!vendor_id) return json({ success: false, error: 'vendor_id required' }, 400);
+      await odoo(apiKey, 'res.partner', 'write', [[parseInt(vendor_id, 10)], { active: false }]);
+      return json({ success: true, archived_vendor_id: vendor_id });
     }
 
     // ── CAT 15 — Bill from PO (account.move linked to purchase.order) ──────

@@ -398,15 +398,31 @@ async function loadRecent() {
   const r = await fetch(`${API}?action=recent&pin=${PIN}`).then(x => x.json()).catch(() => null);
   const list = document.getElementById('recent-list');
   if (!r?.success || !r.entries?.length) { list.innerHTML = '<div class="mute">No recent entries.</div>'; return; }
+  const canDelete = ['admin','cfo','asstmgr'].includes(USER?.user?.role);
   list.innerHTML = r.entries.slice(0, 8).map(e => `
     <div class="entry">
-      <div>
-        <div>${e.product_name || e.category}</div>
-        <div class="mute">${e.category} · ${e.payment_method || '-'} · PIN ${e.recorded_by_pin}</div>
+      <div style="flex: 1; min-width: 0;">
+        <div>${esc(e.product_name || e.category)}</div>
+        <div class="mute">${esc(e.category)} · ${esc(e.payment_method || '-')} · PIN ${esc(e.recorded_by_pin || '')}</div>
       </div>
-      <div class="amt">₹${Number(e.amount).toLocaleString('en-IN')}</div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="amt">₹${Number(e.amount).toLocaleString('en-IN')}</div>
+        ${canDelete && e.odoo_id ? `<button class="btn sm" style="background: var(--danger); color: #fff; padding: 4px 10px;" onclick="deleteEntry(${e.odoo_id})">×</button>` : ''}
+      </div>
     </div>
   `).join('');
+}
+
+async function deleteEntry(odooId) {
+  if (!confirm('Delete this entry? Removes from Odoo + dashboard. Not reversible unless re-recorded.')) return;
+  const r = await fetch(`${API}?action=delete-entry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, odoo_id: odooId }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { toast(r.error || 'Delete failed', 'err'); return; }
+  toast('✓ Deleted', 'ok');
+  loadRecent();
 }
 
 // ═══════════════════════════════════════════════════════════════
