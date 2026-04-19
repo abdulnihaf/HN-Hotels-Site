@@ -54,6 +54,19 @@ function resolveUser(pin) {
   return USERS[pin] || CASHIER_PINS[pin] || null;
 }
 
+// PIN → Odoo res.users.id (for x_recorded_by_user_id attribution)
+// Built from users created in odoo.hnhotels.in on 2026-04-19.
+const PIN_TO_UID = {
+  '0305': 2,  '5882': 2,     // Nihaf (Administrator)
+  '3754': 5,                 // Naveen
+  '2026': 6,  '8316': 6,     // Zoya
+  '8523': 7,                 // Basheer
+  '6890': 8,                 // Tanveer
+  '6045': 9,  '3678': 9,     // Faheem
+  '3697': 10,                // Ismail (Yashwant PIN mapped to Ismail's Odoo user)
+};
+function pinToUid(pin) { return PIN_TO_UID[pin] || 2; }  // fallback to admin
+
 const BRAND_COMPANY = { HE: 1, NCH: 10, HQ: 13 };
 
 // ━━━ 14 Spend Categories (locked spec) ━━━
@@ -306,6 +319,7 @@ export async function onRequest(context) {
           x_location: brand,
           x_excluded_from_pnl: cat.id === 13,  // Owner drawings
           x_submitted_by_pin: String(pin),
+          x_recorded_by_user_id: pinToUid(pin),  // native Odoo audit
         };
 
         const expenseId = await odoo(apiKey, 'hr.expense', 'create', [expenseVals]);
@@ -341,6 +355,7 @@ export async function onRequest(context) {
           invoice_date: new Date().toISOString().slice(0, 10),
           ref: bill_ref || null,
           narration: notes || null,
+          x_recorded_by_user_id: pinToUid(pin),
           invoice_line_ids: [[0, 0, {
             name: vendor_name || 'Vendor charge',
             quantity: 1,
@@ -447,6 +462,7 @@ export async function onRequest(context) {
         ref: bill_ref || po[0].name,
         narration: notes || `Linked to ${po[0].name}`,
         invoice_origin: po[0].name,
+        x_recorded_by_user_id: pinToUid(pin),
         invoice_line_ids: [[0, 0, {
           name: `Bill for ${po[0].name}`,
           quantity: 1,

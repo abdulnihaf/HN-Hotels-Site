@@ -46,20 +46,20 @@ const BRAND_CONFIG = {
 /* ━━━ User / PIN → Odoo Credentials ━━━ */
 
 const USERS = {
-  '0305': { name: 'Nihaf',   role: 'admin',      odoo: 'system' },
-  '5882': { name: 'Nihaf',   role: 'admin',      odoo: 'system' },  // /ops/spend/ alt
-  '2026': { name: 'Zoya',    role: 'purchase',   odoo: 'zoya' },
-  '8316': { name: 'Zoya',    role: 'purchase',   odoo: 'zoya' },     // /ops/spend/ alt
-  '3678': { name: 'Faheem',  role: 'settlement', odoo: 'faheem' },
-  '6045': { name: 'Faheem',  role: 'settlement', odoo: 'faheem' },   // /ops/spend/ alt
-  '6890': { name: 'Tanveer', role: 'staff',      odoo: 'system' },
-  '7115': { name: 'Kesmat',  role: 'staff',      odoo: 'system' },
-  '3946': { name: 'Jafar',   role: 'staff',      odoo: 'system' },
-  '9991': { name: 'Mujib',   role: 'staff',      odoo: 'system' },
-  '3697': { name: 'Yashwant',role: 'staff',      odoo: 'system' },
-  '3754': { name: 'Naveen',  role: 'staff',      odoo: 'system' },
-  '8241': { name: 'Nafees',  role: 'staff',      odoo: 'system' },
-  '8523': { name: 'Basheer', role: 'staff',      odoo: 'system' },
+  '0305': { name: 'Nihaf',   role: 'admin',      odoo: 'system', odoo_uid: 2 },
+  '5882': { name: 'Nihaf',   role: 'admin',      odoo: 'system', odoo_uid: 2 },
+  '2026': { name: 'Zoya',    role: 'purchase',   odoo: 'zoya',   odoo_uid: 6 },
+  '8316': { name: 'Zoya',    role: 'purchase',   odoo: 'zoya',   odoo_uid: 6 },
+  '3678': { name: 'Faheem',  role: 'settlement', odoo: 'faheem', odoo_uid: 9 },
+  '6045': { name: 'Faheem',  role: 'settlement', odoo: 'faheem', odoo_uid: 9 },
+  '6890': { name: 'Tanveer', role: 'staff',      odoo: 'system', odoo_uid: 8 },
+  '7115': { name: 'Kesmat',  role: 'staff',      odoo: 'system', odoo_uid: 13 },
+  '3946': { name: 'Jafar',   role: 'staff',      odoo: 'system', odoo_uid: 2 },
+  '9991': { name: 'Mujib',   role: 'staff',      odoo: 'system', odoo_uid: 15 },
+  '3697': { name: 'Yashwant',role: 'staff',      odoo: 'system', odoo_uid: 10 },
+  '3754': { name: 'Naveen',  role: 'staff',      odoo: 'system', odoo_uid: 5 },
+  '8241': { name: 'Nafees',  role: 'staff',      odoo: 'system', odoo_uid: 14 },
+  '8523': { name: 'Basheer', role: 'staff',      odoo: 'system', odoo_uid: 7 },
 };
 
 function getOdooCredentials(user, env) {
@@ -808,10 +808,15 @@ async function createPO(body, user, creds, cfg, brand, DB) {
     date_planned: datePlanned,
   }]);
 
-  // Create PO
+  // Create PO — tag x_recorded_by_user_id for native Odoo audit
   const poId = await odooCall(creds.uid, creds.key,
     'purchase.order', 'create',
-    [{ partner_id: vendor_id, company_id: cfg.company_id, order_line: orderLines }]
+    [{
+      partner_id: vendor_id,
+      company_id: cfg.company_id,
+      order_line: orderLines,
+      x_recorded_by_user_id: user.odoo_uid || 2,
+    }]
   );
 
   // Auto-confirm
@@ -2861,6 +2866,7 @@ async function createBill(body, user, creds, cfg, brand, env, DB) {
       invoice_date: bill_date,
       invoice_date_due: due_date || null,
       narration: notes || '',
+      x_recorded_by_user_id: user.odoo_uid || 2,
     }]);
 
   // Optionally upload photo to Drive (skip if no photo)
@@ -2911,6 +2917,7 @@ async function directBill(body, user, creds, cfg, brand, env, DB) {
       invoice_date: bill_date,
       company_id: cfg.company_id,
       narration: notes || '',
+      x_recorded_by_user_id: user.odoo_uid || 2,
       invoice_line_ids: [[0,0,{
         name: description || 'Direct Vendor Bill',
         quantity: 1,

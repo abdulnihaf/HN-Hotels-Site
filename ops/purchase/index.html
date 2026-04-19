@@ -403,7 +403,7 @@ async function loadRecent() {
     <div class="entry">
       <div style="flex: 1; min-width: 0;">
         <div>${esc(e.product_name || e.category)}</div>
-        <div class="mute">${esc(e.category)} · ${esc(e.payment_method || '-')} · PIN ${esc(e.recorded_by_pin || '')}</div>
+        <div class="mute">${esc(e.category)} · ${esc(e.payment_method || '-')} · by ${esc(e.recorded_by_pin || 'unknown')}</div>
       </div>
       <div style="display: flex; align-items: center; gap: 10px;">
         <div class="amt">₹${Number(e.amount).toLocaleString('en-IN')}</div>
