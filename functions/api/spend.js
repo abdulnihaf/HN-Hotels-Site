@@ -215,14 +215,23 @@ export async function onRequest(context) {
       if (cat.backend !== 'hr.expense') return json({ success: true, products: [] });
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
 
-      // Find the Odoo product.category by name — use ilike to tolerate whitespace / punctuation quirks
+      // Find the Odoo product.category by name — use ilike to tolerate whitespace / punctuation quirks.
+      // For Cat 1 Raw Materials we also include the sibling "Raw Materials" category (id 21 in new Odoo)
+      // where Zoya's registry products live (HN-RM-*** default codes).
       const parentList = await odoo(apiKey, 'product.category', 'search_read',
         [[['name', 'ilike', cat.parentName]]],
         { fields: ['id', 'name'], limit: 5 });
-      if (!parentList.length) return json({ success: true, products: [], reason: `No category matching ${cat.parentName}` });
+      const categIds = parentList.map(c => c.id);
+      if (catId === 1) {
+        // Also grep the bare "Raw Materials" taxonomy where RM registry lives
+        const rmExtra = await odoo(apiKey, 'product.category', 'search_read',
+          [[['name', '=', 'Raw Materials']]], { fields: ['id'], limit: 5 });
+        for (const r of rmExtra) if (!categIds.includes(r.id)) categIds.push(r.id);
+      }
+      if (!categIds.length) return json({ success: true, products: [], reason: `No category matching ${cat.parentName}` });
       const products = await odoo(apiKey, 'product.product', 'search_read',
-        [[['categ_id', '=', parentList[0].id], ['can_be_expensed', '=', true], ['active', '=', true]]],
-        { fields: ['id', 'name', 'default_code', 'standard_price'], order: 'name asc', limit: 200 });
+        [[['categ_id', 'in', categIds], ['can_be_expensed', '=', true], ['active', '=', true]]],
+        { fields: ['id', 'name', 'default_code', 'standard_price'], order: 'name asc', limit: 500 });
       return json({ success: true, products });
     }
 
@@ -372,16 +381,29 @@ export async function onRequest(context) {
       if (cat.backend !== 'hr.expense') return json({ success: false, error: 'Only expense categories support inline product creation' }, 400);
       if (!name?.trim()) return json({ success: false, error: 'Name required' }, 400);
 
-      // Resolve parent category
-      const parentList = await odoo(apiKey, 'product.category', 'search_read',
-        [[['name', 'ilike', cat.parentName]]],
-        { fields: ['id', 'name'], limit: 1 });
-      if (!parentList.length) return json({ success: false, error: `Parent category "${cat.parentName}" not found in Odoo` }, 404);
+      // Resolve category:
+      //   Cat 1 (Raw Material Purchase) lives in the "Raw Materials" taxonomy (id 21)
+      //   where Zoya's HN-RM-* registry is. All other cats use their parentName.
+      let categId = null;
+      if (parseInt(cat_id, 10) === 1) {
+        const rm = await odoo(apiKey, 'product.category', 'search_read',
+          [[['name', '=', 'Raw Materials']]], { fields: ['id'], limit: 1 });
+        if (!rm.length) return json({ success: false, error: 'Raw Materials category not found in Odoo' }, 404);
+        categId = rm[0].id;
+      } else {
+        const parentList = await odoo(apiKey, 'product.category', 'search_read',
+          [[['name', 'ilike', cat.parentName]]],
+          { fields: ['id', 'name'], limit: 1 });
+        if (!parentList.length) return json({ success: false, error: `Parent category "${cat.parentName}" not found in Odoo` }, 404);
+        categId = parentList[0].id;
+      }
 
+      // Raw materials are consumable goods, not services. Everything else is a service.
+      const prodType = parseInt(cat_id, 10) === 1 ? 'consu' : 'service';
       const prodId = await odoo(apiKey, 'product.product', 'create', [{
         name: name.trim(),
-        categ_id: parentList[0].id,
-        type: 'service',
+        categ_id: categId,
+        type: prodType,
         can_be_expensed: true,
         purchase_ok: true,
         sale_ok: false,
