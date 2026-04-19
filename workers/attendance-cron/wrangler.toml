@@ -3,11 +3,11 @@ main = "index.js"
 compatibility_date = "2024-09-23"
 account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
 
-# Every 15 min, 00:00–17:59 UTC = 05:30–23:29 IST.
-# Cloudflare crons are UTC-only; the Worker also checks IST hour (06:00–23:00 IST)
-# so the 05:30–06:00 UTC slot is a no-op — belt-and-suspenders.
+# Every 15 min, all UTC hours. Worker internally skips the IST 03:00–04:59
+# idle window. Full-hour schedule is needed because HE shift-day runs until
+# 09:00 IST next day — post-midnight check-outs must be processed.
 [triggers]
-crons = ["*/15 0-17 * * *"]
+crons = ["*/15 * * * *"]
 
 # Secrets (set via: wrangler secret put <NAME> --config workers/attendance-cron/wrangler.toml)
 # ADMIN_PIN   — HR Ops dashboard admin PIN (4 digits, Nihaf)

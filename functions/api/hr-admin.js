@@ -963,79 +963,134 @@ function buildNote(emp) {
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * Attendance pull: Odoo hr.attendance → hr_attendance_daily
- * Logic:
- *   1. Fetch all check_in/check_out rows in range
- *   2. Group by employee + IST date
- *   3. Sum worked hours, detect single-punch
- *   4. Apply shift rules → status + deduction
+ * Attendance pull: D1 hr_cams_punches → hr_attendance_daily
+ *
+ * Shift-day model (Apr 19 2026 rewrite):
+ *   Each brand has a shift_day_start_hour (HE=09:00, NCH=06:00, HQ=00:00).
+ *   A punch at time T belongs to shift-day D where D is the calendar date
+ *   whose start-hour is the most recent boundary before T. I.e. an HE
+ *   check-out at 00:30 Apr 20 is part of shift-day Apr 19 (yesterday's
+ *   shift still running past midnight).
+ *
+ *   Status ladder (per employee, per shift-day):
+ *     • leave        → approved leave in D1 hr_leaves
+ *     • week_off     → shift_rules.week_off matches DoW
+ *     • isOffice + any punch  → present  (office = any punch, no deduction)
+ *     • no punches   + shift-day open  → pending    (don't finalise)
+ *     • no punches   + shift-day closed → absent    (full deduction)
+ *     • has punches  + shift-day open  → present    ("present until day closes")
+ *     • has punches  + shift-day closed + open IN < 18h old  → present (within grace)
+ *     • has punches  + shift-day closed + open IN ≥ 18h old:
+ *         allow_single_punch → present (deliberate single punch)
+ *         else → ghost (flagged missing-checkout, full deduction)
+ *     • has punches  + all pairs closed:
+ *         hours < half_day_threshold → ghost, full
+ *         hours < full_day_threshold → half, 50%
+ *         else → present
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
+// "now" in IST as a JS Date (whose wall-clock is IST).
+function istNow() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+}
+
+// Return shift-day (YYYY-MM-DD) for a punch timestamp like "2026-04-19 10:57:33" (IST).
+// startHour=9  → 08:59 belongs to previous day; 09:00 onwards = current day.
+function shiftDayFor(punchTimeStr, startHour) {
+  const [d, t] = String(punchTimeStr).split(' ');
+  if (!d) return null;
+  const hr = parseInt((t || '00').slice(0, 2), 10) || 0;
+  if (hr < (startHour || 0)) {
+    // Belongs to previous calendar day's shift-day
+    const ymd = new Date(d + 'T12:00:00Z'); // noon-anchor avoids DST off-by-one
+    ymd.setUTCDate(ymd.getUTCDate() - 1);
+    return ymd.toISOString().slice(0, 10);
+  }
+  return d;
+}
+
+// Is shift-day D closed at "now"? D closes at (D+1) start_hour:00 IST.
+function isShiftDayClosed(shiftDay, startHour, nowIst) {
+  const close = new Date(shiftDay + 'T00:00:00Z');
+  close.setUTCDate(close.getUTCDate() + 1);
+  close.setUTCHours(startHour || 0, 0, 0, 0);
+  // nowIst is a Date whose UTC fields encode IST wall-clock
+  return nowIst.getTime() >= close.getTime();
+}
+
+// Parse "YYYY-MM-DD HH:MM:SS" IST → JS Date whose UTC fields = IST wall-clock.
+// This matches istNow(), so Date arithmetic stays consistent.
+function parseIstWall(s) {
+  if (!s) return null;
+  return new Date(s.replace(' ', 'T') + 'Z');
+}
+
 async function pullAttendance(apiKey, db, from, to, userName) {
-  // Load roster + shift rules once
+  // Load roster + shift rules once (now includes shift_day_start_hour + missing_checkout_hours)
   const rosterRows = await db.prepare(
     `SELECT e.*, r.min_daily_hours, r.expected_daily_hours,
             r.full_day_threshold, r.half_day_threshold,
             r.allow_single_punch, r.week_off, r.applies_to_office,
-            r.scheduled_break_minutes, r.shift_start_time, r.shift_end_time
+            r.scheduled_break_minutes, r.shift_start_time, r.shift_end_time,
+            r.shift_day_start_hour, r.missing_checkout_hours
        FROM hr_employees e
        LEFT JOIN hr_shift_rules r
          ON r.brand_label = e.brand_label AND r.pay_type = e.pay_type
       WHERE e.is_active = 1 AND e.odoo_employee_id IS NOT NULL
         AND e.pin IS NOT NULL AND e.pin != ''`
   ).all();
-  const byOdooId = new Map();
   const byPin = new Map();
-  for (const e of rosterRows.results) {
-    byOdooId.set(e.odoo_employee_id, e);
-    byPin.set(String(e.pin), e);
-  }
+  for (const e of rosterRows.results) byPin.set(String(e.pin), e);
 
-  // ── Source: D1 hr_cams_punches (source='webhook') from /api/cams-ingest.
-  //    Odoo hr.attendance is bypassed — the CAMS→Odoo integration was flaky
-  //    ("service tag ID does not exist" 403s even though the record exists).
-  //    D1 is authoritative for attendance; Odoo mirror can be added later via
-  //    a side-car cron if payroll needs it.
+  // Expand fetch window by ±1 calendar day so we catch cross-midnight punches
+  // that belong to the requested shift-days.
+  const fetchFrom = shiftDayDelta(from, -1);
+  const fetchTo   = shiftDayDelta(to,   +1);
+
   const rawPunches = await db.prepare(
     `SELECT pin, punch_time, punch_type
        FROM hr_cams_punches
        WHERE substr(punch_time, 1, 10) BETWEEN ? AND ?
        ORDER BY pin, punch_time`
-  ).bind(from, to).all();
+  ).bind(fetchFrom, fetchTo).all();
 
-  // Bucket by employee + IST date — pair CheckIn→CheckOut into hour-bearing sessions
-  const buckets = new Map();  // key = `${odoo_id}|${date}` → { punches:[], hours, firstIn, lastOut }
-  const byKey = new Map();    // `${pin}|${date}` → [raw rows]
+  // Bucket by (pin, shift_day) — shift_day resolved per-employee via brand rule
+  const byKey = new Map();  // `${pin}|${shiftDay}` → [raw rows]
   let punchCount = 0;
   for (const r of rawPunches.results || []) {
     const pin = String(r.pin);
-    if (!byPin.has(pin)) continue;  // skip punches for archived/unmapped employees
-    const date = String(r.punch_time).slice(0, 10);
-    if (date < from || date > to) continue;
-    const k = `${pin}|${date}`;
+    const emp = byPin.get(pin);
+    if (!emp) continue;  // skip archived/unmapped
+    const startHour = emp.shift_day_start_hour ?? 0;
+    const shiftDay = shiftDayFor(r.punch_time, startHour);
+    if (!shiftDay) continue;
+    if (shiftDay < from || shiftDay > to) continue;  // outside the recompute window
+    const k = `${pin}|${shiftDay}`;
     if (!byKey.has(k)) byKey.set(k, []);
     byKey.get(k).push(r);
     punchCount++;
   }
+
+  // Pair CheckIn→CheckOut within each shift-day bucket
+  const buckets = new Map();  // `${odoo_id}|${shiftDay}` → { punches, hours, firstIn, lastOut }
   for (const [k, rows] of byKey.entries()) {
-    const [pin, date] = k.split('|');
+    const [pin, shiftDay] = k.split('|');
     const emp = byPin.get(pin);
     rows.sort((a, b) => String(a.punch_time).localeCompare(String(b.punch_time)));
 
-    // Pair CheckIn → next CheckOut (CAMS emits one row per punch event)
     const pairs = [];
     let openIn = null;
     for (const r of rows) {
       const isCheckOut = String(r.punch_type || '').toLowerCase() === 'checkout';
       if (!isCheckOut) {
-        if (openIn) pairs.push({ in: openIn, out: null });  // orphan CheckIn → single-punch
+        if (openIn) pairs.push({ in: openIn, out: null });  // orphan CheckIn
         openIn = r.punch_time;
       } else {
         if (openIn) {
           pairs.push({ in: openIn, out: r.punch_time });
           openIn = null;
         } else {
-          pairs.push({ in: null, out: r.punch_time });  // orphan CheckOut
+          pairs.push({ in: null, out: r.punch_time });
         }
       }
     }
@@ -1044,45 +1099,42 @@ async function pullAttendance(apiKey, db, from, to, userName) {
     let hours = 0, firstIn = null, lastOut = null;
     for (const p of pairs) {
       if (p.in && p.out) {
-        const ms = new Date(p.out.replace(' ', 'T') + '+05:30') - new Date(p.in.replace(' ', 'T') + '+05:30');
+        const ms = parseIstWall(p.out) - parseIstWall(p.in);
         if (ms > 0) hours += ms / 3600000;
       }
-      if (p.in && (!firstIn || p.in < firstIn)) firstIn = p.in;
+      if (p.in  && (!firstIn || p.in  < firstIn)) firstIn = p.in;
       if (p.out && (!lastOut || p.out > lastOut)) lastOut = p.out;
     }
 
-    buckets.set(`${emp.odoo_employee_id}|${date}`, {
-      punches: pairs,
-      hours,
-      firstIn,
-      lastOut,
+    buckets.set(`${emp.odoo_employee_id}|${shiftDay}`, {
+      punches: pairs, hours, firstIn, lastOut,
     });
   }
 
-  // Generate one row per (employee, date) across the range, including absent days
+  // Target shift-days in range [from, to]
   const days = [];
-  const d0 = new Date(from);
-  const d1 = new Date(to);
-  for (let d = new Date(d0); d <= d1; d.setDate(d.getDate() + 1)) {
-    days.push(d.toISOString().slice(0,10));
+  for (let cursor = from; cursor <= to; cursor = shiftDayDelta(cursor, +1)) {
+    days.push(cursor);
   }
 
-  const written = { present: 0, half: 0, absent: 0, ghost: 0, week_off: 0, leave: 0, total: 0 };
+  const now = istNow();
+  const written = { present: 0, half: 0, absent: 0, ghost: 0, week_off: 0, leave: 0, pending: 0, total: 0 };
 
   for (const emp of rosterRows.results) {
-    for (const date of days) {
-      const key = `${emp.odoo_employee_id}|${date}`;
+    const startHour = emp.shift_day_start_hour ?? 0;
+    const missingCheckoutH = emp.missing_checkout_hours ?? 18;
+    for (const shiftDay of days) {
+      const key = `${emp.odoo_employee_id}|${shiftDay}`;
       const b = buckets.get(key);
       const hours = b?.hours || 0;
-      const isWeekOff = isWeekOffDay(date, emp.week_off);
+      const isWeekOff = isWeekOffDay(shiftDay, emp.week_off);
       const isOffice = !!emp.applies_to_office;
+      const shiftClosed = isShiftDayClosed(shiftDay, startHour, now);
 
-      // Check leave
       const leave = await db.prepare(
         'SELECT leave_type, approved FROM hr_leaves WHERE employee_id=? AND ? BETWEEN start_date AND end_date LIMIT 1'
-      ).bind(emp.id, date).first();
+      ).bind(emp.id, shiftDay).first();
 
-      // Compute break gap from multi-pair punch data
       const breakInfo = b ? computeBreakGap(b.punches) : { minutes: 0, start: null, end: null };
 
       let status, deduction = 0, reason = null, singlePunch = 0;
@@ -1093,49 +1145,60 @@ async function pullAttendance(apiKey, db, from, to, userName) {
           deduction = daily(emp);
           reason = 'unpaid leave';
         }
-      } else if (isOffice) {
-        // Office staff MUST punch. Any punch (CheckIn without CheckOut counts)
-        // = present. No deduction — payroll decides on missing punches.
-        const hasPunches = b && b.punches.length > 0;
-        if (hasPunches) {
-          status = 'present';
-        } else if (isWeekOff) {
-          status = 'week_off';
-        } else {
-          status = 'absent';
-          reason = 'no punches';
-        }
       } else if (isWeekOff) {
         status = 'week_off';
+      } else if (isOffice) {
+        const hasPunches = b && b.punches.length > 0;
+        if (hasPunches) status = 'present';
+        else if (!shiftClosed) status = 'pending';
+        else { status = 'absent'; reason = 'no punches'; }
+        // Office: no auto-deduction; payroll handles missing punches.
       } else if (!b || b.punches.length === 0) {
-        status = 'absent';
-        deduction = daily(emp);
-        reason = 'no punches';
-      } else {
-        singlePunch = b.punches.some(p => !p.out) ? 1 : 0;
-        if (hours < (emp.half_day_threshold ?? 2)) {
-          status = 'ghost';
-          deduction = daily(emp);
-          reason = `only ${hours.toFixed(1)}h — likely ghost/bounce`;
-        } else if (hours < (emp.full_day_threshold ?? 6)) {
-          status = 'half';
-          deduction = daily(emp) * 0.5;
-          reason = `half-day (${hours.toFixed(1)}h)`;
+        if (!shiftClosed) {
+          status = 'pending';
+          reason = 'shift open — no punch yet';
         } else {
-          status = 'present';
+          status = 'absent';
+          deduction = daily(emp);
+          reason = 'no punches';
         }
-        // Single-punch: check-in but no check-out yet (e.g. open shift at end of day)
-        if (singlePunch) {
-          if (emp.allow_single_punch) {
-            // allow_single_punch staff: ghost → present (one deliberate punch = full day)
-            if (status === 'ghost') { status = 'present'; deduction = 0; reason = 'single punch (approved)'; }
+      } else {
+        // Has punches
+        const openPair = b.punches.find(p => p.in && !p.out) || null;
+        singlePunch = openPair ? 1 : 0;
+
+        if (!shiftClosed) {
+          // Shift still in progress → present until day closes
+          status = 'present';
+          deduction = 0;
+          reason = openPair ? 'shift in progress' : null;
+        } else if (openPair) {
+          // Shift-day closed but an IN has no OUT — check staleness
+          const ageH = Math.max(0, (now - parseIstWall(openPair.in)) / 3600000);
+          if (ageH < missingCheckoutH) {
+            // Inside grace window — still present (may punch out any moment)
+            status = 'present';
+            reason = `open IN — ${ageH.toFixed(1)}h, within ${missingCheckoutH}h grace`;
+          } else if (emp.allow_single_punch) {
+            status = 'present';
+            reason = 'single punch (approved)';
           } else {
-            // Downgrade from present → half (didn't check out)
-            if (status === 'present') {
-              status = 'half';
-              deduction = daily(emp) * 0.5;
-              reason = 'single punch — no checkout';
-            }
+            status = 'ghost';
+            deduction = daily(emp);
+            reason = `missing checkout — IN ${openPair.in}, no OUT after ${ageH.toFixed(0)}h`;
+          }
+        } else {
+          // All pairs closed — classic hour-based ladder
+          if (hours < (emp.half_day_threshold ?? 2)) {
+            status = 'ghost';
+            deduction = daily(emp);
+            reason = `only ${hours.toFixed(1)}h — likely ghost/bounce`;
+          } else if (hours < (emp.full_day_threshold ?? 6)) {
+            status = 'half';
+            deduction = daily(emp) * 0.5;
+            reason = `half-day (${hours.toFixed(1)}h)`;
+          } else {
+            status = 'present';
           }
         }
       }
@@ -1149,7 +1212,7 @@ async function pullAttendance(apiKey, db, from, to, userName) {
            computed_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`
       ).bind(
-        emp.pin, emp.id, emp.odoo_employee_id, date,
+        emp.pin, emp.id, emp.odoo_employee_id, shiftDay,
         b?.firstIn || null, b?.lastOut || null,
         b?.punches.length || 0, hours,
         status, singlePunch,
@@ -1167,6 +1230,13 @@ async function pullAttendance(apiKey, db, from, to, userName) {
   await logSync(db, 'pull_attendance', 'hr.attendance', null, `${from}..${to}`,
     { employees: rosterRows.results.length, punches: punchCount, written }, userName);
   return { employees: rosterRows.results.length, punches: punchCount, written };
+}
+
+// Date arithmetic on "YYYY-MM-DD" without timezone fuss.
+function shiftDayDelta(ymd, days) {
+  const d = new Date(ymd + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

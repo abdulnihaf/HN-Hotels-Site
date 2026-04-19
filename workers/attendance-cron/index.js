@@ -42,8 +42,11 @@ async function runPull(env) {
   const istMinute = istNow.getUTCMinutes();
   const today = istNow.toISOString().slice(0, 10);  // YYYY-MM-DD IST
 
-  // Only run 06:00–23:00 IST (skip overnight idle hours)
-  if (istHour < 6 || istHour >= 23) {
+  // Run 05:00–02:59 IST. Covers:
+  //   NCH morning shift starts 06:00 (need 05:xx to warm up yesterday close)
+  //   HE late-night check-outs up to 02:00+ (yesterday's shift still running)
+  //   Idle window 03:00–04:59 when both brands are fully closed/quiet.
+  if (istHour >= 3 && istHour < 5) {
     return { skipped: true, reason: `outside active window (IST ${istHour}:${String(istMinute).padStart(2,'0')})` };
   }
 
@@ -51,6 +54,12 @@ async function runPull(env) {
   const pin = env.ADMIN_PIN;
 
   if (!pin) return { error: 'ADMIN_PIN secret not set' };
+
+  // Recompute yesterday + today shift-days. The server expands the punch
+  // fetch window by ±1 day internally to catch cross-midnight punches, but
+  // it only writes rows for shift-days inside [from, to]. Including
+  // yesterday ensures HE's post-midnight check-outs finalise correctly.
+  const yesterday = new Date(istMs - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   let result;
   try {
@@ -61,7 +70,7 @@ async function runPull(env) {
       body: JSON.stringify({
         action: 'pull-attendance',
         pin,
-        from: today,
+        from: yesterday,
         to: today,
       }),
     });
@@ -74,8 +83,8 @@ async function runPull(env) {
       return { error: `HTTP ${res.status}`, date: today, body: result };
     }
 
-    console.log(`[attendance-cron] ${today} — employees: ${result.employees}, punches: ${result.punches}, written: ${JSON.stringify(result.written)}`);
-    return { success: true, date: today, ...result };
+    console.log(`[attendance-cron] ${yesterday}..${today} — employees: ${result.employees}, punches: ${result.punches}, written: ${JSON.stringify(result.written)}`);
+    return { success: true, from: yesterday, to: today, ...result };
 
   } catch (e) {
     console.error('[attendance-cron] fetch failed:', e.message);
