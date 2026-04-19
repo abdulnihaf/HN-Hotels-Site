@@ -9,6 +9,11 @@
 <title>HN Expense</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/ops-ui.css">
+<!-- Download helpers -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
+<script src="/assets/ops-downloads.js" defer></script>
 <style>
   /* Local overrides — design primitives come from /assets/ops-ui.css */
   .brand-chips { margin-bottom: 14px; }
@@ -54,7 +59,10 @@
         <h1 id="user-greeting">HN Expense</h1>
         <div class="sub" id="user-sub"></div>
       </div>
-      <button class="btn btn-ghost" onclick="logout()">Exit</button>
+      <div style="display: flex; gap: 6px;">
+        <button class="btn btn-ghost btn-sm" onclick="openDownloadMenu('expense')" title="Download structure + data">⬇ Download</button>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Exit</button>
+      </div>
     </header>
 
     <div class="brand-chips" id="brand-chips"></div>

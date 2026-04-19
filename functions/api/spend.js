@@ -185,6 +185,120 @@ export async function onRequest(context) {
       return json({ success: true, employees: rows.results });
     }
 
+    // ── EXPORT STRUCTURE (all categories, products, vendors for PDF/XLSX download) ──
+    if (action === 'export-structure') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+
+      // Resolve the root "HN Hotels Expenses" category
+      const rootHits = await odoo(apiKey, 'product.category', 'search_read',
+        [[['name', '=', 'HN Hotels Expenses'], ['parent_id', '=', false]]],
+        { fields: ['id', 'name'], limit: 1 });
+      const rootId = rootHits[0]?.id;
+
+      // Pull all parent categories under the root + products per category
+      const structureCats = await Promise.all(CATEGORIES.map(async (cat) => {
+        let products = [];
+        if (cat.backend === 'hr.expense' && cat.parentName) {
+          const parentHits = await odoo(apiKey, 'product.category', 'search_read',
+            [[['name', 'ilike', cat.parentName]]], { fields: ['id', 'name'], limit: 5 });
+          if (parentHits.length) {
+            const rows = await odoo(apiKey, 'product.product', 'search_read',
+              [[['categ_id', '=', parentHits[0].id], ['can_be_expensed', '=', true], ['active', '=', true]]],
+              { fields: ['id', 'name', 'default_code'], order: 'name asc', limit: 500 });
+            products = rows.map(r => ({ id: r.id, name: r.name, code: r.default_code || '' }));
+          }
+        }
+        if (cat.backend === 'purchase.order') {
+          // For cat 1: pull all HN-RM-* products (flat, not variant-aware here)
+          const rows = await odoo(apiKey, 'product.product', 'search_read',
+            [[['default_code', 'like', 'HN-RM-'], ['active', '=', true]]],
+            { fields: ['id', 'name', 'default_code'], order: 'name asc', limit: 500 });
+          products = rows.map(r => ({ id: r.id, name: r.name, code: r.default_code || '' }));
+        }
+        return { id: cat.id, label: cat.label, emoji: cat.emoji, desc: cat.desc,
+                 backend: cat.backend, parent_name: cat.parentName || null, products };
+      }));
+
+      // Vendors with supplier_rank>0 + their product links from D1
+      const vendors = await odoo(apiKey, 'res.partner', 'search_read',
+        [[['supplier_rank', '>', 0], ['active', '=', true]]],
+        { fields: ['id', 'name', 'phone', 'email'], order: 'name asc', limit: 500 });
+      let vendorLinks = [];
+      if (DB) {
+        try {
+          const rows = await DB.prepare(
+            'SELECT vp.vendor_key, vp.product_code, v.name as vendor_name FROM rm_vendor_products vp JOIN rm_vendors v ON vp.vendor_key = v.key'
+          ).all();
+          vendorLinks = rows.results || [];
+        } catch {}
+      }
+
+      return json({
+        success: true,
+        generated_at: new Date().toISOString(),
+        root_category: rootHits[0] || null,
+        categories: structureCats,
+        vendors,
+        vendor_product_links: vendorLinks,
+        payment_methods: PAYMENT_METHODS,
+        pin_scope_summary: Object.entries({ ...USERS, ...CASHIER_PINS }).map(([pin, u]) => ({
+          pin, name: u.name, role: u.role, brands: u.brands,
+          cats: u.cats === 'all' ? 'all' : u.cats,
+        })),
+      });
+    }
+
+    // ── EXPORT DATA (actual records: expenses / POs / bills / employees) ──
+    if (action === 'export-data') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const type = url.searchParams.get('type') || 'expense';
+      const from = url.searchParams.get('from') || new Date(Date.now() - 30*86400000).toISOString().slice(0, 10);
+      const to   = url.searchParams.get('to')   || new Date().toISOString().slice(0, 10);
+
+      if (type === 'expense') {
+        // Pull hr.expense records in the date range
+        const rows = await odoo(apiKey, 'hr.expense', 'search_read',
+          [[['date', '>=', from], ['date', '<=', to]]],
+          { fields: ['id', 'name', 'date', 'total_amount', 'product_id', 'company_id',
+                     'x_pool', 'x_payment_method', 'x_location', 'x_submitted_by_pin', 'x_recorded_by_user_id'],
+            order: 'date desc, id desc', limit: 2000 });
+        return json({ success: true, type, from, to, rows });
+      }
+      if (type === 'po') {
+        const rows = await odoo(apiKey, 'purchase.order', 'search_read',
+          [[['date_order', '>=', from + ' 00:00:00'], ['date_order', '<=', to + ' 23:59:59']]],
+          { fields: ['id', 'name', 'date_order', 'partner_id', 'company_id', 'amount_total', 'state',
+                     'x_recorded_by_user_id'],
+            order: 'date_order desc', limit: 2000 });
+        return json({ success: true, type, from, to, rows });
+      }
+      if (type === 'bill') {
+        const rows = await odoo(apiKey, 'account.move', 'search_read',
+          [[['move_type', '=', 'in_invoice'], ['invoice_date', '>=', from], ['invoice_date', '<=', to]]],
+          { fields: ['id', 'name', 'ref', 'invoice_date', 'partner_id', 'company_id',
+                     'amount_total', 'payment_state', 'invoice_origin', 'x_recorded_by_user_id'],
+            order: 'invoice_date desc', limit: 2000 });
+        return json({ success: true, type, from, to, rows });
+      }
+      if (type === 'vendor') {
+        const rows = await odoo(apiKey, 'res.partner', 'search_read',
+          [[['supplier_rank', '>', 0], ['active', '=', true]]],
+          { fields: ['id', 'name', 'phone', 'email', 'vat', 'street', 'city', 'state_id', 'country_id',
+                     'property_payment_term_id', 'create_date'],
+            order: 'name asc', limit: 500 });
+        return json({ success: true, type, rows });
+      }
+      if (type === 'product') {
+        const rows = await odoo(apiKey, 'product.product', 'search_read',
+          [[['active', '=', true]]],
+          { fields: ['id', 'name', 'default_code', 'categ_id', 'type', 'uom_id',
+                     'can_be_expensed', 'purchase_ok', 'sale_ok'],
+            order: 'default_code asc, name asc', limit: 2000 });
+        return json({ success: true, type, rows });
+      }
+      return json({ success: false, error: 'Unknown type. Use: expense|po|bill|vendor|product' }, 400);
+    }
+
     // ── UoMs (for inline product creation) ─────────────────
     if (action === 'uoms') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
