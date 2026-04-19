@@ -1583,9 +1583,27 @@ async function buildDigest(db, brand, date, mode, includeFin) {
     if (cat.present.length) {
       txt += `✅ *Present (${cat.present.length}):*\n`;
       cat.present.forEach(r => {
-        const range = `${t(r.first_in_at)}–${t(r.last_out_at) || 'open'}`;
-        const brk = r.break_minutes ? `, break ${hm(r.break_minutes)}` : '';
-        txt += `• ${nameOf(r)} · ${range} · ${(r.total_hours || 0).toFixed(1)}h${brk}\n`;
+        let pairs = [];
+        try { pairs = JSON.parse(r.raw_punches_json || '[]'); } catch {}
+        const last = pairs[pairs.length - 1];
+        const first = pairs[0];
+        let line;
+        if (!pairs.length) {
+          line = `${nameOf(r)} · no punches on record`;
+        } else if (pairs.length === 1 && !last.out) {
+          // First session, still on shift
+          line = `${nameOf(r)} · on shift since ${t(first.in)}`;
+        } else if (pairs.length === 1 && last.out) {
+          // One session, closed
+          line = `${nameOf(r)} · ${t(first.in)}–${t(last.out)} · ${(r.total_hours || 0).toFixed(1)}h`;
+        } else if (last && !last.out) {
+          // Returned from break, currently working
+          line = `${nameOf(r)} · ${t(first.in)}–${t(pairs[0].out)} · 🔁 back on shift since ${t(last.in)}${r.break_minutes ? ` (break ${hm(r.break_minutes)})` : ''}`;
+        } else {
+          // Multi-session, all closed
+          line = `${nameOf(r)} · ${t(first.in)}–${t(last.out)} · ${(r.total_hours || 0).toFixed(1)}h${r.break_minutes ? ` (break ${hm(r.break_minutes)})` : ''}`;
+        }
+        txt += `• ${line}\n`;
       });
       txt += '\n';
     }
