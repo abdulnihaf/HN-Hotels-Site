@@ -1209,10 +1209,12 @@ async function pullAttendance(apiKey, db, from, to, userName) {
   // 29/29 punches ever received have punch_type=CheckIn). So we infer
   // direction from sequence + timing:
   //
-  //   1. Re-verify dedup: two taps within REVERIFY_SECONDS of each
-  //      other = same person registered twice by the device (CAMS has
-  //      30s guard but we use 120s to absorb anything weird). Drop
-  //      the second tap.
+  //   1. Re-verify / double-tap dedup: consecutive taps within
+  //      MIN_SESSION_MINUTES are treated as duplicate presence-markers
+  //      (device re-verify, hesitation tap, staff checking if it
+  //      registered). A real work session is longer than this. Set
+  //      generously at 10 min — catches the 6-min double-tap pattern
+  //      we saw on Faheem today without swallowing real short shifts.
   //   2. Alternate-pair with max-session cap per brand: walking sorted
   //      taps, first = IN, next = OUT, next = IN, next = OUT … BUT if
   //      the gap between an open IN and the next tap exceeds the brand's
@@ -1229,7 +1231,7 @@ async function pullAttendance(apiKey, db, from, to, userName) {
   // computeBreakGap(). 30-300 min = qualifying break. <30 min = weird
   // (shouldn't happen after reverify dedup). >300 min = flagged outlier.
   const MAX_SESSION_H = { HE: 16, NCH: 12, HQ: 10 };
-  const REVERIFY_SECONDS = 120;
+  const MIN_SESSION_MINUTES = 10;   // taps closer than this = duplicates
 
   const buckets = new Map();  // `${odoo_id}|${shiftDay}` → { punches, hours, firstIn, lastOut }
   for (const [k, rows] of byKey.entries()) {
@@ -1239,13 +1241,13 @@ async function pullAttendance(apiKey, db, from, to, userName) {
 
     rows.sort((a, b) => String(a.punch_time).localeCompare(String(b.punch_time)));
 
-    // Step 1: reverify dedup
+    // Step 1: dedup double-taps (gap < MIN_SESSION_MINUTES)
     const clean = [];
     for (const r of rows) {
       const last = clean[clean.length - 1];
       if (last) {
-        const gapSec = (parseIstWall(r.punch_time) - parseIstWall(last.punch_time)) / 1000;
-        if (gapSec < REVERIFY_SECONDS) continue;   // drop echo
+        const gapMin = (parseIstWall(r.punch_time) - parseIstWall(last.punch_time)) / 60000;
+        if (gapMin < MIN_SESSION_MINUTES) continue;   // drop duplicate
       }
       clean.push(r);
     }
