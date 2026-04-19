@@ -431,13 +431,15 @@ export async function onRequest(context) {
           { fields: ['name', 'default_code'], limit: 1 });
         const prodName = prodRows[0]?.name || 'Expense';
 
+        // Optional backdated date — must be YYYY-MM-DD, defaults to today
+        const customDate = body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : new Date().toISOString().slice(0, 10);
         const expenseVals = {
           name: notes ? `${prodName} — ${notes}` : prodName,
           product_id: parseInt(product_id, 10),
           total_amount: parseFloat(amount),
           employee_id: empId,
           company_id: companyId,
-          date: new Date().toISOString().slice(0, 10),
+          date: customDate,
           x_pool: cat.id === 2 || cat.id === 13 ? 'capex' : 'opex',
           x_payment_method: payment_method || 'cash',
           x_location: brand,
@@ -472,11 +474,12 @@ export async function onRequest(context) {
       // Cat 14 → account.move direct vendor bill
       if (cat.backend === 'account.move') {
         if (!body.vendor_id) return json({ success: false, error: 'Vendor required' }, 400);
+        const customInvDate = body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : new Date().toISOString().slice(0, 10);
         const moveVals = {
           move_type: 'in_invoice',
           partner_id: parseInt(body.vendor_id, 10),
           company_id: companyId,
-          invoice_date: new Date().toISOString().slice(0, 10),
+          invoice_date: customInvDate,
           ref: bill_ref || null,
           narration: notes || null,
           x_recorded_by_user_id: pinToUid(pin),

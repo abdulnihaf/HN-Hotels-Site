@@ -453,7 +453,13 @@ async function buildGenericForm(cat) {
     `);
   }
 
+  const today = new Date().toISOString().slice(0, 10);
   fields.push(`
+    <div class="row">
+      <label>Date</label>
+      <input id="f-date" type="date" value="${today}" max="${today}">
+      <div class="mute" style="margin-top: 4px;">Change for backdated entries (e.g. April 1–19 historical)</div>
+    </div>
     <div class="row">
       <label>Amount (₹)</label>
       <input id="f-amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
@@ -484,6 +490,7 @@ async function submitForm() {
       pin: PIN, category: CURRENT_CAT.id, brand: BRAND, amount,
       payment_method: document.getElementById('f-payment')?.value || 'cash',
       notes: document.getElementById('f-notes')?.value || '',
+      date: document.getElementById('f-date')?.value || undefined,
     };
     if (CURRENT_CAT.backend === 'hr.expense') {
       body.product_id = document.getElementById('f-product')?.value;
