@@ -52,10 +52,9 @@ const USERS = {
 // Cats [5,6,7,8,9] = Rent, Utility, Police/Hafta, Petty/Operations, Maintenance/Repair.
 // Populate real PINs when onboarding Noor / Kesmat / Nafees.
 const CASHIER_PINS = {
-  // Example entries — update with each cashier's actual 4-digit PIN:
-  // '0912': { name: 'Noor',    brands: ['HE'],  cats: [5,6,7,8,9], role: 'cashier' },
-  // '4321': { name: 'Kesmat',  brands: ['NCH'], cats: [5,6,7,8,9], role: 'cashier' },
-  // '8888': { name: 'Nafees',  brands: ['NCH'], cats: [5,6,7,8,9], role: 'cashier' },
+  '15': { name: 'Noor',    brands: ['HE'],  cats: [5,6,7,8,9], role: 'cashier' },
+  '14': { name: 'Kesmat',  brands: ['NCH'], cats: [5,6,7,8,9], role: 'cashier' },
+  '43': { name: 'Nafees',  brands: ['NCH'], cats: [5,6,7,8,9], role: 'cashier' },
 };
 
 function resolveUser(pin) {
@@ -72,6 +71,9 @@ const PIN_TO_UID = {
   '6890': 8,                 // Tanveer
   '6045': 9,  '3678': 9,     // Faheem
   '3697': 10,                // Ismail (Yashwant PIN mapped to Ismail's Odoo user)
+  '15':   11,                // Noor (HE cashier — biometric pin from D1)
+  '14':   13,                // Kesmat (NCH cashier)
+  '43':   14,                // Nafees (NCH cashier)
 };
 function pinToUid(pin) { return PIN_TO_UID[pin] || 2; }  // fallback to admin
 
