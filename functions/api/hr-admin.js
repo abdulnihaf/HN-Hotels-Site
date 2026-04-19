@@ -22,9 +22,9 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const ODOO_URL  = 'https://ops.hamzahotel.com/jsonrpc';
+const ODOO_URL  = 'https://odoo.hnhotels.in/jsonrpc';
 const ODOO_DB   = 'main';
-const ODOO_USER = 'yash@gmail.com';
+const ODOO_USER = 'nihaf@gmail.com';
 
 // CAMS F38+ biometric device config (mirrors live dashboard)
 const CAMS_API_BASE = 'https://www.camsbiometrics.com/api3.0';

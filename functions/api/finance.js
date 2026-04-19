@@ -61,7 +61,7 @@ export async function onRequest(context) {
     // ══════════════════════════════════════════
     if (action === 'expense-taxonomy') {
       if (!env.ODOO_API_KEY) return json({success: false, error: 'Odoo API key not configured'});
-      const ODOO_URL = env.ODOO_URL || 'https://ops.hamzahotel.com/jsonrpc';
+      const ODOO_URL = env.ODOO_URL || 'https://odoo.hnhotels.in/jsonrpc';
       const ODOO_DB = env.ODOO_DB || 'main';
       const ODOO_UID = parseInt(env.ODOO_UID || '2', 10);
       const KEY = env.ODOO_API_KEY;
@@ -217,7 +217,7 @@ export async function onRequest(context) {
       if (!companyId) return json({success: false, error: 'brand (he|nch) or company_id required'});
 
       if (!env.ODOO_API_KEY) return json({success: false, error: 'Odoo API key not configured'});
-      const ODOO_URL = env.ODOO_URL || 'https://ops.hamzahotel.com/jsonrpc';
+      const ODOO_URL = env.ODOO_URL || 'https://odoo.hnhotels.in/jsonrpc';
       const ODOO_DB = env.ODOO_DB || 'main';
       const ODOO_UID = parseInt(env.ODOO_UID || '2', 10);
       const KEY = env.ODOO_API_KEY;
@@ -318,7 +318,7 @@ export async function onRequest(context) {
         const row = await DB.prepare('SELECT odoo_id FROM business_expenses WHERE id = ?').bind(id).first();
         if (row?.odoo_id && env.ODOO_API_KEY) {
           try {
-            await odooCall(env.ODOO_URL || 'https://ops.hamzahotel.com/jsonrpc', env.ODOO_DB || 'main',
+            await odooCall(env.ODOO_URL || 'https://odoo.hnhotels.in/jsonrpc', env.ODOO_DB || 'main',
               parseInt(env.ODOO_UID || '2', 10), env.ODOO_API_KEY, 'hr.expense', 'unlink', [[row.odoo_id]]);
           } catch (e) {
             return json({success: false, error: `Odoo unlink failed (D1 row intact): ${e.message}`});

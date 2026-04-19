@@ -14,7 +14,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const ODOO_URL  = 'https://ops.hamzahotel.com/jsonrpc';
+const ODOO_URL  = 'https://odoo.hnhotels.in/jsonrpc';
 const ODOO_DB   = 'main';
 const ODOO_USER = 'yash@gmail.com';
 

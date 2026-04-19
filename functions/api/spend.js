@@ -14,7 +14,7 @@
  * Replaces split between /ops/rm/ /ops/purchase/ /ops/finance/ for entry.
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-const ODOO_URL = 'https://ops.hamzahotel.com/jsonrpc';
+const ODOO_URL = 'https://odoo.hnhotels.in/jsonrpc';
 const ODOO_DB  = 'main';
 const ODOO_UID = 2;  // Administrator
 
