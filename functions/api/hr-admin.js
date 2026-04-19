@@ -419,22 +419,32 @@ async function handlePost(request, env) {
   const { action, pin } = body;
   if (!action) return json({ error: 'Missing action' }, 400);
 
-  // Permission matrix
+  // Permission matrix — minimum role required per action.
+  //   manager (Basheer)   → view + trigger attendance pull + send digest
+  //   onboarding (Zoya)   → manager + create/edit employees
+  //   hr                  → legacy (no one today, retained for compat)
+  //   admin (Nihaf)       → everything including financial / destructive ops
   const permMap = {
-    'employee-upsert': 'hr',
-    'employee-archive': 'admin',
-    'shift-rules-upsert': 'admin',
-    'leave-add': 'hr',
-    'leave-approve': 'admin',
-    'sync-employee': 'hr',
-    'sync-all-employees': 'admin',
-    'pull-maps': 'hr',
-    'pull-attendance': 'hr',
-    'compute-deductions': 'hr',
-    'cams-device-upsert': 'admin',
-    'cams-remote': 'admin',
-    'cams-pull-users': 'hr',
-    'rescan-drive': 'hr',
+    // Manager-level: Basheer can trigger these from the dashboard
+    'pull-attendance':   'manager',  // refresh today's attendance
+    'digest-send':       'manager',  // send WhatsApp digest to self+Nihaf
+
+    // Onboarding-level: Zoya (and above) can create/edit employees
+    'employee-upsert':   'onboarding',
+    'leave-add':         'onboarding',
+    'pull-maps':         'onboarding',
+    'sync-employee':     'onboarding',
+    'rescan-drive':      'onboarding',
+    'cams-pull-users':   'onboarding',
+
+    // Admin-only: financial + destructive + shift-rule edits
+    'employee-archive':    'admin',
+    'shift-rules-upsert':  'admin',
+    'leave-approve':       'admin',
+    'sync-all-employees':  'admin',
+    'compute-deductions':  'admin',
+    'cams-device-upsert':  'admin',
+    'cams-remote':         'admin',
   };
   const need = permMap[action] || 'read';
   const user = checkPin(pin, need);
