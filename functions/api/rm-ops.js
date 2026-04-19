@@ -782,7 +782,7 @@ async function createPO(body, user, creds, cfg, brand, DB) {
   // lets Nihaf/Naveen/Faheem/Basheer/Tanveer/Yashwant/Zoya all record RM purchases.
   // PIN membership in USERS is the actual auth gate.
 
-  const { vendor_id, lines } = body;
+  const { vendor_id, lines, date } = body;
   if (!vendor_id || !lines || !Array.isArray(lines) || lines.length === 0) {
     return json({ error: 'Missing vendor_id or lines' }, 400);
   }
@@ -796,7 +796,14 @@ async function createPO(body, user, creds, cfg, brand, DB) {
   );
   const uomMap = Object.fromEntries(productData.map(p => [p.id, p.uom_id[0]]));
 
-  const datePlanned = toOdooDatetime(new Date());
+  // Backdated PO support: historical mode sends date=YYYY-MM-DD for the PO's
+  // date_order. Live mode sends nothing and we use now().
+  let orderDate = new Date();
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    orderDate = new Date(`${date}T09:00:00+05:30`);
+  }
+  const datePlanned = toOdooDatetime(orderDate);
+  const dateOrderStr = toOdooDatetime(orderDate);
 
   // Build PO lines
   const orderLines = lines.map(l => [0, 0, {
@@ -809,14 +816,17 @@ async function createPO(body, user, creds, cfg, brand, DB) {
   }]);
 
   // Create PO — tag x_recorded_by_user_id for native Odoo audit
+  const poVals = {
+    partner_id: vendor_id,
+    company_id: cfg.company_id,
+    order_line: orderLines,
+    x_recorded_by_user_id: user.odoo_uid || 2,
+  };
+  if (date) poVals.date_order = dateOrderStr;
+
   const poId = await odooCall(creds.uid, creds.key,
     'purchase.order', 'create',
-    [{
-      partner_id: vendor_id,
-      company_id: cfg.company_id,
-      order_line: orderLines,
-      x_recorded_by_user_id: user.odoo_uid || 2,
-    }]
+    [poVals]
   );
 
   // Auto-confirm

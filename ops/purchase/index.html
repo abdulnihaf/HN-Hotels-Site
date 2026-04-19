@@ -36,6 +36,26 @@
   .cart-line { display: flex; gap: 8px; align-items: center; padding: 8px 0;
     border-bottom: 1px dashed var(--border); font-size: 13px; }
   .cart-line input { max-width: 90px; padding: 6px 8px; font-size: 13px; min-height: 36px; }
+
+  /* Mode toggle — Live vs Historical */
+  .mode-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .mode-btn { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; text-align: left;
+    color: var(--text-dim); font-family: inherit; transition: all 0.15s; min-height: 60px; }
+  .mode-btn .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; flex-shrink: 0;
+    opacity: 0.4; }
+  .mode-btn .lbl { font-weight: 700; font-size: 14px; color: var(--text); }
+  .mode-btn .sub-lbl { font-size: 11px; color: var(--text-mute); margin-top: 2px; }
+  .mode-btn.active.mode-live { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.4); color: #34d399; }
+  .mode-btn.active.mode-live .dot { opacity: 1; box-shadow: 0 0 0 3px rgba(16,185,129,0.2); }
+  .mode-btn.active.mode-hist { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.45); color: #fbbf24; }
+  .mode-btn.active.mode-hist .dot { opacity: 1; box-shadow: 0 0 0 3px rgba(245,158,11,0.25); }
+  .mode-banner { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.35); color: #fbbf24;
+    padding: 10px 14px; border-radius: var(--radius); margin-bottom: 12px; font-size: 12px; font-weight: 600; text-align: center; }
+  .mode-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+  .mode-pill.live { background: rgba(16,185,129,.15); color: #34d399; }
+  .mode-pill.hist { background: rgba(245,158,11,.15); color: #fbbf24; }
 </style>
 </head>
 <body>
@@ -68,6 +88,27 @@
       </div>
     </header>
 
+    <!-- Mode toggle: Live vs Historical catch-up -->
+    <div class="mode-toggle" id="mode-toggle">
+      <button class="mode-btn mode-live active" id="btn-mode-live" onclick="setMode('live')">
+        <span class="dot"></span>
+        <div>
+          <div class="lbl">Live entry</div>
+          <div class="sub-lbl">Orders happening now</div>
+        </div>
+      </button>
+      <button class="mode-btn mode-hist" id="btn-mode-hist" onclick="setMode('historical')">
+        <span class="dot"></span>
+        <div>
+          <div class="lbl">Historical catch-up</div>
+          <div class="sub-lbl">Apr 1 → backdated</div>
+        </div>
+      </button>
+    </div>
+    <div id="mode-banner-hist" class="mode-banner hidden">
+      HISTORICAL MODE — every entry asks for the original PO / bill date. Finish by Monday.
+    </div>
+
     <div class="brand-chips" id="brand-chips"></div>
     <div class="cat-grid" id="cat-grid"></div>
 
@@ -81,7 +122,10 @@
   <div id="form-screen" class="hidden">
     <header>
       <button class="btn btn-back" onclick="showHome()">← Back</button>
-      <span class="mute" id="form-brand-tag"></span>
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <span class="mode-pill" id="form-mode-pill"></span>
+        <span class="mute" id="form-brand-tag"></span>
+      </div>
     </header>
     <div class="form-title">
       <span class="e" id="form-emoji"></span>
@@ -199,7 +243,10 @@
   <div id="cat15-screen" class="hidden">
     <header>
       <button class="btn btn-back" onclick="showHome()">← Back</button>
-      <span class="mute" id="cat15-brand-tag"></span>
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <span class="mode-pill" id="cat15-mode-pill"></span>
+        <span class="mute" id="cat15-brand-tag"></span>
+      </div>
     </header>
     <div class="form-title">
       <span class="e">📄</span>
@@ -260,6 +307,23 @@ let PIN = '';
 let USER = null;
 let BRAND = null;
 let CURRENT_CAT = null;
+let MODE = 'live';
+
+// ═══════════════════════════════════════════════════════════════
+// Mode toggle — Live vs Historical
+// ═══════════════════════════════════════════════════════════════
+function setMode(m) {
+  MODE = m;
+  document.getElementById('btn-mode-live').classList.toggle('active', m === 'live');
+  document.getElementById('btn-mode-hist').classList.toggle('active', m === 'historical');
+  document.getElementById('mode-banner-hist').classList.toggle('hidden', m !== 'historical');
+}
+function setFormModePill() {
+  const pill = document.getElementById('form-mode-pill');
+  if (!pill) return;
+  pill.className = `mode-pill ${MODE === 'live' ? 'live' : 'hist'}`;
+  pill.textContent = MODE === 'live' ? '● LIVE' : '● HISTORICAL';
+}
 
 // Cat 1 state
 let rmCatalog = { products: [], vendors: [], recentPOs: [] };
@@ -395,6 +459,7 @@ async function openGenericForm(cat) {
   document.getElementById('form-label').textContent = cat.label;
   document.getElementById('form-desc').textContent = cat.desc;
   document.getElementById('form-brand-tag').textContent = BRAND;
+  setFormModePill();
   await buildGenericForm(cat);
 }
 
@@ -460,12 +525,33 @@ async function buildGenericForm(cat) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const todayHuman = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  if (MODE === 'live') {
+    fields.push(`
+      <div class="row">
+        <label>Date</label>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); border-radius: var(--radius);">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 3px rgba(16,185,129,0.2);"></span>
+          <div>
+            <div style="font-weight: 600; color: #34d399;">Today — ${todayHuman}</div>
+            <div class="mute" style="font-size: 11px;">Auto-timestamped on submit</div>
+          </div>
+        </div>
+        <input id="f-date" type="hidden" value="${today}">
+      </div>
+    `);
+  } else {
+    fields.push(`
+      <div class="row">
+        <label style="color: #fbbf24;">Bill date *</label>
+        <input id="f-date" type="date" value="" max="${today}" required style="border-color: rgba(245,158,11,.4);">
+        <div class="mute" style="margin-top: 4px;">Pick the actual date on the paper bill (not today)</div>
+      </div>
+    `);
+  }
+
   fields.push(`
-    <div class="row">
-      <label>Date</label>
-      <input id="f-date" type="date" value="${today}" max="${today}">
-      <div class="mute" style="margin-top: 4px;">Change for backdated entries (e.g. April 1–19 historical)</div>
-    </div>
     <div class="row">
       <label>Amount (₹)</label>
       <input id="f-amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
@@ -492,11 +578,20 @@ async function submitForm() {
   try {
     const amount = parseFloat(document.getElementById('f-amount')?.value || '0');
     if (!amount || amount <= 0) throw new Error('Enter a valid amount');
+
+    let chosenDate;
+    if (MODE === 'historical') {
+      chosenDate = document.getElementById('f-date')?.value;
+      if (!chosenDate) throw new Error('Pick the original bill date');
+      const today = new Date().toISOString().slice(0, 10);
+      if (chosenDate > today) throw new Error('Date cannot be in the future');
+    }
+
     const body = {
       pin: PIN, category: CURRENT_CAT.id, brand: BRAND, amount,
       payment_method: document.getElementById('f-payment')?.value || 'cash',
       notes: document.getElementById('f-notes')?.value || '',
-      date: document.getElementById('f-date')?.value || undefined,
+      ...(chosenDate ? { date: chosenDate } : {}),
     };
     if (CURRENT_CAT.backend === 'hr.expense') {
       body.product_id = document.getElementById('f-product')?.value;
@@ -845,6 +940,18 @@ function closeVariantPicker() {
 // ── Submit PO (groups by vendor) ───────────────────────────────────
 async function submitRmPurchase() {
   if (!cart.length) return;
+
+  // Historical mode: prompt for the original PO date
+  let historicalDate;
+  if (MODE === 'historical') {
+    const today = new Date().toISOString().slice(0, 10);
+    historicalDate = prompt('Historical catch-up — enter the original PO date (YYYY-MM-DD):', '');
+    if (!historicalDate || !/^\d{4}-\d{2}-\d{2}$/.test(historicalDate)) {
+      return toast('Pick a valid date (YYYY-MM-DD)', 'err');
+    }
+    if (historicalDate > today) return toast('Date cannot be in the future', 'err');
+  }
+
   const btn = document.getElementById('rm-submit-btn');
   btn.disabled = true; btn.textContent = 'Creating…';
 
@@ -875,7 +982,8 @@ async function submitRmPurchase() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'create-po', pin: PIN, brand: BRAND,
-          vendor_id: g.vendor.id, lines: g.lines }),
+          vendor_id: g.vendor.id, lines: g.lines,
+          ...(historicalDate ? { date: historicalDate } : {}) }),
       }).then(x => x.json());
       if (r.success) successes.push(r.po_name || 'PO');
       else failures.push(`${g.vendor.name}: ${r.error || 'failed'}`);
@@ -906,7 +1014,10 @@ async function submitRmPurchase() {
 async function openCat15() {
   document.getElementById('cat15-screen').classList.remove('hidden');
   document.getElementById('cat15-brand-tag').textContent = BRAND;
-  document.getElementById('cat15-date').value = new Date().toISOString().slice(0, 10);
+  const pill = document.getElementById('cat15-mode-pill');
+  pill.className = `mode-pill ${MODE === 'live' ? 'live' : 'hist'}`;
+  pill.textContent = MODE === 'live' ? '● LIVE' : '● HISTORICAL';
+  document.getElementById('cat15-date').value = MODE === 'live' ? new Date().toISOString().slice(0, 10) : '';
   document.getElementById('cat15-ref').value = '';
   document.getElementById('cat15-amount').value = '';
   document.getElementById('cat15-notes').value = '';
