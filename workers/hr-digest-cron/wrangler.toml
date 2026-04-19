@@ -1,0 +1,21 @@
+name = "hn-hr-digest-cron"
+main = "index.js"
+compatibility_date = "2024-09-23"
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+# Two scheduled fires per day IST:
+#   09:45 IST (04:15 UTC) — yesterday recap (HE shift-day Apr N-1 closed
+#                            at 09:00; NCH closed at 06:00 — both final)
+#   13:00 IST (07:30 UTC) — today no-show check for HE (shift opened at
+#                            09:00, giving everyone 4 hours to clock in)
+[triggers]
+crons = [
+  "15 4 * * *",
+  "30 7 * * *"
+]
+
+# Secrets (set via: wrangler secret put <NAME> --config workers/hr-digest-cron/wrangler.toml)
+# ADMIN_PIN     — HR admin PIN (Nihaf 0305) for /api/hr-admin POST auth
+# DASHBOARD_KEY — shared admin key (same as HN-Hotels-Site Pages secret)
+[vars]
+PAGES_URL = "https://hnhotels.in"

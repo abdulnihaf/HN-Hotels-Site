@@ -736,6 +736,71 @@ async function handlePost(request, env) {
     });
   }
 
+  if (action === 'digest-send') {
+    // Orchestrates brand-scoped digest delivery:
+    //   HE + HQ rows go through hamzaexpress.in/api/hr-wa-send
+    //   NCH rows   go through nawabichaihouse.com/api/hr-wa-send
+    // Recipients: Nihaf (admin, gets financial detail) + Basheer (manager,
+    // redacted). Can be invoked from UI ("Send digest" button) or by the
+    // hr-digest-cron scheduled worker.
+    const brand = body.brand || 'HE';
+    const mode = body.mode || 'recap';
+    const date = body.date || istDate();
+    if (!['HE','NCH','ALL'].includes(brand)) return json({ error: 'brand must be HE|NCH|ALL' }, 400);
+    if (!['recap','no_show'].includes(mode)) return json({ error: 'mode must be recap|no_show' }, 400);
+    const apiKey = env.DASHBOARD_KEY;
+    if (!apiKey) return json({ error: 'DASHBOARD_KEY not set' }, 500);
+
+    // Resolve endpoint per brand
+    const brandsToSend = brand === 'ALL' ? ['HE','NCH'] : [brand];
+    const results = [];
+
+    for (const b of brandsToSend) {
+      const endpoint = b === 'HE'
+        ? 'https://hamzaexpress.in/api/hr-wa-send'
+        : 'https://nawabichaihouse.com/api/hr-wa-send';
+
+      // Recipients: always Nihaf + Basheer. Each gets their own rendering
+      // (admin view with financials vs manager view).
+      const recipients = [
+        { phone: '917010426808', pin: '0305', name: 'Nihaf' },
+        { phone: '919061906916', pin: '8523', name: 'Basheer' },
+      ];
+
+      for (const rcp of recipients) {
+        const viewer = PINS[rcp.pin];
+        const includeFin = viewer ? !!viewer.view_financials : false;
+        const digest = await buildDigest(db, b, date, mode, includeFin);
+        if (!digest.text || digest.roster_total === 0) {
+          results.push({ brand: b, to: rcp.name, skipped: true, reason: 'empty digest' });
+          continue;
+        }
+        try {
+          const r = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+            body: JSON.stringify({ to: rcp.phone, text: digest.text }),
+          });
+          const out = await r.json();
+          results.push({ brand: b, to: rcp.name, ok: r.ok, status: r.status, wa_message_id: out.wa_message_id || null, error: out.error || null });
+        } catch (e) {
+          results.push({ brand: b, to: rcp.name, ok: false, error: e.message });
+        }
+      }
+    }
+
+    const sent = results.filter(r => r.ok).length;
+    const failed = results.filter(r => r.ok === false).length;
+    const skipped = results.filter(r => r.skipped).length;
+    await logSync(db, 'digest_send', 'whatsapp', null, `${brand}/${mode}/${date}`,
+      { results, sent, failed, skipped }, user.name);
+    return json({
+      success: true,
+      summary: `Sent ${sent}, failed ${failed}, skipped ${skipped}`,
+      date, brand, mode, results,
+    });
+  }
+
   if (action === 'pull-attendance') {
     // Pull hr.attendance from Odoo for a date range, compute daily roll-up, store in D1
     const apiKey = env.ODOO_API_KEY;
