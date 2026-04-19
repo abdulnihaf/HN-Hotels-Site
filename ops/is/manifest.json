@@ -1,0 +1,15 @@
+{
+  "name": "HN Hotels — Inventory Settlement",
+  "short_name": "Inventory",
+  "description": "HN inventory settlement — counts, vessels, photo upload",
+  "start_url": "/ops/is/",
+  "scope": "/ops/is/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0c14",
+  "theme_color": "#0c0c14",
+  "icons": [
+    { "src": "/ops/is/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/ops/is/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
