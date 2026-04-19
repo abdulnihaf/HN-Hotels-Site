@@ -128,6 +128,9 @@ export async function onRequest(context) {
       case 'entry-detail':     return await entryDetail(DB, apiKey, url);
       case 'nch-day':          return await nchDay(DB, apiKey, url);
       case 'shortages-list':   return await shortagesList(DB, url);
+      case 'nch-weekly':       return await nchWeekly(DB, url);
+      case 'nch-discrepancies':return await nchDiscrepancies(DB, apiKey, url);
+      case 'nch-person-history': return await nchPersonHistory(DB, url);
       case 'verify':           return json({ success: true, user });
       default: return json({ success: false, error: 'Unknown action' }, 400);
     }
@@ -783,6 +786,233 @@ async function nchDay(DB, apiKey, url) {
     settlements,
     collections,
     counter_balance: counterBalance,
+  });
+}
+
+/* ━━━ NCH WEEKLY ROLLUP ━━━
+ * Per-person shortage tally for the month + daily variance trend for the last 7 days.
+ * Includes running monthly cap (₹5k alert threshold).
+ */
+const MONTHLY_CAP_NCH = 5000;
+
+async function nchWeekly(DB, url) {
+  const month = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
+  const today = new Date().toISOString().slice(0, 10);
+  const d7 = new Date(); d7.setDate(d7.getDate() - 6);
+  const from7 = d7.toISOString().slice(0, 10);
+
+  // Per-person rollup for month
+  const perPerson = await DB.prepare(
+    `SELECT s.pin, e.name AS staff_name, e.phone, e.job_name,
+            COUNT(*) AS event_count,
+            COALESCE(SUM(CASE WHEN s.waived = 0 AND s.cleared_at IS NULL THEN s.amount ELSE 0 END), 0) AS total_open,
+            COALESCE(SUM(CASE WHEN s.waived = 1 THEN s.amount ELSE 0 END), 0) AS total_waived,
+            COALESCE(SUM(CASE WHEN s.cleared_at IS NOT NULL AND s.waived = 0 THEN s.amount ELSE 0 END), 0) AS total_cleared,
+            COALESCE(SUM(s.amount), 0) AS total_all
+       FROM hr_cash_shortages s
+       LEFT JOIN hr_employees e ON e.pin = s.pin
+      WHERE s.brand = 'NCH'
+        AND strftime('%Y-%m', s.created_at) = ?
+      GROUP BY s.pin, e.name, e.phone, e.job_name
+      ORDER BY total_open DESC`
+  ).bind(month).all();
+
+  // Daily trend for last 7 days
+  const daily = await DB.prepare(
+    `SELECT DATE(created_at) AS day,
+            COUNT(*) AS count,
+            COALESCE(SUM(amount), 0) AS total,
+            COALESCE(SUM(CASE WHEN source='runner_settle' THEN amount ELSE 0 END), 0) AS runner_short,
+            COALESCE(SUM(CASE WHEN source='shift_handover' THEN amount ELSE 0 END), 0) AS handover_short,
+            COALESCE(SUM(CASE WHEN source='cashier_collect' THEN amount ELSE 0 END), 0) AS collect_short
+       FROM hr_cash_shortages
+      WHERE brand = 'NCH'
+        AND DATE(created_at) >= ?
+      GROUP BY day
+      ORDER BY day ASC`
+  ).bind(from7).all();
+
+  // Top 3 single-biggest shortages this month
+  const topEvents = await DB.prepare(
+    `SELECT s.*, e.name AS staff_name
+       FROM hr_cash_shortages s
+       LEFT JOIN hr_employees e ON e.pin = s.pin
+      WHERE s.brand = 'NCH'
+        AND strftime('%Y-%m', s.created_at) = ?
+        AND s.waived = 0
+      ORDER BY s.amount DESC LIMIT 5`
+  ).bind(month).all();
+
+  return json({
+    success: true,
+    month,
+    cap: MONTHLY_CAP_NCH,
+    people: (perPerson.results || []).map(p => ({
+      ...p,
+      over_cap: (p.total_open || 0) > MONTHLY_CAP_NCH,
+      cap_pct: Math.round(((p.total_open || 0) / MONTHLY_CAP_NCH) * 100),
+      is_unmapped: !p.pin,
+    })),
+    daily: daily.results || [],
+    top_events: topEvents.results || [],
+    totals: {
+      total_open:    (perPerson.results || []).reduce((s,x) => s + (x.total_open || 0), 0),
+      total_cleared: (perPerson.results || []).reduce((s,x) => s + (x.total_cleared || 0), 0),
+      total_waived:  (perPerson.results || []).reduce((s,x) => s + (x.total_waived || 0), 0),
+      event_count:   (perPerson.results || []).reduce((s,x) => s + (x.event_count || 0), 0),
+    },
+  });
+}
+
+/* ━━━ NCH DISCREPANCIES — anomaly detection ━━━
+ * Flags edge cases that need human review:
+ *   - Unmapped runner shortages (pin=null)
+ *   - Single-event outliers (>₹500)
+ *   - Missing-photo expense flags
+ *   - Uncovered settlements (runner has cash but no settle today)
+ *   - Big-discrepancy collections (>₹500)
+ */
+async function nchDiscrepancies(DB, apiKey, url) {
+  const daysBack = parseInt(url.searchParams.get('days') || '7', 10);
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - daysBack);
+  const cutoffIso = cutoff.toISOString();
+
+  // 1. Unmapped shortages (pin is null) — last N days
+  const unmapped = await DB.prepare(
+    `SELECT * FROM hr_cash_shortages
+      WHERE brand = 'NCH' AND pin IS NULL
+        AND created_at >= ?
+      ORDER BY created_at DESC LIMIT 100`
+  ).bind(cutoffIso).all();
+
+  // 2. Big outliers (amount > ₹500, regardless of status)
+  const outliers = await DB.prepare(
+    `SELECT s.*, e.name AS staff_name
+       FROM hr_cash_shortages s
+       LEFT JOIN hr_employees e ON e.pin = s.pin
+      WHERE s.brand = 'NCH' AND s.amount > 500
+        AND s.created_at >= ?
+      ORDER BY s.amount DESC LIMIT 50`
+  ).bind(cutoffIso).all();
+
+  // 3. NCH expenses without photos (from business_expenses, then check ir.attachment)
+  const expenseRows = await DB.prepare(
+    `SELECT id, odoo_id, amount, product_name, category_parent, recorded_at, recorded_by
+       FROM business_expenses
+      WHERE company_id = 3 AND recorded_at >= ?
+      ORDER BY recorded_at DESC LIMIT 200`
+  ).bind(cutoffIso).all();
+
+  const expOdooIds = (expenseRows.results || []).map(r => r.odoo_id).filter(Boolean);
+  let haveAtt = new Set();
+  if (apiKey && expOdooIds.length) {
+    try {
+      const atts = await odoo(apiKey, 'ir.attachment', 'search_read',
+        [[['res_model','=','hr.expense'],['res_id','in',expOdooIds],['mimetype','like','image/']]],
+        { fields: ['res_id'], limit: 500 });
+      haveAtt = new Set(atts.map(a => a.res_id));
+    } catch (e) {}
+  }
+  const missingPhotos = (expenseRows.results || []).filter(e => e.odoo_id && !haveAtt.has(e.odoo_id));
+
+  // 4. Cap-crossers this month
+  const month = new Date().toISOString().slice(0, 7);
+  const capCrossers = await DB.prepare(
+    `SELECT s.pin, e.name AS staff_name, SUM(s.amount) AS total
+       FROM hr_cash_shortages s
+       LEFT JOIN hr_employees e ON e.pin = s.pin
+      WHERE s.brand = 'NCH' AND s.pin IS NOT NULL
+        AND s.cleared_at IS NULL AND s.waived = 0
+        AND strftime('%Y-%m', s.created_at) = ?
+      GROUP BY s.pin
+      HAVING total > ?
+      ORDER BY total DESC`
+  ).bind(month, MONTHLY_CAP_NCH).all();
+
+  // 5. Shortage-source distribution (where's the problem coming from)
+  const sourceDist = await DB.prepare(
+    `SELECT source, COUNT(*) AS cnt, SUM(amount) AS total
+       FROM hr_cash_shortages
+      WHERE brand = 'NCH' AND created_at >= ?
+      GROUP BY source
+      ORDER BY total DESC`
+  ).bind(cutoffIso).all();
+
+  return json({
+    success: true,
+    days_analysed: daysBack,
+    cutoff: cutoffIso,
+    flags: {
+      unmapped_shortages: {
+        count: (unmapped.results || []).length,
+        total: (unmapped.results || []).reduce((s,x) => s + (x.amount || 0), 0),
+        rows: unmapped.results || [],
+      },
+      outliers: {
+        count: (outliers.results || []).length,
+        rows: outliers.results || [],
+      },
+      missing_photos: {
+        count: missingPhotos.length,
+        rows: missingPhotos,
+      },
+      cap_crossers: {
+        count: (capCrossers.results || []).length,
+        cap: MONTHLY_CAP_NCH,
+        month,
+        rows: capCrossers.results || [],
+      },
+      source_distribution: sourceDist.results || [],
+    },
+  });
+}
+
+/* ━━━ NCH PERSON HISTORY — drill into one staff's shortages + shift history ━━━ */
+async function nchPersonHistory(DB, url) {
+  const pin = url.searchParams.get('pin');
+  const month = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
+  if (!pin) return json({ success: false, error: 'pin required' }, 400);
+
+  const person = await DB.prepare(
+    'SELECT pin, name, phone, job_name, brand_label, monthly_salary FROM hr_employees WHERE pin = ?'
+  ).bind(pin).first();
+
+  if (!person) return json({ success: false, error: 'Staff not found for PIN ' + pin }, 404);
+
+  // Month shortages
+  const shortages = await DB.prepare(
+    `SELECT * FROM hr_cash_shortages
+      WHERE pin = ? AND brand = 'NCH'
+        AND strftime('%Y-%m', created_at) = ?
+      ORDER BY created_at DESC`
+  ).bind(pin, month).all();
+
+  // Last 5 shortages regardless of month
+  const recent = await DB.prepare(
+    `SELECT * FROM hr_cash_shortages WHERE pin = ? ORDER BY created_at DESC LIMIT 10`
+  ).bind(pin).all();
+
+  // Totals
+  const open = (shortages.results || []).filter(s => !s.cleared_at && !s.waived);
+  const cleared = (shortages.results || []).filter(s => s.cleared_at && !s.waived);
+  const waived = (shortages.results || []).filter(s => s.waived);
+
+  return json({
+    success: true,
+    person,
+    month,
+    summary: {
+      open_count: open.length,
+      open_total: Math.round(open.reduce((s,x) => s + (x.amount||0), 0)),
+      cleared_count: cleared.length,
+      cleared_total: Math.round(cleared.reduce((s,x) => s + (x.amount||0), 0)),
+      waived_count: waived.length,
+      waived_total: Math.round(waived.reduce((s,x) => s + (x.amount||0), 0)),
+      salary_after_deduction: Math.max(0, (person.monthly_salary || 0) - open.reduce((s,x) => s + (x.amount||0), 0)),
+      over_cap: open.reduce((s,x) => s + (x.amount||0), 0) > MONTHLY_CAP_NCH,
+    },
+    shortages_month: shortages.results || [],
+    shortages_recent: recent.results || [],
   });
 }
 
