@@ -38,17 +38,25 @@ const USERS = {
   '6045': { name: 'Faheem',   brands: ['HE','NCH','HQ'], cats: 'all', role: 'asstmgr' },
   '3678': { name: 'Faheem',   brands: ['HE','NCH','HQ'], cats: 'all', role: 'asstmgr' },
   '5882': { name: 'Nihaf',    brands: ['HE','NCH','HQ'], cats: 'all', role: 'admin' },  // legacy
-  '2026': { name: 'Zoya',     brands: ['HE','NCH','HQ'], cats: [1,2,9,10,11,12,14,15], role: 'admin' },
-  '8316': { name: 'Zoya',     brands: ['HE','NCH','HQ'], cats: [1,2,9,10,11,12,14,15], role: 'admin' },  // legacy
+  // Zoya is INVENTORY-PURCHASE only. She does not handle cash / expenses.
+  // Cat 1 = RM purchase (her daily work) · Cat 15 = matching vendor bills to her POs.
+  '2026': { name: 'Zoya',     brands: ['HE','NCH','HQ'], cats: [1, 15], role: 'purchase' },
+  '8316': { name: 'Zoya',     brands: ['HE','NCH','HQ'], cats: [1, 15], role: 'purchase' },
   // HQ GMs — all daily ops categories, no drawings
   '8523': { name: 'Basheer',  brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14], role: 'gm' },
   '6890': { name: 'Tanveer',  brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14], role: 'gm' },
   '3697': { name: 'Yashwant', brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14], role: 'gm' },
 };
 
-// Outlet cashier PINs are mapped by name — aligns with HR employee.pin when set.
-// Extend here as cashier PINs are onboarded.
-const CASHIER_PINS = {};  // Example: '0912': { name: 'Noor', brands:['HE'], cats:[5,6,7,8,9], role:'cashier' }
+// Outlet cashier PINs — scoped to their outlet only (brand chip auto-fixes, no switcher).
+// Cats [5,6,7,8,9] = Rent, Utility, Police/Hafta, Petty/Operations, Maintenance/Repair.
+// Populate real PINs when onboarding Noor / Kesmat / Nafees.
+const CASHIER_PINS = {
+  // Example entries — update with each cashier's actual 4-digit PIN:
+  // '0912': { name: 'Noor',    brands: ['HE'],  cats: [5,6,7,8,9], role: 'cashier' },
+  // '4321': { name: 'Kesmat',  brands: ['NCH'], cats: [5,6,7,8,9], role: 'cashier' },
+  // '8888': { name: 'Nafees',  brands: ['NCH'], cats: [5,6,7,8,9], role: 'cashier' },
+};
 
 function resolveUser(pin) {
   return USERS[pin] || CASHIER_PINS[pin] || null;
