@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>HR Ops — HN Hotels</title>
+  <!-- PWA + iPhone home-screen app config — keeps the app self-contained so
+       the home-screen icon launches straight into /ops/hr/ without exiting
+       to the marketing site. -->
+  <link rel="manifest" href="/ops/hr/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="HR Ops">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0c0c14">
+  <link rel="apple-touch-icon" href="/ops/hr/icon-192.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
@@ -100,9 +110,13 @@
   </div>
   <div class="flex items-center gap-2">
     <span id="userBadge" class="text-xs text-white/30 hidden"></span>
-    <a href="/" class="btn-ghost btn-sm no-underline text-xs">Home</a>
+    <button id="btnRefresh" onclick="refreshCurrentTab()" class="btn-ghost btn-sm text-xs flex items-center gap-1" title="Refresh current tab (Pull → Reload)">
+      <svg id="btnRefreshIcon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+      <span>Refresh</span>
+    </button>
   </div>
 </nav>
+
 
 <!-- ═══ PIN GATE ═══ -->
 <div id="pinGate" class="flex items-center justify-center" style="min-height:calc(100vh - 56px)">
@@ -501,6 +515,44 @@ function setTab(t) {
   if (t === 'cams') loadCamsDevices();
   if (t === 'sync') loadSyncLog();
 }
+
+/* ━━━ Refresh ━━━
+ * Top-nav refresh button. On the Attendance tab it does a full
+ * server-side re-pull (action=pull-attendance) so fresh biometric
+ * punches are processed before reading back the day. On other tabs
+ * it just re-queries the corresponding read endpoint.
+ * Also spins the icon to give tactile feedback on iPhone home-screen PWA. */
+async function refreshCurrentTab() {
+  const btn = document.getElementById('btnRefreshIcon');
+  if (btn) btn.classList.add('spinner');
+  try {
+    if (state.currentTab === 'attendance') {
+      // Full pull first — picks up any new CAMS punches landed since last cron run
+      const date = document.getElementById('attendDate').value || new Date().toISOString().slice(0,10);
+      const r = await apiPost('pull-attendance', { from: date, to: date });
+      if (r.success) toast(`Refreshed · ${r.punches} punches`);
+      else if (r.error) toast(r.error, 'error');
+      await loadAttendance();
+    } else {
+      setTab(state.currentTab);
+      toast('Refreshed');
+    }
+  } finally {
+    if (btn) btn.classList.remove('spinner');
+  }
+}
+
+// Pull-to-refresh gesture on iPhone PWA: swipe down from top ~80px triggers refresh
+let _touchStartY = 0;
+document.addEventListener('touchstart', (e) => {
+  if (window.scrollY === 0) _touchStartY = e.touches[0].clientY;
+}, { passive: true });
+document.addEventListener('touchend', (e) => {
+  if (!_touchStartY) return;
+  const dy = e.changedTouches[0].clientY - _touchStartY;
+  _touchStartY = 0;
+  if (dy > 80 && state.pin) refreshCurrentTab();
+});
 
 /* ━━━ Toast ━━━ */
 function toast(msg, kind = 'success') {

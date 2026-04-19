@@ -1,0 +1,25 @@
+{
+  "name": "HN Hotels — HR Ops",
+  "short_name": "HR Ops",
+  "description": "Biometric attendance + roster dashboard for HN Hotels Pvt Ltd",
+  "start_url": "/ops/hr/",
+  "scope": "/ops/hr/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0c14",
+  "theme_color": "#0c0c14",
+  "icons": [
+    {
+      "src": "/ops/hr/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/ops/hr/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
