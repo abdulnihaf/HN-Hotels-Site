@@ -482,6 +482,10 @@ async function buildGenericForm(cat) {
   container.innerHTML = '<div class="sub">Loading…</div>';
   const fields = [];
 
+  // Cats that require a vendor (strict product→vendor mapping).
+  // Excluded: cat 3 (salary) + cat 4 (advance) use employee, cat 13 (drawings) is internal.
+  const needsVendor = cat.backend === 'hr.expense' && ![3, 4, 13].includes(cat.id);
+
   if (cat.backend === 'hr.expense') {
     const products = await fetch(`${API}?action=products&pin=${PIN}&cat=${cat.id}`).then(x => x.json()).catch(() => ({ products: [] }));
     if (!products.products || !products.products.length) {
@@ -511,6 +515,22 @@ async function buildGenericForm(cat) {
             <option value="">— Select —</option>
             ${filtered.map(e => `<option value="${e.odoo_employee_id}">${e.name} [${e.brand_label}]</option>`).join('')}
           </select>
+        </div>
+      `);
+    }
+
+    // Vendor field for cats 2, 5, 6, 7, 8, 9, 10, 11, 12 — REQUIRED
+    if (needsVendor) {
+      const vend = await fetch(`${API}?action=vendors&pin=${PIN}&brand=${BRAND}`).then(x => x.json()).catch(() => ({ vendors: [] }));
+      fields.push(`
+        <div class="row">
+          <label>Vendor *</label>
+          <select id="f-vendor" onchange="onVendorPick(this)">
+            <option value="">— Select —</option>
+            ${(vend.vendors || []).map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join('')}
+            <option value="__new__" style="color: var(--accent);">+ Add new vendor…</option>
+          </select>
+          <div class="mute" style="margin-top: 4px;">Every expense must tie to a vendor for audit + tax trail</div>
         </div>
       `);
     }
@@ -626,6 +646,14 @@ async function submitForm() {
       const empEl = document.getElementById('f-employee');
       if (empEl) body.employee_id = parseInt(empEl.value, 10);
       if ((CURRENT_CAT.id === 3 || CURRENT_CAT.id === 4) && !body.employee_id) throw new Error('Pick an employee');
+      // Require vendor for cats 2, 5-12 (excludes salary/advance/drawings)
+      const needsVendor = ![3, 4, 13].includes(CURRENT_CAT.id);
+      if (needsVendor) {
+        const vSel = document.getElementById('f-vendor');
+        body.vendor_id = vSel?.value;
+        body.vendor_name = vSel?.selectedOptions?.[0]?.text || '';
+        if (!body.vendor_id) throw new Error('Pick a vendor — every expense must tie to a vendor');
+      }
     }
     if (CURRENT_CAT.backend === 'account.move') {
       body.vendor_id = document.getElementById('f-vendor')?.value;

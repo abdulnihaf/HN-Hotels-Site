@@ -43,9 +43,9 @@ const USERS = {
   '2026': { name: 'Zoya',     brands: ['HE','NCH','HQ'], cats: [1, 15], role: 'purchase' },
   '8316': { name: 'Zoya',     brands: ['HE','NCH','HQ'], cats: [1, 15], role: 'purchase' },
   // HQ GMs — all daily ops categories, no drawings
-  '8523': { name: 'Basheer',  brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14,15], role: 'gm' },
-  '6890': { name: 'Tanveer',  brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14,15], role: 'gm' },
-  '3697': { name: 'Yashwant', brands: ['HE','NCH','HQ'], cats: [1,2,3,4,5,6,7,8,9,10,11,12,14,15], role: 'gm' },
+  '8523': { name: 'Basheer',  brands: ['HE','NCH','HQ'], cats: 'all', role: 'gm' },
+  '6890': { name: 'Tanveer',  brands: ['HE','NCH','HQ'], cats: 'all', role: 'gm' },
+  '3697': { name: 'Yashwant', brands: ['HE','NCH','HQ'], cats: 'all', role: 'gm' },
 };
 
 // Outlet cashier PINs — scoped to their outlet only (brand chip auto-fixes, no switcher).
@@ -488,6 +488,10 @@ export async function onRequest(context) {
           x_submitted_by_pin: String(pin),
           x_recorded_by_user_id: pinToUid(pin),  // native Odoo audit
         };
+        // Vendor mapping — strict for cats 2, 5-12. Odoo hr.expense has vendor_id.
+        if (body.vendor_id && ![3, 4, 13].includes(cat.id)) {
+          expenseVals.vendor_id = parseInt(body.vendor_id, 10);
+        }
 
         const expenseId = await odoo(apiKey, 'hr.expense', 'create', [expenseVals]);
 
