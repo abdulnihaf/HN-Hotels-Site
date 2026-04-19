@@ -1258,7 +1258,10 @@ async function pullAttendance(apiKey, db, from, to, userName) {
       const key = `${emp.odoo_employee_id}|${shiftDay}`;
       const b = buckets.get(key);
       const hours = b?.hours || 0;
-      const isWeekOff = isWeekOffDay(shiftDay, emp.week_off);
+      // Per-employee week_off_day takes precedence over brand shift rule.
+      //   Apr 19 2026: only Zoya has Sunday off among HQ staff.
+      const effectiveWeekOff = emp.week_off_day || emp.week_off;
+      const isWeekOff = isWeekOffDay(shiftDay, effectiveWeekOff);
       const isOffice = !!emp.applies_to_office;
       const shiftClosed = isShiftDayClosed(shiftDay, startHour, now);
 
