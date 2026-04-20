@@ -411,12 +411,15 @@ async function handlePost(request, env) {
       uomId = await adminCall('uom.uom', 'create', [{ name: uom_name }]);
     }
 
-    // 3. Read product template id then update uom_id + uom_po_id
+    // 3. Read product template id then update uom_id (+ uom_po_id if field exists)
     const prod = await adminCall('product.product', 'read',
-      [[odoo_product_id]], { fields: ['id', 'product_tmpl_id', 'uom_id', 'uom_po_id'] });
+      [[odoo_product_id]], { fields: ['id', 'product_tmpl_id'] });
     if (!prod[0]) return json({ error: `Product ${odoo_product_id} not found` }, 404);
     const tmplId = prod[0].product_tmpl_id[0];
-    await adminCall('product.template', 'write', [[tmplId], { uom_id: uomId, uom_po_id: uomId }]);
+    const writeVals = { uom_id: uomId };
+    try { await adminCall('product.template', 'write', [[tmplId], { uom_po_id: uomId }]); }
+    catch (_) { /* uom_po_id may not exist in Odoo 19 — uom_id alone is sufficient */ }
+    await adminCall('product.template', 'write', [[tmplId], writeVals]);
 
     // 4. Update D1 rm_products UoM label if hn_code provided
     if (hn_code && db) {
