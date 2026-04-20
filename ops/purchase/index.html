@@ -251,9 +251,10 @@
       </div>
       <div class="row">
         <label>Supplier vendor * <span class="mute" style="font-weight: 400;">(you can't add new RM without a vendor)</span></label>
-        <select id="nrm-vendor">
-          <option value="">— Select vendor —</option>
-        </select>
+        <input id="nrm-vendor-search" type="search" list="nrm-vendor-dl" placeholder="Type vendor name to search…"
+               oninput="resolveDatalistId('nrm-vendor', 'nrm-vendor-dl')">
+        <datalist id="nrm-vendor-dl"></datalist>
+        <input type="hidden" id="nrm-vendor">
       </div>
       <div class="row">
         <label>Last known price per unit (optional, ₹)</label>
@@ -307,7 +308,10 @@
 
     <div class="row">
       <label>Pick Purchase Order</label>
-      <select id="cat15-po"><option value="">Loading confirmed POs…</option></select>
+      <input id="cat15-po-search" type="search" list="cat15-po-dl" placeholder="Type PO number or vendor to search…"
+             oninput="resolveDatalistId('cat15-po', 'cat15-po-dl'); onCat15PoChange()">
+      <datalist id="cat15-po-dl"></datalist>
+      <input type="hidden" id="cat15-po">
       <div id="cat15-po-meta" class="mute" style="margin-top: 6px;"></div>
     </div>
     <div class="row">
@@ -1104,25 +1108,34 @@ async function openCat15() {
   document.getElementById('cat15-notes').value = '';
   document.getElementById('cat15-po-meta').textContent = '';
 
-  const sel = document.getElementById('cat15-po');
-  sel.innerHTML = '<option value="">Loading confirmed POs…</option>';
+  // Load confirmed POs into a datalist for typeahead search
+  document.getElementById('cat15-po-search').value = '';
+  document.getElementById('cat15-po').value = '';
+  const dl = document.getElementById('cat15-po-dl');
+  dl.innerHTML = '';
 
   const r = await fetch(`${API}?action=confirmed-pos&brand=${BRAND}&pin=${PIN}`).then(x => x.json()).catch(() => ({ pos: [] }));
   const pos = r.pos || [];
-  sel.innerHTML = '<option value="">— Pick a PO —</option>' + pos.map(p =>
-    `<option value="${p.id}" data-total="${p.amount_total}" data-vendor="${esc(p.partner_id?.[1] || '')}">${esc(p.name)} · ${esc(p.partner_id?.[1] || '')} · ₹${Number(p.amount_total).toLocaleString('en-IN')}</option>`
-  ).join('');
+  // Cache for post-resolution lookups
+  window._cat15Pos = pos;
+  dl.innerHTML = pos.map(p => {
+    const label = `${p.name} · ${p.partner_id?.[1] || ''} · ₹${Number(p.amount_total).toLocaleString('en-IN')}`;
+    return `<option data-id="${p.id}" data-total="${p.amount_total}" data-vendor="${esc(p.partner_id?.[1] || '')}" value="${esc(label)}"></option>`;
+  }).join('');
+}
 
-  sel.addEventListener('change', () => {
-    const opt = sel.selectedOptions[0];
-    if (!opt?.value) { document.getElementById('cat15-po-meta').textContent = ''; return; }
-    const total = opt.dataset.total;
-    const vendor = opt.dataset.vendor;
-    document.getElementById('cat15-po-meta').textContent = `Vendor: ${vendor} · PO total: ₹${Number(total).toLocaleString('en-IN')}`;
-    if (!document.getElementById('cat15-amount').value) {
-      document.getElementById('cat15-amount').value = total;
-    }
-  });
+// Fires whenever user types in cat15-po-search — if they've picked an exact match,
+// resolveDatalistId already set the hidden id. Update meta + auto-fill amount.
+function onCat15PoChange() {
+  const id = document.getElementById('cat15-po').value;
+  const meta = document.getElementById('cat15-po-meta');
+  if (!id) { meta.textContent = ''; return; }
+  const po = (window._cat15Pos || []).find(p => String(p.id) === String(id));
+  if (!po) { meta.textContent = ''; return; }
+  meta.textContent = `Vendor: ${po.partner_id?.[1] || ''} · PO total: ₹${Number(po.amount_total).toLocaleString('en-IN')}`;
+  if (!document.getElementById('cat15-amount').value) {
+    document.getElementById('cat15-amount').value = po.amount_total;
+  }
 }
 
 async function submitCat15() {
@@ -1174,6 +1187,23 @@ function onVendorPick(el) {
 // ═══════════════════════════════════════════════════════════════
 // + Add New Raw Material (cart flow — requires vendor)
 // ═══════════════════════════════════════════════════════════════
+// Datalist helper — text-input with datalist resolves picked label back to an id.
+// Works on iOS 14+ and modern Android Chrome. Native UI, auto-filters as user types.
+function resolveDatalistId(targetHiddenId, datalistId) {
+  const inputEl = document.getElementById(targetHiddenId + '-search');
+  const hidden = document.getElementById(targetHiddenId);
+  const dl = document.getElementById(datalistId);
+  const typed = (inputEl?.value || '').trim().toLowerCase();
+  let matched = '';
+  for (const opt of dl.options) {
+    if (opt.value.toLowerCase() === typed || opt.label?.toLowerCase() === typed) {
+      matched = opt.dataset.id || '';
+      break;
+    }
+  }
+  hidden.value = matched;
+}
+
 async function openNewRmProductModal() {
   // Load UoMs
   if (!_uomsCache) {
@@ -1186,11 +1216,14 @@ async function openNewRmProductModal() {
     ${_uomsCache.map(u => `<option value="${u.id}" ${u.name === 'kg' ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
   `;
 
-  // Load vendors (from already-fetched rmCatalog)
+  // Load vendors into the datalist (typeahead search)
   const vendors = rmCatalog.vendors || [];
-  const vSel = document.getElementById('nrm-vendor');
-  vSel.innerHTML = '<option value="">— Select vendor —</option>' +
-    vendors.map(v => `<option value="${v.id}">${esc(v.name)}${v.phone ? ' · ' + v.phone : ''}</option>`).join('');
+  const dl = document.getElementById('nrm-vendor-dl');
+  dl.innerHTML = vendors.map(v =>
+    `<option data-id="${v.id}" value="${esc(v.name)}"${v.phone ? ` label="${esc(v.name)} · ${esc(v.phone)}"` : ''}></option>`
+  ).join('');
+  document.getElementById('nrm-vendor').value = '';
+  document.getElementById('nrm-vendor-search').value = '';
 
   document.getElementById('nrm-name').value = '';
   document.getElementById('nrm-price').value = '';
