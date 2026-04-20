@@ -1,0 +1,25 @@
+name = "hn-spend-sync-cron"
+main = "index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+# Every 5 minutes — pull delta from both Odoo instances into fact_spend.
+# CF free tier: 5 crons/worker OK. Each fire does incremental pull via
+# write_date > last_synced cursor, so cost is bounded by actual change
+# volume (~dozens of rows/day).
+[triggers]
+crons = ["*/5 * * * *"]
+
+# D1 binding — same database as the Pages project (hn-hiring).
+[[d1_databases]]
+binding = "DB"
+database_name = "hn-hiring"
+database_id = "a0107321-790a-4d46-ac3c-a54a676c6bcb"
+
+# Secrets (wrangler secret put <NAME> --config workers/spend-sync-cron/wrangler.toml):
+#   ODOO_KEY_HNHOTELS   — API key for odoo.hnhotels.in (admin uid=2)
+#   ODOO_KEY_OPS_HAMZA  — API key for ops.hamzahotel.com (admin uid=2, legacy NCH v2 expenses)
+#   DASHBOARD_KEY       — for manual /?key=... trigger
+[vars]
+# No non-secret vars needed
