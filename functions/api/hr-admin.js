@@ -1565,9 +1565,16 @@ async function pullAttendance(apiKey, db, from, to, userName) {
     }
 
     // Step 4: aggregate per shift-day into buckets
+    // tapCount = actual TAP count (every in/out is 1 tap), NOT pair count.
+    //   2 pairs fully closed = 4 taps (IN, OUT, IN, OUT) — EVEN, valid
+    //   1 pair + 1 orphan IN  = 3 taps — ODD, missed a break punch
+    //   1 full pair           = 2 taps — EVEN, valid straight shift
+    //   1 orphan IN           = 1 tap  — ODD, missing OUT
     for (const [sd, pairsInDay] of byShiftDay.entries()) {
-      let hours = 0, firstIn = null, lastOut = null;
+      let hours = 0, firstIn = null, lastOut = null, tapCount = 0;
       for (const p of pairsInDay) {
+        if (p.in)  tapCount++;
+        if (p.out) tapCount++;
         if (p.in && p.out) {
           const ms = parseIstWall(p.out) - parseIstWall(p.in);
           if (ms > 0) hours += ms / 3600000;
@@ -1576,7 +1583,7 @@ async function pullAttendance(apiKey, db, from, to, userName) {
         if (p.out && (!lastOut || p.out > lastOut)) lastOut = p.out;
       }
       buckets.set(`${emp.odoo_employee_id}|${sd}`, {
-        punches: pairsInDay, hours, firstIn, lastOut,
+        punches: pairsInDay, hours, firstIn, lastOut, tapCount,
       });
     }
   }
@@ -1689,7 +1696,7 @@ async function pullAttendance(apiKey, db, from, to, userName) {
       ).bind(
         emp.pin, emp.id, emp.odoo_employee_id, shiftDay,
         b?.firstIn || null, b?.lastOut || null,
-        b?.punches.length || 0, hours,
+        b?.tapCount ?? 0, hours,
         status, singlePunch,
         emp.expected_daily_hours || 8,
         deduction, reason,
