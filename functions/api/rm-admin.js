@@ -395,31 +395,31 @@ async function handlePost(request, env) {
     if (!odoo_product_id || !uom_name) return json({ error: 'Required: odoo_product_id, uom_name' }, 400);
     const apiKey = env.ODOO_API_KEY;
     if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+    // Use admin uid=2 directly (rm-admin.js authenticates as yash@ which doesn't exist
+    // on odoo.hnhotels.in; admin-only API policy: uid=2 + ODOO_API_KEY)
+    const adminCall = (model, method, args, kwargs) =>
+      rpc('object', 'execute_kw', [ODOO_DB, 2, apiKey, model, method, args, kwargs || {}]);
 
     // 1. Find existing UoM by name (case-insensitive)
-    const existing = await odoo(apiKey, 'uom.uom', 'search_read',
+    const existing = await adminCall('uom.uom', 'search_read',
       [[['name', '=ilike', uom_name]]], { fields: ['id', 'name', 'category_id', 'uom_type'] });
     let uomId;
     if (existing.length > 0) {
       uomId = existing[0].id;
     } else {
       // 2. Get the "Units" category to create "can" under it (unit-count, not volume)
-      const unitsCat = await odoo(apiKey, 'uom.category', 'search_read',
+      const unitsCat = await adminCall('uom.category', 'search_read',
         [[['name', '=ilike', 'Unit']]], { fields: ['id', 'name'] });
       const catId = unitsCat[0]?.id || 1;
-      uomId = await odoo(apiKey, 'uom.uom', 'create', [{
-        name: uom_name, category_id: catId, uom_type: 'bigger', factor_inv: 1, active: true,
-      }]);
+      uomId = await adminCall('uom.uom', 'create', [{ name: uom_name, category_id: catId, uom_type: 'bigger', factor_inv: 1, active: true }]);
     }
 
-    // 3. Update product.product's uom_id and uom_po_id
-    await odoo(apiKey, 'product.template', 'write',
-      [[]], {}); // no-op — we use product.product
-    const prod = await odoo(apiKey, 'product.product', 'read',
+    // 3. Read product template id then update uom_id + uom_po_id
+    const prod = await adminCall('product.product', 'read',
       [[odoo_product_id]], { fields: ['id', 'product_tmpl_id', 'uom_id', 'uom_po_id'] });
     if (!prod[0]) return json({ error: `Product ${odoo_product_id} not found` }, 404);
     const tmplId = prod[0].product_tmpl_id[0];
-    await odoo(apiKey, 'product.template', 'write', [[tmplId], { uom_id: uomId, uom_po_id: uomId }]);
+    await adminCall('product.template', 'write', [[tmplId], { uom_id: uomId, uom_po_id: uomId }]);
 
     // 4. Update D1 rm_products UoM label if hn_code provided
     if (hn_code && db) {
