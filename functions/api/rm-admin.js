@@ -14,9 +14,8 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const ODOO_URL  = 'https://odoo.hnhotels.in/jsonrpc';
-const ODOO_DB   = 'main';
-const ODOO_USER = 'nihaf@gmail.com';
+const ODOO_URL = 'https://odoo.hnhotels.in/jsonrpc';
+const ODOO_DB  = 'main';
 
 // Master Data attribute IDs (created in Phase 1 — seeded in Odoo)
 const CAT_GOODS_ROOT = 1;   // product.category "Goods"
@@ -58,7 +57,9 @@ function checkPin(pin, requireAdmin = false) {
 
 /* ━━━ Odoo JSON-RPC ━━━ */
 
-let _uid = null;
+// Admin-only: all calls use uid=2 + ODOO_API_KEY directly (no authenticate step).
+// common/authenticate does NOT work with API keys in Odoo 19.
+const ODOO_UID = 2;
 
 async function rpc(service, method, args) {
   const r = await fetch(ODOO_URL, {
@@ -77,17 +78,8 @@ async function rpc(service, method, args) {
   return d.result;
 }
 
-async function odooAuth(apiKey) {
-  if (_uid) return _uid;
-  const uid = await rpc('common', 'authenticate', [ODOO_DB, ODOO_USER, apiKey, {}]);
-  if (!uid) throw new Error('Odoo auth failed — check ODOO_API_KEY');
-  _uid = uid;
-  return uid;
-}
-
 async function odoo(apiKey, model, method, args = [], kwargs = {}) {
-  const uid = await odooAuth(apiKey);
-  return rpc('object', 'execute_kw', [ODOO_DB, uid, apiKey, model, method, args, kwargs]);
+  return rpc('object', 'execute_kw', [ODOO_DB, ODOO_UID, apiKey, model, method, args, kwargs]);
 }
 
 /* ━━━ Sync log ━━━ */
@@ -857,7 +849,7 @@ async function doExtract(env) {
   const apiKey = env.ODOO_API_KEY;
   if (!apiKey) return json({ error: 'ODOO_API_KEY secret not set' }, 500);
 
-  const uid = await odooAuth(apiKey);
+  const uid = ODOO_UID;
 
   const [categories, uoms, vendors, products, fields] = await Promise.all([
     odoo(apiKey, 'product.category', 'search_read', [[]], { fields: ['name', 'parent_id', 'complete_name'] }),
@@ -1236,7 +1228,6 @@ async function runCleanup(env, db, step, userName) {
 }
 
 async function fetchCleanupState(apiKey, db) {
-  await odooAuth(apiKey);
   const [prods, cats] = await Promise.all([
     odoo(apiKey, 'product.product', 'search_read',
       [['|', ['default_code', 'like', 'RM-'], ['default_code', 'like', 'NCH-']]],
@@ -1364,7 +1355,6 @@ async function cleanupRename(apiKey, db, userName) {
 /* --- Fix D1: sync correct odoo_ids + reset missing products for creation --- */
 
 async function cleanupFixD1(apiKey, db) {
-  await odooAuth(apiKey);
   const prods = await odoo(apiKey, 'product.product', 'search_read',
     [[['default_code', 'like', 'HN-RM-']]], { fields: ['id', 'default_code'] });
   const byCode = {};
@@ -1400,7 +1390,6 @@ async function cleanupFixD1(apiKey, db) {
 /* --- Categories: deprecate old HE/NCH Raw Materials categories once empty --- */
 
 async function cleanupCategories(apiKey, db, userName) {
-  await odooAuth(apiKey);
   const oldCats = await odoo(apiKey, 'product.category', 'search_read',
     [['|', ['complete_name', 'like', 'HE Raw Materials'], ['complete_name', 'like', 'NCH Raw Materials']]],
     { fields: ['id', 'name', 'complete_name'] });

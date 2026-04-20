@@ -682,10 +682,9 @@ async function submitForm() {
       if ((CURRENT_CAT.id === 3 || CURRENT_CAT.id === 4) && !body.employee_id) throw new Error('Pick an employee');
     }
     if (CURRENT_CAT.backend === 'account.move') {
-      body.vendor_id = document.getElementById('f-vendor')?.value;
+      body.vendor_id = document.getElementById('f-vendor')?.value || '';
       body.vendor_name = document.getElementById('f-vendor-name')?.value || '';
       body.bill_ref = document.getElementById('f-bill-ref')?.value || '';
-      if (!body.vendor_id) throw new Error('Pick a vendor');
     }
     const r = await fetch(`${API}?action=record`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
