@@ -152,8 +152,22 @@
       </div>
     </div>
 
+    <!-- Historical date picker (shown only when MODE=historical) -->
+    <div id="rm-hist-date-wrap" class="hidden" style="padding:12px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:12px;margin-bottom:12px">
+      <div style="font-size:11px;color:#fbbf24;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">
+        HISTORICAL PO — ORIGINAL DATE *
+      </div>
+      <input id="rm-hist-date" type="date" required style="width:100%">
+      <div class="mute" style="font-size:11px;margin-top:4px">Every line in this cart will be dated to this day.</div>
+    </div>
+
     <input id="rm-search" type="search" placeholder="Search products (name or code)…"
-           oninput="filterRmProducts()" style="margin-bottom: 12px;">
+           oninput="filterRmProducts()" style="margin-bottom: 8px;">
+
+    <button type="button" onclick="openNewRmProductModal()"
+            style="width:100%;padding:10px;background:rgba(124,86,247,0.1);border:1px dashed rgba(124,86,247,0.35);color:#a78bfa;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px">
+      + Add New Raw Material
+    </button>
 
     <div id="rm-product-list" style="margin-bottom: 20px;"></div>
     <div id="rm-empty" class="mute hidden" style="text-align: center; padding: 20px;">No products match.</div>
@@ -216,6 +230,41 @@
       <div style="display: flex; gap: 8px;">
         <button class="btn btn-ghost" style="flex: 1;" onclick="closeNewProductModal()">Cancel</button>
         <button class="btn btn-primary" style="flex: 1;" onclick="submitNewProduct()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW RAW MATERIAL modal — vendor REQUIRED, links via product.supplierinfo -->
+  <div id="new-rm-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeNewRmProductModal()">
+    <div class="modal-card" style="max-width: 480px;">
+      <h3>Add Raw Material to Registry</h3>
+      <div class="sub" style="margin-bottom: 14px; font-size: 12px;">
+        Creates a Raw Material in Odoo and links to the vendor. Next time the same vendor is picked, this item shows as theirs.
+      </div>
+      <div class="row">
+        <label>Product name *</label>
+        <input id="nrm-name" type="text" placeholder="e.g. Green Chilli, Kashmiri Red Chilli Powder">
+      </div>
+      <div class="row">
+        <label>Unit of measure *</label>
+        <select id="nrm-uom"><option value="">Loading…</option></select>
+      </div>
+      <div class="row">
+        <label>Supplier vendor * <span class="mute" style="font-weight: 400;">(you can't add new RM without a vendor)</span></label>
+        <select id="nrm-vendor">
+          <option value="">— Select vendor —</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Last known price per unit (optional, ₹)</label>
+        <input id="nrm-price" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="row mute" style="font-size: 11px; line-height: 1.4; padding: 10px; background: rgba(16,185,129,0.05); border-radius: 8px;">
+        For brand/pack/grade variants (e.g. "Oil" with 3 brands × 2 packs = 6 variants), use the full registry flow at <b>/ops/is/</b>. This simple form creates a single plain product.
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-ghost" style="flex: 1;" onclick="closeNewRmProductModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex: 1;" onclick="submitNewRmProduct()">Create + Add to Cart</button>
       </div>
     </div>
   </div>
@@ -318,6 +367,18 @@ function setMode(m) {
   document.getElementById('btn-mode-live').classList.toggle('active', m === 'live');
   document.getElementById('btn-mode-hist').classList.toggle('active', m === 'historical');
   document.getElementById('mode-banner-hist').classList.toggle('hidden', m !== 'historical');
+  // Show/hide cart inline date picker
+  const wrap = document.getElementById('rm-hist-date-wrap');
+  if (wrap) {
+    wrap.classList.toggle('hidden', m !== 'historical');
+    // Seed with last historical date if set
+    const di = document.getElementById('rm-hist-date');
+    if (m === 'historical' && di && !di.value) {
+      const today = new Date().toISOString().slice(0, 10);
+      di.value = LAST_HISTORICAL_DATE || '';
+      di.max = today;
+    }
+  }
   updateHistBannerText();
 }
 function updateHistBannerText() {
@@ -958,18 +1019,14 @@ function closeVariantPicker() {
 async function submitRmPurchase() {
   if (!cart.length) return;
 
-  // Historical mode: prompt for the original PO date (sticky default from last entry)
+  // Historical mode: read from the inline date picker at top of cart
   let historicalDate;
   if (MODE === 'historical') {
-    const today = new Date().toISOString().slice(0, 10);
-    const defaultDate = LAST_HISTORICAL_DATE || '';
-    historicalDate = prompt(
-      `Historical catch-up — enter the original PO date (YYYY-MM-DD).${defaultDate ? '\n(last entry was ' + defaultDate + ' — press Enter to reuse, or type a different date)' : ''}`,
-      defaultDate
-    );
+    historicalDate = document.getElementById('rm-hist-date')?.value || '';
     if (!historicalDate || !/^\d{4}-\d{2}-\d{2}$/.test(historicalDate)) {
-      return toast('Pick a valid date (YYYY-MM-DD)', 'err');
+      return toast('Pick the original PO date at the top before submitting', 'err');
     }
+    const today = new Date().toISOString().slice(0, 10);
     if (historicalDate > today) return toast('Date cannot be in the future', 'err');
   }
 
@@ -1111,6 +1168,93 @@ function onVendorPick(el) {
     el.value = '';
     _newVendorContext = 'generic';
     openNewVendorModal();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// + Add New Raw Material (cart flow — requires vendor)
+// ═══════════════════════════════════════════════════════════════
+async function openNewRmProductModal() {
+  // Load UoMs
+  if (!_uomsCache) {
+    const r = await fetch(`${API}?action=uoms&pin=${PIN}`).then(x => x.json()).catch(() => null);
+    _uomsCache = r?.uoms || [];
+  }
+  const uomSel = document.getElementById('nrm-uom');
+  uomSel.innerHTML = `
+    <option value="">— Select —</option>
+    ${_uomsCache.map(u => `<option value="${u.id}" ${u.name === 'kg' ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
+  `;
+
+  // Load vendors (from already-fetched rmCatalog)
+  const vendors = rmCatalog.vendors || [];
+  const vSel = document.getElementById('nrm-vendor');
+  vSel.innerHTML = '<option value="">— Select vendor —</option>' +
+    vendors.map(v => `<option value="${v.id}">${esc(v.name)}${v.phone ? ' · ' + v.phone : ''}</option>`).join('');
+
+  document.getElementById('nrm-name').value = '';
+  document.getElementById('nrm-price').value = '';
+  document.getElementById('new-rm-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('nrm-name').focus(), 50);
+}
+
+function closeNewRmProductModal() {
+  document.getElementById('new-rm-modal').classList.add('hidden');
+}
+
+async function submitNewRmProduct() {
+  const name = document.getElementById('nrm-name').value.trim();
+  const uomId = document.getElementById('nrm-uom').value;
+  const vendorId = document.getElementById('nrm-vendor').value;
+  const price = parseFloat(document.getElementById('nrm-price').value) || 0;
+
+  if (!name) return toast('Name is required', 'err');
+  if (!uomId) return toast('Pick a unit of measure', 'err');
+  if (!vendorId) return toast('Vendor is required — every new RM must be linked to a vendor', 'err');
+
+  // Find "Raw Materials" category id (21 in new Odoo)
+  const RM_CATEGORY_ID = 21;
+  // Company id for current brand — HE=2, NCH=3, HQ=1
+  const companyMap = { HE: 2, NCH: 3, HQ: 1 };
+  const companyId = companyMap[BRAND] || null;
+
+  try {
+    const r = await fetch(`/api/rm-admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create-template-with-variants',
+        pin: PIN,
+        name: name,
+        category_id: RM_CATEGORY_ID,
+        uom_id: parseInt(uomId, 10),
+        company_id: companyId,
+        vendor_id: parseInt(vendorId, 10),
+        vendor_price: price,
+      }),
+    }).then(x => x.json());
+
+    if (r.error) return toast(r.error, 'err');
+
+    toast(`✓ Created "${name}" — linked to vendor`, 'ok');
+
+    // Add to local catalog + refresh search
+    const newProduct = {
+      id: r.variants?.[0]?.id || r.template_id,
+      name: name,
+      code: r.variants?.[0]?.default_code || '',
+      uom: _uomsCache.find(u => u.id == uomId)?.name || '',
+      vendors: [{ id: parseInt(vendorId), name: rmCatalog.vendors.find(v => v.id == vendorId)?.name || '' }],
+      lastPrice: price > 0 ? { price: price, date: new Date().toISOString() } : null,
+    };
+    rmCatalog.products.push(newProduct);
+
+    closeNewRmProductModal();
+    // Auto-search the newly-added item so it's visible in the list
+    document.getElementById('rm-search').value = name;
+    filterRmProducts();
+  } catch (e) {
+    toast('Create failed: ' + e.message, 'err');
   }
 }
 

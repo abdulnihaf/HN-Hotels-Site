@@ -547,6 +547,8 @@ async function handlePost(request, env) {
       name, category_id, uom_id, company_id,
       attr_lines,              // [{attribute_id, value_ids:[...]}, ...] — OPTIONAL
       default_code_prefix,     // optional — "HN-RM-XXX"
+      vendor_id,               // optional — links product.supplierinfo so vendor pricelist knows it
+      vendor_price,            // optional — last-known unit price from this vendor
     } = body;
 
     if (!name || !String(name).trim()) return json({ error: 'name required' }, 400);
@@ -593,6 +595,21 @@ async function handlePost(request, env) {
       if (default_code_prefix) tmplVals.default_code = String(default_code_prefix).trim();
 
       const tmplId = await odoo(apiKey, 'product.template', 'create', [tmplVals]);
+
+      // 3b. Link vendor via product.supplierinfo — so next PO with this vendor
+      //     auto-suggests this product, and bill reconciliation can match.
+      let supplierinfoId = null;
+      if (vendor_id) {
+        try {
+          supplierinfoId = await odoo(apiKey, 'product.supplierinfo', 'create', [{
+            product_tmpl_id: tmplId,
+            partner_id: parseInt(vendor_id),
+            min_qty: 0,
+            price: parseFloat(vendor_price) || 0,
+            company_id: cid,
+          }]);
+        } catch (e) { console.error('supplierinfo create fail:', e.message); }
+      }
 
       // 4. Read back the auto-generated variants
       const variants = await odoo(apiKey, 'product.product', 'search_read',
