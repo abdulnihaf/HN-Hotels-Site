@@ -1470,75 +1470,71 @@ async function pullAttendance(apiKey, db, from, to, userName) {
        ORDER BY pin, punch_time`
   ).bind(fetchFrom, fetchTo).all();
 
-  // Bucket by (pin, shift_day) — shift_day resolved per-employee via brand rule
-  const byKey = new Map();  // `${pin}|${shiftDay}` → [raw rows]
+  // Session-based pairing (Apr 20 refactor per Nihaf):
+  //
+  //   Old approach bucketed taps per shift-day then paired within-bucket.
+  //   That broke NCH night shifts that span past 06:00 next day (Aadil
+  //   22:33 → 09:24 = one shift, but OUT was in next bucket).
+  //
+  //   New approach: group by pin only, pair taps chronologically across
+  //   days, assign each completed PAIR to the shift-day of its IN.
+  //
+  // CAMS F38+ sends every face-tap as punch_type="CheckIn" — no direction
+  // tag. Pairing rules:
+  //   1. Double-tap dedup: consecutive taps <10 min = duplicate device
+  //      reads or staff hesitation. Drop the 2nd.
+  //   2. Alternate-pair: 1st tap = IN, 2nd = OUT, 3rd = IN, 4th = OUT…
+  //   3. Max-session cap: if gap IN→next > brand's max, previous IN
+  //      becomes orphan (worker left without tapping) and current tap
+  //      opens a new session.
+  //
+  // Per-brand MAX session (calibrated Apr 20 per real outlet hours):
+  //   HE  18h — staff can arrive 9 AM, OUT up to ~2-3 AM next day
+  //   NCH 14h — 24h operation but one shift rarely exceeds 12-14h
+  //             (Aadil's 22:33 → 09:24 = 10h 51m = within cap ✓)
+  //   HQ  14h — office flex, late-night GM tapping (Tanveer case) included
+  //
+  // PAIR ASSIGNMENT: each pair goes to shift-day of its IN. So Aadil's
+  // (22:33 Apr 19, 09:24 Apr 20) lives in Apr 19 shift-day even though
+  // OUT is in calendar-Apr 20. Ramjan's (10:40 Apr 19, 15:03 Apr 19)
+  // stays in Apr 19. Works for all patterns.
+  const MAX_SESSION_H = { HE: 18, NCH: 14, HQ: 14 };
+  const MIN_SESSION_MINUTES = 10;
+
+  // Group punches by pin only, keeping chronological order
+  const byPinAll = new Map();  // pin → [raw rows, sorted]
   let punchCount = 0;
   for (const r of rawPunches.results || []) {
     const pin = String(r.pin);
-    const emp = byPin.get(pin);
-    if (!emp) continue;  // skip archived/unmapped
-    const startHour = emp.shift_day_start_hour ?? 0;
-    const shiftDay = shiftDayFor(r.punch_time, startHour);
-    if (!shiftDay) continue;
-    if (shiftDay < from || shiftDay > to) continue;  // outside the recompute window
-    const k = `${pin}|${shiftDay}`;
-    if (!byKey.has(k)) byKey.set(k, []);
-    byKey.get(k).push(r);
+    if (!byPin.has(pin)) continue;  // skip archived/unmapped
+    if (!byPinAll.has(pin)) byPinAll.set(pin, []);
+    byPinAll.get(pin).push(r);
     punchCount++;
   }
 
-  // Pair taps within each shift-day bucket using intelligent inference.
-  //
-  // CAMS F38+ sends every face-tap as punch_type="CheckIn" — the device
-  // doesn't distinguish IN from OUT direction (verified Apr 19 2026:
-  // 29/29 punches ever received have punch_type=CheckIn). So we infer
-  // direction from sequence + timing:
-  //
-  //   1. Re-verify / double-tap dedup: consecutive taps within
-  //      MIN_SESSION_MINUTES are treated as duplicate presence-markers
-  //      (device re-verify, hesitation tap, staff checking if it
-  //      registered). A real work session is longer than this. Set
-  //      generously at 10 min — catches the 6-min double-tap pattern
-  //      we saw on Faheem today without swallowing real short shifts.
-  //   2. Alternate-pair with max-session cap per brand: walking sorted
-  //      taps, first = IN, next = OUT, next = IN, next = OUT … BUT if
-  //      the gap between an open IN and the next tap exceeds the brand's
-  //      typical max session length, the next tap is NOT a close-out —
-  //      the IN becomes an orphan (worker left without tapping) and the
-  //      current tap starts a new session.
-  //
-  // Per-brand max-session (calibrated from actual operations):
-  //   HE  16h — biryani kitchen prep ~9 AM → close ~2 AM next day
-  //   NCH 12h — 24h operation with 2 shifts, individual shift ≤ 10h
-  //   HQ  10h — office staff flex
-  //
-  // Break detection then reads pair[i].out → pair[i+1].in gaps in
-  // computeBreakGap(). 30-300 min = qualifying break. <30 min = weird
-  // (shouldn't happen after reverify dedup). >300 min = flagged outlier.
-  const MAX_SESSION_H = { HE: 16, NCH: 12, HQ: 10 };
-  const MIN_SESSION_MINUTES = 10;   // taps closer than this = duplicates
-
+  // For each person, build pairs across all days, then assign each pair
+  // to the shift-day of its IN timestamp.
   const buckets = new Map();  // `${odoo_id}|${shiftDay}` → { punches, hours, firstIn, lastOut }
-  for (const [k, rows] of byKey.entries()) {
-    const [pin, shiftDay] = k.split('|');
+  for (const [pin, rows] of byPinAll.entries()) {
     const emp = byPin.get(pin);
     const maxSessionH = MAX_SESSION_H[emp.brand_label] || 14;
+    const startHour = emp.shift_day_start_hour ?? 0;
 
     rows.sort((a, b) => String(a.punch_time).localeCompare(String(b.punch_time)));
 
-    // Step 1: dedup double-taps (gap < MIN_SESSION_MINUTES)
+    // Step 1: dedup double-taps (<10 min apart)
     const clean = [];
     for (const r of rows) {
       const last = clean[clean.length - 1];
       if (last) {
         const gapMin = (parseIstWall(r.punch_time) - parseIstWall(last.punch_time)) / 60000;
-        if (gapMin < MIN_SESSION_MINUTES) continue;   // drop duplicate
+        if (gapMin < MIN_SESSION_MINUTES) continue;
       }
       clean.push(r);
     }
 
     // Step 2: alternate-pair with max-session cap
-    const pairs = [];
+    const pairs = [];  // { in, out }
     let openIn = null;
     for (const r of clean) {
       if (!openIn) {
@@ -1547,31 +1543,42 @@ async function pullAttendance(apiKey, db, from, to, userName) {
       }
       const gapH = (parseIstWall(r.punch_time) - parseIstWall(openIn)) / 3600000;
       if (gapH <= maxSessionH) {
-        // Close the pair — this tap is the session's OUT
         pairs.push({ in: openIn, out: r.punch_time });
         openIn = null;
       } else {
-        // Gap too long — previous IN is an orphan (forgot to tap OUT),
-        // this tap begins a new session
         pairs.push({ in: openIn, out: null });
         openIn = r.punch_time;
       }
     }
     if (openIn) pairs.push({ in: openIn, out: null });
 
-    let hours = 0, firstIn = null, lastOut = null;
+    // Step 3: assign each pair to the shift-day of its IN (or OUT if no IN)
+    const byShiftDay = new Map();  // shiftDay → [pairs]
     for (const p of pairs) {
-      if (p.in && p.out) {
-        const ms = parseIstWall(p.out) - parseIstWall(p.in);
-        if (ms > 0) hours += ms / 3600000;
-      }
-      if (p.in  && (!firstIn || p.in  < firstIn)) firstIn = p.in;
-      if (p.out && (!lastOut || p.out > lastOut)) lastOut = p.out;
+      const anchor = p.in || p.out;
+      if (!anchor) continue;
+      const sd = shiftDayFor(anchor, startHour);
+      if (!sd) continue;
+      if (sd < from || sd > to) continue;  // outside recompute window
+      if (!byShiftDay.has(sd)) byShiftDay.set(sd, []);
+      byShiftDay.get(sd).push(p);
     }
 
-    buckets.set(`${emp.odoo_employee_id}|${shiftDay}`, {
-      punches: pairs, hours, firstIn, lastOut,
-    });
+    // Step 4: aggregate per shift-day into buckets
+    for (const [sd, pairsInDay] of byShiftDay.entries()) {
+      let hours = 0, firstIn = null, lastOut = null;
+      for (const p of pairsInDay) {
+        if (p.in && p.out) {
+          const ms = parseIstWall(p.out) - parseIstWall(p.in);
+          if (ms > 0) hours += ms / 3600000;
+        }
+        if (p.in  && (!firstIn || p.in  < firstIn)) firstIn = p.in;
+        if (p.out && (!lastOut || p.out > lastOut)) lastOut = p.out;
+      }
+      buckets.set(`${emp.odoo_employee_id}|${sd}`, {
+        punches: pairsInDay, hours, firstIn, lastOut,
+      });
+    }
   }
 
   // Target shift-days in range [from, to]
