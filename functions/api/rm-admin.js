@@ -388,6 +388,51 @@ async function handlePost(request, env) {
     return json({ success: true, hn_code });
   }
 
+  // One-shot: find-or-create a UoM and update a product's uom_id in Odoo + D1
+  // POST {action:'set-product-uom', pin:'0305', odoo_product_id:238, uom_name:'can', hn_code:'HN-RM-203'}
+  if (action === 'set-product-uom') {
+    const { odoo_product_id, uom_name, hn_code } = body;
+    if (!odoo_product_id || !uom_name) return json({ error: 'Required: odoo_product_id, uom_name' }, 400);
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+
+    // 1. Find existing UoM by name (case-insensitive)
+    const existing = await odoo(apiKey, 'uom.uom', 'search_read',
+      [[['name', '=ilike', uom_name]]], { fields: ['id', 'name', 'category_id', 'uom_type'] });
+    let uomId;
+    if (existing.length > 0) {
+      uomId = existing[0].id;
+    } else {
+      // 2. Get the "Units" category to create "can" under it (unit-count, not volume)
+      const unitsCat = await odoo(apiKey, 'uom.category', 'search_read',
+        [[['name', '=ilike', 'Unit']]], { fields: ['id', 'name'] });
+      const catId = unitsCat[0]?.id || 1;
+      uomId = await odoo(apiKey, 'uom.uom', 'create', [{
+        name: uom_name, category_id: catId, uom_type: 'bigger', factor_inv: 1, active: true,
+      }]);
+    }
+
+    // 3. Update product.product's uom_id and uom_po_id
+    await odoo(apiKey, 'product.template', 'write',
+      [[]], {}); // no-op — we use product.product
+    const prod = await odoo(apiKey, 'product.product', 'read',
+      [[odoo_product_id]], { fields: ['id', 'product_tmpl_id', 'uom_id', 'uom_po_id'] });
+    if (!prod[0]) return json({ error: `Product ${odoo_product_id} not found` }, 404);
+    const tmplId = prod[0].product_tmpl_id[0];
+    await odoo(apiKey, 'product.template', 'write', [[tmplId], { uom_id: uomId, uom_po_id: uomId }]);
+
+    // 4. Update D1 rm_products UoM label if hn_code provided
+    if (hn_code && db) {
+      await db.prepare("UPDATE rm_products SET uom = ? WHERE hn_code = ?").bind(uom_name, hn_code).run();
+    }
+
+    return json({
+      success: true, uom_id: uomId, uom_name, odoo_product_id,
+      odoo_template_id: tmplId, was_existing: existing.length > 0,
+      d1_updated: !!hn_code,
+    });
+  }
+
   if (action === 'update-vendor') {
     const { key, ...fields } = body;
     if (!key) return json({ error: 'Required: key' }, 400);
