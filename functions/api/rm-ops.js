@@ -759,10 +759,10 @@ async function handlePost(action, context, env, DB) {
   const creds = getOdooCredentials(user, env);
 
   switch (body.action || action) {
-    case 'create-po':       return createPO(body, user, creds, cfg, brand, DB);
-    case 'edit-po-line':    return editPOLine(body, user, creds, cfg, brand, DB);
-    case 'delete-po-line':  return deletePOLine(body, user, creds, cfg, brand, DB);
-    case 'cancel-po':       return cancelPO(body, user, creds, cfg, brand, DB);
+    case 'create-po':       return createPO(body, user, creds, cfg, brand, DB, env);
+    case 'edit-po-line':    return editPOLine(body, user, creds, cfg, brand, DB, env);
+    case 'delete-po-line':  return deletePOLine(body, user, creds, cfg, brand, DB, env);
+    case 'cancel-po':       return cancelPO(body, user, creds, cfg, brand, DB, env);
     case 'receive-delivery': return receiveDelivery(body, user, creds, cfg, brand, DB, env);
     case 'add-product':     return addProduct(body, user, creds, cfg, brand, env, DB);
     case 'update-price':    return updatePrice(body, user, brand, DB);
@@ -786,19 +786,20 @@ async function handlePost(action, context, env, DB) {
 
 /* ── Create Purchase Order ── */
 
-async function createPO(body, user, creds, cfg, brand, DB) {
-  // Any authenticated user in USERS can create a PO — /ops/spend/ (unified UI)
-  // lets Nihaf/Naveen/Faheem/Basheer/Tanveer/Yashwant/Zoya all record RM purchases.
-  // PIN membership in USERS is the actual auth gate.
+async function createPO(body, user, creds, cfg, brand, DB, env) {
+  // Use admin creds for all Odoo calls: per-user keys may lack product.product
+  // read access or may not be configured for this Odoo instance. Auth gate is
+  // enforced by PIN + USERS map above — Odoo user tracking is via D1 ops log.
+  const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
 
   const { vendor_id, lines, date } = body;
   if (!vendor_id || !lines || !Array.isArray(lines) || lines.length === 0) {
     return json({ error: 'Missing vendor_id or lines' }, 400);
   }
 
-  // Fetch product UoMs
+  // Fetch product UoMs (admin read — product access not guaranteed for all users)
   const productIds = lines.map(l => l.product_id);
-  const productData = await odooCall(creds.uid, creds.key,
+  const productData = await odooCall(sysCreds.uid, sysCreds.key,
     'product.product', 'search_read',
     [[['id', 'in', productIds]]],
     { fields: ['id', 'name', 'uom_id'] }
@@ -824,27 +825,25 @@ async function createPO(body, user, creds, cfg, brand, DB) {
     date_planned: datePlanned,
   }]);
 
-  // Create PO — tag x_recorded_by_user_id for native Odoo audit
   const poVals = {
     partner_id: vendor_id,
     company_id: cfg.company_id,
     order_line: orderLines,
-    x_recorded_by_user_id: user.odoo_uid || 2,
   };
   if (date) poVals.date_order = dateOrderStr;
 
-  const poId = await odooCall(creds.uid, creds.key,
+  const poId = await odooCall(sysCreds.uid, sysCreds.key,
     'purchase.order', 'create',
     [poVals], coCtx(cfg)
   );
 
   // Auto-confirm
-  await odooCall(creds.uid, creds.key,
+  await odooCall(sysCreds.uid, sysCreds.key,
     'purchase.order', 'button_confirm', [[poId]], coCtx(cfg)
   );
 
   // Read PO name
-  const po = await odooCall(creds.uid, creds.key,
+  const po = await odooCall(sysCreds.uid, sysCreds.key,
     'purchase.order', 'read', [[poId]], { fields: ['name'] }
   );
   const poName = po[0] ? po[0].name : `PO#${poId}`;
@@ -941,17 +940,18 @@ async function checkPOEditable(creds, poId) {
 
 /* ── Edit PO Line (qty / price) ── */
 
-async function editPOLine(body, user, creds, cfg, brand, DB) {
+async function editPOLine(body, user, creds, cfg, brand, DB, env) {
   if (user.role !== 'admin' && user.role !== 'purchase') {
     return json({ error: 'Insufficient permissions' }, 403);
   }
+  const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
 
   const { po_id, line_id, qty, price_unit } = body;
   if (!po_id || !line_id) return json({ error: 'Missing po_id or line_id' }, 400);
   if (qty == null && price_unit == null) return json({ error: 'Nothing to update — provide qty or price_unit' }, 400);
 
   // Safety check: PO editable?
-  const check = await checkPOEditable(creds, po_id);
+  const check = await checkPOEditable(sysCreds, po_id);
   if (!check.ok) return json({ error: check.error }, 400);
 
   // Build update fields
@@ -966,13 +966,13 @@ async function editPOLine(body, user, creds, cfg, brand, DB) {
   }
 
   // Write to Odoo
-  await odooCall(creds.uid, creds.key,
+  await odooCall(sysCreds.uid, sysCreds.key,
     'purchase.order.line', 'write', [[line_id], updates], coCtx(cfg));
 
   // If price changed, update D1 daily prices
   if (price_unit != null && DB) {
     // Get the product code for this line
-    const lineData = await odooCall(creds.uid, creds.key,
+    const lineData = await odooCall(sysCreds.uid, sysCreds.key,
       'purchase.order.line', 'read', [[line_id]],
       { fields: ['product_id'] });
     if (lineData[0]) {
@@ -1003,26 +1003,27 @@ async function editPOLine(body, user, creds, cfg, brand, DB) {
 
 /* ── Delete PO Line ── */
 
-async function deletePOLine(body, user, creds, cfg, brand, DB) {
+async function deletePOLine(body, user, creds, cfg, brand, DB, env) {
   if (user.role !== 'admin' && user.role !== 'purchase') {
     return json({ error: 'Insufficient permissions' }, 403);
   }
+  const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
 
   const { po_id, line_id } = body;
   if (!po_id || !line_id) return json({ error: 'Missing po_id or line_id' }, 400);
 
-  const check = await checkPOEditable(creds, po_id);
+  const check = await checkPOEditable(sysCreds, po_id);
   if (!check.ok) return json({ error: check.error }, 400);
 
   // Count remaining lines — if this is the last one, cancel PO instead
-  const existingLines = await odooCall(creds.uid, creds.key,
+  const existingLines = await odooCall(sysCreds.uid, sysCreds.key,
     'purchase.order.line', 'search_read',
     [[['order_id', '=', po_id]]],
     { fields: ['id'] });
 
   if (existingLines.length <= 1) {
     // Last line — cancel the entire PO
-    await odooCall(creds.uid, creds.key,
+    await odooCall(sysCreds.uid, sysCreds.key,
       'purchase.order', 'button_cancel', [[po_id]], coCtx(cfg));
 
     if (DB) {
@@ -1038,13 +1039,13 @@ async function deletePOLine(body, user, creds, cfg, brand, DB) {
 
   // Confirmed POs don't allow line deletion directly.
   // Cycle: cancel → draft → delete line → reconfirm
-  await odooCall(creds.uid, creds.key,
+  await odooCall(sysCreds.uid, sysCreds.key,
     'purchase.order', 'button_cancel', [[po_id]], coCtx(cfg));
-  await odooCall(creds.uid, creds.key,
+  await odooCall(sysCreds.uid, sysCreds.key,
     'purchase.order', 'button_draft', [[po_id]], coCtx(cfg));
-  await odooCall(creds.uid, creds.key,
+  await odooCall(sysCreds.uid, sysCreds.key,
     'purchase.order', 'write', [[po_id], { order_line: [[2, line_id, 0]] }], coCtx(cfg));
-  await odooCall(creds.uid, creds.key,
+  await odooCall(sysCreds.uid, sysCreds.key,
     'purchase.order', 'button_confirm', [[po_id]], coCtx(cfg));
 
   if (DB) {
@@ -1060,18 +1061,19 @@ async function deletePOLine(body, user, creds, cfg, brand, DB) {
 
 /* ── Cancel PO ── */
 
-async function cancelPO(body, user, creds, cfg, brand, DB) {
+async function cancelPO(body, user, creds, cfg, brand, DB, env) {
   if (user.role !== 'admin' && user.role !== 'purchase') {
     return json({ error: 'Insufficient permissions' }, 403);
   }
+  const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
 
   const { po_id } = body;
   if (!po_id) return json({ error: 'Missing po_id' }, 400);
 
-  const check = await checkPOEditable(creds, po_id);
+  const check = await checkPOEditable(sysCreds, po_id);
   if (!check.ok) return json({ error: check.error }, 400);
 
-  await odooCall(creds.uid, creds.key,
+  await odooCall(sysCreds.uid, sysCreds.key,
     'purchase.order', 'button_cancel', [[po_id]], coCtx(cfg));
 
   if (DB) {
@@ -2885,7 +2887,6 @@ async function createBill(body, user, creds, cfg, brand, env, DB) {
       invoice_date: bill_date,
       invoice_date_due: due_date || null,
       narration: notes || '',
-      x_recorded_by_user_id: user.odoo_uid || 2,
     }], coCtx(cfg));
 
   // Optionally upload photo to Drive (skip if no photo)
@@ -2936,7 +2937,6 @@ async function directBill(body, user, creds, cfg, brand, env, DB) {
       invoice_date: bill_date,
       company_id: cfg.company_id,
       narration: notes || '',
-      x_recorded_by_user_id: user.odoo_uid || 2,
       invoice_line_ids: [[0,0,{
         name: description || 'Direct Vendor Bill',
         quantity: 1,
