@@ -162,6 +162,10 @@ async function handleGet(action, url, env, DB) {
   // market-prices is cross-brand — admin only
   if (action === 'market-prices') return getMarketPrices(user, DB);
 
+  // Diagnostic: dump truth from odoo.hnhotels.in — companies, admin's allowed
+  // company_ids, vendor/product company_ids, purchase journals. One-shot.
+  if (action === 'diagnose-multicompany') return diagnoseMulticompany(url, env);
+
   const brand = url.searchParams.get('brand');
   if (!brand || !BRAND_CONFIG[brand]) return json({ error: 'Missing or invalid brand (HE|NCH)' }, 400);
 
@@ -192,6 +196,71 @@ async function handleGet(action, url, env, DB) {
 
     default: return json({ error: `Unknown GET action: ${action}` }, 400);
   }
+}
+
+/* ── Diagnostic: multi-company ground truth ──
+ * Hit: /api/rm-ops?action=diagnose-multicompany&pin=0305&vendor_id=<id>&product_id=<id>
+ * Dumps companies, admin's allowed company_ids, target vendor/product company,
+ * purchase journals per company. Used to debug "Access to unauthorized or
+ * invalid companies" errors without guessing. */
+async function diagnoseMulticompany(url, env) {
+  const creds = { uid: 2, key: env.ODOO_API_KEY };
+  const vendorId = parseInt(url.searchParams.get('vendor_id') || '0');
+  const productId = parseInt(url.searchParams.get('product_id') || '0');
+
+  const out = { ODOO_URL, ODOO_DB, admin_uid: 2, BRAND_CONFIG };
+
+  try {
+    out.companies = await odooCall(creds.uid, creds.key,
+      'res.company', 'search_read', [[]],
+      { fields: ['id', 'name', 'parent_id', 'currency_id'] }
+    );
+  } catch (e) { out.companies_error = e.message; }
+
+  try {
+    const adminUser = await odooCall(creds.uid, creds.key,
+      'res.users', 'read', [[2]],
+      { fields: ['id', 'name', 'login', 'company_id', 'company_ids'] }
+    );
+    out.admin_user = adminUser[0];
+  } catch (e) { out.admin_user_error = e.message; }
+
+  try {
+    out.purchase_journals = await odooCall(creds.uid, creds.key,
+      'account.journal', 'search_read',
+      [[['type', '=', 'purchase']]],
+      { fields: ['id', 'name', 'code', 'company_id'] }
+    );
+  } catch (e) { out.purchase_journals_error = e.message; }
+
+  if (vendorId) {
+    try {
+      const v = await odooCall(creds.uid, creds.key,
+        'res.partner', 'read', [[vendorId]],
+        { fields: ['id', 'name', 'company_id', 'supplier_rank'] }
+      );
+      out.vendor = v[0];
+    } catch (e) { out.vendor_error = e.message; }
+  }
+
+  if (productId) {
+    try {
+      const p = await odooCall(creds.uid, creds.key,
+        'product.product', 'read', [[productId]],
+        { fields: ['id', 'name', 'default_code', 'company_id', 'product_tmpl_id', 'uom_id'] }
+      );
+      out.product = p[0];
+      if (p[0]?.product_tmpl_id) {
+        const tmpl = await odooCall(creds.uid, creds.key,
+          'product.template', 'read', [[p[0].product_tmpl_id[0]]],
+          { fields: ['id', 'name', 'company_id'] }
+        );
+        out.product_template = tmpl[0];
+      }
+    } catch (e) { out.product_error = e.message; }
+  }
+
+  return json(out);
 }
 
 /* ── Vendors ── */
