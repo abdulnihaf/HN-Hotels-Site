@@ -306,6 +306,183 @@ async function handleGet(url, env) {
     return json({ brand, date, mode, ...digest });
   }
 
+  // --- Settlement sheet — full-day attendance closure, HTML for print/PDF ---
+  //   GET ?action=settlement&date=YYYY-MM-DD&pin=XXXX
+  //   Returns HTML formatted for A4 print (Cmd+P → Save as PDF).
+  //   Shows: every active employee, grouped by brand → department, with in/out,
+  //   worked hours, break details, status, and space for manager sign-off.
+  //   Financials (deductions) only shown if viewer is admin.
+  if (action === 'settlement') {
+    const date = url.searchParams.get('date') || shiftDayDelta(istDate(), -1);
+    const viewerPin = url.searchParams.get('pin');
+    const viewer = viewerPin ? PINS[viewerPin] : null;
+    const includeFin = viewer ? !!viewer.view_financials : false;
+
+    const rows = (await db.prepare(
+      `SELECT a.*, e.name, e.known_as, e.pin as emp_pin, e.brand_label, e.pay_type,
+              e.monthly_salary, e.daily_rate, e.job_name, e.department_name, e.row_no
+         FROM hr_employees e
+         LEFT JOIN hr_attendance_daily a ON a.employee_id = e.id AND a.date = ?
+        WHERE e.is_active = 1
+        ORDER BY e.brand_label, e.department_name, e.row_no, e.name`
+    ).bind(date).all()).results || [];
+
+    const enriched = rows.map(r => {
+      const pairs = (() => { try { return JSON.parse(r.raw_punches_json || '[]'); } catch { return []; } })();
+      const bi = pairs.length ? computeBreakGap(pairs) : { minutes: 0, start: null, end: null, outliers: [] };
+      return {
+        ...r,
+        status: r.status || 'absent',
+        pairs,
+        break_minutes: bi.minutes,
+        break_start: bi.start,
+        break_end: bi.end,
+        break_warning: breakWarning(r.total_hours || 0, bi.minutes, bi.outliers),
+        long_break_outliers: bi.outliers || [],
+      };
+    });
+
+    const t = (iso) => iso ? iso.slice(11, 16) : '—';
+    const hm = (min) => {
+      if (!min) return '—';
+      const h = Math.floor(min / 60), m = min % 60;
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    };
+    const escapeHtml = (s) => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const sessionSummary = (r) => {
+      const p = r.pairs;
+      if (!p.length) return '—';
+      const last = p[p.length - 1], first = p[0];
+      if (p.length === 1 && !last.out) return `In ${t(first.in)} · open`;
+      if (p.length === 1) return `${t(first.in)} → ${t(last.out)}`;
+      if (!last.out) return `${t(first.in)} → ${t(p[0].out)} · break ${hm(r.break_minutes)} · back ${t(last.in)} (open)`;
+      return `${t(first.in)} → ${t(last.out)}${r.break_minutes ? ` · break ${hm(r.break_minutes)}` : ''}`;
+    };
+    const statusLabel = {
+      present: 'PRESENT', absent: 'ABSENT', half: 'HALF', ghost: 'GHOST',
+      pending: 'OPEN', week_off: 'WEEK-OFF', leave: 'LEAVE',
+    };
+    const statusColor = {
+      present: '#0e7c4a', absent: '#b42318', half: '#b54708', ghost: '#6941c6',
+      pending: '#b54708', week_off: '#667085', leave: '#175cd3',
+    };
+    const warningIcon = (w) => {
+      if (!w) return '';
+      if (w === 'no_break') return '<span style="color:#b54708">⚠ No break</span>';
+      if (w === 'short_break') return '<span style="color:#b54708">⚠ Short break</span>';
+      if (w === 'long_break') return '<span style="color:#b54708">⚠ Long gap</span>';
+      return '';
+    };
+
+    // Group: brand → department
+    const byBrand = {};
+    for (const r of enriched) {
+      const b = r.brand_label || 'OTHER';
+      const d = r.department_name || 'Unassigned';
+      if (!byBrand[b]) byBrand[b] = {};
+      if (!byBrand[b][d]) byBrand[b][d] = [];
+      byBrand[b][d].push(r);
+    }
+    const BRAND_FULL = { HE: 'Hamza Express', NCH: 'Nawabi Chai House', HQ: 'HN Hotels (HQ · Office)' };
+
+    // KPI summary
+    const counts = { present: 0, absent: 0, half: 0, ghost: 0, pending: 0, leave: 0, week_off: 0 };
+    let brkIssues = 0, totalDed = 0;
+    for (const r of enriched) {
+      counts[r.status] = (counts[r.status] || 0) + 1;
+      if (r.break_warning) brkIssues++;
+      if (includeFin) totalDed += Number(r.deducted_amount) || 0;
+    }
+
+    let html = `<!doctype html><html><head><meta charset="utf-8">
+<title>Attendance Settlement — ${date}</title>
+<style>
+  @media print { body { margin: 0 } .no-print { display: none } @page { size: A4; margin: 12mm } }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #111; font-size: 12px }
+  h1 { font-size: 20px; margin: 0 0 4px }
+  .sub { color: #555; font-size: 11px; margin-bottom: 18px }
+  .meta { display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap }
+  .meta-item { }
+  .meta-item .k { font-size: 9px; text-transform: uppercase; letter-spacing: .5px; color: #777 }
+  .meta-item .v { font-size: 16px; font-weight: 700 }
+  .brand-h { background: #111; color: #fff; padding: 6px 10px; margin: 20px 0 4px; border-radius: 4px; font-weight: 700 }
+  .dept-h { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #555; margin: 10px 0 4px }
+  table { width: 100%; border-collapse: collapse; font-size: 11px }
+  th, td { border: 0.5px solid #bbb; padding: 5px 7px; text-align: left; vertical-align: top }
+  th { background: #f5f5f5; font-size: 10px; text-transform: uppercase; letter-spacing: .3px }
+  .status { font-weight: 700; font-size: 10px; padding: 2px 6px; border-radius: 3px; color: #fff; display: inline-block }
+  .warn { color: #b54708; font-size: 10px }
+  .sig-block { margin-top: 36px; display: flex; gap: 60px }
+  .sig { flex: 1 }
+  .sig .line { border-top: 1px solid #333; margin-top: 40px; padding-top: 4px; font-size: 10px; color: #555 }
+  .toolbar { position: fixed; top: 8px; right: 8px }
+  .toolbar button { background: #111; color: #fff; border: 0; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px }
+</style></head><body>
+<div class="toolbar no-print"><button onclick="window.print()">⬇ Print / Save as PDF</button></div>
+<h1>Attendance Settlement — ${date}</h1>
+<div class="sub">HN Hotels Pvt Ltd · Generated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC · Viewer: ${viewer?.name || 'unknown'}</div>
+<div class="meta">
+  <div class="meta-item"><div class="k">Roster</div><div class="v">${enriched.length}</div></div>
+  <div class="meta-item"><div class="k">Present</div><div class="v" style="color:#0e7c4a">${counts.present}</div></div>
+  <div class="meta-item"><div class="k">Absent</div><div class="v" style="color:#b42318">${counts.absent}</div></div>
+  <div class="meta-item"><div class="k">Half-day</div><div class="v" style="color:#b54708">${counts.half}</div></div>
+  <div class="meta-item"><div class="k">Ghost</div><div class="v" style="color:#6941c6">${counts.ghost}</div></div>
+  <div class="meta-item"><div class="k">Open</div><div class="v" style="color:#b54708">${counts.pending}</div></div>
+  <div class="meta-item"><div class="k">Week off</div><div class="v" style="color:#667085">${counts.week_off}</div></div>
+  <div class="meta-item"><div class="k">Break issues</div><div class="v" style="color:#b54708">${brkIssues}</div></div>
+  ${includeFin ? `<div class="meta-item"><div class="k">Deductions</div><div class="v" style="color:#b42318">₹${totalDed.toLocaleString('en-IN')}</div></div>` : ''}
+</div>`;
+
+    for (const brand of ['HE','NCH','HQ']) {
+      if (!byBrand[brand]) continue;
+      html += `<div class="brand-h">${BRAND_FULL[brand]}</div>`;
+      for (const dept of Object.keys(byBrand[brand]).sort()) {
+        html += `<div class="dept-h">${escapeHtml(dept)}</div>`;
+        html += `<table><thead><tr>
+          <th style="width:26px">#</th>
+          <th>Name</th>
+          <th>Role</th>
+          <th>Shift</th>
+          <th style="width:50px">Hours</th>
+          <th style="width:80px">Status</th>
+          <th>Break / issues</th>
+          ${includeFin ? '<th style="width:70px">Deduct ₹</th>' : ''}
+          <th style="width:80px">Manager note</th>
+        </tr></thead><tbody>`;
+        for (const r of byBrand[brand][dept]) {
+          const name = r.known_as && r.known_as !== r.name ? `${escapeHtml(r.name)} (${escapeHtml(r.known_as)})` : escapeHtml(r.name);
+          const hrs = r.total_hours ? (r.total_hours || 0).toFixed(1) + 'h' : '—';
+          const warn = warningIcon(r.break_warning) || (r.break_start && r.break_end ? `☕ ${t(r.break_start)}–${t(r.break_end)} (${hm(r.break_minutes)})` : '');
+          const ded = (r.deducted_amount) ? `₹${Number(r.deducted_amount).toLocaleString('en-IN')}` : '—';
+          html += `<tr>
+            <td>${r.emp_pin || '—'}</td>
+            <td><strong>${name}</strong></td>
+            <td>${escapeHtml(r.job_name || '—')}</td>
+            <td>${sessionSummary(r)}</td>
+            <td>${hrs}</td>
+            <td><span class="status" style="background:${statusColor[r.status] || '#666'}">${statusLabel[r.status] || r.status.toUpperCase()}</span></td>
+            <td>${warn || ''}${r.deduction_reason ? `<div class="warn">${escapeHtml(r.deduction_reason)}</div>` : ''}</td>
+            ${includeFin ? `<td>${ded}</td>` : ''}
+            <td></td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
+      }
+    }
+
+    html += `
+<div class="sig-block">
+  <div class="sig"><div class="line">Basheer — GM Sales & Marketing</div></div>
+  <div class="sig"><div class="line">Nihaf — MD</div></div>
+</div>
+<p style="font-size:9px;color:#888;margin-top:30px">
+  Biometric source: CAMS F38+ (AYTH09089112) · Shift-day rules: HE 09:00→06:00 next · NCH 06:00→06:00 next · HQ 09:00→09:00 next. Break qualifying window 30–300 min. This settlement reflects the system's reading; use the Manager note column for corrections.
+</p>
+</body></html>`;
+
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', ...CORS } });
+  }
+
   // --- Deductions for a month (YYYY-MM) ---
   if (action === 'deductions') {
     const month = url.searchParams.get('month') || istDate().slice(0, 7);
@@ -744,6 +921,111 @@ async function handlePost(request, env) {
       done,
       ...results,
     });
+  }
+
+  if (action === 'flawed-notify') {
+    // Daily after-shift-day-close notification to staff who have flawed
+    // punches yesterday. Routes each message through the staff member's
+    // brand WABA (HE → hamzaexpress.in, NCH → nawabichaihouse.com, HQ → HE).
+    //
+    // Two auto-detectable error classes are notified:
+    //   CLASS A: odd punch count (≥3) — staff missed one break punch.
+    //            e.g. Nizam 10:47, 20:58, 01:09 → 3 taps, pair + orphan
+    //            Message: "We got 3 punches — you missed one (break-in
+    //            or break-out). Please be careful."
+    //   CLASS B: exactly 1 tap within a brand's clear-IN window, no OUT.
+    //            e.g. Mainuddin 10:42 AM only, NCH morning arrival window.
+    //            Message: "Only your punch-in was captured. Please always
+    //            punch out when leaving."
+    //
+    // NOT notified (need manager clarification first):
+    //   - Ambiguous 1-tap outside clear IN window (Reyaz 21:45, Ameer 02:01,
+    //     Ismail 21:07) — these could be IN or OUT, requires Basheer input.
+    //   - Absent (0 taps) — can't tell if they didn't work or didn't punch.
+    //   - Cross-boundary night shifts (Aadil) — needs cross-boundary pairing
+    //     fix first, then reassess.
+    //   - Owner (PIN 0305 = Nihaf) — always excluded.
+    const date = body.date || shiftDayDelta(istDate(), -1);  // default yesterday
+    const apiKey = env.DASHBOARD_KEY;
+    if (!apiKey) return json({ error: 'DASHBOARD_KEY not set' }, 500);
+
+    // Fetch yesterday's attendance + employee details
+    const rows = (await db.prepare(
+      `SELECT a.*, e.name, e.known_as, e.pin as emp_pin, e.phone, e.brand_label, e.job_name
+         FROM hr_attendance_daily a
+         JOIN hr_employees e ON e.id = a.employee_id
+        WHERE a.date = ? AND e.is_active = 1`
+    ).bind(date).all()).results || [];
+
+    const OWNER_PIN = '1';  // PIN 1 = Nihaf, excluded from auto-notify
+    // Clear-IN windows per brand (hour range where a lone tap is confidently an IN)
+    const CLEAR_IN_WINDOW = {
+      HE:  [9, 13],   // 09:00–12:59 — biryani kitchen morning arrival
+      NCH: [9, 12],   // 09:00–11:59 — NCH morning crew; outside this = ambiguous (night shift, etc.)
+      HQ:  [9, 12],   // 09:00–11:59 — office start
+    };
+
+    const results = [];
+    for (const r of rows) {
+      if (r.emp_pin === OWNER_PIN) { results.push({ pin: r.emp_pin, skipped: 'owner' }); continue; }
+      if (!r.phone) { results.push({ pin: r.emp_pin, name: r.name, skipped: 'no_phone' }); continue; }
+
+      const pairs = (() => { try { return JSON.parse(r.raw_punches_json || '[]'); } catch { return []; } })();
+      const firstInHour = r.first_in_at ? parseInt(r.first_in_at.slice(11, 13), 10) : null;
+      const brand = r.brand_label;
+      const punchCount = r.punch_count || 0;
+
+      let errorClass = null;
+      let msg = null;
+
+      // CLASS A: odd count (≥3) indicates a missed break punch
+      if (punchCount >= 3 && punchCount % 2 === 1) {
+        errorClass = 'missed_break_punch';
+        const taps = pairs.flatMap(p => [p.in, p.out].filter(Boolean)).map(t => t.slice(11, 16)).join(', ');
+        const greet = `Namaste ${r.known_as || r.name} bhai`;
+        msg = `${greet},\n\nYesterday (${date}) we received ${punchCount} punches on the biometric (${taps}). An odd number means you MISSED one punch — either going for your break OR coming back from break.\n\nPlease always punch BOTH when leaving and returning from break, so your hours and break time are recorded correctly.\n\n- HN HR`;
+      }
+      // CLASS B: exactly 1 tap in clear-IN window = forgot to punch out
+      else if (punchCount === 1 && firstInHour !== null) {
+        const win = CLEAR_IN_WINDOW[brand];
+        if (win && firstInHour >= win[0] && firstInHour < win[1]) {
+          errorClass = 'missed_checkout';
+          const greet = `Namaste ${r.known_as || r.name} bhai`;
+          msg = `${greet},\n\nYesterday (${date}) only your punch-IN at ${r.first_in_at.slice(11, 16)} was captured. The system did not receive your punch-OUT.\n\nPlease let Basheer bhai know what time you finished your shift so we can correct the record. And always remember to punch out when leaving.\n\n- HN HR`;
+        }
+      }
+
+      if (!errorClass) { results.push({ pin: r.emp_pin, name: r.name, skipped: 'no_auto_class' }); continue; }
+
+      // Route to brand WABA
+      const endpoint = brand === 'NCH'
+        ? 'https://nawabichaihouse.com/api/hr-wa-send'
+        : 'https://hamzaexpress.in/api/hr-wa-send';
+      const to = String(r.phone).replace(/\D/g, '').slice(-10);
+      if (to.length !== 10) { results.push({ pin: r.emp_pin, name: r.name, skipped: 'invalid_phone' }); continue; }
+
+      try {
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+          body: JSON.stringify({ to: `91${to}`, text: msg }),
+        });
+        const out = await resp.json();
+        results.push({
+          pin: r.emp_pin, name: r.name, class: errorClass,
+          ok: resp.ok, wa_message_id: out.wa_message_id || null, error: out.error || null,
+        });
+      } catch (e) {
+        results.push({ pin: r.emp_pin, name: r.name, class: errorClass, ok: false, error: e.message });
+      }
+    }
+
+    const sent = results.filter(x => x.ok).length;
+    const skipped = results.filter(x => x.skipped).length;
+    const failed = results.filter(x => x.ok === false).length;
+    await logSync(db, 'flawed_notify', 'whatsapp', null, date,
+      { results, sent, skipped, failed }, user.name);
+    return json({ success: true, date, summary: `Sent ${sent}, skipped ${skipped}, failed ${failed}`, results });
   }
 
   if (action === 'digest-send') {
@@ -1471,15 +1753,23 @@ function computeBreakGap(punches) {
 }
 
 // Break warning classifier — applied to a computed attendance row.
-//   'no_break'      worked ≥6h AND 0 qualifying break minutes
-//   'short_break'   worked ≥8h AND <30 qualifying minutes
 //   'long_break'    any single gap >300 min (split/missing-checkout hybrid)
-//   null            clean
+//                   → only genuine break-rule error we flag today
+//   null            clean. Includes "worked straight through" (2 punches,
+//                   paired IN/OUT, no break) — per Nihaf 20 Apr: valid shift,
+//                   not an error. Staff simply didn't take a break.
+//
+// (Removed 'no_break' and 'short_break' — too noisy. We still REPORT break
+//  taken / not taken as info in UI, but no longer mark the row as flawed.)
 function breakWarning(hours, breakMinutes, outliers) {
   if (outliers && outliers.length) return 'long_break';
-  if (hours >= 6 && breakMinutes === 0) return 'no_break';
-  if (hours >= 8 && breakMinutes < BREAK_MIN_MINUTES) return 'short_break';
   return null;
+}
+
+// Separate info-only predicate: "worked straight through without a break".
+// UI shows this as a neutral note (not a warning), cron does NOT notify.
+function workedStraight(hours, breakMinutes) {
+  return hours >= 6 && (breakMinutes || 0) === 0;
 }
 
 function isWeekOffDay(dateStr, weekOff) {

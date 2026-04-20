@@ -220,8 +220,8 @@
       <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('ghost')" data-filter-tile="ghost">
         <div class="text-lg font-bold text-purple-400" id="aGhost">–</div><div class="text-[9px] text-white/40 uppercase">Ghost</div>
       </div>
-      <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('break')" data-filter-tile="break">
-        <div class="text-lg font-bold text-orange-400" id="aBreak">–</div><div class="text-[9px] text-white/40 uppercase">Break ⚠</div>
+      <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('issues')" data-filter-tile="issues">
+        <div class="text-lg font-bold text-orange-400" id="aIssues">–</div><div class="text-[9px] text-white/40 uppercase">Issues ⚠</div>
       </div>
       <div class="stat-tile p-2 cursor-pointer" onclick="setAttendFilter('off')" data-filter-tile="off">
         <div class="text-lg font-bold text-white/50" id="aOff">–</div><div class="text-[9px] text-white/40 uppercase">Off / Leave</div>
@@ -231,9 +231,9 @@
     <!-- Action row -->
     <div class="flex gap-2 mb-3 flex-wrap items-center">
       <input id="attendSearch" type="search" class="flex-1 min-w-[140px]" placeholder="Search name / PIN…" oninput="renderAttendance()">
+      <button onclick="openSettlement()" class="btn btn-primary btn-sm" title="Open full settlement sheet (Cmd+P to save as PDF)">📄 Settlement</button>
       <button onclick="downloadAttendanceCsv()" class="btn btn-ghost btn-sm" title="Download CSV">⬇ CSV</button>
-      <button onclick="window.print()" class="btn btn-ghost btn-sm" title="Print">🖨 Print</button>
-      <button onclick="openDigestModal()" class="btn btn-primary btn-sm admin-only" title="Preview + send WhatsApp digest">📨 Send digest</button>
+      <button onclick="openDigestModal()" class="btn btn-ghost btn-sm admin-only" title="Preview + send WhatsApp digest">📨 Digest</button>
     </div>
 
     <div id="attendList" class="space-y-2"></div>
@@ -900,10 +900,16 @@ function renderAttendance() {
   // Stats across ALL rows (unfiltered by brand so total roster count makes sense)
   const scoped = state.attendBrand === 'all' ? rows : rows.filter(r => r.brand_label === state.attendBrand);
   const counts = { present: 0, pending: 0, absent: 0, half: 0, ghost: 0, leave: 0, week_off: 0 };
-  let breakIssues = 0;
+  // "Issues" = things genuinely worth Basheer's attention.
+  //   • long_break (gap >5h = likely missed checkout during break)
+  //   • missed break punch (odd punch count ≥3 = staff tapped break-in but not break-out, or vice versa)
+  //   • single open IN within shift open >18h grace (ghost risk)
+  // "Worked straight through" (2 punches, no break) is NEUTRAL — not counted here.
+  let issues = 0;
   for (const r of scoped) {
     counts[r.status] = (counts[r.status] || 0) + 1;
-    if (r.break_warning) breakIssues++;
+    const oddPunchCount = (r.punch_count || 0) >= 3 && (r.punch_count || 0) % 2 === 1;
+    if (r.break_warning === 'long_break' || oddPunchCount) issues++;
   }
   document.getElementById('aAll').textContent     = scoped.length;
   document.getElementById('aPresent').textContent = counts.present;
@@ -911,12 +917,15 @@ function renderAttendance() {
   document.getElementById('aAbsent').textContent  = counts.absent;
   document.getElementById('aHalf').textContent    = counts.half;
   document.getElementById('aGhost').textContent   = counts.ghost;
-  document.getElementById('aBreak').textContent   = breakIssues;
+  document.getElementById('aIssues').textContent  = issues;
   document.getElementById('aOff').textContent     = (counts.week_off || 0) + (counts.leave || 0);
 
   // Filter rows based on selected category
   let filtered = scoped;
-  if (state.attendFilter === 'break') filtered = scoped.filter(r => r.break_warning);
+  if (state.attendFilter === 'issues') filtered = scoped.filter(r => {
+    const odd = (r.punch_count || 0) >= 3 && (r.punch_count || 0) % 2 === 1;
+    return r.break_warning === 'long_break' || odd;
+  });
   else if (state.attendFilter === 'off') filtered = scoped.filter(r => r.status === 'week_off' || r.status === 'leave');
   else if (state.attendFilter !== 'all') filtered = scoped.filter(r => r.status === state.attendFilter);
 
@@ -976,17 +985,17 @@ function renderSessionLine(r) {
   return `${fmtTime(firstIn)} → ${fmtTime(overallOut)}${breakFrag} · ${hoursHtml}`;
 }
 
-// Secondary line — break warnings (fired only when no active work row conveys the same info)
+// Secondary line — break info. Only long_break is a real flag.
+// no_break / short_break are NEUTRAL info ("worked straight through") —
+// per Nihaf 20 Apr, 2 punches = valid shift even without a break tap.
 function renderBreakWarning(r) {
-  if (r.break_warning === 'no_break') {
-    return `<span class="text-orange-400">⚠ No break taken (${(r.total_hours || 0).toFixed(1)}h worked)</span>`;
-  }
-  if (r.break_warning === 'short_break') {
-    return `<span class="text-amber-400">⚠ Short break — ${fmtDuration(r.break_taken_minutes)} on ${(r.total_hours || 0).toFixed(1)}h shift</span>`;
-  }
   if (r.break_warning === 'long_break') {
     const o = r.break_outliers?.[0];
     return o ? `<span class="text-orange-400">⚠ Long gap ${fmtTime(o.start)}–${fmtTime(o.end)} (${fmtDuration(o.minutes)})</span>` : '';
+  }
+  // Info-only: worked ≥6h with no break
+  if ((r.total_hours || 0) >= 6 && (r.break_taken_minutes || 0) === 0) {
+    return `<span class="text-white/40">Worked straight through · no break</span>`;
   }
   return '';
 }
@@ -1061,6 +1070,17 @@ function downloadAttendanceCsv() {
   a.download = `attendance_${date}_${state.attendBrand}.csv`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ─── Settlement sheet ───────────────────────────────────
+// Opens server-rendered HTML in a new tab. Nihaf / Basheer hit Cmd+P and
+// "Save as PDF" for a daily settlement they can archive or print. Contains
+// every active employee grouped by brand + department, with shift times,
+// hours, break details, status badge, manager sign-off columns.
+function openSettlement() {
+  const date = document.getElementById('attendDate').value || new Date().toISOString().slice(0,10);
+  const url = `/api/hr-admin?action=settlement&date=${date}&pin=${encodeURIComponent(state.pin)}`;
+  window.open(url, '_blank');
 }
 
 // ─── Digest modal ───────────────────────────────────────
