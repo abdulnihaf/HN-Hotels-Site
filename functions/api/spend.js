@@ -447,7 +447,6 @@ export async function onRequest(context) {
         purchase_ok: true,
         sale_ok: false,
         uom_id: uom_id ? parseInt(uom_id, 10) : undefined,
-        uom_po_id: uom_id ? parseInt(uom_id, 10) : undefined,
       }]);
 
       return json({ success: true, product: { id: prodId, name: name.trim() } });

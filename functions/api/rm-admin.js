@@ -584,7 +584,6 @@ async function handlePost(request, env) {
         name: trimmedName,
         categ_id: parseInt(category_id),
         uom_id: parseInt(uom_id),
-        uom_po_id: parseInt(uom_id),
         type: 'consu', // product.template uses 'consu' + is_storable on newer Odoo
         purchase_ok: true,
         sale_ok: false,
