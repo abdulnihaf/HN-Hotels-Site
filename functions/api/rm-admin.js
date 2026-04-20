@@ -25,7 +25,7 @@ const ATTR_GRADE     = 22;  // product.attribute "Grade"       — context-drive
 
 const PINS = {
   '0305': { name: 'Nihaf', role: 'admin' },
-  '2026': { name: 'Zoya',  role: 'read'  },
+  '2026': { name: 'Zoya',  role: 'ops'   },  // ops: can create RMs + add vendors
 };
 
 // odoo.hnhotels.in: 1=HN Hotels Pvt Ltd (HQ), 2=Hamza Express, 3=Nawabi Chai House
@@ -48,10 +48,12 @@ function json(data, status = 200) {
   });
 }
 
-function checkPin(pin, requireAdmin = false) {
+// Role order: read < ops < admin
+const ROLE_RANK = { read: 0, ops: 1, admin: 2 };
+function checkPin(pin, minRole = 'ops') {
   const u = PINS[pin];
   if (!u) return null;
-  if (requireAdmin && u.role !== 'admin') return null;
+  if ((ROLE_RANK[u.role] ?? -1) < (ROLE_RANK[minRole] ?? 99)) return null;
   return u;
 }
 
@@ -325,9 +327,15 @@ async function handlePost(request, env) {
   const { action, pin } = body;
   if (!action) return json({ error: 'Missing action' }, 400);
 
-  const needsAdmin = action !== 'extract';
-  const user = checkPin(pin, needsAdmin);
-  if (!user) return json({ error: needsAdmin ? 'Admin PIN required (0305)' : 'Valid PIN required' }, 403);
+  // Admin-only: bulk sync, cleanup, Odoo master operations
+  const ADMIN_ONLY = new Set([
+    'extract', 'sync-step', 'sync-all', 'cleanup',
+    'master-create', 'master-rename', 'master-archive',
+    'set-product-uom', 'refresh-variants',
+  ]);
+  const minRole = ADMIN_ONLY.has(action) ? 'admin' : 'ops';
+  const user = checkPin(pin, minRole);
+  if (!user) return json({ error: minRole === 'admin' ? 'Admin access required' : 'Access denied' }, 403);
 
   /* --- D1 writes --- */
 
