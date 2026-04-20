@@ -594,7 +594,48 @@ export async function onRequest(context) {
         // Odoo blocks hr.expense when employee's company_id != record's company_id ("no crossover").
         // Previously fell back to Administrator (id=1, HQ) — broke every NCH/HE expense from an
         // HQ user. Now falls back to the first active employee in the target company.
-        let empId = employee_id;
+        let empId = employee_id ? parseInt(employee_id, 10) : null;
+
+        // PRE-FLIGHT: if client supplied an employee_id (from /ops/expense/ dropdown),
+        // verify it exists + is active + belongs to target company BEFORE hr.expense.create.
+        // D1 hr_employees is a mirror — when it drifts from Odoo (archive/delete in Odoo
+        // not reflected in D1), the dropdown serves dead IDs and Odoo raises a raw
+        // MissingError. We verify up front, self-heal the D1 mirror, and surface a
+        // clear error instead of bubbling Odoo's internal message to Naveen.
+        if (empId) {
+          const live = await odoo(apiKey, 'hr.employee', 'search_read',
+            [[['id', '=', empId], ['company_id', '=', companyId], ['active', '=', true]]],
+            { fields: ['id', 'name'], limit: 1 });
+          if (!live?.length) {
+            // Diagnose: gone entirely, archived, or wrong company?
+            const anyHit = await odoo(apiKey, 'hr.employee', 'search_read',
+              [[['id', '=', empId]]],
+              { fields: ['id', 'active', 'company_id', 'name'], limit: 1,
+                context: { active_test: false } });
+            // Self-heal D1 so the dropdown stops offering this id next load.
+            if (env.DB) {
+              await env.DB.prepare(
+                "UPDATE hr_employees SET is_active = 0, updated_at = datetime('now') WHERE odoo_employee_id = ?"
+              ).bind(empId).run().catch(() => {});
+            }
+            let reason;
+            if (!anyHit?.length) {
+              reason = 'no longer exists in Odoo (record deleted)';
+            } else if (!anyHit[0].active) {
+              reason = 'is archived in Odoo';
+            } else {
+              const cn = Array.isArray(anyHit[0].company_id) ? anyHit[0].company_id[1] : anyHit[0].company_id;
+              reason = `belongs to a different company (${cn}), not ${brand}`;
+            }
+            return json({
+              success: false,
+              code: 'EMPLOYEE_STALE',
+              stale_odoo_id: empId,
+              error: `Selected employee ${reason}. Dropdown has been refreshed — please re-open the form and pick a current employee. If this is a salary/advance, ask Nihaf to (re)create the employee in Odoo first.`,
+            }, 409);
+          }
+        }
+
         if (!empId) {
           const pinRow = await env.DB.prepare(
             'SELECT odoo_employee_id FROM hr_employees WHERE pin = ? AND is_active = 1'
@@ -604,7 +645,7 @@ export async function onRequest(context) {
           // Verify PIN-owner's employee is in target company; if not, empId = null to trigger fallback.
           if (empId) {
             const check = await odoo(apiKey, 'hr.employee', 'search_read',
-              [[['id', '=', empId], ['company_id', '=', companyId]]],
+              [[['id', '=', empId], ['company_id', '=', companyId], ['active', '=', true]]],
               { fields: ['id'], limit: 1 });
             if (!check?.length) empId = null;
           }
@@ -972,6 +1013,100 @@ export async function onRequest(context) {
       }));
 
       return json({ success: true, categories: rows });
+    }
+
+    // ── SYNC EMPLOYEES — reconcile D1 hr_employees mirror against Odoo ────
+    // Root-cause fix for "hr.employee(N) does not exist" errors in /ops/expense/:
+    // D1 mirror drifted from Odoo (archive/delete in Odoo not reflected in D1).
+    // This pulls every hr.employee from Odoo (including archived) and:
+    //   • Marks D1 rows whose Odoo record is GONE → is_active=0
+    //   • Syncs D1 is_active with Odoo active flag (archived in Odoo → inactive in D1)
+    //   • Syncs company_id if it changed in Odoo
+    //   • Reports Odoo employees that have no D1 row (need manual onboarding w/ PIN)
+    // GET supported so Nihaf/Naveen can run it from a browser. Admin/CFO only.
+    if (action === 'sync-employees') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const pin = url.searchParams.get('pin') ||
+                  (request.method === 'POST' ? (await request.json().catch(() => ({}))).pin : null);
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!isAdminRole(user)) return json({ success: false, error: 'Admin only (admin or CFO)' }, 403);
+      if (!DB) return json({ success: false, error: 'D1 not configured' }, 500);
+
+      // Pull every hr.employee from Odoo (active + archived), across all companies.
+      const odooEmps = await odoo(apiKey, 'hr.employee', 'search_read',
+        [[]],
+        { fields: ['id', 'name', 'active', 'company_id', 'pin'],
+          limit: 1000, context: { active_test: false } });
+
+      const d1Rows = await DB.prepare(
+        'SELECT id, name, pin, brand_label, company_id, odoo_employee_id, is_active FROM hr_employees'
+      ).all().catch(() => ({ results: [] }));
+
+      const stats = {
+        total_odoo: odooEmps.length,
+        total_d1: d1Rows.results.length,
+        deactivated_missing: [],   // Odoo record gone
+        deactivated_archived: [],  // Odoo still has it but archived
+        reactivated: [],           // Odoo active but D1 marked inactive
+        company_changed: [],       // company_id moved
+        orphan_in_odoo: [],        // Odoo employee with no D1 mirror row
+      };
+
+      const d1ByOdooId = new Map();
+      for (const r of d1Rows.results) {
+        if (r.odoo_employee_id) d1ByOdooId.set(r.odoo_employee_id, r);
+      }
+
+      for (const r of d1Rows.results) {
+        if (!r.odoo_employee_id) continue;
+        const o = odooEmps.find(e => e.id === r.odoo_employee_id);
+        if (!o) {
+          if (r.is_active) {
+            await DB.prepare("UPDATE hr_employees SET is_active=0, updated_at=datetime('now') WHERE id=?")
+              .bind(r.id).run().catch(() => {});
+            stats.deactivated_missing.push({ d1_id: r.id, name: r.name, odoo_id: r.odoo_employee_id });
+          }
+          continue;
+        }
+        const shouldBeActive = o.active ? 1 : 0;
+        const odooCompanyId = Array.isArray(o.company_id) ? o.company_id[0] : o.company_id;
+        const updates = [];
+        const params = [];
+        if (r.is_active !== shouldBeActive) {
+          updates.push('is_active=?');
+          params.push(shouldBeActive);
+          if (shouldBeActive) {
+            stats.reactivated.push({ d1_id: r.id, name: r.name, odoo_id: r.odoo_employee_id });
+          } else {
+            stats.deactivated_archived.push({ d1_id: r.id, name: r.name, odoo_id: r.odoo_employee_id });
+          }
+        }
+        if (String(r.company_id) !== String(odooCompanyId)) {
+          updates.push('company_id=?');
+          params.push(odooCompanyId);
+          stats.company_changed.push({ d1_id: r.id, name: r.name, from: r.company_id, to: odooCompanyId });
+        }
+        if (updates.length) {
+          updates.push("updated_at=datetime('now')");
+          params.push(r.id);
+          await DB.prepare(`UPDATE hr_employees SET ${updates.join(',')} WHERE id=?`)
+            .bind(...params).run().catch(() => {});
+        }
+      }
+
+      for (const o of odooEmps) {
+        if (!o.active) continue;  // only flag ACTIVE orphans — archived orphans don't matter
+        if (!d1ByOdooId.has(o.id)) {
+          stats.orphan_in_odoo.push({
+            odoo_id: o.id,
+            name: o.name,
+            company_id: Array.isArray(o.company_id) ? o.company_id[0] : o.company_id,
+          });
+        }
+      }
+
+      return json({ success: true, stats });
     }
 
     // ── ARCHIVE VENDOR (admin only) ────────────────────────────────────────
