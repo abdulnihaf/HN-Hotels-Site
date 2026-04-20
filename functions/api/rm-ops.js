@@ -308,12 +308,22 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
     ]);
 
   // vendor mappings: product_code → [{key, name, odoo_id, is_primary}]
+  // Self-heal stale odoo_ids: D1's rm_vendors.odoo_id may be from the old
+  // ops.hamzahotel.com instance; remap to the live odoo.hnhotels.in id via
+  // case-insensitive name match so the PO create payload uses a valid partner.
+  const liveVendorByName = {};
+  for (const v of odooVendors) {
+    liveVendorByName[v.name.trim().toLowerCase()] = v.id;
+  }
   const vendorMap = {};
   for (const m of (vendorMappings.results || [])) {
     if (!vendorMap[m.product_code]) vendorMap[m.product_code] = [];
+    const liveId = liveVendorByName[(m.vendor_name || '').trim().toLowerCase()];
     vendorMap[m.product_code].push({
       key: m.vendor_key, name: m.vendor_name,
-      odoo_id: m.vendor_odoo_id, is_primary: !!m.is_primary,
+      odoo_id: liveId || m.vendor_odoo_id,
+      odoo_id_stale: !liveId && !!m.vendor_odoo_id,
+      is_primary: !!m.is_primary,
     });
   }
 
