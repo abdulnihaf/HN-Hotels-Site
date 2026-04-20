@@ -29,7 +29,8 @@ const PINS = {
   '2026': { name: 'Zoya',  role: 'read'  },
 };
 
-const BRAND_COMPANY = { HE: 1, NCH: 10, BOTH: false };
+// odoo.hnhotels.in: 1=HN Hotels Pvt Ltd (HQ), 2=Hamza Express, 3=Nawabi Chai House
+const BRAND_COMPANY = { HE: 2, NCH: 3, BOTH: false };
 
 const UOM_FALLBACK = {
   kg: 'kg', g: 'g', L: 'L', ml: 'ml',
@@ -291,8 +292,9 @@ async function handleGet(url, env) {
       const like = `%${q}%`;
       p.push(like, like, like);
     }
-    if (brand === 'HE') { sql += ' AND (company_id = 1 OR company_id IS NULL)'; }
-    else if (brand === 'NCH') { sql += ' AND (company_id = 10 OR company_id IS NULL)'; }
+    // company_id values in rm_product_variants mirror odoo.hnhotels.in (2=HE, 3=NCH)
+    if (brand === 'HE') { sql += ' AND (company_id = 2 OR company_id IS NULL)'; }
+    else if (brand === 'NCH') { sql += ' AND (company_id = 3 OR company_id IS NULL)'; }
     sql += ' ORDER BY template_name, display_name LIMIT ?';
     p.push(limit);
     const rows = await db.prepare(sql).bind(...p).all();
