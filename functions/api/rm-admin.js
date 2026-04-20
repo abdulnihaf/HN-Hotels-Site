@@ -402,16 +402,24 @@ async function handlePost(request, env) {
 
     // 1. Find existing UoM by name (case-insensitive)
     const existing = await adminCall('uom.uom', 'search_read',
-      [[['name', '=ilike', uom_name]]], { fields: ['id', 'name', 'category_id', 'uom_type'] });
+      [[['name', '=ilike', uom_name]]], { fields: ['id', 'name'] });
     let uomId;
     if (existing.length > 0) {
       uomId = existing[0].id;
     } else {
-      // 2. Get the "Units" category to create "can" under it (unit-count, not volume)
-      const unitsCat = await adminCall('uom.category', 'search_read',
-        [[['name', '=ilike', 'Unit']]], { fields: ['id', 'name'] });
-      const catId = unitsCat[0]?.id || 1;
-      uomId = await adminCall('uom.uom', 'create', [{ name: uom_name, category_id: catId, uom_type: 'bigger', factor_inv: 1, active: true }]);
+      // 2. Find reference UoM "Units" to derive category, then create "can" in same category
+      const refUoms = await adminCall('uom.uom', 'search_read',
+        [[['name', '=ilike', 'Units']]], { fields: ['id', 'name'] });
+      // Clone Units as a reference-type sibling; minimal fields safe across Odoo versions
+      const createVals = { name: uom_name, uom_type: 'reference', factor: 1, active: true };
+      if (refUoms[0]) {
+        // Read full record to get category_id if it exists
+        try {
+          const ref = await adminCall('uom.uom', 'read', [[refUoms[0].id]], { fields: ['id', 'category_id'] });
+          if (ref[0]?.category_id) createVals.category_id = ref[0].category_id[0];
+        } catch (_) { /* category_id may not exist in this Odoo version */ }
+      }
+      uomId = await adminCall('uom.uom', 'create', [createVals]);
     }
 
     // 3. Read product template id then update uom_id + uom_po_id
