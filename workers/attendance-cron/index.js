@@ -27,10 +27,30 @@ export default {
   },
 
   // Scheduled trigger: every 15 min
+  // Piggybacks spend-sync-cron on this trigger because we are at the
+  // free-tier 5-crons-per-account cap. 15-min freshness is plenty for
+  // fact_spend; attendance was already the highest-frequency cron.
   async scheduled(event, env, ctx) {
     ctx.waitUntil(runPull(env));
+    ctx.waitUntil(pingSpendSync(env));
   },
 };
+
+async function pingSpendSync(env) {
+  const url = env.SPEND_SYNC_URL;
+  const key = env.SPEND_SYNC_KEY;
+  if (!url || !key) return;  // not configured — silently skip
+  try {
+    await fetch(`${url}?key=${encodeURIComponent(key)}&instance=all`, {
+      method: 'GET',
+      // 25s max — leaves headroom for attendance-cron's own budget
+      signal: AbortSignal.timeout(25000),
+    });
+  } catch (e) {
+    // Swallow — spend-sync failure should not cascade and kill attendance
+    console.error('spend-sync ping failed:', e.message);
+  }
+}
 
 async function runPull(env) {
   const now = new Date();

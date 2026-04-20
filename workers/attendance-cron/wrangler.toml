@@ -10,7 +10,9 @@ account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
 crons = ["*/15 * * * *"]
 
 # Secrets (set via: wrangler secret put <NAME> --config workers/attendance-cron/wrangler.toml)
-# ADMIN_PIN   — HR Ops dashboard admin PIN (4 digits, Nihaf)
-# PAGES_URL   — set as plain var below; override via secret if domain changes
+# ADMIN_PIN       — HR Ops dashboard admin PIN (4 digits, Nihaf)
+# SPEND_SYNC_KEY  — DASHBOARD_KEY of hn-spend-sync-cron (piggyback sync every 15 min)
+# PAGES_URL       — set as plain var below; override via secret if domain changes
 [vars]
 PAGES_URL = "https://hnhotels.in"
+SPEND_SYNC_URL = "https://hn-spend-sync-cron.nihafwork.workers.dev"

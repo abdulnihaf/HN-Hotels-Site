@@ -4,12 +4,13 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
 
-# Every 5 minutes — pull delta from both Odoo instances into fact_spend.
-# CF free tier: 5 crons/worker OK. Each fire does incremental pull via
-# write_date > last_synced cursor, so cost is bounded by actual change
-# volume (~dozens of rows/day).
-[triggers]
-crons = ["*/5 * * * *"]
+# NOTE: No cron trigger on this worker. CF free-tier cap is 5 crons per
+# ACCOUNT (not per worker) and we're at the limit. Instead the
+# attendance-cron worker (runs every 15 min anyway) pings this worker's
+# fetch handler with DASHBOARD_KEY. 15-min freshness is plenty for
+# spend data. To self-host the trigger, uncomment:
+# [triggers]
+# crons = ["*/5 * * * *"]
 
 # D1 binding — same database as the Pages project (hn-hiring).
 [[d1_databases]]
