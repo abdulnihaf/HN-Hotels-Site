@@ -84,6 +84,7 @@
         <div class="sub" id="user-sub"></div>
       </div>
       <div style="display: flex; gap: 6px;">
+        <a id="payroll-link" class="btn btn-ghost btn-sm hidden" href="/ops/expense/payroll/" title="Per-employee salary / advance ledger">👥 Payroll</a>
         <a id="admin-link" class="btn btn-ghost btn-sm hidden" href="/ops/expense/admin/" title="Rename / archive / add items + categories">⚙ Admin</a>
         <button class="btn btn-ghost btn-sm" onclick="openDownloadMenu('expense')" title="Download structure + data">⬇ Download</button>
         <button class="btn btn-ghost btn-sm" onclick="logout()">Exit</button>
@@ -371,6 +372,7 @@ async function verifyPin() {
   document.getElementById('user-greeting').textContent = `Hi ${r.user.name}`;
   document.getElementById('user-sub').textContent = `${r.user.role} · ${r.brands.join(' / ')}`;
   document.getElementById('admin-link').classList.toggle('hidden', !r.can_admin);
+  document.getElementById('payroll-link').classList.toggle('hidden', !r.can_admin);
   renderBrands();
   renderCategories();
   loadRecent();
@@ -519,6 +521,42 @@ async function buildGenericForm(cat) {
           </select>
         </div>
       `);
+
+      // Period + intent — mandatory for salary/advance so payroll ledger stays accurate.
+      // Period = which month this payment settles/advances. Intent = clear prior, current, or advance next.
+      const now = new Date();
+      const ym = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label = (d) => d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      const monthOpts = [];
+      for (let i = 2; i >= -1; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        monthOpts.push({ v: ym(d), l: label(d), isCurrent: i === 0, isNext: i === -1 });
+      }
+      const defaultPeriod = monthOpts.find(m => m.isCurrent).v;
+      const intents = cat.id === 3
+        ? [ // Salary Payment
+            { v: 'clear_prior',   l: '🟢 Clearing last month\'s pending salary' },
+            { v: 'current_month', l: '🔵 Paying for current month' },
+          ]
+        : [ // Salary Advance
+            { v: 'current_month', l: '🟡 Advance against current month' },
+            { v: 'advance_next',  l: '🟠 Advance against next month' },
+          ];
+      fields.push(`
+        <div class="row">
+          <label>Payroll period *</label>
+          <select id="f-payroll-period">
+            ${monthOpts.map(m => `<option value="${m.v}"${m.v===defaultPeriod?' selected':''}>${m.l}${m.isCurrent?' (current)':''}${m.isNext?' (next)':''}</option>`).join('')}
+          </select>
+          <div class="mute" style="margin-top:4px;">Which month does this payment settle or advance against?</div>
+        </div>
+        <div class="row">
+          <label>Intent *</label>
+          <select id="f-payroll-intent">
+            ${intents.map(i => `<option value="${i.v}">${i.l}</option>`).join('')}
+          </select>
+        </div>
+      `);
     }
 
     // Vendor field for cats 2, 5, 6, 7, 8, 9, 10, 11, 12 — REQUIRED
@@ -648,6 +686,12 @@ async function submitForm() {
       const empEl = document.getElementById('f-employee');
       if (empEl) body.employee_id = parseInt(empEl.value, 10);
       if ((CURRENT_CAT.id === 3 || CURRENT_CAT.id === 4) && !body.employee_id) throw new Error('Pick an employee');
+      if (CURRENT_CAT.id === 3 || CURRENT_CAT.id === 4) {
+        body.payroll_period = document.getElementById('f-payroll-period')?.value || '';
+        body.payroll_intent = document.getElementById('f-payroll-intent')?.value || '';
+        if (!body.payroll_period) throw new Error('Pick a payroll period');
+        if (!body.payroll_intent) throw new Error('Pick an intent (clearing / current / advance)');
+      }
       // Require vendor for cats 2, 5-12 (excludes salary/advance/drawings)
       const needsVendor = ![3, 4, 13].includes(CURRENT_CAT.id);
       if (needsVendor) {

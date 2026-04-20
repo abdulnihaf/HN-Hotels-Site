@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Payroll Ledger">
+<title>HN Expense — Payroll Ledger</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  .totals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; }
+  .stat .k { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; }
+  .stat .v { font-size: 20px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stat.accrued .v { color: var(--text); }
+  .stat.paid .v { color: #60a5fa; }
+  .stat.advance .v { color: #fbbf24; }
+  .stat.bal.pos .v { color: #34d399; }
+  .stat.bal.neg .v { color: var(--danger); }
+  .month-pick { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; }
+  .month-pick input { max-width: 180px; }
+  .emp-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; margin-bottom: 8px; display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr 32px; gap: 8px; align-items: center; font-size: 13px; }
+  .emp-row .name { font-weight: 700; }
+  .emp-row .brand { font-size: 10px; color: var(--text-dim); margin-left: 6px;
+    background: var(--card); padding: 2px 6px; border-radius: 4px; }
+  .emp-row .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .emp-row .num.paid   { color: #60a5fa; }
+  .emp-row .num.adv    { color: #fbbf24; }
+  .emp-row .num.bal    { font-weight: 800; }
+  .emp-row .num.bal.pos { color: #34d399; }
+  .emp-row .num.bal.neg { color: var(--danger); }
+  .emp-row .num.bal.zero { color: var(--text-dim); }
+  .emp-row .chev { color: var(--text-dim); cursor: pointer; text-align: center; transition: transform .15s; }
+  .emp-row.open .chev { transform: rotate(90deg); }
+  .emp-detail { display: none; background: var(--card); border: 1px solid var(--border);
+    border-top: none; border-radius: 0 0 var(--radius) var(--radius);
+    padding: 10px 14px; margin-top: -9px; margin-bottom: 8px; font-size: 12px; }
+  .emp-row.open + .emp-detail { display: block; }
+  .detail-line { display: grid; grid-template-columns: 1fr 1fr 120px 90px; gap: 8px;
+    padding: 6px 0; border-bottom: 1px dashed var(--border); }
+  .detail-line:last-child { border-bottom: none; }
+  .detail-line .lbl { font-weight: 600; }
+  .detail-line .lbl.sp { color: #60a5fa; }
+  .detail-line .lbl.sa { color: #fbbf24; }
+  .detail-line .mute { color: var(--text-dim); }
+  .empty { color: var(--text-dim); text-align: center; padding: 40px 20px; font-size: 14px; }
+  .header-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr 32px; gap: 8px;
+    padding: 0 14px 8px; font-size: 10px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
+  .header-grid .r { text-align: right; }
+  @media (max-width: 600px) {
+    .totals { grid-template-columns: repeat(2, 1fr); }
+    .emp-row, .header-grid { grid-template-columns: 1fr 70px 70px 70px 90px 28px; font-size: 12px; }
+    .detail-line { grid-template-columns: 1fr 80px; }
+    .detail-line > :nth-child(n+3) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app" class="app">
+  <!-- PIN GATE -->
+  <div id="pin-screen">
+    <h1>Payroll Ledger</h1>
+    <p class="sub">Per-employee salary settlement. Admin &amp; CFO only.</p>
+    <div style="margin-top: 32px; max-width: 280px;">
+      <label>Enter PIN</label>
+      <input id="pin-input" type="password" inputmode="numeric" maxlength="4"
+             autocomplete="off" autofocus style="font-size: 20px; text-align: center;">
+      <div id="pin-error" style="color: var(--danger); margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
+      <button id="pin-go" class="btn btn-primary" style="width: 100%; margin-top: 12px;">Unlock</button>
+      <div style="margin-top: 16px;">
+        <a href="/ops/expense/" style="color: var(--text-dim); font-size: 12px;">← Back to expense entry</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main-screen" style="display: none;">
+    <div class="header-bar">
+      <div>
+        <h1 style="margin: 0;">Payroll Ledger</h1>
+        <p class="sub" style="margin: 2px 0 0;" id="ctx">—</p>
+      </div>
+      <a href="/ops/expense/" class="btn btn-ghost btn-sm">← Expense entry</a>
+    </div>
+
+    <div class="month-pick">
+      <label style="margin: 0;">Month</label>
+      <input id="month" type="month">
+      <button id="go" class="btn btn-primary btn-sm">Load</button>
+    </div>
+
+    <div id="totals" class="totals"></div>
+
+    <div class="header-grid">
+      <div>Employee</div>
+      <div class="r">Accrued</div>
+      <div class="r">Paid</div>
+      <div class="r">Advance</div>
+      <div class="r">Balance</div>
+      <div></div>
+    </div>
+    <div id="rows"></div>
+  </div>
+</div>
+
+<script>
+const API = '/api/spend';
+let PIN = sessionStorage.getItem('spend_pin') || '';
+let USER = null;
+
+const fmt = n => '₹' + Math.round(n).toLocaleString('en-IN');
+
+async function unlock() {
+  const pin = document.getElementById('pin-input').value.trim();
+  const err = document.getElementById('pin-error');
+  err.textContent = '';
+  if (!/^\d{4}$/.test(pin)) { err.textContent = 'Enter 4-digit PIN'; return; }
+  const r = await fetch(`${API}?action=verify-pin&pin=${pin}`).then(x => x.json()).catch(() => ({ success: false }));
+  if (!r.success) { err.textContent = r.error || 'Invalid PIN'; return; }
+  if (!r.can_admin) { err.textContent = 'Admin / CFO only'; return; }
+  PIN = pin; USER = r.user;
+  sessionStorage.setItem('spend_pin', pin);
+  document.getElementById('pin-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = '';
+  document.getElementById('ctx').textContent = `${USER.name} · ${USER.role}`;
+  const today = new Date();
+  document.getElementById('month').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  load();
+}
+
+async function load() {
+  const month = document.getElementById('month').value;
+  if (!month) return;
+  const totalsEl = document.getElementById('totals');
+  const rowsEl = document.getElementById('rows');
+  totalsEl.innerHTML = '<div class="mute" style="padding:8px;">Loading…</div>';
+  rowsEl.innerHTML = '';
+  const r = await fetch(`${API}?action=payroll-ledger&pin=${PIN}&month=${month}`).then(x => x.json()).catch(() => ({}));
+  if (!r.success) {
+    totalsEl.innerHTML = '';
+    rowsEl.innerHTML = `<div class="empty">${r.error || 'Load failed'}</div>`;
+    return;
+  }
+  const t = r.totals;
+  totalsEl.innerHTML = `
+    <div class="stat accrued"><div class="k">Accrued</div><div class="v">${fmt(t.accrued)}</div></div>
+    <div class="stat paid"><div class="k">Paid</div><div class="v">${fmt(t.paid)}</div></div>
+    <div class="stat advance"><div class="k">Advance</div><div class="v">${fmt(t.advance)}</div></div>
+    <div class="stat bal ${t.balance > 0 ? 'pos' : t.balance < 0 ? 'neg' : ''}"><div class="k">Outstanding</div><div class="v">${fmt(t.balance)}</div></div>
+  `;
+  if (!r.rows.length) {
+    rowsEl.innerHTML = '<div class="empty">No active employees with salary data.</div>';
+    return;
+  }
+  rowsEl.innerHTML = r.rows.map((row, i) => {
+    const balClass = row.balance > 0.5 ? 'pos' : row.balance < -0.5 ? 'neg' : 'zero';
+    const detail = row.entries.length
+      ? row.entries.map(e => {
+          const cls = e.type === 'Salary Payment' ? 'sp' : 'sa';
+          return `
+            <div class="detail-line">
+              <div class="lbl ${cls}">${e.type}${e.intent ? ' · ' + e.intent.replace('_', ' ') : ''}</div>
+              <div>${fmt(e.amount)}</div>
+              <div class="mute">${(e.at || '').slice(0, 10)}</div>
+              <div class="mute">${escHtml(e.note || '')}</div>
+            </div>`;
+        }).join('')
+      : '<div class="mute" style="padding:8px 0;">No salary/advance entries tagged for this month.</div>';
+    return `
+      <div class="emp-row" data-idx="${i}" onclick="toggle(${i})">
+        <div><span class="name">${escHtml(row.name)}</span><span class="brand">${row.brand}</span></div>
+        <div class="num">${fmt(row.accrued)}</div>
+        <div class="num paid">${fmt(row.paid)}</div>
+        <div class="num adv">${fmt(row.advance)}</div>
+        <div class="num bal ${balClass}">${fmt(row.balance)}</div>
+        <div class="chev">›</div>
+      </div>
+      <div class="emp-detail">${detail}</div>
+    `;
+  }).join('');
+}
+
+function toggle(i) {
+  const el = document.querySelector(`.emp-row[data-idx="${i}"]`);
+  if (el) el.classList.toggle('open');
+}
+function escHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+document.getElementById('pin-go').onclick = unlock;
+document.getElementById('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
+document.getElementById('go').onclick = load;
+
+if (PIN) {
+  fetch(`${API}?action=verify-pin&pin=${PIN}`).then(x => x.json()).then(r => {
+    if (r.success && r.can_admin) {
+      USER = r.user;
+      document.getElementById('pin-screen').style.display = 'none';
+      document.getElementById('main-screen').style.display = '';
+      document.getElementById('ctx').textContent = `${USER.name} · ${USER.role}`;
+      const today = new Date();
+      document.getElementById('month').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+      load();
+    } else {
+      sessionStorage.removeItem('spend_pin');
+      PIN = '';
+    }
+  });
+}
+</script>
+
+</body>
+</html>

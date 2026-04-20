@@ -672,8 +672,44 @@ export async function onRequest(context) {
 
         // Optional backdated date — must be YYYY-MM-DD, defaults to today
         const customDate = body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : new Date().toISOString().slice(0, 10);
+
+        // Payroll period + intent — mandatory for cats 3 (Salary Payment) and 4 (Salary Advance).
+        // Without this, a March salary paid on April 5 is indistinguishable from an April advance
+        // and double-counts in the per-employee settlement ledger.
+        //   payroll_period: YYYY-MM (which month is being settled / advanced against)
+        //   payroll_intent: 'clear_prior' | 'current_month' | 'advance_next'
+        let payrollPeriod = null, payrollIntent = null;
+        if (cat.id === 3 || cat.id === 4) {
+          payrollPeriod = (body.payroll_period || '').trim();
+          payrollIntent = (body.payroll_intent || '').trim();
+          if (!/^\d{4}-\d{2}$/.test(payrollPeriod)) {
+            return json({ success: false,
+              error: 'payroll_period required (YYYY-MM) — which month is this payment settling or advancing against?'
+            }, 400);
+          }
+          const validIntents = cat.id === 3
+            ? ['clear_prior', 'current_month']          // Salary Payment — settles a past/current month
+            : ['current_month', 'advance_next'];        // Salary Advance — advance against current/next
+          if (!validIntents.includes(payrollIntent)) {
+            return json({ success: false,
+              error: `payroll_intent for ${cat.label} must be one of: ${validIntents.join(', ')}`
+            }, 400);
+          }
+        }
+
+        // Build a period-tagged name so the distinction is visible in Odoo AND in D1.
+        // [Mar 2026 · Cleared] Salary Payment — Basheer Bhai
+        let baseName = notes ? `${prodName} — ${notes}` : prodName;
+        if (payrollPeriod) {
+          const [py, pm] = payrollPeriod.split('-');
+          const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          const tagMonth = `${months[parseInt(pm,10)-1]} ${py}`;
+          const tagIntent = { clear_prior: 'Cleared', current_month: 'Current', advance_next: 'Advance' }[payrollIntent];
+          baseName = `[${tagMonth} · ${tagIntent}] ${baseName}`;
+        }
+
         const expenseVals = {
-          name: notes ? `${prodName} — ${notes}` : prodName,
+          name: baseName,
           product_id: parseInt(product_id, 10),
           total_amount: parseFloat(amount),
           employee_id: empId,
@@ -715,14 +751,17 @@ export async function onRequest(context) {
             `INSERT INTO business_expenses
                (recorded_by, recorded_at, amount, description, category, payment_mode, notes,
                 odoo_id, company_id, product_id, product_name, category_parent,
-                x_pool, x_payment_method, x_location, x_excluded_from_pnl, odoo_synced_at)
+                x_pool, x_payment_method, x_location, x_excluded_from_pnl, odoo_synced_at,
+                x_payroll_period, x_payroll_intent, x_employee_odoo_id)
              VALUES (?, datetime('now'), ?, ?, ?, ?, ?,
                      ?, ?, ?, ?, ?,
-                     ?, ?, ?, ?, datetime('now'))`
+                     ?, ?, ?, ?, datetime('now'),
+                     ?, ?, ?)`
           ).bind(
             user.name, parseFloat(amount), prodName, cat.label, payMode, notes || '',
             expenseId, companyId, parseInt(product_id, 10), prodName, cat.parentName || null,
-            expenseVals.x_pool, expenseVals.x_payment_method, brand, cat.id === 13 ? 1 : 0
+            expenseVals.x_pool, expenseVals.x_payment_method, brand, cat.id === 13 ? 1 : 0,
+            payrollPeriod, payrollIntent, (cat.id === 3 || cat.id === 4) ? empId : null
           ).run().catch(e => console.error('mirror fail:', e.message));
         }
 
@@ -1107,6 +1146,96 @@ export async function onRequest(context) {
       }
 
       return json({ success: true, stats });
+    }
+
+    // ── PAYROLL LEDGER — per-employee salary accrued / paid / advance / balance ──
+    // Admin/CFO only. Pulls from D1 mirror (cats 3 + 4) indexed on x_payroll_period +
+    // x_employee_odoo_id. Computes settlement position for each active employee.
+    //
+    // Model:
+    //   accrued(month)      = monthly_salary (from hr_employees.monthly_salary)
+    //   paid(month)         = SUM(cat 3 where x_payroll_period=month)
+    //   advance_out(month)  = SUM(cat 4 where x_payroll_period=month, not yet deducted)
+    //   balance(month)      = accrued - paid - advance_out
+    //   → Positive balance = employee is owed. Negative = overpaid.
+    //
+    // Filters: ?month=YYYY-MM (defaults to current)  ?employee_id=N (optional drill-down)
+    if (action === 'payroll-ledger') {
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!isAdminRole(user)) return json({ success: false, error: 'Admin only (admin or CFO)' }, 403);
+      if (!DB) return json({ success: false, error: 'D1 not configured' }, 500);
+
+      const today = new Date();
+      const defaultMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+      const month = url.searchParams.get('month') || defaultMonth;
+      if (!/^\d{4}-\d{2}$/.test(month)) {
+        return json({ success: false, error: 'month must be YYYY-MM' }, 400);
+      }
+      const empFilter = url.searchParams.get('employee_id');
+
+      const emps = await DB.prepare(
+        `SELECT id, name, brand_label, company_id, monthly_salary, odoo_employee_id
+           FROM hr_employees
+          WHERE is_active = 1 AND odoo_employee_id IS NOT NULL
+          ${empFilter ? 'AND odoo_employee_id = ?' : ''}
+          ORDER BY brand_label, name`
+      ).bind(...(empFilter ? [parseInt(empFilter, 10)] : [])).all().catch(() => ({ results: [] }));
+
+      // Pull all payroll-tagged entries for this month in one query.
+      const entries = await DB.prepare(
+        `SELECT x_employee_odoo_id, x_payroll_period, x_payroll_intent, category, amount, recorded_at, description
+           FROM business_expenses
+          WHERE x_payroll_period = ?
+            AND x_employee_odoo_id IS NOT NULL
+          ORDER BY recorded_at DESC`
+      ).bind(month).all().catch(() => ({ results: [] }));
+
+      // Pull ALL salary-advance entries regardless of period — needed to compute
+      // outstanding advance balance (advance taken in month M counts until a salary
+      // clearing for M lands). Simple model: advance_out = sum of cat 4 where
+      // x_payroll_period <= month AND no corresponding Salary Payment cleared month yet.
+      // v1: just show this month's advances — good enough for Naveen's monthly view.
+
+      const rows = emps.results.map(e => {
+        const empEntries = entries.results.filter(r => r.x_employee_odoo_id === e.odoo_employee_id);
+        const paid = empEntries
+          .filter(r => r.category === 'Salary Payment')
+          .reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+        const advance = empEntries
+          .filter(r => r.category === 'Salary Advance')
+          .reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+        const accrued = parseFloat(e.monthly_salary || 0);
+        return {
+          employee_id: e.id,
+          odoo_employee_id: e.odoo_employee_id,
+          name: e.name,
+          brand: e.brand_label,
+          monthly_salary: accrued,
+          accrued,
+          paid,
+          advance,
+          balance: accrued - paid - advance,
+          entries: empEntries.map(r => ({
+            amount: parseFloat(r.amount || 0),
+            type: r.category,
+            intent: r.x_payroll_intent,
+            at: r.recorded_at,
+            note: r.description,
+          })),
+        };
+      });
+
+      // Totals
+      const totals = rows.reduce((t, r) => ({
+        accrued: t.accrued + r.accrued,
+        paid: t.paid + r.paid,
+        advance: t.advance + r.advance,
+        balance: t.balance + r.balance,
+      }), { accrued: 0, paid: 0, advance: 0, balance: 0 });
+
+      return json({ success: true, month, rows, totals });
     }
 
     // ── ARCHIVE VENDOR (admin only) ────────────────────────────────────────
