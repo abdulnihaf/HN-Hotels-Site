@@ -837,9 +837,11 @@ export async function onRequest(context) {
       if (!label?.trim()) return json({ success: false, error: 'label required' }, 400);
 
       // Resolve parent: default to "HN Hotels Expenses" root.
+      // Constrain parent_id=false so we don't match a sub-category that happens to share the name.
       const rootName = (odoo_parent_name || 'HN Hotels Expenses').trim();
       const rootHits = await odoo(apiKey, 'product.category', 'search_read',
-        [[['name', '=', rootName]]], { fields: ['id', 'name'], limit: 1 });
+        [[['name', '=', rootName], ['parent_id', '=', false]]],
+        { fields: ['id', 'name'], limit: 1 });
       if (!rootHits.length) {
         return json({ success: false, error: `Odoo parent category "${rootName}" not found` }, 404);
       }
@@ -934,14 +936,17 @@ export async function onRequest(context) {
         try {
           if (cat.custom && cat.odoo_category_id) {
             categIds = [cat.odoo_category_id];
-          } else if (cat.id === 1) {
-            const rm = await odoo(apiKey, 'product.category', 'search_read',
-              [[['name', '=', 'Raw Materials']]], { fields: ['id'], limit: 5 });
-            categIds = rm.map(r => r.id);
           } else if (cat.parentName) {
+            // Mirror the products endpoint: ilike on parentName, plus for cat 1
+            // also include the bare "Raw Materials" taxonomy where HN-RM-* registry lives.
             const ph = await odoo(apiKey, 'product.category', 'search_read',
               [[['name', 'ilike', cat.parentName]]], { fields: ['id'], limit: 5 });
             categIds = ph.map(r => r.id);
+            if (cat.id === 1) {
+              const rmExtra = await odoo(apiKey, 'product.category', 'search_read',
+                [[['name', '=', 'Raw Materials']]], { fields: ['id'], limit: 5 });
+              for (const r of rmExtra) if (!categIds.includes(r.id)) categIds.push(r.id);
+            }
           }
           if (!categIds.length) {
             return { ...cat, products: [], resolved: false };
