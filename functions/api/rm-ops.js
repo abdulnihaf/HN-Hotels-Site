@@ -756,7 +756,10 @@ async function handlePost(action, context, env, DB) {
   if (!brand || !BRAND_CONFIG[brand]) return json({ error: 'Missing or invalid brand' }, 400);
 
   const cfg = BRAND_CONFIG[brand];
-  const creds = getOdooCredentials(user, env);
+  // Admin-only API policy: PIN + USERS map is the auth gate; Odoo user tracking
+  // is via D1 ops log. Per-employee Odoo logins intentionally not created on
+  // odoo.hnhotels.in — saves licences and avoids per-user ACL gaps.
+  const creds = getOdooCredentials({ odoo: 'system' }, env);
 
   switch (body.action || action) {
     case 'create-po':       return createPO(body, user, creds, cfg, brand, DB, env);
