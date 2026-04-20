@@ -497,7 +497,9 @@ async function buildGenericForm(cat) {
       document.getElementById('submit-btn').classList.add('hidden');
       return;
     }
-    document.getElementById('submit-btn').classList.remove('hidden');
+    const sb = document.getElementById('submit-btn');
+    sb.classList.remove('hidden');
+    sb.disabled = false; sb.textContent = 'Record';  // safety reset — covers any stale state
     fields.push(`
       <div class="row">
         <label>What</label>
@@ -716,6 +718,10 @@ async function submitForm() {
     if (!r.success) throw new Error(r.error || 'Record failed');
     if (chosenDate) { LAST_HISTORICAL_DATE = chosenDate; updateHistBannerText(); }
     toast(`✓ Recorded ₹${amount.toLocaleString('en-IN')} — ${CURRENT_CAT.label}`, 'ok');
+    // Reset the shared submit button BEFORE returning home — otherwise the next
+    // entry lands on a button still disabled and labeled "Recording…", which
+    // makes the form look stuck (user had to hard-refresh to unstick it).
+    btn.disabled = false; btn.textContent = 'Record';
     setTimeout(showHome, 800);
   } catch (e) {
     toast(e.message, 'err');
