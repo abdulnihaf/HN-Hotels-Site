@@ -288,6 +288,10 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
         // Source of truth is the "Raw Materials" category (id=21).
         // Legacy HN-RM-* SKU prefix kept as a fallback for products that
         // haven't been re-categorized yet.
+        // seller_ids exposes product.supplierinfo links so we can surface
+        // vendors even when the D1 rm_vendor_products mapping is absent
+        // (e.g. RMs added via the /ops/purchase/ Add-RM modal which writes
+        // supplierinfo in Odoo but not the D1 mirror).
         [[
           '|',
             ['categ_id', '=', 21],
@@ -295,7 +299,8 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
           ['company_id', 'in', [cfg.company_id, false]],
           ['active', '=', true],
         ]],
-        { fields: ['id', 'name', 'default_code', 'uom_id', 'categ_id'], order: 'name asc' }),
+        { fields: ['id', 'name', 'default_code', 'uom_id', 'categ_id',
+                   'product_tmpl_id', 'seller_ids'], order: 'name asc' }),
       odooCall(creds.uid, creds.key, 'res.partner', 'search_read',
         [[['supplier_rank', '>', 0], ['company_id', 'in', [cfg.company_id, false]]]],
         { fields: ['id', 'name', 'phone'], order: 'name asc' }),
@@ -336,6 +341,45 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
     });
   }
 
+  // Secondary vendor source: product.supplierinfo in Odoo. Keyed by
+  // product_id + product_tmpl_id so RMs added via the Add-RM modal (which
+  // only writes supplierinfo, not the D1 mirror) still resolve a vendor.
+  const supplierinfoVendorMap = {};
+  const allSupplierinfoIds = [...new Set(odooProducts.flatMap(p => p.seller_ids || []))];
+  if (allSupplierinfoIds.length > 0) {
+    const supplierinfos = await odooCall(creds.uid, creds.key,
+      'product.supplierinfo', 'search_read',
+      [[['id', 'in', allSupplierinfoIds]]],
+      { fields: ['id', 'partner_id', 'product_tmpl_id', 'product_id', 'price', 'min_qty'] });
+    // Tag each vendor link with a synthetic primary flag (first seller = primary)
+    const seenByTmpl = new Set();
+    for (const si of supplierinfos) {
+      if (!si.partner_id) continue;
+      const vendorOdooId = si.partner_id[0];
+      const vendorName = si.partner_id[1] || '';
+      const tmplId = si.product_tmpl_id?.[0];
+      const prodId = si.product_id?.[0];
+      const isPrimary = tmplId && !seenByTmpl.has(tmplId);
+      if (isPrimary) seenByTmpl.add(tmplId);
+      const link = {
+        key: `si-${si.id}`, name: vendorName,
+        odoo_id: vendorOdooId, odoo_id_stale: false,
+        is_primary: isPrimary,
+        price: si.price || 0,
+      };
+      // Key by product_tmpl_id (covers all variants of the template) and
+      // also by specific product_id when the supplierinfo is variant-scoped.
+      if (tmplId) {
+        const tk = `tmpl:${tmplId}`;
+        (supplierinfoVendorMap[tk] = supplierinfoVendorMap[tk] || []).push(link);
+      }
+      if (prodId) {
+        const pk = `prod:${prodId}`;
+        (supplierinfoVendorMap[pk] = supplierinfoVendorMap[pk] || []).push(link);
+      }
+    }
+  }
+
   // latest price per product (first occurrence = most recent due to ORDER BY)
   const priceMap = {};
   for (const p of (lastPricesAll.results || [])) {
@@ -365,13 +409,28 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
     });
   }
 
+  // Merge D1 vendorMap with Odoo supplierinfo, deduped by odoo_id. D1 takes
+  // precedence when both exist; supplierinfo fills gaps for new-flow RMs.
+  function mergeVendors(codeBased, prodId, tmplId) {
+    const byOdooId = new Map();
+    for (const v of codeBased || []) byOdooId.set(v.odoo_id, v);
+    const siLinks = [
+      ...(supplierinfoVendorMap[`tmpl:${tmplId}`] || []),
+      ...(supplierinfoVendorMap[`prod:${prodId}`] || []),
+    ];
+    for (const v of siLinks) {
+      if (!byOdooId.has(v.odoo_id)) byOdooId.set(v.odoo_id, v);
+    }
+    return [...byOdooId.values()];
+  }
+
   return json({
     success: true,
     products: odooProducts.map(p => ({
       id: p.id, name: p.name, code: p.default_code || '',
       uom: p.uom_id ? p.uom_id[1] : 'Units',
       category: p.categ_id ? p.categ_id[1] : '',
-      vendors: vendorMap[p.default_code] || [],
+      vendors: mergeVendors(vendorMap[p.default_code], p.id, p.product_tmpl_id?.[0]),
       lastPrice: priceMap[p.default_code] || null,
     })),
     vendors: odooVendors.map(v => ({ id: v.id, name: v.name, phone: v.phone || '' })),
