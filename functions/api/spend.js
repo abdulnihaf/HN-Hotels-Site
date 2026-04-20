@@ -578,6 +578,7 @@ export async function onRequest(context) {
           employee_id: empId,
           company_id: companyId,
           date: customDate,
+          payment_mode: 'company_account',  // Paid from company till — no reimbursement
           x_pool: cat.id === 2 || cat.id === 13 ? 'capex' : 'opex',
           x_payment_method: payment_method || 'cash',
           x_location: brand,
@@ -691,6 +692,25 @@ export async function onRequest(context) {
       }
 
       return json({ success: true, deleted_odoo_id: odoo_id });
+    }
+
+    // ── PATCH EXPENSE NAME (admin / cfo only) — fix description without delete/re-create ──
+    if (action === 'patch-expense' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, odoo_id, name } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!['admin','cfo'].includes(user.role)) {
+        return json({ success: false, error: 'Only Nihaf/Naveen can patch expense names' }, 403);
+      }
+      if (!odoo_id || !name?.trim()) return json({ success: false, error: 'odoo_id and name required' }, 400);
+      await odoo(apiKey, 'hr.expense', 'write', [[parseInt(odoo_id, 10)], { name: name.trim() }]);
+      if (DB) {
+        await DB.prepare('UPDATE business_expenses SET description = ? WHERE odoo_id = ?')
+          .bind(name.trim(), parseInt(odoo_id, 10)).run().catch(() => {});
+      }
+      return json({ success: true, odoo_id, name: name.trim() });
     }
 
     // ── ARCHIVE PRODUCT (admin only) — marks active=false in Odoo ──────────
