@@ -92,8 +92,8 @@ export async function onRequest(context) {
         parents: tree,
         options: {
           brands: [
-            {v: 'nch', l: 'Nawabi Chai House', company_id: 10},
-            {v: 'he', l: 'Hamza Express', company_id: 1},
+            {v: 'nch', l: 'Nawabi Chai House', company_id: 3},
+            {v: 'he', l: 'Hamza Express', company_id: 2},
           ],
           payment_methods: [
             {v: 'cash', l: 'Cash'},

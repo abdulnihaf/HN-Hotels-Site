@@ -682,10 +682,9 @@ async function submitForm() {
       if ((CURRENT_CAT.id === 3 || CURRENT_CAT.id === 4) && !body.employee_id) throw new Error('Pick an employee');
     }
     if (CURRENT_CAT.backend === 'account.move') {
-      body.vendor_id = document.getElementById('f-vendor')?.value;
+      body.vendor_id = document.getElementById('f-vendor')?.value || '';
       body.vendor_name = document.getElementById('f-vendor-name')?.value || '';
       body.bill_ref = document.getElementById('f-bill-ref')?.value || '';
-      if (!body.vendor_id) throw new Error('Pick a vendor');
     }
     const r = await fetch(`${API}?action=record`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1248,7 +1247,8 @@ async function submitNewRmProduct() {
   // Find "Raw Materials" category id (21 in new Odoo)
   const RM_CATEGORY_ID = 21;
   // Company id for current brand — must match BRAND_CONFIG in rm-ops.js
-  const companyMap = { HE: 1, NCH: 10, HQ: 13 };
+  // odoo.hnhotels.in: 1=HN Hotels Pvt Ltd (HQ), 2=Hamza Express, 3=Nawabi Chai House
+  const companyMap = { HE: 2, NCH: 3, HQ: 1 };
   const companyId = companyMap[BRAND] || null;
 
   try {

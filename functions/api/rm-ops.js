@@ -20,21 +20,27 @@ const ODOO_DB = 'main';
 
 /* ━━━ Brand Config ━━━ */
 
+// Company IDs are for odoo.hnhotels.in (verified 2026-04-20 via diagnose-multicompany):
+//   1 = HN Hotels Pvt Ltd (HQ)  |  2 = Hamza Express  |  3 = Nawabi Chai House
+// DO NOT use old ops.hamzahotel.com IDs here (those were 1/10/13).
+// Location / picking_type / pos_config IDs below are from the old instance and
+// have NOT been re-verified for odoo.hnhotels.in — inventory flows (settlement,
+// kitchen-stock, receive-delivery) may need re-mapping separately.
 const BRAND_CONFIG = {
   NCH: {
-    company_id: 10,
+    company_id: 3,
     locations: { VENDORS: 1, STOCK: 34, MAIN: 39, COLD: 40, KITCHEN: 41, WASTAGE: 42 },
     picking_types: { to_kitchen: 20, from_cold: 21, return: 22, wastage: 23 },
     pos_configs: [27, 28],
   },
   HE: {
-    company_id: 1,
+    company_id: 2,
     locations: { VENDORS: 1, STOCK: 5, MAIN: 47, COLD: 48, KITCHEN: 49, WASTAGE: 50 },
     picking_types: { to_kitchen: 30, from_cold: 31, return: 32, wastage: 33 },
     pos_configs: [5, 6, 10],
   },
   HQ: {
-    company_id: 13,
+    company_id: 1,
     // HQ has no warehouse — service / capex / centralized purchases only.
     // Inventory-related actions (settlement, stock count) skip HQ.
     locations: {},
@@ -302,12 +308,22 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
     ]);
 
   // vendor mappings: product_code → [{key, name, odoo_id, is_primary}]
+  // Self-heal stale odoo_ids: D1's rm_vendors.odoo_id may be from the old
+  // ops.hamzahotel.com instance; remap to the live odoo.hnhotels.in id via
+  // case-insensitive name match so the PO create payload uses a valid partner.
+  const liveVendorByName = {};
+  for (const v of odooVendors) {
+    liveVendorByName[v.name.trim().toLowerCase()] = v.id;
+  }
   const vendorMap = {};
   for (const m of (vendorMappings.results || [])) {
     if (!vendorMap[m.product_code]) vendorMap[m.product_code] = [];
+    const liveId = liveVendorByName[(m.vendor_name || '').trim().toLowerCase()];
     vendorMap[m.product_code].push({
       key: m.vendor_key, name: m.vendor_name,
-      odoo_id: m.vendor_odoo_id, is_primary: !!m.is_primary,
+      odoo_id: liveId || m.vendor_odoo_id,
+      odoo_id_stale: !liveId && !!m.vendor_odoo_id,
+      is_primary: !!m.is_primary,
     });
   }
 
@@ -756,7 +772,10 @@ async function handlePost(action, context, env, DB) {
   if (!brand || !BRAND_CONFIG[brand]) return json({ error: 'Missing or invalid brand' }, 400);
 
   const cfg = BRAND_CONFIG[brand];
-  const creds = getOdooCredentials(user, env);
+  // Admin-only API policy: PIN + USERS map is the auth gate; Odoo user tracking
+  // is via D1 ops log. Per-employee Odoo logins intentionally not created on
+  // odoo.hnhotels.in — saves licences and avoids per-user ACL gaps.
+  const creds = getOdooCredentials({ odoo: 'system' }, env);
 
   switch (body.action || action) {
     case 'create-po':       return createPO(body, user, creds, cfg, brand, DB, env);

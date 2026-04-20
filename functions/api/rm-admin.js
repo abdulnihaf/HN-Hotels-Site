@@ -14,9 +14,8 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const ODOO_URL  = 'https://odoo.hnhotels.in/jsonrpc';
-const ODOO_DB   = 'main';
-const ODOO_USER = 'yash@gmail.com';
+const ODOO_URL = 'https://odoo.hnhotels.in/jsonrpc';
+const ODOO_DB  = 'main';
 
 // Master Data attribute IDs (created in Phase 1 — seeded in Odoo)
 const CAT_GOODS_ROOT = 1;   // product.category "Goods"
@@ -29,7 +28,8 @@ const PINS = {
   '2026': { name: 'Zoya',  role: 'read'  },
 };
 
-const BRAND_COMPANY = { HE: 1, NCH: 10, BOTH: false };
+// odoo.hnhotels.in: 1=HN Hotels Pvt Ltd (HQ), 2=Hamza Express, 3=Nawabi Chai House
+const BRAND_COMPANY = { HE: 2, NCH: 3, BOTH: false };
 
 const UOM_FALLBACK = {
   kg: 'kg', g: 'g', L: 'L', ml: 'ml',
@@ -57,7 +57,9 @@ function checkPin(pin, requireAdmin = false) {
 
 /* ━━━ Odoo JSON-RPC ━━━ */
 
-let _uid = null;
+// Admin-only: all calls use uid=2 + ODOO_API_KEY directly (no authenticate step).
+// common/authenticate does NOT work with API keys in Odoo 19.
+const ODOO_UID = 2;
 
 async function rpc(service, method, args) {
   const r = await fetch(ODOO_URL, {
@@ -76,17 +78,8 @@ async function rpc(service, method, args) {
   return d.result;
 }
 
-async function odooAuth(apiKey) {
-  if (_uid) return _uid;
-  const uid = await rpc('common', 'authenticate', [ODOO_DB, ODOO_USER, apiKey, {}]);
-  if (!uid) throw new Error('Odoo auth failed — check ODOO_API_KEY');
-  _uid = uid;
-  return uid;
-}
-
 async function odoo(apiKey, model, method, args = [], kwargs = {}) {
-  const uid = await odooAuth(apiKey);
-  return rpc('object', 'execute_kw', [ODOO_DB, uid, apiKey, model, method, args, kwargs]);
+  return rpc('object', 'execute_kw', [ODOO_DB, ODOO_UID, apiKey, model, method, args, kwargs]);
 }
 
 /* ━━━ Sync log ━━━ */
@@ -291,8 +284,9 @@ async function handleGet(url, env) {
       const like = `%${q}%`;
       p.push(like, like, like);
     }
-    if (brand === 'HE') { sql += ' AND (company_id = 1 OR company_id IS NULL)'; }
-    else if (brand === 'NCH') { sql += ' AND (company_id = 10 OR company_id IS NULL)'; }
+    // company_id values in rm_product_variants mirror odoo.hnhotels.in (2=HE, 3=NCH)
+    if (brand === 'HE') { sql += ' AND (company_id = 2 OR company_id IS NULL)'; }
+    else if (brand === 'NCH') { sql += ' AND (company_id = 3 OR company_id IS NULL)'; }
     sql += ' ORDER BY template_name, display_name LIMIT ?';
     p.push(limit);
     const rows = await db.prepare(sql).bind(...p).all();
@@ -384,6 +378,51 @@ async function handlePost(request, env) {
     vals.push(hn_code);
     await db.prepare(`UPDATE rm_products SET ${sets.join(', ')} WHERE hn_code = ?`).bind(...vals).run();
     return json({ success: true, hn_code });
+  }
+
+  // One-shot: find-or-create a UoM and update a product's uom_id in Odoo + D1
+  // POST {action:'set-product-uom', pin:'0305', odoo_product_id:238, uom_name:'can', hn_code:'HN-RM-203'}
+  if (action === 'set-product-uom') {
+    const { odoo_product_id, uom_name, hn_code } = body;
+    if (!odoo_product_id || !uom_name) return json({ error: 'Required: odoo_product_id, uom_name' }, 400);
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+    // Use admin uid=2 directly (rm-admin.js authenticates as yash@ which doesn't exist
+    // on odoo.hnhotels.in; admin-only API policy: uid=2 + ODOO_API_KEY)
+    const adminCall = (model, method, args, kwargs) =>
+      rpc('object', 'execute_kw', [ODOO_DB, 2, apiKey, model, method, args, kwargs || {}]);
+
+    // 1. Find existing UoM by name (case-insensitive)
+    const existing = await adminCall('uom.uom', 'search_read',
+      [[['name', '=ilike', uom_name]]], { fields: ['id', 'name'] });
+    let uomId;
+    if (existing.length > 0) {
+      uomId = existing[0].id;
+    } else {
+      // Create with name only — Odoo 19 uom.uom doesn't expose category_id via API
+      uomId = await adminCall('uom.uom', 'create', [{ name: uom_name }]);
+    }
+
+    // 3. Read product template id then update uom_id (+ uom_po_id if field exists)
+    const prod = await adminCall('product.product', 'read',
+      [[odoo_product_id]], { fields: ['id', 'product_tmpl_id'] });
+    if (!prod[0]) return json({ error: `Product ${odoo_product_id} not found` }, 404);
+    const tmplId = prod[0].product_tmpl_id[0];
+    const writeVals = { uom_id: uomId };
+    try { await adminCall('product.template', 'write', [[tmplId], { uom_po_id: uomId }]); }
+    catch (_) { /* uom_po_id may not exist in Odoo 19 — uom_id alone is sufficient */ }
+    await adminCall('product.template', 'write', [[tmplId], writeVals]);
+
+    // 4. Update D1 rm_products UoM label if hn_code provided
+    if (hn_code && db) {
+      await db.prepare("UPDATE rm_products SET uom = ? WHERE hn_code = ?").bind(uom_name, hn_code).run();
+    }
+
+    return json({
+      success: true, uom_id: uomId, uom_name, odoo_product_id,
+      odoo_template_id: tmplId, was_existing: existing.length > 0,
+      d1_updated: !!hn_code,
+    });
   }
 
   if (action === 'update-vendor') {
@@ -810,7 +849,7 @@ async function doExtract(env) {
   const apiKey = env.ODOO_API_KEY;
   if (!apiKey) return json({ error: 'ODOO_API_KEY secret not set' }, 500);
 
-  const uid = await odooAuth(apiKey);
+  const uid = ODOO_UID;
 
   const [categories, uoms, vendors, products, fields] = await Promise.all([
     odoo(apiKey, 'product.category', 'search_read', [[]], { fields: ['name', 'parent_id', 'complete_name'] }),
@@ -1189,7 +1228,6 @@ async function runCleanup(env, db, step, userName) {
 }
 
 async function fetchCleanupState(apiKey, db) {
-  await odooAuth(apiKey);
   const [prods, cats] = await Promise.all([
     odoo(apiKey, 'product.product', 'search_read',
       [['|', ['default_code', 'like', 'RM-'], ['default_code', 'like', 'NCH-']]],
@@ -1317,7 +1355,6 @@ async function cleanupRename(apiKey, db, userName) {
 /* --- Fix D1: sync correct odoo_ids + reset missing products for creation --- */
 
 async function cleanupFixD1(apiKey, db) {
-  await odooAuth(apiKey);
   const prods = await odoo(apiKey, 'product.product', 'search_read',
     [[['default_code', 'like', 'HN-RM-']]], { fields: ['id', 'default_code'] });
   const byCode = {};
@@ -1353,7 +1390,6 @@ async function cleanupFixD1(apiKey, db) {
 /* --- Categories: deprecate old HE/NCH Raw Materials categories once empty --- */
 
 async function cleanupCategories(apiKey, db, userName) {
-  await odooAuth(apiKey);
   const oldCats = await odoo(apiKey, 'product.category', 'search_read',
     [['|', ['complete_name', 'like', 'HE Raw Materials'], ['complete_name', 'like', 'NCH Raw Materials']]],
     { fields: ['id', 'name', 'complete_name'] });
