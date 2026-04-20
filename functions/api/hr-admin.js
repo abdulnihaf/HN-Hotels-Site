@@ -977,20 +977,23 @@ async function handlePost(request, env) {
 
       let errorClass = null;
       let msg = null;
+      const taps = pairs.flatMap(p => [p.in, p.out].filter(Boolean)).map(t => t.slice(11, 16)).join(', ');
+      const greet = `Namaste ${r.known_as || r.name} bhai`;
 
-      // CLASS A: odd count (≥3) indicates a missed break punch
+      // Nihaf's punch semantics: 2 or 4 taps = valid. Odd count = error.
+      //
+      //   3+ odd count      → missed a break punch (specific error class)
+      //   1 tap in clear-IN → forgot to punch out
+      //   1 tap outside    → ambiguous — hold off, manager clarifies
+
       if (punchCount >= 3 && punchCount % 2 === 1) {
         errorClass = 'missed_break_punch';
-        const taps = pairs.flatMap(p => [p.in, p.out].filter(Boolean)).map(t => t.slice(11, 16)).join(', ');
-        const greet = `Namaste ${r.known_as || r.name} bhai`;
-        msg = `${greet},\n\nYesterday (${date}) we received ${punchCount} punches on the biometric (${taps}). An odd number means you MISSED one punch — either going for your break OR coming back from break.\n\nPlease always punch BOTH when leaving and returning from break, so your hours and break time are recorded correctly.\n\n- HN HR`;
+        msg = `${greet},\n\nYesterday (${date}) we received ${punchCount} punches on the biometric (${taps}). An odd number means you MISSED one punch — either going for your break OR coming back from break.\n\nPlease always punch BOTH when leaving AND returning from break, so your hours and break time are recorded correctly. A valid shift is 2 punches (IN + OUT) or 4 punches (IN + break-OUT + break-IN + OUT).\n\n- HN HR`;
       }
-      // CLASS B: exactly 1 tap in clear-IN window = forgot to punch out
       else if (punchCount === 1 && firstInHour !== null) {
         const win = CLEAR_IN_WINDOW[brand];
         if (win && firstInHour >= win[0] && firstInHour < win[1]) {
           errorClass = 'missed_checkout';
-          const greet = `Namaste ${r.known_as || r.name} bhai`;
           msg = `${greet},\n\nYesterday (${date}) only your punch-IN at ${r.first_in_at.slice(11, 16)} was captured. The system did not receive your punch-OUT.\n\nPlease let Basheer bhai know what time you finished your shift so we can correct the record. And always remember to punch out when leaving.\n\n- HN HR`;
         }
       }
