@@ -84,6 +84,7 @@
         <div class="sub" id="user-sub"></div>
       </div>
       <div style="display: flex; gap: 6px;">
+        <a id="admin-link" class="btn btn-ghost btn-sm hidden" href="/ops/expense/admin/" title="Rename / archive / add items + categories">⚙ Admin</a>
         <button class="btn btn-ghost btn-sm" onclick="openDownloadMenu('expense')" title="Download structure + data">⬇ Download</button>
         <button class="btn btn-ghost btn-sm" onclick="logout()">Exit</button>
       </div>
@@ -369,6 +370,7 @@ async function verifyPin() {
   document.getElementById('home-screen').classList.remove('hidden');
   document.getElementById('user-greeting').textContent = `Hi ${r.user.name}`;
   document.getElementById('user-sub').textContent = `${r.user.role} · ${r.brands.join(' / ')}`;
+  document.getElementById('admin-link').classList.toggle('hidden', !r.can_admin);
   renderBrands();
   renderCategories();
   loadRecent();

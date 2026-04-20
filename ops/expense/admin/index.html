@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Expense Admin">
+<title>HN Expense — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  .cat-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; margin-bottom: 10px; }
+  .cat-row.custom { border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.04); }
+  .cat-head { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .cat-head .e { font-size: 22px; }
+  .cat-head .label { font-weight: 700; font-size: 14px; flex: 1; }
+  .cat-head .count { font-size: 11px; color: var(--text-dim); }
+  .cat-head .chev { color: var(--text-dim); font-size: 14px; transition: transform .15s; }
+  .cat-row.open .chev { transform: rotate(90deg); }
+  .cat-body { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+  .cat-row.open .cat-body { display: block; }
+  .lock-pill { background: rgba(148,163,184,0.15); color: var(--text-dim); font-size: 10px;
+    padding: 2px 6px; border-radius: 999px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+  .custom-pill { background: rgba(16,185,129,0.15); color: #34d399; font-size: 10px;
+    padding: 2px 6px; border-radius: 999px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+  .prod-line { display: flex; align-items: center; gap: 8px; padding: 8px 0;
+    border-bottom: 1px dashed var(--border); font-size: 13px; }
+  .prod-line:last-child { border-bottom: none; }
+  .prod-line .n { flex: 1; min-width: 0; }
+  .prod-line .n .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prod-line .n .co { font-size: 11px; color: var(--text-dim); }
+  .prod-line.archived { opacity: 0.45; }
+  .prod-line.archived .nm::after { content: ' · archived'; color: var(--warn); font-weight: 500; }
+  .mini-btn { background: var(--card); border: 1px solid var(--border); color: var(--text);
+    padding: 4px 8px; font-size: 11px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  .mini-btn.danger { color: var(--danger); border-color: rgba(239,68,68,0.4); }
+  .mini-btn.ok { color: var(--accent); border-color: rgba(16,185,129,0.4); }
+  .add-item-row { display: flex; gap: 6px; margin-top: 10px; }
+  .add-item-row input { flex: 1; min-height: 36px; padding: 6px 10px; font-size: 13px; }
+  .new-cat-box { background: var(--card); border: 1px solid rgba(16,185,129,0.35);
+    border-radius: var(--radius); padding: 14px; margin-bottom: 16px; }
+  .filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; font-size: 13px; color: var(--text-dim); }
+  .filter-bar label { display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0; }
+</style>
+</head>
+<body>
+
+<div id="app" class="app">
+
+  <!-- PIN GATE -->
+  <div id="pin-screen">
+    <h1>HN Expense — Admin</h1>
+    <p class="sub">Rename · archive · add. Naveen &amp; Nihaf only.</p>
+    <div style="margin-top: 32px; max-width: 280px;">
+      <label>Enter PIN</label>
+      <input id="pin-input" type="password" inputmode="numeric" maxlength="4"
+             autocomplete="off" autofocus style="font-size: 20px; text-align: center;">
+      <div id="pin-error" style="color: var(--danger); margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
+      <button class="btn btn-primary btn-full" style="margin-top: 12px;" onclick="verifyPin()">Enter</button>
+    </div>
+  </div>
+
+  <!-- ADMIN HOME -->
+  <div id="admin-screen" class="hidden">
+    <header>
+      <div>
+        <h1 id="greet">Admin</h1>
+        <div class="sub" id="greet-sub"></div>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <a class="btn btn-ghost btn-sm" href="/ops/expense/">← Expense</a>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Exit</button>
+      </div>
+    </header>
+
+    <!-- New category box -->
+    <div class="new-cat-box">
+      <div style="font-weight: 700; margin-bottom: 8px;">+ Add new category</div>
+      <div class="sub" style="margin-bottom: 10px;">Creates an Odoo product.category under <b>HN Hotels Expenses</b>. Locked category IDs (1–15) are shown below as hard-locked — you can only rename/archive the items inside them.</div>
+      <div style="display: grid; grid-template-columns: 60px 1fr; gap: 6px; margin-bottom: 6px;">
+        <input id="nc-emoji" type="text" placeholder="📌" maxlength="2" style="text-align: center; font-size: 18px;">
+        <input id="nc-label" type="text" placeholder="Category name (e.g. 16 · Consulting Fees)">
+      </div>
+      <input id="nc-desc" type="text" placeholder="Short description (optional)" style="margin-bottom: 6px;">
+      <button class="btn btn-primary btn-sm" onclick="createCategory()">Create category</button>
+    </div>
+
+    <div class="filter-bar">
+      <label>
+        <input id="show-archived" type="checkbox" onchange="loadOverview()"> Show archived items
+      </label>
+      <span id="cat-count" class="mute"></span>
+    </div>
+
+    <div id="cats-list">
+      <div class="mute">Loading…</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = '/api/spend';
+let PIN = '';
+let USER = null;
+let OVERVIEW = null;
+
+const pinInput = document.getElementById('pin-input');
+pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') verifyPin(); });
+pinInput.addEventListener('input', () => { if (pinInput.value.length === 4) verifyPin(); });
+
+async function verifyPin() {
+  const pin = pinInput.value.trim();
+  if (!pin || pin.length < 4) return;
+  const r = await fetch(`${API}?action=verify-pin&pin=${pin}`).then(x => x.json()).catch(() => null);
+  if (!r || !r.success) {
+    document.getElementById('pin-error').textContent = r?.error || 'Invalid PIN';
+    pinInput.value = '';
+    return;
+  }
+  if (!r.can_admin) {
+    document.getElementById('pin-error').textContent = 'Not authorised — admin/CFO only';
+    pinInput.value = '';
+    return;
+  }
+  PIN = pin;
+  USER = r;
+  document.getElementById('pin-screen').classList.add('hidden');
+  document.getElementById('admin-screen').classList.remove('hidden');
+  document.getElementById('greet').textContent = `Hi ${r.user.name}`;
+  document.getElementById('greet-sub').textContent = `${r.user.role} · category + item admin`;
+  loadOverview();
+}
+
+function logout() {
+  PIN = ''; USER = null;
+  pinInput.value = '';
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('admin-screen').classList.add('hidden');
+  document.getElementById('pin-screen').classList.remove('hidden');
+  pinInput.focus();
+}
+
+async function loadOverview() {
+  const box = document.getElementById('cats-list');
+  box.innerHTML = '<div class="mute">Loading from Odoo…</div>';
+  const showArch = document.getElementById('show-archived').checked ? '1' : '0';
+  const r = await fetch(`${API}?action=admin-overview&pin=${PIN}&include_archived=${showArch}`).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { box.innerHTML = `<div class="mute" style="color: var(--danger);">${esc(r.error || 'Load failed')}</div>`; return; }
+  OVERVIEW = r.categories;
+  renderCats();
+}
+
+function renderCats() {
+  const box = document.getElementById('cats-list');
+  document.getElementById('cat-count').textContent = `${OVERVIEW.length} categories · ${OVERVIEW.reduce((s,c)=>s+(c.products?.length||0),0)} items`;
+  box.innerHTML = OVERVIEW.map(c => renderCat(c)).join('');
+}
+
+function renderCat(c) {
+  const pill = c.custom
+    ? `<span class="custom-pill">custom</span>`
+    : `<span class="lock-pill">locked</span>`;
+  const archiveCatBtn = c.custom
+    ? `<button class="mini-btn danger" onclick="archiveCategory(${c.id})">Archive category</button>`
+    : '';
+  const itemRows = (c.products || []).map(p => renderProduct(p, c.id)).join('')
+                  || '<div class="mute" style="padding: 8px 0;">No items in this category yet.</div>';
+  return `
+    <div class="cat-row ${c.custom ? 'custom' : ''}" id="cat-${c.id}">
+      <div class="cat-head" onclick="toggleCat(${c.id})">
+        <span class="e">${c.emoji || '📌'}</span>
+        <div class="label">${esc(c.label)} ${pill}</div>
+        <span class="count">${(c.products || []).length} items</span>
+        <span class="chev">›</span>
+      </div>
+      <div class="cat-body">
+        <div class="sub" style="margin-bottom: 8px;">
+          ${esc(c.desc || '')}
+          ${c.parentName ? `<br>Odoo: <code>${esc(c.parentName)}</code> (id ${c.odoo_category_id || '?'})` : ''}
+        </div>
+        <div>${itemRows}</div>
+        <div class="add-item-row">
+          <input id="add-${c.id}" type="text" placeholder="+ Add item to ${esc(c.label)}">
+          <button class="mini-btn ok" onclick="addItem(${c.id})">Add</button>
+        </div>
+        ${archiveCatBtn ? `<div style="margin-top: 14px; text-align: right;">${archiveCatBtn}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderProduct(p, catId) {
+  const active = p.active !== false;
+  return `
+    <div class="prod-line ${active ? '' : 'archived'}" id="prod-${p.id}">
+      <div class="n">
+        <div class="nm">${esc(p.name)}</div>
+        <div class="co">${esc(p.default_code || '')} ${p.uom_id ? '· ' + esc(p.uom_id[1] || '') : ''} · id ${p.id}</div>
+      </div>
+      ${active ? `
+        <button class="mini-btn" onclick="renameItem(${p.id}, ${JSON.stringify(p.name).replace(/"/g,'&quot;')})">Rename</button>
+        <button class="mini-btn danger" onclick="deleteItem(${p.id})">Delete</button>
+      ` : `
+        <button class="mini-btn ok" onclick="unarchiveItem(${p.id})">Restore</button>
+      `}
+    </div>
+  `;
+}
+
+function toggleCat(id) {
+  document.getElementById(`cat-${id}`)?.classList.toggle('open');
+}
+
+async function addItem(catId) {
+  const input = document.getElementById(`add-${catId}`);
+  const name = (input?.value || '').trim();
+  if (!name) { toast('Item name required', 'err'); return; }
+  const r = await fetch(`${API}?action=create-expense-product`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, cat_id: catId, name }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { toast(r.error || 'Add failed', 'err'); return; }
+  input.value = '';
+  toast(`✓ Added "${r.product.name}"`, 'ok');
+  await loadOverview();
+  document.getElementById(`cat-${catId}`)?.classList.add('open');
+}
+
+async function renameItem(productId, currentName) {
+  const name = prompt('Rename item:', currentName);
+  if (name == null) return;
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === currentName) return;
+  const r = await fetch(`${API}?action=rename-product`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, product_id: productId, name: trimmed }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { toast(r.error || 'Rename failed', 'err'); return; }
+  toast('✓ Renamed', 'ok');
+  loadOverview();
+}
+
+async function deleteItem(productId) {
+  if (!confirm('Delete this item? It archives in Odoo (existing expenses referencing it still show). You can restore from "Show archived".')) return;
+  const r = await fetch(`${API}?action=archive-product`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, product_id: productId }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { toast(r.error || 'Delete failed', 'err'); return; }
+  toast('✓ Deleted', 'ok');
+  loadOverview();
+}
+
+async function unarchiveItem(productId) {
+  const r = await fetch(`${API}?action=unarchive-product`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, product_id: productId }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { toast(r.error || 'Restore failed', 'err'); return; }
+  toast('✓ Restored', 'ok');
+  loadOverview();
+}
+
+async function createCategory() {
+  const label = document.getElementById('nc-label').value.trim();
+  const emoji = document.getElementById('nc-emoji').value.trim() || '📌';
+  const desc  = document.getElementById('nc-desc').value.trim();
+  if (!label) { toast('Category name required', 'err'); return; }
+  if (!confirm(`Create category "${emoji} ${label}"? This makes a new Odoo product.category under "HN Hotels Expenses".`)) return;
+  const r = await fetch(`${API}?action=create-category`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, label, emoji, description: desc }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { toast(r.error || 'Create failed', 'err'); return; }
+  document.getElementById('nc-label').value = '';
+  document.getElementById('nc-emoji').value = '';
+  document.getElementById('nc-desc').value = '';
+  toast(`✓ Added "${r.category.label}"`, 'ok');
+  await loadOverview();
+  document.getElementById(`cat-${r.category.id}`)?.classList.add('open');
+}
+
+async function archiveCategory(catId) {
+  if (!confirm('Archive this custom category? Items inside stay in Odoo but the category no longer shows in the expense app. You can only do this for custom categories (1–15 are locked).')) return;
+  const r = await fetch(`${API}?action=archive-category`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, category_id: catId }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { toast(r.error || 'Archive failed', 'err'); return; }
+  toast('✓ Category archived', 'ok');
+  loadOverview();
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg, kind) {
+  const el = document.createElement('div');
+  el.className = `toast toast-${kind === 'ok' ? 'success' : 'error'}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+</script>
+</body>
+</html>

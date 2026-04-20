@@ -180,6 +180,39 @@ function visibleCats(user) {
   return CATEGORIES.filter(c => !c.hidden && user.cats.includes(c.id));
 }
 
+// Custom categories Naveen has added via /ops/expense/admin/.
+// Returned with shape matching the built-in CATEGORIES so the UI treats them identically.
+async function loadCustomCategories(DB) {
+  if (!DB) return [];
+  try {
+    const r = await DB.prepare(
+      `SELECT id, label, emoji, description, backend, odoo_category_id, odoo_category_name
+         FROM expense_categories_ext
+        WHERE is_active = 1
+        ORDER BY id ASC`
+    ).all();
+    return (r.results || []).map(row => ({
+      id: row.id,
+      label: row.label,
+      emoji: row.emoji || '📌',
+      desc: row.description || '',
+      backend: row.backend || 'hr.expense',
+      parentName: row.odoo_category_name || null,
+      odoo_category_id: row.odoo_category_id,
+      custom: true,
+    }));
+  } catch (e) {
+    console.error('loadCustomCategories fail:', e.message);
+    return [];
+  }
+}
+
+// Admin-capable roles — CFO (Naveen) + admin (Nihaf).
+// Gates the /ops/expense/admin/ endpoints.
+function isAdminRole(user) {
+  return user && (user.role === 'cfo' || user.role === 'admin');
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
@@ -195,12 +228,21 @@ export async function onRequest(context) {
       const pin = url.searchParams.get('pin');
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' });
+
+      // Merge built-in (locked) cats with custom cats Naveen has added.
+      // Custom cats respect the same scope rules — 'all' sees them; scoped PINs never get them
+      // (cashiers/Zoya/etc. stay on their locked list until explicitly extended).
+      const builtins = visibleCats(user);
+      const custom = user.cats === 'all' ? await loadCustomCategories(DB) : [];
+      const categories = [...builtins, ...custom];
+
       return json({
         success: true,
         user: { name: user.name, role: user.role },
         brands: user.brands,
-        categories: visibleCats(user),
+        categories,
         payment_methods: PAYMENT_METHODS,
+        can_admin: isAdminRole(user),
       });
     }
 
@@ -210,23 +252,34 @@ export async function onRequest(context) {
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
       const catId = parseInt(url.searchParams.get('cat') || '0', 10);
-      const cat = CATEGORIES.find(c => c.id === catId);
+
+      // Resolve cat from built-in const OR from custom cats registry (id >= 100)
+      let cat = CATEGORIES.find(c => c.id === catId);
+      if (!cat && catId >= 100 && DB) {
+        const custom = (await loadCustomCategories(DB)).find(c => c.id === catId);
+        if (custom) cat = custom;
+      }
       if (!cat) return json({ success: false, error: 'Unknown category' }, 400);
       if (cat.backend !== 'hr.expense') return json({ success: true, products: [] });
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
 
-      // Find the Odoo product.category by name — use ilike to tolerate whitespace / punctuation quirks.
-      // For Cat 1 Raw Materials we also include the sibling "Raw Materials" category (id 21 in new Odoo)
-      // where Zoya's registry products live (HN-RM-*** default codes).
-      const parentList = await odoo(apiKey, 'product.category', 'search_read',
-        [[['name', 'ilike', cat.parentName]]],
-        { fields: ['id', 'name'], limit: 5 });
-      const categIds = parentList.map(c => c.id);
-      if (catId === 1) {
-        // Also grep the bare "Raw Materials" taxonomy where RM registry lives
-        const rmExtra = await odoo(apiKey, 'product.category', 'search_read',
-          [[['name', '=', 'Raw Materials']]], { fields: ['id'], limit: 5 });
-        for (const r of rmExtra) if (!categIds.includes(r.id)) categIds.push(r.id);
+      // Resolve Odoo category IDs:
+      //   Custom cats → stored odoo_category_id (stable, rename-proof).
+      //   Built-in cats → ilike match on parentName (legacy behaviour, unchanged).
+      let categIds = [];
+      if (cat.custom && cat.odoo_category_id) {
+        categIds = [cat.odoo_category_id];
+      } else {
+        const parentList = await odoo(apiKey, 'product.category', 'search_read',
+          [[['name', 'ilike', cat.parentName]]],
+          { fields: ['id', 'name'], limit: 5 });
+        categIds = parentList.map(c => c.id);
+        if (catId === 1) {
+          // Also grep the bare "Raw Materials" taxonomy where RM registry lives
+          const rmExtra = await odoo(apiKey, 'product.category', 'search_read',
+            [[['name', '=', 'Raw Materials']]], { fields: ['id'], limit: 5 });
+          for (const r of rmExtra) if (!categIds.includes(r.id)) categIds.push(r.id);
+        }
       }
       if (!categIds.length) return json({ success: true, products: [], reason: `No category matching ${cat.parentName}` });
 
@@ -415,16 +468,24 @@ export async function onRequest(context) {
       const { pin, cat_id, name, uom_id } = body;
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
-      const cat = CATEGORIES.find(c => c.id === parseInt(cat_id, 10));
+      const catIdInt = parseInt(cat_id, 10);
+      let cat = CATEGORIES.find(c => c.id === catIdInt);
+      if (!cat && catIdInt >= 100 && DB) {
+        cat = (await loadCustomCategories(DB)).find(c => c.id === catIdInt);
+      }
       if (!cat) return json({ success: false, error: 'Unknown category' }, 400);
       if (cat.backend !== 'hr.expense') return json({ success: false, error: 'Only expense categories support inline product creation' }, 400);
       if (!name?.trim()) return json({ success: false, error: 'Name required' }, 400);
 
       // Resolve category:
+      //   Custom cat → use stored odoo_category_id.
       //   Cat 1 (Raw Material Purchase) lives in the "Raw Materials" taxonomy (id 21)
-      //   where Zoya's HN-RM-* registry is. All other cats use their parentName.
+      //     where Zoya's HN-RM-* registry is.
+      //   All other built-in cats resolve via parentName ilike.
       let categId = null;
-      if (parseInt(cat_id, 10) === 1) {
+      if (cat.custom && cat.odoo_category_id) {
+        categId = cat.odoo_category_id;
+      } else if (catIdInt === 1) {
         const rm = await odoo(apiKey, 'product.category', 'search_read',
           [[['name', '=', 'Raw Materials']]], { fields: ['id'], limit: 1 });
         if (!rm.length) return json({ success: false, error: 'Raw Materials category not found in Odoo' }, 404);
@@ -438,7 +499,7 @@ export async function onRequest(context) {
       }
 
       // Raw materials are consumable goods, not services. Everything else is a service.
-      const prodType = parseInt(cat_id, 10) === 1 ? 'consu' : 'service';
+      const prodType = catIdInt === 1 ? 'consu' : 'service';
       const prodId = await odoo(apiKey, 'product.product', 'create', [{
         name: name.trim(),
         categ_id: categId,
@@ -712,19 +773,200 @@ export async function onRequest(context) {
       return json({ success: true, odoo_id, name: name.trim() });
     }
 
-    // ── ARCHIVE PRODUCT (admin only) — marks active=false in Odoo ──────────
+    // ── ARCHIVE PRODUCT (admin/cfo) — marks active=false in Odoo ──────────
     if (action === 'archive-product' && request.method === 'POST') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
       const body = await request.json();
       const { pin, product_id } = body;
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
-      if (user.role !== 'admin') {
-        return json({ success: false, error: 'Only admins can archive products' }, 403);
+      if (!isAdminRole(user)) {
+        return json({ success: false, error: 'Only Nihaf/Naveen can archive products' }, 403);
       }
       if (!product_id) return json({ success: false, error: 'product_id required' }, 400);
       await odoo(apiKey, 'product.product', 'write', [[parseInt(product_id, 10)], { active: false }]);
       return json({ success: true, archived_product_id: product_id });
+    }
+
+    // ── UNARCHIVE PRODUCT (admin/cfo) — undo accidental delete ─────────────
+    if (action === 'unarchive-product' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, product_id } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!isAdminRole(user)) {
+        return json({ success: false, error: 'Only Nihaf/Naveen can unarchive products' }, 403);
+      }
+      if (!product_id) return json({ success: false, error: 'product_id required' }, 400);
+      await odoo(apiKey, 'product.product', 'write', [[parseInt(product_id, 10)], { active: true }]);
+      return json({ success: true, unarchived_product_id: product_id });
+    }
+
+    // ── RENAME PRODUCT (admin/cfo) — writes new name to Odoo product.product ──
+    if (action === 'rename-product' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, product_id, name } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!isAdminRole(user)) {
+        return json({ success: false, error: 'Only Nihaf/Naveen can rename products' }, 403);
+      }
+      if (!product_id || !name?.trim()) {
+        return json({ success: false, error: 'product_id + name required' }, 400);
+      }
+      await odoo(apiKey, 'product.product', 'write',
+        [[parseInt(product_id, 10)], { name: name.trim() }]);
+      return json({ success: true, product_id: parseInt(product_id, 10), name: name.trim() });
+    }
+
+    // ── CREATE CATEGORY (admin/cfo) — creates Odoo product.category + D1 row ──
+    // Parent under Odoo root "HN Hotels Expenses" so new cats inherit the expense taxonomy.
+    // Returns the new D1 row with its synthesized id (>= 100) so the UI can open it immediately.
+    if (action === 'create-category' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      if (!DB)     return json({ success: false, error: 'DB not configured' }, 500);
+      const body = await request.json();
+      const { pin, label, emoji, description, odoo_parent_name } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!isAdminRole(user)) {
+        return json({ success: false, error: 'Only Nihaf/Naveen can add categories' }, 403);
+      }
+      if (!label?.trim()) return json({ success: false, error: 'label required' }, 400);
+
+      // Resolve parent: default to "HN Hotels Expenses" root.
+      const rootName = (odoo_parent_name || 'HN Hotels Expenses').trim();
+      const rootHits = await odoo(apiKey, 'product.category', 'search_read',
+        [[['name', '=', rootName]]], { fields: ['id', 'name'], limit: 1 });
+      if (!rootHits.length) {
+        return json({ success: false, error: `Odoo parent category "${rootName}" not found` }, 404);
+      }
+      const parentId = rootHits[0].id;
+
+      // Create the Odoo product.category — label is what Naveen typed.
+      const odooCategName = label.trim();
+
+      // Guard against duplicate: same parent + same name
+      const dupe = await odoo(apiKey, 'product.category', 'search_read',
+        [[['name', '=', odooCategName], ['parent_id', '=', parentId]]],
+        { fields: ['id'], limit: 1 });
+      let odooCategId;
+      if (dupe.length) {
+        odooCategId = dupe[0].id;  // reuse existing — user probably retrying
+      } else {
+        odooCategId = await odoo(apiKey, 'product.category', 'create', [{
+          name: odooCategName,
+          parent_id: parentId,
+        }]);
+      }
+
+      const res = await DB.prepare(
+        `INSERT INTO expense_categories_ext
+           (label, emoji, description, backend, odoo_category_id, odoo_category_name, created_by_pin)
+         VALUES (?, ?, ?, 'hr.expense', ?, ?, ?)
+         RETURNING id`
+      ).bind(
+        label.trim(),
+        emoji?.trim() || '📌',
+        description?.trim() || '',
+        odooCategId,
+        odooCategName,
+        String(pin),
+      ).first();
+
+      return json({
+        success: true,
+        category: {
+          id: res.id,
+          label: label.trim(),
+          emoji: emoji?.trim() || '📌',
+          desc: description?.trim() || '',
+          backend: 'hr.expense',
+          parentName: odooCategName,
+          odoo_category_id: odooCategId,
+          custom: true,
+        },
+      });
+    }
+
+    // ── ARCHIVE CATEGORY (admin/cfo, custom cats only) ────────────────────
+    // Built-in cats 1-15 are hard-locked. Custom cats can be archived;
+    // products inside remain in Odoo under the Odoo category (not auto-archived).
+    if (action === 'archive-category' && request.method === 'POST') {
+      if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
+      const body = await request.json();
+      const { pin, category_id } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!isAdminRole(user)) {
+        return json({ success: false, error: 'Only Nihaf/Naveen can archive categories' }, 403);
+      }
+      const id = parseInt(category_id, 10);
+      if (!id || id < 100) {
+        return json({ success: false, error: 'Only custom categories (id >= 100) can be archived' }, 400);
+      }
+      await DB.prepare(
+        `UPDATE expense_categories_ext SET is_active = 0, updated_at = datetime('now') WHERE id = ?`
+      ).bind(id).run();
+      return json({ success: true, archived_category_id: id });
+    }
+
+    // ── ADMIN OVERVIEW — full tree for Naveen's admin UI ─────────────────
+    // Returns every category (built-in + custom) with its products. Includes archived
+    // products so Naveen can unarchive if he regrets a delete.
+    if (action === 'admin-overview') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!isAdminRole(user)) {
+        return json({ success: false, error: 'Admin only' }, 403);
+      }
+      const includeArchived = url.searchParams.get('include_archived') === '1';
+
+      const custom = await loadCustomCategories(DB);
+      const allCats = [...CATEGORIES.filter(c => c.backend === 'hr.expense'), ...custom];
+
+      const rows = await Promise.all(allCats.map(async (cat) => {
+        let categIds = [];
+        try {
+          if (cat.custom && cat.odoo_category_id) {
+            categIds = [cat.odoo_category_id];
+          } else if (cat.id === 1) {
+            const rm = await odoo(apiKey, 'product.category', 'search_read',
+              [[['name', '=', 'Raw Materials']]], { fields: ['id'], limit: 5 });
+            categIds = rm.map(r => r.id);
+          } else if (cat.parentName) {
+            const ph = await odoo(apiKey, 'product.category', 'search_read',
+              [[['name', 'ilike', cat.parentName]]], { fields: ['id'], limit: 5 });
+            categIds = ph.map(r => r.id);
+          }
+          if (!categIds.length) {
+            return { ...cat, products: [], resolved: false };
+          }
+          const domain = [['categ_id', 'in', categIds], ['can_be_expensed', '=', true]];
+          if (!includeArchived) domain.push(['active', '=', true]);
+          const prods = await odoo(apiKey, 'product.product', 'search_read',
+            [domain],
+            { fields: ['id', 'name', 'default_code', 'active', 'uom_id'],
+              order: 'name asc', limit: 500, context: { active_test: false } });
+          return {
+            id: cat.id, label: cat.label, emoji: cat.emoji, desc: cat.desc,
+            backend: cat.backend, parentName: cat.parentName,
+            odoo_category_id: cat.odoo_category_id || categIds[0],
+            custom: !!cat.custom,
+            products: prods,
+            resolved: true,
+          };
+        } catch (e) {
+          return { id: cat.id, label: cat.label, emoji: cat.emoji,
+                   custom: !!cat.custom, products: [], resolved: false, error: e.message };
+        }
+      }));
+
+      return json({ success: true, categories: rows });
     }
 
     // ── ARCHIVE VENDOR (admin only) ────────────────────────────────────────
