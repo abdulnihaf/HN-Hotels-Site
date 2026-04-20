@@ -62,6 +62,32 @@ const CAT_LABEL = {
  15: 'Vendor Bill (from PO)',
 };
 
+// NCH counter_expense category_code → our canonical 15-cat (spend.js)
+const NCH_CODE_TO_CAT = {
+  // Police bribes — all collapse to cat 7
+  BEAT: 7, CHETA: 7, HOYSALA: 7, ASI: 7, WEEKLY: 7, CIRCLE: 7, SI: 7,
+  // Raw material / consumables
+  MILK: 1, RM: 1,
+  // Utility
+  GAS: 6, MISC: 6,
+  // Petty / ops
+  SUPPLIES: 8, CLEANING: 8, STAFF_FOOD: 8, TRANSPORT: 8,
+  // Maintenance
+  REPAIR: 9, EMERGENCY: 9,
+  // Capex
+  ASSET: 2,
+  // Salary advance
+  ADVANCE: 4,
+  // Marketing + tech + legal
+  MARKETING: 10, TECH: 11, LEGAL: 13,
+};
+
+// Cashier slot → PIN (from spend.js CASHIER_PINS)
+const NCH_SLOT_TO_PIN = {
+  CASH001: '14', // Kesmat
+  CASH002: '43', // Nafees
+};
+
 // PIN mapping from dim_user (hnhotels instance uids)
 const UID_TO_PIN_HNHOTELS = {
   2:  ['0305', 'Nihaf',    'admin'],
@@ -338,6 +364,119 @@ async function loadProductCategoryCache(instance, apiKey, productIds) {
   return out;
 }
 
+// ━━━ NCH D1 cashier-counter expense ingest ━━━━━━━━━━━━━━━
+// counter_expenses_v2 on nch-settlements D1. These expenses never hit
+// Odoo because the NCH v2 /api/rectify flow writes only to NCH's own D1.
+// This function pulls delta by id (row id is monotonic, recorded_at is ISO
+// UTC) and upserts into fact_spend with odoo_instance='d1-nch'.
+async function syncNchCounterExpenses(env, opts = {}) {
+  const stats = { instance: 'd1-nch', rows: {}, errors: {} };
+  const started = Date.now();
+  if (!env.DB_NCH) { stats.errors['counter_expenses_v2'] = 'DB_NCH binding missing'; return stats; }
+
+  // Cursor is the max id seen — simpler + more reliable than recorded_at
+  // because recorded_at is a string that sorts fine but id is cheaper.
+  const cur = await env.DB.prepare(
+    `SELECT last_write_date FROM sync_cursor WHERE source_key = ?`
+  ).bind('d1-nch:counter_expenses_v2').first();
+  const sinceId = opts.force ? 0 : parseInt(cur?.last_write_date || '0', 10);
+
+  let rows;
+  try {
+    const q = await env.DB_NCH.prepare(
+      `SELECT ce.id, ce.category_code, ce.amount, ce.description,
+              ce.recorded_by, ce.recorded_by_name, ce.recorded_at, ce.shift_id,
+              vc.name AS category_name
+       FROM counter_expenses_v2 ce
+       LEFT JOIN v_expense_categories vc ON ce.category_code = vc.code
+       WHERE ce.id > ?
+       ORDER BY ce.id ASC
+       LIMIT 500`
+    ).bind(sinceId).all();
+    rows = q.results || [];
+  } catch (e) { stats.errors['counter_expenses_v2'] = e.message; return stats; }
+  stats.rows['counter_expenses_v2'] = rows.length;
+  if (!rows.length) {
+    // Heartbeat the cursor so we know we checked
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    await env.DB.prepare(
+      `INSERT INTO sync_cursor (source_key, last_write_date, last_run_at, last_run_rows)
+       VALUES (?, COALESCE((SELECT last_write_date FROM sync_cursor WHERE source_key = ?), '0'), ?, 0)
+       ON CONFLICT(source_key) DO UPDATE SET last_run_at = excluded.last_run_at, last_run_rows = 0`
+    ).bind('d1-nch:counter_expenses_v2', 'd1-nch:counter_expenses_v2', now).run();
+    stats.duration_ms = Date.now() - started;
+    stats.total_rows_upserted = 0;
+    return stats;
+  }
+
+  const factRows = [];
+  for (const r of rows) {
+    const catId = NCH_CODE_TO_CAT[r.category_code] || 13;
+    const pin = NCH_SLOT_TO_PIN[r.recorded_by] || null;
+    const occurredIst = utcToIst(r.recorded_at.replace('T', ' ').replace('Z', ''));
+    const periods = periodParts(occurredIst);
+    const fr = {
+      id: `d1-nch:counter_expenses_v2:${r.id}`,
+      odoo_instance: 'd1-nch', odoo_model: 'counter_expenses_v2', odoo_id: r.id,
+      odoo_line_id: null, odoo_name: `NCH-CE-${String(r.id).padStart(5,'0')}`,
+      occurred_at: occurredIst, recorded_at: occurredIst, ...periods,
+      brand: 'NCH', outlet: 'NCH-Koramangala', company_id: 10,
+      category_id: catId, category_label: CAT_LABEL[catId],
+      sub_kind: r.category_name || r.category_code,
+      product_id: null, product_name: r.category_name || r.category_code,
+      line_qty: null, line_uom: null,
+      vendor_id: null, vendor_name: null, vendor_tags: '[]',
+      amount_total: r.amount || 0, amount_untaxed: r.amount || 0, tax_amount: 0,
+      currency: 'INR',
+      payment_mode: 'cash', payment_status: 'posted',
+      payment_ref: r.shift_id || null,
+      source_ui: 'v2-nch',
+      recorded_by_pin: pin, recorded_by_name: r.recorded_by_name || null,
+      recorded_by_role: 'cashier',
+      attachment_id: null, attachment_url: null, notes: r.description || null,
+      flag_no_bill: 0,  // counter-cash tiny expenses, no bill expected
+      flag_off_hours: parseInt(occurredIst.slice(11,13), 10) < 6 ? 1 : 0,
+      flag_above_avg: 0, flag_dup_candidate: 0,
+      flag_backdated: 0,
+      last_synced_at: new Date().toISOString().slice(0,19).replace('T',' '),
+    };
+    fr.odoo_checksum = await sha16(fr);
+    factRows.push(fr);
+  }
+
+  const COLUMNS = [
+    'id','odoo_instance','odoo_model','odoo_id','odoo_line_id','odoo_name',
+    'occurred_at','recorded_at','period_day','period_week','period_month',
+    'brand','outlet','company_id',
+    'category_id','category_label','sub_kind','product_id','product_name','line_qty','line_uom',
+    'vendor_id','vendor_name','vendor_tags',
+    'amount_total','amount_untaxed','tax_amount','currency',
+    'payment_mode','payment_status','payment_ref',
+    'source_ui','recorded_by_pin','recorded_by_name','recorded_by_role',
+    'attachment_id','attachment_url','notes',
+    'flag_no_bill','flag_off_hours','flag_above_avg','flag_dup_candidate','flag_backdated',
+    'last_synced_at','odoo_checksum',
+  ];
+  const placeholders = COLUMNS.map(() => '?').join(',');
+  const sql = `REPLACE INTO fact_spend (${COLUMNS.join(',')}) VALUES (${placeholders})`;
+  const CHUNK = 50;
+  for (let i = 0; i < factRows.length; i += CHUNK) {
+    const chunk = factRows.slice(i, i + CHUNK);
+    await env.DB.batch(chunk.map(r => env.DB.prepare(sql).bind(...COLUMNS.map(c => r[c] ?? null))));
+  }
+
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const maxId = rows[rows.length - 1].id;
+  await env.DB.prepare(
+    `REPLACE INTO sync_cursor (source_key, last_write_date, last_run_at, last_run_rows)
+     VALUES (?, ?, ?, ?)`
+  ).bind('d1-nch:counter_expenses_v2', String(maxId), now, factRows.length).run();
+
+  stats.duration_ms = Date.now() - started;
+  stats.total_rows_upserted = factRows.length;
+  return stats;
+}
+
 // ━━━ Main sync routine per instance ━━━━━━━━━━━━━━━━━━━━━━━
 async function syncInstance(env, instanceKey, opts = {}) {
   const instance = INSTANCES[instanceKey];
@@ -527,14 +666,15 @@ async function recomputeFlags(env) {
 
 // ━━━ Dispatch ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function runSync(env, instancesRequested, opts = {}) {
-  const keys = instancesRequested === 'all'
-    ? Object.keys(INSTANCES)
-    : [instancesRequested];
+  const allKeys = [...Object.keys(INSTANCES), 'd1-nch'];
+  const keys = instancesRequested === 'all' ? allKeys : [instancesRequested];
   const results = [];
   for (const k of keys) {
-    if (!INSTANCES[k]) { results.push({ instance: k, error: 'unknown instance' }); continue; }
-    try { results.push(await syncInstance(env, k, opts)); }
-    catch (e) { results.push({ instance: k, error: e.message }); }
+    try {
+      if (k === 'd1-nch') results.push(await syncNchCounterExpenses(env, opts));
+      else if (INSTANCES[k]) results.push(await syncInstance(env, k, opts));
+      else results.push({ instance: k, error: 'unknown instance' });
+    } catch (e) { results.push({ instance: k, error: e.message }); }
   }
   try { await recomputeFlags(env); } catch (e) { results.push({ flags_error: e.message }); }
   return { ran_at: new Date().toISOString(), results };

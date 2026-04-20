@@ -12,11 +12,19 @@ account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
 # [triggers]
 # crons = ["*/5 * * * *"]
 
-# D1 binding — same database as the Pages project (hn-hiring).
+# Primary DB — holds fact_spend + dims + cursors. Dashboard reads from here.
 [[d1_databases]]
 binding = "DB"
 database_name = "hn-hiring"
 database_id = "a0107321-790a-4d46-ac3c-a54a676c6bcb"
+
+# NCH outlet D1 — source for counter_expenses_v2 (cashier-recorded expenses
+# that never hit Odoo because NCH v2 writes to its own ledger). Worker reads
+# delta, normalizes, upserts into fact_spend with odoo_instance='d1-nch'.
+[[d1_databases]]
+binding = "DB_NCH"
+database_name = "nch-settlements"
+database_id = "3388724b-41b2-4925-a7df-12f068c19e6e"
 
 # Secrets (wrangler secret put <NAME> --config workers/spend-sync-cron/wrangler.toml):
 #   ODOO_KEY_HNHOTELS   — API key for odoo.hnhotels.in (admin uid=2)
