@@ -285,7 +285,16 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
   const [odooProducts, odooVendors, vendorMappings, lastPricesAll, recentPOsRaw, pendingPickings] =
     await Promise.all([
       odooCall(creds.uid, creds.key, 'product.product', 'search_read',
-        [[['default_code', 'like', 'HN-RM-'], ['company_id', 'in', [cfg.company_id, false]]]],
+        // Source of truth is the "Raw Materials" category (id=21).
+        // Legacy HN-RM-* SKU prefix kept as a fallback for products that
+        // haven't been re-categorized yet.
+        [[
+          '|',
+            ['categ_id', '=', 21],
+            ['default_code', 'like', 'HN-RM-'],
+          ['company_id', 'in', [cfg.company_id, false]],
+          ['active', '=', true],
+        ]],
         { fields: ['id', 'name', 'default_code', 'uom_id', 'categ_id'], order: 'name asc' }),
       odooCall(creds.uid, creds.key, 'res.partner', 'search_read',
         [[['supplier_rank', '>', 0], ['company_id', 'in', [cfg.company_id, false]]]],
