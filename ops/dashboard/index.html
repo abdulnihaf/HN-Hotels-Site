@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>HN Finance — Spend Intelligence</title>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --card: #121a2d;
+    --card-2: #182240;
+    --border: #1f2a4a;
+    --text: #e7ecf5;
+    --mute: #8a94ab;
+    --accent: #7c56f7;
+    --ok: #2ecc71;
+    --warn: #f39c12;
+    --err: #e74c3c;
+    --cash: #27ae60;
+    --upi: #3498db;
+    --bank: #9b59b6;
+    --credit: #e67e22;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Gate */
+  .gate {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: var(--bg); z-index: 100;
+  }
+  .gate-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px 32px; max-width: 340px; width: 90%;
+  }
+  .gate-card h1 { margin: 0 0 8px 0; font-size: 22px; font-weight: 700; }
+  .gate-card p { margin: 0 0 18px 0; color: var(--mute); font-size: 13px; }
+  .gate-input {
+    width: 100%; padding: 14px 16px; border-radius: 10px;
+    background: var(--card-2); border: 1px solid var(--border); color: var(--text);
+    font-size: 18px; font-family: inherit; letter-spacing: 0.3em; text-align: center;
+  }
+  .gate-input:focus { outline: none; border-color: var(--accent); }
+  .gate-err { color: var(--err); font-size: 12px; margin-top: 10px; text-align: center; min-height: 16px; }
+
+  /* Layout */
+  .topbar {
+    position: sticky; top: 0; z-index: 20; background: var(--bg);
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  }
+  .brand-title {
+    font-weight: 700; font-size: 15px; letter-spacing: 0.3px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .brand-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .user-chip {
+    background: var(--card); border: 1px solid var(--border); padding: 5px 10px;
+    border-radius: 999px; font-size: 12px; color: var(--mute); margin-left: auto;
+  }
+  .user-chip strong { color: var(--text); }
+  .logout-btn { background: none; border: none; color: var(--err); cursor: pointer; margin-left: 10px; font-size: 12px; }
+
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    background: var(--card); border: 1px solid var(--border); color: var(--mute);
+    padding: 6px 12px; border-radius: 999px; font-size: 12px; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .chip.mute-active { background: rgba(124,86,247,0.15); border-color: var(--accent); color: var(--text); }
+  .chip-date { min-width: 60px; text-align: center; }
+
+  .shell {
+    display: grid; grid-template-columns: 280px 1fr;
+    gap: 16px; padding: 16px;
+    max-width: 1600px; margin: 0 auto;
+  }
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar { order: 2; }
+  }
+
+  .sidebar {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px; height: fit-content; position: sticky; top: 64px;
+    max-height: calc(100vh - 80px); overflow-y: auto;
+  }
+  .facet-block { border-bottom: 1px solid var(--border); padding: 10px 0; }
+  .facet-block:last-child { border-bottom: none; }
+  .facet-title {
+    font-size: 11px; font-weight: 700; color: var(--mute); text-transform: uppercase;
+    letter-spacing: 0.8px; margin: 0 0 8px 0; display: flex; justify-content: space-between;
+  }
+  .facet-title .facet-count { color: var(--accent); }
+  .facet-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 4px; border-radius: 6px; cursor: pointer; font-size: 13px;
+    transition: background 0.1s;
+  }
+  .facet-row:hover { background: var(--card-2); }
+  .facet-row.sel { background: rgba(124,86,247,0.2); }
+  .facet-row .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
+  .facet-row .n { color: var(--mute); font-size: 11px; margin-right: 6px; }
+  .facet-row .amt { color: var(--text); font-weight: 600; font-size: 12px; min-width: 60px; text-align: right; }
+  .facet-search {
+    width: 100%; padding: 6px 8px; background: var(--card-2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 12px; margin-bottom: 6px;
+  }
+  .facet-search:focus { outline: none; border-color: var(--accent); }
+
+  .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 700px) { .kpi-row { grid-template-columns: repeat(2, 1fr); } }
+  .kpi-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .kpi-label { font-size: 11px; color: var(--mute); text-transform: uppercase; letter-spacing: 0.8px; }
+  .kpi-value { font-size: 26px; font-weight: 700; margin-top: 4px; }
+  .kpi-sub { font-size: 12px; color: var(--mute); margin-top: 4px; }
+  .kpi-delta.up { color: var(--ok); }
+  .kpi-delta.down { color: var(--err); }
+
+  .panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .panel-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .panel-title { font-weight: 700; font-size: 14px; }
+  .panel-sub { font-size: 12px; color: var(--mute); }
+
+  .split-pill {
+    background: var(--card-2); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 10px; border-radius: 999px; font-size: 12px; cursor: pointer;
+    font-family: inherit;
+  }
+
+  /* Stacked bar chart */
+  .chart { display: flex; gap: 4px; align-items: flex-end; height: 220px; padding: 4px 0; }
+  .chart-col {
+    flex: 1; display: flex; flex-direction: column-reverse; gap: 2px;
+    min-width: 12px; position: relative;
+  }
+  .chart-col .seg {
+    width: 100%; border-radius: 2px 2px 0 0; transition: opacity 0.15s;
+  }
+  .chart-col:hover .seg { opacity: 0.8; }
+  .chart-col .day-label {
+    position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; color: var(--mute); white-space: nowrap;
+  }
+  .chart-legend {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px;
+    font-size: 11px; color: var(--mute);
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 2px; }
+
+  /* Flags strip */
+  .flags-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .flag-pill {
+    background: var(--card-2); border: 1px solid var(--border);
+    padding: 8px 12px; border-radius: 8px; display: flex; align-items: center; gap: 8px;
+    cursor: pointer; font-size: 12px; transition: all 0.15s;
+  }
+  .flag-pill:hover { border-color: var(--accent); }
+  .flag-pill.sel { border-color: var(--warn); background: rgba(243,156,18,0.1); }
+  .flag-pill .pill-n { font-weight: 700; color: var(--warn); font-size: 14px; }
+
+  /* Table */
+  .table-scroll { overflow-x: auto; border-radius: 8px; }
+  table.spend-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.spend-table th {
+    position: sticky; top: 0; background: var(--card-2); color: var(--mute);
+    padding: 8px 10px; text-align: left; font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+  }
+  table.spend-table td {
+    padding: 10px; border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  table.spend-table tr:hover td { background: rgba(124,86,247,0.06); }
+  .amt-cell { font-weight: 700; text-align: right; white-space: nowrap; }
+  .flag-badge {
+    display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px;
+    margin-right: 3px; background: rgba(243,156,18,0.15); color: var(--warn);
+    font-weight: 600;
+  }
+  .status-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .status-paid     { background: rgba(46,204,113,0.15); color: var(--ok); }
+  .status-posted   { background: rgba(52,152,219,0.15); color: #3498db; }
+  .status-partial  { background: rgba(243,156,18,0.15); color: var(--warn); }
+  .status-approved { background: rgba(155,89,182,0.15); color: #9b59b6; }
+  .status-draft    { background: rgba(138,148,171,0.15); color: var(--mute); }
+  .status-cancel   { background: rgba(231,76,60,0.15); color: var(--err); }
+
+  .pay-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .pay-cash       { background: rgba(39,174,96,0.15); color: var(--cash); }
+  .pay-upi        { background: rgba(52,152,219,0.15); color: var(--upi); }
+  .pay-bank       { background: rgba(155,89,182,0.15); color: var(--bank); }
+  .pay-credit     { background: rgba(230,126,34,0.15); color: var(--credit); }
+  .pay-company_account { background: rgba(138,148,171,0.15); color: var(--mute); }
+
+  .loading { color: var(--mute); font-size: 13px; padding: 20px; text-align: center; }
+  .empty { color: var(--mute); font-size: 13px; padding: 30px; text-align: center; }
+
+  .sidebar-toggle {
+    display: none; position: fixed; bottom: 16px; right: 16px;
+    width: 52px; height: 52px; border-radius: 50%; background: var(--accent);
+    color: white; border: none; font-size: 20px; z-index: 30;
+    box-shadow: 0 6px 20px rgba(124,86,247,0.4); cursor: pointer;
+  }
+  @media (max-width: 900px) {
+    .sidebar-toggle { display: flex; align-items: center; justify-content: center; }
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0; width: 300px; transform: translateX(-100%);
+      transition: transform 0.2s; z-index: 40; max-height: 100vh;
+      border-radius: 0; border-right: 1px solid var(--border);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-scrim {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 35;
+      display: none;
+    }
+    .sidebar-scrim.open { display: block; }
+  }
+
+  .clear-filters {
+    background: none; border: 1px solid var(--border); color: var(--mute);
+    padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;
+  }
+  .clear-filters:hover { color: var(--err); border-color: var(--err); }
+
+  .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scroll-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- PIN GATE -->
+<div id="gate" class="gate">
+  <div class="gate-card">
+    <h1>🔐 HN Finance</h1>
+    <p>Enter your PIN to access spend intelligence.</p>
+    <input id="gate-pin" class="gate-input" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autofocus>
+    <div id="gate-err" class="gate-err"></div>
+  </div>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar" id="topbar" style="display:none;">
+  <div class="brand-title"><span class="dot"></span> HN Finance</div>
+
+  <div class="chips" id="brand-chips">
+    <div class="chip chip-brand active" data-brand="All">All</div>
+    <div class="chip chip-brand" data-brand="HE">HE</div>
+    <div class="chip chip-brand" data-brand="NCH">NCH</div>
+    <div class="chip chip-brand" data-brand="HQ">HQ</div>
+  </div>
+
+  <div class="chips" id="date-chips">
+    <div class="chip chip-date" data-range="today">Today</div>
+    <div class="chip chip-date" data-range="7d">7d</div>
+    <div class="chip chip-date" data-range="30d">30d</div>
+    <div class="chip chip-date" data-range="mtd">MTD</div>
+    <div class="chip chip-date active" data-range="apr1">Apr 1+</div>
+  </div>
+
+  <div class="user-chip" id="user-chip">—</div>
+  <button class="logout-btn" onclick="logout()">exit</button>
+</div>
+
+<button id="sidebar-toggle" class="sidebar-toggle" onclick="toggleSidebar()" style="display:none;">⚙</button>
+<div id="sidebar-scrim" class="sidebar-scrim" onclick="toggleSidebar()"></div>
+
+<div class="shell" id="shell" style="display:none;">
+
+  <!-- SIDEBAR / FACETS -->
+  <aside class="sidebar scroll-thin" id="sidebar">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <div style="font-weight:700; font-size:13px;">Filters</div>
+      <button class="clear-filters" onclick="clearAllFilters()">Clear all</button>
+    </div>
+
+    <div class="facet-block">
+      <div class="facet-title">Search <span class="facet-count" id="search-hit">·</span></div>
+      <input id="fx-search" class="facet-search" type="search" placeholder="Vendor / product / notes…" oninput="onSearchInput()">
+    </div>
+
+    <div class="facet-block">
+      <div class="facet-title">Exceptions <span class="facet-count" id="flags-total">·</span></div>
+      <div id="fx-flags" class="flags-row" style="flex-direction:column; gap:4px;">
+        <div class="facet-row" data-flag="no_bill"><span class="label">🧾 No bill photo</span><span class="n" id="flag-no_bill">0</span></div>
+        <div class="facet-row" data-flag="above_avg"><span class="label">📈 Above vendor avg</span><span class="n" id="flag-above_avg">0</span></div>
+        <div class="facet-row" data-flag="dup_candidate"><span class="label">♊ Possible duplicate</span><span class="n" id="flag-dup_candidate">0</span></div>
+        <div class="facet-row" data-flag="backdated"><span class="label">⏳ Backdated &gt;48h</span><span class="n" id="flag-backdated">0</span></div>
+        <div class="facet-row" data-flag="off_hours"><span class="label">🌙 Off-hours (0–6am)</span><span class="n" id="flag-off_hours">0</span></div>
+      </div>
+    </div>
+
+    <div class="facet-block">
+      <div class="facet-title">Category <span class="facet-count" id="cat-count">—</span></div>
+      <div id="fx-category"></div>
+    </div>
+
+    <div class="facet-block">
+      <div class="facet-title">Vendor <span class="facet-count" id="ven-count">—</span></div>
+      <input id="fx-ven-search" class="facet-search" placeholder="Filter vendors…" oninput="filterFacetList('fx-vendor', this.value)">
+      <div id="fx-vendor" class="scroll-thin" style="max-height: 220px; overflow-y: auto;"></div>
+    </div>
+
+    <div class="facet-block">
+      <div class="facet-title">Payment mode</div>
+      <div id="fx-payment"></div>
+    </div>
+
+    <div class="facet-block">
+      <div class="facet-title">Status</div>
+      <div id="fx-status"></div>
+    </div>
+
+    <div class="facet-block">
+      <div class="facet-title">Recorded by</div>
+      <div id="fx-recorded"></div>
+    </div>
+
+    <div class="facet-block">
+      <div class="facet-title">Source</div>
+      <div id="fx-source"></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- KPI strip -->
+    <div class="kpi-row" id="kpi-row">
+      <div class="kpi-card"><div class="kpi-label">Total spend</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub"><span id="kpi-delta"></span></div></div>
+      <div class="kpi-card"><div class="kpi-label">Transactions</div><div class="kpi-value" id="kpi-count">—</div><div class="kpi-sub" id="kpi-avg"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Paid</div><div class="kpi-value" id="kpi-paid" style="color:var(--ok);">—</div><div class="kpi-sub" id="kpi-paid-pct"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Pending</div><div class="kpi-value" id="kpi-pending" style="color:var(--warn);">—</div><div class="kpi-sub" id="kpi-partial"></div></div>
+    </div>
+
+    <!-- Chart -->
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Daily spend</div>
+          <div class="panel-sub" id="chart-sub">—</div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span style="font-size:11px; color:var(--mute);">Split by</span>
+          <select id="split-by" class="split-pill" onchange="refresh()">
+            <option value="category">Category</option>
+            <option value="brand">Brand</option>
+            <option value="vendor">Vendor</option>
+            <option value="payment_mode">Payment mode</option>
+            <option value="recorded_by">Recorded by</option>
+            <option value="source_ui">Source UI</option>
+          </select>
+        </div>
+      </div>
+      <div id="chart" class="chart"><div class="loading">Loading…</div></div>
+      <div id="chart-legend" class="chart-legend"></div>
+    </div>
+
+    <!-- Table -->
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Transactions</div>
+          <div class="panel-sub" id="table-sub">—</div>
+        </div>
+        <div>
+          <button class="split-pill" onclick="exportCsv()">📄 Export CSV</button>
+        </div>
+      </div>
+      <div class="table-scroll scroll-thin">
+        <table class="spend-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Brand</th>
+              <th>Category</th>
+              <th>Vendor / Item</th>
+              <th>Payment</th>
+              <th>Status</th>
+              <th>Recorded by</th>
+              <th>Flags</th>
+              <th style="text-align:right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"><tr><td colspan="9" class="loading">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+        <div class="panel-sub" id="page-info">—</div>
+        <div style="display:flex; gap:6px;">
+          <button class="split-pill" id="page-prev" onclick="pagePrev()">← Prev</button>
+          <button class="split-pill" id="page-next" onclick="pageNext()">Next →</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// HN Finance Dashboard — state + fetch + render
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const API = '/api/spend-intel';
+const LS_PIN = 'hn-finance-pin';
+const LS_FILTERS = 'hn-finance-filters';
+
+// Category colors — consistent across chart + facets
+const CAT_COLORS = {
+  'Raw Material Purchase': '#7c56f7',
+  'Capex / Equipment':     '#e67e22',
+  'Salary Payment':        '#3498db',
+  'Salary Advance':        '#2980b9',
+  'Rent':                  '#9b59b6',
+  'Utility Bill':          '#f39c12',
+  'Police / Hafta':        '#e74c3c',
+  'Petty / Operations':    '#1abc9c',
+  'Maintenance / Repair':  '#16a085',
+  'Marketing / Ads':       '#f1c40f',
+  'Tech / SaaS / Bank':    '#34495e',
+  'Owner Drawings':        '#c0392b',
+  'Misc / Other':          '#7f8c8d',
+  'Vendor Bill (direct)':  '#27ae60',
+  'Vendor Bill (from PO)': '#2ecc71',
+};
+const PALETTE = Object.values(CAT_COLORS);
+
+const state = {
+  pin: null,
+  user: null,
+  brand: 'All',
+  dateRange: 'apr1',
+  dateFrom: '2026-04-01',
+  dateTo: null,
+  filters: {
+    category_id: new Set(),
+    vendor_id: new Set(),
+    payment_mode: new Set(),
+    recorded_by_pin: new Set(),
+    payment_status: new Set(),
+    source_ui: new Set(),
+    flags: new Set(),
+    search: '',
+    amount_min: null,
+    amount_max: null,
+  },
+  split_by: 'category',
+  page: 0,
+  pageSize: 50,
+  lastData: null,
+};
+
+// ━━━ Utilities ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const fmtMoney = (n, withSign=false) => {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const sign = withSign && n > 0 ? '+' : '';
+  const abs = Math.abs(n);
+  if (abs >= 10000000) return sign + '₹' + (n/10000000).toFixed(2) + 'Cr';
+  if (abs >= 100000) return sign + '₹' + (n/100000).toFixed(2) + 'L';
+  if (abs >= 1000) return sign + '₹' + (n/1000).toFixed(1) + 'k';
+  return sign + '₹' + Math.round(n).toLocaleString('en-IN');
+};
+const fmtInt = n => (n||0).toLocaleString('en-IN');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const colorFor = k => CAT_COLORS[k] || PALETTE[Math.abs(hashStr(k||'')) % PALETTE.length];
+function hashStr(s) { let h = 0; for (let i=0;i<s.length;i++) { h = ((h<<5)-h + s.charCodeAt(i))|0; } return h; }
+
+function istToday() {
+  const d = new Date();
+  const ist = new Date(d.getTime() + 5.5*3600*1000);
+  return ist.toISOString().slice(0,10);
+}
+
+function daysAgo(n) {
+  const d = new Date();
+  const ist = new Date(d.getTime() + 5.5*3600*1000 - n*86400*1000);
+  return ist.toISOString().slice(0,10);
+}
+
+// ━━━ Gate ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function tryPin(pin) {
+  const url = `${API}?pin=${encodeURIComponent(pin)}&rows_limit=1&date_from=2099-01-01&date_to=2099-01-01`;
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  const d = await r.json();
+  if (d.error) return null;
+  return d.meta?.user || null;
+}
+
+document.getElementById('gate-pin').addEventListener('input', async e => {
+  const v = e.target.value.trim();
+  if (v.length < 2) return;
+  if (!/^\d+$/.test(v)) return;
+  document.getElementById('gate-err').textContent = '';
+  // Accept 2-digit cashier PINs (14/15/43) too
+  if (v.length === 2 || v.length === 4) {
+    const user = await tryPin(v);
+    if (user) {
+      localStorage.setItem(LS_PIN, v);
+      enter(v, user);
+    } else if (v.length === 4) {
+      document.getElementById('gate-err').textContent = 'Invalid PIN';
+    }
+  }
+});
+
+function logout() {
+  localStorage.removeItem(LS_PIN);
+  location.reload();
+}
+
+function enter(pin, user) {
+  state.pin = pin; state.user = user;
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('topbar').style.display = 'flex';
+  document.getElementById('shell').style.display = 'grid';
+  document.getElementById('sidebar-toggle').style.display = 'flex';
+  document.getElementById('user-chip').innerHTML = `<strong>${esc(user.name)}</strong> · ${esc(user.role)}`;
+  refresh();
+}
+
+// Auto-enter if stored
+(async () => {
+  const pin = localStorage.getItem(LS_PIN);
+  if (pin) {
+    const user = await tryPin(pin);
+    if (user) enter(pin, user);
+    else localStorage.removeItem(LS_PIN);
+  }
+})();
+
+// ━━━ Filter mgmt ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+document.querySelectorAll('.chip-brand').forEach(c => c.addEventListener('click', () => {
+  document.querySelectorAll('.chip-brand').forEach(x => x.classList.remove('active'));
+  c.classList.add('active');
+  state.brand = c.dataset.brand;
+  state.page = 0;
+  refresh();
+}));
+
+document.querySelectorAll('.chip-date').forEach(c => c.addEventListener('click', () => {
+  document.querySelectorAll('.chip-date').forEach(x => x.classList.remove('active'));
+  c.classList.add('active');
+  const r = c.dataset.range;
+  state.dateRange = r;
+  const today = istToday();
+  state.dateTo = today;
+  if (r === 'today')       state.dateFrom = today;
+  else if (r === '7d')     state.dateFrom = daysAgo(6);
+  else if (r === '30d')    state.dateFrom = daysAgo(29);
+  else if (r === 'mtd')    state.dateFrom = today.slice(0,8) + '01';
+  else if (r === 'apr1')   state.dateFrom = '2026-04-01';
+  state.page = 0;
+  refresh();
+}));
+
+function clearAllFilters() {
+  for (const k of Object.keys(state.filters)) {
+    if (state.filters[k] instanceof Set) state.filters[k].clear();
+    else state.filters[k] = null;
+  }
+  state.filters.search = '';
+  document.getElementById('fx-search').value = '';
+  state.page = 0;
+  refresh();
+}
+
+function toggleFilter(key, value) {
+  const set = state.filters[key];
+  const v = String(value);
+  if (set.has(v)) set.delete(v); else set.add(v);
+  state.page = 0;
+  refresh();
+}
+
+let searchTimer;
+function onSearchInput() {
+  clearTimeout(searchTimer);
+  const v = document.getElementById('fx-search').value.trim();
+  searchTimer = setTimeout(() => {
+    state.filters.search = v;
+    state.page = 0;
+    refresh();
+  }, 350);
+}
+
+function filterFacetList(containerId, query) {
+  const q = query.trim().toLowerCase();
+  for (const row of document.querySelectorAll('#' + containerId + ' .facet-row')) {
+    const label = row.querySelector('.label').textContent.toLowerCase();
+    row.style.display = !q || label.includes(q) ? '' : 'none';
+  }
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-scrim').classList.toggle('open');
+}
+
+// ━━━ Fetch + render ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function buildQuery() {
+  const q = new URLSearchParams();
+  q.set('pin', state.pin);
+  q.set('brand', state.brand);
+  if (state.dateFrom) q.set('date_from', state.dateFrom);
+  if (state.dateTo)   q.set('date_to', state.dateTo);
+  for (const k of ['category_id','vendor_id','payment_mode','recorded_by_pin','payment_status','source_ui']) {
+    if (state.filters[k].size) q.set(k, [...state.filters[k]].join(','));
+  }
+  if (state.filters.flags.size) q.set('flags', [...state.filters.flags].join(','));
+  if (state.filters.search) q.set('search', state.filters.search);
+  if (state.filters.amount_min != null) q.set('amount_min', state.filters.amount_min);
+  if (state.filters.amount_max != null) q.set('amount_max', state.filters.amount_max);
+  q.set('split_by', state.split_by);
+  q.set('rows_limit', state.pageSize);
+  q.set('rows_offset', state.page * state.pageSize);
+  return q.toString();
+}
+
+async function refresh() {
+  state.split_by = document.getElementById('split-by').value || 'category';
+  const qs = buildQuery();
+  document.getElementById('chart').innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const r = await fetch(`${API}?${qs}`);
+    const d = await r.json();
+    if (d.error) {
+      alert(d.error);
+      return;
+    }
+    state.lastData = d;
+    renderKpi(d.kpi);
+    renderFlags(d.flags_summary);
+    renderFacets(d.facets);
+    renderChart(d.series, d.meta);
+    renderTable(d.rows, d.total_rows);
+  } catch (e) {
+    document.getElementById('chart').innerHTML = '<div class="loading" style="color:var(--err);">' + esc(e.message) + '</div>';
+  }
+}
+
+function renderKpi(k) {
+  document.getElementById('kpi-total').textContent = fmtMoney(k.total);
+  document.getElementById('kpi-count').textContent = fmtInt(k.count);
+  document.getElementById('kpi-avg').textContent   = 'Avg ticket ' + fmtMoney(k.avg_ticket);
+  document.getElementById('kpi-paid').textContent  = fmtMoney(k.paid);
+  document.getElementById('kpi-pending').textContent = fmtMoney(k.pending);
+
+  const deltaEl = document.getElementById('kpi-delta');
+  if (k.delta_pct == null) deltaEl.innerHTML = '<span style="color:var(--mute);">No prior data</span>';
+  else {
+    const cls = k.delta_pct >= 0 ? 'up' : 'down';
+    const arrow = k.delta_pct >= 0 ? '↑' : '↓';
+    deltaEl.innerHTML = `<span class="kpi-delta ${cls}">${arrow} ${Math.abs(k.delta_pct)}%</span> vs prior (${fmtMoney(k.prior_total)})`;
+  }
+
+  const pct = k.total > 0 ? Math.round((k.paid / k.total) * 100) : 0;
+  document.getElementById('kpi-paid-pct').textContent = pct + '% of total';
+  document.getElementById('kpi-partial').textContent = k.partial > 0 ? 'Partial ' + fmtMoney(k.partial) : '';
+}
+
+function renderFlags(f) {
+  const sum = (f.no_bill||0)+(f.above_avg||0)+(f.dup_candidate||0)+(f.backdated||0)+(f.off_hours||0);
+  document.getElementById('flags-total').textContent = sum + ' flagged';
+  document.getElementById('flag-no_bill').textContent = f.no_bill || 0;
+  document.getElementById('flag-above_avg').textContent = f.above_avg || 0;
+  document.getElementById('flag-dup_candidate').textContent = f.dup_candidate || 0;
+  document.getElementById('flag-backdated').textContent = f.backdated || 0;
+  document.getElementById('flag-off_hours').textContent = f.off_hours || 0;
+
+  document.querySelectorAll('#fx-flags .facet-row').forEach(row => {
+    const key = row.dataset.flag;
+    row.classList.toggle('sel', state.filters.flags.has(key));
+    row.onclick = () => toggleFilter('flags', key);
+  });
+}
+
+function renderFacets(f) {
+  const rowsHtml = (items, key, labelFn) => items.map(r => {
+    const v = String(r[key] ?? '');
+    if (!v) return '';
+    const sel = state.filters[key]?.has(v) ? 'sel' : '';
+    return `<div class="facet-row ${sel}" onclick="toggleFilter('${key}', ${JSON.stringify(v)})">
+      <span class="label">${esc(labelFn(r))}</span>
+      <span class="n">${r.n}</span>
+      <span class="amt">${fmtMoney(r.total)}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('fx-category').innerHTML =
+    rowsHtml(f.category, 'category_id', r => r.category_label || ('Cat ' + r.category_id));
+  document.getElementById('cat-count').textContent = f.category.length;
+
+  document.getElementById('fx-vendor').innerHTML =
+    rowsHtml(f.vendor.filter(x => x.vendor_id), 'vendor_id', r => r.vendor_name || '—');
+  document.getElementById('ven-count').textContent = f.vendor.filter(x=>x.vendor_id).length + ' top';
+
+  document.getElementById('fx-payment').innerHTML =
+    rowsHtml(f.payment_mode.filter(x => x.payment_mode), 'payment_mode', r => r.payment_mode);
+  document.getElementById('fx-status').innerHTML =
+    rowsHtml(f.payment_status.filter(x => x.payment_status), 'payment_status', r => r.payment_status);
+  document.getElementById('fx-recorded').innerHTML =
+    rowsHtml(f.recorded_by.filter(x => x.recorded_by_pin), 'recorded_by_pin', r => `${r.recorded_by_name} · ${r.recorded_by_role}`);
+  document.getElementById('fx-source').innerHTML =
+    rowsHtml(f.source_ui.filter(x => x.source_ui), 'source_ui', r => r.source_ui);
+}
+
+function renderChart(series, meta) {
+  const el = document.getElementById('chart');
+  const legendEl = document.getElementById('chart-legend');
+  document.getElementById('chart-sub').textContent =
+    `${meta.filters.date_from} → ${meta.filters.date_to} · split by ${meta.filters.split_by}`;
+  if (!series.length) {
+    el.innerHTML = '<div class="empty">No spend in this window.</div>';
+    legendEl.innerHTML = ''; return;
+  }
+
+  // Normalize: every bucket has every split key (fill zeros)
+  const allKeys = new Set();
+  for (const b of series) for (const s of b.splits) allKeys.add(s.key);
+  const keysSorted = [...allKeys].sort((a,b) => {
+    const aT = series.reduce((acc, x) => acc + (x.splits.find(s => s.key===a)?.amt || 0), 0);
+    const bT = series.reduce((acc, x) => acc + (x.splits.find(s => s.key===b)?.amt || 0), 0);
+    return bT - aT;
+  });
+
+  const maxTotal = Math.max(...series.map(b => b.total));
+  const cols = series.map(b => {
+    const segs = keysSorted.map(k => {
+      const s = b.splits.find(x => x.key === k);
+      const amt = s?.amt || 0;
+      const h = maxTotal > 0 ? (amt / maxTotal) * 100 : 0;
+      if (h === 0) return '';
+      return `<div class="seg" style="height:${h}%; background:${colorFor(k)};" title="${esc(k)}: ${fmtMoney(amt)}"></div>`;
+    }).join('');
+    const dayLabel = b.bucket.slice(5);  // MM-DD
+    return `<div class="chart-col" title="${b.bucket} · ${fmtMoney(b.total)}">${segs}<span class="day-label">${dayLabel}</span></div>`;
+  }).join('');
+  el.innerHTML = cols;
+
+  legendEl.innerHTML = keysSorted.slice(0, 10).map(k =>
+    `<div class="legend-item"><span class="legend-dot" style="background:${colorFor(k)};"></span>${esc(k)}</div>`
+  ).join('') + (keysSorted.length > 10 ? `<div class="legend-item" style="color:var(--mute);">+${keysSorted.length-10} more</div>` : '');
+}
+
+function renderTable(rows, total) {
+  const tbody = document.getElementById('table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">No transactions match current filters.</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(r => {
+      const flags = [];
+      if (r.flag_no_bill) flags.push('<span class="flag-badge" title="No bill photo">🧾</span>');
+      if (r.flag_above_avg) flags.push('<span class="flag-badge" title="Above vendor avg">📈</span>');
+      if (r.flag_dup_candidate) flags.push('<span class="flag-badge" title="Possible duplicate">♊</span>');
+      if (r.flag_backdated) flags.push('<span class="flag-badge" title="Backdated">⏳</span>');
+      if (r.flag_off_hours) flags.push('<span class="flag-badge" title="Off hours">🌙</span>');
+
+      const statusCls = 'status-' + (r.payment_status || 'draft');
+      const payCls = 'pay-' + (r.payment_mode || 'cash');
+      const vendorLabel = r.vendor_name || '—';
+      const itemLabel = r.product_name ? ` · ${esc(r.product_name)}` : (r.sub_kind ? ` · ${esc(r.sub_kind)}` : '');
+      const poLabel = r.odoo_name ? `<div style="font-size:10px;color:var(--mute);">${esc(r.odoo_name)}</div>` : '';
+
+      return `<tr>
+        <td>${esc(r.period_day)}<div style="font-size:10px;color:var(--mute);">${esc(r.occurred_at?.slice(11,16) || '')}</div></td>
+        <td><strong>${esc(r.brand)}</strong></td>
+        <td><span style="color:${colorFor(r.category_label)};">■</span> ${esc(r.category_label)}</td>
+        <td>${esc(vendorLabel)}${itemLabel}${poLabel}</td>
+        <td><span class="pay-badge ${payCls}">${esc(r.payment_mode||'—')}</span></td>
+        <td><span class="status-badge ${statusCls}">${esc(r.payment_status||'—')}</span></td>
+        <td>${esc(r.recorded_by_name || '—')}<div style="font-size:10px;color:var(--mute);">${esc(r.recorded_by_role||'')}</div></td>
+        <td>${flags.join('') || '<span style="color:var(--mute);">—</span>'}</td>
+        <td class="amt-cell">${fmtMoney(r.amount_total)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  const start = total ? state.page * state.pageSize + 1 : 0;
+  const end = Math.min((state.page + 1) * state.pageSize, total);
+  document.getElementById('page-info').textContent = `Showing ${start}–${end} of ${fmtInt(total)}`;
+  document.getElementById('table-sub').textContent = `${fmtInt(total)} transactions matching filters`;
+  document.getElementById('page-prev').disabled = state.page === 0;
+  document.getElementById('page-next').disabled = end >= total;
+}
+
+function pagePrev() { if (state.page > 0) { state.page--; refresh(); } }
+function pageNext() { state.page++; refresh(); }
+
+function exportCsv() {
+  if (!state.lastData?.rows) return;
+  const hdr = ['date','brand','category','vendor','item','amount','payment','status','recorded_by','flags','odoo_ref'];
+  const body = state.lastData.rows.map(r => {
+    const flags = [r.flag_no_bill && 'no_bill', r.flag_above_avg && 'above_avg', r.flag_dup_candidate && 'dup',
+                   r.flag_backdated && 'backdated', r.flag_off_hours && 'off_hours'].filter(Boolean).join('|');
+    return [r.period_day, r.brand, r.category_label, r.vendor_name, r.product_name,
+            r.amount_total, r.payment_mode, r.payment_status, r.recorded_by_name, flags, r.odoo_name]
+           .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
+  });
+  const csv = hdr.join(',') + '\n' + body.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `hn-finance-${state.dateFrom}_to_${state.dateTo}.csv`;
+  a.click();
+}
+
+// Initial date default
+state.dateTo = istToday();
+</script>
+
+</body>
+</html>
