@@ -24,6 +24,8 @@ const INSTANCES = {
     uid: 2,
     keyVar: 'ODOO_KEY_HNHOTELS',
     brandByCompany: { 1: 'HQ', 2: 'HE', 3: 'NCH' },
+    // Sink for all brands from these dates onwards — no cap.
+    cutoverMax: null,
   },
   'ops-hamza': {
     url: 'https://ops.hamzahotel.com/jsonrpc',
@@ -32,6 +34,18 @@ const INSTANCES = {
     keyVar: 'ODOO_KEY_OPS_HAMZA',
     // OLD instance: NCH=10, HE=1 (test only), HQ=13
     brandByCompany: { 1: 'HE', 10: 'NCH', 13: 'HQ' },
+    // Instance-cutover: keep ops-hamza rows ONLY for the pre-migration
+    // historical window. After the cutover date per brand, the same POs
+    // also exist in odoo.hnhotels.in — taking both would double-count.
+    // NCH moved to odoo.hnhotels.in on 2026-04-01 (Excel backfill + live).
+    // HE moved on 2026-04-16 (live /ops/purchase/ + Excel backfill).
+    // Sync worker ignores rows whose date_approve/date_order is >= cutover
+    // for the matching brand; dedup audit 2026-04-20.
+    cutoverMax: {
+      NCH: '2026-03-31',
+      HE:  '2026-04-15',
+      HQ:  '2000-01-01',  // ops-hamza never had real HQ activity
+    },
   },
 };
 
@@ -165,6 +179,13 @@ async function normalizePO(po, lines, vendors, instance, instanceKey) {
   const cid = po.company_id[0];
   const brand = instance.brandByCompany[cid] || 'HQ';
   const occurred = utcToIst(po.date_approve || po.date_order);
+  // Cutover skip: if this instance has a cutoverMax for this brand and the
+  // PO is on/after that date, the SAME PO also lives on the new instance.
+  // Silently drop to avoid double-count. See dedup audit 2026-04-20.
+  if (instance.cutoverMax && instance.cutoverMax[brand]) {
+    const poDay = (occurred || '').slice(0, 10);
+    if (poDay && poDay > instance.cutoverMax[brand]) return [];
+  }
   const recorded = utcToIst(po.create_date) || occurred;
   const periods = periodParts(occurred);
   const vendor = po.partner_id ? vendors[po.partner_id[0]] || {} : {};
@@ -214,6 +235,9 @@ async function normalizeExpense(e, prodCategory, instance, instanceKey) {
   const cid = e.company_id[0];
   const brand = instance.brandByCompany[cid] || 'HQ';
   const occurred = `${e.date} 12:00`;
+  if (instance.cutoverMax && instance.cutoverMax[brand]) {
+    if (e.date > instance.cutoverMax[brand]) return null;
+  }
   const recorded = utcToIst(e.create_date) || occurred;
   const periods = periodParts(occurred);
   const prodName = e.product_id?.[1] || '';
@@ -259,6 +283,9 @@ async function normalizeMove(m, lines, vendors, instance, instanceKey) {
   const cid = m.company_id[0];
   const brand = instance.brandByCompany[cid] || 'HQ';
   const occurred = `${m.invoice_date} 12:00`;
+  if (instance.cutoverMax && instance.cutoverMax[brand]) {
+    if (m.invoice_date > instance.cutoverMax[brand]) return [];
+  }
   const recorded = utcToIst(m.create_date) || occurred;
   const periods = periodParts(occurred);
   const vendor = m.partner_id ? vendors[m.partner_id[0]] || {} : {};
@@ -540,7 +567,10 @@ async function syncInstance(env, instanceKey, opts = {}) {
     if (exps.length) {
       const prodIds = [...new Set(exps.map(e => e.product_id?.[0]).filter(Boolean))];
       const prodCat = await loadProductCategoryCache(instance, apiKey, prodIds);
-      for (const e of exps) allRows.push(await normalizeExpense(e, prodCat, instance, instanceKey));
+      for (const e of exps) {
+        const row = await normalizeExpense(e, prodCat, instance, instanceKey);
+        if (row) allRows.push(row);  // null = cutover skipped
+      }
       newCursors[`${instanceKey}:hr.expense`] = exps[exps.length - 1].write_date;
     }
   } catch (e) { stats.errors['hr.expense'] = e.message; }
