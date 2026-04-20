@@ -529,14 +529,38 @@ export async function onRequest(context) {
       // Cats 3-13 → hr.expense
       if (cat.backend === 'hr.expense') {
         if (!product_id) return json({ success: false, error: 'Product required' }, 400);
-        // Resolve employee_id — salary/advance require explicit; others default to PIN owner
+        // Resolve employee_id — salary/advance require explicit; others default to PIN owner,
+        // but ONLY if that owner's Odoo employee belongs to the target brand's company.
+        // Odoo blocks hr.expense when employee's company_id != record's company_id ("no crossover").
+        // Previously fell back to Administrator (id=1, HQ) — broke every NCH/HE expense from an
+        // HQ user. Now falls back to the first active employee in the target company.
         let empId = employee_id;
         if (!empId) {
-          // fallback to PIN's own Odoo employee via hr_employees
           const pinRow = await env.DB.prepare(
-            'SELECT odoo_employee_id FROM hr_employees WHERE pin = ?'
+            'SELECT odoo_employee_id FROM hr_employees WHERE pin = ? AND is_active = 1'
           ).bind(pin).first().catch(() => null);
-          empId = pinRow?.odoo_employee_id || 1;  // Administrator fallback
+          empId = pinRow?.odoo_employee_id || null;
+
+          // Verify PIN-owner's employee is in target company; if not, empId = null to trigger fallback.
+          if (empId) {
+            const check = await odoo(apiKey, 'hr.employee', 'search_read',
+              [[['id', '=', empId], ['company_id', '=', companyId]]],
+              { fields: ['id'], limit: 1 });
+            if (!check?.length) empId = null;
+          }
+
+          // Brand-scoped fallback — any active employee in the target Odoo company.
+          if (!empId) {
+            const brandEmp = await odoo(apiKey, 'hr.employee', 'search_read',
+              [[['company_id', '=', companyId], ['active', '=', true]]],
+              { fields: ['id', 'name'], limit: 1 });
+            if (!brandEmp?.length) {
+              return json({ success: false,
+                error: `No active employee in Odoo for ${brand} (company_id=${companyId}) — cannot create hr.expense. Add at least one ${brand} employee in Odoo first.`
+              }, 400);
+            }
+            empId = brandEmp[0].id;
+          }
         }
 
         // Fetch product for name + default_code
