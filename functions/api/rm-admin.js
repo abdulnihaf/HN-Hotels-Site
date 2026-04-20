@@ -16,7 +16,7 @@ const CORS = {
 
 const ODOO_URL  = 'https://odoo.hnhotels.in/jsonrpc';
 const ODOO_DB   = 'main';
-const ODOO_USER = 'yash@gmail.com';
+const ODOO_USER = 'nihaf@gmail.com';
 
 // Master Data attribute IDs (created in Phase 1 — seeded in Odoo)
 const CAT_GOODS_ROOT = 1;   // product.category "Goods"
