@@ -43,6 +43,15 @@ const BRAND_CONFIG = {
   },
 };
 
+/* ━━━ Multi-company context helper ━━━
+ * Odoo execute_kw uses the API user's default company when allowed_company_ids
+ * is absent from context. If the target company differs from the user's default,
+ * Odoo raises "Access to unauthorized or invalid companies." on any write.
+ * Always inject this into kwargs for every create / write / action call. */
+function coCtx(cfg, extra) {
+  return { ...(extra || {}), context: { ...(extra?.context || {}), allowed_company_ids: [cfg.company_id] } };
+}
+
 /* ━━━ User / PIN → Odoo Credentials ━━━ */
 
 const USERS = {
@@ -826,12 +835,12 @@ async function createPO(body, user, creds, cfg, brand, DB) {
 
   const poId = await odooCall(creds.uid, creds.key,
     'purchase.order', 'create',
-    [poVals]
+    [poVals], coCtx(cfg)
   );
 
   // Auto-confirm
   await odooCall(creds.uid, creds.key,
-    'purchase.order', 'button_confirm', [[poId]]
+    'purchase.order', 'button_confirm', [[poId]], coCtx(cfg)
   );
 
   // Read PO name
@@ -958,7 +967,7 @@ async function editPOLine(body, user, creds, cfg, brand, DB) {
 
   // Write to Odoo
   await odooCall(creds.uid, creds.key,
-    'purchase.order.line', 'write', [[line_id], updates]);
+    'purchase.order.line', 'write', [[line_id], updates], coCtx(cfg));
 
   // If price changed, update D1 daily prices
   if (price_unit != null && DB) {
@@ -1014,7 +1023,7 @@ async function deletePOLine(body, user, creds, cfg, brand, DB) {
   if (existingLines.length <= 1) {
     // Last line — cancel the entire PO
     await odooCall(creds.uid, creds.key,
-      'purchase.order', 'button_cancel', [[po_id]]);
+      'purchase.order', 'button_cancel', [[po_id]], coCtx(cfg));
 
     if (DB) {
       await DB.prepare(
@@ -1030,13 +1039,13 @@ async function deletePOLine(body, user, creds, cfg, brand, DB) {
   // Confirmed POs don't allow line deletion directly.
   // Cycle: cancel → draft → delete line → reconfirm
   await odooCall(creds.uid, creds.key,
-    'purchase.order', 'button_cancel', [[po_id]]);
+    'purchase.order', 'button_cancel', [[po_id]], coCtx(cfg));
   await odooCall(creds.uid, creds.key,
-    'purchase.order', 'button_draft', [[po_id]]);
+    'purchase.order', 'button_draft', [[po_id]], coCtx(cfg));
   await odooCall(creds.uid, creds.key,
-    'purchase.order', 'write', [[po_id], { order_line: [[2, line_id, 0]] }]);
+    'purchase.order', 'write', [[po_id], { order_line: [[2, line_id, 0]] }], coCtx(cfg));
   await odooCall(creds.uid, creds.key,
-    'purchase.order', 'button_confirm', [[po_id]]);
+    'purchase.order', 'button_confirm', [[po_id]], coCtx(cfg));
 
   if (DB) {
     await DB.prepare(
@@ -1063,7 +1072,7 @@ async function cancelPO(body, user, creds, cfg, brand, DB) {
   if (!check.ok) return json({ error: check.error }, 400);
 
   await odooCall(creds.uid, creds.key,
-    'purchase.order', 'button_cancel', [[po_id]]);
+    'purchase.order', 'button_cancel', [[po_id]], coCtx(cfg));
 
   if (DB) {
     await DB.prepare(
@@ -1189,7 +1198,7 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB, env) {
     const qtyPerLine = mv.product_uom_qty / mv.move_line_ids.length;
     for (const mlId of mv.move_line_ids) {
       await odooCall(sysCreds.uid, sysCreds.key,
-        'stock.move.line', 'write', [[mlId], { [doneField]: qtyPerLine }]);
+        'stock.move.line', 'write', [[mlId], { [doneField]: qtyPerLine }], coCtx(cfg));
     }
   }
 
@@ -1207,9 +1216,9 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB, env) {
           const lotName = `RCV-${picking.name.replace(/\//g, '-')}-${ml.id}`;
           const lotId = await odooCall(sysCreds.uid, sysCreds.key,
             'stock.lot', 'create',
-            [{ name: lotName, product_id: ml.product_id[0], company_id: cfg.company_id }]);
+            [{ name: lotName, product_id: ml.product_id[0], company_id: cfg.company_id }], coCtx(cfg));
           await odooCall(sysCreds.uid, sysCreds.key,
-            'stock.move.line', 'write', [[ml.id], { lot_id: lotId }]);
+            'stock.move.line', 'write', [[ml.id], { lot_id: lotId }], coCtx(cfg));
         }
       }
     }
@@ -1220,7 +1229,7 @@ async function receiveDelivery(body, user, creds, cfg, brand, DB, env) {
   // skip_backorder = don't create partial backorder (receive everything that was reserved)
   await odooCall(sysCreds.uid, sysCreds.key,
     'stock.picking', 'button_validate', [[picking_id]],
-    { context: { skip_backorder: true, skip_immediate: true } });
+    coCtx(cfg, { context: { skip_backorder: true, skip_immediate: true } }));
 
   // Verify the picking actually reached 'done' state — guard against Odoo returning
   // a wizard action dict instead of completing the validation
@@ -1302,7 +1311,7 @@ async function addProduct(body, user, creds, cfg, brand, env, DB) {
       uom_id: odooUomId,
       company_id: cfg.company_id,
       ...(categId ? { categ_id: categId } : {}),
-    }]
+    }], coCtx(cfg)
   );
 
   // Create in D1
@@ -1320,7 +1329,7 @@ async function addProduct(body, user, creds, cfg, brand, env, DB) {
   if (vendor.odoo_id) {
     await odooCall(creds.uid, creds.key,
       'product.supplierinfo', 'create',
-      [{ partner_id: vendor.odoo_id, product_id: odooId, company_id: cfg.company_id }]
+      [{ partner_id: vendor.odoo_id, product_id: odooId, company_id: cfg.company_id }], coCtx(cfg)
     );
   }
 
@@ -1392,7 +1401,7 @@ async function linkVendor(body, user, creds, cfg, brand, env, DB) {
   if (product?.odoo_id && vendor.odoo_id) {
     try {
       await odooCall(creds.uid, creds.key, 'product.supplierinfo', 'create',
-        [{ partner_id: vendor.odoo_id, product_id: product.odoo_id, company_id: cfg.company_id }]);
+        [{ partner_id: vendor.odoo_id, product_id: product.odoo_id, company_id: cfg.company_id }], coCtx(cfg));
     } catch (_) { /* supplierinfo may already exist */ }
   }
 
@@ -2290,10 +2299,10 @@ async function syncStockToOdoo(creds, cfg, counts, DB) {
       if (Math.abs(diff) > 0.001) {
         await odooCall(creds.uid, creds.key,
           'stock.quant', 'write',
-          [[quants[0].id], { inventory_quantity: qty }]
+          [[quants[0].id], { inventory_quantity: qty }], coCtx(cfg)
         );
         await odooCall(creds.uid, creds.key,
-          'stock.quant', 'action_apply_inventory', [[quants[0].id]]
+          'stock.quant', 'action_apply_inventory', [[quants[0].id]], coCtx(cfg)
         );
         results.push({ code, odoo_id: product.odoo_id, action: 'updated', from: quants[0].quantity, to: qty });
       } else {
@@ -2308,10 +2317,10 @@ async function syncStockToOdoo(creds, cfg, counts, DB) {
           location_id: cfg.locations.MAIN,
           inventory_quantity: qty,
           company_id: cfg.company_id,
-        }]
+        }], coCtx(cfg)
       );
       await odooCall(creds.uid, creds.key,
-        'stock.quant', 'action_apply_inventory', [[newQuant]]
+        'stock.quant', 'action_apply_inventory', [[newQuant]], coCtx(cfg)
       );
       results.push({ code, odoo_id: product.odoo_id, action: 'created', qty });
     }
@@ -2850,7 +2859,7 @@ async function createBill(body, user, creds, cfg, brand, env, DB) {
   // Use Odoo's native action: action_create_invoice → returns dict with invoice_ids
   let billId;
   try {
-    const inv = await odooCall(creds.uid, creds.key, 'purchase.order', 'action_create_invoice', [[po_id]]);
+    const inv = await odooCall(creds.uid, creds.key, 'purchase.order', 'action_create_invoice', [[po_id]], coCtx(cfg));
     // Sometimes returns {res_id} or {domain: [['id','in',[...]]]}
     if (inv && inv.res_id) billId = inv.res_id;
     else if (inv && inv.domain) {
@@ -2877,7 +2886,7 @@ async function createBill(body, user, creds, cfg, brand, env, DB) {
       invoice_date_due: due_date || null,
       narration: notes || '',
       x_recorded_by_user_id: user.odoo_uid || 2,
-    }]);
+    }], coCtx(cfg));
 
   // Optionally upload photo to Drive (skip if no photo)
   let photoLink = null, photoId = null;
@@ -2933,8 +2942,8 @@ async function directBill(body, user, creds, cfg, brand, env, DB) {
         quantity: 1,
         price_unit: parseFloat(amount_total),
       }]],
-    }]);
-  await odooCall(creds.uid, creds.key, 'account.move', 'action_post', [[billId]]);
+    }], coCtx(cfg));
+  await odooCall(creds.uid, creds.key, 'account.move', 'action_post', [[billId]], coCtx(cfg));
 
   // Vendor name for D1
   const vp = await odooCall(creds.uid, creds.key, 'res.partner', 'read', [[vendor_id]], { fields: ['name'] });

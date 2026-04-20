@@ -1247,8 +1247,8 @@ async function submitNewRmProduct() {
 
   // Find "Raw Materials" category id (21 in new Odoo)
   const RM_CATEGORY_ID = 21;
-  // Company id for current brand — HE=2, NCH=3, HQ=1
-  const companyMap = { HE: 2, NCH: 3, HQ: 1 };
+  // Company id for current brand — must match BRAND_CONFIG in rm-ops.js
+  const companyMap = { HE: 1, NCH: 10, HQ: 13 };
   const companyId = companyMap[BRAND] || null;
 
   try {
