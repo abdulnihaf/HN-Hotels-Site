@@ -45,6 +45,23 @@ function doPost(e) {
       return json({ success: false, error: 'no body' });
     }
     const body = JSON.parse(e.postData.contents);
+
+    // Rename action — used by bill backfill to rename existing files
+    // to the structured pattern so Drive folder stays scannable.
+    if (body.action === 'rename') {
+      if (!body.file_id || !body.new_name) {
+        return json({ success: false, error: 'file_id and new_name required' });
+      }
+      try {
+        const file = DriveApp.getFileById(body.file_id);
+        const safe = sanitize(body.new_name);
+        file.setName(safe);
+        return json({ success: true, file_id: body.file_id, new_name: safe });
+      } catch (err) {
+        return json({ success: false, error: String(err && err.message || err) });
+      }
+    }
+
     const {
       date, company, category, product,
       amount, recorded_by, filename,
@@ -80,8 +97,65 @@ function doPost(e) {
   }
 }
 
-function doGet() {
-  return json({ status: 'ok', purpose: 'HN Expense Photo Webhook', usage: 'POST JSON with {date, company, category, product, amount, recorded_by, filename, mimetype, data_b64}' });
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  if (p.action === 'list' && p.path) {
+    return doList(p.path);
+  }
+  if (p.action === 'find' && p.path && p.filename) {
+    return doFind(p.path, p.filename);
+  }
+  return json({ status: 'ok', purpose: 'HN Expense Photo Webhook',
+    usage: 'POST JSON with {date, company, category, product, amount, recorded_by, filename, mimetype, data_b64} OR GET ?action=list&path=YYYY-MM/YYYY-MM-DD/BRAND OR GET ?action=find&path=...&filename=... OR POST {action:"rename",file_id:X,new_name:Y}' });
+}
+
+// List all files inside a folder path relative to ROOT_FOLDER_ID.
+// Used by the bill backfill in the Worker to reconcile old Odoo
+// attachments with their Drive file_id + view_url.
+function doList(path) {
+  try {
+    const folder = resolveFolder(path);
+    if (!folder) return json({ success: true, path: path, files: [] });
+    const out = [];
+    const it = folder.getFiles();
+    while (it.hasNext()) {
+      const f = it.next();
+      out.push({
+        filename: f.getName(),
+        file_id: f.getId(),
+        view_url: f.getUrl(),
+        size: f.getSize(),
+        created: f.getDateCreated().toISOString(),
+      });
+    }
+    return json({ success: true, path: path, files: out });
+  } catch (err) {
+    return json({ success: false, error: String(err && err.message || err) });
+  }
+}
+
+function doFind(path, filename) {
+  try {
+    const folder = resolveFolder(path);
+    if (!folder) return json({ success: false, error: 'folder not found' });
+    const it = folder.getFilesByName(filename);
+    if (!it.hasNext()) return json({ success: false, error: 'file not found' });
+    const f = it.next();
+    return json({ success: true, file_id: f.getId(), view_url: f.getUrl() });
+  } catch (err) {
+    return json({ success: false, error: String(err && err.message || err) });
+  }
+}
+
+function resolveFolder(path) {
+  const parts = String(path).split('/').map(function(s){return s.trim();}).filter(Boolean);
+  let folder = DriveApp.getFolderById(ROOT_FOLDER_ID);
+  for (var i = 0; i < parts.length; i++) {
+    const it = folder.getFoldersByName(parts[i]);
+    if (!it.hasNext()) return null;
+    folder = it.next();
+  }
+  return folder;
 }
 
 function getOrCreate(parent, name) {

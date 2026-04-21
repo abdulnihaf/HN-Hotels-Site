@@ -1450,6 +1450,218 @@ export async function onRequest(context) {
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // BACKFILL BILLS — one-time reconciler for bills uploaded before D1
+    // tracking existed.  Walks Odoo ir.attachment rows for PO/Expense/Bill
+    // in the date range, looks up each file in Drive by filename via the
+    // drive-webhook list endpoint, and inserts bill_attachments rows with
+    // the real drive_view_url so every old bill becomes clickable.
+    //
+    // Admin / CFO only.  Idempotent — skips rows that already exist in D1.
+    // ─────────────────────────────────────────────────────────────────────
+    if (action === 'backfill-bills' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      if (!env?.DRIVE_WEBHOOK_URL) return json({ success: false, error: 'DRIVE_WEBHOOK_URL not set' }, 500);
+      if (!DB) return json({ success: false, error: 'D1 binding missing' }, 500);
+      const body = await request.json().catch(() => ({}));
+      const { pin } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!['admin','cfo'].includes(user.role)) {
+        return json({ success: false, error: 'Admin/CFO only' }, 403);
+      }
+      const from = body.from || '2026-04-01';
+      const to   = body.to   || new Date().toISOString().slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+        return json({ success: false, error: 'from/to must be YYYY-MM-DD' }, 400);
+      }
+
+      // Step 1 — collect entries per kind in the date range with date + brand
+      const companyToBrand = { 1: 'HQ', 2: 'HE', 3: 'NCH' };
+      const [pos, expenses, bills] = await Promise.all([
+        odoo(apiKey, 'purchase.order', 'search_read',
+          [[['date_order', '>=', from + ' 00:00:00'], ['date_order', '<=', to + ' 23:59:59']]],
+          { fields: ['id', 'date_order', 'company_id', 'amount_total'], limit: 2000 }),
+        odoo(apiKey, 'hr.expense', 'search_read',
+          [[['date', '>=', from], ['date', '<=', to]]],
+          { fields: ['id', 'date', 'company_id', 'total_amount'], limit: 2000 }),
+        odoo(apiKey, 'account.move', 'search_read',
+          [[['move_type', '=', 'in_invoice'], ['invoice_date', '>=', from], ['invoice_date', '<=', to]]],
+          { fields: ['id', 'invoice_date', 'company_id', 'amount_total'], limit: 2000 }),
+      ]);
+
+      // Index: res_model → id → { date, brand, amount }
+      const entryIndex = { 'purchase.order': {}, 'hr.expense': {}, 'account.move': {} };
+      for (const p of pos) {
+        entryIndex['purchase.order'][p.id] = {
+          date: (p.date_order || '').slice(0, 10),
+          brand: companyToBrand[p.company_id?.[0]] || 'HQ',
+          amount: p.amount_total,
+        };
+      }
+      for (const e of expenses) {
+        entryIndex['hr.expense'][e.id] = {
+          date: e.date || '',
+          brand: companyToBrand[e.company_id?.[0]] || 'HQ',
+          amount: e.total_amount,
+        };
+      }
+      for (const b of bills) {
+        entryIndex['account.move'][b.id] = {
+          date: b.invoice_date || '',
+          brand: companyToBrand[b.company_id?.[0]] || 'HQ',
+          amount: b.amount_total,
+        };
+      }
+
+      // Step 2 — fetch all ir.attachment rows for these entries
+      const allIds = {
+        'purchase.order': Object.keys(entryIndex['purchase.order']).map(Number),
+        'hr.expense':     Object.keys(entryIndex['hr.expense']).map(Number),
+        'account.move':   Object.keys(entryIndex['account.move']).map(Number),
+      };
+      const attachmentsByModel = {};
+      for (const [resModel, ids] of Object.entries(allIds)) {
+        if (!ids.length) { attachmentsByModel[resModel] = []; continue; }
+        attachmentsByModel[resModel] = await odoo(apiKey, 'ir.attachment', 'search_read',
+          [[['res_model', '=', resModel], ['res_id', 'in', ids]]],
+          { fields: ['id', 'res_model', 'res_id', 'name', 'mimetype', 'create_date', 'file_size'], limit: 5000 });
+      }
+
+      // Step 3 — check which ones already have a D1 row (skip those)
+      const existing = await DB.prepare(
+        `SELECT entry_kind, entry_odoo_id, odoo_attachment_id FROM bill_attachments`
+      ).all();
+      const existingKey = new Set();
+      for (const r of existing.results || []) {
+        existingKey.add(`${r.entry_kind}-${r.entry_odoo_id}-${r.odoo_attachment_id || 'X'}`);
+      }
+      const kindOf = { 'purchase.order': 'PO', 'hr.expense': 'Expense', 'account.move': 'Bill' };
+
+      // Step 4 — for each unique (date,brand) that has attachments, list Drive folder once
+      const folderCache = {};   // key: "YYYY-MM/YYYY-MM-DD/BRAND" -> [{filename,file_id,view_url}, ...]
+      const needFolders = new Set();
+      const pending = []; // [{att, resModel, entry, kind, key}]
+      for (const [resModel, atts] of Object.entries(attachmentsByModel)) {
+        for (const att of atts) {
+          const entry = entryIndex[resModel][att.res_id];
+          if (!entry || !entry.date) continue;
+          const kind = kindOf[resModel];
+          const key = `${kind}-${att.res_id}-${att.id}`;
+          if (existingKey.has(key)) continue;
+          const [yy, mm] = entry.date.split('-');
+          const folderPath = `${yy}-${mm}/${entry.date}/${entry.brand}`;
+          needFolders.add(folderPath);
+          pending.push({ att, kind, entry, folderPath });
+        }
+      }
+
+      // Step 5 — list Drive folders in parallel batches
+      async function listFolder(path) {
+        try {
+          const r = await fetch(`${env.DRIVE_WEBHOOK_URL}?action=list&path=${encodeURIComponent(path)}`);
+          const out = await r.json().catch(() => null);
+          return out?.success ? (out.files || []) : [];
+        } catch (e) { return []; }
+      }
+      const folderList = Array.from(needFolders);
+      // Chunk to avoid overwhelming the webhook — Apps Script is single-threaded
+      const CHUNK = 4;
+      for (let i = 0; i < folderList.length; i += CHUNK) {
+        const slice = folderList.slice(i, i + CHUNK);
+        const results = await Promise.all(slice.map(p => listFolder(p).then(files => [p, files])));
+        for (const [p, files] of results) folderCache[p] = files;
+      }
+
+      // Step 6 — match pending items, rename to structured pattern, insert
+      let matched = 0, unmatched = 0, skipped = existingKey.size, errors = 0, renamed = 0;
+      const unmatchedSamples = [];
+      const modelByKind = { PO: 'purchase.order', Expense: 'hr.expense', Bill: 'account.move' };
+
+      async function renameDriveFile(fileId, newName) {
+        try {
+          const r = await fetch(env.DRIVE_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'rename', file_id: fileId, new_name: newName }),
+          });
+          const out = await r.json().catch(() => null);
+          return out?.success === true;
+        } catch (e) { return false; }
+      }
+
+      for (const it of pending) {
+        const files = folderCache[it.folderPath] || [];
+        let match = files.find(f => f.filename === it.att.name);
+        if (!match) {
+          const base = (it.att.name || '').replace(/\.[^.]+$/, '');
+          match = files.find(f => f.filename.startsWith(base));
+        }
+        if (!match) {
+          unmatched++;
+          if (unmatchedSamples.length < 10) unmatchedSamples.push({ filename: it.att.name, folder: it.folderPath });
+          continue;
+        }
+
+        // Build structured filename. We don't have the original vendor/product
+        // handy on this code path, so use the kind + res_id + amount signature
+        // which is still cleaner than "WhatsApp Image 2026-04-17 at 16.47.jpg".
+        const structuredName = buildBillFilename({
+          date: it.entry.date,
+          category: `${it.kind}-bill`,
+          brand: it.entry.brand,
+          product: `${it.kind}-${it.att.res_id}`,
+          amount: it.entry.amount,
+          recorded_by: 'backfill',
+        });
+
+        let finalName = match.filename;
+        // Rename Drive file if not already structured
+        if (match.filename !== structuredName) {
+          const ok = await renameDriveFile(match.file_id, structuredName);
+          if (ok) { finalName = structuredName; renamed++; }
+        }
+        // Rename Odoo attachment name to match (best-effort, non-fatal)
+        if (finalName !== it.att.name) {
+          try {
+            await odoo(apiKey, 'ir.attachment', 'write', [[it.att.id], { name: finalName }]);
+          } catch (e) { /* ignore */ }
+        }
+
+        try {
+          await DB.prepare(`
+            INSERT INTO bill_attachments
+              (entry_kind, entry_odoo_id, brand, entry_date, entry_amount,
+               odoo_attachment_id, drive_file_id, drive_view_url, drive_folder_path,
+               filename, mimetype, file_size_kb, uploaded_by_pin, uploaded_by_name,
+               uploaded_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            it.kind, it.att.res_id, it.entry.brand, it.entry.date, it.entry.amount,
+            it.att.id, match.file_id, match.view_url, it.folderPath,
+            finalName, it.att.mimetype || 'image/jpeg',
+            Math.round((match.size || 0) / 1024),
+            null, 'backfill',
+            (it.att.create_date || new Date().toISOString()).replace('T', ' ').slice(0, 19)
+          ).run();
+          matched++;
+        } catch (e) {
+          errors++;
+          console.error('backfill insert fail:', e.message);
+        }
+      }
+
+      return json({
+        success: true,
+        from, to,
+        scanned_entries: pos.length + expenses.length + bills.length,
+        scanned_attachments: Object.values(attachmentsByModel).reduce((s, a) => s + a.length, 0),
+        folders_listed: folderList.length,
+        matched, renamed, unmatched, skipped_existing: skipped, errors,
+        unmatched_samples: unmatchedSamples,
+      });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // UPDATE ENTRY NOTES — edit notes / bill-ref on existing PO / Expense / Bill
     // - Expense: writes to `name` (the description field)
     // - PO / Bill: posts a message to Odoo chatter (mail.message) — the
