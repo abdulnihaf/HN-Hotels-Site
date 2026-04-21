@@ -255,6 +255,9 @@
                oninput="resolveDatalistId('nrm-vendor', 'nrm-vendor-dl')">
         <datalist id="nrm-vendor-dl"></datalist>
         <input type="hidden" id="nrm-vendor">
+        <div style="text-align: right; margin-top: 6px;">
+          <button type="button" class="btn-link" onclick="_newVendorContext='rm'; openNewVendorModal()" style="font-size:12px; color: var(--accent,#d4a44c); background:none; border:none; cursor:pointer; padding:0; text-decoration:underline;">+ New vendor not in list?</button>
+        </div>
       </div>
       <div class="row">
         <label>Last known price per unit (optional, ₹)</label>
@@ -272,19 +275,34 @@
 
   <!-- New Vendor inline-create modal -->
   <div id="new-vendor-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeNewVendorModal()">
-    <div class="modal-card">
-      <h3>Add new vendor</h3>
-      <div class="row">
-        <label>Vendor name *</label>
-        <input id="nv-name" type="text" placeholder="e.g. Sharma Electrical">
+    <div class="modal-card" style="max-width: 480px;">
+      <h3>Add New Vendor</h3>
+      <div class="sub" style="margin-bottom: 14px; font-size: 12px;">
+        Saved to Odoo and available in all vendor dropdowns immediately.
       </div>
       <div class="row">
-        <label>Phone (optional)</label>
-        <input id="nv-phone" type="tel" inputmode="tel" placeholder="9xxxx xxxxx">
+        <label>Vendor / Business name *</label>
+        <input id="nv-name" type="text" placeholder="e.g. Sharma Dairy, Raju Vegetables">
       </div>
-      <div style="display: flex; gap: 8px;">
+      <div class="row">
+        <label>Mobile *</label>
+        <input id="nv-phone" type="tel" inputmode="tel" placeholder="9XXXXXXXXX">
+      </div>
+      <div class="row">
+        <label>Email <span class="mute">(optional)</span></label>
+        <input id="nv-email" type="email" inputmode="email" placeholder="vendor@example.com">
+      </div>
+      <div class="row">
+        <label>Address <span class="mute">(optional)</span></label>
+        <input id="nv-address" type="text" placeholder="e.g. Shop 4, KR Market, Bangalore">
+      </div>
+      <div class="row">
+        <label>GST Number <span class="mute">(optional)</span></label>
+        <input id="nv-gst" type="text" placeholder="29XXXXX1234Z5" style="text-transform: uppercase;" oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 4px;">
         <button class="btn btn-ghost" style="flex: 1;" onclick="closeNewVendorModal()">Cancel</button>
-        <button class="btn btn-primary" style="flex: 1;" onclick="submitNewVendor()">Create</button>
+        <button class="btn btn-primary" style="flex: 1;" onclick="submitNewVendor()">Create Vendor</button>
       </div>
     </div>
   </div>
@@ -1342,8 +1360,10 @@ async function submitNewProduct() {
 }
 
 function openNewVendorModal() {
-  document.getElementById('nv-name').value = '';
-  document.getElementById('nv-phone').value = '';
+  ['nv-name','nv-phone','nv-email','nv-address','nv-gst'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   document.getElementById('new-vendor-modal').classList.remove('hidden');
   setTimeout(() => document.getElementById('nv-name').focus(), 50);
 }
@@ -1351,28 +1371,49 @@ function closeNewVendorModal() {
   document.getElementById('new-vendor-modal').classList.add('hidden');
 }
 async function submitNewVendor() {
-  const name = document.getElementById('nv-name').value.trim();
-  const phone = document.getElementById('nv-phone').value.trim();
-  if (!name) { toast('Name required', 'err'); return; }
+  const name    = document.getElementById('nv-name').value.trim();
+  const phone   = document.getElementById('nv-phone').value.trim();
+  const email   = document.getElementById('nv-email').value.trim();
+  const address = document.getElementById('nv-address').value.trim();
+  const gst     = document.getElementById('nv-gst').value.trim();
+
+  if (!name)  { toast('Vendor name is required', 'err'); return; }
+  if (!phone) { toast('Mobile number is required', 'err'); return; }
 
   const r = await fetch(`${API}?action=create-vendor`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pin: PIN, name, phone }),
+    body: JSON.stringify({ pin: PIN, name, phone, email, address, gst }),
   }).then(x => x.json()).catch(e => ({ error: e.message }));
 
   if (!r.success) { toast(r.error || 'Failed', 'err'); return; }
 
   const newVendor = r.vendor;
 
-  if (_newVendorContext === 'cart') {
-    // Cat 1 — add to catalog, auto-pick for current cart row
+  if (_newVendorContext === 'rm') {
+    // RM registry modal — add to datalist and auto-select
+    rmCatalog.vendors.push(newVendor);
+    const dl = document.getElementById('nrm-vendor-dl');
+    if (dl) {
+      const opt = document.createElement('option');
+      opt.value = newVendor.name;
+      opt.dataset.id = newVendor.id;
+      dl.appendChild(opt);
+    }
+    document.getElementById('nrm-vendor-search').value = newVendor.name;
+    document.getElementById('nrm-vendor').value = newVendor.id;
+    closeNewVendorModal();
+    // Return focus to RM modal
+    setTimeout(() => document.getElementById('nrm-name').focus(), 100);
+  } else if (_newVendorContext === 'cart') {
+    // Cat 1 cart — add to catalog, auto-pick for current cart row
     rmCatalog.vendors.push(newVendor);
     if (vendorPickerCtx?.cartIdx != null) {
       cart[vendorPickerCtx.cartIdx].vendor = newVendor;
       renderRmProducts(); renderCart();
     }
     closeVendorModal();
+    closeNewVendorModal();
   } else {
     // Generic form — add to dropdown + select
     const sel = document.getElementById('f-vendor');
@@ -1385,9 +1426,9 @@ async function submitNewVendor() {
       else        sel.appendChild(opt);
       sel.value = newVendor.id;
     }
+    closeNewVendorModal();
   }
-  closeNewVendorModal();
-  toast(`✓ Added "${newVendor.name}"`, 'ok');
+  toast(`✓ Vendor "${newVendor.name}" created`, 'ok');
 }
 
 // ═══════════════════════════════════════════════════════════════

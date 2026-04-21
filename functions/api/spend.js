@@ -561,17 +561,22 @@ export async function onRequest(context) {
     if (action === 'create-vendor' && request.method === 'POST') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
       const body = await request.json();
-      const { pin, name, phone } = body;
+      const { pin, name, phone, email, address, gst } = body;
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
       if (!name?.trim()) return json({ success: false, error: 'Name required' }, 400);
 
-      const vendorId = await odoo(apiKey, 'res.partner', 'create', [{
+      const partnerVals = {
         name: name.trim(),
-        phone: phone?.trim() || false,
         supplier_rank: 1,
         is_company: true,
-      }]);
+      };
+      if (phone?.trim())   partnerVals.phone   = phone.trim();
+      if (email?.trim())   partnerVals.email   = email.trim();
+      if (address?.trim()) partnerVals.street  = address.trim();
+      if (gst?.trim())     partnerVals.vat     = gst.trim().toUpperCase();
+
+      const vendorId = await odoo(apiKey, 'res.partner', 'create', [partnerVals]);
 
       return json({ success: true, vendor: { id: vendorId, name: name.trim(), phone: phone?.trim() || '' } });
     }
