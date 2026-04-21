@@ -1045,7 +1045,7 @@ export async function onRequest(context) {
       const pin = url.searchParams.get('pin');
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
-      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm'];
+      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr'];
       if (!LEDGER_ROLES.includes(user.role)) {
         return json({ success: false, error: `Access denied for role ${user.role}` }, 403);
       }
@@ -1082,7 +1082,7 @@ export async function onRequest(context) {
       const [pos, expenses, bills] = await Promise.all([
         odoo(apiKey, 'purchase.order', 'search_read', [poFilter],
           { fields: ['id', 'name', 'partner_id', 'company_id', 'date_order', 'amount_total',
-                     'state', 'order_line', 'x_recorded_by_user_id'],
+                     'state', 'order_line', 'notes', 'x_recorded_by_user_id'],
             order: 'date_order desc', limit: 500 }),
         odoo(apiKey, 'hr.expense', 'search_read', [expFilter],
           { fields: ['id', 'name', 'date', 'total_amount', 'product_id', 'company_id',
@@ -1090,7 +1090,7 @@ export async function onRequest(context) {
             order: 'date desc', limit: 500 }),
         odoo(apiKey, 'account.move', 'search_read', [billFilter],
           { fields: ['id', 'name', 'ref', 'invoice_date', 'partner_id', 'company_id',
-                     'amount_total', 'payment_state', 'invoice_origin', 'x_recorded_by_user_id'],
+                     'amount_total', 'payment_state', 'invoice_origin', 'narration', 'x_recorded_by_user_id'],
             order: 'invoice_date desc', limit: 500 }),
       ]);
 
@@ -1124,9 +1124,11 @@ export async function onRequest(context) {
         recorded_by_user_id: base.recorded_by_user_id || null,
         recorded_by_name:    base.recorded_by_name    || null,
         recorded_by_pin:     base.recorded_by_pin     || null,
-        notes: base.notes || null,
+        notes: base.notes || '',
+        bill_ref: base.bill_ref || '',
       });
 
+      const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
       const rows = [
         ...pos.map(p => toRow('PO', {
           odoo_id: p.id,
@@ -1138,6 +1140,7 @@ export async function onRequest(context) {
           state: p.state,
           recorded_by_user_id: p.x_recorded_by_user_id?.[0] || null,
           recorded_by_name:    p.x_recorded_by_user_id?.[1] || null,
+          notes: stripHtml(p.notes),
         }, poAtts)),
         ...expenses.map(e => toRow('Expense', {
           odoo_id: e.id,
@@ -1150,6 +1153,7 @@ export async function onRequest(context) {
           recorded_by_user_id: e.x_recorded_by_user_id?.[0] || null,
           recorded_by_name:    e.x_recorded_by_user_id?.[1] || null,
           recorded_by_pin:     e.x_submitted_by_pin || null,
+          notes: e.name || '',  // hr.expense uses `name` as description
         }, expAtts)),
         ...bills.map(b => toRow('Bill', {
           odoo_id: b.id,
@@ -1161,6 +1165,8 @@ export async function onRequest(context) {
           state: b.payment_state || 'not_paid',
           recorded_by_user_id: b.x_recorded_by_user_id?.[0] || null,
           recorded_by_name:    b.x_recorded_by_user_id?.[1] || null,
+          notes: stripHtml(b.narration),
+          bill_ref: b.ref || '',
         }, billAtts)),
       ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
@@ -1188,7 +1194,7 @@ export async function onRequest(context) {
       const { pin, kind, odoo_id, attachment } = body;
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
-      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm'];
+      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr'];
       if (!LEDGER_ROLES.includes(user.role)) return json({ success: false, error: 'Access denied' }, 403);
       if (!odoo_id || !attachment?.data_b64) {
         return json({ success: false, error: 'odoo_id and attachment.data_b64 required' }, 400);
@@ -1204,7 +1210,9 @@ export async function onRequest(context) {
         date: body.date || new Date().toISOString().slice(0, 10),
         company: body.brand || 'HQ',
         category: `${kind}-bill`,
-        file_name: attachment.name || 'bill.jpg',
+        product: `${kind} #${odoo_id}`,
+        recorded_by: user.name,
+        filename: attachment.name || 'bill.jpg',
         mimetype: attachment.mimetype || 'image/jpeg',
         data_b64: attachment.data_b64,
       });
@@ -1221,7 +1229,7 @@ export async function onRequest(context) {
       const { pin, kind, odoo_id, notes, bill_ref } = body;
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
-      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm'];
+      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr'];
       if (!LEDGER_ROLES.includes(user.role)) return json({ success: false, error: 'Access denied' }, 403);
       if (!odoo_id) return json({ success: false, error: 'odoo_id required' }, 400);
       const MODEL = { PO: 'purchase.order', Expense: 'hr.expense', Bill: 'account.move' };

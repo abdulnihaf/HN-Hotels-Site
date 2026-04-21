@@ -100,8 +100,10 @@
 
   @media (max-width: 700px) {
     .ledger-wrap { padding: 10px; }
-    table.ledger th:nth-child(n+7), table.ledger td:nth-child(n+7) { display: none; }
-    table.ledger th:nth-child(4), table.ledger td:nth-child(4) { max-width: 140px; }
+    /* Rely on horizontal scroll in .tbl-wrap rather than hiding columns —
+       bill status / action button are the most important columns. */
+    table.ledger { font-size: 12px; }
+    table.ledger th, table.ledger td { padding: 8px 8px; }
   }
 </style>
 </head>
@@ -262,10 +264,10 @@
 <script>
 // ── State ──────────────────────────────────────────────────────
 const API = '/api/spend';
-const ODOO_BASE = 'https://odoo.hnhotels.in/odoo';
+const ODOO_BASE = 'https://odoo.hnhotels.in';
 let PIN = '';
 let USER = null;
-let STATE = { rows: [], totals: null, missingOnly: false, currentRow: null };
+let STATE = { rows: [], totals: null, missingOnly: false, currentRow: null, quickUploadMode: false };
 
 // ── PIN gate ──────────────────────────────────────────────────
 const pinInput = document.getElementById('pin-input');
@@ -280,16 +282,18 @@ async function verifyPin() {
     document.getElementById('pin-error').textContent = r?.error || 'Invalid PIN';
     return;
   }
-  const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm'];
-  if (!LEDGER_ROLES.includes(r.role)) {
-    document.getElementById('pin-error').textContent = `Ledger not available for role "${r.role}"`;
+  const role = r.user?.role;
+  const name = r.user?.name;
+  const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr'];
+  if (!LEDGER_ROLES.includes(role)) {
+    document.getElementById('pin-error').textContent = `Ledger not available for role "${role || 'unknown'}"`;
     return;
   }
   PIN = pin;
-  USER = r;
+  USER = { name, role, brands: r.brands };
   document.getElementById('pin-screen').classList.add('hidden');
   document.getElementById('ledger-screen').classList.remove('hidden');
-  document.getElementById('user-sub').textContent = `Signed in as ${r.name} · ${r.role}`;
+  document.getElementById('user-sub').textContent = `Signed in as ${name} · ${role}`;
   // Default: last 30 days, all kinds
   setRangeDays(30, false);
   load();
@@ -444,7 +448,8 @@ function openDrawer(idx) {
   document.getElementById('d-sub').textContent   = `${r.vendor?.name || r.recorded_by_name || ''} · ${fmtDate(r.date)}`;
 
   const modelSlug = { PO: 'purchase.order', Expense: 'hr.expense', Bill: 'account.move' }[r.kind];
-  document.getElementById('d-odoo-link').href = `${ODOO_BASE}/action-base_setup.action_general_configuration#id=${r.odoo_id}&model=${modelSlug}&view_type=form`;
+  // Odoo classic web URL — works regardless of menu structure
+  document.getElementById('d-odoo-link').href = `${ODOO_BASE}/web#id=${r.odoo_id}&model=${modelSlug}&view_type=form`;
 
   document.getElementById('d-kv').innerHTML = `
     <div class="k">Kind</div>      <div class="v"><span class="chip kind-${r.kind}">${r.kind}</span></div>
@@ -468,6 +473,7 @@ function openDrawer(idx) {
   document.getElementById('d-notes-status').textContent = '';
   document.getElementById('d-upload-status').textContent = '';
   document.getElementById('d-file').value = '';
+  document.getElementById('d-billref').value = r.bill_ref || '';
 
   // Bill-ref only for Bill kind
   document.getElementById('d-billref-section').style.display = r.kind === 'Bill' ? 'block' : 'none';
@@ -499,11 +505,21 @@ function getFilteredRows() {
 async function uploadBill(input) {
   const file = input.files?.[0];
   if (!file || !STATE.currentRow) return;
-  const status = document.getElementById('d-upload-status');
-  status.textContent = 'Compressing…';
+  const inDrawer = !STATE.quickUploadMode;
+  const status = inDrawer ? document.getElementById('d-upload-status') : null;
+  const setStatus = (msg, isErr) => {
+    if (status) {
+      status.textContent = msg;
+      status.style.color = isErr ? '#f87171' : 'var(--text-dim)';
+    } else if (msg) {
+      // Inline quickUpload — use toast-style inline indicator at top of table
+      showToast(msg, isErr ? 'err' : 'ok');
+    }
+  };
+  setStatus('Compressing…');
   try {
     const compressed = await compressImage(file);
-    status.textContent = 'Uploading to Odoo…';
+    setStatus('Uploading to Odoo…');
     const r = await fetch(`${API}?action=attach-bill`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -517,26 +533,51 @@ async function uploadBill(input) {
       }),
     }).then(x => x.json());
     if (!r.success) throw new Error(r.error || 'Upload failed');
-    status.textContent = '✓ Uploaded. Refreshing…';
     // Local update
     STATE.currentRow.has_attachment = true;
     STATE.currentRow.attachment_count = (STATE.currentRow.attachment_count || 0) + 1;
     render();
-    openDrawer(getFilteredRows().indexOf(STATE.currentRow));
-    setTimeout(() => { status.textContent = ''; }, 2000);
+    if (inDrawer) {
+      setStatus('✓ Uploaded. Refreshing…');
+      // Refresh drawer content inline (find updated row in filtered list)
+      const newIdx = getFilteredRows().indexOf(STATE.currentRow);
+      if (newIdx >= 0) openDrawer(newIdx);
+      setTimeout(() => { if (status) status.textContent = ''; }, 2000);
+    } else {
+      setStatus('✓ Bill uploaded');
+      STATE.quickUploadMode = false;
+      STATE.currentRow = null;
+    }
   } catch (e) {
-    status.textContent = '✗ ' + e.message;
-    status.style.color = '#f87171';
+    setStatus('✗ ' + e.message, true);
+    STATE.quickUploadMode = false;
   }
 }
 async function quickUpload(idx) {
   const r = getFilteredRows()[idx];
+  if (!r) return;
   STATE.currentRow = r;
-  // Reuse drawer file input
+  STATE.quickUploadMode = true;
+  // Reuse drawer file input — use onchange once (cleared below after fire)
   const file = document.getElementById('d-file');
-  file.onchange = null;
+  file.value = '';
+  file.onchange = function() {
+    uploadBill(this);
+    this.onchange = null;
+  };
   file.click();
-  file.onchange = function() { uploadBill(this); };
+}
+
+// ── Simple toast (for quick-upload feedback outside drawer) ───
+function showToast(msg, kind) {
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = `position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background: ${kind === 'err' ? 'rgba(239,68,68,0.95)' : 'rgba(16,185,129,0.95)'};
+    color:white; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600;
+    z-index:100; box-shadow:0 4px 12px rgba(0,0,0,0.3);`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
 }
 
 async function compressImage(file) {
