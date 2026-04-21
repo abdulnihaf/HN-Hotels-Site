@@ -1968,15 +1968,44 @@ export async function onRequest(context) {
         }
 
         if (!dry_run && toCreate.length) {
-          try {
-            const valsArr = toCreate.map(t => t.vals);
-            const newIds = await odoo(apiKey, 'product.supplierinfo', 'create', [valsArr]);
-            const idsArr = Array.isArray(newIds) ? newIds : [newIds];
-            toCreate.forEach((t, i) => {
-              created.push({ ...t.hint, supplierinfo_id: idsArr[i] });
-            });
-          } catch (e) {
-            failed.push({ reason: 'batch create failed: ' + e.message, count: toCreate.length });
+          // Pre-validate: check which partners + templates actually exist as active in Odoo.
+          // One bad ref makes the whole batch fail, so filter first, then per-row create the rest.
+          const partnerIds = [...new Set(toCreate.map(t => t.vals.partner_id))];
+          const activePartners = await odoo(apiKey, 'res.partner', 'search_read',
+            [[['id', 'in', partnerIds]]], { fields: ['id', 'active', 'name', 'supplier_rank'], limit: 500 });
+          const activePartnerSet = new Set(activePartners.filter(p => p.active !== false).map(p => p.id));
+          const tmplIdsToCheck = [...new Set(toCreate.map(t => t.vals.product_tmpl_id))];
+          const activeTmpls = await odoo(apiKey, 'product.template', 'search_read',
+            [[['id', 'in', tmplIdsToCheck]]], { fields: ['id', 'active'], limit: 2000 });
+          const activeTmplSet = new Set(activeTmpls.filter(t => t.active !== false).map(t => t.id));
+
+          // Try batch first with only validated rows
+          const validRows = toCreate.filter(t =>
+            activePartnerSet.has(t.vals.partner_id) && activeTmplSet.has(t.vals.product_tmpl_id));
+          const prefilteredOut = toCreate.length - validRows.length;
+
+          if (validRows.length) {
+            try {
+              const valsArr = validRows.map(t => t.vals);
+              const newIds = await odoo(apiKey, 'product.supplierinfo', 'create', [valsArr]);
+              const idsArr = Array.isArray(newIds) ? newIds : [newIds];
+              validRows.forEach((t, i) => {
+                created.push({ ...t.hint, supplierinfo_id: idsArr[i] });
+              });
+            } catch (e) {
+              // Batch failed — try per-row to isolate which record Odoo is rejecting
+              for (const t of validRows) {
+                try {
+                  const newId = await odoo(apiKey, 'product.supplierinfo', 'create', [t.vals]);
+                  created.push({ ...t.hint, supplierinfo_id: newId });
+                } catch (inner) {
+                  failed.push({ ...t.hint, reason: inner.message.slice(0, 200) });
+                }
+              }
+            }
+          }
+          if (prefilteredOut) {
+            failed.push({ reason: `${prefilteredOut} rows filtered — partner or template archived/deleted` });
           }
         } else if (dry_run) {
           toCreate.forEach(t => created.push({ ...t.hint, dry_run: true }));
