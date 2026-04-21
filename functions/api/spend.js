@@ -1096,7 +1096,7 @@ export async function onRequest(context) {
             order: 'invoice_date desc', limit: 500 }),
       ]);
 
-      // Step 3 — batched attachment counts per model
+      // Step 3a — batched Odoo attachment counts (covers bills uploaded outside this UI)
       const countAtt = async (resModel, ids) => {
         if (!ids.length) return {};
         const atts = await odoo(apiKey, 'ir.attachment', 'search_read',
@@ -1112,23 +1112,72 @@ export async function onRequest(context) {
         countAtt('account.move',  bills.map(b => b.id)),
       ]);
 
+      // Step 3b — D1 bill registry (files we've tracked, with Drive URLs)
+      // key = `${kind}-${odoo_id}` → list of { drive_url, filename, uploaded_by, uploaded_at, size_kb }
+      const d1Atts = {};
+      if (DB) {
+        const kindToIds = {
+          PO: pos.map(p => p.id),
+          Expense: expenses.map(e => e.id),
+          Bill: bills.map(b => b.id),
+        };
+        for (const [kind, ids] of Object.entries(kindToIds)) {
+          if (!ids.length) continue;
+          try {
+            const placeholders = ids.map(() => '?').join(',');
+            const res = await DB.prepare(`
+              SELECT entry_odoo_id, drive_file_id, drive_view_url, drive_folder_path,
+                     filename, file_size_kb, uploaded_by_pin, uploaded_by_name, uploaded_at
+              FROM bill_attachments
+              WHERE entry_kind = ? AND entry_odoo_id IN (${placeholders})
+              ORDER BY uploaded_at DESC
+            `).bind(kind, ...ids).all();
+            for (const row of res?.results || []) {
+              const key = `${kind}-${row.entry_odoo_id}`;
+              if (!d1Atts[key]) d1Atts[key] = [];
+              d1Atts[key].push({
+                drive_file_id: row.drive_file_id,
+                drive_url: row.drive_view_url,
+                drive_path: row.drive_folder_path,
+                filename: row.filename,
+                size_kb: row.file_size_kb,
+                uploaded_by: row.uploaded_by_name,
+                uploaded_by_pin: row.uploaded_by_pin,
+                uploaded_at: row.uploaded_at,
+              });
+            }
+          } catch (e) { console.error(`D1 fetch fail for ${kind}:`, e.message); }
+        }
+      }
+
       // Step 4 — normalize to unified row shape
       const companyToBrand = { 1: 'HQ', 2: 'HE', 3: 'NCH' };
-      const toRow = (kind, base, attMap) => ({
-        kind, odoo_id: base.odoo_id, date: base.date,
-        vendor: base.vendor,
-        item_or_ref: base.item_or_ref,
-        brand: companyToBrand[base.company_id] || '?',
-        amount: base.amount,
-        state: base.state,
-        has_attachment: (attMap[base.odoo_id] || 0) > 0,
-        attachment_count: attMap[base.odoo_id] || 0,
-        recorded_by_user_id: base.recorded_by_user_id || null,
-        recorded_by_name:    base.recorded_by_name    || null,
-        recorded_by_pin:     base.recorded_by_pin     || null,
-        notes: base.notes || '',
-        bill_ref: base.bill_ref || '',
-      });
+      const toRow = (kind, base, attMap) => {
+        const tracked = d1Atts[`${kind}-${base.odoo_id}`] || [];
+        const odooCount = attMap[base.odoo_id] || 0;
+        // Show total of what we know: tracked files (with Drive URLs) + any
+        // Odoo-side attachments we didn't record (uploaded via Odoo UI).
+        // The UI uses `attachments` array for the list; count for the badge.
+        const trackedCount = tracked.length;
+        const externalInOdoo = Math.max(0, odooCount - trackedCount);
+        return {
+          kind, odoo_id: base.odoo_id, date: base.date,
+          vendor: base.vendor,
+          item_or_ref: base.item_or_ref,
+          brand: companyToBrand[base.company_id] || '?',
+          amount: base.amount,
+          state: base.state,
+          has_attachment: trackedCount > 0 || odooCount > 0,
+          attachment_count: Math.max(trackedCount, odooCount),
+          attachments: tracked,                // detailed list with Drive URLs
+          odoo_only_count: externalInOdoo,     // files in Odoo not tracked here
+          recorded_by_user_id: base.recorded_by_user_id || null,
+          recorded_by_name:    base.recorded_by_name    || null,
+          recorded_by_pin:     base.recorded_by_pin     || null,
+          notes: base.notes || '',
+          bill_ref: base.bill_ref || '',
+        };
+      };
 
       const rows = [
         ...pos.map(p => toRow('PO', {
@@ -1187,7 +1236,9 @@ export async function onRequest(context) {
 
     // ─────────────────────────────────────────────────────────────────────
     // ATTACH BILL — upload bill photo to an existing PO / Expense / Bill
-    // Reuses existing saveAttachment + syncToDrive. Purely additive.
+    // 1. Attach to Odoo (ir.attachment)
+    // 2. Send to Google Drive via webhook → structured folder tree
+    // 3. Record in D1 bill_attachments with Drive view URL → UI source of truth
     // ─────────────────────────────────────────────────────────────────────
     if (action === 'attach-bill' && request.method === 'POST') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
@@ -1204,20 +1255,74 @@ export async function onRequest(context) {
       const resModel = MODEL[kind];
       if (!resModel) return json({ success: false, error: 'kind must be PO|Expense|Bill' }, 400);
 
-      const attId = await saveAttachment(apiKey, attachment, resModel, parseInt(odoo_id, 10));
-      if (!attId) return json({ success: false, error: 'Attachment save failed' }, 500);
+      const entryDate = body.date || new Date().toISOString().slice(0, 10);
+      const brand = body.brand || 'HQ';
+      const entryAmount = body.amount != null ? parseFloat(body.amount) : null;
+      const idInt = parseInt(odoo_id, 10);
 
-      const driveFileId = await syncToDrive(env, {
-        date: body.date || new Date().toISOString().slice(0, 10),
-        company: body.brand || 'HQ',
-        category: `${kind}-bill`,
-        product: `${kind} #${odoo_id}`,
-        recorded_by: user.name,
-        filename: attachment.name || 'bill.jpg',
-        mimetype: attachment.mimetype || 'image/jpeg',
-        data_b64: attachment.data_b64,
+      // Step 1 — Odoo attachment (always attempt; may fail if Odoo rejects)
+      let attId = null;
+      try {
+        attId = await saveAttachment(apiKey, attachment, resModel, idInt);
+      } catch (e) {
+        console.error('Odoo attach fail:', e.message);
+      }
+
+      // Step 2 — Drive sync (inline so we can capture both file_id AND view_url)
+      let driveInfo = null;
+      if (env?.DRIVE_WEBHOOK_URL) {
+        try {
+          const driveRes = await fetch(env.DRIVE_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              date: entryDate,
+              company: brand,
+              category: `${kind}-bill`,
+              product: `${kind} #${odoo_id}`,
+              amount: entryAmount,
+              recorded_by: user.name,
+              filename: attachment.name || 'bill.jpg',
+              mimetype: attachment.mimetype || 'image/jpeg',
+              data_b64: attachment.data_b64,
+            }),
+          });
+          driveInfo = await driveRes.json().catch(() => null);
+          if (driveInfo && !driveInfo.success) driveInfo = null;
+        } catch (e) { console.error('Drive sync fail:', e.message); }
+      }
+
+      // If BOTH failed we cannot claim the upload worked
+      if (!attId && !driveInfo?.file_id) {
+        return json({ success: false, error: 'Both Odoo and Drive save failed' }, 500);
+      }
+
+      // Step 3 — D1 registry (source of truth for UI)
+      const fileSizeKb = Math.round(((attachment.data_b64 || '').length * 3 / 4) / 1024);
+      try {
+        if (DB) {
+          await DB.prepare(`
+            INSERT INTO bill_attachments
+              (entry_kind, entry_odoo_id, brand, entry_date, entry_amount,
+               odoo_attachment_id, drive_file_id, drive_view_url, drive_folder_path,
+               filename, mimetype, file_size_kb, uploaded_by_pin, uploaded_by_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            kind, idInt, brand, entryDate, entryAmount,
+            attId, driveInfo?.file_id || null, driveInfo?.view_url || null, driveInfo?.path || null,
+            attachment.name || 'bill.jpg', attachment.mimetype || 'image/jpeg',
+            fileSizeKb, String(pin), user.name
+          ).run();
+        }
+      } catch (e) { console.error('D1 bill_attachments insert fail:', e.message); }
+
+      return json({
+        success: true,
+        attachment_id: attId,
+        drive_file_id: driveInfo?.file_id || null,
+        drive_view_url: driveInfo?.view_url || null,
+        drive_path: driveInfo?.path || null,
       });
-      return json({ success: true, attachment_id: attId, drive_file_id: driveFileId });
     }
 
     // ─────────────────────────────────────────────────────────────────────

@@ -94,6 +94,19 @@
   .att-thumb { display: inline-block; margin: 4px 6px 0 0; }
   .att-thumb img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
   .att-thumb a { font-size: 10px; color: var(--text-dim); display: block; margin-top: 2px; text-align: center; }
+  /* Uploaded bill list */
+  .att-list { display: flex; flex-direction: column; gap: 6px; }
+  .att-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .att-item .att-name { font-size: 13px; font-weight: 600; word-break: break-word; }
+  .att-item .att-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .att-item .att-drive-btn { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.35); color: #34d399;
+    padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap;
+    text-decoration: none; display: inline-block; }
+  .att-item .att-drive-btn:hover { background: rgba(16,185,129,0.18); }
+  .att-item .att-drive-btn.na { background: transparent; border-color: var(--border); color: var(--text-dim); cursor: default; }
+  .att-external-hint { font-size: 11px; color: var(--text-dim); padding: 8px 10px; background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.25); border-radius: 6px; margin-top: 8px; }
   .empty-state { padding: 40px 20px; text-align: center; color: var(--text-dim); }
 
   /* Skeleton */
@@ -522,11 +535,41 @@ function openDrawer(idx) {
     <div class="k">Recorded by</div><div class="v">${esc(r.recorded_by_name || '—')}${r.recorded_by_pin ? ` <span class="recorded-by">(PIN ${esc(r.recorded_by_pin)})</span>` : ''}</div>
   `;
 
-  // Attachments
-  document.getElementById('d-atts').innerHTML = r.has_attachment
-    ? `<span class="chip bill-yes">✓ ${r.attachment_count} attachment${r.attachment_count === 1 ? '' : 's'} attached</span>
-       <div class="mute" style="font-size:11px; margin-top:4px;">Open in Odoo to view images.</div>`
-    : `<span class="chip bill-no">⚠ No bill attached yet</span>`;
+  // Attachments — render uploaded bills with Drive links
+  const trackedAtts = r.attachments || [];
+  const odooOnly = r.odoo_only_count || 0;
+  const attBox = document.getElementById('d-atts');
+  if (trackedAtts.length === 0 && odooOnly === 0) {
+    attBox.innerHTML = `<span class="chip bill-no">⚠ No bill uploaded yet</span>`;
+  } else {
+    let html = '';
+    if (trackedAtts.length) {
+      html += `<div class="att-list">`;
+      for (const a of trackedAtts) {
+        const uploadedAt = a.uploaded_at ? fmtDateTime(a.uploaded_at) : '';
+        const sizeText = a.size_kb ? ` · ${a.size_kb} KB` : '';
+        const driveBtn = a.drive_url
+          ? `<a href="${esc(a.drive_url)}" target="_blank" rel="noopener" class="att-drive-btn" title="Open in Google Drive">Drive ↗</a>`
+          : `<span class="att-drive-btn na" title="Drive webhook not configured">No Drive link</span>`;
+        html += `
+          <div class="att-item">
+            <div style="flex:1; min-width:0;">
+              <div class="att-name">${esc(a.filename || 'bill.jpg')}</div>
+              <div class="att-meta">by ${esc(a.uploaded_by || '—')}${uploadedAt ? ' · ' + uploadedAt : ''}${sizeText}</div>
+            </div>
+            ${driveBtn}
+          </div>`;
+      }
+      html += `</div>`;
+    }
+    if (odooOnly > 0) {
+      html += `<div class="att-external-hint">
+        ⓘ ${odooOnly} additional attachment${odooOnly > 1 ? 's' : ''} in Odoo but not tracked here
+        (uploaded via Odoo UI or before this ledger existed — still visible in Odoo).
+      </div>`;
+    }
+    attBox.innerHTML = html;
+  }
 
   document.getElementById('d-notes').value = r.notes || '';
   document.getElementById('d-notes-status').textContent = '';
@@ -608,13 +651,24 @@ async function uploadBill(input) {
         odoo_id: STATE.currentRow.odoo_id,
         brand: STATE.currentRow.brand,
         date: STATE.currentRow.date,
+        amount: STATE.currentRow.amount,
         attachment: compressed,
       }),
     }).then(x => x.json());
     if (!r.success) throw new Error(r.error || 'Upload failed');
-    // Local update
+    // Local update — also append to attachments list so drawer shows it immediately
     STATE.currentRow.has_attachment = true;
     STATE.currentRow.attachment_count = (STATE.currentRow.attachment_count || 0) + 1;
+    if (!STATE.currentRow.attachments) STATE.currentRow.attachments = [];
+    STATE.currentRow.attachments.unshift({
+      drive_file_id: r.drive_file_id || null,
+      drive_url: r.drive_view_url || null,
+      filename: file.name,
+      size_kb: Math.round(file.size / 1024),
+      uploaded_by: USER?.name || 'You',
+      uploaded_by_pin: PIN,
+      uploaded_at: new Date().toISOString(),
+    });
     // Mark row to pulse-highlight on next render so user sees what updated
     STATE.pulseOdooId = STATE.currentRow.odoo_id;
     STATE.pulseKind = STATE.currentRow.kind;
@@ -745,6 +799,15 @@ function fmtDate(s) {
   const d = new Date(s);
   if (isNaN(d)) return s;
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+}
+function fmtDateTime(s) {
+  if (!s) return '—';
+  // D1 CURRENT_TIMESTAMP format is "YYYY-MM-DD HH:MM:SS" (UTC) — append Z for correct parse
+  const normalized = s.includes('T') ? s : s.replace(' ', 'T') + 'Z';
+  const d = new Date(normalized);
+  if (isNaN(d)) return s;
+  return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata',
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
 }
 </script>
 
