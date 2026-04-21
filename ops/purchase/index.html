@@ -813,9 +813,18 @@ async function submitForm() {
 // ═══════════════════════════════════════════════════════════════
 async function openCat1() {
   cart = [];
+  bulkItems.clear();
+  bulkVendor = null;
   document.getElementById('cat1-screen').classList.remove('hidden');
   document.getElementById('cat1-brand-tag').textContent = BRAND;
   document.getElementById('rm-search').value = '';
+  // Always start in search mode — previous session state shouldn't bleed in
+  document.getElementById('btn-cat1-search').classList.add('active');
+  document.getElementById('btn-cat1-bulk').classList.remove('active');
+  document.getElementById('cat1-search-mode').classList.remove('hidden');
+  document.getElementById('cat1-bulk-mode').classList.add('hidden');
+  const bulkFilter = document.getElementById('bulk-filter');
+  if (bulkFilter) bulkFilter.value = '';
   document.getElementById('rm-product-list').innerHTML = '<div class="mute">Loading catalog…</div>';
 
   try {
@@ -1208,15 +1217,27 @@ let bulkVendor = null;          // { id, name } currently picked
 const bulkItems = new Map();    // product_id → { product, qty, price }
 
 function setCat1Mode(mode) {
+  // If the OTHER mode has unsaved items, confirm before clearing.
+  // Otherwise user can accidentally create two POs (one from each mode) on submit.
+  if (mode === 'bulk' && cart.length > 0) {
+    if (!confirm(`Switching to Bulk mode will clear your ${cart.length} search-cart item${cart.length===1?'':'s'}. Continue?`)) return;
+    cart = [];
+    renderCart();  // hides the cart bar since cart is now empty
+  } else if (mode === 'search' && bulkItems.size > 0) {
+    if (!confirm(`Switching to Search mode will clear your ${bulkItems.size} bulk item${bulkItems.size===1?'':'s'}. Continue?`)) return;
+    bulkItems.clear();
+    bulkVendor = null;
+  }
   const search = document.getElementById('cat1-search-mode');
   const bulk   = document.getElementById('cat1-bulk-mode');
   document.getElementById('btn-cat1-search').classList.toggle('active', mode === 'search');
   document.getElementById('btn-cat1-bulk').classList.toggle('active', mode === 'bulk');
   search.classList.toggle('hidden', mode !== 'search');
   bulk.classList.toggle('hidden', mode !== 'bulk');
-  if (mode === 'bulk') {
-    populateBulkVendorPicker();
-  }
+  // Hide the search-mode cart bar when in bulk mode (it covers bulk's submit button otherwise)
+  const cartBar = document.getElementById('rm-cart-bar');
+  if (cartBar) cartBar.classList.toggle('hidden', mode !== 'search' || cart.length === 0);
+  if (mode === 'bulk') populateBulkVendorPicker();
 }
 
 function populateBulkVendorPicker() {

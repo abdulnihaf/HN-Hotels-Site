@@ -863,14 +863,17 @@ async function savePOLines() {
       errors.push(`${l.product_name}: ${e.message}`);
     }
   }
+  // Always reload from server — even on partial failure — so _orig_* stays
+  // in sync with what Odoo actually has. Otherwise a second save would
+  // re-submit already-applied edits.
+  await loadPOLines(STATE.currentRow);
   if (errors.length) {
-    status.textContent = `✗ ${edits} edited, ${deletes} deleted, ${errors.length} failed: ${errors[0]}`;
+    status.textContent = `${edits+deletes>0?'✓ '+(edits+' edited, '+deletes+' deleted — '):''}✗ ${errors.length} failed: ${errors[0].slice(0,100)}`;
     status.style.color = '#f87171';
     return;
   }
-  status.textContent = `✓ ${edits} edited, ${deletes} deleted. Reloading…`;
+  status.textContent = `✓ ${edits} edited, ${deletes} deleted.`;
   status.style.color = '#34d399';
-  await loadPOLines(STATE.currentRow);
   // Refresh the ledger row's amount in the table — keep drawer open with the
   // updated row. load() replaces STATE.rows, so re-point currentRow at the
   // fresh object with the same kind+odoo_id so header totals stay accurate.
