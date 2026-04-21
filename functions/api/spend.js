@@ -1225,42 +1225,38 @@ export async function onRequest(context) {
         countAtt('account.move',  bills.map(b => b.id)),
       ]);
 
-      // Step 3b — D1 bill registry (files we've tracked, with Drive URLs)
-      // key = `${kind}-${odoo_id}` → list of { drive_url, filename, uploaded_by, uploaded_at, size_kb }
+      // Step 3b — D1 bill registry (files we've tracked, with Drive URLs).
+      // IMPORTANT: D1 caps prepared-statement parameters around 100, so an
+      // `entry_odoo_id IN (?,?,...)` with hundreds of ids fails silently and
+      // leaves d1Atts empty (producing the "attachments in Odoo not tracked
+      // here" fallback even when they ARE tracked). Fix: single range-scan
+      // query over bill_attachments filtered by entry_date, then group
+      // client-side by (kind, odoo_id).
       const d1Atts = {};
       if (DB) {
-        const kindToIds = {
-          PO: pos.map(p => p.id),
-          Expense: expenses.map(e => e.id),
-          Bill: bills.map(b => b.id),
-        };
-        for (const [kind, ids] of Object.entries(kindToIds)) {
-          if (!ids.length) continue;
-          try {
-            const placeholders = ids.map(() => '?').join(',');
-            const res = await DB.prepare(`
-              SELECT entry_odoo_id, drive_file_id, drive_view_url, drive_folder_path,
-                     filename, file_size_kb, uploaded_by_pin, uploaded_by_name, uploaded_at
-              FROM bill_attachments
-              WHERE entry_kind = ? AND entry_odoo_id IN (${placeholders})
-              ORDER BY uploaded_at DESC
-            `).bind(kind, ...ids).all();
-            for (const row of res?.results || []) {
-              const key = `${kind}-${row.entry_odoo_id}`;
-              if (!d1Atts[key]) d1Atts[key] = [];
-              d1Atts[key].push({
-                drive_file_id: row.drive_file_id,
-                drive_url: row.drive_view_url,
-                drive_path: row.drive_folder_path,
-                filename: row.filename,
-                size_kb: row.file_size_kb,
-                uploaded_by: row.uploaded_by_name,
-                uploaded_by_pin: row.uploaded_by_pin,
-                uploaded_at: row.uploaded_at,
-              });
-            }
-          } catch (e) { console.error(`D1 fetch fail for ${kind}:`, e.message); }
-        }
+        try {
+          const res = await DB.prepare(`
+            SELECT entry_kind, entry_odoo_id, drive_file_id, drive_view_url, drive_folder_path,
+                   filename, file_size_kb, uploaded_by_pin, uploaded_by_name, uploaded_at
+            FROM bill_attachments
+            WHERE entry_date BETWEEN ? AND ?
+            ORDER BY uploaded_at DESC
+          `).bind(from, to).all();
+          for (const row of res?.results || []) {
+            const key = `${row.entry_kind}-${row.entry_odoo_id}`;
+            if (!d1Atts[key]) d1Atts[key] = [];
+            d1Atts[key].push({
+              drive_file_id: row.drive_file_id,
+              drive_url: row.drive_view_url,
+              drive_path: row.drive_folder_path,
+              filename: row.filename,
+              size_kb: row.file_size_kb,
+              uploaded_by: row.uploaded_by_name,
+              uploaded_by_pin: row.uploaded_by_pin,
+              uploaded_at: row.uploaded_at,
+            });
+          }
+        } catch (e) { console.error('D1 bill_attachments fetch fail:', e.message); }
       }
 
       // Step 4 — normalize to unified row shape
