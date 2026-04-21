@@ -382,6 +382,14 @@ let CURRENT_CAT = null;
 let MODE = 'live';
 let LAST_HISTORICAL_DATE = '';
 
+// ── IST-aware "today" helper ──
+// `toLocaleDateString('en-CA', { timeZone:'Asia/Kolkata' })` returns YYYY-MM-DD
+// in Bangalore local time, so late-night entries don't get bucketed to yesterday
+// due to UTC rollover (which used to happen with new Date().toISOString()).
+function todayIST() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Mode toggle — Live vs Historical
 // ═══════════════════════════════════════════════════════════════
@@ -397,7 +405,7 @@ function setMode(m) {
     // Seed with last historical date if set
     const di = document.getElementById('rm-hist-date');
     if (m === 'historical' && di && !di.value) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayIST();
       di.value = LAST_HISTORICAL_DATE || '';
       di.max = today;
     }
@@ -457,10 +465,24 @@ async function verifyPin() {
 }
 
 function logout() {
-  PIN = ''; USER = null; BRAND = null; CURRENT_CAT = null; cart = [];
+  // Full in-memory reset so the next user on a shared device starts clean
+  PIN = ''; USER = null; BRAND = null; CURRENT_CAT = null;
+  MODE = 'live'; LAST_HISTORICAL_DATE = '';
+  cart = [];
+  rmCatalog = { products: [], vendors: [], recentPOs: [] };
+  variantSearch = { q: '', results: [], timer: null };
+  vendorPickerCtx = null;
+  vendorKnownOdooIds = new Set();
+  _newProductForCat = null;
+  _uomsCache = null;
+  _newVendorContext = 'generic';
   pinInput.value = '';
   document.getElementById('pin-error').textContent = '';
   ['home-screen','form-screen','cat1-screen','cat15-screen'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  // Reset mode toggle visuals back to Live
+  document.getElementById('btn-mode-live')?.classList.add('active');
+  document.getElementById('btn-mode-hist')?.classList.remove('active');
+  document.getElementById('mode-banner-hist')?.classList.add('hidden');
   document.getElementById('pin-screen').classList.remove('hidden');
   pinInput.focus();
 }
@@ -621,8 +643,8 @@ async function buildGenericForm(cat) {
     `);
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const todayHuman = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const today = todayIST();
+  const todayHuman = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
 
   if (MODE === 'live') {
     fields.push(`
@@ -664,6 +686,11 @@ async function buildGenericForm(cat) {
       </select>
     </div>
     <div class="row">
+      <label>Bill photo <span class="mute" style="font-weight:400">(optional — recommended)</span></label>
+      <input id="f-photo" type="file" accept="image/*" capture="environment" onchange="previewPhoto(this, 'f-photo-preview')">
+      <div id="f-photo-preview"></div>
+    </div>
+    <div class="row">
       <label>Notes (optional)</label>
       <textarea id="f-notes" rows="2" placeholder="short context"></textarea>
     </div>
@@ -684,7 +711,7 @@ async function submitForm() {
     if (MODE === 'historical') {
       chosenDate = document.getElementById('f-date')?.value;
       if (!chosenDate) throw new Error('Pick the original bill date');
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayIST();
       if (chosenDate > today) throw new Error('Date cannot be in the future');
     }
 
@@ -706,6 +733,10 @@ async function submitForm() {
       body.vendor_name = document.getElementById('f-vendor-name')?.value || '';
       body.bill_ref = document.getElementById('f-bill-ref')?.value || '';
     }
+    // Bill photo — optional. Compressed client-side, attached to Odoo +
+    // saved to Google Drive + logged in D1 bill_attachments (for the ledger UI).
+    const photo = await readPhoto('f-photo');
+    if (photo) body.attachment = photo;
     const r = await fetch(`${API}?action=record`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -1049,7 +1080,7 @@ async function submitRmPurchase() {
     if (!historicalDate || !/^\d{4}-\d{2}-\d{2}$/.test(historicalDate)) {
       return toast('Pick the original PO date at the top before submitting', 'err');
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIST();
     if (historicalDate > today) return toast('Date cannot be in the future', 'err');
   }
 
@@ -1120,7 +1151,7 @@ async function openCat15() {
   pill.className = `mode-pill ${MODE === 'live' ? 'live' : 'hist'}`;
   pill.textContent = MODE === 'live' ? '● LIVE' : '● HISTORICAL';
   document.getElementById('cat15-date').value = MODE === 'live'
-    ? new Date().toISOString().slice(0, 10)
+    ? todayIST()
     : (LAST_HISTORICAL_DATE || '');
   document.getElementById('cat15-ref').value = '';
   document.getElementById('cat15-amount').value = '';

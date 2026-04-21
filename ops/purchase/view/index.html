@@ -30,11 +30,16 @@
   .quick-chip.warn.active { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.5); color: #f87171; }
 
   .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
-  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; transition: border-color 0.1s, background 0.1s; }
   .kpi .v { font-size: 20px; font-weight: 700; line-height: 1.1; }
   .kpi .l { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; font-weight: 600; }
   .kpi.warn .v { color: #f87171; }
   .kpi.good .v { color: #34d399; }
+  .kpi.clickable { cursor: pointer; }
+  .kpi.clickable:hover { border-color: var(--text-dim); background: rgba(255,255,255,0.03); }
+  .kpi.clickable:focus-visible { outline: 2px solid var(--accent,#d4a44c); outline-offset: 2px; }
+  .kpi.clickable.active.warn { border-color: rgba(239,68,68,0.55); background: rgba(239,68,68,0.10); }
+  .kpi.clickable.active.good { border-color: rgba(16,185,129,0.55); background: rgba(16,185,129,0.10); }
 
   /* Table */
   .tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
@@ -284,7 +289,7 @@
 // ── State ──────────────────────────────────────────────────────
 const API = '/api/spend';
 const ODOO_BASE = 'https://odoo.hnhotels.in';
-const FRESH_STATE = () => ({ rows: [], totals: null, missingOnly: false, currentRow: null, quickUploadMode: false, isLoading: false, lastFocusedRow: null });
+const FRESH_STATE = () => ({ rows: [], totals: null, missingOnly: false, withBillOnly: false, currentRow: null, quickUploadMode: false, isLoading: false, lastFocusedRow: null });
 let PIN = '';
 let USER = null;
 let STATE = FRESH_STATE();
@@ -367,6 +372,13 @@ function updateChipActive() {
 }
 function toggleMissing() {
   STATE.missingOnly = !STATE.missingOnly;
+  if (STATE.missingOnly) STATE.withBillOnly = false;  // mutually exclusive
+  updateChipActive();
+  render();
+}
+function toggleWithBill() {
+  STATE.withBillOnly = !STATE.withBillOnly;
+  if (STATE.withBillOnly) STATE.missingOnly = false;  // mutually exclusive
   updateChipActive();
   render();
 }
@@ -375,6 +387,7 @@ function resetFilters() {
   document.getElementById('f-kind').value  = 'ALL';
   document.getElementById('f-search').value = '';
   STATE.missingOnly = false;
+  STATE.withBillOnly = false;
   setRangeDays(30);
 }
 
@@ -427,7 +440,8 @@ function render() {
   let rows = STATE.rows;
   if (kind  !== 'ALL') rows = rows.filter(r => r.kind === kind);
   if (brand !== 'ALL') rows = rows.filter(r => r.brand === brand);
-  if (STATE.missingOnly) rows = rows.filter(r => !r.has_attachment);
+  if (STATE.missingOnly)  rows = rows.filter(r => !r.has_attachment);
+  if (STATE.withBillOnly) rows = rows.filter(r =>  r.has_attachment);
   if (search) {
     rows = rows.filter(r => {
       const hay = [r.vendor?.name, r.item_or_ref, r.recorded_by_name, r.notes].filter(Boolean).join(' ').toLowerCase();
@@ -435,19 +449,42 @@ function render() {
     });
   }
 
-  // KPIs
+  // KPIs — the "Without Bill" / "With Bill" tiles are interactive filters.
+  // Counts are computed against the pre-bill-filter pool so the numbers
+  // stay meaningful (otherwise e.g. "With Bill" would always show 0 when
+  // the Missing filter is active).
+  const baseForBillCounts = (() => {
+    let s = STATE.rows;
+    if (kind  !== 'ALL') s = s.filter(r => r.kind === kind);
+    if (brand !== 'ALL') s = s.filter(r => r.brand === brand);
+    if (search) s = s.filter(r => {
+      const hay = [r.vendor?.name, r.item_or_ref, r.recorded_by_name, r.notes].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(search);
+    });
+    return s;
+  })();
   const totals = {
     count: rows.length,
     amount: rows.reduce((s, r) => s + (r.amount || 0), 0),
-    missing: rows.filter(r => !r.has_attachment).length,
-    withBill: rows.filter(r => r.has_attachment).length,
+    missing: baseForBillCounts.filter(r => !r.has_attachment).length,
+    withBill: baseForBillCounts.filter(r => r.has_attachment).length,
   };
   const kpiBox = document.getElementById('kpi-strip');
   kpiBox.innerHTML = `
     <div class="kpi"><div class="v">${totals.count}</div><div class="l">Entries</div></div>
     <div class="kpi"><div class="v">${fmtINR(totals.amount)}</div><div class="l">Total ₹</div></div>
-    <div class="kpi warn"><div class="v">${totals.missing}</div><div class="l">⚠ Without Bill</div></div>
-    <div class="kpi good"><div class="v">${totals.withBill}</div><div class="l">✓ With Bill</div></div>
+    <div class="kpi warn clickable ${STATE.missingOnly ? 'active' : ''}"
+         role="button" tabindex="0" aria-pressed="${STATE.missingOnly}"
+         title="Click to ${STATE.missingOnly ? 'clear' : 'show only'} entries without a bill"
+         onclick="toggleMissing()"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMissing();}">
+      <div class="v">${totals.missing}</div><div class="l">⚠ Without Bill</div></div>
+    <div class="kpi good clickable ${STATE.withBillOnly ? 'active' : ''}"
+         role="button" tabindex="0" aria-pressed="${STATE.withBillOnly}"
+         title="Click to ${STATE.withBillOnly ? 'clear' : 'show only'} entries with a bill"
+         onclick="toggleWithBill()"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleWithBill();}">
+      <div class="v">${totals.withBill}</div><div class="l">✓ With Bill</div></div>
   `;
 
   // Table
@@ -539,8 +576,18 @@ function openDrawer(idx) {
   const trackedAtts = r.attachments || [];
   const odooOnly = r.odoo_only_count || 0;
   const attBox = document.getElementById('d-atts');
+
+  // "Browse Drive folder for this day" — always useful.  Uses Drive's
+  // search URL with date + brand terms so the user lands in a view
+  // filtered to files named like "2026-04-13_..._NCH_...jpg".  Works
+  // as a fallback for legacy bills that pre-date D1 tracking.
+  const driveSearchQ = encodeURIComponent(`${r.date || ''} ${r.brand || ''}`.trim());
+  const driveFolderLink = driveSearchQ
+    ? `<a href="https://drive.google.com/drive/u/0/search?q=${driveSearchQ}" target="_blank" rel="noopener" class="att-drive-btn" title="Search Drive for files from this day + brand" style="margin-top:8px; display:inline-block;">📁 Browse Drive · ${r.date || 'today'} · ${r.brand || ''}</a>`
+    : '';
+
   if (trackedAtts.length === 0 && odooOnly === 0) {
-    attBox.innerHTML = `<span class="chip bill-no">⚠ No bill uploaded yet</span>`;
+    attBox.innerHTML = `<span class="chip bill-no">⚠ No bill uploaded yet</span>${driveFolderLink}`;
   } else {
     let html = '';
     if (trackedAtts.length) {
@@ -549,8 +596,8 @@ function openDrawer(idx) {
         const uploadedAt = a.uploaded_at ? fmtDateTime(a.uploaded_at) : '';
         const sizeText = a.size_kb ? ` · ${a.size_kb} KB` : '';
         const driveBtn = a.drive_url
-          ? `<a href="${esc(a.drive_url)}" target="_blank" rel="noopener" class="att-drive-btn" title="Open in Google Drive">Drive ↗</a>`
-          : `<span class="att-drive-btn na" title="Drive webhook not configured">No Drive link</span>`;
+          ? `<a href="${esc(a.drive_url)}" target="_blank" rel="noopener" class="att-drive-btn" title="Open this bill in Google Drive">Drive ↗</a>`
+          : `<a href="https://drive.google.com/drive/u/0/search?q=${driveSearchQ}" target="_blank" rel="noopener" class="att-drive-btn" title="Drive URL not stored — search by date + brand">Drive search ↗</a>`;
         html += `
           <div class="att-item">
             <div style="flex:1; min-width:0;">
@@ -563,11 +610,14 @@ function openDrawer(idx) {
       html += `</div>`;
     }
     if (odooOnly > 0) {
-      html += `<div class="att-external-hint">
-        ⓘ ${odooOnly} additional attachment${odooOnly > 1 ? 's' : ''} in Odoo but not tracked here
-        (uploaded via Odoo UI or before this ledger existed — still visible in Odoo).
-      </div>`;
+      const searchHref = `https://drive.google.com/drive/u/0/search?q=${driveSearchQ}`;
+      html += `<a href="${searchHref}" target="_blank" rel="noopener" class="att-external-hint" style="text-decoration:none; display:block;">
+        ⓘ ${odooOnly} additional attachment${odooOnly > 1 ? 's' : ''} in Odoo (uploaded before this ledger tracked them).
+        <span style="text-decoration:underline;">Search Drive for this day →</span>
+      </a>`;
     }
+    // Always offer the folder browse link too
+    html += driveFolderLink;
     attBox.innerHTML = html;
   }
 
@@ -615,7 +665,8 @@ function getFilteredRows() {
   let rows = STATE.rows;
   if (kind  !== 'ALL') rows = rows.filter(r => r.kind === kind);
   if (brand !== 'ALL') rows = rows.filter(r => r.brand === brand);
-  if (STATE.missingOnly) rows = rows.filter(r => !r.has_attachment);
+  if (STATE.missingOnly)  rows = rows.filter(r => !r.has_attachment);
+  if (STATE.withBillOnly) rows = rows.filter(r =>  r.has_attachment);
   if (search) rows = rows.filter(r => {
     const hay = [r.vendor?.name, r.item_or_ref, r.recorded_by_name, r.notes].filter(Boolean).join(' ').toLowerCase();
     return hay.includes(search);

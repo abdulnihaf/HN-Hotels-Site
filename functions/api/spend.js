@@ -111,6 +111,9 @@ async function saveAttachment(apiKey, attachment, res_model, res_id) {
 // ━━━ Drive sync helper ━━━
 // POSTs to Google Apps Script webhook so the bill photo lands in a dated,
 // company-scoped Drive folder. Silently skipped if DRIVE_WEBHOOK_URL is unset.
+// Returns { file_id, view_url, path } or null. Back-compat callers that
+// treat the return as a string (file_id) are preserved via driveFileId()
+// which unwraps the object.
 async function syncToDrive(env, meta) {
   if (!env || !env.DRIVE_WEBHOOK_URL) return null;
   if (!meta || !meta.data_b64) return null;
@@ -121,10 +124,46 @@ async function syncToDrive(env, meta) {
       body: JSON.stringify(meta),
     });
     const out = await r.json().catch(() => null);
-    return out?.file_id || null;
+    if (!out || out.success === false) return null;
+    return { file_id: out.file_id || null, view_url: out.view_url || null, path: out.path || null };
   } catch (e) {
     console.error('drive sync fail:', e.message);
     return null;
+  }
+}
+// Back-compat for response payloads that emit drive_file_id as a scalar.
+function driveFileId(driveInfo) { return driveInfo?.file_id || null; }
+
+// ━━━ Bill attachment registry (D1) ━━━
+// Write-through log for every bill/receipt photo so the ledger UI can
+// reliably show "what's been uploaded" with clickable Drive links —
+// independent of Odoo ACL on ir.attachment.
+async function logBillAttachment(DB, params) {
+  if (!DB) return false;
+  const {
+    kind, odoo_id, brand, entry_date, entry_amount,
+    odoo_attachment_id, drive_file_id, drive_view_url, drive_path,
+    filename, mimetype, data_b64, pin, user_name,
+  } = params;
+  const fileSizeKb = Math.round(((data_b64 || '').length * 3 / 4) / 1024);
+  try {
+    await DB.prepare(`
+      INSERT INTO bill_attachments
+        (entry_kind, entry_odoo_id, brand, entry_date, entry_amount,
+         odoo_attachment_id, drive_file_id, drive_view_url, drive_folder_path,
+         filename, mimetype, file_size_kb, uploaded_by_pin, uploaded_by_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      kind, parseInt(odoo_id, 10), brand || null, entry_date || null,
+      entry_amount != null ? parseFloat(entry_amount) : null,
+      odoo_attachment_id || null, drive_file_id || null, drive_view_url || null, drive_path || null,
+      filename || 'bill.jpg', mimetype || 'image/jpeg',
+      fileSizeKb, String(pin || ''), user_name || null
+    ).run();
+    return true;
+  } catch (e) {
+    console.error('bill_attachments insert fail:', e.message);
+    return false;
   }
 }
 
@@ -910,9 +949,11 @@ export async function onRequest(context) {
 
         const expenseId = await odoo(apiKey, 'hr.expense', 'create', [expenseVals]);
 
-        // Optional bill photo — write to Odoo AND to Drive
+        // Optional bill photo — write to Odoo AND to Drive AND to D1 bill_attachments.
+        // Only the D1 write makes the bill visible in the ledger UI (/ops/purchase/view/)
+        // so this is the source of truth for "what has a bill attached".
         const attId = await saveAttachment(apiKey, body.attachment, 'hr.expense', expenseId);
-        const driveFileId = await syncToDrive(env, body.attachment ? {
+        const driveInfo = await syncToDrive(env, body.attachment ? {
           date: customDate,
           company: brand,
           category: cat.label,
@@ -923,6 +964,17 @@ export async function onRequest(context) {
           mimetype: body.attachment.mimetype,
           data_b64: body.attachment.data_b64,
         } : null);
+        if (body.attachment) {
+          await logBillAttachment(DB, {
+            kind: 'Expense', odoo_id: expenseId, brand,
+            entry_date: customDate, entry_amount: parseFloat(amount),
+            odoo_attachment_id: attId,
+            drive_file_id: driveInfo?.file_id, drive_view_url: driveInfo?.view_url, drive_path: driveInfo?.path,
+            filename: body.attachment.name, mimetype: body.attachment.mimetype,
+            data_b64: body.attachment.data_b64, pin, user_name: user.name,
+          });
+        }
+        const driveFile = driveFileId(driveInfo);
 
         // Mirror to D1 for fast reads (matches existing business_expenses schema)
         if (DB) {
@@ -945,7 +997,8 @@ export async function onRequest(context) {
           ).run().catch(e => console.error('mirror fail:', e.message));
         }
 
-        return json({ success: true, odoo_id: expenseId, backend: 'hr.expense', category: cat.label, attachment_id: attId, drive_file_id: driveFileId });
+        return json({ success: true, odoo_id: expenseId, backend: 'hr.expense', category: cat.label,
+          attachment_id: attId, drive_file_id: driveFile, drive_view_url: driveInfo?.view_url || null });
       }
 
       // Cat 14 → account.move direct vendor bill
@@ -979,7 +1032,18 @@ export async function onRequest(context) {
           mimetype: body.attachment.mimetype,
           data_b64: body.attachment.data_b64,
         } : null);
-        return json({ success: true, odoo_id: moveId, backend: 'account.move', category: cat.label, attachment_id: attId14, drive_file_id: drive14 });
+        if (body.attachment) {
+          await logBillAttachment(DB, {
+            kind: 'Bill', odoo_id: moveId, brand,
+            entry_date: customInvDate, entry_amount: parseFloat(amount),
+            odoo_attachment_id: attId14,
+            drive_file_id: drive14?.file_id, drive_view_url: drive14?.view_url, drive_path: drive14?.path,
+            filename: body.attachment.name, mimetype: body.attachment.mimetype,
+            data_b64: body.attachment.data_b64, pin, user_name: user.name,
+          });
+        }
+        return json({ success: true, odoo_id: moveId, backend: 'account.move', category: cat.label,
+          attachment_id: attId14, drive_file_id: driveFileId(drive14), drive_view_url: drive14?.view_url || null });
       }
 
       return json({ success: false, error: `Backend ${cat.backend} not implemented yet` }, 501);
@@ -1817,8 +1881,9 @@ export async function onRequest(context) {
       };
       const moveId = await odoo(apiKey, 'account.move', 'create', [moveVals]);
       const attIdPo = await saveAttachment(apiKey, body.attachment, 'account.move', moveId);
+      const effectiveDate = bill_date || new Date().toISOString().slice(0, 10);
       const drivePo = await syncToDrive(env, body.attachment ? {
-        date: bill_date || new Date().toISOString().slice(0, 10),
+        date: effectiveDate,
         company: brand,
         category: 'Bill from PO',
         product: `Bill ${bill_ref || po[0].name}`,
@@ -1828,7 +1893,18 @@ export async function onRequest(context) {
         mimetype: body.attachment.mimetype,
         data_b64: body.attachment.data_b64,
       } : null);
-      return json({ success: true, odoo_id: moveId, po_name: po[0].name, backend: 'account.move', attachment_id: attIdPo, drive_file_id: drivePo });
+      if (body.attachment) {
+        await logBillAttachment(DB, {
+          kind: 'Bill', odoo_id: moveId, brand,
+          entry_date: effectiveDate, entry_amount: parseFloat(amount),
+          odoo_attachment_id: attIdPo,
+          drive_file_id: drivePo?.file_id, drive_view_url: drivePo?.view_url, drive_path: drivePo?.path,
+          filename: body.attachment.name, mimetype: body.attachment.mimetype,
+          data_b64: body.attachment.data_b64, pin, user_name: user.name,
+        });
+      }
+      return json({ success: true, odoo_id: moveId, po_name: po[0].name, backend: 'account.move',
+        attachment_id: attIdPo, drive_file_id: driveFileId(drivePo), drive_view_url: drivePo?.view_url || null });
     }
 
     // ── List confirmed POs for cat 15 picker ───────────────────────────────
