@@ -134,6 +134,33 @@ async function syncToDrive(env, meta) {
 // Back-compat for response payloads that emit drive_file_id as a scalar.
 function driveFileId(driveInfo) { return driveInfo?.file_id || null; }
 
+// ━━━ Structured bill filename ━━━
+// Every bill photo is RENAMED server-side to a consistent, scannable pattern
+// so Zoya (and anyone browsing Drive / Odoo) can identify it at a glance.
+//   2026-04-16_PO-bill_NCH_Prabhu-Buffalo-Milk-Vendor_4400_Zoya.jpg
+// Matches the Apps Script sanitize rules so Drive + Odoo + D1 all carry
+// the same filename.  User's original upload name (e.g. "WhatsApp Image…")
+// is discarded at write time — we keep only what's useful for retrieval.
+function sanitizeBillPart(s, max) {
+  const out = String(s || '')
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[,()]/g, '')
+    .replace(/[·—–]/g, '-');
+  return max ? out.slice(0, max) : out;
+}
+function buildBillFilename({ date, category, brand, product, amount, recorded_by, ext = 'jpg' }) {
+  const parts = [
+    date || new Date().toISOString().slice(0, 10),
+    sanitizeBillPart(category || 'bill', 30),
+    String(brand || 'HQ').toUpperCase(),
+    sanitizeBillPart(product || 'misc', 40),
+    amount != null && !isNaN(amount) ? String(Math.round(Number(amount))) : '0',
+    sanitizeBillPart(recorded_by || 'unknown', 20),
+  ].filter(Boolean);
+  return parts.join('_') + '.' + ext.replace(/^\./, '');
+}
+
 // ━━━ Bill attachment registry (D1) ━━━
 // Write-through log for every bill/receipt photo so the ledger UI can
 // reliably show "what's been uploaded" with clickable Drive links —
@@ -952,6 +979,17 @@ export async function onRequest(context) {
         // Optional bill photo — write to Odoo AND to Drive AND to D1 bill_attachments.
         // Only the D1 write makes the bill visible in the ledger UI (/ops/purchase/view/)
         // so this is the source of truth for "what has a bill attached".
+        // Rename to structured pattern before any write so Odoo + Drive + D1 all carry
+        // the same scannable name (not the original "WhatsApp Image..." filename).
+        if (body.attachment) {
+          body.attachment = {
+            ...body.attachment,
+            name: buildBillFilename({
+              date: customDate, category: cat.label, brand,
+              product: prodName, amount, recorded_by: user.name,
+            }),
+          };
+        }
         const attId = await saveAttachment(apiKey, body.attachment, 'hr.expense', expenseId);
         const driveInfo = await syncToDrive(env, body.attachment ? {
           date: customDate,
@@ -1020,6 +1058,17 @@ export async function onRequest(context) {
           }]],
         };
         const moveId = await odoo(apiKey, 'account.move', 'create', [moveVals]);
+        // Rename for consistency across Odoo + Drive + D1
+        if (body.attachment) {
+          body.attachment = {
+            ...body.attachment,
+            name: buildBillFilename({
+              date: customInvDate, category: cat.label, brand,
+              product: body.vendor_name || 'Vendor-bill',
+              amount, recorded_by: user.name,
+            }),
+          };
+        }
         const attId14 = await saveAttachment(apiKey, body.attachment, 'account.move', moveId);
         const drive14 = await syncToDrive(env, body.attachment ? {
           date: customInvDate,
@@ -1324,10 +1373,20 @@ export async function onRequest(context) {
       const entryAmount = body.amount != null ? parseFloat(body.amount) : null;
       const idInt = parseInt(odoo_id, 10);
 
+      // Rename to structured pattern — overrides whatever filename the user's
+      // phone sent (e.g. "WhatsApp Image 2026-04-21 at 16.47.02.jpeg") so Odoo,
+      // Drive, and D1 all carry the same readable name.
+      const structuredName = buildBillFilename({
+        date: entryDate, category: `${kind}-bill`, brand,
+        product: body.product_hint || `${kind}-${idInt}`,
+        amount: entryAmount, recorded_by: user.name,
+      });
+      const renamedAttachment = { ...attachment, name: structuredName };
+
       // Step 1 — Odoo attachment (always attempt; may fail if Odoo rejects)
       let attId = null;
       try {
-        attId = await saveAttachment(apiKey, attachment, resModel, idInt);
+        attId = await saveAttachment(apiKey, renamedAttachment, resModel, idInt);
       } catch (e) {
         console.error('Odoo attach fail:', e.message);
       }
@@ -1346,9 +1405,9 @@ export async function onRequest(context) {
               product: `${kind} #${odoo_id}`,
               amount: entryAmount,
               recorded_by: user.name,
-              filename: attachment.name || 'bill.jpg',
-              mimetype: attachment.mimetype || 'image/jpeg',
-              data_b64: attachment.data_b64,
+              filename: renamedAttachment.name,
+              mimetype: renamedAttachment.mimetype || 'image/jpeg',
+              data_b64: renamedAttachment.data_b64,
             }),
           });
           driveInfo = await driveRes.json().catch(() => null);
@@ -1362,7 +1421,7 @@ export async function onRequest(context) {
       }
 
       // Step 3 — D1 registry (source of truth for UI)
-      const fileSizeKb = Math.round(((attachment.data_b64 || '').length * 3 / 4) / 1024);
+      const fileSizeKb = Math.round(((renamedAttachment.data_b64 || '').length * 3 / 4) / 1024);
       try {
         if (DB) {
           await DB.prepare(`
@@ -1374,7 +1433,7 @@ export async function onRequest(context) {
           `).bind(
             kind, idInt, brand, entryDate, entryAmount,
             attId, driveInfo?.file_id || null, driveInfo?.view_url || null, driveInfo?.path || null,
-            attachment.name || 'bill.jpg', attachment.mimetype || 'image/jpeg',
+            renamedAttachment.name, renamedAttachment.mimetype || 'image/jpeg',
             fileSizeKb, String(pin), user.name
           ).run();
         }
@@ -1386,6 +1445,7 @@ export async function onRequest(context) {
         drive_file_id: driveInfo?.file_id || null,
         drive_view_url: driveInfo?.view_url || null,
         drive_path: driveInfo?.path || null,
+        filename: renamedAttachment.name,
       });
     }
 
@@ -1880,8 +1940,19 @@ export async function onRequest(context) {
         }]],
       };
       const moveId = await odoo(apiKey, 'account.move', 'create', [moveVals]);
-      const attIdPo = await saveAttachment(apiKey, body.attachment, 'account.move', moveId);
       const effectiveDate = bill_date || new Date().toISOString().slice(0, 10);
+      // Rename for consistency
+      if (body.attachment) {
+        body.attachment = {
+          ...body.attachment,
+          name: buildBillFilename({
+            date: effectiveDate, category: 'Bill-from-PO', brand,
+            product: bill_ref || po[0].name,
+            amount, recorded_by: user.name,
+          }),
+        };
+      }
+      const attIdPo = await saveAttachment(apiKey, body.attachment, 'account.move', moveId);
       const drivePo = await syncToDrive(env, body.attachment ? {
         date: effectiveDate,
         company: brand,

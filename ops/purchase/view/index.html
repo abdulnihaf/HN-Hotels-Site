@@ -703,6 +703,11 @@ async function uploadBill(input) {
         brand: STATE.currentRow.brand,
         date: STATE.currentRow.date,
         amount: STATE.currentRow.amount,
+        // product_hint feeds into the structured Drive/Odoo filename
+        // so the vendor / PO number / expense name is visible in the file name
+        product_hint: STATE.currentRow.vendor?.name
+          || STATE.currentRow.item_or_ref
+          || STATE.currentRow.recorded_by_name,
         attachment: compressed,
       }),
     }).then(x => x.json());
@@ -714,7 +719,7 @@ async function uploadBill(input) {
     STATE.currentRow.attachments.unshift({
       drive_file_id: r.drive_file_id || null,
       drive_url: r.drive_view_url || null,
-      filename: file.name,
+      filename: r.filename || file.name,    // server returns the structured filename
       size_kb: Math.round(file.size / 1024),
       uploaded_by: USER?.name || 'You',
       uploaded_by_pin: PIN,
