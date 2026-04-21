@@ -1222,12 +1222,20 @@ function setCat1Mode(mode) {
 function populateBulkVendorPicker() {
   const sel = document.getElementById('bulk-vendor');
   const vendors = (rmCatalog.vendors || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const hint = document.getElementById('bulk-vendor-hint');
+  if (!vendors.length) {
+    // Catalog may still be loading (openCat1 is async) — show state and retry soon
+    sel.innerHTML = `<option value="">Loading vendors…</option>`;
+    hint.textContent = 'Vendor catalog still loading — please wait a moment and re-pick the mode.';
+    setTimeout(() => { if ((rmCatalog.vendors || []).length) populateBulkVendorPicker(); }, 800);
+    return;
+  }
   sel.innerHTML = `<option value="">— Select vendor —</option>` +
     vendors.map(v => `<option value="${v.id}">${esc(v.name)}${v.phone?` · ${esc(v.phone)}`:''}</option>`).join('');
   bulkVendor = null;
   bulkItems.clear();
   document.getElementById('bulk-items-wrap').classList.add('hidden');
-  document.getElementById('bulk-vendor-hint').textContent = '';
+  hint.textContent = '';
 }
 
 function onBulkVendorPick(vendorIdStr) {
@@ -1255,7 +1263,9 @@ function renderBulkItems() {
   const otherProducts = (rmCatalog.products || []).filter(p => !(p.vendors || []).some(v => v.odoo_id === vid));
   const matches = (list) => list.filter(p => !q || `${p.name} ${p.code||''} ${p.category||''}`.toLowerCase().includes(q));
   const myFiltered = matches(myProducts);
-  const otherFiltered = q ? matches(otherProducts) : [];
+  // Show "other RM products" when user is filtering OR when this vendor has NO
+  // mapped products (otherwise the screen would be empty and unhelpful)
+  const otherFiltered = (q || !myProducts.length) ? matches(otherProducts) : [];
   const list = document.getElementById('bulk-items-list');
   const empty = document.getElementById('bulk-empty');
   if (!myFiltered.length && !otherFiltered.length) {

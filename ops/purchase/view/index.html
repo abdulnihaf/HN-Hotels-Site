@@ -744,53 +744,92 @@ function renderPOLines() {
     list.innerHTML = `<div class="mute" style="font-size:12px;">No lines. Use "+ Add line" below.</div>`;
     return;
   }
-  list.innerHTML = lines.map((l, i) => {
-    const dirty = l._deleted || l.qty !== l._orig_qty || l.price_unit !== l._orig_price;
-    const subtotal = (parseFloat(l.qty) || 0) * (parseFloat(l.price_unit) || 0);
-    const cls = l._deleted ? 'marked-delete' : (dirty ? 'dirty' : '');
-    return `
-      <div class="line-row ${cls}" data-idx="${i}">
-        <div class="ln-name" title="${esc(l.product_name)}">${esc(l.product_name)}<span class="ln-uom">${esc(l.uom||'')}</span></div>
-        <input type="number" inputmode="decimal" value="${l.qty}"
-               ${l._deleted||!STATE.poEditable?'disabled':''}
-               onchange="updateLine(${i}, 'qty', this.value)">
-        <input type="number" inputmode="decimal" value="${l.price_unit}"
-               ${l._deleted||!STATE.poEditable?'disabled':''}
-               onchange="updateLine(${i}, 'price_unit', this.value)">
-        <button class="ln-del" title="${l._deleted?'Undo delete':'Delete this line'}"
-                ${!STATE.poEditable?'disabled':''}
-                onclick="toggleDeleteLine(${i})">${l._deleted?'↺':'×'}</button>
-      </div>
-      <div class="line-subtotal" style="grid-column: 3 / span 2; margin-top:-2px; margin-bottom:6px;">
-        = ₹${fmtINR(subtotal)}
-      </div>`;
-  }).join('');
-  // Running total
-  const total = lines.filter(l => !l._deleted).reduce((s, l) => s + (parseFloat(l.qty)||0) * (parseFloat(l.price_unit)||0), 0);
-  const hasDirty = lines.some(l => l._deleted || l.qty !== l._orig_qty || l.price_unit !== l._orig_price);
-  list.innerHTML += `
-    <div class="lines-total">
-      <span>Running total (${lines.filter(l=>!l._deleted).length} lines)</span>
-      <span>₹${fmtINR(total)}</span>
+  // Split into: scrolling rows region + sticky footer so targeted updates
+  // only touch the row/subtotal/total without replacing inputs (preserves focus
+  // while typing and allows tabbing between fields).
+  list.innerHTML = `
+    <div id="lines-rows">${lines.map((l, i) => renderLineRowHTML(l, i)).join('')}</div>
+    <div id="lines-footer"></div>`;
+  renderLinesFooter();
+}
+function renderLineRowHTML(l, i) {
+  const dirty = l._deleted || l.qty !== l._orig_qty || l.price_unit !== l._orig_price;
+  const subtotal = (parseFloat(l.qty) || 0) * (parseFloat(l.price_unit) || 0);
+  const cls = l._deleted ? 'marked-delete' : (dirty ? 'dirty' : '');
+  const disabled = l._deleted || !STATE.poEditable;
+  return `
+    <div class="line-row ${cls}" data-idx="${i}">
+      <div class="ln-name" title="${esc(l.product_name)}">${esc(l.product_name)}<span class="ln-uom">${esc(l.uom||'')}</span></div>
+      <input type="number" inputmode="decimal" step="any" value="${l.qty}"
+             ${disabled?'disabled':''}
+             oninput="updateLine(${i}, 'qty', this.value)">
+      <input type="number" inputmode="decimal" step="any" value="${l.price_unit}"
+             ${disabled?'disabled':''}
+             oninput="updateLine(${i}, 'price_unit', this.value)">
+      <button class="ln-del" title="${l._deleted?'Undo delete':'Delete this line'}"
+              ${!STATE.poEditable?'disabled':''}
+              onclick="toggleDeleteLine(${i})">${l._deleted?'↺':'×'}</button>
+      <div class="line-subtotal" data-sub-for="${i}" style="grid-column: 1 / span 4; margin-top:-2px;">= ₹${fmtINR(subtotal)}</div>
     </div>`;
-  if (hasDirty) {
-    list.innerHTML += `
+}
+function renderLinesFooter() {
+  const lines = STATE.poLines || [];
+  const activeLines = lines.filter(l => !l._deleted);
+  const total = activeLines.reduce((s, l) => s + (parseFloat(l.qty)||0) * (parseFloat(l.price_unit)||0), 0);
+  const hasDirty = lines.some(l => l._deleted || l.qty !== l._orig_qty || l.price_unit !== l._orig_price);
+  // Warn when deleting would cancel the entire PO (backend auto-cancels if 0 lines remain)
+  const origCount = lines.length;
+  const wouldCancel = hasDirty && activeLines.length === 0 && origCount > 0;
+  const footer = document.getElementById('lines-footer');
+  if (!footer) return;
+  footer.innerHTML = `
+    <div class="lines-total">
+      <span>Running total (${activeLines.length} line${activeLines.length===1?'':'s'})</span>
+      <span>₹${fmtINR(total)}</span>
+    </div>
+    ${wouldCancel ? `<div style="margin-top:6px; padding:8px 10px; background:rgba(239,68,68,0.10); border:1px solid rgba(239,68,68,0.35); border-radius:6px; font-size:11px; color:#f87171;">⚠ All lines marked for deletion — saving will <b>cancel the entire PO</b> in Odoo.</div>` : ''}
+    ${hasDirty ? `
       <div style="display:flex; gap:6px; margin-top:8px;">
         <button class="btn btn-primary btn-sm" style="flex:1;" onclick="savePOLines()">Save changes</button>
         <button class="btn btn-ghost btn-sm" onclick="loadPOLines(STATE.currentRow)">Discard</button>
-      </div>`;
-  }
+      </div>` : ''}
+  `;
+}
+
+// Targeted update — changes only this row's .dirty class + its subtotal span,
+// never the <input> nodes themselves (so the user keeps focus while typing).
+function updateLineRowDOM(i) {
+  const l = STATE.poLines?.[i];
+  if (!l) return;
+  const row = document.querySelector(`#lines-rows .line-row[data-idx="${i}"]`);
+  if (!row) return;
+  const dirty = l._deleted || l.qty !== l._orig_qty || l.price_unit !== l._orig_price;
+  row.classList.toggle('dirty', dirty && !l._deleted);
+  row.classList.toggle('marked-delete', !!l._deleted);
+  const sub = row.querySelector(`[data-sub-for="${i}"]`);
+  if (sub) sub.textContent = `= ₹${fmtINR((parseFloat(l.qty)||0) * (parseFloat(l.price_unit)||0))}`;
+  // Toggle disabled on inputs if _deleted flipped
+  row.querySelectorAll('input').forEach(el => { el.disabled = l._deleted || !STATE.poEditable; });
 }
 
 function updateLine(i, field, val) {
   if (!STATE.poLines || !STATE.poLines[i]) return;
-  STATE.poLines[i][field] = field === 'qty' || field === 'price_unit' ? parseFloat(val) || 0 : val;
-  renderPOLines();
+  STATE.poLines[i][field] = parseFloat(val) || 0;
+  updateLineRowDOM(i);
+  renderLinesFooter();
 }
 function toggleDeleteLine(i) {
   if (!STATE.poLines || !STATE.poLines[i]) return;
   STATE.poLines[i]._deleted = !STATE.poLines[i]._deleted;
-  renderPOLines();
+  // Update button icon inline — can't be done cleanly with targeted update
+  const row = document.querySelector(`#lines-rows .line-row[data-idx="${i}"]`);
+  const btn = row?.querySelector('.ln-del');
+  if (btn) {
+    btn.textContent = STATE.poLines[i]._deleted ? '↺' : '×';
+    btn.title = STATE.poLines[i]._deleted ? 'Undo delete' : 'Delete this line';
+  }
+  updateLineRowDOM(i);
+  renderLinesFooter();
 }
 
 async function savePOLines() {
@@ -832,8 +871,20 @@ async function savePOLines() {
   status.textContent = `✓ ${edits} edited, ${deletes} deleted. Reloading…`;
   status.style.color = '#34d399';
   await loadPOLines(STATE.currentRow);
-  // Refresh the ledger row's amount in the table
+  // Refresh the ledger row's amount in the table — keep drawer open with the
+  // updated row. load() replaces STATE.rows, so re-point currentRow at the
+  // fresh object with the same kind+odoo_id so header totals stay accurate.
+  const prev = STATE.currentRow;
   await load();
+  if (prev) {
+    const fresh = STATE.rows.find(r => r.kind === prev.kind && r.odoo_id === prev.odoo_id);
+    if (fresh) {
+      STATE.currentRow = fresh;
+      // Refresh drawer header (title shows ₹amount)
+      const amountText = (fresh.amount != null && !isNaN(fresh.amount)) ? `₹${fmtINR(fresh.amount)}` : '—';
+      document.getElementById('d-title').textContent = `${fresh.kind} · ${amountText}`;
+    }
+  }
 }
 
 async function toggleAddLine() {
@@ -895,7 +946,16 @@ async function submitAddLine() {
     status.style.color = '#34d399';
     document.getElementById('d-lines-add-form').classList.add('hidden');
     await loadPOLines(STATE.currentRow);
+    const prev = STATE.currentRow;
     await load();
+    if (prev) {
+      const fresh = STATE.rows.find(r => r.kind === prev.kind && r.odoo_id === prev.odoo_id);
+      if (fresh) {
+        STATE.currentRow = fresh;
+        const amountText = (fresh.amount != null && !isNaN(fresh.amount)) ? `₹${fmtINR(fresh.amount)}` : '—';
+        document.getElementById('d-title').textContent = `${fresh.kind} · ${amountText}`;
+      }
+    }
   } catch (e) {
     status.textContent = '✗ ' + e.message;
     status.style.color = '#f87171';
