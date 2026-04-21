@@ -1784,6 +1784,25 @@ export async function onRequest(context) {
               .bind(u.real, u.d1_id).run();
           }
         }
+        // Null out stale odoo_ids for unmatched vendors so downstream queries
+        // (e.g. supplierinfo sync) don't try to reference non-existent partners
+        if (!dry_run && vendorUnmatched.length) {
+          for (const u of vendorUnmatched) {
+            if (u.stale_odoo_id != null) {
+              await DB.prepare(`UPDATE rm_vendors SET odoo_id = NULL, updated_at = datetime('now') WHERE key = ?`)
+                .bind(u.key).run();
+            }
+          }
+        }
+        // Same for unmatched products — clear stale product odoo_id
+        if (!dry_run && prodUnmatched.length) {
+          for (const u of prodUnmatched) {
+            if (u.stale_odoo_id != null) {
+              await DB.prepare(`UPDATE rm_products SET odoo_id = NULL, updated_at = datetime('now') WHERE hn_code = ?`)
+                .bind(u.hn_code).run();
+            }
+          }
+        }
 
         report.steps.push({
           phase: 'refresh-ids',
