@@ -56,6 +56,20 @@
     font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
   .mode-pill.live { background: rgba(16,185,129,.15); color: #34d399; }
   .mode-pill.hist { background: rgba(245,158,11,.15); color: #fbbf24; }
+
+  /* Entry-mode toggle (Phase 7) */
+  .entry-mode-toggle .mode-btn.active { background: rgba(124,86,247,0.12); border-color: rgba(124,86,247,0.5); }
+  .entry-mode-toggle .mode-btn:hover { border-color: var(--text-dim); }
+
+  /* Bulk items list */
+  .bulk-row { display: grid; grid-template-columns: 1fr 80px 90px; gap: 8px; align-items: center;
+    padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .bulk-row.filled { background: rgba(16,185,129,0.06); border-left: 3px solid #34d399; }
+  .bulk-row .bulk-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bulk-row .bulk-name .bulk-uom { font-weight: 400; color: var(--text-dim); font-size: 11px; margin-left: 4px; }
+  .bulk-row .bulk-last { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .bulk-row input { padding: 6px 8px; font-size: 13px; text-align: right; min-height: 34px; }
+  .bulk-row .bulk-sub { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-dim); grid-column: 2 / span 2; text-align: right; padding: 0 4px; margin-top: -2px; }
 </style>
 </head>
 <body>
@@ -153,6 +167,20 @@
       </div>
     </div>
 
+    <!-- Entry-mode toggle: Search-first vs Bulk (vendor-first) — Phase 7 -->
+    <div class="entry-mode-toggle" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+      <button class="mode-btn active" id="btn-cat1-search" onclick="setCat1Mode('search')"
+              style="padding:10px 12px; border-radius:10px; background:var(--surface); border:1px solid var(--border); color:var(--text); cursor:pointer; font-family:inherit; text-align:left; font-size:13px;">
+        <div style="font-weight:700;">🔎 Search each item</div>
+        <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">Good for 1–2 items</div>
+      </button>
+      <button class="mode-btn" id="btn-cat1-bulk" onclick="setCat1Mode('bulk')"
+              style="padding:10px 12px; border-radius:10px; background:var(--surface); border:1px solid var(--border); color:var(--text); cursor:pointer; font-family:inherit; text-align:left; font-size:13px;">
+        <div style="font-weight:700;">🧾 One bill · Many items</div>
+        <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">Pick vendor → tick what they delivered</div>
+      </button>
+    </div>
+
     <!-- Historical date picker (shown only when MODE=historical) -->
     <div id="rm-hist-date-wrap" class="hidden" style="padding:12px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:12px;margin-bottom:12px">
       <div style="font-size:11px;color:#fbbf24;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">
@@ -162,6 +190,8 @@
       <div class="mute" style="font-size:11px;margin-top:4px">Every line in this cart will be dated to this day.</div>
     </div>
 
+    <!-- SEARCH-FIRST mode (existing) -->
+    <div id="cat1-search-mode">
     <input id="rm-search" type="search" placeholder="Search products (name or code)…"
            oninput="filterRmProducts()" style="margin-bottom: 8px;">
 
@@ -184,6 +214,33 @@
     <div class="recent" style="margin-top: 24px;">
       <h3>Recent POs</h3>
       <div id="rm-recent-pos"></div>
+    </div>
+    </div><!-- /#cat1-search-mode -->
+
+    <!-- BULK mode (Phase 7) — vendor-first entry ─────────────── -->
+    <div id="cat1-bulk-mode" class="hidden">
+      <div style="padding:12px 14px; background:rgba(124,86,247,0.06); border:1px solid rgba(124,86,247,0.25); border-radius:10px; margin-bottom:12px;">
+        <label style="font-size:11px; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:0.4px;">Pick vendor for this bill</label>
+        <select id="bulk-vendor" onchange="onBulkVendorPick(this.value)" style="width:100%; margin-top:6px; padding:10px 12px; font-size:14px;">
+          <option value="">— Select vendor —</option>
+        </select>
+        <div id="bulk-vendor-hint" class="mute" style="font-size:11px; margin-top:4px;"></div>
+      </div>
+
+      <div id="bulk-items-wrap" class="hidden">
+        <input id="bulk-filter" type="search" placeholder="Filter items…" oninput="renderBulkItems()"
+               style="margin-bottom:10px;">
+        <div id="bulk-items-list"></div>
+        <div id="bulk-empty" class="mute hidden" style="padding:20px; text-align:center;">No products match.</div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background: rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:10px; margin-top:16px; position:sticky; bottom:12px;">
+          <div>
+            <span id="bulk-count" style="font-weight:700; font-size:14px;">0 items</span>
+            <span style="color:var(--accent); font-weight:700; margin-left:8px; font-size:16px;" id="bulk-total">₹0</span>
+          </div>
+          <button class="btn btn-primary" id="bulk-submit-btn" onclick="submitBulkPO()" disabled>Create PO</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1137,6 +1194,183 @@ async function submitRmPurchase() {
     btn.disabled = false; btn.textContent = 'Retry failed';
   } else {
     toast(failures[0] || 'Submit failed', 'err');
+    btn.disabled = false; btn.textContent = 'Create PO';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CAT 1 · BULK ENTRY MODE (Phase 7) — vendor-first, many items, one PO
+// Prevents the "1 bill → 8 separate POs" splitting problem we saw in
+// the Apr-1 audit. Shows the picked vendor's known products as a
+// single scrollable list with qty + price inline. Submit = 1 PO.
+// ═══════════════════════════════════════════════════════════════
+let bulkVendor = null;          // { id, name } currently picked
+const bulkItems = new Map();    // product_id → { product, qty, price }
+
+function setCat1Mode(mode) {
+  const search = document.getElementById('cat1-search-mode');
+  const bulk   = document.getElementById('cat1-bulk-mode');
+  document.getElementById('btn-cat1-search').classList.toggle('active', mode === 'search');
+  document.getElementById('btn-cat1-bulk').classList.toggle('active', mode === 'bulk');
+  search.classList.toggle('hidden', mode !== 'search');
+  bulk.classList.toggle('hidden', mode !== 'bulk');
+  if (mode === 'bulk') {
+    populateBulkVendorPicker();
+  }
+}
+
+function populateBulkVendorPicker() {
+  const sel = document.getElementById('bulk-vendor');
+  const vendors = (rmCatalog.vendors || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+  sel.innerHTML = `<option value="">— Select vendor —</option>` +
+    vendors.map(v => `<option value="${v.id}">${esc(v.name)}${v.phone?` · ${esc(v.phone)}`:''}</option>`).join('');
+  bulkVendor = null;
+  bulkItems.clear();
+  document.getElementById('bulk-items-wrap').classList.add('hidden');
+  document.getElementById('bulk-vendor-hint').textContent = '';
+}
+
+function onBulkVendorPick(vendorIdStr) {
+  const vid = parseInt(vendorIdStr, 10);
+  if (!vid) { document.getElementById('bulk-items-wrap').classList.add('hidden'); return; }
+  bulkVendor = (rmCatalog.vendors || []).find(v => v.id === vid) || null;
+  if (!bulkVendor) return;
+  bulkItems.clear();
+  document.getElementById('bulk-filter').value = '';
+  document.getElementById('bulk-items-wrap').classList.remove('hidden');
+  const hint = document.getElementById('bulk-vendor-hint');
+  const myProducts = (rmCatalog.products || []).filter(p =>
+    (p.vendors || []).some(v => v.odoo_id === vid));
+  hint.textContent = myProducts.length
+    ? `${myProducts.length} known product${myProducts.length===1?'':'s'} for ${bulkVendor.name}. Items you didn't buy just stay blank.`
+    : `No known products mapped to ${bulkVendor.name} yet — showing all RM products. Items you enter here will implicitly link this vendor.`;
+  renderBulkItems();
+}
+
+function renderBulkItems() {
+  if (!bulkVendor) return;
+  const q = (document.getElementById('bulk-filter').value || '').trim().toLowerCase();
+  const vid = bulkVendor.id;
+  const myProducts = (rmCatalog.products || []).filter(p => (p.vendors || []).some(v => v.odoo_id === vid));
+  const otherProducts = (rmCatalog.products || []).filter(p => !(p.vendors || []).some(v => v.odoo_id === vid));
+  const matches = (list) => list.filter(p => !q || `${p.name} ${p.code||''} ${p.category||''}`.toLowerCase().includes(q));
+  const myFiltered = matches(myProducts);
+  const otherFiltered = q ? matches(otherProducts) : [];
+  const list = document.getElementById('bulk-items-list');
+  const empty = document.getElementById('bulk-empty');
+  if (!myFiltered.length && !otherFiltered.length) {
+    list.innerHTML = '';
+    empty.classList.remove('hidden');
+    updateBulkTotals();
+    return;
+  }
+  empty.classList.add('hidden');
+  const rowHtml = (p) => {
+    const state = bulkItems.get(p.id) || { qty: '', price: p.lastPrice?.price || '' };
+    const sub = (parseFloat(state.qty)||0) * (parseFloat(state.price)||0);
+    const filled = parseFloat(state.qty) > 0;
+    const lastP = p.lastPrice?.price ? `Last: ₹${p.lastPrice.price}` : '';
+    return `
+      <div class="bulk-row ${filled?'filled':''}" data-id="${p.id}">
+        <div>
+          <div class="bulk-name">${esc(p.name)}<span class="bulk-uom">${esc(p.uom||'')}</span></div>
+          ${lastP ? `<div class="bulk-last">${lastP}</div>` : ''}
+        </div>
+        <input type="number" inputmode="decimal" placeholder="Qty" value="${state.qty||''}"
+               oninput="updateBulkItem(${p.id}, 'qty', this.value)">
+        <input type="number" inputmode="decimal" placeholder="₹/unit" value="${state.price||''}"
+               oninput="updateBulkItem(${p.id}, 'price', this.value)">
+        ${filled ? `<div class="bulk-sub">= ₹${fmtINR(sub)}</div>` : ''}
+      </div>`;
+  };
+  let html = '';
+  if (myFiltered.length) {
+    html += `<div style="font-size:11px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.4px; padding:10px 12px; background:rgba(255,255,255,0.02);">${bulkVendor.name}'s items · ${myFiltered.length}</div>`;
+    html += myFiltered.map(rowHtml).join('');
+  }
+  if (otherFiltered.length) {
+    html += `<div style="font-size:11px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.4px; padding:10px 12px; background:rgba(255,255,255,0.02); margin-top:10px;">Other RM products matching "${esc(q)}" · ${otherFiltered.length}</div>`;
+    html += otherFiltered.map(rowHtml).join('');
+  }
+  list.innerHTML = html;
+  updateBulkTotals();
+}
+
+function updateBulkItem(productId, field, value) {
+  const prod = (rmCatalog.products || []).find(p => p.id === productId);
+  if (!prod) return;
+  const cur = bulkItems.get(productId) || { product: prod, qty: '', price: prod.lastPrice?.price || '' };
+  cur.product = prod;
+  cur[field] = value;
+  // Remove row when both qty and price are empty (user cleared it)
+  if (!cur.qty && !cur.price) bulkItems.delete(productId);
+  else bulkItems.set(productId, cur);
+  // Re-render only the changed row — avoids focus loss on other inputs
+  const row = document.querySelector(`.bulk-row[data-id="${productId}"]`);
+  if (row) {
+    const qty = parseFloat(cur.qty) || 0, price = parseFloat(cur.price) || 0;
+    row.classList.toggle('filled', qty > 0);
+    let sub = row.querySelector('.bulk-sub');
+    if (qty > 0 && price > 0) {
+      if (!sub) {
+        sub = document.createElement('div');
+        sub.className = 'bulk-sub';
+        row.appendChild(sub);
+      }
+      sub.textContent = `= ₹${fmtINR(qty * price)}`;
+    } else if (sub) {
+      sub.remove();
+    }
+  }
+  updateBulkTotals();
+}
+
+function fmtINR(n) { return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Math.round(n)); }
+
+function updateBulkTotals() {
+  const filled = [...bulkItems.values()].filter(it => parseFloat(it.qty) > 0);
+  const total = filled.reduce((s, it) => s + (parseFloat(it.qty)||0) * (parseFloat(it.price)||0), 0);
+  document.getElementById('bulk-count').textContent = `${filled.length} item${filled.length===1?'':'s'}`;
+  document.getElementById('bulk-total').textContent = `₹${fmtINR(total)}`;
+  document.getElementById('bulk-submit-btn').disabled = filled.length === 0;
+}
+
+async function submitBulkPO() {
+  if (!bulkVendor) return toast('Pick a vendor first', 'err');
+  const filled = [...bulkItems.values()].filter(it => parseFloat(it.qty) > 0);
+  if (!filled.length) return toast('No items to add', 'err');
+  // Historical date check
+  let historicalDate;
+  if (MODE === 'historical') {
+    historicalDate = document.getElementById('rm-hist-date')?.value || '';
+    if (!historicalDate || !/^\d{4}-\d{2}-\d{2}$/.test(historicalDate)) return toast('Pick the original PO date at the top', 'err');
+    const today = todayIST();
+    if (historicalDate > today) return toast('Date cannot be in the future', 'err');
+  }
+  const btn = document.getElementById('bulk-submit-btn');
+  btn.disabled = true; btn.textContent = 'Creating…';
+  const lines = filled.map(it => ({
+    product_id: it.product.id,
+    qty: parseFloat(it.qty),
+    price_unit: parseFloat(it.price) || 0,
+    name: it.product.name,
+    ...(it.product._variant ? { odoo_variant_id: it.product.id, variant_display: it.product.name } : {}),
+  }));
+  try {
+    const r = await fetch(`${RM_API}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create-po', pin: PIN, brand: BRAND,
+        vendor_id: bulkVendor.id, lines,
+        ...(historicalDate ? { date: historicalDate } : {}) }),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Create failed');
+    toast(`✓ Created ${r.po_name || 'PO'} with ${filled.length} lines · ₹${fmtINR(filled.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.price)||0),0))}`, 'ok');
+    if (historicalDate) { LAST_HISTORICAL_DATE = historicalDate; updateHistBannerText(); }
+    bulkItems.clear();
+    bulkVendor = null;
+    setTimeout(showHome, 1000);
+  } catch (e) {
+    toast(e.message, 'err');
     btn.disabled = false; btn.textContent = 'Create PO';
   }
 }
