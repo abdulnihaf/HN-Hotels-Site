@@ -112,6 +112,20 @@
   .att-item .att-drive-btn.na { background: transparent; border-color: var(--border); color: var(--text-dim); cursor: default; }
   .att-external-hint { font-size: 11px; color: var(--text-dim); padding: 8px 10px; background: rgba(245,158,11,0.08);
     border: 1px solid rgba(245,158,11,0.25); border-radius: 6px; margin-top: 8px; }
+  /* Line-item editor */
+  .lines-list { display: flex; flex-direction: column; gap: 6px; }
+  .line-row { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    display: grid; grid-template-columns: 1fr 70px 80px auto; gap: 6px; align-items: center; }
+  .line-row .ln-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line-row .ln-name .ln-uom { font-weight: 400; color: var(--text-dim); font-size: 10px; margin-left: 4px; }
+  .line-row input { padding: 4px 6px; font-size: 12px; min-height: 28px; text-align: right;
+    border: 1px solid var(--border); background: var(--bg); border-radius: 4px; }
+  .line-row .ln-del { background: none; border: none; color: #f87171; cursor: pointer; font-size: 16px; padding: 0 4px; }
+  .line-row.dirty { border-color: rgba(212,164,76,0.5); background: rgba(212,164,76,0.06); }
+  .line-row.marked-delete { opacity: 0.4; text-decoration: line-through; background: rgba(239,68,68,0.08); }
+  .line-subtotal { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-dim); text-align: right; padding: 0 4px; white-space: nowrap; }
+  .lines-total { margin-top: 8px; padding: 8px 10px; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25);
+    border-radius: 8px; font-weight: 600; display: flex; justify-content: space-between; font-size: 13px; }
   .empty-state { padding: 40px 20px; text-align: center; color: var(--text-dim); }
 
   /* Skeleton */
@@ -263,6 +277,32 @@
       <div class="drawer-section" id="d-billref-section" style="display:none;">
         <h3>Bill Reference Number</h3>
         <input type="text" id="d-billref" placeholder="e.g. INV-2026-042" style="width:100%; padding:8px 10px;">
+      </div>
+
+      <!-- PO Line Items — Phase 6 enrichment UI (shown only for kind=PO) -->
+      <div class="drawer-section" id="d-lines-section" style="display:none;">
+        <h3>Line Items</h3>
+        <div id="d-lines-hint" style="font-size:11px; color: var(--text-dim); margin-bottom:8px;"></div>
+        <div id="d-lines-list" class="lines-list"></div>
+        <div id="d-lines-add-wrap" style="margin-top:10px;">
+          <button class="btn btn-ghost btn-sm" id="d-lines-add-btn" onclick="toggleAddLine()"
+                  style="width:100%; border:1px dashed var(--border);">+ Add line</button>
+          <div id="d-lines-add-form" class="hidden" style="margin-top:8px; padding:10px; background: var(--surface); border-radius:8px; border:1px solid var(--border);">
+            <select id="d-add-product" style="width:100%; padding:6px 8px; margin-bottom:6px; font-size:13px;">
+              <option value="">— Pick product —</option>
+            </select>
+            <div style="display:flex; gap:6px;">
+              <input id="d-add-qty"   type="number" inputmode="decimal" placeholder="Qty"    style="flex:1; padding:6px 8px;">
+              <input id="d-add-price" type="number" inputmode="decimal" placeholder="₹/unit" style="flex:1; padding:6px 8px;">
+            </div>
+            <div style="display:flex; gap:6px; margin-top:8px;">
+              <button class="btn btn-primary btn-sm" style="flex:1;" onclick="submitAddLine()">Add to PO</button>
+              <button class="btn btn-ghost btn-sm"   onclick="toggleAddLine()">Cancel</button>
+            </div>
+            <div id="d-add-status" style="font-size:11px; color:var(--text-dim); margin-top:4px; min-height:14px;"></div>
+          </div>
+        </div>
+        <div id="d-lines-status" style="font-size:11px; color: var(--text-dim); margin-top:6px; min-height:14px;"></div>
       </div>
 
       <div class="drawer-section">
@@ -638,6 +678,8 @@ function openDrawer(idx) {
   drawer.setAttribute('aria-hidden', 'false');
   // Move focus into the drawer for screen readers + keyboard users
   setTimeout(() => drawer.querySelector('.drawer-header button')?.focus(), 260);
+  // Phase 6 — fetch+render line items for PO kind
+  loadPOLines(r);
 }
 function closeDrawer() {
   const drawer = document.getElementById('drawer');
@@ -650,6 +692,214 @@ function closeDrawer() {
   }
   STATE.currentRow = null;
   STATE.lastFocusedRow = null;
+  STATE.poLines = null;
+  STATE.poVendorProducts = null;
+}
+
+// ── PO LINE EDITOR (Phase 6) ─────────────────────────────────
+// Only shown when the drawer is open for a PO. Fetches po-detail + the
+// vendor's known products catalogue, lets the user add/edit/delete line
+// items, and commits changes via add-po-line / edit-po-line / delete-po-line.
+const RM_API = '/api/rm-ops';
+
+async function loadPOLines(r) {
+  const section = document.getElementById('d-lines-section');
+  if (r.kind !== 'PO') { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  const list = document.getElementById('d-lines-list');
+  const hint = document.getElementById('d-lines-hint');
+  list.innerHTML = `<div class="skel" style="height:32px; width:100%;"></div>`;
+  hint.textContent = '';
+  document.getElementById('d-lines-status').textContent = '';
+  document.getElementById('d-lines-add-form').classList.add('hidden');
+
+  try {
+    const res = await fetch(`${RM_API}?action=po-detail&po_id=${r.odoo_id}&pin=${PIN}&brand=${r.brand}`)
+      .then(x => x.json());
+    if (!res.success) throw new Error(res.error || 'Load failed');
+    STATE.poLines = (res.lines || []).map(l => ({ ...l, _orig_qty: l.qty, _orig_price: l.price_unit, _deleted: false }));
+    STATE.poEditable = res.editable;
+    STATE.poEditableReason = res.editableReason;
+    STATE.poVendorId = res.po?.vendor_id;
+
+    if (!res.editable) {
+      hint.textContent = `⚠ Not editable — ${res.editableReason}. Open in Odoo if you need to modify.`;
+      hint.style.color = '#fbbf24';
+      document.getElementById('d-lines-add-btn').disabled = true;
+    } else {
+      hint.textContent = `Vendor: ${res.po?.vendor || '—'} · ${res.lines.length} line${res.lines.length===1?'':'s'} · ₹${fmtINR(res.po?.total||0)}`;
+      hint.style.color = 'var(--text-dim)';
+      document.getElementById('d-lines-add-btn').disabled = false;
+    }
+    renderPOLines();
+  } catch (e) {
+    list.innerHTML = `<div style="color:#f87171; font-size:12px;">${esc(e.message)}</div>`;
+  }
+}
+
+function renderPOLines() {
+  const list = document.getElementById('d-lines-list');
+  const lines = STATE.poLines || [];
+  if (!lines.length) {
+    list.innerHTML = `<div class="mute" style="font-size:12px;">No lines. Use "+ Add line" below.</div>`;
+    return;
+  }
+  list.innerHTML = lines.map((l, i) => {
+    const dirty = l._deleted || l.qty !== l._orig_qty || l.price_unit !== l._orig_price;
+    const subtotal = (parseFloat(l.qty) || 0) * (parseFloat(l.price_unit) || 0);
+    const cls = l._deleted ? 'marked-delete' : (dirty ? 'dirty' : '');
+    return `
+      <div class="line-row ${cls}" data-idx="${i}">
+        <div class="ln-name" title="${esc(l.product_name)}">${esc(l.product_name)}<span class="ln-uom">${esc(l.uom||'')}</span></div>
+        <input type="number" inputmode="decimal" value="${l.qty}"
+               ${l._deleted||!STATE.poEditable?'disabled':''}
+               onchange="updateLine(${i}, 'qty', this.value)">
+        <input type="number" inputmode="decimal" value="${l.price_unit}"
+               ${l._deleted||!STATE.poEditable?'disabled':''}
+               onchange="updateLine(${i}, 'price_unit', this.value)">
+        <button class="ln-del" title="${l._deleted?'Undo delete':'Delete this line'}"
+                ${!STATE.poEditable?'disabled':''}
+                onclick="toggleDeleteLine(${i})">${l._deleted?'↺':'×'}</button>
+      </div>
+      <div class="line-subtotal" style="grid-column: 3 / span 2; margin-top:-2px; margin-bottom:6px;">
+        = ₹${fmtINR(subtotal)}
+      </div>`;
+  }).join('');
+  // Running total
+  const total = lines.filter(l => !l._deleted).reduce((s, l) => s + (parseFloat(l.qty)||0) * (parseFloat(l.price_unit)||0), 0);
+  const hasDirty = lines.some(l => l._deleted || l.qty !== l._orig_qty || l.price_unit !== l._orig_price);
+  list.innerHTML += `
+    <div class="lines-total">
+      <span>Running total (${lines.filter(l=>!l._deleted).length} lines)</span>
+      <span>₹${fmtINR(total)}</span>
+    </div>`;
+  if (hasDirty) {
+    list.innerHTML += `
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <button class="btn btn-primary btn-sm" style="flex:1;" onclick="savePOLines()">Save changes</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadPOLines(STATE.currentRow)">Discard</button>
+      </div>`;
+  }
+}
+
+function updateLine(i, field, val) {
+  if (!STATE.poLines || !STATE.poLines[i]) return;
+  STATE.poLines[i][field] = field === 'qty' || field === 'price_unit' ? parseFloat(val) || 0 : val;
+  renderPOLines();
+}
+function toggleDeleteLine(i) {
+  if (!STATE.poLines || !STATE.poLines[i]) return;
+  STATE.poLines[i]._deleted = !STATE.poLines[i]._deleted;
+  renderPOLines();
+}
+
+async function savePOLines() {
+  const status = document.getElementById('d-lines-status');
+  status.textContent = 'Saving…';
+  status.style.color = 'var(--text-dim)';
+  const lines = STATE.poLines || [];
+  const poId = STATE.currentRow?.odoo_id;
+  const brand = STATE.currentRow?.brand;
+  let edits = 0, deletes = 0, errors = [];
+
+  for (const l of lines) {
+    try {
+      if (l._deleted) {
+        const r = await fetch(RM_API, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete-po-line', pin: PIN, brand, po_id: poId, line_id: l.id }),
+        }).then(x => x.json());
+        if (r.error) errors.push(`Delete ${l.product_name}: ${r.error}`);
+        else deletes++;
+      } else if (l.qty !== l._orig_qty || l.price_unit !== l._orig_price) {
+        const r = await fetch(RM_API, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'edit-po-line', pin: PIN, brand, po_id: poId, line_id: l.id,
+                                  qty: l.qty, price_unit: l.price_unit }),
+        }).then(x => x.json());
+        if (r.error) errors.push(`Edit ${l.product_name}: ${r.error}`);
+        else edits++;
+      }
+    } catch (e) {
+      errors.push(`${l.product_name}: ${e.message}`);
+    }
+  }
+  if (errors.length) {
+    status.textContent = `✗ ${edits} edited, ${deletes} deleted, ${errors.length} failed: ${errors[0]}`;
+    status.style.color = '#f87171';
+    return;
+  }
+  status.textContent = `✓ ${edits} edited, ${deletes} deleted. Reloading…`;
+  status.style.color = '#34d399';
+  await loadPOLines(STATE.currentRow);
+  // Refresh the ledger row's amount in the table
+  await load();
+}
+
+async function toggleAddLine() {
+  const form = document.getElementById('d-lines-add-form');
+  const willShow = form.classList.contains('hidden');
+  form.classList.toggle('hidden');
+  document.getElementById('d-add-status').textContent = '';
+  if (willShow) {
+    // Load vendor's products into the picker (purchase-catalog gives all with vendor tags)
+    const sel = document.getElementById('d-add-product');
+    sel.innerHTML = `<option value="">Loading…</option>`;
+    document.getElementById('d-add-qty').value = '';
+    document.getElementById('d-add-price').value = '';
+    try {
+      if (!STATE.poVendorProducts) {
+        const r = await fetch(`${RM_API}?action=purchase-catalog&brand=${STATE.currentRow.brand}&pin=${PIN}`).then(x => x.json());
+        if (!r.success) throw new Error(r.error || 'catalog load failed');
+        STATE.poVendorProducts = r.products || [];
+      }
+      const vid = STATE.poVendorId;
+      const all = STATE.poVendorProducts;
+      // Products where this vendor is linked (primary or secondary)
+      const myList = all.filter(p => (p.vendors || []).some(v => v.odoo_id === vid));
+      const otherList = all.filter(p => !(p.vendors || []).some(v => v.odoo_id === vid));
+      sel.innerHTML = [
+        `<option value="">— Pick product —</option>`,
+        myList.length ? `<optgroup label="Vendor's products (${myList.length})">${myList.map(p => `<option value="${p.id}" data-price="${p.lastPrice?.price||''}">${esc(p.name)}${p.lastPrice?.price?` · ₹${p.lastPrice.price}`:''}</option>`).join('')}</optgroup>` : '',
+        otherList.length ? `<optgroup label="All other RM products (${otherList.length})">${otherList.map(p => `<option value="${p.id}" data-price="${p.lastPrice?.price||''}">${esc(p.name)}${p.lastPrice?.price?` · ₹${p.lastPrice.price}`:''}</option>`).join('')}</optgroup>` : '',
+      ].join('');
+      sel.onchange = () => {
+        const opt = sel.selectedOptions[0];
+        const p = opt?.dataset?.price;
+        if (p && !document.getElementById('d-add-price').value) document.getElementById('d-add-price').value = p;
+      };
+    } catch (e) {
+      sel.innerHTML = `<option value="">Failed: ${e.message}</option>`;
+    }
+  }
+}
+
+async function submitAddLine() {
+  const status = document.getElementById('d-add-status');
+  const productId = document.getElementById('d-add-product').value;
+  const qty       = parseFloat(document.getElementById('d-add-qty').value);
+  const price     = parseFloat(document.getElementById('d-add-price').value);
+  if (!productId) { status.textContent = 'Pick a product'; status.style.color='#f87171'; return; }
+  if (!qty || qty <= 0) { status.textContent = 'Qty must be > 0'; status.style.color='#f87171'; return; }
+  if (isNaN(price) || price < 0) { status.textContent = 'Price must be >= 0'; status.style.color='#f87171'; return; }
+  status.textContent = 'Adding…'; status.style.color = 'var(--text-dim)';
+  try {
+    const r = await fetch(RM_API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add-po-line', pin: PIN, brand: STATE.currentRow.brand,
+                              po_id: STATE.currentRow.odoo_id,
+                              product_id: parseInt(productId, 10), qty, price_unit: price }),
+    }).then(x => x.json());
+    if (r.error) throw new Error(r.error);
+    status.textContent = `✓ Added ${r.product_name}`;
+    status.style.color = '#34d399';
+    document.getElementById('d-lines-add-form').classList.add('hidden');
+    await loadPOLines(STATE.currentRow);
+    await load();
+  } catch (e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = '#f87171';
+  }
 }
 
 // Global ESC to close drawer
