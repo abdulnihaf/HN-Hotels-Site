@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<title>HN Purchase Ledger</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  /* ── Ledger-specific layout ─────────────────────────────────── */
+  .ledger-wrap { max-width: 1400px; margin: 0 auto; padding: 16px; }
+  .ledger-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .ledger-header h1 { margin: 0; font-size: 22px; }
+  .ledger-header .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  .filter-bar { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 10px 0;
+    border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .filter-row label { font-size: 11px; color: var(--text-dim); margin-bottom: 2px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  .filter-group { display: flex; flex-direction: column; gap: 2px; }
+  .filter-group input, .filter-group select { padding: 6px 8px; font-size: 13px; min-height: 34px; min-width: 120px; }
+  .quick-chip { padding: 6px 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border);
+    color: var(--text-dim); font-size: 11px; cursor: pointer; font-weight: 600; white-space: nowrap; min-height: 34px;
+    display: inline-flex; align-items: center; }
+  .quick-chip:hover { color: var(--text); border-color: var(--text-dim); }
+  .quick-chip.active { background: rgba(212,164,76,0.15); border-color: rgba(212,164,76,0.5); color: #fbbf24; }
+  .quick-chip.warn.active { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.5); color: #f87171; }
+
+  .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+  .kpi .v { font-size: 20px; font-weight: 700; line-height: 1.1; }
+  .kpi .l { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; font-weight: 600; }
+  .kpi.warn .v { color: #f87171; }
+  .kpi.good .v { color: #34d399; }
+
+  /* Table */
+  .tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
+  table.ledger { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
+  table.ledger th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.4px; color: var(--text-dim); border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); position: sticky; top: 0; }
+  table.ledger td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table.ledger tbody tr { cursor: pointer; transition: background 0.1s; }
+  table.ledger tbody tr:hover { background: rgba(255,255,255,0.03); }
+  table.ledger tbody tr:last-child td { border-bottom: none; }
+  .amount-cell { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; white-space: nowrap; }
+
+  /* Kind / Brand / Bill chips */
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+  .chip.kind-PO       { background: rgba(124,86,247,0.15); color: #c4b5fd; }
+  .chip.kind-Expense  { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .chip.kind-Bill     { background: rgba(16,185,129,0.15); color: #34d399; }
+  .chip.brand-HE      { background: rgba(239,68,68,0.15);  color: #f87171; }
+  .chip.brand-NCH     { background: rgba(212,164,76,0.15); color: #fbbf24; }
+  .chip.brand-HQ      { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .chip.bill-yes      { background: rgba(16,185,129,0.15); color: #34d399; }
+  .chip.bill-no       { background: rgba(239,68,68,0.15);  color: #f87171; }
+  .chip.state-draft, .chip.state-opex, .chip.state-not_paid  { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+  .chip.state-purchase, .chip.state-done, .chip.state-paid, .chip.state-in_payment { background: rgba(16,185,129,0.15); color: #34d399; }
+  .chip.state-capex   { background: rgba(124,86,247,0.15); color: #c4b5fd; }
+
+  .cam-btn { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.35); color: #34d399;
+    padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .cam-btn.has-bill { background: rgba(148,163,184,0.08); border-color: var(--border); color: var(--text-dim); }
+
+  .vendor-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ref-cell    { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recorded-by { font-size: 11px; color: var(--text-dim); }
+
+  /* Drawer */
+  .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 20;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 100vw);
+    background: var(--bg); border-left: 1px solid var(--border); z-index: 21; overflow-y: auto;
+    transform: translateX(100%); transition: transform 0.25s ease-out; display: flex; flex-direction: column; }
+  .drawer.open { transform: translateX(0); }
+  .drawer-header { display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 16px 18px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); }
+  .drawer-header h2 { margin: 0; font-size: 17px; }
+  .drawer-body { padding: 16px 18px; flex: 1; }
+  .drawer-body .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 14px; margin-bottom: 14px; font-size: 13px; }
+  .drawer-body .kv .k { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; padding-top: 2px; }
+  .drawer-body .kv .v { font-weight: 500; }
+  .drawer-section { margin-bottom: 20px; }
+  .drawer-section h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-dim);
+    margin: 0 0 8px; font-weight: 700; }
+  .att-thumb { display: inline-block; margin: 4px 6px 0 0; }
+  .att-thumb img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+  .att-thumb a { font-size: 10px; color: var(--text-dim); display: block; margin-top: 2px; text-align: center; }
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--text-dim); }
+
+  /* Skeleton */
+  .skel { background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%);
+    background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 4px; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  @media (max-width: 700px) {
+    .ledger-wrap { padding: 10px; }
+    table.ledger th:nth-child(n+7), table.ledger td:nth-child(n+7) { display: none; }
+    table.ledger th:nth-child(4), table.ledger td:nth-child(4) { max-width: 140px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app" class="app">
+
+  <!-- ══════════ PIN GATE ══════════ -->
+  <div id="pin-screen">
+    <h1>Purchase Ledger</h1>
+    <p class="sub">View all purchases, expenses and bills. PIN-gated.</p>
+    <div style="margin-top: 32px; max-width: 280px;">
+      <label>Enter PIN</label>
+      <input id="pin-input" type="password" inputmode="numeric" maxlength="4"
+             autocomplete="off" autofocus style="font-size: 20px; text-align: center;">
+      <div id="pin-error" style="color: var(--danger); margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
+      <button class="btn btn-primary btn-full" style="margin-top: 12px;" onclick="verifyPin()">Enter</button>
+      <a href="/ops/purchase/" style="display:block; text-align:center; margin-top:16px; color:var(--text-dim); font-size:12px;">← Back to entry form</a>
+    </div>
+  </div>
+
+  <!-- ══════════ LEDGER ══════════ -->
+  <div id="ledger-screen" class="hidden">
+    <div class="ledger-wrap">
+
+      <div class="ledger-header">
+        <div>
+          <h1>Purchase Ledger</h1>
+          <div class="sub" id="user-sub"></div>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <a href="/ops/purchase/" class="btn btn-ghost btn-sm">+ New entry</a>
+          <button class="btn btn-ghost btn-sm" onclick="logout()">Exit</button>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <div class="filter-row" style="margin-bottom: 8px;">
+          <div class="filter-group">
+            <label>From</label>
+            <input type="date" id="f-from" onchange="load()">
+          </div>
+          <div class="filter-group">
+            <label>To</label>
+            <input type="date" id="f-to" onchange="load()">
+          </div>
+          <div class="filter-group">
+            <label>Brand</label>
+            <select id="f-brand" onchange="render()">
+              <option value="ALL">All brands</option>
+              <option value="HE">Hamza Express</option>
+              <option value="NCH">Nawabi Chai House</option>
+              <option value="HQ">HN HQ</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Kind</label>
+            <select id="f-kind" onchange="render()">
+              <option value="ALL">All</option>
+              <option value="PO">Purchase Orders</option>
+              <option value="Expense">Direct Expenses</option>
+              <option value="Bill">Vendor Bills</option>
+            </select>
+          </div>
+          <div class="filter-group" style="flex: 1; min-width: 180px;">
+            <label>Search (vendor, ref, notes)</label>
+            <input type="search" id="f-search" placeholder="Type to filter…" oninput="render()">
+          </div>
+        </div>
+        <div class="filter-row">
+          <span class="quick-chip" id="chip-30d"  onclick="setRangeDays(30)">Last 30 days</span>
+          <span class="quick-chip" id="chip-7d"   onclick="setRangeDays(7)">Last 7 days</span>
+          <span class="quick-chip" id="chip-apr1" onclick="setRangeApr1()">Since Apr 1</span>
+          <span class="quick-chip warn" id="chip-missing" onclick="toggleMissing()">⚠ Missing bill only</span>
+          <span style="flex:1"></span>
+          <button class="btn btn-ghost btn-sm" onclick="resetFilters()">Reset</button>
+          <button class="btn btn-ghost btn-sm" onclick="load()" title="Refresh">↻</button>
+        </div>
+      </div>
+
+      <!-- KPI strip -->
+      <div class="kpi-strip" id="kpi-strip"></div>
+
+      <!-- Table -->
+      <div class="tbl-wrap">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Kind</th>
+              <th>Vendor / Submitter</th>
+              <th>Item / Ref</th>
+              <th>Brand</th>
+              <th style="text-align:right;">Amount</th>
+              <th>State</th>
+              <th>Bill</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="ledger-body">
+            <tr><td colspan="9" class="empty-state">Enter a date range above.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="footer-meta" class="mute" style="text-align:center; font-size:11px; margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- Drawer -->
+  <div class="drawer-backdrop" id="drawer-bd" onclick="closeDrawer()"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div>
+        <h2 id="d-title">Entry</h2>
+        <div class="sub" id="d-sub" style="font-size:11px; color: var(--text-dim); margin-top:2px;"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="closeDrawer()">×</button>
+    </div>
+    <div class="drawer-body">
+      <div class="kv" id="d-kv"></div>
+
+      <div class="drawer-section">
+        <h3>Bill / Attachments</h3>
+        <div id="d-atts">—</div>
+        <div style="margin-top: 10px;">
+          <label for="d-file" class="btn btn-primary btn-full" style="justify-content:center; display:flex;">
+            📷 Upload bill photo
+          </label>
+          <input type="file" id="d-file" accept="image/*" capture="environment" style="display:none;" onchange="uploadBill(this)">
+          <div id="d-upload-status" style="font-size:11px; color: var(--text-dim); margin-top:6px; min-height:14px;"></div>
+        </div>
+      </div>
+
+      <div class="drawer-section" id="d-billref-section" style="display:none;">
+        <h3>Bill Reference Number</h3>
+        <input type="text" id="d-billref" placeholder="e.g. INV-2026-042" style="width:100%; padding:8px 10px;">
+      </div>
+
+      <div class="drawer-section">
+        <h3>Notes / Description</h3>
+        <textarea id="d-notes" rows="3" placeholder="Add context… (optional)" style="width:100%; padding:8px 10px; resize:vertical;"></textarea>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn btn-primary" style="flex:1;" onclick="saveNotes()">Save</button>
+          <button class="btn btn-ghost" onclick="closeDrawer()">Cancel</button>
+        </div>
+        <div id="d-notes-status" style="font-size:11px; color: var(--text-dim); margin-top:6px; min-height:14px;"></div>
+      </div>
+
+      <div class="drawer-section">
+        <a id="d-odoo-link" href="#" target="_blank" rel="noopener" class="btn btn-ghost btn-full" style="justify-content:center; display:flex;">Open in Odoo ↗</a>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+const API = '/api/spend';
+const ODOO_BASE = 'https://odoo.hnhotels.in/odoo';
+let PIN = '';
+let USER = null;
+let STATE = { rows: [], totals: null, missingOnly: false, currentRow: null };
+
+// ── PIN gate ──────────────────────────────────────────────────
+const pinInput = document.getElementById('pin-input');
+pinInput.addEventListener('keypress', e => { if (e.key === 'Enter') verifyPin(); });
+
+async function verifyPin() {
+  const pin = pinInput.value.trim();
+  if (!pin) return;
+  document.getElementById('pin-error').textContent = '';
+  const r = await fetch(`${API}?action=verify-pin&pin=${pin}`).then(x => x.json()).catch(() => null);
+  if (!r?.success) {
+    document.getElementById('pin-error').textContent = r?.error || 'Invalid PIN';
+    return;
+  }
+  const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm'];
+  if (!LEDGER_ROLES.includes(r.role)) {
+    document.getElementById('pin-error').textContent = `Ledger not available for role "${r.role}"`;
+    return;
+  }
+  PIN = pin;
+  USER = r;
+  document.getElementById('pin-screen').classList.add('hidden');
+  document.getElementById('ledger-screen').classList.remove('hidden');
+  document.getElementById('user-sub').textContent = `Signed in as ${r.name} · ${r.role}`;
+  // Default: last 30 days, all kinds
+  setRangeDays(30, false);
+  load();
+}
+
+function logout() {
+  PIN = ''; USER = null; STATE = { rows: [], totals: null, missingOnly: false, currentRow: null };
+  document.getElementById('ledger-screen').classList.add('hidden');
+  document.getElementById('pin-screen').classList.remove('hidden');
+  pinInput.value = '';
+  setTimeout(() => pinInput.focus(), 100);
+}
+
+// ── Filters ───────────────────────────────────────────────────
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+function isoDaysAgo(n) { return new Date(Date.now() - n*86400000).toISOString().slice(0, 10); }
+
+function setRangeDays(n, reload = true) {
+  document.getElementById('f-from').value = isoDaysAgo(n);
+  document.getElementById('f-to').value = todayISO();
+  updateChipActive();
+  if (reload) load();
+}
+function setRangeApr1() {
+  document.getElementById('f-from').value = '2026-04-01';
+  document.getElementById('f-to').value = todayISO();
+  updateChipActive();
+  load();
+}
+function updateChipActive() {
+  const from = document.getElementById('f-from').value;
+  const to = document.getElementById('f-to').value;
+  const chips = { 'chip-30d': isoDaysAgo(30), 'chip-7d': isoDaysAgo(7), 'chip-apr1': '2026-04-01' };
+  Object.entries(chips).forEach(([id, expFrom]) => {
+    document.getElementById(id).classList.toggle('active', from === expFrom && to === todayISO());
+  });
+  document.getElementById('chip-missing').classList.toggle('active', STATE.missingOnly);
+}
+function toggleMissing() {
+  STATE.missingOnly = !STATE.missingOnly;
+  updateChipActive();
+  render();
+}
+function resetFilters() {
+  document.getElementById('f-brand').value = 'ALL';
+  document.getElementById('f-kind').value  = 'ALL';
+  document.getElementById('f-search').value = '';
+  STATE.missingOnly = false;
+  setRangeDays(30);
+}
+
+// ── Load from API ──────────────────────────────────────────────
+async function load() {
+  const from = document.getElementById('f-from').value;
+  const to   = document.getElementById('f-to').value;
+  if (!from || !to) return;
+  const brand = document.getElementById('f-brand').value;
+  updateChipActive();
+
+  document.getElementById('ledger-body').innerHTML = `
+    <tr><td colspan="9" class="empty-state">
+      <div class="skel" style="height:12px; width:200px; margin:4px auto;"></div>
+      <div class="skel" style="height:12px; width:260px; margin:4px auto;"></div>
+      <div class="skel" style="height:12px; width:220px; margin:4px auto;"></div>
+    </td></tr>`;
+
+  const r = await fetch(`${API}?action=purchase-ledger&pin=${PIN}&from=${from}&to=${to}&brand=${brand}`)
+    .then(x => x.json()).catch(e => ({ success: false, error: e.message }));
+
+  if (!r?.success) {
+    document.getElementById('ledger-body').innerHTML =
+      `<tr><td colspan="9" class="empty-state" style="color:#f87171;">${esc(r?.error || 'Load failed')}</td></tr>`;
+    return;
+  }
+  STATE.rows = r.rows || [];
+  STATE.totals = r.totals;
+  render();
+}
+
+// ── Render ─────────────────────────────────────────────────────
+function render() {
+  const kind   = document.getElementById('f-kind').value;
+  const brand  = document.getElementById('f-brand').value;
+  const search = document.getElementById('f-search').value.trim().toLowerCase();
+
+  let rows = STATE.rows;
+  if (kind  !== 'ALL') rows = rows.filter(r => r.kind === kind);
+  if (brand !== 'ALL') rows = rows.filter(r => r.brand === brand);
+  if (STATE.missingOnly) rows = rows.filter(r => !r.has_attachment);
+  if (search) {
+    rows = rows.filter(r => {
+      const hay = [r.vendor?.name, r.item_or_ref, r.recorded_by_name, r.notes].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(search);
+    });
+  }
+
+  // KPIs
+  const totals = {
+    count: rows.length,
+    amount: rows.reduce((s, r) => s + (r.amount || 0), 0),
+    missing: rows.filter(r => !r.has_attachment).length,
+    withBill: rows.filter(r => r.has_attachment).length,
+  };
+  const kpiBox = document.getElementById('kpi-strip');
+  kpiBox.innerHTML = `
+    <div class="kpi"><div class="v">${totals.count}</div><div class="l">Entries</div></div>
+    <div class="kpi"><div class="v">${fmtINR(totals.amount)}</div><div class="l">Total ₹</div></div>
+    <div class="kpi warn"><div class="v">${totals.missing}</div><div class="l">⚠ Without Bill</div></div>
+    <div class="kpi good"><div class="v">${totals.withBill}</div><div class="l">✓ With Bill</div></div>
+  `;
+
+  // Table
+  const body = document.getElementById('ledger-body');
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="9" class="empty-state">No entries match these filters.</td></tr>`;
+    document.getElementById('footer-meta').textContent = '';
+    return;
+  }
+  body.innerHTML = rows.map((r, i) => {
+    const vendorText = r.vendor?.name || (r.recorded_by_name ? `<span class="recorded-by">by ${esc(r.recorded_by_name)}</span>` : '—');
+    const recordedByLine = r.recorded_by_name && r.vendor?.name
+      ? `<div class="recorded-by">by ${esc(r.recorded_by_name)}</div>` : '';
+    return `
+      <tr data-idx="${i}" onclick="openDrawer(${i})">
+        <td>${fmtDate(r.date)}</td>
+        <td><span class="chip kind-${r.kind}">${r.kind}</span></td>
+        <td class="vendor-cell">${vendorText}${recordedByLine}</td>
+        <td class="ref-cell" title="${esc(r.item_or_ref)}">${esc(r.item_or_ref)}</td>
+        <td><span class="chip brand-${r.brand}">${r.brand}</span></td>
+        <td class="amount-cell">${fmtINR(r.amount)}</td>
+        <td><span class="chip state-${r.state || 'na'}">${r.state || '—'}</span></td>
+        <td>${r.has_attachment
+              ? `<span class="chip bill-yes">✓ ${r.attachment_count}</span>`
+              : `<span class="chip bill-no">⚠ None</span>`}</td>
+        <td style="text-align:right;">
+          <button class="cam-btn${r.has_attachment ? ' has-bill' : ''}" onclick="event.stopPropagation(); quickUpload(${i})">
+            ${r.has_attachment ? '+' : '📷 Add'}
+          </button>
+        </td>
+      </tr>`;
+  }).join('');
+  document.getElementById('footer-meta').textContent =
+    `${rows.length} of ${STATE.rows.length} entries · ${fmtINR(totals.amount)} total`;
+}
+
+// ── Drawer ─────────────────────────────────────────────────────
+function openDrawer(idx) {
+  const r = getFilteredRows()[idx];
+  if (!r) return;
+  STATE.currentRow = r;
+  document.getElementById('d-title').textContent = `${r.kind} · ₹${fmtINR(r.amount)}`;
+  document.getElementById('d-sub').textContent   = `${r.vendor?.name || r.recorded_by_name || ''} · ${fmtDate(r.date)}`;
+
+  const modelSlug = { PO: 'purchase.order', Expense: 'hr.expense', Bill: 'account.move' }[r.kind];
+  document.getElementById('d-odoo-link').href = `${ODOO_BASE}/action-base_setup.action_general_configuration#id=${r.odoo_id}&model=${modelSlug}&view_type=form`;
+
+  document.getElementById('d-kv').innerHTML = `
+    <div class="k">Kind</div>      <div class="v"><span class="chip kind-${r.kind}">${r.kind}</span></div>
+    <div class="k">Odoo ID</div>   <div class="v">${r.odoo_id}</div>
+    <div class="k">Date</div>      <div class="v">${fmtDate(r.date)}</div>
+    <div class="k">Brand</div>     <div class="v"><span class="chip brand-${r.brand}">${r.brand}</span></div>
+    <div class="k">Vendor</div>    <div class="v">${esc(r.vendor?.name || '—')}</div>
+    <div class="k">Item / Ref</div><div class="v">${esc(r.item_or_ref)}</div>
+    <div class="k">Amount</div>    <div class="v">₹ ${fmtINR(r.amount)}</div>
+    <div class="k">State</div>     <div class="v"><span class="chip state-${r.state || 'na'}">${r.state || '—'}</span></div>
+    <div class="k">Recorded by</div><div class="v">${esc(r.recorded_by_name || '—')}${r.recorded_by_pin ? ` <span class="recorded-by">(PIN ${esc(r.recorded_by_pin)})</span>` : ''}</div>
+  `;
+
+  // Attachments
+  document.getElementById('d-atts').innerHTML = r.has_attachment
+    ? `<span class="chip bill-yes">✓ ${r.attachment_count} attachment${r.attachment_count === 1 ? '' : 's'} attached</span>
+       <div class="mute" style="font-size:11px; margin-top:4px;">Open in Odoo to view images.</div>`
+    : `<span class="chip bill-no">⚠ No bill attached yet</span>`;
+
+  document.getElementById('d-notes').value = r.notes || '';
+  document.getElementById('d-notes-status').textContent = '';
+  document.getElementById('d-upload-status').textContent = '';
+  document.getElementById('d-file').value = '';
+
+  // Bill-ref only for Bill kind
+  document.getElementById('d-billref-section').style.display = r.kind === 'Bill' ? 'block' : 'none';
+
+  document.getElementById('drawer-bd').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('drawer-bd').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  STATE.currentRow = null;
+}
+function getFilteredRows() {
+  const kind   = document.getElementById('f-kind').value;
+  const brand  = document.getElementById('f-brand').value;
+  const search = document.getElementById('f-search').value.trim().toLowerCase();
+  let rows = STATE.rows;
+  if (kind  !== 'ALL') rows = rows.filter(r => r.kind === kind);
+  if (brand !== 'ALL') rows = rows.filter(r => r.brand === brand);
+  if (STATE.missingOnly) rows = rows.filter(r => !r.has_attachment);
+  if (search) rows = rows.filter(r => {
+    const hay = [r.vendor?.name, r.item_or_ref, r.recorded_by_name, r.notes].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(search);
+  });
+  return rows;
+}
+
+// ── Upload bill (drawer + inline quick upload) ────────────────
+async function uploadBill(input) {
+  const file = input.files?.[0];
+  if (!file || !STATE.currentRow) return;
+  const status = document.getElementById('d-upload-status');
+  status.textContent = 'Compressing…';
+  try {
+    const compressed = await compressImage(file);
+    status.textContent = 'Uploading to Odoo…';
+    const r = await fetch(`${API}?action=attach-bill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pin: PIN,
+        kind: STATE.currentRow.kind,
+        odoo_id: STATE.currentRow.odoo_id,
+        brand: STATE.currentRow.brand,
+        date: STATE.currentRow.date,
+        attachment: compressed,
+      }),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Upload failed');
+    status.textContent = '✓ Uploaded. Refreshing…';
+    // Local update
+    STATE.currentRow.has_attachment = true;
+    STATE.currentRow.attachment_count = (STATE.currentRow.attachment_count || 0) + 1;
+    render();
+    openDrawer(getFilteredRows().indexOf(STATE.currentRow));
+    setTimeout(() => { status.textContent = ''; }, 2000);
+  } catch (e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = '#f87171';
+  }
+}
+async function quickUpload(idx) {
+  const r = getFilteredRows()[idx];
+  STATE.currentRow = r;
+  // Reuse drawer file input
+  const file = document.getElementById('d-file');
+  file.onchange = null;
+  file.click();
+  file.onchange = function() { uploadBill(this); };
+}
+
+async function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1200;
+        let w = img.width, h = img.height;
+        if (w > h && w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else if (h > maxDim)     { w = Math.round(w * maxDim / h); h = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        const b64 = dataUrl.split(',')[1];
+        resolve({ name: file.name, mimetype: 'image/jpeg', data_b64: b64 });
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Save notes / bill-ref ─────────────────────────────────────
+async function saveNotes() {
+  if (!STATE.currentRow) return;
+  const notes   = document.getElementById('d-notes').value;
+  const billRef = document.getElementById('d-billref').value;
+  const status  = document.getElementById('d-notes-status');
+  status.textContent = 'Saving…';
+  status.style.color = 'var(--text-dim)';
+  const r = await fetch(`${API}?action=update-entry-notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pin: PIN,
+      kind: STATE.currentRow.kind,
+      odoo_id: STATE.currentRow.odoo_id,
+      notes,
+      bill_ref: STATE.currentRow.kind === 'Bill' ? billRef : undefined,
+    }),
+  }).then(x => x.json()).catch(e => ({ success: false, error: e.message }));
+  if (!r.success) {
+    status.textContent = '✗ ' + (r.error || 'Save failed');
+    status.style.color = '#f87171';
+    return;
+  }
+  STATE.currentRow.notes = notes;
+  status.textContent = '✓ Saved';
+  status.style.color = '#34d399';
+  setTimeout(closeDrawer, 600);
+}
+
+// ── Utils ──────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtINR(n) {
+  if (n == null || isNaN(n)) return '—';
+  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Math.round(n));
+}
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (isNaN(d)) return s;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+}
+</script>
+
+</body>
+</html>

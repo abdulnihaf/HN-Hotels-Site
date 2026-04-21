@@ -1033,6 +1033,217 @@ export async function onRequest(context) {
       return json({ success: true, odoo_id, name: name.trim() });
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // PURCHASE LEDGER — read-only unified view for Zoya / GMs / admin
+    // Returns purchase.order + RM/Capex hr.expense + account.move(in_invoice)
+    // in one sorted list, with attachment counts for "missing bill" filter.
+    // Roles: admin, cfo, purchase, gm.  Purely additive — does not touch
+    // any existing record-creation path.
+    // ─────────────────────────────────────────────────────────────────────
+    if (action === 'purchase-ledger') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm'];
+      if (!LEDGER_ROLES.includes(user.role)) {
+        return json({ success: false, error: `Access denied for role ${user.role}` }, 403);
+      }
+
+      const from = url.searchParams.get('from') || new Date(Date.now() - 30*86400000).toISOString().slice(0, 10);
+      const to   = url.searchParams.get('to')   || new Date().toISOString().slice(0, 10);
+      const brandFilter = (url.searchParams.get('brand') || 'ALL').toUpperCase();
+      const companyId = brandFilter !== 'ALL' ? BRAND_COMPANY[brandFilter] : null;
+
+      // Step 1 — resolve RM + Capex category descendants (for hr.expense filter)
+      const parentCats = await odoo(apiKey, 'product.category', 'search_read',
+        [[['name', 'in', ['01 · Raw Materials', '14 · One-Time Capex']]]],
+        { fields: ['id', 'name'] });
+      let rmCapexCatIds = [];
+      if (parentCats.length) {
+        const childCats = await odoo(apiKey, 'product.category', 'search_read',
+          [[['id', 'child_of', parentCats.map(c => c.id)]]],
+          { fields: ['id'], limit: 500 });
+        rmCapexCatIds = childCats.map(c => c.id);
+      }
+
+      // Step 2 — parallel fetch PO, RM/Capex expenses, bills
+      const poFilter = [['date_order', '>=', from + ' 00:00:00'], ['date_order', '<=', to + ' 23:59:59']];
+      if (companyId) poFilter.push(['company_id', '=', companyId]);
+
+      const expFilter = [['date', '>=', from], ['date', '<=', to]];
+      if (companyId) expFilter.push(['company_id', '=', companyId]);
+      if (rmCapexCatIds.length) expFilter.push(['product_id.categ_id', 'in', rmCapexCatIds]);
+      else expFilter.push(['id', '=', -1]); // no categories → return empty
+
+      const billFilter = [['move_type', '=', 'in_invoice'], ['invoice_date', '>=', from], ['invoice_date', '<=', to]];
+      if (companyId) billFilter.push(['company_id', '=', companyId]);
+
+      const [pos, expenses, bills] = await Promise.all([
+        odoo(apiKey, 'purchase.order', 'search_read', [poFilter],
+          { fields: ['id', 'name', 'partner_id', 'company_id', 'date_order', 'amount_total',
+                     'state', 'order_line', 'x_recorded_by_user_id'],
+            order: 'date_order desc', limit: 500 }),
+        odoo(apiKey, 'hr.expense', 'search_read', [expFilter],
+          { fields: ['id', 'name', 'date', 'total_amount', 'product_id', 'company_id',
+                     'x_pool', 'x_location', 'x_submitted_by_pin', 'x_recorded_by_user_id'],
+            order: 'date desc', limit: 500 }),
+        odoo(apiKey, 'account.move', 'search_read', [billFilter],
+          { fields: ['id', 'name', 'ref', 'invoice_date', 'partner_id', 'company_id',
+                     'amount_total', 'payment_state', 'invoice_origin', 'x_recorded_by_user_id'],
+            order: 'invoice_date desc', limit: 500 }),
+      ]);
+
+      // Step 3 — batched attachment counts per model
+      const countAtt = async (resModel, ids) => {
+        if (!ids.length) return {};
+        const atts = await odoo(apiKey, 'ir.attachment', 'search_read',
+          [[['res_model', '=', resModel], ['res_id', 'in', ids]]],
+          { fields: ['res_id'], limit: 5000 });
+        const counts = {};
+        atts.forEach(a => { counts[a.res_id] = (counts[a.res_id] || 0) + 1; });
+        return counts;
+      };
+      const [poAtts, expAtts, billAtts] = await Promise.all([
+        countAtt('purchase.order', pos.map(p => p.id)),
+        countAtt('hr.expense',    expenses.map(e => e.id)),
+        countAtt('account.move',  bills.map(b => b.id)),
+      ]);
+
+      // Step 4 — normalize to unified row shape
+      const companyToBrand = { 1: 'HQ', 2: 'HE', 3: 'NCH' };
+      const toRow = (kind, base, attMap) => ({
+        kind, odoo_id: base.odoo_id, date: base.date,
+        vendor: base.vendor,
+        item_or_ref: base.item_or_ref,
+        brand: companyToBrand[base.company_id] || '?',
+        amount: base.amount,
+        state: base.state,
+        has_attachment: (attMap[base.odoo_id] || 0) > 0,
+        attachment_count: attMap[base.odoo_id] || 0,
+        recorded_by_user_id: base.recorded_by_user_id || null,
+        recorded_by_name:    base.recorded_by_name    || null,
+        recorded_by_pin:     base.recorded_by_pin     || null,
+        notes: base.notes || null,
+      });
+
+      const rows = [
+        ...pos.map(p => toRow('PO', {
+          odoo_id: p.id,
+          date: (p.date_order || '').slice(0, 10),
+          vendor: p.partner_id ? { id: p.partner_id[0], name: p.partner_id[1] } : null,
+          item_or_ref: `${p.name || 'PO'} · ${p.order_line?.length || 0} item${p.order_line?.length === 1 ? '' : 's'}`,
+          company_id: p.company_id?.[0],
+          amount: p.amount_total || 0,
+          state: p.state,
+          recorded_by_user_id: p.x_recorded_by_user_id?.[0] || null,
+          recorded_by_name:    p.x_recorded_by_user_id?.[1] || null,
+        }, poAtts)),
+        ...expenses.map(e => toRow('Expense', {
+          odoo_id: e.id,
+          date: e.date || '',
+          vendor: null,
+          item_or_ref: e.name || e.product_id?.[1] || 'Expense',
+          company_id: e.company_id?.[0],
+          amount: e.total_amount || 0,
+          state: e.x_pool === 'capex' ? 'capex' : 'opex',
+          recorded_by_user_id: e.x_recorded_by_user_id?.[0] || null,
+          recorded_by_name:    e.x_recorded_by_user_id?.[1] || null,
+          recorded_by_pin:     e.x_submitted_by_pin || null,
+        }, expAtts)),
+        ...bills.map(b => toRow('Bill', {
+          odoo_id: b.id,
+          date: b.invoice_date || '',
+          vendor: b.partner_id ? { id: b.partner_id[0], name: b.partner_id[1] } : null,
+          item_or_ref: b.ref || b.name || 'Bill',
+          company_id: b.company_id?.[0],
+          amount: b.amount_total || 0,
+          state: b.payment_state || 'not_paid',
+          recorded_by_user_id: b.x_recorded_by_user_id?.[0] || null,
+          recorded_by_name:    b.x_recorded_by_user_id?.[1] || null,
+        }, billAtts)),
+      ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+      const totals = {
+        count: rows.length,
+        amount: rows.reduce((s, r) => s + (r.amount || 0), 0),
+        missing_bill_count: rows.filter(r => !r.has_attachment).length,
+        with_bill_count:    rows.filter(r =>  r.has_attachment).length,
+        by_kind: {
+          PO:      rows.filter(r => r.kind === 'PO').length,
+          Expense: rows.filter(r => r.kind === 'Expense').length,
+          Bill:    rows.filter(r => r.kind === 'Bill').length,
+        },
+      };
+      return json({ success: true, rows, totals, from, to, brand: brandFilter });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // ATTACH BILL — upload bill photo to an existing PO / Expense / Bill
+    // Reuses existing saveAttachment + syncToDrive. Purely additive.
+    // ─────────────────────────────────────────────────────────────────────
+    if (action === 'attach-bill' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, kind, odoo_id, attachment } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm'];
+      if (!LEDGER_ROLES.includes(user.role)) return json({ success: false, error: 'Access denied' }, 403);
+      if (!odoo_id || !attachment?.data_b64) {
+        return json({ success: false, error: 'odoo_id and attachment.data_b64 required' }, 400);
+      }
+      const MODEL = { PO: 'purchase.order', Expense: 'hr.expense', Bill: 'account.move' };
+      const resModel = MODEL[kind];
+      if (!resModel) return json({ success: false, error: 'kind must be PO|Expense|Bill' }, 400);
+
+      const attId = await saveAttachment(apiKey, attachment, resModel, parseInt(odoo_id, 10));
+      if (!attId) return json({ success: false, error: 'Attachment save failed' }, 500);
+
+      const driveFileId = await syncToDrive(env, {
+        date: body.date || new Date().toISOString().slice(0, 10),
+        company: body.brand || 'HQ',
+        category: `${kind}-bill`,
+        file_name: attachment.name || 'bill.jpg',
+        mimetype: attachment.mimetype || 'image/jpeg',
+        data_b64: attachment.data_b64,
+      });
+      return json({ success: true, attachment_id: attId, drive_file_id: driveFileId });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // UPDATE ENTRY NOTES — edit notes / bill-ref on existing PO / Expense / Bill
+    // Never touches amount, vendor, product — by design.
+    // ─────────────────────────────────────────────────────────────────────
+    if (action === 'update-entry-notes' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, kind, odoo_id, notes, bill_ref } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm'];
+      if (!LEDGER_ROLES.includes(user.role)) return json({ success: false, error: 'Access denied' }, 403);
+      if (!odoo_id) return json({ success: false, error: 'odoo_id required' }, 400);
+      const MODEL = { PO: 'purchase.order', Expense: 'hr.expense', Bill: 'account.move' };
+      const resModel = MODEL[kind];
+      if (!resModel) return json({ success: false, error: 'kind must be PO|Expense|Bill' }, 400);
+
+      const vals = {};
+      if (typeof notes === 'string') {
+        // hr.expense uses `name` as the line description; PO/Bill have `notes`/`narration`
+        if (kind === 'Expense')  vals.name = notes.trim();
+        else if (kind === 'PO')  vals.notes = notes.trim();
+        else                     vals.narration = notes.trim();
+      }
+      if (typeof bill_ref === 'string' && kind === 'Bill') {
+        vals.ref = bill_ref.trim();
+      }
+      if (!Object.keys(vals).length) return json({ success: false, error: 'Nothing to update' }, 400);
+
+      await odoo(apiKey, resModel, 'write', [[parseInt(odoo_id, 10)], vals]);
+      return json({ success: true });
+    }
+
     // ── ARCHIVE PRODUCT (admin/cfo) — marks active=false in Odoo ──────────
     if (action === 'archive-product' && request.method === 'POST') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
