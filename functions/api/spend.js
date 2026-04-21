@@ -1527,31 +1527,44 @@ export async function onRequest(context) {
           { fields: ['id', 'res_model', 'res_id', 'name', 'mimetype', 'create_date', 'file_size'], limit: 5000 });
       }
 
-      // Step 3 — check which ones already have a D1 row (skip those)
+      // Step 3 — index existing D1 rows so we can decide per-attachment
+      //   • row already exists AND filename already structured → truly skip
+      //   • row exists but filename unstructured → rename Drive + Odoo + D1
+      //   • row missing → fresh match + insert
+      const STRUCTURED_NAME_RE = /^\d{4}-\d{2}-\d{2}_/;
       const existing = await DB.prepare(
-        `SELECT entry_kind, entry_odoo_id, odoo_attachment_id FROM bill_attachments`
+        `SELECT id AS d1_id, entry_kind, entry_odoo_id, odoo_attachment_id,
+                drive_file_id, filename
+         FROM bill_attachments`
       ).all();
-      const existingKey = new Set();
+      const existingByKey = new Map();
       for (const r of existing.results || []) {
-        existingKey.add(`${r.entry_kind}-${r.entry_odoo_id}-${r.odoo_attachment_id || 'X'}`);
+        const k = `${r.entry_kind}-${r.entry_odoo_id}-${r.odoo_attachment_id || 'X'}`;
+        existingByKey.set(k, r);
       }
       const kindOf = { 'purchase.order': 'PO', 'hr.expense': 'Expense', 'account.move': 'Bill' };
 
       // Step 4 — for each unique (date,brand) that has attachments, list Drive folder once
       const folderCache = {};   // key: "YYYY-MM/YYYY-MM-DD/BRAND" -> [{filename,file_id,view_url}, ...]
       const needFolders = new Set();
-      const pending = []; // [{att, resModel, entry, kind, key}]
+      const pending = []; // [{att, kind, entry, folderPath, existing?}]
+      let alreadyGood = 0;
       for (const [resModel, atts] of Object.entries(attachmentsByModel)) {
         for (const att of atts) {
           const entry = entryIndex[resModel][att.res_id];
           if (!entry || !entry.date) continue;
           const kind = kindOf[resModel];
           const key = `${kind}-${att.res_id}-${att.id}`;
-          if (existingKey.has(key)) continue;
+          const existingRow = existingByKey.get(key);
+          // If fully processed already (has drive_file_id AND structured name) → truly skip
+          if (existingRow && existingRow.drive_file_id && STRUCTURED_NAME_RE.test(existingRow.filename || '')) {
+            alreadyGood++;
+            continue;
+          }
           const [yy, mm] = entry.date.split('-');
           const folderPath = `${yy}-${mm}/${entry.date}/${entry.brand}`;
           needFolders.add(folderPath);
-          pending.push({ att, kind, entry, folderPath });
+          pending.push({ att, kind, entry, folderPath, existing: existingRow || null });
         }
       }
 
@@ -1573,7 +1586,7 @@ export async function onRequest(context) {
       }
 
       // Step 6 — match pending items, rename to structured pattern, insert
-      let matched = 0, unmatched = 0, skipped = existingKey.size, errors = 0, renamed = 0;
+      let matched = 0, unmatched = 0, errors = 0, renamed = 0;
       const unmatchedSamples = [];
       const modelByKind = { PO: 'purchase.order', Expense: 'hr.expense', Bill: 'account.move' };
 
@@ -1591,7 +1604,22 @@ export async function onRequest(context) {
 
       for (const it of pending) {
         const files = folderCache[it.folderPath] || [];
-        let match = files.find(f => f.filename === it.att.name);
+        // Match by exact current name first, then fall back to Odoo's stored name
+        // (covers the case where Drive already got renamed but D1 is stale, or vice versa)
+        const nameHints = [
+          it.existing?.filename,
+          it.att.name,
+        ].filter(Boolean);
+        let match = null;
+        for (const h of nameHints) {
+          match = files.find(f => f.filename === h);
+          if (match) break;
+        }
+        // File-id match (if we stored it before) beats everything
+        if (!match && it.existing?.drive_file_id) {
+          match = files.find(f => f.file_id === it.existing.drive_file_id);
+        }
+        // Prefix fallback for "(1)" collision suffixes
         if (!match) {
           const base = (it.att.name || '').replace(/\.[^.]+$/, '');
           match = files.find(f => f.filename.startsWith(base));
@@ -1602,9 +1630,6 @@ export async function onRequest(context) {
           continue;
         }
 
-        // Build structured filename. We don't have the original vendor/product
-        // handy on this code path, so use the kind + res_id + amount signature
-        // which is still cleaner than "WhatsApp Image 2026-04-17 at 16.47.jpg".
         const structuredName = buildBillFilename({
           date: it.entry.date,
           category: `${it.kind}-bill`,
@@ -1615,34 +1640,45 @@ export async function onRequest(context) {
         });
 
         let finalName = match.filename;
-        // Rename Drive file if not already structured
         if (match.filename !== structuredName) {
           const ok = await renameDriveFile(match.file_id, structuredName);
           if (ok) { finalName = structuredName; renamed++; }
         }
-        // Rename Odoo attachment name to match (best-effort, non-fatal)
         if (finalName !== it.att.name) {
           try {
             await odoo(apiKey, 'ir.attachment', 'write', [[it.att.id], { name: finalName }]);
-          } catch (e) { /* ignore */ }
+          } catch (e) { /* non-fatal */ }
         }
 
         try {
-          await DB.prepare(`
-            INSERT INTO bill_attachments
-              (entry_kind, entry_odoo_id, brand, entry_date, entry_amount,
-               odoo_attachment_id, drive_file_id, drive_view_url, drive_folder_path,
-               filename, mimetype, file_size_kb, uploaded_by_pin, uploaded_by_name,
-               uploaded_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(
-            it.kind, it.att.res_id, it.entry.brand, it.entry.date, it.entry.amount,
-            it.att.id, match.file_id, match.view_url, it.folderPath,
-            finalName, it.att.mimetype || 'image/jpeg',
-            Math.round((match.size || 0) / 1024),
-            null, 'backfill',
-            (it.att.create_date || new Date().toISOString()).replace('T', ' ').slice(0, 19)
-          ).run();
+          if (it.existing) {
+            // Update existing D1 row — fill in drive metadata + new name
+            await DB.prepare(`
+              UPDATE bill_attachments
+              SET drive_file_id = ?, drive_view_url = ?, drive_folder_path = ?,
+                  filename = ?
+              WHERE id = ?
+            `).bind(
+              match.file_id, match.view_url, it.folderPath,
+              finalName, it.existing.d1_id
+            ).run();
+          } else {
+            await DB.prepare(`
+              INSERT INTO bill_attachments
+                (entry_kind, entry_odoo_id, brand, entry_date, entry_amount,
+                 odoo_attachment_id, drive_file_id, drive_view_url, drive_folder_path,
+                 filename, mimetype, file_size_kb, uploaded_by_pin, uploaded_by_name,
+                 uploaded_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(
+              it.kind, it.att.res_id, it.entry.brand, it.entry.date, it.entry.amount,
+              it.att.id, match.file_id, match.view_url, it.folderPath,
+              finalName, it.att.mimetype || 'image/jpeg',
+              Math.round((match.size || 0) / 1024),
+              null, 'backfill',
+              (it.att.create_date || new Date().toISOString()).replace('T', ' ').slice(0, 19)
+            ).run();
+          }
           matched++;
         } catch (e) {
           errors++;
@@ -1656,7 +1692,7 @@ export async function onRequest(context) {
         scanned_entries: pos.length + expenses.length + bills.length,
         scanned_attachments: Object.values(attachmentsByModel).reduce((s, a) => s + a.length, 0),
         folders_listed: folderList.length,
-        matched, renamed, unmatched, skipped_existing: skipped, errors,
+        matched, renamed, unmatched, already_structured: alreadyGood, errors,
         unmatched_samples: unmatchedSamples,
       });
     }
