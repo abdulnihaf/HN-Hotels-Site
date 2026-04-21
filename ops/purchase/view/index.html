@@ -43,7 +43,10 @@
     letter-spacing: 0.4px; color: var(--text-dim); border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); position: sticky; top: 0; }
   table.ledger td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   table.ledger tbody tr { cursor: pointer; transition: background 0.1s; }
-  table.ledger tbody tr:hover { background: rgba(255,255,255,0.03); }
+  table.ledger tbody tr:hover { background: rgba(255,255,255,0.06); }
+  table.ledger tbody tr:focus-visible { outline: 2px solid var(--accent,#d4a44c); outline-offset: -2px; background: rgba(255,255,255,0.06); }
+  table.ledger tbody tr.highlight-pulse { background: rgba(16,185,129,0.18); animation: rowPulse 1.6s ease-out; }
+  @keyframes rowPulse { 0% { background: rgba(16,185,129,0.35); } 100% { background: rgba(16,185,129,0.06); } }
   table.ledger tbody tr:last-child td { border-bottom: none; }
   .amount-cell { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; white-space: nowrap; }
 
@@ -181,7 +184,7 @@
           <span class="quick-chip warn" id="chip-missing" onclick="toggleMissing()">⚠ Missing bill only</span>
           <span style="flex:1"></span>
           <button class="btn btn-ghost btn-sm" onclick="resetFilters()">Reset</button>
-          <button class="btn btn-ghost btn-sm" onclick="load()" title="Refresh">↻</button>
+          <button class="btn btn-ghost btn-sm" id="btn-refresh" onclick="load()" title="Refresh">↻</button>
         </div>
       </div>
 
@@ -216,7 +219,7 @@
 
   <!-- Drawer -->
   <div class="drawer-backdrop" id="drawer-bd" onclick="closeDrawer()"></div>
-  <aside class="drawer" id="drawer">
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="d-title">
     <div class="drawer-header">
       <div>
         <h2 id="d-title">Entry</h2>
@@ -268,9 +271,10 @@
 // ── State ──────────────────────────────────────────────────────
 const API = '/api/spend';
 const ODOO_BASE = 'https://odoo.hnhotels.in';
+const FRESH_STATE = () => ({ rows: [], totals: null, missingOnly: false, currentRow: null, quickUploadMode: false, isLoading: false, lastFocusedRow: null });
 let PIN = '';
 let USER = null;
-let STATE = { rows: [], totals: null, missingOnly: false, currentRow: null, quickUploadMode: false };
+let STATE = FRESH_STATE();
 
 // ── PIN gate ──────────────────────────────────────────────────
 const pinInput = document.getElementById('pin-input');
@@ -279,8 +283,12 @@ pinInput.addEventListener('keypress', e => { if (e.key === 'Enter') verifyPin();
 async function verifyPin() {
   const pin = pinInput.value.trim();
   if (!pin) return;
+  const btn = document.querySelector('#pin-screen .btn-primary');
+  const prevLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Verifying…';
   document.getElementById('pin-error').textContent = '';
   const r = await fetch(`${API}?action=verify-pin&pin=${pin}`).then(x => x.json()).catch(() => null);
+  btn.disabled = false; btn.textContent = prevLabel;
   if (!r?.success) {
     document.getElementById('pin-error').textContent = r?.error || 'Invalid PIN';
     return;
@@ -303,16 +311,25 @@ async function verifyPin() {
 }
 
 function logout() {
-  PIN = ''; USER = null; STATE = { rows: [], totals: null, missingOnly: false, currentRow: null };
+  PIN = ''; USER = null; STATE = FRESH_STATE();
+  closeDrawer();
   document.getElementById('ledger-screen').classList.add('hidden');
   document.getElementById('pin-screen').classList.remove('hidden');
   pinInput.value = '';
   setTimeout(() => pinInput.focus(), 100);
 }
 
-// ── Filters ───────────────────────────────────────────────────
-function todayISO() { return new Date().toISOString().slice(0, 10); }
-function isoDaysAgo(n) { return new Date(Date.now() - n*86400000).toISOString().slice(0, 10); }
+// ── Filters — IST timezone (Asia/Kolkata) ─────────────────────
+// `toLocaleDateString('en-CA', { timeZone })` returns YYYY-MM-DD and
+// respects the chosen timezone, so late-night Bangalore entries don't
+// get bucketed to yesterday due to UTC rollover.
+function todayISO() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+function isoDaysAgo(n) {
+  const d = new Date(Date.now() - n * 86400000);
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
 
 function setRangeDays(n, reload = true) {
   document.getElementById('f-from').value = isoDaysAgo(n);
@@ -349,15 +366,25 @@ function resetFilters() {
 }
 
 // ── Load from API ──────────────────────────────────────────────
+const COL_COUNT = 9;  // single source of truth — update if columns change
 async function load() {
+  if (STATE.isLoading) return;  // prevent concurrent loads (double-click refresh)
   const from = document.getElementById('f-from').value;
   const to   = document.getElementById('f-to').value;
   if (!from || !to) return;
+  if (from > to) {
+    document.getElementById('ledger-body').innerHTML =
+      `<tr><td colspan="${COL_COUNT}" class="empty-state" style="color:#f87171;">From date is after To date.</td></tr>`;
+    return;
+  }
+  STATE.isLoading = true;
+  const refreshBtn = document.getElementById('btn-refresh');
+  if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.style.opacity = '0.5'; }
   const brand = document.getElementById('f-brand').value;
   updateChipActive();
 
   document.getElementById('ledger-body').innerHTML = `
-    <tr><td colspan="9" class="empty-state">
+    <tr><td colspan="${COL_COUNT}" class="empty-state">
       <div class="skel" style="height:12px; width:200px; margin:4px auto;"></div>
       <div class="skel" style="height:12px; width:260px; margin:4px auto;"></div>
       <div class="skel" style="height:12px; width:220px; margin:4px auto;"></div>
@@ -366,9 +393,11 @@ async function load() {
   const r = await fetch(`${API}?action=purchase-ledger&pin=${PIN}&from=${from}&to=${to}&brand=${brand}`)
     .then(x => x.json()).catch(e => ({ success: false, error: e.message }));
 
+  STATE.isLoading = false;
+  if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.style.opacity = ''; }
   if (!r?.success) {
     document.getElementById('ledger-body').innerHTML =
-      `<tr><td colspan="9" class="empty-state" style="color:#f87171;">${esc(r?.error || 'Load failed')}</td></tr>`;
+      `<tr><td colspan="${COL_COUNT}" class="empty-state" style="color:#f87171;">${esc(r?.error || 'Load failed')}</td></tr>`;
     return;
   }
   STATE.rows = r.rows || [];
@@ -411,35 +440,57 @@ function render() {
   // Table
   const body = document.getElementById('ledger-body');
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="9" class="empty-state">No entries match these filters.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${COL_COUNT}" class="empty-state">No entries match these filters.</td></tr>`;
     document.getElementById('footer-meta').textContent = '';
     return;
   }
   body.innerHTML = rows.map((r, i) => {
-    const vendorText = r.vendor?.name || (r.recorded_by_name ? `<span class="recorded-by">by ${esc(r.recorded_by_name)}</span>` : '—');
-    const recordedByLine = r.recorded_by_name && r.vendor?.name
+    const vendorName = r.vendor?.name || '';
+    const vendorText = vendorName
+      ? `<div title="${esc(vendorName)}">${esc(vendorName)}</div>`
+      : (r.recorded_by_name ? `<span class="recorded-by">by ${esc(r.recorded_by_name)}</span>` : '—');
+    const recordedByLine = r.recorded_by_name && vendorName
       ? `<div class="recorded-by">by ${esc(r.recorded_by_name)}</div>` : '';
     return `
-      <tr data-idx="${i}" onclick="openDrawer(${i})">
+      <tr data-idx="${i}" data-odoo-id="${r.odoo_id}" data-kind="${r.kind}"
+          tabindex="0" role="button"
+          onclick="openDrawer(${i})"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDrawer(${i});}">
         <td>${fmtDate(r.date)}</td>
         <td><span class="chip kind-${r.kind}">${r.kind}</span></td>
         <td class="vendor-cell">${vendorText}${recordedByLine}</td>
         <td class="ref-cell" title="${esc(r.item_or_ref)}">${esc(r.item_or_ref)}</td>
         <td><span class="chip brand-${r.brand}">${r.brand}</span></td>
         <td class="amount-cell">${fmtINR(r.amount)}</td>
-        <td><span class="chip state-${r.state || 'na'}">${r.state || '—'}</span></td>
+        <td><span class="chip state-${esc(r.state || 'na')}">${esc(r.state || '—')}</span></td>
         <td>${r.has_attachment
-              ? `<span class="chip bill-yes">✓ ${r.attachment_count}</span>`
-              : `<span class="chip bill-no">⚠ None</span>`}</td>
+              ? `<span class="chip bill-yes" aria-label="Bill attached">✓${r.attachment_count > 1 ? ' ' + r.attachment_count : ''}</span>`
+              : `<span class="chip bill-no" aria-label="No bill attached">No bill</span>`}</td>
         <td style="text-align:right;">
-          <button class="cam-btn${r.has_attachment ? ' has-bill' : ''}" onclick="event.stopPropagation(); quickUpload(${i})">
-            ${r.has_attachment ? '+' : '📷 Add'}
+          <button class="cam-btn${r.has_attachment ? ' has-bill' : ''}"
+                  aria-label="${r.has_attachment ? 'Add another bill' : 'Upload bill'}"
+                  onclick="event.stopPropagation(); quickUpload(${i})">
+            ${r.has_attachment ? '+' : 'Add bill'}
           </button>
         </td>
       </tr>`;
   }).join('');
-  document.getElementById('footer-meta').textContent =
-    `${rows.length} of ${STATE.rows.length} entries · ${fmtINR(totals.amount)} total`;
+
+  // Pagination warning: backend limit is 500 per model — if any kind hit exactly 500, warn
+  const atLimit = STATE.totals && (STATE.totals.by_kind?.PO === 500 || STATE.totals.by_kind?.Expense === 500 || STATE.totals.by_kind?.Bill === 500);
+  document.getElementById('footer-meta').innerHTML =
+    `${rows.length} of ${STATE.rows.length} entries · ${fmtINR(totals.amount)} total`
+    + (atLimit ? ` <span style="color:#fbbf24;">· ⚠ Results capped at 500 per kind — narrow date range to see more</span>` : '');
+
+  // Restore a row highlight (e.g. after quick-upload) so user can see what updated
+  if (STATE.pulseOdooId) {
+    const row = body.querySelector(`tr[data-odoo-id="${STATE.pulseOdooId}"][data-kind="${STATE.pulseKind}"]`);
+    if (row) {
+      row.classList.add('highlight-pulse');
+      setTimeout(() => row.classList.remove('highlight-pulse'), 1800);
+    }
+    STATE.pulseOdooId = null; STATE.pulseKind = null;
+  }
 }
 
 // ── Drawer ─────────────────────────────────────────────────────
@@ -447,8 +498,13 @@ function openDrawer(idx) {
   const r = getFilteredRows()[idx];
   if (!r) return;
   STATE.currentRow = r;
-  document.getElementById('d-title').textContent = `${r.kind} · ₹${fmtINR(r.amount)}`;
-  document.getElementById('d-sub').textContent   = `${r.vendor?.name || r.recorded_by_name || ''} · ${fmtDate(r.date)}`;
+  // Remember the row that triggered the drawer so we can restore focus on close
+  STATE.lastFocusedRow = document.querySelector(`tbody#ledger-body tr[data-odoo-id="${r.odoo_id}"][data-kind="${r.kind}"]`);
+
+  const amountText = (r.amount != null && !isNaN(r.amount)) ? `₹${fmtINR(r.amount)}` : '—';
+  document.getElementById('d-title').textContent = `${r.kind} · ${amountText}`;
+  const subParts = [r.vendor?.name || r.recorded_by_name, fmtDate(r.date)].filter(Boolean);
+  document.getElementById('d-sub').textContent = subParts.join(' · ');
 
   const modelSlug = { PO: 'purchase.order', Expense: 'hr.expense', Bill: 'account.move' }[r.kind];
   // Odoo classic web URL — works regardless of menu structure
@@ -461,8 +517,8 @@ function openDrawer(idx) {
     <div class="k">Brand</div>     <div class="v"><span class="chip brand-${r.brand}">${r.brand}</span></div>
     <div class="k">Vendor</div>    <div class="v">${esc(r.vendor?.name || '—')}</div>
     <div class="k">Item / Ref</div><div class="v">${esc(r.item_or_ref)}</div>
-    <div class="k">Amount</div>    <div class="v">₹ ${fmtINR(r.amount)}</div>
-    <div class="k">State</div>     <div class="v"><span class="chip state-${r.state || 'na'}">${r.state || '—'}</span></div>
+    <div class="k">Amount</div>    <div class="v">${amountText}</div>
+    <div class="k">State</div>     <div class="v"><span class="chip state-${esc(r.state || 'na')}">${esc(r.state || '—')}</span></div>
     <div class="k">Recorded by</div><div class="v">${esc(r.recorded_by_name || '—')}${r.recorded_by_pin ? ` <span class="recorded-by">(PIN ${esc(r.recorded_by_pin)})</span>` : ''}</div>
   `;
 
@@ -483,14 +539,32 @@ function openDrawer(idx) {
   // Notes-hint for PO / Bill (chatter-based) vs Expense (direct field)
   document.getElementById('d-notes-hint').style.display = (r.kind === 'PO' || r.kind === 'Bill') ? 'block' : 'none';
 
+  const drawer = document.getElementById('drawer');
   document.getElementById('drawer-bd').classList.add('open');
-  document.getElementById('drawer').classList.add('open');
+  drawer.classList.add('open');
+  drawer.setAttribute('aria-hidden', 'false');
+  // Move focus into the drawer for screen readers + keyboard users
+  setTimeout(() => drawer.querySelector('.drawer-header button')?.focus(), 260);
 }
 function closeDrawer() {
+  const drawer = document.getElementById('drawer');
   document.getElementById('drawer-bd').classList.remove('open');
-  document.getElementById('drawer').classList.remove('open');
+  drawer.classList.remove('open');
+  drawer.setAttribute('aria-hidden', 'true');
+  // Restore focus to the triggering row for keyboard users
+  if (STATE.lastFocusedRow && document.body.contains(STATE.lastFocusedRow)) {
+    STATE.lastFocusedRow.focus({ preventScroll: false });
+  }
   STATE.currentRow = null;
+  STATE.lastFocusedRow = null;
 }
+
+// Global ESC to close drawer
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('drawer').classList.contains('open')) {
+    closeDrawer();
+  }
+});
 function getFilteredRows() {
   const kind   = document.getElementById('f-kind').value;
   const brand  = document.getElementById('f-brand').value;
@@ -541,6 +615,9 @@ async function uploadBill(input) {
     // Local update
     STATE.currentRow.has_attachment = true;
     STATE.currentRow.attachment_count = (STATE.currentRow.attachment_count || 0) + 1;
+    // Mark row to pulse-highlight on next render so user sees what updated
+    STATE.pulseOdooId = STATE.currentRow.odoo_id;
+    STATE.pulseKind = STATE.currentRow.kind;
     render();
     if (inDrawer) {
       setStatus('✓ Uploaded. Refreshing…');
@@ -561,9 +638,13 @@ async function uploadBill(input) {
 async function quickUpload(idx) {
   const r = getFilteredRows()[idx];
   if (!r) return;
+  // If drawer is open for a DIFFERENT row, close it first so state isn't stale
+  if (STATE.currentRow && STATE.currentRow !== r && document.getElementById('drawer').classList.contains('open')) {
+    closeDrawer();
+  }
   STATE.currentRow = r;
   STATE.quickUploadMode = true;
-  // Reuse drawer file input — use onchange once (cleared below after fire)
+  // Reuse drawer file input — set onchange for this trigger, cleared after fire
   const file = document.getElementById('d-file');
   file.value = '';
   file.onchange = function() {
@@ -616,28 +697,39 @@ async function saveNotes() {
   const notes   = document.getElementById('d-notes').value;
   const billRef = document.getElementById('d-billref').value;
   const status  = document.getElementById('d-notes-status');
+  const saveBtn = document.querySelector('.drawer-section button.btn-primary');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
   status.textContent = 'Saving…';
   status.style.color = 'var(--text-dim)';
-  const r = await fetch(`${API}?action=update-entry-notes`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      pin: PIN,
-      kind: STATE.currentRow.kind,
-      odoo_id: STATE.currentRow.odoo_id,
-      notes,
-      bill_ref: STATE.currentRow.kind === 'Bill' ? billRef : undefined,
-    }),
-  }).then(x => x.json()).catch(e => ({ success: false, error: e.message }));
-  if (!r.success) {
-    status.textContent = '✗ ' + (r.error || 'Save failed');
-    status.style.color = '#f87171';
-    return;
+  try {
+    const r = await fetch(`${API}?action=update-entry-notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pin: PIN,
+        kind: STATE.currentRow.kind,
+        odoo_id: STATE.currentRow.odoo_id,
+        notes,
+        bill_ref: STATE.currentRow.kind === 'Bill' ? billRef : undefined,
+      }),
+    }).then(x => x.json()).catch(e => ({ success: false, error: e.message }));
+    if (!r.success) {
+      status.textContent = '✗ ' + (r.error || 'Save failed');
+      status.style.color = '#f87171';
+      return;
+    }
+    // Update in-memory row + re-render row in table (for Expense where name shows in item/ref)
+    STATE.currentRow.notes = notes;
+    if (STATE.currentRow.kind === 'Bill') STATE.currentRow.bill_ref = billRef;
+    if (STATE.currentRow.kind === 'Expense') STATE.currentRow.item_or_ref = notes || STATE.currentRow.item_or_ref;
+    render();
+    status.textContent = '✓ Saved to Odoo';
+    status.style.color = '#34d399';
+    // Auto-clear the status after a moment but keep the drawer open for further edits
+    setTimeout(() => { if (status) status.textContent = ''; }, 2500);
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
   }
-  STATE.currentRow.notes = notes;
-  status.textContent = '✓ Saved';
-  status.style.color = '#34d399';
-  setTimeout(closeDrawer, 600);
 }
 
 // ── Utils ──────────────────────────────────────────────────────
