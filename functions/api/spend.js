@@ -1724,6 +1724,78 @@ export async function onRequest(context) {
       const rmParentId = rmParentHits[0].id;
       report.rm_parent_category_id = rmParentId;
 
+      // ── PHASE 0 — refresh stale D1 odoo_ids (match hn_code ↔ Odoo default_code) ─
+      // D1 rm_products.odoo_id was written before the Apr 18 Odoo rebuild and points
+      // to dead IDs. Re-map against current Odoo using default_code = hn_code. Also
+      // refreshes rm_vendors.odoo_id by matching on trimmed+lower-cased name.
+      if (phase === 'refresh-ids' || phase === 'all') {
+        // Products: fetch all products with HN-RM-* default_code
+        const odooProducts = await odoo(apiKey, 'product.product', 'search_read',
+          [[['default_code', 'like', 'HN-RM-']]],
+          { fields: ['id', 'default_code', 'name'], limit: 500 });
+        const codeToId = Object.fromEntries(odooProducts.map(p => [p.default_code, p.id]));
+
+        const d1Prods = await DB.prepare(
+          `SELECT id AS d1_id, hn_code, name, odoo_id FROM rm_products WHERE is_active = 1`
+        ).all();
+        const prodUpdates = [], prodSkipped = [], prodUnmatched = [];
+        for (const p of (d1Prods.results || [])) {
+          const realId = codeToId[p.hn_code];
+          if (!realId) {
+            prodUnmatched.push({ hn_code: p.hn_code, name: p.name, stale_odoo_id: p.odoo_id });
+            continue;
+          }
+          if (p.odoo_id === realId) { prodSkipped.push(p.hn_code); continue; }
+          prodUpdates.push({ d1_id: p.d1_id, hn_code: p.hn_code, stale: p.odoo_id, real: realId });
+        }
+        if (!dry_run && prodUpdates.length) {
+          for (const u of prodUpdates) {
+            await DB.prepare(`UPDATE rm_products SET odoo_id = ?, updated_at = datetime('now') WHERE id = ?`)
+              .bind(u.real, u.d1_id).run();
+          }
+        }
+
+        // Vendors: fetch all suppliers in Odoo, match by name
+        const odooVendors = await odoo(apiKey, 'res.partner', 'search_read',
+          [[['supplier_rank', '>', 0], ['active', '=', true]]],
+          { fields: ['id', 'name', 'phone'], limit: 500 });
+        const normName = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const nameToVendorIds = {};
+        for (const v of odooVendors) {
+          const k = normName(v.name);
+          if (!nameToVendorIds[k]) nameToVendorIds[k] = [];
+          nameToVendorIds[k].push(v.id);
+        }
+        const d1Vendors = await DB.prepare(
+          `SELECT id AS d1_id, key, name, odoo_id FROM rm_vendors WHERE is_active = 1`
+        ).all();
+        const vendorUpdates = [], vendorSkipped = [], vendorUnmatched = [], vendorAmbiguous = [];
+        for (const v of (d1Vendors.results || [])) {
+          const candidates = nameToVendorIds[normName(v.name)] || [];
+          if (!candidates.length) { vendorUnmatched.push({ key: v.key, name: v.name, stale_odoo_id: v.odoo_id }); continue; }
+          if (candidates.length > 1) { vendorAmbiguous.push({ key: v.key, name: v.name, matches: candidates }); continue; }
+          const realId = candidates[0];
+          if (v.odoo_id === realId) { vendorSkipped.push(v.key); continue; }
+          vendorUpdates.push({ d1_id: v.d1_id, key: v.key, name: v.name, stale: v.odoo_id, real: realId });
+        }
+        if (!dry_run && vendorUpdates.length) {
+          for (const u of vendorUpdates) {
+            await DB.prepare(`UPDATE rm_vendors SET odoo_id = ?, updated_at = datetime('now') WHERE id = ?`)
+              .bind(u.real, u.d1_id).run();
+          }
+        }
+
+        report.steps.push({
+          phase: 'refresh-ids',
+          summary: `Products: ${prodUpdates.length} ${dry_run?'would-update':'updated'}, ${prodSkipped.length} already correct, ${prodUnmatched.length} unmatched · Vendors: ${vendorUpdates.length} ${dry_run?'would-update':'updated'}, ${vendorSkipped.length} already correct, ${vendorUnmatched.length} unmatched, ${vendorAmbiguous.length} ambiguous`,
+          product_updates_sample: prodUpdates.slice(0, 5),
+          product_unmatched: prodUnmatched,
+          vendor_updates_sample: vendorUpdates.slice(0, 10),
+          vendor_unmatched: vendorUnmatched,
+          vendor_ambiguous: vendorAmbiguous,
+        });
+      }
+
       // ── PHASE 1 — create sub-categories (BATCHED: 1 search + 1 create) ──
       const subCatMap = {};  // D1 category name → Odoo category id
       if (phase === 'categories' || phase === 'all') {
