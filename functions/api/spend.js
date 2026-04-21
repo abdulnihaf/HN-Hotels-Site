@@ -1080,17 +1080,19 @@ export async function onRequest(context) {
       if (companyId) billFilter.push(['company_id', '=', companyId]);
 
       const [pos, expenses, bills] = await Promise.all([
+        // purchase.order: `notes` field was removed in Odoo 17+. Field list kept minimal.
         odoo(apiKey, 'purchase.order', 'search_read', [poFilter],
           { fields: ['id', 'name', 'partner_id', 'company_id', 'date_order', 'amount_total',
-                     'state', 'order_line', 'notes', 'x_recorded_by_user_id'],
+                     'state', 'order_line', 'x_recorded_by_user_id'],
             order: 'date_order desc', limit: 500 }),
         odoo(apiKey, 'hr.expense', 'search_read', [expFilter],
           { fields: ['id', 'name', 'date', 'total_amount', 'product_id', 'company_id',
                      'x_pool', 'x_location', 'x_submitted_by_pin', 'x_recorded_by_user_id'],
             order: 'date desc', limit: 500 }),
+        // account.move: narration is standard but might be renamed — tolerate missing.
         odoo(apiKey, 'account.move', 'search_read', [billFilter],
           { fields: ['id', 'name', 'ref', 'invoice_date', 'partner_id', 'company_id',
-                     'amount_total', 'payment_state', 'invoice_origin', 'narration', 'x_recorded_by_user_id'],
+                     'amount_total', 'payment_state', 'invoice_origin', 'x_recorded_by_user_id'],
             order: 'invoice_date desc', limit: 500 }),
       ]);
 
@@ -1128,7 +1130,6 @@ export async function onRequest(context) {
         bill_ref: base.bill_ref || '',
       });
 
-      const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
       const rows = [
         ...pos.map(p => toRow('PO', {
           odoo_id: p.id,
@@ -1140,7 +1141,7 @@ export async function onRequest(context) {
           state: p.state,
           recorded_by_user_id: p.x_recorded_by_user_id?.[0] || null,
           recorded_by_name:    p.x_recorded_by_user_id?.[1] || null,
-          notes: stripHtml(p.notes),
+          // notes for PO go to Odoo chatter (mail.message) — not inline editable in this v1
         }, poAtts)),
         ...expenses.map(e => toRow('Expense', {
           odoo_id: e.id,
@@ -1165,8 +1166,8 @@ export async function onRequest(context) {
           state: b.payment_state || 'not_paid',
           recorded_by_user_id: b.x_recorded_by_user_id?.[0] || null,
           recorded_by_name:    b.x_recorded_by_user_id?.[1] || null,
-          notes: stripHtml(b.narration),
           bill_ref: b.ref || '',
+          // narration for Bill goes to Odoo chatter — not inline editable in this v1
         }, billAtts)),
       ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
@@ -1221,6 +1222,10 @@ export async function onRequest(context) {
 
     // ─────────────────────────────────────────────────────────────────────
     // UPDATE ENTRY NOTES — edit notes / bill-ref on existing PO / Expense / Bill
+    // - Expense: writes to `name` (the description field)
+    // - PO / Bill: posts a message to Odoo chatter (mail.message) — the
+    //   proper Odoo audit trail, always works regardless of schema changes
+    // Bill ref is written to `account.move.ref` directly (standard field)
     // Never touches amount, vendor, product — by design.
     // ─────────────────────────────────────────────────────────────────────
     if (action === 'update-entry-notes' && request.method === 'POST') {
@@ -1236,20 +1241,35 @@ export async function onRequest(context) {
       const resModel = MODEL[kind];
       if (!resModel) return json({ success: false, error: 'kind must be PO|Expense|Bill' }, 400);
 
-      const vals = {};
-      if (typeof notes === 'string') {
-        // hr.expense uses `name` as the line description; PO/Bill have `notes`/`narration`
-        if (kind === 'Expense')  vals.name = notes.trim();
-        else if (kind === 'PO')  vals.notes = notes.trim();
-        else                     vals.narration = notes.trim();
-      }
-      if (typeof bill_ref === 'string' && kind === 'Bill') {
-        vals.ref = bill_ref.trim();
-      }
-      if (!Object.keys(vals).length) return json({ success: false, error: 'Nothing to update' }, 400);
+      const id = parseInt(odoo_id, 10);
+      const updates = [];
 
-      await odoo(apiKey, resModel, 'write', [[parseInt(odoo_id, 10)], vals]);
-      return json({ success: true });
+      try {
+        if (kind === 'Expense') {
+          // hr.expense: name IS the description line, writable directly
+          if (typeof notes === 'string' && notes.trim()) {
+            await odoo(apiKey, 'hr.expense', 'write', [[id], { name: notes.trim() }]);
+            updates.push('notes');
+          }
+        } else {
+          // PO / Bill: post to chatter via message_post so no schema assumptions
+          if (typeof notes === 'string' && notes.trim()) {
+            const body_html = `<p><b>Note by ${user.name} (PIN ${pin}):</b><br/>${notes.trim().replace(/</g, '&lt;').replace(/\n/g, '<br/>')}</p>`;
+            await odoo(apiKey, resModel, 'message_post', [[id]], { body: body_html });
+            updates.push('chatter-note');
+          }
+          // Bill ref is a standard field and always writable
+          if (kind === 'Bill' && typeof bill_ref === 'string') {
+            await odoo(apiKey, 'account.move', 'write', [[id], { ref: bill_ref.trim() }]);
+            updates.push('bill_ref');
+          }
+        }
+      } catch (e) {
+        return json({ success: false, error: `Odoo rejected the update: ${e.message}` }, 400);
+      }
+
+      if (!updates.length) return json({ success: false, error: 'Nothing to update' }, 400);
+      return json({ success: true, updated: updates });
     }
 
     // ── ARCHIVE PRODUCT (admin/cfo) — marks active=false in Odoo ──────────

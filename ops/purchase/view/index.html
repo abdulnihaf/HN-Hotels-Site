@@ -246,6 +246,9 @@
 
       <div class="drawer-section">
         <h3>Notes / Description</h3>
+        <div id="d-notes-hint" style="font-size:11px; color: var(--text-dim); margin-bottom:6px; display:none;">
+          Notes for this kind post to Odoo chatter on the record — visible in Odoo UI, not re-loaded here.
+        </div>
         <textarea id="d-notes" rows="3" placeholder="Add context… (optional)" style="width:100%; padding:8px 10px; resize:vertical;"></textarea>
         <div style="display:flex; gap:8px; margin-top:10px;">
           <button class="btn btn-primary" style="flex:1;" onclick="saveNotes()">Save</button>
@@ -477,6 +480,8 @@ function openDrawer(idx) {
 
   // Bill-ref only for Bill kind
   document.getElementById('d-billref-section').style.display = r.kind === 'Bill' ? 'block' : 'none';
+  // Notes-hint for PO / Bill (chatter-based) vs Expense (direct field)
+  document.getElementById('d-notes-hint').style.display = (r.kind === 'PO' || r.kind === 'Bill') ? 'block' : 'none';
 
   document.getElementById('drawer-bd').classList.add('open');
   document.getElementById('drawer').classList.add('open');
