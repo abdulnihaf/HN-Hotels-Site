@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hamza Express — Sales & Payment Flow</title>
+<style>
+:root{--bg:#0a0a0f;--s1:#12121a;--s2:#1a1a26;--bd:#2a2a3a;--tx:#e0e0e8;--dm:#8888a0;--ac:#6366f1;--gn:#22c55e;--rd:#ef4444;--or:#f97316;--yl:#eab308;--pr:#a855f7;--tl:#14b8a6;--bl:#3b82f6;--pk:#ec4899;
+--cash:#f59e0b;--upi:#8b5cf6;--card:#06b6d4;--agg:#ef4444;--comp:#6b7280;--waba:#22c55e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--tx);line-height:1.6}
+.hdr{padding:40px;text-align:center;border-bottom:1px solid var(--bd)}
+.hdr h1{font-size:28px;font-weight:800;background:linear-gradient(135deg,#3b82f6,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr p{color:var(--dm);font-size:14px;margin-top:6px}
+.nav{position:sticky;top:0;z-index:100;background:rgba(10,10,15,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--bd);display:flex;gap:4px;padding:8px 16px;overflow-x:auto}
+.nav a{padding:8px 14px;border-radius:8px;color:var(--dm);text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap;transition:.2s}
+.nav a:hover{background:var(--s2);color:var(--tx)}
+.sec{padding:50px 40px;border-top:1px solid var(--bd)}
+.sec-t{font-size:24px;font-weight:800;margin-bottom:24px}
+/* Flow diagrams */
+.flow-container{position:relative;padding:20px 0}
+.flow-level{display:flex;justify-content:center;gap:16px;margin:12px 0;flex-wrap:wrap}
+.flow-node{background:var(--s1);border:2px solid var(--bd);border-radius:12px;padding:14px 20px;text-align:center;min-width:140px;position:relative;transition:.2s}
+.flow-node:hover{border-color:var(--ac);transform:translateY(-2px)}
+.flow-node h4{font-size:14px;font-weight:700}
+.flow-node p{font-size:11px;color:var(--dm);margin-top:2px}
+.flow-node.root{background:linear-gradient(135deg,#1a1a3e,#2a1a4e);border-color:var(--ac);min-width:200px}
+.flow-node.mode{border-color:var(--bl);min-width:180px}
+.flow-node.channel{min-width:160px}
+.flow-node.payment{min-width:130px;font-size:13px}
+.flow-node.destination{border-style:dashed;min-width:200px}
+.flow-node.bank{background:rgba(34,197,94,.08);border-color:var(--gn)}
+/* Color coding */
+.c-cash{border-color:var(--cash);background:rgba(245,158,11,.06)}
+.c-upi{border-color:var(--upi);background:rgba(139,92,246,.06)}
+.c-card{border-color:var(--card);background:rgba(6,182,212,.06)}
+.c-agg{border-color:var(--agg);background:rgba(239,68,68,.06)}
+.c-comp{border-color:var(--comp);background:rgba(107,114,128,.06)}
+.c-waba{border-color:var(--waba);background:rgba(34,197,94,.06)}
+.c-dine{border-color:var(--gn)}
+.c-take{border-color:var(--tl)}
+.c-del{border-color:var(--or)}
+/* Connector lines */
+.connector{text-align:center;color:var(--bd);font-size:20px;margin:4px 0}
+.connector.down::after{content:'|';display:block}
+/* Legend */
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin:20px 0;padding:16px;background:var(--s1);border-radius:12px;border:1px solid var(--bd)}
+.leg-item{display:flex;align-items:center;gap:8px;font-size:13px}
+.leg-dot{width:14px;height:14px;border-radius:4px;border:2px solid}
+/* Tables */
+.ft{width:100%;border-collapse:collapse;font-size:13px;margin:16px 0}
+.ft th{background:var(--s2);padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--dm);border-bottom:2px solid var(--bd)}
+.ft td{padding:10px 12px;border-bottom:1px solid var(--bd)}
+.ft tr:hover{background:var(--s2)}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;margin:1px}
+.tag-cash{background:rgba(245,158,11,.15);color:var(--cash)}
+.tag-upi{background:rgba(139,92,246,.15);color:var(--upi)}
+.tag-card{background:rgba(6,182,212,.15);color:var(--card)}
+.tag-agg{background:rgba(239,68,68,.15);color:var(--rd)}
+.tag-comp{background:rgba(107,114,128,.15);color:var(--comp)}
+.tag-waba{background:rgba(34,197,94,.15);color:var(--waba)}
+.tag-bank{background:rgba(59,130,246,.15);color:var(--bl)}
+/* Insight */
+.insight{padding:18px;border-radius:12px;margin:16px 0;border-left:4px solid}
+.insight.green{background:rgba(34,197,94,.06);border-color:var(--gn)}
+.insight.red{background:rgba(239,68,68,.06);border-color:var(--rd)}
+.insight.blue{background:rgba(99,102,241,.06);border-color:var(--ac)}
+.insight.orange{background:rgba(249,115,22,.06);border-color:var(--or)}
+.insight h4{font-size:14px;font-weight:700;margin-bottom:4px}
+.insight p{font-size:13px;color:var(--dm)}
+/* Settlement flow */
+.settle-flow{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;flex-wrap:wrap}
+.settle-box{padding:8px 14px;background:var(--s1);border:1px solid var(--bd);border-radius:8px;text-align:center}
+.settle-arrow{color:var(--dm);font-size:18px}
+.settle-box.final{background:rgba(34,197,94,.08);border-color:var(--gn);font-weight:700}
+/* Cost layer */
+.cost-row{display:flex;gap:16px;margin:8px 0;align-items:stretch}
+.cost-card{flex:1;background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:16px}
+.cost-card h4{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.cost-card .big{font-size:28px;font-weight:800;margin:8px 0}
+.cost-card p{font-size:12px;color:var(--dm)}
+@media(max-width:900px){.sec{padding:30px 16px}.flow-level{flex-direction:column;align-items:center}.cost-row{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+<h1>Hamza Express — Complete Sales & Payment Flow</h1>
+<p>Every rupee traced: from customer to your bank account. Based on Odoo POS + verified contracts.</p>
+</div>
+
+<div class="nav">
+<a href="#overview">Overview</a>
+<a href="#dinein">Dine-In</a>
+<a href="#takeaway">Take-Away</a>
+<a href="#delivery">Delivery</a>
+<a href="#payment-routing">Payment Routing</a>
+<a href="#settlement">Settlement Destinations</a>
+<a href="#cost-layers">Cost of Each Sale</a>
+</div>
+
+<!-- ========== OVERVIEW ========== -->
+<div id="overview" class="sec">
+<div class="sec-t">Hamza Express — Sales Mode Overview</div>
+
+<div class="legend">
+<div class="leg-item"><div class="leg-dot" style="background:var(--cash);border-color:var(--cash)"></div>Cash</div>
+<div class="leg-item"><div class="leg-dot" style="background:var(--upi);border-color:var(--upi)"></div>UPI</div>
+<div class="leg-item"><div class="leg-dot" style="background:var(--card);border-color:var(--card)"></div>Card</div>
+<div class="leg-item"><div class="leg-dot" style="background:var(--agg);border-color:var(--agg)"></div>Aggregator Settlement</div>
+<div class="leg-item"><div class="leg-dot" style="background:var(--waba);border-color:var(--waba)"></div>WABA/Razorpay</div>
+<div class="leg-item"><div class="leg-dot" style="background:var(--comp);border-color:var(--comp)"></div>Complimentary</div>
+</div>
+
+<!-- MASTER TREE -->
+<div class="flow-container">
+<div class="flow-level">
+<div class="flow-node root"><h4>HAMZA EXPRESS</h4><p>HN Hotels Pvt Ltd | Company ID: 1</p></div>
+</div>
+<div class="connector down"></div>
+<div class="flow-level">
+<div class="flow-node mode c-dine"><h4>DINE-IN</h4><p>POS: Cash Counter + Captain</p></div>
+<div class="flow-node mode c-take"><h4>TAKE-AWAY</h4><p>POS: Cash Counter + WABA</p></div>
+<div class="flow-node mode c-del"><h4>DELIVERY</h4><p>POS: HE-Delivery + WABA</p></div>
+</div>
+</div>
+</div>
+
+<!-- ========== DINE-IN ========== -->
+<div id="dinein" class="sec">
+<div class="sec-t" style="color:var(--gn)">DINE-IN — Complete Flow</div>
+
+<table class="ft">
+<tr><th>Customer Source</th><th>POS Terminal</th><th>Payment Methods</th><th>Odoo Journal</th><th>Account Code</th><th>Commission</th></tr>
+<tr>
+<td><strong>Direct Walk-in</strong><br><span style="color:var(--dm);font-size:11px">Off street, Google Maps, signage</span></td>
+<td>Captain (ID: 6) or<br>Cash Counter (ID: 5)</td>
+<td><span class="tag tag-cash">Cash</span> <span class="tag tag-upi">UPI</span> <span class="tag tag-card">Card</span> <span class="tag tag-comp">Comp</span></td>
+<td>CSH2 / HC01 / RPY1 / HCMP</td>
+<td>100102 / 100207 / 100206 / 100213</td>
+<td style="color:var(--gn);font-weight:700">0%</td>
+</tr>
+<tr>
+<td><strong>Zomato District</strong><br><span style="color:var(--dm);font-size:11px">Customer pays via Zomato app at table</span></td>
+<td>Not through POS<br><span style="color:var(--dm);font-size:11px">Zomato settles directly</span></td>
+<td><span class="tag tag-agg">Zomato Pay via App</span></td>
+<td>ZMT1 (Zomato)</td>
+<td>100302 Zomato Receivable</td>
+<td style="color:var(--or);font-weight:700">7% + GST = 8.26%</td>
+</tr>
+<tr>
+<td><strong>Zomato Table Reservation</strong><br><span style="color:var(--dm);font-size:11px">Books table, walks in</span></td>
+<td>Captain (if pays direct) or Zomato app</td>
+<td><span class="tag tag-agg">Zomato App</span> or <span class="tag tag-cash">Cash</span> <span class="tag tag-upi">UPI</span></td>
+<td>ZMT1 or CSH2/HC01</td>
+<td>100302 or 100102/100207</td>
+<td style="font-weight:700">7% (app) / 0% (direct)</td>
+</tr>
+<tr>
+<td><strong>EazyDiner Booking</strong><br><span style="color:var(--dm);font-size:11px">Books on EazyDiner</span></td>
+<td>Captain (ID: 6)</td>
+<td><span class="tag tag-cash">Cash</span> <span class="tag tag-upi">UPI</span> <span class="tag tag-card">Card</span> or <span class="tag tag-agg">PayEazy</span></td>
+<td>CSH2/HC01/RPY1 or EazyDiner settlement</td>
+<td>100102/100207/100206</td>
+<td style="color:var(--rd);font-weight:700">Rs 30/pax + GST<br>+ 10% discount (you fund)<br>+ 5%+1.8% if PayEazy</td>
+</tr>
+<tr>
+<td><strong>WhatsApp → Dine-in</strong><br><span style="color:var(--dm);font-size:11px">Meta CTWA ad / GBP → WhatsApp → books table</span></td>
+<td>Captain (ID: 6)</td>
+<td><span class="tag tag-cash">Cash</span> <span class="tag tag-upi">UPI</span> <span class="tag tag-card">Card</span></td>
+<td>CSH2 / HC01 / RPY1</td>
+<td>100102 / 100207 / 100206</td>
+<td style="color:var(--gn);font-weight:700">0%</td>
+</tr>
+</table>
+
+<h4 style="margin:24px 0 12px">Dine-In Payment Flow — Where Each Rupee Lands</h4>
+
+<div style="margin:20px 0">
+<h4 style="margin-bottom:12px"><span class="tag tag-cash" style="font-size:13px">CASH FLOW</span> — Two collection points, one destination</h4>
+<div class="settle-flow">
+<div class="settle-box"><strong>Captain takes cash</strong><br><span style="color:var(--dm);font-size:11px">Journal: HE-Cash Captain (CSH2)<br>Account: 100102</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box"><strong>Captain settles to Counter</strong><br><span style="color:var(--dm);font-size:11px">End of shift / periodic settlement<br>Physical cash handover</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box final"><strong>Cash Counter (CSH1)</strong><br><span style="color:var(--dm);font-size:11px">Account: 100101<br>FINAL CASH DESTINATION</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box bank"><strong>HDFC Bank (BNK1)</strong><br><span style="color:var(--dm);font-size:11px">Account: 100201<br>Daily/periodic bank deposit</span></div>
+</div>
+
+<div class="settle-flow" style="margin-top:4px">
+<div class="settle-box"><strong>Counter direct cash</strong><br><span style="color:var(--dm);font-size:11px">Walk-in pays at counter<br>Journal: HE-Cash Counter (CSH1)</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box final"><strong>Cash Counter (CSH1)</strong><br><span style="color:var(--dm);font-size:11px">Account: 100101<br>FINAL CASH DESTINATION</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box bank"><strong>HDFC Bank (BNK1)</strong><br><span style="color:var(--dm);font-size:11px">Account: 100201</span></div>
+</div>
+
+<div class="insight orange" style="margin-top:12px">
+<h4>Cash tracking is where leakage happens</h4>
+<p>Captain cash (100102) must reconcile to Counter cash (100101) every shift. The variance between Captain POS total and physical cash handover is your first leakage checkpoint. Your existing cashier shift settlement system tracks this — the captain_cash_variance field.</p>
+</div>
+</div>
+
+<div style="margin:20px 0">
+<h4 style="margin-bottom:12px"><span class="tag tag-upi" style="font-size:13px">UPI FLOW</span> — Both routes go through Razorpay (2.36% fee)</h4>
+<div class="settle-flow">
+<div class="settle-box"><strong>Captain UPI (HC01)</strong><br><span style="color:var(--dm);font-size:11px">Captain's Razorpay QR<br>Account: 100207 Captain UPI Collections<br><strong style="color:var(--or)">2% + GST = 2.36% fee</strong></span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box"><strong>Razorpay</strong><br><span style="color:var(--dm);font-size:11px">T+2 settlement</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box bank"><strong>HDFC Bank (BNK1)</strong><br><span style="color:var(--dm);font-size:11px">Account: 100201</span></div>
+</div>
+
+<div class="settle-flow" style="margin-top:4px">
+<div class="settle-box"><strong>Counter UPI via Razorpay (RPY1)</strong><br><span style="color:var(--dm);font-size:11px">Counter Razorpay QR/POS<br>Account: 100206 Razorpay Settlement<br><strong style="color:var(--or)">2% + GST = 2.36% fee</strong></span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box"><strong>Razorpay</strong><br><span style="color:var(--dm);font-size:11px">T+2 settlement</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box bank"><strong>HDFC Bank (BNK1)</strong><br><span style="color:var(--dm);font-size:11px">Account: 100201</span></div>
+</div>
+
+<div class="insight orange" style="margin-top:12px">
+<h4>ALL UPI currently goes through Razorpay = 2.36% on every UPI payment</h4>
+<p>Both Captain UPI (HC01) and Counter UPI (RPY1) are Razorpay QR codes — both charge <strong>2% + GST = 2.36%</strong>. The only difference is tracking: Captain UPI lands in account 100207, Counter UPI in 100206. <strong>Consider setting up a direct bank UPI QR (0% cost) for high-value dine-in to eliminate this fee.</strong> On Rs 5L/month UPI revenue, you'd save Rs 11,800/month.</p>
+</div>
+</div>
+
+<div style="margin:20px 0">
+<h4 style="margin-bottom:12px"><span class="tag tag-card" style="font-size:13px">CARD FLOW</span></h4>
+<div class="settle-flow">
+<div class="settle-box"><strong>Card at Captain or Counter</strong><br><span style="color:var(--dm);font-size:11px">Both route to Razorpay (RPY1)<br>Account: 100206<br><strong>2% + GST = 2.36% fee</strong></span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box"><strong>Razorpay</strong><br><span style="color:var(--dm);font-size:11px">T+2 settlement</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box bank"><strong>HDFC Bank (BNK1)</strong><br><span style="color:var(--dm);font-size:11px">Account: 100201</span></div>
+</div>
+</div>
+</div>
+
+<!-- ========== TAKE-AWAY ========== -->
+<div id="takeaway" class="sec">
+<div class="sec-t" style="color:var(--tl)">TAKE-AWAY — Complete Flow</div>
+
+<table class="ft">
+<tr><th>Customer Source</th><th>POS Terminal</th><th>Payment Methods</th><th>Odoo Journal</th><th>Commission</th></tr>
+<tr>
+<td><strong>Direct Counter Walk-in</strong><br><span style="color:var(--dm);font-size:11px">Walks in, orders, picks up</span></td>
+<td>Cash Counter (ID: 5)</td>
+<td><span class="tag tag-cash">Cash</span> <span class="tag tag-upi">UPI</span> <span class="tag tag-card">Card</span></td>
+<td>CSH1 / RPY1</td>
+<td style="color:var(--gn);font-weight:700">0% (Cash/UPI direct)<br>2.36% (Razorpay)</td>
+</tr>
+<tr>
+<td><strong>Meta CTWA Ad → WhatsApp</strong><br><span style="color:var(--dm);font-size:11px">Clicks ad → Combo MPM → Razorpay UPI → picks up</span></td>
+<td>HE-WABA (ID: 10)</td>
+<td><span class="tag tag-waba">WABA UPI (Razorpay)</span></td>
+<td>HWBA (HE WABA UPI)</td>
+<td style="font-weight:700">2.36% Razorpay<br><span style="color:var(--dm);font-size:11px">+ Meta ad spend (external budget)</span></td>
+</tr>
+<tr>
+<td><strong>Station QR x5</strong><br><span style="color:var(--dm);font-size:11px">Scans QR → Station MPM → Razorpay UPI → picks up</span></td>
+<td>HE-WABA (ID: 10)</td>
+<td><span class="tag tag-waba">WABA UPI (Razorpay)</span></td>
+<td>HWBA</td>
+<td style="font-weight:700">2.36% Razorpay</td>
+</tr>
+<tr>
+<td><strong>GBP / IG / FB / Website</strong><br><span style="color:var(--dm);font-size:11px">Discovers online → WhatsApp 30-item MPM → Razorpay</span></td>
+<td>HE-WABA (ID: 10)</td>
+<td><span class="tag tag-waba">WABA UPI (Razorpay)</span></td>
+<td>HWBA</td>
+<td style="font-weight:700">2.36% Razorpay</td>
+</tr>
+</table>
+
+<h4 style="margin:24px 0 12px">Take-Away Payment Destinations</h4>
+
+<div class="settle-flow">
+<div class="settle-box"><strong>Counter Cash (CSH1)</strong><br><span style="color:var(--dm);font-size:11px">100101 | 0% fee</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box final bank"><strong>HDFC Bank</strong></div>
+</div>
+<div class="settle-flow">
+<div class="settle-box"><strong>Counter Card/UPI via Razorpay (RPY1)</strong><br><span style="color:var(--dm);font-size:11px">100206 | 2.36% fee | T+2</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box final bank"><strong>HDFC Bank</strong></div>
+</div>
+<div class="settle-flow">
+<div class="settle-box"><strong>WABA UPI (HWBA)</strong><br><span style="color:var(--dm);font-size:11px">100212 | 2.36% fee | T+2</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box"><strong>Razorpay</strong></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box final bank"><strong>HDFC Bank</strong></div>
+</div>
+</div>
+
+<!-- ========== DELIVERY ========== -->
+<div id="delivery" class="sec">
+<div class="sec-t" style="color:var(--or)">DELIVERY — Complete Flow</div>
+
+<table class="ft">
+<tr><th>Customer Source</th><th>POS Terminal</th><th>Payment Methods</th><th>Odoo Journal</th><th>Commission (post-honeymoon)</th></tr>
+<tr>
+<td><strong>Zomato App</strong><br><span style="color:var(--dm);font-size:11px">Customer orders → KDS Kitchen → Zomato rider</span></td>
+<td>HE-Delivery (ID: 7)</td>
+<td><span class="tag tag-agg">HE-Zomato</span></td>
+<td>ZMT1 (Zomato)</td>
+<td style="color:var(--rd);font-weight:700">18% + 1.84% + GST<br>= 23.41% (<4km)<br>= 27.70% (4-6km)<br>= 33.41% (6km+)</td>
+</tr>
+<tr>
+<td><strong>Swiggy App</strong><br><span style="color:var(--dm);font-size:11px">Customer orders → KDS Kitchen → Swiggy rider</span></td>
+<td>HE-Delivery (ID: 7)</td>
+<td><span class="tag tag-agg">HE-Swiggy</span></td>
+<td>SWG1 (Swiggy)</td>
+<td style="color:var(--rd);font-weight:700">18% + 2% + 1%TCS + GST<br>= 24.60% (non-One)<br>= 25.61% (Swiggy One)</td>
+</tr>
+<tr>
+<td><strong>WhatsApp Direct Delivery</strong><br><span style="color:var(--dm);font-size:11px">WABA order → Razorpay → KDS → own rider</span></td>
+<td>HE-WABA (ID: 10)</td>
+<td><span class="tag tag-waba">WABA UPI (Razorpay)</span></td>
+<td>HWBA</td>
+<td style="color:var(--gn);font-weight:700">2.36% Razorpay<br><span style="color:var(--dm);font-size:11px">+ rider cost (~Rs 30/order)</span></td>
+</tr>
+</table>
+
+<h4 style="margin:24px 0 12px">Delivery Settlement — How Money Reaches Your Bank</h4>
+
+<div class="settle-flow">
+<div class="settle-box" style="border-color:var(--rd)"><strong>Zomato (ZMT1)</strong><br><span style="color:var(--dm);font-size:11px">100302 Zomato Receivable<br>Weekly settlement (Mon-Sun → Thu)</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box"><strong>Zomato deducts</strong><br><span style="color:var(--rd);font-size:11px">18% service + 1.84% payment<br>+ GST on both + penalties</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box final bank"><strong>HDFC Bank 50200118314680</strong><br><span style="color:var(--dm);font-size:11px">Net payout: ~76.6% of order value</span></div>
+</div>
+
+<div class="settle-flow" style="margin-top:8px">
+<div class="settle-box" style="border-color:var(--or)"><strong>Swiggy (SWG1)</strong><br><span style="color:var(--dm);font-size:11px">100301 Swiggy Receivable<br>Weekly settlement</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box"><strong>Swiggy deducts</strong><br><span style="color:var(--or);font-size:11px">18% service + 2% collection<br>+ 1% TCS + GST + Swiggy One fee</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box final bank"><strong>HDFC Bank 50200118314680</strong><br><span style="color:var(--dm);font-size:11px">Net payout: ~75.4% of order value</span></div>
+</div>
+
+<div class="settle-flow" style="margin-top:8px">
+<div class="settle-box" style="border-color:var(--gn)"><strong>WABA Direct (HWBA)</strong><br><span style="color:var(--dm);font-size:11px">100212 WABA UPI Collections<br>Razorpay T+2 settlement</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box"><strong>Razorpay deducts</strong><br><span style="color:var(--dm);font-size:11px">2% + GST = 2.36%</span></div>
+<div class="settle-arrow">&#8594;</div>
+<div class="settle-box final bank"><strong>HDFC Bank</strong><br><span style="color:var(--dm);font-size:11px">Net payout: 97.64%</span></div>
+</div>
+</div>
+
+<!-- ========== PAYMENT ROUTING MAP ========== -->
+<div id="payment-routing" class="sec">
+<div class="sec-t">Complete Payment Routing Map — Odoo Account Codes</div>
+
+<table class="ft">
+<tr><th>Payment Type</th><th>POS Method</th><th>Odoo Journal</th><th>Account Code</th><th>Account Name</th><th>Fee</th><th>Settlement</th></tr>
+<tr>
+<td><span class="tag tag-cash">Cash</span> Counter</td>
+<td>Cash (ID: 11)</td><td>CSH1</td><td>100101</td><td>HE - Cash Counter</td>
+<td class="grn" style="font-weight:700">0%</td><td>Immediate (physical)</td>
+</tr>
+<tr>
+<td><span class="tag tag-cash">Cash</span> Captain</td>
+<td>Cash (ID: 19)</td><td>CSH2</td><td>100102</td><td>HE - Cash Captain</td>
+<td class="grn" style="font-weight:700">0%</td><td>Shift settlement → Counter</td>
+</tr>
+<tr>
+<td><span class="tag tag-upi">UPI</span> Captain Direct</td>
+<td>UPI (ID: 52)</td><td>HC01</td><td>100207</td><td>HE - Captain UPI Collections</td>
+<td class="grn" style="font-weight:700">0%</td><td>Instant to bank</td>
+</tr>
+<tr>
+<td><span class="tag tag-upi">UPI</span> Counter Razorpay</td>
+<td>UPI (ID: 14)</td><td>RPY1</td><td>100206</td><td>Razorpay Settlement</td>
+<td style="font-weight:700;color:var(--or)">2.36%</td><td>T+2 business days</td>
+</tr>
+<tr>
+<td><span class="tag tag-card">Card</span> Any Terminal</td>
+<td>Card (ID: 12/24)</td><td>RPY1</td><td>100206</td><td>Razorpay Settlement</td>
+<td style="font-weight:700;color:var(--or)">2.36%</td><td>T+2 business days</td>
+</tr>
+<tr>
+<td><span class="tag tag-waba">WABA</span> UPI</td>
+<td>WABA General (ID: 17)</td><td>HWBA</td><td>100212</td><td>HE WABA UPI Collections</td>
+<td style="font-weight:700;color:var(--or)">2.36%</td><td>T+2 via Razorpay</td>
+</tr>
+<tr>
+<td><span class="tag tag-agg">Zomato</span> Delivery</td>
+<td>HE-Zomato (ID: 16)</td><td>ZMT1</td><td>100302</td><td>Zomato Receivable</td>
+<td style="font-weight:700;color:var(--rd)">23.41%</td><td>Weekly (Thu)</td>
+</tr>
+<tr>
+<td><span class="tag tag-agg">Zomato</span> Dining</td>
+<td>N/A (external)</td><td>ZMT1</td><td>100302</td><td>Zomato Receivable</td>
+<td style="font-weight:700;color:var(--or)">8.26%</td><td>Bi-weekly (Wed)</td>
+</tr>
+<tr>
+<td><span class="tag tag-agg">Swiggy</span> Delivery</td>
+<td>HE-Swiggy (ID: 15)</td><td>SWG1</td><td>100301</td><td>Swiggy Receivable</td>
+<td style="font-weight:700;color:var(--rd)">24.60%</td><td>Weekly</td>
+</tr>
+<tr>
+<td><span class="tag tag-comp">Comp</span></td>
+<td>Complimentary (ID: 57)</td><td>HCMP</td><td>100213</td><td>HE Complimentary</td>
+<td style="font-weight:700;color:var(--dm)">100% (no revenue)</td><td>N/A — write off</td>
+</tr>
+</table>
+
+<div class="insight blue">
+<h4>Final Destination: Everything flows to HDFC Bank (BNK1) — Account 100201</h4>
+<p>Cash: physically deposited. Captain UPI: instant. Razorpay (Counter UPI/Card/WABA): T+2 days. Zomato: weekly Thursday. Swiggy: weekly. Secondary bank: Federal Bank (BNK2) — Account 100205.</p>
+</div>
+</div>
+
+<!-- ========== SETTLEMENT DESTINATIONS ========== -->
+<div id="settlement" class="sec">
+<div class="sec-t">Where Every Rupee Ultimately Sits</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin:20px 0">
+<div class="cost-card" style="border-top:4px solid var(--cash)">
+<h4><span class="tag tag-cash">CASH</span> Track Points</h4>
+<p><strong>Captain Cash (100102)</strong> → settled to → <strong>Counter Cash (100101)</strong> → deposited to → <strong>HDFC Bank (100201)</strong></p>
+<p style="margin-top:8px"><strong>Reconciliation checkpoints:</strong></p>
+<p>1. Captain POS total vs physical cash handover (shift end)</p>
+<p>2. Counter expected vs actual cash count (shift end)</p>
+<p>3. Cash deposited to bank vs counter closing balance</p>
+<p style="margin-top:8px;color:var(--rd)"><strong>Fee: 0%</strong> — but highest risk of leakage</p>
+</div>
+
+<div class="cost-card" style="border-top:4px solid var(--upi)">
+<h4><span class="tag tag-upi">UPI</span> Two Paths</h4>
+<p><strong>Captain UPI (100207)</strong> — direct bank QR, 0% fee, instant</p>
+<p><strong>Razorpay UPI (100206)</strong> — via Razorpay, 2.36% fee, T+2</p>
+<p style="margin-top:8px"><strong>Reconciliation:</strong></p>
+<p>1. Match Captain UPI (Odoo) vs bank statement UPI credits</p>
+<p>2. Match Razorpay dashboard settlements vs Odoo RPY1 journal</p>
+<p style="margin-top:8px;color:var(--or)"><strong>Always prefer Captain UPI (0%) over Razorpay UPI (2.36%)</strong></p>
+</div>
+
+<div class="cost-card" style="border-top:4px solid var(--card)">
+<h4><span class="tag tag-card">CARD</span> Single Path</h4>
+<p><strong>Razorpay (100206)</strong> — all cards go through Razorpay</p>
+<p style="margin-top:8px"><strong>Fee: 2.36%</strong> (2% + 18% GST)</p>
+<p><strong>Settlement:</strong> T+2 business days to HDFC</p>
+<p><strong>Reconciliation:</strong> Razorpay dashboard vs Odoo RPY1</p>
+</div>
+
+<div class="cost-card" style="border-top:4px solid var(--waba)">
+<h4><span class="tag tag-waba">WABA</span> Direct Orders</h4>
+<p><strong>WABA UPI (100212)</strong> — WhatsApp orders via Razorpay payment links</p>
+<p style="margin-top:8px"><strong>Fee: 2.36%</strong></p>
+<p><strong>Settlement:</strong> T+2 via Razorpay to HDFC</p>
+<p><strong>Reconciliation:</strong> WABA order DB (D1) vs Razorpay vs Odoo HWBA journal</p>
+</div>
+
+<div class="cost-card" style="border-top:4px solid var(--rd)">
+<h4><span class="tag tag-agg">ZOMATO</span> Settlement</h4>
+<p><strong>Zomato Receivable (100302)</strong></p>
+<p style="margin-top:8px"><strong>Delivery fee: 23.41%</strong> | <strong>Dining fee: 8.26%</strong></p>
+<p><strong>Settlement:</strong> Delivery = weekly Thu | Dining = bi-weekly Wed</p>
+<p><strong>Reconciliation:</strong> Zomato partner dashboard vs Odoo ZMT1 vs bank credit</p>
+<p style="color:var(--rd);margin-top:8px"><strong>Check: refund deductions, TDS, promo adjustments</strong></p>
+</div>
+
+<div class="cost-card" style="border-top:4px solid var(--or)">
+<h4><span class="tag tag-agg">SWIGGY</span> Settlement</h4>
+<p><strong>Swiggy Receivable (100301)</strong></p>
+<p style="margin-top:8px"><strong>Fee: 24.60%</strong> (incl TCS 1% reclaimable)</p>
+<p><strong>Settlement:</strong> Weekly to HDFC</p>
+<p><strong>Reconciliation:</strong> Swiggy partner portal vs Odoo SWG1 vs bank credit</p>
+<p style="color:var(--or);margin-top:8px"><strong>Check: Swiggy One surcharges, TCS certificates for ITR</strong></p>
+</div>
+</div>
+</div>
+
+<!-- ========== COST OF EACH SALE ========== -->
+<div id="cost-layers" class="sec">
+<div class="sec-t">Cost Layers of Each Sale — What's Revenue vs External Budget</div>
+
+<div class="insight blue" style="margin-bottom:24px">
+<h4>Important Distinction: Direct Cost of Sale vs External Budget</h4>
+<p><strong>Direct Cost of Sale</strong> = commission, payment fees, GST on fees — deducted from the order revenue itself.<br>
+<strong>External Budget</strong> = Meta ad spend, EazyDiner 10% discount, marketing costs — these are separate marketing expenses, NOT deducted from order revenue. They appear in the P&L under Marketing (Section 5), not under Revenue.</p>
+</div>
+
+<table class="ft">
+<tr><th>Channel</th><th>Direct Cost of Sale<br>(deducted from revenue)</th><th>External Budget<br>(marketing expense, separate)</th><th>COGS<br>(food + packaging)</th></tr>
+<tr>
+<td><strong>Dine-in Cash/Captain UPI</strong></td>
+<td style="color:var(--gn);font-weight:700">Rs 0 (0%)</td>
+<td style="color:var(--dm)">None</td>
+<td>~30% food + Rs 3 packaging</td>
+</tr>
+<tr>
+<td><strong>Dine-in via Zomato District</strong></td>
+<td style="font-weight:700">7% + GST = 8.26%</td>
+<td style="color:var(--dm)">None (Zomato drives traffic)</td>
+<td>~30% food + Rs 3 packaging</td>
+</tr>
+<tr>
+<td><strong>Dine-in via EazyDiner</strong></td>
+<td style="font-weight:700">Rs 30/pax + GST<br>+ 5% + 1.8% (if PayEazy)</td>
+<td style="color:var(--or);font-weight:700">10% EazyDeal discount (you fund)</td>
+<td>~30% food + Rs 3 packaging</td>
+</tr>
+<tr>
+<td><strong>WABA Take-Away (Meta ad)</strong></td>
+<td style="font-weight:700">2.36% (Razorpay)</td>
+<td style="color:var(--or);font-weight:700">Meta CTWA ad spend (per click)</td>
+<td>~30% food + Rs 8 packaging</td>
+</tr>
+<tr>
+<td><strong>WABA Take-Away (Station QR)</strong></td>
+<td style="font-weight:700">2.36% (Razorpay)</td>
+<td style="color:var(--dm)">QR printing cost (one-time)</td>
+<td>~30% food + Rs 8 packaging</td>
+</tr>
+<tr>
+<td><strong>Zomato Delivery (<4km)</strong></td>
+<td style="color:var(--rd);font-weight:700">18% + 1.84% + GST = 23.41%</td>
+<td style="color:var(--dm)">None (platform drives traffic)</td>
+<td>~30% food + Rs 12 packaging</td>
+</tr>
+<tr>
+<td><strong>Zomato Delivery (6km+)</strong></td>
+<td style="color:var(--rd);font-weight:700">18% + 1.84% + Rs 35 LD + GST = 33.41%</td>
+<td style="color:var(--dm)">None</td>
+<td>~30% food + Rs 12 packaging</td>
+</tr>
+<tr>
+<td><strong>Swiggy Delivery</strong></td>
+<td style="color:var(--rd);font-weight:700">18% + 2% + 1%TCS + GST = 24.60%</td>
+<td style="color:var(--dm)">None (platform drives traffic)</td>
+<td>~30% food + Rs 12 packaging</td>
+</tr>
+<tr>
+<td><strong>WABA Delivery (own rider)</strong></td>
+<td style="font-weight:700">2.36% (Razorpay)</td>
+<td style="color:var(--or);font-weight:700">Rider cost ~Rs 30/order<br>+ Meta ad spend (if ad-driven)</td>
+<td>~30% food + Rs 12 packaging</td>
+</tr>
+</table>
+
+<h4 style="margin:32px 0 16px">Visual: Rs 350 Order — What Goes Where</h4>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+
+<div class="cost-card" style="border-top:4px solid var(--gn)">
+<h4>Dine-in Direct (Cash/Captain UPI)</h4>
+<div style="display:flex;height:30px;border-radius:6px;overflow:hidden;margin:12px 0">
+<div style="width:70%;background:var(--gn);display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:700;color:#fff">COGS Rs 108 (30.9%)</div>
+<div style="width:30%;background:#166534;display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:700;color:#fff">PROFIT Rs 242</div>
+</div>
+<p style="font-size:13px"><strong>Revenue: Rs 350</strong> | Cost of sale: Rs 0 | COGS: Rs 105+3 | <strong class="grn">Profit: Rs 242 (69%)</strong></p>
+</div>
+
+<div class="cost-card" style="border-top:4px solid var(--tl)">
+<h4>WABA Take-Away (Razorpay)</h4>
+<div style="display:flex;height:30px;border-radius:6px;overflow:hidden;margin:12px 0">
+<div style="width:2.4%;background:var(--upi)"></div>
+<div style="width:32.3%;background:var(--or);display:flex;align-items:center;padding:0 4px;font-size:11px;font-weight:700;color:#fff">COGS Rs 113</div>
+<div style="width:65.3%;background:var(--gn);display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:700;color:#fff">PROFIT Rs 229</div>
+</div>
+<p style="font-size:13px"><strong>Revenue: Rs 350</strong> | Razorpay: Rs 8 | COGS: Rs 105+8 | <strong class="grn">Profit: Rs 229 (65%)</strong></p>
+</div>
+
+<div class="cost-card" style="border-top:4px solid var(--rd)">
+<h4>Zomato Delivery (<4km)</h4>
+<div style="display:flex;height:30px;border-radius:6px;overflow:hidden;margin:12px 0">
+<div style="width:23.4%;background:var(--rd);display:flex;align-items:center;padding:0 4px;font-size:10px;font-weight:700;color:#fff">Zomato Rs 82</div>
+<div style="width:33.4%;background:var(--or);display:flex;align-items:center;padding:0 4px;font-size:10px;font-weight:700;color:#fff">COGS Rs 117</div>
+<div style="width:43.2%;background:var(--gn);display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:700;color:#fff">PROFIT Rs 151</div>
+</div>
+<p style="font-size:13px"><strong>Revenue: Rs 350</strong> | Zomato: Rs 82 | COGS: Rs 105+12 | <strong style="color:var(--or)">Profit: Rs 151 (43%)</strong></p>
+</div>
+
+<div class="cost-card" style="border-top:4px solid var(--rd)">
+<h4>Zomato Delivery (6km+)</h4>
+<div style="display:flex;height:30px;border-radius:6px;overflow:hidden;margin:12px 0">
+<div style="width:33.4%;background:var(--rd);display:flex;align-items:center;padding:0 4px;font-size:10px;font-weight:700;color:#fff">Zomato Rs 117</div>
+<div style="width:33.4%;background:var(--or);display:flex;align-items:center;padding:0 4px;font-size:10px;font-weight:700;color:#fff">COGS Rs 117</div>
+<div style="width:33.2%;background:#854d0e;display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:700;color:#fff">PROFIT Rs 116</div>
+</div>
+<p style="font-size:13px"><strong>Revenue: Rs 350</strong> | Zomato: Rs 117 | COGS: Rs 117 | <strong class="red">Profit: Rs 116 (33%)</strong></p>
+</div>
+</div>
+
+<div class="insight red" style="margin-top:24px">
+<h4>The Profitability Gap at a Glance</h4>
+<p style="font-size:15px;color:var(--tx)">
+Same Rs 350 order, same food, same kitchen effort:<br><br>
+Dine-in Direct = <strong class="grn">Rs 242 profit (69%)</strong><br>
+WhatsApp Direct = <strong style="color:var(--tl)">Rs 229 profit (65%)</strong><br>
+Zomato Delivery = <strong class="orn">Rs 151 profit (43%)</strong><br>
+Zomato 6km+ = <strong class="red">Rs 116 profit (33%)</strong><br><br>
+<strong>Dine-in gives you 2.1x the profit of a Zomato delivery order.</strong>
+</p>
+</div>
+</div>
+
+<div style="text-align:center;padding:40px;color:var(--dm);font-size:12px">
+Hamza Express — Sales & Payment Flow | Based on Odoo POS (Company ID 1) + Verified Contracts | For internal use only
+</div>
+</body>
+</html>

@@ -1,0 +1,5 @@
+{
+  "_comment": "hn_code → { odoo_id, category } — the mapping used to drive Phase 2 (product re-linking). If Phase 2 needs rollback, replay each row's odoo_id with its original categ_id (captured in odoo-all-products.json under categ_id field).",
+  "snapshot_date": "2026-04-21",
+  "total_products": 150
+}

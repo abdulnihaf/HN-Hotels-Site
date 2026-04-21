@@ -1694,6 +1694,194 @@ export async function onRequest(context) {
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // RM ARCHITECTURE MIGRATION (admin/cfo only, idempotent, dry-run aware)
+    // Three phases, runnable independently or together:
+    //   phase=categories   → create sub-categories under "01 · Raw Materials"
+    //   phase=relink       → re-link each D1 rm_products row to its new sub-cat
+    //   phase=supplierinfo → sync D1 rm_vendor_products → Odoo product.supplierinfo
+    //   phase=all          → run all three in order
+    // Always returns a detailed report. Set dry_run=true to preview without writes.
+    // ─────────────────────────────────────────────────────────────────────
+    if (action === 'rm-migrate' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      if (!DB) return json({ success: false, error: 'D1 binding missing' }, 500);
+      const body = await request.json().catch(() => ({}));
+      const { pin, phase = 'all', dry_run = true } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!['admin','cfo'].includes(user.role)) {
+        return json({ success: false, error: 'Admin/CFO only' }, 403);
+      }
+
+      const report = { phase, dry_run, steps: [] };
+
+      // Resolve the RM parent category once (matches spend.js CATEGORIES parentName)
+      const rmParentHits = await odoo(apiKey, 'product.category', 'search_read',
+        [[['name', '=', '01 · Raw Materials']]], { fields: ['id', 'name'], limit: 1 });
+      if (!rmParentHits.length) {
+        return json({ success: false, error: 'Parent category "01 · Raw Materials" not found in Odoo' }, 404);
+      }
+      const rmParentId = rmParentHits[0].id;
+      report.rm_parent_category_id = rmParentId;
+
+      // ── PHASE 1 — create sub-categories ────────────────────────────────
+      const subCatMap = {};  // D1 category name → Odoo category id
+      if (phase === 'categories' || phase === 'all') {
+        const d1Cats = await DB.prepare(
+          `SELECT DISTINCT category FROM rm_products WHERE is_active = 1 ORDER BY category`
+        ).all();
+        const subCatNames = (d1Cats.results || []).map(r => r.category).filter(Boolean);
+        const created = [], existed = [];
+        for (const subName of subCatNames) {
+          const odooName = `RM / ${subName}`;
+          // Check if already exists under this parent
+          const existing = await odoo(apiKey, 'product.category', 'search_read',
+            [[['name', '=', odooName], ['parent_id', '=', rmParentId]]],
+            { fields: ['id'], limit: 1 });
+          if (existing.length) {
+            subCatMap[subName] = existing[0].id;
+            existed.push({ d1_name: subName, odoo_name: odooName, id: existing[0].id });
+            continue;
+          }
+          if (dry_run) {
+            created.push({ d1_name: subName, odoo_name: odooName, id: null, dry_run: true });
+            subCatMap[subName] = null;
+            continue;
+          }
+          const newId = await odoo(apiKey, 'product.category', 'create',
+            [{ name: odooName, parent_id: rmParentId }]);
+          subCatMap[subName] = newId;
+          created.push({ d1_name: subName, odoo_name: odooName, id: newId });
+        }
+        report.steps.push({
+          phase: 'categories',
+          summary: `${created.length} ${dry_run?'would-create':'created'}, ${existed.length} already existed`,
+          created, existed,
+        });
+      }
+
+      // ── PHASE 2 — re-link products (need subCatMap from Phase 1) ───────
+      if (phase === 'relink' || phase === 'all') {
+        // If Phase 1 wasn't run, load subcat map from Odoo
+        if (!Object.keys(subCatMap).length) {
+          const subs = await odoo(apiKey, 'product.category', 'search_read',
+            [[['parent_id', '=', rmParentId]]],
+            { fields: ['id', 'name'], limit: 100 });
+          for (const s of subs) {
+            const d1Name = s.name.startsWith('RM / ') ? s.name.slice(5) : s.name;
+            subCatMap[d1Name] = s.id;
+          }
+        }
+        const products = await DB.prepare(
+          `SELECT hn_code, name, category, odoo_id FROM rm_products WHERE is_active = 1 AND odoo_id IS NOT NULL`
+        ).all();
+        const rows = products.results || [];
+        const relinked = [], skipped = [], missing_subcat = [];
+
+        // Batch-fetch current categ_ids for rollback / idempotency
+        const ids = rows.map(r => r.odoo_id);
+        const currentProducts = ids.length ? await odoo(apiKey, 'product.product', 'search_read',
+          [[['id', 'in', ids]]],
+          { fields: ['id', 'name', 'categ_id', 'product_tmpl_id'], limit: 2000 }) : [];
+        const curByOdoo = Object.fromEntries(currentProducts.map(p => [p.id, p]));
+
+        for (const r of rows) {
+          const targetCatId = subCatMap[r.category];
+          if (!targetCatId) {
+            missing_subcat.push({ hn_code: r.hn_code, d1_category: r.category });
+            continue;
+          }
+          const cur = curByOdoo[r.odoo_id];
+          if (!cur) { skipped.push({ hn_code: r.hn_code, reason: 'odoo product not found' }); continue; }
+          const curCatId = cur.categ_id?.[0];
+          if (curCatId === targetCatId) {
+            skipped.push({ hn_code: r.hn_code, reason: 'already on target category' });
+            continue;
+          }
+          if (dry_run) {
+            relinked.push({ hn_code: r.hn_code, odoo_id: r.odoo_id, from: curCatId, to: targetCatId, dry_run: true });
+            continue;
+          }
+          // Write to product.template (categ_id lives there in Odoo 17+)
+          const tmplId = cur.product_tmpl_id?.[0];
+          if (tmplId) {
+            await odoo(apiKey, 'product.template', 'write', [[tmplId], { categ_id: targetCatId }]);
+          } else {
+            await odoo(apiKey, 'product.product', 'write', [[r.odoo_id], { categ_id: targetCatId }]);
+          }
+          relinked.push({ hn_code: r.hn_code, odoo_id: r.odoo_id, from: curCatId, to: targetCatId });
+        }
+        report.steps.push({
+          phase: 'relink',
+          summary: `${relinked.length} ${dry_run?'would-relink':'re-linked'}, ${skipped.length} skipped (already correct or missing), ${missing_subcat.length} couldn't resolve sub-cat`,
+          relinked_sample: relinked.slice(0, 5),
+          skipped_sample: skipped.slice(0, 5),
+          missing_subcat,
+        });
+      }
+
+      // ── PHASE 3 — sync supplierinfo (D1 rm_vendor_products → Odoo) ─────
+      if (phase === 'supplierinfo' || phase === 'all') {
+        const links = await DB.prepare(`
+          SELECT vp.product_code, vp.vendor_key, vp.is_primary, vp.last_price, vp.odoo_variant_id,
+                 p.odoo_id AS product_odoo_id, p.name AS product_name,
+                 v.odoo_id AS vendor_odoo_id, v.name AS vendor_name
+          FROM rm_vendor_products vp
+          JOIN rm_products p ON p.hn_code = vp.product_code AND p.is_active = 1
+          JOIN rm_vendors v ON v.key = vp.vendor_key AND v.is_active = 1
+          WHERE v.odoo_id IS NOT NULL AND p.odoo_id IS NOT NULL
+        `).all();
+        const rows = links.results || [];
+        const created = [], existed = [], failed = [];
+
+        // Fetch product templates for each product (supplierinfo binds to template)
+        const prodIds = [...new Set(rows.map(r => r.product_odoo_id))];
+        const prods = prodIds.length ? await odoo(apiKey, 'product.product', 'search_read',
+          [[['id', 'in', prodIds]]],
+          { fields: ['id', 'product_tmpl_id'], limit: 2000 }) : [];
+        const tmplByProdId = Object.fromEntries(prods.map(p => [p.id, p.product_tmpl_id?.[0]]));
+
+        for (const r of rows) {
+          const tmplId = tmplByProdId[r.product_odoo_id];
+          if (!tmplId) { failed.push({ code: r.product_code, reason: 'no template' }); continue; }
+          // Check existing supplierinfo row
+          const existingLink = await odoo(apiKey, 'product.supplierinfo', 'search_read',
+            [[['partner_id', '=', r.vendor_odoo_id], ['product_tmpl_id', '=', tmplId]]],
+            { fields: ['id', 'price', 'sequence'], limit: 1 });
+          if (existingLink.length) {
+            existed.push({ code: r.product_code, vendor: r.vendor_name, supplierinfo_id: existingLink[0].id });
+            continue;
+          }
+          if (dry_run) {
+            created.push({ code: r.product_code, vendor: r.vendor_name, dry_run: true });
+            continue;
+          }
+          try {
+            const vals = {
+              partner_id: r.vendor_odoo_id,
+              product_tmpl_id: tmplId,
+              sequence: r.is_primary ? 1 : 10,
+            };
+            if (r.last_price != null && r.last_price > 0) vals.price = r.last_price;
+            const newId = await odoo(apiKey, 'product.supplierinfo', 'create', [vals]);
+            created.push({ code: r.product_code, vendor: r.vendor_name, supplierinfo_id: newId });
+          } catch (e) {
+            failed.push({ code: r.product_code, vendor: r.vendor_name, reason: e.message });
+          }
+        }
+        report.steps.push({
+          phase: 'supplierinfo',
+          summary: `${created.length} ${dry_run?'would-create':'created'}, ${existed.length} already existed, ${failed.length} failed`,
+          created_sample: created.slice(0, 10),
+          existed_count: existed.length,
+          failed,
+        });
+      }
+
+      return json({ success: true, ...report });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // UPDATE ENTRY NOTES — edit notes / bill-ref on existing PO / Expense / Bill
     // - Expense: writes to `name` (the description field)
     // - PO / Bill: posts a message to Odoo chatter (mail.message) — the

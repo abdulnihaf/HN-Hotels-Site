@@ -1,0 +1,149 @@
+{
+  "search_date": "2026-04-02",
+  "search_method": "KnowYourGST browser search by name + PAN",
+  "whois": {
+    "domain": "learabia.in",
+    "status": "NOT REGISTERED (expired/available)",
+    "registrant_email": null,
+    "note": "Domain has lapsed. No registrant data available."
+  },
+  "gst_registrations": {
+    "confirmed_le_arabia": [
+      {
+        "gstin": "29AAHFL8416C1ZA",
+        "pan": "AAHFL8416C",
+        "state": "Karnataka",
+        "business_name": "LE ARABIA RESTAURANT",
+        "entity_type": "Partnership",
+        "registration_type": "Regular",
+        "registration_date": "2018-11-20",
+        "status": "Active",
+        "address": "NO. 15, BANNERGHATTA ROAD J P NAGAR 3RD PHASE, Karnataka",
+        "pincode": "560076",
+        "department": "LGSTO 025 - Bengaluru, KA006, YV0402, RANGE-BSD4",
+        "nature_of_business": "Office / Sale Office",
+        "covers_outlets": ["JP Nagar", "Basaveshwar Nagar", "Marathahalli"],
+        "previously_known": true
+      },
+      {
+        "gstin": "29AAJFL0868L1ZP",
+        "pan": "AAJFL0868L",
+        "state": "Karnataka",
+        "business_name": "LE ARABIA RESTAURANT",
+        "entity_type": "Partnership",
+        "registration_type": "Regular",
+        "registration_date": "2021-12-16",
+        "status": "Active",
+        "address": "5TH BLOCK NO. 60, 60FEET ROAD BEHIND SUKA SAGAR HOTEL, KORAMANGALA, Karnataka",
+        "pincode": "560034",
+        "department": "LGSTO 015 - Bengaluru, KA003, YV0502, RANGE-BSD5",
+        "nature_of_business": "Retail Business, Office / Sale Office",
+        "covers_outlets": ["Koramangala 5th Block"],
+        "previously_known": false,
+        "note": "NEW FIND - Separate partnership firm for Koramangala outlet"
+      },
+      {
+        "gstin": "32BQRPN9730L1Z6",
+        "pan": "BQRPN9730L",
+        "state": "Kerala",
+        "business_name": "LE ARABIA RESTAURANT",
+        "legal_name": "NAZNIN NIYAF",
+        "entity_type": "Proprietorship",
+        "registration_type": "Regular",
+        "registration_date": "2020-10-07",
+        "status": "INACTIVE (cancelled since May 2022)",
+        "address": "Kazhakuttom TC No I/3852 1, Ground Floor, Trivandrum, Kerala",
+        "pincode": "695582",
+        "department": "Taxpayer Services Circle Kazhakoottam., KLC230, TH0503, KAZHAKOOTTAM RANGE",
+        "nature_of_business": "Retail Business, Office / Sale Office",
+        "covers_outlets": ["Trivandrum - Kazhakkoottam (original, now replaced)"],
+        "previously_known": true
+      },
+      {
+        "gstin": "32AAIFL0411G1ZZ",
+        "pan": "AAIFL0411G",
+        "state": "Kerala",
+        "business_name": "LE ARABIA RESTAURANT",
+        "entity_type": "Partnership",
+        "registration_type": "Regular",
+        "registration_date": "2019-08-01",
+        "status": "Active",
+        "address": "ZUM ZUM TOWERS 1/3714 B,B1,B2, VANDIPETTA JUNCTION, BILATHIKULAM, Kerala",
+        "pincode": "673011",
+        "department": "Commercial Tax Office, Vadakara, KL142, TJ0302, KOZHIKODE II RANGE",
+        "nature_of_business": "Supplier of Services, Retail Business",
+        "covers_outlets": ["Calicut - Nadakkave", "Calicut - Govindapuram"],
+        "previously_known": false,
+        "note": "NEW FIND - Partnership firm for Calicut outlets"
+      },
+      {
+        "gstin": "32ABIFR8802J1Z1",
+        "pan": "ABIFR8802J",
+        "state": "Kerala",
+        "business_name": "M/s ROYAL LE ARABIA RESTAURANT",
+        "entity_type": "Partnership",
+        "registration_type": "Regular",
+        "registration_date": "2024-04-30",
+        "status": "Active",
+        "address": "ROYAL LE ARABIA RESTAURANT OLD TC KP11/105B, NEW TC 1/3852-1, Kazhakuttom Road, Thiruvananthapuram, Kerala",
+        "pincode": "695582",
+        "department": "Taxpayer Services Circle Kazhakoottam., KLC230, TH0503, KAZHAKOOTTAM RANGE",
+        "nature_of_business": "Retail Business",
+        "covers_outlets": ["Trivandrum - Kazhakkoottam", "Trivandrum - Vazhuthacaud (likely)"],
+        "previously_known": false,
+        "note": "NEW FIND - Same Kazhakuttom address as inactive 32BQRPN9730L1Z6. Registered Apr 2024, successor entity."
+      }
+    ],
+    "possibly_unrelated": [
+      {
+        "gstin": "33BPRPS8052R1ZS",
+        "pan": "BPRPS8052R",
+        "state": "Tamil Nadu",
+        "business_name": "HOTEL LE ARABIA",
+        "entity_type": "Proprietorship",
+        "registration_type": "Regular",
+        "registration_date": "2017-07-01",
+        "address": "4/100A MAINROAD, KANYAKUMARI, Tamil Nadu",
+        "pincode": "629702",
+        "department": "NAGERCOIL (RURAL), TN148",
+        "nature_of_business": "Retail Business",
+        "note": "Different PAN, Kanyakumari. Likely unrelated."
+      }
+    ]
+  },
+  "pan_summary": {
+    "BQRPN9730L": {
+      "holder": "Naznin Niyaf (wife of Mohammad Shamsuddin)",
+      "type": "Individual PAN",
+      "gstins_found": 1,
+      "states": ["Kerala (INACTIVE)"]
+    },
+    "AAHFL8416C": {
+      "holder": "LE ARABIA FOODS (partnership firm)",
+      "type": "Firm PAN",
+      "gstins_found": 1,
+      "states": ["Karnataka (JP Nagar)"]
+    },
+    "AAJFL0868L": {
+      "holder": "LE ARABIA RESTAURANT (partnership firm - Koramangala)",
+      "type": "Firm PAN",
+      "gstins_found": 1,
+      "states": ["Karnataka (Koramangala)"],
+      "discovered": "NEW"
+    },
+    "AAIFL0411G": {
+      "holder": "LE ARABIA RESTAURANT (partnership firm - Calicut)",
+      "type": "Firm PAN",
+      "gstins_found": 1,
+      "states": ["Kerala (Calicut)"],
+      "discovered": "NEW"
+    },
+    "ABIFR8802J": {
+      "holder": "M/s ROYAL LE ARABIA RESTAURANT (partnership firm - Trivandrum)",
+      "type": "Firm PAN",
+      "gstins_found": 1,
+      "states": ["Kerala (Trivandrum)"],
+      "discovered": "NEW - successor to Naznin's proprietorship at same address"
+    }
+  }
+}
