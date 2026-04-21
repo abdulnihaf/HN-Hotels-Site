@@ -97,6 +97,53 @@
     <div id="cats-list">
       <div class="mute">Loading…</div>
     </div>
+
+    <!-- VENDOR MANAGER ─────────────────────────────────────────────── -->
+    <div class="new-cat-box" style="margin-top: 24px; border-color: rgba(124,86,247,0.35);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div style="font-weight: 700;">🏷️ Vendor Manager</div>
+        <button class="mini-btn" onclick="toggleVendorManager()">Open / Refresh</button>
+      </div>
+      <div class="sub" style="margin-bottom: 8px;">
+        Tag each vendor with the categories it belongs to. In the cashier
+        flow, the vendor dropdown for each category will only show vendors
+        with the matching tag. Changes sync to Odoo
+        <code>res.partner.category_id</code> immediately.
+      </div>
+      <div id="vendor-mgr-body" class="hidden">
+        <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+          <input id="vm-search" class="mini-btn" style="flex:1; min-width: 180px; padding: 8px;"
+                 placeholder="Search vendor…" oninput="renderVendorList()">
+          <label style="font-size:12px; color: var(--text-dim); display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="vm-untagged-only" onchange="renderVendorList()"> Untagged only
+          </label>
+        </div>
+        <div id="vendor-list"><div class="mute">Click "Open / Refresh" above.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT CATEGORY MODAL (overlay) -->
+  <div id="edit-cat-modal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; z-index:100;">
+    <div style="background: var(--surface); border:1px solid var(--border); border-radius: 14px; padding: 20px; max-width: 440px; width: 90%;">
+      <h3 style="margin: 0 0 4px 0;">Edit category display</h3>
+      <div id="ec-id-label" class="sub" style="margin-bottom: 14px;">Category id —</div>
+      <input id="ec-id" type="hidden">
+      <div style="display: grid; grid-template-columns: 60px 1fr; gap: 6px; margin-bottom: 8px;">
+        <input id="ec-emoji" type="text" maxlength="2" placeholder="📌" style="text-align:center; font-size: 18px;">
+        <input id="ec-label" type="text" placeholder="Label">
+      </div>
+      <input id="ec-desc" type="text" placeholder="Short description" style="margin-bottom: 8px;">
+      <input id="ec-parent" type="text" placeholder="Odoo parent category name (e.g. 01 · Raw Materials)" style="margin-bottom: 12px;">
+      <div class="sub" style="margin-bottom: 12px;">
+        Changing the Odoo parent name will rename the product.category in Odoo too.
+        The numeric id and backend stay fixed.
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button class="mini-btn" onclick="closeEditCat()">Cancel</button>
+        <button class="mini-btn ok" onclick="submitEditCat()">Save</button>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -156,18 +203,103 @@ async function loadOverview() {
 function renderCats() {
   const box = document.getElementById('cats-list');
   document.getElementById('cat-count').textContent = `${OVERVIEW.length} categories · ${OVERVIEW.reduce((s,c)=>s+(c.products?.length||0),0)} items`;
+  window.OVERVIEW = OVERVIEW;  // expose for renderCat's cat-selector
   box.innerHTML = OVERVIEW.map(c => renderCat(c)).join('');
+}
+
+// ── Vendor Manager ───────────────────────────────────────────────
+let VENDOR_LIST = [];
+let TAG_TO_CAT = {};
+async function toggleVendorManager() {
+  const body = document.getElementById('vendor-mgr-body');
+  if (body.classList.contains('hidden')) {
+    body.classList.remove('hidden');
+  }
+  const list = document.getElementById('vendor-list');
+  list.innerHTML = '<div class="mute">Loading vendors...</div>';
+  const r = await fetch(`${API}?action=list-vendors-with-cats&pin=${PIN}`)
+    .then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { list.innerHTML = `<div class="mute" style="color:var(--danger);">${esc(r.error||'Load failed')}</div>`; return; }
+  VENDOR_LIST = r.vendors || [];
+  TAG_TO_CAT  = r.tag_to_cat || {};
+  renderVendorList();
+}
+function renderVendorList() {
+  const list = document.getElementById('vendor-list');
+  const q = (document.getElementById('vm-search').value || '').toLowerCase();
+  const untaggedOnly = document.getElementById('vm-untagged-only').checked;
+  const rows = VENDOR_LIST.filter(v => {
+    const name = (v.name || '').toLowerCase();
+    if (q && !name.includes(q)) return false;
+    if (untaggedOnly) {
+      const catsOnVendor = (v.category_id || []).filter(tid => tid in TAG_TO_CAT);
+      if (catsOnVendor.length > 0) return false;
+    }
+    return true;
+  });
+  if (!rows.length) { list.innerHTML = '<div class="mute">No vendors match.</div>'; return; }
+  list.innerHTML = rows.map(v => renderVendorRow(v)).join('');
+}
+function renderVendorRow(v) {
+  const tagIds = v.category_id || [];
+  const catsOnVendor = tagIds.filter(tid => tid in TAG_TO_CAT).map(tid => TAG_TO_CAT[tid]);
+  const chips = (window.OVERVIEW || []).filter(c => c.id >= 1 && c.id <= 15).map(c => {
+    const checked = catsOnVendor.includes(c.id) ? 'checked' : '';
+    return `<label style="display:inline-flex; align-items:center; gap:4px; padding:3px 6px; border:1px solid var(--border); border-radius:4px; font-size:11px; margin:2px;">
+      <input type="checkbox" data-vid="${v.id}" data-cat="${c.id}" ${checked} onchange="saveVendorCats(${v.id})"> ${esc(c.emoji||'')} ${esc(c.label)}
+    </label>`;
+  }).join('');
+  return `
+    <div style="padding: 8px 10px; border-bottom: 1px dashed var(--border);">
+      <div style="font-weight:600; font-size:13px; margin-bottom: 4px;">${esc(v.name)}
+        ${catsOnVendor.length === 0 ? '<span class="lock-pill" style="background:rgba(239,68,68,0.15); color:#f87171;">UNTAGGED</span>' : ''}
+      </div>
+      <div style="display:flex; flex-wrap:wrap;">${chips}</div>
+    </div>
+  `;
+}
+async function saveVendorCats(vendorId) {
+  const checks = document.querySelectorAll(`input[data-vid="${vendorId}"]:checked`);
+  const catIds = Array.from(checks).map(el => parseInt(el.dataset.cat, 10));
+  const r = await fetch(`${API}?action=set-vendor-cats`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: PIN, vendor_id: vendorId, cat_ids: catIds }),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { toast(r.error || 'Save failed', 'err'); return; }
+  // Update local cache so UI stays in sync without full refetch
+  const v = VENDOR_LIST.find(x => x.id === vendorId);
+  if (v) {
+    const keepNonCat = (v.category_id || []).filter(tid => !(tid in TAG_TO_CAT));
+    const newCatTags = catIds.map(c => {
+      for (const [tid, cid] of Object.entries(TAG_TO_CAT)) if (cid === c) return parseInt(tid, 10);
+      return null;
+    }).filter(Boolean);
+    v.category_id = [...keepNonCat, ...newCatTags];
+  }
+  toast('✓ Saved', 'ok');
 }
 
 function renderCat(c) {
   const pill = c.custom
     ? `<span class="custom-pill">custom</span>`
-    : `<span class="lock-pill">locked</span>`;
+    : `<span class="lock-pill">display-editable</span>`;
   const archiveCatBtn = c.custom
     ? `<button class="mini-btn danger" onclick="archiveCategory(${c.id})">Archive category</button>`
     : '';
+  // Edit display button — enabled for BOTH locked and custom categories.
+  // For locked (1-15): rewrites label/emoji/desc/parentName via
+  //   /api/spend?action=edit-category-display (override table + optional
+  //   Odoo product.category rename). id stays immutable.
+  const editBtn = c.id >= 1 && c.id <= 15
+    ? `<button class="mini-btn" onclick="openEditCat(${c.id}, ${JSON.stringify(c.label).replace(/"/g,'&quot;')}, ${JSON.stringify(c.emoji||'📌').replace(/"/g,'&quot;')}, ${JSON.stringify(c.desc||'').replace(/"/g,'&quot;')}, ${JSON.stringify(c.parentName||'').replace(/"/g,'&quot;')})">Edit display</button>`
+    : '';
   const itemRows = (c.products || []).map(p => renderProduct(p, c.id)).join('')
                   || '<div class="mute" style="padding: 8px 0;">No items in this category yet.</div>';
+  // All-categories dropdown for Add-Item row so admin can pick any heading
+  // from any row — answers Naveen's "select under which Heading".
+  const catOptions = (window.OVERVIEW || []).map(x =>
+    `<option value="${x.id}" ${x.id === c.id ? 'selected' : ''}>${esc(x.emoji||'')} ${esc(x.label)}</option>`
+  ).join('');
   return `
     <div class="cat-row ${c.custom ? 'custom' : ''}" id="cat-${c.id}">
       <div class="cat-head" onclick="toggleCat(${c.id})">
@@ -181,15 +313,50 @@ function renderCat(c) {
           ${esc(c.desc || '')}
           ${c.parentName ? `<br>Odoo: <code>${esc(c.parentName)}</code> (id ${c.odoo_category_id || '?'})` : ''}
         </div>
+        <div style="margin-bottom: 8px;">${editBtn}</div>
         <div>${itemRows}</div>
-        <div class="add-item-row">
-          <input id="add-${c.id}" type="text" placeholder="+ Add item to ${esc(c.label)}">
+        <div class="add-item-row" style="flex-wrap:wrap; gap:6px;">
+          <select id="add-cat-${c.id}" style="min-width:160px;">${catOptions}</select>
+          <input id="add-${c.id}" type="text" placeholder="+ New item name" style="flex:1; min-width:140px;">
           <button class="mini-btn ok" onclick="addItem(${c.id})">Add</button>
         </div>
         ${archiveCatBtn ? `<div style="margin-top: 14px; text-align: right;">${archiveCatBtn}</div>` : ''}
       </div>
     </div>
   `;
+}
+
+// ── Edit Category Display modal ──────────────────────────────────────
+function openEditCat(id, label, emoji, desc, parentName) {
+  const modal = document.getElementById('edit-cat-modal');
+  document.getElementById('ec-id').value = id;
+  document.getElementById('ec-id-label').textContent = `Category id ${id} (immutable)`;
+  document.getElementById('ec-label').value = label;
+  document.getElementById('ec-emoji').value = emoji;
+  document.getElementById('ec-desc').value = desc;
+  document.getElementById('ec-parent').value = parentName;
+  modal.classList.remove('hidden');
+}
+function closeEditCat() { document.getElementById('edit-cat-modal').classList.add('hidden'); }
+async function submitEditCat() {
+  const id = parseInt(document.getElementById('ec-id').value, 10);
+  const body = {
+    pin: PIN, id,
+    label: document.getElementById('ec-label').value.trim(),
+    emoji: document.getElementById('ec-emoji').value.trim(),
+    description: document.getElementById('ec-desc').value.trim(),
+    parent_name: document.getElementById('ec-parent').value.trim(),
+  };
+  if (!body.label) { toast('Label required', 'err'); return; }
+  const r = await fetch(`${API}?action=edit-category-display`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { toast(r.error || 'Save failed', 'err'); return; }
+  toast('✓ Saved', 'ok');
+  closeEditCat();
+  await loadOverview();
+  document.getElementById(`cat-${id}`)?.classList.add('open');
 }
 
 function renderProduct(p, catId) {
@@ -214,19 +381,21 @@ function toggleCat(id) {
   document.getElementById(`cat-${id}`)?.classList.toggle('open');
 }
 
-async function addItem(catId) {
-  const input = document.getElementById(`add-${catId}`);
+async function addItem(rowCatId) {
+  const input = document.getElementById(`add-${rowCatId}`);
+  const catSel = document.getElementById(`add-cat-${rowCatId}`);
+  const targetCatId = parseInt(catSel?.value || rowCatId, 10);  // picker wins
   const name = (input?.value || '').trim();
   if (!name) { toast('Item name required', 'err'); return; }
   const r = await fetch(`${API}?action=create-expense-product`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pin: PIN, cat_id: catId, name }),
+    body: JSON.stringify({ pin: PIN, cat_id: targetCatId, name }),
   }).then(x => x.json()).catch(e => ({ error: e.message }));
   if (!r.success) { toast(r.error || 'Add failed', 'err'); return; }
   input.value = '';
-  toast(`✓ Added "${r.product.name}"`, 'ok');
+  toast(`✓ Added "${r.product.name}" to ${targetCatId}`, 'ok');
   await loadOverview();
-  document.getElementById(`cat-${catId}`)?.classList.add('open');
+  document.getElementById(`cat-${targetCatId}`)?.classList.add('open');
 }
 
 async function renameItem(productId, currentName) {

@@ -182,6 +182,47 @@ function visibleCats(user) {
 
 // Custom categories Naveen has added via /ops/expense/admin/.
 // Returned with shape matching the built-in CATEGORIES so the UI treats them identically.
+// Naveen-edited display overrides for the 15 locked categories. Label /
+// emoji / description / parentName are editable; id + backend stay fixed.
+// Stored in D1 expense_cat_override (see schema-expense-cat-override.sql).
+async function loadCategoryOverrides(DB) {
+  if (!DB) return {};
+  try {
+    const r = await DB.prepare(
+      `SELECT id, label, emoji, description, parent_name FROM expense_cat_override`
+    ).all();
+    const map = {};
+    for (const row of (r.results || [])) {
+      map[row.id] = {
+        label: row.label || null,
+        emoji: row.emoji || null,
+        desc: row.description || null,
+        parentName: row.parent_name || null,
+      };
+    }
+    return map;
+  } catch (e) {
+    console.error('loadCategoryOverrides fail:', e.message);
+    return {};
+  }
+}
+
+// Returns CATEGORIES with admin overrides merged in. Use this instead of
+// reading CATEGORIES directly whenever the UI will see the values.
+function mergeCategoryOverrides(overrides) {
+  return CATEGORIES.map(c => {
+    const o = overrides[c.id];
+    if (!o) return c;
+    return {
+      ...c,
+      label:      o.label      || c.label,
+      emoji:      o.emoji      || c.emoji,
+      desc:       o.desc       || c.desc,
+      parentName: o.parentName || c.parentName,
+    };
+  });
+}
+
 async function loadCustomCategories(DB) {
   if (!DB) return [];
   try {
@@ -349,8 +390,11 @@ export async function onRequest(context) {
         { fields: ['id', 'name'], limit: 1 });
       const rootId = rootHits[0]?.id;
 
-      // Pull all parent categories under the root + products per category
-      const structureCats = await Promise.all(CATEGORIES.map(async (cat) => {
+      // Pull all parent categories under the root + products per category.
+      // Apply admin display overrides so cashier UI shows Naveen's renames.
+      const overrides = await loadCategoryOverrides(DB);
+      const categoriesForStructure = mergeCategoryOverrides(overrides);
+      const structureCats = await Promise.all(categoriesForStructure.map(async (cat) => {
         let products = [];
         if (cat.backend === 'hr.expense' && cat.parentName) {
           const parentHits = await odoo(apiKey, 'product.category', 'search_read',
@@ -537,13 +581,144 @@ export async function onRequest(context) {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
       const brand = (url.searchParams.get('brand') || '').toUpperCase();
       const companyId = BRAND_COMPANY[brand];
+      // Optional cat_id filter: when present, restrict to vendors tagged with
+      // the matching "Cat:<id> ..." res.partner.category. Preserves backward
+      // compat — omit cat_id and you get all brand vendors as before.
+      const catIdRaw = url.searchParams.get('cat_id');
+      const catId = catIdRaw ? parseInt(catIdRaw, 10) : null;
       const domain = companyId
         ? [['supplier_rank', '>', 0], ['company_id', 'in', [companyId, false]]]
         : [['supplier_rank', '>', 0]];
+      if (catId) {
+        // Resolve the Cat:<id> tag → partner category id, then filter
+        const tagHits = await odoo(apiKey, 'res.partner.category', 'search_read',
+          [[['name', 'like', `Cat:${catId} `]]], { fields: ['id'], limit: 1 });
+        if (tagHits.length) {
+          domain.push(['category_id', 'in', [tagHits[0].id]]);
+        }
+        // If tag doesn't exist yet, we silently do not filter — avoids locking
+        // users out before Step 1 seeding has run in a fresh environment.
+      }
       const vendors = await odoo(apiKey, 'res.partner', 'search_read',
         [domain],
-        { fields: ['id', 'name', 'phone'], order: 'name asc', limit: 200 });
+        { fields: ['id', 'name', 'phone', 'category_id'],
+          order: 'name asc', limit: 200 });
+      // Fallback for empty cat_id result: return all vendors w/ a hint so UI
+      // can surface a banner "No vendors tagged for <Cat>. Showing all."
+      if (catId && vendors.length === 0) {
+        const allVendors = await odoo(apiKey, 'res.partner', 'search_read',
+          [domain.filter(d => d[0] !== 'category_id')],
+          { fields: ['id', 'name', 'phone', 'category_id'],
+            order: 'name asc', limit: 200 });
+        return json({ success: true, vendors: allVendors, fallback: true, reason: 'no_tagged_vendors' });
+      }
       return json({ success: true, vendors });
+    }
+
+    // ── ADMIN: list vendors + category tags (for vendor manager) ────────
+    if (action === 'list-vendors-with-cats') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!isAdminRole(user)) return json({ success: false, error: 'Admin only' }, 403);
+
+      const vendors = await odoo(apiKey, 'res.partner', 'search_read',
+        [[['supplier_rank', '>', 0]]],
+        { fields: ['id', 'name', 'phone', 'category_id', 'company_id'],
+          order: 'name asc', limit: 500 });
+
+      // Build tagId → cat_id map so UI can show category pills
+      const catTags = await odoo(apiKey, 'res.partner.category', 'search_read',
+        [[['name', 'like', 'Cat:']]], { fields: ['id', 'name'] });
+      const tagToCat = {};
+      for (const t of catTags) {
+        const m = (t.name || '').match(/^Cat:(\d+) /);
+        if (m) tagToCat[t.id] = parseInt(m[1], 10);
+      }
+      return json({ success: true, vendors, tag_to_cat: tagToCat });
+    }
+
+    // ── ADMIN: set vendor category tags (replace, union, or remove) ─────
+    if (action === 'set-vendor-cats' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, vendor_id, cat_ids } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!isAdminRole(user)) return json({ success: false, error: 'Admin only' }, 403);
+      if (!vendor_id || !Array.isArray(cat_ids)) {
+        return json({ success: false, error: 'vendor_id + cat_ids required' }, 400);
+      }
+
+      // Load all Cat:<id> tags to know which to add/remove
+      const catTags = await odoo(apiKey, 'res.partner.category', 'search_read',
+        [[['name', 'like', 'Cat:']]], { fields: ['id', 'name'] });
+      const tagToCat = {}; const catToTag = {};
+      for (const t of catTags) {
+        const m = (t.name || '').match(/^Cat:(\d+) /);
+        if (m) { tagToCat[t.id] = parseInt(m[1], 10); catToTag[parseInt(m[1], 10)] = t.id; }
+      }
+
+      // Read current tags, keep non-Cat:* tags, swap Cat:* tags to desired set
+      const vendorRows = await odoo(apiKey, 'res.partner', 'read',
+        [[parseInt(vendor_id, 10)]], { fields: ['category_id'] });
+      if (!vendorRows.length) return json({ success: false, error: 'Vendor not found' }, 404);
+      const currentTags = vendorRows[0].category_id || [];
+      const keepTags = currentTags.filter(tid => !(tid in tagToCat));
+      const newCatTags = cat_ids.map(c => catToTag[parseInt(c, 10)]).filter(Boolean);
+      const finalTags = [...new Set([...keepTags, ...newCatTags])];
+      await odoo(apiKey, 'res.partner', 'write',
+        [[parseInt(vendor_id, 10)], { category_id: [[6, 0, finalTags]] }]);
+      return json({ success: true, vendor_id: parseInt(vendor_id, 10), tags: finalTags });
+    }
+
+    // ── ADMIN: edit display of a locked category (1-15) ─────────────────
+    // Label / emoji / description / parent_name are editable; id + backend
+    // stay immutable (30+ references to id numbers in PIN scope + dashboard).
+    if (action === 'edit-category-display' && request.method === 'POST') {
+      if (!DB) return json({ success: false, error: 'D1 not configured' }, 500);
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, id, label, emoji, description, parent_name } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!isAdminRole(user)) return json({ success: false, error: 'Admin only' }, 403);
+      const catId = parseInt(id, 10);
+      if (!catId || catId < 1 || catId > 15) {
+        return json({ success: false, error: 'id must be 1..15 (use custom category actions for 16+)' }, 400);
+      }
+      const base = CATEGORIES.find(c => c.id === catId);
+      if (!base) return json({ success: false, error: 'Unknown category id' }, 400);
+
+      // Optionally rename the Odoo product.category if parent_name changed
+      if (parent_name && parent_name !== base.parentName) {
+        try {
+          const hits = await odoo(apiKey, 'product.category', 'search_read',
+            [[['name', '=', base.parentName]]], { fields: ['id'], limit: 1 });
+          if (hits.length) {
+            await odoo(apiKey, 'product.category', 'write',
+              [[hits[0].id], { name: parent_name }]);
+          }
+        } catch (e) { /* fall through — record override even if Odoo rename fails */ }
+      }
+
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      await DB.prepare(
+        `INSERT INTO expense_cat_override (id, label, emoji, description, parent_name, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           label = excluded.label,
+           emoji = excluded.emoji,
+           description = excluded.description,
+           parent_name = excluded.parent_name,
+           updated_at = excluded.updated_at,
+           updated_by = excluded.updated_by`
+      ).bind(catId,
+             label || null, emoji || null, description || null,
+             parent_name || null, now, String(pin)).run();
+
+      return json({ success: true, id: catId, label, emoji, description, parent_name });
     }
 
     // ── RECENT ENTRIES (last 20) ───────────────────────────
@@ -1008,8 +1183,10 @@ export async function onRequest(context) {
       }
       const includeArchived = url.searchParams.get('include_archived') === '1';
 
+      const overrides = await loadCategoryOverrides(DB);
+      const baseCats = mergeCategoryOverrides(overrides).filter(c => c.backend === 'hr.expense');
       const custom = await loadCustomCategories(DB);
-      const allCats = [...CATEGORIES.filter(c => c.backend === 'hr.expense'), ...custom];
+      const allCats = [...baseCats, ...custom];
 
       const rows = await Promise.all(allCats.map(async (cat) => {
         let categIds = [];

@@ -580,7 +580,8 @@ async function buildGenericForm(cat) {
   }
 
   if (cat.backend === 'account.move') {
-    const vend = await fetch(`${API}?action=vendors&pin=${PIN}&brand=${BRAND}`).then(x => x.json()).catch(() => ({ vendors: [] }));
+    // Scope vendor list by the current category (Naveen 2026-04-21).
+    const vend = await fetch(`${API}?action=vendors&pin=${PIN}&brand=${BRAND}&cat_id=${cat.id}`).then(x => x.json()).catch(() => ({ vendors: [] }));
     fields.push(`
       <div class="row">
         <label>Vendor</label>

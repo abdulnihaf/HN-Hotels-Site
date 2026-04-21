@@ -3,3 +3,19 @@ node_modules/
 .wrangler/
 *.log
 .dev.vars
+
+# Sensitive / never-commit
+.secrets/
+.env
+.env.*
+*.pem
+*.key
+
+# Large binary research assets (keep local only)
+*.pdf
+*.xlsx
+!package.json
+
+# Claude Code worktrees and local-scratch
+.claude/worktrees/
+.claude/settings.local.json
