@@ -1724,49 +1724,55 @@ export async function onRequest(context) {
       const rmParentId = rmParentHits[0].id;
       report.rm_parent_category_id = rmParentId;
 
-      // ── PHASE 1 — create sub-categories ────────────────────────────────
+      // ── PHASE 1 — create sub-categories (BATCHED: 1 search + 1 create) ──
       const subCatMap = {};  // D1 category name → Odoo category id
       if (phase === 'categories' || phase === 'all') {
         const d1Cats = await DB.prepare(
           `SELECT DISTINCT category FROM rm_products WHERE is_active = 1 ORDER BY category`
         ).all();
         const subCatNames = (d1Cats.results || []).map(r => r.category).filter(Boolean);
-        const created = [], existed = [];
+        // Single search: all sub-cats already under the RM parent
+        const existingSubs = await odoo(apiKey, 'product.category', 'search_read',
+          [[['parent_id', '=', rmParentId]]], { fields: ['id', 'name'], limit: 200 });
+        const existingByName = Object.fromEntries(existingSubs.map(s => [s.name, s.id]));
+        const created = [], existed = [], toCreate = [];
         for (const subName of subCatNames) {
           const odooName = `RM / ${subName}`;
-          // Check if already exists under this parent
-          const existing = await odoo(apiKey, 'product.category', 'search_read',
-            [[['name', '=', odooName], ['parent_id', '=', rmParentId]]],
-            { fields: ['id'], limit: 1 });
-          if (existing.length) {
-            subCatMap[subName] = existing[0].id;
-            existed.push({ d1_name: subName, odoo_name: odooName, id: existing[0].id });
-            continue;
+          if (existingByName[odooName] != null) {
+            subCatMap[subName] = existingByName[odooName];
+            existed.push({ d1_name: subName, odoo_name: odooName, id: existingByName[odooName] });
+          } else {
+            toCreate.push({ d1_name: subName, odoo_name: odooName });
           }
-          if (dry_run) {
-            created.push({ d1_name: subName, odoo_name: odooName, id: null, dry_run: true });
-            subCatMap[subName] = null;
-            continue;
-          }
-          const newId = await odoo(apiKey, 'product.category', 'create',
-            [{ name: odooName, parent_id: rmParentId }]);
-          subCatMap[subName] = newId;
-          created.push({ d1_name: subName, odoo_name: odooName, id: newId });
+        }
+        // Batch create — single Odoo call with array of records
+        if (toCreate.length && !dry_run) {
+          const vals = toCreate.map(c => ({ name: c.odoo_name, parent_id: rmParentId }));
+          const newIds = await odoo(apiKey, 'product.category', 'create', [vals]);
+          const idsArr = Array.isArray(newIds) ? newIds : [newIds];
+          toCreate.forEach((c, i) => {
+            subCatMap[c.d1_name] = idsArr[i];
+            created.push({ ...c, id: idsArr[i] });
+          });
+        } else if (toCreate.length && dry_run) {
+          toCreate.forEach(c => {
+            subCatMap[c.d1_name] = null;
+            created.push({ ...c, id: null, dry_run: true });
+          });
         }
         report.steps.push({
           phase: 'categories',
           summary: `${created.length} ${dry_run?'would-create':'created'}, ${existed.length} already existed`,
-          created, existed,
+          created: created.slice(0, 40), existed_count: existed.length,
         });
       }
 
-      // ── PHASE 2 — re-link products (need subCatMap from Phase 1) ───────
+      // ── PHASE 2 — re-link products (BATCHED by target category) ────────
       if (phase === 'relink' || phase === 'all') {
-        // If Phase 1 wasn't run, load subcat map from Odoo
         if (!Object.keys(subCatMap).length) {
           const subs = await odoo(apiKey, 'product.category', 'search_read',
             [[['parent_id', '=', rmParentId]]],
-            { fields: ['id', 'name'], limit: 100 });
+            { fields: ['id', 'name'], limit: 200 });
           for (const s of subs) {
             const d1Name = s.name.startsWith('RM / ') ? s.name.slice(5) : s.name;
             subCatMap[d1Name] = s.id;
@@ -1776,51 +1782,55 @@ export async function onRequest(context) {
           `SELECT hn_code, name, category, odoo_id FROM rm_products WHERE is_active = 1 AND odoo_id IS NOT NULL`
         ).all();
         const rows = products.results || [];
-        const relinked = [], skipped = [], missing_subcat = [];
-
-        // Batch-fetch current categ_ids for rollback / idempotency
         const ids = rows.map(r => r.odoo_id);
         const currentProducts = ids.length ? await odoo(apiKey, 'product.product', 'search_read',
           [[['id', 'in', ids]]],
           { fields: ['id', 'name', 'categ_id', 'product_tmpl_id'], limit: 2000 }) : [];
         const curByOdoo = Object.fromEntries(currentProducts.map(p => [p.id, p]));
 
+        // Group template ids by target category — one write call per group
+        const groups = {};    // targetCatId → [tmplId, ...]
+        const missing_subcat = [], skipped_already = [], skipped_missing = [];
         for (const r of rows) {
           const targetCatId = subCatMap[r.category];
-          if (!targetCatId) {
-            missing_subcat.push({ hn_code: r.hn_code, d1_category: r.category });
-            continue;
-          }
+          if (!targetCatId) { missing_subcat.push({ hn_code: r.hn_code, d1_category: r.category }); continue; }
           const cur = curByOdoo[r.odoo_id];
-          if (!cur) { skipped.push({ hn_code: r.hn_code, reason: 'odoo product not found' }); continue; }
-          const curCatId = cur.categ_id?.[0];
-          if (curCatId === targetCatId) {
-            skipped.push({ hn_code: r.hn_code, reason: 'already on target category' });
-            continue;
-          }
-          if (dry_run) {
-            relinked.push({ hn_code: r.hn_code, odoo_id: r.odoo_id, from: curCatId, to: targetCatId, dry_run: true });
-            continue;
-          }
-          // Write to product.template (categ_id lives there in Odoo 17+)
-          const tmplId = cur.product_tmpl_id?.[0];
-          if (tmplId) {
-            await odoo(apiKey, 'product.template', 'write', [[tmplId], { categ_id: targetCatId }]);
-          } else {
-            await odoo(apiKey, 'product.product', 'write', [[r.odoo_id], { categ_id: targetCatId }]);
-          }
-          relinked.push({ hn_code: r.hn_code, odoo_id: r.odoo_id, from: curCatId, to: targetCatId });
+          if (!cur) { skipped_missing.push({ hn_code: r.hn_code }); continue; }
+          if (cur.categ_id?.[0] === targetCatId) { skipped_already.push(r.hn_code); continue; }
+          const tmplId = cur.product_tmpl_id?.[0] || null;
+          if (!tmplId) { skipped_missing.push({ hn_code: r.hn_code, reason: 'no template' }); continue; }
+          if (!groups[targetCatId]) groups[targetCatId] = [];
+          groups[targetCatId].push({ hn_code: r.hn_code, odoo_id: r.odoo_id, tmpl_id: tmplId, from: cur.categ_id?.[0] });
+        }
+
+        let relinkedCount = 0;
+        const relinked_sample = [];
+        if (!dry_run) {
+          // Parallel group-writes (one subrequest per category group, ~29 max)
+          const writes = Object.entries(groups).map(async ([targetCatId, items]) => {
+            const tmplIds = items.map(i => i.tmpl_id);
+            await odoo(apiKey, 'product.template', 'write', [tmplIds, { categ_id: parseInt(targetCatId, 10) }]);
+            return items.length;
+          });
+          const counts = await Promise.all(writes);
+          relinkedCount = counts.reduce((a, b) => a + b, 0);
+        } else {
+          relinkedCount = Object.values(groups).reduce((a, b) => a + b.length, 0);
+        }
+        for (const items of Object.values(groups)) {
+          for (const it of items.slice(0, 2)) relinked_sample.push(it);
+          if (relinked_sample.length >= 10) break;
         }
         report.steps.push({
           phase: 'relink',
-          summary: `${relinked.length} ${dry_run?'would-relink':'re-linked'}, ${skipped.length} skipped (already correct or missing), ${missing_subcat.length} couldn't resolve sub-cat`,
-          relinked_sample: relinked.slice(0, 5),
-          skipped_sample: skipped.slice(0, 5),
+          summary: `${relinkedCount} ${dry_run?'would-relink':'re-linked'} across ${Object.keys(groups).length} category groups, ${skipped_already.length} already correct, ${skipped_missing.length} skipped, ${missing_subcat.length} couldn't resolve sub-cat`,
+          relinked_sample,
           missing_subcat,
+          skipped_missing_sample: skipped_missing.slice(0, 5),
         });
       }
 
-      // ── PHASE 3 — sync supplierinfo (D1 rm_vendor_products → Odoo) ─────
+      // ── PHASE 3 — sync supplierinfo (BATCHED: 2 searches + 1 create) ───
       if (phase === 'supplierinfo' || phase === 'all') {
         const links = await DB.prepare(`
           SELECT vp.product_code, vp.vendor_key, vp.is_primary, vp.last_price, vp.odoo_variant_id,
@@ -1832,43 +1842,55 @@ export async function onRequest(context) {
           WHERE v.odoo_id IS NOT NULL AND p.odoo_id IS NOT NULL
         `).all();
         const rows = links.results || [];
-        const created = [], existed = [], failed = [];
 
-        // Fetch product templates for each product (supplierinfo binds to template)
+        // Batch lookup all product templates in one call
         const prodIds = [...new Set(rows.map(r => r.product_odoo_id))];
         const prods = prodIds.length ? await odoo(apiKey, 'product.product', 'search_read',
           [[['id', 'in', prodIds]]],
           { fields: ['id', 'product_tmpl_id'], limit: 2000 }) : [];
         const tmplByProdId = Object.fromEntries(prods.map(p => [p.id, p.product_tmpl_id?.[0]]));
 
+        // Batch lookup existing supplierinfo links for ALL vendor×template pairs
+        const vendorIds = [...new Set(rows.map(r => r.vendor_odoo_id))];
+        const tmplIds = [...new Set(Object.values(tmplByProdId).filter(Boolean))];
+        const existingLinks = (vendorIds.length && tmplIds.length) ? await odoo(apiKey, 'product.supplierinfo', 'search_read',
+          [[['partner_id', 'in', vendorIds], ['product_tmpl_id', 'in', tmplIds]]],
+          { fields: ['id', 'partner_id', 'product_tmpl_id', 'price'], limit: 5000 }) : [];
+        const existingKey = new Set(existingLinks.map(e => `${e.partner_id?.[0]}-${e.product_tmpl_id?.[0]}`));
+
+        // Decide which rows need creation
+        const toCreate = [];
+        const created = [], existed = [], failed = [];
         for (const r of rows) {
           const tmplId = tmplByProdId[r.product_odoo_id];
           if (!tmplId) { failed.push({ code: r.product_code, reason: 'no template' }); continue; }
-          // Check existing supplierinfo row
-          const existingLink = await odoo(apiKey, 'product.supplierinfo', 'search_read',
-            [[['partner_id', '=', r.vendor_odoo_id], ['product_tmpl_id', '=', tmplId]]],
-            { fields: ['id', 'price', 'sequence'], limit: 1 });
-          if (existingLink.length) {
-            existed.push({ code: r.product_code, vendor: r.vendor_name, supplierinfo_id: existingLink[0].id });
-            continue;
-          }
-          if (dry_run) {
-            created.push({ code: r.product_code, vendor: r.vendor_name, dry_run: true });
-            continue;
-          }
-          try {
-            const vals = {
-              partner_id: r.vendor_odoo_id,
-              product_tmpl_id: tmplId,
-              sequence: r.is_primary ? 1 : 10,
-            };
-            if (r.last_price != null && r.last_price > 0) vals.price = r.last_price;
-            const newId = await odoo(apiKey, 'product.supplierinfo', 'create', [vals]);
-            created.push({ code: r.product_code, vendor: r.vendor_name, supplierinfo_id: newId });
-          } catch (e) {
-            failed.push({ code: r.product_code, vendor: r.vendor_name, reason: e.message });
-          }
+          const key = `${r.vendor_odoo_id}-${tmplId}`;
+          if (existingKey.has(key)) { existed.push(key); continue; }
+          const vals = {
+            partner_id: r.vendor_odoo_id,
+            product_tmpl_id: tmplId,
+            sequence: r.is_primary ? 1 : 10,
+          };
+          if (r.last_price != null && r.last_price > 0) vals.price = r.last_price;
+          toCreate.push({ vals, hint: { code: r.product_code, vendor: r.vendor_name } });
+          existingKey.add(key); // avoid duplicate creates within same run
         }
+
+        if (!dry_run && toCreate.length) {
+          try {
+            const valsArr = toCreate.map(t => t.vals);
+            const newIds = await odoo(apiKey, 'product.supplierinfo', 'create', [valsArr]);
+            const idsArr = Array.isArray(newIds) ? newIds : [newIds];
+            toCreate.forEach((t, i) => {
+              created.push({ ...t.hint, supplierinfo_id: idsArr[i] });
+            });
+          } catch (e) {
+            failed.push({ reason: 'batch create failed: ' + e.message, count: toCreate.length });
+          }
+        } else if (dry_run) {
+          toCreate.forEach(t => created.push({ ...t.hint, dry_run: true }));
+        }
+
         report.steps.push({
           phase: 'supplierinfo',
           summary: `${created.length} ${dry_run?'would-create':'created'}, ${existed.length} already existed, ${failed.length} failed`,
