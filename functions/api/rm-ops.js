@@ -847,6 +847,7 @@ async function handlePost(action, context, env, DB) {
 
   switch (body.action || action) {
     case 'create-po':       return createPO(body, user, creds, cfg, brand, DB, env);
+    case 'add-po-line':     return addPOLine(body, user, creds, cfg, brand, DB, env);
     case 'edit-po-line':    return editPOLine(body, user, creds, cfg, brand, DB, env);
     case 'delete-po-line':  return deletePOLine(body, user, creds, cfg, brand, DB, env);
     case 'cancel-po':       return cancelPO(body, user, creds, cfg, brand, DB, env);
@@ -1026,6 +1027,79 @@ async function checkPOEditable(creds, poId) {
 }
 
 /* ── Edit PO Line (qty / price) ── */
+
+/* ── Add a new line to an existing PO ──
+ * Used by the ledger drawer's "Edit Lines" section so Zoya can enrich a
+ * PO that was originally entered as a single-item flat entry (e.g. one of
+ * the 168 fragmented POs the audit flagged).  Follows the same cancel→
+ * draft→write→confirm cycle as delete-po-line for confirmed POs.
+ */
+async function addPOLine(body, user, creds, cfg, brand, DB, env) {
+  if (user.role !== 'admin' && user.role !== 'purchase') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+  const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
+
+  const { po_id, product_id, qty, price_unit } = body;
+  if (!po_id || !product_id) return json({ error: 'Missing po_id or product_id' }, 400);
+  if (!qty || qty <= 0) return json({ error: 'Quantity must be positive' }, 400);
+  const priceU = price_unit != null ? parseFloat(price_unit) : 0;
+  if (priceU < 0) return json({ error: 'Price cannot be negative' }, 400);
+
+  const check = await checkPOEditable(sysCreds, po_id);
+  if (!check.ok) return json({ error: check.error }, 400);
+
+  // Fetch product meta for name (required by Odoo)
+  const prod = await odooCall(sysCreds.uid, sysCreds.key,
+    'product.product', 'read', [[parseInt(product_id, 10)]],
+    { fields: ['id', 'name', 'uom_po_id', 'product_tmpl_id'] });
+  if (!prod || !prod.length) return json({ error: 'Product not found' }, 404);
+
+  const lineVals = {
+    product_id: parseInt(product_id, 10),
+    name: prod[0].name,
+    product_qty: qty,
+    price_unit: priceU,
+  };
+  if (prod[0].uom_po_id?.[0]) lineVals.product_uom = prod[0].uom_po_id[0];
+
+  // Confirmed POs need cancel→draft→write→confirm cycle (same as delete-po-line)
+  const state = check.po.state;
+  if (state === 'purchase') {
+    await odooCall(sysCreds.uid, sysCreds.key,
+      'purchase.order', 'button_cancel', [[po_id]], coCtx(cfg));
+    await odooCall(sysCreds.uid, sysCreds.key,
+      'purchase.order', 'button_draft', [[po_id]], coCtx(cfg));
+  }
+  // Add the line via order_line [[0, 0, vals]] trick
+  await odooCall(sysCreds.uid, sysCreds.key,
+    'purchase.order', 'write', [[po_id], { order_line: [[0, 0, lineVals]] }], coCtx(cfg));
+  if (state === 'purchase') {
+    await odooCall(sysCreds.uid, sysCreds.key,
+      'purchase.order', 'button_confirm', [[po_id]], coCtx(cfg));
+  }
+
+  // Record price in D1 daily prices (if we can map the product)
+  if (DB && priceU > 0) {
+    const d1Product = await DB.prepare(
+      'SELECT hn_code FROM rm_products WHERE odoo_id = ?'
+    ).bind(parseInt(product_id, 10)).first();
+    if (d1Product) {
+      await DB.prepare(
+        'INSERT INTO rm_daily_prices (product_code, brand, price, recorded_by, source, recorded_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(d1Product.hn_code, brand, priceU, user.name, `po-add-line:${check.po.name}`, istNow().toISOString()).run();
+    }
+  }
+  if (DB) {
+    await DB.prepare(
+      'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind('add_po_line', brand, user.name, JSON.stringify({
+      po_id, po_name: check.po.name, product_id, product_name: prod[0].name, qty, price_unit: priceU,
+    }), istNow().toISOString()).run();
+  }
+
+  return json({ success: true, po_name: check.po.name, product_id, product_name: prod[0].name, qty, price_unit: priceU });
+}
 
 async function editPOLine(body, user, creds, cfg, brand, DB, env) {
   if (user.role !== 'admin' && user.role !== 'purchase') {
