@@ -877,7 +877,9 @@ async function handlePost(action, context, env, DB) {
     case 'list-bills':       return listBills(brand, body, DB);
     case 'vendor-outstanding': return vendorOutstanding(creds, cfg, brand);
     case 'register-payment': return registerPayment(body, user, creds, cfg, brand, DB);
+    case 'register-payment-je': return registerPaymentJE(body, user, creds, cfg, brand, DB);
     case 'post-payment':     return postPayment(body, user, creds, cfg);
+    case 'unlink-payment':   return unlinkPayment(body, user, creds, cfg);
 
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
@@ -3298,6 +3300,129 @@ async function vendorOutstanding(creds, cfg, brand) {
     grouped[vname].bills.push({ id: m.id, ref: m.name, amount: m.amount_residual, due: m.invoice_date_due });
   }
   return json({ success: true, outstanding: Object.values(grouped).sort((a,b)=>b.outstanding-a.outstanding) });
+}
+
+/* ━━━ Unlink an orphan payment (state=draft, move_id=false) ━━━
+ * For cleanup of half-created payments. Safe only when the payment never
+ * posted — we verify move_id is false before allowing the delete. */
+async function unlinkPayment(body, user, creds, cfg) {
+  if (user.role !== 'admin') return json({ error: 'Admin only' }, 403);
+  const payment_id = parseInt(body.payment_id);
+  if (!payment_id) return json({ error: 'payment_id required' }, 400);
+  const p = await odooCall(creds.uid, creds.key, 'account.payment', 'read',
+    [[payment_id]], { fields: ['id','name','state','move_id','company_id'] });
+  if (!p || !p[0]) return json({ error: 'Payment not found' }, 404);
+  if (p[0].company_id[0] !== cfg.company_id) return json({ error: 'Wrong company' }, 400);
+  if (p[0].move_id) return json({ error: `Payment has posted move ${p[0].move_id} — cannot delete safely` }, 400);
+  // Try draft first in case it's in_process
+  if (p[0].state !== 'draft') {
+    try { await odooCall(creds.uid, creds.key, 'account.payment', 'action_draft', [[payment_id]], coCtx(cfg)); } catch(_) {}
+  }
+  await odooCall(creds.uid, creds.key, 'account.payment', 'unlink', [[payment_id]], coCtx(cfg));
+  return json({ success: true, deleted: p[0].name });
+}
+
+/* ━━━ Register Payment via direct Journal Entry (Odoo-18-safe) ━━━
+ * Bypasses the account.payment model entirely. Creates an account.move in
+ * the chosen cash/bank journal with two lines (Dr Payable, Cr Cash), posts
+ * it, then reconciles the new Payable-debit line with the bill's Payable
+ * credit line. Result: bill.amount_residual drops, payment_state transitions
+ * to 'partial' or 'paid'. Works on every Odoo version without depending on
+ * the account.payment state machine.
+ *
+ * Body: { pin, brand, bill_id, amount, payment_date, journal_id, memo? }
+ */
+async function registerPaymentJE(body, user, creds, cfg, brand, DB) {
+  if (user.role !== 'admin' && user.role !== 'purchase' && user.role !== 'settlement') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+  const { bill_id, amount, payment_date, journal_id, memo } = body;
+  if (!bill_id || !amount || !payment_date || !journal_id) {
+    return json({ error: 'bill_id, amount, payment_date, journal_id required' }, 400);
+  }
+  const amt = parseFloat(amount);
+
+  // 1. Read the bill + its payable line (this gives us the AP account to use)
+  const bill = await odooCall(creds.uid, creds.key, 'account.move', 'read',
+    [[parseInt(bill_id)]],
+    { fields: ['id','name','state','move_type','amount_residual','company_id','partner_id','line_ids'] });
+  if (!bill || !bill[0]) return json({ error: 'Bill not found' }, 404);
+  const b = bill[0];
+  if (b.move_type !== 'in_invoice') return json({ error: 'Not a vendor bill' }, 400);
+  if (b.state !== 'posted') return json({ error: `Bill state=${b.state}` }, 400);
+  if (b.company_id[0] !== cfg.company_id) return json({ error: 'Wrong company' }, 400);
+  if (amt > (b.amount_residual || 0) + 0.01) return json({ error: `amount ${amt} exceeds residual ${b.amount_residual}` }, 400);
+
+  // Find the bill's UNRECONCILED payable line (there's exactly one on a vendor bill)
+  const billLines = await odooCall(creds.uid, creds.key, 'account.move.line', 'search_read',
+    [[['move_id','=',b.id],['account_id.account_type','in',['liability_payable']]]],
+    { fields: ['id','account_id','partner_id','debit','credit','reconciled','amount_residual'] });
+  const payableLine = billLines.find(l => !l.reconciled);
+  if (!payableLine) return json({ error: 'Bill payable line not found or already reconciled' }, 400);
+  const payable_account_id = payableLine.account_id[0];
+
+  // 2. Read journal's default_account (cash/bank account) + suspense fallback
+  const jrn = await odooCall(creds.uid, creds.key, 'account.journal', 'read',
+    [[parseInt(journal_id)]], { fields: ['id','name','default_account_id','company_id'] });
+  if (!jrn || !jrn[0] || !jrn[0].default_account_id) return json({ error: 'Journal has no default_account_id' }, 400);
+  if (jrn[0].company_id[0] !== cfg.company_id) return json({ error: 'Journal wrong company' }, 400);
+  const cash_account_id = jrn[0].default_account_id[0];
+
+  // 3. Create the payment journal entry (Dr Payable / Cr Cash)
+  const narration = memo || `Payment: ${b.name}`;
+  const pmtMoveId = await odooCall(creds.uid, creds.key, 'account.move', 'create',
+    [{
+      move_type: 'entry',
+      journal_id: parseInt(journal_id),
+      date: payment_date,
+      ref: narration,
+      company_id: cfg.company_id,
+      line_ids: [
+        [0,0,{ account_id: payable_account_id, partner_id: b.partner_id[0],
+               debit: amt, credit: 0, name: narration }],
+        [0,0,{ account_id: cash_account_id,    partner_id: b.partner_id[0],
+               debit: 0, credit: amt, name: narration }],
+      ],
+    }], coCtx(cfg));
+
+  // 4. Post it
+  await odooCall(creds.uid, creds.key, 'account.move', 'action_post', [[pmtMoveId]], coCtx(cfg));
+
+  // 5. Find the new payable-debit line and reconcile it with the bill's payable line
+  const newLines = await odooCall(creds.uid, creds.key, 'account.move.line', 'search_read',
+    [[['move_id','=',pmtMoveId],['account_id','=',payable_account_id]]],
+    { fields: ['id','debit','credit'] });
+  const newPayableDebit = newLines.find(l => l.debit > 0);
+  if (!newPayableDebit) return json({ error: 'New payable debit line not found' }, 500);
+
+  await odooCall(creds.uid, creds.key, 'account.move.line', 'reconcile',
+    [[payableLine.id, newPayableDebit.id]], coCtx(cfg));
+
+  // 6. Re-read bill to surface new state
+  const after = await odooCall(creds.uid, creds.key, 'account.move', 'read',
+    [[b.id]], { fields: ['amount_residual','payment_state'] });
+
+  // 7. Mirror to D1
+  if (DB) {
+    try {
+      await DB.prepare(
+        `UPDATE rm_vendor_bills
+           SET amount_paid = COALESCE(amount_paid,0) + ?,
+               payment_state = ?
+         WHERE odoo_move_id = ? AND brand = ?`
+      ).bind(amt, after?.[0]?.payment_state || 'partial', b.id, brand).run();
+    } catch (_) { /* soft-fail if columns don't exist */ }
+  }
+
+  return json({
+    success: true,
+    payment_move_id: pmtMoveId,
+    bill_id: b.id,
+    bill_ref: b.name,
+    amount_paid: amt,
+    new_residual: after?.[0]?.amount_residual ?? null,
+    payment_state: after?.[0]?.payment_state ?? null,
+  });
 }
 
 /* ━━━ Post a payment (Odoo 18 flow) ━━━
