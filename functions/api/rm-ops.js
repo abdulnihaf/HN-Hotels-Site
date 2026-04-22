@@ -3320,6 +3320,17 @@ async function postPayment(body, user, creds, cfg) {
 
   let tried = [];
   let posted = false;
+  // Odoo 18 quirk: if the register-wizard's internal post failed silently,
+  // the payment sits in in_process with move_id=False. action_post then
+  // no-ops. Roll back to draft first, then post fresh.
+  if (p0[0].state === 'in_process' && !p0[0].move_id) {
+    try {
+      await odooCall(creds.uid, creds.key, 'account.payment', 'action_draft', [[payment_id]], coCtx(cfg));
+      tried.push({ method: 'action_draft', ok: true });
+    } catch (e) {
+      tried.push({ method: 'action_draft', error: e.message });
+    }
+  }
   // Odoo 18 renamed methods around a bit. Try in order, first to succeed wins.
   for (const method of ['action_post', 'action_validate', 'action_paid']) {
     try {
