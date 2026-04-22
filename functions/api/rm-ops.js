@@ -199,6 +199,9 @@ async function handleGet(action, url, env, DB) {
     /* ── Payment journals (bank/cash) for vendor-payment UI ── */
     case 'payment-journals':  return getPaymentJournals(creds, cfg);
 
+    /* ── Debug: inspect a payment + its bill reconciliation state ── */
+    case 'probe-payment':     return probePayment(creds, cfg, url);
+
     default: return json({ error: `Unknown GET action: ${action}` }, 400);
   }
 }
@@ -3293,6 +3296,32 @@ async function vendorOutstanding(creds, cfg, brand) {
     grouped[vname].bills.push({ id: m.id, ref: m.name, amount: m.amount_residual, due: m.invoice_date_due });
   }
   return json({ success: true, outstanding: Object.values(grouped).sort((a,b)=>b.outstanding-a.outstanding) });
+}
+
+/* ━━━ Debug: probe a payment's state + bill linkage ━━━
+ * Reads payment + bill + their reconciliation links so we can see whether
+ * Odoo actually tied the payment to the bill. Use: GET …?action=probe-payment
+ * &brand=HE&pin=5882&payment_id=1&bill_id=1 */
+async function probePayment(creds, cfg, url) {
+  const payment_id = parseInt(url.searchParams.get('payment_id'));
+  const bill_id = parseInt(url.searchParams.get('bill_id'));
+  const out = {};
+  if (payment_id) {
+    const p = await odooCall(creds.uid, creds.key, 'account.payment', 'read',
+      [[payment_id]],
+      { fields: ['id','name','state','amount','date','journal_id','partner_id',
+                 'payment_type','partner_type','reconciled_bill_ids',
+                 'reconciled_bills_count','move_id','is_matched'] });
+    out.payment = p?.[0] || null;
+  }
+  if (bill_id) {
+    const b = await odooCall(creds.uid, creds.key, 'account.move', 'read',
+      [[bill_id]],
+      { fields: ['id','name','state','amount_total','amount_residual','payment_state',
+                 'partner_id','company_id'] });
+    out.bill = b?.[0] || null;
+  }
+  return json({ success: true, ...out });
 }
 
 /* ━━━ Payment journals (bank/cash) ━━━
