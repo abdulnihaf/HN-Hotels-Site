@@ -682,7 +682,13 @@ async function handlePost(request, env) {
       }
 
       // 3. Create the template — Odoo auto-creates variants (or one plain variant)
-      const cid = company_id ? parseInt(company_id) : false;
+      // ARCHITECTURE: Raw Materials default to company_id=false (global) so
+      // they're visible in BOTH HE and NCH purchase catalogs. The old behavior
+      // (scope to current brand's company) created invisible products across
+      // brands — e.g. packaging (containers, pouches) added from /ops/purchase/
+      // in HE wouldn't show for NCH's Deepak Packaging Store. Brand-specific
+      // RMs should pass explicit_company:true with company_id.
+      const cid = body.explicit_company && company_id ? parseInt(company_id) : false;
       const tmplVals = {
         name: trimmedName,
         categ_id: parseInt(category_id),

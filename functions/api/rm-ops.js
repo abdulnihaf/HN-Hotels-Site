@@ -204,6 +204,9 @@ async function handleGet(action, url, env, DB) {
     /* ── Debug: inspect a payment + its bill reconciliation state ── */
     case 'probe-payment':     return probePayment(creds, cfg, url);
     case 'probe-journal':     return probeJournal(creds, cfg, url);
+    /* ── Diagnostics: RM templates scoped to wrong company (common cross-brand problem) ── */
+    case 'probe-template':    return probeTemplate(creds, url);
+    case 'rm-company-audit':  return rmCompanyAudit(creds);
 
     default: return json({ error: `Unknown GET action: ${action}` }, 400);
   }
@@ -884,6 +887,8 @@ async function handlePost(action, context, env, DB) {
     case 'unlink-payment':   return unlinkPayment(body, user, creds, cfg);
     case 'create-uom':       return createUom(body, user, creds);
     case 'correct-bill':     return correctBill(body, user, creds, cfg, brand, DB);
+    case 'fix-template-company':    return fixTemplateCompany(body, user, creds);
+    case 'globalize-rm-templates':  return globalizeRmTemplates(body, user, creds);
 
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
@@ -3527,6 +3532,116 @@ async function probePayment(creds, cfg, url) {
     out.bill = b?.[0] || null;
   }
   return json({ success: true, ...out });
+}
+
+/* ━━━ RM cross-brand architecture helpers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Problem: /ops/purchase/ catalog filters products by
+ *   company_id IN [cfg.company_id, false]
+ * A RM template created with a specific company_id (e.g. 2=HE) is invisible
+ * in the other brand's purchase flow — even if supplierinfo is set up.
+ *
+ * Solution: RMs are cross-brand by default. They should be company_id=false
+ * (global). Brand-specific RMs are the exception, not the default.
+ *
+ * Tooling added here:
+ *   GET  probe-template       — inspect any template's company scope
+ *   GET  rm-company-audit     — find RMs stuck to a specific company
+ *   POST fix-template-company — rescope one template (false = global)
+ *   POST globalize-rm-templates — bulk rescope RMs to company_id=false
+ *
+ * (Also: the Add-RM backend now defaults new RMs to company_id=false,
+ * see rm-admin.js create-template-with-variants.) */
+
+async function probeTemplate(creds, url) {
+  const tmpl_id = parseInt(url.searchParams.get('template_id'));
+  const name    = url.searchParams.get('name');
+  const domain  = tmpl_id ? [['id','=',tmpl_id]] : (name ? [['name','=ilike',name]] : null);
+  if (!domain) return json({ error: 'template_id or name required' }, 400);
+
+  const tmpls = await odooCall(creds.uid, creds.key, 'product.template', 'search_read',
+    [domain],
+    { fields: ['id','name','categ_id','company_id','uom_id','active','purchase_ok','seller_ids'], limit: 10 });
+
+  // Enrich each with supplierinfo detail so we can see which brand-vendors are linked.
+  const allSiIds = [...new Set(tmpls.flatMap(t => t.seller_ids || []))];
+  let siMap = {};
+  if (allSiIds.length) {
+    const sis = await odooCall(creds.uid, creds.key, 'product.supplierinfo', 'search_read',
+      [[['id','in',allSiIds]]],
+      { fields: ['id','partner_id','product_tmpl_id','company_id','price'] });
+    for (const si of sis) {
+      const t = si.product_tmpl_id[0];
+      (siMap[t] = siMap[t] || []).push({
+        id: si.id,
+        vendor: si.partner_id?.[1] + ` (id=${si.partner_id?.[0]})`,
+        company_id: si.company_id || false,
+        price: si.price,
+      });
+    }
+  }
+  return json({ success: true, templates: tmpls.map(t => ({ ...t, supplierinfos: siMap[t.id] || [] })) });
+}
+
+/* Audit: list RMs scoped to a specific company_id (candidates for globalization) */
+async function rmCompanyAudit(creds) {
+  const tmpls = await odooCall(creds.uid, creds.key, 'product.template', 'search_read',
+    [[['categ_id','=',21],['active','=',true],['company_id','!=',false]]],
+    { fields: ['id','name','company_id','categ_id'], order: 'name asc', limit: 500 });
+  const byCompany = {};
+  for (const t of tmpls) {
+    const cid = t.company_id[0];
+    const cname = t.company_id[1];
+    const k = `${cid}:${cname}`;
+    (byCompany[k] = byCompany[k] || []).push({ id: t.id, name: t.name });
+  }
+  return json({
+    success: true,
+    summary: Object.fromEntries(Object.entries(byCompany).map(([k,arr]) => [k, arr.length])),
+    total_scoped: tmpls.length,
+    templates: tmpls,
+  });
+}
+
+/* Rescope a single template. company_id=false → global (cross-brand). */
+async function fixTemplateCompany(body, user, creds) {
+  if (user.role !== 'admin') return json({ error: 'Admin only' }, 403);
+  const { template_id, company_id } = body;
+  if (!template_id) return json({ error: 'template_id required' }, 400);
+  // company_id can be false (global) or a numeric id. Default action: globalize.
+  const newCid = (company_id === false || company_id === 0 || company_id === null || company_id === undefined)
+    ? false : parseInt(company_id);
+
+  await odooCall(creds.uid, creds.key, 'product.template', 'write',
+    [[parseInt(template_id)], { company_id: newCid }],
+    { context: { allowed_company_ids: [1, 2, 3] } }); // admin can touch all companies
+
+  const after = await odooCall(creds.uid, creds.key, 'product.template', 'read',
+    [[parseInt(template_id)]], { fields: ['id','name','company_id'] });
+  return json({ success: true, template: after[0] });
+}
+
+/* Bulk globalize RMs that are currently company-scoped. Dry-run by default. */
+async function globalizeRmTemplates(body, user, creds) {
+  if (user.role !== 'admin') return json({ error: 'Admin only' }, 403);
+  const dry = body.dry_run !== false; // default true — safety first
+  const categ_id = parseInt(body.categ_id) || 21; // RM category
+  const only_ids = Array.isArray(body.only_ids) ? body.only_ids.map(Number) : null;
+
+  const domain = [['categ_id','=',categ_id],['active','=',true],['company_id','!=',false]];
+  if (only_ids) domain.push(['id','in',only_ids]);
+
+  const tmpls = await odooCall(creds.uid, creds.key, 'product.template', 'search_read',
+    [domain], { fields: ['id','name','company_id'], limit: 500 });
+
+  if (dry) return json({ success: true, dry_run: true, candidates: tmpls, count: tmpls.length });
+
+  const ids = tmpls.map(t => t.id);
+  if (ids.length) {
+    await odooCall(creds.uid, creds.key, 'product.template', 'write',
+      [ids, { company_id: false }],
+      { context: { allowed_company_ids: [1, 2, 3] } });
+  }
+  return json({ success: true, globalized: ids.length, templates: tmpls });
 }
 
 /* ━━━ Correct a posted bill amount (admin) ━━━
