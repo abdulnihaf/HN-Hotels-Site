@@ -3553,17 +3553,15 @@ async function createUom(body, user, creds) {
     { fields: ['id','name'], limit: 5 });
   if (existing.length) return json({ error: `UoM already exists: ${existing.map(u=>u.name).join(', ')}` }, 409);
 
-  // Borrow category from reference UoM (default: Units id=1)
-  const refId = parseInt(reference_uom_id) || 1;
-  const ref = await odooCall(creds.uid, creds.key, 'uom.uom', 'read',
-    [[refId]], { fields: ['id','name','category_id'] });
-  if (!ref || !ref[0]) return json({ error: `Reference UoM id=${refId} not found` }, 404);
-  const category_id = ref[0].category_id[0];
+  // In Odoo 18, uom.uom uses 'relative_uom_id' (not category_id).
+  // Create as a simple discrete unit grouped with the reference UoM.
+  // uom_type 'bigger' with factor=1 means 1 packet = 1 reference unit.
+  const refId = parseInt(reference_uom_id) || 1; // default: Units
 
   const newId = await odooCall(creds.uid, creds.key, 'uom.uom', 'create',
-    [{ name: name.trim(), category_id, uom_type: 'bigger', factor: 1 }]);
+    [{ name: name.trim(), relative_uom_id: refId, uom_type: 'bigger', factor: 1 }]);
 
-  return json({ success: true, uom: { id: newId, name: name.trim(), category: ref[0].category_id[1] } });
+  return json({ success: true, uom: { id: newId, name: name.trim() } });
 }
 
 /* ━━━ Payment journals (bank/cash) ━━━
