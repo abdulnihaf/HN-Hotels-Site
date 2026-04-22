@@ -883,6 +883,7 @@ async function handlePost(action, context, env, DB) {
     case 'post-payment':     return postPayment(body, user, creds, cfg);
     case 'unlink-payment':   return unlinkPayment(body, user, creds, cfg);
     case 'create-uom':       return createUom(body, user, creds);
+    case 'correct-bill':     return correctBill(body, user, creds, cfg, brand, DB);
 
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
@@ -3526,6 +3527,92 @@ async function probePayment(creds, cfg, url) {
     out.bill = b?.[0] || null;
   }
   return json({ success: true, ...out });
+}
+
+/* ━━━ Correct a posted bill amount (admin) ━━━
+ * Resets bill to draft (auto-unreconciles any linked payments), updates the
+ * first product line to the new amount, reposts, then re-reconciles a
+ * payment JE if one was provided.
+ *
+ * Body: { pin, brand, bill_id, new_amount, payment_move_id?, description? }
+ *   bill_id        — account.move id to correct
+ *   new_amount     — corrected total (replaces price_unit on line 1)
+ *   payment_move_id — optional: JE move id to re-reconcile after repost
+ */
+async function correctBill(body, user, creds, cfg, brand, DB) {
+  if (user.role !== 'admin') return json({ error: 'Admin only' }, 403);
+  const { bill_id, new_amount, payment_move_id, description } = body;
+  if (!bill_id || !new_amount) return json({ error: 'bill_id and new_amount required' }, 400);
+  const bId = parseInt(bill_id);
+  const amt = parseFloat(new_amount);
+
+  // 1. Read current bill
+  const bill = await odooCall(creds.uid, creds.key, 'account.move', 'read',
+    [[bId]], { fields: ['id','name','state','move_type','company_id','partner_id'] });
+  if (!bill?.[0]) return json({ error: 'Bill not found' }, 404);
+  if (bill[0].company_id[0] !== cfg.company_id) return json({ error: 'Wrong company' }, 400);
+
+  // 2. Reset to draft — auto-unreconciles all linked payment lines
+  await odooCall(creds.uid, creds.key, 'account.move', 'button_draft', [[bId]], coCtx(cfg));
+
+  // 3. Find the first product invoice line and update its price_unit
+  const lines = await odooCall(creds.uid, creds.key, 'account.move.line', 'search_read',
+    [[['move_id','=',bId],['display_type','=','product']]],
+    { fields: ['id','name','price_unit'], limit: 1 });
+  if (!lines?.length) return json({ error: 'No product line found on bill' }, 400);
+
+  const lineUpdates = [[1, lines[0].id, {
+    price_unit: amt,
+    quantity: 1,
+    name: description || lines[0].name,
+  }]];
+  await odooCall(creds.uid, creds.key, 'account.move', 'write',
+    [[bId], { invoice_line_ids: lineUpdates }], coCtx(cfg));
+
+  // 4. Repost the bill
+  await odooCall(creds.uid, creds.key, 'account.move', 'action_post', [[bId]], coCtx(cfg));
+
+  // 5. Re-reconcile payment JE if provided
+  let reconciled = false;
+  if (payment_move_id) {
+    const pmtId = parseInt(payment_move_id);
+    // Find the bill's new payable line (credit, liability_payable)
+    const billAPLines = await odooCall(creds.uid, creds.key, 'account.move.line', 'search_read',
+      [[['move_id','=',bId],['account_id.account_type','in',['liability_payable']],['reconciled','=',false]]],
+      { fields: ['id','credit','account_id'] });
+    // Find the payment JE's payable line (debit)
+    const pmtAPLines = await odooCall(creds.uid, creds.key, 'account.move.line', 'search_read',
+      [[['move_id','=',pmtId],['account_id.account_type','in',['liability_payable']],['reconciled','=',false]]],
+      { fields: ['id','debit','account_id'] });
+
+    if (billAPLines?.length && pmtAPLines?.length) {
+      await odooCall(creds.uid, creds.key, 'account.move.line', 'reconcile',
+        [[billAPLines[0].id, pmtAPLines[0].id]], coCtx(cfg));
+      reconciled = true;
+    }
+  }
+
+  // 6. Re-read final state
+  const after = await odooCall(creds.uid, creds.key, 'account.move', 'read',
+    [[bId]], { fields: ['name','amount_total','amount_residual','payment_state'] });
+
+  // 7. Update D1 mirror
+  if (DB) {
+    try {
+      await DB.prepare(
+        `UPDATE rm_vendor_bills SET amount_total=?, payment_state=? WHERE odoo_move_id=? AND brand=?`
+      ).bind(amt, after?.[0]?.payment_state || 'not_paid', bId, brand).run();
+    } catch (_) {}
+  }
+
+  return json({
+    success: true,
+    bill_ref: after?.[0]?.name,
+    new_total: after?.[0]?.amount_total,
+    new_residual: after?.[0]?.amount_residual,
+    payment_state: after?.[0]?.payment_state,
+    payment_reconciled: reconciled,
+  });
 }
 
 /* ━━━ UoM list (global, no company filter) ━━━ */
