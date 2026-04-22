@@ -113,15 +113,49 @@ export async function onRequest(context) {
   }
 
   // Dedup on (device_serial, pin, punch_time). INSERT OR IGNORE → idempotent retries.
+  let wrote = false;
   try {
-    await db.prepare(
+    const result = await db.prepare(
       `INSERT OR IGNORE INTO hr_cams_punches
          (device_serial, pin, user_name, punch_time, punch_type, input_type, source, raw_json)
        VALUES (?, ?, ?, ?, ?, ?, 'webhook', ?)`
     ).bind(stgid, userId, userName, punchTimeISO, punchType, inputType, JSON.stringify(body)).run();
+    wrote = (result?.meta?.changes || 0) > 0;
   } catch (e) {
     // Log but still ack — better to ack and investigate than to have CAMS retry-storm
     console.error('[cams-ingest] D1 write failed:', e.message);
+  }
+
+  // Auto-trigger attendance rollup — only when a brand-new row landed
+  // (dedup'd retries are idempotent, no need to re-compute). Fire-and-forget
+  // via context.waitUntil so the CAMS ack is instant.
+  //
+  // Authorised via service_key = CAMS_AUTH_TOKEN (same secret CAMS sent with
+  // this punch). hr-admin.js recognises this and skips the PIN gate.
+  //
+  // Range: punch_time's calendar date ±1 day so shift-day bucketing covers
+  // post-midnight and pre-morning edge cases regardless of brand.
+  if (wrote && context.waitUntil) {
+    const calDate = punchTimeISO.slice(0, 10);
+    const prevDay = new Date(calDate + 'T12:00:00Z');
+    prevDay.setUTCDate(prevDay.getUTCDate() - 1);
+    const from = prevDay.toISOString().slice(0, 10);
+    const to   = calDate;
+    context.waitUntil((async () => {
+      try {
+        await fetch(`${new URL(request.url).origin}/api/hr-admin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'pull-attendance',
+            service_key: expectedToken,   // CAMS_AUTH_TOKEN
+            from, to,
+          }),
+        });
+      } catch (e) {
+        console.error('[cams-ingest] auto pull-attendance failed:', e.message);
+      }
+    })());
   }
 
   // CAMS requires "status":"done" to acknowledge. Any other string → retry.

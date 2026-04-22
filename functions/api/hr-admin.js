@@ -596,6 +596,16 @@ async function handlePost(request, env) {
   const { action, pin } = body;
   if (!action) return json({ error: 'Missing action' }, 400);
 
+  // Internal service-to-service call bypass.
+  //   /api/cams-ingest fires pull-attendance after every punch lands.
+  //   Passing service_key = env.CAMS_AUTH_TOKEN authorises as admin.
+  //   Using CAMS_AUTH_TOKEN (already a tightly-held secret) avoids adding
+  //   a new secret to the hn-hotels-site Pages project.
+  if (body.service_key && env.CAMS_AUTH_TOKEN && body.service_key === env.CAMS_AUTH_TOKEN) {
+    // Skip PIN check; treat as admin for audit logging
+    body._service_user = { name: 'cams-ingest', role: 'admin', view_financials: true };
+  }
+
   // Permission matrix — minimum role required per action.
   //   manager (Basheer)   → view + trigger attendance pull + send digest
   //   onboarding (Zoya)   → manager + create/edit employees
@@ -624,7 +634,7 @@ async function handlePost(request, env) {
     'cams-remote':         'admin',
   };
   const need = permMap[action] || 'read';
-  const user = checkPin(pin, need);
+  const user = body._service_user || checkPin(pin, need);
   if (!user) return json({ error: `${need} PIN required` }, 403);
 
   /* ━━━━━━━━━━ D1 roster writes ━━━━━━━━━━ */
