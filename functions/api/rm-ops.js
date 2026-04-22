@@ -196,6 +196,9 @@ async function handleGet(action, url, env, DB) {
     case 'price-intel':      return getPriceIntel(brand, url, DB);
     case 'variant-price-summary': return getVariantPriceSummary(brand, url, DB);
 
+    /* ── Payment journals (bank/cash) for vendor-payment UI ── */
+    case 'payment-journals':  return getPaymentJournals(creds, cfg);
+
     default: return json({ error: `Unknown GET action: ${action}` }, 400);
   }
 }
@@ -869,6 +872,7 @@ async function handlePost(action, context, env, DB) {
     case 'direct-bill':      return directBill(body, user, creds, cfg, brand, env, DB);
     case 'list-bills':       return listBills(brand, body, DB);
     case 'vendor-outstanding': return vendorOutstanding(creds, cfg, brand);
+    case 'register-payment': return registerPayment(body, user, creds, cfg, brand, DB);
 
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
@@ -3289,4 +3293,118 @@ async function vendorOutstanding(creds, cfg, brand) {
     grouped[vname].bills.push({ id: m.id, ref: m.name, amount: m.amount_residual, due: m.invoice_date_due });
   }
   return json({ success: true, outstanding: Object.values(grouped).sort((a,b)=>b.outstanding-a.outstanding) });
+}
+
+/* ━━━ Payment journals (bank/cash) ━━━
+ * Lists payable-capable journals for the brand company. Used by the
+ * Register Payment modal so the operator picks HDFC / Federal / Paytm /
+ * Cash instead of guessing a journal_id. */
+async function getPaymentJournals(creds, cfg) {
+  const journals = await odooCall(creds.uid, creds.key,
+    'account.journal', 'search_read',
+    [[['type','in',['bank','cash']],['company_id','=',cfg.company_id]]],
+    { fields: ['id','name','type','code','currency_id'], order: 'sequence asc, name asc' });
+  return json({ success: true, journals });
+}
+
+/* ━━━ Register Payment against a vendor bill ━━━
+ * Uses Odoo's account.payment.register wizard — the same path the web UI
+ * takes when you click "Register Payment" on an in_invoice. Handles partial
+ * payments, multi-bill batching, and automatic reconciliation.
+ *
+ * Body: { pin, brand, bill_id, amount, payment_date, journal_id, memo? }
+ *   bill_id     — account.move id of the posted in_invoice
+ *   amount      — payment amount (float, <= residual for partial)
+ *   payment_date— YYYY-MM-DD (historical payments OK)
+ *   journal_id  — account.journal id (bank or cash)
+ *   memo        — optional free-text ref (goes to payment.ref)
+ */
+async function registerPayment(body, user, creds, cfg, brand, DB) {
+  if (user.role !== 'admin' && user.role !== 'purchase' && user.role !== 'settlement') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+  const { bill_id, amount, payment_date, journal_id, memo } = body;
+  if (!bill_id || !amount || !payment_date || !journal_id) {
+    return json({ error: 'bill_id, amount, payment_date, journal_id required' }, 400);
+  }
+
+  // Sanity-check the bill: must be posted in_invoice for this company,
+  // and the amount must not exceed its residual (partial payments OK).
+  const bill = await odooCall(creds.uid, creds.key, 'account.move', 'read',
+    [[parseInt(bill_id)]],
+    { fields: ['id','name','move_type','state','amount_residual','company_id','partner_id','payment_state'] });
+  if (!bill || !bill[0]) return json({ error: 'Bill not found' }, 404);
+  const b = bill[0];
+  if (b.move_type !== 'in_invoice') return json({ error: 'Not a vendor bill' }, 400);
+  if (b.state !== 'posted') return json({ error: `Bill state=${b.state} — must be posted` }, 400);
+  if (b.company_id[0] !== cfg.company_id) return json({ error: 'Bill belongs to a different company' }, 400);
+  const amt = parseFloat(amount);
+  if (amt <= 0) return json({ error: 'amount must be > 0' }, 400);
+  if (amt > (b.amount_residual || 0) + 0.01) {
+    return json({ error: `amount ${amt} exceeds residual ${b.amount_residual}` }, 400);
+  }
+
+  // Odoo payment wizard flow — mirrors the web UI exactly.
+  const wizCtx = {
+    active_model: 'account.move',
+    active_ids: [b.id],
+    active_id: b.id,
+    allowed_company_ids: [cfg.company_id],
+  };
+
+  const wizardId = await odooCall(creds.uid, creds.key,
+    'account.payment.register', 'create',
+    [{
+      payment_date,
+      amount: amt,
+      journal_id: parseInt(journal_id),
+      communication: memo || b.name,
+      // payment_type / partner_type are inferred from the active bill;
+      // passing them explicitly makes intent unambiguous.
+      payment_type: 'outbound',
+      partner_type: 'supplier',
+      // 'amount' (partial/full handling): default group_payment=false so
+      // each bill gets its own payment line — fine for our single-bill case.
+    }],
+    { context: wizCtx });
+
+  const result = await odooCall(creds.uid, creds.key,
+    'account.payment.register', 'action_create_payments',
+    [[wizardId]],
+    { context: wizCtx });
+
+  // action_create_payments returns either {res_id: <payment_id>} (single)
+  // or {domain: [['id','in',[...]]]} (multi). Normalize.
+  let paymentId = null;
+  if (result && result.res_id) paymentId = result.res_id;
+  else if (result && result.domain) {
+    const m = JSON.stringify(result.domain).match(/\[(\d+)\]/);
+    if (m) paymentId = parseInt(m[1]);
+  }
+
+  // Re-read the bill to surface post-payment state
+  const after = await odooCall(creds.uid, creds.key, 'account.move', 'read',
+    [[b.id]], { fields: ['amount_residual','payment_state'] });
+
+  // Mirror to D1 — reflect new residual on the bill row if present
+  if (DB) {
+    try {
+      await DB.prepare(
+        `UPDATE rm_vendor_bills
+           SET amount_paid = COALESCE(amount_paid,0) + ?,
+               payment_state = ?
+         WHERE odoo_move_id = ? AND brand = ?`
+      ).bind(amt, after?.[0]?.payment_state || 'partial', b.id, brand).run();
+    } catch (_) { /* column may not exist yet — soft-fail */ }
+  }
+
+  return json({
+    success: true,
+    payment_id: paymentId,
+    bill_id: b.id,
+    bill_ref: b.name,
+    amount_paid: amt,
+    new_residual: after?.[0]?.amount_residual ?? null,
+    payment_state: after?.[0]?.payment_state ?? null,
+  });
 }
