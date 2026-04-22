@@ -312,7 +312,7 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
           ['active', '=', true],
         ]],
         { fields: ['id', 'name', 'default_code', 'uom_id', 'categ_id',
-                   'product_tmpl_id', 'seller_ids'], order: 'name asc' }),
+                   'product_tmpl_id', 'seller_ids', 'company_id'], order: 'name asc' }),
       odooCall(creds.uid, creds.key, 'res.partner', 'search_read',
         [[['supplier_rank', '>', 0], ['company_id', 'in', [cfg.company_id, false]]]],
         { fields: ['id', 'name', 'phone'], order: 'name asc' }),
@@ -444,6 +444,12 @@ async function getPurchaseCatalog(creds, cfg, brand, url, DB) {
       category: p.categ_id ? p.categ_id[1] : '',
       vendors: mergeVendors(vendorMap[p.default_code], p.id, p.product_tmpl_id?.[0]),
       lastPrice: priceMap[p.default_code] || null,
+      // Scope info for admin "Globalize" toggle in the Manage-list UI.
+      // company_id = false → product is global (visible to all brands).
+      // company_id = 2|3 → brand-scoped (only that brand's catalog sees it).
+      template_id: p.product_tmpl_id?.[0] || null,
+      company_id: p.company_id ? p.company_id[0] : false,
+      company_name: p.company_id ? p.company_id[1] : null,
     })),
     vendors: odooVendors.map(v => ({ id: v.id, name: v.name, phone: v.phone || '' })),
     recentPOs: recentPOsRaw.map(p => ({

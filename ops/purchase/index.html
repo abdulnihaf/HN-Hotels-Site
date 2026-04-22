@@ -76,6 +76,13 @@
   .bulk-row .mgmt-btn.primary.is-primary { background: rgba(245,158,11,0.15); color: #fbbf24; }
   .bulk-row .mgmt-btn.unlink { color: #f87171; border-color: rgba(239,68,68,0.35); }
   .bulk-row .mgmt-btn.unlink:hover { background: rgba(239,68,68,0.1); }
+  .bulk-row .mgmt-btn.globalize { color: #60a5fa; border-color: rgba(59,130,246,0.35); }
+  .bulk-row .mgmt-btn.globalize:hover { background: rgba(59,130,246,0.12); }
+  .scope-badge { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 6px; font-weight: 500; letter-spacing: 0.3px; vertical-align: 1px; }
+  .scope-badge.global { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+  .scope-badge.scoped { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
+  /* With the globalize button, manage-mode can have 3 or 4 buttons — widen grid. */
+  .bulk-row.manage-mode { grid-template-columns: 1fr auto auto auto; }
 </style>
 </head>
 <body>
@@ -1321,12 +1328,26 @@ function renderBulkItems() {
     // In manage mode, show ⭐ primary toggle + ✕ unlink buttons instead of qty/price inputs
     const isPrimary = (p.vendors || []).find(v => v.odoo_id === bulkVendor?.id)?.is_primary;
     if (bulkManageMode) {
+      // Scope badge + admin-only Globalize button.
+      // RMs scoped to one brand are invisible in the other brand's catalog —
+      // common problem for packaging/generics that should be cross-brand.
+      // Admin sees a one-click toggle to promote a brand-scoped RM to global.
+      const isGlobal = p.company_id === false || p.company_id === null || p.company_id === 0;
+      const scopeBadge = isGlobal
+        ? `<span class="scope-badge global" title="Visible in all brands">🌍 Global</span>`
+        : `<span class="scope-badge scoped" title="Only visible in ${esc(p.company_name||'this brand')}">🔒 ${esc(p.company_name||'Brand-only')}</span>`;
+      const globalizeBtn = (USER?.can_admin && !isGlobal && p.template_id)
+        ? `<button class="mgmt-btn globalize"
+                   title="Make this product visible across all brands (HE + NCH + HQ)"
+                   onclick="bulkGlobalize(${p.template_id}, ${p.id}, '${esc(p.name).replace(/'/g,"\\'")}')">🌍 Make global</button>`
+        : '';
       return `
         <div class="bulk-row manage-mode" data-id="${p.id}">
           <div>
-            <div class="bulk-name">${esc(p.name)}<span class="bulk-uom">${esc(p.uom||'')}</span></div>
+            <div class="bulk-name">${esc(p.name)}<span class="bulk-uom">${esc(p.uom||'')}</span> ${scopeBadge}</div>
             ${lastP ? `<div class="bulk-last">${lastP}</div>` : ''}
           </div>
+          ${globalizeBtn}
           <button class="mgmt-btn primary ${isPrimary?'is-primary':''}"
                   title="${isPrimary?'This vendor is already primary for this product':'Make ' + esc(bulkVendor?.name||'this vendor') + ' the primary supplier for this product'}"
                   onclick="bulkSetPrimary(${p.id})">${isPrimary?'⭐ Primary':'⭐ Set primary'}</button>
@@ -1458,6 +1479,33 @@ async function bulkSetPrimary(productId) {
   } catch (e) {
     toast('Failed: ' + e.message, 'err');
     if (btn) { btn.disabled = false; btn.textContent = '⭐ Set primary'; }
+  }
+}
+
+// Globalize a brand-scoped RM → make visible across all brands.
+// Admin-only; UI already hides button for non-admins, but double-check here.
+async function bulkGlobalize(templateId, productId, productName) {
+  if (!USER?.can_admin) return toast('Admin only', 'err');
+  if (!templateId) return toast('No template id — cannot globalize', 'err');
+  const ok = confirm(`Make "${productName}" visible across ALL brands?\n\nThis removes the brand restriction so HE, NCH and HQ all see it in their purchase lists.\n\nSafe for packaging / generic RMs. Avoid for truly brand-specific items.`);
+  if (!ok) return;
+  const btn = document.querySelector(`.bulk-row[data-id="${productId}"] .mgmt-btn.globalize`);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch(`${RM_API}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'fix-template-company', pin: PIN, brand: BRAND,
+                              template_id: templateId, company_id: false }),
+    }).then(x => x.json());
+    if (r.error) throw new Error(r.error);
+    // Local sync — mark product as global so badge/button update on re-render
+    const p = (rmCatalog.products || []).find(x => x.id === productId);
+    if (p) { p.company_id = false; p.company_name = null; }
+    toast(`🌍 "${productName}" is now cross-brand`, 'ok');
+    renderBulkItems();
+  } catch (e) {
+    toast('Globalize failed: ' + e.message, 'err');
+    if (btn) { btn.disabled = false; btn.textContent = '🌍 Make global'; }
   }
 }
 
