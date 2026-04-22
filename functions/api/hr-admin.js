@@ -573,12 +573,42 @@ async function handleGet(url, env) {
     });
   }
 
+  // --- Raw CAMS biometric punches for audit ---
+  // Returns all punches from hr_cams_punches for a calendar date range,
+  // joined with employee name + brand. Used by /ops/attendance-audit/.
+  if (action === 'cams-punches') {
+    const date  = url.searchParams.get('date') || istDate();
+    const days  = Math.min(parseInt(url.searchParams.get('days') || '2', 10), 7);
+    // Build date range: from (date - days + 1) to date, so default = yesterday + today
+    const endDate   = date;
+    const startDate = (() => {
+      const d = new Date(date + 'T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() - (days - 1));
+      return d.toISOString().slice(0, 10);
+    })();
+    const rows = await db.prepare(`
+      SELECT p.pin, p.punch_time, p.punch_type, p.device_serial, p.source,
+             e.name, e.brand_label, e.row_no, e.job_name
+      FROM hr_cams_punches p
+      LEFT JOIN hr_employees e ON e.pin = p.pin AND e.is_active = 1
+      WHERE p.punch_time >= ? AND p.punch_time < ?
+      ORDER BY p.punch_time ASC
+    `).bind(startDate + ' 00:00:00', endDate + ' 23:59:59' ).all();
+
+    // Also load shift rules so the UI can show which shift-day each punch belongs to
+    const rules = await db.prepare('SELECT brand_label, shift_day_start_hour FROM hr_shift_rules GROUP BY brand_label').all();
+    const shiftHours = {};
+    for (const r of rules.results) shiftHours[r.brand_label] = r.shift_day_start_hour || 0;
+
+    return json({ date, startDate, endDate, shiftHours, punches: rows.results, count: rows.results.length });
+  }
+
   return json({
     error: 'Unknown action',
     actions: [
       'employees', 'employee', 'shift-rules',
       'attendance', 'attendance-daily', 'deductions',
-      'leaves', 'sync-log', 'cams-devices', 'maps', 'status',
+      'leaves', 'sync-log', 'cams-devices', 'maps', 'status', 'cams-punches',
     ],
   }, 400);
 }
