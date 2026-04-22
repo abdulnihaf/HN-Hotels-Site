@@ -354,8 +354,8 @@
         <input id="nv-name" type="text" placeholder="e.g. Sharma Dairy, Raju Vegetables">
       </div>
       <div class="row">
-        <label>Mobile *</label>
-        <input id="nv-phone" type="tel" inputmode="tel" placeholder="9XXXXXXXXX">
+        <label>Mobile <span class="mute">(optional)</span></label>
+        <input id="nv-phone" type="tel" inputmode="tel" placeholder="9XXXXXXXXX — leave blank for local vendors">
       </div>
       <div class="row">
         <label>Email <span class="mute">(optional)</span></label>
@@ -1770,7 +1770,7 @@ async function submitNewVendor() {
   const gst     = document.getElementById('nv-gst').value.trim();
 
   if (!name)  { toast('Vendor name is required', 'err'); return; }
-  if (!phone) { toast('Mobile number is required', 'err'); return; }
+  // Phone optional — backend accepts empty. Many local/kirana vendors don't give a number.
 
   const r = await fetch(`${API}?action=create-vendor`, {
     method: 'POST',
