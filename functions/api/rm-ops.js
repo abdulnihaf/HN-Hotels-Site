@@ -198,6 +198,8 @@ async function handleGet(action, url, env, DB) {
 
     /* ── Payment journals (bank/cash) for vendor-payment UI ── */
     case 'payment-journals':  return getPaymentJournals(creds, cfg);
+    /* ── UoM list (for dropdowns) ── */
+    case 'uoms':              return getUoms(creds);
 
     /* ── Debug: inspect a payment + its bill reconciliation state ── */
     case 'probe-payment':     return probePayment(creds, cfg, url);
@@ -880,6 +882,7 @@ async function handlePost(action, context, env, DB) {
     case 'register-payment-je': return registerPaymentJE(body, user, creds, cfg, brand, DB);
     case 'post-payment':     return postPayment(body, user, creds, cfg);
     case 'unlink-payment':   return unlinkPayment(body, user, creds, cfg);
+    case 'create-uom':       return createUom(body, user, creds);
 
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
@@ -3523,6 +3526,44 @@ async function probePayment(creds, cfg, url) {
     out.bill = b?.[0] || null;
   }
   return json({ success: true, ...out });
+}
+
+/* ━━━ UoM list (global, no company filter) ━━━ */
+async function getUoms(creds) {
+  const uoms = await odooCall(creds.uid, creds.key, 'uom.uom', 'search_read',
+    [[['active','=',true]]],
+    { fields: ['id','name','category_id','uom_type','factor'], order: 'name asc' });
+  return json({ success: true, uoms });
+}
+
+/* ━━━ Create a new Unit of Measure ━━━
+ * Admin-only. Creates the UoM in the same category as a reference UoM
+ * (default: "Units", id=1 → category "Unit"). Use reference_uom_id to
+ * borrow another category (e.g. pass 29 to put it with "can").
+ * Body: { pin, brand, name, reference_uom_id? }
+ */
+async function createUom(body, user, creds) {
+  if (user.role !== 'admin') return json({ error: 'Admin only' }, 403);
+  const { name, reference_uom_id } = body;
+  if (!name?.trim()) return json({ error: 'name required' }, 400);
+
+  // Guard: don't create duplicate
+  const existing = await odooCall(creds.uid, creds.key, 'uom.uom', 'search_read',
+    [[['name','ilike',name.trim()]]],
+    { fields: ['id','name'], limit: 5 });
+  if (existing.length) return json({ error: `UoM already exists: ${existing.map(u=>u.name).join(', ')}` }, 409);
+
+  // Borrow category from reference UoM (default: Units id=1)
+  const refId = parseInt(reference_uom_id) || 1;
+  const ref = await odooCall(creds.uid, creds.key, 'uom.uom', 'read',
+    [[refId]], { fields: ['id','name','category_id'] });
+  if (!ref || !ref[0]) return json({ error: `Reference UoM id=${refId} not found` }, 404);
+  const category_id = ref[0].category_id[0];
+
+  const newId = await odooCall(creds.uid, creds.key, 'uom.uom', 'create',
+    [{ name: name.trim(), category_id, uom_type: 'bigger', factor: 1 }]);
+
+  return json({ success: true, uom: { id: newId, name: name.trim(), category: ref[0].category_id[1] } });
 }
 
 /* ━━━ Payment journals (bank/cash) ━━━
