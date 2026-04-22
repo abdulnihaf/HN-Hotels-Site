@@ -889,6 +889,8 @@ async function handlePost(action, context, env, DB) {
     case 'correct-bill':     return correctBill(body, user, creds, cfg, brand, DB);
     case 'fix-template-company':    return fixTemplateCompany(body, user, creds);
     case 'globalize-rm-templates':  return globalizeRmTemplates(body, user, creds);
+    case 'migrate-bills-schema':    return migrateBillsSchema(body, user, DB);
+    case 'resync-bill-d1':          return resyncBillD1(body, user, creds, cfg, brand, DB);
 
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
@@ -3644,6 +3646,59 @@ async function globalizeRmTemplates(body, user, creds) {
   return json({ success: true, globalized: ids.length, templates: tmpls });
 }
 
+/* ━━━ D1: one-time schema extension for payment tracking columns ━━━
+ * Adds amount_paid + payment_state columns to rm_vendor_bills. Idempotent —
+ * checks if columns already exist before ALTER. Call once (admin) after deploy. */
+async function migrateBillsSchema(body, user, DB) {
+  if (user.role !== 'admin') return json({ error: 'Admin only' }, 403);
+  if (!DB) return json({ error: 'DB not configured' }, 500);
+  const result = { added: [], existing: [] };
+  // SQLite ALTER TABLE ADD COLUMN is idempotent-safe via try/catch: if column
+  // exists, ALTER fails with 'duplicate column'. We swallow and report.
+  for (const [col, def] of [
+    ['amount_paid', 'REAL DEFAULT 0'],
+    ['payment_state', "TEXT DEFAULT 'not_paid'"],
+  ]) {
+    try {
+      await DB.prepare(`ALTER TABLE rm_vendor_bills ADD COLUMN ${col} ${def}`).run();
+      result.added.push(col);
+    } catch (e) {
+      if (String(e.message).toLowerCase().includes('duplicate')) result.existing.push(col);
+      else return json({ error: `ALTER ${col} failed: ${e.message}` }, 500);
+    }
+  }
+  return json({ success: true, ...result });
+}
+
+/* ━━━ Re-sync one D1 bill row from Odoo (corrects drift) ━━━ */
+async function resyncBillD1(body, user, creds, cfg, brand, DB) {
+  if (user.role !== 'admin') return json({ error: 'Admin only' }, 403);
+  if (!DB) return json({ error: 'DB not configured' }, 500);
+  const bill_id = parseInt(body.bill_id);
+  if (!bill_id) return json({ error: 'bill_id required' }, 400);
+  const bill = await odooCall(creds.uid, creds.key, 'account.move', 'read',
+    [[bill_id]], { fields: ['id','name','amount_total','amount_residual','payment_state','company_id'] });
+  if (!bill?.[0]) return json({ error: 'Bill not found' }, 404);
+  if (bill[0].company_id[0] !== cfg.company_id) return json({ error: 'Wrong company' }, 400);
+  const b = bill[0];
+  const paid = (b.amount_total || 0) - (b.amount_residual || 0);
+  // Try updating amount_paid + payment_state individually (soft-fail each)
+  await DB.prepare(`UPDATE rm_vendor_bills SET amount_total=? WHERE odoo_move_id=? AND brand=?`)
+    .bind(b.amount_total, b.id, brand).run();
+  try {
+    await DB.prepare(`UPDATE rm_vendor_bills SET amount_paid=? WHERE odoo_move_id=? AND brand=?`)
+      .bind(paid, b.id, brand).run();
+  } catch (_) {}
+  try {
+    await DB.prepare(`UPDATE rm_vendor_bills SET payment_state=? WHERE odoo_move_id=? AND brand=?`)
+      .bind(b.payment_state || 'not_paid', b.id, brand).run();
+  } catch (_) {}
+  return json({
+    success: true,
+    bill: { id: b.id, ref: b.name, amount_total: b.amount_total, amount_paid: paid, payment_state: b.payment_state },
+  });
+}
+
 /* ━━━ Correct a posted bill amount (admin) ━━━
  * Resets bill to draft (auto-unreconciles any linked payments), updates the
  * first product line to the new amount, reposts, then re-reconciles a
@@ -3711,13 +3766,21 @@ async function correctBill(body, user, creds, cfg, brand, DB) {
   const after = await odooCall(creds.uid, creds.key, 'account.move', 'read',
     [[bId]], { fields: ['name','amount_total','amount_residual','payment_state'] });
 
-  // 7. Update D1 mirror
+  // 7. Update D1 mirror. Schema has amount_total but NOT payment_state —
+  //    do the safe UPDATE first (always works), then the optional one
+  //    (fails silently if column doesn't exist). This guarantees the
+  //    amount_total sync even on older D1 schemas.
   if (DB) {
     try {
       await DB.prepare(
-        `UPDATE rm_vendor_bills SET amount_total=?, payment_state=? WHERE odoo_move_id=? AND brand=?`
-      ).bind(amt, after?.[0]?.payment_state || 'not_paid', bId, brand).run();
-    } catch (_) {}
+        `UPDATE rm_vendor_bills SET amount_total=? WHERE odoo_move_id=? AND brand=?`
+      ).bind(amt, bId, brand).run();
+    } catch (_) { /* unreachable — column always exists */ }
+    try {
+      await DB.prepare(
+        `UPDATE rm_vendor_bills SET payment_state=? WHERE odoo_move_id=? AND brand=?`
+      ).bind(after?.[0]?.payment_state || 'not_paid', bId, brand).run();
+    } catch (_) { /* payment_state column may not exist — acceptable */ }
   }
 
   return json({

@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS rm_vendor_bills (
   amount_untaxed REAL DEFAULT 0,
   tax_amount REAL DEFAULT 0,
   amount_total REAL NOT NULL,
+  amount_paid REAL DEFAULT 0,             -- running total of registered payments (mirrors Odoo)
+  payment_state TEXT DEFAULT 'not_paid',  -- not_paid | in_payment | partial | paid (from Odoo)
   state TEXT DEFAULT 'posted',            -- draft | posted | paid
   bill_photo_drive_id TEXT,
   bill_photo_link TEXT,
@@ -24,6 +26,13 @@ CREATE TABLE IF NOT EXISTS rm_vendor_bills (
   recorded_at TEXT DEFAULT (datetime('now')),
   is_direct INTEGER DEFAULT 0             -- 1 = no PO link
 );
+
+-- Migration ALTERs for existing deployments (idempotent — CREATE TABLE IF NOT
+-- EXISTS above won't add new columns to an existing table). Run via the
+-- migrate-bills-schema admin action:
+--   POST /api/rm-ops {action:migrate-bills-schema, pin:0305}
+-- ALTER TABLE rm_vendor_bills ADD COLUMN amount_paid REAL DEFAULT 0;
+-- ALTER TABLE rm_vendor_bills ADD COLUMN payment_state TEXT DEFAULT 'not_paid';
 
 CREATE INDEX IF NOT EXISTS idx_bills_brand ON rm_vendor_bills(brand);
 CREATE INDEX IF NOT EXISTS idx_bills_vendor ON rm_vendor_bills(vendor_id);
