@@ -609,10 +609,66 @@ async function handlePost(request, env) {
 
     const trimmedName = String(name).trim();
     try {
-      // 1. Duplicate check — refuse if template with same name exists under same category
-      const dup = await odoo(apiKey, 'product.template', 'search_count',
-        [[['name', '=ilike', trimmedName], ['categ_id', '=', parseInt(category_id)]]]);
-      if (dup) return json({ error: `Template "${trimmedName}" already exists in this category` }, 409);
+      // 1. Duplicate check — if template with same name exists in same category:
+      //    - No vendor_id provided → still an error (nothing useful to do)
+      //    - vendor_id provided → auto-link existing template to vendor via
+      //      product.supplierinfo and return success. This is Zoya's case:
+      //      Container (400 Ml) already exists from another flow, she just
+      //      wants to associate it with Deepak Packaging Store.
+      const existing = await odoo(apiKey, 'product.template', 'search_read',
+        [[['name', '=ilike', trimmedName], ['categ_id', '=', parseInt(category_id)]]],
+        { fields: ['id','name','uom_id'], limit: 1 });
+
+      if (existing.length) {
+        if (!vendor_id) {
+          return json({ error: `Template "${trimmedName}" already exists in this category` }, 409);
+        }
+        const existingTmpl = existing[0];
+        const vId = parseInt(vendor_id);
+        const cidForLink = company_id ? parseInt(company_id) : false;
+
+        // Is this vendor already a supplier for this template? Skip duplicate.
+        const alreadyLinked = await odoo(apiKey, 'product.supplierinfo', 'search_count',
+          [[['product_tmpl_id', '=', existingTmpl.id], ['partner_id', '=', vId]]]);
+
+        let supplierinfoId = null;
+        if (!alreadyLinked) {
+          supplierinfoId = await odoo(apiKey, 'product.supplierinfo', 'create', [{
+            product_tmpl_id: existingTmpl.id,
+            partner_id: vId,
+            min_qty: 0,
+            price: parseFloat(vendor_price) || 0,
+            company_id: cidForLink,
+          }]);
+        }
+
+        // Return the existing template's variants so the frontend can treat
+        // this exactly like a fresh create.
+        const existingVariants = await odoo(apiKey, 'product.product', 'search_read',
+          [[['product_tmpl_id', '=', existingTmpl.id], ['active', '=', true]]],
+          { fields: ['id','default_code','display_name','uom_id'] });
+
+        await logSync(db, 'link_existing_template', 'product.template', existingTmpl.id, trimmedName,
+          { vendor_id: vId, already_linked: !!alreadyLinked, supplierinfo_id: supplierinfoId },
+          user.name);
+
+        return json({
+          success: true,
+          linked_existing: true,
+          already_linked: !!alreadyLinked,
+          template_id: existingTmpl.id,
+          name: trimmedName,
+          variants: existingVariants.map(v => ({
+            id: v.id,
+            code: v.default_code,
+            name: v.display_name,
+            attrs: {},
+          })),
+          message: alreadyLinked
+            ? `"${trimmedName}" was already linked to this vendor.`
+            : `Linked existing "${trimmedName}" to this vendor.`,
+        });
+      }
 
       // 2. Build attribute_line_ids payload (may be empty = plain product)
       const attrLinePayload = [];

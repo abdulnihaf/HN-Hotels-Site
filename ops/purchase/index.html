@@ -1680,7 +1680,13 @@ async function submitNewRmProduct() {
 
     if (r.error) return toast(r.error, 'err');
 
-    toast(`✓ Created "${name}" — linked to vendor`, 'ok');
+    // Backend returns linked_existing:true when the template already existed
+    // and we just added a supplierinfo link for this vendor (or was already
+    // linked). Use the backend's message so the operator knows what happened.
+    const successMsg = r.linked_existing
+      ? (r.message || `✓ Linked existing "${name}" to vendor`)
+      : `✓ Created "${name}" — linked to vendor`;
+    toast(successMsg, 'ok');
 
     // Add to local catalog + refresh search
     const newProduct = {
