@@ -876,6 +876,7 @@ async function handlePost(action, context, env, DB) {
     case 'list-bills':       return listBills(brand, body, DB);
     case 'vendor-outstanding': return vendorOutstanding(creds, cfg, brand);
     case 'register-payment': return registerPayment(body, user, creds, cfg, brand, DB);
+    case 'post-payment':     return postPayment(body, user, creds, cfg);
 
     default: return json({ error: `Unknown POST action: ${body.action}` }, 400);
   }
@@ -3296,6 +3297,50 @@ async function vendorOutstanding(creds, cfg, brand) {
     grouped[vname].bills.push({ id: m.id, ref: m.name, amount: m.amount_residual, due: m.invoice_date_due });
   }
   return json({ success: true, outstanding: Object.values(grouped).sort((a,b)=>b.outstanding-a.outstanding) });
+}
+
+/* ━━━ Post a payment (Odoo 18 flow) ━━━
+ * In Odoo 18 the register-wizard can leave payments in 'in_process' with no
+ * move_id — the accounting entry isn't actually created until action_post
+ * runs on the payment itself. Call this after register-payment if residual
+ * didn't drop. Also used to recover stuck payments from earlier attempts. */
+async function postPayment(body, user, creds, cfg) {
+  if (user.role !== 'admin' && user.role !== 'purchase' && user.role !== 'settlement') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+  const payment_id = parseInt(body.payment_id);
+  if (!payment_id) return json({ error: 'payment_id required' }, 400);
+
+  // Guard: payment must belong to this company.
+  const p0 = await odooCall(creds.uid, creds.key, 'account.payment', 'read',
+    [[payment_id]], { fields: ['id','state','company_id','move_id','amount','reconciled_bill_ids'] });
+  if (!p0 || !p0[0]) return json({ error: 'Payment not found' }, 404);
+  if (p0[0].company_id[0] !== cfg.company_id) return json({ error: 'Payment belongs to a different company' }, 400);
+
+  let tried = [];
+  let posted = false;
+  // Odoo 18 renamed methods around a bit. Try in order, first to succeed wins.
+  for (const method of ['action_post', 'action_validate', 'action_paid']) {
+    try {
+      await odooCall(creds.uid, creds.key, 'account.payment', method, [[payment_id]], coCtx(cfg));
+      tried.push({ method, ok: true });
+      posted = true;
+      break;
+    } catch (e) {
+      tried.push({ method, error: e.message });
+    }
+  }
+
+  const after = await odooCall(creds.uid, creds.key, 'account.payment', 'read',
+    [[payment_id]], { fields: ['id','name','state','move_id','is_matched'] });
+  const bill_ids = p0[0].reconciled_bill_ids || [];
+  let bills = [];
+  if (bill_ids.length) {
+    bills = await odooCall(creds.uid, creds.key, 'account.move', 'read',
+      [bill_ids], { fields: ['id','name','amount_residual','payment_state'] });
+  }
+
+  return json({ success: posted, tried, payment: after[0], bills });
 }
 
 /* ━━━ Debug: probe a payment's state + bill linkage ━━━
