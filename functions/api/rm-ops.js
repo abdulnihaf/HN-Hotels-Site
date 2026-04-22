@@ -851,6 +851,8 @@ async function handlePost(action, context, env, DB) {
     case 'edit-po-line':    return editPOLine(body, user, creds, cfg, brand, DB, env);
     case 'delete-po-line':  return deletePOLine(body, user, creds, cfg, brand, DB, env);
     case 'cancel-po':       return cancelPO(body, user, creds, cfg, brand, DB, env);
+    case 'unlink-vendor-product': return unlinkVendorProduct(body, user, creds, cfg, brand, DB, env);
+    case 'set-primary-vendor':    return setPrimaryVendor(body, user, creds, cfg, brand, DB, env);
     case 'receive-delivery': return receiveDelivery(body, user, creds, cfg, brand, DB, env);
     case 'add-product':     return addProduct(body, user, creds, cfg, brand, env, DB);
     case 'update-price':    return updatePrice(body, user, brand, DB);
@@ -1027,6 +1029,129 @@ async function checkPOEditable(creds, poId) {
 }
 
 /* ── Edit PO Line (qty / price) ── */
+
+/* ── Vendor ↔ Product mapping management ──
+ * Data hygiene actions so Zoya / admin can fix bad links from the UI without
+ * touching Odoo directly. Used by the "✏️ Manage list" toggle inside the
+ * bulk-entry vendor pane.
+ *
+ *   unlink-vendor-product: removes a product from a vendor's known catalogue
+ *     — deletes product.supplierinfo row(s) for (vendor, product_tmpl) in Odoo
+ *     — deletes the matching rm_vendor_products rows in D1 (handles dup vendor keys)
+ *
+ *   set-primary-vendor: makes the given vendor the "primary" supplier for a
+ *     product — sets sequence=1 on its supplierinfo row, sequence=10 on others
+ */
+async function unlinkVendorProduct(body, user, creds, cfg, brand, DB, env) {
+  if (user.role !== 'admin' && user.role !== 'purchase') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+  const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
+  const { vendor_id, product_id } = body;
+  if (!vendor_id || !product_id) return json({ error: 'Missing vendor_id or product_id' }, 400);
+
+  // Resolve product_tmpl_id — supplierinfo binds to the template
+  const prod = await odooCall(sysCreds.uid, sysCreds.key, 'product.product', 'read',
+    [[parseInt(product_id, 10)]], { fields: ['id', 'name', 'default_code', 'product_tmpl_id'] });
+  if (!prod?.length) return json({ error: 'Product not found' }, 404);
+  const tmplId = prod[0].product_tmpl_id?.[0];
+  if (!tmplId) return json({ error: 'Product template not found' }, 404);
+
+  // Find + unlink all supplierinfo rows for this (vendor, template) pair
+  const matchingSupplierinfo = await odooCall(sysCreds.uid, sysCreds.key,
+    'product.supplierinfo', 'search_read',
+    [[['partner_id', '=', parseInt(vendor_id, 10)], ['product_tmpl_id', '=', tmplId]]],
+    { fields: ['id'], limit: 10 });
+  const siIds = matchingSupplierinfo.map(r => r.id);
+  if (siIds.length) {
+    await odooCall(sysCreds.uid, sysCreds.key, 'product.supplierinfo', 'unlink', [siIds]);
+  }
+
+  // Mirror into D1 — delete rm_vendor_products rows for (product_code, any-vendor-key-that-maps-to-this-odoo-id).
+  // The Apr-18 rebuild left duplicate vendor keys for the same partner, so we
+  // delete across ALL matching vendor keys to keep UI consistent.
+  let d1Deleted = 0;
+  if (DB && prod[0].default_code) {
+    // Find every D1 vendor_key that currently maps to this Odoo partner
+    const keys = await DB.prepare(
+      `SELECT key FROM rm_vendors WHERE odoo_id = ? AND is_active = 1`
+    ).bind(parseInt(vendor_id, 10)).all();
+    const vendorKeys = (keys.results || []).map(r => r.key);
+    for (const k of vendorKeys) {
+      const res = await DB.prepare(
+        `DELETE FROM rm_vendor_products WHERE product_code = ? AND vendor_key = ?`
+      ).bind(prod[0].default_code, k).run();
+      d1Deleted += res.meta?.changes || 0;
+    }
+  }
+
+  // Audit log
+  if (DB) {
+    await DB.prepare(
+      'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind('unlink_vendor_product', brand, user.name, JSON.stringify({
+      vendor_id, product_id, product_name: prod[0].name, product_code: prod[0].default_code,
+      supplierinfo_ids_removed: siIds, d1_rows_deleted: d1Deleted,
+    }), istNow().toISOString()).run();
+  }
+
+  return json({
+    success: true,
+    product_name: prod[0].name,
+    product_code: prod[0].default_code,
+    supplierinfo_removed: siIds.length,
+    d1_rows_removed: d1Deleted,
+  });
+}
+
+async function setPrimaryVendor(body, user, creds, cfg, brand, DB, env) {
+  if (user.role !== 'admin' && user.role !== 'purchase') {
+    return json({ error: 'Insufficient permissions' }, 403);
+  }
+  const sysCreds = getOdooCredentials({ odoo: 'system' }, env);
+  const { vendor_id, product_id } = body;
+  if (!vendor_id || !product_id) return json({ error: 'Missing vendor_id or product_id' }, 400);
+
+  const prod = await odooCall(sysCreds.uid, sysCreds.key, 'product.product', 'read',
+    [[parseInt(product_id, 10)]], { fields: ['id', 'name', 'default_code', 'product_tmpl_id'] });
+  if (!prod?.length) return json({ error: 'Product not found' }, 404);
+  const tmplId = prod[0].product_tmpl_id?.[0];
+  if (!tmplId) return json({ error: 'Product template not found' }, 404);
+
+  // Fetch all suppliers for this template
+  const allSi = await odooCall(sysCreds.uid, sysCreds.key, 'product.supplierinfo', 'search_read',
+    [[['product_tmpl_id', '=', tmplId]]], { fields: ['id', 'partner_id', 'sequence'], limit: 50 });
+  const targetSi = allSi.find(si => si.partner_id?.[0] === parseInt(vendor_id, 10));
+  if (!targetSi) return json({ error: 'This vendor is not in the product\'s supplier list' }, 404);
+
+  // Primary = sequence 1, others = sequence 10
+  await odooCall(sysCreds.uid, sysCreds.key, 'product.supplierinfo', 'write', [[targetSi.id], { sequence: 1 }]);
+  const others = allSi.filter(si => si.id !== targetSi.id && si.sequence < 10).map(si => si.id);
+  if (others.length) {
+    await odooCall(sysCreds.uid, sysCreds.key, 'product.supplierinfo', 'write', [others, { sequence: 10 }]);
+  }
+  // D1 mirror — set is_primary=1 for this pair, 0 for others
+  if (DB && prod[0].default_code) {
+    const keys = await DB.prepare(
+      `SELECT key FROM rm_vendors WHERE odoo_id = ? AND is_active = 1`
+    ).bind(parseInt(vendor_id, 10)).all();
+    const vendorKeys = (keys.results || []).map(r => r.key);
+    await DB.prepare(`UPDATE rm_vendor_products SET is_primary = 0 WHERE product_code = ?`)
+      .bind(prod[0].default_code).run();
+    for (const k of vendorKeys) {
+      await DB.prepare(`UPDATE rm_vendor_products SET is_primary = 1 WHERE product_code = ? AND vendor_key = ?`)
+        .bind(prod[0].default_code, k).run();
+    }
+  }
+  if (DB) {
+    await DB.prepare(
+      'INSERT INTO rm_ops_log (action, brand, user_name, details, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind('set_primary_vendor', brand, user.name, JSON.stringify({
+      vendor_id, product_id, product_name: prod[0].name,
+    }), istNow().toISOString()).run();
+  }
+  return json({ success: true, product_name: prod[0].name });
+}
 
 /* ── Add a new line to an existing PO ──
  * Used by the ledger drawer's "Edit Lines" section so Zoya can enrich a

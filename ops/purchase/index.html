@@ -64,12 +64,18 @@
   /* Bulk items list */
   .bulk-row { display: grid; grid-template-columns: 1fr 80px 90px; gap: 8px; align-items: center;
     padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .bulk-row.manage-mode { grid-template-columns: 1fr auto auto; }
   .bulk-row.filled { background: rgba(16,185,129,0.06); border-left: 3px solid #34d399; }
   .bulk-row .bulk-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bulk-row .bulk-name .bulk-uom { font-weight: 400; color: var(--text-dim); font-size: 11px; margin-left: 4px; }
   .bulk-row .bulk-last { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
   .bulk-row input { padding: 6px 8px; font-size: 13px; text-align: right; min-height: 34px; }
   .bulk-row .bulk-sub { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-dim); grid-column: 2 / span 2; text-align: right; padding: 0 4px; margin-top: -2px; }
+  .bulk-row .mgmt-btn { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 14px; min-height: 34px; font-family: inherit; }
+  .bulk-row .mgmt-btn.primary { color: #fbbf24; border-color: rgba(245,158,11,0.35); }
+  .bulk-row .mgmt-btn.primary.is-primary { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .bulk-row .mgmt-btn.unlink { color: #f87171; border-color: rgba(239,68,68,0.35); }
+  .bulk-row .mgmt-btn.unlink:hover { background: rgba(239,68,68,0.1); }
 </style>
 </head>
 <body>
@@ -228,8 +234,13 @@
       </div>
 
       <div id="bulk-items-wrap" class="hidden">
-        <input id="bulk-filter" type="search" placeholder="Filter items…" oninput="renderBulkItems()"
-               style="margin-bottom:10px;">
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+          <input id="bulk-filter" type="search" placeholder="Filter items…" oninput="renderBulkItems()" style="flex:1;">
+          <button id="bulk-manage-btn" onclick="toggleBulkManageMode()" class="btn btn-ghost btn-sm" title="Edit this vendor's product list (add / remove / change primary)">✏️ Manage list</button>
+        </div>
+        <div id="bulk-manage-hint" class="hidden" style="padding:8px 10px; background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.35); border-radius:6px; font-size:11px; color:#fbbf24; margin-bottom:10px;">
+          ✏️ <b>Manage mode</b> — tap × next to any item to remove it from this vendor's list. Tap ⭐ to make that vendor the primary supplier. Tap "✏️ Manage list" again to go back to entry mode.
+        </div>
         <div id="bulk-items-list"></div>
         <div id="bulk-empty" class="mute hidden" style="padding:20px; text-align:center;">No products match.</div>
 
@@ -815,6 +826,11 @@ async function openCat1() {
   cart = [];
   bulkItems.clear();
   bulkVendor = null;
+  bulkManageMode = false;
+  const mb = document.getElementById('bulk-manage-btn');
+  if (mb) mb.textContent = '✏️ Manage list';
+  const mh = document.getElementById('bulk-manage-hint');
+  if (mh) mh.classList.add('hidden');
   document.getElementById('cat1-screen').classList.remove('hidden');
   document.getElementById('cat1-brand-tag').textContent = BRAND;
   document.getElementById('rm-search').value = '';
@@ -1215,6 +1231,7 @@ async function submitRmPurchase() {
 // ═══════════════════════════════════════════════════════════════
 let bulkVendor = null;          // { id, name } currently picked
 const bulkItems = new Map();    // product_id → { product, qty, price }
+let bulkManageMode = false;     // toggled by the "✏️ Manage list" button
 
 function setCat1Mode(mode) {
   // If the OTHER mode has unsaved items, confirm before clearing.
@@ -1301,6 +1318,23 @@ function renderBulkItems() {
     const sub = (parseFloat(state.qty)||0) * (parseFloat(state.price)||0);
     const filled = parseFloat(state.qty) > 0;
     const lastP = p.lastPrice?.price ? `Last: ₹${p.lastPrice.price}` : '';
+    // In manage mode, show ⭐ primary toggle + ✕ unlink buttons instead of qty/price inputs
+    const isPrimary = (p.vendors || []).find(v => v.odoo_id === bulkVendor?.id)?.is_primary;
+    if (bulkManageMode) {
+      return `
+        <div class="bulk-row manage-mode" data-id="${p.id}">
+          <div>
+            <div class="bulk-name">${esc(p.name)}<span class="bulk-uom">${esc(p.uom||'')}</span></div>
+            ${lastP ? `<div class="bulk-last">${lastP}</div>` : ''}
+          </div>
+          <button class="mgmt-btn primary ${isPrimary?'is-primary':''}"
+                  title="${isPrimary?'This vendor is already primary for this product':'Make ' + esc(bulkVendor?.name||'this vendor') + ' the primary supplier for this product'}"
+                  onclick="bulkSetPrimary(${p.id})">${isPrimary?'⭐ Primary':'⭐ Set primary'}</button>
+          <button class="mgmt-btn unlink"
+                  title="Remove from ${esc(bulkVendor?.name||'vendor')}'s list"
+                  onclick="bulkUnlinkProduct(${p.id})">× Remove</button>
+        </div>`;
+    }
     return `
       <div class="bulk-row ${filled?'filled':''}" data-id="${p.id}">
         <div>
@@ -1364,6 +1398,67 @@ function updateBulkTotals() {
   document.getElementById('bulk-count').textContent = `${filled.length} item${filled.length===1?'':'s'}`;
   document.getElementById('bulk-total').textContent = `₹${fmtINR(total)}`;
   document.getElementById('bulk-submit-btn').disabled = filled.length === 0;
+}
+
+// ── Manage-list mode — unlink a product from the picked vendor, or flip primary ──
+function toggleBulkManageMode() {
+  bulkManageMode = !bulkManageMode;
+  document.getElementById('bulk-manage-btn').textContent = bulkManageMode ? '✓ Done editing' : '✏️ Manage list';
+  document.getElementById('bulk-manage-hint').classList.toggle('hidden', !bulkManageMode);
+  // Disable submit while in manage mode — it's a separate concern
+  const submitBtn = document.getElementById('bulk-submit-btn');
+  if (submitBtn) submitBtn.disabled = bulkManageMode || [...bulkItems.values()].filter(it => parseFloat(it.qty) > 0).length === 0;
+  renderBulkItems();
+}
+
+async function bulkUnlinkProduct(productId) {
+  if (!bulkVendor) return;
+  const prod = (rmCatalog.products || []).find(p => p.id === productId);
+  if (!prod) return;
+  if (!confirm(`Remove "${prod.name}" from ${bulkVendor.name}'s product list?\n\nThis deletes the vendor↔product link in Odoo. The product itself is NOT deleted — it stays in the RM catalogue and can still be linked to other vendors.`)) return;
+  const btn = document.querySelector(`.bulk-row[data-id="${productId}"] .mgmt-btn.unlink`);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch(`${RM_API}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'unlink-vendor-product', pin: PIN, brand: BRAND,
+                              vendor_id: bulkVendor.id, product_id: productId }),
+    }).then(x => x.json());
+    if (r.error) throw new Error(r.error);
+    // Update local catalog so the row disappears on re-render
+    const p = (rmCatalog.products || []).find(x => x.id === productId);
+    if (p) p.vendors = (p.vendors || []).filter(v => v.odoo_id !== bulkVendor.id);
+    bulkItems.delete(productId);
+    toast(`✓ Removed "${prod.name}" from ${bulkVendor.name}`, 'ok');
+    renderBulkItems();
+  } catch (e) {
+    toast('Unlink failed: ' + e.message, 'err');
+    if (btn) { btn.disabled = false; btn.textContent = '× Remove'; }
+  }
+}
+
+async function bulkSetPrimary(productId) {
+  if (!bulkVendor) return;
+  const prod = (rmCatalog.products || []).find(p => p.id === productId);
+  if (!prod) return;
+  const btn = document.querySelector(`.bulk-row[data-id="${productId}"] .mgmt-btn.primary`);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch(`${RM_API}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set-primary-vendor', pin: PIN, brand: BRAND,
+                              vendor_id: bulkVendor.id, product_id: productId }),
+    }).then(x => x.json());
+    if (r.error) throw new Error(r.error);
+    // Local sync — flip is_primary on this product's vendor array
+    const p = (rmCatalog.products || []).find(x => x.id === productId);
+    if (p) (p.vendors || []).forEach(v => v.is_primary = (v.odoo_id === bulkVendor.id));
+    toast(`✓ ${bulkVendor.name} is now primary supplier for "${prod.name}"`, 'ok');
+    renderBulkItems();
+  } catch (e) {
+    toast('Failed: ' + e.message, 'err');
+    if (btn) { btn.disabled = false; btn.textContent = '⭐ Set primary'; }
+  }
 }
 
 async function submitBulkPO() {
