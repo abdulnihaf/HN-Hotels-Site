@@ -201,6 +201,7 @@ async function handleGet(action, url, env, DB) {
 
     /* ── Debug: inspect a payment + its bill reconciliation state ── */
     case 'probe-payment':     return probePayment(creds, cfg, url);
+    case 'probe-journal':     return probeJournal(creds, cfg, url);
 
     default: return json({ error: `Unknown GET action: ${action}` }, 400);
   }
@@ -3341,6 +3342,25 @@ async function postPayment(body, user, creds, cfg) {
   }
 
   return json({ success: posted, tried, payment: after[0], bills });
+}
+
+/* ━━━ Debug: probe a journal's config (esp. outstanding accounts) ━━━ */
+async function probeJournal(creds, cfg, url) {
+  const journal_id = parseInt(url.searchParams.get('journal_id'));
+  if (!journal_id) return json({ error: 'journal_id required' }, 400);
+  const j = await odooCall(creds.uid, creds.key, 'account.journal', 'read',
+    [[journal_id]],
+    { fields: ['id','name','type','code','company_id','default_account_id',
+               'suspense_account_id','outbound_payment_method_line_ids',
+               'inbound_payment_method_line_ids'] });
+  // Also read one outbound payment method line to see its payment_account_id
+  let outLines = [];
+  if (j?.[0]?.outbound_payment_method_line_ids?.length) {
+    outLines = await odooCall(creds.uid, creds.key, 'account.payment.method.line', 'read',
+      [j[0].outbound_payment_method_line_ids],
+      { fields: ['id','name','payment_account_id','payment_method_id','journal_id'] });
+  }
+  return json({ success: true, journal: j?.[0] || null, outbound_method_lines: outLines });
 }
 
 /* ━━━ Debug: probe a payment's state + bill linkage ━━━
