@@ -482,17 +482,73 @@ export async function onRequestGet({ request, env }) {
   tr.txn td.bal    { color: #666; font-size: 10px; }
 
   .footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #e5e5e8; font-size: 9px; color: #888; display: flex; justify-content: space-between; }
-  .no-print-btns { margin-bottom: 16px; }
-  .no-print-btns button { background: #111; color: #fff; border: 0; padding: 8px 16px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; margin-right: 8px; font-family: inherit; }
+  .no-print-btns { margin-bottom: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .no-print-btns button { background: #111; color: #fff; border: 0; padding: 8px 16px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
   .no-print-btns button.sec { background: #fff; color: #111; border: 1px solid #ccc; }
+  .no-print-btns button:disabled { opacity: 0.5; cursor: wait; }
+  .no-print-btns .hint { font-size: 10px; color: #888; margin-left: auto; }
   @media print { .no-print-btns { display: none !important; } }
 </style>
 </head><body>
 <div class="wrap">
   <div class="no-print-btns">
-    <button onclick="window.print()">↓ Save as PDF / Print</button>
-    <button class="sec" onclick="window.close()">Close</button>
+    <button id="pdf-btn" onclick="savePDF()">↓ Save as PDF</button>
+    <button class="sec" onclick="window.print()">🖨 Print</button>
+    <button class="sec" onclick="window.close()">✕ Close</button>
+    <span class="hint">First click loads the PDF engine (~350KB)</span>
   </div>
+  <script>
+    // Lazy-load html2pdf only when user asks for it. First-click cost is
+    // ~350KB; subsequent clicks are instant. Produces a raster-based PDF
+    // (canvas snapshot) — layout matches what you see here, including
+    // colors and fonts. If we ever want selectable-text PDFs, switch to
+    // a server-side pdf-lib approach.
+    let _h2pLoaded = null;
+    function loadHtml2Pdf() {
+      if (_h2pLoaded) return _h2pLoaded;
+      _h2pLoaded = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js';
+        s.onload = () => resolve(window.html2pdf);
+        s.onerror = () => reject(new Error('html2pdf failed to load'));
+        document.head.appendChild(s);
+      });
+      return _h2pLoaded;
+    }
+    async function savePDF() {
+      const btn = document.getElementById('pdf-btn');
+      btn.disabled = true;
+      btn.textContent = 'generating…';
+      try {
+        const html2pdf = await loadHtml2Pdf();
+        const wrap = document.querySelector('.wrap');
+        // Temp-hide the button row so it doesn't appear inside the PDF.
+        const btnRow = document.querySelector('.no-print-btns');
+        btnRow.style.display = 'none';
+        const stamp = new Date().toISOString().slice(0, 10);
+        const fname = 'hn-money-' + stamp + '.pdf';
+        await html2pdf().set({
+          margin: [12, 10, 14, 10],
+          filename: fname,
+          image: { type: 'jpeg', quality: 0.96 },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'], avoid: ['tr.txn', 'tr.day-row'] },
+        }).from(wrap).save();
+        btnRow.style.display = '';
+      } catch (e) {
+        alert('Could not generate PDF: ' + (e.message || e));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '↓ Save as PDF';
+      }
+    }
+    // Optional: ?auto_pdf=1 triggers download on load (dashboard uses this
+    // for one-click PDF export without the preview step).
+    if (new URLSearchParams(location.search).get('auto_pdf') === '1') {
+      addEventListener('load', () => setTimeout(savePDF, 150));
+    }
+  </script>
   <div class="header">
     <div>
       <div class="brand"><span class="ac">HN</span> <span class="lbl">money statement</span></div>
