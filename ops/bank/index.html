@@ -40,16 +40,46 @@
     .chip-recon  { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
     .chip-unrec  { background: rgba(251,191,36,.12); color: #fbbf24; border:1px solid rgba(251,191,36,.3); }
     .chip-ignored { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
-    /* Source */
-    .chip-hdfc   { background: rgba(220,38,38,.12); color: #f87171; border:1px solid rgba(220,38,38,.3); }
-    .chip-razorpay { background: rgba(56,189,248,.12); color: #38bdf8; border:1px solid rgba(56,189,248,.3); }
-    .chip-paytm  { background: rgba(14,165,233,.12); color: #38bdf8; border:1px solid rgba(14,165,233,.3); }
+    /* Source — HDFC + Federal are the only money sources now */
+    .chip-hdfc     { background: rgba(220,38,38,.12); color: #f87171; border:1px solid rgba(220,38,38,.3); }
+    .chip-federal  { background: rgba(99,102,241,.12); color: #818cf8; border:1px solid rgba(99,102,241,.3); }
+    .chip-manual   { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
+    /* Settlement platform (not a money source — tags the route money took to reach the bank) */
+    .chip-razorpay  { background: rgba(56,189,248,.12); color: #38bdf8; border:1px solid rgba(56,189,248,.3); }
+    .chip-paytm     { background: rgba(14,165,233,.12); color: #38bdf8; border:1px solid rgba(14,165,233,.3); }
+    .chip-swiggy    { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
     .chip-zomato_delivery { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
-    .chip-zomato_dining { background: rgba(251,113,133,.12); color: #fb7185; border:1px solid rgba(251,113,133,.3); }
-    .chip-swiggy { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
+    .chip-zomato_dining   { background: rgba(251,113,133,.12); color: #fb7185; border:1px solid rgba(251,113,133,.3); }
     .chip-eazydiner { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
-    .chip-federal { background: rgba(99,102,241,.12); color: #818cf8; border:1px solid rgba(99,102,241,.3); }
-    .chip-manual { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
+    .chip-direct    { background: rgba(148,163,184,.08); color: #9ca3af; border:1px solid rgba(148,163,184,.2); }
+    /* Brand */
+    .chip-HE       { background: rgba(232,147,12,.15); color: #f0a944; border:1px solid rgba(232,147,12,.35); }
+    .chip-NCH      { background: rgba(16,185,129,.15); color: #34d399; border:1px solid rgba(16,185,129,.35); }
+    .chip-HQ       { background: rgba(99,102,241,.15); color: #a5b4fc; border:1px solid rgba(99,102,241,.35); }
+    .chip-mixed    { background: rgba(251,191,36,.12); color: #fbbf24; border:1px solid rgba(251,191,36,.3); }
+    .chip-unknown  { background: rgba(148,163,184,.08); color: #9ca3af; border:1px solid rgba(148,163,184,.2); }
+    /* Category */
+    .chip-salary             { background: rgba(236,72,153,.12); color: #f472b6; border:1px solid rgba(236,72,153,.3); }
+    .chip-vendor_food        { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
+    .chip-vendor_packaging   { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
+    .chip-vendor_utility     { background: rgba(34,197,94,.12);  color: #4ade80; border:1px solid rgba(34,197,94,.3); }
+    .chip-vendor_other       { background: rgba(107,114,128,.12); color: #9ca3af; border:1px solid rgba(107,114,128,.3); }
+    .chip-owner              { background: rgba(99,102,241,.15);  color: #a5b4fc; border:1px solid rgba(99,102,241,.35); }
+    .chip-petty_cash         { background: rgba(234,179,8,.12);   color: #facc15; border:1px solid rgba(234,179,8,.3); }
+    .chip-platform_revenue   { background: rgba(56,189,248,.12);  color: #38bdf8; border:1px solid rgba(56,189,248,.3); }
+    .chip-platform_commission{ background: rgba(239,68,68,.12);   color: #f87171; border:1px solid rgba(239,68,68,.3); }
+    .chip-interest           { background: rgba(34,197,94,.12);   color: #4ade80; border:1px solid rgba(34,197,94,.3); }
+    .chip-transfer_internal  { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
+    /* Inputs */
+    .input { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #e4e4ed; outline: none; }
+    .input:focus { border-color: rgba(232,147,12,.4); }
+    .input::placeholder { color: rgba(156,163,175,.6); }
+    details summary { cursor: pointer; user-select: none; list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::before { content: '▸ '; color: #6b7280; font-size: 10px; margin-right: 4px; }
+    details[open] summary::before { content: '▾ '; }
+    .tbrow { cursor: pointer; }
+    .tbrow:hover td { background: rgba(232,147,12,.04); }
     /* Parse status */
     .chip-parsed { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
     .chip-partial { background: rgba(234,179,8,.12); color: #facc15; border:1px solid rgba(234,179,8,.3); }
@@ -181,25 +211,63 @@
         <span class="text-gray-600 text-xs">loading…</span>
       </section>
 
-      <!-- Filters -->
-      <section class="flex flex-wrap items-center gap-2 mb-4">
-        <span class="text-xs text-gray-500 mr-1">direction:</span>
-        <button class="filter-btn active" data-kind="dir" data-val="all"    onclick="setFilter(this)">All</button>
-        <button class="filter-btn"        data-kind="dir" data-val="credit" onclick="setFilter(this)">Credits</button>
-        <button class="filter-btn"        data-kind="dir" data-val="debit"  onclick="setFilter(this)">Debits</button>
-        <span class="w-px h-4 bg-white/10 mx-1"></span>
-        <span class="text-xs text-gray-500 mr-1">source:</span>
-        <button class="filter-btn active" data-kind="source" data-val="all"         onclick="setFilter(this)">Any</button>
-        <button class="filter-btn"        data-kind="source" data-val="hdfc"        onclick="setFilter(this)">HDFC</button>
-        <button class="filter-btn"        data-kind="source" data-val="razorpay"    onclick="setFilter(this)">Razorpay</button>
-        <button class="filter-btn"        data-kind="source" data-val="paytm"       onclick="setFilter(this)">Paytm</button>
-        <span class="w-px h-4 bg-white/10 mx-1"></span>
-        <span class="text-xs text-gray-500 mr-1">status:</span>
-        <button class="filter-btn active" data-kind="status" data-val="all"          onclick="setFilter(this)">Any</button>
-        <button class="filter-btn"        data-kind="status" data-val="unreconciled" onclick="setFilter(this)">Unrecon.</button>
-        <button class="filter-btn"        data-kind="status" data-val="reconciled"   onclick="setFilter(this)">Reconciled</button>
-        <button class="filter-btn"        data-kind="status" data-val="quarantined"  onclick="setFilter(this)">Quarantined</button>
-        <span class="ml-auto text-xs text-gray-500"><span id="row-count">0</span> rows</span>
+      <!-- Primary filters (always visible) -->
+      <section class="card p-3 mb-4">
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <span class="text-xs text-gray-500 mr-1">account:</span>
+          <button class="filter-btn active" data-kind="instrument" data-val="all"              onclick="setFilter(this)">All</button>
+          <button class="filter-btn"        data-kind="instrument" data-val="hdfc_ca_4680"     onclick="setFilter(this)">HDFC 4680</button>
+          <button class="filter-btn"        data-kind="instrument" data-val="federal_sa_4510"  onclick="setFilter(this)">Federal 4510</button>
+          <span class="w-px h-4 bg-white/10 mx-1"></span>
+          <span class="text-xs text-gray-500 mr-1">brand:</span>
+          <button class="filter-btn active" data-kind="brand" data-val="all"     onclick="setFilter(this)">All</button>
+          <button class="filter-btn"        data-kind="brand" data-val="HE"      onclick="setFilter(this)">HE</button>
+          <button class="filter-btn"        data-kind="brand" data-val="NCH"     onclick="setFilter(this)">NCH</button>
+          <button class="filter-btn"        data-kind="brand" data-val="HQ"      onclick="setFilter(this)">HQ</button>
+          <button class="filter-btn"        data-kind="brand" data-val="mixed"   onclick="setFilter(this)">Mixed</button>
+          <button class="filter-btn"        data-kind="brand" data-val="unknown" onclick="setFilter(this)">Untagged</button>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <span class="text-xs text-gray-500 mr-1">direction:</span>
+          <button class="filter-btn active" data-kind="dir" data-val="all"    onclick="setFilter(this)">All</button>
+          <button class="filter-btn"        data-kind="dir" data-val="credit" onclick="setFilter(this)">Credits</button>
+          <button class="filter-btn"        data-kind="dir" data-val="debit"  onclick="setFilter(this)">Debits</button>
+          <span class="w-px h-4 bg-white/10 mx-1"></span>
+          <span class="text-xs text-gray-500 mr-1">status:</span>
+          <button class="filter-btn active" data-kind="status" data-val="all"          onclick="setFilter(this)">Any</button>
+          <button class="filter-btn"        data-kind="status" data-val="unreconciled" onclick="setFilter(this)">Unrecon.</button>
+          <button class="filter-btn"        data-kind="status" data-val="reconciled"   onclick="setFilter(this)">Reconciled</button>
+          <button class="filter-btn"        data-kind="status" data-val="quarantined"  onclick="setFilter(this)">Quarantined</button>
+          <span class="w-px h-4 bg-white/10 mx-1"></span>
+          <span class="text-xs text-gray-500 mr-1">date:</span>
+          <button class="filter-btn"        data-kind="range" data-val="today" onclick="setFilter(this)">Today</button>
+          <button class="filter-btn"        data-kind="range" data-val="7d"    onclick="setFilter(this)">7d</button>
+          <button class="filter-btn"        data-kind="range" data-val="30d"   onclick="setFilter(this)">30d</button>
+          <button class="filter-btn"        data-kind="range" data-val="90d"   onclick="setFilter(this)">90d</button>
+          <button class="filter-btn active" data-kind="range" data-val="all"   onclick="setFilter(this)">All</button>
+          <span class="ml-auto text-xs text-gray-500"><span id="row-count">0</span> rows</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <input id="f-search" class="input flex-1 min-w-[200px]" type="text"
+                 placeholder="search counterparty · narration · ref · VPA…"
+                 oninput="onSearchInput(event)"/>
+          <select id="f-payee" class="input" onchange="onDropdown(event, 'payee_id')">
+            <option value="">— any payee —</option>
+          </select>
+          <select id="f-channel" class="input" onchange="onDropdown(event, 'channel')">
+            <option value="">— any channel —</option>
+          </select>
+          <select id="f-category" class="input" onchange="onDropdown(event, 'category')">
+            <option value="">— any category —</option>
+          </select>
+          <select id="f-platform" class="input" onchange="onDropdown(event, 'platform')">
+            <option value="">— platform —</option>
+            <option value="direct">direct (no platform)</option>
+          </select>
+          <input id="f-minamt" class="input w-24" type="number" placeholder="min ₹" oninput="onAmountInput('min_amount', event)"/>
+          <input id="f-maxamt" class="input w-24" type="number" placeholder="max ₹" oninput="onAmountInput('max_amount', event)"/>
+          <button id="f-clear" class="btn text-xs" onclick="clearAllFilters()">clear</button>
+        </div>
       </section>
 
       <!-- Transactions table -->
@@ -209,22 +277,45 @@
             <thead>
               <tr>
                 <th>When</th>
-                <th>Source</th>
+                <th>A/c</th>
                 <th>Dir</th>
                 <th class="text-right">Amount</th>
-                <th class="text-right">Balance</th>
                 <th>Channel</th>
+                <th>Platform</th>
                 <th>Counterparty</th>
-                <th>Ref</th>
+                <th>Category</th>
+                <th>Brand</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody id="rows">
-              <tr><td colspan="10" class="text-center text-gray-500 py-10"><span class="spinner"></span> loading…</td></tr>
+              <tr><td colspan="11" class="text-center text-gray-500 py-10"><span class="spinner"></span> loading…</td></tr>
             </tbody>
           </table>
         </div>
+      </section>
+
+      <!-- Top counterparties — discoverable aggregates -->
+      <section class="card p-4 mt-4">
+        <details open>
+          <summary class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Top counterparties</summary>
+          <div class="flex items-center gap-2 mt-3 mb-2">
+            <span class="text-xs text-gray-500">direction:</span>
+            <button class="filter-btn active" data-kind="tcp-dir" data-val="debit"  onclick="setTopDir(this)">Paid out</button>
+            <button class="filter-btn"        data-kind="tcp-dir" data-val="credit" onclick="setTopDir(this)">Received</button>
+            <span class="text-xs text-gray-500 ml-auto">click a row to drill down</span>
+          </div>
+          <div id="top-counterparties" class="text-xs text-gray-500">loading…</div>
+        </details>
+      </section>
+
+      <!-- Platform revenue breakdown -->
+      <section class="card p-4 mt-4">
+        <details>
+          <summary class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Revenue by settlement platform (90d)</summary>
+          <div id="platform-summary" class="mt-3 text-xs text-gray-500">loading…</div>
+        </details>
       </section>
 
       <!-- Empty / setup state -->
@@ -244,10 +335,18 @@
   <script>
     const API = '/api/bank-feed';
     const PIN_STORAGE_KEY = 'hn-bank-pin';
-    let filter = { dir: 'all', source: 'all', status: 'all' };
+    let filter = {
+      dir: 'all', status: 'all', instrument: 'all', brand: 'all', range: 'all',
+      // dropdown / input filters (empty = any)
+      payee_id: '', channel: '', category: '', platform: '',
+      q: '', min_amount: '', max_amount: '',
+    };
+    let topDir = 'debit';       // default: "who do I pay the most"
     let pollTimer = null;
     let errCount = 0;
     let pin = '';
+    let searchDebounce = null;
+    let amountDebounce = null;
 
     // ━━━ PIN gate ━━━
     function pinPress(d) {
@@ -281,6 +380,10 @@
         renderSummary(j);
         // Also fetch rows on first paint.
         loadRows();
+        // Populate filter dropdowns once per session.
+        loadFilterOptions();
+        // And seed the top-counterparties / platform blocks via refresh.
+        refresh(false);
         pollTimer = setInterval(() => refresh(false), 45000);
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') refresh(false);
@@ -305,20 +408,49 @@
       return r.json();
     }
 
+    function buildListQS() {
+      const parts = ['action=list', 'limit=150'];
+      if (filter.dir !== 'all')        parts.push('dir='        + encodeURIComponent(filter.dir));
+      if (filter.status !== 'all')     parts.push('status='     + encodeURIComponent(filter.status));
+      if (filter.instrument !== 'all') parts.push('instrument=' + encodeURIComponent(filter.instrument));
+      if (filter.brand !== 'all')      parts.push('brand='      + encodeURIComponent(filter.brand));
+      const since = rangeToSince(filter.range);
+      if (since) parts.push('date_from=' + encodeURIComponent(since));
+      if (filter.channel)    parts.push('channel='    + encodeURIComponent(filter.channel));
+      if (filter.category)   parts.push('category='   + encodeURIComponent(filter.category));
+      if (filter.platform)   parts.push('platform='   + encodeURIComponent(filter.platform));
+      if (filter.payee_id)   parts.push('payee_id='   + encodeURIComponent(filter.payee_id));
+      if (filter.q)          parts.push('q='          + encodeURIComponent(filter.q));
+      if (filter.min_amount) parts.push('min_amount=' + encodeURIComponent(filter.min_amount));
+      if (filter.max_amount) parts.push('max_amount=' + encodeURIComponent(filter.max_amount));
+      return parts.join('&');
+    }
+
+    function rangeToSince(r) {
+      const now = new Date();
+      if (r === 'today') { const d = new Date(now.getFullYear(), now.getMonth(), now.getDate()); return d.toISOString(); }
+      if (r === '7d')    return new Date(now.getTime() -   7 * 86400000).toISOString();
+      if (r === '30d')   return new Date(now.getTime() -  30 * 86400000).toISOString();
+      if (r === '90d')   return new Date(now.getTime() -  90 * 86400000).toISOString();
+      return null;
+    }
+
     async function refresh(manual = false) {
       const btn = document.getElementById('refresh-btn');
       const prevLabel = btn.textContent;
       if (manual) btn.innerHTML = '<span class="spinner"></span>';
       try {
-        const [summary, listRes] = await Promise.all([
+        const since90 = rangeToSince('90d');
+        const [summary, listRes, topRes, platRes] = await Promise.all([
           authedFetch(`${API}?action=summary`),
-          authedFetch(`${API}?action=list&limit=100` +
-            (filter.dir !== 'all'    ? '&dir='    + filter.dir    : '') +
-            (filter.source !== 'all' ? '&source=' + filter.source : '') +
-            (filter.status !== 'all' ? '&status=' + filter.status : '')),
+          authedFetch(`${API}?${buildListQS()}`),
+          authedFetch(`${API}?action=top_counterparties&dir=${topDir}&since=${encodeURIComponent(since90)}&limit=20`),
+          authedFetch(`${API}?action=platform_summary&since=${encodeURIComponent(since90)}`),
         ]);
         renderSummary(summary);
         renderRows(listRes.rows || []);
+        renderTopCounterparties(topRes.rows || []);
+        renderPlatformSummary(platRes.rows || []);
         document.getElementById('last-refresh').textContent = 'updated ' + timeStr(new Date());
         document.getElementById('err-banner').classList.add('hidden');
         errCount = 0;
@@ -345,11 +477,86 @@
       }
     }
     async function loadRows() {
-      // Explicit first-load to ensure rows populate even if summary fetch is slow.
       try {
-        const listRes = await authedFetch(`${API}?action=list&limit=100`);
+        const listRes = await authedFetch(`${API}?${buildListQS()}`);
         renderRows(listRes.rows || []);
       } catch {}
+    }
+
+    async function loadFilterOptions() {
+      // Populate channel / category / platform / payee dropdowns. One-shot
+      // per session; options rarely change.
+      try {
+        const [opt, payees] = await Promise.all([
+          authedFetch(`${API}?action=filter_options`),
+          authedFetch(`${API}?action=payees`),
+        ]);
+        fillSelect('f-channel',  (opt.channels    || []).map(v => ({ value: v, label: v })));
+        fillSelect('f-category', (opt.categories  || []).map(v => ({ value: v, label: v.replace(/_/g, ' ') })));
+        fillSelect('f-platform', [{ value: 'direct', label: 'direct (no platform)' },
+                                   ...(opt.platforms || []).map(v => ({ value: v, label: v }))],
+                   /*keepFirstPlaceholder*/ true, /*replacePlaceholders*/ true);
+        fillSelect('f-payee', (payees.rows || []).map(p => ({
+          value: String(p.id),
+          label: `${p.name}${p.category ? ' · ' + p.category : ''}${p.last4 ? ' · ' + p.last4 : ''}`,
+        })));
+      } catch (e) { console.warn('filter options load failed', e); }
+    }
+
+    function fillSelect(id, options, keepFirstPlaceholder = true) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const placeholder = el.options[0];
+      el.innerHTML = '';
+      if (keepFirstPlaceholder && placeholder) el.appendChild(placeholder);
+      for (const o of options) {
+        const opt = document.createElement('option');
+        opt.value = o.value; opt.textContent = o.label;
+        el.appendChild(opt);
+      }
+    }
+
+    function onSearchInput(e) {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => {
+        filter.q = e.target.value.trim();
+        refresh(false);
+      }, 300);
+    }
+    function onDropdown(e, kind) {
+      filter[kind] = e.target.value;
+      refresh(false);
+    }
+    function onAmountInput(kind, e) {
+      clearTimeout(amountDebounce);
+      amountDebounce = setTimeout(() => {
+        filter[kind] = e.target.value.trim();
+        refresh(false);
+      }, 400);
+    }
+    function setTopDir(btn) {
+      topDir = btn.dataset.val;
+      document.querySelectorAll('[data-kind="tcp-dir"]').forEach(b => {
+        b.classList.toggle('active', b.dataset.val === topDir);
+      });
+      refresh(false);
+    }
+    function clearAllFilters() {
+      filter = {
+        dir: 'all', status: 'all', instrument: 'all', brand: 'all', range: 'all',
+        payee_id: '', channel: '', category: '', platform: '',
+        q: '', min_amount: '', max_amount: '',
+      };
+      // Reset UI
+      document.querySelectorAll('.filter-btn').forEach(b => {
+        if (b.dataset.kind && b.dataset.kind !== 'tcp-dir') {
+          b.classList.toggle('active', b.dataset.val === 'all');
+        }
+      });
+      ['f-search','f-payee','f-channel','f-category','f-platform','f-minamt','f-maxamt'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+      });
+      refresh(false);
     }
 
     // Bind refresh button properly (event object, not window.event).
@@ -439,39 +646,149 @@
       const tb = document.getElementById('rows');
       document.getElementById('empty-state').classList.toggle('hidden', rows.length > 0);
       if (!rows.length) {
-        tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-500 py-8">no rows</td></tr>';
+        tb.innerHTML = '<tr><td colspan="11" class="text-center text-gray-500 py-8">no rows match</td></tr>';
         return;
       }
       tb.innerHTML = rows.map(r => {
         const dirClass = r.direction === 'credit' ? 'chip-credit' : 'chip-debit';
         const chanClass = channelClass(r.channel);
-        const srcClass = sourceClass(r.source);
+        const instrumentLabel = instrumentShort(r.instrument);
+        const instrumentClass = r.source === 'federal' ? 'chip-federal' : 'chip-hdfc';
         const recon = reconcileChip(r.reconcile_status);
         const amountStr = r.amount_paise != null
           ? (r.direction === 'credit' ? '+' : '−') + fmtRupees(r.amount_paise)
           : '—';
+        const brandChip = r.brand
+          ? `<span class="chip ${brandClass(r.brand)}">${escapeHtml(r.brand)}</span>`
+          : '<span class="text-gray-600">—</span>';
+        const catChip = r.category
+          ? `<span class="chip ${categoryClass(r.category)}">${escapeHtml(r.category.replace(/_/g,' '))}</span>`
+          : '<span class="text-gray-600">—</span>';
+        const platChip = r.settlement_platform
+          ? `<span class="chip ${platformClass(r.settlement_platform)}">${escapeHtml(r.settlement_platform)}</span>`
+          : '<span class="text-gray-600">direct</span>';
+        const cpLabel = r.payee_name || r.counterparty || r.counterparty_ref || '—';
         return `
-          <tr>
-            <td class="text-gray-400">${escapeHtml(relativeTime(r.txn_at || r.received_at))}</td>
-            <td><span class="chip ${srcClass}">${escapeHtml(r.source || 'unknown')}</span></td>
+          <tr class="tbrow" title="${escapeHtml(r.narration || '')}" onclick="filterByCounterparty(this)" data-cp="${escapeHtml(r.counterparty || '')}" data-pid="${r.matched_payee_id || ''}">
+            <td class="text-gray-400 whitespace-nowrap">${escapeHtml(relativeTime(r.txn_at || r.received_at))}</td>
+            <td><span class="chip ${instrumentClass}">${escapeHtml(instrumentLabel)}</span></td>
             <td><span class="chip ${dirClass}">${r.direction === 'credit' ? '↓ in' : '↑ out'}</span></td>
             <td class="text-right font-semibold num ${r.direction === 'credit' ? 'text-green-400' : 'text-red-400'}">${escapeHtml(amountStr)}</td>
-            <td class="text-right text-gray-400 num">${r.balance_paise_after != null ? fmtRupees(r.balance_paise_after) : '—'}</td>
             <td>${r.channel ? `<span class="chip ${chanClass}">${escapeHtml(r.channel)}</span>` : '—'}</td>
-            <td class="text-gray-300">${escapeHtml(r.counterparty || r.counterparty_ref || '—')}</td>
-            <td class="text-xs text-gray-500 font-mono">${escapeHtml((r.source_ref || '').slice(0, 14))}</td>
+            <td>${platChip}</td>
+            <td class="text-gray-300">${escapeHtml(cpLabel)}${r.payee_last4 ? ` <span class="text-gray-500 text-xs">·${escapeHtml(r.payee_last4)}</span>` : ''}</td>
+            <td>${catChip}</td>
+            <td>${brandChip}</td>
             <td>${recon}</td>
-            <td>${r.reconcile_status === 'unreconciled' ? `<button class="btn text-xs" data-id="${r.id}" onclick="ignoreRow(this)">ignore</button>` : ''}</td>
+            <td onclick="event.stopPropagation()">${r.reconcile_status === 'unreconciled' ? `<button class="btn text-xs" data-id="${r.id}" onclick="ignoreRow(this)">ignore</button>` : ''}</td>
           </tr>
         `;
       }).join('');
     }
 
+    function renderTopCounterparties(rows) {
+      const el = document.getElementById('top-counterparties');
+      if (!rows.length) { el.innerHTML = '<div class="text-gray-500 py-3">no data yet for this period</div>'; return; }
+      const max = Math.max(...rows.map(r => r.total_paise || 0), 1);
+      el.innerHTML = rows.map(r => {
+        const pct = Math.round(((r.total_paise || 0) / max) * 100);
+        const brand = r.payee_brand
+          ? `<span class="chip ${brandClass(r.payee_brand)}">${escapeHtml(r.payee_brand)}</span>`
+          : '';
+        const cat = r.payee_category
+          ? `<span class="chip ${categoryClass(r.payee_category)}">${escapeHtml(r.payee_category.replace(/_/g,' '))}</span>`
+          : '<span class="chip chip-unknown">unmatched</span>';
+        const label = r.payee_name || r.counterparty;
+        return `
+          <div class="flex items-center gap-3 py-2 border-b border-white/5 cursor-pointer tcp-row" data-cp="${escapeHtml(r.counterparty)}" data-pid="${r.matched_payee_id || ''}">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 text-sm text-gray-200 truncate">
+                <span class="truncate">${escapeHtml(label)}</span>
+                ${brand}${cat}
+              </div>
+              <div class="w-full h-1 mt-1 rounded bg-white/5 overflow-hidden">
+                <div class="h-full bg-brand-500" style="width:${pct}%"></div>
+              </div>
+            </div>
+            <div class="text-right num">
+              <div class="font-semibold">${fmtRupeesShort(r.total_paise)}</div>
+              <div class="text-[10px] text-gray-500">${r.n} txn${r.n === 1 ? '' : 's'} · ${escapeHtml(relativeTime(r.last_txn_at))}</div>
+            </div>
+          </div>`;
+      }).join('');
+      el.querySelectorAll('.tcp-row').forEach(row => {
+        row.addEventListener('click', () => {
+          const pid = row.dataset.pid;
+          if (pid) {
+            filter.payee_id = pid;
+            const sel = document.getElementById('f-payee'); if (sel) sel.value = pid;
+          } else {
+            filter.q = row.dataset.cp;
+            const inp = document.getElementById('f-search'); if (inp) inp.value = row.dataset.cp;
+          }
+          refresh(false);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      });
+    }
+
+    function renderPlatformSummary(rows) {
+      const el = document.getElementById('platform-summary');
+      if (!rows.length) { el.innerHTML = '<div class="text-gray-500">no platform data</div>'; return; }
+      // Group by platform; display credit sum (revenue received via that route).
+      const byPlat = {};
+      for (const r of rows) {
+        if (!byPlat[r.platform]) byPlat[r.platform] = { credit: 0, debit: 0, n: 0 };
+        byPlat[r.platform][r.direction] = r.total_paise || 0;
+        byPlat[r.platform].n += r.n || 0;
+      }
+      const total = Object.values(byPlat).reduce((a, b) => a + (b.credit || 0), 0) || 1;
+      el.innerHTML = '<div class="grid grid-cols-2 md:grid-cols-3 gap-2">' +
+        Object.entries(byPlat)
+          .sort((a, b) => (b[1].credit || 0) - (a[1].credit || 0))
+          .map(([plat, v]) => {
+            const pct = Math.round(((v.credit || 0) / total) * 100);
+            return `
+              <div class="card p-3">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="chip ${platformClass(plat)}">${escapeHtml(plat)}</span>
+                  <span class="text-xs text-gray-500">${pct}%</span>
+                </div>
+                <div class="text-lg font-semibold num text-green-400">${fmtRupeesShort(v.credit)}</div>
+                <div class="text-[11px] text-gray-500">${v.n} credits</div>
+              </div>`;
+          }).join('') +
+        '</div>';
+    }
+
+    function filterByCounterparty(rowEl) {
+      const pid = rowEl.dataset.pid;
+      const cp  = rowEl.dataset.cp;
+      if (pid) {
+        filter.payee_id = pid;
+        const sel = document.getElementById('f-payee'); if (sel) sel.value = pid;
+      } else if (cp) {
+        filter.q = cp;
+        const inp = document.getElementById('f-search'); if (inp) inp.value = cp;
+      }
+      refresh(false);
+    }
+
+    function instrumentShort(i) {
+      if (i === 'hdfc_ca_4680')    return 'HDFC 4680';
+      if (i === 'federal_sa_4510') return 'Federal 4510';
+      return i || '—';
+    }
+
     // Whitelist CSS class lookup (defense against CSS-injection via parser output).
-    const CHAN_WHITELIST = new Set(['upi','neft','imps','rtgs','card','atm','cheque','charges','unknown']);
+    const CHAN_WHITELIST = new Set(['upi','neft','imps','rtgs','card','card_subscription','card_online','card_refund','atm','cheque','charges','clearing','cash_deposit','interest','billpay','ft','ach','unknown']);
     function channelClass(c) { return CHAN_WHITELIST.has(c) ? 'chip-' + c : 'chip-unknown'; }
-    const SRC_WHITELIST = new Set(['hdfc','federal','razorpay','paytm','zomato_delivery','zomato_dining','swiggy','eazydiner','manual']);
-    function sourceClass(s) { return SRC_WHITELIST.has(s) ? 'chip-' + s : 'chip-manual'; }
+    const BRAND_WHITELIST = new Set(['HE','NCH','HQ','mixed','unknown']);
+    function brandClass(b) { return BRAND_WHITELIST.has(b) ? 'chip-' + b : 'chip-unknown'; }
+    const CAT_WHITELIST = new Set(['salary','vendor_food','vendor_packaging','vendor_utility','vendor_other','owner','petty_cash','platform_revenue','platform_commission','charges','interest','transfer_internal','unknown']);
+    function categoryClass(c) { return CAT_WHITELIST.has(c) ? 'chip-' + c : 'chip-unknown'; }
+    const PLAT_WHITELIST = new Set(['razorpay','paytm','zomato_delivery','zomato_dining','swiggy','eazydiner','direct']);
+    function platformClass(p) { return PLAT_WHITELIST.has(p) ? 'chip-' + p : 'chip-direct'; }
 
     function reconcileChip(s) {
       if (s === 'auto' || s === 'manual') return `<span class="chip chip-recon">✓ ${escapeHtml(s)}</span>`;

@@ -52,38 +52,45 @@ AGGREGATOR_PATTERNS = [
 ]
 
 def _apply_aggregator_source(narration: str, current: dict, direction: str) -> dict:
-    """Override source to the aggregator name IFF the event is money
-    INFLOW (credit). A debit with aggregator keywords is an expense TO
-    that aggregator (e.g. card swipe at Swiggy for a food order), not
-    a payout FROM them — keep source='hdfc' but clean up counterparty."""
+    """Tag the settlement_platform (route the money took to reach the
+    bank) but NEVER override source. Architecture pivot 2026-04-23:
+    Razorpay/Paytm/Zomato/Swiggy/EazyDiner are intermediaries, not money
+    sources. Money only lives in HDFC + Federal. A 'Razorpay' IMPS credit
+    is an HDFC credit whose settlement_platform='razorpay', full stop.
+    Previous behavior (overriding source='razorpay') double-counted
+    rupees as separate platform + bank entries."""
     for pat, src, nice_name in AGGREGATOR_PATTERNS:
         if pat.search(narration):
-            if direction == 'credit':
-                current['source'] = src
-                current['counterparty'] = nice_name
-            else:
-                # Debit: keep source='hdfc', but tidy counterparty so
-                # it still shows "SWIGGY" instead of the raw HDFC garble.
-                current['counterparty'] = nice_name
+            current['settlement_platform'] = src
+            current['counterparty'] = nice_name
             return current
     return current
 
 
 def classify(narration: str, direction: str = 'debit') -> dict:
-    """Returns { source, channel, counterparty, counterparty_ref, narration_tidy } """
+    """Returns { source, channel, counterparty, counterparty_ref,
+    settlement_platform, narration_tidy }. source is always 'hdfc' now
+    (pivot 2026-04-23); settlement_platform tags the intermediary route
+    when narration contains an aggregator keyword, else None."""
     n = str(narration).strip()
     base = _classify_channel(n)
+    base.setdefault('settlement_platform', None)
     base = _apply_aggregator_source(n, base, direction)
     return base
 
 
 def _classify_channel(n: str) -> dict:
+    # Default template for every branch: source is always 'hdfc' (pivot:
+    # aggregators are settlement_platforms, not sources). settlement_platform
+    # is applied later by _apply_aggregator_source; default None here.
+    defaults = dict(source='hdfc', settlement_platform=None)
+
     # <from_acct_num>-TPT-<memo>-<to_name>  (HDFC third-party UPI transfer
     # format used in the account-statement XLS; memo is free-text or a UPI
     # reference id, to_name is the beneficiary).
     m = re.match(r'^\d{10,18}-TPT-([^-]*)-(.+)', n)
     if m:
-        return dict(source='hdfc', channel='upi',
+        return dict(**defaults, channel='upi',
                     counterparty=_tidy_name(m.group(2)),
                     counterparty_ref=m.group(1).strip() or None,
                     narration_tidy=n)
@@ -373,6 +380,7 @@ def parse_xls(path: str) -> list[dict]:
             amount_paise=amount_paise,
             balance_paise_after=bal if bal > 0 else None,
             source=cls['source'],
+            settlement_platform=cls.get('settlement_platform'),
             channel=cls['channel'],
             counterparty=cls['counterparty'],
             counterparty_ref=cls['counterparty_ref'],
@@ -428,7 +436,8 @@ def emit_sql(rows: list[dict]) -> str:
             'INSERT OR IGNORE INTO money_events\n'
             '  (source, instrument, source_ref, direction, amount_paise,\n'
             '   balance_paise_after, channel, counterparty, counterparty_ref,\n'
-            '   narration, txn_at, received_at, parse_status, notes)\n'
+            '   narration, txn_at, received_at, parse_status,\n'
+            '   settlement_platform, matched_payee_id, notes)\n'
             'VALUES ('
             f'{sql_escape(r["source"])}, '
             f"'{INSTRUMENT}', "
@@ -443,6 +452,8 @@ def emit_sql(rows: list[dict]) -> str:
             f'{sql_escape(r["txn_at"])}, '
             f"'{received_at_iso}', "
             "'parsed', "
+            f'{sql_escape(r.get("settlement_platform"))}, '
+            f'{num(r.get("matched_payee_id"))}, '
             f'{sql_escape(notes)});'
         )
 
