@@ -84,37 +84,55 @@ Email alerts are free; confirmation text is visible on the same page.
 
 First alert arrives within 5 minutes of the next transaction.
 
-## 5. Gmail auto-forward (resolving the chicken-and-egg)
+## 5. Gmail auto-forward (subdomain, not root zone)
 
-Forwarding to `hdfc-alerts@hnhotels.in` needs that address verified. Do these in order:
+**Architecture note:** `hnhotels.in` root MX belongs to Google Workspace
+(for `@hnhotels.in` mailboxes). CF Email Routing cannot own the root zone
+without breaking Workspace mail. So the alerts pipeline lives on the
+dedicated subdomain `alerts.hnhotels.in`, which has its own CF MX records
+(`route{1,2,3}.mx.cloudflare.net`) + SPF.
 
-**5a. Temporarily route the address to your inbox**
+**5a. Confirm subdomain is set up**
 
-- Cloudflare Dashboard → `hnhotels.in` → Email → **Email Routing** → enable if off (adds MX records, ~5 min).
-- **Routes** tab → **Create address**:
-  - Custom: `hdfc-alerts@hnhotels.in`
-  - Action: **Send to an email** → pick your verified destination (nihafwork@gmail.com)
-  - Save.
+Cloudflare Dashboard → `hnhotels.in` → Email → Email Routing →
+**Settings** → Subdomains. `alerts.hnhotels.in` should be listed as
+enabled. If not, add it; CF writes MX + SPF automatically.
 
-**5b. Kick off Gmail verification**
+**5b. Temporarily flip the route to Gmail (for verification)**
 
-- Gmail (nihafwork@gmail.com) → Settings → Forwarding and POP/IMAP → **Add a forwarding address** → `hdfc-alerts@hnhotels.in`.
-- Google sends a verification code to that address. CF Email Routing forwards it back to your Gmail inbox. Click the confirmation link.
+Routes tab → edit `hdfc-alerts@alerts.hnhotels.in`:
+- Action: **Send to an email** → `nihafwork@gmail.com`
+- Save.
 
-**5c. Switch the route to the Worker**
+**5c. Kick off Gmail verification**
 
-- Back in CF Email Routing → Routes → edit `hdfc-alerts@hnhotels.in`:
-  - Action: **Send to a Worker** → `hn-bank-feed-email`.
-  - Save.
+Gmail (nihafwork@gmail.com) → Settings → Forwarding and POP/IMAP →
+**Add a forwarding address** → `hdfc-alerts@alerts.hnhotels.in`.
+Google sends a verification code to that address. CF delivers it to
+Gmail. Click confirmation link.
 
-**5d. Create the Gmail filter**
+**5d. Flip the route back to the Worker**
 
-- Gmail search → show search options (sliders) → From: `alerts@hdfcbank.bank.in OR alerts@hdfcbank.net OR InstaAlert@hdfcbank.net OR instaalerts@hdfcbank.net` → **Create filter**:
-  - ✅ Forward it to: `hdfc-alerts@hnhotels.in`
-  - ✅ Never send it to Spam
-  - ✅ Mark as read
-  - ✅ Also apply to matching conversations
-- Create filter.
+Routes tab → edit `hdfc-alerts@alerts.hnhotels.in`:
+- Action: **Send to a Worker** → `hn-bank-feed-email`
+- Save.
+
+**5e. Create the Gmail filter**
+
+Gmail search → show search options → From:
+`alerts@hdfcbank.bank.in OR alerts@hdfcbank.net OR InstaAlert@hdfcbank.net OR instaalerts@hdfcbank.net`
+→ **Create filter**:
+- ✅ Forward it to: `hdfc-alerts@alerts.hnhotels.in`
+- ✅ Never send it to Spam
+- ✅ Mark as read
+- ✅ Also apply to matching conversations
+
+**5f. Delete any stray root-zone alert route**
+
+If a rule exists for `hdfc-alerts@hnhotels.in` (no `alerts.` subdomain),
+delete it. It triggers a "DNS records: Misconfigured" banner because
+CF tries to own root MX that Workspace already holds, and the rule
+never delivers mail.
 
 ## 6. Verify HDFC end-to-end
 
