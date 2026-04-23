@@ -79,10 +79,14 @@ CREATE INDEX IF NOT EXISTS idx_me_parse_status  ON money_events(parse_status);
 
 -- Idempotency: two guards, because different sources have different ID guarantees.
 --
--- (a) When a source_ref exists (Razorpay payment_id, HDFC UPI Ref, etc.),
---     the (source, source_ref) pair is globally unique.
+-- (a) When a source_ref exists, the (source, source_ref, direction, amount_paise, txn_at)
+--     tuple is unique. HDFC famously reuses refs across legitimately-different
+--     events (batched ATM-fee debits on different dates, POS swipe-reversal
+--     pairs with signed amounts). Including direction/amount/date keeps
+--     those as separate ledger entries while still catching true dupes
+--     (same webhook delivered twice → identical on every field).
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_me_source_ref
-  ON money_events(source, source_ref)
+  ON money_events(source, source_ref, direction, amount_paise, txn_at)
   WHERE source_ref IS NOT NULL;
 
 -- (b) When no source_ref (POS swipes, some email parses), the fingerprint
