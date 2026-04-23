@@ -266,7 +266,16 @@ tailwind.config = {
           <button id="download-btn" class="text-xs text-ink-3 hover:text-brand-400 px-3 py-1.5 rounded-lg border border-white/10 hover:border-brand-400/40 transition-colors flex items-center gap-1.5" onclick="toggleDownloadMenu(event)" title="Download the filtered data">
             <span>↓</span><span>Download</span><span class="text-ink-4">▾</span>
           </button>
-          <div id="download-menu" class="hidden absolute right-0 top-full mt-1 z-20 card p-1 min-w-[220px] shadow-2xl">
+          <div id="download-menu" class="hidden absolute right-0 top-full mt-1 z-20 card p-1 min-w-[240px] shadow-2xl">
+            <button class="block w-full text-left px-3 py-2 rounded-md hover:bg-white/5 text-sm" onclick="downloadPDF(); closeDownloadMenu()">
+              <div class="flex items-center gap-2">
+                <span class="text-ink-3">📕</span>
+                <div>
+                  <div class="text-ink-1">PDF</div>
+                  <div class="text-[10px] text-ink-3">Branded statement · auto-downloads</div>
+                </div>
+              </div>
+            </button>
             <button class="block w-full text-left px-3 py-2 rounded-md hover:bg-white/5 text-sm" onclick="downloadCSV(); closeDownloadMenu()">
               <div class="flex items-center gap-2">
                 <span class="text-ink-3">📋</span>
@@ -280,8 +289,8 @@ tailwind.config = {
               <div class="flex items-center gap-2">
                 <span class="text-ink-3">📄</span>
                 <div>
-                  <div class="text-ink-1">Printable statement</div>
-                  <div class="text-[10px] text-ink-3">HTML · save as PDF from browser</div>
+                  <div class="text-ink-1">Preview statement</div>
+                  <div class="text-[10px] text-ink-3">HTML · review before saving</div>
                 </div>
               </div>
             </button>
@@ -919,6 +928,14 @@ function buildExportQS() {
 
 function openStatement() {
   const qs = 'action=statement&' + buildExportQS();
+  window.open(`${API}?${qs}`, '_blank', 'noopener');
+}
+
+// One-click PDF: opens the statement tab with auto_pdf=1 — the page
+// auto-loads html2pdf and triggers save as soon as the DOM is ready.
+// User sees the statement flash briefly and gets a PDF file.
+function downloadPDF() {
+  const qs = 'action=statement&auto_pdf=1&' + buildExportQS();
   window.open(`${API}?${qs}`, '_blank', 'noopener');
 }
 
