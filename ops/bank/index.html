@@ -203,7 +203,7 @@ tailwind.config = {
     </div>
     <div id="active-chips" class="flex flex-wrap gap-1.5 mt-2"></div>
     <!-- Advanced filters (hidden by default) -->
-    <div id="advanced-panel" class="hidden mt-3 p-3 card space-y-2">
+    <div id="advanced-panel" class="hidden mt-3 p-3 card space-y-3">
       <div class="flex flex-wrap gap-2 items-center text-xs">
         <span class="text-ink-3">account:</span>
         <button class="chip chip-mute" data-kind="instrument" data-val="all"              onclick="setPill(this)">All</button>
@@ -225,6 +225,23 @@ tailwind.config = {
         <button class="chip chip-mute" data-kind="status" data-val="reconciled"   onclick="setPill(this)">Reconciled</button>
         <button class="chip chip-mute" data-kind="status" data-val="quarantined"  onclick="setPill(this)">Quarantined</button>
       </div>
+      <div class="divider pt-2 flex flex-wrap items-center gap-2 text-xs">
+        <span class="text-ink-3 mr-1">date:</span>
+        <button class="chip chip-mute" onclick="applyPreset('today')">Today</button>
+        <button class="chip chip-mute" onclick="applyPreset('yesterday')">Yesterday</button>
+        <button class="chip chip-mute" onclick="applyPreset('this_week')">This week</button>
+        <button class="chip chip-mute" onclick="applyPreset('last_week')">Last week</button>
+        <button class="chip chip-mute" onclick="applyPreset('this_month')">This month</button>
+        <button class="chip chip-mute" onclick="applyPreset('last_month')">Last month</button>
+        <button class="chip chip-mute" onclick="applyPreset('quarter')">Last 90d</button>
+        <button class="chip chip-mute" onclick="applyPreset('ytd')">YTD</button>
+        <button class="chip chip-mute" onclick="applyPreset('all')">All time</button>
+        <span class="w-px h-4 bg-white/10 mx-1"></span>
+        <span class="text-ink-3">custom:</span>
+        <input id="date-from-input" type="date" class="input py-1 px-2 w-auto" style="font-size:11px" onchange="onDateInputChange('from')"/>
+        <span class="text-ink-3">→</span>
+        <input id="date-to-input"   type="date" class="input py-1 px-2 w-auto" style="font-size:11px" onchange="onDateInputChange('to')"/>
+      </div>
     </div>
   </section>
 
@@ -243,7 +260,34 @@ tailwind.config = {
 
     <!-- LEDGER TAB -->
     <section id="tab-ledger">
-      <div id="ledger-summary" class="text-xs text-ink-3 mb-3"></div>
+      <div class="flex items-center gap-3 mb-3">
+        <div id="ledger-summary" class="text-xs text-ink-3 flex-1"></div>
+        <div class="relative" id="download-wrap">
+          <button id="download-btn" class="text-xs text-ink-3 hover:text-brand-400 px-3 py-1.5 rounded-lg border border-white/10 hover:border-brand-400/40 transition-colors flex items-center gap-1.5" onclick="toggleDownloadMenu(event)" title="Download the filtered data">
+            <span>↓</span><span>Download</span><span class="text-ink-4">▾</span>
+          </button>
+          <div id="download-menu" class="hidden absolute right-0 top-full mt-1 z-20 card p-1 min-w-[220px] shadow-2xl">
+            <button class="block w-full text-left px-3 py-2 rounded-md hover:bg-white/5 text-sm" onclick="downloadCSV(); closeDownloadMenu()">
+              <div class="flex items-center gap-2">
+                <span class="text-ink-3">📋</span>
+                <div>
+                  <div class="text-ink-1">CSV (raw data)</div>
+                  <div class="text-[10px] text-ink-3">Excel-ready · all columns</div>
+                </div>
+              </div>
+            </button>
+            <button class="block w-full text-left px-3 py-2 rounded-md hover:bg-white/5 text-sm" onclick="openStatement(); closeDownloadMenu()">
+              <div class="flex items-center gap-2">
+                <span class="text-ink-3">📄</span>
+                <div>
+                  <div class="text-ink-1">Printable statement</div>
+                  <div class="text-[10px] text-ink-3">HTML · save as PDF from browser</div>
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
       <div id="ledger-body">
         <div class="text-center text-ink-3 py-10"><span class="spinner"></span> loading…</div>
       </div>
@@ -564,6 +608,7 @@ function onSmartSearch(e) {
     const saved = {};
     for (const k of pillKeys) if (filter[k] !== 'all' && !queryTouches(k, rawQuery)) saved[k] = filter[k];
     filter = Object.assign({}, parsed, saved);
+    syncDateInputs();
     renderActiveChips();
     refresh(false);
   }, 260);
@@ -711,6 +756,7 @@ function renderSparkline(rows) {
       filter.date_from = d + 'T00:00:00+05:30';
       const next = new Date(d); next.setDate(next.getDate() + 1);
       filter.date_to = next.toISOString().slice(0, 10) + 'T00:00:00+05:30';
+      syncDateInputs();
       renderActiveChips();
       refresh(false);
     });
@@ -796,6 +842,99 @@ function rowCard(r) {
   `;
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Date pickers + presets
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function applyPreset(key) {
+  const now = new Date();
+  const iso = d => d.toISOString();
+  const atStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const from = (d) => iso(atStart(d));
+  let f = null, t = null;
+  switch (key) {
+    case 'today':      f = from(now); break;
+    case 'yesterday':  { const y = new Date(now); y.setDate(y.getDate()-1); f = from(y); t = from(now); break; }
+    case 'this_week':  { const w = new Date(now); w.setDate(w.getDate()-w.getDay()); f = from(w); break; }
+    case 'last_week':  { const w = new Date(now); w.setDate(w.getDate()-w.getDay()-7); const w2 = new Date(w); w2.setDate(w2.getDate()+7); f = from(w); t = from(w2); break; }
+    case 'this_month': f = iso(new Date(now.getFullYear(), now.getMonth(), 1)); break;
+    case 'last_month': { const a = new Date(now.getFullYear(), now.getMonth()-1, 1); const b = new Date(now.getFullYear(), now.getMonth(), 1); f = iso(a); t = iso(b); break; }
+    case 'quarter':    f = iso(new Date(now.getTime() - 90 * 86400000)); break;
+    case 'ytd':        f = iso(new Date(now.getFullYear(), 0, 1)); break;
+    case 'all':        f = null; t = null; break;
+  }
+  filter.date_from = f;
+  filter.date_to = t;
+  syncDateInputs();
+  renderActiveChips();
+  refresh(false);
+}
+
+function onDateInputChange(which) {
+  const fv = document.getElementById('date-from-input').value;
+  const tv = document.getElementById('date-to-input').value;
+  filter.date_from = fv ? fv + 'T00:00:00+05:30' : null;
+  filter.date_to   = tv ? tv + 'T23:59:59+05:30' : null;
+  renderActiveChips();
+  refresh(false);
+}
+
+function syncDateInputs() {
+  const fi = document.getElementById('date-from-input');
+  const ti = document.getElementById('date-to-input');
+  if (!fi || !ti) return;
+  fi.value = filter.date_from ? filter.date_from.slice(0, 10) : '';
+  ti.value = filter.date_to   ? filter.date_to.slice(0, 10)   : '';
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Download menu
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function toggleDownloadMenu(e) {
+  e?.stopPropagation();
+  document.getElementById('download-menu').classList.toggle('hidden');
+}
+function closeDownloadMenu() { document.getElementById('download-menu').classList.add('hidden'); }
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('download-wrap');
+  if (wrap && !wrap.contains(e.target)) closeDownloadMenu();
+});
+
+function buildExportQS() {
+  const parts = [];
+  if (filter.dir !== 'all')        parts.push('dir='        + encodeURIComponent(filter.dir));
+  if (filter.status !== 'all')     parts.push('status='     + encodeURIComponent(filter.status));
+  if (filter.instrument !== 'all') parts.push('instrument=' + encodeURIComponent(filter.instrument));
+  if (filter.brand !== 'all')      parts.push('brand='      + encodeURIComponent(filter.brand));
+  if (filter.category)   parts.push('category='   + encodeURIComponent(filter.category));
+  if (filter.platform)   parts.push('platform='   + encodeURIComponent(filter.platform));
+  if (filter.payee_id)   parts.push('payee_id='   + encodeURIComponent(filter.payee_id));
+  if (filter.q)          parts.push('q='          + encodeURIComponent(filter.q));
+  if (filter.min_amount) parts.push('min_amount=' + encodeURIComponent(filter.min_amount));
+  if (filter.max_amount) parts.push('max_amount=' + encodeURIComponent(filter.max_amount));
+  if (filter.date_from)  parts.push('date_from='  + encodeURIComponent(filter.date_from));
+  if (filter.date_to)    parts.push('date_to='    + encodeURIComponent(filter.date_to));
+  parts.push('pin=' + encodeURIComponent(pin));
+  return parts.join('&');
+}
+
+function openStatement() {
+  const qs = 'action=statement&' + buildExportQS();
+  window.open(`${API}?${qs}`, '_blank', 'noopener');
+}
+
+// Trigger a CSV download reflecting the current filter state. PIN in
+// query string is required — browsers can't attach custom headers to a
+// file-download navigation.
+function downloadCSV() {
+  const href = `${API}?action=export&${buildExportQS()}`;
+  const a = document.createElement('a');
+  a.href = href;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => a.remove(), 1000);
+}
+
 function clearAllFilters() {
   filter = {
     dir: 'all', status: 'all', instrument: 'all', brand: 'all',
@@ -805,6 +944,7 @@ function clearAllFilters() {
   };
   rawQuery = '';
   document.getElementById('search-input').value = '';
+  syncDateInputs();
   renderActiveChips();
   syncAdvancedPills();
   refresh(false);
