@@ -291,6 +291,374 @@ export async function onRequestGet({ request, env }) {
     return json({ ok: true, days, rows: r.results || [] }, 200, origin);
   }
 
+  if (action === 'statement') {
+    // Branded, printable HTML statement. Respects all filters. Returns
+    // a complete HTML document — user opens in new tab and prints to PDF
+    // via Cmd/Ctrl+P. No external asset deps; inline CSS sized for A4.
+    const dir       = url.searchParams.get('dir');
+    const status    = url.searchParams.get('status');
+    const instrument= url.searchParams.get('instrument');
+    const brand     = url.searchParams.get('brand');
+    const category  = url.searchParams.get('category');
+    const platform  = url.searchParams.get('platform');
+    const payeeId   = url.searchParams.get('payee_id');
+    const q         = url.searchParams.get('q');
+    const dateFrom  = url.searchParams.get('date_from');
+    const dateTo    = url.searchParams.get('date_to');
+    const minAmt    = url.searchParams.get('min_amount');
+    const maxAmt    = url.searchParams.get('max_amount');
+
+    let sql = `SELECT me.txn_at, me.received_at, me.instrument, me.direction,
+                      me.amount_paise, me.balance_paise_after,
+                      me.settlement_platform, me.channel,
+                      me.counterparty, me.counterparty_ref,
+                      mp.name AS payee_name, mp.last4 AS payee_last4,
+                      me.category, me.brand, me.source_ref, me.narration,
+                      me.reconcile_status
+               FROM money_events me
+               LEFT JOIN money_payees mp ON mp.id = me.matched_payee_id
+               WHERE 1=1`;
+    const binds = [];
+    if (!status)                  sql += ` AND me.parse_status IN ('parsed','partial')`;
+    if (dir === 'credit' || dir === 'debit') { sql += ' AND me.direction=?'; binds.push(dir); }
+    if (status === 'unreconciled') sql += ` AND me.reconcile_status='unreconciled' AND me.parse_status='parsed'`;
+    if (status === 'reconciled')   sql += ` AND me.reconcile_status IN ('auto','manual')`;
+    if (instrument)               { sql += ' AND me.instrument=?';           binds.push(instrument); }
+    if (brand)                    { sql += ' AND me.brand=?';                binds.push(brand); }
+    if (category)                 { sql += ' AND me.category=?';             binds.push(category); }
+    if (platform === 'direct')      sql += ' AND me.settlement_platform IS NULL';
+    else if (platform)            { sql += ' AND me.settlement_platform=?'; binds.push(platform); }
+    if (payeeId)                  { sql += ' AND me.matched_payee_id=?';    binds.push(parseInt(payeeId, 10)); }
+    if (dateFrom)                 { sql += ' AND COALESCE(me.txn_at, me.received_at) >= ?'; binds.push(dateFrom); }
+    if (dateTo)                   { sql += ' AND COALESCE(me.txn_at, me.received_at) <= ?'; binds.push(dateTo.length === 10 ? dateTo + 'T23:59:59+05:30' : dateTo); }
+    if (minAmt)                   { sql += ' AND me.amount_paise >= ?'; binds.push(Math.round(parseFloat(minAmt) * 100)); }
+    if (maxAmt)                   { sql += ' AND me.amount_paise <= ?'; binds.push(Math.round(parseFloat(maxAmt) * 100)); }
+    if (q) {
+      sql += ' AND (me.counterparty LIKE ? OR me.narration LIKE ? OR me.source_ref LIKE ? OR me.counterparty_ref LIKE ?)';
+      const needle = '%' + q + '%';
+      binds.push(needle, needle, needle, needle);
+    }
+    sql += ' ORDER BY COALESCE(me.txn_at, me.received_at) ASC LIMIT 50000';
+    const r = await db.prepare(sql).bind(...binds).all();
+    const rows = r.results || [];
+
+    // Aggregates.
+    const credits = rows.filter(x => x.direction === 'credit');
+    const debits  = rows.filter(x => x.direction === 'debit');
+    const sumCr   = credits.reduce((a, b) => a + (b.amount_paise || 0), 0);
+    const sumDr   = debits .reduce((a, b) => a + (b.amount_paise || 0), 0);
+    const net     = sumCr - sumDr;
+
+    const fmtRupees = p => p == null ? '—' : '₹' + (p / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtShort  = p => {
+      if (p == null) return '—';
+      const r = Math.abs(p) / 100;
+      if (r >= 10000000) return '₹' + (r / 10000000).toFixed(2) + ' Cr';
+      if (r >= 100000)   return '₹' + (r / 100000).toFixed(2) + ' L';
+      if (r >= 1000)     return '₹' + (r / 1000).toFixed(1) + 'k';
+      return '₹' + Math.round(r).toLocaleString('en-IN');
+    };
+    const fmtDate = iso => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    };
+    const htmlEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+
+    // Group by day.
+    const byDay = new Map();
+    for (const x of rows) {
+      const d = (x.txn_at || x.received_at || '').slice(0, 10);
+      if (!byDay.has(d)) byDay.set(d, []);
+      byDay.get(d).push(x);
+    }
+    const dayKeys = Array.from(byDay.keys()).sort();
+
+    // Title / filter summary
+    const titleBits = [];
+    if (instrument === 'hdfc_ca_4680')    titleBits.push('HDFC 4680');
+    else if (instrument === 'federal_sa_4510') titleBits.push('Federal 4510');
+    if (brand && brand !== 'all') titleBits.push(`brand: ${brand}`);
+    if (category)  titleBits.push(category.replace(/_/g, ' '));
+    if (platform)  titleBits.push(platform);
+    if (dir === 'credit') titleBits.push('credits only');
+    if (dir === 'debit')  titleBits.push('debits only');
+    if (payeeId) {
+      const p = await db.prepare('SELECT name FROM money_payees WHERE id=?').bind(parseInt(payeeId, 10)).first();
+      if (p?.name) titleBits.push(`payee: ${p.name}`);
+    }
+    if (q) titleBits.push(`"${q}"`);
+    const filterLabel = titleBits.length ? titleBits.join(' · ') : 'All transactions';
+    const rangeLabel = [
+      dateFrom ? `from ${fmtDate(dateFrom)}` : null,
+      dateTo   ? `to ${fmtDate(dateTo)}`     : null,
+    ].filter(Boolean).join(' ') || (rows.length ? `${fmtDate(rows[0].txn_at || rows[0].received_at)} — ${fmtDate(rows[rows.length-1].txn_at || rows[rows.length-1].received_at)}` : '—');
+
+    const nowStr = new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    const tableRows = dayKeys.map(d => {
+      const rs = byDay.get(d);
+      const dayCr = rs.filter(x => x.direction === 'credit').reduce((a, b) => a + (b.amount_paise || 0), 0);
+      const dayDr = rs.filter(x => x.direction === 'debit').reduce((a, b) => a + (b.amount_paise || 0), 0);
+      return `
+        <tr class="day-row">
+          <td colspan="6">
+            <span class="day-label">${fmtDate(d)}</span>
+            <span class="day-totals">
+              ${dayCr ? `<span class="cr">+${fmtShort(dayCr)}</span>` : ''}
+              ${dayDr ? `<span class="dr">−${fmtShort(dayDr)}</span>` : ''}
+            </span>
+          </td>
+        </tr>
+        ${rs.map(x => {
+          const cp = x.payee_name || x.counterparty || '—';
+          const meta = [x.channel, x.settlement_platform, x.payee_last4 ? 'a/c ·' + x.payee_last4 : null].filter(Boolean).join(' · ');
+          const amt = fmtRupees(x.amount_paise);
+          const isCr = x.direction === 'credit';
+          return `
+            <tr class="txn">
+              <td class="time">${(x.txn_at || '').slice(11, 16) || '—'}</td>
+              <td class="cp">
+                <div class="cp-name">${htmlEsc(cp)}</div>
+                ${meta ? `<div class="cp-meta">${htmlEsc(meta)}</div>` : ''}
+                ${x.narration ? `<div class="cp-narr">${htmlEsc((x.narration || '').slice(0, 140))}</div>` : ''}
+              </td>
+              <td class="cat">${x.category ? htmlEsc(x.category.replace(/_/g, ' ')) : '—'}</td>
+              <td class="brand">${x.brand ? htmlEsc(x.brand) : '—'}</td>
+              <td class="amt ${isCr ? 'cr' : 'dr'}">${isCr ? '+' : '−'}${fmtRupees(x.amount_paise)}</td>
+              <td class="bal">${x.balance_paise_after != null ? fmtRupees(x.balance_paise_after) : ''}</td>
+            </tr>
+          `;
+        }).join('')}
+      `;
+    }).join('');
+
+    const html = `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>HN Money Statement — ${htmlEsc(filterLabel)}</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111; background: #fff; font-size: 11px; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 24px 28px; }
+  .header { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 18px; }
+  .brand { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+  .brand .ac { color: #e8930c; }
+  .brand .lbl { color: #666; font-weight: 500; margin-left: 6px; }
+  .meta-right { text-align: right; font-size: 10px; color: #666; line-height: 1.5; }
+  .meta-right strong { color: #111; font-weight: 600; }
+  .context { background: #f7f7f9; border: 1px solid #e5e5e8; padding: 10px 12px; border-radius: 6px; margin-bottom: 14px; font-size: 10px; display: flex; gap: 18px; flex-wrap: wrap; }
+  .context div strong { display: block; color: #888; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; margin-bottom: 2px; }
+  .context div span { font-size: 12px; color: #111; font-weight: 500; }
+  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+  .summary .card { border: 1px solid #e5e5e8; border-radius: 6px; padding: 10px 12px; }
+  .summary .label { font-size: 9px; color: #888; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; font-weight: 600; }
+  .summary .num { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .summary .cr .num { color: #0a7a3a; }
+  .summary .dr .num { color: #b4291f; }
+  .summary .net .num.neg { color: #b4291f; }
+  .summary .n  { font-size: 9px; color: #888; margin-top: 2px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #888; font-weight: 600; padding: 6px 4px; border-bottom: 1px solid #111; text-align: left; }
+  thead th.amt, thead th.bal { text-align: right; }
+  tr.day-row td { background: #f7f7f9; padding: 6px 8px; border-bottom: 1px solid #e5e5e8; border-top: 1px solid #e5e5e8; }
+  .day-label { font-weight: 600; font-size: 10px; letter-spacing: .02em; color: #111; }
+  .day-totals { float: right; font-variant-numeric: tabular-nums; font-size: 10px; }
+  .day-totals .cr { color: #0a7a3a; margin-left: 10px; }
+  .day-totals .dr { color: #b4291f; margin-left: 10px; }
+  tr.txn td { padding: 7px 4px; border-bottom: 1px solid #f0f0f2; vertical-align: top; }
+  tr.txn td.time { width: 40px; color: #888; font-variant-numeric: tabular-nums; }
+  tr.txn td.cp   { min-width: 200px; }
+  .cp-name { font-weight: 500; color: #111; font-size: 11px; }
+  .cp-meta { color: #888; font-size: 9px; margin-top: 1px; }
+  .cp-narr { color: #aaa; font-size: 8px; margin-top: 1px; line-height: 1.3; }
+  tr.txn td.cat, tr.txn td.brand { color: #555; font-size: 10px; text-transform: capitalize; width: 90px; }
+  tr.txn td.amt, tr.txn td.bal  { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 90px; }
+  tr.txn td.amt.cr { color: #0a7a3a; font-weight: 600; }
+  tr.txn td.amt.dr { color: #b4291f; font-weight: 600; }
+  tr.txn td.bal    { color: #666; font-size: 10px; }
+
+  .footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #e5e5e8; font-size: 9px; color: #888; display: flex; justify-content: space-between; }
+  .no-print-btns { margin-bottom: 16px; }
+  .no-print-btns button { background: #111; color: #fff; border: 0; padding: 8px 16px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; margin-right: 8px; font-family: inherit; }
+  .no-print-btns button.sec { background: #fff; color: #111; border: 1px solid #ccc; }
+  @media print { .no-print-btns { display: none !important; } }
+</style>
+</head><body>
+<div class="wrap">
+  <div class="no-print-btns">
+    <button onclick="window.print()">↓ Save as PDF / Print</button>
+    <button class="sec" onclick="window.close()">Close</button>
+  </div>
+  <div class="header">
+    <div>
+      <div class="brand"><span class="ac">HN</span> <span class="lbl">money statement</span></div>
+    </div>
+    <div class="meta-right">
+      <strong>Generated:</strong> ${htmlEsc(nowStr)}<br>
+      <strong>Source:</strong> hnhotels.in/ops/bank
+    </div>
+  </div>
+
+  <div class="context">
+    <div><strong>Scope</strong><span>${htmlEsc(filterLabel)}</span></div>
+    <div><strong>Period</strong><span>${htmlEsc(rangeLabel)}</span></div>
+    <div><strong>Transactions</strong><span>${rows.length}</span></div>
+  </div>
+
+  <div class="summary">
+    <div class="card cr">
+      <div class="label">Credits in</div>
+      <div class="num">+${fmtRupees(sumCr)}</div>
+      <div class="n">${credits.length} txn${credits.length === 1 ? '' : 's'}</div>
+    </div>
+    <div class="card dr">
+      <div class="label">Debits out</div>
+      <div class="num">−${fmtRupees(sumDr)}</div>
+      <div class="n">${debits.length} txn${debits.length === 1 ? '' : 's'}</div>
+    </div>
+    <div class="card net">
+      <div class="label">Net</div>
+      <div class="num ${net < 0 ? 'neg' : ''}">${net >= 0 ? '+' : '−'}${fmtRupees(Math.abs(net))}</div>
+      <div class="n">${net >= 0 ? 'inflow' : 'outflow'}</div>
+    </div>
+    <div class="card">
+      <div class="label">Avg / day</div>
+      <div class="num">${dayKeys.length ? fmtRupees(Math.round((sumCr + sumDr) / dayKeys.length)) : '—'}</div>
+      <div class="n">across ${dayKeys.length} day${dayKeys.length === 1 ? '' : 's'}</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="time">Time</th>
+        <th class="cp">Counterparty</th>
+        <th class="cat">Category</th>
+        <th class="brand">Brand</th>
+        <th class="amt">Amount</th>
+        <th class="bal">Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tableRows || '<tr><td colspan="6" style="text-align:center;padding:40px;color:#888;">No transactions match this filter.</td></tr>'}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <div>HN Hotels Pvt Ltd · money ledger</div>
+    <div>${rows.length} transaction${rows.length === 1 ? '' : 's'} · Generated ${htmlEsc(nowStr)}</div>
+  </div>
+</div>
+</body></html>`;
+
+    return new Response(html, {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8', ...corsHeaders(origin) },
+    });
+  }
+
+  if (action === 'export') {
+    // CSV export — respects every filter the list action accepts.
+    // Returns Content-Type: text/csv with attachment disposition so the
+    // browser triggers a file download. PIN in query param is required
+    // (can't set headers during a navigation-driven download).
+    const dir = url.searchParams.get('dir');
+    const status = url.searchParams.get('status');
+    const instrument = url.searchParams.get('instrument');
+    const brand = url.searchParams.get('brand');
+    const category = url.searchParams.get('category');
+    const platform = url.searchParams.get('platform');
+    const payeeId = url.searchParams.get('payee_id');
+    const q = url.searchParams.get('q');
+    const dateFrom = url.searchParams.get('date_from');
+    const dateTo = url.searchParams.get('date_to');
+    const minAmt = url.searchParams.get('min_amount');
+    const maxAmt = url.searchParams.get('max_amount');
+
+    let sql = `SELECT me.txn_at, me.received_at, me.instrument, me.direction,
+                      me.amount_paise, me.balance_paise_after,
+                      me.source, me.settlement_platform, me.channel,
+                      me.counterparty, me.counterparty_ref,
+                      mp.name AS payee_name, me.category, me.brand,
+                      me.source_ref, me.narration,
+                      me.parse_status, me.reconcile_status
+               FROM money_events me
+               LEFT JOIN money_payees mp ON mp.id = me.matched_payee_id
+               WHERE 1=1`;
+    const binds = [];
+    if (!status)                   sql += ` AND me.parse_status IN ('parsed','partial')`;
+    if (dir === 'credit' || dir === 'debit') { sql += ' AND me.direction=?'; binds.push(dir); }
+    if (status === 'unreconciled') sql += ` AND me.reconcile_status='unreconciled' AND me.parse_status='parsed'`;
+    if (status === 'reconciled')   sql += ` AND me.reconcile_status IN ('auto','manual')`;
+    if (status === 'quarantined')  sql += ` AND me.parse_status IN ('failed','quarantined','partial')`;
+    if (instrument)                { sql += ' AND me.instrument=?';          binds.push(instrument); }
+    if (brand)                     { sql += ' AND me.brand=?';                binds.push(brand); }
+    if (category)                  { sql += ' AND me.category=?';             binds.push(category); }
+    if (platform === 'direct')       sql += ' AND me.settlement_platform IS NULL';
+    else if (platform)             { sql += ' AND me.settlement_platform=?'; binds.push(platform); }
+    if (payeeId)                   { sql += ' AND me.matched_payee_id=?';    binds.push(parseInt(payeeId, 10)); }
+    if (dateFrom)                  { sql += ' AND COALESCE(me.txn_at, me.received_at) >= ?'; binds.push(dateFrom); }
+    if (dateTo)                    { sql += ' AND COALESCE(me.txn_at, me.received_at) <= ?'; binds.push(dateTo.length === 10 ? dateTo + 'T23:59:59+05:30' : dateTo); }
+    if (minAmt)                    { sql += ' AND me.amount_paise >= ?'; binds.push(Math.round(parseFloat(minAmt) * 100)); }
+    if (maxAmt)                    { sql += ' AND me.amount_paise <= ?'; binds.push(Math.round(parseFloat(maxAmt) * 100)); }
+    if (q) {
+      sql += ' AND (me.counterparty LIKE ? OR me.narration LIKE ? OR me.source_ref LIKE ? OR me.counterparty_ref LIKE ?)';
+      const needle = '%' + q + '%';
+      binds.push(needle, needle, needle, needle);
+    }
+    sql += ' ORDER BY COALESCE(me.txn_at, me.received_at) DESC, me.id DESC LIMIT 50000';
+    const r = await db.prepare(sql).bind(...binds).all();
+    const rows = r.results || [];
+
+    const headers = [
+      'txn_date', 'received_at', 'account', 'direction',
+      'amount_rupees', 'balance_after_rupees',
+      'source', 'settlement_platform', 'channel',
+      'counterparty', 'counterparty_ref', 'matched_payee',
+      'category', 'brand',
+      'source_ref', 'narration', 'parse_status', 'reconcile_status',
+    ];
+    const esc = v => {
+      if (v == null) return '';
+      const s = String(v);
+      return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [headers.join(',')];
+    for (const x of rows) {
+      lines.push([
+        x.txn_at || '', x.received_at || '',
+        x.instrument || '', x.direction || '',
+        x.amount_paise != null ? (x.amount_paise / 100).toFixed(2) : '',
+        x.balance_paise_after != null ? (x.balance_paise_after / 100).toFixed(2) : '',
+        x.source || '', x.settlement_platform || '', x.channel || '',
+        x.counterparty || '', x.counterparty_ref || '', x.payee_name || '',
+        x.category || '', x.brand || '',
+        x.source_ref || '', x.narration || '',
+        x.parse_status || '', x.reconcile_status || '',
+      ].map(esc).join(','));
+    }
+    const csv = lines.join('\n');
+    const stamp = new Date().toISOString().slice(0, 10);
+    const filterSuffix = [
+      instrument ? instrument.split('_')[0] : null,
+      brand, category, platform,
+      dir, dateFrom ? 'from-' + dateFrom.slice(0, 10) : null,
+    ].filter(Boolean).join('-').toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const fname = `hn-money-${stamp}${filterSuffix ? '-' + filterSuffix : ''}.csv`;
+    return new Response(csv, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${fname}"`,
+        ...corsHeaders(origin),
+      },
+    });
+  }
+
   if (action === 'filter_options') {
     // Distinct values that can populate UI dropdowns. One round-trip for
     // all dimensions so the client doesn't have to fire 5 queries.
