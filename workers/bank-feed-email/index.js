@@ -2,8 +2,8 @@
  * hn-bank-feed-email — HDFC transaction-alert ingester.
  *
  * Pipeline:
- *   HDFC alert → nihafwork@gmail.com →
- *     Gmail filter "from:alerts@hdfcbank.net" forwards to
+ *   HDFC alert (alerts@hdfcbank.bank.in) → nihafwork@gmail.com →
+ *     Gmail filter "from:alerts@hdfcbank.bank.in" forwards to
  *       hdfc-alerts@hnhotels.in →
  *   Cloudflare Email Routing → this Worker →
  *     DKIM check → parse → INSERT OR IGNORE into money_events
@@ -190,20 +190,26 @@ export default {
  * the hdfc-alerts@hnhotels.in address from injecting fake transactions.
  *
  * Trust model:
- *  - The From/Sender must be an HDFC-owned domain (alerts@hdfcbank.net
- *    or InstaAlert@hdfcbank.net — extend if new HDFC alert domains appear).
+ *  - The From/Sender must be an HDFC-owned domain. Verified real sender of
+ *    live 2026 txn alerts is alerts@hdfcbank.bank.in. Older bank literature
+ *    also uses alerts@hdfcbank.net / InstaAlert@hdfcbank.net — kept in set.
  *  - One of Authentication-Results or ARC-Authentication-Results must
- *    report dkim=pass for header.d=hdfcbank.{net,com,in}.
+ *    report dkim=pass for header.d= a hdfcbank-owned zone:
+ *    hdfcbank.net | hdfcbank.com | hdfcbank.in | hdfcbank.bank.in.
  *    Gmail-forwarded mail carries the original DKIM via ARC.
  */
 export function isTrustedHdfcAlert({ from, subject, body, authRes, arcAuth }) {
   const f = String(from || '').toLowerCase();
+  // Accept any sender ending in a hdfcbank-owned zone (incl. subdomains
+  // like mailers.hdfcbank.bank.in). Anchored to '@' so 'fakehdfcbank.com'
+  // cannot slip through.
   const fromOk =
-    /@(alerts\.)?hdfcbank\.(net|com|in)\b/.test(f) ||
-    /(alerts|instaalert|instaalerts)@hdfcbank/i.test(f);
+    /@([a-z0-9.-]+\.)?hdfcbank\.(net|com|in|bank\.in)\b/.test(f) ||
+    /(alerts|instaalert|instaalerts|information)@hdfcbank/i.test(f);
 
   const auth = (String(authRes) + '\n' + String(arcAuth)).toLowerCase();
-  const dkimOk = /dkim\s*=\s*pass[^;]*header\.d=[^;\s]*hdfcbank\.(net|com|in)/i.test(auth);
+  // DKIM d= must be a hdfcbank-owned zone. Same set as the sender gate.
+  const dkimOk = /dkim\s*=\s*pass[^;]*header\.d=(?:[a-z0-9.-]+\.)?hdfcbank\.(net|com|in|bank\.in)\b/i.test(auth);
 
   // Hard fail without DKIM — this is a banking ingest, we don't bet on
   // sender string alone.

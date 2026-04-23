@@ -109,7 +109,7 @@ Forwarding to `hdfc-alerts@hnhotels.in` needs that address verified. Do these in
 
 **5d. Create the Gmail filter**
 
-- Gmail search → show search options (sliders) → From: `alerts@hdfcbank.net OR InstaAlert@hdfcbank.net OR instaalerts@hdfcbank.net` → **Create filter**:
+- Gmail search → show search options (sliders) → From: `alerts@hdfcbank.bank.in OR alerts@hdfcbank.net OR InstaAlert@hdfcbank.net OR instaalerts@hdfcbank.net` → **Create filter**:
   - ✅ Forward it to: `hdfc-alerts@hnhotels.in`
   - ✅ Never send it to Spam
   - ✅ Mark as read
