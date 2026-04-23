@@ -15,9 +15,11 @@
  *   - DKIM verification (C4): refuse emails whose Authentication-Results
  *     don't show dkim=pass for an HDFC-owned domain. Gmail-forwarded mail
  *     preserves the original signature in the ARC chain.
- *   - No phantom-row fallback (C2): a parse failure stores a 'quarantined'
- *     row with amount=NULL, never a zero debit. Dashboard hides these
- *     from rollups but surfaces the count.
+ *   - No phantom-row fallback (C2): a parse failure stores a 'partial'
+ *     or 'quarantined' row with amount_paise=0 (schema is NOT NULL).
+ *     Rollups filter on parse_status='parsed' so these zero rows never
+ *     pollute SUM; dashboard surfaces them as a separate bucket so
+ *     reparse can promote them once the parser improves.
  *   - Idempotency (C3): atomic INSERT OR IGNORE on UNIQUE(source, source_ref)
  *     or UNIQUE(source, instrument, direction, amount_paise, txn_at) if no ref.
  *     When parser can't find txn_at, we store NULL and flag 'partial' —
@@ -236,13 +238,18 @@ export function parseHdfcAlert({ subject, body }) {
   const text = String(body || '').replace(/\s+/g, ' ').trim();
   const s = String(subject || '').replace(/\s+/g, ' ').trim();
 
-  // Direction — else-if so "credited" doesn't clobber "debited" in a
-  // Disclaimer-footer-heavy body.
+  // Direction — anchor to the lead (subject + first ~400 chars of body)
+  // because HDFC alert footers contain disclaimer text like "If you did
+  // not authorize this debit, call…" which would misfire a body-wide
+  // \bdebit\b match on a CREDIT email, flipping the ledger sign. The
+  // lead carries the action verb ("has been debited/credited to A/c…");
+  // the footer is pure boilerplate.
+  const lead = text.slice(0, 400);
   let direction = null;
-  if (/\b(debited|debit|sent|paid|withdrawn)\b/i.test(text) ||
+  if (/\b(debited|debit|sent|paid|withdrawn)\b/i.test(lead) ||
       /\b(debit|sent)\b/i.test(s)) {
     direction = 'debit';
-  } else if (/\b(credited|credit|received)\b/i.test(text) ||
+  } else if (/\b(credited|credit|received)\b/i.test(lead) ||
              /\b(credit|received)\b/i.test(s)) {
     direction = 'credit';
   }
@@ -332,6 +339,13 @@ async function insertEvent(db, row) {
   // Atomic idempotency via UNIQUE indexes on (source, source_ref) and
   // (source, instrument, direction, amount_paise, txn_at). INSERT OR
   // IGNORE returns 0 rows changed on conflict — no race, no duplicate.
+  //
+  // amount_paise is NOT NULL in the schema. For partial/quarantined rows
+  // the parser returns null; coerce to 0 here so the insert actually
+  // lands (instead of throwing NOT NULL and falling through to the outer
+  // catch-all, which would reclassify a 'partial' row as 'quarantined').
+  // Rollups filter on parse_status='parsed' so 0-amount non-parsed rows
+  // never pollute SUM.
   const r = await db.prepare(`
     INSERT OR IGNORE INTO money_events
       (source, instrument, source_ref, direction, amount_paise,
@@ -341,7 +355,7 @@ async function insertEvent(db, row) {
   `).bind(
     row.source, row.instrument, row.source_ref || null,
     row.direction || 'debit',
-    row.amount_paise != null ? row.amount_paise : null,
+    row.amount_paise != null ? row.amount_paise : 0,
     row.balance_paise_after ?? null,
     row.channel || null, row.counterparty || null, row.counterparty_ref || null,
     row.narration || null, row.txn_at || null,

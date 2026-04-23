@@ -316,17 +316,33 @@ def parse_xls(path: str) -> list[dict]:
     rows = []
     payees = load_payees()
 
+    # Derive a statement-level namespace for synthetic (XLS_…) refs so that
+    # next month's backfill — which restarts row_idx at 0 — can't collide
+    # with this month's on (source, source_ref, direction, amount, txn_at).
+    # Use the earliest txn date in the statement (YYYYMM), falling back to
+    # the file mtime if no dates parsed.
+    stmt_dates = []
+    for _, r in data.iterrows():
+        try:
+            stmt_dates.append(datetime.strptime(str(r['date']).strip(), '%d/%m/%y'))
+        except ValueError:
+            pass
+    if stmt_dates:
+        stmt_ns = min(stmt_dates).strftime('%Y%m')
+    else:
+        stmt_ns = datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y%m')
+
     for row_idx, (_, r) in enumerate(data.iterrows()):
         date_str = str(r['date']).strip()
         narr = str(r['narration']).strip() if pd.notna(r['narration']) else ''
         ref = str(r['ref']).strip() if pd.notna(r['ref']) else None
         if ref and ref.strip('0') == '': ref = None  # all zeros ref → null
-        # For null-ref rows, assign a synthetic deterministic ref using the
-        # statement row index so the (rare) case of N identical same-day
-        # same-amount null-ref events isn't collapsed by the fingerprint
-        # index. Prefix 'XLS_' marks it as derived, not from the bank.
+        # For null-ref rows, assign a synthetic deterministic ref namespaced
+        # by the statement's earliest month so reruns of DIFFERENT monthly
+        # statements don't collide at XLS_0001. Reruns of the SAME statement
+        # reproduce identical refs (→ dedup index catches them correctly).
         if ref is None:
-            ref = f'XLS_{row_idx:04d}'
+            ref = f'XLS_{stmt_ns}_{row_idx:04d}'
         dr = _to_paise(r['debit'])
         cr = _to_paise(r['credit'])
         bal = _to_paise(r['balance'])
