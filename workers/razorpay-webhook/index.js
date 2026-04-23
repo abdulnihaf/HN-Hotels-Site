@@ -1,19 +1,21 @@
 /**
  * hn-razorpay-webhook — real-time Razorpay event ingester.
  *
- * Pipeline:
- *   Razorpay event → HTTPS POST to this Worker with X-Razorpay-Signature →
- *     HMAC-SHA256 verify → parse → INSERT OR IGNORE into money_events.
+ * ARCHITECTURE PIVOT 2026-04-23: Razorpay is a settlement intermediary,
+ * not a money source. Razorpay balance is not where the business owns
+ * money — it's a hold until IMPS settlement lands in HDFC. Writing
+ * Razorpay rows into money_events double-counts every rupee (once as
+ * customer payment, once as HDFC IMPS settlement). The money ledger
+ * now tracks ONLY the two bank accounts: HDFC CA 4680 + Federal SA 4510.
  *
- * Writes rows with source='razorpay', instrument varies by event:
- *   payment.captured   → credit to razorpay_balance  (customer paid us)
- *   payment.failed     → logged only (no money-events row)
- *   refund.processed   → debit  from razorpay_balance
- *   payout.processed   → debit  from razorpay_balance  (money going out)
- *   payout.reversed    → credit back to razorpay_balance
- *   settlement.processed → debit from razorpay_balance
- *                          (the matching HDFC IMPS credit is a
- *                           'hdfc' row, reconciled via money_recon_matches)
+ * This worker is retained for:
+ *   - Signature verification smoke test (Razorpay still POSTs here)
+ *   - Future: writing to a separate razorpay_payments table for order-
+ *     level reconciliation (map payment_id → eventual HDFC IMPS credit)
+ *
+ * For now it validates signature, logs, and 200s without DB writes.
+ * Re-enable ingest by flipping INGEST_TO_MONEY_EVENTS = true when the
+ * separate razorpay_payments table is introduced.
  *
  * Razorpay webhook contract:
  *   https://razorpay.com/docs/webhooks/
@@ -29,6 +31,10 @@
 const SOURCE = 'razorpay';
 const INSTRUMENT = 'razorpay_balance';
 const MAX_BODY_BYTES = 64 * 1024; // Razorpay webhooks are ~3-5 KB
+
+// Pivot 2026-04-23: don't write to money_events. See header docstring.
+// Flip to true once razorpay_payments table lands.
+const INGEST_TO_MONEY_EVENTS = false;
 
 export default {
   async fetch(req, env, ctx) {
@@ -101,9 +107,18 @@ async function handleWebhook(req, env) {
   try { payload = JSON.parse(rawBody); }
   catch (e) { return new Response('bad json', { status: 400 }); }
 
+  const event = payload.event || 'unknown';
+
+  // Architecture pivot: do not write to money_events. Log + 200 so
+  // Razorpay stops retrying; signature verified, so we know the POST is
+  // authentic. Future: redirect to razorpay_payments reconciliation table.
+  if (!INGEST_TO_MONEY_EVENTS) {
+    console.log('razorpay event received (not ingested)', { event, eventId });
+    return new Response('ok (not ingested per architecture pivot)', { status: 200 });
+  }
+
   // Events the Razorpay webhook carries — we handle the ones affecting
   // the balance ledger. Unknown events log + 200 so Razorpay doesn't retry.
-  const event = payload.event || 'unknown';
   const row = mapEventToRow(event, payload);
 
   if (!row) {

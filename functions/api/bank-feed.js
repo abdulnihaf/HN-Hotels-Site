@@ -93,26 +93,143 @@ export async function onRequestGet({ request, env }) {
     const status = url.searchParams.get('status');
     const source = url.searchParams.get('source');
     const instrument = url.searchParams.get('instrument');
-    let sql = `SELECT id, source, source_ref, instrument, txn_at, received_at,
-                      direction, amount_paise, balance_paise_after,
-                      channel, counterparty, counterparty_ref, narration,
-                      parse_status, reconcile_status,
-                      matched_expense_id, matched_vendor_bill_id, matched_payout_platform
-               FROM money_events WHERE 1=1`;
+    const channel = url.searchParams.get('channel');
+    const brand = url.searchParams.get('brand');
+    const category = url.searchParams.get('category');
+    const platform = url.searchParams.get('platform');         // settlement_platform
+    const payeeId = url.searchParams.get('payee_id');
+    const q = url.searchParams.get('q');                        // counterparty/narration/ref search
+    const dateFrom = url.searchParams.get('date_from');         // ISO yyyy-mm-dd
+    const dateTo = url.searchParams.get('date_to');
+    const minAmt = url.searchParams.get('min_amount');          // in rupees
+    const maxAmt = url.searchParams.get('max_amount');
+
+    let sql = `SELECT me.id, me.source, me.source_ref, me.instrument, me.txn_at, me.received_at,
+                      me.direction, me.amount_paise, me.balance_paise_after,
+                      me.channel, me.counterparty, me.counterparty_ref, me.narration,
+                      me.parse_status, me.reconcile_status,
+                      me.matched_expense_id, me.matched_vendor_bill_id, me.matched_payout_platform,
+                      me.matched_payee_id, me.brand, me.category, me.settlement_platform,
+                      mp.name AS payee_name, mp.bank AS payee_bank, mp.last4 AS payee_last4
+               FROM money_events me
+               LEFT JOIN money_payees mp ON mp.id = me.matched_payee_id
+               WHERE 1=1`;
     const binds = [];
-    // Exclude 'failed'/'quarantined' from default list; caller can opt in.
-    if (!status) sql += ` AND parse_status IN ('parsed','partial')`;
-    if (since) { sql += ' AND (txn_at >= ? OR received_at >= ?)'; binds.push(since, since); }
-    if (dir === 'credit' || dir === 'debit') { sql += ' AND direction=?'; binds.push(dir); }
-    if (status === 'unreconciled') sql += ` AND reconcile_status='unreconciled' AND parse_status='parsed'`;
-    if (status === 'reconciled')   sql += ` AND reconcile_status IN ('auto','manual')`;
-    if (status === 'quarantined')  sql += ` AND parse_status IN ('failed','quarantined','partial')`;
-    if (source) { sql += ' AND source=?'; binds.push(source); }
-    if (instrument) { sql += ' AND instrument=?'; binds.push(instrument); }
-    sql += ' ORDER BY COALESCE(txn_at, received_at) DESC, id DESC LIMIT ?';
+    if (!status)                      sql += ` AND me.parse_status IN ('parsed','partial')`;
+    if (since)                      { sql += ' AND (me.txn_at >= ? OR me.received_at >= ?)'; binds.push(since, since); }
+    if (dir === 'credit' || dir === 'debit') { sql += ' AND me.direction=?'; binds.push(dir); }
+    if (status === 'unreconciled')    sql += ` AND me.reconcile_status='unreconciled' AND me.parse_status='parsed'`;
+    if (status === 'reconciled')      sql += ` AND me.reconcile_status IN ('auto','manual')`;
+    if (status === 'quarantined')     sql += ` AND me.parse_status IN ('failed','quarantined','partial')`;
+    if (source)                     { sql += ' AND me.source=?';                  binds.push(source); }
+    if (instrument)                 { sql += ' AND me.instrument=?';              binds.push(instrument); }
+    if (channel)                    { sql += ' AND me.channel=?';                 binds.push(channel); }
+    if (brand)                      { sql += ' AND me.brand=?';                   binds.push(brand); }
+    if (category)                   { sql += ' AND me.category=?';                binds.push(category); }
+    if (platform === 'direct')        sql += ' AND me.settlement_platform IS NULL';
+    else if (platform)              { sql += ' AND me.settlement_platform=?';     binds.push(platform); }
+    if (payeeId)                    { sql += ' AND me.matched_payee_id=?';        binds.push(parseInt(payeeId, 10)); }
+    if (dateFrom)                   { sql += ' AND COALESCE(me.txn_at, me.received_at) >= ?'; binds.push(dateFrom); }
+    if (dateTo)                     { sql += ' AND COALESCE(me.txn_at, me.received_at) <= ?'; binds.push(dateTo + 'T23:59:59+05:30'); }
+    if (minAmt)                     { sql += ' AND me.amount_paise >= ?';         binds.push(Math.round(parseFloat(minAmt) * 100)); }
+    if (maxAmt)                     { sql += ' AND me.amount_paise <= ?';         binds.push(Math.round(parseFloat(maxAmt) * 100)); }
+    if (q) {
+      sql += ' AND (me.counterparty LIKE ? OR me.narration LIKE ? OR me.source_ref LIKE ? OR me.counterparty_ref LIKE ?)';
+      const needle = '%' + q + '%';
+      binds.push(needle, needle, needle, needle);
+    }
+    sql += ' ORDER BY COALESCE(me.txn_at, me.received_at) DESC, me.id DESC LIMIT ?';
     binds.push(limit);
     const r = await db.prepare(sql).bind(...binds).all();
     return json({ ok: true, user: user.name, rows: r.results || [] }, 200, origin);
+  }
+
+  if (action === 'payees') {
+    const registry = url.searchParams.get('registry');
+    const category = url.searchParams.get('category');
+    const brand = url.searchParams.get('brand');
+    let sql = `SELECT mp.id, mp.registry_source, mp.name, mp.bank, mp.account_type,
+                      mp.last4, mp.category, mp.commodity, mp.role, mp.brand,
+                      mp.is_own_account, mp.notes,
+                      (SELECT COUNT(*)            FROM money_events me WHERE me.matched_payee_id = mp.id) AS txn_count,
+                      (SELECT SUM(amount_paise)   FROM money_events me WHERE me.matched_payee_id = mp.id AND me.direction='debit'  AND me.parse_status='parsed') AS paid_paise,
+                      (SELECT SUM(amount_paise)   FROM money_events me WHERE me.matched_payee_id = mp.id AND me.direction='credit' AND me.parse_status='parsed') AS received_paise,
+                      (SELECT MAX(txn_at)         FROM money_events me WHERE me.matched_payee_id = mp.id) AS last_txn_at
+               FROM money_payees mp WHERE 1=1`;
+    const binds = [];
+    if (registry) { sql += ' AND mp.registry_source=?'; binds.push(registry); }
+    if (category) { sql += ' AND mp.category=?';        binds.push(category); }
+    if (brand)    { sql += ' AND mp.brand=?';           binds.push(brand); }
+    sql += ' ORDER BY paid_paise DESC NULLS LAST, mp.name';
+    const r = await db.prepare(sql).bind(...binds).all();
+    return json({ ok: true, rows: r.results || [] }, 200, origin);
+  }
+
+  if (action === 'top_counterparties') {
+    // Aggregates by counterparty name (raw, not just registered payees).
+    // Useful for discovering unmatched counterparties that should be added
+    // to the registry.
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '25', 10), 200);
+    const dir = url.searchParams.get('dir'); // optional: credit | debit
+    const since = url.searchParams.get('since'); // optional ISO date
+    let sql = `SELECT COALESCE(me.counterparty, '—') AS counterparty,
+                      me.matched_payee_id,
+                      mp.name  AS payee_name,
+                      mp.brand AS payee_brand,
+                      mp.category AS payee_category,
+                      me.direction,
+                      COUNT(*)                AS n,
+                      SUM(me.amount_paise)    AS total_paise,
+                      MAX(me.txn_at)          AS last_txn_at
+               FROM money_events me
+               LEFT JOIN money_payees mp ON mp.id = me.matched_payee_id
+               WHERE me.parse_status='parsed'`;
+    const binds = [];
+    if (dir === 'credit' || dir === 'debit') { sql += ' AND me.direction=?'; binds.push(dir); }
+    if (since)                               { sql += ' AND COALESCE(me.txn_at, me.received_at) >= ?'; binds.push(since); }
+    sql += ` GROUP BY me.counterparty, me.matched_payee_id, me.direction
+             ORDER BY total_paise DESC LIMIT ?`;
+    binds.push(limit);
+    const r = await db.prepare(sql).bind(...binds).all();
+    return json({ ok: true, rows: r.results || [] }, 200, origin);
+  }
+
+  if (action === 'platform_summary') {
+    // Revenue breakdown by settlement_platform (Razorpay/Paytm/etc.)
+    // Shows aggregator gross revenue; commission/net split is future work
+    // once platform statements are backfilled.
+    const since = url.searchParams.get('since');
+    let sql = `SELECT COALESCE(settlement_platform, 'direct') AS platform,
+                      direction,
+                      COUNT(*) AS n,
+                      SUM(amount_paise) AS total_paise
+               FROM money_events
+               WHERE parse_status='parsed'`;
+    const binds = [];
+    if (since) { sql += ' AND COALESCE(txn_at, received_at) >= ?'; binds.push(since); }
+    sql += ' GROUP BY settlement_platform, direction ORDER BY total_paise DESC';
+    const r = await db.prepare(sql).bind(...binds).all();
+    return json({ ok: true, rows: r.results || [] }, 200, origin);
+  }
+
+  if (action === 'filter_options') {
+    // Distinct values that can populate UI dropdowns. One round-trip for
+    // all dimensions so the client doesn't have to fire 5 queries.
+    const [channels, brands, categories, platforms, instruments] = await Promise.all([
+      db.prepare(`SELECT DISTINCT channel FROM money_events WHERE channel IS NOT NULL ORDER BY channel`).all(),
+      db.prepare(`SELECT DISTINCT brand   FROM money_events WHERE brand   IS NOT NULL ORDER BY brand`).all(),
+      db.prepare(`SELECT DISTINCT category FROM money_events WHERE category IS NOT NULL ORDER BY category`).all(),
+      db.prepare(`SELECT DISTINCT settlement_platform FROM money_events WHERE settlement_platform IS NOT NULL ORDER BY settlement_platform`).all(),
+      db.prepare(`SELECT DISTINCT instrument FROM money_events ORDER BY instrument`).all(),
+    ]);
+    return json({
+      ok: true,
+      channels:    (channels.results   || []).map(r => r.channel),
+      brands:      (brands.results     || []).map(r => r.brand),
+      categories:  (categories.results || []).map(r => r.category),
+      platforms:   (platforms.results  || []).map(r => r.settlement_platform),
+      instruments: (instruments.results|| []).map(r => r.instrument),
+    }, 200, origin);
   }
 
   if (action === 'summary') {
