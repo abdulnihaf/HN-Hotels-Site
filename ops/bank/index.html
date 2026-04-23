@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Money Feed — HN Hotels</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        colors: {
+          brand:   { 400:'#f0a944', 500:'#e8930c', 600:'#c97508' },
+          surface: { 1:'#111118', 2:'#16161f', 3:'#1c1c27', 4:'#22222e' },
+        }
+      }}
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background: #0c0c14; color: #e4e4ed; font-family: 'Inter', sans-serif; overscroll-behavior: none; }
+    .glass { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(16px); }
+    .card { background: #16161f; border: 1px solid rgba(255,255,255,.06); border-radius: 14px; }
+    .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    /* Direction */
+    .chip-credit { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
+    .chip-debit  { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
+    /* Channel (only whitelisted keys rendered) */
+    .chip-upi    { background: rgba(99,102,241,.12); color: #818cf8; border:1px solid rgba(99,102,241,.3); }
+    .chip-neft   { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
+    .chip-imps   { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
+    .chip-rtgs   { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
+    .chip-card   { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
+    .chip-atm    { background: rgba(6,182,212,.12); color: #22d3ee; border:1px solid rgba(6,182,212,.3); }
+    .chip-cheque { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
+    .chip-charges { background: rgba(234,179,8,.12); color: #facc15; border:1px solid rgba(234,179,8,.3); }
+    .chip-unknown { background: rgba(148,163,184,.08); color: #9ca3af; border:1px solid rgba(148,163,184,.2); }
+    /* Reconcile */
+    .chip-recon  { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
+    .chip-unrec  { background: rgba(251,191,36,.12); color: #fbbf24; border:1px solid rgba(251,191,36,.3); }
+    .chip-ignored { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
+    /* Source */
+    .chip-hdfc   { background: rgba(220,38,38,.12); color: #f87171; border:1px solid rgba(220,38,38,.3); }
+    .chip-razorpay { background: rgba(56,189,248,.12); color: #38bdf8; border:1px solid rgba(56,189,248,.3); }
+    .chip-paytm  { background: rgba(14,165,233,.12); color: #38bdf8; border:1px solid rgba(14,165,233,.3); }
+    .chip-zomato_delivery { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
+    .chip-zomato_dining { background: rgba(251,113,133,.12); color: #fb7185; border:1px solid rgba(251,113,133,.3); }
+    .chip-swiggy { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
+    .chip-eazydiner { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
+    .chip-federal { background: rgba(99,102,241,.12); color: #818cf8; border:1px solid rgba(99,102,241,.3); }
+    .chip-manual { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
+    /* Parse status */
+    .chip-parsed { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
+    .chip-partial { background: rgba(234,179,8,.12); color: #facc15; border:1px solid rgba(234,179,8,.3); }
+    .chip-quarantined { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
+    .chip-failed { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
+    /* Health */
+    .chip-healthy { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
+    .chip-stale { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
+    .chip-silent { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
+
+    .filter-btn { padding: 6px 12px; border-radius: 999px; font-weight: 500; font-size: 12px; border: 1px solid rgba(255,255,255,.08); cursor: pointer; color:#9ca3af; background: transparent; }
+    .filter-btn.active { background: rgba(232,147,12,.15); border-color: rgba(232,147,12,.4); color: #f0a944; }
+    .live-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#4ade80; box-shadow:0 0 8px #4ade80; animation: pulse 1.8s infinite; }
+    .live-dot.paused { background:#f87171; box-shadow:0 0 8px #f87171; animation: none; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+    .num { font-variant-numeric: tabular-nums; }
+    table th { text-align: left; font-size: 11px; font-weight: 600; color:#9ca3af; text-transform: uppercase; letter-spacing: .04em; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
+    table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 13px; }
+    table tr:hover td { background: rgba(255,255,255,.02); }
+    .btn { padding: 8px 14px; border-radius: 10px; font-weight: 600; font-size: 12px; cursor: pointer; transition: all .15s; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.04); color:#e4e4ed; }
+    .btn:hover { background: rgba(255,255,255,.08); }
+    .btn-primary { background: #e8930c; color: #0c0c14; border-color: #e8930c; }
+    .btn-primary:hover { background: #f0a944; }
+    .spinner { border: 2px solid rgba(255,255,255,.1); border-top-color: #e8930c; border-radius: 50%; width: 14px; height: 14px; animation: spin 0.8s linear infinite; display:inline-block; vertical-align:middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .banner { padding: 10px 16px; border-radius: 10px; font-size: 12px; margin-bottom: 12px; }
+    .banner-warn { background: rgba(251,146,60,.08); border: 1px solid rgba(251,146,60,.25); color: #fb923c; }
+    .banner-err  { background: rgba(239,68,68,.08);  border: 1px solid rgba(239,68,68,.25);  color: #f87171; }
+    .pin-btn { background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 14px; font-size: 18px; font-weight: 600; color:#e4e4ed; cursor: pointer; transition: background .1s; }
+    .pin-btn:hover { background: rgba(255,255,255,.1); }
+    .pin-dot { width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,.1); transition: background .1s; }
+    .pin-dot.filled { background: #e8930c; }
+  </style>
+</head>
+<body>
+  <!-- ━━━━━━━━━━━━━━━━━━━━━ PIN gate ━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="pin-gate" class="fixed inset-0 flex items-center justify-center z-50 bg-surface-1">
+    <div class="card p-6 max-w-sm w-full mx-4">
+      <div class="text-center mb-4">
+        <div class="text-xl font-bold"><span class="text-brand-400">HN</span> / bank</div>
+        <div class="text-xs text-gray-500 mt-1">Enter PIN</div>
+      </div>
+      <div class="flex justify-center gap-2 mb-5">
+        <div class="pin-dot" id="pd-0"></div>
+        <div class="pin-dot" id="pd-1"></div>
+        <div class="pin-dot" id="pd-2"></div>
+        <div class="pin-dot" id="pd-3"></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2">
+        <button class="pin-btn" onclick="pinPress('1')">1</button>
+        <button class="pin-btn" onclick="pinPress('2')">2</button>
+        <button class="pin-btn" onclick="pinPress('3')">3</button>
+        <button class="pin-btn" onclick="pinPress('4')">4</button>
+        <button class="pin-btn" onclick="pinPress('5')">5</button>
+        <button class="pin-btn" onclick="pinPress('6')">6</button>
+        <button class="pin-btn" onclick="pinPress('7')">7</button>
+        <button class="pin-btn" onclick="pinPress('8')">8</button>
+        <button class="pin-btn" onclick="pinPress('9')">9</button>
+        <button class="pin-btn opacity-40" onclick="pinClear()">clear</button>
+        <button class="pin-btn" onclick="pinPress('0')">0</button>
+        <button class="pin-btn opacity-40" onclick="pinBack()">←</button>
+      </div>
+      <div id="pin-err" class="text-xs text-red-400 mt-3 text-center hidden">incorrect pin</div>
+    </div>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━ Main UI ━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="app" class="hidden">
+    <header class="glass sticky top-0 z-10 border-b border-white/5">
+      <div class="max-w-7xl mx-auto px-5 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="text-base font-bold tracking-tight">
+            <span class="text-brand-400">HN</span> <span class="text-gray-400">/ money</span>
+          </div>
+          <span class="text-xs text-gray-500 hidden sm:inline">inflow · outflow · reconcile</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs">
+          <span class="flex items-center gap-1.5 text-gray-400">
+            <span id="live-dot" class="live-dot"></span> <span id="live-label">live</span>
+          </span>
+          <span id="last-refresh" class="text-gray-500">—</span>
+          <button id="refresh-btn" class="btn text-xs py-1.5 px-3">↻</button>
+          <span id="who" class="text-gray-500 hidden sm:inline">—</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-5 py-6">
+      <!-- Stale / parse banners -->
+      <div id="stale-banner" class="banner banner-warn hidden"></div>
+      <div id="parse-banner" class="banner banner-warn hidden"></div>
+      <div id="err-banner" class="banner banner-err hidden"></div>
+
+      <!-- Balances per instrument -->
+      <section id="balances-row" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="card p-4">
+          <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">Loading</div>
+          <div class="text-2xl font-bold num">—</div>
+        </div>
+      </section>
+
+      <!-- Rollups -->
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="card p-4">
+          <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">Today net</div>
+          <div id="today-net" class="text-2xl font-bold num">—</div>
+          <div id="today-count" class="text-xs text-gray-500 mt-1">—</div>
+        </div>
+        <div class="card p-4">
+          <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">7d inflow</div>
+          <div id="week-credit" class="text-2xl font-bold num text-green-400">—</div>
+          <div id="week-credit-n" class="text-xs text-gray-500 mt-1">—</div>
+        </div>
+        <div class="card p-4">
+          <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">7d outflow</div>
+          <div id="week-debit" class="text-2xl font-bold num text-red-400">—</div>
+          <div id="week-debit-n" class="text-xs text-gray-500 mt-1">—</div>
+        </div>
+        <div class="card p-4">
+          <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">7d net</div>
+          <div id="week-net" class="text-2xl font-bold num">—</div>
+          <div class="text-xs text-gray-500 mt-1">inflow − outflow</div>
+        </div>
+      </section>
+
+      <!-- Source health (sentinel row) -->
+      <section id="source-health" class="card p-3 mb-4 text-xs flex flex-wrap gap-2 items-center">
+        <span class="text-gray-500 mr-1">sources:</span>
+        <span class="text-gray-600 text-xs">loading…</span>
+      </section>
+
+      <!-- Filters -->
+      <section class="flex flex-wrap items-center gap-2 mb-4">
+        <span class="text-xs text-gray-500 mr-1">direction:</span>
+        <button class="filter-btn active" data-kind="dir" data-val="all"    onclick="setFilter(this)">All</button>
+        <button class="filter-btn"        data-kind="dir" data-val="credit" onclick="setFilter(this)">Credits</button>
+        <button class="filter-btn"        data-kind="dir" data-val="debit"  onclick="setFilter(this)">Debits</button>
+        <span class="w-px h-4 bg-white/10 mx-1"></span>
+        <span class="text-xs text-gray-500 mr-1">source:</span>
+        <button class="filter-btn active" data-kind="source" data-val="all"         onclick="setFilter(this)">Any</button>
+        <button class="filter-btn"        data-kind="source" data-val="hdfc"        onclick="setFilter(this)">HDFC</button>
+        <button class="filter-btn"        data-kind="source" data-val="razorpay"    onclick="setFilter(this)">Razorpay</button>
+        <button class="filter-btn"        data-kind="source" data-val="paytm"       onclick="setFilter(this)">Paytm</button>
+        <span class="w-px h-4 bg-white/10 mx-1"></span>
+        <span class="text-xs text-gray-500 mr-1">status:</span>
+        <button class="filter-btn active" data-kind="status" data-val="all"          onclick="setFilter(this)">Any</button>
+        <button class="filter-btn"        data-kind="status" data-val="unreconciled" onclick="setFilter(this)">Unrecon.</button>
+        <button class="filter-btn"        data-kind="status" data-val="reconciled"   onclick="setFilter(this)">Reconciled</button>
+        <button class="filter-btn"        data-kind="status" data-val="quarantined"  onclick="setFilter(this)">Quarantined</button>
+        <span class="ml-auto text-xs text-gray-500"><span id="row-count">0</span> rows</span>
+      </section>
+
+      <!-- Transactions table -->
+      <section class="card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Source</th>
+                <th>Dir</th>
+                <th class="text-right">Amount</th>
+                <th class="text-right">Balance</th>
+                <th>Channel</th>
+                <th>Counterparty</th>
+                <th>Ref</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="rows">
+              <tr><td colspan="10" class="text-center text-gray-500 py-10"><span class="spinner"></span> loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Empty / setup state -->
+      <section id="empty-state" class="hidden card p-6 mt-4 text-center text-sm text-gray-400">
+        <div class="text-base font-semibold text-gray-300 mb-2">No money events yet.</div>
+        <div class="mb-3">Complete the ingest setup:</div>
+        <ol class="text-left max-w-md mx-auto space-y-1.5 text-xs">
+          <li>1. Run <code>schema-money-events.sql</code> against the <code>hn-hiring</code> D1</li>
+          <li>2. Deploy <code>workers/bank-feed-email</code>, enable HDFC per-txn email alerts, Gmail filter, CF Email Routing</li>
+          <li>3. (Optional) Deploy <code>workers/razorpay-webhook</code> + add Razorpay webhook URL</li>
+        </ol>
+        <div class="mt-3 text-xs">Full guide in <code>workers/bank-feed-email/SETUP.md</code> and <code>docs/SOURCES.md</code></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const API = '/api/bank-feed';
+    const PIN_STORAGE_KEY = 'hn-bank-pin';
+    let filter = { dir: 'all', source: 'all', status: 'all' };
+    let pollTimer = null;
+    let errCount = 0;
+    let pin = '';
+
+    // ━━━ PIN gate ━━━
+    function pinPress(d) {
+      if (pin.length >= 4) return;
+      pin += d;
+      renderPinDots();
+      if (pin.length === 4) verifyPin();
+    }
+    function pinClear() { pin = ''; renderPinDots(); document.getElementById('pin-err').classList.add('hidden'); }
+    function pinBack() { pin = pin.slice(0, -1); renderPinDots(); }
+    function renderPinDots() {
+      for (let i = 0; i < 4; i++) {
+        document.getElementById('pd-' + i).classList.toggle('filled', i < pin.length);
+      }
+    }
+    async function verifyPin() {
+      // Ping summary with the entered pin; 401 means wrong.
+      try {
+        const r = await fetch(`${API}?action=summary&pin=${encodeURIComponent(pin)}`);
+        if (r.status === 401) {
+          document.getElementById('pin-err').classList.remove('hidden');
+          setTimeout(() => { pin = ''; renderPinDots(); }, 250);
+          return;
+        }
+        if (!r.ok) throw new Error('pin check failed');
+        try { sessionStorage.setItem(PIN_STORAGE_KEY, pin); } catch {}
+        document.getElementById('pin-gate').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        const j = await r.json();
+        if (j.user) document.getElementById('who').textContent = j.user;
+        renderSummary(j);
+        // Also fetch rows on first paint.
+        loadRows();
+        pollTimer = setInterval(() => refresh(false), 45000);
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') refresh(false);
+        });
+      } catch (e) {
+        document.getElementById('pin-err').textContent = 'network error; try again';
+        document.getElementById('pin-err').classList.remove('hidden');
+      }
+    }
+
+    // Restore pin from session.
+    try {
+      const saved = sessionStorage.getItem(PIN_STORAGE_KEY);
+      if (saved && /^\d{4}$/.test(saved)) { pin = saved; renderPinDots(); verifyPin(); }
+    } catch {}
+
+    // ━━━ Data refresh ━━━
+    async function authedFetch(path) {
+      const r = await fetch(path, { headers: { 'X-Ops-Pin': pin } });
+      if (r.status === 401) throw new Error('unauth');
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }
+
+    async function refresh(manual = false) {
+      const btn = document.getElementById('refresh-btn');
+      const prevLabel = btn.textContent;
+      if (manual) btn.innerHTML = '<span class="spinner"></span>';
+      try {
+        const [summary, listRes] = await Promise.all([
+          authedFetch(`${API}?action=summary`),
+          authedFetch(`${API}?action=list&limit=100` +
+            (filter.dir !== 'all'    ? '&dir='    + filter.dir    : '') +
+            (filter.source !== 'all' ? '&source=' + filter.source : '') +
+            (filter.status !== 'all' ? '&status=' + filter.status : '')),
+        ]);
+        renderSummary(summary);
+        renderRows(listRes.rows || []);
+        document.getElementById('last-refresh').textContent = 'updated ' + timeStr(new Date());
+        document.getElementById('err-banner').classList.add('hidden');
+        errCount = 0;
+        setLive(true);
+      } catch (e) {
+        errCount++;
+        console.error('refresh err', e);
+        if (e.message === 'unauth') {
+          // Pin got invalidated — bounce back to gate.
+          try { sessionStorage.removeItem(PIN_STORAGE_KEY); } catch {}
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          document.getElementById('app').classList.add('hidden');
+          document.getElementById('pin-gate').classList.remove('hidden');
+          pin = ''; renderPinDots();
+          return;
+        }
+        if (errCount >= 3) {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          setLive(false);
+          showErr(`Auto-refresh paused after ${errCount} failures. Click ↻ to retry.`);
+        }
+      } finally {
+        if (manual) btn.textContent = prevLabel;
+      }
+    }
+    async function loadRows() {
+      // Explicit first-load to ensure rows populate even if summary fetch is slow.
+      try {
+        const listRes = await authedFetch(`${API}?action=list&limit=100`);
+        renderRows(listRes.rows || []);
+      } catch {}
+    }
+
+    // Bind refresh button properly (event object, not window.event).
+    document.getElementById('refresh-btn').addEventListener('click', () => {
+      if (!pollTimer) pollTimer = setInterval(() => refresh(false), 45000);
+      setLive(true);
+      refresh(true);
+    });
+
+    function setLive(live) {
+      document.getElementById('live-dot').classList.toggle('paused', !live);
+      document.getElementById('live-label').textContent = live ? 'live' : 'paused';
+    }
+
+    // ━━━ Renderers ━━━
+    function renderSummary(s) {
+      if (!s || !s.ok) return;
+      const balRow = document.getElementById('balances-row');
+      const bals = Array.isArray(s.balances) ? s.balances : [];
+      if (bals.length === 0) {
+        balRow.innerHTML = `
+          <div class="card p-4">
+            <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">Balance</div>
+            <div class="text-2xl font-bold num">—</div>
+            <div class="text-xs text-gray-500 mt-1">awaiting first bank alert</div>
+          </div>`;
+      } else {
+        balRow.innerHTML = bals.map(b => `
+          <div class="card p-4">
+            <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">${escapeHtml(b.instrument)}</div>
+            <div class="text-2xl font-bold num">${fmtRupees(b.balance_paise)}</div>
+            <div class="text-xs text-gray-500 mt-1">as of ${relativeTime(b.as_of)}</div>
+          </div>
+        `).join('');
+      }
+
+      const t = s.today || {};
+      const netEl = document.getElementById('today-net');
+      netEl.textContent = fmtRupeesShort(t.net_paise);
+      netEl.className = 'text-2xl font-bold num ' + ((t.net_paise || 0) >= 0 ? 'text-green-400' : 'text-red-400');
+      document.getElementById('today-count').textContent = `${(t.n_credit || 0) + (t.n_debit || 0)} txns`;
+
+      const w = s.week || {};
+      document.getElementById('week-credit').textContent = fmtRupeesShort(w.credit_paise);
+      document.getElementById('week-credit-n').textContent = `${w.n_credit || 0} in`;
+      document.getElementById('week-debit').textContent = fmtRupeesShort(w.debit_paise);
+      document.getElementById('week-debit-n').textContent = `${w.n_debit || 0} out`;
+      const weekNetEl = document.getElementById('week-net');
+      weekNetEl.textContent = fmtRupeesShort(w.net_paise);
+      weekNetEl.className = 'text-2xl font-bold num ' + ((w.net_paise || 0) >= 0 ? 'text-green-400' : 'text-red-400');
+
+      // Parse health
+      const ph = s.parse_health || {};
+      const bad = (ph.failed || 0) + (ph.partial || 0) + (ph.quarantined || 0);
+      const pb = document.getElementById('parse-banner');
+      if (bad > 0) {
+        pb.classList.remove('hidden');
+        pb.textContent = `⚠ ${bad} email(s) didn't parse cleanly. Filter by 'Quarantined' to inspect; regex updates + reparse endpoint recover them.`;
+      } else { pb.classList.add('hidden'); }
+
+      // Source health banner
+      const stale = (s.source_health || []).filter(h => h.live_status === 'stale' || h.live_status === 'silent');
+      const sb = document.getElementById('stale-banner');
+      if (stale.length > 0) {
+        sb.classList.remove('hidden');
+        sb.innerHTML = '⚠ Stale sources: ' + stale.map(h =>
+          `${escapeHtml(h.source)}/${escapeHtml(h.instrument)} (${h.live_status === 'silent' ? 'never' : (h.age_minutes || 0) + 'm'})`
+        ).join(', ');
+      } else { sb.classList.add('hidden'); }
+
+      // Source health row
+      renderSourceHealth(s.source_health || []);
+    }
+
+    function renderSourceHealth(rows) {
+      const el = document.getElementById('source-health');
+      if (!rows.length) { el.innerHTML = '<span class="text-gray-500 text-xs">no source health rows</span>'; return; }
+      el.innerHTML = '<span class="text-gray-500 mr-1">sources:</span>' + rows.map(h => {
+        const ls = ['healthy','stale','silent'].includes(h.live_status) ? h.live_status : 'unknown';
+        const age = h.last_event_at ? relativeTime(h.last_event_at) : 'never';
+        return `<span class="chip chip-${ls}" title="${escapeHtml(h.source)}/${escapeHtml(h.instrument)} — last ${escapeHtml(age)}">${escapeHtml(h.source)} ${age === 'never' ? '' : '· ' + escapeHtml(age)}</span>`;
+      }).join('');
+    }
+
+    function renderRows(rows) {
+      document.getElementById('row-count').textContent = rows.length;
+      const tb = document.getElementById('rows');
+      document.getElementById('empty-state').classList.toggle('hidden', rows.length > 0);
+      if (!rows.length) {
+        tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-500 py-8">no rows</td></tr>';
+        return;
+      }
+      tb.innerHTML = rows.map(r => {
+        const dirClass = r.direction === 'credit' ? 'chip-credit' : 'chip-debit';
+        const chanClass = channelClass(r.channel);
+        const srcClass = sourceClass(r.source);
+        const recon = reconcileChip(r.reconcile_status);
+        const amountStr = r.amount_paise != null
+          ? (r.direction === 'credit' ? '+' : '−') + fmtRupees(r.amount_paise)
+          : '—';
+        return `
+          <tr>
+            <td class="text-gray-400">${escapeHtml(relativeTime(r.txn_at || r.received_at))}</td>
+            <td><span class="chip ${srcClass}">${escapeHtml(r.source || 'unknown')}</span></td>
+            <td><span class="chip ${dirClass}">${r.direction === 'credit' ? '↓ in' : '↑ out'}</span></td>
+            <td class="text-right font-semibold num ${r.direction === 'credit' ? 'text-green-400' : 'text-red-400'}">${escapeHtml(amountStr)}</td>
+            <td class="text-right text-gray-400 num">${r.balance_paise_after != null ? fmtRupees(r.balance_paise_after) : '—'}</td>
+            <td>${r.channel ? `<span class="chip ${chanClass}">${escapeHtml(r.channel)}</span>` : '—'}</td>
+            <td class="text-gray-300">${escapeHtml(r.counterparty || r.counterparty_ref || '—')}</td>
+            <td class="text-xs text-gray-500 font-mono">${escapeHtml((r.source_ref || '').slice(0, 14))}</td>
+            <td>${recon}</td>
+            <td>${r.reconcile_status === 'unreconciled' ? `<button class="btn text-xs" data-id="${r.id}" onclick="ignoreRow(this)">ignore</button>` : ''}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Whitelist CSS class lookup (defense against CSS-injection via parser output).
+    const CHAN_WHITELIST = new Set(['upi','neft','imps','rtgs','card','atm','cheque','charges','unknown']);
+    function channelClass(c) { return CHAN_WHITELIST.has(c) ? 'chip-' + c : 'chip-unknown'; }
+    const SRC_WHITELIST = new Set(['hdfc','federal','razorpay','paytm','zomato_delivery','zomato_dining','swiggy','eazydiner','manual']);
+    function sourceClass(s) { return SRC_WHITELIST.has(s) ? 'chip-' + s : 'chip-manual'; }
+
+    function reconcileChip(s) {
+      if (s === 'auto' || s === 'manual') return `<span class="chip chip-recon">✓ ${escapeHtml(s)}</span>`;
+      if (s === 'ignored') return `<span class="chip chip-ignored">ignored</span>`;
+      return `<span class="chip chip-unrec">pending</span>`;
+    }
+
+    async function ignoreRow(btn) {
+      const id = parseInt(btn.dataset.id, 10);
+      btn.disabled = true;
+      btn.textContent = '…';
+      try {
+        const r = await fetch(`${API}?action=reconcile`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'X-Ops-Pin': pin },
+          body: JSON.stringify({ id, status: 'ignored' }),
+        });
+        if (!r.ok) throw new Error('ignore failed');
+        refresh(false);
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'ignore';
+        showErr('Could not mark ignored — retry.');
+      }
+    }
+
+    function setFilter(btn) {
+      const kind = btn.dataset.kind;
+      const val  = btn.dataset.val;
+      filter[kind] = val;
+      document.querySelectorAll(`[data-kind="${kind}"]`).forEach(b => {
+        b.classList.toggle('active', b.dataset.val === val);
+      });
+      refresh(false);
+    }
+
+    function showErr(msg) {
+      const el = document.getElementById('err-banner');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    // ━━━ Format helpers ━━━
+    function fmtRupees(paise) {
+      if (paise == null) return '—';
+      const r = Number(paise) / 100;
+      return '₹' + r.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function fmtRupeesShort(paise) {
+      if (paise == null) return '—';
+      const r = Number(paise) / 100;
+      return '₹' + r.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    }
+    function relativeTime(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d)) return '—';
+      const diff = Date.now() - d.getTime();
+      if (diff < 0) return d.toLocaleString('en-IN');
+      if (diff < 60000) return 'just now';
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+      if (diff < 7 * 86400000) return Math.floor(diff / 86400000) + 'd ago';
+      return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    }
+    function timeStr(d) {
+      return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+    }
+  </script>
+</body>
+</html>
