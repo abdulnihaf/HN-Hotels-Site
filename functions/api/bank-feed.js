@@ -212,6 +212,85 @@ export async function onRequestGet({ request, env }) {
     return json({ ok: true, rows: r.results || [] }, 200, origin);
   }
 
+  if (action === 'attention_queue') {
+    // Items that need a human decision. Budget-constrained: each query
+    // returns ≤10 so the client renders fast. Categories:
+    //   unmatched        — parsed credits with a counterparty but no payee link
+    //   unusual          — debits in last 7d exceeding 2× the 30d counterparty avg
+    //   unreconciled     — platform-settled rows still flagged unreconciled
+    const now = new Date();
+    const d7  = new Date(now.getTime() -  7 * 86400000).toISOString();
+    const d30 = new Date(now.getTime() - 30 * 86400000).toISOString();
+
+    const [unmatched, unusual, unreconciled, counts] = await Promise.all([
+      db.prepare(`
+        SELECT id, txn_at, direction, amount_paise, counterparty, channel, narration
+        FROM money_events
+        WHERE parse_status='parsed' AND matched_payee_id IS NULL
+          AND counterparty IS NOT NULL AND counterparty != ''
+          AND COALESCE(txn_at, received_at) >= ?
+        ORDER BY amount_paise DESC LIMIT 10
+      `).bind(d30).all(),
+      // Rough unusual detector: last-7d debits where the row's amount is
+      // >= 2 × the 30d average for the same counterparty. Cheap signal,
+      // surfaces the "did I really pay X this much?" checks.
+      db.prepare(`
+        WITH avg30 AS (
+          SELECT counterparty, AVG(amount_paise) AS avg_paise, COUNT(*) AS n
+          FROM money_events
+          WHERE parse_status='parsed' AND direction='debit'
+            AND COALESCE(txn_at, received_at) >= ?
+          GROUP BY counterparty HAVING n >= 3
+        )
+        SELECT me.id, me.txn_at, me.amount_paise, me.counterparty, me.channel,
+               a.avg_paise, (me.amount_paise * 1.0 / a.avg_paise) AS ratio
+        FROM money_events me
+        JOIN avg30 a ON a.counterparty = me.counterparty
+        WHERE me.parse_status='parsed' AND me.direction='debit'
+          AND COALESCE(me.txn_at, me.received_at) >= ?
+          AND me.amount_paise >= a.avg_paise * 2
+        ORDER BY ratio DESC LIMIT 10
+      `).bind(d30, d7).all(),
+      db.prepare(`
+        SELECT id, txn_at, amount_paise, counterparty, settlement_platform, channel
+        FROM money_events
+        WHERE parse_status='parsed' AND reconcile_status='unreconciled'
+          AND settlement_platform IS NOT NULL
+        ORDER BY COALESCE(txn_at, received_at) DESC LIMIT 10
+      `).all(),
+      db.prepare(`
+        SELECT
+          (SELECT COUNT(*) FROM money_events WHERE parse_status='parsed' AND matched_payee_id IS NULL AND counterparty IS NOT NULL AND counterparty != '') AS n_unmatched,
+          (SELECT COUNT(*) FROM money_events WHERE parse_status='parsed' AND reconcile_status='unreconciled' AND settlement_platform IS NOT NULL)                  AS n_unreconciled,
+          (SELECT COUNT(*) FROM money_events WHERE parse_status IN ('partial','failed','quarantined'))                                                             AS n_parse_issues
+      `).first(),
+    ]);
+    return json({
+      ok: true,
+      counts,
+      unmatched:    unmatched.results    || [],
+      unusual:      unusual.results      || [],
+      unreconciled: unreconciled.results || [],
+    }, 200, origin);
+  }
+
+  if (action === 'daily_cashflow') {
+    // Per-day sum of credits/debits for the sparkline. Default 30 days.
+    const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10), 365);
+    const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    const instrument = url.searchParams.get('instrument');
+    let sql = `SELECT SUBSTR(COALESCE(txn_at, received_at), 1, 10) AS day,
+                      SUM(CASE WHEN direction='credit' THEN amount_paise ELSE 0 END) AS credit_paise,
+                      SUM(CASE WHEN direction='debit'  THEN amount_paise ELSE 0 END) AS debit_paise
+               FROM money_events
+               WHERE parse_status='parsed' AND COALESCE(txn_at, received_at) >= ?`;
+    const binds = [since];
+    if (instrument && instrument !== 'all') { sql += ' AND instrument=?'; binds.push(instrument); }
+    sql += ' GROUP BY day ORDER BY day';
+    const r = await db.prepare(sql).bind(...binds).all();
+    return json({ ok: true, days, rows: r.results || [] }, 200, origin);
+  }
+
   if (action === 'filter_options') {
     // Distinct values that can populate UI dropdowns. One round-trip for
     // all dimensions so the client doesn't have to fire 5 queries.

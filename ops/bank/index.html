@@ -1,865 +1,1273 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Money Feed — HN Hotels</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script>
-    tailwind.config = {
-      theme: { extend: {
-        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-        colors: {
-          brand:   { 400:'#f0a944', 500:'#e8930c', 600:'#c97508' },
-          surface: { 1:'#111118', 2:'#16161f', 3:'#1c1c27', 4:'#22222e' },
-        }
-      }}
-    }
-  </script>
-  <style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { background: #0c0c14; color: #e4e4ed; font-family: 'Inter', sans-serif; overscroll-behavior: none; }
-    .glass { background: rgba(22,22,31,0.7); border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(16px); }
-    .card { background: #16161f; border: 1px solid rgba(255,255,255,.06); border-radius: 14px; }
-    .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-    /* Direction */
-    .chip-credit { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
-    .chip-debit  { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
-    /* Channel (only whitelisted keys rendered) */
-    .chip-upi    { background: rgba(99,102,241,.12); color: #818cf8; border:1px solid rgba(99,102,241,.3); }
-    .chip-neft   { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
-    .chip-imps   { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
-    .chip-rtgs   { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
-    .chip-card   { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
-    .chip-atm    { background: rgba(6,182,212,.12); color: #22d3ee; border:1px solid rgba(6,182,212,.3); }
-    .chip-cheque { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
-    .chip-charges { background: rgba(234,179,8,.12); color: #facc15; border:1px solid rgba(234,179,8,.3); }
-    .chip-unknown { background: rgba(148,163,184,.08); color: #9ca3af; border:1px solid rgba(148,163,184,.2); }
-    /* Reconcile */
-    .chip-recon  { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
-    .chip-unrec  { background: rgba(251,191,36,.12); color: #fbbf24; border:1px solid rgba(251,191,36,.3); }
-    .chip-ignored { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
-    /* Source — HDFC + Federal are the only money sources now */
-    .chip-hdfc     { background: rgba(220,38,38,.12); color: #f87171; border:1px solid rgba(220,38,38,.3); }
-    .chip-federal  { background: rgba(99,102,241,.12); color: #818cf8; border:1px solid rgba(99,102,241,.3); }
-    .chip-manual   { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
-    /* Settlement platform (not a money source — tags the route money took to reach the bank) */
-    .chip-razorpay  { background: rgba(56,189,248,.12); color: #38bdf8; border:1px solid rgba(56,189,248,.3); }
-    .chip-paytm     { background: rgba(14,165,233,.12); color: #38bdf8; border:1px solid rgba(14,165,233,.3); }
-    .chip-swiggy    { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
-    .chip-zomato_delivery { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
-    .chip-zomato_dining   { background: rgba(251,113,133,.12); color: #fb7185; border:1px solid rgba(251,113,133,.3); }
-    .chip-eazydiner { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
-    .chip-direct    { background: rgba(148,163,184,.08); color: #9ca3af; border:1px solid rgba(148,163,184,.2); }
-    /* Brand */
-    .chip-HE       { background: rgba(232,147,12,.15); color: #f0a944; border:1px solid rgba(232,147,12,.35); }
-    .chip-NCH      { background: rgba(16,185,129,.15); color: #34d399; border:1px solid rgba(16,185,129,.35); }
-    .chip-HQ       { background: rgba(99,102,241,.15); color: #a5b4fc; border:1px solid rgba(99,102,241,.35); }
-    .chip-mixed    { background: rgba(251,191,36,.12); color: #fbbf24; border:1px solid rgba(251,191,36,.3); }
-    .chip-unknown  { background: rgba(148,163,184,.08); color: #9ca3af; border:1px solid rgba(148,163,184,.2); }
-    /* Category */
-    .chip-salary             { background: rgba(236,72,153,.12); color: #f472b6; border:1px solid rgba(236,72,153,.3); }
-    .chip-vendor_food        { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
-    .chip-vendor_packaging   { background: rgba(168,85,247,.12); color: #c084fc; border:1px solid rgba(168,85,247,.3); }
-    .chip-vendor_utility     { background: rgba(34,197,94,.12);  color: #4ade80; border:1px solid rgba(34,197,94,.3); }
-    .chip-vendor_other       { background: rgba(107,114,128,.12); color: #9ca3af; border:1px solid rgba(107,114,128,.3); }
-    .chip-owner              { background: rgba(99,102,241,.15);  color: #a5b4fc; border:1px solid rgba(99,102,241,.35); }
-    .chip-petty_cash         { background: rgba(234,179,8,.12);   color: #facc15; border:1px solid rgba(234,179,8,.3); }
-    .chip-platform_revenue   { background: rgba(56,189,248,.12);  color: #38bdf8; border:1px solid rgba(56,189,248,.3); }
-    .chip-platform_commission{ background: rgba(239,68,68,.12);   color: #f87171; border:1px solid rgba(239,68,68,.3); }
-    .chip-interest           { background: rgba(34,197,94,.12);   color: #4ade80; border:1px solid rgba(34,197,94,.3); }
-    .chip-transfer_internal  { background: rgba(148,163,184,.12); color: #cbd5e1; border:1px solid rgba(148,163,184,.3); }
-    /* Inputs */
-    .input { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #e4e4ed; outline: none; }
-    .input:focus { border-color: rgba(232,147,12,.4); }
-    .input::placeholder { color: rgba(156,163,175,.6); }
-    details summary { cursor: pointer; user-select: none; list-style: none; }
-    details summary::-webkit-details-marker { display: none; }
-    details summary::before { content: '▸ '; color: #6b7280; font-size: 10px; margin-right: 4px; }
-    details[open] summary::before { content: '▾ '; }
-    .tbrow { cursor: pointer; }
-    .tbrow:hover td { background: rgba(232,147,12,.04); }
-    /* Parse status */
-    .chip-parsed { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
-    .chip-partial { background: rgba(234,179,8,.12); color: #facc15; border:1px solid rgba(234,179,8,.3); }
-    .chip-quarantined { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
-    .chip-failed { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
-    /* Health */
-    .chip-healthy { background: rgba(34,197,94,.12); color: #4ade80; border:1px solid rgba(34,197,94,.3); }
-    .chip-stale { background: rgba(251,146,60,.12); color: #fb923c; border:1px solid rgba(251,146,60,.3); }
-    .chip-silent { background: rgba(239,68,68,.12); color: #f87171; border:1px solid rgba(239,68,68,.3); }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<title>money · HN</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: { extend: {
+    fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+    colors: {
+      brand:   { 400:'#f0a944', 500:'#e8930c', 600:'#c97508' },
+      surface: { 0:'#0c0c14', 1:'#111118', 2:'#16161f', 3:'#1c1c27', 4:'#22222e' },
+      ink:     { 1:'#f5f5f7', 2:'#c4c4cc', 3:'#8e8e9e', 4:'#5e5e6e' },
+    },
+  }}
+}
+</script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #0c0c14; color: #f5f5f7; font-family: 'Inter', sans-serif; }
+  body { overscroll-behavior: none; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
 
-    .filter-btn { padding: 6px 12px; border-radius: 999px; font-weight: 500; font-size: 12px; border: 1px solid rgba(255,255,255,.08); cursor: pointer; color:#9ca3af; background: transparent; }
-    .filter-btn.active { background: rgba(232,147,12,.15); border-color: rgba(232,147,12,.4); color: #f0a944; }
-    .live-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#4ade80; box-shadow:0 0 8px #4ade80; animation: pulse 1.8s infinite; }
-    .live-dot.paused { background:#f87171; box-shadow:0 0 8px #f87171; animation: none; }
-    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
-    .num { font-variant-numeric: tabular-nums; }
-    table th { text-align: left; font-size: 11px; font-weight: 600; color:#9ca3af; text-transform: uppercase; letter-spacing: .04em; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
-    table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 13px; }
-    table tr:hover td { background: rgba(255,255,255,.02); }
-    .btn { padding: 8px 14px; border-radius: 10px; font-weight: 600; font-size: 12px; cursor: pointer; transition: all .15s; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.04); color:#e4e4ed; }
-    .btn:hover { background: rgba(255,255,255,.08); }
-    .btn-primary { background: #e8930c; color: #0c0c14; border-color: #e8930c; }
-    .btn-primary:hover { background: #f0a944; }
-    .spinner { border: 2px solid rgba(255,255,255,.1); border-top-color: #e8930c; border-radius: 50%; width: 14px; height: 14px; animation: spin 0.8s linear infinite; display:inline-block; vertical-align:middle; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .banner { padding: 10px 16px; border-radius: 10px; font-size: 12px; margin-bottom: 12px; }
-    .banner-warn { background: rgba(251,146,60,.08); border: 1px solid rgba(251,146,60,.25); color: #fb923c; }
-    .banner-err  { background: rgba(239,68,68,.08);  border: 1px solid rgba(239,68,68,.25);  color: #f87171; }
-    .pin-btn { background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 14px; font-size: 18px; font-weight: 600; color:#e4e4ed; cursor: pointer; transition: background .1s; }
-    .pin-btn:hover { background: rgba(255,255,255,.1); }
-    .pin-dot { width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,.1); transition: background .1s; }
-    .pin-dot.filled { background: #e8930c; }
-  </style>
+  /* ━━━ Surfaces ━━━ */
+  .card      { background: #16161f; border: 1px solid rgba(255,255,255,.05); border-radius: 14px; }
+  .card-flat { background: transparent; }
+  .divider   { border-top: 1px solid rgba(255,255,255,.06); }
+  .glass     { background: rgba(12,12,20,.85); backdrop-filter: blur(14px) saturate(1.2); border-bottom: 1px solid rgba(255,255,255,.05); }
+
+  /* ━━━ Chips — disciplined. Only 3 semantic colors ━━━ */
+  .chip       { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; white-space: nowrap; border: 1px solid transparent; }
+  .chip-in    { background: rgba(34,197,94,.10);  color: #4ade80; border-color: rgba(34,197,94,.25); }
+  .chip-out   { background: rgba(239,68,68,.10);  color: #f87171; border-color: rgba(239,68,68,.25); }
+  .chip-act   { background: rgba(251,146,60,.10); color: #fb923c; border-color: rgba(251,146,60,.25); }
+  .chip-mute  { background: rgba(255,255,255,.04); color: #8e8e9e; border-color: rgba(255,255,255,.06); }
+  .chip-removable:hover { background: rgba(255,255,255,.08); cursor: pointer; }
+
+  /* Colored dot only (for category hints in list view — no rainbow chips) */
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-salary          { background: #f472b6; }
+  .dot-vendor_food     { background: #fb923c; }
+  .dot-vendor_packaging{ background: #c084fc; }
+  .dot-vendor_utility  { background: #34d399; }
+  .dot-vendor_other    { background: #9ca3af; }
+  .dot-owner           { background: #a5b4fc; }
+  .dot-petty_cash      { background: #facc15; }
+  .dot-platform_revenue{ background: #38bdf8; }
+  .dot-charges         { background: #f87171; }
+  .dot-interest        { background: #4ade80; }
+  .dot-transfer_internal { background: #cbd5e1; }
+  .dot-unknown         { background: #4b5563; }
+
+  /* Brand ring (subtle, only on drill-down) */
+  .brand-HE     { box-shadow: inset 0 0 0 2px rgba(232,147,12,.35); }
+  .brand-NCH    { box-shadow: inset 0 0 0 2px rgba(52,211,153,.35); }
+  .brand-HQ     { box-shadow: inset 0 0 0 2px rgba(129,140,248,.35); }
+  .brand-mixed  { box-shadow: inset 0 0 0 2px rgba(251,191,36,.35); }
+
+  /* ━━━ Inputs ━━━ */
+  .input        { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 10px 14px; font-size: 14px; color: #f5f5f7; outline: none; width: 100%; }
+  .input:focus  { border-color: rgba(232,147,12,.45); background: rgba(255,255,255,.06); }
+  .input::placeholder { color: #5e5e6e; }
+
+  /* ━━━ Tabs ━━━ */
+  .tab-btn      { color: #8e8e9e; padding: 10px 4px; font-size: 13px; font-weight: 500; border-bottom: 2px solid transparent; transition: color .15s, border-color .15s; cursor: pointer; background: transparent; white-space: nowrap; }
+  .tab-btn:hover { color: #c4c4cc; }
+  .tab-btn.active { color: #f0a944; border-bottom-color: #f0a944; font-weight: 600; }
+
+  /* ━━━ Row / card hover ━━━ */
+  .row           { transition: background .1s; cursor: pointer; }
+  .row:hover     { background: rgba(255,255,255,.025); }
+  .row.open      { background: rgba(232,147,12,.04); }
+
+  /* ━━━ Live dot ━━━ */
+  .live { display:inline-block; width:6px; height:6px; border-radius:50%; background:#4ade80; box-shadow:0 0 6px #4ade80; animation: pulse 2s infinite; }
+  .live.paused { background:#f87171; box-shadow:0 0 6px #f87171; animation: none; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+
+  /* ━━━ Spinner ━━━ */
+  .spinner { border: 2px solid rgba(255,255,255,.1); border-top-color: #e8930c; border-radius: 50%; width: 14px; height: 14px; animation: spin .8s linear infinite; display:inline-block; vertical-align:middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ━━━ Sparkline ━━━ */
+  .sparkline-wrap { position: relative; }
+  .spark-bar { fill: rgba(74,222,128,.55); cursor: pointer; transition: fill .12s; }
+  .spark-bar.neg { fill: rgba(248,113,113,.55); }
+  .spark-bar:hover { fill: #f0a944; }
+  .spark-tooltip { position: absolute; top:-28px; background: #111118; border: 1px solid rgba(255,255,255,.1); padding: 3px 8px; font-size: 11px; border-radius: 6px; pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity .1s; }
+
+  /* ━━━ Bottom nav (mobile) ━━━ */
+  .botnav-btn { flex: 1; padding: 10px 0; font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #8e8e9e; background: transparent; border: 0; cursor: pointer; }
+  .botnav-btn.active { color: #f0a944; }
+  .botnav-icon { font-size: 18px; line-height: 1; }
+
+  /* PIN-gate (unchanged) */
+  .pin-btn { background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px; font-size: 18px; font-weight: 600; color:#f5f5f7; cursor: pointer; transition: background .1s; }
+  .pin-btn:hover { background: rgba(255,255,255,.1); }
+  .pin-dot { width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,.1); transition: background .1s; }
+  .pin-dot.filled { background: #e8930c; }
+
+  /* Sheet (drill-down) */
+  .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 40; }
+  .sheet { position: fixed; bottom: 0; left: 0; right: 0; max-height: 85vh; background: #16161f; border-top-left-radius: 20px; border-top-right-radius: 20px; z-index: 41; transform: translateY(100%); transition: transform .25s cubic-bezier(.2,.7,.3,1); overflow-y: auto; }
+  .sheet.open { transform: translateY(0); }
+  @media (min-width: 768px) {
+    .sheet { max-width: 560px; left: 50%; transform: translate(-50%, 100%); border-radius: 20px; bottom: 5vh; max-height: 80vh; }
+    .sheet.open { transform: translate(-50%, 0); }
+  }
+
+  /* Utility */
+  .hidden { display: none !important; }
+  details summary { cursor: pointer; list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
+</style>
 </head>
 <body>
-  <!-- ━━━━━━━━━━━━━━━━━━━━━ PIN gate ━━━━━━━━━━━━━━━━━━━━━ -->
-  <div id="pin-gate" class="fixed inset-0 flex items-center justify-center z-50 bg-surface-1">
-    <div class="card p-6 max-w-sm w-full mx-4">
-      <div class="text-center mb-4">
-        <div class="text-xl font-bold"><span class="text-brand-400">HN</span> / bank</div>
-        <div class="text-xs text-gray-500 mt-1">Enter PIN</div>
-      </div>
-      <div class="flex justify-center gap-2 mb-5">
-        <div class="pin-dot" id="pd-0"></div>
-        <div class="pin-dot" id="pd-1"></div>
-        <div class="pin-dot" id="pd-2"></div>
-        <div class="pin-dot" id="pd-3"></div>
-      </div>
-      <div class="grid grid-cols-3 gap-2">
-        <button class="pin-btn" onclick="pinPress('1')">1</button>
-        <button class="pin-btn" onclick="pinPress('2')">2</button>
-        <button class="pin-btn" onclick="pinPress('3')">3</button>
-        <button class="pin-btn" onclick="pinPress('4')">4</button>
-        <button class="pin-btn" onclick="pinPress('5')">5</button>
-        <button class="pin-btn" onclick="pinPress('6')">6</button>
-        <button class="pin-btn" onclick="pinPress('7')">7</button>
-        <button class="pin-btn" onclick="pinPress('8')">8</button>
-        <button class="pin-btn" onclick="pinPress('9')">9</button>
-        <button class="pin-btn opacity-40" onclick="pinClear()">clear</button>
-        <button class="pin-btn" onclick="pinPress('0')">0</button>
-        <button class="pin-btn opacity-40" onclick="pinBack()">←</button>
-      </div>
-      <div id="pin-err" class="text-xs text-red-400 mt-3 text-center hidden">incorrect pin</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ PIN gate ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="pin-gate" class="fixed inset-0 flex items-center justify-center z-50 bg-surface-0">
+  <div class="card p-6 max-w-sm w-full mx-4">
+    <div class="text-center mb-4">
+      <div class="text-xl font-bold tracking-tight"><span class="text-brand-400">HN</span> <span class="text-ink-3">/</span> money</div>
+      <div class="text-xs text-ink-3 mt-1">enter PIN</div>
     </div>
+    <div class="flex justify-center gap-2 mb-5">
+      <div class="pin-dot" id="pd-0"></div><div class="pin-dot" id="pd-1"></div>
+      <div class="pin-dot" id="pd-2"></div><div class="pin-dot" id="pd-3"></div>
+    </div>
+    <div class="grid grid-cols-3 gap-2">
+      <button class="pin-btn" onclick="pinPress('1')">1</button>
+      <button class="pin-btn" onclick="pinPress('2')">2</button>
+      <button class="pin-btn" onclick="pinPress('3')">3</button>
+      <button class="pin-btn" onclick="pinPress('4')">4</button>
+      <button class="pin-btn" onclick="pinPress('5')">5</button>
+      <button class="pin-btn" onclick="pinPress('6')">6</button>
+      <button class="pin-btn" onclick="pinPress('7')">7</button>
+      <button class="pin-btn" onclick="pinPress('8')">8</button>
+      <button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn opacity-40" onclick="pinClear()">clear</button>
+      <button class="pin-btn" onclick="pinPress('0')">0</button>
+      <button class="pin-btn opacity-40" onclick="pinBack()">←</button>
+    </div>
+    <div id="pin-err" class="text-xs text-red-400 mt-3 text-center hidden">incorrect pin</div>
   </div>
+</div>
 
-  <!-- ━━━━━━━━━━━━━━━━━━━━━ Main UI ━━━━━━━━━━━━━━━━━━━━━ -->
-  <div id="app" class="hidden">
-    <header class="glass sticky top-0 z-10 border-b border-white/5">
-      <div class="max-w-7xl mx-auto px-5 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="text-base font-bold tracking-tight">
-            <span class="text-brand-400">HN</span> <span class="text-gray-400">/ money</span>
-          </div>
-          <span class="text-xs text-gray-500 hidden sm:inline">inflow · outflow · reconcile</span>
+<!-- ━━━━━━━━━━━━━━━━━━━━━ Main app ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="app" class="hidden pb-24 md:pb-8">
+
+  <!-- Sticky header -->
+  <header class="glass sticky top-0 z-30">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-baseline gap-2">
+        <span class="text-base font-bold tracking-tight text-brand-400">HN</span>
+        <span class="text-sm text-ink-3">money</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-ink-3 hidden sm:inline" id="last-refresh">—</span>
+        <span class="flex items-center gap-1.5 text-xs text-ink-3">
+          <span id="live-dot" class="live"></span><span id="live-label">live</span>
+        </span>
+        <button id="refresh-btn" class="text-ink-3 hover:text-ink-1 text-sm" title="refresh">↻</button>
+        <span id="who" class="text-xs text-ink-3">—</span>
+      </div>
+    </div>
+    <!-- Desktop tabs -->
+    <nav class="max-w-5xl mx-auto px-4 hidden md:flex gap-6">
+      <button class="tab-btn active" data-tab="ledger"    onclick="switchTab('ledger')">Ledger</button>
+      <button class="tab-btn"        data-tab="payees"    onclick="switchTab('payees')">Payees</button>
+      <button class="tab-btn"        data-tab="reconcile" onclick="switchTab('reconcile')">Reconcile <span id="tab-reconcile-badge" class="chip chip-act hidden ml-1">0</span></button>
+      <button class="tab-btn"        data-tab="insights"  onclick="switchTab('insights')">Insights</button>
+    </nav>
+  </header>
+
+  <!-- Hero strip: story + sparkline -->
+  <section class="max-w-5xl mx-auto px-4 pt-5">
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+      <div>
+        <div class="text-[11px] uppercase tracking-wider text-ink-3 mb-1">Total balance</div>
+        <div id="total-balance" class="text-3xl md:text-4xl font-bold num">—</div>
+        <p id="hero-story" class="text-sm text-ink-2 mt-2 max-w-xl">—</p>
+      </div>
+      <div class="sparkline-wrap w-full md:w-auto md:min-w-[360px]">
+        <div class="text-[10px] uppercase tracking-wider text-ink-3 text-right mb-1">30-day flow · click to filter</div>
+        <svg id="sparkline" viewBox="0 0 360 60" preserveAspectRatio="none" class="w-full h-[60px]"></svg>
+        <div id="spark-tooltip" class="spark-tooltip"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Smart search -->
+  <section class="max-w-5xl mx-auto px-4 pt-5">
+    <div class="relative">
+      <input id="search-input" class="input pr-24"
+             placeholder="type anything — 'chicken last week', 'NCH credits >5k', 'razorpay today'… (/ to focus)"
+             oninput="onSmartSearch(event)"
+             onkeydown="onSearchKey(event)"/>
+      <button id="advanced-btn" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-ink-3 hover:text-ink-1 px-2 py-1 rounded-md" onclick="toggleAdvanced()">advanced ▾</button>
+    </div>
+    <div id="active-chips" class="flex flex-wrap gap-1.5 mt-2"></div>
+    <!-- Advanced filters (hidden by default) -->
+    <div id="advanced-panel" class="hidden mt-3 p-3 card space-y-2">
+      <div class="flex flex-wrap gap-2 items-center text-xs">
+        <span class="text-ink-3">account:</span>
+        <button class="chip chip-mute" data-kind="instrument" data-val="all"              onclick="setPill(this)">All</button>
+        <button class="chip chip-mute" data-kind="instrument" data-val="hdfc_ca_4680"     onclick="setPill(this)">HDFC 4680</button>
+        <button class="chip chip-mute" data-kind="instrument" data-val="federal_sa_4510"  onclick="setPill(this)">Federal 4510</button>
+        <span class="w-px h-4 bg-white/10 mx-1"></span>
+        <span class="text-ink-3">brand:</span>
+        <button class="chip chip-mute" data-kind="brand" data-val="all"      onclick="setPill(this)">Any</button>
+        <button class="chip chip-mute" data-kind="brand" data-val="HE"       onclick="setPill(this)">HE</button>
+        <button class="chip chip-mute" data-kind="brand" data-val="NCH"      onclick="setPill(this)">NCH</button>
+        <button class="chip chip-mute" data-kind="brand" data-val="HQ"       onclick="setPill(this)">HQ</button>
+        <button class="chip chip-mute" data-kind="brand" data-val="mixed"    onclick="setPill(this)">Mixed</button>
+        <button class="chip chip-mute" data-kind="brand" data-val="unknown"  onclick="setPill(this)">Untagged</button>
+      </div>
+      <div class="flex flex-wrap gap-2 items-center text-xs">
+        <span class="text-ink-3">status:</span>
+        <button class="chip chip-mute" data-kind="status" data-val="all"          onclick="setPill(this)">Any</button>
+        <button class="chip chip-mute" data-kind="status" data-val="unreconciled" onclick="setPill(this)">Unrecon.</button>
+        <button class="chip chip-mute" data-kind="status" data-val="reconciled"   onclick="setPill(this)">Reconciled</button>
+        <button class="chip chip-mute" data-kind="status" data-val="quarantined"  onclick="setPill(this)">Quarantined</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Attention queue -->
+  <section id="attention" class="max-w-5xl mx-auto px-4 pt-4 hidden">
+    <button class="w-full card p-3 text-left hover:bg-white/2 flex items-center gap-3"
+            onclick="switchTab('reconcile')">
+      <span class="text-xl">⚠</span>
+      <span id="attention-summary" class="flex-1 text-sm">—</span>
+      <span class="text-ink-3 text-xs">review →</span>
+    </button>
+  </section>
+
+  <!-- Tab content -->
+  <main class="max-w-5xl mx-auto px-4 pt-5">
+
+    <!-- LEDGER TAB -->
+    <section id="tab-ledger">
+      <div id="ledger-summary" class="text-xs text-ink-3 mb-3"></div>
+      <div id="ledger-body">
+        <div class="text-center text-ink-3 py-10"><span class="spinner"></span> loading…</div>
+      </div>
+    </section>
+
+    <!-- PAYEES TAB -->
+    <section id="tab-payees" class="hidden">
+      <div class="flex items-center gap-2 mb-3">
+        <input id="payee-search" class="input flex-1" placeholder="search payees by name or commodity…" oninput="onPayeeSearch(event)"/>
+        <select id="payee-cat-filter" class="input w-40" onchange="renderPayees()">
+          <option value="">all categories</option>
+        </select>
+      </div>
+      <div id="payee-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div class="text-center text-ink-3 py-10 col-span-full"><span class="spinner"></span> loading…</div>
+      </div>
+    </section>
+
+    <!-- RECONCILE TAB -->
+    <section id="tab-reconcile" class="hidden space-y-5">
+      <div id="reconcile-body" class="text-center text-ink-3 py-10"><span class="spinner"></span> loading…</div>
+    </section>
+
+    <!-- INSIGHTS TAB -->
+    <section id="tab-insights" class="hidden space-y-5">
+      <div class="card p-4">
+        <div class="text-xs uppercase tracking-wider text-ink-3 mb-2">90-day cashflow</div>
+        <svg id="insight-cashflow" viewBox="0 0 720 180" preserveAspectRatio="none" class="w-full h-[180px]"></svg>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="card p-4">
+          <div class="text-xs uppercase tracking-wider text-ink-3 mb-3">Revenue by platform (90d)</div>
+          <div id="insight-platform"></div>
         </div>
-        <div class="flex items-center gap-3 text-xs">
-          <span class="flex items-center gap-1.5 text-gray-400">
-            <span id="live-dot" class="live-dot"></span> <span id="live-label">live</span>
-          </span>
-          <span id="last-refresh" class="text-gray-500">—</span>
-          <button id="refresh-btn" class="btn text-xs py-1.5 px-3">↻</button>
-          <span id="who" class="text-gray-500 hidden sm:inline">—</span>
+        <div class="card p-4">
+          <div class="text-xs uppercase tracking-wider text-ink-3 mb-3">Top paid-out counterparties (90d)</div>
+          <div id="insight-topcp"></div>
         </div>
       </div>
-    </header>
+      <div class="card p-4">
+        <div class="text-xs uppercase tracking-wider text-ink-3 mb-3">Brand split · debits 90d</div>
+        <div id="insight-brand"></div>
+      </div>
+    </section>
+  </main>
 
-    <main class="max-w-7xl mx-auto px-5 py-6">
-      <!-- Stale / parse banners -->
-      <div id="stale-banner" class="banner banner-warn hidden"></div>
-      <div id="parse-banner" class="banner banner-warn hidden"></div>
-      <div id="err-banner" class="banner banner-err hidden"></div>
+  <!-- Mobile bottom nav -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-30 glass flex">
+    <button class="botnav-btn active" data-tab="ledger"    onclick="switchTab('ledger')">
+      <span class="botnav-icon">₹</span><span>Ledger</span>
+    </button>
+    <button class="botnav-btn" data-tab="payees" onclick="switchTab('payees')">
+      <span class="botnav-icon">◑</span><span>Payees</span>
+    </button>
+    <button class="botnav-btn" data-tab="reconcile" onclick="switchTab('reconcile')">
+      <span class="botnav-icon">⚠</span><span>Reconcile <span id="tab-reconcile-badge-m" class="chip chip-act hidden">0</span></span>
+    </button>
+    <button class="botnav-btn" data-tab="insights" onclick="switchTab('insights')">
+      <span class="botnav-icon">▲</span><span>Insights</span>
+    </button>
+  </nav>
 
-      <!-- Balances per instrument -->
-      <section id="balances-row" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div class="card p-4">
-          <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">Loading</div>
-          <div class="text-2xl font-bold num">—</div>
-        </div>
-      </section>
+  <!-- Detail sheet -->
+  <div id="sheet-overlay" class="sheet-overlay hidden" onclick="closeSheet()"></div>
+  <aside id="sheet" class="sheet">
+    <div id="sheet-body" class="p-5"></div>
+  </aside>
+</div>
 
-      <!-- Rollups -->
-      <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div class="card p-4">
-          <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">Today net</div>
-          <div id="today-net" class="text-2xl font-bold num">—</div>
-          <div id="today-count" class="text-xs text-gray-500 mt-1">—</div>
-        </div>
-        <div class="card p-4">
-          <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">7d inflow</div>
-          <div id="week-credit" class="text-2xl font-bold num text-green-400">—</div>
-          <div id="week-credit-n" class="text-xs text-gray-500 mt-1">—</div>
-        </div>
-        <div class="card p-4">
-          <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">7d outflow</div>
-          <div id="week-debit" class="text-2xl font-bold num text-red-400">—</div>
-          <div id="week-debit-n" class="text-xs text-gray-500 mt-1">—</div>
-        </div>
-        <div class="card p-4">
-          <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">7d net</div>
-          <div id="week-net" class="text-2xl font-bold num">—</div>
-          <div class="text-xs text-gray-500 mt-1">inflow − outflow</div>
-        </div>
-      </section>
+<script>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// State
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const API = '/api/bank-feed';
+const PIN_KEY = 'hn-bank-pin';
+let pin = '';
+let pollTimer = null;
+let errCount = 0;
 
-      <!-- Source health (sentinel row) -->
-      <section id="source-health" class="card p-3 mb-4 text-xs flex flex-wrap gap-2 items-center">
-        <span class="text-gray-500 mr-1">sources:</span>
-        <span class="text-gray-600 text-xs">loading…</span>
-      </section>
+// Parsed from search + advanced pills
+let filter = {
+  dir: 'all', status: 'all', instrument: 'all', brand: 'all',
+  category: '', platform: '', payee_id: '',
+  q: '', min_amount: null, max_amount: null,
+  date_from: null, date_to: null,
+};
+let rawQuery = '';
+let activeTab = 'ledger';
+let allPayees = [];                   // cached registry
+let cachedDailyCF = [];               // cached 30d
+let lastAttention = null;
+let searchDebounce = null;
 
-      <!-- Primary filters (always visible) -->
-      <section class="card p-3 mb-4">
-        <div class="flex flex-wrap items-center gap-2 mb-2">
-          <span class="text-xs text-gray-500 mr-1">account:</span>
-          <button class="filter-btn active" data-kind="instrument" data-val="all"              onclick="setFilter(this)">All</button>
-          <button class="filter-btn"        data-kind="instrument" data-val="hdfc_ca_4680"     onclick="setFilter(this)">HDFC 4680</button>
-          <button class="filter-btn"        data-kind="instrument" data-val="federal_sa_4510"  onclick="setFilter(this)">Federal 4510</button>
-          <span class="w-px h-4 bg-white/10 mx-1"></span>
-          <span class="text-xs text-gray-500 mr-1">brand:</span>
-          <button class="filter-btn active" data-kind="brand" data-val="all"     onclick="setFilter(this)">All</button>
-          <button class="filter-btn"        data-kind="brand" data-val="HE"      onclick="setFilter(this)">HE</button>
-          <button class="filter-btn"        data-kind="brand" data-val="NCH"     onclick="setFilter(this)">NCH</button>
-          <button class="filter-btn"        data-kind="brand" data-val="HQ"      onclick="setFilter(this)">HQ</button>
-          <button class="filter-btn"        data-kind="brand" data-val="mixed"   onclick="setFilter(this)">Mixed</button>
-          <button class="filter-btn"        data-kind="brand" data-val="unknown" onclick="setFilter(this)">Untagged</button>
-        </div>
-        <div class="flex flex-wrap items-center gap-2 mb-2">
-          <span class="text-xs text-gray-500 mr-1">direction:</span>
-          <button class="filter-btn active" data-kind="dir" data-val="all"    onclick="setFilter(this)">All</button>
-          <button class="filter-btn"        data-kind="dir" data-val="credit" onclick="setFilter(this)">Credits</button>
-          <button class="filter-btn"        data-kind="dir" data-val="debit"  onclick="setFilter(this)">Debits</button>
-          <span class="w-px h-4 bg-white/10 mx-1"></span>
-          <span class="text-xs text-gray-500 mr-1">status:</span>
-          <button class="filter-btn active" data-kind="status" data-val="all"          onclick="setFilter(this)">Any</button>
-          <button class="filter-btn"        data-kind="status" data-val="unreconciled" onclick="setFilter(this)">Unrecon.</button>
-          <button class="filter-btn"        data-kind="status" data-val="reconciled"   onclick="setFilter(this)">Reconciled</button>
-          <button class="filter-btn"        data-kind="status" data-val="quarantined"  onclick="setFilter(this)">Quarantined</button>
-          <span class="w-px h-4 bg-white/10 mx-1"></span>
-          <span class="text-xs text-gray-500 mr-1">date:</span>
-          <button class="filter-btn"        data-kind="range" data-val="today" onclick="setFilter(this)">Today</button>
-          <button class="filter-btn"        data-kind="range" data-val="7d"    onclick="setFilter(this)">7d</button>
-          <button class="filter-btn"        data-kind="range" data-val="30d"   onclick="setFilter(this)">30d</button>
-          <button class="filter-btn"        data-kind="range" data-val="90d"   onclick="setFilter(this)">90d</button>
-          <button class="filter-btn active" data-kind="range" data-val="all"   onclick="setFilter(this)">All</button>
-          <span class="ml-auto text-xs text-gray-500"><span id="row-count">0</span> rows</span>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <input id="f-search" class="input flex-1 min-w-[200px]" type="text"
-                 placeholder="search counterparty · narration · ref · VPA…"
-                 oninput="onSearchInput(event)"/>
-          <select id="f-payee" class="input" onchange="onDropdown(event, 'payee_id')">
-            <option value="">— any payee —</option>
-          </select>
-          <select id="f-channel" class="input" onchange="onDropdown(event, 'channel')">
-            <option value="">— any channel —</option>
-          </select>
-          <select id="f-category" class="input" onchange="onDropdown(event, 'category')">
-            <option value="">— any category —</option>
-          </select>
-          <select id="f-platform" class="input" onchange="onDropdown(event, 'platform')">
-            <option value="">— platform —</option>
-            <option value="direct">direct (no platform)</option>
-          </select>
-          <input id="f-minamt" class="input w-24" type="number" placeholder="min ₹" oninput="onAmountInput('min_amount', event)"/>
-          <input id="f-maxamt" class="input w-24" type="number" placeholder="max ₹" oninput="onAmountInput('max_amount', event)"/>
-          <button id="f-clear" class="btn text-xs" onclick="clearAllFilters()">clear</button>
-        </div>
-      </section>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PIN
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function pinPress(d) { if (pin.length >= 4) return; pin += d; renderPinDots(); if (pin.length === 4) verifyPin(); }
+function pinClear() { pin = ''; renderPinDots(); document.getElementById('pin-err').classList.add('hidden'); }
+function pinBack()  { pin = pin.slice(0, -1); renderPinDots(); }
+function renderPinDots() {
+  for (let i = 0; i < 4; i++) document.getElementById('pd-'+i).classList.toggle('filled', i < pin.length);
+}
+async function verifyPin() {
+  try {
+    const r = await fetch(`${API}?action=summary&pin=${encodeURIComponent(pin)}`);
+    if (r.status === 401) { document.getElementById('pin-err').classList.remove('hidden'); setTimeout(() => { pin=''; renderPinDots(); }, 250); return; }
+    if (!r.ok) throw new Error('pin check failed');
+    try { sessionStorage.setItem(PIN_KEY, pin); } catch {}
+    document.getElementById('pin-gate').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    const j = await r.json();
+    if (j.user) document.getElementById('who').textContent = j.user;
+    renderHeaderSummary(j);
+    boot();
+  } catch (e) {
+    document.getElementById('pin-err').textContent = 'network error; retry';
+    document.getElementById('pin-err').classList.remove('hidden');
+  }
+}
+try {
+  const saved = sessionStorage.getItem(PIN_KEY);
+  if (saved && /^\d{4}$/.test(saved)) { pin = saved; renderPinDots(); verifyPin(); }
+} catch {}
 
-      <!-- Transactions table -->
-      <section class="card overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>A/c</th>
-                <th>Dir</th>
-                <th class="text-right">Amount</th>
-                <th>Channel</th>
-                <th>Platform</th>
-                <th>Counterparty</th>
-                <th>Category</th>
-                <th>Brand</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="rows">
-              <tr><td colspan="11" class="text-center text-gray-500 py-10"><span class="spinner"></span> loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Boot + refresh cycle
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function authedFetch(path) {
+  const r = await fetch(path, { headers: { 'X-Ops-Pin': pin } });
+  if (r.status === 401) throw new Error('unauth');
+  if (!r.ok) throw new Error('http ' + r.status);
+  return r.json();
+}
 
-      <!-- Top counterparties — discoverable aggregates -->
-      <section class="card p-4 mt-4">
-        <details open>
-          <summary class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Top counterparties</summary>
-          <div class="flex items-center gap-2 mt-3 mb-2">
-            <span class="text-xs text-gray-500">direction:</span>
-            <button class="filter-btn active" data-kind="tcp-dir" data-val="debit"  onclick="setTopDir(this)">Paid out</button>
-            <button class="filter-btn"        data-kind="tcp-dir" data-val="credit" onclick="setTopDir(this)">Received</button>
-            <span class="text-xs text-gray-500 ml-auto">click a row to drill down</span>
-          </div>
-          <div id="top-counterparties" class="text-xs text-gray-500">loading…</div>
-        </details>
-      </section>
-
-      <!-- Platform revenue breakdown -->
-      <section class="card p-4 mt-4">
-        <details>
-          <summary class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Revenue by settlement platform (90d)</summary>
-          <div id="platform-summary" class="mt-3 text-xs text-gray-500">loading…</div>
-        </details>
-      </section>
-
-      <!-- Empty / setup state -->
-      <section id="empty-state" class="hidden card p-6 mt-4 text-center text-sm text-gray-400">
-        <div class="text-base font-semibold text-gray-300 mb-2">No money events yet.</div>
-        <div class="mb-3">Complete the ingest setup:</div>
-        <ol class="text-left max-w-md mx-auto space-y-1.5 text-xs">
-          <li>1. Run <code>schema-money-events.sql</code> against the <code>hn-hiring</code> D1</li>
-          <li>2. Deploy <code>workers/bank-feed-email</code>, enable HDFC per-txn email alerts, Gmail filter, CF Email Routing</li>
-          <li>3. (Optional) Deploy <code>workers/razorpay-webhook</code> + add Razorpay webhook URL</li>
-        </ol>
-        <div class="mt-3 text-xs">Full guide in <code>workers/bank-feed-email/SETUP.md</code> and <code>docs/SOURCES.md</code></div>
-      </section>
-    </main>
-  </div>
-
-  <script>
-    const API = '/api/bank-feed';
-    const PIN_STORAGE_KEY = 'hn-bank-pin';
-    let filter = {
-      dir: 'all', status: 'all', instrument: 'all', brand: 'all', range: 'all',
-      // dropdown / input filters (empty = any)
-      payee_id: '', channel: '', category: '', platform: '',
-      q: '', min_amount: '', max_amount: '',
-    };
-    let topDir = 'debit';       // default: "who do I pay the most"
-    let pollTimer = null;
-    let errCount = 0;
-    let pin = '';
-    let searchDebounce = null;
-    let amountDebounce = null;
-
-    // ━━━ PIN gate ━━━
-    function pinPress(d) {
-      if (pin.length >= 4) return;
-      pin += d;
-      renderPinDots();
-      if (pin.length === 4) verifyPin();
+async function boot() {
+  // Parallel: payees (for dropdown + attention), daily cashflow, attention queue
+  await Promise.all([loadPayees(), loadCashflow(), loadAttention()]);
+  renderSparkline(cachedDailyCF);
+  refresh(true);
+  pollTimer = setInterval(() => refresh(false), 45000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refresh(false);
+  });
+  document.getElementById('refresh-btn').addEventListener('click', () => refresh(true));
+  document.addEventListener('keydown', e => {
+    if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+      e.preventDefault();
+      document.getElementById('search-input').focus();
+    } else if (e.key === 'Escape') {
+      closeSheet();
     }
-    function pinClear() { pin = ''; renderPinDots(); document.getElementById('pin-err').classList.add('hidden'); }
-    function pinBack() { pin = pin.slice(0, -1); renderPinDots(); }
-    function renderPinDots() {
-      for (let i = 0; i < 4; i++) {
-        document.getElementById('pd-' + i).classList.toggle('filled', i < pin.length);
-      }
-    }
-    async function verifyPin() {
-      // Ping summary with the entered pin; 401 means wrong.
-      try {
-        const r = await fetch(`${API}?action=summary&pin=${encodeURIComponent(pin)}`);
-        if (r.status === 401) {
-          document.getElementById('pin-err').classList.remove('hidden');
-          setTimeout(() => { pin = ''; renderPinDots(); }, 250);
-          return;
-        }
-        if (!r.ok) throw new Error('pin check failed');
-        try { sessionStorage.setItem(PIN_STORAGE_KEY, pin); } catch {}
-        document.getElementById('pin-gate').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
-        const j = await r.json();
-        if (j.user) document.getElementById('who').textContent = j.user;
-        renderSummary(j);
-        // Also fetch rows on first paint.
-        loadRows();
-        // Populate filter dropdowns once per session.
-        loadFilterOptions();
-        // And seed the top-counterparties / platform blocks via refresh.
-        refresh(false);
-        pollTimer = setInterval(() => refresh(false), 45000);
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') refresh(false);
-        });
-      } catch (e) {
-        document.getElementById('pin-err').textContent = 'network error; try again';
-        document.getElementById('pin-err').classList.remove('hidden');
-      }
-    }
+  });
+}
 
-    // Restore pin from session.
-    try {
-      const saved = sessionStorage.getItem(PIN_STORAGE_KEY);
-      if (saved && /^\d{4}$/.test(saved)) { pin = saved; renderPinDots(); verifyPin(); }
-    } catch {}
+async function refresh(showSpinner) {
+  try {
+    const [summary, list] = await Promise.all([
+      authedFetch(`${API}?action=summary`),
+      authedFetch(`${API}?${buildListQS()}`),
+    ]);
+    renderHeaderSummary(summary);
+    renderLedger(list.rows || []);
+    document.getElementById('last-refresh').textContent = timeStr(new Date());
+    setLive(true);
+    errCount = 0;
+    // Attention + cashflow refresh in background (less frequent feel)
+    loadAttention(); // updates badge
+  } catch (e) {
+    errCount++;
+    if (e.message === 'unauth') {
+      try { sessionStorage.removeItem(PIN_KEY); } catch {}
+      location.reload();
+      return;
+    }
+    if (errCount >= 3) { setLive(false); clearInterval(pollTimer); pollTimer = null; }
+  }
+}
 
-    // ━━━ Data refresh ━━━
-    async function authedFetch(path) {
-      const r = await fetch(path, { headers: { 'X-Ops-Pin': pin } });
-      if (r.status === 401) throw new Error('unauth');
-      if (!r.ok) throw new Error('http ' + r.status);
-      return r.json();
-    }
+function buildListQS() {
+  const p = ['action=list', 'limit=200'];
+  if (filter.dir !== 'all')        p.push('dir='        + encodeURIComponent(filter.dir));
+  if (filter.status !== 'all')     p.push('status='     + encodeURIComponent(filter.status));
+  if (filter.instrument !== 'all') p.push('instrument=' + encodeURIComponent(filter.instrument));
+  if (filter.brand !== 'all')      p.push('brand='      + encodeURIComponent(filter.brand));
+  if (filter.category)   p.push('category='   + encodeURIComponent(filter.category));
+  if (filter.platform)   p.push('platform='   + encodeURIComponent(filter.platform));
+  if (filter.payee_id)   p.push('payee_id='   + encodeURIComponent(filter.payee_id));
+  if (filter.q)          p.push('q='          + encodeURIComponent(filter.q));
+  if (filter.min_amount) p.push('min_amount=' + encodeURIComponent(filter.min_amount));
+  if (filter.max_amount) p.push('max_amount=' + encodeURIComponent(filter.max_amount));
+  if (filter.date_from)  p.push('date_from='  + encodeURIComponent(filter.date_from));
+  if (filter.date_to)    p.push('date_to='    + encodeURIComponent(filter.date_to));
+  return p.join('&');
+}
 
-    function buildListQS() {
-      const parts = ['action=list', 'limit=150'];
-      if (filter.dir !== 'all')        parts.push('dir='        + encodeURIComponent(filter.dir));
-      if (filter.status !== 'all')     parts.push('status='     + encodeURIComponent(filter.status));
-      if (filter.instrument !== 'all') parts.push('instrument=' + encodeURIComponent(filter.instrument));
-      if (filter.brand !== 'all')      parts.push('brand='      + encodeURIComponent(filter.brand));
-      const since = rangeToSince(filter.range);
-      if (since) parts.push('date_from=' + encodeURIComponent(since));
-      if (filter.channel)    parts.push('channel='    + encodeURIComponent(filter.channel));
-      if (filter.category)   parts.push('category='   + encodeURIComponent(filter.category));
-      if (filter.platform)   parts.push('platform='   + encodeURIComponent(filter.platform));
-      if (filter.payee_id)   parts.push('payee_id='   + encodeURIComponent(filter.payee_id));
-      if (filter.q)          parts.push('q='          + encodeURIComponent(filter.q));
-      if (filter.min_amount) parts.push('min_amount=' + encodeURIComponent(filter.min_amount));
-      if (filter.max_amount) parts.push('max_amount=' + encodeURIComponent(filter.max_amount));
-      return parts.join('&');
-    }
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Smart search — parse free text into filter deltas
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const CATEGORY_HINTS = {
+  'salary': 'salary', 'staff': 'salary', 'employee': 'salary',
+  'chicken': 'vendor_food', 'mutton': 'vendor_food', 'meat': 'vendor_food',
+  'chai': 'vendor_food', 'tea': 'vendor_food', 'milk': 'vendor_food',
+  'biscuit': 'vendor_food', 'biscuits': 'vendor_food', 'grocery': 'vendor_food',
+  'coal': 'vendor_food', 'firewood': 'vendor_food', 'charcoal': 'vendor_food',
+  'vendor': 'vendor_food',
+  'utility': 'vendor_utility', 'gas': 'vendor_utility', 'lpg': 'vendor_utility',
+  'water': 'vendor_utility', 'electricity': 'vendor_utility', 'bescom': 'vendor_utility',
+  'packaging': 'vendor_packaging', 'box': 'vendor_packaging',
+  'owner': 'owner', 'self': 'owner', 'nihaf': 'owner',
+  'charges': 'charges', 'fees': 'charges', 'gst': 'charges', 'charge': 'charges',
+  'interest': 'interest',
+  'transfer': 'transfer_internal', 'internal': 'transfer_internal',
+  'petty': 'petty_cash',
+};
 
-    function rangeToSince(r) {
-      const now = new Date();
-      if (r === 'today') { const d = new Date(now.getFullYear(), now.getMonth(), now.getDate()); return d.toISOString(); }
-      if (r === '7d')    return new Date(now.getTime() -   7 * 86400000).toISOString();
-      if (r === '30d')   return new Date(now.getTime() -  30 * 86400000).toISOString();
-      if (r === '90d')   return new Date(now.getTime() -  90 * 86400000).toISOString();
-      return null;
-    }
+function parseQuery(text) {
+  const base = {
+    category: '', platform: '', payee_id: '',
+    dir: 'all', brand: 'all', instrument: 'all', status: 'all',
+    q: '', min_amount: null, max_amount: null,
+    date_from: null, date_to: null,
+  };
+  let rem = ' ' + text.trim() + ' ';
 
-    async function refresh(manual = false) {
-      const btn = document.getElementById('refresh-btn');
-      const prevLabel = btn.textContent;
-      if (manual) btn.innerHTML = '<span class="spinner"></span>';
-      try {
-        const since90 = rangeToSince('90d');
-        const [summary, listRes, topRes, platRes] = await Promise.all([
-          authedFetch(`${API}?action=summary`),
-          authedFetch(`${API}?${buildListQS()}`),
-          authedFetch(`${API}?action=top_counterparties&dir=${topDir}&since=${encodeURIComponent(since90)}&limit=20`),
-          authedFetch(`${API}?action=platform_summary&since=${encodeURIComponent(since90)}`),
-        ]);
-        renderSummary(summary);
-        renderRows(listRes.rows || []);
-        renderTopCounterparties(topRes.rows || []);
-        renderPlatformSummary(platRes.rows || []);
-        document.getElementById('last-refresh').textContent = 'updated ' + timeStr(new Date());
-        document.getElementById('err-banner').classList.add('hidden');
-        errCount = 0;
-        setLive(true);
-      } catch (e) {
-        errCount++;
-        console.error('refresh err', e);
-        if (e.message === 'unauth') {
-          // Pin got invalidated — bounce back to gate.
-          try { sessionStorage.removeItem(PIN_STORAGE_KEY); } catch {}
-          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-          document.getElementById('app').classList.add('hidden');
-          document.getElementById('pin-gate').classList.remove('hidden');
-          pin = ''; renderPinDots();
-          return;
-        }
-        if (errCount >= 3) {
-          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-          setLive(false);
-          showErr(`Auto-refresh paused after ${errCount} failures. Click ↻ to retry.`);
-        }
-      } finally {
-        if (manual) btn.textContent = prevLabel;
-      }
-    }
-    async function loadRows() {
-      try {
-        const listRes = await authedFetch(`${API}?${buildListQS()}`);
-        renderRows(listRes.rows || []);
-      } catch {}
-    }
+  // Amount: >5000, <100, >=1k, >=1L, <10cr etc.
+  const amtRe = /\s([<>])=?\s*₹?\s*([\d.,]+)\s*([klLcC][rR]?)?\b/g;
+  let m;
+  while ((m = amtRe.exec(rem)) !== null) {
+    let val = parseFloat(m[2].replace(/,/g, ''));
+    const suf = (m[3] || '').toLowerCase();
+    if (suf === 'k') val *= 1000;
+    else if (suf === 'l' || suf === 'lakh') val *= 100000;
+    else if (suf === 'cr' || suf === 'c') val *= 10000000;
+    if (m[1] === '>') base.min_amount = val;
+    if (m[1] === '<') base.max_amount = val;
+    rem = rem.replace(m[0], ' ');
+  }
 
-    async function loadFilterOptions() {
-      // Populate channel / category / platform / payee dropdowns. One-shot
-      // per session; options rarely change.
-      try {
-        const [opt, payees] = await Promise.all([
-          authedFetch(`${API}?action=filter_options`),
-          authedFetch(`${API}?action=payees`),
-        ]);
-        fillSelect('f-channel',  (opt.channels    || []).map(v => ({ value: v, label: v })));
-        fillSelect('f-category', (opt.categories  || []).map(v => ({ value: v, label: v.replace(/_/g, ' ') })));
-        fillSelect('f-platform', [{ value: 'direct', label: 'direct (no platform)' },
-                                   ...(opt.platforms || []).map(v => ({ value: v, label: v }))],
-                   /*keepFirstPlaceholder*/ true, /*replacePlaceholders*/ true);
-        fillSelect('f-payee', (payees.rows || []).map(p => ({
-          value: String(p.id),
-          label: `${p.name}${p.category ? ' · ' + p.category : ''}${p.last4 ? ' · ' + p.last4 : ''}`,
-        })));
-      } catch (e) { console.warn('filter options load failed', e); }
-    }
+  // Date ranges
+  const now = new Date();
+  const iso = d => d.toISOString();
+  const atStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dateMap = [
+    [/\btoday\b/i,           () => [iso(atStart(now)), null]],
+    [/\byesterday\b/i,       () => { const y = new Date(now); y.setDate(y.getDate()-1); return [iso(atStart(y)), iso(atStart(now))]; }],
+    [/\bthis\s+week\b/i,     () => { const w = new Date(now); w.setDate(w.getDate()-w.getDay()); return [iso(atStart(w)), null]; }],
+    [/\blast\s+week\b/i,     () => { const w = new Date(now); w.setDate(w.getDate()-w.getDay()-7); const w2 = new Date(w); w2.setDate(w2.getDate()+7); return [iso(atStart(w)), iso(atStart(w2))]; }],
+    [/\bthis\s+month\b/i,    () => [iso(new Date(now.getFullYear(), now.getMonth(), 1)), null]],
+    [/\blast\s+month\b/i,    () => { const a = new Date(now.getFullYear(), now.getMonth()-1, 1); const b = new Date(now.getFullYear(), now.getMonth(), 1); return [iso(a), iso(b)]; }],
+    [/\b7d\b/i,              () => [iso(new Date(now.getTime() - 7*86400000)), null]],
+    [/\b30d\b/i,              () => [iso(new Date(now.getTime() - 30*86400000)), null]],
+    [/\b90d\b/i,              () => [iso(new Date(now.getTime() - 90*86400000)), null]],
+  ];
+  for (const [re, fn] of dateMap) {
+    const mm = rem.match(re);
+    if (mm) { const [from, to] = fn(); base.date_from = from; if (to) base.date_to = to; rem = rem.replace(mm[0], ' '); break; }
+  }
 
-    function fillSelect(id, options, keepFirstPlaceholder = true) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const placeholder = el.options[0];
-      el.innerHTML = '';
-      if (keepFirstPlaceholder && placeholder) el.appendChild(placeholder);
-      for (const o of options) {
-        const opt = document.createElement('option');
-        opt.value = o.value; opt.textContent = o.label;
-        el.appendChild(opt);
-      }
-    }
+  // Direction
+  const dirM = rem.match(/\b(credit|credits|in|inflow|received|incoming)\b/i) || rem.match(/\b(debit|debits|out|outflow|paid|sent|outgoing)\b/i);
+  if (dirM) {
+    const w = dirM[1].toLowerCase();
+    base.dir = /^(debit|out|paid|sent)/.test(w) ? 'debit' : 'credit';
+    rem = rem.replace(dirM[0], ' ');
+  }
 
-    function onSearchInput(e) {
-      clearTimeout(searchDebounce);
-      searchDebounce = setTimeout(() => {
-        filter.q = e.target.value.trim();
-        refresh(false);
-      }, 300);
-    }
-    function onDropdown(e, kind) {
-      filter[kind] = e.target.value;
-      refresh(false);
-    }
-    function onAmountInput(kind, e) {
-      clearTimeout(amountDebounce);
-      amountDebounce = setTimeout(() => {
-        filter[kind] = e.target.value.trim();
-        refresh(false);
-      }, 400);
-    }
-    function setTopDir(btn) {
-      topDir = btn.dataset.val;
-      document.querySelectorAll('[data-kind="tcp-dir"]').forEach(b => {
-        b.classList.toggle('active', b.dataset.val === topDir);
-      });
-      refresh(false);
-    }
-    function clearAllFilters() {
-      filter = {
-        dir: 'all', status: 'all', instrument: 'all', brand: 'all', range: 'all',
-        payee_id: '', channel: '', category: '', platform: '',
-        q: '', min_amount: '', max_amount: '',
-      };
-      // Reset UI
-      document.querySelectorAll('.filter-btn').forEach(b => {
-        if (b.dataset.kind && b.dataset.kind !== 'tcp-dir') {
-          b.classList.toggle('active', b.dataset.val === 'all');
-        }
-      });
-      ['f-search','f-payee','f-channel','f-category','f-platform','f-minamt','f-maxamt'].forEach(id => {
-        const el = document.getElementById(id); if (el) el.value = '';
-      });
-      refresh(false);
-    }
+  // Brand
+  const brM = rem.match(/\b(HE|NCH|HQ|mixed)\b/i);
+  if (brM) { base.brand = brM[1].toUpperCase(); if (base.brand === 'MIXED') base.brand = 'mixed'; rem = rem.replace(brM[0], ' '); }
 
-    // Bind refresh button properly (event object, not window.event).
-    document.getElementById('refresh-btn').addEventListener('click', () => {
-      if (!pollTimer) pollTimer = setInterval(() => refresh(false), 45000);
-      setLive(true);
-      refresh(true);
+  // Account
+  const accM = rem.match(/\b(HDFC|federal|fed)\b/i);
+  if (accM) { base.instrument = /federal|fed/i.test(accM[1]) ? 'federal_sa_4510' : 'hdfc_ca_4680'; rem = rem.replace(accM[0], ' '); }
+
+  // Platform
+  const platM = rem.match(/\b(razorpay|paytm|zomato|swiggy|eazydiner|eazy\s*diner|direct)\b/i);
+  if (platM) { base.platform = /eazy/i.test(platM[1]) ? 'eazydiner' : platM[1].toLowerCase(); rem = rem.replace(platM[0], ' '); }
+
+  // Status
+  const statM = rem.match(/\b(unreconciled|unrecon|reconciled|quarantined)\b/i);
+  if (statM) { const w = statM[1].toLowerCase(); base.status = w.startsWith('unrec') ? 'unreconciled' : w === 'reconciled' ? 'reconciled' : 'quarantined'; rem = rem.replace(statM[0], ' '); }
+
+  // Category hints (one wins)
+  for (const [word, cat] of Object.entries(CATEGORY_HINTS)) {
+    const re = new RegExp(`\\b${word}\\b`, 'i');
+    const mm = rem.match(re);
+    if (mm) { base.category = cat; rem = rem.replace(mm[0], ' '); break; }
+  }
+
+  // Payee match — if remainder matches a payee name token
+  const clean = rem.replace(/\s+/g, ' ').trim();
+  if (clean && allPayees.length) {
+    const cu = clean.toUpperCase();
+    const found = allPayees.find(p => {
+      const n = (p.name || '').toUpperCase();
+      return n && (n.includes(cu) || cu.split(' ').some(tok => tok.length >= 3 && n.includes(tok)));
     });
-
-    function setLive(live) {
-      document.getElementById('live-dot').classList.toggle('paused', !live);
-      document.getElementById('live-label').textContent = live ? 'live' : 'paused';
+    if (found) {
+      base.payee_id = String(found.id);
+      // keep remainder as q too so narration also matches
+      base.q = clean;
+    } else {
+      base.q = clean;
     }
+  }
+  return base;
+}
 
-    // ━━━ Renderers ━━━
-    function renderSummary(s) {
-      if (!s || !s.ok) return;
-      const balRow = document.getElementById('balances-row');
-      const bals = Array.isArray(s.balances) ? s.balances : [];
-      if (bals.length === 0) {
-        balRow.innerHTML = `
-          <div class="card p-4">
-            <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">Balance</div>
-            <div class="text-2xl font-bold num">—</div>
-            <div class="text-xs text-gray-500 mt-1">awaiting first bank alert</div>
-          </div>`;
-      } else {
-        balRow.innerHTML = bals.map(b => `
-          <div class="card p-4">
-            <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">${escapeHtml(b.instrument)}</div>
-            <div class="text-2xl font-bold num">${fmtRupees(b.balance_paise)}</div>
-            <div class="text-xs text-gray-500 mt-1">as of ${relativeTime(b.as_of)}</div>
+function onSmartSearch(e) {
+  rawQuery = e.target.value;
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => {
+    const parsed = parseQuery(rawQuery);
+    // Preserve advanced pill values that aren't in the query
+    const pillKeys = ['instrument', 'brand', 'status'];
+    const saved = {};
+    for (const k of pillKeys) if (filter[k] !== 'all' && !queryTouches(k, rawQuery)) saved[k] = filter[k];
+    filter = Object.assign({}, parsed, saved);
+    renderActiveChips();
+    refresh(false);
+  }, 260);
+}
+
+function queryTouches(key, text) {
+  const patterns = {
+    instrument: /\b(HDFC|federal|fed)\b/i,
+    brand:      /\b(HE|NCH|HQ|mixed)\b/i,
+    status:     /\b(unreconciled|unrecon|reconciled|quarantined)\b/i,
+  };
+  return patterns[key] ? patterns[key].test(text) : false;
+}
+
+function onSearchKey(e) {
+  if (e.key === 'Escape') { e.target.blur(); }
+}
+
+function renderActiveChips() {
+  const el = document.getElementById('active-chips');
+  const chips = [];
+  const add = (label, onClear) => chips.push(`<span class="chip chip-removable" onclick="${onClear}">${escapeHtml(label)} ×</span>`);
+  if (filter.dir !== 'all')        add(filter.dir === 'credit' ? 'inflow' : 'outflow', "clearFilter('dir')");
+  if (filter.brand !== 'all')      add('brand: ' + filter.brand, "clearFilter('brand')");
+  if (filter.instrument !== 'all') add(filter.instrument === 'hdfc_ca_4680' ? 'HDFC 4680' : 'Federal 4510', "clearFilter('instrument')");
+  if (filter.status !== 'all')     add('status: ' + filter.status, "clearFilter('status')");
+  if (filter.category)             add(filter.category.replace(/_/g,' '), "clearFilter('category')");
+  if (filter.platform)             add(filter.platform, "clearFilter('platform')");
+  if (filter.payee_id) {
+    const p = allPayees.find(x => String(x.id) === filter.payee_id);
+    add('payee: ' + (p ? p.name : filter.payee_id), "clearFilter('payee_id')");
+  }
+  if (filter.min_amount) add('> ₹' + fmtShort(filter.min_amount*100), "clearFilter('min_amount')");
+  if (filter.max_amount) add('< ₹' + fmtShort(filter.max_amount*100), "clearFilter('max_amount')");
+  if (filter.date_from)  add(dateChipLabel(filter.date_from, filter.date_to), "clearFilter('date_from')");
+  el.innerHTML = chips.join('');
+}
+
+function dateChipLabel(from, to) {
+  const d = new Date(from);
+  const s = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  return to ? `${s} — ${new Date(to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` : `since ${s}`;
+}
+
+function clearFilter(key) {
+  if (['dir','brand','instrument','status'].includes(key)) filter[key] = 'all';
+  else if (key === 'date_from') { filter.date_from = null; filter.date_to = null; }
+  else filter[key] = key.startsWith('min') || key.startsWith('max') ? null : '';
+  renderActiveChips();
+  syncAdvancedPills();
+  refresh(false);
+}
+
+function syncAdvancedPills() {
+  document.querySelectorAll('#advanced-panel [data-kind]').forEach(btn => {
+    const k = btn.dataset.kind;
+    btn.classList.toggle('chip-in', filter[k] === btn.dataset.val && btn.dataset.val !== 'all');
+    btn.classList.toggle('chip-mute', !(filter[k] === btn.dataset.val && btn.dataset.val !== 'all'));
+  });
+}
+
+function setPill(btn) {
+  filter[btn.dataset.kind] = btn.dataset.val;
+  renderActiveChips();
+  syncAdvancedPills();
+  refresh(false);
+}
+
+function toggleAdvanced() {
+  document.getElementById('advanced-panel').classList.toggle('hidden');
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Header summary — total balance + story sentence
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function renderHeaderSummary(s) {
+  if (!s || !s.ok) return;
+  const bals = Array.isArray(s.balances) ? s.balances : [];
+  const total = bals.reduce((a, b) => a + (b.balance_paise || 0), 0);
+  document.getElementById('total-balance').textContent = total ? fmtMoney(total) : '—';
+  // Story: "Today: +₹X across Y txns. Biggest outflow: Z."
+  const t = s.today || {};
+  const totalToday = (t.n_credit || 0) + (t.n_debit || 0);
+  let story;
+  if (totalToday === 0) {
+    story = 'No activity yet today.';
+  } else {
+    const net = (t.net_paise || 0);
+    const sign = net >= 0 ? '+' : '−';
+    const word = net >= 0 ? 'up' : 'down';
+    story = `Today you're ${sign}${fmtShort(Math.abs(net))} across ${totalToday} txn${totalToday===1?'':'s'}.`;
+    if (t.n_credit && t.n_debit) story += ` ${t.n_credit} in / ${t.n_debit} out.`;
+    else if (t.n_credit) story += ` All inflow.`;
+    else story += ` All outflow.`;
+  }
+  if (s.any_source_stale) story += ' ⚠ One or more sources stale — check Reconcile.';
+  document.getElementById('hero-story').textContent = story;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Sparkline
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function loadCashflow() {
+  try {
+    const r = await authedFetch(`${API}?action=daily_cashflow&days=30`);
+    cachedDailyCF = r.rows || [];
+  } catch {}
+}
+
+function renderSparkline(rows) {
+  // Build a continuous 30-day array (fill missing days with 0).
+  const today = new Date();
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const hit = rows.find(r => r.day === key);
+    const net = hit ? ((hit.credit_paise || 0) - (hit.debit_paise || 0)) : 0;
+    days.push({ day: key, net });
+  }
+  const max = Math.max(...days.map(d => Math.abs(d.net)), 1);
+  const W = 360, H = 60, gap = 1;
+  const bw = (W - gap * (days.length-1)) / days.length;
+  const mid = H / 2;
+  const svg = days.map((d, i) => {
+    const h = (Math.abs(d.net) / max) * (mid - 2);
+    const x = i * (bw + gap);
+    const y = d.net >= 0 ? mid - h : mid;
+    return `<rect class="spark-bar ${d.net < 0 ? 'neg' : ''}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${Math.max(1, h).toFixed(2)}" data-day="${d.day}" data-net="${d.net}"/>`;
+  }).join('');
+  const el = document.getElementById('sparkline');
+  el.innerHTML = `<line x1="0" y1="${mid}" x2="${W}" y2="${mid}" stroke="rgba(255,255,255,.08)" stroke-dasharray="2,2"/>` + svg;
+  el.querySelectorAll('.spark-bar').forEach(bar => {
+    bar.addEventListener('mouseenter', e => {
+      const d = e.target.dataset.day; const n = parseInt(e.target.dataset.net, 10);
+      const tip = document.getElementById('spark-tooltip');
+      tip.textContent = `${d} · ${n >= 0 ? '+' : ''}${fmtShort(n)}`;
+      tip.style.left = (e.target.getBoundingClientRect().left - el.getBoundingClientRect().left) + 'px';
+      tip.style.opacity = '1';
+    });
+    bar.addEventListener('mouseleave', () => { document.getElementById('spark-tooltip').style.opacity = '0'; });
+    bar.addEventListener('click', e => {
+      const d = e.target.dataset.day;
+      filter.date_from = d + 'T00:00:00+05:30';
+      const next = new Date(d); next.setDate(next.getDate() + 1);
+      filter.date_to = next.toISOString().slice(0, 10) + 'T00:00:00+05:30';
+      renderActiveChips();
+      refresh(false);
+    });
+  });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Ledger tab — day-grouped card list
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function renderLedger(rows) {
+  const el = document.getElementById('ledger-body');
+  const sum = document.getElementById('ledger-summary');
+
+  // Summary line
+  const cr = rows.filter(r => r.direction === 'credit').reduce((a, b) => a + (b.amount_paise || 0), 0);
+  const dr = rows.filter(r => r.direction === 'debit').reduce((a, b) => a + (b.amount_paise || 0), 0);
+  sum.innerHTML = `<span class="text-ink-2">${rows.length}</span> txn${rows.length===1?'':'s'} · <span class="text-green-400 num">+${fmtShort(cr)}</span> in · <span class="text-red-400 num">−${fmtShort(dr)}</span> out · <span class="num">${(cr-dr)>=0?'+':''}${fmtShort(cr-dr)}</span> net`;
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="card p-6 text-center text-ink-3">
+      <div class="text-sm mb-2">No matching transactions.</div>
+      <button class="text-brand-400 text-xs" onclick="clearAllFilters()">clear all filters</button>
+    </div>`;
+    return;
+  }
+
+  // Group by day (key = YYYY-MM-DD in IST)
+  const groups = new Map();
+  for (const r of rows) {
+    const dt = r.txn_at || r.received_at;
+    const key = dt ? dt.slice(0, 10) : 'unknown';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+  const days = Array.from(groups.keys()).sort((a, b) => b.localeCompare(a));
+
+  el.innerHTML = days.map(day => {
+    const dayRows = groups.get(day);
+    const dayCr = dayRows.filter(r => r.direction === 'credit').reduce((a, b) => a + (b.amount_paise || 0), 0);
+    const dayDr = dayRows.filter(r => r.direction === 'debit').reduce((a, b) => a + (b.amount_paise || 0), 0);
+    const net = dayCr - dayDr;
+    return `
+      <div class="mb-5">
+        <div class="flex items-baseline justify-between px-1 mb-2 sticky top-[112px] md:top-[104px] py-1 z-10 bg-surface-0">
+          <div class="text-xs text-ink-3 font-medium">${escapeHtml(prettyDay(day))}</div>
+          <div class="text-xs text-ink-3 num">
+            <span class="text-green-400">+${fmtShort(dayCr)}</span>
+            <span class="text-ink-4 mx-1">·</span>
+            <span class="text-red-400">−${fmtShort(dayDr)}</span>
+            <span class="text-ink-4 mx-1">·</span>
+            <span class="${net >= 0 ? 'text-green-400' : 'text-red-400'} font-semibold">${net>=0?'+':''}${fmtShort(net)}</span>
           </div>
-        `).join('');
-      }
+        </div>
+        <div class="card overflow-hidden">
+          ${dayRows.map(r => rowCard(r)).join('<div class="divider"></div>')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
-      const t = s.today || {};
-      const netEl = document.getElementById('today-net');
-      netEl.textContent = fmtRupeesShort(t.net_paise);
-      netEl.className = 'text-2xl font-bold num ' + ((t.net_paise || 0) >= 0 ? 'text-green-400' : 'text-red-400');
-      document.getElementById('today-count').textContent = `${(t.n_credit || 0) + (t.n_debit || 0)} txns`;
+function rowCard(r) {
+  const dir = r.direction === 'credit' ? 'in' : 'out';
+  const color = dir === 'in' ? 'text-green-400' : 'text-red-400';
+  const dot = r.category ? `<span class="dot dot-${escSel(r.category)}" title="${escapeHtml(r.category)}"></span>` : '';
+  const cpLabel = r.payee_name || r.counterparty || r.counterparty_ref || '—';
+  const cpMeta = [r.payee_last4, r.channel, r.settlement_platform].filter(Boolean).join(' · ');
+  return `
+    <div class="row px-4 py-3 flex items-center gap-3" onclick="openDetail(${r.id})">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          ${dot}
+          <span class="text-sm font-medium text-ink-1 truncate">${escapeHtml(cpLabel)}</span>
+          ${r.reconcile_status === 'unreconciled' ? '<span class="chip chip-act text-[10px]">!</span>' : ''}
+        </div>
+        <div class="text-[11px] text-ink-3 mt-0.5 truncate">${escapeHtml(cpMeta || relativeTime(r.txn_at || r.received_at))}</div>
+      </div>
+      <div class="text-right">
+        <div class="text-sm font-semibold num ${color}">${dir === 'in' ? '+' : '−'}${fmtMoney(r.amount_paise)}</div>
+        <div class="text-[10px] text-ink-4">${escapeHtml(shortTime(r.txn_at || r.received_at))}</div>
+      </div>
+    </div>
+  `;
+}
 
-      const w = s.week || {};
-      document.getElementById('week-credit').textContent = fmtRupeesShort(w.credit_paise);
-      document.getElementById('week-credit-n').textContent = `${w.n_credit || 0} in`;
-      document.getElementById('week-debit').textContent = fmtRupeesShort(w.debit_paise);
-      document.getElementById('week-debit-n').textContent = `${w.n_debit || 0} out`;
-      const weekNetEl = document.getElementById('week-net');
-      weekNetEl.textContent = fmtRupeesShort(w.net_paise);
-      weekNetEl.className = 'text-2xl font-bold num ' + ((w.net_paise || 0) >= 0 ? 'text-green-400' : 'text-red-400');
+function clearAllFilters() {
+  filter = {
+    dir: 'all', status: 'all', instrument: 'all', brand: 'all',
+    category: '', platform: '', payee_id: '',
+    q: '', min_amount: null, max_amount: null,
+    date_from: null, date_to: null,
+  };
+  rawQuery = '';
+  document.getElementById('search-input').value = '';
+  renderActiveChips();
+  syncAdvancedPills();
+  refresh(false);
+}
 
-      // Parse health
-      const ph = s.parse_health || {};
-      const bad = (ph.failed || 0) + (ph.partial || 0) + (ph.quarantined || 0);
-      const pb = document.getElementById('parse-banner');
-      if (bad > 0) {
-        pb.classList.remove('hidden');
-        pb.textContent = `⚠ ${bad} email(s) didn't parse cleanly. Filter by 'Quarantined' to inspect; regex updates + reparse endpoint recover them.`;
-      } else { pb.classList.add('hidden'); }
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Payees tab
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function loadPayees() {
+  try {
+    const r = await authedFetch(`${API}?action=payees`);
+    allPayees = r.rows || [];
+  } catch {}
+  // Seed category filter dropdown
+  const cats = [...new Set(allPayees.map(p => p.category).filter(Boolean))].sort();
+  const sel = document.getElementById('payee-cat-filter');
+  if (sel) {
+    sel.innerHTML = '<option value="">all categories</option>' +
+      cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c.replace(/_/g,' '))}</option>`).join('');
+  }
+}
 
-      // Source health banner
-      const stale = (s.source_health || []).filter(h => h.live_status === 'stale' || h.live_status === 'silent');
-      const sb = document.getElementById('stale-banner');
-      if (stale.length > 0) {
-        sb.classList.remove('hidden');
-        sb.innerHTML = '⚠ Stale sources: ' + stale.map(h =>
-          `${escapeHtml(h.source)}/${escapeHtml(h.instrument)} (${h.live_status === 'silent' ? 'never' : (h.age_minutes || 0) + 'm'})`
-        ).join(', ');
-      } else { sb.classList.add('hidden'); }
-
-      // Source health row
-      renderSourceHealth(s.source_health || []);
-    }
-
-    function renderSourceHealth(rows) {
-      const el = document.getElementById('source-health');
-      if (!rows.length) { el.innerHTML = '<span class="text-gray-500 text-xs">no source health rows</span>'; return; }
-      el.innerHTML = '<span class="text-gray-500 mr-1">sources:</span>' + rows.map(h => {
-        const ls = ['healthy','stale','silent'].includes(h.live_status) ? h.live_status : 'unknown';
-        const age = h.last_event_at ? relativeTime(h.last_event_at) : 'never';
-        return `<span class="chip chip-${ls}" title="${escapeHtml(h.source)}/${escapeHtml(h.instrument)} — last ${escapeHtml(age)}">${escapeHtml(h.source)} ${age === 'never' ? '' : '· ' + escapeHtml(age)}</span>`;
-      }).join('');
-    }
-
-    function renderRows(rows) {
-      document.getElementById('row-count').textContent = rows.length;
-      const tb = document.getElementById('rows');
-      document.getElementById('empty-state').classList.toggle('hidden', rows.length > 0);
-      if (!rows.length) {
-        tb.innerHTML = '<tr><td colspan="11" class="text-center text-gray-500 py-8">no rows match</td></tr>';
-        return;
-      }
-      tb.innerHTML = rows.map(r => {
-        const dirClass = r.direction === 'credit' ? 'chip-credit' : 'chip-debit';
-        const chanClass = channelClass(r.channel);
-        const instrumentLabel = instrumentShort(r.instrument);
-        const instrumentClass = r.source === 'federal' ? 'chip-federal' : 'chip-hdfc';
-        const recon = reconcileChip(r.reconcile_status);
-        const amountStr = r.amount_paise != null
-          ? (r.direction === 'credit' ? '+' : '−') + fmtRupees(r.amount_paise)
-          : '—';
-        const brandChip = r.brand
-          ? `<span class="chip ${brandClass(r.brand)}">${escapeHtml(r.brand)}</span>`
-          : '<span class="text-gray-600">—</span>';
-        const catChip = r.category
-          ? `<span class="chip ${categoryClass(r.category)}">${escapeHtml(r.category.replace(/_/g,' '))}</span>`
-          : '<span class="text-gray-600">—</span>';
-        const platChip = r.settlement_platform
-          ? `<span class="chip ${platformClass(r.settlement_platform)}">${escapeHtml(r.settlement_platform)}</span>`
-          : '<span class="text-gray-600">direct</span>';
-        const cpLabel = r.payee_name || r.counterparty || r.counterparty_ref || '—';
-        return `
-          <tr class="tbrow" title="${escapeHtml(r.narration || '')}" onclick="filterByCounterparty(this)" data-cp="${escapeHtml(r.counterparty || '')}" data-pid="${r.matched_payee_id || ''}">
-            <td class="text-gray-400 whitespace-nowrap">${escapeHtml(relativeTime(r.txn_at || r.received_at))}</td>
-            <td><span class="chip ${instrumentClass}">${escapeHtml(instrumentLabel)}</span></td>
-            <td><span class="chip ${dirClass}">${r.direction === 'credit' ? '↓ in' : '↑ out'}</span></td>
-            <td class="text-right font-semibold num ${r.direction === 'credit' ? 'text-green-400' : 'text-red-400'}">${escapeHtml(amountStr)}</td>
-            <td>${r.channel ? `<span class="chip ${chanClass}">${escapeHtml(r.channel)}</span>` : '—'}</td>
-            <td>${platChip}</td>
-            <td class="text-gray-300">${escapeHtml(cpLabel)}${r.payee_last4 ? ` <span class="text-gray-500 text-xs">·${escapeHtml(r.payee_last4)}</span>` : ''}</td>
-            <td>${catChip}</td>
-            <td>${brandChip}</td>
-            <td>${recon}</td>
-            <td onclick="event.stopPropagation()">${r.reconcile_status === 'unreconciled' ? `<button class="btn text-xs" data-id="${r.id}" onclick="ignoreRow(this)">ignore</button>` : ''}</td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    function renderTopCounterparties(rows) {
-      const el = document.getElementById('top-counterparties');
-      if (!rows.length) { el.innerHTML = '<div class="text-gray-500 py-3">no data yet for this period</div>'; return; }
-      const max = Math.max(...rows.map(r => r.total_paise || 0), 1);
-      el.innerHTML = rows.map(r => {
-        const pct = Math.round(((r.total_paise || 0) / max) * 100);
-        const brand = r.payee_brand
-          ? `<span class="chip ${brandClass(r.payee_brand)}">${escapeHtml(r.payee_brand)}</span>`
-          : '';
-        const cat = r.payee_category
-          ? `<span class="chip ${categoryClass(r.payee_category)}">${escapeHtml(r.payee_category.replace(/_/g,' '))}</span>`
-          : '<span class="chip chip-unknown">unmatched</span>';
-        const label = r.payee_name || r.counterparty;
-        return `
-          <div class="flex items-center gap-3 py-2 border-b border-white/5 cursor-pointer tcp-row" data-cp="${escapeHtml(r.counterparty)}" data-pid="${r.matched_payee_id || ''}">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 text-sm text-gray-200 truncate">
-                <span class="truncate">${escapeHtml(label)}</span>
-                ${brand}${cat}
-              </div>
-              <div class="w-full h-1 mt-1 rounded bg-white/5 overflow-hidden">
-                <div class="h-full bg-brand-500" style="width:${pct}%"></div>
-              </div>
+let payeeSearchTerm = '';
+function onPayeeSearch(e) {
+  payeeSearchTerm = e.target.value.trim().toLowerCase();
+  renderPayees();
+}
+function renderPayees() {
+  const cat = document.getElementById('payee-cat-filter')?.value || '';
+  let filtered = allPayees;
+  if (cat) filtered = filtered.filter(p => p.category === cat);
+  if (payeeSearchTerm) {
+    const t = payeeSearchTerm;
+    filtered = filtered.filter(p =>
+      (p.name || '').toLowerCase().includes(t) ||
+      (p.commodity || '').toLowerCase().includes(t) ||
+      (p.bank || '').toLowerCase().includes(t));
+  }
+  const el = document.getElementById('payee-grid');
+  if (!filtered.length) { el.innerHTML = '<div class="text-ink-3 text-center py-6 col-span-full">no match</div>'; return; }
+  el.innerHTML = filtered.map(p => {
+    const paid = p.paid_paise || 0;
+    const recv = p.received_paise || 0;
+    return `
+      <button class="card p-3 text-left hover:bg-white/5 ${p.brand ? 'brand-'+escSel(p.brand) : ''}" onclick="drillPayee(${p.id})">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-ink-1 truncate">${escapeHtml(p.name)}</div>
+            <div class="text-[11px] text-ink-3 mt-0.5 flex items-center gap-1.5 flex-wrap">
+              ${p.category ? `<span class="dot dot-${escSel(p.category)}"></span><span>${escapeHtml(p.category.replace(/_/g,' '))}</span>` : ''}
+              ${p.commodity ? `<span class="text-ink-4">·</span><span>${escapeHtml(p.commodity)}</span>` : ''}
+              ${p.brand ? `<span class="text-ink-4">·</span><span>${escapeHtml(p.brand)}</span>` : ''}
             </div>
-            <div class="text-right num">
-              <div class="font-semibold">${fmtRupeesShort(r.total_paise)}</div>
-              <div class="text-[10px] text-gray-500">${r.n} txn${r.n === 1 ? '' : 's'} · ${escapeHtml(relativeTime(r.last_txn_at))}</div>
+          </div>
+          <div class="text-right text-[11px] shrink-0">
+            ${paid ? `<div class="text-red-400 num">−${fmtShort(paid)}</div>` : ''}
+            ${recv ? `<div class="text-green-400 num">+${fmtShort(recv)}</div>` : ''}
+            <div class="text-ink-4">${p.txn_count || 0} txn${p.txn_count===1?'':'s'}</div>
+          </div>
+        </div>
+      </button>
+    `;
+  }).join('');
+}
+
+async function drillPayee(id) {
+  filter.payee_id = String(id);
+  clearBasicFiltersExceptPayee();
+  renderActiveChips();
+  switchTab('ledger');
+  refresh(false);
+}
+
+function clearBasicFiltersExceptPayee() {
+  filter.q = '';
+  filter.category = ''; filter.platform = '';
+  filter.dir = 'all'; filter.status = 'all'; filter.brand = 'all'; filter.instrument = 'all';
+  filter.min_amount = null; filter.max_amount = null;
+  filter.date_from = null; filter.date_to = null;
+  document.getElementById('search-input').value = '';
+  rawQuery = '';
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Reconcile tab — attention queue expanded
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function loadAttention() {
+  try {
+    const r = await authedFetch(`${API}?action=attention_queue`);
+    lastAttention = r;
+    renderAttentionBadge(r);
+    if (activeTab === 'reconcile') renderReconcile(r);
+  } catch {}
+}
+
+function renderAttentionBadge(r) {
+  const c = r.counts || {};
+  const total = (c.n_unmatched || 0) + (c.n_unreconciled || 0) + (c.n_parse_issues || 0);
+  const bits = [];
+  if (c.n_unmatched)    bits.push(`${c.n_unmatched} unmatched`);
+  if (c.n_unreconciled) bits.push(`${c.n_unreconciled} unreconciled`);
+  if (c.n_parse_issues) bits.push(`${c.n_parse_issues} parse issue${c.n_parse_issues===1?'':'s'}`);
+  const banner = document.getElementById('attention');
+  const summary = document.getElementById('attention-summary');
+  if (total > 0) {
+    banner.classList.remove('hidden');
+    summary.textContent = bits.join(' · ');
+  } else {
+    banner.classList.add('hidden');
+  }
+  for (const bId of ['tab-reconcile-badge', 'tab-reconcile-badge-m']) {
+    const b = document.getElementById(bId);
+    if (!b) continue;
+    b.textContent = total;
+    b.classList.toggle('hidden', total === 0);
+  }
+}
+
+function renderReconcile(r) {
+  if (!r) { document.getElementById('reconcile-body').innerHTML = '<div class="text-ink-3 text-center py-10">nothing to review 🎉</div>'; return; }
+  const sections = [];
+  if ((r.unmatched || []).length) {
+    sections.push(`
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-sm font-semibold">Unmatched counterparties</div>
+          <div class="text-xs text-ink-3">${r.unmatched.length} txn${r.unmatched.length===1?'':'s'} · last 30d</div>
+        </div>
+        <div class="space-y-1">
+          ${r.unmatched.map(x => `
+            <div class="row flex items-center justify-between py-2 px-2" onclick="openDetail(${x.id})">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm truncate">${escapeHtml(x.counterparty)}</div>
+                <div class="text-[11px] text-ink-3">${escapeHtml(relativeTime(x.txn_at))} · ${escapeHtml(x.channel || '')}</div>
+              </div>
+              <div class="text-sm num ${x.direction === 'credit' ? 'text-green-400' : 'text-red-400'}">${x.direction === 'credit' ? '+' : '−'}${fmtShort(x.amount_paise)}</div>
             </div>
-          </div>`;
-      }).join('');
-      el.querySelectorAll('.tcp-row').forEach(row => {
-        row.addEventListener('click', () => {
-          const pid = row.dataset.pid;
-          if (pid) {
-            filter.payee_id = pid;
-            const sel = document.getElementById('f-payee'); if (sel) sel.value = pid;
-          } else {
-            filter.q = row.dataset.cp;
-            const inp = document.getElementById('f-search'); if (inp) inp.value = row.dataset.cp;
-          }
-          refresh(false);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
-      });
-    }
+          `).join('')}
+        </div>
+        <div class="text-[11px] text-ink-3 mt-2 leading-relaxed">
+          Tap a row to see details. To add as a payee, use the Payees tab (coming with Phase 2).
+        </div>
+      </div>`);
+  }
+  if ((r.unusual || []).length) {
+    sections.push(`
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-sm font-semibold">Unusual debits</div>
+          <div class="text-xs text-ink-3">${r.unusual.length} · ≥2× normal</div>
+        </div>
+        <div class="space-y-1">
+          ${r.unusual.map(x => `
+            <div class="row flex items-center justify-between py-2 px-2" onclick="openDetail(${x.id})">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm truncate">${escapeHtml(x.counterparty)}</div>
+                <div class="text-[11px] text-ink-3">${escapeHtml(relativeTime(x.txn_at))} · avg ${fmtShort(x.avg_paise)} · this ${((x.ratio)||0).toFixed(1)}×</div>
+              </div>
+              <div class="text-sm num text-red-400">−${fmtShort(x.amount_paise)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`);
+  }
+  if ((r.unreconciled || []).length) {
+    sections.push(`
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-sm font-semibold">Platform payouts awaiting reconciliation</div>
+          <div class="text-xs text-ink-3">${r.unreconciled.length}</div>
+        </div>
+        <div class="space-y-1">
+          ${r.unreconciled.map(x => `
+            <div class="row flex items-center justify-between py-2 px-2" onclick="openDetail(${x.id})">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm truncate">${escapeHtml(x.counterparty)}</div>
+                <div class="text-[11px] text-ink-3">${escapeHtml(relativeTime(x.txn_at))} · ${escapeHtml(x.settlement_platform || '')} · ${escapeHtml(x.channel || '')}</div>
+              </div>
+              <div class="text-sm num text-green-400">+${fmtShort(x.amount_paise)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`);
+  }
+  if (!sections.length) sections.push('<div class="text-ink-3 text-center py-10">nothing to review 🎉</div>');
+  document.getElementById('reconcile-body').innerHTML = sections.join('');
+}
 
-    function renderPlatformSummary(rows) {
-      const el = document.getElementById('platform-summary');
-      if (!rows.length) { el.innerHTML = '<div class="text-gray-500">no platform data</div>'; return; }
-      // Group by platform; display credit sum (revenue received via that route).
-      const byPlat = {};
-      for (const r of rows) {
-        if (!byPlat[r.platform]) byPlat[r.platform] = { credit: 0, debit: 0, n: 0 };
-        byPlat[r.platform][r.direction] = r.total_paise || 0;
-        byPlat[r.platform].n += r.n || 0;
-      }
-      const total = Object.values(byPlat).reduce((a, b) => a + (b.credit || 0), 0) || 1;
-      el.innerHTML = '<div class="grid grid-cols-2 md:grid-cols-3 gap-2">' +
-        Object.entries(byPlat)
-          .sort((a, b) => (b[1].credit || 0) - (a[1].credit || 0))
-          .map(([plat, v]) => {
-            const pct = Math.round(((v.credit || 0) / total) * 100);
-            return `
-              <div class="card p-3">
-                <div class="flex items-center justify-between mb-1">
-                  <span class="chip ${platformClass(plat)}">${escapeHtml(plat)}</span>
-                  <span class="text-xs text-gray-500">${pct}%</span>
-                </div>
-                <div class="text-lg font-semibold num text-green-400">${fmtRupeesShort(v.credit)}</div>
-                <div class="text-[11px] text-gray-500">${v.n} credits</div>
-              </div>`;
-          }).join('') +
-        '</div>';
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Insights tab — 90d charts
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function loadInsights() {
+  const since = new Date(Date.now() - 90 * 86400000).toISOString();
+  const [cf, plat, top] = await Promise.all([
+    authedFetch(`${API}?action=daily_cashflow&days=90`),
+    authedFetch(`${API}?action=platform_summary&since=${encodeURIComponent(since)}`),
+    authedFetch(`${API}?action=top_counterparties&dir=debit&since=${encodeURIComponent(since)}&limit=10`),
+  ]);
+  renderBigCashflow(cf.rows || []);
+  renderPlatformBreakdown(plat.rows || []);
+  renderTopCPBig(top.rows || []);
+  renderBrandSplit();
+}
+function renderBigCashflow(rows) {
+  const today = new Date();
+  const days = [];
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const hit = rows.find(r => r.day === key);
+    days.push({ day: key, cr: hit?.credit_paise || 0, dr: hit?.debit_paise || 0 });
+  }
+  const max = Math.max(...days.map(d => Math.max(d.cr, d.dr)), 1);
+  const W = 720, H = 180, gap = 1;
+  const bw = (W - gap * (days.length-1)) / days.length;
+  const mid = H / 2;
+  const bars = days.map((d, i) => {
+    const x = i * (bw + gap);
+    const crH = (d.cr / max) * (mid - 2);
+    const drH = (d.dr / max) * (mid - 2);
+    return `
+      <rect class="spark-bar" x="${x.toFixed(2)}" y="${(mid - crH).toFixed(2)}" width="${bw.toFixed(2)}" height="${crH.toFixed(2)}" data-day="${d.day}" data-type="credit"/>
+      <rect class="spark-bar neg" x="${x.toFixed(2)}" y="${mid.toFixed(2)}" width="${bw.toFixed(2)}" height="${drH.toFixed(2)}" data-day="${d.day}" data-type="debit"/>
+    `;
+  }).join('');
+  document.getElementById('insight-cashflow').innerHTML =
+    `<line x1="0" y1="${mid}" x2="${W}" y2="${mid}" stroke="rgba(255,255,255,.08)" stroke-dasharray="2,2"/>` + bars;
+}
+function renderPlatformBreakdown(rows) {
+  const byPlat = {};
+  for (const r of rows) {
+    const p = r.platform || 'direct';
+    if (!byPlat[p]) byPlat[p] = 0;
+    if (r.direction === 'credit') byPlat[p] += r.total_paise || 0;
+  }
+  const total = Object.values(byPlat).reduce((a, b) => a + b, 0) || 1;
+  const sorted = Object.entries(byPlat).sort((a, b) => b[1] - a[1]);
+  document.getElementById('insight-platform').innerHTML = sorted.map(([p, v]) => {
+    const pct = Math.round((v / total) * 100);
+    return `
+      <div class="mb-2.5">
+        <div class="flex items-center justify-between text-xs mb-1">
+          <span class="text-ink-2">${escapeHtml(p)}</span>
+          <span class="text-ink-3 num">${fmtShort(v)} · ${pct}%</span>
+        </div>
+        <div class="h-1.5 rounded bg-white/5 overflow-hidden">
+          <div class="h-full bg-brand-500" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+function renderTopCPBig(rows) {
+  if (!rows.length) { document.getElementById('insight-topcp').innerHTML = '<div class="text-ink-3">no data</div>'; return; }
+  const max = Math.max(...rows.map(r => r.total_paise || 0), 1);
+  document.getElementById('insight-topcp').innerHTML = rows.map(r => {
+    const pct = Math.round(((r.total_paise || 0) / max) * 100);
+    const label = r.payee_name || r.counterparty;
+    return `
+      <button class="w-full text-left mb-2.5 hover:opacity-80" onclick="filter.payee_id='${r.matched_payee_id || ''}'; filter.q=${r.matched_payee_id ? '\'\'' : "'" + escapeJs(r.counterparty) + "'"}; switchTab('ledger'); renderActiveChips(); refresh(false);">
+        <div class="flex items-center justify-between text-xs mb-1">
+          <span class="text-ink-2 truncate mr-2">${escapeHtml(label)}</span>
+          <span class="text-red-400 num">−${fmtShort(r.total_paise)}</span>
+        </div>
+        <div class="h-1.5 rounded bg-white/5 overflow-hidden">
+          <div class="h-full bg-red-500/60" style="width:${pct}%"></div>
+        </div>
+      </button>`;
+  }).join('');
+}
+async function renderBrandSplit() {
+  const since = new Date(Date.now() - 90 * 86400000).toISOString();
+  // No dedicated endpoint; use list endpoint with grouping client-side
+  try {
+    const r = await authedFetch(`${API}?action=list&dir=debit&date_from=${encodeURIComponent(since)}&limit=500`);
+    const by = {};
+    for (const x of (r.rows || [])) {
+      const b = x.brand || 'unknown';
+      by[b] = (by[b] || 0) + (x.amount_paise || 0);
     }
+    const total = Object.values(by).reduce((a, b) => a + b, 0) || 1;
+    const order = ['HE','NCH','HQ','mixed','unknown'];
+    document.getElementById('insight-brand').innerHTML = order.filter(b => by[b]).map(b => {
+      const pct = Math.round((by[b] / total) * 100);
+      return `
+        <div class="mb-2.5">
+          <div class="flex items-center justify-between text-xs mb-1">
+            <span class="text-ink-2">${escapeHtml(b)}</span>
+            <span class="text-ink-3 num">${fmtShort(by[b])} · ${pct}%</span>
+          </div>
+          <div class="h-1.5 rounded bg-white/5 overflow-hidden">
+            <div class="h-full bg-brand-500" style="width:${pct}%"></div>
+          </div>
+        </div>`;
+    }).join('') || '<div class="text-ink-3">no data</div>';
+  } catch {}
+}
 
-    function filterByCounterparty(rowEl) {
-      const pid = rowEl.dataset.pid;
-      const cp  = rowEl.dataset.cp;
-      if (pid) {
-        filter.payee_id = pid;
-        const sel = document.getElementById('f-payee'); if (sel) sel.value = pid;
-      } else if (cp) {
-        filter.q = cp;
-        const inp = document.getElementById('f-search'); if (inp) inp.value = cp;
-      }
-      refresh(false);
-    }
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Tab switching
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function switchTab(tab) {
+  activeTab = tab;
+  ['ledger','payees','reconcile','insights'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('hidden', t !== tab);
+  });
+  document.querySelectorAll('[data-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  if (tab === 'payees' && !allPayees.length)  loadPayees().then(renderPayees);
+  else if (tab === 'payees')                   renderPayees();
+  else if (tab === 'reconcile')                { renderReconcile(lastAttention); loadAttention().then(() => renderReconcile(lastAttention)); }
+  else if (tab === 'insights')                 loadInsights();
+}
 
-    function instrumentShort(i) {
-      if (i === 'hdfc_ca_4680')    return 'HDFC 4680';
-      if (i === 'federal_sa_4510') return 'Federal 4510';
-      return i || '—';
-    }
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Detail sheet
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function openDetail(id) {
+  // Fetch the row fresh to render full detail including narration.
+  try {
+    const r = await authedFetch(`${API}?action=list&limit=500`);
+    const row = (r.rows || []).find(x => x.id === id);
+    if (!row) return;
+    const color = row.direction === 'credit' ? 'text-green-400' : 'text-red-400';
+    const sign = row.direction === 'credit' ? '+' : '−';
+    document.getElementById('sheet-body').innerHTML = `
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <div class="text-xs text-ink-3">${escapeHtml(prettyDateTime(row.txn_at || row.received_at))}</div>
+          <div class="text-lg font-semibold mt-0.5">${escapeHtml(row.payee_name || row.counterparty || '—')}</div>
+          ${row.payee_last4 ? `<div class="text-xs text-ink-3">a/c ending ${escapeHtml(row.payee_last4)}</div>` : ''}
+        </div>
+        <button class="text-ink-3 text-xl" onclick="closeSheet()">×</button>
+      </div>
+      <div class="num text-3xl font-bold ${color} mb-4">${sign}${fmtMoney(row.amount_paise)}</div>
+      <div class="grid grid-cols-2 gap-3 text-xs mb-4">
+        ${kv('Account', row.instrument === 'hdfc_ca_4680' ? 'HDFC 4680' : row.instrument === 'federal_sa_4510' ? 'Federal 4510' : row.instrument)}
+        ${kv('Channel', row.channel)}
+        ${kv('Platform', row.settlement_platform || 'direct')}
+        ${kv('Brand', row.brand)}
+        ${kv('Category', row.category ? row.category.replace(/_/g,' ') : null)}
+        ${kv('Balance after', row.balance_paise_after != null ? fmtMoney(row.balance_paise_after) : null)}
+        ${kv('Ref', row.source_ref)}
+        ${kv('VPA', row.counterparty_ref)}
+        ${kv('Reconcile', row.reconcile_status)}
+        ${kv('Parse', row.parse_status)}
+      </div>
+      ${row.narration ? `
+        <div class="text-xs text-ink-3 mb-1">Narration</div>
+        <div class="p-3 bg-surface-3 rounded-lg text-xs font-mono text-ink-2 whitespace-pre-wrap break-words mb-3">${escapeHtml(row.narration)}</div>
+      ` : ''}
+      <div class="flex gap-2">
+        ${row.reconcile_status === 'unreconciled' ? `<button class="input flex-1 text-sm hover:bg-white/10" onclick="markIgnored(${row.id})">mark ignored</button>` : ''}
+        ${row.counterparty && !row.matched_payee_id ? `<button class="input flex-1 text-sm hover:bg-white/10" onclick="searchFromDetail('${escapeJs(row.counterparty)}')">find similar</button>` : ''}
+      </div>
+    `;
+    document.getElementById('sheet-overlay').classList.remove('hidden');
+    document.getElementById('sheet').classList.add('open');
+  } catch {}
+}
+function kv(k, v) {
+  if (v == null || v === '') return '';
+  return `<div><div class="text-ink-3">${escapeHtml(k)}</div><div class="text-ink-1 num">${escapeHtml(v)}</div></div>`;
+}
+function closeSheet() {
+  document.getElementById('sheet').classList.remove('open');
+  setTimeout(() => document.getElementById('sheet-overlay').classList.add('hidden'), 250);
+}
+async function markIgnored(id) {
+  try {
+    await fetch(`${API}?action=reconcile`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'X-Ops-Pin': pin },
+      body: JSON.stringify({ id, status: 'ignored' }),
+    });
+    closeSheet();
+    refresh(false);
+    loadAttention();
+  } catch {}
+}
+function searchFromDetail(cp) {
+  closeSheet();
+  document.getElementById('search-input').value = cp;
+  rawQuery = cp;
+  filter = parseQuery(cp);
+  renderActiveChips();
+  refresh(false);
+}
 
-    // Whitelist CSS class lookup (defense against CSS-injection via parser output).
-    const CHAN_WHITELIST = new Set(['upi','neft','imps','rtgs','card','card_subscription','card_online','card_refund','atm','cheque','charges','clearing','cash_deposit','interest','billpay','ft','ach','unknown']);
-    function channelClass(c) { return CHAN_WHITELIST.has(c) ? 'chip-' + c : 'chip-unknown'; }
-    const BRAND_WHITELIST = new Set(['HE','NCH','HQ','mixed','unknown']);
-    function brandClass(b) { return BRAND_WHITELIST.has(b) ? 'chip-' + b : 'chip-unknown'; }
-    const CAT_WHITELIST = new Set(['salary','vendor_food','vendor_packaging','vendor_utility','vendor_other','owner','petty_cash','platform_revenue','platform_commission','charges','interest','transfer_internal','unknown']);
-    function categoryClass(c) { return CAT_WHITELIST.has(c) ? 'chip-' + c : 'chip-unknown'; }
-    const PLAT_WHITELIST = new Set(['razorpay','paytm','zomato_delivery','zomato_dining','swiggy','eazydiner','direct']);
-    function platformClass(p) { return PLAT_WHITELIST.has(p) ? 'chip-' + p : 'chip-direct'; }
-
-    function reconcileChip(s) {
-      if (s === 'auto' || s === 'manual') return `<span class="chip chip-recon">✓ ${escapeHtml(s)}</span>`;
-      if (s === 'ignored') return `<span class="chip chip-ignored">ignored</span>`;
-      return `<span class="chip chip-unrec">pending</span>`;
-    }
-
-    async function ignoreRow(btn) {
-      const id = parseInt(btn.dataset.id, 10);
-      btn.disabled = true;
-      btn.textContent = '…';
-      try {
-        const r = await fetch(`${API}?action=reconcile`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'X-Ops-Pin': pin },
-          body: JSON.stringify({ id, status: 'ignored' }),
-        });
-        if (!r.ok) throw new Error('ignore failed');
-        refresh(false);
-      } catch (e) {
-        btn.disabled = false;
-        btn.textContent = 'ignore';
-        showErr('Could not mark ignored — retry.');
-      }
-    }
-
-    function setFilter(btn) {
-      const kind = btn.dataset.kind;
-      const val  = btn.dataset.val;
-      filter[kind] = val;
-      document.querySelectorAll(`[data-kind="${kind}"]`).forEach(b => {
-        b.classList.toggle('active', b.dataset.val === val);
-      });
-      refresh(false);
-    }
-
-    function showErr(msg) {
-      const el = document.getElementById('err-banner');
-      el.textContent = msg;
-      el.classList.remove('hidden');
-    }
-
-    // ━━━ Format helpers ━━━
-    function fmtRupees(paise) {
-      if (paise == null) return '—';
-      const r = Number(paise) / 100;
-      return '₹' + r.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-    function fmtRupeesShort(paise) {
-      if (paise == null) return '—';
-      const r = Number(paise) / 100;
-      return '₹' + r.toLocaleString('en-IN', { maximumFractionDigits: 0 });
-    }
-    function relativeTime(iso) {
-      if (!iso) return '—';
-      const d = new Date(iso);
-      if (isNaN(d)) return '—';
-      const diff = Date.now() - d.getTime();
-      if (diff < 0) return d.toLocaleString('en-IN');
-      if (diff < 60000) return 'just now';
-      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
-      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-      if (diff < 7 * 86400000) return Math.floor(diff / 86400000) + 'd ago';
-      return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-    }
-    function timeStr(d) {
-      return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    }
-    function escapeHtml(s) {
-      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
-    }
-  </script>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Formatters
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function fmtMoney(paise) {
+  if (paise == null) return '—';
+  return '₹' + (Number(paise) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtShort(paise) {
+  if (paise == null) return '—';
+  const r = Math.abs(Number(paise)) / 100;
+  if (r >= 10000000) return '₹' + (r / 10000000).toFixed(r >= 100000000 ? 0 : 2) + 'Cr';
+  if (r >= 100000)   return '₹' + (r / 100000).toFixed(r >= 1000000 ? 0 : 1) + 'L';
+  if (r >= 1000)     return '₹' + (r / 1000).toFixed(r >= 10000 ? 0 : 1) + 'k';
+  return '₹' + Math.round(r).toLocaleString('en-IN');
+}
+function prettyDay(d) {
+  if (d === 'unknown') return 'undated';
+  const date = new Date(d);
+  if (isNaN(date)) return d;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const that = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diff = Math.round((today - that) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  if (diff < 7)   return date.toLocaleDateString('en-IN', { weekday: 'long' });
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: today.getFullYear() === date.getFullYear() ? undefined : 'numeric' });
+}
+function prettyDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+function relativeTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  const diff = Date.now() - d.getTime();
+  if (diff < 0) return d.toLocaleString('en-IN');
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  if (diff < 7 * 86400000) return Math.floor(diff / 86400000) + 'd ago';
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+}
+function shortTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const h = d.getHours() % 12 || 12;
+  const m = d.getMinutes().toString().padStart(2, '0');
+  const ap = d.getHours() < 12 ? 'a' : 'p';
+  return `${h}:${m}${ap}`;
+}
+function timeStr(d) {
+  return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+function setLive(live) {
+  document.getElementById('live-dot').classList.toggle('paused', !live);
+  document.getElementById('live-label').textContent = live ? 'live' : 'paused';
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+}
+function escapeJs(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+// Whitelist-only selector builder for dynamic class names (defense vs CSS injection).
+const VALID_CATS = new Set(['salary','vendor_food','vendor_packaging','vendor_utility','vendor_other','owner','petty_cash','platform_revenue','platform_commission','charges','interest','transfer_internal','unknown']);
+const VALID_BRANDS = new Set(['HE','NCH','HQ','mixed','unknown']);
+function escSel(s) {
+  if (!s) return 'unknown';
+  if (VALID_CATS.has(s)) return s;
+  if (VALID_BRANDS.has(s)) return s;
+  return 'unknown';
+}
+</script>
 </body>
 </html>
