@@ -423,7 +423,9 @@ async function refresh(showSpinner) {
 }
 
 function buildListQS() {
-  const p = ['action=list', 'limit=200'];
+  // Show full history by default. Day-grouped UI handles visual density
+  // just fine — sticky day headers keep long lists navigable.
+  const p = ['action=list', 'limit=2000'];
   if (filter.dir !== 'all')        p.push('dir='        + encodeURIComponent(filter.dir));
   if (filter.status !== 'all')     p.push('status='     + encodeURIComponent(filter.status));
   if (filter.instrument !== 'all') p.push('instrument=' + encodeURIComponent(filter.instrument));

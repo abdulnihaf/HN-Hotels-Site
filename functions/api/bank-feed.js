@@ -87,7 +87,7 @@ export async function onRequestGet({ request, env }) {
   const db = env.DB;
 
   if (action === 'list') {
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 500);
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 5000);
     const since = url.searchParams.get('since');
     const dir = url.searchParams.get('dir');
     const status = url.searchParams.get('status');
