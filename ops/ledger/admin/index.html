@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ledger Admin">
+<title>HN Ledger — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  .section { margin-bottom: 24px; }
+  .section h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-dim); margin: 0 0 8px 0; font-weight: 700; }
+  .sect-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 14px; }
+  .sect-tab { padding: 10px 6px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); cursor: pointer; color: var(--text-dim); font-weight: 600;
+    font-family: inherit; font-size: 12px; min-height: 44px; }
+  .sect-tab.active { background: var(--brand-soft); border-color: var(--brand-ring); color: var(--brand); }
+
+  .cat-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; margin-bottom: 10px; }
+  .cat-head { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .cat-head .e { font-size: 22px; }
+  .cat-head .label { font-weight: 700; font-size: 14px; flex: 1; }
+  .cat-head .count { font-size: 11px; color: var(--text-dim); }
+  .cat-head .chev { color: var(--text-dim); font-size: 14px; transition: transform .15s; }
+  .cat-row.open .chev { transform: rotate(90deg); }
+  .cat-body { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+  .cat-row.open .cat-body { display: block; }
+  .cat-row.archived { opacity: 0.5; }
+
+  .prod-line { display: flex; align-items: center; gap: 8px; padding: 8px 0;
+    border-bottom: 1px dashed var(--border); font-size: 13px; }
+  .prod-line:last-child { border-bottom: none; }
+  .prod-line .n { flex: 1; min-width: 0; }
+  .prod-line .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prod-line .uom-pill { background: var(--brand-soft); color: var(--brand); font-size: 10px;
+    padding: 1px 6px; border-radius: 999px; font-weight: 700; margin-left: 4px; }
+  .prod-line.archived { opacity: 0.5; }
+
+  .mini-btn { background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+    padding: 4px 8px; font-size: 11px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: inherit; }
+  .mini-btn.danger { color: var(--danger); border-color: rgba(239,68,68,0.4); }
+  .mini-btn.ok { color: var(--success); border-color: rgba(16,185,129,0.4); }
+
+  .add-box { background: var(--surface); border: 1px solid rgba(16,185,129,0.3); border-radius: var(--radius);
+    padding: 12px; margin-bottom: 14px; }
+  .add-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .add-row input, .add-row select { flex: 1; min-width: 120px; padding: 8px; font-size: 13px; min-height: 38px; }
+
+  .uom-line, .vendor-line { display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+  .uom-line .n { flex: 1; min-width: 0; font-weight: 600; }
+  .uom-line .code { color: var(--text-dim); font-family: monospace; font-size: 12px; margin-right: 8px; }
+  .filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; font-size: 12px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div id="app" class="app">
+
+  <!-- PIN GATE -->
+  <div id="pin-screen">
+    <h1>HN Ledger — Admin</h1>
+    <p class="sub">Edit categories, products, UOMs, vendors. Nihaf / Naveen only.</p>
+    <div style="margin-top: 32px; max-width: 280px;">
+      <label>Enter PIN</label>
+      <input id="pin-input" type="password" inputmode="numeric" maxlength="4"
+             autocomplete="off" autofocus style="font-size: 20px; text-align: center;">
+      <div id="pin-error" style="color: var(--danger); margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
+      <button class="btn btn-primary btn-full" style="margin-top: 12px;" onclick="verifyPin()">Enter</button>
+    </div>
+  </div>
+
+  <!-- ADMIN HOME -->
+  <div id="admin-screen" class="hidden">
+    <header>
+      <div>
+        <h1 id="greet">Admin</h1>
+        <div class="sub" id="greet-sub"></div>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <a class="btn btn-ghost btn-sm" href="/ops/ledger/">← Ledger</a>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Exit</button>
+      </div>
+    </header>
+
+    <div class="sect-tabs">
+      <button class="sect-tab active" id="st-cats"    onclick="setSection('cats')">Categories</button>
+      <button class="sect-tab"        id="st-uoms"    onclick="setSection('uoms')">UOMs</button>
+      <button class="sect-tab"        id="st-vendors" onclick="setSection('vendors')">Vendors</button>
+      <button class="sect-tab"        id="st-products"onclick="setSection('products')">Products</button>
+    </div>
+
+    <div class="filter-bar">
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;">
+        <input type="checkbox" id="show-archived" onchange="loadOverview()"> Show archived
+      </label>
+      <span id="count-label" class="mute"></span>
+    </div>
+
+    <!-- ── Categories section ── -->
+    <div id="section-cats" class="section">
+      <h2>🗂 Categories</h2>
+      <div class="add-box">
+        <div style="font-weight:700; margin-bottom: 6px;">+ Add new category</div>
+        <div class="add-row">
+          <input id="nc-emoji" type="text" placeholder="📌" maxlength="2" style="flex: 0 0 50px; text-align:center; font-size:18px;">
+          <input id="nc-name" type="text" placeholder="Category name (e.g. Imported Goods)">
+          <input id="nc-sort" type="number" value="500" placeholder="Sort" style="flex: 0 0 80px;">
+          <button class="mini-btn ok" onclick="createCategory()">Add</button>
+        </div>
+      </div>
+      <div id="cats-list"><div class="mute">Loading…</div></div>
+    </div>
+
+    <!-- ── UOMs section ── -->
+    <div id="section-uoms" class="section hidden">
+      <h2>📐 Units of Measure</h2>
+      <div class="add-box">
+        <div style="font-weight:700; margin-bottom: 6px;">+ Add new UOM</div>
+        <div class="add-row">
+          <input id="nu-code" type="text" placeholder="code (e.g. sack)" style="flex: 0 0 120px;">
+          <input id="nu-label" type="text" placeholder="Label (e.g. Sack 50kg)">
+          <button class="mini-btn ok" onclick="createUom()">Add</button>
+        </div>
+      </div>
+      <div id="uoms-list"><div class="mute">Loading…</div></div>
+    </div>
+
+    <!-- ── Vendors section ── -->
+    <div id="section-vendors" class="section hidden">
+      <h2>🏷️ Vendors</h2>
+      <div class="add-box">
+        <div style="font-weight:700; margin-bottom: 6px;">+ Add new vendor</div>
+        <div class="add-row">
+          <input id="nv-name" type="text" placeholder="Vendor name">
+          <input id="nv-phone" type="tel" placeholder="Phone (optional)" style="flex: 0 0 140px;">
+          <button class="mini-btn ok" onclick="createVendor()">Add</button>
+        </div>
+      </div>
+      <div id="vendors-list"><div class="mute">Loading…</div></div>
+    </div>
+
+    <!-- ── Products section (flat list with category filter) ── -->
+    <div id="section-products" class="section hidden">
+      <h2>📦 Products (flat view)</h2>
+      <div class="filter-bar">
+        <select id="p-cat-filter" onchange="renderProductsFlat()" style="min-height:34px;">
+          <option value="">All categories</option>
+        </select>
+        <input id="p-search" type="search" placeholder="Search products…" oninput="renderProductsFlat()"
+               style="flex:1; min-height:34px;">
+      </div>
+      <div id="products-list"><div class="mute">Loading…</div></div>
+    </div>
+
+  </div>
+
+  <!-- EDIT MODAL (category / product / uom / vendor) -->
+  <div id="edit-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeEdit()">
+    <div class="modal-card">
+      <h3 id="em-title">Edit</h3>
+      <div id="em-body"></div>
+      <div style="display:flex; gap:8px; margin-top: 12px;">
+        <button class="btn btn-ghost" style="flex:1;" onclick="closeEdit()">Cancel</button>
+        <button class="btn btn-primary" style="flex:1;" onclick="submitEdit()">Save</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = '/api/ledger';
+let PIN = '', USER = null;
+let DATA = { categories: [], uoms: [], vendors: [] };
+let SECTION = 'cats';
+let EDIT_CTX = null;
+
+const pinInput = document.getElementById('pin-input');
+pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') verifyPin(); });
+pinInput.addEventListener('input', () => { if (pinInput.value.length === 4) verifyPin(); });
+
+async function verifyPin() {
+  const pin = pinInput.value.trim();
+  if (!pin || pin.length < 4) return;
+  const r = await fetch(`${API}?action=verify-pin&pin=${pin}`).then(x => x.json()).catch(() => null);
+  if (!r || !r.success) {
+    document.getElementById('pin-error').textContent = r?.error || 'Invalid PIN';
+    pinInput.value = ''; return;
+  }
+  if (!r.can_admin) {
+    document.getElementById('pin-error').textContent = 'Not authorised — admin / CFO only';
+    pinInput.value = ''; return;
+  }
+  PIN = pin; USER = r.user;
+  document.getElementById('pin-screen').classList.add('hidden');
+  document.getElementById('admin-screen').classList.remove('hidden');
+  document.getElementById('greet').textContent = `Hi ${USER.name}`;
+  document.getElementById('greet-sub').textContent = `${USER.role} · structure editor`;
+  loadOverview();
+}
+function logout() {
+  PIN = ''; USER = null;
+  document.getElementById('admin-screen').classList.add('hidden');
+  document.getElementById('pin-screen').classList.remove('hidden');
+  pinInput.value = ''; pinInput.focus();
+}
+
+function setSection(s) {
+  SECTION = s;
+  document.querySelectorAll('.sect-tab').forEach(el =>
+    el.classList.toggle('active', el.id === 'st-' + s));
+  ['cats','uoms','vendors','products'].forEach(k =>
+    document.getElementById('section-' + k).classList.toggle('hidden', k !== s));
+  renderCurrent();
+}
+
+async function loadOverview() {
+  const showArch = document.getElementById('show-archived').checked ? '1' : '0';
+  const box = document.getElementById('cats-list');
+  box.innerHTML = '<div class="mute">Loading…</div>';
+  const r = await fetch(`${API}?action=admin-overview&pin=${PIN}&include_archived=${showArch}`)
+    .then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.success) { box.innerHTML = `<div class="mute" style="color: var(--danger);">${esc(r.error)}</div>`; return; }
+  DATA = { categories: r.categories, uoms: r.uoms, vendors: r.vendors };
+  // Populate product-section category filter
+  const catSel = document.getElementById('p-cat-filter');
+  catSel.innerHTML = '<option value="">All categories</option>' +
+    DATA.categories.map(c => `<option value="${c.id}">${esc(c.emoji||'')} ${esc(c.name)}</option>`).join('');
+  renderCurrent();
+}
+
+function renderCurrent() {
+  if (SECTION === 'cats')     renderCats();
+  if (SECTION === 'uoms')     renderUoms();
+  if (SECTION === 'vendors')  renderVendors();
+  if (SECTION === 'products') renderProductsFlat();
+}
+
+function renderCats() {
+  const box = document.getElementById('cats-list');
+  const cats = DATA.categories;
+  const totalProds = cats.reduce((s, c) => s + (c.products?.length || 0), 0);
+  document.getElementById('count-label').textContent = `${cats.length} categories · ${totalProds} products`;
+  if (!cats.length) { box.innerHTML = '<div class="mute">No categories.</div>'; return; }
+  box.innerHTML = cats.map(c => renderCat(c)).join('');
+}
+
+function renderCat(c) {
+  const archClass = c.archived ? 'archived' : '';
+  const prods = c.products || [];
+  return `
+    <div class="cat-row ${archClass}" id="cat-${c.id}">
+      <div class="cat-head" onclick="document.getElementById('cat-${c.id}').classList.toggle('open')">
+        <span class="e">${c.emoji || '📌'}</span>
+        <div class="label">${esc(c.name)} ${c.archived ? '<span class="mini-btn" style="pointer-events:none;">archived</span>' : ''}</div>
+        <span class="count">${prods.length} items · sort ${c.sort_order}</span>
+        <span class="chev">›</span>
+      </div>
+      <div class="cat-body">
+        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom: 10px;">
+          <button class="mini-btn" onclick="editCategory(${c.id})">Rename / reorder</button>
+          ${c.archived
+            ? `<button class="mini-btn ok" onclick="archiveCategory(${c.id}, false)">Restore</button>`
+            : `<button class="mini-btn danger" onclick="archiveCategory(${c.id}, true)">Archive</button>`}
+        </div>
+        <div>
+          ${prods.map(p => renderProductLine(p, c.id)).join('') || '<div class="mute" style="padding: 8px 0;">No products yet.</div>'}
+        </div>
+        <div class="add-row" style="margin-top:10px;">
+          <input id="np-name-${c.id}" type="text" placeholder="+ new product name" style="flex:1; min-height:34px; font-size:12px;">
+          <select id="np-uom-${c.id}" style="flex: 0 0 110px; min-height:34px; font-size:12px;">
+            <option value="">—</option>
+            ${DATA.uoms.map(u => `<option value="${u.code}">${esc(u.code)}</option>`).join('')}
+          </select>
+          <button class="mini-btn ok" onclick="createProduct(${c.id})">Add</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderProductLine(p, catId) {
+  return `
+    <div class="prod-line ${p.archived ? 'archived' : ''}" id="prod-${p.id}">
+      <div class="n">
+        <span class="nm">${esc(p.name)}</span>
+        ${p.default_uom ? `<span class="uom-pill">${esc(p.default_uom)}</span>` : ''}
+      </div>
+      <button class="mini-btn" onclick="editProduct(${p.id}, ${catId})">Edit</button>
+      ${p.archived
+        ? `<button class="mini-btn ok" onclick="archiveProduct(${p.id}, false)">Restore</button>`
+        : `<button class="mini-btn danger" onclick="archiveProduct(${p.id}, true)">Archive</button>`}
+    </div>
+  `;
+}
+
+function renderUoms() {
+  const box = document.getElementById('uoms-list');
+  document.getElementById('count-label').textContent = `${DATA.uoms.length} UOMs`;
+  if (!DATA.uoms.length) { box.innerHTML = '<div class="mute">No UOMs.</div>'; return; }
+  box.innerHTML = DATA.uoms.map(u => `
+    <div class="uom-line ${u.archived ? 'archived' : ''}">
+      <span class="code">${esc(u.code)}</span>
+      <span class="n">${esc(u.label)}</span>
+      <span class="mute" style="font-size:11px;">sort ${u.sort_order}</span>
+      <button class="mini-btn" onclick="editUom('${esc(u.code)}')">Rename</button>
+      ${u.archived
+        ? `<button class="mini-btn ok" onclick="archiveUom('${esc(u.code)}', false)">Restore</button>`
+        : `<button class="mini-btn danger" onclick="archiveUom('${esc(u.code)}', true)">Archive</button>`}
+    </div>`).join('');
+}
+
+function renderVendors() {
+  const box = document.getElementById('vendors-list');
+  document.getElementById('count-label').textContent = `${DATA.vendors.length} vendors`;
+  if (!DATA.vendors.length) { box.innerHTML = '<div class="mute">No vendors.</div>'; return; }
+  box.innerHTML = DATA.vendors.map(v => `
+    <div class="vendor-line ${v.archived ? 'archived' : ''}">
+      <div class="n">
+        <div style="font-weight:600;">${esc(v.name)}</div>
+        <div class="mute" style="font-size:11px;">${esc(v.phone || '')} ${v.notes ? '· ' + esc(v.notes) : ''}</div>
+      </div>
+      <button class="mini-btn" onclick="editVendor(${v.id})">Edit</button>
+      ${v.archived
+        ? `<button class="mini-btn ok" onclick="archiveVendor(${v.id}, false)">Restore</button>`
+        : `<button class="mini-btn danger" onclick="archiveVendor(${v.id}, true)">Archive</button>`}
+    </div>`).join('');
+}
+
+function renderProductsFlat() {
+  const box = document.getElementById('products-list');
+  const filterCat = document.getElementById('p-cat-filter').value;
+  const q = (document.getElementById('p-search').value || '').toLowerCase();
+  let prods = [];
+  for (const c of DATA.categories) {
+    for (const p of (c.products || [])) prods.push({ ...p, category_name: c.name, category_emoji: c.emoji });
+  }
+  if (filterCat) prods = prods.filter(p => String(p.category_id) === filterCat);
+  if (q) prods = prods.filter(p => p.name.toLowerCase().includes(q));
+  document.getElementById('count-label').textContent = `${prods.length} products`;
+  if (!prods.length) { box.innerHTML = '<div class="mute">No products match.</div>'; return; }
+  box.innerHTML = prods.map(p => `
+    <div class="prod-line ${p.archived ? 'archived' : ''}" style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:6px;">
+      <div class="n">
+        <span class="nm">${esc(p.name)}</span>
+        ${p.default_uom ? `<span class="uom-pill">${esc(p.default_uom)}</span>` : ''}
+        <div class="mute" style="font-size:11px;">${esc(p.category_emoji||'')} ${esc(p.category_name)}</div>
+      </div>
+      <button class="mini-btn" onclick="editProduct(${p.id}, ${p.category_id})">Edit</button>
+      ${p.archived
+        ? `<button class="mini-btn ok" onclick="archiveProduct(${p.id}, false)">Restore</button>`
+        : `<button class="mini-btn danger" onclick="archiveProduct(${p.id}, true)">Archive</button>`}
+    </div>`).join('');
+}
+
+// ── Create ──
+async function createCategory() {
+  const body = {
+    pin: PIN,
+    name:  document.getElementById('nc-name').value.trim(),
+    emoji: document.getElementById('nc-emoji').value.trim() || '📌',
+    sort_order: parseInt(document.getElementById('nc-sort').value || '500', 10),
+  };
+  if (!body.name) return alert('Name required');
+  const r = await post('admin-create-category', body);
+  if (!r.success) return alert(r.error || 'Add failed');
+  document.getElementById('nc-name').value = '';
+  document.getElementById('nc-emoji').value = '';
+  loadOverview();
+}
+async function createUom() {
+  const body = {
+    pin: PIN,
+    code: document.getElementById('nu-code').value.trim().toLowerCase(),
+    label: document.getElementById('nu-label').value.trim() || '',
+  };
+  if (!body.code) return alert('Code required');
+  if (!body.label) body.label = body.code;
+  const r = await post('admin-create-uom', body);
+  if (!r.success) return alert(r.error || 'Add failed');
+  document.getElementById('nu-code').value = '';
+  document.getElementById('nu-label').value = '';
+  loadOverview();
+}
+async function createVendor() {
+  const body = {
+    pin: PIN,
+    name: document.getElementById('nv-name').value.trim(),
+    phone: document.getElementById('nv-phone').value.trim(),
+  };
+  if (!body.name) return alert('Name required');
+  const r = await post('admin-create-vendor', body);
+  if (!r.success) return alert(r.error || 'Add failed');
+  document.getElementById('nv-name').value = '';
+  document.getElementById('nv-phone').value = '';
+  loadOverview();
+}
+async function createProduct(catId) {
+  const body = {
+    pin: PIN,
+    category_id: catId,
+    name: document.getElementById(`np-name-${catId}`).value.trim(),
+    default_uom: document.getElementById(`np-uom-${catId}`).value,
+  };
+  if (!body.name) return alert('Name required');
+  const r = await post('admin-create-product', body);
+  if (!r.success) return alert(r.error || 'Add failed');
+  document.getElementById(`np-name-${catId}`).value = '';
+  loadOverview();
+  setTimeout(() => document.getElementById(`cat-${catId}`)?.classList.add('open'), 100);
+}
+
+// ── Archive toggles ──
+async function archiveCategory(id, archive) {
+  const r = await post('admin-archive-category', { pin: PIN, id, archive });
+  if (!r.success) return alert(r.error);
+  loadOverview();
+}
+async function archiveProduct(id, archive) {
+  const r = await post('admin-archive-product', { pin: PIN, id, archive });
+  if (!r.success) return alert(r.error);
+  loadOverview();
+}
+async function archiveUom(code, archive) {
+  const r = await post('admin-archive-uom', { pin: PIN, code, archive });
+  if (!r.success) return alert(r.error);
+  loadOverview();
+}
+async function archiveVendor(id, archive) {
+  const r = await post('admin-archive-vendor', { pin: PIN, id, archive });
+  if (!r.success) return alert(r.error);
+  loadOverview();
+}
+
+// ── Edit modal ──
+function editCategory(id) {
+  const c = DATA.categories.find(x => x.id === id);
+  if (!c) return;
+  EDIT_CTX = { kind: 'category', id };
+  document.getElementById('em-title').textContent = 'Edit category';
+  document.getElementById('em-body').innerHTML = `
+    <div class="row"><label>Emoji</label><input id="em-emoji" value="${esc(c.emoji||'')}" maxlength="2" style="text-align:center; font-size:18px;"></div>
+    <div class="row"><label>Name</label><input id="em-name" value="${esc(c.name)}"></div>
+    <div class="row"><label>Sort order</label><input id="em-sort" type="number" value="${c.sort_order}"></div>
+  `;
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+function editProduct(id, catId) {
+  const c = DATA.categories.find(x => x.id === catId);
+  const p = c?.products?.find(x => x.id === id);
+  if (!p) return;
+  EDIT_CTX = { kind: 'product', id };
+  document.getElementById('em-title').textContent = 'Edit product';
+  const uomOpts = '<option value="">—</option>' +
+    DATA.uoms.map(u => `<option value="${u.code}" ${u.code === p.default_uom ? 'selected' : ''}>${esc(u.code)} · ${esc(u.label)}</option>`).join('');
+  const catOpts = DATA.categories.map(c2 =>
+    `<option value="${c2.id}" ${c2.id === p.category_id ? 'selected' : ''}>${esc(c2.emoji||'')} ${esc(c2.name)}</option>`).join('');
+  document.getElementById('em-body').innerHTML = `
+    <div class="row"><label>Name</label><input id="em-name" value="${esc(p.name)}"></div>
+    <div class="row"><label>Category</label><select id="em-cat">${catOpts}</select></div>
+    <div class="row"><label>Default UOM</label><select id="em-uom">${uomOpts}</select></div>
+  `;
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+function editUom(code) {
+  const u = DATA.uoms.find(x => x.code === code);
+  if (!u) return;
+  EDIT_CTX = { kind: 'uom', code };
+  document.getElementById('em-title').textContent = `Edit UOM · ${esc(code)}`;
+  document.getElementById('em-body').innerHTML = `
+    <div class="row"><label>Label</label><input id="em-label" value="${esc(u.label)}"></div>
+    <div class="row"><label>Sort order</label><input id="em-sort" type="number" value="${u.sort_order}"></div>
+    <div class="mute" style="font-size:11px;">Code is immutable. To rename the code, archive and create a new one.</div>
+  `;
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+function editVendor(id) {
+  const v = DATA.vendors.find(x => x.id === id);
+  if (!v) return;
+  EDIT_CTX = { kind: 'vendor', id };
+  document.getElementById('em-title').textContent = 'Edit vendor';
+  document.getElementById('em-body').innerHTML = `
+    <div class="row"><label>Name</label><input id="em-name" value="${esc(v.name)}"></div>
+    <div class="row"><label>Phone</label><input id="em-phone" value="${esc(v.phone||'')}"></div>
+    <div class="row"><label>Notes</label><textarea id="em-notes" rows="2">${esc(v.notes||'')}</textarea></div>
+  `;
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+
+async function submitEdit() {
+  if (!EDIT_CTX) return;
+  const k = EDIT_CTX.kind;
+  let action, body = { pin: PIN };
+  if (k === 'category') {
+    action = 'admin-update-category';
+    body.id = EDIT_CTX.id;
+    body.name = document.getElementById('em-name').value.trim();
+    body.emoji = document.getElementById('em-emoji').value.trim();
+    body.sort_order = parseInt(document.getElementById('em-sort').value || '500', 10);
+  } else if (k === 'product') {
+    action = 'admin-update-product';
+    body.id = EDIT_CTX.id;
+    body.name = document.getElementById('em-name').value.trim();
+    body.default_uom = document.getElementById('em-uom').value;
+    body.category_id = parseInt(document.getElementById('em-cat').value, 10);
+  } else if (k === 'uom') {
+    action = 'admin-update-uom';
+    body.code = EDIT_CTX.code;
+    body.label = document.getElementById('em-label').value.trim();
+    body.sort_order = parseInt(document.getElementById('em-sort').value || '500', 10);
+  } else if (k === 'vendor') {
+    action = 'admin-update-vendor';
+    body.id = EDIT_CTX.id;
+    body.name = document.getElementById('em-name').value.trim();
+    body.phone = document.getElementById('em-phone').value.trim();
+    body.notes = document.getElementById('em-notes').value.trim();
+  }
+  const r = await post(action, body);
+  if (!r.success) return alert(r.error || 'Save failed');
+  closeEdit();
+  loadOverview();
+}
+function closeEdit() {
+  EDIT_CTX = null;
+  document.getElementById('edit-modal').classList.add('hidden');
+}
+
+// ── Utils ──
+async function post(action, body) {
+  return fetch(`${API}?action=${action}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(x => x.json()).catch(e => ({ error: e.message, success: false }));
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[<>"'&]/g, c => ({ '<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c])); }
+</script>
+</body>
+</html>
