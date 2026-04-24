@@ -83,6 +83,29 @@
   .scope-badge.scoped { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
   /* With the globalize button, manage-mode can have 3 or 4 buttons — widen grid. */
   .bulk-row.manage-mode { grid-template-columns: 1fr auto auto auto; }
+  /* Past-entries history chips + grouped list (mirrors NCH/HE/Expense UX) */
+  .hist-chip, .hist-brand-chip {
+    padding: 5px 11px; border-radius: 14px; font-size: 11px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); font-family: inherit;
+  }
+  .hist-chip:active, .hist-brand-chip:active { transform: scale(0.97); }
+  .hist-chip.active { background: rgba(232,147,12,0.15); border-color: rgba(232,147,12,0.5); color: #fbbf24; }
+  .hist-brand-chip.active { background: rgba(124,86,247,0.15); border-color: rgba(124,86,247,0.5); color: #c4b5fd; }
+  .hist-day-hdr { display:flex; justify-content:space-between; align-items:baseline; padding:8px 4px 6px; border-bottom: 1px solid var(--border); margin-top: 6px; }
+  .hist-day-hdr .d { font-size:10px; font-weight:700; color:#fbbf24; text-transform:uppercase; letter-spacing:0.5px; }
+  .hist-day-hdr .meta { font-size:10px; color:var(--text-dim); }
+  .hist-day-hdr .meta b { color:var(--text); font-weight:700; font-variant-numeric: tabular-nums; }
+  .hist-empty { padding:18px 4px; color:var(--text-dim); font-size:12px; text-align:center; font-style:italic; }
+  .kind-tag { display:inline-block; padding:1px 7px; border-radius: 999px; font-size:9px; font-weight:700; margin-right:6px; vertical-align:middle; letter-spacing:0.4px; text-transform:uppercase; }
+  .kind-tag.PO      { background: rgba(168,85,247,0.18); color: #c4b5fd; }
+  .kind-tag.Bill    { background: rgba(16,185,129,0.18); color: #34d399; }
+  .kind-tag.Expense { background: rgba(245,158,11,0.18); color: #fbbf24; }
+  .brand-tag { display:inline-block; padding:1px 6px; border-radius: 999px; font-size:9px; font-weight:700; margin-right:6px; vertical-align:middle; letter-spacing:0.3px; }
+  .brand-tag.NCH { background: rgba(212,164,76,0.15); color:#fbbf24; }
+  .brand-tag.HE  { background: rgba(239,68,68,0.15);  color:#f87171; }
+  .brand-tag.HQ  { background: rgba(59,130,246,0.15); color:#60a5fa; }
+  .state-tag { font-size:9px; color:var(--text-mute); margin-left:4px; }
+  .row-time-r { font-size:10px; color:var(--text-dim); font-weight:400; margin-top:2px; display:block; }
 </style>
 </head>
 <body>
@@ -141,7 +164,22 @@
     <div class="cat-grid" id="cat-grid"></div>
 
     <div class="recent" id="recent">
-      <h3>Recent entries</h3>
+      <h3>Past entries
+        <span style="font-size:11px;color:var(--text-dim);margin-left:8px;font-weight:400;">check before re-entering — prevents duplicates</span>
+      </h3>
+      <div id="hist-controls" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px;align-items:center;">
+        <span style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-right:4px;">When:</span>
+        <button type="button" class="hist-chip active" data-days="1"  onclick="setHistDays(1)">Today</button>
+        <button type="button" class="hist-chip"        data-days="2"  onclick="setHistDays(2)">+ Yesterday</button>
+        <button type="button" class="hist-chip"        data-days="7"  onclick="setHistDays(7)">7 days</button>
+        <button type="button" class="hist-chip"        data-days="30" onclick="setHistDays(30)">30 days</button>
+        <span style="width:8px;"></span>
+        <span style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-right:4px;">Brand:</span>
+        <button type="button" class="hist-brand-chip active" data-brand="ALL" onclick="setHistBrand('ALL')">All</button>
+        <button type="button" class="hist-brand-chip" data-brand="NCH"        onclick="setHistBrand('NCH')">NCH</button>
+        <button type="button" class="hist-brand-chip" data-brand="HE"         onclick="setHistBrand('HE')">HE</button>
+        <button type="button" class="hist-brand-chip" data-brand="HQ"         onclick="setHistBrand('HQ')">HQ</button>
+      </div>
       <div id="recent-list"></div>
     </div>
   </div>
@@ -587,24 +625,113 @@ function renderCategories() {
   `).join('');
 }
 
-async function loadRecent() {
-  const r = await fetch(`${API}?action=recent&pin=${PIN}`).then(x => x.json()).catch(() => null);
-  const list = document.getElementById('recent-list');
-  if (!r?.success || !r.entries?.length) { list.innerHTML = '<div class="mute">No recent entries.</div>'; return; }
-  const canDelete = ['admin','cfo','asstmgr'].includes(USER?.user?.role);
-  list.innerHTML = r.entries.slice(0, 8).map(e => `
-    <div class="entry">
-      <div style="flex: 1; min-width: 0;">
-        <div>${esc(e.product_name || e.category)}</div>
-        <div class="mute">${esc(e.category)} · ${esc(e.payment_method || '-')} · by ${esc(e.recorded_by_pin || 'unknown')}</div>
-      </div>
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <div class="amount">₹${Number(e.amount).toLocaleString('en-IN')}</div>
-        ${canDelete && e.odoo_id ? `<button class="btn btn-sm" style="background: var(--danger); color: #fff; padding: 4px 10px;" onclick="deleteEntry(${e.odoo_id})">×</button>` : ''}
-      </div>
-    </div>
-  `).join('');
+// Past-entries view — uses existing /api/spend?action=purchase-ledger which
+// returns POs + Bills + RM/Capex hr.expenses unified with `kind` field.
+// Pure UI change — no backend modification. Mirrors NCH/HE/Expense UX.
+let HIST_DAYS = 1, HIST_BRAND = 'ALL';
+function setHistDays(days) {
+  HIST_DAYS = days;
+  document.querySelectorAll('.hist-chip').forEach(c =>
+    c.classList.toggle('active', String(c.dataset.days) === String(days))
+  );
+  loadPastEntries();
 }
+function setHistBrand(brand) {
+  HIST_BRAND = brand;
+  document.querySelectorAll('.hist-brand-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.brand === brand)
+  );
+  loadPastEntries();
+}
+
+// IST today / today-minus-N as YYYY-MM-DD
+function _istYmdMinus(daysBack) {
+  const istNow = new Date(Date.now() + 5.5 * 3600 * 1000);
+  const back = new Date(istNow.getTime() - daysBack * 86400 * 1000);
+  return back.toISOString().slice(0, 10);
+}
+
+async function loadPastEntries() {
+  const list = document.getElementById('recent-list');
+  if (!list) return;
+  list.innerHTML = '<div class="mute">Loading…</div>';
+  try {
+    const today = _istYmdMinus(0);
+    const fromDate = _istYmdMinus(HIST_DAYS - 1);
+    const url = `${API}?action=purchase-ledger&pin=${PIN}&from=${fromDate}&to=${today}&brand=${HIST_BRAND}`;
+    const r = await fetch(url).then(x => x.json()).catch(e => ({ success: false, error: e.message }));
+    if (!r?.success) {
+      list.innerHTML = `<div class="mute">Could not load: ${esc(r?.error || 'unknown')}</div>`;
+      return;
+    }
+    const rows = r.rows || [];
+    if (!rows.length) {
+      list.innerHTML = '<div class="hist-empty">No entries in this range.<br>Pick a category above to record one.</div>';
+      return;
+    }
+    // Group by IST date (rows already have `date` field as YYYY-MM-DD)
+    const byDate = {};
+    for (const e of rows) {
+      const d = e.date || '?';
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(e);
+    }
+    const dates = Object.keys(byDate).sort().reverse();
+    let html = '';
+    for (const d of dates) {
+      const list2 = byDate[d];
+      const total = list2.reduce((s, x) => s + (x.amount || 0), 0);
+      html += `<div class="hist-day-hdr"><span class="d">${niceDateLabel(d)}</span>
+                 <span class="meta">${list2.length} ${list2.length === 1 ? 'entry' : 'entries'} &middot; <b>₹${Math.round(total).toLocaleString('en-IN')}</b></span></div>`;
+      for (const e of list2) {
+        const vendorOrItem = e.vendor?.name ? esc(e.vendor.name) : esc(e.item_or_ref || '—');
+        const subline = [
+          e.kind === 'PO' && e.item_or_ref ? esc(e.item_or_ref) : null,
+          e.kind === 'Bill' && e.bill_ref ? `bill ${esc(e.bill_ref)}` : null,
+          e.recorded_by_name ? `by ${esc(e.recorded_by_name)}` : null,
+          e.state ? `<span class="state-tag">${esc(e.state)}</span>` : null,
+        ].filter(Boolean).join(' · ');
+        html += `
+          <div class="entry">
+            <div style="flex:1; min-width:0;">
+              <div>
+                <span class="kind-tag ${e.kind}">${e.kind}</span>
+                ${HIST_BRAND === 'ALL' && e.brand ? `<span class="brand-tag ${e.brand}">${e.brand}</span>` : ''}
+                ${vendorOrItem}
+              </div>
+              <div class="mute">${subline || '—'}</div>
+              ${e.notes ? `<div class="mute" style="font-style:italic;margin-top:2px;">${esc(e.notes)}</div>` : ''}
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="amount">₹${Number(e.amount || 0).toLocaleString('en-IN')}</div>
+            </div>
+          </div>`;
+      }
+    }
+    list.innerHTML = html;
+  } catch (e) {
+    list.innerHTML = `<div class="mute">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// Friendly date label — Today / Yesterday / Mon DD
+function niceDateLabel(ymd) {
+  if (!ymd || ymd === '?') return '—';
+  const todayIST = _istYmdMinus(0);
+  const yIST = _istYmdMinus(1);
+  if (ymd === todayIST) return `Today &middot; ${prettyDate(ymd)}`;
+  if (ymd === yIST)     return `Yesterday &middot; ${prettyDate(ymd)}`;
+  return prettyDate(ymd);
+}
+function prettyDate(ymd) {
+  const d = new Date(ymd + 'T00:00:00Z');
+  if (isNaN(d)) return ymd;
+  return d.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+// Backward-compat — keep loadRecent() as an alias so any existing call sites
+// continue to work without breakage. Routes to the new past-entries view.
+async function loadRecent() { return loadPastEntries(); }
 
 async function deleteEntry(odooId) {
   if (!confirm('Delete this entry? Removes from Odoo + dashboard. Not reversible unless re-recorded.')) return;
