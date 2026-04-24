@@ -451,19 +451,29 @@ function guessSource(recordedBy, brand) {
 }
 
 function findCentralTwin(outletRow, central) {
-  // Match by (brand, ±5 min, ±0.5%, similar description). Cheap O(n*m) — both
-  // lists are bounded to ~500 rows in the date window.
+  // Match strategy in order of confidence:
+  //   1. Exact odoo_id match — outlet row was successfully dual-written or
+  //      retry-synced and captured the central Odoo id. Strongest signal.
+  //   2. Fallback fuzzy match: same brand + amount within ₹0.50 + ±10 min
+  //      time window. Used for outlet rows that didn't capture the odoo_id
+  //      (NCH /ops/v2/ doesn't store hnhotels_expense_id today).
+  const outletOdooId = outletRow.odoo_id;
+  if (outletOdooId) {
+    for (const c of central) {
+      if (c.linked_outlet_id) continue;
+      if (c.odoo_id === outletOdooId) return c;
+    }
+  }
   const tgtAmt = +outletRow.amount;
   const tgtTime = Date.parse(outletRow.recorded_at);
   if (Number.isNaN(tgtTime)) return null;
   for (const c of central) {
     if (c.brand !== outletRow.brand) continue;
-    if (c.linked_outlet_id) continue;  // already linked
+    if (c.linked_outlet_id) continue;
     if (Math.abs((+c.amount) - tgtAmt) > 0.5) continue;
     const ct = Date.parse(c.recorded_at);
     if (Number.isNaN(ct)) continue;
-    if (Math.abs(ct - tgtTime) > 10 * 60 * 1000) continue;  // 10 min window
-    // optional desc similarity bump (not required for confidence — amount + time + brand is strong)
+    if (Math.abs(ct - tgtTime) > 10 * 60 * 1000) continue;
     return c;
   }
   return null;
