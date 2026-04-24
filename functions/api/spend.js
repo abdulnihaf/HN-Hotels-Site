@@ -2935,7 +2935,191 @@ export async function onRequest(context) {
       }
     }
 
-    return json({ success: false, error: 'Unknown action', actions: ['verify-pin','products','employees','vendors','recent','record','upload-bill','pay-bill','list-bills','payment-journals'] }, 400);
+    // ════════════════════════════════════════════════════════════════════
+    // PHASE 2: settle-po — atomic PO → Bill → Payment in one call.
+    //
+    // The architectural fix for the cross-kind double-count problem.
+    // Used by:
+    //   • Surface A: /ops/purchase/ Zoya cart-submit "Mark as paid" toggle
+    //     (calls create-po then settle-po with the new PO id)
+    //   • Surface B: /ops/v2/ outlet "Pay open PO" tile, via NCH /api/rectify
+    //     and HE /api/v2 wrappers (which also write outlet D1 for till drop)
+    //
+    // Body: {
+    //   pin, brand, po_id,
+    //   payment_amount? (default = PO total — for partial payment),
+    //   payment_journal_id, payment_date,
+    //   payment_method_label? (free-text "Basheer cash" / "Nihaf HDFC" etc.),
+    //   bill_ref?, bill_due_date?, notes?,
+    //   attachment? ({name, mimetype, data_b64} — bill photo),
+    //   skip_if_already_billed? (default true — idempotent vs double-bill)
+    // }
+    //
+    // Atomic steps:
+    //   1. Read PO, verify state in [purchase, done] AND company match
+    //   2. Idempotency: if PO already has a posted bill, settle that bill instead
+    //      of creating a new one (covers retry-after-failure case)
+    //   3. Else: action_create_invoice → get bill_id → action_post
+    //   4. Update bill ref / due_date / narration if provided
+    //   5. Attach photo (Odoo + Drive + bill_attachments) if provided
+    //   6. Call _settleBillJE for the payment (full or partial)
+    //
+    // Returns: { po_id, po_name, bill_id, payment_move_id, amount_paid,
+    //            new_residual, payment_state, attachment_id, drive_view_url }
+    // ════════════════════════════════════════════════════════════════════
+    if (action === 'settle-po' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, brand, po_id, payment_amount, payment_journal_id, payment_date,
+              payment_method_label, bill_ref, bill_due_date, notes,
+              skip_if_already_billed = true } = body;
+
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!BILL_PAY_ROLES.has(user.role) && user.role !== 'cashier' && user.role !== 'purchase') {
+        return json({ success: false, error: `Role ${user.role} cannot settle POs` }, 403);
+      }
+      const companyId = BRAND_COMPANY[(brand || '').toUpperCase()];
+      if (!companyId) return json({ success: false, error: 'Unknown brand' }, 400);
+      if (!po_id) return json({ success: false, error: 'po_id required' }, 400);
+      if (!payment_journal_id) return json({ success: false, error: 'payment_journal_id required' }, 400);
+      const payDate = payment_date || new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(payDate)) {
+        return json({ success: false, error: 'payment_date YYYY-MM-DD required' }, 400);
+      }
+
+      // 1. Read PO
+      const poId = parseInt(po_id, 10);
+      const po = await odoo(apiKey, 'purchase.order', 'read',
+        [[poId]],
+        { fields: ['id', 'name', 'state', 'company_id', 'partner_id',
+                   'amount_total', 'invoice_status'] });
+      if (!po?.[0]) return json({ success: false, error: 'PO not found' }, 404);
+      const p = po[0];
+      if (p.company_id[0] !== companyId) {
+        return json({ success: false, error: `PO belongs to a different brand` }, 400);
+      }
+      if (!['purchase', 'done'].includes(p.state)) {
+        return json({ success: false, error: `PO state=${p.state}, must be confirmed` }, 400);
+      }
+
+      // 2. Idempotency check — does this PO already have a posted bill?
+      let billId = null;
+      if (skip_if_already_billed) {
+        const existing = await odoo(apiKey, 'account.move', 'search_read',
+          [[['invoice_origin', '=', p.name],
+            ['move_type', '=', 'in_invoice'],
+            ['company_id', '=', companyId]]],
+          { fields: ['id', 'state', 'amount_residual', 'payment_state'],
+            limit: 1, order: 'id desc' });
+        if (existing.length) {
+          billId = existing[0].id;
+          // If bill already fully paid, just return that — caller can interpret
+          if (existing[0].payment_state === 'paid') {
+            return json({ success: true, already_paid: true,
+              po_id: poId, po_name: p.name, bill_id: billId,
+              payment_state: 'paid' });
+          }
+        }
+      }
+
+      // 3. Create + post bill if needed
+      if (!billId) {
+        try {
+          const inv = await odoo(apiKey, 'purchase.order', 'action_create_invoice', [[poId]]);
+          if (inv && inv.res_id) billId = inv.res_id;
+          else if (inv && inv.domain) {
+            const m = JSON.stringify(inv.domain).match(/\[(\d+)\]/);
+            if (m) billId = parseInt(m[1], 10);
+          }
+          if (!billId) {
+            // Fallback search
+            const found = await odoo(apiKey, 'account.move', 'search',
+              [[['invoice_origin', '=', p.name], ['move_type', '=', 'in_invoice']]],
+              { limit: 1, order: 'id desc' });
+            if (found?.length) billId = found[0];
+          }
+        } catch (e) {
+          return json({ success: false, error: `Bill creation failed: ${e.message}` }, 500);
+        }
+        if (!billId) return json({ success: false, error: 'Bill not created (no id returned)' }, 500);
+
+        // Update bill with provided fields BEFORE posting
+        const writeVals = { x_recorded_by_user_id: pinToUid(pin) };
+        if (bill_ref) writeVals.ref = bill_ref;
+        if (bill_due_date) writeVals.invoice_date_due = bill_due_date;
+        if (notes) writeVals.narration = notes;
+        try { await odoo(apiKey, 'account.move', 'write', [[billId], writeVals]); } catch (_) {}
+
+        // Post the bill
+        try { await odoo(apiKey, 'account.move', 'action_post', [[billId]]); }
+        catch (e) {
+          return json({ success: false, error: `Bill post failed: ${e.message}`, bill_id: billId }, 500);
+        }
+      }
+
+      // 4. Attachment (optional)
+      let attId = null, driveInfo = null;
+      if (body.attachment) {
+        body.attachment = {
+          ...body.attachment,
+          name: buildBillFilename({
+            date: payDate, category: 'PO Settlement', brand,
+            product: p.name, amount: p.amount_total, recorded_by: user.name,
+          }),
+        };
+        attId = await saveAttachment(apiKey, body.attachment, 'account.move', billId);
+        driveInfo = await syncToDrive(env, {
+          date: payDate, company: brand, category: 'PO Settlement',
+          product: p.name, amount: p.amount_total, recorded_by: user.name,
+          filename: body.attachment.name, mimetype: body.attachment.mimetype,
+          data_b64: body.attachment.data_b64,
+        });
+        await logBillAttachment(DB, {
+          kind: 'Bill', odoo_id: billId, brand,
+          entry_date: payDate, entry_amount: p.amount_total,
+          odoo_attachment_id: attId,
+          drive_file_id: driveInfo?.file_id, drive_view_url: driveInfo?.view_url, drive_path: driveInfo?.path,
+          filename: body.attachment.name, mimetype: body.attachment.mimetype,
+          data_b64: body.attachment.data_b64, pin, user_name: user.name,
+        });
+      }
+
+      // 5. Read bill residual + decide payment amount
+      const billRow = await odoo(apiKey, 'account.move', 'read',
+        [[billId]], { fields: ['amount_residual', 'amount_total', 'name'] });
+      const residual = billRow?.[0]?.amount_residual || 0;
+      const amt = parseFloat(payment_amount) || residual;
+      if (!(amt > 0)) return json({ success: false, error: 'payment_amount must be > 0' }, 400);
+      if (amt > residual + 0.01) {
+        return json({ success: false, error: `Payment ${amt} exceeds bill residual ${residual}` }, 400);
+      }
+
+      // 6. Settle the bill
+      try {
+        const settled = await _settleBillJE(apiKey, env, {
+          bill_id: billId, amount: amt, payment_date: payDate,
+          journal_id: parseInt(payment_journal_id, 10),
+          partner_id: p.partner_id[0],
+          company_id: companyId,
+          memo: payment_method_label
+            ? `${payment_method_label}${notes ? ' — ' + notes : ''} (PO ${p.name})`
+            : (notes || `Payment for PO ${p.name}`),
+        });
+        return json({ success: true,
+          po_id: poId, po_name: p.name, bill_id: billId, bill_ref: billRow?.[0]?.name,
+          ...settled,
+          attachment_id: attId, drive_view_url: driveInfo?.view_url || null,
+        });
+      } catch (e) {
+        return json({ success: false, partial_failure: true,
+          po_id: poId, bill_id: billId,
+          payment_error: e.message,
+          message: 'PO billed successfully but payment failed — retry from /ops/bills/ Unpaid tab' }, 500);
+      }
+    }
+
+    return json({ success: false, error: 'Unknown action', actions: ['verify-pin','products','employees','vendors','recent','record','upload-bill','pay-bill','list-bills','payment-journals','settle-po'] }, 400);
   } catch (e) {
     return json({ success: false, error: e.message, stack: e.stack }, 500);
   }

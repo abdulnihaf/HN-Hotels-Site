@@ -306,7 +306,59 @@
       <span id="rm-cart-count" style="font-weight: 600;">0 items</span>
       <span style="color: var(--accent); font-weight: 700; margin-left: 8px;" id="rm-cart-total">₹0</span>
     </div>
-    <button class="btn btn-primary" id="rm-submit-btn" onclick="submitRmPurchase()" disabled>Create PO</button>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-secondary" id="rm-pay-create-btn" onclick="openPayCreateModal()" disabled
+              title="Create PO + record payment in one click — for cash-on-delivery purchases">
+        💰 Pay & create
+      </button>
+      <button class="btn btn-primary" id="rm-submit-btn" onclick="submitRmPurchase()" disabled>Create PO</button>
+    </div>
+  </div>
+
+  <!-- Pay-and-Create modal (Phase 2 Surface A) — Zoya marks PO as paid at creation time -->
+  <div id="pay-create-modal" class="modal-overlay hidden" onclick="if(event.target===this)closePayCreateModal()">
+    <div class="modal-card" style="max-width:460px;">
+      <button class="modal-close" onclick="closePayCreateModal()">✕</button>
+      <div class="modal-title">💰 Pay & create PO</div>
+      <p style="font-size:12px; color:var(--text-dim); margin:0 0 14px;">
+        Creates the PO + records a vendor bill + payment in one click.
+        Use this when the vendor was paid cash on delivery, or pre-paid.
+      </p>
+      <div id="pc-err" style="display:none; background:rgba(239,68,68,0.10); border:1px solid rgba(239,68,68,0.4); color:#f87171; padding:10px 12px; border-radius:var(--radius); font-size:12px; margin-bottom:10px;"></div>
+
+      <div id="pc-cart-summary" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; margin-bottom:14px; font-size:13px;"></div>
+
+      <div class="field">
+        <label>Payment account</label>
+        <select id="pc-journal" style="width:100%;"><option value="">— pick brand journal —</option></select>
+      </div>
+      <div class="field" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div>
+          <label>Payment date</label>
+          <input id="pc-date" type="date" style="width:100%;">
+        </div>
+        <div>
+          <label>Paid by <span style="font-size:11px;color:var(--text-mute);font-weight:400;">name</span></label>
+          <input id="pc-by" type="text" placeholder="e.g. Basheer / Nihaf" style="width:100%;">
+        </div>
+      </div>
+      <div class="field">
+        <label>
+          <input id="pc-partial" type="checkbox" onchange="onPcPartialToggle()" style="width:auto; margin-right:6px;">
+          Partial payment (specify amount per PO below)
+        </label>
+        <div id="pc-partial-wrap" style="display:none; margin-top:6px;">
+          <input id="pc-partial-amount" type="number" inputmode="decimal" placeholder="Amount paid (per PO)" style="width:100%;">
+          <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">
+            For partial: the same amount applies to each PO in your cart. Remaining can be paid later from /ops/bills/.
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-full" id="pc-submit-btn" onclick="submitPayCreate()">
+        Confirm — create PO(s) + pay
+      </button>
+    </div>
   </div>
 
   <!-- Vendor picker modal (cat 1) -->
@@ -1135,6 +1187,186 @@ function removeFromCart(idx) {
   renderCart();
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// Phase 2 Surface A — "Pay & create" modal
+//
+// Opens BEFORE create-po. Asks: payment journal, date, paid-by name,
+// optional partial-amount toggle. On submit: groups cart by vendor,
+// creates each PO via existing /api/rm-ops?action=create-po, then for
+// each successful PO calls /api/spend?action=settle-po atomically
+// (which creates bill from PO + payment + reconciles).
+//
+// Reuses the existing submitRmPurchase grouping + create-po loop —
+// just adds a settle-po pass on each successful PO.
+// ════════════════════════════════════════════════════════════════════════
+
+let _payJournalsCache = {};  // brand → journals list
+
+async function openPayCreateModal() {
+  if (!cart.length) return;
+  // Validate cart same way submit does
+  const groups = _groupCartByVendor();
+  if (!groups.length) return toast('Add at least one item with vendor + qty', 'err');
+
+  // Reset modal state
+  const today = todayIST();
+  document.getElementById('pc-date').value = today;
+  document.getElementById('pc-by').value = '';
+  document.getElementById('pc-partial').checked = false;
+  document.getElementById('pc-partial-wrap').style.display = 'none';
+  document.getElementById('pc-partial-amount').value = '';
+  document.getElementById('pc-err').style.display = 'none';
+
+  // Cart summary
+  const totalAll = groups.reduce((s, g) => s + g.lines.reduce((ss, l) => ss + (l.qty * l.price_unit), 0), 0);
+  const summary = groups.map(g => {
+    const t = g.lines.reduce((s, l) => s + (l.qty * l.price_unit), 0);
+    return `<div style="display:flex; justify-content:space-between; padding:3px 0;">
+      <span>${esc(g.vendor.name)} <span style="color:var(--text-dim)">· ${g.lines.length} item${g.lines.length===1?'':'s'}</span></span>
+      <span style="font-weight:700;">₹${Math.round(t).toLocaleString('en-IN')}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('pc-cart-summary').innerHTML =
+    `<div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;margin-bottom:6px;">${groups.length} PO${groups.length===1?'':'s'} will be created · Total ₹${Math.round(totalAll).toLocaleString('en-IN')}</div>${summary}`;
+
+  // Load journals for current BRAND (cache)
+  const sel = document.getElementById('pc-journal');
+  if (!_payJournalsCache[BRAND]) {
+    sel.innerHTML = '<option value="">Loading…</option>';
+    try {
+      const r = await fetch(`${API}?action=payment-journals&pin=${PIN}&brand=${BRAND}`).then(x => x.json());
+      _payJournalsCache[BRAND] = r.journals || [];
+    } catch (_) { _payJournalsCache[BRAND] = []; }
+  }
+  sel.innerHTML = '<option value="">— pick account —</option>' +
+    _payJournalsCache[BRAND].map(j => `<option value="${j.id}">${esc(j.name)} (${j.type})</option>`).join('');
+
+  document.getElementById('pay-create-modal').classList.remove('hidden');
+}
+function closePayCreateModal() {
+  document.getElementById('pay-create-modal').classList.add('hidden');
+}
+function onPcPartialToggle() {
+  const checked = document.getElementById('pc-partial').checked;
+  document.getElementById('pc-partial-wrap').style.display = checked ? '' : 'none';
+}
+
+// Group cart by vendor (extracted from submitRmPurchase so both paths share it)
+function _groupCartByVendor() {
+  const byVendor = {};
+  for (const item of cart) {
+    if (!item.vendor || !item.qty) continue;
+    const vid = item.vendor.id;
+    if (!byVendor[vid]) byVendor[vid] = { vendor: item.vendor, lines: [] };
+    const line = {
+      product_id: item.product.id,
+      qty: parseFloat(item.qty),
+      price_unit: parseFloat(item.price) || 0,
+      name: item.product.name,
+    };
+    if (item.product._variant) {
+      line.odoo_variant_id = item.product.id;
+      line.variant_display = item.product.name;
+    }
+    byVendor[vid].lines.push(line);
+  }
+  return Object.values(byVendor);
+}
+
+async function submitPayCreate() {
+  const errEl = document.getElementById('pc-err');
+  errEl.style.display = 'none';
+  const btn = document.getElementById('pc-submit-btn');
+  btn.disabled = true; btn.textContent = 'Working…';
+
+  try {
+    const journal_id = parseInt(document.getElementById('pc-journal').value, 10);
+    const payment_date = document.getElementById('pc-date').value;
+    const payment_method_label = document.getElementById('pc-by').value.trim();
+    const isPartial = document.getElementById('pc-partial').checked;
+    const partialAmt = isPartial ? parseFloat(document.getElementById('pc-partial-amount').value) : null;
+
+    if (!journal_id) throw new Error('Pick a payment account');
+    if (!payment_date) throw new Error('Pick a payment date');
+    if (isPartial && !(partialAmt > 0)) throw new Error('Enter a valid partial amount');
+
+    // Historical date support
+    let historicalDate;
+    if (MODE === 'historical') {
+      historicalDate = document.getElementById('rm-hist-date')?.value || '';
+      if (!historicalDate || !/^\d{4}-\d{2}-\d{2}$/.test(historicalDate)) {
+        throw new Error('Pick the original PO date at the top before submitting');
+      }
+    }
+
+    const groups = _groupCartByVendor();
+    const successes = [], failures = [], partialFailures = [];
+
+    for (const g of groups) {
+      try {
+        // 1. Create PO
+        const cr = await fetch(`${RM_API}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create-po', pin: PIN, brand: BRAND,
+            vendor_id: g.vendor.id, lines: g.lines,
+            ...(historicalDate ? { date: historicalDate } : {}) }),
+        }).then(x => x.json());
+        if (!cr.success || !cr.po_id) {
+          failures.push(`${g.vendor.name}: ${cr.error || 'create-po failed'}`);
+          continue;
+        }
+
+        // 2. Settle PO (creates bill from PO + payment + reconciles)
+        const settleBody = {
+          pin: PIN, brand: BRAND, po_id: cr.po_id,
+          payment_journal_id: journal_id,
+          payment_date,
+          payment_method_label: payment_method_label || null,
+        };
+        if (isPartial) settleBody.payment_amount = partialAmt;
+        const sr = await fetch(`${API}?action=settle-po`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settleBody),
+        }).then(x => x.json());
+        if (sr.success) {
+          successes.push(`${cr.po_name || 'PO'} (${sr.payment_state})`);
+        } else if (sr.partial_failure) {
+          partialFailures.push(`${cr.po_name}: PO created + billed but payment failed — ${sr.payment_error}`);
+        } else {
+          partialFailures.push(`${cr.po_name}: PO created (unpaid) — settle failed: ${sr.error}`);
+        }
+      } catch (e) {
+        failures.push(`${g.vendor.name}: ${e.message}`);
+      }
+    }
+
+    if (successes.length && !failures.length && !partialFailures.length) {
+      toast(`✓ Paid + created ${successes.length} PO: ${successes.join(', ')}`, 'ok');
+      cart = [];
+      closePayCreateModal();
+      setTimeout(showHome, 1100);
+    } else if (successes.length || partialFailures.length) {
+      const msg = [
+        successes.length ? `${successes.length} paid` : null,
+        partialFailures.length ? `${partialFailures.length} unpaid (settle from /ops/bills/)` : null,
+        failures.length ? `${failures.length} failed` : null,
+      ].filter(Boolean).join(' · ');
+      toast(`Mixed: ${msg}`, 'err');
+      // Don't auto-close — let Zoya read the message
+      cart = [];
+      closePayCreateModal();
+      setTimeout(showHome, 2500);
+    } else {
+      throw new Error(failures[0] || 'All POs failed');
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm — create PO(s) + pay';
+  }
+}
+
 function clearCart() {
   cart = [];
   renderRmProducts();
@@ -1180,6 +1412,9 @@ function updateCartTotals() {
   document.getElementById('rm-cart-count').textContent = `${count} item${count !== 1 ? 's' : ''}`;
   document.getElementById('rm-cart-total').textContent = `₹${total.toLocaleString('en-IN')}`;
   document.getElementById('rm-submit-btn').disabled = !canSubmit || count === 0;
+  // Mirror enable state on the Pay & create button (Phase 2 Surface A)
+  const pcBtn = document.getElementById('rm-pay-create-btn');
+  if (pcBtn) pcBtn.disabled = !canSubmit || count === 0;
 }
 
 function renderRecentPOs() {
