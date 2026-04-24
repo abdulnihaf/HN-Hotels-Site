@@ -947,6 +947,11 @@ async function createPO(body, user, creds, cfg, brand, DB, env) {
     partner_id: vendor_id,
     company_id: cfg.company_id,
     order_line: orderLines,
+    // Audit attribution — without this, every PO is anonymous in Odoo and the
+    // money cockpit shows "by —". Use the PIN owner's Odoo user (mapped via
+    // USERS[pin].odoo_uid). 455 historical POs created before this change have
+    // no attribution and are not retroactively recoverable.
+    x_recorded_by_user_id: user.odoo_uid || 2,
   };
   if (date) poVals.date_order = dateOrderStr;
 

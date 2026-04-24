@@ -330,7 +330,7 @@ function renderPOs(c, rows) {
     <div class="tbl-wrap"><table>
       <thead><tr>
         <th>Date</th><th>Brand</th><th>State</th>
-        <th>PO #</th><th>Vendor</th><th>Items</th><th class="amt">Amount</th><th>By</th>
+        <th>PO #</th><th>Vendor</th><th>Items</th><th>📎</th><th class="amt">Amount</th><th>By</th>
       </tr></thead>
       <tbody>${rows.map(r => `
         <tr>
@@ -340,6 +340,7 @@ function renderPOs(c, rows) {
           <td><b>${escapeHtml(r.odoo_name || '—')}</b></td>
           <td class="vend">${escapeHtml(r.vendor_name || '—')}</td>
           <td>${escapeHtml(r.item || '—')}</td>
+          <td>${attCell(r)}</td>
           <td class="amt">₹${fmtAmt(r.amount)}</td>
           <td class="by">${escapeHtml(r.recorded_by || '—')}</td>
         </tr>`).join('')}
@@ -354,7 +355,7 @@ function renderBills(c, pending, paid) {
       <thead><tr>
         <th>Bill Date</th><th>Brand</th><th>State</th>
         <th>Bill Ref</th><th>Vendor</th><th>From PO</th>
-        <th>Due</th><th class="amt">Total</th>${isPending ? '<th class="amt">Outstanding</th>' : ''}
+        <th>Due</th><th>📎</th><th class="amt">Total</th>${isPending ? '<th class="amt">Outstanding</th>' : ''}
       </tr></thead>
       <tbody>${list.map(r => `
         <tr>
@@ -365,6 +366,7 @@ function renderBills(c, pending, paid) {
           <td class="vend">${escapeHtml(r.vendor_name || '—')}</td>
           <td>${r.invoice_origin ? escapeHtml(r.invoice_origin) : '<span class="by">direct</span>'}</td>
           <td>${r.due_date ? shortDate(r.due_date) : '<span class="by">—</span>'}</td>
+          <td>${attCell(r)}</td>
           <td class="amt">₹${fmtAmt(r.amount)}</td>
           ${isPending ? `<td class="amt" style="color:#f87171">₹${fmtAmt(r.amount_residual || r.amount)}</td>` : ''}
         </tr>`).join('')}
@@ -410,35 +412,89 @@ function renderDupes(c, alerts) {
     c.innerHTML = '<div class="empty" style="color:var(--success)">✓ No duplicate suspects detected.</div>';
     return;
   }
-  c.innerHTML = `
-    <p style="font-size:13px;color:var(--text-dim);margin:0 0 10px">
-      Likely duplicates detected by fuzzy match (same brand · ±1 day · ±0.5% amount · description token overlap).
-      Review each pair and decide manually — no auto-delete.
-    </p>
-    ${alerts.map(d => `
+  // Group: cross-kind first (more important — architectural double-count)
+  const crossKind = alerts.filter(a => a.kind === 'cross-kind');
+  const sameFeed  = alerts.filter(a => a.kind !== 'cross-kind');
+  let html = '';
+
+  if (crossKind.length) {
+    html += `
+      <h3 style="margin:0 0 8px;font-size:13px;color:#f87171;text-transform:uppercase;letter-spacing:0.4px">
+        🔴 Cross-system suspects · ${crossKind.length}
+      </h3>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px">
+        A purchase order looks like the SAME real-world purchase already paid in cash at the outlet.
+        If real, the P&L is double-counting. Review and decide:
+        either close/cancel the PO, or remove the outlet expense entry.
+      </p>`;
+    html += crossKind.map(d => `
+      <div class="dup-card" style="border-color: rgba(239,68,68,0.5)">
+        <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.4px">
+          PO ↔ Paid expense — ${escapeHtml(d.reason || '')}
+        </div>
+        <div class="dup-row">
+          ${dupSide('Purchase Order (open)', d.a, 'po')}
+          ${dupSide('Outlet cash payment', d.b, 'paid')}
+        </div>
+        <div class="dup-meta">
+          <span class="dup-conf ${d.confidence}">${d.confidence}</span>
+          <span>Vendor match: ${d.vendor_match_pct}%</span>
+          <span>Amount diff: ${d.amount_diff_pct}%</span>
+          <span style="margin-left:auto">PO → Paid gap: ${d.date_gap_days >= 0 ? '+' : ''}${d.date_gap_days}d</span>
+        </div>
+      </div>`).join('');
+  }
+
+  if (sameFeed.length) {
+    html += `
+      <h3 style="margin:18px 0 8px;font-size:13px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px">
+        🟡 Same-feed duplicates · ${sameFeed.length}
+      </h3>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px">
+        Same brand · ±1 day · ±0.5% amount · description token overlap.
+        Most likely the same item entered twice by the same person.
+      </p>`;
+    html += sameFeed.map(d => `
       <div class="dup-card">
         <div class="dup-row">
-          ${dupSide('Original', d.a)}
-          ${dupSide('Suspect duplicate', d.b)}
+          ${dupSide('Original', d.a, 'paid')}
+          ${dupSide('Suspect duplicate', d.b, 'paid')}
         </div>
         <div class="dup-meta">
           <span class="dup-conf ${d.confidence}">${d.confidence}</span>
           <span>Description similarity: ${(d.similarity * 100).toFixed(0)}%</span>
           <span style="margin-left:auto">Time gap: ${niceTimeGap(d.a.recorded_at, d.b.recorded_at)}</span>
         </div>
-      </div>
-    `).join('')}`;
+      </div>`).join('');
+  }
+
+  c.innerHTML = html;
 }
 
-function dupSide(label, x) {
+function dupSide(label, x, sideKind) {
+  const ref = x.odoo_name ? `<b>${escapeHtml(x.odoo_name)}</b> · ` : '';
+  const vendor = x.vendor_name ? `<div class="l">Vendor: <b>${escapeHtml(x.vendor_name)}</b></div>` : '';
   return `
     <div class="dup-side">
       <h4>${label}</h4>
-      <div class="l">${shortDate(x.recorded_at)} · <span class="chip brand-${x.brand}">${x.brand}</span> · <span class="chip src-${cssClass(x.source)}">${x.source}</span></div>
-      <div class="l"><b>₹${fmtAmt(x.amount)}</b> — ${escapeHtml(x.item || x.description || '—')}</div>
-      <div class="l">${escapeHtml(x.description || '')}</div>
+      <div class="l">${shortDate(x.recorded_at)} · <span class="chip brand-${x.brand}">${x.brand}</span> · <span class="chip src-${cssClass(x.source || '?')}">${x.source || '?'}</span></div>
+      <div class="l">${ref}<b>₹${fmtAmt(x.amount)}</b> — ${escapeHtml(x.item || x.description || '—')}</div>
+      ${vendor}
+      ${x.description ? `<div class="l">${escapeHtml(x.description)}</div>` : ''}
       <div class="l by">id #${x.id} · ${x.feed}</div>
     </div>`;
+}
+
+// Attachment cell — clickable Drive link if available, plain badge if just count
+function attCell(r) {
+  const n = r.attachment_count || 0;
+  if (!n) return '<span class="by">—</span>';
+  const first = (r.attachments || [])[0];
+  if (first?.drive_url) {
+    const more = n > 1 ? ` +${n - 1}` : '';
+    return `<a href="${escapeHtml(first.drive_url)}" target="_blank" rel="noopener" title="${escapeHtml(first.filename || '')}" style="color:#34d399;text-decoration:none;font-weight:600">📎${more}</a>`;
+  }
+  return `<span style="color:var(--text-dim)">📎${n}</span>`;
 }
 
 // ── Helpers ───────────────────────────────────────────────

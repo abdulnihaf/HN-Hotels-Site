@@ -146,13 +146,15 @@ async function cockpit(url, env) {
   const exportHeaders = { 'x-cockpit-token': cockpitToken };
   const qs = `?from=${from}&to=${to}`;
 
-  // ── Fan out 5 sources in parallel ──────────────────────────────────────
+  // ── Fan out 6 sources in parallel ──────────────────────────────────────
+  // (6) is bill_attachments D1 — Drive URLs + photo metadata for ledger items
   const [
     centralRes,
     nchRes,
     heRes,
     pos,
     bills,
+    attRes,
   ] = await Promise.all([
     // (1) HN central business_expenses (hr.expense mirror)
     fetchCentralExpenses(env.DB, from, to, brand),
@@ -185,7 +187,21 @@ async function cockpit(url, env) {
                  'x_recorded_by_user_id'],
         order: 'invoice_date desc', limit: 500 }
     ).catch((e) => ({ __error: e.message, __empty: true })),
+
+    // (6) D1 bill_attachments — Drive URLs for any photos we tracked
+    fetchAttachments(env.DB, from, to),
   ]);
+
+  // Build attachment index — { 'PO-123': [...drive_urls...], 'Bill-45': [...] }
+  const attIndex = {};
+  for (const a of (attRes || [])) {
+    const key = `${a.entry_kind}-${a.entry_odoo_id}`;
+    if (!attIndex[key]) attIndex[key] = [];
+    attIndex[key].push({
+      drive_url: a.drive_view_url, filename: a.filename,
+      uploaded_by: a.uploaded_by_name, uploaded_at: a.uploaded_at,
+    });
+  }
 
   // ── Normalize all 5 into one shape ─────────────────────────────────────
 
@@ -262,6 +278,8 @@ async function cockpit(url, env) {
     item: `${p.name} · ${p.order_line?.length || 0} item${p.order_line?.length === 1 ? '' : 's'}`,
     description: '',
     recorded_by: p.x_recorded_by_user_id?.[1] || null,
+    attachments: attIndex[`PO-${p.id}`] || [],
+    attachment_count: (attIndex[`PO-${p.id}`] || []).length,
   }));
 
   // (e) Bills
@@ -286,6 +304,8 @@ async function cockpit(url, env) {
     item: b.ref || b.name,
     description: '',
     recorded_by: b.x_recorded_by_user_id?.[1] || null,
+    attachments: attIndex[`Bill-${b.id}`] || [],
+    attachment_count: (attIndex[`Bill-${b.id}`] || []).length,
   }));
 
   // ── Brand filter post-pass on outlet/central feeds (Odoo already filtered)
@@ -307,8 +327,14 @@ async function cockpit(url, env) {
     .filter((b) => b.state === 'bill-paid')
     .sort((a, b) => String(b.recorded_at).localeCompare(String(a.recorded_at)));
 
-  // ── Dup detection — across paid feed only (POs/Bills have their own life)
-  const dupAlerts = detectDuplicates(paid);
+  // ── Dup detection: same-feed (paid ↔ paid) + cross-kind (PO ↔ paid)
+  // Cross-kind catches the architectural double-count: Zoya raises a PO for
+  // "120 Buns from Ganga Bakery ₹996" AND Basheer pays cash at the outlet
+  // for the same delivery ₹1000. Without reconciliation, P&L counts both.
+  const dupAlerts = [
+    ...detectDuplicates(paid),
+    ...detectCrossKindDuplicates(posList, paid),
+  ];
 
   // ── KPIs
   const kpis = {
@@ -344,6 +370,21 @@ async function cockpit(url, env) {
 }
 
 // ━━━ Sub-helpers ━━━
+
+// D1 bill_attachments → list of photos (Drive URLs) tracked for ledger items
+// in the date window. Used to surface 📎 badges + Drive links in the cockpit.
+async function fetchAttachments(DB, from, to) {
+  if (!DB) return [];
+  const r = await DB.prepare(
+    `SELECT entry_kind, entry_odoo_id, drive_view_url, drive_folder_path,
+            filename, file_size_kb, uploaded_by_pin, uploaded_by_name, uploaded_at
+       FROM bill_attachments
+      WHERE entry_date BETWEEN ? AND ?
+      ORDER BY uploaded_at DESC`
+  ).bind(from, to).all().catch(() => ({ results: [] }));
+  return r.results || [];
+}
+
 async function fetchCentralExpenses(DB, from, to, brand) {
   if (!DB) return [];
   let sql = `SELECT id, recorded_by, recorded_at, amount, description, category, category_parent,
@@ -443,12 +484,73 @@ function detectDuplicates(paid) {
                                 `${b.item || ''} ${b.description || ''}`);
       if (sim < 0.6) continue;
       alerts.push({
+        kind: 'same-feed',
         a: { id: a.central_id || a.source_id, feed: a.feed, recorded_at: a.recorded_at,
-             amount: a.amount, brand: a.brand, source: a.source, item: a.item, description: a.description },
+             amount: a.amount, brand: a.brand, source: a.source, item: a.item, description: a.description,
+             vendor_name: a.vendor_name || null },
         b: { id: b.central_id || b.source_id, feed: b.feed, recorded_at: b.recorded_at,
-             amount: b.amount, brand: b.brand, source: b.source, item: b.item, description: b.description },
+             amount: b.amount, brand: b.brand, source: b.source, item: b.item, description: b.description,
+             vendor_name: b.vendor_name || null },
         similarity: +sim.toFixed(2),
         confidence: sim >= 0.85 ? 'high' : 'medium',
+      });
+    }
+  }
+  return alerts;
+}
+
+// Cross-kind duplicate detection — surfaces (PO ↔ paid expense) pairs that
+// look like the SAME real-world event recorded twice:
+//   • Zoya raises a PO for "Buns from Ganga Bakery ₹996" on day X
+//   • Basheer pays cash at outlet for "120 buns Ganga Bakery ₹1000" same week
+// → P&L counts ₹1,996 instead of ₹1,000. This is the architectural double-count.
+//
+// Match rules (intentionally conservative — vendor name MUST match):
+//   • Same brand
+//   • PO has a vendor_name (we use it as the anchor); paid row's description
+//     OR item must contain vendor name tokens (≥ 50% overlap)
+//   • Amount within ±5% (vendor often rounds — bills don't always match the PO)
+//   • PO date within [paid - 1d, paid + 7d] (PO usually first; vendor delivers
+//     and is paid within the week)
+function detectCrossKindDuplicates(pos, paid) {
+  const alerts = [];
+  for (const p of pos) {
+    if (!p.vendor_name || !p.amount) continue;
+    const vendorTokens = new Set(normStr(p.vendor_name).split(' ').filter(t => t.length >= 3));
+    if (!vendorTokens.size) continue;
+    for (const e of paid) {
+      if (e.brand !== p.brand) continue;
+      // amount within ±5%
+      const amtDiff = Math.abs((+e.amount) - (+p.amount)) / (+p.amount);
+      if (amtDiff > 0.05) continue;
+      // date window: PO ≤ paid_date + 7d AND PO ≥ paid_date - 1d
+      const poT = Date.parse(p.recorded_at);
+      const eT  = Date.parse(e.recorded_at);
+      if (Number.isNaN(poT) || Number.isNaN(eT)) continue;
+      const dayDelta = (eT - poT) / 86400000;  // positive = paid after PO
+      if (dayDelta < -1 || dayDelta > 7) continue;
+      // vendor name token overlap with paid row's text (item + description)
+      const eText = normStr(`${e.item || ''} ${e.description || ''}`);
+      const eTextTokens = new Set(eText.split(' ').filter(Boolean));
+      let hits = 0;
+      for (const t of vendorTokens) if (eTextTokens.has(t)) hits++;
+      const vendorMatch = hits / vendorTokens.size;
+      if (vendorMatch < 0.5) continue;
+
+      const confidence = (vendorMatch >= 0.9 && amtDiff <= 0.01) ? 'high' : 'medium';
+      alerts.push({
+        kind: 'cross-kind',
+        reason: 'PO probably already paid in cash at outlet',
+        a: { id: p.odoo_id, feed: 'odoo-po', kind_label: 'PO', odoo_name: p.odoo_name,
+             recorded_at: p.recorded_at, amount: p.amount, brand: p.brand,
+             source: p.source, vendor_name: p.vendor_name, item: p.item, description: '' },
+        b: { id: e.central_id || e.source_id, feed: e.feed, kind_label: 'Paid expense',
+             recorded_at: e.recorded_at, amount: e.amount, brand: e.brand,
+             source: e.source, item: e.item, description: e.description },
+        amount_diff_pct: +(amtDiff * 100).toFixed(1),
+        date_gap_days: +dayDelta.toFixed(1),
+        vendor_match_pct: +(vendorMatch * 100).toFixed(0),
+        confidence,
       });
     }
   }

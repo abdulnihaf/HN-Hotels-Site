@@ -812,7 +812,25 @@ export async function onRequest(context) {
     if (action === 'record' && request.method === 'POST') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
       const body = await request.json();
-      const { pin, category: catId, brand, product_id, amount, payment_method,
+      // Backward-compat shim — accept both `category` (HN UIs, NCH outlet) and
+      // `category_id` (HE outlet). Without this, HE outlet expenses were 100%
+      // failing with "Unknown category" since launch (silent orphaning).
+      const catId = body.category ?? body.category_id;
+      // Backward-compat shim — accept HE-style raw `photo_b64` (data-URI string)
+      // and normalize into the {name, mimetype, data_b64} attachment shape that
+      // saveAttachment + syncToDrive expect. Without this, every HE outlet bill
+      // photo was silently dropped.
+      if (!body.attachment && body.photo_b64) {
+        const raw = String(body.photo_b64);
+        const b64 = raw.includes(',') ? raw.split(',')[1] : raw;
+        const mimeMatch = raw.match(/^data:([^;]+);/);
+        body.attachment = {
+          name: `${body.brand || 'spend'}-${new Date().toISOString().slice(0,10)}-bill.jpg`,
+          mimetype: mimeMatch?.[1] || 'image/jpeg',
+          data_b64: b64,
+        };
+      }
+      const { pin, brand, product_id, amount, payment_method,
               employee_id, notes, bill_ref, vendor_name } = body;
 
       const user = resolveUser(pin);
@@ -1035,7 +1053,9 @@ export async function onRequest(context) {
           ).run().catch(e => console.error('mirror fail:', e.message));
         }
 
-        return json({ success: true, odoo_id: expenseId, backend: 'hr.expense', category: cat.label,
+        return json({ success: true,
+          odoo_id: expenseId, expense_id: expenseId,  // expense_id alias for HE outlet caller
+          backend: 'hr.expense', category: cat.label,
           attachment_id: attId, drive_file_id: driveFile, drive_view_url: driveInfo?.view_url || null });
       }
 
