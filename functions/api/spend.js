@@ -2631,8 +2631,379 @@ export async function onRequest(context) {
       return json({ success: true, pos });
     }
 
-    return json({ success: false, error: 'Unknown action', actions: ['verify-pin','products','employees','vendors','recent','record'] }, 400);
+    // ════════════════════════════════════════════════════════════════════
+    // BILLS API — for /ops/bills/ dedicated bill upload + payment tracker.
+    //
+    // Why these live in spend.js (not a new file): reuses the saveAttachment
+    // / syncToDrive / logBillAttachment / odoo / USERS helpers without
+    // duplication. Same auth model. Zero new schema. All 4 actions use
+    // existing Odoo models (account.move, account.payment, account.move.line)
+    // and the existing D1 bill_attachments table.
+    //
+    // Backward-compat guarantees:
+    //   • No existing endpoint signature changes.
+    //   • No existing JSON response field renamed/removed.
+    //   • If a user creates a bill via /ops/expense/ cat 14, it still works
+    //     identically — these actions are an alternate, additive path.
+    //   • Idempotency check on (vendor_id + bill_ref + bill_date + amount)
+    //     prevents accidental dup-billing across both paths.
+    // ════════════════════════════════════════════════════════════════════
+
+    // ── GET: payment-journals — list bank/cash journals filtered by brand ─
+    if (action === 'payment-journals') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      const brand = (url.searchParams.get('brand') || '').toUpperCase();
+      const companyId = BRAND_COMPANY[brand];
+      if (!companyId) return json({ success: false, error: 'Unknown brand' }, 400);
+      const journals = await odoo(apiKey, 'account.journal', 'search_read',
+        [[['type', 'in', ['bank', 'cash']], ['company_id', '=', companyId]]],
+        { fields: ['id', 'name', 'type', 'code'], order: 'sequence asc, name asc' });
+      return json({ success: true, journals });
+    }
+
+    // ── GET: list-bills — for /ops/bills/ Unpaid + Recent tabs ────────────
+    // Query: ?status=unpaid|all  &days=N  &brand=NCH|HE|HQ|ALL  &pin=...
+    if (action === 'list-bills') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!BILL_VIEW_ROLES.has(user.role)) {
+        return json({ success: false, error: `Role ${user.role} cannot view bills` }, 403);
+      }
+      const status = url.searchParams.get('status') || 'unpaid';
+      const days = Math.min(Math.max(parseInt(url.searchParams.get('days') || '30', 10), 1), 365);
+      const brand = (url.searchParams.get('brand') || 'ALL').toUpperCase();
+      const companyId = brand !== 'ALL' ? BRAND_COMPANY[brand] : null;
+
+      // Date window — IST today minus N days, inclusive
+      const ymdToday = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+      const fromYmd = new Date(Date.parse(`${ymdToday}T00:00:00.000Z`) - (days - 1) * 86400000).toISOString().slice(0, 10);
+
+      const domain = [['move_type', '=', 'in_invoice']];
+      if (companyId) domain.push(['company_id', '=', companyId]);
+      if (status === 'unpaid') {
+        domain.push(['payment_state', '!=', 'paid']);
+        domain.push(['state', '=', 'posted']);
+      } else if (status === 'all') {
+        domain.push(['invoice_date', '>=', fromYmd]);
+      }
+
+      const bills = await odoo(apiKey, 'account.move', 'search_read',
+        [domain],
+        { fields: ['id', 'name', 'ref', 'invoice_date', 'invoice_date_due',
+                   'partner_id', 'company_id', 'amount_total', 'amount_residual',
+                   'payment_state', 'state', 'invoice_origin',
+                   'narration', 'x_recorded_by_user_id'],
+          order: status === 'unpaid' ? 'invoice_date_due asc nulls last' : 'invoice_date desc',
+          limit: 200 });
+
+      // Attachments via existing D1 bill_attachments
+      const billIds = bills.map(b => b.id);
+      const attMap = {};
+      if (DB && billIds.length) {
+        try {
+          const placeholders = billIds.map(() => '?').join(',');
+          const r = await DB.prepare(
+            `SELECT entry_odoo_id, drive_view_url, filename FROM bill_attachments
+              WHERE entry_kind = 'Bill' AND entry_odoo_id IN (${placeholders})`
+          ).bind(...billIds).all().catch(() => ({ results: [] }));
+          for (const row of (r.results || [])) {
+            if (!attMap[row.entry_odoo_id]) attMap[row.entry_odoo_id] = [];
+            attMap[row.entry_odoo_id].push({ drive_url: row.drive_view_url, filename: row.filename });
+          }
+        } catch (_) { /* soft-fail */ }
+      }
+
+      const COMPANY_BRAND = { 1: 'HQ', 2: 'HE', 3: 'NCH' };
+      const todayMs = Date.now();
+      const out = bills.map(b => {
+        const dueMs = b.invoice_date_due ? Date.parse(b.invoice_date_due) : null;
+        const isOverdue = dueMs !== null && dueMs < todayMs && b.payment_state !== 'paid';
+        return {
+          id: b.id,
+          ref: b.ref || b.name,
+          odoo_name: b.name,
+          vendor_id: b.partner_id?.[0] || null,
+          vendor_name: b.partner_id?.[1] || null,
+          brand: COMPANY_BRAND[b.company_id?.[0]] || '?',
+          invoice_date: b.invoice_date,
+          due_date: b.invoice_date_due,
+          amount_total: b.amount_total || 0,
+          amount_residual: b.amount_residual || 0,
+          amount_paid: (b.amount_total || 0) - (b.amount_residual || 0),
+          payment_state: b.payment_state || 'not_paid',
+          is_overdue: isOverdue,
+          recorded_by: b.x_recorded_by_user_id?.[1] || null,
+          notes: b.narration || '',
+          from_po: b.invoice_origin || null,
+          attachments: attMap[b.id] || [],
+          attachment_count: (attMap[b.id] || []).length,
+        };
+      });
+
+      const totals = {
+        count: out.length,
+        unpaid_total: out.filter(b => b.payment_state !== 'paid').reduce((s, b) => s + b.amount_residual, 0),
+        overdue_count: out.filter(b => b.is_overdue).length,
+        overdue_total: out.filter(b => b.is_overdue).reduce((s, b) => s + b.amount_residual, 0),
+      };
+      return json({ success: true, bills: out, totals, status, brand, days });
+    }
+
+    // ── POST: upload-bill — create new vendor bill (paid/unpaid/partial) ──
+    // Body: {
+    //   pin, brand, vendor_id, amount, bill_date, due_date?, bill_ref?, notes?,
+    //   attachment? (existing shape: {name, mimetype, data_b64}),
+    //   payment_status: 'unpaid' | 'paid' | 'partial',
+    //   payment_amount?: number (for partial),
+    //   payment_journal_id?: number (account.journal id; required for paid/partial),
+    //   payment_date?: YYYY-MM-DD (for paid/partial),
+    //   payment_method_label?: string (e.g. "Basheer cash" — display only)
+    // }
+    if (action === 'upload-bill' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, brand, vendor_id, amount, bill_date, due_date, bill_ref, notes,
+              payment_status, payment_amount, payment_journal_id, payment_date,
+              payment_method_label } = body;
+
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!BILL_UPLOAD_ROLES.has(user.role)) {
+        return json({ success: false, error: `Role ${user.role} cannot upload bills` }, 403);
+      }
+      const companyId = BRAND_COMPANY[(brand || '').toUpperCase()];
+      if (!companyId) return json({ success: false, error: 'Unknown brand' }, 400);
+      if (!vendor_id) return json({ success: false, error: 'Vendor required' }, 400);
+      const amt = parseFloat(amount);
+      if (!(amt > 0)) return json({ success: false, error: 'Amount must be > 0' }, 400);
+      if (!bill_date || !/^\d{4}-\d{2}-\d{2}$/.test(bill_date)) {
+        return json({ success: false, error: 'bill_date YYYY-MM-DD required' }, 400);
+      }
+      const status = (payment_status || 'unpaid').toLowerCase();
+      if (!['unpaid', 'paid', 'partial'].includes(status)) {
+        return json({ success: false, error: 'payment_status must be unpaid|paid|partial' }, 400);
+      }
+
+      // Idempotency: reject if a bill with same (vendor + ref + date + amount) already exists.
+      // Prevents accidental dup if user double-taps Save.
+      if (bill_ref) {
+        const existing = await odoo(apiKey, 'account.move', 'search_read',
+          [[['move_type', '=', 'in_invoice'], ['company_id', '=', companyId],
+            ['partner_id', '=', parseInt(vendor_id, 10)], ['ref', '=', bill_ref],
+            ['invoice_date', '=', bill_date]]],
+          { fields: ['id', 'name', 'amount_total'], limit: 1 });
+        if (existing.length && Math.abs(existing[0].amount_total - amt) < 0.5) {
+          return json({ success: false, code: 'DUPLICATE',
+            error: `A bill with same vendor + ref + date + amount already exists: ${existing[0].name}`,
+            existing_bill_id: existing[0].id }, 409);
+        }
+      }
+
+      // 1. Create + post the bill
+      const moveVals = {
+        move_type: 'in_invoice',
+        partner_id: parseInt(vendor_id, 10),
+        company_id: companyId,
+        invoice_date: bill_date,
+        invoice_date_due: due_date || null,
+        ref: bill_ref || null,
+        narration: notes || null,
+        x_recorded_by_user_id: pinToUid(pin),
+        invoice_line_ids: [[0, 0, {
+          name: notes || bill_ref || 'Vendor bill',
+          quantity: 1,
+          price_unit: amt,
+        }]],
+      };
+      const billId = await odoo(apiKey, 'account.move', 'create', [moveVals]);
+      await odoo(apiKey, 'account.move', 'action_post', [[billId]]);
+
+      // 2. Attachment (Odoo + Drive + bill_attachments) — reuses existing helpers
+      let attId = null, driveInfo = null;
+      if (body.attachment) {
+        body.attachment = {
+          ...body.attachment,
+          name: buildBillFilename({
+            date: bill_date, category: 'Vendor Bill', brand,
+            product: bill_ref || 'bill', amount: amt, recorded_by: user.name,
+          }),
+        };
+        attId = await saveAttachment(apiKey, body.attachment, 'account.move', billId);
+        driveInfo = await syncToDrive(env, {
+          date: bill_date, company: brand, category: 'Vendor Bill',
+          product: bill_ref || 'bill', amount: amt, recorded_by: user.name,
+          filename: body.attachment.name, mimetype: body.attachment.mimetype,
+          data_b64: body.attachment.data_b64,
+        });
+        await logBillAttachment(DB, {
+          kind: 'Bill', odoo_id: billId, brand,
+          entry_date: bill_date, entry_amount: amt,
+          odoo_attachment_id: attId,
+          drive_file_id: driveInfo?.file_id, drive_view_url: driveInfo?.view_url, drive_path: driveInfo?.path,
+          filename: body.attachment.name, mimetype: body.attachment.mimetype,
+          data_b64: body.attachment.data_b64, pin, user_name: user.name,
+        });
+      }
+
+      // 3. If paid/partial — register payment via JE pattern (same as rm-ops.registerPaymentJE)
+      let paymentInfo = null;
+      if (status !== 'unpaid') {
+        const payAmt = status === 'partial' ? parseFloat(payment_amount) : amt;
+        if (!(payAmt > 0) || payAmt > amt + 0.01) {
+          return json({ success: false, error: `Invalid payment_amount ${payAmt} for bill of ${amt}` }, 400);
+        }
+        if (!payment_journal_id) {
+          return json({ success: false, error: 'payment_journal_id required for paid/partial' }, 400);
+        }
+        const payDate = payment_date || bill_date;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(payDate)) {
+          return json({ success: false, error: 'payment_date YYYY-MM-DD required' }, 400);
+        }
+
+        try {
+          paymentInfo = await _settleBillJE(apiKey, env, {
+            bill_id: billId, amount: payAmt, payment_date: payDate,
+            journal_id: parseInt(payment_journal_id, 10),
+            partner_id: parseInt(vendor_id, 10),
+            company_id: companyId,
+            memo: payment_method_label
+              ? `${payment_method_label}${notes ? ' — ' + notes : ''}`
+              : (notes || `Payment for bill ${bill_ref || billId}`),
+          });
+        } catch (e) {
+          // Bill is already created + posted; payment failed. Surface clearly so
+          // the user can retry payment without re-uploading the bill.
+          return json({ success: true, partial_failure: true,
+            bill_id: billId, payment_error: e.message,
+            message: 'Bill saved as UNPAID — payment registration failed; retry from Unpaid tab' });
+        }
+      }
+
+      return json({ success: true,
+        bill_id: billId, attachment_id: attId, drive_view_url: driveInfo?.view_url || null,
+        payment: paymentInfo,
+        payment_status: paymentInfo ? (paymentInfo.payment_state || status) : 'unpaid' });
+    }
+
+    // ── POST: pay-bill — settle an existing unpaid/partial bill ───────────
+    // Body: { pin, bill_id, amount, payment_date, payment_journal_id, payment_method_label?, memo? }
+    if (action === 'pay-bill' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, bill_id, amount, payment_date, payment_journal_id, payment_method_label, memo } = body;
+
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!BILL_PAY_ROLES.has(user.role)) {
+        return json({ success: false, error: `Role ${user.role} cannot pay bills` }, 403);
+      }
+      if (!bill_id || !amount || !payment_date || !payment_journal_id) {
+        return json({ success: false, error: 'bill_id, amount, payment_date, payment_journal_id required' }, 400);
+      }
+      const amt = parseFloat(amount);
+      if (!(amt > 0)) return json({ success: false, error: 'amount must be > 0' }, 400);
+
+      const bill = await odoo(apiKey, 'account.move', 'read',
+        [[parseInt(bill_id, 10)]],
+        { fields: ['id', 'name', 'state', 'move_type', 'amount_residual', 'company_id', 'partner_id'] });
+      if (!bill?.[0]) return json({ success: false, error: 'Bill not found' }, 404);
+      const b = bill[0];
+      if (b.move_type !== 'in_invoice') return json({ success: false, error: 'Not a vendor bill' }, 400);
+      if (b.state !== 'posted') return json({ success: false, error: `Bill state=${b.state}, must be posted` }, 400);
+      if (amt > (b.amount_residual || 0) + 0.01) {
+        return json({ success: false, error: `Amount ${amt} exceeds residual ${b.amount_residual}` }, 400);
+      }
+
+      try {
+        const result = await _settleBillJE(apiKey, env, {
+          bill_id: b.id, amount: amt, payment_date,
+          journal_id: parseInt(payment_journal_id, 10),
+          partner_id: b.partner_id[0],
+          company_id: b.company_id[0],
+          memo: payment_method_label
+            ? `${payment_method_label}${memo ? ' — ' + memo : ''}`
+            : (memo || `Payment for ${b.name}`),
+        });
+        return json({ success: true, ...result });
+      } catch (e) {
+        return json({ success: false, error: e.message }, 500);
+      }
+    }
+
+    return json({ success: false, error: 'Unknown action', actions: ['verify-pin','products','employees','vendors','recent','record','upload-bill','pay-bill','list-bills','payment-journals'] }, 400);
   } catch (e) {
     return json({ success: false, error: e.message, stack: e.stack }, 500);
   }
+}
+
+// ━━━ Bill API helpers (Phase 1: /ops/bills/) ━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// Roles allowed to upload / pay / view bills. Aligned with USERS map.
+const BILL_VIEW_ROLES   = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase']);
+const BILL_UPLOAD_ROLES = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase']);
+const BILL_PAY_ROLES    = new Set(['admin', 'cfo', 'gm']);  // Naveen, Nihaf, Basheer, Tanveer, Yashwant
+
+// Settle an Odoo vendor bill via direct journal entry — same pattern as
+// rm-ops.registerPaymentJE. Bypasses account.payment state machine entirely;
+// creates a Dr Payable / Cr Cash JE, posts it, reconciles the new debit line
+// with the bill's payable line. Works on every Odoo version.
+//
+// Returns: { payment_move_id, amount_paid, new_residual, payment_state }
+async function _settleBillJE(apiKey, env, opts) {
+  const { bill_id, amount, payment_date, journal_id, partner_id, company_id, memo } = opts;
+
+  // Find the bill's UNRECONCILED payable line
+  const billLines = await odoo(apiKey, 'account.move.line', 'search_read',
+    [[['move_id', '=', bill_id], ['account_id.account_type', 'in', ['liability_payable']]]],
+    { fields: ['id', 'account_id', 'partner_id', 'debit', 'credit', 'reconciled', 'amount_residual'] });
+  const payableLine = billLines.find(l => !l.reconciled);
+  if (!payableLine) throw new Error('Bill payable line not found or already reconciled');
+  const payable_account_id = payableLine.account_id[0];
+
+  // Read journal's default account (cash/bank)
+  const jrn = await odoo(apiKey, 'account.journal', 'read',
+    [[journal_id]], { fields: ['id', 'name', 'default_account_id', 'company_id'] });
+  if (!jrn?.[0]?.default_account_id) throw new Error('Journal has no default_account_id');
+  if (jrn[0].company_id[0] !== company_id) throw new Error('Journal belongs to a different company');
+  const cash_account_id = jrn[0].default_account_id[0];
+
+  // Create payment JE: Dr Payable / Cr Cash
+  const pmtMoveId = await odoo(apiKey, 'account.move', 'create',
+    [{
+      move_type: 'entry',
+      journal_id: journal_id,
+      date: payment_date,
+      ref: memo,
+      company_id: company_id,
+      line_ids: [
+        [0, 0, { account_id: payable_account_id, partner_id, debit: amount, credit: 0, name: memo }],
+        [0, 0, { account_id: cash_account_id,    partner_id, debit: 0, credit: amount, name: memo }],
+      ],
+    }]);
+  await odoo(apiKey, 'account.move', 'action_post', [[pmtMoveId]]);
+
+  // Reconcile new payable-debit with bill's payable-credit
+  const newLines = await odoo(apiKey, 'account.move.line', 'search_read',
+    [[['move_id', '=', pmtMoveId], ['account_id', '=', payable_account_id]]],
+    { fields: ['id', 'debit', 'credit'] });
+  const newDebit = newLines.find(l => l.debit > 0);
+  if (!newDebit) throw new Error('Payment payable-debit line not found');
+  await odoo(apiKey, 'account.move.line', 'reconcile', [[payableLine.id, newDebit.id]]);
+
+  // Re-read bill to surface new state
+  const after = await odoo(apiKey, 'account.move', 'read',
+    [[bill_id]], { fields: ['amount_residual', 'payment_state', 'name'] });
+
+  return {
+    payment_move_id: pmtMoveId,
+    bill_id, bill_ref: after?.[0]?.name,
+    amount_paid: amount,
+    new_residual: after?.[0]?.amount_residual ?? null,
+    payment_state: after?.[0]?.payment_state ?? null,
+  };
 }

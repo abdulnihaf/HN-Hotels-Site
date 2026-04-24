@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bills">
+<title>HN Bills</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  /* ──────────── Bills-specific layout ──────────── */
+  .wrap { max-width: 980px; margin: 0 auto; padding: 12px 14px 90px; }
+  header { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:22px; font-weight:800; }
+  header .sub { font-size:12px; color:var(--text-dim); }
+
+  /* PIN screen */
+  .pin-screen { max-width:340px; margin:60px auto; padding:24px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); text-align:center; }
+  .pin-screen h2 { margin:0 0 6px; font-size:18px; }
+  .pin-screen p { color:var(--text-dim); font-size:13px; margin:0 0 18px; }
+  .pin-screen input { width:100%; padding:12px 14px; font-size:18px; text-align:center; letter-spacing:0.4em; background:var(--surface-2); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); margin-bottom:10px; font-family:inherit; }
+  .pin-screen .err { color:var(--danger); font-size:12px; min-height:16px; margin-top:8px; }
+  .pin-screen button { width:100%; padding:11px; background:var(--brand); color:#000; border:none; border-radius:var(--radius); font-size:14px; font-weight:700; cursor:pointer; }
+
+  /* Tab bar */
+  .tabs { display:flex; gap:2px; margin-bottom:14px; border-bottom:1px solid var(--border); overflow-x:auto; }
+  .tab { background:transparent; border:none; color:var(--text-dim); padding:10px 16px; font-size:13px; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; font-family:inherit; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--text); border-bottom-color:var(--brand); }
+  .tab .badge { display:inline-block; margin-left:6px; padding:1px 7px; background:var(--surface-2); border-radius:999px; font-size:11px; color:var(--text-dim); }
+  .tab.warn.active { border-bottom-color:var(--danger); color:var(--danger); }
+  .tab.warn .badge { background:rgba(239,68,68,0.15); color:#f87171; }
+
+  /* KPI strip */
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:8px; margin-bottom:14px; }
+  .kpi { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px; }
+  .kpi .v { font-size:20px; font-weight:700; line-height:1.1; font-variant-numeric:tabular-nums; }
+  .kpi .l { font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.4px; margin-top:4px; font-weight:600; }
+  .kpi.warn .v { color:#f87171; }
+  .kpi.good .v { color:#34d399; }
+
+  /* Filter chips */
+  .filter { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:12px; padding:8px 0; }
+  .chip { padding:5px 11px; border-radius:14px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); font-family:inherit; }
+  .chip.active { background:rgba(232,147,12,0.15); border-color:rgba(232,147,12,0.5); color:#fbbf24; }
+  .chip.brand-active { background:rgba(124,86,247,0.15); border-color:rgba(124,86,247,0.5); color:#c4b5fd; }
+  .filter .lbl { font-size:10px; color:var(--text-mute); text-transform:uppercase; letter-spacing:0.4px; font-weight:700; margin-right:4px; }
+
+  /* Bill rows */
+  .bill-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; }
+  .bill-card.overdue { border-left: 3px solid var(--danger); }
+  .bill-card.partial { border-left: 3px solid var(--warn); }
+  .bill-card.paid    { border-left: 3px solid var(--success); }
+  .bill-row1 { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:4px; }
+  .bill-vendor { font-weight:700; font-size:14px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bill-amt { font-weight:700; font-size:15px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .bill-row2 { display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-dim); flex-wrap:wrap; gap:6px; }
+  .bill-row2 .left { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .bill-tag { display:inline-block; padding:1px 7px; border-radius:999px; font-size:9px; font-weight:700; letter-spacing:0.3px; text-transform:uppercase; }
+  .bill-tag.brand-NCH { background:rgba(212,164,76,0.15); color:#fbbf24; }
+  .bill-tag.brand-HE  { background:rgba(239,68,68,0.15);  color:#f87171; }
+  .bill-tag.brand-HQ  { background:rgba(59,130,246,0.15); color:#60a5fa; }
+  .bill-tag.state-not_paid { background:rgba(245,158,11,0.15); color:#fbbf24; }
+  .bill-tag.state-partial  { background:rgba(245,158,11,0.20); color:#fbbf24; }
+  .bill-tag.state-paid     { background:rgba(16,185,129,0.15); color:#34d399; }
+  .bill-tag.state-in_payment { background:rgba(16,185,129,0.10); color:#34d399; }
+  .bill-tag.overdue { background:rgba(239,68,68,0.20); color:#f87171; }
+  .bill-due { font-variant-numeric:tabular-nums; }
+  .bill-residual { font-size:11px; color:var(--danger); font-weight:600; }
+  .pay-btn { background:var(--success); color:#fff; border:none; padding:5px 14px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; }
+  .pay-btn:active { transform:scale(0.97); }
+
+  /* Form (Upload + Pay) */
+  .form-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; }
+  .form-card h2 { margin:0 0 14px; font-size:16px; }
+  .field { margin-bottom:12px; }
+  .field label { display:block; font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.4px; font-weight:700; margin-bottom:5px; }
+  .field input, .field select, .field textarea { width:100%; padding:10px 12px; background:var(--surface-2); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); font-family:inherit; font-size:14px; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline:none; border-color:var(--brand); }
+  .field .hint { color:var(--text-mute); font-weight:400; text-transform:none; letter-spacing:0; font-size:11px; margin-left:6px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .pay-radio { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+  .pay-radio label { display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; font-size:13px; color:var(--text); text-transform:none; letter-spacing:0; font-weight:600; margin-bottom:0; }
+  .pay-radio label:has(input:checked) { background:rgba(232,147,12,0.10); border-color:rgba(232,147,12,0.5); color:#fbbf24; }
+  .pay-details { padding:10px 12px; background:var(--surface-2); border-radius:var(--radius); margin-top:6px; display:none; }
+  .pay-details.show { display:block; }
+
+  .vendor-search { position:relative; }
+  .vendor-list { position:absolute; top:100%; left:0; right:0; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius); margin-top:2px; max-height:240px; overflow-y:auto; z-index:10; display:none; }
+  .vendor-list.show { display:block; }
+  .vendor-item { padding:8px 12px; cursor:pointer; font-size:13px; }
+  .vendor-item:hover { background:var(--surface); }
+
+  .submit-btn { width:100%; padding:13px; background:var(--brand); color:#000; border:none; border-radius:var(--radius); font-size:14px; font-weight:700; cursor:pointer; margin-top:8px; font-family:inherit; }
+  .submit-btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .submit-btn:active:not(:disabled) { transform:scale(0.98); }
+  .err { background:rgba(239,68,68,0.10); border:1px solid rgba(239,68,68,0.4); color:#f87171; padding:10px 12px; border-radius:var(--radius); font-size:12px; margin-bottom:10px; display:none; }
+
+  .empty { padding:40px 20px; text-align:center; color:var(--text-dim); font-size:13px; }
+  .empty.good { color:var(--success); }
+  .loading { padding:24px; text-align:center; color:var(--text-dim); font-size:13px; }
+
+  /* Modal */
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:50; display:flex; align-items:center; justify-content:center; padding:14px; }
+  .overlay.hidden { display:none; }
+  .modal { max-width:480px; width:100%; max-height:90vh; overflow-y:auto; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; }
+  .modal-close { background:transparent; border:none; color:var(--text-dim); font-size:22px; cursor:pointer; float:right; padding:0; line-height:1; }
+
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:12px 18px; border-radius:var(--radius); background:var(--surface); border:1px solid var(--border); color:var(--text); font-size:13px; z-index:100; max-width:90vw; }
+  .toast.ok  { border-color:var(--success); }
+  .toast.err { border-color:var(--danger); color:#f87171; }
+
+  .att-link { color:#34d399; text-decoration:none; font-weight:600; font-size:11px; }
+  .att-link:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<!-- ── PIN GATE ──────────────────────────────────────────── -->
+<div id="pin-screen" class="pin-screen">
+  <h2>HN Bills</h2>
+  <p>Upload bills · pay vendors · track what's owed</p>
+  <input id="pin-input" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" autocomplete="off">
+  <button onclick="login()">Unlock</button>
+  <div id="pin-err" class="err" style="display:block;background:transparent;border:none;padding:0;text-align:center;color:var(--danger);"></div>
+</div>
+
+<!-- ── APP ──────────────────────────────────────────────── -->
+<div id="app" class="wrap" style="display:none;">
+  <header>
+    <div>
+      <h1>HN Bills</h1>
+      <div class="sub" id="sub">Loading…</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span id="who" style="font-size:12px;color:var(--text-dim);"></span>
+      <button class="chip" onclick="refresh()">↻</button>
+      <button class="chip" onclick="logout()">Exit</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab warn active" data-tab="unpaid" onclick="setTab('unpaid')">⏳ Unpaid <span class="badge" id="b-unpaid">0</span></button>
+    <button class="tab" data-tab="upload" onclick="setTab('upload')">＋ Upload Bill</button>
+    <button class="tab" data-tab="recent" onclick="setTab('recent')">🗂 All Bills <span class="badge" id="b-recent">0</span></button>
+  </div>
+
+  <div id="content"></div>
+</div>
+
+<div id="overlay" class="overlay hidden" onclick="if(event.target===this)closeModal()"></div>
+<div id="toast" style="display:none;"></div>
+
+<script>
+const API = '/api/spend';
+let STATE = {
+  pin: localStorage.getItem('bills_pin') || '',
+  user: null,
+  tab: 'unpaid',
+  unpaid: null,
+  recent: null,
+  histDays: 30,
+  histBrand: 'ALL',
+  vendors: {},  // brand → list
+  journals: {}, // brand → list
+};
+
+// ─── PIN gate ───
+function login() {
+  const pin = document.getElementById('pin-input').value.trim();
+  if (!pin) return showPinErr('Enter PIN');
+  STATE.pin = pin;
+  localStorage.setItem('bills_pin', pin);
+  init();
+}
+function logout() {
+  STATE.pin = ''; STATE.user = null;
+  localStorage.removeItem('bills_pin');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('pin-screen').style.display = '';
+  document.getElementById('pin-input').value = '';
+  document.getElementById('pin-err').textContent = '';
+}
+function showPinErr(m) { document.getElementById('pin-err').textContent = m; }
+document.getElementById('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+// ─── Init ───
+async function init() {
+  document.getElementById('app').style.display = '';
+  document.getElementById('pin-screen').style.display = 'none';
+  // Verify PIN — reuse /api/spend?action=verify-pin
+  try {
+    const r = await fetch(`${API}?action=verify-pin&pin=${STATE.pin}`).then(x => x.json());
+    if (!r.success) {
+      logout();
+      showPinErr(r.error || 'Invalid PIN');
+      return;
+    }
+    STATE.user = r;
+    document.getElementById('who').textContent = `${r.user_name || r.user || '?'} · ${r.role || ''}`;
+    document.getElementById('sub').textContent = 'Bills you owe + bills already paid';
+    refresh();
+  } catch (e) {
+    logout();
+    showPinErr('Network error');
+  }
+}
+
+// ─── Refresh ───
+async function refresh() {
+  if (STATE.tab === 'unpaid' || STATE.tab === 'recent') {
+    await loadBills();
+  }
+  render();
+}
+
+async function loadBills() {
+  const status = STATE.tab === 'recent' ? 'all' : 'unpaid';
+  const u = `${API}?action=list-bills&pin=${STATE.pin}&status=${status}&days=${STATE.histDays}&brand=${STATE.histBrand}`;
+  try {
+    const r = await fetch(u).then(x => x.json());
+    if (!r.success) { toast(r.error || 'Failed', 'err'); return; }
+    if (status === 'unpaid') STATE.unpaid = r;
+    else STATE.recent = r;
+    document.getElementById('b-unpaid').textContent = (STATE.unpaid?.bills || []).length;
+    document.getElementById('b-recent').textContent = (STATE.recent?.bills || []).length;
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ─── Tabs ───
+function setTab(t) {
+  STATE.tab = t;
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+  if (t === 'upload') { renderUpload(); return; }
+  refresh();
+}
+
+function render() {
+  const c = document.getElementById('content');
+  if (STATE.tab === 'upload') return renderUpload();
+  const data = STATE.tab === 'unpaid' ? STATE.unpaid : STATE.recent;
+  if (!data) { c.innerHTML = '<div class="loading">Loading…</div>'; return; }
+  const bills = data.bills || [];
+
+  // KPIs (only for Unpaid tab)
+  let html = '';
+  if (STATE.tab === 'unpaid') {
+    const t = data.totals || {};
+    html += `<div class="kpis">
+      <div class="kpi warn"><div class="v">₹${fmtAmt(t.unpaid_total)}</div><div class="l">Owed (residual) · ${t.count}</div></div>
+      <div class="kpi ${t.overdue_count ? 'warn' : ''}"><div class="v">₹${fmtAmt(t.overdue_total)}</div><div class="l">Overdue · ${t.overdue_count}</div></div>
+    </div>`;
+  }
+
+  // Brand chips
+  html += `<div class="filter">
+    <span class="lbl">Brand:</span>
+    ${['ALL','NCH','HE','HQ'].map(b =>
+      `<button class="chip ${STATE.histBrand === b ? 'brand-active' : ''}" onclick="setBrand('${b}')">${b}</button>`
+    ).join('')}`;
+  if (STATE.tab === 'recent') {
+    html += `<span style="width:8px"></span><span class="lbl">When:</span>` +
+            [7, 30, 90, 365].map(d =>
+              `<button class="chip ${STATE.histDays === d ? 'active' : ''}" onclick="setDays(${d})">${d === 365 ? '1 yr' : d + 'd'}</button>`
+            ).join('');
+  }
+  html += `</div>`;
+
+  if (!bills.length) {
+    html += STATE.tab === 'unpaid'
+      ? '<div class="empty good">✓ No unpaid bills. All vendor invoices settled.</div>'
+      : '<div class="empty">No bills in this range. Use ＋ Upload Bill to record one.</div>';
+    c.innerHTML = html;
+    return;
+  }
+
+  for (const b of bills) {
+    const cls = b.payment_state === 'paid' ? 'paid'
+              : b.is_overdue ? 'overdue'
+              : (b.payment_state === 'partial' ? 'partial' : '');
+    html += `<div class="bill-card ${cls}">
+      <div class="bill-row1">
+        <div class="bill-vendor">${escapeHtml(b.vendor_name || '?')}</div>
+        <div class="bill-amt">₹${fmtAmt(b.amount_total)}</div>
+      </div>
+      <div class="bill-row2">
+        <div class="left">
+          <span class="bill-tag brand-${b.brand}">${b.brand}</span>
+          <span class="bill-tag state-${b.payment_state}">${b.payment_state.replace('_', ' ')}</span>
+          ${b.is_overdue ? '<span class="bill-tag overdue">OVERDUE</span>' : ''}
+          ${b.from_po ? `<span style="font-size:10px;color:var(--text-mute);">from ${escapeHtml(b.from_po)}</span>` : ''}
+          ${b.attachment_count > 0 && b.attachments[0]?.drive_url
+            ? `<a href="${escapeHtml(b.attachments[0].drive_url)}" target="_blank" rel="noopener" class="att-link">📎 ${b.attachment_count}</a>`
+            : ''}
+        </div>
+        <div style="text-align:right;">
+          ${b.payment_state !== 'paid' ? `<div class="bill-residual">Owed ₹${fmtAmt(b.amount_residual)}</div>` : ''}
+          <div>Bill ${shortDate(b.invoice_date)} ${b.due_date ? `· Due ${shortDate(b.due_date)}` : ''}</div>
+        </div>
+      </div>
+      ${b.ref ? `<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Ref: ${escapeHtml(b.ref)}</div>` : ''}
+      ${b.notes ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;font-style:italic;">${escapeHtml(b.notes)}</div>` : ''}
+      ${b.payment_state !== 'paid' && canPay() ? `<div style="margin-top:8px;text-align:right;"><button class="pay-btn" onclick="openPayModal(${b.id})">Pay ₹${fmtAmt(b.amount_residual)}</button></div>` : ''}
+    </div>`;
+  }
+  c.innerHTML = html;
+}
+
+function setBrand(b) { STATE.histBrand = b; refresh(); }
+function setDays(d) { STATE.histDays = d; refresh(); }
+function canPay() { return ['admin','cfo','gm'].includes(STATE.user?.role); }
+
+// ─── Upload Bill form ───
+async function renderUpload() {
+  const c = document.getElementById('content');
+  const today = new Date(Date.now() + 5.5*3600*1000).toISOString().slice(0,10);
+  c.innerHTML = `
+    <div class="form-card">
+      <h2>＋ Upload a vendor bill</h2>
+      <div id="up-err" class="err"></div>
+
+      <div class="field">
+        <label>Brand</label>
+        <select id="up-brand" onchange="onBrandChange()">
+          <option value="">— pick brand —</option>
+          ${(STATE.user?.brands || ['NCH','HE','HQ']).map(b => `<option value="${b}">${b}</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="field vendor-search">
+        <label>Vendor <span class="hint">type to search</span></label>
+        <input id="up-vendor-search" type="text" placeholder="Search vendor…" autocomplete="off"
+               oninput="filterVendors()" onfocus="filterVendors()" onblur="setTimeout(closeVendorList, 200)">
+        <input type="hidden" id="up-vendor-id">
+        <div id="up-vendor-list" class="vendor-list"></div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Bill amount (₹)</label>
+          <input id="up-amount" type="number" inputmode="decimal" placeholder="0">
+        </div>
+        <div class="field">
+          <label>Bill ref <span class="hint">invoice no.</span></label>
+          <input id="up-ref" type="text" placeholder="e.g. INV-2026-001">
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Bill date</label>
+          <input id="up-date" type="date" value="${today}">
+        </div>
+        <div class="field">
+          <label>Due date <span class="hint">optional</span></label>
+          <input id="up-due" type="date">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Notes <span class="hint">what is this for?</span></label>
+        <input id="up-notes" type="text" placeholder="e.g. May electricity, March-April internet">
+      </div>
+
+      <div class="field">
+        <label>Bill photo / PDF <span class="hint">optional</span></label>
+        <input id="up-photo" type="file" accept="image/*,application/pdf" capture="environment">
+        <div id="up-photo-preview" style="font-size:11px;color:var(--text-dim);margin-top:4px;"></div>
+      </div>
+
+      <div class="field">
+        <label>Payment status</label>
+        <div class="pay-radio">
+          <label><input type="radio" name="upstatus" value="unpaid" checked onchange="onStatusChange()"> Not paid yet — record as owed</label>
+          <label><input type="radio" name="upstatus" value="paid" onchange="onStatusChange()"> Already paid in full</label>
+          <label><input type="radio" name="upstatus" value="partial" onchange="onStatusChange()"> Partially paid</label>
+        </div>
+        <div id="up-pay-details" class="pay-details">
+          <div class="row2">
+            <div class="field" id="up-partial-wrap" style="display:none;margin-bottom:8px;">
+              <label>Amount paid (₹)</label>
+              <input id="up-partial-amount" type="number" inputmode="decimal" placeholder="0">
+            </div>
+            <div class="field" style="margin-bottom:8px;">
+              <label>Payment date</label>
+              <input id="up-pay-date" type="date" value="${today}">
+            </div>
+          </div>
+          <div class="row2">
+            <div class="field" style="margin-bottom:0;">
+              <label>From (account)</label>
+              <select id="up-pay-journal"><option value="">— pick brand first —</option></select>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Paid by <span class="hint">who handed cash / authorized</span></label>
+              <input id="up-pay-by" type="text" placeholder="e.g. Basheer / Naveen">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="submit-btn" id="up-submit" onclick="submitBill()">Save Bill</button>
+    </div>`;
+}
+
+async function onBrandChange() {
+  const brand = document.getElementById('up-brand').value;
+  if (!brand) return;
+  // Load vendors + journals for this brand (cache)
+  if (!STATE.vendors[brand]) {
+    const r = await fetch(`${API}?action=vendors&pin=${STATE.pin}&brand=${brand}`).then(x => x.json()).catch(() => ({}));
+    STATE.vendors[brand] = r.vendors || [];
+  }
+  if (!STATE.journals[brand]) {
+    const r = await fetch(`${API}?action=payment-journals&pin=${STATE.pin}&brand=${brand}`).then(x => x.json()).catch(() => ({}));
+    STATE.journals[brand] = r.journals || [];
+  }
+  // Refresh journal dropdown
+  const sel = document.getElementById('up-pay-journal');
+  if (sel) {
+    sel.innerHTML = '<option value="">— pick account —</option>' +
+      STATE.journals[brand].map(j => `<option value="${j.id}">${escapeHtml(j.name)} (${j.type})</option>`).join('');
+  }
+}
+
+function filterVendors() {
+  const brand = document.getElementById('up-brand').value;
+  const q = document.getElementById('up-vendor-search').value.trim().toLowerCase();
+  const list = document.getElementById('up-vendor-list');
+  if (!brand || !STATE.vendors[brand]) { list.innerHTML = '<div class="vendor-item" style="color:var(--text-dim);">Pick brand first</div>'; list.classList.add('show'); return; }
+  const matches = STATE.vendors[brand].filter(v => !q || v.name.toLowerCase().includes(q)).slice(0, 30);
+  if (!matches.length) { list.innerHTML = '<div class="vendor-item" style="color:var(--text-dim);">No vendors match. Type a different name.</div>'; list.classList.add('show'); return; }
+  list.innerHTML = matches.map(v =>
+    `<div class="vendor-item" onclick="pickVendor(${v.id}, '${escapeAttr(v.name)}')">${escapeHtml(v.name)}</div>`
+  ).join('');
+  list.classList.add('show');
+}
+function closeVendorList() { document.getElementById('up-vendor-list').classList.remove('show'); }
+function pickVendor(id, name) {
+  document.getElementById('up-vendor-id').value = id;
+  document.getElementById('up-vendor-search').value = name;
+  closeVendorList();
+}
+
+function onStatusChange() {
+  const v = document.querySelector('input[name="upstatus"]:checked').value;
+  const wrap = document.getElementById('up-pay-details');
+  const partial = document.getElementById('up-partial-wrap');
+  if (v === 'unpaid') { wrap.classList.remove('show'); }
+  else { wrap.classList.add('show'); partial.style.display = (v === 'partial') ? '' : 'none'; }
+}
+
+async function submitBill() {
+  const errEl = document.getElementById('up-err');
+  errEl.style.display = 'none';
+  const btn = document.getElementById('up-submit');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const brand = document.getElementById('up-brand').value;
+    const vendor_id = document.getElementById('up-vendor-id').value;
+    const amount = parseFloat(document.getElementById('up-amount').value);
+    const bill_date = document.getElementById('up-date').value;
+    const due_date = document.getElementById('up-due').value || null;
+    const bill_ref = document.getElementById('up-ref').value.trim() || null;
+    const notes = document.getElementById('up-notes').value.trim() || null;
+    const status = document.querySelector('input[name="upstatus"]:checked').value;
+
+    if (!brand) throw new Error('Pick a brand');
+    if (!vendor_id) throw new Error('Pick a vendor');
+    if (!(amount > 0)) throw new Error('Enter a valid amount');
+    if (!bill_date) throw new Error('Pick bill date');
+
+    const body = { pin: STATE.pin, brand, vendor_id, amount, bill_date, due_date, bill_ref, notes, payment_status: status };
+    if (status !== 'unpaid') {
+      const j = document.getElementById('up-pay-journal').value;
+      const pd = document.getElementById('up-pay-date').value;
+      const by = document.getElementById('up-pay-by').value.trim();
+      if (!j) throw new Error('Pick payment account');
+      if (!pd) throw new Error('Pick payment date');
+      body.payment_journal_id = parseInt(j, 10);
+      body.payment_date = pd;
+      body.payment_method_label = by || null;
+      if (status === 'partial') {
+        const pa = parseFloat(document.getElementById('up-partial-amount').value);
+        if (!(pa > 0) || pa > amount) throw new Error('Partial amount must be > 0 and ≤ bill amount');
+        body.payment_amount = pa;
+      }
+    }
+
+    // Photo
+    const photo = await readPhoto('up-photo');
+    if (photo) body.attachment = photo;
+
+    const r = await fetch(`${API}?action=upload-bill`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(x => x.json());
+
+    if (r.code === 'DUPLICATE') {
+      throw new Error(r.error + ' — change ref or amount, or open the existing bill.');
+    }
+    if (!r.success) throw new Error(r.error || 'Save failed');
+    if (r.partial_failure) {
+      toast(`Bill saved as UNPAID — payment failed: ${r.payment_error}`, 'err');
+    } else {
+      toast(`✓ Bill saved · ${r.payment_status || 'unpaid'}`, 'ok');
+    }
+    setTab('unpaid');
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Bill';
+  }
+}
+
+// ─── Pay existing bill modal ───
+async function openPayModal(billId) {
+  const data = STATE.unpaid || STATE.recent;
+  const bill = (data?.bills || []).find(b => b.id === billId);
+  if (!bill) return toast('Bill not found', 'err');
+  if (!STATE.journals[bill.brand]) {
+    const r = await fetch(`${API}?action=payment-journals&pin=${STATE.pin}&brand=${bill.brand}`).then(x => x.json()).catch(() => ({}));
+    STATE.journals[bill.brand] = r.journals || [];
+  }
+  const today = new Date(Date.now() + 5.5*3600*1000).toISOString().slice(0,10);
+  const overlay = document.getElementById('overlay');
+  overlay.innerHTML = `<div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <h2 style="margin:0 0 4px;font-size:16px;">Pay bill</h2>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">${escapeHtml(bill.vendor_name)} · ${bill.brand} · Owed ₹${fmtAmt(bill.amount_residual)}</div>
+    <div id="pm-err" class="err"></div>
+    <div class="row2">
+      <div class="field">
+        <label>Amount (₹)</label>
+        <input id="pm-amount" type="number" inputmode="decimal" value="${bill.amount_residual}">
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input id="pm-date" type="date" value="${today}">
+      </div>
+    </div>
+    <div class="field">
+      <label>From account</label>
+      <select id="pm-journal">
+        <option value="">— pick —</option>
+        ${(STATE.journals[bill.brand] || []).map(j => `<option value="${j.id}">${escapeHtml(j.name)} (${j.type})</option>`).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <label>Paid by <span class="hint">who handed cash / authorized</span></label>
+      <input id="pm-by" type="text" placeholder="e.g. Basheer / Naveen / Nihaf">
+    </div>
+    <button class="submit-btn" id="pm-submit" onclick="submitPay(${bill.id})">Confirm payment</button>
+  </div>`;
+  overlay.classList.remove('hidden');
+}
+function closeModal() { document.getElementById('overlay').classList.add('hidden'); }
+
+async function submitPay(billId) {
+  const errEl = document.getElementById('pm-err');
+  errEl.style.display = 'none';
+  const btn = document.getElementById('pm-submit');
+  btn.disabled = true; btn.textContent = 'Paying…';
+  try {
+    const amount = parseFloat(document.getElementById('pm-amount').value);
+    const payment_date = document.getElementById('pm-date').value;
+    const payment_journal_id = parseInt(document.getElementById('pm-journal').value, 10);
+    const by = document.getElementById('pm-by').value.trim();
+    if (!(amount > 0)) throw new Error('Amount must be > 0');
+    if (!payment_date) throw new Error('Pick date');
+    if (!payment_journal_id) throw new Error('Pick account');
+    const r = await fetch(`${API}?action=pay-bill`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pin: STATE.pin, bill_id: billId, amount, payment_date,
+        payment_journal_id, payment_method_label: by || null,
+      }),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Failed');
+    toast(`✓ Paid · bill ${r.payment_state}`, 'ok');
+    closeModal();
+    refresh();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm payment';
+  }
+}
+
+// ─── Helpers ───
+async function readPhoto(inputId) {
+  const f = document.getElementById(inputId)?.files?.[0];
+  if (!f) return null;
+  if (f.size > 8 * 1024 * 1024) throw new Error('Photo too large (>8MB)');
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const s = r.result;
+      const b64 = s.includes(',') ? s.split(',')[1] : s;
+      resolve({ name: f.name, mimetype: f.type || 'image/jpeg', data_b64: b64 });
+    };
+    r.onerror = () => reject(new Error('Photo read failed'));
+    r.readAsDataURL(f);
+  });
+}
+function fmtAmt(n) { return (Math.round(+n) || 0).toLocaleString('en-IN'); }
+function shortDate(s) {
+  if (!s) return '—';
+  const d = new Date(s + 'T00:00:00Z');
+  if (isNaN(d)) return s;
+  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+}
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]); }
+function escapeAttr(s) { return String(s ?? '').replace(/'/g, "\\'"); }
+function toast(msg, kind) {
+  const el = document.createElement('div');
+  el.className = `toast ${kind || ''}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ─── Boot ───
+if (STATE.pin) init();
+</script>
+</body>
+</html>
