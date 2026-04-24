@@ -35,6 +35,7 @@
 
   /* KPI strip */
   .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .cp-stale { display:inline-block; padding:1px 5px; border-radius:999px; font-size:9px; font-weight:700; background:rgba(245,158,11,0.18); color:#fbbf24; text-transform:uppercase; letter-spacing:0.3px; margin-left:4px; }
   .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
   .kpi .v { font-size: 20px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
   .kpi .l { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 4px; font-weight: 600; }
@@ -154,6 +155,9 @@
     <button class="chip-btn" onclick="setRange(90)">90d</button>
   </div>
 
+  <!-- Phase 3: Cash Position card — fan-out of bank-feed + outlet exports -->
+  <div id="cash-position-card" style="margin-bottom:14px;display:none;"></div>
+
   <div class="kpi-strip" id="kpis"></div>
 
   <div class="tabs" id="tabs">
@@ -257,9 +261,78 @@ async function refresh() {
     renderHeader(r);
     renderKpis(r.kpis);
     render();
+    loadCashPosition();  // Phase 3: independent fan-out, doesn't block cockpit
   } catch (e) {
     document.getElementById('content').innerHTML = `<div class="empty" style="color:var(--danger)">${escapeHtml(e.message)}</div>`;
   }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Phase 3: Cash Position — non-blocking fan-out so the existing cockpit
+// loads at full speed even if bank-feed lags.
+// ════════════════════════════════════════════════════════════════════════
+async function loadCashPosition() {
+  const card = document.getElementById('cash-position-card');
+  if (!card) return;
+  try {
+    const r = await fetch(`${API}?action=cash-position&pin=${encodeURIComponent(STATE.pin)}`).then(x => x.json());
+    if (!r.success) { card.style.display = 'none'; return; }
+    renderCashPosition(card, r);
+    card.style.display = '';
+  } catch (e) { card.style.display = 'none'; }
+}
+
+function renderCashPosition(card, d) {
+  const fmt = n => '₹' + (Math.round(+n) || 0).toLocaleString('en-IN');
+  const ago = (iso) => {
+    if (!iso) return 'never';
+    const ms = Date.now() - Date.parse(iso);
+    const m = Math.round(ms / 60000);
+    if (m < 60)  return `${m}m ago`;
+    const h = Math.round(m / 60);
+    if (h < 24)  return `${h}h ago`;
+    return `${Math.round(h / 24)}d ago`;
+  };
+  const banks = (d.bank.accounts || []).map(b => `
+    <div style="display:flex; justify-content:space-between; align-items:baseline; padding:4px 0; font-size:12px;">
+      <span>${escapeHtml(b.label)}${b.stale ? ' <span class="cp-stale">stale</span>' : ''}</span>
+      <span style="font-weight:700; color:${b.amount > 0 ? '#34d399' : 'var(--text-dim)'};">${fmt(b.amount)}</span>
+    </div>`).join('') || '<div style="font-size:12px;color:var(--text-dim);font-style:italic;">No bank accounts wired yet.</div>';
+
+  card.innerHTML = `
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;">
+        <div style="font-size:12px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px;">Cash Position</div>
+        <div style="font-size:11px; color:var(--text-mute);">as of ${ago(d.as_of)} · grand total <b style="color:var(--text);">${fmt(d.grand_total)}</b></div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px;">
+        <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:10px;">
+          <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.4px; font-weight:700;">🏦 Bank</div>
+          <div style="font-size:18px; font-weight:700; color:#34d399; margin-top:2px;">${fmt(d.bank.total)}</div>
+          ${banks}
+          <div style="font-size:10px; color:var(--text-mute); margin-top:6px;">last sync: ${ago(d.bank.last_ingest_at)}</div>
+        </div>
+        <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:10px;">
+          <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.4px; font-weight:700;">💵 Cash on hand</div>
+          <div style="font-size:18px; font-weight:700; color:#fbbf24; margin-top:2px;">${fmt(d.cash.total)}</div>
+          <div style="font-size:11px; color:var(--text-dim); padding:3px 0;">Petty (NCH): <b style="color:var(--text);">${fmt(d.cash.petty_nch)}</b></div>
+          <div style="font-size:11px; color:var(--text-dim); padding:3px 0;">In transit: <b style="color:var(--text);">${fmt(d.cash.in_transit_total)}</b>${d.cash.in_transit_count ? ` <span style="color:var(--text-mute);">(${d.cash.in_transit_count})</span>` : ''}</div>
+          ${d.cash.in_transit_breakdown ? `<div style="font-size:10px; color:var(--text-mute); margin-top:4px; font-style:italic;">${escapeHtml(d.cash.in_transit_breakdown)}</div>` : ''}
+        </div>
+        <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:10px;">
+          <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.4px; font-weight:700;">📤 Today's outflow</div>
+          <div style="font-size:18px; font-weight:700; color:#f87171; margin-top:2px;">${fmt(d.today_outflow.total)}</div>
+          <div style="font-size:11px; color:var(--text-dim); padding:3px 0;">NCH counter: <b style="color:var(--text);">${fmt(d.today_outflow.nch_counter)}</b></div>
+          <div style="font-size:11px; color:var(--text-dim); padding:3px 0;">HE counter: <b style="color:var(--text);">${fmt(d.today_outflow.he_counter)}</b></div>
+        </div>
+        <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:10px;">
+          <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.4px; font-weight:700;">📈 Bank flow</div>
+          <div style="font-size:11px; color:var(--text-dim); padding:3px 0;">This week: <b style="color:${d.bank.week_net >= 0 ? '#34d399' : '#f87171'};">${fmt(d.bank.week_net)}</b></div>
+          <div style="font-size:11px; color:var(--text-dim); padding:3px 0;">This month: <b style="color:${d.bank.month_net >= 0 ? '#34d399' : '#f87171'};">${fmt(d.bank.month_net)}</b></div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderHeader(r) {

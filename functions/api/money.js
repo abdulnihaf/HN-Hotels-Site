@@ -113,6 +113,7 @@ export async function onRequest(context) {
 
   try {
     if (action === 'cockpit') return await cockpit(url, env);
+    if (action === 'cash-position') return await cashPosition(url, env);
     return json({ success: false, error: `Unknown action: ${action}` }, 400);
   } catch (e) {
     return json({ success: false, error: e.message }, 500);
@@ -565,4 +566,107 @@ function detectCrossKindDuplicates(pos, paid) {
     }
   }
   return alerts;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Phase 3: cash-position — answers "how much cash and bank do we have right now?"
+//
+// Aggregates 3 sources:
+//   1. /api/bank-feed?action=summary — bank account balances (latest reconciled)
+//   2. NCH /api/cockpit-export?include=cash_summary — today's expense outflow
+//      from till + in-transit collected cash + petty cash balance
+//   3. HE  /api/cockpit-export?include=cash_summary — same for HE outlet
+//
+// All sources fail gracefully — partial data is better than no card.
+// "as_of" timestamps surface staleness so user knows when feeds lag.
+// ════════════════════════════════════════════════════════════════════════
+async function cashPosition(url, env) {
+  const pin = url.searchParams.get('pin');
+  const user = USERS[pin];
+  if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+  if (!ALLOWED_ROLES.has(user.role)) {
+    return json({ success: false, error: `Role ${user.role} cannot view cash position` }, 403);
+  }
+
+  const cockpitToken = env.COCKPIT_TOKEN;
+  if (!cockpitToken) return json({ success: false, error: 'COCKPIT_TOKEN not configured' }, 500);
+
+  const exportHeaders = { 'x-cockpit-token': cockpitToken };
+  const today = todayIST();
+  const qs = `?from=${today}&to=${today}&include=cash_summary`;
+
+  const [bankRes, nchRes, heRes] = await Promise.all([
+    fetch(`${new URL(url).origin}/api/bank-feed?action=summary&pin=${encodeURIComponent(pin)}`)
+      .then((r) => r.json())
+      .catch((e) => ({ ok: false, error: `bank-feed: ${e.message}` })),
+    fetch(`${NCH_EXPORT_URL}${qs}`, { headers: exportHeaders })
+      .then((r) => r.json())
+      .catch((e) => ({ success: false, error: `NCH: ${e.message}` })),
+    fetch(`${HE_EXPORT_URL}${qs}`, { headers: exportHeaders })
+      .then((r) => r.json())
+      .catch((e) => ({ success: false, error: `HE: ${e.message}` })),
+  ]);
+
+  const bankBalances = (bankRes.balances || []).map((b) => ({
+    instrument: b.instrument,
+    label: instrumentLabel(b.instrument),
+    amount: b.balance_rupees || 0,
+    as_of: b.as_of,
+    stale: b.as_of ? (Date.now() - Date.parse(b.as_of)) / 86400000 > 1.5 : true,
+  }));
+  const bankTotal = bankBalances.reduce((s, b) => s + (b.amount || 0), 0);
+
+  const nchCash = nchRes.cash_summary || {};
+  const heCash = heRes.cash_summary || {};
+
+  const inTransitTotal = (nchCash.in_transit_total || 0) + (heCash.in_transit_total || 0);
+  const inTransitBreakdown = [
+    nchCash.in_transit_breakdown ? `NCH: ${nchCash.in_transit_breakdown}` : null,
+    heCash.in_transit_breakdown ? `HE: ${heCash.in_transit_breakdown}` : null,
+  ].filter(Boolean).join(' · ');
+
+  const cashOnHand = (nchCash.petty_balance || 0) + inTransitTotal;
+  const grandTotal = cashOnHand + bankTotal;
+
+  return json({
+    success: true,
+    as_of: new Date().toISOString(),
+    bank: {
+      total: bankTotal,
+      accounts: bankBalances,
+      week_net: bankRes.week?.net || 0,
+      month_net: bankRes.month?.net || 0,
+      last_ingest_at: bankRes.last_ingest_at || null,
+      any_stale: bankRes.any_source_stale || false,
+    },
+    cash: {
+      total: cashOnHand,
+      petty_nch: nchCash.petty_balance || 0,
+      petty_last_funded: nchCash.petty_last_funded || null,
+      in_transit_total: inTransitTotal,
+      in_transit_breakdown: inTransitBreakdown,
+      in_transit_count: (nchCash.in_transit_count || 0) + (heCash.in_transit_count || 0),
+    },
+    today_outflow: {
+      nch_counter: nchCash.today_expenses_out || 0,
+      he_counter: heCash.today_expenses_out || 0,
+      total: (nchCash.today_expenses_out || 0) + (heCash.today_expenses_out || 0),
+    },
+    grand_total: grandTotal,
+    feed_status: {
+      bank: bankRes.ok === true ? 'ok' : (bankRes.error || 'failed'),
+      nch:  nchRes.success === true && nchCash && !nchCash.error ? 'ok' : (nchRes.error || nchCash?.error || 'failed'),
+      he:   heRes.success  === true && heCash  && !heCash.error  ? 'ok' : (heRes.error  || heCash?.error  || 'failed'),
+    },
+  });
+}
+
+function instrumentLabel(instrument) {
+  const map = {
+    hdfc_ca_4680: 'HDFC Bank',
+    federal_sa_4510: 'Federal Bank',
+    razorpay: 'Razorpay',
+    paytm: 'Paytm',
+  };
+  return map[instrument] || instrument;
 }
