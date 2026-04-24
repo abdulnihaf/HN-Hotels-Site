@@ -1222,7 +1222,8 @@ export async function onRequest(context) {
       const pin = url.searchParams.get('pin');
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
-      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr'];
+      // 'cashier' added so outlet "Pay open PO" tile can list POs for that brand
+      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr', 'cashier'];
       if (!LEDGER_ROLES.includes(user.role)) {
         return json({ success: false, error: `Access denied for role ${user.role}` }, 403);
       }
@@ -1419,7 +1420,8 @@ export async function onRequest(context) {
       const { pin, kind, odoo_id, attachment } = body;
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
-      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr'];
+      // 'cashier' added so outlet "Pay open PO" tile can list POs for that brand
+      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr', 'cashier'];
       if (!LEDGER_ROLES.includes(user.role)) return json({ success: false, error: 'Access denied' }, 403);
       if (!odoo_id || !attachment?.data_b64) {
         return json({ success: false, error: 'odoo_id and attachment.data_b64 required' }, 400);
@@ -2101,7 +2103,8 @@ export async function onRequest(context) {
       const { pin, kind, odoo_id, notes, bill_ref } = body;
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
-      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr'];
+      // 'cashier' added so outlet "Pay open PO" tile can list POs for that brand
+      const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr', 'cashier'];
       if (!LEDGER_ROLES.includes(user.role)) return json({ success: false, error: 'Access denied' }, 403);
       if (!odoo_id) return json({ success: false, error: 'odoo_id required' }, 400);
       const MODEL = { PO: 'purchase.order', Expense: 'hr.expense', Bill: 'account.move' };
