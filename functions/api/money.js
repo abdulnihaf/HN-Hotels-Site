@@ -114,6 +114,9 @@ export async function onRequest(context) {
   try {
     if (action === 'cockpit') return await cockpit(url, env);
     if (action === 'cash-position') return await cashPosition(url, env);
+    if (action === 'mark-po-received' && request.method === 'POST') return await markPOReceived(request, env);
+    if (action === 'resolve-dup' && request.method === 'POST') return await resolveDup(request, env);
+    if (action === 'lifecycle-for-po') return await getPoLifecycle(url, env);
     return json({ success: false, error: `Unknown action: ${action}` }, 400);
   } catch (e) {
     return json({ success: false, error: e.message }, 500);
@@ -332,10 +335,27 @@ async function cockpit(url, env) {
   // Cross-kind catches the architectural double-count: Zoya raises a PO for
   // "120 Buns from Ganga Bakery ₹996" AND Basheer pays cash at the outlet
   // for the same delivery ₹1000. Without reconciliation, P&L counts both.
-  const dupAlerts = [
+  // Phase 5: pairs already resolved are filtered out client-side.
+  const dupResolutions = await fetchAllDupResolutions(env.DB);
+  const allDupAlerts = [
     ...detectDuplicates(paid),
     ...detectCrossKindDuplicates(posList, paid),
   ];
+  const dupAlerts = allDupAlerts.filter((d) => {
+    if (d.kind !== 'cross-kind') return true;
+    const key = `${d.a.id}|${d.b.feed}|${d.b.id}`;
+    return !dupResolutions.has(key);
+  });
+
+  // ── Phase 4: PO lifecycle — overlay received_at on PO rows
+  const lifecycleMap = await fetchAllPoLifecycle(env.DB, posList.map(p => p.odoo_id));
+  for (const p of posList) {
+    const lc = lifecycleMap[p.odoo_id];
+    if (lc) {
+      p.received_at = lc.received_at;
+      p.received_by = lc.received_by;
+    }
+  }
 
   // ── KPIs
   const kpis = {
@@ -669,4 +689,147 @@ function instrumentLabel(instrument) {
     paytm: 'Paytm',
   };
   return map[instrument] || instrument;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Phase 4: PO Lifecycle — track received_at + received_by per PO
+//
+// We don't add Odoo custom fields (would require Studio + risky migration).
+// Instead, D1 table po_lifecycle keyed by Odoo PO id captures the receipt
+// event timestamp + actor. Cockpit + purchase-ledger join this in.
+// ════════════════════════════════════════════════════════════════════════
+
+const LIFECYCLE_MARK_ROLES = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase', 'cashier']);
+
+async function markPOReceived(request, env) {
+  if (!env.DB) return json({ success: false, error: 'DB not configured' }, 500);
+  const body = await request.json();
+  const { pin, po_id, po_name, brand, notes } = body;
+
+  const user = USERS[pin];
+  if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+  if (!LIFECYCLE_MARK_ROLES.has(user.role)) {
+    return json({ success: false, error: `Role ${user.role} cannot mark PO received` }, 403);
+  }
+  if (!po_id) return json({ success: false, error: 'po_id required' }, 400);
+
+  const now = new Date().toISOString();
+  try {
+    // INSERT OR REPLACE — idempotent. If already marked, the latest mark wins.
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO po_lifecycle
+         (odoo_po_id, odoo_po_name, received_at, received_by_pin, received_by_name,
+          received_notes, brand, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(parseInt(po_id, 10), po_name || null, now, pin, user.name,
+           notes || null, brand || null, now).run();
+
+    return json({ success: true, po_id, received_at: now, received_by: user.name });
+  } catch (e) {
+    return json({ success: false, error: e.message }, 500);
+  }
+}
+
+async function getPoLifecycle(url, env) {
+  if (!env.DB) return json({ success: false, error: 'DB not configured' }, 500);
+  const poId = parseInt(url.searchParams.get('po_id'), 10);
+  if (!poId) return json({ success: false, error: 'po_id required' }, 400);
+  const r = await env.DB.prepare(
+    `SELECT * FROM po_lifecycle WHERE odoo_po_id = ?`
+  ).bind(poId).first().catch(() => null);
+  return json({ success: true, lifecycle: r || null });
+}
+
+async function fetchAllPoLifecycle(DB, poIds) {
+  if (!DB || !poIds || !poIds.length) return {};
+  const placeholders = poIds.slice(0, 500).map(() => '?').join(',');
+  try {
+    const r = await DB.prepare(
+      `SELECT odoo_po_id, received_at, received_by_name FROM po_lifecycle
+        WHERE odoo_po_id IN (${placeholders})`
+    ).bind(...poIds.slice(0, 500)).all();
+    const map = {};
+    for (const row of (r.results || [])) {
+      map[row.odoo_po_id] = { received_at: row.received_at, received_by: row.received_by_name };
+    }
+    return map;
+  } catch (_) { return {}; }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Phase 5: Cross-kind dup resolution
+//
+// 30 historical (PO ↔ outlet expense) cross-kind dup pairs exist because
+// outlet paid Zoya's POs in cash before the Phase 2 "Pay open PO" tile
+// existed. User reviews each pair, decides which side is real, marks
+// resolved. Cockpit dup-detection skips resolved pairs.
+//
+// Two resolution actions:
+//   • 'mark-as-paired' — both records are real, just linked. Counts BOTH
+//     in P&L if user wants. Removes from dup tab.
+//   • 'po-cancelled-paid-via-outlet' — PO never billed; outlet expense IS
+//     the real spend. Cancels Odoo PO + keeps outlet record.
+// ════════════════════════════════════════════════════════════════════════
+
+const DUP_RESOLVE_ROLES = new Set(['admin', 'cfo', 'gm']);
+
+async function resolveDup(request, env) {
+  if (!env.DB) return json({ success: false, error: 'DB not configured' }, 500);
+  const body = await request.json();
+  const { pin, po_id, po_name, outlet_feed, outlet_expense_id, action: resAction, notes } = body;
+
+  const user = USERS[pin];
+  if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+  if (!DUP_RESOLVE_ROLES.has(user.role)) {
+    return json({ success: false, error: `Role ${user.role} cannot resolve dups` }, 403);
+  }
+  if (!po_id || !outlet_feed || !outlet_expense_id) {
+    return json({ success: false, error: 'po_id + outlet_feed + outlet_expense_id required' }, 400);
+  }
+  const validActions = ['mark-as-paired', 'po-cancelled-paid-via-outlet'];
+  if (!validActions.includes(resAction)) {
+    return json({ success: false, error: `action must be one of: ${validActions.join(', ')}` }, 400);
+  }
+
+  // Optional Odoo side-effect: if action is 'po-cancelled-paid-via-outlet',
+  // cancel the Odoo PO so it stops appearing in Open POs.
+  if (resAction === 'po-cancelled-paid-via-outlet') {
+    const apiKey = env.ODOO_API_KEY;
+    if (apiKey) {
+      try {
+        await odoo(apiKey, 'purchase.order', 'button_cancel', [[parseInt(po_id, 10)]]);
+      } catch (e) {
+        // Surface but don't block — D1 record can still be created
+        return json({ success: false, error: `Odoo PO cancel failed: ${e.message}. D1 unchanged.` }, 500);
+      }
+    }
+  }
+
+  try {
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO dup_resolutions
+         (po_id, po_name, outlet_feed, outlet_expense_id,
+          resolved_by_pin, resolved_by_name, resolution_action, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(parseInt(po_id, 10), po_name || null, outlet_feed,
+           parseInt(outlet_expense_id, 10), pin, user.name, resAction, notes || null).run();
+
+    return json({ success: true, action: resAction, po_id, outlet_expense_id });
+  } catch (e) {
+    return json({ success: false, error: e.message }, 500);
+  }
+}
+
+async function fetchAllDupResolutions(DB) {
+  if (!DB) return new Set();
+  try {
+    const r = await DB.prepare(
+      `SELECT po_id, outlet_feed, outlet_expense_id FROM dup_resolutions`
+    ).all();
+    const set = new Set();
+    for (const row of (r.results || [])) {
+      set.add(`${row.po_id}|${row.outlet_feed}|${row.outlet_expense_id}`);
+    }
+    return set;
+  } catch (_) { return new Set(); }
 }

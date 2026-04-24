@@ -1324,6 +1324,24 @@ export async function onRequest(context) {
         } catch (e) { console.error('D1 bill_attachments fetch fail:', e.message); }
       }
 
+      // Phase 4 — load PO lifecycle (received_at, received_by) from D1 once
+      // and merge into PO rows below. Pure read; no behaviour change for
+      // non-PO rows.
+      const lifecycleMap = {};
+      if (DB && pos.length) {
+        try {
+          const poIdsForLifecycle = pos.map(p => p.id);
+          const lcRes = await DB.prepare(
+            `SELECT odoo_po_id, received_at, received_by_name
+               FROM po_lifecycle
+              WHERE odoo_po_id IN (${poIdsForLifecycle.map(() => '?').join(',')})`
+          ).bind(...poIdsForLifecycle).all().catch(() => ({ results: [] }));
+          for (const r of (lcRes.results || [])) {
+            lifecycleMap[r.odoo_po_id] = { received_at: r.received_at, received_by: r.received_by_name };
+          }
+        } catch (_) { /* soft-fail */ }
+      }
+
       // Step 4 — normalize to unified row shape
       const companyToBrand = { 1: 'HQ', 2: 'HE', 3: 'NCH' };
       const toRow = (kind, base, attMap) => {
@@ -1354,18 +1372,24 @@ export async function onRequest(context) {
       };
 
       const rows = [
-        ...pos.map(p => toRow('PO', {
-          odoo_id: p.id,
-          date: (p.date_order || '').slice(0, 10),
-          vendor: p.partner_id ? { id: p.partner_id[0], name: p.partner_id[1] } : null,
-          item_or_ref: `${p.name || 'PO'} · ${p.order_line?.length || 0} item${p.order_line?.length === 1 ? '' : 's'}`,
-          company_id: p.company_id?.[0],
-          amount: p.amount_total || 0,
-          state: p.state,
-          recorded_by_user_id: p.x_recorded_by_user_id?.[0] || null,
-          recorded_by_name:    p.x_recorded_by_user_id?.[1] || null,
-          // notes for PO go to Odoo chatter (mail.message) — not inline editable in this v1
-        }, poAtts)),
+        ...pos.map(p => {
+          const row = toRow('PO', {
+            odoo_id: p.id,
+            date: (p.date_order || '').slice(0, 10),
+            vendor: p.partner_id ? { id: p.partner_id[0], name: p.partner_id[1] } : null,
+            item_or_ref: `${p.name || 'PO'} · ${p.order_line?.length || 0} item${p.order_line?.length === 1 ? '' : 's'}`,
+            company_id: p.company_id?.[0],
+            amount: p.amount_total || 0,
+            state: p.state,
+            recorded_by_user_id: p.x_recorded_by_user_id?.[0] || null,
+            recorded_by_name:    p.x_recorded_by_user_id?.[1] || null,
+          }, poAtts);
+          row.odoo_name = p.name;  // explicit (was already in item_or_ref but UI wants standalone)
+          // Phase 4: lifecycle overlay
+          const lc = lifecycleMap[p.id];
+          if (lc) { row.received_at = lc.received_at; row.received_by = lc.received_by; }
+          return row;
+        }),
         ...expenses.map(e => toRow('Expense', {
           odoo_id: e.id,
           date: e.date || '',

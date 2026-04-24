@@ -743,19 +743,27 @@ async function loadPastEntries() {
           e.recorded_by_name ? `by ${esc(e.recorded_by_name)}` : null,
           e.state ? `<span class="state-tag">${esc(e.state)}</span>` : null,
         ].filter(Boolean).join(' · ');
+        // Phase 4: show "Mark received" only for open POs that haven't been
+        // marked received yet. State == 'purchase' (Odoo confirmed).
+        const isPO = e.kind === 'PO';
+        const canMarkReceived = isPO && e.state === 'purchase' && !e.received_at;
+        const receivedBadge = e.received_at
+          ? `<span style="font-size:10px; color:#fbbf24; margin-left:6px;">📦 received ${shortDateOnly(e.received_at)}${e.received_by ? ' · ' + esc(e.received_by) : ''}</span>`
+          : '';
         html += `
-          <div class="entry">
+          <div class="entry" data-po-id="${e.kind === 'PO' ? e.odoo_id : ''}">
             <div style="flex:1; min-width:0;">
               <div>
                 <span class="kind-tag ${e.kind}">${e.kind}</span>
                 ${HIST_BRAND === 'ALL' && e.brand ? `<span class="brand-tag ${e.brand}">${e.brand}</span>` : ''}
-                ${vendorOrItem}
+                ${vendorOrItem}${receivedBadge}
               </div>
               <div class="mute">${subline || '—'}</div>
               ${e.notes ? `<div class="mute" style="font-style:italic;margin-top:2px;">${esc(e.notes)}</div>` : ''}
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
               <div class="amount">₹${Number(e.amount || 0).toLocaleString('en-IN')}</div>
+              ${canMarkReceived ? `<button class="btn btn-ghost btn-sm" style="font-size:11px; padding:4px 8px;" onclick="markPOReceived(${e.odoo_id}, '${esc(e.odoo_name || '')}', '${e.brand}')">📦 Mark received</button>` : ''}
             </div>
           </div>`;
       }
@@ -764,6 +772,26 @@ async function loadPastEntries() {
   } catch (e) {
     list.innerHTML = `<div class="mute">Error: ${esc(e.message)}</div>`;
   }
+}
+
+// Phase 4: mark a PO as received (writes to po_lifecycle table)
+async function markPOReceived(poId, poName, brand) {
+  if (!confirm(`Mark PO ${poName || '#' + poId} as received now?\n\nThis logs receipt date + your name. Doesn't change Odoo PO state.`)) return;
+  try {
+    const r = await fetch(`/api/money?action=mark-po-received`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN, po_id: poId, po_name: poName, brand }),
+    }).then(x => x.json());
+    if (!r.success) { toast(r.error || 'Failed', 'err'); return; }
+    toast(`✓ PO ${poName} marked received`, 'ok');
+    loadPastEntries();
+  } catch (e) { toast(e.message, 'err'); }
+}
+function shortDateOnly(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  if (isNaN(d)) return s.slice(0, 10);
+  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
 }
 
 // Friendly date label — Today / Yesterday / Mon DD

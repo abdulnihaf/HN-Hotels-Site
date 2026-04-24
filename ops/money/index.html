@@ -403,7 +403,8 @@ function renderPOs(c, rows) {
     <div class="tbl-wrap"><table>
       <thead><tr>
         <th>Date</th><th>Brand</th><th>State</th>
-        <th>PO #</th><th>Vendor</th><th>Items</th><th>📎</th><th class="amt">Amount</th><th>By</th>
+        <th>PO #</th><th>Vendor</th><th>Items</th><th>📎</th>
+        <th>Lifecycle</th><th class="amt">Amount</th><th>By</th>
       </tr></thead>
       <tbody>${rows.map(r => `
         <tr>
@@ -414,11 +415,27 @@ function renderPOs(c, rows) {
           <td class="vend">${escapeHtml(r.vendor_name || '—')}</td>
           <td>${escapeHtml(r.item || '—')}</td>
           <td>${attCell(r)}</td>
+          <td>${lifecycleCell(r)}</td>
           <td class="amt">₹${fmtAmt(r.amount)}</td>
           <td class="by">${escapeHtml(r.recorded_by || '—')}</td>
         </tr>`).join('')}
       </tbody>
     </table></div>`;
+}
+
+// Phase 4: tiny inline timeline cell — created → received → paid
+// Each pip is a small dot; filled = event happened.
+function lifecycleCell(r) {
+  const created = !!r.recorded_at;
+  const received = !!r.received_at;
+  const paid = r.state === 'received' || r.state === 'done';  // for PO context — proper paid status comes from bill linkage; here received_at + state=done = settled
+  const dot = (filled, color, title) => `<span title="${escapeHtml(title)}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${filled ? color : 'var(--border)'};margin-right:3px;"></span>`;
+  return `
+    <span style="white-space:nowrap;font-size:10px;">
+      ${dot(created, '#c4b5fd', 'PO created ' + (r.recorded_at || ''))}
+      ${dot(received, '#fbbf24', r.received_at ? 'Received ' + r.received_at + (r.received_by ? ' by ' + r.received_by : '') : 'Not received yet')}
+      ${dot(paid, '#34d399', paid ? 'Settled' : 'Awaiting payment')}
+    </span>`;
 }
 
 function renderBills(c, pending, paid) {
@@ -500,8 +517,9 @@ function renderDupes(c, alerts) {
         If real, the P&L is double-counting. Review and decide:
         either close/cancel the PO, or remove the outlet expense entry.
       </p>`;
-    html += crossKind.map(d => `
-      <div class="dup-card" style="border-color: rgba(239,68,68,0.5)">
+    const canResolve = ['admin', 'cfo', 'gm'].includes(STATE.data?.user?.role);
+    html += crossKind.map((d, i) => `
+      <div class="dup-card" data-dup-idx="${i}" style="border-color: rgba(239,68,68,0.5)">
         <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.4px">
           PO ↔ Paid expense — ${escapeHtml(d.reason || '')}
         </div>
@@ -515,6 +533,15 @@ function renderDupes(c, alerts) {
           <span>Amount diff: ${d.amount_diff_pct}%</span>
           <span style="margin-left:auto">PO → Paid gap: ${d.date_gap_days >= 0 ? '+' : ''}${d.date_gap_days}d</span>
         </div>
+        ${canResolve ? `
+        <div style="display:flex; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <button class="chip-btn" onclick='resolveDup(${i}, "mark-as-paired")' title="Both records are real — just link them. Removes from this tab.">
+            ✓ Mark as paired (both real)
+          </button>
+          <button class="chip-btn" style="border-color:rgba(239,68,68,0.4); color:#f87171;" onclick='resolveDup(${i}, "po-cancelled-paid-via-outlet")' title="PO never billed; outlet expense IS the spend. Cancels Odoo PO.">
+            ✗ Cancel PO (outlet was the real spend)
+          </button>
+        </div>` : ''}
       </div>`).join('');
   }
 
@@ -556,6 +583,36 @@ function dupSide(label, x, sideKind) {
       ${x.description ? `<div class="l">${escapeHtml(x.description)}</div>` : ''}
       <div class="l by">id #${x.id} · ${x.feed}</div>
     </div>`;
+}
+
+// Phase 5: resolve a cross-kind dup pair from the Dupes tab.
+// Reads dup index from the visible cards, sends to /api/money?action=resolve-dup,
+// then refreshes cockpit so the pair disappears.
+async function resolveDup(idx, action) {
+  const ck = (STATE.data?.dup_alerts || []).filter(a => a.kind === 'cross-kind');
+  const d = ck[idx];
+  if (!d) return alert('Dup pair not found — refresh and try again');
+  const label = action === 'mark-as-paired'
+    ? `Mark PO ${d.a.id} ↔ outlet ${d.b.id} as both real?`
+    : `CANCEL Odoo PO ${d.a.odoo_name || d.a.id} (vendor ${d.a.vendor_name || '?'}) and keep outlet expense?\n\nThis is irreversible — the PO will be cancelled in Odoo.`;
+  if (!confirm(label)) return;
+
+  try {
+    const r = await fetch(`${API}?action=resolve-dup`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pin: STATE.pin,
+        po_id: d.a.id,
+        po_name: d.a.odoo_name || null,
+        outlet_feed: d.b.feed,
+        outlet_expense_id: d.b.id,
+        action,
+      }),
+    }).then(x => x.json());
+    if (!r.success) { alert('Resolve failed: ' + (r.error || '')); return; }
+    // Refresh cockpit to drop the resolved pair
+    refresh();
+  } catch (e) { alert('Network error: ' + e.message); }
 }
 
 // Attachment cell — clickable Drive link if available, plain badge if just count
