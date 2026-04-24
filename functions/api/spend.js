@@ -798,14 +798,58 @@ export async function onRequest(context) {
       const pin = url.searchParams.get('pin');
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
-      // Pull from business_expenses (hr.expense mirror) and rm purchase logs
-      const rows = await DB.prepare(
-        `SELECT odoo_id, category, amount, product_name, company_id, x_payment_method as payment_method,
-                recorded_by as recorded_by_pin, recorded_at as created_at, notes
-           FROM business_expenses
-          ORDER BY recorded_at DESC LIMIT 20`
-      ).all().catch(() => ({ results: [] }));
-      return json({ success: true, entries: rows.results });
+
+      // History support — `days` (default 1) or `from`/`to` (YYYY-MM-DD).
+      // Surfaces what's already been entered so Naveen doesn't re-key items
+      // he thinks didn't save (same root-cause as the Apr 22 outlet dups).
+      // Optional `brand` (HE/NCH/HQ) filter — defaults to user's allowed brands.
+      const daysParam = parseInt(url.searchParams.get('days') || '1', 10);
+      const days = Math.min(Math.max(isNaN(daysParam) ? 1 : daysParam, 1), 30);
+      const fromParam = url.searchParams.get('from');
+      const toParam   = url.searchParams.get('to');
+      const brandParam = (url.searchParams.get('brand') || 'ALL').toUpperCase();
+
+      // business_expenses.recorded_at is stored as `datetime('now')` in SQLite
+      // — UTC string like '2026-04-24 08:23:35'. Compare against IST date
+      // boundaries converted to UTC for correct timezone behaviour.
+      const ymdToday = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+      const istDayStartUTC = (ymd) => {
+        const d = new Date(Date.parse(`${ymd}T00:00:00.000Z`) - 5.5 * 3600 * 1000);
+        return d.toISOString().replace('T', ' ').slice(0, 19);  // SQLite-compatible
+      };
+      let startUTC, endUTC;
+      if (fromParam && toParam && /^\d{4}-\d{2}-\d{2}$/.test(fromParam) && /^\d{4}-\d{2}-\d{2}$/.test(toParam)) {
+        startUTC = istDayStartUTC(fromParam);
+        const toPlus1 = new Date(Date.parse(`${toParam}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
+        endUTC = istDayStartUTC(toPlus1);
+      } else {
+        const fromIST = new Date(Date.parse(`${ymdToday}T00:00:00.000Z`) - (days - 1) * 86400000).toISOString().slice(0, 10);
+        startUTC = istDayStartUTC(fromIST);
+        const toPlus1 = new Date(Date.parse(`${ymdToday}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
+        endUTC = istDayStartUTC(toPlus1);
+      }
+
+      let sql = `SELECT odoo_id, category, category_parent, amount, product_name, company_id,
+                        x_payment_method as payment_method, x_location, x_pool,
+                        recorded_by as recorded_by_pin, recorded_at as created_at, notes
+                   FROM business_expenses
+                  WHERE recorded_at >= ? AND recorded_at < ?`;
+      const args = [startUTC, endUTC];
+      if (brandParam !== 'ALL' && ['HE', 'NCH', 'HQ'].includes(brandParam)) {
+        sql += ` AND x_location = ?`;
+        args.push(brandParam);
+      }
+      sql += ` ORDER BY recorded_at DESC LIMIT 500`;
+
+      const rows = await DB.prepare(sql).bind(...args).all().catch((e) => ({ results: [], _err: e.message }));
+      // Tag each row with IST date for client-side grouping
+      const items = (rows.results || []).map((r) => {
+        const t = Date.parse((r.created_at || '').replace(' ', 'T') + 'Z');
+        const istDate = isNaN(t) ? null : new Date(t + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+        return { ...r, ist_date: istDate };
+      });
+      const total = items.reduce((s, r) => s + (r.amount || 0), 0);
+      return json({ success: true, entries: items, total, days, brand: brandParam, from: fromParam, to: toParam });
     }
 
     // ── RECORD EXPENSE (cats 3-13) → hr.expense ────────────
