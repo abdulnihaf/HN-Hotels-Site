@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<title>HN Money Cockpit</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  /* ── Cockpit-specific layout ─────────────────────────────────── */
+  .wrap { max-width: 1500px; margin: 0 auto; padding: 14px 16px 80px; }
+  .hdr { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; }
+  .hdr h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+  .hdr .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .hdr-right { font-size: 12px; color: var(--text-dim); display: flex; gap: 10px; align-items: center; }
+  .hdr-right button { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+  .hdr-right button:hover { border-color: var(--text-dim); }
+
+  /* PIN gate */
+  .pin-screen { max-width: 360px; margin: 60px auto; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); text-align: center; }
+  .pin-screen h2 { margin: 0 0 6px; font-size: 18px; }
+  .pin-screen p { color: var(--text-dim); font-size: 13px; margin: 0 0 18px; }
+  .pin-screen input { width: 100%; padding: 12px 14px; font-size: 18px; text-align: center; letter-spacing: 0.4em; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); margin-bottom: 12px; font-family: inherit; }
+  .pin-screen button { width: 100%; padding: 11px; background: var(--brand); color: #000; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 700; cursor: pointer; }
+  .pin-screen .err { color: var(--danger); font-size: 12px; margin-top: 10px; min-height: 16px; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .chip-set { display: inline-flex; gap: 4px; }
+  .chip-btn { padding: 6px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim); font-size: 12px; font-weight: 600; border-radius: 999px; cursor: pointer; }
+  .chip-btn:hover { color: var(--text); }
+  .chip-btn.active { background: var(--brand-soft); color: var(--brand-hover); border-color: var(--brand-ring); }
+  .filter-bar input { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 12px; min-width: 130px; font-family: inherit; }
+
+  /* KPI strip */
+  .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+  .kpi .v { font-size: 20px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 4px; font-weight: 600; }
+  .kpi.warn .v { color: #f87171; }
+  .kpi.good .v { color: #34d399; }
+  .kpi.neutral .v { color: #c4b5fd; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab { background: transparent; border: none; color: var(--text-dim); padding: 10px 14px; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; font-family: inherit; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text); border-bottom-color: var(--brand); }
+  .tab .badge { display: inline-block; margin-left: 6px; padding: 1px 7px; background: var(--surface-2); border-radius: 999px; font-size: 11px; color: var(--text-dim); }
+  .tab.active .badge { background: var(--brand-soft); color: var(--brand-hover); }
+  .tab.warn.active { border-bottom-color: var(--danger); color: var(--danger); }
+  .tab.warn .badge { background: rgba(239,68,68,0.15); color: #f87171; }
+
+  /* Table */
+  .tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 880px; }
+  th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-dim); border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); position: sticky; top: 0; z-index: 1; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr:hover { background: rgba(255,255,255,0.04); }
+  tbody tr:last-child td { border-bottom: none; }
+  .amt { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; white-space: nowrap; }
+
+  /* Chips */
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+  .chip.brand-NCH { background: rgba(212,164,76,0.18); color: #fbbf24; }
+  .chip.brand-HE  { background: rgba(239,68,68,0.18);  color: #f87171; }
+  .chip.brand-HQ  { background: rgba(59,130,246,0.18); color: #60a5fa; }
+  .chip.src-NCH-Outlet { background: rgba(212,164,76,0.10); color: #d4a44c; }
+  .chip.src-HE-Outlet  { background: rgba(239,68,68,0.10);  color: #f87171; }
+  .chip.src-HN-Naveen  { background: rgba(59,130,246,0.10); color: #60a5fa; }
+  .chip.src-HN-Zoya    { background: rgba(168,85,247,0.10); color: #c084fc; }
+  .chip.src-HN-Nihaf   { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+  .chip.src-HN-Faheem  { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+  .chip.src-HN-Basheer { background: rgba(212,164,76,0.10); color: #d4a44c; }
+  .chip.state-paid { background: rgba(16,185,129,0.18); color: #34d399; }
+  .chip.state-paid-orphan { background: rgba(239,68,68,0.18); color: #f87171; }
+  .chip.state-open-po { background: rgba(168,85,247,0.18); color: #c4b5fd; }
+  .chip.state-received { background: rgba(168,85,247,0.10); color: #c4b5fd; }
+  .chip.state-po-draft { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+  .chip.state-bill-pending { background: rgba(245,158,11,0.18); color: #fbbf24; }
+  .chip.state-bill-overdue { background: rgba(239,68,68,0.20); color: #f87171; }
+  .chip.state-bill-partial { background: rgba(245,158,11,0.10); color: #fbbf24; }
+  .chip.state-bill-paid { background: rgba(16,185,129,0.18); color: #34d399; }
+
+  .vend, .item-cell { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .desc { color: var(--text-dim); font-size: 12px; }
+  .by { font-size: 11px; color: var(--text-mute); }
+  .empty { padding: 32px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+  /* Dup tab */
+  .dup-card { background: var(--surface); border: 1px solid rgba(239,68,68,0.3); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+  .dup-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 700px) { .dup-row { grid-template-columns: 1fr; } }
+  .dup-side { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+  .dup-side h4 { margin: 0 0 6px; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; }
+  .dup-side .l { font-size: 12px; color: var(--text-dim); margin: 2px 0; }
+  .dup-side .l b { color: var(--text); }
+  .dup-meta { display: flex; gap: 10px; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-dim); }
+  .dup-conf { padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 10px; text-transform: uppercase; }
+  .dup-conf.high { background: rgba(239,68,68,0.18); color: #f87171; }
+  .dup-conf.medium { background: rgba(245,158,11,0.18); color: #fbbf24; }
+
+  /* Loading */
+  .loading { padding: 32px; text-align: center; color: var(--text-dim); font-size: 13px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--brand); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Status footer (feed health) */
+  .feed-status { font-size: 11px; color: var(--text-mute); padding: 10px 0 0; }
+  .feed-status .ok { color: var(--success); }
+  .feed-status .err { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<!-- ── PIN GATE ───────────────────────────────────────────── -->
+<div id="pin-screen" class="pin-screen">
+  <h2>HN Money Cockpit</h2>
+  <p>Enter your admin / CFO / GM PIN</p>
+  <input id="pin-input" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+  <button onclick="login()">Unlock</button>
+  <div id="pin-err" class="err"></div>
+</div>
+
+<!-- ── COCKPIT ────────────────────────────────────────────── -->
+<div id="cockpit" class="wrap" style="display:none;">
+
+  <div class="hdr">
+    <div>
+      <h1>HN Money Cockpit</h1>
+      <div class="sub" id="hdr-sub">Loading…</div>
+    </div>
+    <div class="hdr-right">
+      <span id="who"></span>
+      <button onclick="refresh()">↻ Refresh</button>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="chip-set" role="group" aria-label="Brand">
+      <button class="chip-btn active" data-brand="ALL" onclick="setBrand('ALL')">All</button>
+      <button class="chip-btn" data-brand="NCH" onclick="setBrand('NCH')">NCH</button>
+      <button class="chip-btn" data-brand="HE"  onclick="setBrand('HE')">HE</button>
+      <button class="chip-btn" data-brand="HQ"  onclick="setBrand('HQ')">HQ</button>
+    </div>
+    <span style="color:var(--text-dim);font-size:11px;margin-left:8px">From</span>
+    <input id="f-from" type="date">
+    <span style="color:var(--text-dim);font-size:11px">To</span>
+    <input id="f-to" type="date">
+    <button class="chip-btn" onclick="setRange(7)">7d</button>
+    <button class="chip-btn" onclick="setRange(30)">30d</button>
+    <button class="chip-btn" onclick="setRange(90)">90d</button>
+  </div>
+
+  <div class="kpi-strip" id="kpis"></div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="paid"    onclick="setTab('paid')">💸 Paid <span class="badge" id="b-paid">0</span></button>
+    <button class="tab"        data-tab="pos"     onclick="setTab('pos')">📋 Open POs <span class="badge" id="b-pos">0</span></button>
+    <button class="tab"        data-tab="bills"   onclick="setTab('bills')">🧾 Bills Pending <span class="badge" id="b-bills">0</span></button>
+    <button class="tab warn"   data-tab="orphans" onclick="setTab('orphans')">⚠ Orphans <span class="badge" id="b-orphans">0</span></button>
+    <button class="tab warn"   data-tab="dupes"   onclick="setTab('dupes')">🔁 Dupes <span class="badge" id="b-dupes">0</span></button>
+  </div>
+
+  <div id="content"></div>
+  <div id="feed-status" class="feed-status"></div>
+</div>
+
+<script>
+const API = '/api/money';
+
+let STATE = {
+  pin: localStorage.getItem('money_pin') || '',
+  brand: 'ALL',
+  from: '',
+  to: '',
+  tab: 'paid',
+  data: null,
+};
+
+// ── PIN gate ──────────────────────────────────────────────
+function login() {
+  const pin = document.getElementById('pin-input').value.trim();
+  if (!pin) return showPinErr('Enter PIN');
+  STATE.pin = pin;
+  localStorage.setItem('money_pin', pin);
+  init();
+}
+function logout() {
+  STATE.pin = '';
+  localStorage.removeItem('money_pin');
+  document.getElementById('cockpit').style.display = 'none';
+  document.getElementById('pin-screen').style.display = '';
+  document.getElementById('pin-input').value = '';
+  document.getElementById('pin-err').textContent = '';
+}
+function showPinErr(m) { document.getElementById('pin-err').textContent = m; }
+document.getElementById('pin-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+
+// ── Init ──────────────────────────────────────────────────
+function init() {
+  // Default range = last 30d
+  const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+  const past = new Date(Date.now() + 5.5 * 3600 * 1000 - 30 * 86400 * 1000).toISOString().slice(0, 10);
+  STATE.from = past;
+  STATE.to = today;
+  document.getElementById('f-from').value = past;
+  document.getElementById('f-to').value = today;
+  document.getElementById('f-from').addEventListener('change', refresh);
+  document.getElementById('f-to').addEventListener('change', refresh);
+  refresh();
+}
+
+// ── Filters ───────────────────────────────────────────────
+function setBrand(b) {
+  STATE.brand = b;
+  document.querySelectorAll('[data-brand]').forEach(el => el.classList.toggle('active', el.dataset.brand === b));
+  refresh();
+}
+function setRange(days) {
+  const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+  const past = new Date(Date.now() + 5.5 * 3600 * 1000 - days * 86400 * 1000).toISOString().slice(0, 10);
+  STATE.from = past; STATE.to = today;
+  document.getElementById('f-from').value = past;
+  document.getElementById('f-to').value = today;
+  refresh();
+}
+function setTab(t) {
+  STATE.tab = t;
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+  render();
+}
+
+// ── Fetch + render ────────────────────────────────────────
+async function refresh() {
+  STATE.from = document.getElementById('f-from').value;
+  STATE.to   = document.getElementById('f-to').value;
+  document.getElementById('content').innerHTML = '<div class="loading"><span class="spinner"></span>Loading…</div>';
+  try {
+    const url = `${API}?action=cockpit&pin=${encodeURIComponent(STATE.pin)}&brand=${STATE.brand}&from=${STATE.from}&to=${STATE.to}`;
+    const r = await fetch(url).then(x => x.json());
+    if (!r.success) {
+      if (r.error && /pin/i.test(r.error)) {
+        showPinErr(r.error);
+        document.getElementById('cockpit').style.display = 'none';
+        document.getElementById('pin-screen').style.display = '';
+        return;
+      }
+      document.getElementById('content').innerHTML = `<div class="empty" style="color:var(--danger)">${escapeHtml(r.error || 'Failed')}</div>`;
+      return;
+    }
+    document.getElementById('pin-screen').style.display = 'none';
+    document.getElementById('cockpit').style.display = '';
+    STATE.data = r;
+    renderHeader(r);
+    renderKpis(r.kpis);
+    render();
+  } catch (e) {
+    document.getElementById('content').innerHTML = `<div class="empty" style="color:var(--danger)">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderHeader(r) {
+  document.getElementById('who').textContent = `${r.user.name} (${r.user.role})`;
+  document.getElementById('hdr-sub').textContent = `${r.from} → ${r.to} · ${r.brand}`;
+}
+
+function renderKpis(k) {
+  const fmt = n => '₹' + (Math.round(+n) || 0).toLocaleString('en-IN');
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi good"><div class="v">${fmt(k.paid_total)}</div><div class="l">Paid · ${k.paid_count}</div></div>
+    <div class="kpi neutral"><div class="v">${fmt(k.open_po_total)}</div><div class="l">Open POs · ${k.open_po_count}</div></div>
+    <div class="kpi warn"><div class="v">${fmt(k.bills_pending_total)}</div><div class="l">Bills Pending · ${k.bills_pending_count}${k.bills_overdue_count ? ' (' + k.bills_overdue_count + ' overdue)' : ''}</div></div>
+    <div class="kpi ${k.orphan_count ? 'warn' : ''}"><div class="v">${k.orphan_count}</div><div class="l">Orphans (outlet only)</div></div>
+    <div class="kpi ${k.dup_count ? 'warn' : ''}"><div class="v">${k.dup_count}</div><div class="l">Duplicate suspects</div></div>
+  `;
+  document.getElementById('b-paid').textContent = k.paid_count;
+  document.getElementById('b-pos').textContent = k.open_po_count;
+  document.getElementById('b-bills').textContent = k.bills_pending_count;
+  document.getElementById('b-orphans').textContent = k.orphan_count;
+  document.getElementById('b-dupes').textContent = k.dup_count;
+}
+
+function render() {
+  if (!STATE.data) return;
+  const d = STATE.data;
+  const c = document.getElementById('content');
+  if (STATE.tab === 'paid')    return renderPaid(c, d.paid);
+  if (STATE.tab === 'pos')     return renderPOs(c, d.pos_open);
+  if (STATE.tab === 'bills')   return renderBills(c, d.bills_pending, d.bills_paid);
+  if (STATE.tab === 'orphans') return renderOrphans(c, d.orphans);
+  if (STATE.tab === 'dupes')   return renderDupes(c, d.dup_alerts);
+  // Feed status
+  const fs = d.feed_status || {};
+  const fmt2 = (k, v) => `<span class="${v === 'ok' ? 'ok' : 'err'}">${k}: ${v}</span>`;
+  document.getElementById('feed-status').innerHTML =
+    `Feeds — ${fmt2('NCH', fs.nch_export)} · ${fmt2('HE', fs.he_export)} · ${fmt2('PO', fs.odoo_pos)} · ${fmt2('Bills', fs.odoo_bills)}`;
+}
+
+function renderPaid(c, rows) {
+  if (!rows.length) { c.innerHTML = '<div class="empty">No paid expenses in this range.</div>'; return; }
+  c.innerHTML = `
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Date</th><th>Brand</th><th>Source</th><th>State</th>
+        <th>Category</th><th>Item / Notes</th><th class="amt">Amount</th><th>By</th>
+      </tr></thead>
+      <tbody>${rows.map(r => `
+        <tr>
+          <td>${shortDate(r.recorded_at)}</td>
+          <td><span class="chip brand-${r.brand}">${r.brand}</span></td>
+          <td><span class="chip src-${cssClass(r.source)}">${r.source || '?'}</span></td>
+          <td><span class="chip state-${r.state}">${r.state.replace('-', ' ')}</span></td>
+          <td>${escapeHtml(r.category || r.category_label || '—')}</td>
+          <td class="item-cell" title="${escapeHtml((r.item || '') + ' · ' + (r.description || ''))}">
+            ${escapeHtml(r.item || '—')}<br><span class="desc">${escapeHtml(r.description || '')}</span>
+          </td>
+          <td class="amt">₹${fmtAmt(r.amount)}</td>
+          <td class="by">${escapeHtml(r.recorded_by || r.recorded_by_name || '—')}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+}
+
+function renderPOs(c, rows) {
+  if (!rows.length) { c.innerHTML = '<div class="empty">No open POs in this range.</div>'; return; }
+  c.innerHTML = `
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Date</th><th>Brand</th><th>State</th>
+        <th>PO #</th><th>Vendor</th><th>Items</th><th class="amt">Amount</th><th>By</th>
+      </tr></thead>
+      <tbody>${rows.map(r => `
+        <tr>
+          <td>${shortDate(r.recorded_at)}</td>
+          <td><span class="chip brand-${r.brand}">${r.brand}</span></td>
+          <td><span class="chip state-${r.state}">${r.state.replace('-', ' ')}</span></td>
+          <td><b>${escapeHtml(r.odoo_name || '—')}</b></td>
+          <td class="vend">${escapeHtml(r.vendor_name || '—')}</td>
+          <td>${escapeHtml(r.item || '—')}</td>
+          <td class="amt">₹${fmtAmt(r.amount)}</td>
+          <td class="by">${escapeHtml(r.recorded_by || '—')}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+}
+
+function renderBills(c, pending, paid) {
+  const sec = (title, list, isPending) => list.length ? `
+    <h3 style="margin: 16px 0 8px; font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px;">${title} · ${list.length}</h3>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Bill Date</th><th>Brand</th><th>State</th>
+        <th>Bill Ref</th><th>Vendor</th><th>From PO</th>
+        <th>Due</th><th class="amt">Total</th>${isPending ? '<th class="amt">Outstanding</th>' : ''}
+      </tr></thead>
+      <tbody>${list.map(r => `
+        <tr>
+          <td>${shortDate(r.recorded_at)}</td>
+          <td><span class="chip brand-${r.brand}">${r.brand}</span></td>
+          <td><span class="chip state-${r.state}">${r.state.replace('-', ' ')}</span></td>
+          <td><b>${escapeHtml(r.bill_ref || r.odoo_name || '—')}</b></td>
+          <td class="vend">${escapeHtml(r.vendor_name || '—')}</td>
+          <td>${r.invoice_origin ? escapeHtml(r.invoice_origin) : '<span class="by">direct</span>'}</td>
+          <td>${r.due_date ? shortDate(r.due_date) : '<span class="by">—</span>'}</td>
+          <td class="amt">₹${fmtAmt(r.amount)}</td>
+          ${isPending ? `<td class="amt" style="color:#f87171">₹${fmtAmt(r.amount_residual || r.amount)}</td>` : ''}
+        </tr>`).join('')}
+      </tbody>
+    </table></div>` : '';
+
+  if (!pending.length && !paid.length) { c.innerHTML = '<div class="empty">No vendor bills in this range.</div>'; return; }
+  c.innerHTML = sec('Pending payment', pending, true) + sec('Paid', paid, false);
+}
+
+function renderOrphans(c, rows) {
+  if (!rows.length) {
+    c.innerHTML = '<div class="empty" style="color:var(--success)">✓ No orphans — every outlet expense is mirrored to Odoo.</div>';
+    return;
+  }
+  c.innerHTML = `
+    <p style="font-size:13px;color:var(--text-dim);margin:0 0 10px">
+      These outlet entries exist in NCH/HE D1 but were NOT mirrored to Odoo (dual-write failed). They are visible at the outlet but missing from central P&L.
+      Use the "Retry sync" action in the outlet app, or contact dev to backfill.
+    </p>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Date</th><th>Brand</th><th>Source</th>
+        <th>Item</th><th>Notes</th><th class="amt">Amount</th><th>By</th><th>Source ID</th>
+      </tr></thead>
+      <tbody>${rows.map(r => `
+        <tr>
+          <td>${shortDate(r.recorded_at)}</td>
+          <td><span class="chip brand-${r.brand}">${r.brand}</span></td>
+          <td><span class="chip src-${cssClass(r.source)}">${r.source || '?'}</span></td>
+          <td class="item-cell">${escapeHtml(r.item || r.category_label || '—')}</td>
+          <td class="desc item-cell">${escapeHtml(r.description || '')}</td>
+          <td class="amt">₹${fmtAmt(r.amount)}</td>
+          <td class="by">${escapeHtml(r.recorded_by_name || '—')}</td>
+          <td class="by">#${r.source_id}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+}
+
+function renderDupes(c, alerts) {
+  if (!alerts.length) {
+    c.innerHTML = '<div class="empty" style="color:var(--success)">✓ No duplicate suspects detected.</div>';
+    return;
+  }
+  c.innerHTML = `
+    <p style="font-size:13px;color:var(--text-dim);margin:0 0 10px">
+      Likely duplicates detected by fuzzy match (same brand · ±1 day · ±0.5% amount · description token overlap).
+      Review each pair and decide manually — no auto-delete.
+    </p>
+    ${alerts.map(d => `
+      <div class="dup-card">
+        <div class="dup-row">
+          ${dupSide('Original', d.a)}
+          ${dupSide('Suspect duplicate', d.b)}
+        </div>
+        <div class="dup-meta">
+          <span class="dup-conf ${d.confidence}">${d.confidence}</span>
+          <span>Description similarity: ${(d.similarity * 100).toFixed(0)}%</span>
+          <span style="margin-left:auto">Time gap: ${niceTimeGap(d.a.recorded_at, d.b.recorded_at)}</span>
+        </div>
+      </div>
+    `).join('')}`;
+}
+
+function dupSide(label, x) {
+  return `
+    <div class="dup-side">
+      <h4>${label}</h4>
+      <div class="l">${shortDate(x.recorded_at)} · <span class="chip brand-${x.brand}">${x.brand}</span> · <span class="chip src-${cssClass(x.source)}">${x.source}</span></div>
+      <div class="l"><b>₹${fmtAmt(x.amount)}</b> — ${escapeHtml(x.item || x.description || '—')}</div>
+      <div class="l">${escapeHtml(x.description || '')}</div>
+      <div class="l by">id #${x.id} · ${x.feed}</div>
+    </div>`;
+}
+
+// ── Helpers ───────────────────────────────────────────────
+function shortDate(s) {
+  if (!s) return '—';
+  const d = new Date(s.length === 10 ? s + 'T00:00:00Z' : s);
+  if (isNaN(d)) return s;
+  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) + ' ' +
+         (s.length > 10 ? d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '');
+}
+function fmtAmt(n) { return (Math.round(+n) || 0).toLocaleString('en-IN'); }
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]); }
+function cssClass(s) { return String(s || '').replace(/[^a-zA-Z0-9-]/g, '-'); }
+function niceTimeGap(a, b) {
+  if (!a || !b) return '?';
+  const diff = Math.abs(Date.parse(a) - Date.parse(b));
+  if (diff < 60000) return Math.round(diff / 1000) + ' sec';
+  if (diff < 3600000) return Math.round(diff / 60000) + ' min';
+  if (diff < 86400000) return Math.round(diff / 3600000) + ' hr';
+  return Math.round(diff / 86400000) + ' day(s)';
+}
+
+// ── Boot ──────────────────────────────────────────────────
+if (STATE.pin) {
+  document.getElementById('pin-screen').style.display = 'none';
+  document.getElementById('cockpit').style.display = '';
+  init();
+}
+</script>
+</body>
+</html>
