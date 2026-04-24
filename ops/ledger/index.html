@@ -465,7 +465,7 @@ function renderEntryRow(e) {
         <div class="sub">
           <span class="brand-tag ${brand}">${brand}</span>
           ${esc(e.category_name || '')}
-          ${e.vendor_name ? ' · ' + esc(e.vendor_name) : ''}
+          ${e.vendor_name ? ' · ' + esc(e.vendor_name) : (e.vendor_name_free ? ' · ' + esc(e.vendor_name_free) : '')}
           ${e.quantity > 0 ? ` · ${e.quantity} ${esc(e.uom || '')}` : ''}
           ${missingTxt}
         </div>

@@ -239,6 +239,10 @@ INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_b
 INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_by) VALUES (11, 'Parking Stand (Iron)', 'pcs', 'seed');
 INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_by) VALUES (11, 'PC Mount', 'pcs', 'seed');
 INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_by) VALUES (11, 'Weight Machine', 'pcs', 'seed');
+INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_by) VALUES (11, '6-to-16 Adapter', 'pcs', 'seed');
+INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_by) VALUES (11, 'Coin Box', 'pcs', 'seed');
+INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_by) VALUES (11, 'Tea Cups & Saucer', 'pcs', 'seed');
+INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_by) VALUES (11, 'Tea Equipment & Items', 'pcs', 'seed');
 INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_by) VALUES (12, 'Rapido / Porter / Transport', 'service', 'seed');
 INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_by) VALUES (12, 'Petrol & Diesel', 'ltr', 'seed');
 INSERT OR IGNORE INTO ledger_products (category_id, name, default_uom, created_by) VALUES (12, 'Auto Fare', 'visit', 'seed');

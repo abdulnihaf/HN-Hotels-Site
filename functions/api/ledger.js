@@ -362,6 +362,7 @@ export async function onRequest(context) {
     }
 
     if (action === 'delete-entry') {
+      if (!isAdminRole(user)) return json({ success: false, error: 'delete is admin-only' }, 403);
       const id = parseInt(body.id || '0', 10);
       if (!id) return json({ success: false, error: 'id required' }, 400);
       await DB.prepare('DELETE FROM ledger_bills WHERE entry_id = ?').bind(id).run();
@@ -451,10 +452,14 @@ export async function onRequest(context) {
       if (action === 'admin-update-category') {
         const id = parseInt(body.id || '0', 10);
         if (!id) return json({ success: false, error: 'id required' }, 400);
-        await DB.prepare(
-          'UPDATE ledger_categories SET name = COALESCE(?, name), emoji = COALESCE(?, emoji), sort_order = COALESCE(?, sort_order) WHERE id = ?'
-        ).bind(body.name || null, body.emoji || null, body.sort_order != null ? parseInt(body.sort_order, 10) : null, id).run();
-        return json({ success: true });
+        try {
+          await DB.prepare(
+            'UPDATE ledger_categories SET name = COALESCE(?, name), emoji = COALESCE(?, emoji), sort_order = COALESCE(?, sort_order) WHERE id = ?'
+          ).bind(body.name || null, body.emoji || null, body.sort_order != null ? parseInt(body.sort_order, 10) : null, id).run();
+          return json({ success: true });
+        } catch (e) {
+          return json({ success: false, error: e.message.includes('UNIQUE') ? 'category name already exists' : e.message });
+        }
       }
       if (action === 'admin-archive-category') {
         const id = parseInt(body.id || '0', 10);
@@ -480,21 +485,25 @@ export async function onRequest(context) {
       if (action === 'admin-update-product') {
         const id = parseInt(body.id || '0', 10);
         if (!id) return json({ success: false, error: 'id required' }, 400);
-        await DB.prepare(
-          `UPDATE ledger_products
-              SET name = COALESCE(?, name),
-                  default_uom = COALESCE(?, default_uom),
-                  category_id = COALESCE(?, category_id),
-                  notes = COALESCE(?, notes)
-            WHERE id = ?`
-        ).bind(
-          body.name || null,
-          body.default_uom != null ? body.default_uom : null,
-          body.category_id ? parseInt(body.category_id, 10) : null,
-          body.notes != null ? body.notes : null,
-          id,
-        ).run();
-        return json({ success: true });
+        try {
+          await DB.prepare(
+            `UPDATE ledger_products
+                SET name = COALESCE(?, name),
+                    default_uom = COALESCE(?, default_uom),
+                    category_id = COALESCE(?, category_id),
+                    notes = COALESCE(?, notes)
+              WHERE id = ?`
+          ).bind(
+            body.name || null,
+            body.default_uom != null ? body.default_uom : null,
+            body.category_id ? parseInt(body.category_id, 10) : null,
+            body.notes != null ? body.notes : null,
+            id,
+          ).run();
+          return json({ success: true });
+        } catch (e) {
+          return json({ success: false, error: e.message.includes('UNIQUE') ? 'a product with that name already exists in this category' : e.message });
+        }
       }
       if (action === 'admin-archive-product') {
         const id = parseInt(body.id || '0', 10);
@@ -547,10 +556,14 @@ export async function onRequest(context) {
       if (action === 'admin-update-vendor') {
         const id = parseInt(body.id || '0', 10);
         if (!id) return json({ success: false, error: 'id required' }, 400);
-        await DB.prepare(
-          'UPDATE ledger_vendors SET name = COALESCE(?, name), phone = COALESCE(?, phone), notes = COALESCE(?, notes) WHERE id = ?'
-        ).bind(body.name || null, body.phone != null ? body.phone : null, body.notes != null ? body.notes : null, id).run();
-        return json({ success: true });
+        try {
+          await DB.prepare(
+            'UPDATE ledger_vendors SET name = COALESCE(?, name), phone = COALESCE(?, phone), notes = COALESCE(?, notes) WHERE id = ?'
+          ).bind(body.name || null, body.phone != null ? body.phone : null, body.notes != null ? body.notes : null, id).run();
+          return json({ success: true });
+        } catch (e) {
+          return json({ success: false, error: e.message.includes('UNIQUE') ? 'a vendor with that name already exists' : e.message });
+        }
       }
       if (action === 'admin-archive-vendor') {
         const id = parseInt(body.id || '0', 10);
