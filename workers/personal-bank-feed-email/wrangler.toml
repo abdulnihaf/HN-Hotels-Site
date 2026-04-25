@@ -1,0 +1,17 @@
+name = "hn-personal-bank-feed"
+main = "index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+# Triggered by Cloudflare Email Routing on personal-hdfc@alerts.hnhotels.in.
+# Fully isolated from hn-bank-feed-email — separate D1 database, separate
+# email address, separate Gmail filter source.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hn-personal-finance"
+database_id = "bc1c3a5f-f641-4a66-a876-c3121be76235"
+
+# Secrets:
+#   DASHBOARD_KEY  — shared secret for /?key=K endpoints
