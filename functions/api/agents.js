@@ -294,32 +294,38 @@ async function runFinanceWatcher(env, run, actor, originBase) {
     }
   } catch (_) {}
 
-  // ─── Persist (upsert by fingerprint to keep reviewed verdicts on re-runs) ───
-  let inserted = 0, updated = 0;
-  for (const f of findings) {
-    const existing = await env.DB.prepare(
-      `SELECT id, verdict, closure_status FROM agent_findings WHERE agent_name = ? AND fingerprint = ? LIMIT 1`
-    ).bind('finance-watcher', f.fingerprint).first();
-
-    if (existing) {
-      // Don't reset verdict; just refresh title/detail/evidence + bump run_id.
-      await env.DB.prepare(
-        `UPDATE agent_findings
-            SET run_id = ?, severity = ?, title = ?, detail = ?, evidence_json = ?, updated_at = unixepoch()
-          WHERE id = ?`
-      ).bind(run.id, f.severity, f.title, f.detail, JSON.stringify(f.evidence), existing.id).run();
-      updated++;
-    } else {
-      await env.DB.prepare(
+  // ─── Persist via batched UPSERT (single subrequest for all findings) ────
+  // Old impl did SELECT + INSERT/UPDATE per finding = 2 subrequests × N findings,
+  // hitting the 1000-subrequest Worker cap when findings >500. Now: one
+  // INSERT ... ON CONFLICT(agent_name, fingerprint) DO UPDATE per finding,
+  // batched together so the whole persist phase counts as one D1 call.
+  // Verdict / closure_status / directive columns are NOT touched on conflict —
+  // reviewer state survives re-runs.
+  let upserted = 0;
+  if (findings.length) {
+    const stmts = findings.map((f) =>
+      env.DB.prepare(
         `INSERT INTO agent_findings
             (run_id, agent_name, severity, category, title, detail, evidence_json, fingerprint)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(agent_name, fingerprint) DO UPDATE SET
+            run_id        = excluded.run_id,
+            severity      = excluded.severity,
+            title         = excluded.title,
+            detail        = excluded.detail,
+            evidence_json = excluded.evidence_json,
+            updated_at    = unixepoch()`
       ).bind(run.id, 'finance-watcher', f.severity, f.category, f.title, f.detail,
-             JSON.stringify(f.evidence), f.fingerprint).run();
-      inserted++;
+             JSON.stringify(f.evidence), f.fingerprint)
+    );
+    // Chunk into batches of 100 statements to stay well under D1 batch limits.
+    for (let i = 0; i < stmts.length; i += 100) {
+      const slice = stmts.slice(i, i + 100);
+      await env.DB.batch(slice);
+      upserted += slice.length;
     }
   }
-  return { inserted, updated, total_findings: findings.length };
+  return { inserted: upserted, updated: 0, total_findings: findings.length };
 }
 
 // ━━━ Action handlers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
