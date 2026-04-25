@@ -323,56 +323,77 @@ async function handleMerge(env, body, actor) {
   return json({ ok: true });
 }
 
-async function handleOdooSync(env, actor) {
-  // Pull all res.partner where supplier_rank > 0.
-  // For each: if D1 has matching odoo_partner_id → update name/phone.
-  // If no match by id but name matches an existing D1 vendor with no odoo id → link them.
-  // If no match at all → create stub D1 vendor for visibility.
+async function handleOdooSync(env, actor, url) {
+  // Chunked sync — caller passes offset + limit. Cloudflare Worker subrequest cap = 1000,
+  // so a single call cannot process every Odoo partner if there are hundreds.
+  // Frontend loops until { more: false }.
+  const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
+  const limit  = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
+
+  // Total count (one cheap call) so frontend can show progress + stop condition.
+  let total = 0;
+  try {
+    total = await odooCall(env.ODOO_API_KEY, 'res.partner', 'search_count',
+      [[['supplier_rank', '>', 0]]]);
+  } catch (e) {
+    return json({ ok: false, error: 'odoo_count_failed', detail: String(e.message || e) }, 502);
+  }
+
   const partners = await odooCall(env.ODOO_API_KEY, 'res.partner', 'search_read',
     [[['supplier_rank', '>', 0]]],
-    { fields: ['id', 'name', 'phone', 'mobile', 'street', 'city', 'vat', 'company_id', 'active'] });
+    {
+      fields: ['id', 'name', 'phone', 'mobile', 'company_id', 'active'],
+      offset, limit, order: 'id asc',
+    });
 
-  const out = { updated: 0, linked: 0, created: 0, total_pulled: partners.length };
+  const out = {
+    ok: true, total, offset, limit,
+    processed: partners.length,
+    more: (offset + partners.length) < total,
+    next_offset: offset + partners.length,
+    updated: 0, linked: 0, created: 0,
+    errors: [],
+  };
 
   for (const p of partners) {
-    const phone = p.phone || p.mobile || null;
-    const existsById = await env.DB.prepare(`SELECT id FROM vendors WHERE odoo_partner_id = ?`).bind(p.id).first();
-    if (existsById) {
+    try {
+      const phone = p.phone || p.mobile || null;
+      const existsById = await env.DB.prepare(`SELECT id FROM vendors WHERE odoo_partner_id = ?`).bind(p.id).first();
+      if (existsById) {
+        await env.DB.prepare(
+          `UPDATE vendors SET name = ?, phone = COALESCE(phone, ?), updated_at = unixepoch(), updated_by = ?
+             WHERE id = ?`
+        ).bind(p.name, phone, `${actor.name} (sync)`, existsById.id).run();
+        out.updated++;
+        continue;
+      }
+      const byName = await env.DB.prepare(
+        `SELECT id FROM vendors WHERE LOWER(name) = LOWER(?) AND odoo_partner_id IS NULL LIMIT 1`
+      ).bind(p.name).first();
+      if (byName) {
+        await env.DB.prepare(
+          `UPDATE vendors SET odoo_partner_id = ?, phone = COALESCE(phone, ?), updated_at = unixepoch(), updated_by = ?
+             WHERE id = ?`
+        ).bind(p.id, phone, `${actor.name} (sync)`, byName.id).run();
+        out.linked++;
+        continue;
+      }
+      const key = slugify(p.name) || `odoo-${p.id}`;
       await env.DB.prepare(
-        `UPDATE vendors SET name = ?, phone = COALESCE(phone, ?), updated_at = unixepoch(), updated_by = ?
-           WHERE id = ?`
-      ).bind(p.name, phone, `${actor.name} (sync)`, existsById.id).run();
-      out.updated++;
-      await logVendor(env.DB, existsById.id, 'sync_odoo', { odoo_id: p.id }, `${actor.name} (sync)`);
-      continue;
-    }
-    // Try to match by name (case-insensitive)
-    const byName = await env.DB.prepare(
-      `SELECT id FROM vendors WHERE LOWER(name) = LOWER(?) AND odoo_partner_id IS NULL LIMIT 1`
-    ).bind(p.name).first();
-    if (byName) {
-      await env.DB.prepare(
-        `UPDATE vendors SET odoo_partner_id = ?, phone = COALESCE(phone, ?), updated_at = unixepoch(), updated_by = ?
-           WHERE id = ?`
-      ).bind(p.id, phone, `${actor.name} (sync)`, byName.id).run();
-      out.linked++;
-      await logVendor(env.DB, byName.id, 'sync_odoo', { odoo_id: p.id, action: 'link' }, `${actor.name} (sync)`);
-      continue;
-    }
-    // Create stub
-    const key = slugify(p.name) || `odoo-${p.id}`;
-    const r = await env.DB.prepare(
-      `INSERT INTO vendors (vendor_key, odoo_partner_id, name, phone, active, updated_by, updated_at)
-         VALUES (?, ?, ?, ?, 1, ?, unixepoch())
-       ON CONFLICT(vendor_key) DO UPDATE SET odoo_partner_id = excluded.odoo_partner_id, updated_at = unixepoch()`
-    ).bind(key, p.id, p.name, phone, `${actor.name} (sync)`).run();
-    out.created++;
-    if (r.meta && r.meta.last_row_id) {
-      await logVendor(env.DB, r.meta.last_row_id, 'sync_odoo', { odoo_id: p.id, action: 'create' }, `${actor.name} (sync)`);
+        `INSERT INTO vendors (vendor_key, odoo_partner_id, name, phone, active, updated_by, updated_at)
+           VALUES (?, ?, ?, ?, 1, ?, unixepoch())
+         ON CONFLICT(vendor_key) DO UPDATE SET
+           odoo_partner_id = excluded.odoo_partner_id,
+           phone = COALESCE(vendors.phone, excluded.phone),
+           updated_at = unixepoch()`
+      ).bind(key, p.id, p.name, phone, `${actor.name} (sync)`).run();
+      out.created++;
+    } catch (e) {
+      out.errors.push({ odoo_id: p.id, name: p.name, error: String(e.message || e) });
     }
   }
 
-  return json({ ok: true, ...out });
+  return json(out);
 }
 
 // ━━━ Router ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -398,7 +419,7 @@ export async function onRequest(context) {
       if (action === 'spend-summary') return handleSpendSummary(env, url);
       if (action === 'odoo-sync') {
         if (!ADMIN_ROLES.has(user.role)) return forbidden();
-        return handleOdooSync(env, user);
+        return handleOdooSync(env, user, url);
       }
       return badRequest('unknown_action');
     }
