@@ -34,6 +34,10 @@ function json(data, status = 200) {
 // ━━━ Fuzzy duplicate detection (Apr 2026 fix-A) ━━━
 // Catches "Bun"/"Buns", "Samoosa"/"Samosa", "Lemon"/"Lemon (Nimbu)",
 // "Pudina"/"Fresh Mint (Pudina)" before they pollute Odoo product list.
+// Mirror sets from vendor.js so spend.js can validate before the mirror call.
+const VALID_PRIMARY_BRANDS = new Set(['HE', 'NCH', 'BOTH']);
+const VALID_PAYMENT_TERMS  = new Set(['on_delivery', '7d', '15d', '30d', '45d', 'other']);
+
 function _normName(s) {
   return String(s || '').toLowerCase()
     .replace(/[\(\)\[\]\{\}.,;:!?'"`-]/g, ' ')
@@ -656,6 +660,19 @@ export async function onRequest(context) {
       if (cat.backend !== 'hr.expense') return json({ success: false, error: 'Only expense categories support inline product creation' }, 400);
       if (!name?.trim()) return json({ success: false, error: 'Name required' }, 400);
 
+      // ── HARD RULE 0 (Apr 2026 fix-C): Cat 1 raw materials must come from
+      //   Zoya's central registry (/ops/purchase). New HN-RM-* codes assigned
+      //   centrally guarantee BOM mapping + supplier traceability + UOM consistency.
+      //   Counter cashiers cannot inline-create RMs anymore. ───────
+      if (catIdInt === 1) {
+        return json({
+          success: false,
+          error: 'cat1_inline_blocked',
+          message: 'Raw materials must be added by Zoya in /ops/purchase (so each gets an HN-RM-* code + canonical UOM + supplier link). Tell her the item name and supplier; once she creates it the dropdown will refresh.',
+          deep_link: 'https://hnhotels.in/ops/purchase/',
+        }, 400);
+      }
+
       // ── HARD RULE 1: UOM required ────────────────────────
       const uomIdInt = parseInt(uom_id, 10);
       if (!uomIdInt || uomIdInt <= 0) {
@@ -726,27 +743,107 @@ export async function onRequest(context) {
     }
 
     // ── CREATE VENDOR (inline-add for cats 1, 14, 15) ──────
+    // Hard rules (Apr 2026 fix-B "vendor data quality"):
+    //   1) phone REQUIRED — without it the vendor-watcher agent can't match
+    //      incoming WhatsApp/SMS, and dedup fails.
+    //   2) Phone-uniqueness check vs existing res.partner — if same digits already
+    //      exist, return 409 with existing match. Caller can pass {force:true} to
+    //      override (e.g. two distinct shops sharing a household phone).
+    //   3) Auto-mirror to /api/vendor (D1 vendor master) so the new vendor gets
+    //      brand + payment_terms + delivery_slot + GSTIN/PAN slots, not just
+    //      name+phone in Odoo. Mirror failure does NOT block parent create.
     if (action === 'create-vendor' && request.method === 'POST') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
       const body = await request.json();
-      const { pin, name, phone, email, address, gst } = body;
+      const { pin, name, phone, email, address, gst, primary_brand, payment_terms, force } = body;
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
       if (!name?.trim()) return json({ success: false, error: 'Name required' }, 400);
+
+      // ── HARD RULE 1: phone required ──────────────────────
+      const cleanPhone = String(phone || '').replace(/[^\d+]/g, '');
+      const phoneDigits = cleanPhone.replace(/[^\d]/g, '');
+      if (phoneDigits.length < 10) {
+        return json({
+          success: false,
+          error: 'phone_required',
+          message: 'Vendor phone is required (min 10 digits). The vendor-watcher agent matches incoming WhatsApp/SMS by phone — without it dedup fails.',
+        }, 400);
+      }
+
+      // ── HARD RULE 2: phone-uniqueness check ─────────────
+      if (!force) {
+        // Search by last 10 digits to catch +91 vs no-prefix variations
+        const last10 = phoneDigits.slice(-10);
+        const existing = await odoo(apiKey, 'res.partner', 'search_read',
+          [[['supplier_rank', '>', 0], ['phone', 'ilike', last10]]],
+          { fields: ['id', 'name', 'phone'], limit: 5 });
+        if (existing.length) {
+          const e = existing[0];
+          return json({
+            success: false,
+            error: 'phone_duplicate',
+            message: `Phone ${last10} already linked to "${e.name}". Pick that vendor, or pass force=true to create a new one anyway (rare — usually a household phone shared by two distinct shops).`,
+            existing: { id: e.id, name: e.name, phone: e.phone || null },
+          }, 409);
+        }
+      }
 
       const partnerVals = {
         name: name.trim(),
         supplier_rank: 1,
         is_company: true,
+        phone: cleanPhone,
       };
-      if (phone?.trim())   partnerVals.phone   = phone.trim();
       if (email?.trim())   partnerVals.email   = email.trim();
       if (address?.trim()) partnerVals.street  = address.trim();
       if (gst?.trim())     partnerVals.vat     = gst.trim().toUpperCase();
 
       const vendorId = await odoo(apiKey, 'res.partner', 'create', [partnerVals]);
 
-      return json({ success: true, vendor: { id: vendorId, name: name.trim(), phone: phone?.trim() || '' } });
+      // ── RULE 3: mirror to /api/vendor (best-effort, non-blocking) ─
+      let mirror_status = 'skipped';
+      try {
+        const mirrorBody = {
+          vendor_key: name.trim().toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 60),
+          name: name.trim(),
+          phone: cleanPhone,
+          owner_contact: null,
+          address: address?.trim() || null,
+          gstin: gst?.trim() || null,
+          primary_brand: VALID_PRIMARY_BRANDS.has(primary_brand) ? primary_brand : null,
+          payment_terms: VALID_PAYMENT_TERMS.has(payment_terms) ? payment_terms : null,
+          notes: `Created via /api/spend create-vendor by ${user.name} (${user.role})`,
+        };
+        const m = await fetch(`${new URL(request.url).origin}/api/vendor?action=create&pin=${encodeURIComponent(pin)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mirrorBody),
+        });
+        const mj = await m.json().catch(() => ({}));
+        if (mj.ok) {
+          // Link the just-created Odoo res.partner ID into the D1 row
+          mirror_status = 'mirrored';
+          if (DB && mj.id) {
+            try {
+              await DB.prepare(`UPDATE vendors SET odoo_partner_id = ? WHERE id = ?`)
+                .bind(vendorId, mj.id).run();
+            } catch (_) { /* non-blocking */ }
+          }
+        } else if (mj.error === 'vendor_key_exists') {
+          mirror_status = 'already_in_d1';
+        } else {
+          mirror_status = 'mirror_failed:' + (mj.error || 'unknown');
+        }
+      } catch (e) {
+        mirror_status = 'mirror_exception:' + String(e.message || e).slice(0, 60);
+      }
+
+      return json({
+        success: true,
+        vendor: { id: vendorId, name: name.trim(), phone: cleanPhone },
+        mirror_status,
+      });
     }
 
     // ── VENDORS (for Cat 1, 2, 14, 15) ─────────────────────
@@ -1179,23 +1276,32 @@ export async function onRequest(context) {
         const driveFile = driveFileId(driveInfo);
 
         // Mirror to D1 for fast reads (matches existing business_expenses schema)
+        // Apr 2026 fix-D: also persist vendor_id, vendor_name, quantity, uom when
+        // the client sent them. All optional — backward compatible with old callers.
         if (DB) {
           const payMode = payment_method === 'cash' ? 'cash' : 'bank';
+          const qty   = body.quantity != null && !Number.isNaN(parseFloat(body.quantity)) ? parseFloat(body.quantity) : null;
+          const uomT  = body.uom?.trim?.() || null;
+          const vId   = body.vendor_id ? parseInt(body.vendor_id, 10) : null;
+          const vName = body.vendor_name?.trim?.() || null;
           await DB.prepare(
             `INSERT INTO business_expenses
                (recorded_by, recorded_at, amount, description, category, payment_mode, notes,
                 odoo_id, company_id, product_id, product_name, category_parent,
                 x_pool, x_payment_method, x_location, x_excluded_from_pnl, odoo_synced_at,
-                x_payroll_period, x_payroll_intent, x_employee_odoo_id)
+                x_payroll_period, x_payroll_intent, x_employee_odoo_id,
+                vendor_id, vendor_name, quantity, uom)
              VALUES (?, datetime('now'), ?, ?, ?, ?, ?,
                      ?, ?, ?, ?, ?,
                      ?, ?, ?, ?, datetime('now'),
-                     ?, ?, ?)`
+                     ?, ?, ?,
+                     ?, ?, ?, ?)`
           ).bind(
             user.name, parseFloat(amount), prodName, cat.label, payMode, notes || '',
             expenseId, companyId, parseInt(product_id, 10), prodName, cat.parentName || null,
             expenseVals.x_pool, expenseVals.x_payment_method, brand, cat.id === 13 ? 1 : 0,
-            payrollPeriod, payrollIntent, (cat.id === 3 || cat.id === 4) ? empId : null
+            payrollPeriod, payrollIntent, (cat.id === 3 || cat.id === 4) ? empId : null,
+            vId, vName, qty, uomT
           ).run().catch(e => console.error('mirror fail:', e.message));
         }
 
@@ -2656,6 +2762,87 @@ export async function onRequest(context) {
     }
 
     // ── ARCHIVE VENDOR (admin only) ────────────────────────────────────────
+    // ── DUPLICATE PRODUCT MERGE (Apr 2026 fix-E lookback cleanup) ──
+    // GET  ?action=merge-duplicate-products&dry_run=1  → preview canonical groupings
+    // POST ?action=merge-duplicate-products            → apply: re-point business_expenses,
+    //                                                    archive Odoo dup products
+    // Admin only. Idempotent.
+    if (action === 'merge-duplicate-products') {
+      const pin = url.searchParams.get('pin') || (request.method === 'POST' ? (await request.clone().json().catch(()=>({}))).pin : null);
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (user.role !== 'admin' && user.role !== 'cfo') {
+        return json({ success: false, error: 'Admin/CFO only' }, 403);
+      }
+
+      // Known canonical mappings (curated 2026-04-25 from D1 audit). Future
+      // merges should be added here, not invented at runtime.
+      const MERGE_GROUPS = [
+        { keep_name: 'Bun',   merge_names: ['Buns'] },
+        { keep_name: 'Lemon (Nimbu)', merge_names: ['Lemon'] },
+        { keep_name: 'Fresh Mint (Pudina)', merge_names: ['Pudina'] },
+        { keep_name: 'Samosa Raw', merge_names: ['Samoosa', 'Samosa'] },
+        { keep_name: 'Bottled Water (500ml)', merge_names: ['Aqua king water 500 ml', 'Bisleri water'] },
+        { keep_name: 'Packaging (bags/paper/foil)', merge_names: ['Packing Meterials', 'Packing Materials'] },
+      ];
+
+      const dryRun = request.method === 'GET' || url.searchParams.get('dry_run') === '1';
+      const report = { dry_run: dryRun, groups: [] };
+
+      for (const g of MERGE_GROUPS) {
+        const groupReport = { keep_name: g.keep_name, merge_names: g.merge_names, keep_id: null, dups: [], be_rows_repointed: 0 };
+
+        // Resolve canonical product_id (case-insensitive name match in Odoo)
+        const keepHits = await odoo(apiKey, 'product.product', 'search_read',
+          [[['name', 'ilike', g.keep_name]]],
+          { fields: ['id', 'name', 'default_code', 'active'], limit: 5 });
+        const keep = keepHits.find(p => p.name.trim().toLowerCase() === g.keep_name.toLowerCase()) || keepHits[0];
+        if (!keep) { groupReport.note = 'canonical_not_found'; report.groups.push(groupReport); continue; }
+        groupReport.keep_id = keep.id;
+
+        for (const dn of g.merge_names) {
+          const dups = await odoo(apiKey, 'product.product', 'search_read',
+            [[['name', 'ilike', dn], ['id', '!=', keep.id]]],
+            { fields: ['id', 'name', 'active'], limit: 10 });
+          for (const d of dups) {
+            // Match exact (case-insensitive) only — defends against unintended catches
+            if (d.name.trim().toLowerCase() !== dn.toLowerCase()) continue;
+            const dupEntry = { id: d.id, name: d.name, was_active: !!d.active, be_rows: 0 };
+
+            if (DB) {
+              // Count business_expenses rows touching this dup
+              const cnt = await DB.prepare(
+                `SELECT COUNT(*) AS n FROM business_expenses WHERE product_id = ?`
+              ).bind(d.id).first();
+              dupEntry.be_rows = cnt?.n || 0;
+            }
+
+            if (!dryRun) {
+              // 1) Re-point business_expenses canonical_product_id (keep product_id as historical)
+              if (DB) {
+                const upd = await DB.prepare(
+                  `UPDATE business_expenses SET canonical_product_id = ? WHERE product_id = ? AND (canonical_product_id IS NULL OR canonical_product_id != ?)`
+                ).bind(keep.id, d.id, keep.id).run();
+                groupReport.be_rows_repointed += (upd.meta?.changes || 0);
+              }
+              // 2) Archive the Odoo dup product so cashiers can't pick it again
+              try {
+                await odoo(apiKey, 'product.product', 'write', [[d.id], { active: false }]);
+                dupEntry.archived = true;
+              } catch (e) {
+                dupEntry.archived = false;
+                dupEntry.error = String(e.message || e).slice(0, 80);
+              }
+            }
+            groupReport.dups.push(dupEntry);
+          }
+        }
+        report.groups.push(groupReport);
+      }
+
+      return json({ success: true, ...report });
+    }
+
     if (action === 'archive-vendor' && request.method === 'POST') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
       const body = await request.json();
