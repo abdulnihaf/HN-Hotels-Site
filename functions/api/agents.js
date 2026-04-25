@@ -86,8 +86,10 @@ async function runFinanceWatcher(env, run, actor, originBase) {
   // SERVICE PIN for self-call: use Nihaf admin (0305) — agents authenticate as admin.
   const SERVICE_PIN = '0305';
   const today = todayIST();
-  // Pull a wide window so all open POs and pending bills are visible.
-  const from = '2025-01-01';
+  // Window: from FY-start (2026-04-01) to today IST. Per Nihaf — historical
+  // pre-April data is out of scope; only flag what's relevant in the current
+  // operating window.
+  const from = '2026-04-01';
   const to   = today;
 
   let cockpit;
