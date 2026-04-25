@@ -2803,6 +2803,136 @@ export async function onRequest(context) {
     }
 
     // ── ARCHIVE VENDOR (admin only) ────────────────────────────────────────
+    // ── UNIVERSAL PRODUCT MASTER (manager view — fix-data-quality v2) ──
+    // GET ?action=list-products-master&pin=&filter=all|no_uom|no_vendor|has_gap&q=
+    // Returns all expense-able Odoo products + their D1 vendor mappings.
+    // Surfaces gaps (no UOM, no vendor) so Basheer can correct in /ops/vendor.
+    if (action === 'list-products-master') {
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!ALLOWED_HYGIENE_ROLES.has(user.role)) return json({ success: false, error: 'Manager/admin only' }, 403);
+      const filter = url.searchParams.get('filter') || 'all';
+      const q      = (url.searchParams.get('q') || '').trim().toLowerCase();
+
+      const products = await odoo(apiKey, 'product.product', 'search_read',
+        [[['can_be_expensed', '=', true], ['active', '=', true]]],
+        { fields: ['id', 'name', 'default_code', 'categ_id', 'uom_id', 'type'], limit: 2000 });
+
+      // Pull vendor_products mappings keyed by HN-RM code first, fall back to product name
+      const mapByRm = new Map(); // hn_rm_code → [{vendor_id, vendor_name, uom, qty_hint, unit_price}, …]
+      const mapByName = new Map(); // lower(product_name) → same shape
+      if (DB) {
+        const rows = (await DB.prepare(
+          `SELECT vp.id AS vp_id, vp.vendor_id, v.name AS vendor_name, v.primary_brand,
+                  vp.hn_rm_code, vp.product_name, vp.uom, vp.qty_hint, vp.unit_price, vp.is_primary_vendor
+             FROM vendor_products vp
+             JOIN vendors v ON v.id = vp.vendor_id
+             WHERE vp.active = 1 AND v.active = 1`
+        ).all()).results || [];
+        for (const r of rows) {
+          if (r.hn_rm_code) {
+            if (!mapByRm.has(r.hn_rm_code)) mapByRm.set(r.hn_rm_code, []);
+            mapByRm.get(r.hn_rm_code).push(r);
+          }
+          const nKey = (r.product_name || '').toLowerCase().trim();
+          if (nKey) {
+            if (!mapByName.has(nKey)) mapByName.set(nKey, []);
+            mapByName.get(nKey).push(r);
+          }
+        }
+      }
+
+      // Categories that legitimately don't need UOM/vendor (salary, rent, utility, etc.)
+      // Tagged for UI to skip the "no UOM" warning.
+      const NO_UOM_CATEGORIES = new Set([
+        'Salary', 'Salary Payment', 'Rent', 'Utility Bill', 'Police / Hafta',
+        'Bank Charge', 'Owner Drawing', 'Owner Drawings', 'Tax', 'Insurance',
+        'Subscription', 'Loan Repayment', 'Interest',
+      ]);
+
+      const out = [];
+      for (const p of products) {
+        const catId   = Array.isArray(p.categ_id) ? p.categ_id[0] : p.categ_id;
+        const catName = Array.isArray(p.categ_id) ? p.categ_id[1] : '';
+        const uomId   = Array.isArray(p.uom_id)   ? p.uom_id[0]   : p.uom_id;
+        const uomName = Array.isArray(p.uom_id)   ? p.uom_id[1]   : null;
+        const isUOMRequired = !NO_UOM_CATEGORIES.has(catName?.split(' / ').pop()?.trim()) &&
+                              !NO_UOM_CATEGORIES.has(catName) &&
+                              !/Salary|Rent|Hafta|Utility|Police|Bank|Insurance|Subscription|Loan/i.test(catName || '');
+
+        // Resolve mapped vendors — try HN-RM code first, fall back to name match
+        let mapped = (p.default_code && mapByRm.get(p.default_code)) || mapByName.get((p.name || '').toLowerCase().trim()) || [];
+
+        const has_uom = !!(uomName && uomName.toLowerCase() !== 'units' && uomName.length);
+        // 'Units' is the Odoo default — usually unset by the user. We treat it as
+        // "UOM still default" only when we expect kg/L (cat hint), not for cats
+        // that genuinely use Units (Bottles, Packets etc.). For now, flag any
+        // 'Units' UOM in raw-material-y categories as "needs review" via has_uom.
+        const has_vendor = mapped.length > 0;
+        const has_gap = isUOMRequired && (!has_uom || !has_vendor);
+
+        const row = {
+          id: p.id,
+          name: p.name,
+          default_code: p.default_code || null,
+          categ_id: catId,
+          categ_name: catName,
+          uom_id: uomId,
+          uom_name: uomName,
+          uom_required: isUOMRequired,
+          mapped_vendors: mapped.map(m => ({
+            vp_id: m.vp_id, vendor_id: m.vendor_id, vendor_name: m.vendor_name,
+            primary_brand: m.primary_brand, vendor_uom: m.uom, qty_hint: m.qty_hint,
+            unit_price: m.unit_price, is_primary_vendor: !!m.is_primary_vendor,
+          })),
+          has_gap, has_uom, has_vendor,
+        };
+
+        // Filter
+        if (filter === 'no_uom'    && (has_uom || !isUOMRequired)) continue;
+        if (filter === 'no_vendor' && (has_vendor || !isUOMRequired)) continue;
+        if (filter === 'has_gap'   && !has_gap) continue;
+
+        if (q) {
+          const hay = (p.name + ' ' + (p.default_code || '') + ' ' + (catName || '')).toLowerCase();
+          if (!hay.includes(q)) continue;
+        }
+        out.push(row);
+      }
+
+      // Stats
+      const stats = {
+        total: products.length,
+        shown: out.length,
+        no_uom: products.filter(p => {
+          const u = Array.isArray(p.uom_id) ? p.uom_id[1] : null;
+          return !u || u.toLowerCase() === 'units';
+        }).length,
+        no_vendor_in_d1: out.filter(r => r.uom_required && !r.has_vendor).length,
+        has_gap: out.filter(r => r.has_gap).length,
+      };
+      return json({ success: true, stats, products: out });
+    }
+
+    // ── UPDATE PRODUCT (rename / change UOM in Odoo from manager UI) ──
+    // POST { pin, product_id, name?, uom_id?, default_code? }
+    if (action === 'update-product' && request.method === 'POST') {
+      const body = await request.json();
+      const { pin, product_id, name, uom_id, default_code } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!ALLOWED_HYGIENE_ROLES.has(user.role)) return json({ success: false, error: 'Manager/admin only' }, 403);
+      if (!product_id) return json({ success: false, error: 'product_id required' }, 400);
+      const updates = {};
+      if (name?.trim())         updates.name = name.trim();
+      if (uom_id)               updates.uom_id = parseInt(uom_id, 10);
+      if (default_code?.trim()) updates.default_code = default_code.trim();
+      if (!Object.keys(updates).length) return json({ success: false, error: 'Nothing to update' }, 400);
+      await odoo(apiKey, 'product.product', 'write', [[parseInt(product_id, 10)], updates]);
+      return json({ success: true, product_id, updates });
+    }
+
     // ── PRODUCT DUP SCAN (manager hygiene panel — fix-E live mode) ──
     // GET ?action=scan-product-dups&pin= → live fuzzy scan over recent
     // expense products (Odoo product.product where can_be_expensed=true).

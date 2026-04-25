@@ -132,8 +132,8 @@
 <main id="app" class="wrap" style="display:none">
   <div class="hdr">
     <div>
-      <h1>Vendor Master</h1>
-      <div class="sub">38 known + Odoo sync · Per-vendor RM mapping · Spend history</div>
+      <h1>Vendor &amp; Product Master</h1>
+      <div class="sub">Universal registry · Vendors ↔ Products (many-to-many) · Spot &amp; fix gaps from ops/v2 + ops/expense + ops/purchase</div>
     </div>
     <div class="hdr-right">
       <button id="btn-hygiene" title="Scan for duplicate products / vendors and resolve">🧹 Hygiene</button>
@@ -142,28 +142,61 @@
     </div>
   </div>
 
-  <div class="kpi-strip">
-    <div class="kpi"><div class="v" id="kpi-total">—</div><div class="l">Total active</div></div>
-    <div class="kpi neutral"><div class="v" id="kpi-he">—</div><div class="l">HE only</div></div>
-    <div class="kpi neutral"><div class="v" id="kpi-nch">—</div><div class="l">NCH only</div></div>
-    <div class="kpi neutral"><div class="v" id="kpi-both">—</div><div class="l">Both brands</div></div>
-    <div class="kpi warn"><div class="v" id="kpi-norm">—</div><div class="l">No RM mapped</div></div>
-    <div class="kpi warn"><div class="v" id="kpi-nophone">—</div><div class="l">No phone</div></div>
+  <!-- Tab switcher -->
+  <div style="display:flex; gap:6px; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:0;">
+    <button class="tab-btn active" id="tab-vendors"  onclick="switchTab('vendors')"  style="background:transparent;border:none;color:var(--text);padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;border-bottom:2px solid var(--brand);font-family:inherit;">Vendors</button>
+    <button class="tab-btn"        id="tab-products" onclick="switchTab('products')" style="background:transparent;border:none;color:var(--text-dim);padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit;">Products</button>
   </div>
 
-  <div class="filter-bar">
-    <span class="chip-set" id="brand-filter">
-      <button class="chip-btn active" data-brand="ALL">All brands</button>
-      <button class="chip-btn" data-brand="HE">HE</button>
-      <button class="chip-btn" data-brand="NCH">NCH</button>
-      <button class="chip-btn" data-brand="BOTH">Both</button>
-    </span>
-    <input id="search" placeholder="Search by name, phone, or contact" autocomplete="off">
+  <!-- ─── VENDORS TAB ──────────────────────────────────── -->
+  <div id="pane-vendors">
+    <div class="kpi-strip">
+      <div class="kpi"><div class="v" id="kpi-total">—</div><div class="l">Total active</div></div>
+      <div class="kpi neutral"><div class="v" id="kpi-he">—</div><div class="l">HE only</div></div>
+      <div class="kpi neutral"><div class="v" id="kpi-nch">—</div><div class="l">NCH only</div></div>
+      <div class="kpi neutral"><div class="v" id="kpi-both">—</div><div class="l">Both brands</div></div>
+      <div class="kpi warn"><div class="v" id="kpi-norm">—</div><div class="l">No RM mapped</div></div>
+      <div class="kpi warn"><div class="v" id="kpi-nophone">—</div><div class="l">No phone</div></div>
+    </div>
+
+    <div class="filter-bar">
+      <span class="chip-set" id="brand-filter">
+        <button class="chip-btn active" data-brand="ALL">All brands</button>
+        <button class="chip-btn" data-brand="HE">HE</button>
+        <button class="chip-btn" data-brand="NCH">NCH</button>
+        <button class="chip-btn" data-brand="BOTH">Both</button>
+      </span>
+      <input id="search" placeholder="Search by name, phone, or contact" autocomplete="off">
+    </div>
+
+    <div id="vendor-list" class="vendor-grid"></div>
+    <div id="vendor-empty" class="empty" style="display:none">No vendors match.</div>
+    <div id="vendor-loading" class="loading"><span class="spinner"></span>Loading…</div>
   </div>
 
-  <div id="vendor-list" class="vendor-grid"></div>
-  <div id="vendor-empty" class="empty" style="display:none">No vendors match.</div>
-  <div id="vendor-loading" class="loading"><span class="spinner"></span>Loading…</div>
+  <!-- ─── PRODUCTS TAB ─────────────────────────────────── -->
+  <div id="pane-products" style="display:none">
+    <div class="kpi-strip">
+      <div class="kpi"><div class="v" id="pkpi-total">—</div><div class="l">Total products</div></div>
+      <div class="kpi warn"><div class="v" id="pkpi-no-uom">—</div><div class="l">No UOM (default)</div></div>
+      <div class="kpi warn"><div class="v" id="pkpi-no-vendor">—</div><div class="l">No vendor mapped</div></div>
+      <div class="kpi warn"><div class="v" id="pkpi-gap">—</div><div class="l">Has any gap</div></div>
+    </div>
+
+    <div class="filter-bar">
+      <span class="chip-set" id="prod-filter">
+        <button class="chip-btn active" data-pf="all">All</button>
+        <button class="chip-btn" data-pf="has_gap">Has gap</button>
+        <button class="chip-btn" data-pf="no_uom">No UOM</button>
+        <button class="chip-btn" data-pf="no_vendor">No vendor</button>
+      </span>
+      <input id="prod-search" placeholder="Search by product name, HN-RM code, or category" autocomplete="off">
+    </div>
+
+    <div id="prod-list" class="vendor-grid"></div>
+    <div id="prod-empty" class="empty" style="display:none">No products match.</div>
+    <div id="prod-loading" class="loading"><span class="spinner"></span>Loading…</div>
+  </div>
 </main>
 
 <!-- ── DETAIL PANEL ─────────────────────────────────────────── -->
@@ -246,6 +279,54 @@
   <div class="save-bar">
     <button class="archive" id="dp-archive">Archive</button>
     <button class="save" id="dp-save">Save changes</button>
+  </div>
+</aside>
+
+<!-- ── PRODUCT DETAIL PANEL (universal product master) ───────── -->
+<div id="pdetail-overlay" class="detail-overlay"></div>
+<aside id="pdetail-panel" class="detail-panel" aria-hidden="true">
+  <div class="dp-hdr">
+    <div>
+      <h2 id="pd-name">—</h2>
+      <div class="sub" id="pd-sub" style="font-size:12px;color:var(--text-dim);margin-top:2px;"></div>
+    </div>
+    <button class="closebtn" id="pd-close" aria-label="Close">×</button>
+  </div>
+  <div class="dp-body">
+    <div class="dp-section">
+      <h3>Product details (writes to Odoo on save)</h3>
+      <div class="dp-grid">
+        <div class="field" style="grid-column:1/-1;"><label>Name</label><input id="pdf-name"></div>
+        <div class="field"><label>HN-RM code</label><input id="pdf-code" placeholder="HN-RM-073 (optional)"></div>
+        <div class="field"><label>Unit of measure *</label><select id="pdf-uom"><option value="">—</option></select></div>
+        <div class="field readonly"><label>Category (Odoo)</label><input id="pdf-cat" readonly></div>
+        <div class="field readonly"><label>Odoo product ID</label><input id="pdf-odoo" readonly></div>
+      </div>
+    </div>
+
+    <div class="dp-section">
+      <h3>Vendors that supply this product (<span id="pd-vcount">0</span>)</h3>
+      <p style="font-size:11px;color:var(--text-dim);margin:0 0 8px;">A product can come from multiple vendors (Bun → Ganga Bakery + Savita Bakery). Add as many as you need.</p>
+      <table class="product-table">
+        <thead><tr><th>Vendor</th><th>UOM</th><th>Last ₹</th><th></th></tr></thead>
+        <tbody id="pd-vtbody"></tbody>
+      </table>
+      <div class="add-product-row">
+        <div class="dp-grid">
+          <div class="field" style="grid-column:1/-1;">
+            <label>Link this product to a vendor</label>
+            <select id="pd-add-vendor"><option value="">— Select vendor —</option></select>
+          </div>
+          <div class="field"><label>Vendor's UOM (override if different)</label><input id="pd-add-uom" placeholder="kg / L / Units"></div>
+          <div class="field"><label>Typical qty (hint)</label><input id="pd-add-qty" type="number" step="0.01"></div>
+        </div>
+        <button id="pd-link-btn" style="margin-top:6px;padding:8px 14px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Link vendor to this product</button>
+      </div>
+    </div>
+  </div>
+  <div class="save-bar">
+    <button class="archive" id="pd-cancel">Cancel</button>
+    <button class="save" id="pd-save">Save product changes</button>
   </div>
 </aside>
 
@@ -559,6 +640,229 @@ document.getElementById('btn-add').onclick = async () => {
   if (r.ok) { toast('Created'); loadList(); openVendor(r.id); }
   else toast('Failed: ' + (r.error || ''), 'err');
 };
+
+// ── Tab switcher (Vendors / Products) ────────────────────────
+function switchTab(tab) {
+  const v = document.getElementById('pane-vendors');
+  const p = document.getElementById('pane-products');
+  const tv = document.getElementById('tab-vendors');
+  const tp = document.getElementById('tab-products');
+  if (tab === 'products') {
+    v.style.display = 'none'; p.style.display = '';
+    tv.style.color = 'var(--text-dim)'; tv.style.borderBottomColor = 'transparent'; tv.style.fontWeight = '600';
+    tp.style.color = 'var(--text)'; tp.style.borderBottomColor = 'var(--brand)'; tp.style.fontWeight = '700';
+    if (!STATE.products) loadProducts();
+  } else {
+    v.style.display = ''; p.style.display = 'none';
+    tp.style.color = 'var(--text-dim)'; tp.style.borderBottomColor = 'transparent'; tp.style.fontWeight = '600';
+    tv.style.color = 'var(--text)'; tv.style.borderBottomColor = 'var(--brand)'; tv.style.fontWeight = '700';
+  }
+}
+
+// ── Products tab ─────────────────────────────────────────────
+let _UOMS_CACHE = null;
+async function loadUoMs() {
+  if (_UOMS_CACHE) return _UOMS_CACHE;
+  const r = await fetch(`${SPEND_API}?action=uoms&pin=${encodeURIComponent(PIN)}`).then(x => x.json());
+  _UOMS_CACHE = r.uoms || [];
+  return _UOMS_CACHE;
+}
+
+let _PROD_FILTER = 'all', _PROD_SEARCH = '';
+async function loadProducts() {
+  document.getElementById('prod-loading').style.display = 'block';
+  document.getElementById('prod-empty').style.display = 'none';
+  try {
+    const u = `${SPEND_API}?action=list-products-master&filter=${_PROD_FILTER}${_PROD_SEARCH ? '&q=' + encodeURIComponent(_PROD_SEARCH) : ''}&pin=${encodeURIComponent(PIN)}`;
+    const r = await fetch(u).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'load_failed');
+    STATE.products = r.products;
+    document.getElementById('pkpi-total').textContent = r.stats.total;
+    document.getElementById('pkpi-no-uom').textContent = r.stats.no_uom;
+    document.getElementById('pkpi-no-vendor').textContent = r.stats.no_vendor_in_d1;
+    document.getElementById('pkpi-gap').textContent = r.stats.has_gap;
+    renderProducts();
+  } catch (e) {
+    toast('Load products failed: ' + e.message, 'err');
+  } finally {
+    document.getElementById('prod-loading').style.display = 'none';
+  }
+}
+
+function renderProducts() {
+  const list = document.getElementById('prod-list');
+  const empty = document.getElementById('prod-empty');
+  list.innerHTML = '';
+  if (!STATE.products?.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  for (const p of STATE.products.slice(0, 200)) {
+    const card = document.createElement('div');
+    card.className = 'vendor-card';
+    const uomBadge = p.has_uom
+      ? `<span class="vc-tag" style="background:rgba(124,86,247,0.15);color:#c4b5fd">${escapeHtml(p.uom_name)}</span>`
+      : (p.uom_required ? '<span class="vc-tag no-rm">Default UOM</span>' : '<span class="vc-tag" style="background:rgba(148,163,184,0.10);color:#94a3b8">N/A</span>');
+    const vendorBadge = p.has_vendor
+      ? `<span class="vc-tag" style="background:rgba(16,185,129,0.15);color:#34d399">${p.mapped_vendors.length} vendor${p.mapped_vendors.length === 1 ? '' : 's'}</span>`
+      : (p.uom_required ? '<span class="vc-tag" style="background:rgba(239,68,68,0.18);color:#f87171">No vendor</span>' : '');
+    card.innerHTML = `
+      <div class="vc-row1">
+        <div class="vc-name">${escapeHtml(p.name)}</div>
+        ${p.default_code ? `<div class="vc-products" style="font-family:ui-monospace,monospace;color:var(--text-dim);">${escapeHtml(p.default_code)}</div>` : ''}
+      </div>
+      <div class="vc-meta">${escapeHtml(p.categ_name || '')}</div>
+      <div class="vc-meta" style="margin-top:6px;">
+        ${uomBadge}
+        ${vendorBadge}
+        ${p.has_gap ? '<span class="vc-tag" style="background:rgba(245,158,11,0.18);color:#fbbf24">FIX</span>' : ''}
+      </div>
+    `;
+    card.onclick = () => openProduct(p);
+    list.appendChild(card);
+  }
+  if (STATE.products.length > 200) {
+    const more = document.createElement('div');
+    more.className = 'empty';
+    more.style.gridColumn = '1/-1';
+    more.textContent = `${STATE.products.length - 200} more — refine search to narrow.`;
+    list.appendChild(more);
+  }
+}
+
+document.getElementById('prod-filter').addEventListener('click', e => {
+  if (e.target.matches('.chip-btn')) {
+    document.querySelectorAll('#prod-filter .chip-btn').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    _PROD_FILTER = e.target.dataset.pf;
+    loadProducts();
+  }
+});
+let _prodSearchTimer;
+document.getElementById('prod-search').addEventListener('input', e => {
+  clearTimeout(_prodSearchTimer);
+  _prodSearchTimer = setTimeout(() => { _PROD_SEARCH = e.target.value.trim(); loadProducts(); }, 280);
+});
+
+// ── Product detail panel ─────────────────────────────────────
+let _CURRENT_PRODUCT = null;
+async function openProduct(p) {
+  _CURRENT_PRODUCT = p;
+  document.getElementById('pdetail-overlay').classList.add('open');
+  const panel = document.getElementById('pdetail-panel');
+  panel.classList.add('open'); panel.setAttribute('aria-hidden', 'false');
+
+  document.getElementById('pd-name').textContent = p.name;
+  document.getElementById('pd-sub').textContent = `Odoo product · ${p.categ_name || ''}`;
+  document.getElementById('pdf-name').value = p.name;
+  document.getElementById('pdf-code').value = p.default_code || '';
+  document.getElementById('pdf-cat').value = p.categ_name || '';
+  document.getElementById('pdf-odoo').value = p.id;
+
+  // Populate UOM dropdown
+  const uoms = await loadUoMs();
+  const sel = document.getElementById('pdf-uom');
+  sel.innerHTML = '<option value="">—</option>' +
+    uoms.map(u => `<option value="${u.id}" ${u.id === p.uom_id ? 'selected' : ''}>${escapeHtml(u.name)}</option>`).join('');
+
+  // Render mapped vendors
+  renderProductVendors();
+
+  // Populate "add vendor" dropdown with all D1 vendors
+  if (!STATE.allVendorsForLink) {
+    const r = await fetch(`/api/vendor?action=list&pin=${encodeURIComponent(PIN)}`).then(x => x.json());
+    STATE.allVendorsForLink = r.vendors || [];
+  }
+  const addSel = document.getElementById('pd-add-vendor');
+  addSel.innerHTML = '<option value="">— Select vendor —</option>' +
+    STATE.allVendorsForLink.map(v => `<option value="${v.id}">${escapeHtml(v.name)}${v.phone ? ' · ' + escapeHtml(v.phone) : ''}</option>`).join('');
+}
+
+function renderProductVendors() {
+  const tb = document.getElementById('pd-vtbody');
+  const v = _CURRENT_PRODUCT.mapped_vendors || [];
+  document.getElementById('pd-vcount').textContent = v.length;
+  if (!v.length) {
+    tb.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim);text-align:center;padding:14px;font-size:12px;">No vendors linked yet — add one below.</td></tr>';
+    return;
+  }
+  tb.innerHTML = v.map(m => `
+    <tr>
+      <td><b>${escapeHtml(m.vendor_name)}</b>${m.primary_brand ? ` <span class="vc-tag brand-${m.primary_brand}" style="font-size:9px;padding:1px 6px;">${m.primary_brand}</span>` : ''}${m.is_primary_vendor ? ' <span class="vc-tag" style="background:rgba(16,185,129,0.15);color:#34d399;font-size:9px;padding:1px 6px;">PRIMARY</span>' : ''}</td>
+      <td>${escapeHtml(m.vendor_uom || '—')}</td>
+      <td>${m.unit_price ? '₹' + Number(m.unit_price).toFixed(2) : '—'}</td>
+      <td class="actcell"><button data-vp="${m.vp_id}">Unlink</button></td>
+    </tr>
+  `).join('');
+  tb.querySelectorAll('button[data-vp]').forEach(btn => btn.onclick = async () => {
+    if (!confirm(`Unlink ${btn.closest('tr').querySelector('b').textContent} from this product?`)) return;
+    const r = await fetch(`/api/vendor?action=remove-product&pin=${encodeURIComponent(PIN)}`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ product_id: parseInt(btn.dataset.vp, 10) }),
+    }).then(r => r.json());
+    if (r.ok) { toast('Unlinked'); refreshCurrentProduct(); }
+    else toast('Unlink failed: ' + (r.error || ''), 'err');
+  });
+}
+
+document.getElementById('pd-link-btn').onclick = async () => {
+  const vendorId = document.getElementById('pd-add-vendor').value;
+  if (!vendorId) { toast('Pick a vendor', 'err'); return; }
+  const body = {
+    vendor_id: parseInt(vendorId, 10),
+    hn_rm_code: _CURRENT_PRODUCT.default_code || null,
+    product_name: _CURRENT_PRODUCT.name,
+    uom: document.getElementById('pd-add-uom').value.trim() || _CURRENT_PRODUCT.uom_name || null,
+    qty_hint: parseFloat(document.getElementById('pd-add-qty').value) || null,
+  };
+  const r = await fetch(`/api/vendor?action=add-product&pin=${encodeURIComponent(PIN)}`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body),
+  }).then(r => r.json());
+  if (r.ok) {
+    toast('Linked');
+    document.getElementById('pd-add-vendor').value = '';
+    document.getElementById('pd-add-uom').value = '';
+    document.getElementById('pd-add-qty').value = '';
+    refreshCurrentProduct();
+  } else toast('Link failed: ' + (r.error || ''), 'err');
+};
+
+async function refreshCurrentProduct() {
+  // Reload product list to get fresh mapped_vendors
+  await loadProducts();
+  const updated = (STATE.products || []).find(p => p.id === _CURRENT_PRODUCT.id);
+  if (updated) {
+    _CURRENT_PRODUCT = updated;
+    renderProductVendors();
+  }
+}
+
+document.getElementById('pd-save').onclick = async () => {
+  const body = {
+    product_id: _CURRENT_PRODUCT.id,
+    name: document.getElementById('pdf-name').value.trim(),
+    default_code: document.getElementById('pdf-code').value.trim() || null,
+    uom_id: parseInt(document.getElementById('pdf-uom').value, 10) || null,
+  };
+  const r = await fetch(`${SPEND_API}?action=update-product`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ...body, pin: PIN }),
+  }).then(r => r.json());
+  if (r.success) {
+    toast('Product updated in Odoo');
+    closeProductPanel();
+    loadProducts();
+  } else toast('Save failed: ' + (r.error || ''), 'err');
+};
+
+function closeProductPanel() {
+  document.getElementById('pdetail-overlay').classList.remove('open');
+  const p = document.getElementById('pdetail-panel');
+  p.classList.remove('open'); p.setAttribute('aria-hidden', 'true');
+  _CURRENT_PRODUCT = null;
+}
+document.getElementById('pd-close').onclick = closeProductPanel;
+document.getElementById('pd-cancel').onclick = closeProductPanel;
+document.getElementById('pdetail-overlay').onclick = closeProductPanel;
 
 // ── Hygiene panel (manager-owned dup cleanup) ────────────────
 const SPEND_API = '/api/spend';
