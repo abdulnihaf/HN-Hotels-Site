@@ -62,6 +62,16 @@ export default {
         const personal = await computeDrift(env.DB_PERSONAL, INSTR_PERSONAL);
         return json({ ok: true, company, personal });
       }
+      // ?mode=reconcile-manual — call after each XLS upload to merge any
+      // MAN_* manual entries against the canonical XLS rows. For each
+      // matching tuple (instrument, direction, amount_paise, date(txn_at)),
+      // the MAN row is deleted (XLS row wins, since it has the real UTR
+      // and bank-side narration). Returns count of deleted MAN rows.
+      if (mode === 'reconcile-manual') {
+        const company  = await reconcileManual(env.DB,          INSTR_COMPANY);
+        const personal = await reconcileManual(env.DB_PERSONAL, INSTR_PERSONAL);
+        return json({ ok: true, company, personal });
+      }
       const debug = url.searchParams.get('debug') === '1';
       const result = await runPoll(env, debug);
       return json({ ok: true, ...result });
@@ -94,6 +104,14 @@ async function processQuery(access, db, instrument, tailFilter, labelId, debug =
   // UTR/RRN that we can use as source_ref, and our null-ref rows would not
   // dedup against the XLS rows (which DO have refs). Cap time window to
   // 24h so the role boundary is clean: live = poller, history = XLS.
+  // newer_than:1d — sticking with a tight window after testing 7d showed
+  // that "Account update" mails older than 24h include device-registration
+  // / online-banking-login notices that the parser correctly classifies as
+  // not-quite-txns but still inserts as partials, polluting D1 with
+  // null-amount rows. The PROCESSED_LABEL filter handles dedup for any
+  // re-processing within 24h, and if the poller is down >24h the OWNER
+  // can do a manual catch-up by removing the label from any unprocessed
+  // backlog. We accept this tradeoff over the alternative noise.
   const q = `${HDFC_FROM} ${tailFilter} newer_than:1d -label:${PROCESSED_LABEL}`;
   const ids = await listMessages(access, q, MAX_PER_POLL);
   let inserted = 0, dupes = 0, partials = 0, failed = 0, snapshots = 0;
@@ -130,7 +148,13 @@ async function processQuery(access, db, instrument, tailFilter, labelId, debug =
         });
         await applyLabel(access, id, labelId);
         snapshots++;
-        if (debug) reasons.push({ id, subject: (subject||'').slice(0,80), reason: `snapshot ${snap.snapshot_date} = ₹${(snap.balance_paise/100).toFixed(2)}` });
+        // Auto-trigger drift check the moment a fresh snapshot lands. This
+        // is the moment we have a new audit anchor — defer it to a manual
+        // ?mode=drift call and you'd never know about a bank-side drift
+        // until someone opens the dashboard. checkDriftForDate inserts a
+        // drift_log row only on non-zero drift (signal, not noise).
+        const driftResult = await checkDriftForDate(db, instrument, snap.snapshot_date, snap.balance_paise);
+        if (debug) reasons.push({ id, subject: (subject||'').slice(0,80), reason: `snapshot ${snap.snapshot_date} = ₹${(snap.balance_paise/100).toFixed(2)} drift=${driftResult.verdict}` });
         continue;
       }
 
@@ -235,50 +259,109 @@ async function computeDrift(db, instrument) {
 
   const out = [];
   for (const s of (snaps.results || [])) {
-    const eod = `${s.snapshot_date}T23:59:59+05:30`;
-    const lastBal = await db.prepare(`
-      SELECT id, txn_at, balance_paise_after, counterparty, direction, amount_paise
-      FROM money_events
-      WHERE instrument = ?
-        AND parse_status = 'parsed'
-        AND balance_paise_after IS NOT NULL
-        AND txn_at <= ?
-      ORDER BY txn_at DESC, id DESC
-      LIMIT 1
-    `).bind(instrument, eod).first();
+    out.push(await checkDriftForDate(db, instrument, s.snapshot_date, s.balance_paise));
+  }
+  return out;
+}
 
-    const computed = lastBal?.balance_paise_after ?? null;
-    const drift = computed != null ? (s.balance_paise - computed) : null;
-    out.push({
-      date: s.snapshot_date,
-      bank_balance_rs: s.balance_paise / 100,
-      computed_balance_rs: computed != null ? computed / 100 : null,
-      drift_rs: drift != null ? drift / 100 : null,
-      latest_event: lastBal ? {
-        id: lastBal.id, txn_at: lastBal.txn_at,
-        counterparty: lastBal.counterparty,
-        direction: lastBal.direction,
-        amount_rs: lastBal.amount_paise / 100,
-      } : null,
-      verdict: drift == null ? 'no_data' : (Math.abs(drift) < 100 ? 'ok' : 'DRIFT'),
-    });
+// Reconcile MAN_* manual entries against canonical XLS rows. Run this after
+// every monthly XLS upload — the XLS row carries the real UTR + bank
+// narration; the MAN row was a placeholder. Match by
+// (instrument, direction, amount_paise, calendar-date) and delete the MAN
+// row if a non-MAN row covers the same tuple.
+async function reconcileManual(db, instrument) {
+  if (!db) return { skipped: 'no_d1_binding' };
+  // Find candidate dupe pairs: a MAN row plus a non-MAN row with the same
+  // (instrument, direction, amount_paise, date(txn_at)). Prefer the
+  // non-MAN row's source_ref, narration, and balance_paise_after.
+  const candidates = await db.prepare(`
+    SELECT m.id AS man_id, m.txn_at AS man_txn_at, m.amount_paise AS man_amount,
+           m.direction AS man_dir, x.id AS xls_id, x.source_ref AS xls_ref
+    FROM money_events m
+    JOIN money_events x ON
+      x.instrument = m.instrument
+      AND x.direction = m.direction
+      AND x.amount_paise = m.amount_paise
+      AND substr(x.txn_at, 1, 10) = substr(m.txn_at, 1, 10)
+      AND x.id != m.id
+      AND (x.source_ref IS NULL OR x.source_ref NOT LIKE 'MAN_%')
+    WHERE m.source_ref LIKE 'MAN_%'
+      AND m.instrument = ?
+      AND m.parse_status = 'parsed'
+  `).bind(instrument).all();
 
-    // Persist for ops history (so dashboard can render "drifting for N days").
+  let deleted = 0;
+  const keptIds = [];
+  for (const c of (candidates.results || [])) {
+    try {
+      await db.prepare('DELETE FROM money_events WHERE id = ?').bind(c.man_id).run();
+      deleted++;
+      keptIds.push({ man_id_deleted: c.man_id, replaced_by_xls_id: c.xls_id, ref: c.xls_ref });
+    } catch (e) {
+      console.warn('manual reconcile skipped for id', c.man_id, String(e).slice(0, 200));
+    }
+  }
+  return { instrument, manual_rows_deleted: deleted, replacements: keptIds };
+}
+
+// One drift-check pass for a specific (instrument, date, expected_balance).
+// Returns the verdict and side-effect-logs to money_balance_drift only when
+// drift is non-zero — keeps the drift log a SIGNAL table, not a heartbeat.
+// |drift| < ₹1 (100 paise) counted as zero to absorb rounding flutter.
+async function checkDriftForDate(db, instrument, snapshot_date, snapshot_paise) {
+  const eod = `${snapshot_date}T23:59:59+05:30`;
+  const lastBal = await db.prepare(`
+    SELECT id, txn_at, balance_paise_after, counterparty, direction, amount_paise
+    FROM money_events
+    WHERE instrument = ?
+      AND parse_status = 'parsed'
+      AND balance_paise_after IS NOT NULL
+      AND txn_at <= ?
+    ORDER BY txn_at DESC, id DESC
+    LIMIT 1
+  `).bind(instrument, eod).first();
+
+  const computed = lastBal?.balance_paise_after ?? null;
+  const drift_paise = computed != null ? (snapshot_paise - computed) : null;
+  const verdict = drift_paise == null ? 'no_data'
+    : (Math.abs(drift_paise) < 100 ? 'ok' : 'DRIFT');
+
+  const summary = {
+    date: snapshot_date,
+    bank_balance_rs: snapshot_paise / 100,
+    computed_balance_rs: computed != null ? computed / 100 : null,
+    drift_rs: drift_paise != null ? drift_paise / 100 : null,
+    latest_event: lastBal ? {
+      id: lastBal.id, txn_at: lastBal.txn_at,
+      counterparty: lastBal.counterparty,
+      direction: lastBal.direction,
+      amount_rs: lastBal.amount_paise / 100,
+    } : null,
+    verdict,
+  };
+
+  // Persist drift only when it's a real signal — non-zero drift OR no_data.
+  // verdict=ok is heartbeat noise; we'd accumulate one row per check
+  // forever otherwise.
+  if (verdict !== 'ok') {
     try {
       await db.prepare(`
         INSERT INTO money_balance_drift
           (instrument, snapshot_date, snapshot_paise, computed_paise, drift_paise, checked_at, notes)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).bind(
-        instrument, s.snapshot_date, s.balance_paise,
-        computed ?? 0, drift ?? 0, nowIso(),
-        computed == null ? 'no_balance_event_for_date' : '',
+        instrument, snapshot_date, snapshot_paise,
+        computed ?? 0, drift_paise ?? 0, nowIso(),
+        verdict === 'no_data'
+          ? 'no_balance_event_for_date — D1 has no balance_paise_after row at or before this date'
+          : `drift ₹${(drift_paise/100).toFixed(2)} — bank says ₹${(snapshot_paise/100).toFixed(2)}, D1 latest balance is ₹${(computed/100).toFixed(2)} (event id ${lastBal.id})`,
       ).run();
     } catch (e) {
       console.warn('drift log skipped', String(e).slice(0, 200));
     }
   }
-  return out;
+
+  return summary;
 }
 
 // Return 'ok' when trust gate passes, otherwise a reason string identifying

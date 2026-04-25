@@ -770,15 +770,28 @@ export async function onRequestGet({ request, env }) {
     // here. The dashboard is the HDFC + Federal account view by intent.
     const BANK_FILTER = `source IN ('hdfc','federal')`;
     const [latestByInstr, today, week, month, pstatus, health, lastReceived, lastTxn] = await Promise.all([
-      // Most recent balance per instrument where balance is exposed.
+      // Most recent balance per instrument where balance is exposed. The
+      // correlated-subquery form picks the LATEST row by (txn_at, id) per
+      // instrument — id-DESC is the tiebreaker when multiple rows share
+      // the same txn_at (date-only normalization can produce ties; see
+      // commit f50fd2f). The earlier GROUP-BY+HAVING form returned an
+      // arbitrary row from each tied set, which silently misordered the
+      // displayed balance.
       db.prepare(`
-        SELECT instrument, balance_paise_after AS balance_paise, txn_at
-        FROM money_events
-        WHERE balance_paise_after IS NOT NULL
-          AND parse_status='parsed'
+        SELECT m.instrument, m.balance_paise_after AS balance_paise, m.txn_at
+        FROM money_events m
+        WHERE m.balance_paise_after IS NOT NULL
+          AND m.parse_status='parsed'
           AND ${BANK_FILTER}
-        GROUP BY instrument
-        HAVING txn_at = MAX(txn_at)
+          AND m.id = (
+            SELECT m2.id FROM money_events m2
+            WHERE m2.instrument = m.instrument
+              AND m2.balance_paise_after IS NOT NULL
+              AND m2.parse_status='parsed'
+              AND m2.source IN ('hdfc','federal')
+            ORDER BY m2.txn_at DESC, m2.id DESC
+            LIMIT 1
+          )
       `).all(),
       db.prepare(`SELECT direction, SUM(amount_paise) AS total_paise, COUNT(*) AS n
                   FROM money_events
