@@ -45,6 +45,14 @@ function _normName(s) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+// Strip bracketed content: "Lemon (Nimbu)" → "lemon", "Mutton (Cut)" → "mutton"
+function _stripParens(s) {
+  return String(s || '').toLowerCase()
+    .replace(/\(.*?\)|\[.*?\]|\{.*?\}/g, ' ')
+    .replace(/[.,;:!?'"`-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 function _levenshtein(a, b) {
   if (a === b) return 0;
   if (!a.length) return b.length;
@@ -80,37 +88,36 @@ function _tokens(s) {
     .filter(t => !_STOPLIST_TOKENS.has(t)); // drop noise tokens
 }
 // Returns the closest existing product object that's a likely duplicate, or null.
-// Match reasons: 'levenshtein', 'substring', 'shared_token'.
+// Match reasons: 'exact', 'levenshtein', 'parens_strip', 'substring'.
+// Removed shared_token — over-fires for items sharing common nouns
+// (Black/Green Cardamom, Curry/Bay Leaves, Beat/Weekly Police are NOT dups).
 function findFuzzyDup(newName, existing) {
   const nN = _normName(newName);
+  const nP = _stripParens(newName);
   if (nN.length < 2) return null;
-  const nTokens = new Set(_tokens(newName));
   let best = null;
   for (const p of existing) {
     if (!p?.name) continue;
     const eN = _normName(p.name);
+    const eP = _stripParens(p.name);
     if (!eN) continue;
     if (eN === nN) return { ...p, match_reason: 'exact' };
+    // 'Lemon' vs 'Lemon (Nimbu)' → after parens-strip both = 'lemon' → MATCH
+    if (nP && eP && nP === eP && nN !== eN) {
+      return { ...p, match_reason: 'parens_strip' };
+    }
     const dist = _levenshtein(nN, eN);
     if (dist <= 2 && (!best || dist < best._dist)) {
       best = { ...p, _dist: dist, match_reason: 'levenshtein' };
       continue;
     }
-    // Substring: require shorter side ≥ 6 chars AND make up ≥60% of longer side.
-    // Stops "Salt" matching "Lemon Salt" / "Bun" matching "Bun Maska" etc.
+    // Substring: require shorter side ≥ 6 chars AND make up ≥70% of longer side.
+    // Bumped 60→70% — stops 'Bun' matching 'Bun Maska', etc.
     const shorter = nN.length <= eN.length ? nN : eN;
     const longer  = shorter === nN ? eN : nN;
-    if (shorter.length >= 6 && (longer.includes(shorter)) && (shorter.length / longer.length) >= 0.6) {
+    if (shorter.length >= 6 && longer.includes(shorter) && (shorter.length / longer.length) >= 0.7) {
       if (!best || best.match_reason !== 'levenshtein') {
         best = { ...p, match_reason: 'substring' };
-      }
-      continue;
-    }
-    if (nTokens.size) {
-      const eTokens = _tokens(p.name);
-      const shared = eTokens.find(t => nTokens.has(t));
-      if (shared && (!best || (best.match_reason !== 'levenshtein' && best.match_reason !== 'substring'))) {
-        best = { ...p, match_reason: 'shared_token:' + shared };
       }
     }
   }
