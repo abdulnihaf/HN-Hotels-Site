@@ -78,14 +78,36 @@
   .f-actions button { padding: 6px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
   .f-actions button:hover { border-color: var(--text-dim); }
   .f-actions button.primary { background: var(--brand); color: #000; border-color: var(--brand); }
-  .f-rectify { margin-top: 10px; padding: 10px; background: rgba(124,86,247,0.05); border: 1px solid rgba(124,86,247,0.25); border-radius: 8px; }
-  .f-rectify .label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 6px; }
+  /* Key facts grid (decoded evidence) */
+  .f-keyfacts { margin-top: 10px; padding: 10px 12px; background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 8px; }
+  .kf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px 14px; }
+  .kf-cell { min-width: 0; }
+  .kf-k { font-size: 9px; color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; margin-bottom: 1px; }
+  .kf-v { font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; word-break: break-word; }
+  .kf-v.amount { font-weight: 700; }
+  .kf-v.muted { color: var(--text-dim); }
+
+  /* Rectify panel */
+  .f-rectify { margin-top: 10px; padding: 10px 12px; background: rgba(124,86,247,0.05); border: 1px solid rgba(124,86,247,0.25); border-radius: 8px; }
+  .f-rectify .rg-section { margin-bottom: 10px; }
+  .f-rectify .rg-section:last-child { margin-bottom: 0; }
+  .f-rectify .label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+  .f-rectify .label .pip { display: inline-block; width: 6px; height: 6px; border-radius: 50%; }
+  .f-rectify .label .pip.inline { background: #34d399; }
+  .f-rectify .label .pip.link   { background: #c4b5fd; }
   .f-rectify .opts { display: flex; flex-wrap: wrap; gap: 6px; }
-  .f-rectify .opts button { padding: 6px 10px; background: var(--surface); border: 1px solid rgba(124,86,247,0.4); color: #c4b5fd; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
-  .f-rectify .opts button:hover { background: rgba(124,86,247,0.12); border-color: #7c56f7; color: #fff; }
-  .f-rectify .opts button.api-action { background: rgba(16,185,129,0.10); border-color: rgba(16,185,129,0.5); color: #34d399; }
-  .f-rectify .opts button.api-action:hover { background: rgba(16,185,129,0.18); }
-  .f-rectify .opts button.link-action::after { content: " ↗"; opacity: 0.7; }
+  .f-rectify .opts button { padding: 7px 11px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .f-rectify .opts button.api-action { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.5); color: #34d399; }
+  .f-rectify .opts button.api-action:hover { background: rgba(16,185,129,0.22); border-color: #34d399; color: #fff; }
+  .f-rectify .opts button.link-action { background: var(--surface); border: 1px solid rgba(124,86,247,0.4); color: #c4b5fd; }
+  .f-rectify .opts button.link-action:hover { background: rgba(124,86,247,0.15); border-color: #7c56f7; }
+  .f-rectify .opts button.link-action::after { content: " ↗"; opacity: 0.7; margin-left: 2px; }
+  .f-rectify .opts button.note-action { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
+
+  /* Audit footer */
+  .f-audit { margin-top: 10px; padding: 8px 10px; font-size: 11px; color: var(--text-mute); border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 12px; }
+  .f-audit b { color: var(--text-dim); font-weight: 600; }
+  .f-audit .ok { color: #34d399; }
 
   .f-evidence { margin-top: 8px; padding: 10px; background: var(--surface-2); border-radius: 8px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-dim); white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto; display: none; }
   .f-evidence.show { display: block; }
@@ -297,6 +319,147 @@ function escapeHtml(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// Per-category decoded evidence renderer — so reviewer doesn't need to read JSON.
+function renderKeyFacts(f) {
+  let ev;
+  try { ev = JSON.parse(f.evidence_json || '{}'); }
+  catch { return ''; }
+  const inr = (n) => '₹' + Math.round(Number(n) || 0).toLocaleString('en-IN');
+  const dt  = (s) => (s || '').slice(0, 16).replace('T', ' ');
+  const facts = [];
+  const push = (k, v, cls = '') => { if (v != null && v !== '') facts.push([k, String(v), cls]); };
+
+  switch (f.category) {
+    case 'stale_po': {
+      const days = ev.recorded_at ? Math.max(0, Math.floor((Date.now() - Date.parse(ev.recorded_at)) / 86400000)) : null;
+      push('PO', ev.odoo_name);
+      push('Vendor', ev.vendor_name);
+      push('Amount', inr(ev.amount), 'amount');
+      push('Brand', ev.brand);
+      push('Ordered', dt(ev.recorded_at));
+      push('Days stale', days != null ? days + 'd' : null);
+      push('Raised by', ev.recorded_by);
+      push('Attachments', ev.attachment_count != null ? String(ev.attachment_count) : null, 'muted');
+      push('Items', ev.item, 'muted');
+      break;
+    }
+    case 'po_paid_in_cash_bypass': {
+      push('PO ref', ev.a?.odoo_name);
+      push('PO vendor', ev.a?.vendor_name);
+      push('PO amount', inr(ev.a?.amount), 'amount');
+      push('PO date', dt(ev.a?.recorded_at));
+      push('Cash amount', inr(ev.b?.amount), 'amount');
+      push('Cash source', ev.b?.source || ev.b?.feed);
+      push('Cash date', dt(ev.b?.recorded_at));
+      push('Cash item', ev.b?.item || ev.b?.description);
+      push('Vendor match', ev.vendor_match_pct != null ? ev.vendor_match_pct + '%' : null);
+      push('Amt diff', ev.amount_diff_pct != null ? ev.amount_diff_pct + '%' : null);
+      push('Date gap', ev.date_gap_days != null ? ev.date_gap_days + 'd' : null);
+      push('Brand', ev.a?.brand);
+      break;
+    }
+    case 'duplicate': {
+      push('A: source', ev.a?.source || ev.a?.feed);
+      push('A: amount', inr(ev.a?.amount), 'amount');
+      push('A: date', dt(ev.a?.recorded_at));
+      push('A: item', ev.a?.item || ev.a?.description, 'muted');
+      push('B: source', ev.b?.source || ev.b?.feed);
+      push('B: amount', inr(ev.b?.amount), 'amount');
+      push('B: date', dt(ev.b?.recorded_at));
+      push('B: item', ev.b?.item || ev.b?.description, 'muted');
+      push('Brand', ev.a?.brand);
+      push('Similarity', ev.similarity != null ? Math.round(ev.similarity * 100) + '%' : null);
+      break;
+    }
+    case 'orphan': {
+      push('Source', ev.source || ev.feed);
+      push('Brand', ev.brand);
+      push('Amount', inr(ev.amount), 'amount');
+      push('Date', ev.ist_date || dt(ev.recorded_at));
+      push('Cashier', ev.recorded_by_name);
+      push('Shift', ev.shift_id);
+      push('Category', ev.category_label || ev.category_code);
+      push('Description', ev.description || ev.item, 'muted');
+      push('Payment', ev.payment_method, 'muted');
+      break;
+    }
+    case 'overdue_bill':
+    case 'bill_stale_no_due': {
+      push('Bill', ev.odoo_name || ev.bill_ref);
+      push('Vendor', ev.vendor_name);
+      push('Amount', inr(ev.amount_residual || ev.amount), 'amount');
+      push('Brand', ev.brand);
+      push('Due', ev.due_date || '(none set)');
+      push('Recorded', dt(ev.recorded_at));
+      push('State', ev.state);
+      push('From PO', ev.invoice_origin || '(direct bill)', 'muted');
+      break;
+    }
+    case 'po_received_no_bill': {
+      push('PO', ev.odoo_name);
+      push('Vendor', ev.vendor_name);
+      push('Amount', inr(ev.amount), 'amount');
+      push('Received at', dt(ev.received_at));
+      push('Received by', ev.received_by);
+      push('Brand', ev.brand);
+      break;
+    }
+    case 'po_billed_twice': {
+      push('PO origin', ev.invoice_origin);
+      push('Bills count', String((ev.bills || []).length));
+      push('Total', inr((ev.bills || []).reduce((s, b) => s + (b.amount || 0), 0)), 'amount');
+      (ev.bills || []).slice(0, 3).forEach((b, i) => {
+        push(`Bill ${i + 1}`, `${b.odoo_name || b.bill_ref} ${inr(b.amount)}`);
+      });
+      break;
+    }
+    case 'rm_no_po': {
+      push('Source', ev.source || ev.feed);
+      push('Brand', ev.brand);
+      push('Amount', inr(ev.amount), 'amount');
+      push('Date', ev.ist_date || dt(ev.recorded_at));
+      push('Cashier/By', ev.recorded_by_name || ev.recorded_by);
+      push('Item', ev.item || ev.description);
+      push('Vendor', ev.vendor_name || '(unspecified)');
+      push('Category', ev.category_parent || ev.category);
+      break;
+    }
+    case 'expense_no_product': {
+      push('By', ev.source || ev.recorded_by);
+      push('Amount', inr(ev.amount), 'amount');
+      push('Brand', ev.brand);
+      push('Date', dt(ev.recorded_at));
+      push('Category', ev.category);
+      push('Description', ev.description || '(empty)', 'muted');
+      break;
+    }
+    case 'product_no_uom': {
+      push('Code', ev.hn_code);
+      push('Name', ev.name);
+      push('Brand', ev.brand);
+      push('Category', ev.category);
+      break;
+    }
+    case 'schema_variant_gap': {
+      push('Current', ev.current);
+      push('Needed', ev.needed);
+      break;
+    }
+    default: {
+      Object.entries(ev).slice(0, 8).forEach(([k, v]) => {
+        if (typeof v === 'object' || v == null) return;
+        facts.push([k, String(v).slice(0, 80), 'muted']);
+      });
+    }
+  }
+
+  if (!facts.length) return '';
+  const cells = facts.map(([k, v, cls]) =>
+    `<div class="kf-cell"><div class="kf-k">${escapeHtml(k)}</div><div class="kf-v ${cls || ''}">${escapeHtml(v)}</div></div>`
+  ).join('');
+  return `<div class="f-keyfacts"><div class="kf-grid">${cells}</div></div>`;
+}
+
 function renderCard(f) {
   const card = document.createElement('div');
   card.className = `finding ${f.severity === 'critical' ? 'crit' : f.severity}`;
@@ -315,20 +478,48 @@ function renderCard(f) {
       </div>`;
   }
 
-  // Render rectify panel for this category if options exist + finding still open
+  // ── Key facts (decoded evidence) ────────────────────────────────────────
+  const keyFactsBlock = renderKeyFacts(f);
+
+  // ── Rectify panel (split into "fix here" vs "open elsewhere") ───────────
   const rectifyOpts = (STATE.rectify[f.category] || []);
+  const inlineOpts = rectifyOpts.filter(o => o.kind === 'inline_api' || o.kind === 'note_only');
+  const linkOpts   = rectifyOpts.filter(o => o.kind === 'link');
+  const renderBtn = (opt) => {
+    const cls = opt.kind === 'inline_api' ? 'api-action'
+              : opt.kind === 'link' ? 'link-action'
+              : 'note-action';
+    return `<button class="${cls}" data-rectify-id="${escapeHtml(opt.id)}" data-rectify-kind="${escapeHtml(opt.kind)}" data-rectify-url="${escapeHtml(opt.url || '')}">${escapeHtml(opt.label)}</button>`;
+  };
   let rectifyBlock = '';
   if (rectifyOpts.length && f.closure_status === 'open') {
-    const buttons = rectifyOpts.map(opt => {
-      const cls = opt.kind === 'inline_api' ? 'api-action' : (opt.kind === 'link' ? 'link-action' : '');
-      return `<button class="${cls}" data-rectify-id="${escapeHtml(opt.id)}" data-rectify-kind="${escapeHtml(opt.kind)}" data-rectify-url="${escapeHtml(opt.url || '')}">${escapeHtml(opt.label)}</button>`;
-    }).join('');
-    rectifyBlock = `
-      <div class="f-rectify">
-        <div class="label">Rectify in UI</div>
-        <div class="opts">${buttons}</div>
-      </div>`;
+    const inlineSection = inlineOpts.length
+      ? `<div class="rg-section"><div class="label"><span class="pip inline"></span>Fix here · auto-closes finding</div><div class="opts">${inlineOpts.map(renderBtn).join('')}</div></div>`
+      : '';
+    const linkSection = linkOpts.length
+      ? `<div class="rg-section"><div class="label"><span class="pip link"></span>Or open another UI · fix there + return</div><div class="opts">${linkOpts.map(renderBtn).join('')}</div></div>`
+      : '';
+    rectifyBlock = `<div class="f-rectify">${inlineSection}${linkSection}</div>`;
   }
+
+  // ── Audit footer (verdict + directive + rectified attribution) ──────────
+  const auditParts = [];
+  if (f.verdict) {
+    const when = f.verdict_at ? new Date(f.verdict_at * 1000).toLocaleString() : '';
+    auditParts.push(`<span><b>verdict:</b> ${escapeHtml(f.verdict)} by ${escapeHtml(f.verdict_by || '?')} · ${escapeHtml(when)}</span>`);
+  }
+  if (f.directive_at) {
+    const when = new Date(f.directive_at * 1000).toLocaleString();
+    auditParts.push(`<span><b>directive:</b> via ${escapeHtml(f.directive_channel || '?')} to ${escapeHtml(f.directive_to || '?')} · ${escapeHtml(when)}</span>`);
+  }
+  if (f.rectified_at) {
+    const when = new Date(f.rectified_at * 1000).toLocaleString();
+    auditParts.push(`<span class="ok"><b>rectified:</b> ${escapeHtml(f.rectify_action_id || '')} by ${escapeHtml(f.rectified_by || '?')} (PIN ${escapeHtml(f.rectified_by_pin || '?')}) · ${escapeHtml(when)}</span>`);
+  } else if (f.closed_at && f.closure_status !== 'open') {
+    const when = new Date(f.closed_at * 1000).toLocaleString();
+    auditParts.push(`<span><b>closed:</b> ${escapeHtml(f.closure_status)} · ${escapeHtml(when)}${f.closure_note ? ' · ' + escapeHtml(f.closure_note) : ''}</span>`);
+  }
+  const auditBlock = auditParts.length ? `<div class="f-audit">${auditParts.join('')}</div>` : '';
 
   card.innerHTML = `
     <div class="f-row1">
@@ -353,7 +544,9 @@ function renderCard(f) {
         <button data-act="dismiss">Dismiss</button>
       ` : ''}
     </div>
+    ${keyFactsBlock}
     ${rectifyBlock}
+    ${auditBlock}
     <pre class="f-evidence">${escapeHtml(evidencePretty)}</pre>
     <div class="f-directive">
       <textarea placeholder="Write the directive in your own words. e.g. 'Basheer, Shariff bill 12k overdue 5 days, please call him today and pay by EOD.'"></textarea>

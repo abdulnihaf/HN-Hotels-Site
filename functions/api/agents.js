@@ -392,6 +392,7 @@ async function handleFindings(env, url) {
             verdict, verdict_note, verdict_at, verdict_by,
             directive, directive_channel, directive_to, directive_at,
             closure_status, closed_at, closure_note,
+            rectified_by, rectified_by_pin, rectified_at, rectify_action_id,
             created_at, updated_at
        FROM agent_findings ${where}
        ORDER BY
@@ -545,9 +546,14 @@ async function handleRectify(env, body, actor, originBase, pin) {
       await env.DB.prepare(
         `UPDATE agent_findings
             SET closure_status = 'resolved', closed_at = unixepoch(),
-                closure_note = ?, updated_at = unixepoch()
+                closure_note = ?, updated_at = unixepoch(),
+                rectified_by = ?, rectified_by_pin = ?, rectified_at = unixepoch(),
+                rectify_action_id = ?
           WHERE id = ?`
-      ).bind(opt.note || `Rectified: ${opt.label}`, id).run();
+      ).bind(
+        opt.note || `Rectified: ${opt.label}`,
+        `${actor.name} (${actor.role})`, pin, opt.id, id
+      ).run();
     }
     return json({ ok: true, kind: 'note_only', note: opt.note });
   }
@@ -579,9 +585,14 @@ async function handleRectify(env, body, actor, originBase, pin) {
       await env.DB.prepare(
         `UPDATE agent_findings
             SET closure_status = 'resolved', closed_at = unixepoch(),
-                closure_note = ?, updated_at = unixepoch()
+                closure_note = ?, updated_at = unixepoch(),
+                rectified_by = ?, rectified_by_pin = ?, rectified_at = unixepoch(),
+                rectify_action_id = ?
           WHERE id = ?`
-      ).bind(`Rectified: ${opt.label} by ${actor.name}`, id).run();
+      ).bind(
+        `Rectified: ${opt.label}`,
+        `${actor.name} (${actor.role})`, pin, opt.id, id
+      ).run();
     }
     return json({ ok: true, kind: 'inline_api', action: opt.id, api_response: apiResp });
   }
