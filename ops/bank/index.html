@@ -183,6 +183,7 @@ tailwind.config = {
         <div class="text-[11px] uppercase tracking-wider text-ink-3 mb-1">Total balance</div>
         <div id="total-balance" class="text-3xl md:text-4xl font-bold num">—</div>
         <p id="hero-story" class="text-sm text-ink-2 mt-2 max-w-xl">—</p>
+        <div id="data-freshness" class="text-[11px] mt-1 text-ink-3" title="Latest transaction date in the data — drives staleness banner">—</div>
       </div>
       <div class="sparkline-wrap w-full md:w-auto md:min-w-[360px]">
         <div class="text-[10px] uppercase tracking-wider text-ink-3 text-right mb-1">30-day flow · click to filter</div>
@@ -715,6 +716,31 @@ function renderHeaderSummary(s) {
   }
   if (s.any_source_stale) story += ' ⚠ One or more sources stale — check Reconcile.';
   document.getElementById('hero-story').textContent = story;
+
+  // Always-visible "Data as of …" line. Drives off last_txn_at (latest
+  // transaction date in the data) — independent of source_health, which
+  // only tracks live-pipe events and lies after an XLS-only backfill.
+  // If the gap to today is >24h we flip it to a yellow warning state.
+  const fresh = document.getElementById('data-freshness');
+  if (fresh) {
+    const lastTxn = s.last_txn_at;
+    if (!lastTxn) {
+      fresh.textContent = 'No transactions in the ledger yet.';
+      fresh.className = 'text-[11px] mt-1 text-amber-600 font-medium';
+    } else {
+      const txnDate = new Date(lastTxn);
+      const ageH = (Date.now() - txnDate.getTime()) / 3600000;
+      const istDate = txnDate.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'short', day: '2-digit' });
+      if (ageH > 36) {
+        const ageDays = Math.floor(ageH / 24);
+        fresh.textContent = `⚠ Data is ${ageDays} day${ageDays === 1 ? '' : 's'} behind — last txn ${istDate}. Upload latest HDFC e-statement.`;
+        fresh.className = 'text-[12px] mt-1 px-2 py-1 rounded bg-amber-50 text-amber-800 font-medium inline-block';
+      } else {
+        fresh.textContent = `Data as of ${istDate}.`;
+        fresh.className = 'text-[11px] mt-1 text-ink-3';
+      }
+    }
+  }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

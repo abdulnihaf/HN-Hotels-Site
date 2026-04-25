@@ -1,0 +1,30 @@
+name = "hn-gmail-poller"
+main = "index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+# Polls Gmail every minute for HDFC alerts and ingests into D1. Replaces
+# the email-routing-based ingest (Gmail-forwarded mail was DMARC-rejected
+# by Cloudflare's MX). Within free-tier 5-cron cap.
+[triggers]
+crons = ["*/1 * * * *"]
+
+# Two D1 bindings — one per pipe. The same Worker code routes each mail
+# to the right database based on which account-tail the Gmail search
+# matched (search query is scoped per pipe).
+[[d1_databases]]
+binding = "DB"
+database_name = "hn-hiring"
+database_id = "a0107321-790a-4d46-ac3c-a54a676c6bcb"
+
+[[d1_databases]]
+binding = "DB_PERSONAL"
+database_name = "hn-personal-finance"
+database_id = "bc1c3a5f-f641-4a66-a876-c3121be76235"
+
+# Secrets (set via `wrangler secret put`):
+#   GOOGLE_CLIENT_ID
+#   GOOGLE_CLIENT_SECRET
+#   GOOGLE_GMAIL_REFRESH_TOKEN
+#   DASHBOARD_KEY              (for manual GET /?key=K trigger)

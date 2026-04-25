@@ -277,13 +277,22 @@ export async function onRequestGet({ request, env }) {
   if (action === 'daily_cashflow') {
     // Per-day sum of credits/debits for the sparkline. Default 30 days.
     const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10), 365);
-    const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    // IST-relative window: txn_at is stored at IST midnight, so anchor
+    // the lower bound on IST calendar days too. Otherwise the oldest 5.5h
+    // of the window can shift relative to user expectation.
+    const since = new Date(Date.now() + 5.5 * 3600000 - days * 86400000).toISOString().slice(0, 10);
     const instrument = url.searchParams.get('instrument');
+    // Scope: HDFC bank-account view only. Per product spec the dashboard
+    // tracks money flowing in/out of HDFC 4680 (and federal 4510) — never
+    // platform-API rows. source IN ('hdfc','federal') is the hard filter;
+    // instrument param narrows further when the user picks a specific account.
     let sql = `SELECT SUBSTR(COALESCE(txn_at, received_at), 1, 10) AS day,
                       SUM(CASE WHEN direction='credit' THEN amount_paise ELSE 0 END) AS credit_paise,
                       SUM(CASE WHEN direction='debit'  THEN amount_paise ELSE 0 END) AS debit_paise
                FROM money_events
-               WHERE parse_status='parsed' AND COALESCE(txn_at, received_at) >= ?`;
+               WHERE parse_status='parsed'
+                 AND source IN ('hdfc','federal')
+                 AND COALESCE(txn_at, received_at) >= ?`;
     const binds = [since];
     if (instrument && instrument !== 'all') { sql += ' AND instrument=?'; binds.push(instrument); }
     sql += ' GROUP BY day ORDER BY day';
@@ -737,40 +746,71 @@ export async function onRequestGet({ request, env }) {
 
   if (action === 'summary') {
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const d7  = new Date(now.getTime() - 7  * 86400000).toISOString();
-    const d30 = new Date(now.getTime() - 30 * 86400000).toISOString();
+    // CRITICAL — Workers run in UTC, but txn_at is stored as IST literal
+    // 'YYYY-MM-DDT00:00:00+05:30' (matches XLS backfill, byte-identical
+    // for dedup). If we generate `todayStart` via toISOString() it would
+    // be UTC ('...Z') and lexical-compare against IST literals fails:
+    // '+'(43) < '.'(46) means today's IST midnight sorts BEFORE today's
+    // UTC midnight, and today's txns get silently excluded from the
+    // "today" rollup until 5:30 AM IST the next day.
+    // Fix: build IST-literal boundaries that match the txn_at format
+    // exactly. istDateStr() returns 'YYYY-MM-DD' for the IST calendar
+    // date of a UTC instant; we then anchor at IST midnight.
+    const istNowMs   = now.getTime() + 5.5 * 3600000;
+    const istToday   = new Date(istNowMs).toISOString().slice(0, 10);
+    const istD7      = new Date(istNowMs - 7  * 86400000).toISOString().slice(0, 10);
+    const istD30     = new Date(istNowMs - 30 * 86400000).toISOString().slice(0, 10);
+    const todayStart = `${istToday}T00:00:00+05:30`;
+    const d7         = `${istD7}T00:00:00+05:30`;
+    const d30        = `${istD30}T00:00:00+05:30`;
     const staleAfter = new Date(now.getTime() - 24 * 3600000).toISOString();
 
-    const [latestByInstr, today, week, month, pstatus, health, lastReceived] = await Promise.all([
+    // Headline rollups: scope to bank-only sources. Excludes any future
+    // 'manual' or platform-API rows — those land in their own views, not
+    // here. The dashboard is the HDFC + Federal account view by intent.
+    const BANK_FILTER = `source IN ('hdfc','federal')`;
+    const [latestByInstr, today, week, month, pstatus, health, lastReceived, lastTxn] = await Promise.all([
       // Most recent balance per instrument where balance is exposed.
       db.prepare(`
         SELECT instrument, balance_paise_after AS balance_paise, txn_at
         FROM money_events
         WHERE balance_paise_after IS NOT NULL
           AND parse_status='parsed'
+          AND ${BANK_FILTER}
         GROUP BY instrument
         HAVING txn_at = MAX(txn_at)
       `).all(),
       db.prepare(`SELECT direction, SUM(amount_paise) AS total_paise, COUNT(*) AS n
                   FROM money_events
-                  WHERE parse_status='parsed' AND COALESCE(txn_at, received_at) >= ?
+                  WHERE parse_status='parsed' AND ${BANK_FILTER}
+                    AND COALESCE(txn_at, received_at) >= ?
                   GROUP BY direction`).bind(todayStart).all(),
       db.prepare(`SELECT direction, SUM(amount_paise) AS total_paise, COUNT(*) AS n
                   FROM money_events
-                  WHERE parse_status='parsed' AND COALESCE(txn_at, received_at) >= ?
+                  WHERE parse_status='parsed' AND ${BANK_FILTER}
+                    AND COALESCE(txn_at, received_at) >= ?
                   GROUP BY direction`).bind(d7).all(),
       db.prepare(`SELECT direction, SUM(amount_paise) AS total_paise, COUNT(*) AS n
                   FROM money_events
-                  WHERE parse_status='parsed' AND COALESCE(txn_at, received_at) >= ?
+                  WHERE parse_status='parsed' AND ${BANK_FILTER}
+                    AND COALESCE(txn_at, received_at) >= ?
                   GROUP BY direction`).bind(d30).all(),
       db.prepare(`SELECT parse_status, COUNT(*) AS n
-                  FROM money_events GROUP BY parse_status`).all(),
+                  FROM money_events WHERE ${BANK_FILTER}
+                  GROUP BY parse_status`).all(),
       db.prepare(`SELECT source, instrument, last_event_at,
                          expected_max_gap_minutes, status, notes
                   FROM money_source_health`).all(),
       db.prepare(`SELECT MAX(received_at) AS last_received
-                  FROM money_events WHERE parse_status='parsed'`).first(),
+                  FROM money_events
+                  WHERE parse_status='parsed' AND ${BANK_FILTER}`).first(),
+      // last_txn_at: the freshest transaction date in the data — what users
+      // actually mean when they ask "is this current?". Drives the "Data as
+      // of …" banner. Independent of source_health (which only tracks live
+      // pipe events; XLS backfill doesn't bump it).
+      db.prepare(`SELECT MAX(txn_at) AS last_txn
+                  FROM money_events
+                  WHERE parse_status='parsed' AND ${BANK_FILTER}`).first(),
     ]);
 
     // Compute staleness per source: status = 'stale' if last_event_at
@@ -802,6 +842,7 @@ export async function onRequestGet({ request, env }) {
       source_health: healthCooked,
       any_source_stale: anyStale,
       last_ingest_at: lastReceived?.last_received || null,
+      last_txn_at: lastTxn?.last_txn || null,
     }, 200, origin);
   }
 

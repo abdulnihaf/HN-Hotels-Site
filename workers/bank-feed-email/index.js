@@ -449,29 +449,35 @@ function decodeQuotedPrintable(s) {
   return new TextDecoder('utf-8', { fatal: false }).decode(Uint8Array.from(bytes));
 }
 
+// txn_at MUST be byte-identical to the XLS-backfill output to share the
+// `(source, source_ref, direction, amount_paise, txn_at)` unique index. The
+// Python backfill emits `YYYY-MM-DDT00:00:00+05:30` (IST midnight literal,
+// no UTC roundtrip). We mirror that exact string so live email rows dedup
+// cleanly against backfill rows on the next monthly statement upload.
+// HDFC alert times go into received_at and narration; we don't need them
+// in txn_at for ledger purposes.
 function normalizeNumericDate(m) {
   try {
-    let [_, dd, mm, yy, tt] = m;
+    let [_, dd, mm, yy] = m;
     if (yy.length === 2) yy = '20' + yy;
     const y = parseInt(yy, 10), mo = parseInt(mm, 10), d = parseInt(dd, 10);
     if (y < 2020 || y > new Date().getFullYear() + 1) return null;
     if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
-    const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}T${tt || '00:00'}:00+05:30`;
-    const parsed = new Date(iso);
-    return isNaN(parsed) ? null : parsed.toISOString();
+    return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}T00:00:00+05:30`;
   } catch { return null; }
 }
 
 function normalizeWordDate(m) {
   try {
     const months = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12 };
-    let [_, dd, monWord, yy, tt] = m;
+    let [_, dd, monWord, yy] = m;
     const mo = months[monWord.toLowerCase().slice(0, 3)];
     if (!mo) return null;
     if (yy.length === 2) yy = '20' + yy;
-    const iso = `${yy}-${String(mo).padStart(2, '0')}-${String(parseInt(dd, 10)).padStart(2, '0')}T${tt || '00:00'}:00+05:30`;
-    const d = new Date(iso);
-    return isNaN(d) ? null : d.toISOString();
+    const dy = parseInt(yy, 10), dd_ = parseInt(dd, 10);
+    if (dy < 2020 || dy > new Date().getFullYear() + 1) return null;
+    if (dd_ < 1 || dd_ > 31) return null;
+    return `${dy}-${String(mo).padStart(2, '0')}-${String(dd_).padStart(2, '0')}T00:00:00+05:30`;
   } catch { return null; }
 }
 
