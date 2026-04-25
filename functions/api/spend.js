@@ -31,6 +31,69 @@ function json(data, status = 200) {
   });
 }
 
+// ━━━ Fuzzy duplicate detection (Apr 2026 fix-A) ━━━
+// Catches "Bun"/"Buns", "Samoosa"/"Samosa", "Lemon"/"Lemon (Nimbu)",
+// "Pudina"/"Fresh Mint (Pudina)" before they pollute Odoo product list.
+function _normName(s) {
+  return String(s || '').toLowerCase()
+    .replace(/[\(\)\[\]\{\}.,;:!?'"`-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function _levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function _tokens(s) {
+  return _normName(s).split(' ').filter(t => t.length >= 4);
+}
+// Returns the closest existing product object that's a likely duplicate, or null.
+// Match reasons: 'levenshtein', 'substring', 'shared_token'.
+function findFuzzyDup(newName, existing) {
+  const nN = _normName(newName);
+  if (nN.length < 2) return null;
+  const nTokens = new Set(_tokens(newName));
+  let best = null;
+  for (const p of existing) {
+    if (!p?.name) continue;
+    const eN = _normName(p.name);
+    if (!eN) continue;
+    if (eN === nN) return { ...p, match_reason: 'exact' };
+    const dist = _levenshtein(nN, eN);
+    if (dist <= 2 && (!best || dist < best._dist)) {
+      best = { ...p, _dist: dist, match_reason: 'levenshtein' };
+      continue;
+    }
+    if (nN.length >= 3 && (eN.includes(nN) || nN.includes(eN))) {
+      if (!best || best.match_reason !== 'levenshtein') {
+        best = { ...p, match_reason: 'substring' };
+      }
+      continue;
+    }
+    if (nTokens.size) {
+      const eTokens = _tokens(p.name);
+      const shared = eTokens.find(t => nTokens.has(t));
+      if (shared && (!best || (best.match_reason !== 'levenshtein' && best.match_reason !== 'substring'))) {
+        best = { ...p, match_reason: 'shared_token:' + shared };
+      }
+    }
+  }
+  if (best) { delete best._dist; }
+  return best;
+}
+
 // ━━━ PIN → Scope (locked spec) ━━━
 const USERS = {
   '0305': { name: 'Nihaf',    brands: ['HE','NCH','HQ'], cats: 'all', role: 'admin' },
@@ -572,10 +635,16 @@ export async function onRequest(context) {
     }
 
     // ── CREATE EXPENSE PRODUCT (inline-add from cats 2-13) ─
+    // Hard rules (Apr 2026 fix-A "expense data quality"):
+    //   1) uom_id REQUIRED — without it, kg/L/Units distinction is permanently lost.
+    //   2) Fuzzy-dup check vs existing products in same Odoo category.
+    //      Returns 409 with existing match if Levenshtein ≤ 2 / substring / shared
+    //      ≥4-char token. Caller can pass {force:true} to override (e.g. "Bun" vs
+    //      "Burger Bun" if they really are different items).
     if (action === 'create-expense-product' && request.method === 'POST') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
       const body = await request.json();
-      const { pin, cat_id, name, uom_id } = body;
+      const { pin, cat_id, name, uom_id, force } = body;
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
       const catIdInt = parseInt(cat_id, 10);
@@ -586,6 +655,16 @@ export async function onRequest(context) {
       if (!cat) return json({ success: false, error: 'Unknown category' }, 400);
       if (cat.backend !== 'hr.expense') return json({ success: false, error: 'Only expense categories support inline product creation' }, 400);
       if (!name?.trim()) return json({ success: false, error: 'Name required' }, 400);
+
+      // ── HARD RULE 1: UOM required ────────────────────────
+      const uomIdInt = parseInt(uom_id, 10);
+      if (!uomIdInt || uomIdInt <= 0) {
+        return json({
+          success: false,
+          error: 'uom_required',
+          message: 'Unit of measure is required. Pick kg / L / Units / packets etc. so the product is consistent across kitchens.',
+        }, 400);
+      }
 
       // Resolve category:
       //   Custom cat → use stored odoo_category_id.
@@ -608,6 +687,29 @@ export async function onRequest(context) {
         categId = parentList[0].id;
       }
 
+      // ── HARD RULE 2: fuzzy-dup check (skipped if force=true) ─
+      if (!force) {
+        const existingInCat = await odoo(apiKey, 'product.product', 'search_read',
+          [[['categ_id', '=', categId], ['active', '=', true]]],
+          { fields: ['id', 'name', 'default_code', 'uom_id'], limit: 500 });
+        const candidate = findFuzzyDup(name.trim(), existingInCat);
+        if (candidate) {
+          return json({
+            success: false,
+            error: 'fuzzy_duplicate',
+            message: `Looks like "${candidate.name}" already exists in this category. Pick the existing one, or pass force=true to create a new product anyway.`,
+            existing: {
+              id: candidate.id,
+              name: candidate.name,
+              default_code: candidate.default_code || null,
+              uom_id: Array.isArray(candidate.uom_id) ? candidate.uom_id[0] : candidate.uom_id,
+              uom_name: Array.isArray(candidate.uom_id) ? candidate.uom_id[1] : null,
+              match_reason: candidate.match_reason,
+            },
+          }, 409);
+        }
+      }
+
       // Raw materials are consumable goods, not services. Everything else is a service.
       const prodType = catIdInt === 1 ? 'consu' : 'service';
       const prodId = await odoo(apiKey, 'product.product', 'create', [{
@@ -617,7 +719,7 @@ export async function onRequest(context) {
         can_be_expensed: true,
         purchase_ok: true,
         sale_ok: false,
-        uom_id: uom_id ? parseInt(uom_id, 10) : undefined,
+        uom_id: uomIdInt,
       }]);
 
       return json({ success: true, product: { id: prodId, name: name.trim() } });
