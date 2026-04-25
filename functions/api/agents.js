@@ -41,8 +41,8 @@ const USERS = {
 const AGENTS = {
   'finance-watcher': {
     domain:      'finance',
-    description: 'Bills overdue, money orphans, duplicate-bill alerts, stale POs. Pre-BOM.',
-    rules:       ['overdue_bill', 'orphan', 'duplicate', 'stale_po'],
+    description: 'Money flow violations per Nihaf logical layer. 11 rules: overdue bills, orphans, PO-paid-in-cash bypass, stale POs, RM without PO, PO received no bill, PO billed twice, expense without product, stale bill no due-date, product without UOM, variant-vendor schema gap. Pre-BOM.',
+    rules:       ['overdue_bill', 'orphan', 'duplicate', 'po_paid_in_cash_bypass', 'stale_po', 'rm_no_po', 'po_received_no_bill', 'po_billed_twice', 'expense_no_product', 'bill_stale_no_due', 'product_no_uom', 'schema_variant_gap'],
     runner:      runFinanceWatcher,
   },
   // sales-watcher, ops-watcher, growth-watcher, people-watcher land later
@@ -102,60 +102,195 @@ async function runFinanceWatcher(env, run, actor, originBase) {
   const findings = [];
   const sev = (n) => n > 30 ? 'critical' : n > 7 ? 'high' : n > 0 ? 'medium' : 'low';
 
-  // ─── Rule 1: Overdue bills (objective: due_date < today, not paid) ───
-  for (const b of (cockpit.pending_bills || [])) {
-    const due = b.invoice_date_due || b.due_date || null;
+  // ─── Rule 1 (D1): Overdue bills (objective: due_date < today, not paid) ───
+  for (const b of (cockpit.bills_pending || [])) {
+    const due = b.due_date || b.invoice_date_due || null;
     const days = daysBetween(due);
     if (days === null || days <= 0) continue;
     findings.push({
       severity:  sev(days),
       category:  'overdue_bill',
-      title:     `Overdue ${days}d · ${b.partner_name || b.vendor_name || 'unknown vendor'} · ₹${Math.round(b.amount_total || b.amount_residual || 0).toLocaleString('en-IN')}`,
-      detail:    `Bill ${b.name || b.ref || '(no ref)'} · due ${due} · state ${b.payment_state || b.state || '-'} · brand ${b.brand || 'unknown'}`,
+      title:     `Overdue ${days}d · ${b.vendor_name || 'unknown vendor'} · ₹${Math.round(b.amount_residual || b.amount || 0).toLocaleString('en-IN')}`,
+      detail:    `Bill ${b.odoo_name || b.bill_ref || '(no ref)'} · due ${due} · state ${b.state} · brand ${b.brand || 'unknown'}`,
       evidence:  b,
-      fingerprint: `overdue_bill:${b.id || b.move_id || b.name || `${b.partner_name}-${due}-${b.amount_total}`}`,
+      fingerprint: `overdue_bill:${b.odoo_id || b.odoo_name || `${b.vendor_name}-${due}-${b.amount}`}`,
     });
   }
 
-  // ─── Rule 2: Orphans (outlet has it, central D1 doesn't) ───
+  // ─── Rule 2 (E1+E2): Orphans (outlet has it, central D1 doesn't) ───
   for (const o of (cockpit.orphans || [])) {
     findings.push({
-      severity:  'high',
+      severity:  o.feed === 'he-outlet' ? 'high' : 'medium',  // HE explicit > NCH fuzzy
       category:  'orphan',
-      title:     `Orphan: ${o.vendor_name || o.partner_name || '(unknown)'} · ₹${Math.round(o.amount || 0).toLocaleString('en-IN')} · ${o.brand || 'unknown brand'}`,
-      detail:    `Recorded in outlet D1 only. Date ${o.date || o.expense_date || '-'} · category ${o.category || '-'} · note ${o.note || '-'}`,
+      title:     `Orphan ${o.brand} · ₹${Math.round(o.amount || 0).toLocaleString('en-IN')} · ${o.source || o.feed}`,
+      detail:    `Outlet recorded but no central twin. Date ${o.ist_date || (o.recorded_at || '').slice(0, 10)} · cashier ${o.recorded_by_name || '-'} · "${o.description || o.item || ''}"`,
       evidence:  o,
-      fingerprint: `orphan:${o.id || `${o.vendor_name}-${o.date}-${o.amount}`}`,
+      fingerprint: `orphan:${o.feed}:${o.source_id}`,
     });
   }
 
-  // ─── Rule 3: High-confidence duplicate bill alerts ───
+  // ─── Rule 3 (A2): High-confidence duplicate alerts (same-feed + cross-kind) ───
+  // Cross-kind = "Zoya raised PO + cashier paid cash for same delivery without settle-PO"
   for (const d of (cockpit.dup_alerts || [])) {
     if (d.confidence !== 'high') continue;
+    const a = d.a || {};
+    const b = d.b || {};
+    const isCrossKind = d.kind === 'cross-kind';
     findings.push({
       severity:  'critical',
-      category:  'duplicate',
-      title:     `Duplicate suspected · ${d.vendor_name || '(unknown)'} · ₹${Math.round(d.amount || 0).toLocaleString('en-IN')}`,
-      detail:    `Two records within ${d.days_apart || '?'} days · sources ${d.left_source || '?'} ↔ ${d.right_source || '?'}`,
+      category:  isCrossKind ? 'po_paid_in_cash_bypass' : 'duplicate',
+      title:     isCrossKind
+        ? `PO paid in cash bypass · ${a.vendor_name || '?'} · ₹${Math.round(a.amount || 0).toLocaleString('en-IN')}`
+        : `Duplicate · ${a.vendor_name || a.source} · ₹${Math.round(a.amount || 0).toLocaleString('en-IN')}`,
+      detail:    isCrossKind
+        ? `PO ${a.odoo_name || a.id} (${a.brand}) ↔ cash expense (${b.feed}) within ${d.date_gap_days}d · vendor match ${d.vendor_match_pct}% · amt diff ${d.amount_diff_pct}%. Cashier should have used Pay-PO action.`
+        : `Two ${a.brand} rows · ${a.feed} ↔ ${b.feed} · "${a.item || a.description}" ↔ "${b.item || b.description}"`,
       evidence:  d,
-      fingerprint: `duplicate:${[d.left_id, d.right_id].sort().join('-')}`,
+      fingerprint: `dup:${d.kind}:${[a.id, b.id].sort().join('-')}`,
     });
   }
 
-  // ─── Rule 4: Stale POs (open + ordered > 7 days ago, no receive) ───
-  for (const po of (cockpit.open_pos || [])) {
-    const ordered = po.date_order || po.create_date || null;
+  // ─── Rule 4 (B2): Stale POs (open + ordered > 7 days ago, no receipt) ───
+  for (const po of (cockpit.pos_open || [])) {
+    if (po.state !== 'open-po') continue; // skip 'received' (handled by Rule 6)
+    const ordered = po.recorded_at || po.date_order || null;
     const days = daysBetween((ordered || '').slice(0, 10));
     if (days === null || days <= 7) continue;
     findings.push({
       severity:  sev(days),
       category:  'stale_po',
-      title:     `Stale PO ${days}d · ${po.partner_name || po.vendor_name || '(unknown)'} · ₹${Math.round(po.amount_total || 0).toLocaleString('en-IN')}`,
-      detail:    `PO ${po.name || '(no ref)'} · ordered ${(ordered || '').slice(0, 10)} · state ${po.state || '-'}`,
+      title:     `Stale PO ${days}d · ${po.vendor_name || '(unknown)'} · ₹${Math.round(po.amount || 0).toLocaleString('en-IN')}`,
+      detail:    `PO ${po.odoo_name || '(no ref)'} · ordered ${(ordered || '').slice(0, 10)} · ${po.brand} · ${po.attachment_count || 0} attachment(s)`,
       evidence:  po,
-      fingerprint: `stale_po:${po.id || po.name}`,
+      fingerprint: `stale_po:${po.odoo_id || po.odoo_name}`,
     });
   }
+
+  // ─── Rule 5 (B1): RM bought at outlet without PO ───
+  // Per Nihaf logic: ideally all RM purchases route through /ops/purchase.
+  // Outlet direct cash RM expense > ₹500 = "should have been a PO first".
+  // Below threshold = OK (small daily veg/milk runs).
+  const RM_THRESHOLD = 500;
+  for (const e of (cockpit.paid || [])) {
+    if (e.kind !== 'Expense') continue;
+    if (e.feed === 'central') continue;  // central went through /api/spend, fine
+    const cat = String(e.category_parent || e.category || e.category_code || '').toLowerCase();
+    const isRM = cat.includes('raw material') || cat === 'rm' || cat.includes('01');
+    if (!isRM) continue;
+    if ((e.amount || 0) < RM_THRESHOLD) continue;
+    findings.push({
+      severity:  e.amount > 5000 ? 'high' : 'medium',
+      category:  'rm_no_po',
+      title:     `RM at outlet, no PO · ${e.vendor_name || e.item || '(unspecified)'} · ₹${Math.round(e.amount).toLocaleString('en-IN')}`,
+      detail:    `${e.brand} · ${e.source || e.feed} · ${e.ist_date} · "${e.description || e.item || '-'}". Per HN policy, RM > ₹${RM_THRESHOLD} should be raised in /ops/purchase first.`,
+      evidence:  e,
+      fingerprint: `rm_no_po:${e.feed}:${e.source_id || e.central_id}`,
+    });
+  }
+
+  // ─── Rule 6 (B3): PO received but no bill landed yet ───
+  // pos_open includes state='received' rows (po_lifecycle overlay marked but
+  // no Odoo done) — we want PO that received >3d ago and has no matching bill.
+  const billsByOrigin = new Map();
+  for (const b of [...(cockpit.bills_paid || []), ...(cockpit.bills_pending || [])]) {
+    if (!b.invoice_origin) continue;
+    if (!billsByOrigin.has(b.invoice_origin)) billsByOrigin.set(b.invoice_origin, []);
+    billsByOrigin.get(b.invoice_origin).push(b);
+  }
+  for (const po of (cockpit.pos_open || [])) {
+    if (!po.received_at) continue;
+    if (billsByOrigin.has(po.odoo_name)) continue;
+    const days = daysBetween((po.received_at || '').slice(0, 10));
+    if (days === null || days < 3) continue;  // give vendor 3 days to send bill
+    findings.push({
+      severity:  days > 14 ? 'high' : 'medium',
+      category:  'po_received_no_bill',
+      title:     `Received ${days}d, no bill · ${po.vendor_name || '?'} · ₹${Math.round(po.amount || 0).toLocaleString('en-IN')}`,
+      detail:    `PO ${po.odoo_name} received ${(po.received_at || '').slice(0,10)} by ${po.received_by || 'unknown'} · vendor hasn't sent bill OR Naveen needs to attach.`,
+      evidence:  po,
+      fingerprint: `po_received_no_bill:${po.odoo_id || po.odoo_name}`,
+    });
+  }
+
+  // ─── Rule 7 (D3): Same PO billed twice ───
+  for (const [origin, bills] of billsByOrigin) {
+    if (bills.length < 2) continue;
+    const totalAmount = bills.reduce((s, b) => s + (b.amount || 0), 0);
+    findings.push({
+      severity:  'critical',
+      category:  'po_billed_twice',
+      title:     `Same PO billed ${bills.length}× · ${bills[0].vendor_name || '?'} · ₹${Math.round(totalAmount).toLocaleString('en-IN')} total`,
+      detail:    `PO ${origin} has ${bills.length} bills: ${bills.map(b => `${b.odoo_name || b.bill_ref}(₹${Math.round(b.amount)})`).join(', ')}`,
+      evidence:  { invoice_origin: origin, bills },
+      fingerprint: `po_billed_twice:${origin}`,
+    });
+  }
+
+  // ─── Rule 8 (C1): Central expense missing product link ───
+  for (const e of (cockpit.paid || [])) {
+    if (e.feed !== 'central') continue;
+    if (e.item || e.product_id) continue;  // has product
+    if (e.kind !== 'Expense') continue;
+    findings.push({
+      severity:  'medium',
+      category:  'expense_no_product',
+      title:     `Expense, no product · ${e.vendor_name || e.source || '?'} · ₹${Math.round(e.amount).toLocaleString('en-IN')}`,
+      detail:    `${e.brand} · ${e.category || '-'} · ${e.ist_date} · description: "${e.description || '(empty)'}". Missing product breaks BOM mapping.`,
+      evidence:  e,
+      fingerprint: `expense_no_product:${e.central_id}`,
+    });
+  }
+
+  // ─── Rule 9 (D2): Stale unpaid bill with no due date ───
+  for (const b of (cockpit.bills_pending || [])) {
+    if (b.due_date) continue;  // covered by Rule 1
+    const recordedDate = (b.recorded_at || b.ist_date || '').slice(0, 10);
+    const age = daysBetween(recordedDate);
+    if (age === null || age < 30) continue;
+    findings.push({
+      severity:  age > 90 ? 'high' : 'medium',
+      category:  'bill_stale_no_due',
+      title:     `Stale bill ${age}d, no due date · ${b.vendor_name || '?'} · ₹${Math.round(b.amount_residual || b.amount || 0).toLocaleString('en-IN')}`,
+      detail:    `Bill ${b.odoo_name} · ${b.brand} · payment_state ${b.state} · needs due_date OR pay-bill.`,
+      evidence:  b,
+      fingerprint: `bill_stale_no_due:${b.odoo_id || b.odoo_name}`,
+    });
+  }
+
+  // ─── Rule 10 (F1): Product missing UOM (D1 direct query) ───
+  try {
+    const noUom = await env.DB.prepare(
+      `SELECT hn_code, name, brand, category FROM rm_products
+          WHERE is_active = 1 AND (uom IS NULL OR uom = '') LIMIT 50`
+    ).all();
+    for (const p of (noUom.results || [])) {
+      findings.push({
+        severity:  'medium',
+        category:  'product_no_uom',
+        title:     `Product missing UOM · ${p.name} (${p.hn_code})`,
+        detail:    `${p.brand} · ${p.category} · UOM required for BOM mapping + agent leakage detection.`,
+        evidence:  p,
+        fingerprint: `product_no_uom:${p.hn_code}`,
+      });
+    }
+  } catch (_) { /* table may not exist; skip silently */ }
+
+  // ─── Rule 11 (F3): Variant-vendor schema gap (structural, surfaces once) ───
+  try {
+    const tableCheck = await env.DB.prepare(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name IN ('rm_variant_vendors', 'rm_vendor_variants') LIMIT 1`
+    ).first();
+    if (!tableCheck) {
+      findings.push({
+        severity:  'low',
+        category:  'schema_variant_gap',
+        title:     `Schema gap: vendors map to product TEMPLATE, not VARIANT`,
+        detail:    `rm_vendor_products joins on product_code (template) — but per spec, "Amul Butter" vs "White Butter" are variants of one product (Butter), each with its own independent vendor list (10 vendors per variant). Without variant-level vendor mapping, agent can't surface "cheaper vendor for THIS variant" signals.`,
+        evidence:  { current: 'rm_vendor_products(product_code, vendor_key)', needed: 'rm_variant_vendors(variant_id, vendor_key) OR add variant_id column' },
+        fingerprint: `schema_variant_gap:singleton`,
+      });
+    }
+  } catch (_) {}
 
   // ─── Persist (upsert by fingerprint to keep reviewed verdicts on re-runs) ───
   let inserted = 0, updated = 0;
