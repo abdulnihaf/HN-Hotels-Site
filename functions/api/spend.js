@@ -61,8 +61,23 @@ function _levenshtein(a, b) {
   }
   return prev[b.length];
 }
+// Common cooking-modifier tokens that are NOT useful for dedup signal —
+// "Black Cardamom" vs "Green Cardamom" share 'cardamom' but are distinct items.
+const _STOPLIST_TOKENS = new Set([
+  'powder','leaves','seeds','masala','flour','salt','oil','ghee','sauce','spice',
+  'spices','dry','dried','fresh','paste','raw','whole','ground','chilli','chili',
+  'chilly','sugar','milk','water','curd','cream','butter','cheese','garlic','ginger',
+  'mint','green','black','red','white','yellow','brown','jeera','cumin','coriander',
+  'cardamom','clove','cloves','pepper','peppers','seed','leaf','rice','dal',
+  'flour','cashew','almond','coconut','curry','meat','chicken','mutton','fish',
+  'sambar','rasam','tea','coffee','flour','grain','grains','desi','asli',
+  'whole','half','quarter','pieces','piece','pkt','packet','litre','liter','kg',
+  'gram','units','unit',
+]);
 function _tokens(s) {
-  return _normName(s).split(' ').filter(t => t.length >= 4);
+  return _normName(s).split(' ')
+    .filter(t => t.length >= 5)            // raise floor: 4→5
+    .filter(t => !_STOPLIST_TOKENS.has(t)); // drop noise tokens
 }
 // Returns the closest existing product object that's a likely duplicate, or null.
 // Match reasons: 'levenshtein', 'substring', 'shared_token'.
@@ -81,7 +96,11 @@ function findFuzzyDup(newName, existing) {
       best = { ...p, _dist: dist, match_reason: 'levenshtein' };
       continue;
     }
-    if (nN.length >= 3 && (eN.includes(nN) || nN.includes(eN))) {
+    // Substring: require shorter side ≥ 6 chars AND make up ≥60% of longer side.
+    // Stops "Salt" matching "Lemon Salt" / "Bun" matching "Bun Maska" etc.
+    const shorter = nN.length <= eN.length ? nN : eN;
+    const longer  = shorter === nN ? eN : nN;
+    if (shorter.length >= 6 && (longer.includes(shorter)) && (shorter.length / longer.length) >= 0.6) {
       if (!best || best.match_reason !== 'levenshtein') {
         best = { ...p, match_reason: 'substring' };
       }
