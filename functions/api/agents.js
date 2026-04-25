@@ -462,29 +462,25 @@ const RECTIFY = {
     { id: 'open_purchase_view', label: 'Open in /ops/purchase/view →', kind: 'link', url: '/ops/purchase/view/' },
   ],
   po_paid_in_cash_bypass: [
-    { id: 'mark_paired', label: 'Mark as paired (both real)', kind: 'inline_api',
+    // SAFE: just records the resolution in dup_resolutions table.
+    // Does NOT fix the underlying Odoo state — PO stays open, outlet expense stays.
+    // P&L may still double-count until proper settle-po-with-outlet-payment is built.
+    { id: 'mark_paired_acknowledge', label: 'Acknowledge (record only — no Odoo fix)', kind: 'inline_api',
       method: 'POST', api: '/api/money?action=resolve-dup',
       build_body: (ev, pin) => ({
         pin,
         po_id: ev.a?.id, po_name: ev.a?.odoo_name,
         outlet_feed: ev.b?.feed, outlet_expense_id: ev.b?.id,
         action: 'mark-as-paired',
-        notes: 'Resolved via agent rectify',
+        notes: 'Acknowledged via agent — needs settle-po-with-outlet-payment for proper Odoo fix',
       }),
       auto_close: true,
     },
-    { id: 'cancel_po_keep_outlet', label: 'PO cancelled, paid at outlet', kind: 'inline_api',
-      method: 'POST', api: '/api/money?action=resolve-dup',
-      build_body: (ev, pin) => ({
-        pin,
-        po_id: ev.a?.id, po_name: ev.a?.odoo_name,
-        outlet_feed: ev.b?.feed, outlet_expense_id: ev.b?.id,
-        action: 'po-cancelled-paid-via-outlet',
-        notes: 'Resolved via agent rectify',
-      }),
-      auto_close: true,
-    },
+    // Removed: 'PO cancelled, paid at outlet' (button_cancel destroys T1 audit
+    // per Nihaf logic). Will be replaced by 'settle-po-with-outlet-payment'
+    // action that creates the bill and links payment without losing the PO.
     { id: 'open_money', label: 'Open Money Cockpit (Dups tab) →', kind: 'link', url: '/ops/money/' },
+    { id: 'open_purchase_view', label: 'Inspect PO in /ops/purchase/view →', kind: 'link', url: '/ops/purchase/view/' },
   ],
   duplicate: [
     { id: 'open_money', label: 'Open Money Cockpit (Dups tab) →', kind: 'link', url: '/ops/money/' },

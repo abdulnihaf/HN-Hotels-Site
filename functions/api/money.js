@@ -339,7 +339,7 @@ async function cockpit(url, env) {
   const dupResolutions = await fetchAllDupResolutions(env.DB);
   const allDupAlerts = [
     ...detectDuplicates(paid),
-    ...detectCrossKindDuplicates(posList, paid),
+    ...detectCrossKindDuplicates(posList, paid, billsList),
   ];
   const dupAlerts = allDupAlerts.filter((d) => {
     if (d.kind !== 'cross-kind') return true;
@@ -543,10 +543,19 @@ function detectDuplicates(paid) {
 //   • Amount within ±5% (vendor often rounds — bills don't always match the PO)
 //   • PO date within [paid - 1d, paid + 7d] (PO usually first; vendor delivers
 //     and is paid within the week)
-function detectCrossKindDuplicates(pos, paid) {
+function detectCrossKindDuplicates(pos, paid, bills) {
+  // Skip POs that already have a bill linked via invoice_origin — those are
+  // properly settled (or in the process). Per Nihaf's PO-lifecycle spec,
+  // once a bill exists with invoice_origin = PO.name, T1+T2 are captured
+  // in the bill itself, no longer a "bypass" candidate.
+  const billedPOs = new Set();
+  for (const b of (bills || [])) {
+    if (b.invoice_origin) billedPOs.add(b.invoice_origin);
+  }
   const alerts = [];
   for (const p of pos) {
     if (!p.vendor_name || !p.amount) continue;
+    if (billedPOs.has(p.odoo_name)) continue; // already settled — not a bypass
     const vendorTokens = new Set(normStr(p.vendor_name).split(' ').filter(t => t.length >= 3));
     if (!vendorTokens.size) continue;
     for (const e of paid) {
