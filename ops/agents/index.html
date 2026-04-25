@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Agents">
+<title>HN Agents — Workbench</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  .wrap { max-width: 1500px; margin: 0 auto; padding: 14px 16px 80px; }
+  .hdr { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; }
+  .hdr h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+  .hdr .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .hdr-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .hdr-right button { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 7px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
+  .hdr-right button.primary { background: var(--brand); color: #000; border-color: var(--brand); }
+  .hdr-right button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* PIN gate */
+  .pin-screen { max-width: 360px; margin: 60px auto; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); text-align: center; }
+  .pin-screen h2 { margin: 0 0 6px; font-size: 18px; }
+  .pin-screen p { color: var(--text-dim); font-size: 13px; margin: 0 0 18px; }
+  .pin-screen input { width: 100%; padding: 12px 14px; font-size: 18px; text-align: center; letter-spacing: 0.4em; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); margin-bottom: 12px; font-family: inherit; }
+  .pin-screen button { width: 100%; padding: 11px; background: var(--brand); color: #000; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 700; cursor: pointer; }
+  .pin-screen .err { color: var(--danger); font-size: 12px; margin-top: 10px; min-height: 16px; }
+
+  /* Agent picker */
+  .agent-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .agent-chip { padding: 8px 14px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim); font-size: 13px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all .12s ease; }
+  .agent-chip:hover { color: var(--text); }
+  .agent-chip.active { background: var(--brand-soft); color: var(--brand-hover); border-color: var(--brand-ring); }
+  .agent-chip .badge { display: inline-block; margin-left: 8px; padding: 1px 7px; background: rgba(239,68,68,0.18); color: #f87171; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .agent-chip .meta { display: block; font-size: 11px; color: var(--text-mute); margin-top: 2px; font-weight: 400; }
+
+  /* KPI strip */
+  .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+  .kpi .v { font-size: 20px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 4px; font-weight: 600; }
+  .kpi.crit .v { color: #f87171; }
+  .kpi.high .v { color: #fb923c; }
+  .kpi.med  .v { color: #fbbf24; }
+  .kpi.low  .v { color: #c4b5fd; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 2px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .tab { background: transparent; border: none; color: var(--text-dim); padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; font-family: inherit; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text); border-bottom-color: var(--brand); }
+  .tab .count { display: inline-block; margin-left: 6px; padding: 1px 7px; background: var(--surface-2); border-radius: 999px; font-size: 11px; color: var(--text-dim); }
+
+  /* Finding card */
+  .finding { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 8px; transition: border-color .1s ease; }
+  .finding.crit { border-left: 3px solid var(--danger); }
+  .finding.high { border-left: 3px solid #fb923c; }
+  .finding.med  { border-left: 3px solid var(--warn); }
+  .finding.low  { border-left: 3px solid var(--text-dim); }
+
+  .f-row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .f-title { font-weight: 700; font-size: 14px; flex: 1; min-width: 0; line-height: 1.3; }
+  .f-tags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .f-tag { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+  .f-tag.sev-critical { background: rgba(239,68,68,0.20); color: #f87171; }
+  .f-tag.sev-high     { background: rgba(251,146,60,0.20); color: #fb923c; }
+  .f-tag.sev-medium   { background: rgba(245,158,11,0.20); color: #fbbf24; }
+  .f-tag.sev-low      { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+  .f-tag.cat { background: rgba(124,86,247,0.15); color: #c4b5fd; }
+  .f-tag.verdict-act       { background: rgba(16,185,129,0.18); color: #34d399; }
+  .f-tag.verdict-ignore    { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+  .f-tag.verdict-wrong     { background: rgba(239,68,68,0.18);  color: #f87171; }
+  .f-tag.verdict-more_info { background: rgba(124,86,247,0.18); color: #c4b5fd; }
+
+  .f-detail { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.45; }
+  .f-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .f-actions button { padding: 6px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .f-actions button:hover { border-color: var(--text-dim); }
+  .f-actions button.primary { background: var(--brand); color: #000; border-color: var(--brand); }
+
+  .f-evidence { margin-top: 8px; padding: 10px; background: var(--surface-2); border-radius: 8px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-dim); white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto; display: none; }
+  .f-evidence.show { display: block; }
+
+  .f-directive { margin-top: 10px; padding: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; display: none; }
+  .f-directive.show { display: block; }
+  .f-directive textarea { width: 100%; min-height: 70px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-family: inherit; font-size: 13px; resize: vertical; }
+  .f-directive .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .f-directive select, .f-directive input { padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-family: inherit; font-size: 12px; }
+  .f-directive .hint { font-size: 10px; color: var(--text-mute); margin-top: 6px; }
+
+  .f-existing-directive { margin-top: 10px; padding: 10px; background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.2); border-radius: 8px; font-size: 12px; }
+  .f-existing-directive .label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; margin-bottom: 4px; }
+  .f-existing-directive .body { color: var(--text); white-space: pre-wrap; }
+  .f-existing-directive .meta { font-size: 11px; color: var(--text-mute); margin-top: 4px; }
+
+  .empty { padding: 40px 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
+  .empty.good { color: var(--success); }
+  .loading { padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--brand); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 18px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 13px; z-index: 100; max-width: 90vw; }
+  .toast.ok  { border-color: var(--success); }
+  .toast.err { border-color: var(--danger); color: #f87171; }
+
+  /* Foundation note */
+  .foundation-note { font-size: 11px; color: var(--text-mute); margin-bottom: 14px; padding: 10px 14px; background: rgba(124,86,247,0.06); border: 1px solid rgba(124,86,247,0.2); border-radius: 8px; }
+  .foundation-note b { color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<!-- ── PIN GATE ─────────────────────────────────────────────── -->
+<div id="pin-screen" class="pin-screen">
+  <h2>HN Agent Workbench</h2>
+  <p>Enter your admin / CFO / GM PIN</p>
+  <input id="pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off">
+  <button id="pin-submit">Unlock</button>
+  <div id="pin-err" class="err"></div>
+</div>
+
+<!-- ── MAIN ─────────────────────────────────────────────────── -->
+<main id="app" class="wrap" style="display:none">
+  <div class="hdr">
+    <div>
+      <h1>Agent Workbench</h1>
+      <div class="sub">Phase 1 · deterministic detection · you write the directive</div>
+    </div>
+    <div class="hdr-right">
+      <span id="last-run" style="font-size:11px; color:var(--text-mute);"></span>
+      <button id="btn-run" class="primary">Run now</button>
+    </div>
+  </div>
+
+  <div class="foundation-note">
+    <b>How this works:</b> Each agent runs a bag of deterministic rules against substrate APIs. No LLM, no persona-guessing. The agent surfaces objective findings; you write the directive in your own words. Your verdicts + directives become the training set for Phase 2 (auto-drafted directives in your tone).
+  </div>
+
+  <!-- Agent picker (Phase 1: just finance-watcher) -->
+  <div class="agent-row" id="agent-row"></div>
+
+  <!-- KPI strip -->
+  <div class="kpi-strip">
+    <div class="kpi crit"><div class="v" id="kpi-critical">—</div><div class="l">Critical</div></div>
+    <div class="kpi high"><div class="v" id="kpi-high">—</div><div class="l">High</div></div>
+    <div class="kpi med"><div class="v" id="kpi-medium">—</div><div class="l">Medium</div></div>
+    <div class="kpi low"><div class="v" id="kpi-low">—</div><div class="l">Low</div></div>
+    <div class="kpi"><div class="v" id="kpi-pending">—</div><div class="l">No verdict</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-status="open">Open <span class="count" id="cnt-open">0</span></button>
+    <button class="tab" data-status="in_progress">In Progress <span class="count" id="cnt-prog">0</span></button>
+    <button class="tab" data-status="resolved">Resolved <span class="count" id="cnt-res">0</span></button>
+  </div>
+
+  <div id="findings"></div>
+  <div id="empty" class="empty" style="display:none">No findings.</div>
+  <div id="loading" class="loading"><span class="spinner"></span>Loading…</div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api/agents';
+let PIN = sessionStorage.getItem('hn_agents_pin') || '';
+let STATE = { agent: 'finance-watcher', status: 'open', findings: [], agents: [] };
+
+// ── Toast ──────────────────────────────────────────────────────
+function toast(msg, kind = 'ok') {
+  const el = document.getElementById('toast');
+  el.className = 'toast ' + kind;
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 2800);
+}
+
+// ── PIN gate ───────────────────────────────────────────────────
+async function tryAuth(pin) {
+  const r = await fetch(`${API}?action=list&pin=${encodeURIComponent(pin)}`);
+  return r.status !== 401;
+}
+document.getElementById('pin-submit').onclick = async () => {
+  const pin = document.getElementById('pin-input').value.trim();
+  if (!pin) return;
+  const ok = await tryAuth(pin);
+  if (!ok) { document.getElementById('pin-err').textContent = 'Invalid PIN'; return; }
+  PIN = pin;
+  sessionStorage.setItem('hn_agents_pin', pin);
+  document.getElementById('pin-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  bootstrap();
+};
+document.getElementById('pin-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('pin-submit').click();
+});
+
+// ── Bootstrap ──────────────────────────────────────────────────
+async function bootstrap() {
+  await loadAgents();
+  await loadFindings();
+}
+
+async function loadAgents() {
+  const r = await fetch(`${API}?action=list&pin=${encodeURIComponent(PIN)}`).then(r => r.json());
+  if (!r.ok) return;
+  STATE.agents = r.agents;
+  const row = document.getElementById('agent-row');
+  row.innerHTML = '';
+  for (const a of r.agents) {
+    const chip = document.createElement('button');
+    chip.className = 'agent-chip' + (a.name === STATE.agent ? ' active' : '');
+    chip.dataset.agent = a.name;
+    chip.innerHTML = `${a.name}${a.open_findings ? `<span class="badge">${a.open_findings}</span>` : ''}<span class="meta">${a.description}</span>`;
+    chip.onclick = () => { STATE.agent = a.name; loadAgents(); loadFindings(); };
+    row.appendChild(chip);
+  }
+  // Last run status
+  const a = r.agents.find(x => x.name === STATE.agent);
+  const lr = a && a.last_run;
+  document.getElementById('last-run').textContent = lr
+    ? `Last run · ${new Date(lr.started_at * 1000).toLocaleString()} · ${lr.findings_count} findings · ${lr.status}`
+    : 'No runs yet';
+}
+
+// ── Tabs ───────────────────────────────────────────────────────
+document.getElementById('tabs').addEventListener('click', e => {
+  if (!e.target.matches('.tab')) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  e.target.classList.add('active');
+  STATE.status = e.target.dataset.status;
+  renderFindings();
+});
+
+// ── Load findings ──────────────────────────────────────────────
+async function loadFindings() {
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('empty').style.display = 'none';
+  try {
+    const r = await fetch(`${API}?action=findings&agent=${encodeURIComponent(STATE.agent)}&pin=${encodeURIComponent(PIN)}`).then(r => r.json());
+    if (!r.ok) throw new Error(r.error || 'load_failed');
+    STATE.findings = r.findings;
+    renderKpis();
+    renderFindings();
+  } catch (e) {
+    toast('Load failed: ' + e.message, 'err');
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+  }
+}
+
+function renderKpis() {
+  const f = STATE.findings.filter(x => x.closure_status === 'open');
+  document.getElementById('kpi-critical').textContent = f.filter(x => x.severity === 'critical').length;
+  document.getElementById('kpi-high').textContent     = f.filter(x => x.severity === 'high').length;
+  document.getElementById('kpi-medium').textContent   = f.filter(x => x.severity === 'medium').length;
+  document.getElementById('kpi-low').textContent      = f.filter(x => x.severity === 'low').length;
+  document.getElementById('kpi-pending').textContent  = f.filter(x => !x.verdict).length;
+
+  document.getElementById('cnt-open').textContent = STATE.findings.filter(x => x.closure_status === 'open').length;
+  document.getElementById('cnt-prog').textContent = STATE.findings.filter(x => x.closure_status === 'in_progress').length;
+  document.getElementById('cnt-res').textContent  = STATE.findings.filter(x => x.closure_status === 'resolved' || x.closure_status === 'dismissed').length;
+}
+
+function renderFindings() {
+  const list = STATE.findings.filter(x => {
+    if (STATE.status === 'open')        return x.closure_status === 'open';
+    if (STATE.status === 'in_progress') return x.closure_status === 'in_progress';
+    return x.closure_status === 'resolved' || x.closure_status === 'dismissed';
+  });
+  const el = document.getElementById('findings');
+  el.innerHTML = '';
+  if (!list.length) { document.getElementById('empty').style.display = 'block'; return; }
+  document.getElementById('empty').style.display = 'none';
+  for (const f of list) el.appendChild(renderCard(f));
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function renderCard(f) {
+  const card = document.createElement('div');
+  card.className = `finding ${f.severity === 'critical' ? 'crit' : f.severity}`;
+  const verdictTag = f.verdict ? `<span class="f-tag verdict-${f.verdict}">${f.verdict}</span>` : '';
+  let evidencePretty = '';
+  try { evidencePretty = JSON.stringify(JSON.parse(f.evidence_json || '{}'), null, 2); }
+  catch { evidencePretty = f.evidence_json || ''; }
+
+  let directiveBlock = '';
+  if (f.directive) {
+    const sentAt = f.directive_at ? new Date(f.directive_at * 1000).toLocaleString() : '—';
+    directiveBlock = `
+      <div class="f-existing-directive">
+        <div class="label">Your directive · to ${escapeHtml(f.directive_to || 'basheer')} via ${escapeHtml(f.directive_channel || '—')} · ${escapeHtml(sentAt)}</div>
+        <div class="body">${escapeHtml(f.directive)}</div>
+      </div>`;
+  }
+
+  card.innerHTML = `
+    <div class="f-row1">
+      <div class="f-title">${escapeHtml(f.title)}</div>
+      <div class="f-tags">
+        <span class="f-tag sev-${f.severity}">${f.severity}</span>
+        <span class="f-tag cat">${escapeHtml(f.category)}</span>
+        ${verdictTag}
+      </div>
+    </div>
+    <div class="f-detail">${escapeHtml(f.detail || '')}</div>
+    <div class="f-actions">
+      <button data-act="evidence">View evidence</button>
+      ${f.closure_status === 'open' ? `
+        <button data-act="verdict" data-v="act" class="primary">Act</button>
+        <button data-act="verdict" data-v="ignore">Ignore</button>
+        <button data-act="verdict" data-v="wrong">Wrong</button>
+        <button data-act="verdict" data-v="more_info">More info</button>
+      ` : ''}
+      ${f.closure_status === 'in_progress' ? `
+        <button data-act="resolve" class="primary">Mark resolved</button>
+        <button data-act="dismiss">Dismiss</button>
+      ` : ''}
+    </div>
+    <pre class="f-evidence">${escapeHtml(evidencePretty)}</pre>
+    <div class="f-directive">
+      <textarea placeholder="Write the directive in your own words. e.g. 'Basheer, Shariff bill 12k overdue 5 days, please call him today and pay by EOD.'"></textarea>
+      <div class="row">
+        <select class="d-channel">
+          <option value="whatsapp">WhatsApp</option>
+          <option value="sms">SMS</option>
+          <option value="call">Call</option>
+          <option value="email">Email</option>
+          <option value="in_person">In person</option>
+        </select>
+        <input class="d-to" placeholder="To: basheer / zoya / naveen / yash" value="basheer">
+        <button class="primary d-save">Log directive</button>
+      </div>
+      <div class="hint">Phase 1: directives are logged, not auto-sent. You send via your channel of choice. Logging it here builds the training set for Phase 2 auto-drafts.</div>
+    </div>
+    ${directiveBlock}
+  `;
+
+  // Wire actions
+  card.querySelectorAll('.f-actions button').forEach(btn => {
+    btn.onclick = async () => {
+      const act = btn.dataset.act;
+      if (act === 'evidence') {
+        card.querySelector('.f-evidence').classList.toggle('show');
+        return;
+      }
+      if (act === 'verdict') {
+        const v = btn.dataset.v;
+        const r = await fetch(`${API}?action=verdict&pin=${encodeURIComponent(PIN)}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ finding_id: f.id, verdict: v }),
+        }).then(r => r.json());
+        if (!r.ok) { toast('Verdict failed: ' + (r.error || ''), 'err'); return; }
+        if (v === 'act') {
+          card.querySelector('.f-directive').classList.add('show');
+          card.querySelector('.f-directive textarea').focus();
+        } else {
+          // Other verdicts: close immediately as dismissed (you decided it's not actionable here)
+          if (v === 'ignore' || v === 'wrong') {
+            await fetch(`${API}?action=close&pin=${encodeURIComponent(PIN)}`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ finding_id: f.id, status: 'dismissed', note: `verdict: ${v}` }),
+            });
+          }
+          toast('Saved'); loadFindings();
+        }
+        return;
+      }
+      if (act === 'resolve' || act === 'dismiss') {
+        const status = act === 'resolve' ? 'resolved' : 'dismissed';
+        const r = await fetch(`${API}?action=close&pin=${encodeURIComponent(PIN)}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ finding_id: f.id, status }),
+        }).then(r => r.json());
+        if (!r.ok) { toast('Failed: ' + (r.error || ''), 'err'); return; }
+        toast(status === 'resolved' ? 'Resolved' : 'Dismissed');
+        loadFindings();
+      }
+    };
+  });
+
+  // Save directive
+  const saveBtn = card.querySelector('.d-save');
+  if (saveBtn) {
+    saveBtn.onclick = async () => {
+      const txt = card.querySelector('.f-directive textarea').value.trim();
+      if (!txt) { toast('Write the directive first', 'err'); return; }
+      const channel = card.querySelector('.d-channel').value;
+      const to      = card.querySelector('.d-to').value.trim() || 'basheer';
+      const r = await fetch(`${API}?action=directive&pin=${encodeURIComponent(PIN)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ finding_id: f.id, directive: txt, channel, to }),
+      }).then(r => r.json());
+      if (!r.ok) { toast('Failed: ' + (r.error || ''), 'err'); return; }
+      toast('Directive logged'); loadFindings();
+    };
+  }
+  return card;
+}
+
+// ── Run agent ──────────────────────────────────────────────────
+document.getElementById('btn-run').onclick = async () => {
+  const btn = document.getElementById('btn-run');
+  btn.disabled = true; btn.textContent = 'Running…';
+  try {
+    const r = await fetch(`${API}?action=run&agent=${encodeURIComponent(STATE.agent)}&pin=${encodeURIComponent(PIN)}`, { method: 'POST' }).then(r => r.json());
+    if (!r.ok) throw new Error(r.error || (r.detail || 'run_failed'));
+    toast(`Run ok · ${r.total_findings} findings (${r.inserted} new, ${r.updated} updated)`);
+    await loadAgents();
+    await loadFindings();
+  } catch (e) {
+    toast('Run failed: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Run now';
+  }
+};
+
+// ── Boot ───────────────────────────────────────────────────────
+(async () => {
+  if (PIN && await tryAuth(PIN)) {
+    document.getElementById('pin-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    bootstrap();
+  }
+})();
+</script>
+</body>
+</html>
