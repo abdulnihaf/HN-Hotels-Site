@@ -341,7 +341,7 @@ async function handleOdooSync(env, actor, url) {
     partners = await odooCall(env.ODOO_API_KEY, 'res.partner', 'search_read',
       [[['supplier_rank', '>', 0]]],
       {
-        fields: ['id', 'name', 'phone', 'mobile', 'company_id', 'active'],
+        fields: ['id', 'name', 'phone', 'company_id', 'active'],
         offset, limit,
       });
   } catch (e) {
@@ -360,7 +360,7 @@ async function handleOdooSync(env, actor, url) {
 
   for (const p of partners) {
     try {
-      const phone = p.phone || p.mobile || null;
+      const phone = p.phone || null;
       const existsById = await env.DB.prepare(`SELECT id FROM vendors WHERE odoo_partner_id = ?`).bind(p.id).first();
       if (existsById) {
         await env.DB.prepare(
