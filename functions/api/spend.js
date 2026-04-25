@@ -102,13 +102,27 @@ function findFuzzyDup(newName, existing) {
     const eP = _stripParens(p.name);
     if (!eN) continue;
     if (eN === nN) return { ...p, match_reason: 'exact' };
-    // 'Lemon' vs 'Lemon (Nimbu)' → after parens-strip both = 'lemon' → MATCH
-    if (nP && eP && nP === eP && nN !== eN) {
+    // 'Lemon' vs 'Lemon (Nimbu)' → after parens-strip both = 'lemon' → MATCH.
+    // BUT skip if either bracketed content is a brand/scope marker (HE/NCH/HQ/Both)
+    // — those are intentional per-brand items, not duplicates.
+    const hasBrandParens = (s) => /\((HE|NCH|HQ|BOTH|both|he|nch|hq)\)/i.test(s) || /\((HE|NCH|HQ)[^)]*\)/i.test(s);
+    if (nP && eP && nP === eP && nN !== eN && !hasBrandParens(newName) && !hasBrandParens(p.name)) {
       return { ...p, match_reason: 'parens_strip' };
     }
+    // Levenshtein — only count INSERTIONS/DELETIONS (single-char additions),
+    // not SUBSTITUTIONS (which usually mean different items: Card vs Cash, ASI vs SI).
+    // A pure insert/delete leaves abs(len_diff) === edit_dist; a substitution makes them differ.
     const dist = _levenshtein(nN, eN);
-    if (dist <= 2 && (!best || dist < best._dist)) {
-      best = { ...p, _dist: dist, match_reason: 'levenshtein' };
+    if (dist === 1 && Math.abs(nN.length - eN.length) === 1) {
+      if (!best || dist < best._dist) {
+        best = { ...p, _dist: dist, match_reason: 'levenshtein_insert_delete' };
+      }
+      continue;
+    }
+    if (dist === 2 && Math.abs(nN.length - eN.length) === 2) {
+      if (!best || dist < best._dist) {
+        best = { ...p, _dist: dist, match_reason: 'levenshtein_insert_delete' };
+      }
       continue;
     }
     // Substring: require shorter side ≥ 6 chars AND make up ≥70% of longer side.
