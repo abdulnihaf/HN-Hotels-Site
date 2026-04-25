@@ -91,7 +91,10 @@ async function odooCall(apiKey, model, method, args = [], kwargs = {}) {
     }),
   });
   const j = await r.json();
-  if (j.error) throw new Error(`odoo:${j.error.message || 'unknown'}`);
+  if (j.error) {
+    const detail = (j.error.data && (j.error.data.message || j.error.data.debug)) || j.error.message || 'unknown';
+    throw new Error(`odoo:${String(detail).split('\n')[0].slice(0, 240)}`);
+  }
   return j.result;
 }
 
