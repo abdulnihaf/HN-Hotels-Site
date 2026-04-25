@@ -330,27 +330,27 @@ async function handleOdooSync(env, actor, url) {
   const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
   const limit  = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
 
-  // Total count (one cheap call) so frontend can show progress + stop condition.
-  let total = 0;
+  // Single Odoo call: fetch this slice. Default ordering (no `order` kwarg —
+  // some Odoo configs reject 'id asc'). `more` inferred from whether we got
+  // a full page back; `total` is approximate (running max).
+  let partners;
   try {
-    total = await odooCall(env.ODOO_API_KEY, 'res.partner', 'search_count',
-      [[['supplier_rank', '>', 0]]]);
+    partners = await odooCall(env.ODOO_API_KEY, 'res.partner', 'search_read',
+      [[['supplier_rank', '>', 0]]],
+      {
+        fields: ['id', 'name', 'phone', 'mobile', 'company_id', 'active'],
+        offset, limit,
+      });
   } catch (e) {
-    return json({ ok: false, error: 'odoo_count_failed', detail: String(e.message || e) }, 502);
+    return json({ ok: false, error: 'odoo_search_failed', detail: String(e.message || e) }, 502);
   }
 
-  const partners = await odooCall(env.ODOO_API_KEY, 'res.partner', 'search_read',
-    [[['supplier_rank', '>', 0]]],
-    {
-      fields: ['id', 'name', 'phone', 'mobile', 'company_id', 'active'],
-      offset, limit, order: 'id asc',
-    });
-
   const out = {
-    ok: true, total, offset, limit,
+    ok: true, offset, limit,
     processed: partners.length,
-    more: (offset + partners.length) < total,
+    more: partners.length === limit,           // full page → likely more
     next_offset: offset + partners.length,
+    total_seen: offset + partners.length,      // running counter (frontend shows progress)
     updated: 0, linked: 0, created: 0,
     errors: [],
   };

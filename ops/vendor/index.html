@@ -543,20 +543,20 @@ document.getElementById('btn-sync').onclick = async () => {
   btn.disabled = true;
   let offset = 0;
   const totals = { updated: 0, linked: 0, created: 0, errors: 0 };
-  let total = 0;
+  let lastSeen = 0;
   let safety = 100; // max 100 chunks of 50 = 5000 partners — plenty
   try {
     while (safety-- > 0) {
-      btn.textContent = total ? `Syncing ${offset}/${total}…` : 'Syncing…';
+      btn.textContent = lastSeen ? `Syncing ${offset} of ${lastSeen}+…` : 'Syncing…';
       const url = `${API}?action=odoo-sync&offset=${offset}&limit=50&pin=${encodeURIComponent(PIN)}`;
       const r = await fetch(url);
       if (!r.ok) {
         const text = await r.text();
-        throw new Error(`HTTP ${r.status}: ${text.slice(0, 80)}`);
+        throw new Error(`HTTP ${r.status}: ${text.slice(0, 100)}`);
       }
       const j = await r.json();
-      if (!j.ok) throw new Error(j.error || 'sync_failed');
-      total = j.total || total;
+      if (!j.ok) throw new Error((j.error || 'sync_failed') + (j.detail ? ': ' + j.detail : ''));
+      lastSeen = j.total_seen || lastSeen;
       totals.updated += j.updated || 0;
       totals.linked  += j.linked  || 0;
       totals.created += j.created || 0;
@@ -565,7 +565,7 @@ document.getElementById('btn-sync').onclick = async () => {
       offset = j.next_offset;
     }
     const errSuffix = totals.errors ? ` · ${totals.errors} errors (logged)` : '';
-    toast(`Sync ok — ${total} Odoo suppliers · ${totals.updated} updated, ${totals.linked} linked, ${totals.created} created${errSuffix}`);
+    toast(`Sync ok — ${lastSeen} Odoo suppliers · ${totals.updated} updated, ${totals.linked} linked, ${totals.created} created${errSuffix}`);
     loadList();
   } catch (e) {
     toast('Sync failed: ' + e.message, 'err');
