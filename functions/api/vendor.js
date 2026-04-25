@@ -342,7 +342,7 @@ async function handleOdooSync(env, actor, url) {
         offset, limit,
       });
   } catch (e) {
-    return json({ ok: false, error: 'odoo_search_failed', detail: String(e.message || e) }, 502);
+    return json({ ok: false, error: 'odoo_search_failed', detail: String(e.message || e) });
   }
 
   const out = {
