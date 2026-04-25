@@ -136,6 +136,7 @@
       <div class="sub">38 known + Odoo sync · Per-vendor RM mapping · Spend history</div>
     </div>
     <div class="hdr-right">
+      <button id="btn-hygiene" title="Scan for duplicate products / vendors and resolve">🧹 Hygiene</button>
       <button id="btn-sync" title="Pull res.partner from Odoo and merge into D1">Sync Odoo</button>
       <button id="btn-add" class="primary">+ Add vendor</button>
     </div>
@@ -245,6 +246,29 @@
   <div class="save-bar">
     <button class="archive" id="dp-archive">Archive</button>
     <button class="save" id="dp-save">Save changes</button>
+  </div>
+</aside>
+
+<!-- ── HYGIENE PANEL ─────────────────────────────────────────── -->
+<div id="hygiene-overlay" class="detail-overlay"></div>
+<aside id="hygiene-panel" class="detail-panel" aria-hidden="true">
+  <div class="dp-hdr">
+    <div>
+      <h2>🧹 Data Hygiene</h2>
+      <div class="sub" style="font-size:12px; color:var(--text-dim); margin-top:2px;">Duplicate products + vendors. Manager-owned cleanup queue.</div>
+    </div>
+    <button class="closebtn" id="hyg-close" aria-label="Close">×</button>
+  </div>
+  <div class="dp-body">
+    <div class="dp-section">
+      <h3>Product duplicates (live scan over expense products)</h3>
+      <div id="hyg-products"><div class="loading"><span class="spinner"></span>Scanning…</div></div>
+    </div>
+    <div class="dp-section">
+      <h3>Curated cleanup history</h3>
+      <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;">Pre-curated dup groups already collapsed (Bun/Buns, Lemon/Lemon (Nimbu), Pudina/Fresh Mint, Samoosa, Bottled Water variants, Packing Materials).</p>
+      <button id="hyg-rerun-curated" style="padding:8px 14px; background:var(--surface-2); border:1px solid var(--border); color:var(--text-dim); border-radius:6px; cursor:pointer; font-size:12px;">Re-run curated merge (idempotent)</button>
+    </div>
   </div>
 </aside>
 
@@ -534,6 +558,92 @@ document.getElementById('btn-add').onclick = async () => {
   }).then(r => r.json());
   if (r.ok) { toast('Created'); loadList(); openVendor(r.id); }
   else toast('Failed: ' + (r.error || ''), 'err');
+};
+
+// ── Hygiene panel (manager-owned dup cleanup) ────────────────
+const SPEND_API = '/api/spend';
+function openHygiene() {
+  document.getElementById('hygiene-overlay').classList.add('open');
+  const p = document.getElementById('hygiene-panel');
+  p.classList.add('open'); p.setAttribute('aria-hidden', 'false');
+  scanProductDups();
+}
+function closeHygiene() {
+  document.getElementById('hygiene-overlay').classList.remove('open');
+  const p = document.getElementById('hygiene-panel');
+  p.classList.remove('open'); p.setAttribute('aria-hidden', 'true');
+}
+document.getElementById('btn-hygiene').onclick = openHygiene;
+document.getElementById('hyg-close').onclick = closeHygiene;
+document.getElementById('hygiene-overlay').onclick = closeHygiene;
+
+async function scanProductDups() {
+  const wrap = document.getElementById('hyg-products');
+  wrap.innerHTML = '<div class="loading"><span class="spinner"></span>Scanning Odoo expense products…</div>';
+  try {
+    const r = await fetch(`${SPEND_API}?action=scan-product-dups&pin=${encodeURIComponent(PIN)}`).then(r => r.json());
+    if (!r.success) throw new Error(r.error || 'scan_failed');
+    if (!r.candidates_count) {
+      wrap.innerHTML = '<div class="empty" style="color:var(--success)">✓ No duplicate candidates found. Product registry is clean.</div>';
+      return;
+    }
+    wrap.innerHTML = r.candidates.map((c, i) => `
+      <div class="bill-card" style="margin-bottom:8px;" data-idx="${i}">
+        <div class="bill-row1">
+          <div class="bill-vendor">Keep: <b>${escapeHtml(c.keep.name)}</b>${c.keep.uom ? ` <span class="vc-tag" style="background:rgba(124,86,247,0.15);color:#c4b5fd">${escapeHtml(c.keep.uom)}</span>` : ''}</div>
+          <div class="bill-amt" style="font-size:11px;color:var(--text-dim);">${c.match_reason}</div>
+        </div>
+        <div class="bill-row2" style="margin-top:6px;">
+          <div class="left">Drop: <b style="color:var(--danger)">${escapeHtml(c.drop.name)}</b>${c.drop.uom ? ` <span class="vc-tag" style="background:rgba(239,68,68,0.10);color:#f87171">${escapeHtml(c.drop.uom)}</span>` : ''} · ${c.be_rows} expense row${c.be_rows === 1 ? '' : 's'} affected</div>
+        </div>
+        <div style="margin-top:8px; display:flex; gap:6px;">
+          <button class="hyg-merge" data-keep="${c.keep.id}" data-drop="${c.drop.id}" style="flex:1;padding:8px;background:var(--brand);color:#000;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Merge</button>
+          <button class="hyg-skip" data-idx="${i}" style="flex:1;padding:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);border-radius:6px;font-size:12px;cursor:pointer;">Skip</button>
+        </div>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('.hyg-merge').forEach(btn => btn.onclick = () => mergePair(btn.dataset.keep, btn.dataset.drop, btn));
+    wrap.querySelectorAll('.hyg-skip').forEach(btn => btn.onclick = () => btn.closest('.bill-card').remove());
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty" style="color:var(--danger)">Scan failed: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function mergePair(keep_id, drop_id, btn) {
+  if (!confirm('Merge confirmed?\n\nThe Drop product will be archived in Odoo and existing expense rows will canonical-link to Keep.')) return;
+  btn.disabled = true; btn.textContent = 'Merging…';
+  try {
+    const r = await fetch(`${SPEND_API}?action=merge-product-pair`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ pin: PIN, keep_id: parseInt(keep_id, 10), drop_id: parseInt(drop_id, 10) }),
+    }).then(r => r.json());
+    if (r.success) {
+      toast(`✓ Merged · ${r.be_rows_repointed} rows re-pointed${r.archived ? ' · drop archived' : ''}`);
+      btn.closest('.bill-card').remove();
+    } else {
+      toast('Merge failed: ' + (r.error || ''), 'err');
+      btn.disabled = false; btn.textContent = 'Merge';
+    }
+  } catch (e) {
+    toast('Merge failed: ' + e.message, 'err');
+    btn.disabled = false; btn.textContent = 'Merge';
+  }
+}
+
+document.getElementById('hyg-rerun-curated').onclick = async () => {
+  const btn = document.getElementById('hyg-rerun-curated');
+  btn.disabled = true; btn.textContent = 'Running…';
+  try {
+    const r = await fetch(`${SPEND_API}?action=merge-duplicate-products`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ pin: PIN }),
+    }).then(r => r.json());
+    if (r.success) {
+      const n = r.groups.reduce((s, g) => s + (g.be_rows_repointed || 0), 0);
+      toast(`✓ Curated merge complete · ${n} rows re-pointed`);
+    } else toast('Failed: ' + (r.error || ''), 'err');
+  } catch (e) { toast('Failed: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Re-run curated merge (idempotent)'; }
 };
 
 // ── Sync Odoo (chunked — Worker subrequest cap = 1000, we chunk @ 50/call) ─────

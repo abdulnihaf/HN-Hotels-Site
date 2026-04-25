@@ -37,6 +37,7 @@ function json(data, status = 200) {
 // Mirror sets from vendor.js so spend.js can validate before the mirror call.
 const VALID_PRIMARY_BRANDS = new Set(['HE', 'NCH', 'BOTH']);
 const VALID_PAYMENT_TERMS  = new Set(['on_delivery', '7d', '15d', '30d', '45d', 'other']);
+const ALLOWED_HYGIENE_ROLES = new Set(['admin', 'cfo', 'gm', 'asstmgr']);
 
 function _normName(s) {
   return String(s || '').toLowerCase()
@@ -2762,6 +2763,93 @@ export async function onRequest(context) {
     }
 
     // ── ARCHIVE VENDOR (admin only) ────────────────────────────────────────
+    // ── PRODUCT DUP SCAN (manager hygiene panel — fix-E live mode) ──
+    // GET ?action=scan-product-dups&pin= → live fuzzy scan over recent
+    // expense products (Odoo product.product where can_be_expensed=true).
+    // Manager-facing — surfaces candidates that the curated MERGE_GROUPS
+    // didn't pre-handle. Each candidate includes business_expenses row counts
+    // so the manager can see impact before approving.
+    if (action === 'scan-product-dups') {
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!ALLOWED_HYGIENE_ROLES.has(user.role)) return json({ success: false, error: 'Manager/admin only' }, 403);
+
+      const products = await odoo(apiKey, 'product.product', 'search_read',
+        [[['can_be_expensed', '=', true], ['active', '=', true]]],
+        { fields: ['id', 'name', 'default_code', 'categ_id', 'uom_id'], limit: 1000 });
+
+      // Group by category, then fuzzy within group (cross-category matches are noise)
+      const byCat = new Map();
+      for (const p of products) {
+        const cid = Array.isArray(p.categ_id) ? p.categ_id[0] : p.categ_id;
+        if (!byCat.has(cid)) byCat.set(cid, []);
+        byCat.get(cid).push(p);
+      }
+
+      const candidates = [];
+      for (const [cid, items] of byCat.entries()) {
+        const seen = new Set();
+        for (const p of items) {
+          if (seen.has(p.id)) continue;
+          const others = items.filter(o => o.id !== p.id && !seen.has(o.id));
+          const dup = findFuzzyDup(p.name, others);
+          if (!dup) continue;
+          // Skip exact-equal-after-normalisation triggered by curated merges already
+          if (dup.match_reason === 'exact') continue;
+          // Decide which is canonical: prefer one with default_code or longer name
+          const aHasCode = !!p.default_code, bHasCode = !!dup.default_code;
+          const keep = bHasCode && !aHasCode ? dup : (aHasCode && !bHasCode ? p : (p.name.length >= dup.name.length ? p : dup));
+          const drop = keep.id === p.id ? dup : p;
+          seen.add(drop.id); seen.add(keep.id);
+
+          let beRows = 0;
+          if (DB) {
+            try {
+              const r = await DB.prepare(`SELECT COUNT(*) AS n FROM business_expenses WHERE product_id = ?`).bind(drop.id).first();
+              beRows = r?.n || 0;
+            } catch (_) {}
+          }
+          candidates.push({
+            keep:  { id: keep.id, name: keep.name, default_code: keep.default_code, uom: Array.isArray(keep.uom_id) ? keep.uom_id[1] : null },
+            drop:  { id: drop.id, name: drop.name, default_code: drop.default_code, uom: Array.isArray(drop.uom_id) ? drop.uom_id[1] : null },
+            categ_id: cid,
+            match_reason: dup.match_reason,
+            be_rows: beRows,
+          });
+        }
+      }
+      return json({ success: true, candidates_count: candidates.length, candidates });
+    }
+
+    // ── MERGE PRODUCT PAIR (manager-approved single pair) ──
+    // POST { pin, keep_id, drop_id } → archives drop in Odoo + re-points
+    // business_expenses canonical_product_id. Idempotent.
+    if (action === 'merge-product-pair' && request.method === 'POST') {
+      const body = await request.json();
+      const { pin, keep_id, drop_id } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!ALLOWED_HYGIENE_ROLES.has(user.role)) return json({ success: false, error: 'Manager/admin only' }, 403);
+      if (!keep_id || !drop_id || keep_id === drop_id) return json({ success: false, error: 'keep_id + drop_id required (distinct)' }, 400);
+
+      let beRows = 0;
+      if (DB) {
+        const upd = await DB.prepare(
+          `UPDATE business_expenses SET canonical_product_id = ? WHERE product_id = ? AND (canonical_product_id IS NULL OR canonical_product_id != ?)`
+        ).bind(parseInt(keep_id, 10), parseInt(drop_id, 10), parseInt(keep_id, 10)).run();
+        beRows = upd.meta?.changes || 0;
+      }
+      let archived = false, archive_error = null;
+      try {
+        await odoo(apiKey, 'product.product', 'write', [[parseInt(drop_id, 10)], { active: false }]);
+        archived = true;
+      } catch (e) {
+        archive_error = String(e.message || e).slice(0, 120);
+      }
+      return json({ success: true, keep_id, drop_id, be_rows_repointed: beRows, archived, archive_error });
+    }
+
     // ── DUPLICATE PRODUCT MERGE (Apr 2026 fix-E lookback cleanup) ──
     // GET  ?action=merge-duplicate-products&dry_run=1  → preview canonical groupings
     // POST ?action=merge-duplicate-products            → apply: re-point business_expenses,
