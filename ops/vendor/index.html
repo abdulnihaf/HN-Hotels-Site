@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Vendors">
+<title>HN Vendor Master</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  .wrap { max-width: 1500px; margin: 0 auto; padding: 14px 16px 80px; }
+  .hdr { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; }
+  .hdr h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+  .hdr .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .hdr-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .hdr-right button { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 7px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
+  .hdr-right button:hover { border-color: var(--text-dim); }
+  .hdr-right button.primary { background: var(--brand); color: #000; border-color: var(--brand); }
+  .hdr-right button.primary:hover { background: var(--brand-hover); }
+
+  /* PIN gate */
+  .pin-screen { max-width: 360px; margin: 60px auto; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); text-align: center; }
+  .pin-screen h2 { margin: 0 0 6px; font-size: 18px; }
+  .pin-screen p { color: var(--text-dim); font-size: 13px; margin: 0 0 18px; }
+  .pin-screen input { width: 100%; padding: 12px 14px; font-size: 18px; text-align: center; letter-spacing: 0.4em; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); margin-bottom: 12px; font-family: inherit; }
+  .pin-screen button { width: 100%; padding: 11px; background: var(--brand); color: #000; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 700; cursor: pointer; }
+  .pin-screen .err { color: var(--danger); font-size: 12px; margin-top: 10px; min-height: 16px; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .chip-set { display: inline-flex; gap: 4px; }
+  .chip-btn { padding: 6px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim); font-size: 12px; font-weight: 600; border-radius: 999px; cursor: pointer; }
+  .chip-btn:hover { color: var(--text); }
+  .chip-btn.active { background: var(--brand-soft); color: var(--brand-hover); border-color: var(--brand-ring); }
+  .filter-bar input { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 7px 12px; border-radius: 6px; font-size: 13px; min-width: 220px; flex: 1; max-width: 380px; font-family: inherit; }
+
+  /* KPI strip */
+  .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+  .kpi .v { font-size: 22px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 4px; font-weight: 600; }
+  .kpi.warn .v { color: #f87171; }
+  .kpi.good .v { color: #34d399; }
+  .kpi.neutral .v { color: #c4b5fd; }
+
+  /* Vendor list */
+  .vendor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+  .vendor-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: border-color .12s ease, transform .05s ease; }
+  .vendor-card:hover { border-color: var(--text-dim); }
+  .vendor-card:active { transform: scale(0.99); }
+  .vc-row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .vc-name { font-weight: 700; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vc-products { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+  .vc-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; color: var(--text-dim); }
+  .vc-phone { font-variant-numeric: tabular-nums; }
+  .vc-tag { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+  .vc-tag.brand-HE   { background: rgba(239,68,68,0.15);  color: #f87171; }
+  .vc-tag.brand-NCH  { background: rgba(212,164,76,0.15); color: #fbbf24; }
+  .vc-tag.brand-BOTH { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .vc-tag.pt-on_delivery { background: rgba(16,185,129,0.10); color: #34d399; }
+  .vc-tag.pt-7d  { background: rgba(245,158,11,0.10); color: #fbbf24; }
+  .vc-tag.pt-15d { background: rgba(245,158,11,0.18); color: #fbbf24; }
+  .vc-tag.pt-30d { background: rgba(239,68,68,0.10);  color: #f87171; }
+  .vc-tag.pt-45d { background: rgba(239,68,68,0.18);  color: #f87171; }
+  .vc-tag.no-rm  { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+  .vc-tag.no-phone { background: rgba(239,68,68,0.18); color: #f87171; }
+
+  /* Detail panel (slide-in) */
+  .detail-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 50; display: none; }
+  .detail-overlay.open { display: block; }
+  .detail-panel { position: fixed; right: 0; top: 0; bottom: 0; width: min(720px, 100%); background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; z-index: 60; transform: translateX(100%); transition: transform .18s ease; -webkit-overflow-scrolling: touch; }
+  .detail-panel.open { transform: translateX(0); }
+  .dp-hdr { padding: 18px 20px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  .dp-hdr h2 { margin: 0; font-size: 18px; font-weight: 700; }
+  .dp-hdr .closebtn { background: transparent; border: none; color: var(--text-dim); font-size: 24px; cursor: pointer; line-height: 1; padding: 0 4px; }
+  .dp-body { padding: 16px 20px 80px; }
+  .dp-section { margin-bottom: 18px; }
+  .dp-section h3 { margin: 0 0 10px; font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+  .dp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 540px) { .dp-grid { grid-template-columns: 1fr; } }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; font-weight: 600; }
+  .field input, .field select, .field textarea { width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-family: inherit; font-size: 13px; }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--brand); }
+  .field.readonly input { color: var(--text-dim); background: rgba(255,255,255,0.02); }
+
+  .product-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .product-table th { text-align: left; padding: 6px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+  .product-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .product-table tr:last-child td { border-bottom: none; }
+  .product-table .rm-code { font-family: ui-monospace, monospace; color: var(--text-dim); font-size: 11px; }
+  .product-table .actcell { text-align: right; }
+  .product-table button { background: transparent; border: none; color: var(--danger); cursor: pointer; font-size: 12px; padding: 2px 6px; }
+  .product-table button:hover { background: rgba(239,68,68,0.1); border-radius: 4px; }
+  .add-product-row { margin-top: 10px; padding: 10px; background: var(--surface-2); border-radius: var(--radius); }
+
+  .spend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .spend-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+  .spend-card .v { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .spend-card .l { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+
+  .save-bar { position: sticky; bottom: 0; padding: 12px 20px; background: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 8px; }
+  .save-bar button { flex: 1; padding: 10px; border-radius: var(--radius); font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid var(--border); font-family: inherit; }
+  .save-bar .save { background: var(--brand); color: #000; border-color: var(--brand); }
+  .save-bar .archive { background: var(--surface-2); color: var(--text-dim); }
+
+  .empty { padding: 40px 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
+  .loading { padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--brand); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 18px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 13px; z-index: 100; max-width: 90vw; }
+  .toast.ok  { border-color: var(--success); }
+  .toast.err { border-color: var(--danger); color: #f87171; }
+</style>
+</head>
+<body>
+
+<!-- ── PIN GATE ─────────────────────────────────────────────── -->
+<div id="pin-screen" class="pin-screen">
+  <h2>HN Vendor Master</h2>
+  <p>Enter your admin / CFO / GM / asst-mgr / purchase PIN</p>
+  <input id="pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off">
+  <button id="pin-submit">Unlock</button>
+  <div id="pin-err" class="err"></div>
+</div>
+
+<!-- ── MAIN ─────────────────────────────────────────────────── -->
+<main id="app" class="wrap" style="display:none">
+  <div class="hdr">
+    <div>
+      <h1>Vendor Master</h1>
+      <div class="sub">38 known + Odoo sync · Per-vendor RM mapping · Spend history</div>
+    </div>
+    <div class="hdr-right">
+      <button id="btn-sync" title="Pull res.partner from Odoo and merge into D1">Sync Odoo</button>
+      <button id="btn-add" class="primary">+ Add vendor</button>
+    </div>
+  </div>
+
+  <div class="kpi-strip">
+    <div class="kpi"><div class="v" id="kpi-total">—</div><div class="l">Total active</div></div>
+    <div class="kpi neutral"><div class="v" id="kpi-he">—</div><div class="l">HE only</div></div>
+    <div class="kpi neutral"><div class="v" id="kpi-nch">—</div><div class="l">NCH only</div></div>
+    <div class="kpi neutral"><div class="v" id="kpi-both">—</div><div class="l">Both brands</div></div>
+    <div class="kpi warn"><div class="v" id="kpi-norm">—</div><div class="l">No RM mapped</div></div>
+    <div class="kpi warn"><div class="v" id="kpi-nophone">—</div><div class="l">No phone</div></div>
+  </div>
+
+  <div class="filter-bar">
+    <span class="chip-set" id="brand-filter">
+      <button class="chip-btn active" data-brand="ALL">All brands</button>
+      <button class="chip-btn" data-brand="HE">HE</button>
+      <button class="chip-btn" data-brand="NCH">NCH</button>
+      <button class="chip-btn" data-brand="BOTH">Both</button>
+    </span>
+    <input id="search" placeholder="Search by name, phone, or contact" autocomplete="off">
+  </div>
+
+  <div id="vendor-list" class="vendor-grid"></div>
+  <div id="vendor-empty" class="empty" style="display:none">No vendors match.</div>
+  <div id="vendor-loading" class="loading"><span class="spinner"></span>Loading…</div>
+</main>
+
+<!-- ── DETAIL PANEL ─────────────────────────────────────────── -->
+<div id="detail-overlay" class="detail-overlay"></div>
+<aside id="detail-panel" class="detail-panel" aria-hidden="true">
+  <div class="dp-hdr">
+    <div>
+      <h2 id="dp-name">—</h2>
+      <div class="sub" id="dp-sub" style="font-size:12px; color:var(--text-dim); margin-top:2px;"></div>
+    </div>
+    <button class="closebtn" id="dp-close" aria-label="Close">×</button>
+  </div>
+  <div class="dp-body">
+    <div class="dp-section">
+      <h3>Spend (last 12 months)</h3>
+      <div class="spend-grid">
+        <div class="spend-card"><div class="v" id="spend-total">—</div><div class="l">Total ₹</div></div>
+        <div class="spend-card"><div class="v" id="spend-tx">—</div><div class="l">Transactions</div></div>
+        <div class="spend-card"><div class="v" id="spend-bills">—</div><div class="l">Vendor bills ₹</div></div>
+      </div>
+    </div>
+
+    <div class="dp-section">
+      <h3>Profile</h3>
+      <div class="dp-grid">
+        <div class="field"><label>Name</label><input id="f-name"></div>
+        <div class="field"><label>Owner / Contact</label><input id="f-owner"></div>
+        <div class="field"><label>Phone</label><input id="f-phone" inputmode="tel"></div>
+        <div class="field"><label>Alternate Phone</label><input id="f-alt"></div>
+        <div class="field" style="grid-column:1/-1;"><label>Address</label><input id="f-address"></div>
+        <div class="field"><label>GSTIN</label><input id="f-gstin"></div>
+        <div class="field"><label>PAN</label><input id="f-pan"></div>
+        <div class="field"><label>Bank / UPI</label><input id="f-bank" placeholder="UPI / Cash / Bank"></div>
+        <div class="field">
+          <label>Payment Terms</label>
+          <select id="f-pt">
+            <option value="">—</option>
+            <option value="on_delivery">On delivery</option>
+            <option value="7d">7 days</option>
+            <option value="15d">15 days</option>
+            <option value="30d">30 days</option>
+            <option value="45d">45 days</option>
+            <option value="other">Other…</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Primary Brand</label>
+          <select id="f-brand">
+            <option value="">—</option>
+            <option value="HE">HE only</option>
+            <option value="NCH">NCH only</option>
+            <option value="BOTH">Both</option>
+          </select>
+        </div>
+        <div class="field"><label>Delivery slot</label><input id="f-slot" placeholder="morning / evening / DAY time…"></div>
+        <div class="field readonly"><label>Odoo Partner ID</label><input id="f-odoo" readonly></div>
+        <div class="field" style="grid-column:1/-1;"><label>Notes</label><textarea id="f-notes"></textarea></div>
+      </div>
+    </div>
+
+    <div class="dp-section">
+      <h3>Raw materials supplied (<span id="rm-count">0</span>)</h3>
+      <table class="product-table">
+        <thead>
+          <tr><th>HN-RM</th><th>Product</th><th>UOM</th><th>Last ₹</th><th></th></tr>
+        </thead>
+        <tbody id="rm-tbody"></tbody>
+      </table>
+      <div class="add-product-row">
+        <div class="dp-grid">
+          <div class="field"><label>HN-RM code</label><input id="ap-rm" placeholder="HN-RM-073 (optional)"></div>
+          <div class="field"><label>Product name</label><input id="ap-name" placeholder="e.g. Chicken Tandoori Cut"></div>
+          <div class="field"><label>UOM</label><input id="ap-uom" placeholder="kg / L / Units"></div>
+          <div class="field"><label>Typical qty (hint)</label><input id="ap-qty" type="number" step="0.01"></div>
+        </div>
+        <button id="ap-add" style="margin-top:6px; padding:8px 14px; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:6px; cursor:pointer; font-size:12px; font-weight:600;">+ Add product</button>
+      </div>
+    </div>
+  </div>
+  <div class="save-bar">
+    <button class="archive" id="dp-archive">Archive</button>
+    <button class="save" id="dp-save">Save changes</button>
+  </div>
+</aside>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api/vendor';
+let PIN = sessionStorage.getItem('hn_vendor_pin') || '';
+let STATE = { vendors: [], filter: { brand: 'ALL', q: '' }, currentId: null, currentVendor: null, products: [] };
+
+// ── Toast ──────────────────────────────────────────────────────
+function toast(msg, kind='ok') {
+  const el = document.getElementById('toast');
+  el.className = 'toast ' + kind;
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(()=> el.style.display = 'none', 2400);
+}
+
+// ── PIN gate ───────────────────────────────────────────────────
+async function tryAuth(pin) {
+  const r = await fetch(`${API}?action=list&pin=${encodeURIComponent(pin)}`);
+  return r.status !== 401;
+}
+document.getElementById('pin-submit').onclick = async () => {
+  const pin = document.getElementById('pin-input').value.trim();
+  if (!pin) return;
+  const ok = await tryAuth(pin);
+  if (!ok) {
+    document.getElementById('pin-err').textContent = 'Invalid PIN';
+    return;
+  }
+  PIN = pin;
+  sessionStorage.setItem('hn_vendor_pin', pin);
+  document.getElementById('pin-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadList();
+};
+document.getElementById('pin-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('pin-submit').click();
+});
+
+// ── Render list ────────────────────────────────────────────────
+async function loadList() {
+  document.getElementById('vendor-loading').style.display = 'block';
+  document.getElementById('vendor-empty').style.display = 'none';
+  const q = STATE.filter.q ? `&q=${encodeURIComponent(STATE.filter.q)}` : '';
+  const b = STATE.filter.brand !== 'ALL' ? `&brand=${STATE.filter.brand}` : '';
+  try {
+    const r = await fetch(`${API}?action=list${b}${q}&pin=${encodeURIComponent(PIN)}`);
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'load_failed');
+    STATE.vendors = j.vendors;
+    renderList();
+    renderKpis();
+  } catch (e) {
+    toast('Load failed: ' + e.message, 'err');
+  } finally {
+    document.getElementById('vendor-loading').style.display = 'none';
+  }
+}
+
+function renderList() {
+  const list = document.getElementById('vendor-list');
+  const empty = document.getElementById('vendor-empty');
+  list.innerHTML = '';
+  if (!STATE.vendors.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  for (const v of STATE.vendors) {
+    const card = document.createElement('div');
+    card.className = 'vendor-card';
+    card.dataset.id = v.id;
+    const brand = v.primary_brand || 'BOTH';
+    const ptLabel = v.payment_terms ? v.payment_terms.replace('_', ' ').replace('on delivery', 'on-deliv') : '';
+    card.innerHTML = `
+      <div class="vc-row1">
+        <div class="vc-name">${escapeHtml(v.name)}</div>
+        <div class="vc-products">${v.product_count || 0} RM</div>
+      </div>
+      <div class="vc-meta">
+        ${v.phone ? `<span class="vc-phone">${escapeHtml(v.phone)}</span>` : '<span class="vc-tag no-phone">No phone</span>'}
+        ${v.owner_contact ? `<span>· ${escapeHtml(v.owner_contact)}</span>` : ''}
+      </div>
+      <div class="vc-meta" style="margin-top:6px;">
+        ${v.primary_brand ? `<span class="vc-tag brand-${brand}">${brand}</span>` : ''}
+        ${v.payment_terms ? `<span class="vc-tag pt-${v.payment_terms}">${ptLabel}</span>` : ''}
+        ${(v.product_count || 0) === 0 ? '<span class="vc-tag no-rm">No RM mapped</span>' : ''}
+      </div>
+    `;
+    card.onclick = () => openVendor(v.id);
+    list.appendChild(card);
+  }
+}
+
+function renderKpis() {
+  const v = STATE.vendors;
+  document.getElementById('kpi-total').textContent = v.length;
+  document.getElementById('kpi-he').textContent = v.filter(x => x.primary_brand === 'HE').length;
+  document.getElementById('kpi-nch').textContent = v.filter(x => x.primary_brand === 'NCH').length;
+  document.getElementById('kpi-both').textContent = v.filter(x => x.primary_brand === 'BOTH').length;
+  document.getElementById('kpi-norm').textContent = v.filter(x => (x.product_count || 0) === 0).length;
+  document.getElementById('kpi-nophone').textContent = v.filter(x => !x.phone).length;
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ── Filter / search ────────────────────────────────────────────
+document.getElementById('brand-filter').addEventListener('click', e => {
+  if (e.target.matches('.chip-btn')) {
+    document.querySelectorAll('#brand-filter .chip-btn').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    STATE.filter.brand = e.target.dataset.brand;
+    loadList();
+  }
+});
+let searchTimer;
+document.getElementById('search').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    STATE.filter.q = e.target.value.trim();
+    loadList();
+  }, 280);
+});
+
+// ── Detail panel ───────────────────────────────────────────────
+async function openVendor(id) {
+  const ov = document.getElementById('detail-overlay');
+  const dp = document.getElementById('detail-panel');
+  ov.classList.add('open'); dp.classList.add('open'); dp.setAttribute('aria-hidden', 'false');
+  STATE.currentId = id;
+
+  // Loading state
+  document.getElementById('dp-name').textContent = 'Loading…';
+  document.getElementById('dp-sub').textContent = '';
+  document.getElementById('rm-tbody').innerHTML = '';
+
+  try {
+    const [getR, spendR] = await Promise.all([
+      fetch(`${API}?action=get&id=${id}&pin=${encodeURIComponent(PIN)}`).then(r => r.json()),
+      fetch(`${API}?action=spend-summary&id=${id}&pin=${encodeURIComponent(PIN)}`).then(r => r.json()).catch(() => ({ ok: false })),
+    ]);
+    if (!getR.ok) throw new Error(getR.error || 'fetch_failed');
+    STATE.currentVendor = getR.vendor;
+    STATE.products = getR.products;
+    renderDetail();
+    if (spendR && spendR.ok) renderSpend(spendR);
+  } catch (e) {
+    toast('Open failed: ' + e.message, 'err');
+    closePanel();
+  }
+}
+
+function closePanel() {
+  document.getElementById('detail-overlay').classList.remove('open');
+  const dp = document.getElementById('detail-panel');
+  dp.classList.remove('open');
+  dp.setAttribute('aria-hidden', 'true');
+  STATE.currentId = null; STATE.currentVendor = null; STATE.products = [];
+}
+document.getElementById('dp-close').onclick = closePanel;
+document.getElementById('detail-overlay').onclick = closePanel;
+
+function renderDetail() {
+  const v = STATE.currentVendor;
+  document.getElementById('dp-name').textContent = v.name;
+  document.getElementById('dp-sub').textContent = `Key: ${v.vendor_key}${v.odoo_partner_id ? ' · Odoo #' + v.odoo_partner_id : ' · not synced to Odoo'}`;
+
+  document.getElementById('f-name').value     = v.name || '';
+  document.getElementById('f-owner').value    = v.owner_contact || '';
+  document.getElementById('f-phone').value    = v.phone || '';
+  document.getElementById('f-alt').value      = v.alternate_phone || '';
+  document.getElementById('f-address').value  = v.address || '';
+  document.getElementById('f-gstin').value    = v.gstin || '';
+  document.getElementById('f-pan').value      = v.pan || '';
+  document.getElementById('f-bank').value     = v.bank_upi || '';
+  document.getElementById('f-pt').value       = v.payment_terms || '';
+  document.getElementById('f-brand').value    = v.primary_brand || '';
+  document.getElementById('f-slot').value     = v.delivery_slot || '';
+  document.getElementById('f-odoo').value     = v.odoo_partner_id || '';
+  document.getElementById('f-notes').value    = v.notes || '';
+
+  renderProducts();
+}
+
+function renderProducts() {
+  const tb = document.getElementById('rm-tbody');
+  tb.innerHTML = '';
+  document.getElementById('rm-count').textContent = STATE.products.filter(p => p.active).length;
+  for (const p of STATE.products.filter(p => p.active)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="rm-code">${escapeHtml(p.hn_rm_code || '—')}</td>
+      <td>${escapeHtml(p.product_name)}</td>
+      <td>${escapeHtml(p.uom || '—')}</td>
+      <td>${p.unit_price ? '₹' + Number(p.unit_price).toFixed(2) : '—'}</td>
+      <td class="actcell"><button data-pid="${p.id}">Remove</button></td>
+    `;
+    tr.querySelector('button').onclick = async () => {
+      if (!confirm('Remove this product mapping?')) return;
+      const r = await fetch(`${API}?action=remove-product&pin=${encodeURIComponent(PIN)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_id: p.id }),
+      }).then(r => r.json());
+      if (r.ok) { toast('Removed'); openVendor(STATE.currentId); }
+      else toast('Failed: ' + (r.error || ''), 'err');
+    };
+    tb.appendChild(tr);
+  }
+}
+
+function renderSpend(s) {
+  document.getElementById('spend-total').textContent = '₹' + Number(s.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  document.getElementById('spend-tx').textContent = s.total_transactions || 0;
+  document.getElementById('spend-bills').textContent = '₹' + Number((s.rm_vendor_bills && s.rm_vendor_bills.total_amount) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+}
+
+// ── Add product ────────────────────────────────────────────────
+document.getElementById('ap-add').onclick = async () => {
+  const name = document.getElementById('ap-name').value.trim();
+  if (!name) { toast('Product name required', 'err'); return; }
+  const body = {
+    vendor_id: STATE.currentId,
+    hn_rm_code: document.getElementById('ap-rm').value.trim() || null,
+    product_name: name,
+    uom: document.getElementById('ap-uom').value.trim() || null,
+    qty_hint: parseFloat(document.getElementById('ap-qty').value) || null,
+  };
+  const r = await fetch(`${API}?action=add-product&pin=${encodeURIComponent(PIN)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(r => r.json());
+  if (r.ok) {
+    toast('Added');
+    ['ap-rm','ap-name','ap-uom','ap-qty'].forEach(i => document.getElementById(i).value = '');
+    openVendor(STATE.currentId);
+  } else toast('Failed: ' + (r.error || ''), 'err');
+};
+
+// ── Save profile ───────────────────────────────────────────────
+document.getElementById('dp-save').onclick = async () => {
+  const body = {
+    id: STATE.currentId,
+    name: document.getElementById('f-name').value.trim() || null,
+    owner_contact: document.getElementById('f-owner').value.trim() || null,
+    phone: document.getElementById('f-phone').value.trim() || null,
+    alternate_phone: document.getElementById('f-alt').value.trim() || null,
+    address: document.getElementById('f-address').value.trim() || null,
+    gstin: document.getElementById('f-gstin').value.trim() || null,
+    pan: document.getElementById('f-pan').value.trim() || null,
+    bank_upi: document.getElementById('f-bank').value.trim() || null,
+    payment_terms: document.getElementById('f-pt').value || null,
+    primary_brand: document.getElementById('f-brand').value || null,
+    delivery_slot: document.getElementById('f-slot').value.trim() || null,
+    notes: document.getElementById('f-notes').value.trim() || null,
+  };
+  const r = await fetch(`${API}?action=update&pin=${encodeURIComponent(PIN)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(r => r.json());
+  if (r.ok) { toast('Saved'); closePanel(); loadList(); }
+  else toast('Failed: ' + (r.error || ''), 'err');
+};
+
+// ── Archive ────────────────────────────────────────────────────
+document.getElementById('dp-archive').onclick = async () => {
+  if (!confirm('Archive this vendor? It will hide from list but keep history.')) return;
+  const r = await fetch(`${API}?action=update&pin=${encodeURIComponent(PIN)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: STATE.currentId, active: 0 }),
+  }).then(r => r.json());
+  if (r.ok) { toast('Archived'); closePanel(); loadList(); }
+  else toast('Failed: ' + (r.error || ''), 'err');
+};
+
+// ── Add new vendor ─────────────────────────────────────────────
+document.getElementById('btn-add').onclick = async () => {
+  const name = prompt('Vendor name:');
+  if (!name) return;
+  const r = await fetch(`${API}?action=create&pin=${encodeURIComponent(PIN)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  }).then(r => r.json());
+  if (r.ok) { toast('Created'); loadList(); openVendor(r.id); }
+  else toast('Failed: ' + (r.error || ''), 'err');
+};
+
+// ── Sync Odoo ──────────────────────────────────────────────────
+document.getElementById('btn-sync').onclick = async () => {
+  if (!confirm('Pull all res.partner (suppliers) from Odoo and merge into D1?')) return;
+  document.getElementById('btn-sync').disabled = true;
+  document.getElementById('btn-sync').textContent = 'Syncing…';
+  try {
+    const r = await fetch(`${API}?action=odoo-sync&pin=${encodeURIComponent(PIN)}`).then(r => r.json());
+    if (r.ok) {
+      toast(`Sync ok: ${r.updated} updated, ${r.linked} linked, ${r.created} created (of ${r.total_pulled} Odoo records)`);
+      loadList();
+    } else toast('Sync failed: ' + (r.error || ''), 'err');
+  } catch (e) {
+    toast('Sync failed: ' + e.message, 'err');
+  } finally {
+    document.getElementById('btn-sync').disabled = false;
+    document.getElementById('btn-sync').textContent = 'Sync Odoo';
+  }
+};
+
+// ── Boot ───────────────────────────────────────────────────────
+(async () => {
+  if (PIN && await tryAuth(PIN)) {
+    document.getElementById('pin-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadList();
+  }
+})();
+</script>
+</body>
+</html>

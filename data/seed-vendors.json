@@ -1,0 +1,480 @@
+{
+  "_meta": {
+    "source": "Hand-filled vendor master sheets photographed 2026-04-25 04:15 IST + master list generated 2026-04-19 (38 deduplicated vendors)",
+    "extracted": "2026-04-25",
+    "schema_version": 1,
+    "notes": "Bisleri Water Supplier and Nazeer Nadeem are flagged as the same vendor on master sheet ('Same' arrow). Galaxy Bakery Products and Rehan Osmania share phone 9482965179 — likely the same vendor under two listings. Filter Water Supplier and Water Golden Rajesh share phone 9538605311. Resolve all dups in Odoo sync."
+  },
+  "vendors": [
+    {
+      "key": "abid-cheese-balls",
+      "name": "Abid Cheese Balls Vendor",
+      "phone": "9742770048",
+      "owner_contact": "Abid",
+      "address": "North Indian Hotel, Shivaji Nagar, HKP Road",
+      "bank_upi": null,
+      "payment_terms": "on_delivery",
+      "primary_brand": "NCH",
+      "delivery_slot": null,
+      "raw_materials": [
+        {"hn_rm": "HN-RM-212", "name": "Cheese Balls Raw", "uom": "Units"},
+        {"hn_rm": "HN-RM-072", "name": "Chicken Whole — Skin Out", "uom": "kg"},
+        {"hn_rm": "HN-RM-093", "name": "Milk (Local)", "uom": "L", "qty_hint": 54},
+        {"hn_rm": "HN-RM-210", "name": "Samosa Raw", "uom": "Units", "qty_hint": 15}
+      ]
+    },
+    {
+      "key": "abu-tomato-shop",
+      "name": "Abu Tomato Shop",
+      "phone": "9035764489",
+      "owner_contact": "Abu",
+      "address": "Russell Market, Shivajinagar, HKP Road",
+      "bank_upi": null,
+      "payment_terms": "7d",
+      "primary_brand": "HE",
+      "delivery_slot": "morning daily",
+      "raw_materials": [],
+      "notes": "No raw materials mapped — fill if applicable"
+    },
+    {
+      "key": "afeefa-impex",
+      "name": "Afeefa Impex Agencies",
+      "phone": null,
+      "owner_contact": null,
+      "address": null,
+      "bank_upi": null,
+      "payment_terms": null,
+      "primary_brand": null,
+      "raw_materials": [],
+      "notes": "Phone missing on master sheet"
+    },
+    {
+      "key": "ahmed",
+      "name": "Ahmed",
+      "phone": null,
+      "owner_contact": "Ahmed",
+      "address": null,
+      "bank_upi": null,
+      "payment_terms": null,
+      "primary_brand": null,
+      "raw_materials": [],
+      "notes": "Phone missing on master sheet — possibly subsumed by 'Ahmed - Gas Cylinder'"
+    },
+    {
+      "key": "ahmed-gas-cylinder",
+      "name": "Ahmed - Gas Cylinder",
+      "phone": "8553568718",
+      "owner_contact": "Ahmed",
+      "address": "Shivajinagar, HKP Road",
+      "bank_upi": "UPI",
+      "payment_terms": "on_delivery",
+      "primary_brand": "BOTH",
+      "delivery_slot": "DAY time",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-225", "name": "LPG Gas Cylinder", "uom": "Units"}
+      ]
+    },
+    {
+      "key": "anju-express",
+      "name": "Anju Express",
+      "phone": null,
+      "owner_contact": null,
+      "address": null,
+      "bank_upi": null,
+      "payment_terms": null,
+      "primary_brand": null,
+      "raw_materials": [],
+      "notes": "Master sheet shows 16 products against this — possibly aggregator/online listing rather than a true vendor. Verify before activating."
+    },
+    {
+      "key": "bisleri-water-supplier",
+      "name": "Bisleri Water Supplier",
+      "phone": "9900323484",
+      "owner_contact": "Nadeem",
+      "address": "Shivajinaya, HKP Road",
+      "bank_upi": "Bank or Cash",
+      "payment_terms": "on_delivery",
+      "primary_brand": "BOTH",
+      "delivery_slot": "evening",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-207", "name": "Bottled Water (500ml)", "uom": "Units", "qty_hint": 7.5}
+      ],
+      "notes": "Marked 'Same' as 'Nazeer Nadeem' on master sheet — merge candidate"
+    },
+    {
+      "key": "butter-online",
+      "name": "Butter Online",
+      "phone": null,
+      "owner_contact": null,
+      "address": null,
+      "raw_materials": [],
+      "notes": "Phone missing — possibly an online/marketplace channel rather than a person vendor"
+    },
+    {
+      "key": "d-babu-onion",
+      "name": "D Babu Onion Shop",
+      "phone": "9845599088",
+      "owner_contact": "D Babu",
+      "address": "Shivajinagar, behind Hamza Express",
+      "bank_upi": "Cash",
+      "payment_terms": "on_delivery",
+      "primary_brand": "HE",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-058", "name": "Onion", "uom": "kg", "qty_hint": 14}
+      ]
+    },
+    {
+      "key": "filter-water-supplier",
+      "name": "Filter Water Supplier",
+      "phone": "9538605311",
+      "owner_contact": "Rajesh",
+      "address": "Shivaji nagar",
+      "bank_upi": "cash",
+      "payment_terms": "7d",
+      "primary_brand": null,
+      "raw_materials": [],
+      "notes": "Shares phone 9538605311 with 'Water Golden Rajesh' on master sheet — likely same vendor, merge in Odoo"
+    },
+    {
+      "key": "galaxy-bakery-products",
+      "name": "Galaxy Bakery Products",
+      "phone": "9482965179",
+      "owner_contact": "Rehan",
+      "address": "SS Sira, Tumkur, Karnataka",
+      "bank_upi": "Bank",
+      "payment_terms": "on_delivery",
+      "primary_brand": "NCH",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-205", "name": "Osmania Biscuit (Loose)", "uom": "Units"}
+      ],
+      "notes": "Shares phone with 'Rehan Osmania' — same vendor, merge"
+    },
+    {
+      "key": "ganga-bakery",
+      "name": "Ganga Bakery",
+      "phone": "7019547835",
+      "owner_contact": null,
+      "address": "Vasant Nagar",
+      "bank_upi": "UPI",
+      "payment_terms": "on_delivery",
+      "primary_brand": "NCH",
+      "delivery_slot": "evening",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-204", "name": "Buns", "uom": "Units"}
+      ]
+    },
+    {
+      "key": "hkgn-mutton-stall",
+      "name": "H.K.G.N Mutton Stall (Noor)",
+      "phone": "9880751395",
+      "owner_contact": "Noor",
+      "address": "Russell Market, Shivajinagar",
+      "bank_upi": "Bank Transfer",
+      "payment_terms": "7d",
+      "primary_brand": "NCH",
+      "delivery_slot": "evening",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-077", "name": "Mutton Biryani Cut", "uom": "kg"},
+        {"hn_rm": "HN-RM-078", "name": "Mutton Chops", "uom": "kg"},
+        {"hn_rm": "HN-RM-079", "name": "Mutton Gravy Cut", "uom": "kg"}
+      ]
+    },
+    {
+      "key": "hari-prasad-b",
+      "name": "Hari Prasad B",
+      "phone": null,
+      "raw_materials": [],
+      "notes": "Phone missing"
+    },
+    {
+      "key": "imtaiz-bhai",
+      "name": "Imtaiz Bhai (Curd and Milk)",
+      "phone": "8088350733",
+      "owner_contact": "Imtaiz Bhai",
+      "address": null,
+      "bank_upi": "Cash",
+      "payment_terms": "7d",
+      "primary_brand": null,
+      "delivery_slot": "evening",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-092", "name": "Curd", "uom": "L"},
+        {"hn_rm": "HN-RM-093", "name": "Milk (Local)", "uom": "L"}
+      ]
+    },
+    {
+      "key": "jay-jay-dehydrofoods",
+      "name": "Jay & Jay Dehydrofoods Pvt Ltd",
+      "phone": "+91 99766 88833",
+      "owner_contact": null,
+      "address": "Vishwapriya Nagar, Begur, Bangalore",
+      "bank_upi": "Bank",
+      "payment_terms": "7d",
+      "primary_brand": "NCH",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-201", "name": "Skimmed Milk Powder", "uom": "kg"}
+      ]
+    },
+    {
+      "key": "karachi-bakery",
+      "name": "Karachi Bakery",
+      "phone": null,
+      "raw_materials": [],
+      "notes": "Phone missing"
+    },
+    {
+      "key": "mn-broilers",
+      "name": "M.N. Broilers (Syed Ahmedulla)",
+      "phone": "9845007755",
+      "owner_contact": "Syed Ahmedulla",
+      "address": "Shivajinagar, HKP",
+      "bank_upi": "Bank",
+      "payment_terms": "on_delivery",
+      "primary_brand": "HE",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-073", "name": "Chicken Tandoori Cut", "uom": "kg"},
+        {"hn_rm": "HN-RM-076", "name": "Chicken Thighs", "uom": "kg"},
+        {"hn_rm": "HN-RM-072", "name": "Chicken Whole — Skin Out", "uom": "kg"},
+        {"hn_rm": "HN-RM-074", "name": "Chicken Whole — With Skin", "uom": "kg"}
+      ]
+    },
+    {
+      "key": "manju-veg-supplier",
+      "name": "Manju Veg Supplier",
+      "phone": "9886244138",
+      "owner_contact": "Manju",
+      "address": "Chandni Chowk, Shivajinagar",
+      "bank_upi": "cash",
+      "payment_terms": "on_delivery",
+      "primary_brand": "HE",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-064", "name": "Cauliflower (Gobi)", "uom": "kg"},
+        {"hn_rm": "HN-RM-071", "name": "Cucumber", "uom": "kg"},
+        {"hn_rm": "HN-RM-068", "name": "French Beans", "uom": "kg"},
+        {"hn_rm": "HN-RM-066", "name": "Fresh Mint (Pudina)", "uom": "kg"},
+        {"hn_rm": "HN-RM-096", "name": "Garlic (Lasun)", "uom": "kg"},
+        {"hn_rm": "HN-RM-065", "name": "Lemon (Nimbu)", "uom": "kg"}
+      ]
+    },
+    {
+      "key": "mudassir-pasha",
+      "name": "Mudassir Pasha (Charcoal)",
+      "phone": "8050547191",
+      "owner_contact": "Mudassir",
+      "address": "Shivaji nagar",
+      "bank_upi": "Bank",
+      "payment_terms": "7d",
+      "primary_brand": "BOTH",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-095", "name": "Charcoal", "uom": "kg", "qty_hint": 32}
+      ]
+    },
+    {
+      "key": "navya-milk",
+      "name": "Navya Milk Vendor",
+      "phone": "9902476503",
+      "raw_materials": [
+        {"hn_rm": null, "name": "Milk", "uom": "L"}
+      ],
+      "notes": "Profile sheet not in batch — derive from master list (1 product = milk)"
+    },
+    {
+      "key": "nazeer-nadeem",
+      "name": "Nazeer Nadeem (Bisleri & Cold Drinks)",
+      "phone": "9900323484",
+      "owner_contact": "Nadeem",
+      "raw_materials": [],
+      "notes": "Master sheet says 'Same' linking to Bisleri Water Supplier — same person, two listings. Merge."
+    },
+    {
+      "key": "niloufer-bakery",
+      "name": "Niloufer Bakery",
+      "phone": null,
+      "raw_materials": [],
+      "notes": "Phone missing on master. 5 products on master — fill in profile sheet"
+    },
+    {
+      "key": "nisarcha-brother",
+      "name": "Nisarcha Brother (Hamza/Krispy Eats)",
+      "phone": "8971457998",
+      "owner_contact": "Suhail",
+      "address": "Shivaji nagar",
+      "bank_upi": "Cash",
+      "payment_terms": "on_delivery",
+      "primary_brand": "NCH",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-097", "name": "Chicken Cutlet (Pre-made)", "uom": "Units"},
+        {"hn_rm": "HN-RM-206", "name": "Chicken Cutlet (Unfried)", "uom": "Units"},
+        {"hn_rm": "HN-RM-216", "name": "Chicken Roll Raw", "uom": "Units"}
+      ]
+    },
+    {
+      "key": "online",
+      "name": "Online",
+      "phone": null,
+      "raw_materials": [],
+      "notes": "Generic 'Online' entry on master — likely catch-all for marketplace purchases. Consider deactivating or splitting into per-marketplace vendors."
+    },
+    {
+      "key": "prabhu-buffalo-milk",
+      "name": "Prabhu Buffalo Milk Vendor",
+      "phone": "9886806395",
+      "owner_contact": "Prabhu",
+      "address": "Hagawara, Bangalore",
+      "bank_upi": "Cash",
+      "payment_terms": "on_delivery",
+      "primary_brand": "HE",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-200", "name": "Buffalo Milk", "uom": "L"}
+      ]
+    },
+    {
+      "key": "r-prasad-dairy",
+      "name": "R Prasad Dairy",
+      "phone": "+91 99726 08280",
+      "raw_materials": [],
+      "notes": "Profile sheet not in batch — 1 product on master"
+    },
+    {
+      "key": "ranveer-tea-supplier",
+      "name": "Ranveer Tea Supplier",
+      "phone": null,
+      "raw_materials": [],
+      "notes": "Phone missing"
+    },
+    {
+      "key": "rehan-osmania",
+      "name": "Rehan Osmania",
+      "phone": "9482965179",
+      "owner_contact": "Rehan",
+      "address": "Sira, Tumkur, Karnataka",
+      "bank_upi": "Bank",
+      "raw_materials": [],
+      "notes": "Same phone as Galaxy Bakery Products — same vendor, merge in Odoo"
+    },
+    {
+      "key": "sajid-mutton-brain",
+      "name": "Sajid (Mutton Brain)",
+      "phone": "9113090982",
+      "owner_contact": "Sajid",
+      "address": "Shivajinagar",
+      "bank_upi": "cash",
+      "payment_terms": "7d",
+      "primary_brand": "HE",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-090", "name": "Brain (Bheja)", "uom": "kg"}
+      ]
+    },
+    {
+      "key": "sameer-hamza-samosa",
+      "name": "Sameer Hamza Samosa Vendor",
+      "phone": "9746581122",
+      "owner_contact": null,
+      "address": "Shivajinagar, Chandni Chowk",
+      "bank_upi": "cash",
+      "payment_terms": "on_delivery",
+      "primary_brand": "NCH",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-210", "name": "Samosa Raw", "uom": "Units"}
+      ]
+    },
+    {
+      "key": "savita-bakery",
+      "name": "Savita Bakery",
+      "phone": "9916191842",
+      "owner_contact": null,
+      "address": "Shivajinagar",
+      "bank_upi": "Cash",
+      "payment_terms": "on_delivery",
+      "primary_brand": "HE",
+      "raw_materials": [
+        {"hn_rm": "HN-RM-204", "name": "Buns", "uom": "Units", "qty_hint": 8}
+      ]
+    },
+    {
+      "key": "shariff-departmental-stores",
+      "name": "Shariff Departmental Stores",
+      "phone": "+91 89514 84783",
+      "owner_contact": "Shariff",
+      "address": "Shivajinagar",
+      "bank_upi": "Bank",
+      "payment_terms": "7d",
+      "primary_brand": "BOTH",
+      "raw_materials_count_estimate": 85,
+      "raw_materials_partial": [
+        {"hn_rm": "HN-RM-054", "name": "8 to 8 Sauce (Maggi)", "uom": "L"},
+        {"hn_rm": "HN-RM-040", "name": "Ajinomoto (MSG)", "uom": "kg"},
+        {"hn_rm": "HN-RM-033", "name": "All-Purpose Flour (Maida)", "uom": "kg"},
+        {"hn_rm": "HN-RM-112", "name": "Almonds (Badam)", "uom": "kg"},
+        {"hn_rm": "HN-RM-024", "name": "Amchur Powder (Dry Mango)", "uom": "kg"},
+        {"hn_rm": "HN-RM-048", "name": "Amul Cheese (Block)", "uom": "kg"},
+        {"hn_rm": "HN-RM-047", "name": "Amul Fresh Cream", "uom": "L"},
+        {"hn_rm": "HN-RM-107", "name": "Baking Soda", "uom": "kg"},
+        {"hn_rm": "HN-RM-007", "name": "Bay Leaves (Tej Patta)", "uom": "kg"},
+        {"hn_rm": "HN-RM-002", "name": "Black Cardamom (Badi Elaichi)", "uom": "kg"},
+        {"hn_rm": "HN-RM-028", "name": "Black Salt (Kala Namak)", "uom": "kg"},
+        {"hn_rm": "HN-RM-053", "name": "Capsicum Sauce", "uom": "L"},
+        {"hn_rm": "HN-RM-083", "name": "Carom Seeds (Ajwain)", "uom": "kg"}
+      ],
+      "notes": "85 RM total — only first ~13 visible on photographed sheet. Remainder must be filled by re-photographing or pulling from Odoo. This is the master spice/grocery vendor — highest leverage to get fully mapped."
+    },
+    {
+      "key": "sree-manjula-enterprises",
+      "name": "Sree Manjula Enterprises",
+      "phone": "9343587777",
+      "raw_materials": [],
+      "notes": "1 product on master — profile sheet not in batch"
+    },
+    {
+      "key": "sri-krishna-enterprises",
+      "name": "Sri Krishna Enterprises",
+      "phone": null,
+      "raw_materials": [],
+      "notes": "STRUCK OUT on master sheet — possibly deactivated"
+    },
+    {
+      "key": "tabrez-rumali-rotti",
+      "name": "Tabrez (Rumali Rotti)",
+      "phone": "8870581691",
+      "owner_contact": "Tabrez",
+      "raw_materials": [
+        {"hn_rm": null, "name": "Rumali Rotti", "uom": "Units"}
+      ],
+      "notes": "Profile sheet not in batch"
+    },
+    {
+      "key": "tea-powder-luqman",
+      "name": "Tea Powder Luqman",
+      "phone": "+91 99621 22483",
+      "raw_materials": [
+        {"hn_rm": null, "name": "Tea Powder", "uom": "kg"}
+      ],
+      "notes": "1 product on master"
+    },
+    {
+      "key": "water-golden-rajesh",
+      "name": "Water Golden Rajesh",
+      "phone": "9620515684",
+      "alternate_phone": "9538605311",
+      "raw_materials": [],
+      "notes": "Master page 2 entry (#38). Shares 9538605311 with Filter Water Supplier — likely same vendor, merge"
+    },
+    {
+      "key": "parcel-containers",
+      "name": "Parcel Containers Vendor",
+      "phone": null,
+      "raw_materials": [
+        {"hn_rm": null, "name": "Parcel Containers", "uom": "Units"}
+      ],
+      "notes": "Handwritten addition #39 on master — entry incomplete, fill in next field round"
+    }
+  ],
+  "_dedup_candidates": [
+    {"keep": "bisleri-water-supplier", "merge": ["nazeer-nadeem"], "reason": "'Same' arrow on master sheet, same phone 9900323484"},
+    {"keep": "galaxy-bakery-products", "merge": ["rehan-osmania"], "reason": "Same phone 9482965179, same owner Rehan, same address Sira Tumkur"},
+    {"keep": "filter-water-supplier", "merge": ["water-golden-rajesh"], "reason": "Both list phone 9538605311"},
+    {"keep": "ahmed-gas-cylinder", "merge": ["ahmed"], "reason": "'Ahmed' bare entry has no detail — likely subsumed by 'Ahmed - Gas Cylinder'"}
+  ],
+  "_payment_terms_enum": ["on_delivery", "7d", "15d", "30d", "45d", "other"],
+  "_primary_brand_enum": ["HE", "NCH", "BOTH"],
+  "_bank_upi_enum_examples": ["UPI", "Cash", "Bank", "Bank Transfer", "Bank or Cash"]
+}
