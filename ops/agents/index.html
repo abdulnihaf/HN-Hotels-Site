@@ -78,6 +78,14 @@
   .f-actions button { padding: 6px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
   .f-actions button:hover { border-color: var(--text-dim); }
   .f-actions button.primary { background: var(--brand); color: #000; border-color: var(--brand); }
+  .f-rectify { margin-top: 10px; padding: 10px; background: rgba(124,86,247,0.05); border: 1px solid rgba(124,86,247,0.25); border-radius: 8px; }
+  .f-rectify .label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 6px; }
+  .f-rectify .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .f-rectify .opts button { padding: 6px 10px; background: var(--surface); border: 1px solid rgba(124,86,247,0.4); color: #c4b5fd; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .f-rectify .opts button:hover { background: rgba(124,86,247,0.12); border-color: #7c56f7; color: #fff; }
+  .f-rectify .opts button.api-action { background: rgba(16,185,129,0.10); border-color: rgba(16,185,129,0.5); color: #34d399; }
+  .f-rectify .opts button.api-action:hover { background: rgba(16,185,129,0.18); }
+  .f-rectify .opts button.link-action::after { content: " ↗"; opacity: 0.7; }
 
   .f-evidence { margin-top: 8px; padding: 10px; background: var(--surface-2); border-radius: 8px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-dim); white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto; display: none; }
   .f-evidence.show { display: block; }
@@ -166,7 +174,7 @@
 <script>
 const API = '/api/agents';
 let PIN = sessionStorage.getItem('hn_agents_pin') || '';
-let STATE = { agent: 'finance-watcher', status: 'open', findings: [], agents: [] };
+let STATE = { agent: 'finance-watcher', status: 'open', findings: [], agents: [], rectify: {} };
 
 // ── Toast ──────────────────────────────────────────────────────
 function toast(msg, kind = 'ok') {
@@ -199,8 +207,15 @@ document.getElementById('pin-input').addEventListener('keydown', e => {
 
 // ── Bootstrap ──────────────────────────────────────────────────
 async function bootstrap() {
-  await loadAgents();
+  await Promise.all([loadAgents(), loadRectifyOptions()]);
   await loadFindings();
+}
+
+async function loadRectifyOptions() {
+  try {
+    const r = await fetch(`${API}?action=rectify-options&pin=${encodeURIComponent(PIN)}`).then(r => r.json());
+    if (r.ok) STATE.rectify = r.rectify || {};
+  } catch (_) {}
 }
 
 async function loadAgents() {
@@ -300,6 +315,21 @@ function renderCard(f) {
       </div>`;
   }
 
+  // Render rectify panel for this category if options exist + finding still open
+  const rectifyOpts = (STATE.rectify[f.category] || []);
+  let rectifyBlock = '';
+  if (rectifyOpts.length && f.closure_status === 'open') {
+    const buttons = rectifyOpts.map(opt => {
+      const cls = opt.kind === 'inline_api' ? 'api-action' : (opt.kind === 'link' ? 'link-action' : '');
+      return `<button class="${cls}" data-rectify-id="${escapeHtml(opt.id)}" data-rectify-kind="${escapeHtml(opt.kind)}" data-rectify-url="${escapeHtml(opt.url || '')}">${escapeHtml(opt.label)}</button>`;
+    }).join('');
+    rectifyBlock = `
+      <div class="f-rectify">
+        <div class="label">Rectify in UI</div>
+        <div class="opts">${buttons}</div>
+      </div>`;
+  }
+
   card.innerHTML = `
     <div class="f-row1">
       <div class="f-title">${escapeHtml(f.title)}</div>
@@ -323,6 +353,7 @@ function renderCard(f) {
         <button data-act="dismiss">Dismiss</button>
       ` : ''}
     </div>
+    ${rectifyBlock}
     <pre class="f-evidence">${escapeHtml(evidencePretty)}</pre>
     <div class="f-directive">
       <textarea placeholder="Write the directive in your own words. e.g. 'Basheer, Shariff bill 12k overdue 5 days, please call him today and pay by EOD.'"></textarea>
@@ -381,6 +412,41 @@ function renderCard(f) {
         if (!r.ok) { toast('Failed: ' + (r.error || ''), 'err'); return; }
         toast(status === 'resolved' ? 'Resolved' : 'Dismissed');
         loadFindings();
+      }
+    };
+  });
+
+  // Wire rectify buttons
+  card.querySelectorAll('.f-rectify .opts button').forEach(btn => {
+    btn.onclick = async () => {
+      const action_id = btn.dataset.rectifyId;
+      const kind = btn.dataset.rectifyKind;
+      const url = btn.dataset.rectifyUrl;
+      if (kind === 'link' && url) {
+        window.open(url, '_blank');
+        return;
+      }
+      const confirmMsg = `Apply rectify "${btn.textContent}" to this finding?\n\nThis will call the underlying API and auto-close the finding on success.`;
+      if (!confirm(confirmMsg)) return;
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = 'Working…';
+      try {
+        const r = await fetch(`${API}?action=rectify&pin=${encodeURIComponent(PIN)}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ finding_id: f.id, action_id }),
+        }).then(r => r.json());
+        if (!r.ok) {
+          const detail = r.detail ? ` — ${typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail).slice(0,120)}` : '';
+          throw new Error((r.error || 'rectify_failed') + detail);
+        }
+        toast(`Rectified · ${orig}`);
+        loadFindings();
+      } catch (e) {
+        toast('Rectify failed: ' + e.message, 'err');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
       }
     };
   });

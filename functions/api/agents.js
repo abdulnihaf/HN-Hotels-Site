@@ -444,6 +444,151 @@ async function handleClose(env, body, actor) {
   return json({ ok: true });
 }
 
+// ━━━ Rectify map: per-category options to fix the finding in-UI ━━━━━━━━
+// 'inline_api'  → POST to underlying API; on success, finding auto-closes
+// 'link'        → just open the underlying ops page in a new tab
+// 'note_only'   → no API; just record a closure note
+const RECTIFY = {
+  stale_po: [
+    { id: 'mark_received', label: 'Mark as received', kind: 'inline_api',
+      method: 'POST', api: '/api/money?action=mark-po-received',
+      build_body: (ev, pin) => ({
+        pin, po_id: ev.odoo_id, po_name: ev.odoo_name,
+        brand: ev.brand, notes: 'Marked via agent rectify',
+      }),
+      auto_close: true,
+    },
+    { id: 'open_purchase_view', label: 'Open in /ops/purchase/view →', kind: 'link', url: '/ops/purchase/view/' },
+  ],
+  po_paid_in_cash_bypass: [
+    { id: 'mark_paired', label: 'Mark as paired (both real)', kind: 'inline_api',
+      method: 'POST', api: '/api/money?action=resolve-dup',
+      build_body: (ev, pin) => ({
+        pin,
+        po_id: ev.a?.id, po_name: ev.a?.odoo_name,
+        outlet_feed: ev.b?.feed, outlet_expense_id: ev.b?.id,
+        action: 'mark-as-paired',
+        notes: 'Resolved via agent rectify',
+      }),
+      auto_close: true,
+    },
+    { id: 'cancel_po_keep_outlet', label: 'PO cancelled, paid at outlet', kind: 'inline_api',
+      method: 'POST', api: '/api/money?action=resolve-dup',
+      build_body: (ev, pin) => ({
+        pin,
+        po_id: ev.a?.id, po_name: ev.a?.odoo_name,
+        outlet_feed: ev.b?.feed, outlet_expense_id: ev.b?.id,
+        action: 'po-cancelled-paid-via-outlet',
+        notes: 'Resolved via agent rectify',
+      }),
+      auto_close: true,
+    },
+    { id: 'open_money', label: 'Open Money Cockpit (Dups tab) →', kind: 'link', url: '/ops/money/' },
+  ],
+  duplicate: [
+    { id: 'open_money', label: 'Open Money Cockpit (Dups tab) →', kind: 'link', url: '/ops/money/' },
+  ],
+  orphan: [
+    { id: 'open_money', label: 'Open Money Cockpit (Orphans tab) →', kind: 'link', url: '/ops/money/' },
+  ],
+  overdue_bill: [
+    { id: 'open_bills', label: 'Open in /ops/bills →', kind: 'link', url: '/ops/bills/' },
+  ],
+  bill_stale_no_due: [
+    { id: 'open_bills', label: 'Open in /ops/bills →', kind: 'link', url: '/ops/bills/' },
+  ],
+  po_received_no_bill: [
+    { id: 'open_bills_attach', label: 'Open /ops/bills (attach to PO) →', kind: 'link', url: '/ops/bills/' },
+  ],
+  po_billed_twice: [
+    { id: 'open_bills_resolve', label: 'Open /ops/bills (cancel duplicate) →', kind: 'link', url: '/ops/bills/' },
+  ],
+  rm_no_po: [
+    { id: 'open_purchase', label: 'Back-fill as PO in /ops/purchase →', kind: 'link', url: '/ops/purchase/' },
+  ],
+  expense_no_product: [
+    { id: 'open_expense', label: 'Open in /ops/expense →', kind: 'link', url: '/ops/expense/' },
+  ],
+  product_no_uom: [
+    { id: 'open_purchase_admin', label: 'Open RM admin →', kind: 'link', url: '/ops/purchase/' },
+  ],
+  schema_variant_gap: [
+    { id: 'note_acked', label: 'Acknowledge (no in-UI fix)', kind: 'note_only',
+      note: 'Architectural gap acknowledged. Variant-vendor schema migration pending.', auto_close: true },
+  ],
+};
+
+async function handleRectifyOptions(env, url) {
+  // Returns the rectify map so the UI knows what buttons to render per category.
+  return json({ ok: true, rectify: RECTIFY });
+}
+
+async function handleRectify(env, body, actor, originBase, pin) {
+  const id = body.finding_id;
+  const action_id = body.action_id;
+  if (!id || !action_id) return badRequest('finding_id_and_action_id_required');
+
+  const f = await env.DB.prepare(`SELECT * FROM agent_findings WHERE id = ?`).bind(id).first();
+  if (!f) return notFound('finding_not_found');
+
+  const opts = RECTIFY[f.category];
+  if (!opts) return badRequest(`no_rectify_options_for_category:${f.category}`);
+  const opt = opts.find((o) => o.id === action_id);
+  if (!opt) return badRequest(`unknown_action_id:${action_id}`);
+
+  if (opt.kind === 'link') {
+    return json({ ok: true, kind: 'link', url: opt.url });
+  }
+
+  if (opt.kind === 'note_only') {
+    if (opt.auto_close) {
+      await env.DB.prepare(
+        `UPDATE agent_findings
+            SET closure_status = 'resolved', closed_at = unixepoch(),
+                closure_note = ?, updated_at = unixepoch()
+          WHERE id = ?`
+      ).bind(opt.note || `Rectified: ${opt.label}`, id).run();
+    }
+    return json({ ok: true, kind: 'note_only', note: opt.note });
+  }
+
+  if (opt.kind === 'inline_api') {
+    let evidence;
+    try { evidence = JSON.parse(f.evidence_json || '{}'); }
+    catch { return json({ ok: false, error: 'evidence_parse_failed' }); }
+
+    const reqBody = opt.build_body(evidence, pin);
+    let apiResp;
+    try {
+      const r = await fetch(`${originBase}${opt.api}`, {
+        method: opt.method || 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody),
+      });
+      apiResp = await r.json();
+    } catch (e) {
+      return json({ ok: false, error: 'api_call_failed', detail: String(e.message || e) });
+    }
+
+    const apiOk = apiResp?.ok === true || apiResp?.success === true;
+    if (!apiOk) {
+      return json({ ok: false, error: 'api_returned_error', api_response: apiResp });
+    }
+
+    if (opt.auto_close) {
+      await env.DB.prepare(
+        `UPDATE agent_findings
+            SET closure_status = 'resolved', closed_at = unixepoch(),
+                closure_note = ?, updated_at = unixepoch()
+          WHERE id = ?`
+      ).bind(`Rectified: ${opt.label} by ${actor.name}`, id).run();
+    }
+    return json({ ok: true, kind: 'inline_api', action: opt.id, api_response: apiResp });
+  }
+
+  return badRequest('rectify_kind_not_implemented');
+}
+
 // ━━━ Router ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export async function onRequest(context) {
@@ -461,9 +606,10 @@ export async function onRequest(context) {
 
   try {
     if (request.method === 'GET') {
-      if (action === 'list')     return handleList(env);
-      if (action === 'runs')     return handleRuns(env, url);
-      if (action === 'findings') return handleFindings(env, url);
+      if (action === 'list')             return handleList(env);
+      if (action === 'runs')             return handleRuns(env, url);
+      if (action === 'findings')         return handleFindings(env, url);
+      if (action === 'rectify-options')  return handleRectifyOptions(env, url);
       return badRequest('unknown_action');
     }
     if (request.method === 'POST') {
@@ -472,6 +618,7 @@ export async function onRequest(context) {
       if (action === 'verdict')   return handleVerdict(env, body, user);
       if (action === 'directive') return handleDirective(env, body, user);
       if (action === 'close')     return handleClose(env, body, user);
+      if (action === 'rectify')   return handleRectify(env, body, user, originBase, pin);
       return badRequest('unknown_action');
     }
     return badRequest('method_not_allowed');
