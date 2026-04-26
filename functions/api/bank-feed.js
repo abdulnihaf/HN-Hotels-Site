@@ -770,28 +770,61 @@ export async function onRequestGet({ request, env }) {
     // here. The dashboard is the HDFC + Federal account view by intent.
     const BANK_FILTER = `source IN ('hdfc','federal')`;
     const [latestByInstr, today, week, month, pstatus, health, lastReceived, lastTxn] = await Promise.all([
-      // Most recent balance per instrument where balance is exposed. The
-      // correlated-subquery form picks the LATEST row by (txn_at, id) per
-      // instrument — id-DESC is the tiebreaker when multiple rows share
-      // the same txn_at (date-only normalization can produce ties; see
-      // commit f50fd2f). The earlier GROUP-BY+HAVING form returned an
-      // arbitrary row from each tied set, which silently misordered the
-      // displayed balance.
+      // Effective current balance per instrument:
+      //   anchor = latest row WITH balance_paise_after (from the bank's
+      //            own snapshot — NEFT/IMPS alerts include this, card
+      //            debits do NOT).
+      //   delta  = net of any subsequent rows by (timestamp, id) that
+      //            don't carry their own balance_paise_after — i.e. the
+      //            txns that happened AFTER the last bank-confirmed
+      //            balance. Includes partial rows iff amount > 0 (so a
+      //            ₹15,000 Shariff debit with txn_at=NULL but a parsed
+      //            amount still counts toward the running balance).
+      //   effective_balance = anchor + delta
+      //
+      // This is what the user expects to see — "what is my balance RIGHT
+      // NOW given everything I've ingested" — not "what was the balance
+      // at the most recent NEFT". Without delta, a card-debit run can
+      // look like a +balance until the next NEFT lands.
       db.prepare(`
-        SELECT m.instrument, m.balance_paise_after AS balance_paise, m.txn_at
-        FROM money_events m
-        WHERE m.balance_paise_after IS NOT NULL
-          AND m.parse_status='parsed'
-          AND ${BANK_FILTER}
-          AND m.id = (
-            SELECT m2.id FROM money_events m2
-            WHERE m2.instrument = m.instrument
-              AND m2.balance_paise_after IS NOT NULL
-              AND m2.parse_status='parsed'
-              AND m2.source IN ('hdfc','federal')
-            ORDER BY m2.txn_at DESC, m2.id DESC
-            LIMIT 1
-          )
+        WITH anchor AS (
+          SELECT m.instrument,
+                 m.balance_paise_after AS bal_paise,
+                 COALESCE(m.txn_at, m.received_at) AS effective_ts,
+                 m.id, m.txn_at
+          FROM money_events m
+          WHERE m.balance_paise_after IS NOT NULL
+            AND m.parse_status='parsed'
+            AND ${BANK_FILTER}
+            AND m.id = (
+              SELECT m2.id FROM money_events m2
+              WHERE m2.instrument = m.instrument
+                AND m2.balance_paise_after IS NOT NULL
+                AND m2.parse_status='parsed'
+                AND m2.source IN ('hdfc','federal')
+              ORDER BY COALESCE(m2.txn_at, m2.received_at) DESC, m2.id DESC
+              LIMIT 1
+            )
+        )
+        SELECT a.instrument,
+               a.bal_paise + COALESCE((
+                 SELECT SUM(CASE WHEN d.direction='credit' THEN d.amount_paise
+                                 WHEN d.direction='debit'  THEN -d.amount_paise
+                                 ELSE 0 END)
+                 FROM money_events d
+                 WHERE d.instrument = a.instrument
+                   AND d.source IN ('hdfc','federal')
+                   AND d.amount_paise > 0
+                   AND d.direction IN ('credit','debit')
+                   AND d.parse_status IN ('parsed','partial')
+                   AND d.balance_paise_after IS NULL
+                   AND (
+                     COALESCE(d.txn_at, d.received_at) > a.effective_ts
+                     OR (COALESCE(d.txn_at, d.received_at) = a.effective_ts AND d.id > a.id)
+                   )
+               ), 0) AS balance_paise,
+               a.txn_at
+        FROM anchor a
       `).all(),
       db.prepare(`SELECT direction, SUM(amount_paise) AS total_paise, COUNT(*) AS n
                   FROM money_events
