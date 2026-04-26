@@ -24,6 +24,8 @@ const LEDGER_USERS = {
   '0305': { name: 'Nihaf',  role: 'admin' },
   '5882': { name: 'Nihaf',  role: 'admin' },
   '3754': { name: 'Naveen', role: 'cfo'   },
+  '4040': { name: 'Haneef', role: 'viewer'},
+  '5050': { name: 'Nisar',  role: 'viewer'},
 };
 function resolveUser(pin) { return LEDGER_USERS[pin] || null; }
 function isAdminRole(user) { return user && (user.role === 'admin' || user.role === 'cfo'); }

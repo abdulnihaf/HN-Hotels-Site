@@ -29,7 +29,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const ALLOWED_ROLES        = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase']);
+const ALLOWED_ROLES        = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase', 'viewer']);
 const ADMIN_ROLES          = new Set(['admin', 'cfo']);
 const VALID_PAYMENT_TERMS  = new Set(['on_delivery', '7d', '15d', '30d', '45d', 'other']);
 const VALID_PRIMARY_BRANDS = new Set(['HE', 'NCH', 'BOTH']);
@@ -47,6 +47,8 @@ const USERS = {
   '3697': { name: 'Yashwant', role: 'gm'       },
   '2026': { name: 'Zoya',     role: 'purchase' },
   '8316': { name: 'Zoya',     role: 'purchase' },
+  '4040': { name: 'Haneef',   role: 'viewer'   },
+  '5050': { name: 'Nisar',    role: 'viewer'   },
 };
 
 // ━━━ Helpers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

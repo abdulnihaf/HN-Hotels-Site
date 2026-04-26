@@ -32,6 +32,8 @@ const PINS = {
   '3678': { name: 'Faheem', role: 'ops'   },
   '5882': { name: 'Nihaf',  role: 'admin' },   // legacy
   '2026': { name: 'Zoya',   role: 'ops'   },
+  '4040': { name: 'Haneef', role: 'read'  },   // investor view-only
+  '5050': { name: 'Nisar',  role: 'read'  },   // investor view-only
 };
 const ROLE_RANK = { read: 0, ops: 1, admin: 2 };
 

@@ -15,6 +15,8 @@ const PINS = {
   '7421': 'Yash',
   '8316': 'Zoya',
   '6045': 'Faheem',
+  '4040': 'Haneef',
+  '5050': 'Nisar',
 };
 
 function companyFromRequest(url, body) {

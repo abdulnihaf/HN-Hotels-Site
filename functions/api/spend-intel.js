@@ -60,6 +60,8 @@ const PIN_SCOPE = {
   '15':   { name: 'Noor',     role: 'cashier',  brands: ['HE'],            canvas: 'operator' },
   '14':   { name: 'Kesmat',   role: 'cashier',  brands: ['NCH'],           canvas: 'operator' },
   '43':   { name: 'Nafees',   role: 'cashier',  brands: ['NCH'],           canvas: 'operator' },
+  '4040': { name: 'Haneef',   role: 'viewer',   brands: ['HE','NCH','HQ'], canvas: 'owner' },
+  '5050': { name: 'Nisar',    role: 'viewer',   brands: ['HE','NCH','HQ'], canvas: 'owner' },
 };
 
 function resolveUser(pin) { return PIN_SCOPE[pin] || null; }

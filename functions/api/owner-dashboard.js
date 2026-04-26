@@ -31,6 +31,8 @@ const OWNER_PINS = {
   '3754': { name: 'Naveen', role: 'cfo' },
   '6045': { name: 'Faheem', role: 'asstmgr' },
   '3678': { name: 'Faheem', role: 'asstmgr' },
+  '4040': { name: 'Haneef', role: 'viewer' },
+  '5050': { name: 'Nisar',  role: 'viewer' },
 };
 
 // NEW odoo.hnhotels.in instance: 1=HN Hotels, 2=HE, 3=NCH

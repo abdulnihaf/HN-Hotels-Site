@@ -26,6 +26,8 @@ const ATTR_GRADE     = 22;  // product.attribute "Grade"       — context-drive
 const PINS = {
   '0305': { name: 'Nihaf', role: 'admin' },
   '2026': { name: 'Zoya',  role: 'ops'   },  // ops: can create RMs + add vendors
+  '4040': { name: 'Haneef',role: 'viewer'},
+  '5050': { name: 'Nisar', role: 'viewer'},
 };
 
 // odoo.hnhotels.in: 1=HN Hotels Pvt Ltd (HQ), 2=Hamza Express, 3=Nawabi Chai House

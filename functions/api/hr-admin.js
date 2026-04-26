@@ -39,6 +39,8 @@ const PINS = {
   '0305': { name: 'Nihaf',   role: 'admin',      phone: '917010426808', view_financials: true  },
   '8523': { name: 'Basheer', role: 'manager',    phone: '919061906916', view_financials: false },
   '2026': { name: 'Zoya',    role: 'onboarding', phone: null,           view_financials: false },
+  '4040': { name: 'Haneef',  role: 'manager',    phone: null,           view_financials: false },
+  '5050': { name: 'Nisar',   role: 'manager',    phone: null,           view_financials: false },
 };
 
 // brand_label → Odoo company_id. HQ maps to HE (company 1, the parent Pvt Ltd)

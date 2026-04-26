@@ -154,6 +154,9 @@ const USERS = {
   '8523': { name: 'Basheer',  brands: ['HE','NCH','HQ'], cats: 'all', role: 'gm' },
   '6890': { name: 'Tanveer',  brands: ['HE','NCH','HQ'], cats: 'all', role: 'gm' },
   '3697': { name: 'Yashwant', brands: ['HE','NCH','HQ'], cats: 'all', role: 'gm' },
+  // Investor view-only access — no cats means all reads work, no writes (no role in write allowlists)
+  '4040': { name: 'Haneef',   brands: ['HE','NCH','HQ'], cats: 'all', role: 'viewer' },
+  '5050': { name: 'Nisar',    brands: ['HE','NCH','HQ'], cats: 'all', role: 'viewer' },
 };
 
 // Outlet cashier PINs — scoped to their outlet only (brand chip auto-fixes, no switcher).
@@ -3702,7 +3705,7 @@ export async function onRequest(context) {
 // ━━━ Bill API helpers (Phase 1: /ops/bills/) ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 // Roles allowed to upload / pay / view bills. Aligned with USERS map.
-const BILL_VIEW_ROLES   = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase']);
+const BILL_VIEW_ROLES   = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase', 'viewer']);
 const BILL_UPLOAD_ROLES = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase']);
 const BILL_PAY_ROLES    = new Set(['admin', 'cfo', 'gm']);  // Naveen, Nihaf, Basheer, Tanveer, Yashwant
 

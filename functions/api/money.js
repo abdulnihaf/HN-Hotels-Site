@@ -30,7 +30,7 @@ const CORS = {
 const BRAND_COMPANY = { HE: 2, NCH: 3, HQ: 1 };
 const COMPANY_BRAND = { 1: 'HQ', 2: 'HE', 3: 'NCH' };
 
-const ALLOWED_ROLES = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase']);
+const ALLOWED_ROLES = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase', 'viewer']);
 
 // PIN gate — same source of truth as spend.js, kept compact here.
 const USERS = {
@@ -44,6 +44,8 @@ const USERS = {
   '3697': { name: 'Yashwant', role: 'gm'       },
   '2026': { name: 'Zoya',     role: 'purchase' },
   '8316': { name: 'Zoya',     role: 'purchase' },
+  '4040': { name: 'Haneef',   role: 'viewer'   },
+  '5050': { name: 'Nisar',    role: 'viewer'   },
 };
 
 const NCH_EXPORT_URL = 'https://nawabichaihouse.com/api/cockpit-export';

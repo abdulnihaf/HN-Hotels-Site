@@ -75,6 +75,8 @@ const USERS = {
   '3754': { name: 'Naveen',  role: 'staff',      odoo: 'system', odoo_uid: 5 },
   '8241': { name: 'Nafees',  role: 'staff',      odoo: 'system', odoo_uid: 14 },
   '8523': { name: 'Basheer', role: 'staff',      odoo: 'system', odoo_uid: 7 },
+  '4040': { name: 'Haneef',  role: 'viewer',     odoo: 'system', odoo_uid: 2 },
+  '5050': { name: 'Nisar',   role: 'viewer',     odoo: 'system', odoo_uid: 2 },
 };
 
 function getOdooCredentials(user, env) {

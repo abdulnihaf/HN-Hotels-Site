@@ -23,7 +23,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const ALLOWED_ROLES = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase']);
+const ALLOWED_ROLES = new Set(['admin', 'cfo', 'gm', 'asstmgr', 'purchase', 'viewer']);
 const USERS = {
   '0305': { name: 'Nihaf',    role: 'admin'    },
   '5882': { name: 'Nihaf',    role: 'admin'    },
@@ -35,6 +35,8 @@ const USERS = {
   '3697': { name: 'Yashwant', role: 'gm'       },
   '2026': { name: 'Zoya',     role: 'purchase' },
   '8316': { name: 'Zoya',     role: 'purchase' },
+  '4040': { name: 'Haneef',   role: 'viewer'   },
+  '5050': { name: 'Nisar',    role: 'viewer'   },
 };
 
 // Registry of agents (Phase 1 ships finance-watcher only; we add as we go).
