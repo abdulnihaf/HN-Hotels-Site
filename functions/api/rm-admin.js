@@ -279,7 +279,7 @@ async function handleGet(url, env) {
     const q = (url.searchParams.get('q') || '').trim().toLowerCase();
     const brand = url.searchParams.get('brand'); // HE / NCH / BOTH
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 300);
-    let sql = 'SELECT * FROM rm_product_variants WHERE is_active=1';
+    let sql = 'SELECT * FROM rm_product_variants WHERE is_active=1 AND category_id = 21';
     const p = [];
     if (q) {
       sql += ' AND (LOWER(display_name) LIKE ? OR LOWER(template_name) LIKE ? OR LOWER(default_code) LIKE ?)';
@@ -815,7 +815,7 @@ async function handlePost(request, env) {
     if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
     try {
       const tmpls = await odoo(apiKey, 'product.template', 'search_read',
-        [[['active', '=', true], ['purchase_ok', '=', true]]],
+        [[['active', '=', true], ['purchase_ok', '=', true], ['categ_id', '=', 21]]],
         { fields: ['id', 'name', 'categ_id', 'uom_id', 'company_id'], limit: 500 });
 
       if (!tmpls.length) return json({ synced: 0, message: 'No purchasable templates found' });
