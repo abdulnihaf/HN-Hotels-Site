@@ -70,6 +70,15 @@ export default {
       return;
     }
 
+    // After HDFC InstaAlerts is repointed to hdfc-alerts@alerts.hnhotels.in
+    // directly (bypassing the Gmail→CF forward that DMARC-rejects), this
+    // re-creates Gmail inbox visibility for the user. Best-effort — a forward
+    // failure must never block the ledger insert.
+    if (env.FORWARD_TO) {
+      try { await message.forward(env.FORWARD_TO); }
+      catch (e) { console.warn('forward failed', String(e).slice(0, 200)); }
+    }
+
     const parsed = parseHdfcAlert({ subject, body });
 
     // Partial / failed rows are inserted with amount=NULL but raw body

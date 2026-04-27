@@ -15,6 +15,15 @@ binding = "DB"
 database_name = "hn-hiring"
 database_id = "a0107321-790a-4d46-ac3c-a54a676c6bcb"
 
+# Re-create Gmail inbox visibility after HDFC InstaAlerts is repointed to
+# hdfc-alerts@alerts.hnhotels.in directly. Uncomment AFTER verifying the
+# destination in CF Email Routing → Destination addresses (CF emails a
+# confirmation link; click it on Gmail). Without that verification,
+# message.forward() throws and the warning lands in worker logs (the
+# DB insert still succeeds — forward is best-effort).
+# [vars]
+# FORWARD_TO = "nihafwork@gmail.com"
+
 # Trigger fetch handler for manual reparse of raw_body rows (useful when
 # regex is updated). GET /?key=<DASHBOARD_KEY>&mode=reparse
 # Secrets:
