@@ -104,21 +104,28 @@ Phase 1 ensures the **data needed** for PO-creator visibility is present:
 
 **The "My POs" tab UI in `/ops/purchase/`** is owned by Phase 2 (`OPS-VISIBILITY-SPEC.md` §2 row 3). Phase 1 just guarantees the underlying data is queryable. This avoids touching `ops/purchase/index.html` in Phase 1.
 
-### 4.6 April back-fill plan (critical — do not skip)
-Every existing April row in `business_expenses`, `purchase_bills`, and Odoo cash-journal `account.move` was written before `cash_basheer` / `cash_nihaf` instruments existed. Without back-fill, `/ops/cash/` totals will be correct only **prospectively** — defeating Phase 3's reconciliation gate.
+### 4.6 Back-fill plan (revised 2026-04-27 — bulk, not surgical)
 
-**Approach** (one-time idempotent script `scripts/cash-backfill/run.js`):
-1. Pull all `business_expenses` rows with `payment_method='cash'` since 2026-04-01.
-2. Pull all Odoo `account.payment` rows on cash journals (HE cash, NCH cash, HQ petty) since 2026-04-01.
-3. For each, classify which cash pile paid it:
-   - Counter expense from outlet `/ops/v2/` → `pos_counter_he` or `pos_counter_nch` (use `brand` column).
-   - Central cash expense recorded via `/ops/expense/` → `cash_basheer` by default (Naveen's typical source); flag rows where Nihaf is the recorded payer for manual review.
-   - PO-settled cash payment → infer pile from journal name and `recorded_by_pin` (Naveen → Basheer; Nihaf → Nihaf).
-4. Write a `money_events` row per pulled record with full line metadata. Use a deterministic `source_ref` (e.g. `backfill:expense:<id>`) so re-running is idempotent.
-5. Output a CSV `data/cash/april-backfill-classifications.csv` listing every row + chosen instrument; owner reviews ambiguous rows before final commit.
-6. Counter→Basheer transfer events for April are reconstructed from end-of-day cash deposit slips owner provides. If slips are missing for a day, write a single reconciliation transfer event matching the day's net counter cash flow with `notes='backfill: net handover'`.
+**Anchor (per brand):**
+- **NCH:** `2026-04-19 21:00:50 IST`. Definitive event: NCH `collection-history` id=75 — *"HISTORICAL RESET — 9 PM IST 2026-04-19 bootstrap · new era from Rs70 opening float · Nafees CASH002"*. Pre-anchor cash data is archived; not back-filled.
+- **HE:** TBD — owner specifies HE v2 anchor + opening float when ready. Until then `pos_counter_he` ledger starts at the first going-forward POS-cash event.
 
-Acceptance for back-fill: after the script runs, `SUM(money_events)` for each cash instrument matches the corresponding Odoo journal balance for the same period within ±0.5%.
+**Why bulk over surgical** (decision locked 2026-04-27): row-by-row classification by `recorded_by` was wrong — `recorded_by` is the data-enterer, not the funds source. Surgical reconstruction from POS sales + runner settlements is achievable for going-forward events (Phase 1 hooks already wired; Phase 2 settlement console adds precision) but **not for backlog**. P&L (the ultimate goal) cares about each expense being *counted once* (Phase 3 dup cleanup) and *categorized correctly* (already in Odoo) — not which cash pile it flowed through. Pile attribution is for live ops view + Phase 3 anchor; directionally correct is sufficient.
+
+**Approach** (one-shot SQL — `scripts/cash-backfill/bulk-anchor-april.sql`):
+1. **Bulk debit back-fill** — every `business_expenses` cash row since 2026-04-01 lands on a pile by a single brand rule:
+   - `brand=NCH` or `HE` → `cash_basheer`
+   - `brand=HQ` → `cash_nihaf`
+   Idempotent via `source_ref='backfill:expense:<id>'`.
+2. **NCH opening-float credit** — ₹70 → `pos_counter_nch` dated to the historical-reset event.
+3. **Per-pile plug credit** — one credit per pile equal to the sum of its debits, tagged `source_ref='plug:<pile>:april-2026'`, narration *"External capital April"*. Refines in Phase 3 once individual flows are matched.
+
+**Out of scope for backlog (deferred to going-forward + Phase 3):**
+- Per-row sourcing (which sale funded which expense).
+- Counter→Basheer transfer reconstruction from deposit slips.
+- POS-sales credit ledger for backlog window.
+
+Going-forward, every cash event lands precisely on the right pile via the spend.js + money.js hooks (PIN+brand based) — no accuracy burden on the owner.
 
 ---
 
@@ -188,7 +195,8 @@ Acceptance for back-fill: after the script runs, `SUM(money_events)` for each ca
 5. Posting `/ops/expense/` with method=cash reduces Basheer or Nihaf pile per selection.
 6. Settling a PO from `/ops/money/` with a cash journal reduces the chosen cash pile AND writes a row with full bill metadata AND links back to the PO via `linked_po_id`.
 7. Total Live Cash on `/ops/cash/` matches: Counter HE + Counter NCH + Basheer + Nihaf, recomputed on every page load.
-8. **Reconciliation gate (Phase 1 exit bar):** after the §4.6 back-fill runs, `/ops/cash/` total per cash instrument matches Odoo cash-journal balance for the same period within **±0.5%**. `/ops/bank/` total per bank instrument matches the latest HDFC e-statement closing balance within ±0.5%. This is the entry condition for Phase 2 — do not proceed until it passes.
+8. **Phase 1 exit bar (revised 2026-04-27):** cash piles are *populated and directionally consistent* — every `business_expenses` cash row since 2026-04-01 has a corresponding `money_events` debit row, each pile balances (debits matched by plug credits), opening float is anchored at the historical-reset event for NCH. `/ops/bank/` total per bank instrument matches the latest HDFC e-statement closing balance within ±0.5% (bank side is unchanged — already healthy from email-feed pipeline).
+   The original strict ±0.5% per-cash-pile vs Odoo cash-journal gate was overscoped — it required surgical row-by-row reconstruction that doesn't materially improve P&L (Phase 4 reads category totals, not pile attribution). The strict bar moves to **post-Phase-3** as the gate before P&L: after dup cleanup retroactively links cash debits to PO settlements (DUP-SPEC §5.1), each pile's net balance must reconcile to Odoo within ±0.5%.
 9. Money is stored as INTEGER paise everywhere; no float comparisons in cash-trail code paths.
 
 ---
@@ -199,5 +207,6 @@ Strict order: **Phase 1 (this) → Phase 2 (`OPS-VISIBILITY-SPEC.md`) → Phase 
 
 Rules:
 - One branch per phase. One draft PR per phase. No bundling.
-- Phase 2 cannot start until §8 acceptance criterion 8 (the ±0.5% reconciliation gate) passes.
+- Phase 2 cannot start until §8 acceptance criterion 8 (cash piles populated + directionally consistent + bank reconciled) passes.
+- Phase 3's post-cleanup ±0.5% reconciliation (`OPS-DUP-SPEC.md` §9.9) is the strict gate for Phase 4 P&L. Phase 1 ships when the trail is *populated and usable*; precision is a Phase 3 deliverable.
 - Phase 4 P&L will be specified after Phase 3 ships; it consumes the clean cash + bank ledger as input. See `docs/EXECUTION-CHARTER.md` for the cross-phase view.
