@@ -2,8 +2,10 @@
 
 **Status:** Spec only. No code written yet.
 **Owner:** Nihaf
-**Depends on:** `docs/OPS-CASH-SPEC.md` (Phase 1) and `docs/OPS-VISIBILITY-SPEC.md` (Phase 2). Both must ship first.
+**Depends on:** `docs/OPS-CASH-SPEC.md` (Phase 1) and `docs/OPS-VISIBILITY-SPEC.md` (Phase 2). Both must ship first. Vendor master must be enforced on all surfaces (Phase 2 precondition) before write-time guards (§6) deploy.
 **Goal:** (a) Surgically identify every PO that was also recorded as a cash/bank expense, using April 1, 2026 onwards as the test corpus. (b) Provide a one-time cleanup workflow for those existing duplicates. (c) Lock write-time guards so going forward, duplication cannot occur silently across deployments.
+
+Global rules (mobile-first, paise integer storage, one-branch-per-phase, reuse-not-reinvent — including reuse of `findFuzzyDup` in `functions/api/spend.js` for token normalization) are defined in `OPS-CASH-SPEC.md` preamble and apply here unchanged.
 
 ---
 
@@ -184,6 +186,11 @@ All three guards require `vendor_id` to be present at write time. Phase 2 should
 | **Phase 1** | `OPS-CASH-SPEC.md` | Live cash trail. Cash position visible. |
 | **Phase 2** | `OPS-VISIBILITY-SPEC.md` | Cross-surface visibility + `/ops/money/` settlement console. |
 | **Phase 3** | **this doc** | April dupes cleaned + write-time guards live. |
-| **Next milestone** | (future spec) | April P&L per day / per week / live YTD. Built on clean ledger. |
+| **Phase 4** | (future spec — to be written after Phase 3 ships) | April P&L per day / per week / live YTD. Built on clean ledger. |
 
-Strict order. Do not start Phase 3 work until Phase 2 is in production and the vendor master is enforced everywhere. Do not start P&L work until Phase 3 §9 criterion 9 is met.
+Rules:
+- One branch per phase (`claude/ops-cash-trail`, `claude/ops-visibility`, `claude/ops-dup-intelligence`, then a future `claude/ops-pnl`). One draft PR per phase. No bundling.
+- Phase 3 cannot start until Phase 2 ships and vendor master is enforced on all 10 surfaces.
+- Phase 4 P&L cannot start until §9 criterion 9 (post-cleanup ±0.5% reconciliation) passes.
+
+See `docs/EXECUTION-CHARTER.md` for the cross-phase view, hand-offs, and the consolidated laptop execution prompt.
