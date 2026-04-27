@@ -12,7 +12,15 @@
 --   swiggy             hdfc_ca_4680 (via settlement)   aggregator API / email parse
 --   eazydiner          hdfc_ca_4680 (via settlement)   aggregator API
 --   federal            federal_ca (expenses account)   email parse (pending)
+--   cash               cash_basheer / cash_nihaf /     manual entry (cashier handover,
+--                      pos_counter_he / pos_counter_nch  /ops/cash/ Record Transfer,
+--                                                      /ops/v2/ counter expense)
 --   manual             any                             typed into dashboard
+--
+-- Cash-trail extensions (transfer_group_id, linked_po_id/name,
+-- recorded_by_pin/name, idem_key, verified_separate) are added by
+-- schema-money-events-cash.sql — Phase 1 of the ops refactor (see
+-- docs/OPS-CASH-SPEC.md and docs/EXECUTION-CHARTER.md).
 --
 -- Cross-source reconciliation: one gross Razorpay payout (source=razorpay,
 -- direction=debit from razorpay_balance) maps to one HDFC credit (source=hdfc,
@@ -32,7 +40,7 @@ CREATE TABLE IF NOT EXISTS money_events (
   source TEXT NOT NULL
     CHECK (source IN ('hdfc','federal','razorpay','paytm',
                       'zomato_delivery','zomato_dining','swiggy','eazydiner',
-                      'manual','unknown')),
+                      'cash','manual','unknown')),
   source_ref TEXT,                 -- source-native id (UPI Ref, Razorpay payment_id, Zomato payout_id)
   direction TEXT NOT NULL CHECK (direction IN ('credit','debit')),
   amount_paise INTEGER NOT NULL CHECK (amount_paise >= 0),
