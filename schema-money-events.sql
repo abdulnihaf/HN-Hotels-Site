@@ -13,6 +13,14 @@
 --   eazydiner          hdfc_ca_4680 (via settlement)   aggregator API
 --   federal            federal_ca (expenses account)   email parse (pending)
 --   manual             any                             typed into dashboard
+--                      cash_basheer / cash_nihaf /      (cash-trail events: counter
+--                      pos_counter_he / pos_counter_nch  expense, /ops/cash/ transfer,
+--                                                       /ops/v2/ handover, PO-settle cash)
+--
+-- Cash-trail extensions (transfer_group_id, linked_po_id/name,
+-- recorded_by_pin/name, idem_key, verified_separate) are added by
+-- schema-money-events-cash.sql — Phase 1 of the ops refactor (see
+-- docs/OPS-CASH-SPEC.md and docs/EXECUTION-CHARTER.md).
 --
 -- Cross-source reconciliation: one gross Razorpay payout (source=razorpay,
 -- direction=debit from razorpay_balance) maps to one HDFC credit (source=hdfc,

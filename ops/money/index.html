@@ -139,6 +139,23 @@
     </div>
   </div>
 
+  <!-- Cross-surface nav (Phase 1: cash). /ops/cash/ is the live cash trail
+       counterpart to /ops/bank/. Phase 2 promotes this page to the
+       settlement console for all pay-outs. -->
+  <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;margin-bottom:12px;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
+    <span style="color:var(--text-dim)">money:</span>
+    <a href="/ops/money/"    style="color:var(--brand-hover);font-weight:600;text-decoration:none">cockpit</a>
+    <span style="color:var(--text-dim)">·</span>
+    <a href="/ops/cash/"     style="color:var(--text);text-decoration:none" title="live cash trail (Counter HE/NCH + Basheer + Nihaf)">cash</a>
+    <a href="/ops/bank/"     style="color:var(--text);text-decoration:none" title="bank ledger (HDFC + Federal + Razorpay)">bank</a>
+    <span style="color:var(--text-dim)">·</span>
+    <a href="/ops/expense/"  style="color:var(--text);text-decoration:none">expense</a>
+    <a href="/ops/purchase/" style="color:var(--text);text-decoration:none">purchase</a>
+    <a href="/ops/bills/"    style="color:var(--text);text-decoration:none">bills</a>
+    <a href="/ops/vendor/"   style="color:var(--text);text-decoration:none">vendor</a>
+    <a href="/ops/agents/"   style="color:var(--text);text-decoration:none">agents</a>
+  </div>
+
   <div class="filter-bar">
     <div class="chip-set" role="group" aria-label="Brand">
       <button class="chip-btn active" data-brand="ALL" onclick="setBrand('ALL')">All</button>
