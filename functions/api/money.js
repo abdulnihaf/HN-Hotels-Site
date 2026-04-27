@@ -774,12 +774,14 @@ async function cashTransfer(request, env) {
     return json({ success: false, error: 'amount_paise must be a positive integer' }, 400);
   }
 
-  // Source classification — cash↔cash uses 'cash'; cash→bank deposit
-  // uses 'cash' on the debit leg and 'manual' on the bank credit leg
-  // (real bank credit will land later from the email parser; we tag the
-  // synthetic leg as 'manual' so it's distinguishable in reconciliation).
-  const fromSource = CASH_INSTRUMENTS.has(from_instrument) ? 'cash' : 'manual';
-  const toSource   = CASH_INSTRUMENTS.has(to_instrument)   ? 'cash' : 'manual';
+  // Source classification — every cash-trail event is user-typed (no
+  // auto-feed), so source='manual' for both legs. The instrument value
+  // (cash_basheer/cash_nihaf/pos_counter_*) is the cash-pile distinction.
+  // The existing money_events.source CHECK constraint does not allow
+  // 'cash' on the live table; rebuilding the table to add it would be
+  // high-blast-radius for what's effectively a vocabulary preference.
+  const fromSource = 'manual';
+  const toSource   = 'manual';
 
   const groupId = newTransferGroupId();
   const txnAt = transferred_at && /^\d{4}-\d{2}-\d{2}/.test(transferred_at)

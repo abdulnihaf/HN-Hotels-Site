@@ -200,7 +200,7 @@ async function commit() {
             instrument, channel, counterparty, narration,
             txn_at, received_at, parse_status, brand, category,
             matched_expense_id, recorded_by_name, notes)
-         VALUES ('cash', ?, 'debit', ?, 'INR',
+         VALUES ('manual', ?, 'debit', ?, 'INR',
                  ?, 'internal', ?, ?,
                  ?, datetime('now'), 'parsed', ?, ?,
                  ?, ?, ?)`,

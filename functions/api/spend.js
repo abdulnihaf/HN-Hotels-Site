@@ -238,6 +238,10 @@ async function emitCashEvent(DB, opts) {
   } = opts;
   if (!instrument || !Number.isFinite(amount_paise) || amount_paise <= 0) return;
   try {
+    // source='manual' — cash events are all user-typed; the live
+    // money_events.source CHECK does not include 'cash'. The instrument
+    // column carries the cash-pile distinction, and recorded_by_pin
+    // gives provenance.
     await DB.prepare(
       `INSERT INTO money_events
          (source, source_ref, direction, amount_paise, currency,
@@ -247,7 +251,7 @@ async function emitCashEvent(DB, opts) {
           linked_po_id, linked_po_name,
           matched_expense_id, matched_vendor_bill_id,
           recorded_by_pin, recorded_by_name, notes)
-       VALUES ('cash', ?, 'debit', ?, 'INR',
+       VALUES ('manual', ?, 'debit', ?, 'INR',
                ?, 'internal', ?, ?,
                ?, ?, 'parsed',
                ?, ?,
