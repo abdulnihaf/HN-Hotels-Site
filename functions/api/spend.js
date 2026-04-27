@@ -198,6 +198,77 @@ function pinToUid(pin) { return PIN_TO_UID[pin] || 2; }  // fallback to admin
 //   3 = Nawabi Chai House   (NCH)
 const BRAND_COMPANY = { HE: 2, NCH: 3, HQ: 1 };
 
+// ━━━ Cash-pile attribution (Phase 1 — docs/OPS-CASH-SPEC.md) ━━━━━━━━━━
+// Determines which money_events cash instrument a cash outflow lands on.
+//   - Cashier role + brand → till pile (pos_counter_he | pos_counter_nch)
+//   - Owner (Nihaf)        → cash_nihaf
+//   - Everyone else paying cash centrally (Naveen/Basheer/GMs/Faheem/Zoya)
+//                          → cash_basheer (Naveen typically holds the
+//                          Basheer pool when settling central expenses)
+//
+// Returns null if the operation is not a cash outflow (so callers can
+// no-op without writing a money_events row). Strict — unknown PINs
+// fall through to null and the cash event is silently skipped, since
+// non-cash payment paths land on bank instruments via the email/webhook
+// ingest pipeline already.
+function cashPileForRecord(user, brand, paymentMethod, pin) {
+  if (paymentMethod !== 'cash') return null;
+  if (!user) return null;
+  if (user.role === 'cashier') {
+    if (brand === 'HE')  return 'pos_counter_he';
+    if (brand === 'NCH') return 'pos_counter_nch';
+    return null;
+  }
+  // Central staff paying cash. Owner pile vs Basheer pool by PIN.
+  if (pin === '0305' || pin === '5882') return 'cash_nihaf';
+  return 'cash_basheer';
+}
+
+// Atomic-ish cash-trail emit. Best-effort — failure to write the
+// money_events row must not roll back the upstream Odoo record (which
+// already happened) nor the business_expenses mirror. The `agents`
+// po_paid_no_money_event watcher (Phase 2) will surface any drift.
+async function emitCashEvent(DB, opts) {
+  if (!DB) return;
+  const {
+    instrument, amount_paise, brand, category, counterparty, narration,
+    txn_at, recorded_by_pin, recorded_by_name,
+    linked_po_id, linked_po_name, matched_expense_id, matched_vendor_bill_id,
+    source_ref, notes,
+  } = opts;
+  if (!instrument || !Number.isFinite(amount_paise) || amount_paise <= 0) return;
+  try {
+    await DB.prepare(
+      `INSERT INTO money_events
+         (source, source_ref, direction, amount_paise, currency,
+          instrument, channel, counterparty, narration,
+          txn_at, received_at, parse_status,
+          brand, category,
+          linked_po_id, linked_po_name,
+          matched_expense_id, matched_vendor_bill_id,
+          recorded_by_pin, recorded_by_name, notes)
+       VALUES ('cash', ?, 'debit', ?, 'INR',
+               ?, 'internal', ?, ?,
+               ?, ?, 'parsed',
+               ?, ?,
+               ?, ?,
+               ?, ?,
+               ?, ?, ?)`
+    ).bind(
+      source_ref || null, amount_paise,
+      instrument, counterparty || null, narration || null,
+      txn_at || new Date().toISOString(), new Date().toISOString(),
+      brand || null, category || null,
+      linked_po_id || null, linked_po_name || null,
+      matched_expense_id || null, matched_vendor_bill_id || null,
+      recorded_by_pin || null, recorded_by_name || null, notes || null
+    ).run();
+  } catch (e) {
+    // Eat — agent watcher will catch silent gaps.
+    console.error('emitCashEvent fail:', e.message);
+  }
+}
+
 // ━━━ Attachment helper ━━━
 // Accepts { name, mimetype, data_b64 } and attaches to any Odoo record.
 // Silently logs on failure — attachment is best-effort, never blocks the main record.
@@ -1347,6 +1418,27 @@ export async function onRequest(context) {
             payrollPeriod, payrollIntent, (cat.id === 3 || cat.id === 4) ? empId : null,
             vId, vName, qty, uomT
           ).run().catch(e => console.error('mirror fail:', e.message));
+        }
+
+        // Phase 1 cash-trail emit — counter expense + central cash expense
+        // both produce a debit on the matching cash pile. Non-cash methods
+        // (hdfc_bank, federal_bank, paytm_upi, razorpay) skip — those land
+        // via the email/webhook ingest pipeline.
+        const cashInstrument = cashPileForRecord(user, brand, payment_method, String(pin));
+        if (cashInstrument && DB) {
+          await emitCashEvent(DB, {
+            instrument: cashInstrument,
+            amount_paise: Math.round(parseFloat(amount) * 100),
+            brand,
+            category: cat.label,
+            counterparty: vName || prodName,
+            narration: notes || prodName,
+            txn_at: customDate,
+            recorded_by_pin: String(pin),
+            recorded_by_name: user.name,
+            matched_expense_id: expenseId,
+            source_ref: `expense:${expenseId}`,
+          });
         }
 
         return json({ success: true,
@@ -3683,6 +3775,36 @@ export async function onRequest(context) {
             ? `${payment_method_label}${notes ? ' — ' + notes : ''} (PO ${p.name})`
             : (notes || `Payment for PO ${p.name}`),
         });
+
+        // Phase 1 cash-trail emit — when the caller declares a cash
+        // instrument (forthcoming Phase 2 settle modal sends one of
+        // cash_basheer | cash_nihaf | pos_counter_he | pos_counter_nch),
+        // produce a debit on that pile linked back to the PO. Bank
+        // settlements skip — those land via the email-feed pipeline.
+        // Phase 2 replaces this with the unified /api/money?action=settle
+        // endpoint that owns the D1+Odoo idempotency contract.
+        const cashInstrument = body.cash_instrument;
+        if (cashInstrument && env.DB) {
+          const validCashSet = new Set(['cash_basheer', 'cash_nihaf', 'pos_counter_he', 'pos_counter_nch']);
+          if (validCashSet.has(cashInstrument)) {
+            await emitCashEvent(env.DB, {
+              instrument: cashInstrument,
+              amount_paise: Math.round(amt * 100),
+              brand,
+              category: 'PO Settlement',
+              counterparty: Array.isArray(p.partner_id) ? p.partner_id[1] : null,
+              narration: `PO ${p.name}${notes ? ' — ' + notes : ''}`,
+              txn_at: payDate,
+              recorded_by_pin: String(pin),
+              recorded_by_name: user.name,
+              linked_po_id: poId,
+              linked_po_name: p.name,
+              matched_vendor_bill_id: billId,
+              source_ref: `po-settle:${poId}:${billId}`,
+            });
+          }
+        }
+
         return json({ success: true,
           po_id: poId, po_name: p.name, bill_id: billId, bill_ref: billRow?.[0]?.name,
           ...settled,
