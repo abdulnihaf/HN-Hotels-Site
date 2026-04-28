@@ -1,0 +1,797 @@
+{
+  "captured_at": "2026-04-28T12:19:03.902Z",
+  "source": "https://hamzaexpress.in/api/ctwa-analytics?period=30d",
+  "data": {
+    "success": true,
+    "period": "30d",
+    "adMetrics": {
+      "available": true,
+      "impressions": 61898,
+      "reach": 40350,
+      "spend": 3058.14,
+      "linkClicks": 421,
+      "ctr": "1.517012",
+      "cpc": 3.256805,
+      "cpm": 49.40612,
+      "frequency": 1.534027,
+      "conversations": 145,
+      "costPerConversation": 21.090621,
+      "depth2": 91,
+      "depth3": 55,
+      "reactions": 90,
+      "saves": 20,
+      "shares": 17,
+      "comments": 1,
+      "perAd": [
+        {
+          "adId": "120243938411780505",
+          "name": "Combo 1 — Ghee Rice + Kabab + BC",
+          "impressions": 12712,
+          "reach": 9885,
+          "spend": 666.37,
+          "frequency": 1.285989,
+          "clicks": 89,
+          "conversations": 26,
+          "costPerConversation": 25.629615,
+          "depth2": 18,
+          "depth3": 9
+        },
+        {
+          "adId": "120243938416470505",
+          "name": "Combo 2 — Rice + Dal + Brain + Kulcha",
+          "impressions": 8865,
+          "reach": 7662,
+          "spend": 433.87,
+          "frequency": 1.157009,
+          "clicks": 45,
+          "conversations": 15,
+          "costPerConversation": 28.924667,
+          "depth2": 10,
+          "depth3": 5
+        },
+        {
+          "adId": "120243938420780505",
+          "name": "Combo 3 — Ghee Rice + Dal Fry",
+          "impressions": 22147,
+          "reach": 15969,
+          "spend": 1040.78,
+          "frequency": 1.386875,
+          "clicks": 143,
+          "conversations": 41,
+          "costPerConversation": 25.384878,
+          "depth2": 22,
+          "depth3": 15
+        },
+        {
+          "adId": "120243938426200505",
+          "name": "Combo 4 — Brain + Butter Naan",
+          "impressions": 10679,
+          "reach": 8136,
+          "spend": 615.95,
+          "frequency": 1.312561,
+          "clicks": 87,
+          "conversations": 41,
+          "costPerConversation": 15.023171,
+          "depth2": 26,
+          "depth3": 18
+        },
+        {
+          "adId": "120243938435680505",
+          "name": "Combo 5 — Rice + BC + Naan",
+          "impressions": 7495,
+          "reach": 6418,
+          "spend": 301.17,
+          "frequency": 1.167809,
+          "clicks": 57,
+          "conversations": 22,
+          "costPerConversation": 13.689545,
+          "depth2": 15,
+          "depth3": 8
+        }
+      ],
+      "audience": [
+        {
+          "age": "18-24",
+          "gender": "male",
+          "impressions": 23527,
+          "reach": 15345,
+          "spend": 947.09,
+          "clicks": 133,
+          "conversations": 38
+        },
+        {
+          "age": "25-34",
+          "gender": "male",
+          "impressions": 35843,
+          "reach": 23416,
+          "spend": 1934.68,
+          "clicks": 260,
+          "conversations": 94
+        },
+        {
+          "age": "35-44",
+          "gender": "male",
+          "impressions": 2527,
+          "reach": 1675,
+          "spend": 176.31,
+          "clicks": 28,
+          "conversations": 13
+        },
+        {
+          "age": "Unknown",
+          "gender": "male",
+          "impressions": 1,
+          "reach": 1,
+          "spend": 0.06,
+          "clicks": 0,
+          "conversations": 0
+        }
+      ],
+      "dailyTrend": [
+        {
+          "date": "2026-04-13",
+          "impressions": 11866,
+          "spend": 577.28,
+          "clicks": 73,
+          "conversations": 16
+        },
+        {
+          "date": "2026-04-14",
+          "impressions": 0,
+          "spend": 0,
+          "clicks": 0,
+          "conversations": 2
+        },
+        {
+          "date": "2026-04-15",
+          "impressions": 5294,
+          "spend": 261.77,
+          "clicks": 42,
+          "conversations": 22
+        },
+        {
+          "date": "2026-04-16",
+          "impressions": 9112,
+          "spend": 419.24,
+          "clicks": 53,
+          "conversations": 14
+        },
+        {
+          "date": "2026-04-17",
+          "impressions": 18289,
+          "spend": 850.7,
+          "clicks": 124,
+          "conversations": 42
+        },
+        {
+          "date": "2026-04-18",
+          "impressions": 12192,
+          "spend": 628.6,
+          "clicks": 94,
+          "conversations": 35
+        },
+        {
+          "date": "2026-04-19",
+          "impressions": 346,
+          "spend": 15.33,
+          "clicks": 3,
+          "conversations": 0
+        },
+        {
+          "date": "2026-04-20",
+          "impressions": 4799,
+          "spend": 305.22,
+          "clicks": 32,
+          "conversations": 14
+        },
+        {
+          "date": "2026-04-21",
+          "impressions": 0,
+          "spend": 0,
+          "clicks": 0,
+          "conversations": 0
+        }
+      ]
+    },
+    "overview": {
+      "conversations": 117,
+      "orders": 2,
+      "bookings": 2,
+      "revenue": 536,
+      "aov": 268,
+      "orderConvRate": 1.7,
+      "bookingConvRate": 1.7,
+      "costPerConversation": 21.090621,
+      "totalSpend": 3058.14
+    },
+    "comboPerformance": [
+      {
+        "adHeadline": "Message to Order",
+        "adId": "120243938420780505",
+        "conversations": 33,
+        "orders": 0,
+        "revenue": 0,
+        "convRate": "0.0"
+      },
+      {
+        "adHeadline": "Message to Order",
+        "adId": "120243938426200505",
+        "conversations": 31,
+        "orders": 1,
+        "revenue": 536,
+        "convRate": "3.2"
+      },
+      {
+        "adHeadline": "Message to Order",
+        "adId": "120243938411780505",
+        "conversations": 23,
+        "orders": 0,
+        "revenue": 0,
+        "convRate": "0.0"
+      },
+      {
+        "adHeadline": "Message to Order",
+        "adId": "120243938435680505",
+        "conversations": 19,
+        "orders": 0,
+        "revenue": 0,
+        "convRate": "0.0"
+      },
+      {
+        "adHeadline": "Message to Order",
+        "adId": "120243938416470505",
+        "conversations": 10,
+        "orders": 0,
+        "revenue": 0,
+        "convRate": "0.0"
+      },
+      {
+        "adHeadline": "Book Now!",
+        "adId": "120240098566480743",
+        "conversations": 1,
+        "orders": 0,
+        "revenue": 0,
+        "convRate": "0.0"
+      }
+    ],
+    "funnel": {
+      "adTaps": 117,
+      "messaged": 117,
+      "viewedCombos": 1,
+      "ordered": 1,
+      "booked": 2
+    },
+    "conversations": [
+      {
+        "waId": "917406594552",
+        "name": "HeenaZeeshan",
+        "phone": "...4552",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Book Now!",
+        "firstContact": "2026-04-21T08:28:24.403Z",
+        "nurtureStage": 0
+      },
+      {
+        "waId": "917817893320",
+        "name": "ARYMAN SISODIA",
+        "phone": "...3320",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T11:36:37.205Z",
+        "nurtureStage": 1
+      },
+      {
+        "waId": "918050717791",
+        "name": "Rajesh",
+        "phone": "...7791",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T10:49:03.041Z",
+        "nurtureStage": 0
+      },
+      {
+        "waId": "917979825931",
+        "name": "Ayaz Ahmad",
+        "phone": "...5931",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T10:05:01.842Z",
+        "nurtureStage": 1
+      },
+      {
+        "waId": "918618251156",
+        "name": "__CK",
+        "phone": "...1156",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T09:40:32.414Z",
+        "nurtureStage": 1
+      },
+      {
+        "waId": "916399283785",
+        "name": "Rubina",
+        "phone": "...3785",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T09:37:50.725Z",
+        "nurtureStage": 1
+      },
+      {
+        "waId": "919187667873",
+        "name": "Sumi 👑 Suman 💪😊",
+        "phone": "...7873",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T09:35:59.817Z",
+        "nurtureStage": 1
+      },
+      {
+        "waId": "918892248330",
+        "name": "rizwanhussain7855",
+        "phone": "...8330",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T09:24:53.524Z",
+        "nurtureStage": 1
+      },
+      {
+        "waId": "918197533117",
+        "name": "SAFIRULLA",
+        "phone": "...3117",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T09:15:44.034Z",
+        "nurtureStage": 1
+      },
+      {
+        "waId": "917667767368",
+        "name": "Shiv(Aman)",
+        "phone": "...7368",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T09:02:55.953Z",
+        "nurtureStage": 1
+      },
+      {
+        "waId": "916362505746",
+        "name": "kishan",
+        "phone": "...5746",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T08:18:14.960Z",
+        "nurtureStage": 1
+      },
+      {
+        "waId": "919632920367",
+        "name": "Mohammad Sanaulla K I",
+        "phone": "...0367",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T05:50:59.434Z",
+        "nurtureStage": 2
+      },
+      {
+        "waId": "919606837204",
+        "name": "Karthik Mohan P",
+        "phone": "...7204",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-20T04:25:52.032Z",
+        "nurtureStage": 2
+      },
+      {
+        "waId": "916361404926",
+        "name": "IMRAN",
+        "phone": "...4926",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T15:11:07.812Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "919751230925",
+        "name": "Abubakker Siddik",
+        "phone": "...0925",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T13:56:20.500Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "919035723014",
+        "name": "Hussain",
+        "phone": "...3014",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T13:29:39.466Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "917470555548",
+        "name": "yasir usmani",
+        "phone": "...5548",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T13:24:43.223Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "917406146489",
+        "name": "❤️",
+        "phone": "...6489",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T13:13:23.805Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "917337860833",
+        "name": "Syed Mansoor Romeo 👑",
+        "phone": "...0833",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T12:37:38.099Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "919113970335",
+        "name": "Nandan N",
+        "phone": "...0335",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T12:32:03.165Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "916206134006",
+        "name": "Ashwini",
+        "phone": "...4006",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T12:18:12.266Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "918840833690",
+        "name": ".~",
+        "phone": "...3690",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T10:36:22.428Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "918050676500",
+        "name": "Happy😁 Funny😆 Enjoying 😊",
+        "phone": "...6500",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T10:24:14.617Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "916363186659",
+        "name": "s r",
+        "phone": "...6659",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T10:18:02.417Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "919187065846",
+        "name": "draganinternationalspa",
+        "phone": "...5846",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T10:04:42.262Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "918880617883",
+        "name": "N.M",
+        "phone": "...7883",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T10:01:24.416Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "918050671808",
+        "name": "😡",
+        "phone": "...1808",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T09:37:42.489Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "919775691101",
+        "name": "Sourav 😍",
+        "phone": "...1101",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T09:35:42.269Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "917204706362",
+        "name": "aSaSiN",
+        "phone": "...6362",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T08:54:08.024Z",
+        "nurtureStage": 3
+      },
+      {
+        "waId": "917837810282",
+        "name": "jaimalia01",
+        "phone": "...0282",
+        "tier": "new",
+        "orders": 0,
+        "spent": 0,
+        "adHeadline": "Message to Order",
+        "firstContact": "2026-04-18T08:51:42.213Z",
+        "nurtureStage": 3
+      }
+    ],
+    "daily": [
+      {
+        "date": "2026-04-13",
+        "conversations": 13,
+        "orders": 1,
+        "revenue": 536
+      },
+      {
+        "date": "2026-04-15",
+        "conversations": 16,
+        "orders": 0,
+        "revenue": 0
+      },
+      {
+        "date": "2026-04-16",
+        "conversations": 11,
+        "orders": 0,
+        "revenue": 0
+      },
+      {
+        "date": "2026-04-17",
+        "conversations": 30,
+        "orders": 0,
+        "revenue": 0
+      },
+      {
+        "date": "2026-04-18",
+        "conversations": 34,
+        "orders": 0,
+        "revenue": 0
+      },
+      {
+        "date": "2026-04-20",
+        "conversations": 12,
+        "orders": 0,
+        "revenue": 0
+      },
+      {
+        "date": "2026-04-21",
+        "conversations": 1,
+        "orders": 0,
+        "revenue": 0
+      }
+    ],
+    "orders": [
+      {
+        "code": "HE-2004-0002",
+        "total": 179,
+        "status": "cancelled",
+        "adHeadline": "Message to Order",
+        "items": "Butter Naan + Butter Chicken",
+        "createdAt": "2026-04-20T09:36:54.175Z"
+      },
+      {
+        "code": "HE-2004-0001",
+        "total": 130,
+        "status": "cancelled",
+        "adHeadline": "Message to Order",
+        "items": "Ghee Rice, Kerala Paratha",
+        "createdAt": "2026-04-20T08:20:51.613Z"
+      },
+      {
+        "code": "HE-1804-0006",
+        "total": 219,
+        "status": "pending",
+        "adHeadline": "Message to Order",
+        "items": "Butter Naan + Butter Chicken + Kabab",
+        "createdAt": "2026-04-18T10:27:56.059Z"
+      },
+      {
+        "code": "HE-1804-0005",
+        "total": 299,
+        "status": "pending",
+        "adHeadline": "Message to Order",
+        "items": "CM1 For You — Rice+Roti+Kabab+BC",
+        "createdAt": "2026-04-18T08:21:56.222Z"
+      },
+      {
+        "code": "HE-1804-0004",
+        "total": 320,
+        "status": "pending",
+        "adHeadline": "Message to Order",
+        "items": "Mutton Brain Dry — Half",
+        "createdAt": "2026-04-18T08:21:26.948Z"
+      },
+      {
+        "code": "HE-1804-0003",
+        "total": 30,
+        "status": "pending",
+        "adHeadline": "Message to Order",
+        "items": "Kerala Paratha",
+        "createdAt": "2026-04-18T07:38:38.618Z"
+      },
+      {
+        "code": "HE-1804-0002",
+        "total": 200,
+        "status": "cancelled",
+        "adHeadline": "Message to Order",
+        "items": "CM4 For You — Brain+Naan",
+        "createdAt": "2026-04-18T06:41:42.037Z"
+      },
+      {
+        "code": "HE-1804-0001",
+        "total": 179,
+        "status": "pending",
+        "adHeadline": "Message to Order",
+        "items": "Ghee Rice + Butter Chicken",
+        "createdAt": "2026-04-17T22:24:11.077Z"
+      },
+      {
+        "code": "HE-1704-0004",
+        "total": 357,
+        "status": "paid",
+        "adHeadline": "Message to Order",
+        "items": "Ghee Rice + Butter Chicken",
+        "createdAt": "2026-04-17T08:25:05.957Z"
+      },
+      {
+        "code": "HE-1704-0003",
+        "total": 420,
+        "status": "cancelled",
+        "adHeadline": "Message to Order",
+        "items": "Mutton Brain Dry — Half, Ghee Rice",
+        "createdAt": "2026-04-17T04:01:39.435Z"
+      },
+      {
+        "code": "HE-1704-0002",
+        "total": 179,
+        "status": "cancelled",
+        "adHeadline": "Message to Order",
+        "items": "Biriyani Rice + Chicken Kabab",
+        "createdAt": "2026-04-16T20:55:06.720Z"
+      },
+      {
+        "code": "HE-1304-0004",
+        "total": 179,
+        "status": "pending",
+        "adHeadline": "Message to Order",
+        "items": "Ghee Rice + Butter Chicken",
+        "createdAt": "2026-04-13T08:50:13.543Z"
+      },
+      {
+        "code": "HE-1304-0003",
+        "total": 179,
+        "status": "paid",
+        "adHeadline": "Message to Order",
+        "items": "Ghee Rice + Butter Chicken",
+        "createdAt": "2026-04-13T08:46:15.656Z"
+      },
+      {
+        "code": "HE-1304-0002",
+        "total": 427,
+        "status": "pending",
+        "adHeadline": "Message to Order",
+        "items": "Ghee Rice + Butter Chicken + Kabab, Ghee Rice + Butter Chicken",
+        "createdAt": "2026-04-13T08:45:36.410Z"
+      },
+      {
+        "code": "HE-1104-0001",
+        "total": 359,
+        "status": "pending",
+        "adHeadline": "Message to Order",
+        "items": "CM3 For Three — Rice+Dal",
+        "createdAt": "2026-04-11T08:56:45.963Z"
+      }
+    ],
+    "bookings": [
+      {
+        "name": "Rajesh",
+        "date": "2026-04-20",
+        "time": "7:00 PM",
+        "guests": "7-8",
+        "status": "confirmed",
+        "adHeadline": "Message to Order"
+      },
+      {
+        "name": "Sheku",
+        "date": "2026-04-15",
+        "time": "12:30 PM",
+        "guests": "1",
+        "status": "confirmed",
+        "adHeadline": "Message to Order"
+      }
+    ],
+    "organic": [
+      {
+        "source": "ctwa",
+        "customers": 116,
+        "orders": 0,
+        "revenue": 0,
+        "avgLtv": 0
+      },
+      {
+        "source": "organic",
+        "customers": 55,
+        "orders": 0,
+        "revenue": 0,
+        "avgLtv": 0
+      }
+    ]
+  }
+}

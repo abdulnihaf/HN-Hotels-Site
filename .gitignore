@@ -8,12 +8,16 @@ node_modules/
 .secrets/
 .env
 .env.*
+.env.local
 *.pem
 *.key
+*.token
+*.secret
 
 # Large binary research assets (keep local only)
 *.pdf
 *.xlsx
+hn-asset*.xlsx
 !package.json
 
 # Claude Code worktrees and local-scratch
