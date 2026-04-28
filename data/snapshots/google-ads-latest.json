@@ -1,0 +1,603 @@
+{
+  "captured_at": "2026-04-28T12:19:04.871Z",
+  "source": "https://hamzaexpress.in/api/google-cockpit?period=30d",
+  "data": {
+    "success": true,
+    "period": "30d",
+    "asOf": "2026-04-28",
+    "campaignId": "23748431244",
+    "campaignName": "HE — Ghee Rice & Kabab — Local Search",
+    "overview": {
+      "impressions": 401,
+      "clicks": 19,
+      "spend": 281.14,
+      "ctr": 4.74,
+      "avgCPC": 14.8,
+      "avgCPM": 0,
+      "conversions": 0,
+      "interactions": 0,
+      "searchImprShare": 0,
+      "topImprPct": 0,
+      "absTopImprPct": 0,
+      "status": "PAUSED",
+      "servingStatus": "SERVING"
+    },
+    "adGroups": [
+      {
+        "name": "Near Me — Ghee Rice Kabab Biryani",
+        "status": "ENABLED",
+        "bidINR": 15,
+        "impressions": 401,
+        "clicks": 19,
+        "spend": 281.14,
+        "ctr": 4.74,
+        "avgCPC": 14.8,
+        "conversions": 0
+      },
+      {
+        "name": "Shivajinagar — Destination Intent",
+        "status": "ENABLED",
+        "bidINR": 10,
+        "impressions": 0,
+        "clicks": 0,
+        "spend": 0,
+        "ctr": 0,
+        "avgCPC": 0,
+        "conversions": 0
+      }
+    ],
+    "keywords": [
+      {
+        "keyword": "best restaurant near me",
+        "matchType": "PHRASE",
+        "criterionId": "296260889469",
+        "adGroupId": "195450415117",
+        "bidINR": null,
+        "adGroup": "Near Me — Ghee Rice Kabab Biryani",
+        "impressions": 389,
+        "clicks": 17,
+        "spend": 251.4,
+        "ctr": 4.37,
+        "avgCPC": 14.79,
+        "conversions": 0,
+        "imprShare": 9.99,
+        "qualityScore": 1,
+        "creativeQuality": "BELOW_AVERAGE",
+        "landingQuality": "BELOW_AVERAGE",
+        "predictedCtr": "BELOW_AVERAGE",
+        "firstPageCpc": 102.3,
+        "topOfPageCpc": null
+      },
+      {
+        "keyword": "best biryani near me",
+        "matchType": "PHRASE",
+        "criterionId": "321620795926",
+        "adGroupId": "195450415117",
+        "bidINR": null,
+        "adGroup": "Near Me — Ghee Rice Kabab Biryani",
+        "impressions": 6,
+        "clicks": 1,
+        "spend": 14.95,
+        "ctr": 16.67,
+        "avgCPC": 14.95,
+        "conversions": 0,
+        "imprShare": 9.99,
+        "qualityScore": 1,
+        "creativeQuality": "BELOW_AVERAGE",
+        "landingQuality": "BELOW_AVERAGE",
+        "predictedCtr": "BELOW_AVERAGE",
+        "firstPageCpc": 80,
+        "topOfPageCpc": null
+      },
+      {
+        "keyword": "best kabab near me",
+        "matchType": "PHRASE",
+        "criterionId": "488925321511",
+        "adGroupId": "195450415117",
+        "bidINR": null,
+        "adGroup": "Near Me — Ghee Rice Kabab Biryani",
+        "impressions": 6,
+        "clicks": 1,
+        "spend": 14.79,
+        "ctr": 16.67,
+        "avgCPC": 14.79,
+        "conversions": 0,
+        "imprShare": 9.99,
+        "qualityScore": 0,
+        "creativeQuality": "",
+        "landingQuality": "",
+        "predictedCtr": "",
+        "firstPageCpc": 102.3,
+        "topOfPageCpc": 102.3
+      },
+      {
+        "keyword": "best ghee rice near me",
+        "matchType": "PHRASE",
+        "criterionId": "2480756144798",
+        "adGroupId": "195450415117",
+        "bidINR": null,
+        "adGroup": "Near Me — Ghee Rice Kabab Biryani",
+        "impressions": 0,
+        "clicks": 0,
+        "spend": 0,
+        "ctr": 0,
+        "avgCPC": 0,
+        "conversions": 0,
+        "imprShare": 9.99,
+        "qualityScore": 0,
+        "creativeQuality": "",
+        "landingQuality": "",
+        "predictedCtr": "",
+        "firstPageCpc": 56.8,
+        "topOfPageCpc": 74.3
+      },
+      {
+        "keyword": "shivajinagar restaurant",
+        "matchType": "PHRASE",
+        "criterionId": "846851011649",
+        "adGroupId": "195450415157",
+        "bidINR": null,
+        "adGroup": "Shivajinagar — Destination Intent",
+        "impressions": 0,
+        "clicks": 0,
+        "spend": 0,
+        "ctr": 0,
+        "avgCPC": 0,
+        "conversions": 0,
+        "imprShare": 9.99,
+        "qualityScore": 0,
+        "creativeQuality": "",
+        "landingQuality": "",
+        "predictedCtr": "",
+        "firstPageCpc": 37.8,
+        "topOfPageCpc": 37.8
+      },
+      {
+        "keyword": "restaurants in shivajinagar",
+        "matchType": "PHRASE",
+        "criterionId": "1949400747971",
+        "adGroupId": "195450415157",
+        "bidINR": null,
+        "adGroup": "Shivajinagar — Destination Intent",
+        "impressions": 0,
+        "clicks": 0,
+        "spend": 0,
+        "ctr": 0,
+        "avgCPC": 0,
+        "conversions": 0,
+        "imprShare": 9.99,
+        "qualityScore": 0,
+        "creativeQuality": "",
+        "landingQuality": "",
+        "predictedCtr": "",
+        "firstPageCpc": null,
+        "topOfPageCpc": null
+      },
+      {
+        "keyword": "shivajinagar biryani",
+        "matchType": "PHRASE",
+        "criterionId": "2480756144838",
+        "adGroupId": "195450415157",
+        "bidINR": null,
+        "adGroup": "Shivajinagar — Destination Intent",
+        "impressions": 0,
+        "clicks": 0,
+        "spend": 0,
+        "ctr": 0,
+        "avgCPC": 0,
+        "conversions": 0,
+        "imprShare": 9.99,
+        "qualityScore": 0,
+        "creativeQuality": "",
+        "landingQuality": "",
+        "predictedCtr": "",
+        "firstPageCpc": 100,
+        "topOfPageCpc": 100
+      },
+      {
+        "keyword": "shivajinagar food",
+        "matchType": "PHRASE",
+        "criterionId": "2480756144878",
+        "adGroupId": "195450415157",
+        "bidINR": null,
+        "adGroup": "Shivajinagar — Destination Intent",
+        "impressions": 0,
+        "clicks": 0,
+        "spend": 0,
+        "ctr": 0,
+        "avgCPC": 0,
+        "conversions": 0,
+        "imprShare": 0,
+        "qualityScore": 0,
+        "creativeQuality": "",
+        "landingQuality": "",
+        "predictedCtr": "",
+        "firstPageCpc": null,
+        "topOfPageCpc": null
+      }
+    ],
+    "daily": [
+      {
+        "date": "2026-04-15",
+        "impressions": 19,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "date": "2026-04-16",
+        "impressions": 3,
+        "clicks": 1,
+        "spend": 14.71,
+        "conversions": 0
+      },
+      {
+        "date": "2026-04-17",
+        "impressions": 76,
+        "clicks": 6,
+        "spend": 88.84,
+        "conversions": 0
+      },
+      {
+        "date": "2026-04-18",
+        "impressions": 114,
+        "clicks": 7,
+        "spend": 104.01,
+        "conversions": 0
+      },
+      {
+        "date": "2026-04-19",
+        "impressions": 140,
+        "clicks": 4,
+        "spend": 59.26,
+        "conversions": 0
+      },
+      {
+        "date": "2026-04-20",
+        "impressions": 49,
+        "clicks": 1,
+        "spend": 14.32,
+        "conversions": 0
+      }
+    ],
+    "searchTerms": [
+      {
+        "term": "restaurants nearby",
+        "matchType": "Exact~",
+        "impressions": 159,
+        "clicks": 7,
+        "spend": 103.34,
+        "conversions": 0
+      },
+      {
+        "term": "restaurants nearby",
+        "matchType": "Phrase~",
+        "impressions": 38,
+        "clicks": 4,
+        "spend": 58.88,
+        "conversions": 0
+      },
+      {
+        "term": "restaurants near me",
+        "matchType": "Exact~",
+        "impressions": 17,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "near by restaurants",
+        "matchType": "Exact~",
+        "impressions": 13,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "nearby restaurants",
+        "matchType": "Exact~",
+        "impressions": 13,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "bucket biryani near me",
+        "matchType": "Phrase~",
+        "impressions": 7,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "restaurants near me",
+        "matchType": "Phrase~",
+        "impressions": 5,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "shawarma near me",
+        "matchType": "Phrase~",
+        "impressions": 5,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "restaurant near me",
+        "matchType": "Exact~",
+        "impressions": 4,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "restaurants nearby my location",
+        "matchType": "Exact~",
+        "impressions": 4,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "near me restaurant",
+        "matchType": "Exact~",
+        "impressions": 3,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "near restaurant",
+        "matchType": "Exact~",
+        "impressions": 3,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "nearby restaurants near me",
+        "matchType": "Exact~",
+        "impressions": 3,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "grill chicken near me",
+        "matchType": "Phrase~",
+        "impressions": 3,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "grill chicken near me within 400m",
+        "matchType": "Phrase~",
+        "impressions": 3,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "best restaurants near me",
+        "matchType": "Exact~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "food places near me",
+        "matchType": "Exact~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "nearby chicken biryani",
+        "matchType": "Exact~",
+        "impressions": 2,
+        "clicks": 1,
+        "spend": 14.95,
+        "conversions": 0
+      },
+      {
+        "term": "bamboo biryani near me",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "best shawarma near me",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "chicken kebab near me",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "chicken shawarma near me",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "fast food near me",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "food near me halal",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 1,
+        "spend": 14.82,
+        "conversions": 0
+      },
+      {
+        "term": "mandi biryani near me",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "near me bar and restaurant",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "near me open restaurant",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "nearby mutton biryani hotel",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "restaurants near me for lunch",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      },
+      {
+        "term": "restaurants nearby open now",
+        "matchType": "Phrase~",
+        "impressions": 2,
+        "clicks": 0,
+        "spend": 0,
+        "conversions": 0
+      }
+    ],
+    "negatives": [
+      {
+        "text": "movie",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "diet",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "streaming",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "nutrition",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "how to make",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "recipe",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "cooking",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "download",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "jobs",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "franchise",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "vegetarian",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "calories",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "hiring",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "homemade",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "watch online",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "ingredients",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "veg",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "Zomato",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      },
+      {
+        "text": "Swiggy",
+        "matchType": "PHRASE",
+        "status": "ENABLED"
+      }
+    ]
+  }
+}

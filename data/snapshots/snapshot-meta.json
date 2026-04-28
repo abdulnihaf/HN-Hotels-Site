@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-04-28T12:19:09.012Z",
+  "window": {
+    "from": "2026-02-27",
+    "to": "2026-04-28"
+  },
+  "sources": {
+    "aggregator": {
+      "ok": true,
+      "records": 68
+    },
+    "sales": {
+      "ok": true,
+      "records": 24611
+    },
+    "google_ads": {
+      "ok": true,
+      "records": 13
+    },
+    "meta_ctwa": {
+      "ok": true,
+      "records": 9
+    },
+    "waba_leads": {
+      "ok": true,
+      "records": 169
+    }
+  },
+  "files": [
+    {
+      "file": "aggregator-latest.json",
+      "ok": true,
+      "records": 68
+    },
+    {
+      "file": "sales-daily-last60d.json",
+      "ok": true,
+      "records": 24611
+    },
+    {
+      "file": "google-ads-latest.json",
+      "ok": true,
+      "records": 13
+    },
+    {
+      "file": "meta-ctwa-latest.json",
+      "ok": true,
+      "records": 9
+    },
+    {
+      "file": "waba-leads-latest.json",
+      "ok": true,
+      "records": 169
+    }
+  ]
+}
