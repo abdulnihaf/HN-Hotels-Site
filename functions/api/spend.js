@@ -1129,6 +1129,10 @@ export async function onRequest(context) {
       const toPlus1  = new Date(Date.parse(`${toParam}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
       const endUTC   = istDayStartUTC(toPlus1);
 
+      const isRmExpr = `(rmp.uom IS NOT NULL
+                      OR LOWER(COALESCE(be.category_parent,'')) LIKE '01%'
+                      OR LOWER(COALESCE(be.category_parent,'')) LIKE '%raw material%')`;
+
       let sql = `
         SELECT be.id, be.odoo_id,
                be.category, be.category_parent,
@@ -1137,20 +1141,33 @@ export async function onRequest(context) {
                be.recorded_by AS recorded_by_pin, be.recorded_at AS created_at, be.notes,
                be.quantity, be.uom, be.vendor_id, be.vendor_name,
                COALESCE(be.uom, rmp.uom) AS uom_display,
-               CASE WHEN rmp.uom IS NOT NULL
-                      OR LOWER(COALESCE(be.category_parent,'')) LIKE '01%'
-                      OR LOWER(COALESCE(be.category_parent,'')) LIKE '%raw material%'
-                    THEN 1 ELSE 0 END AS is_rm,
-               CASE WHEN (rmp.uom IS NOT NULL
-                            OR LOWER(COALESCE(be.category_parent,'')) LIKE '01%'
-                            OR LOWER(COALESCE(be.category_parent,'')) LIKE '%raw material%')
-                         AND be.quantity IS NULL
-                    THEN 1 ELSE 0 END AS qty_missing,
-               CASE WHEN (rmp.uom IS NOT NULL
-                            OR LOWER(COALESCE(be.category_parent,'')) LIKE '01%'
-                            OR LOWER(COALESCE(be.category_parent,'')) LIKE '%raw material%')
-                         AND (be.vendor_name IS NULL OR be.vendor_name = '')
-                    THEN 1 ELSE 0 END AS vendor_missing
+               CASE WHEN ${isRmExpr} THEN 1 ELSE 0 END AS is_rm,
+               CASE WHEN ${isRmExpr} AND be.quantity IS NULL THEN 1 ELSE 0 END AS qty_missing,
+               CASE WHEN ${isRmExpr} AND (be.vendor_name IS NULL OR be.vendor_name = '')
+                    THEN 1 ELSE 0 END AS vendor_missing,
+               -- Bill attachments uploaded in D1
+               (SELECT COUNT(*) FROM bill_attachments ba
+                 WHERE ba.entry_kind='Expense' AND ba.entry_odoo_id=be.odoo_id) AS bill_count,
+               (SELECT GROUP_CONCAT(ba.drive_view_url,'||')
+                  FROM bill_attachments ba
+                 WHERE ba.entry_kind='Expense' AND ba.entry_odoo_id=be.odoo_id
+                   AND ba.drive_view_url IS NOT NULL LIMIT 5) AS bill_urls,
+               -- HDFC bank-feed debits matching this amount ±2 calendar days
+               CASE WHEN be.x_payment_method='hdfc_bank'
+                    THEN (SELECT COUNT(*) FROM money_events me
+                           WHERE me.source='hdfc' AND me.direction='debit'
+                             AND me.amount_paise=CAST(ROUND(be.amount*100) AS INTEGER)
+                             AND DATE(me.txn_at) >= DATE(be.recorded_at, '-1 day')
+                             AND DATE(me.txn_at) <= DATE(be.recorded_at, '+2 day'))
+                    ELSE NULL END AS hdfc_match_count,
+               -- Counter-expense duplicate: same amount on same day in cash_events
+               (SELECT COUNT(*) FROM cash_events ce
+                 WHERE ce.source='counter_expense'
+                   AND (ce.brand IS NULL OR ce.brand = COALESCE(be.x_location, ce.brand))
+                   AND ce.direction='debit'
+                   AND ce.amount_paise=CAST(ROUND(be.amount*100) AS INTEGER)
+                   AND DATE(ce.txn_at) >= DATE(be.recorded_at, '-1 day')
+                   AND DATE(ce.txn_at) <= DATE(be.recorded_at, '+1 day')) AS v2_dup_count
           FROM business_expenses be
           LEFT JOIN rm_products rmp
                  ON rmp.odoo_id = be.product_id AND rmp.odoo_id IS NOT NULL
@@ -1166,17 +1183,74 @@ export async function onRequest(context) {
       const items = (rows.results || []).map(r => {
         const t = Date.parse((r.created_at || '').replace(' ', 'T') + 'Z');
         const ist_date = isNaN(t) ? null : new Date(t + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
-        return { ...r, ist_date };
+        // Flag: cash/petty expense with no bill uploaded
+        const needsBill = ['cash', 'petty_pool', 'counter_pool'].includes(r.payment_method) && (r.bill_count || 0) === 0;
+        // Flag: HDFC expense not found in bank feed
+        const hdfcUnverified = r.payment_method === 'hdfc_bank' && r.hdfc_match_count === 0;
+        return { ...r, ist_date, needs_bill: needsBill ? 1 : 0, hdfc_unverified: hdfcUnverified ? 1 : 0 };
       });
 
-      const total         = items.reduce((s, r) => s + (r.amount || 0), 0);
-      const rm_rows       = items.filter(r => r.is_rm);
-      const qty_missing   = items.filter(r => r.qty_missing).length;
+      // Also query rm_vendor_bills (PO-linked purchases) for same period
+      let billSql = `SELECT b.id, b.brand, b.bill_date, b.vendor_name, b.amount_total,
+             b.odoo_po_name, b.payment_state, b.bill_ref, b.recorded_by, b.is_direct,
+             b.odoo_move_id,
+             (SELECT COUNT(*) FROM bill_attachments ba
+               WHERE ba.entry_kind='Bill' AND ba.entry_odoo_id=b.odoo_move_id) AS bill_count
+        FROM rm_vendor_bills b
+       WHERE b.bill_date >= ? AND b.bill_date <= ?`;
+      const billArgs = [fromParam, toParam];
+      if (brandParam !== 'ALL' && ['HE', 'NCH', 'HQ'].includes(brandParam)) {
+        billSql += ` AND b.brand = ?`;
+        billArgs.push(brandParam);
+      }
+      billSql += ` ORDER BY b.bill_date ASC LIMIT 500`;
+      const billRows = await DB.prepare(billSql).bind(...billArgs).all().catch(() => ({ results: [] }));
+
+      const total          = items.reduce((s, r) => s + (r.amount || 0), 0);
+      const rm_rows        = items.filter(r => r.is_rm).length;
+      const qty_missing    = items.filter(r => r.qty_missing).length;
       const vendor_missing = items.filter(r => r.vendor_missing).length;
+      const bill_missing   = items.filter(r => r.needs_bill).length;
+      const hdfc_unverified = items.filter(r => r.hdfc_unverified).length;
+      const dup_suspect    = items.filter(r => (r.v2_dup_count || 0) > 0).length;
 
       return json({ success: true, entries: items, total,
-        summary: { total_rows: items.length, rm_rows: rm_rows.length, qty_missing, vendor_missing },
+        po_bills: billRows.results || [],
+        summary: { total_rows: items.length, rm_rows, qty_missing, vendor_missing,
+                   bill_missing, hdfc_unverified, dup_suspect },
         from: fromParam, to: toParam, brand: brandParam });
+    }
+
+    // ── UPDATE EXPENSE QTY / VENDOR (Basheer / admin / cfo) ──
+    if (action === 'expense-update' && request.method === 'POST') {
+      if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
+      const body = await request.json().catch(() => ({}));
+      const { pin, expense_id, quantity, uom, vendor_name } = body;
+      const user = resolveUser(pin);
+      if (!user || !['admin', 'cfo', 'gm'].includes(user.role)) {
+        return json({ success: false, error: 'Admin, CFO or GM PIN required' }, 401);
+      }
+      if (!expense_id) return json({ success: false, error: 'expense_id required' }, 400);
+
+      const setClauses = [];
+      const vals = [];
+      if (quantity !== undefined && quantity !== null && quantity !== '') {
+        setClauses.push('quantity=?');
+        vals.push(parseFloat(quantity));
+      }
+      if (uom !== undefined && uom !== null) {
+        setClauses.push('uom=?');
+        vals.push(String(uom).trim() || null);
+      }
+      if (vendor_name !== undefined) {
+        setClauses.push('vendor_name=?');
+        vals.push(vendor_name ? String(vendor_name).trim() : null);
+      }
+      if (!setClauses.length) return json({ success: false, error: 'Nothing to update' }, 400);
+
+      vals.push(parseInt(expense_id, 10));
+      await DB.prepare(`UPDATE business_expenses SET ${setClauses.join(',')} WHERE id=?`).bind(...vals).run();
+      return json({ success: true, updated: { expense_id, quantity, uom, vendor_name, updated_by: user.name } });
     }
 
     // ── RECORD EXPENSE (cats 3-13) → hr.expense ────────────

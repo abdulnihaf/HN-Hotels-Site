@@ -4,11 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0c0c14">
-<title>HN Expense — April Audit Export</title>
+<title>HN Expense — Audit Export</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/ops-ui.css">
 <style>
-/* ── Screen styles ───────────────────────────────────────── */
 .filter-row { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:16px; }
 .filter-row label { font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.4px;
   font-weight:600; display:flex; flex-direction:column; gap:4px; }
@@ -21,7 +20,6 @@
 .stat-chip.danger .n { color:var(--danger); }
 .stat-chip.ok .n { color:var(--accent); }
 
-/* audit table */
 .audit-wrap { overflow-x:auto; margin-bottom:16px; }
 table.audit { width:100%; border-collapse:collapse; font-size:12px; }
 table.audit th { background:var(--card); color:var(--text-dim); font-size:10px; text-transform:uppercase;
@@ -29,8 +27,8 @@ table.audit th { background:var(--card); color:var(--text-dim); font-size:10px; 
   white-space:nowrap; position:sticky; top:0; z-index:2; }
 table.audit td { padding:5px 8px; border:1px solid var(--border); vertical-align:middle; font-size:12px; }
 table.audit tr:nth-child(even) td { background:rgba(255,255,255,0.02); }
+table.audit tr.dup-suspect td { background:rgba(251,191,36,0.08) !important; }
 
-/* RM flag cells */
 td.qty-missing { background:rgba(245,158,11,0.18); border:1px dashed #f59e0b !important;
   text-align:center; font-size:11px; color:#f59e0b; }
 td.vendor-missing { background:rgba(239,68,68,0.12); border:1px dashed #ef4444 !important;
@@ -43,47 +41,91 @@ td.brand-nch { color:#34d399; font-weight:700; }
 td.brand-hq { color:#a78bfa; font-weight:700; }
 .rm-badge { background:rgba(245,158,11,0.15); color:#f59e0b; border-radius:4px;
   font-size:9px; font-weight:700; padding:1px 4px; margin-left:4px; }
+.dup-badge { background:rgba(251,191,36,0.2); color:#f59e0b; border-radius:4px;
+  font-size:9px; font-weight:700; padding:1px 4px; cursor:help; }
+
+/* Bill cell */
+td.bill-ok { color:var(--accent); text-align:center; font-size:11px; }
+td.bill-missing { background:rgba(239,68,68,0.10); border:1px dashed #ef4444 !important;
+  text-align:center; font-size:11px; color:#ef4444; }
+td.bill-na { color:var(--text-dim); text-align:center; font-size:11px; }
+.bill-link { color:var(--accent); text-decoration:none; font-size:11px; }
+.bill-link:hover { text-decoration:underline; }
+
+/* HDFC verify cell */
+td.hdfc-ok { color:var(--accent); text-align:center; font-size:11px; }
+td.hdfc-warn { background:rgba(245,158,11,0.12); border:1px dashed #f59e0b !important;
+  text-align:center; font-size:11px; color:#f59e0b; }
+td.hdfc-na { color:var(--text-dim); text-align:center; font-size:11px; }
+
+/* Backfill info banner */
+.info-banner { background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3);
+  border-radius:8px; padding:10px 14px; font-size:12px; color:var(--text-dim);
+  margin-bottom:14px; }
+.info-banner strong { color:var(--text); }
 
 .total-row td { font-weight:700; background:var(--card) !important; }
 .print-btn { display:flex; gap:8px; margin-bottom:8px; }
-
-/* legend */
 .legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; font-size:11px; }
 .leg-item { display:flex; align-items:center; gap:5px; }
 .leg-swatch { width:14px; height:14px; border-radius:3px; flex-shrink:0; }
 
-/* ── Print styles ────────────────────────────────────────── */
+/* Edit button */
+.edit-btn { background:none; border:1px solid rgba(99,102,241,0.4); border-radius:4px;
+  color:rgba(99,102,241,0.8); font-size:10px; padding:2px 6px; cursor:pointer;
+  white-space:nowrap; }
+.edit-btn:hover { background:rgba(99,102,241,0.15); }
+
+/* Edit modal */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100;
+  display:flex; align-items:center; justify-content:center; }
+.modal-box { background:var(--card); border:1px solid var(--border); border-radius:12px;
+  padding:24px; width:min(460px, 92vw); }
+.modal-box h3 { margin:0 0 6px; font-size:15px; }
+.modal-box .sub { font-size:12px; color:var(--text-dim); margin-bottom:18px; }
+.modal-field { margin-bottom:14px; }
+.modal-field label { display:block; font-size:11px; color:var(--text-dim); font-weight:600;
+  text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; }
+.modal-field input, .modal-field select { width:100%; min-height:38px; }
+.modal-actions { display:flex; gap:10px; margin-top:18px; }
+
+/* PO Bills section */
+.section-title { font-size:13px; font-weight:700; color:var(--text); margin:20px 0 10px;
+  padding-top:16px; border-top:1px solid var(--border); }
+table.po-table { width:100%; border-collapse:collapse; font-size:12px; }
+table.po-table th { background:var(--card); color:var(--text-dim); font-size:10px; text-transform:uppercase;
+  padding:5px 8px; border:1px solid var(--border); }
+table.po-table td { padding:5px 8px; border:1px solid var(--border); font-size:12px; }
+.pay-paid { color:var(--accent); font-weight:600; }
+.pay-partial { color:#f59e0b; font-weight:600; }
+.pay-unpaid { color:var(--danger); }
+
+/* Print styles */
 @media print {
-  @page { size: A4 landscape; margin: 12mm 10mm; }
+  @page { size: A4 landscape; margin: 10mm 8mm; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-
-  body { background: #fff !important; color: #000 !important; font-family: 'Inter', sans-serif; }
-  #pin-screen, .filter-row, .print-btn, .legend, header, .no-print { display:none !important; }
+  body { background:#fff !important; color:#000 !important; }
+  #pin-screen, .filter-row, .print-btn, .legend, header, .no-print,
+  .info-banner, .modal-overlay, .edit-btn { display:none !important; }
   #main-screen { display:block !important; padding:0 !important; }
-
-  .summary-bar { margin-bottom:10px; }
-  .stat-chip { border:1px solid #ccc; background:#f9f9f9 !important;
-    padding:4px 10px; border-radius:4px; font-size:10px; }
-  .stat-chip .n { font-size:14px; }
-
-  table.audit { font-size:9pt; width:100%; }
-  table.audit th { background:#e5e7eb !important; color:#374151 !important; font-size:8pt;
-    padding:4px 5px; border:1px solid #9ca3af; }
-  table.audit td { padding:3px 5px; border:1px solid #d1d5db; font-size:9pt; }
+  .summary-bar { margin-bottom:8px; }
+  .stat-chip { border:1px solid #ccc; background:#f9f9f9 !important; padding:4px 10px;
+    border-radius:4px; font-size:10px; }
+  .stat-chip .n { font-size:13px; }
+  table.audit { font-size:8pt; }
+  table.audit th { background:#e5e7eb !important; color:#374151 !important; font-size:7pt; padding:3px 4px; }
+  table.audit td { padding:3px 4px; font-size:8pt; border:1px solid #d1d5db; }
   table.audit tr:nth-child(even) td { background:#f9fafb !important; }
-
-  td.qty-missing { background:rgba(245,158,11,0.15) !important; border:2px dashed #d97706 !important;
-    color:#92400e !important; min-width:44px; }
-  td.vendor-missing { background:rgba(239,68,68,0.10) !important; border:2px dashed #dc2626 !important;
-    color:#991b1b !important; }
-  td.amount { font-weight:700; }
+  td.qty-missing { background:rgba(245,158,11,0.15) !important; border:2px dashed #d97706 !important; color:#92400e !important; }
+  td.vendor-missing { background:rgba(239,68,68,0.10) !important; border:2px dashed #dc2626 !important; color:#991b1b !important; }
+  td.bill-missing { background:rgba(239,68,68,0.10) !important; border:2px dashed #dc2626 !important; color:#991b1b !important; }
+  td.hdfc-warn { background:rgba(245,158,11,0.12) !important; }
   .total-row td { background:#e5e7eb !important; border-top:2px solid #374151 !important; }
-
   .print-header { display:block !important; }
 }
 .print-header { display:none; margin-bottom:10px; }
-.print-header h2 { font-size:14pt; margin:0 0 2px; }
-.print-header .ph-meta { font-size:9pt; color:#6b7280; }
+.print-header h2 { font-size:13pt; margin:0 0 2px; }
+.print-header .ph-meta { font-size:8pt; color:#6b7280; }
 </style>
 </head>
 <body>
@@ -92,7 +134,7 @@ td.brand-hq { color:#a78bfa; font-weight:700; }
 <!-- PIN GATE -->
 <div id="pin-screen">
   <h1>HN Expense — Audit Export</h1>
-  <p class="sub">April expense audit with qty flags. Nihaf &amp; Naveen only.</p>
+  <p class="sub">Full audit view with bills, bank verification &amp; flags.</p>
   <div style="margin-top:32px; max-width:280px;">
     <label>Enter PIN</label>
     <input id="pin-input" type="password" inputmode="numeric" maxlength="4"
@@ -106,8 +148,8 @@ td.brand-hq { color:#a78bfa; font-weight:700; }
 <div id="main-screen" class="hidden">
   <header class="no-print">
     <div>
-      <h1>April Expense Audit</h1>
-      <div class="sub" id="sub-line">Raw materials with missing qty are flagged for hand-entry</div>
+      <h1>Expense Audit Export</h1>
+      <div class="sub" id="sub-line">Bills · Bank match · RM qty flags</div>
     </div>
     <div style="display:flex; gap:6px;">
       <a class="btn btn-ghost btn-sm" href="/ops/expense/">← Expense</a>
@@ -115,20 +157,21 @@ td.brand-hq { color:#a78bfa; font-weight:700; }
     </div>
   </header>
 
-  <!-- Print header (hidden on screen, visible on print) -->
   <div class="print-header" id="print-header">
-    <h2>HN Hotels — April 2026 Expense Audit</h2>
+    <h2>HN Hotels — Expense Audit</h2>
     <div class="ph-meta" id="print-meta"></div>
+  </div>
+
+  <!-- Context banner about backfill entries -->
+  <div class="info-banner no-print">
+    <strong>Historical entries show as "Nihaf":</strong> Data backfilled before 19 Apr 2026 was imported via admin account (uid=2). From 20 Apr onward, recorded_by reflects the actual user PIN. &nbsp;·&nbsp;
+    <strong>ops/expense only:</strong> This view covers hr.expense records (daily cash + HDFC entries). Purchase orders (ops/purchase) appear separately in the PO Bills section below.
   </div>
 
   <!-- Filters -->
   <div class="filter-row no-print">
-    <label>From
-      <input id="f-from" type="date" value="2026-04-01">
-    </label>
-    <label>To
-      <input id="f-to" type="date" value="2026-04-30">
-    </label>
+    <label>From<input id="f-from" type="date" value="2026-04-01"></label>
+    <label>To<input id="f-to" type="date" value="2026-04-30"></label>
     <label>Brand
       <select id="f-brand">
         <option value="ALL">All brands</option>
@@ -140,36 +183,36 @@ td.brand-hq { color:#a78bfa; font-weight:700; }
     <button class="btn btn-primary" onclick="loadExport()">Load</button>
   </div>
 
-  <!-- Summary -->
+  <!-- Summary chips -->
   <div class="summary-bar" id="summary-bar" style="display:none;"></div>
 
   <!-- Legend -->
   <div class="legend no-print" id="legend" style="display:none;">
     <div class="leg-item">
       <div class="leg-swatch" style="background:rgba(245,158,11,0.18);border:1px dashed #f59e0b;"></div>
-      <span>RM item — qty missing (write in)</span>
+      <span>RM — qty missing</span>
     </div>
     <div class="leg-item">
       <div class="leg-swatch" style="background:rgba(239,68,68,0.12);border:1px dashed #ef4444;"></div>
-      <span>RM item — vendor missing</span>
+      <span>Bill not uploaded / vendor missing</span>
     </div>
     <div class="leg-item">
-      <div class="leg-swatch" style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);"></div>
-      <span>RM item — qty recorded</span>
+      <div class="leg-swatch" style="background:rgba(245,158,11,0.12);border:1px dashed #f59e0b;"></div>
+      <span>HDFC — no bank match found</span>
     </div>
     <div class="leg-item">
-      <div class="leg-swatch" style="background:var(--surface);border:1px solid var(--border);"></div>
-      <span>Non-RM (qty N/A)</span>
+      <div class="leg-swatch" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);"></div>
+      <span>Possible duplicate with counter entry</span>
     </div>
   </div>
 
-  <!-- Print / Export actions -->
+  <!-- Actions -->
   <div class="print-btn no-print" id="action-bar" style="display:none;">
-    <button class="btn btn-primary" onclick="window.print()">🖨 Print / Save PDF</button>
+    <button class="btn btn-primary" onclick="window.print()">🖨 Print / PDF</button>
     <button class="btn btn-ghost btn-sm" onclick="downloadCsv()">↓ CSV</button>
   </div>
 
-  <!-- Table -->
+  <!-- Expense Table -->
   <div class="audit-wrap" id="audit-wrap" style="display:none;">
     <table class="audit" id="audit-table">
       <thead>
@@ -177,12 +220,14 @@ td.brand-hq { color:#a78bfa; font-weight:700; }
           <th>#</th>
           <th>Date</th>
           <th>Brand</th>
-          <th>Source</th>
+          <th>Payment</th>
           <th>Vendor</th>
           <th>Product / Item</th>
           <th>UOM</th>
           <th>Qty ✏</th>
           <th>Amount ₹</th>
+          <th>Bills</th>
+          <th>Bank ✓</th>
           <th>By</th>
           <th>Category</th>
           <th>Notes</th>
@@ -193,35 +238,88 @@ td.brand-hq { color:#a78bfa; font-weight:700; }
     </table>
   </div>
 
+  <!-- PO Bills section -->
+  <div id="po-section" style="display:none;">
+    <div class="section-title">Purchase Order Bills (ops/purchase) — same period</div>
+    <div class="audit-wrap">
+      <table class="po-table" id="po-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Date</th><th>Brand</th><th>PO#</th>
+            <th>Vendor</th><th>Bill Ref</th>
+            <th>Amount ₹</th><th>Payment</th><th>Bills</th><th>By</th>
+          </tr>
+        </thead>
+        <tbody id="po-body"></tbody>
+        <tfoot id="po-foot"></tfoot>
+      </table>
+    </div>
+  </div>
+
   <div id="empty-msg" class="mute" style="display:none; text-align:center; padding:32px;">No entries found for this range.</div>
   <div id="load-err"  class="mute" style="display:none; color:var(--danger); padding:16px;"></div>
+</div>
+
+<!-- Edit Modal (Basheer / admin / cfo) -->
+<div class="modal-overlay hidden" id="edit-modal">
+  <div class="modal-box">
+    <h3>Edit Entry</h3>
+    <div class="sub" id="edit-sub">Update qty and vendor for this RM item</div>
+    <div class="modal-field">
+      <label>Quantity</label>
+      <input id="e-qty" type="number" step="any" min="0.001" placeholder="e.g. 2.5">
+    </div>
+    <div class="modal-field">
+      <label>Unit <span id="e-uom-hint" style="color:var(--text-dim); font-weight:400; text-transform:none;"></span></label>
+      <input id="e-uom" type="text" placeholder="e.g. kg, pcs, litre">
+    </div>
+    <div class="modal-field">
+      <label>Vendor name</label>
+      <input id="e-vendor" type="text" placeholder="Supplier name">
+    </div>
+    <div class="modal-field">
+      <label>Notes (optional)</label>
+      <input id="e-notes" type="text" placeholder="Any clarification">
+    </div>
+    <div id="edit-err" style="color:var(--danger); font-size:12px; min-height:16px; margin-top:4px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+      <button class="btn btn-ghost" onclick="closeEdit()">Cancel</button>
+    </div>
+  </div>
 </div>
 
 </div><!-- #app -->
 
 <script>
-const API  = '/api/spend';
-const PINS = { '0305':'Nihaf','5882':'Nihaf','3754':'Naveen' };
+const API = '/api/spend';
+const PIN_MAP = {
+  '0305':'Nihaf', '5882':'Nihaf', '3754':'Naveen',
+  '8523':'Basheer', '6890':'Tanveer', '6045':'Faheem', '3678':'Faheem',
+  '2026':'Zoya', '8316':'Zoya', '3697':'Yashwant',
+  '15':'Noor', '14':'Kesmat', '43':'Nafees',
+};
+// Roles: admin/cfo see everything; editor (Basheer/GMs) can edit
+const PIN_ROLES = {
+  '0305':'admin', '5882':'admin', '3754':'cfo',
+  '8523':'editor', '6890':'editor', '6045':'editor', '3678':'editor',
+};
 
-let PIN = '';
-let _entries = [];
+let PIN = '', PIN_ROLE = '';
+let _entries = [], _editingId = null;
 
-// ── Auth ────────────────────────────────────────────────────
 function verifyPin() {
   const v = document.getElementById('pin-input').value.trim();
-  if (!PINS[v]) { document.getElementById('pin-error').textContent = 'Invalid PIN'; return; }
+  if (!PIN_MAP[v]) { document.getElementById('pin-error').textContent = 'Invalid PIN'; return; }
   PIN = v;
+  PIN_ROLE = PIN_ROLES[v] || 'viewer';
   document.getElementById('pin-screen').classList.add('hidden');
   document.getElementById('main-screen').classList.remove('hidden');
 }
-function logout() {
-  PIN = ''; location.reload();
-}
-document.getElementById('pin-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') verifyPin();
-});
+function logout() { PIN = ''; location.reload(); }
+document.getElementById('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') verifyPin(); });
 
-// ── Source label ────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────
 function srcLabel(pm, pool) {
   const m = { hdfc_bank:'HDFC', federal_bank:'Federal', paytm_upi:'Paytm',
               razorpay:'Razorpay', petty_pool:'Petty', counter_pool:'Counter' };
@@ -233,21 +331,19 @@ function srcLabel(pm, pool) {
   }
   return pm || '—';
 }
-
-// ── Date helpers ────────────────────────────────────────────
 function fmtDate(ymd) {
   if (!ymd) return '—';
-  const d = new Date(ymd + 'T00:00:00Z');
-  return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short' });
+  return new Date(ymd + 'T00:00:00Z').toLocaleDateString('en-IN', { day:'2-digit', month:'short' });
 }
 function fmtAmt(n) {
   return Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits:0, maximumFractionDigits:0 });
 }
-
 function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function pinName(p) { return PIN_MAP[p] || p || '—'; }
+const canEdit = () => ['admin','cfo','editor'].includes(PIN_ROLE);
 
 // ── Load ────────────────────────────────────────────────────
 async function loadExport() {
@@ -255,14 +351,11 @@ async function loadExport() {
   const to    = document.getElementById('f-to').value;
   const brand = document.getElementById('f-brand').value;
 
-  document.getElementById('summary-bar').style.display = 'none';
-  document.getElementById('audit-wrap').style.display  = 'none';
-  document.getElementById('action-bar').style.display  = 'none';
-  document.getElementById('legend').style.display      = 'none';
-  document.getElementById('empty-msg').style.display   = 'none';
-  document.getElementById('load-err').style.display    = 'none';
-  document.getElementById('audit-body').innerHTML      = '<tr><td colspan="12" class="mute" style="text-align:center; padding:20px;">Loading…</td></tr>';
-  document.getElementById('audit-wrap').style.display  = '';
+  ['summary-bar','audit-wrap','action-bar','legend','empty-msg','load-err','po-section']
+    .forEach(id => document.getElementById(id).style.display = 'none');
+  document.getElementById('audit-body').innerHTML =
+    '<tr><td colspan="14" class="mute" style="text-align:center; padding:20px;">Loading…</td></tr>';
+  document.getElementById('audit-wrap').style.display = '';
 
   try {
     const r = await fetch(`${API}?action=expense-export&pin=${PIN}&from=${from}&to=${to}&brand=${brand}`)
@@ -279,22 +372,30 @@ async function loadExport() {
     }
 
     // Summary chips
+    const chips = [
+      `<div class="stat-chip ok"><span class="n">${s.total_rows || _entries.length}</span>Total entries</div>`,
+      `<div class="stat-chip"><span class="n">₹${fmtAmt(r.total)}</span>Total spend</div>`,
+      `<div class="stat-chip"><span class="n">${s.rm_rows || 0}</span>RM items</div>`,
+      s.qty_missing ? `<div class="stat-chip warn"><span class="n">${s.qty_missing}</span>Qty missing ✏</div>` : '',
+      s.vendor_missing ? `<div class="stat-chip danger"><span class="n">${s.vendor_missing}</span>Vendor missing</div>` : '',
+      s.bill_missing  ? `<div class="stat-chip danger"><span class="n">${s.bill_missing}</span>No bill uploaded</div>` : '',
+      s.hdfc_unverified ? `<div class="stat-chip warn"><span class="n">${s.hdfc_unverified}</span>HDFC unverified</div>` : '',
+      s.dup_suspect ? `<div class="stat-chip warn"><span class="n">${s.dup_suspect}</span>Dup suspect</div>` : '',
+    ];
     const bar = document.getElementById('summary-bar');
-    bar.innerHTML = `
-      <div class="stat-chip ok"><span class="n">${s.total_rows || _entries.length}</span>Total entries</div>
-      <div class="stat-chip"><span class="n">₹${fmtAmt(r.total)}</span>Total spend</div>
-      <div class="stat-chip"><span class="n">${s.rm_rows || 0}</span>RM items</div>
-      <div class="stat-chip warn"><span class="n">${s.qty_missing || 0}</span>Qty missing ✏</div>
-      ${s.vendor_missing ? `<div class="stat-chip danger"><span class="n">${s.vendor_missing}</span>Vendor missing</div>` : ''}
-    `;
+    bar.innerHTML = chips.join('');
     bar.style.display = '';
 
-    // Print header meta
     document.getElementById('print-meta').textContent =
-      `${from} to ${to} · ${brand === 'ALL' ? 'All brands' : brand} · ${_entries.length} entries · ₹${fmtAmt(r.total)} · Printed ${new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}`;
+      `${from} to ${to} · ${brand === 'ALL' ? 'All brands' : brand} · ${_entries.length} entries · ₹${fmtAmt(r.total)} · Generated ${new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}`;
 
-    // Render table
     renderTable(_entries);
+
+    // PO bills section
+    if ((r.po_bills || []).length > 0) {
+      renderPoBills(r.po_bills);
+      document.getElementById('po-section').style.display = '';
+    }
 
     document.getElementById('legend').style.display    = '';
     document.getElementById('action-bar').style.display = '';
@@ -308,60 +409,85 @@ async function loadExport() {
 function renderTable(entries) {
   const tbody = document.getElementById('audit-body');
   const tfoot = document.getElementById('audit-foot');
-  let html = '';
-  let total = 0;
+  let html = '', total = 0;
 
   entries.forEach((e, i) => {
-    const brand = e.x_location || (e.company_id === 2 ? 'HE' : e.company_id === 3 ? 'NCH' : e.company_id === 1 ? 'HQ' : '?');
-    const brandCls = brand === 'HE' ? 'brand-he' : brand === 'NCH' ? 'brand-nch' : brand === 'HQ' ? 'brand-hq' : '';
+    const brand = e.x_location || (e.company_id===2?'HE':e.company_id===3?'NCH':e.company_id===1?'HQ':'?');
+    const brandCls = brand==='HE'?'brand-he':brand==='NCH'?'brand-nch':brand==='HQ'?'brand-hq':'';
     const src = srcLabel(e.payment_method, e.x_pool);
-
-    // Product name — prefer stored product_name, fall back to category
     const item = e.product_name || e.category || '—';
     const rmBadge = e.is_rm ? `<span class="rm-badge">RM</span>` : '';
+    const dupBadge = (e.v2_dup_count > 0) ? `<span class="dup-badge" title="Same amount found in counter cash on same day — verify not double-counted">DUP?</span>` : '';
 
-    // Qty cell logic
+    // Qty cell
     let qtyCls = '', qtyContent = '';
     if (e.is_rm) {
       if (e.qty_missing) {
         qtyCls = 'qty-missing';
-        qtyContent = '_____ ' + esc(e.uom_display || '');
+        qtyContent = `_____ ${esc(e.uom_display||'')}`;
       } else {
         qtyCls = 'qty-ok';
-        qtyContent = `${e.quantity}${e.uom_display ? ' ' + esc(e.uom_display) : ''}`;
+        qtyContent = `${e.quantity}${e.uom_display?' '+esc(e.uom_display):''}`;
       }
-    } else {
-      qtyCls = 'qty-na';
-      qtyContent = '—';
-    }
+    } else { qtyCls='qty-na'; qtyContent='—'; }
 
     // Vendor cell
     let vendorContent = '', vendorCls = '';
     if (e.vendor_missing) {
-      vendorCls   = 'vendor-missing';
-      vendorContent = '?';
+      vendorCls='vendor-missing'; vendorContent='?';
     } else {
-      vendorContent = esc(e.vendor_name || '—');
+      vendorContent = esc(e.vendor_name||'—');
     }
 
-    // UOM cell
-    const uom = e.uom_display || (e.is_rm ? '?' : '—');
+    // Bills cell
+    let billCls = 'bill-na', billContent = '—';
+    const billCount = e.bill_count || 0;
+    if (e.needs_bill && billCount === 0) {
+      billCls = 'bill-missing'; billContent = '⚠ none';
+    } else if (billCount > 0) {
+      billCls = 'bill-ok';
+      const urls = (e.bill_urls || '').split('||').filter(Boolean);
+      if (urls.length) {
+        billContent = urls.map((u, idx) => `<a href="${esc(u)}" target="_blank" class="bill-link">📎${idx+1}</a>`).join(' ');
+      } else {
+        billContent = `✓ ${billCount}`;
+      }
+    }
 
+    // HDFC verify cell
+    let hdfcCls = 'hdfc-na', hdfcContent = '—';
+    if (e.payment_method === 'hdfc_bank') {
+      if (e.hdfc_unverified) {
+        hdfcCls = 'hdfc-warn'; hdfcContent = '⚠ no match';
+      } else {
+        hdfcCls = 'hdfc-ok'; hdfcContent = `✓ ${e.hdfc_match_count}`;
+      }
+    }
+
+    // Edit button (for editors on RM rows with missing data)
+    const showEdit = canEdit() && e.is_rm;
+    const editBtn = showEdit
+      ? `<button class="edit-btn no-print" onclick="openEdit(${e.id}, '${esc(e.product_name||e.category||'')}', '${esc(e.vendor_name||'')}', ${e.quantity||'null'}, '${esc(e.uom_display||'')}')">✏ Edit</button>`
+      : '';
+
+    const rowCls = (e.v2_dup_count > 0) ? 'dup-suspect' : '';
     total += e.amount || 0;
 
-    html += `<tr>
-      <td style="color:var(--text-dim); text-align:right;">${i + 1}</td>
+    html += `<tr class="${rowCls}" id="row-${e.id}">
+      <td style="color:var(--text-dim); text-align:right;">${i+1}</td>
       <td style="white-space:nowrap;">${fmtDate(e.ist_date)}</td>
       <td class="${brandCls}">${esc(brand)}</td>
       <td style="white-space:nowrap; font-size:11px;">${esc(src)}</td>
       <td class="${vendorCls}">${vendorContent}</td>
-      <td>${esc(item)}${rmBadge}</td>
-      <td style="font-size:11px; color:var(--text-dim);">${esc(uom)}</td>
-      <td class="${qtyCls}">${qtyContent}</td>
+      <td>${esc(item)}${rmBadge}${dupBadge}</td>
+      <td style="font-size:11px; color:var(--text-dim);">${esc(e.uom_display||'—')}</td>
+      <td class="${qtyCls}">${qtyContent}${editBtn}</td>
       <td class="amount">₹${fmtAmt(e.amount)}</td>
-      <td style="font-size:11px; color:var(--text-dim);">${esc(e.recorded_by_pin || '—')}</td>
-      <td style="font-size:11px; color:var(--text-dim);">${esc((e.category_parent || e.category || '—').replace(/^\d+\s*·\s*/, ''))}</td>
-      <td style="font-size:11px; color:var(--text-dim); max-width:120px; overflow:hidden; text-overflow:ellipsis;">${esc(e.notes || '')}</td>
+      <td class="${billCls}">${billContent}</td>
+      <td class="${hdfcCls}">${hdfcContent}</td>
+      <td style="font-size:11px; color:var(--text-dim);">${esc(pinName(e.recorded_by_pin))}</td>
+      <td style="font-size:11px; color:var(--text-dim);">${esc((e.category_parent||e.category||'—').replace(/^\d+\s*·\s*/,''))}</td>
+      <td style="font-size:11px; color:var(--text-dim); max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(e.notes||'')}">${esc(e.notes||'')}</td>
     </tr>`;
   });
 
@@ -369,41 +495,122 @@ function renderTable(entries) {
   tfoot.innerHTML = `<tr class="total-row">
     <td colspan="8" style="text-align:right; font-size:11px;">TOTAL (${entries.length} entries)</td>
     <td class="amount">₹${fmtAmt(total)}</td>
-    <td colspan="3"></td>
+    <td colspan="5"></td>
   </tr>`;
 }
 
-// ── CSV export ──────────────────────────────────────────────
+function renderPoBills(bills) {
+  const tbody = document.getElementById('po-body');
+  const tfoot = document.getElementById('po-foot');
+  let html = '', total = 0;
+
+  bills.forEach((b, i) => {
+    const brandCls = b.brand==='HE'?'brand-he':b.brand==='NCH'?'brand-nch':'brand-hq';
+    const payClass = b.payment_state==='paid'?'pay-paid':b.payment_state==='partial'?'pay-partial':'pay-unpaid';
+    const payLabel = b.payment_state==='paid'?'Paid':b.payment_state==='partial'?'Partial':'Unpaid';
+    const billBadge = (b.bill_count||0) > 0
+      ? `<span style="color:var(--accent);">✓ ${b.bill_count}</span>`
+      : `<span style="color:var(--danger);">⚠ none</span>`;
+    total += b.amount_total || 0;
+    html += `<tr>
+      <td style="color:var(--text-dim);">${i+1}</td>
+      <td>${fmtDate(b.bill_date)}</td>
+      <td class="${brandCls}">${esc(b.brand||'—')}</td>
+      <td style="font-size:11px;">${esc(b.odoo_po_name||'—')}</td>
+      <td>${esc(b.vendor_name||'—')}</td>
+      <td style="font-size:11px;">${esc(b.bill_ref||'—')}</td>
+      <td class="amount">₹${fmtAmt(b.amount_total)}</td>
+      <td class="${payClass} " style="text-align:center; font-size:11px;">${payLabel}</td>
+      <td style="text-align:center;">${billBadge}</td>
+      <td style="font-size:11px; color:var(--text-dim);">${esc(b.recorded_by||'—')}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html || '<tr><td colspan="10" class="mute" style="text-align:center;">No PO bills in this range</td></tr>';
+  tfoot.innerHTML = `<tr class="total-row"><td colspan="6" style="text-align:right; font-size:11px;">PO TOTAL</td><td class="amount">₹${fmtAmt(total)}</td><td colspan="3"></td></tr>`;
+}
+
+// ── Edit modal ───────────────────────────────────────────────
+function openEdit(id, product, vendor, qty, uom) {
+  _editingId = id;
+  document.getElementById('edit-sub').textContent = product || '';
+  document.getElementById('e-qty').value = qty != null ? qty : '';
+  document.getElementById('e-uom').value = uom || '';
+  document.getElementById('e-uom-hint').textContent = uom ? `(current: ${uom})` : '';
+  document.getElementById('e-vendor').value = vendor || '';
+  document.getElementById('e-notes').value = '';
+  document.getElementById('edit-err').textContent = '';
+  document.getElementById('edit-modal').classList.remove('hidden');
+  document.getElementById('e-qty').focus();
+}
+function closeEdit() {
+  _editingId = null;
+  document.getElementById('edit-modal').classList.add('hidden');
+}
+async function saveEdit() {
+  if (!_editingId) return;
+  const qty    = document.getElementById('e-qty').value.trim();
+  const uom    = document.getElementById('e-uom').value.trim();
+  const vendor = document.getElementById('e-vendor').value.trim();
+  const notes  = document.getElementById('e-notes').value.trim();
+  if (!qty && !vendor) {
+    document.getElementById('edit-err').textContent = 'Enter at least qty or vendor';
+    return;
+  }
+  try {
+    const body = { pin: PIN, expense_id: _editingId };
+    if (qty)    { body.quantity = parseFloat(qty); }
+    if (uom)    { body.uom = uom; }
+    if (vendor) { body.vendor_name = vendor; }
+    if (notes)  { body.notes = notes; }
+
+    const r = await fetch(`${API}?action=expense-update`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Update failed');
+
+    // Update local entry + re-render that row
+    const idx = _entries.findIndex(e => e.id === _editingId);
+    if (idx >= 0) {
+      if (body.quantity != null) { _entries[idx].quantity = body.quantity; _entries[idx].qty_missing = 0; }
+      if (body.uom)    { _entries[idx].uom = body.uom; _entries[idx].uom_display = body.uom; }
+      if (body.vendor_name) { _entries[idx].vendor_name = body.vendor_name; _entries[idx].vendor_missing = 0; }
+      if (body.notes) { _entries[idx].notes = body.notes; }
+    }
+    closeEdit();
+    renderTable(_entries);
+  } catch (e) {
+    document.getElementById('edit-err').textContent = e.message;
+  }
+}
+document.getElementById('edit-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('edit-modal')) closeEdit();
+});
+
+// ── CSV export ───────────────────────────────────────────────
 function downloadCsv() {
   if (!_entries.length) return;
-  const cols = ['#','Date','Brand','Source','Vendor','Product/Item','UOM','Qty','Amount','By','Category','Notes','Qty_Missing','Vendor_Missing','Is_RM'];
+  const cols = ['#','Date','Brand','Payment','Vendor','Product/Item','UOM','Qty','Amount',
+                'Bills','Bank_Match','By','Category','Notes',
+                'Qty_Missing','Vendor_Missing','Bill_Missing','HDFC_Unverified','Dup_Suspect','Is_RM'];
   const rows = _entries.map((e, i) => {
     const brand = e.x_location || '';
-    const src   = srcLabel(e.payment_method, e.x_pool);
     return [
-      i + 1,
-      e.ist_date || '',
-      brand,
-      src,
-      e.vendor_name || '',
-      e.product_name || e.category || '',
-      e.uom_display || '',
-      e.quantity != null ? e.quantity : '',
-      e.amount || 0,
-      e.recorded_by_pin || '',
-      (e.category_parent || e.category || '').replace(/^\d+\s*·\s*/, ''),
-      e.notes || '',
-      e.qty_missing ? 'YES' : '',
-      e.vendor_missing ? 'YES' : '',
-      e.is_rm ? 'YES' : '',
+      i+1, e.ist_date||'', brand, srcLabel(e.payment_method, e.x_pool),
+      e.vendor_name||'', e.product_name||e.category||'',
+      e.uom_display||'', e.quantity!=null?e.quantity:'', e.amount||0,
+      e.bill_count||0, e.hdfc_match_count!=null?e.hdfc_match_count:'',
+      pinName(e.recorded_by_pin),
+      (e.category_parent||e.category||'').replace(/^\d+\s*·\s*/,''),
+      e.notes||'',
+      e.qty_missing?'YES':'', e.vendor_missing?'YES':'',
+      e.needs_bill?'YES':'', e.hdfc_unverified?'YES':'',
+      (e.v2_dup_count||0)>0?'YES':'', e.is_rm?'YES':'',
     ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
   });
   const csv = [cols.join(','), ...rows].join('\n');
-  const a   = document.createElement('a');
-  a.href    = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  const from = document.getElementById('f-from').value;
-  const to   = document.getElementById('f-to').value;
-  a.download = `hn-expense-export-${from}-to-${to}.csv`;
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `hn-expense-${document.getElementById('f-from').value}-to-${document.getElementById('f-to').value}.csv`;
   a.click();
 }
 </script>
