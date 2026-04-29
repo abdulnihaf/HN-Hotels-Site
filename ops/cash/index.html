@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<title>cash · HN</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = { theme: { extend: {
+  fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+  colors: {
+    brand:   { 400:'#f0a944', 500:'#e8930c', 600:'#c97508' },
+    surface: { 0:'#0c0c14', 1:'#111118', 2:'#16161f', 3:'#1c1c27' },
+    ink:     { 1:'#f5f5f7', 2:'#c4c4cc', 3:'#8e8e9e', 4:'#5e5e6e' },
+  },
+}}}
+</script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #0c0c14; color: #f5f5f7; font-family: 'Inter', sans-serif; }
+  body { overscroll-behavior: none; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+
+  .card    { background: #16161f; border: 1px solid rgba(255,255,255,.05); border-radius: 14px; }
+  .glass   { background: rgba(12,12,20,.85); backdrop-filter: blur(14px) saturate(1.2); border-bottom: 1px solid rgba(255,255,255,.05); }
+  .divider { border-top: 1px solid rgba(255,255,255,.06); }
+
+  .chip       { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; white-space: nowrap; border: 1px solid transparent; }
+  .chip-in    { background: rgba(34,197,94,.10);  color: #4ade80; border-color: rgba(34,197,94,.25); }
+  .chip-out   { background: rgba(239,68,68,.10);  color: #f87171; border-color: rgba(239,68,68,.25); }
+  .chip-act   { background: rgba(251,146,60,.10); color: #fb923c; border-color: rgba(251,146,60,.25); }
+  .chip-mute  { background: rgba(255,255,255,.04); color: #8e8e9e; border-color: rgba(255,255,255,.06); }
+  .chip-mute.on { background: rgba(232,147,12,.15); color: #f0a944; border-color: rgba(232,147,12,.4); }
+
+  .input        { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 10px 14px; font-size: 14px; color: #f5f5f7; outline: none; width: 100%; }
+  .input:focus  { border-color: rgba(232,147,12,.45); background: rgba(255,255,255,.06); }
+  .input::placeholder { color: #5e5e6e; }
+
+  .btn       { background: rgba(232,147,12,.15); color: #f0a944; border: 1px solid rgba(232,147,12,.3); border-radius: 10px; padding: 12px 16px; font-size: 14px; font-weight: 600; min-height: 44px; cursor: pointer; }
+  .btn:hover { background: rgba(232,147,12,.22); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: #c4c4cc; border-color: rgba(255,255,255,.08); }
+  .btn-ghost:hover { background: rgba(255,255,255,.04); color: #f5f5f7; }
+  .btn-warn  { background: rgba(239,68,68,.15); color: #f87171; border-color: rgba(239,68,68,.3); }
+
+  .live { display:inline-block; width:6px; height:6px; border-radius:50%; background:#4ade80; box-shadow:0 0 6px #4ade80; animation: pulse 2s infinite; }
+  .live.paused { background:#f87171; box-shadow:0 0 6px #f87171; animation: none; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+  .spinner { border: 2px solid rgba(255,255,255,.1); border-top-color: #e8930c; border-radius: 50%; width: 14px; height: 14px; animation: spin .8s linear infinite; display:inline-block; vertical-align:middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .pin-btn { background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px; font-size: 18px; font-weight: 600; color:#f5f5f7; cursor: pointer; min-height: 60px; }
+  .pin-btn:hover { background: rgba(255,255,255,.1); }
+  .pin-dot { width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,.1); }
+  .pin-dot.filled { background: #e8930c; }
+
+  .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 40; }
+  .sheet { position: fixed; bottom: 0; left: 0; right: 0; max-height: 92vh; background: #16161f; border-top-left-radius: 20px; border-top-right-radius: 20px; z-index: 41; transform: translateY(100%); transition: transform .25s cubic-bezier(.2,.7,.3,1); overflow-y: auto; }
+  .sheet.open { transform: translateY(0); }
+  @media (min-width: 768px) {
+    .sheet { max-width: 560px; left: 50%; transform: translate(-50%, 100%); border-radius: 20px; bottom: 5vh; max-height: 80vh; }
+    .sheet.open { transform: translate(-50%, 0); }
+  }
+
+  .kpi-tile { padding: 14px 16px; min-height: 88px; cursor: pointer; transition: background .12s; text-align: left; width: 100%; }
+  .kpi-tile:hover { background: rgba(255,255,255,.02); }
+  .kpi-tile.active { background: rgba(232,147,12,.06); border-color: rgba(232,147,12,.35); }
+  .kpi-pending { padding: 10px 14px; background: rgba(251,146,60,.06); border:1px solid rgba(251,146,60,.18); border-radius: 12px; }
+
+  .ledger-row td { padding: 10px 8px; vertical-align: top; font-size: 13px; }
+  .ledger-row + .ledger-row td { border-top: 1px solid rgba(255,255,255,.04); }
+  .ledger-head th { padding: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #8e8e9e; text-align: left; font-weight: 500; }
+
+  .source-pill { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,.05); color: #8e8e9e; text-transform: uppercase; letter-spacing: 0.4px; }
+  .source-pill.opening_float       { background: rgba(232,147,12,.18);  color: #f0a944; }
+  .source-pill.runner_settlement   { background: rgba(34,197,94,.10);   color: #4ade80; }
+  .source-pill.captain_handover    { background: rgba(34,197,94,.10);   color: #4ade80; }
+  .source-pill.main_counter_cash   { background: rgba(34,197,94,.10);   color: #4ade80; }
+  .source-pill.pos_sale            { background: rgba(34,197,94,.10);   color: #4ade80; }
+  .source-pill.counter_expense     { background: rgba(239,68,68,.10);   color: #f87171; }
+  .source-pill.collection_handover { background: rgba(168,85,247,.12);  color: #c084fc; }
+  .source-pill.transfer            { background: rgba(168,85,247,.12);  color: #c084fc; }
+  .source-pill.deposit_to_bank     { background: rgba(59,130,246,.12);  color: #60a5fa; }
+  .source-pill.po_settle           { background: rgba(251,146,60,.12);  color: #fb923c; }
+  .source-pill.central_expense     { background: rgba(239,68,68,.10);   color: #f87171; }
+  .source-pill.external_capital_in { background: rgba(232,147,12,.18);  color: #f0a944; }
+  .source-pill.manual              { background: rgba(255,255,255,.06); color: #c4c4cc; }
+
+  .sync-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .sync-dot.ok { background: #4ade80; }
+  .sync-dot.idle { background: #5e5e6e; }
+  .sync-dot.running { background: #f0a944; animation: pulse 1.2s infinite; }
+  .sync-dot.error { background: #f87171; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ PIN gate ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="pin-gate" class="fixed inset-0 flex items-center justify-center z-50 bg-surface-0">
+  <div class="card p-6 max-w-sm w-full mx-4">
+    <div class="text-center mb-4">
+      <div class="text-xl font-bold tracking-tight"><span class="text-brand-400">HN</span> <span class="text-ink-3">/</span> cash</div>
+      <div class="text-xs text-ink-3 mt-1">enter PIN</div>
+    </div>
+    <div class="flex justify-center gap-2 mb-5">
+      <div class="pin-dot" id="pd-0"></div><div class="pin-dot" id="pd-1"></div>
+      <div class="pin-dot" id="pd-2"></div><div class="pin-dot" id="pd-3"></div>
+    </div>
+    <div class="grid grid-cols-3 gap-2">
+      <button class="pin-btn" onclick="pinPress('1')">1</button>
+      <button class="pin-btn" onclick="pinPress('2')">2</button>
+      <button class="pin-btn" onclick="pinPress('3')">3</button>
+      <button class="pin-btn" onclick="pinPress('4')">4</button>
+      <button class="pin-btn" onclick="pinPress('5')">5</button>
+      <button class="pin-btn" onclick="pinPress('6')">6</button>
+      <button class="pin-btn" onclick="pinPress('7')">7</button>
+      <button class="pin-btn" onclick="pinPress('8')">8</button>
+      <button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn opacity-40" onclick="pinClear()">clear</button>
+      <button class="pin-btn" onclick="pinPress('0')">0</button>
+      <button class="pin-btn opacity-40" onclick="pinBack()">←</button>
+    </div>
+    <div id="pin-err" class="text-xs text-red-400 mt-3 text-center hidden">incorrect pin</div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ Main app ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="app" class="hidden pb-24 md:pb-8">
+
+  <!-- Header -->
+  <header class="glass sticky top-0 z-30">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-baseline gap-2">
+        <span class="text-base font-bold tracking-tight text-brand-400">HN</span>
+        <span class="text-sm text-ink-3">cash</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-ink-3 hidden sm:inline" id="last-refresh">—</span>
+        <span class="flex items-center gap-1.5 text-xs text-ink-3">
+          <span id="live-dot" class="live"></span><span id="live-label">live</span>
+        </span>
+        <button id="refresh-btn" class="text-ink-3 hover:text-ink-1 text-sm" title="refresh">↻</button>
+        <span id="who" class="text-xs text-ink-3">—</span>
+      </div>
+    </div>
+    <nav class="max-w-5xl mx-auto px-4 flex gap-4 text-xs overflow-x-auto">
+      <a href="/ops/money/"   class="text-ink-3 hover:text-brand-400 py-2">money</a>
+      <a href="/ops/bank/"    class="text-ink-3 hover:text-brand-400 py-2">bank</a>
+      <a href="/ops/cash/"    class="text-brand-400 border-b-2 border-brand-400 py-2 font-semibold">cash</a>
+      <a href="/ops/expense/" class="text-ink-3 hover:text-brand-400 py-2">expense</a>
+      <a href="/ops/purchase/" class="text-ink-3 hover:text-brand-400 py-2">purchase</a>
+      <a href="/ops/bills/"   class="text-ink-3 hover:text-brand-400 py-2">bills</a>
+      <a href="/ops/vendor/"  class="text-ink-3 hover:text-brand-400 py-2">vendor</a>
+      <a href="/ops/agents/"  class="text-ink-3 hover:text-brand-400 py-2">agents</a>
+    </nav>
+  </header>
+
+  <!-- KPI tiles -->
+  <section class="max-w-5xl mx-auto px-4 pt-5">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <button class="card kpi-tile" data-pile="pos_counter_nch" onclick="filterByInstrument('pos_counter_nch')">
+        <div class="text-[10px] uppercase tracking-wider text-ink-3">Counter NCH</div>
+        <div class="text-lg md:text-xl font-bold num mt-1" id="bal-pos_counter_nch">—</div>
+        <div class="text-[10px] text-ink-3 mt-0.5" id="last-pos_counter_nch">—</div>
+      </button>
+      <button class="card kpi-tile" data-pile="pos_counter_he" onclick="filterByInstrument('pos_counter_he')">
+        <div class="text-[10px] uppercase tracking-wider text-ink-3">Counter HE</div>
+        <div class="text-lg md:text-xl font-bold num mt-1" id="bal-pos_counter_he">—</div>
+        <div class="text-[10px] text-ink-3 mt-0.5" id="last-pos_counter_he">—</div>
+      </button>
+      <button class="card kpi-tile" data-pile="cash_basheer" onclick="filterByInstrument('cash_basheer')">
+        <div class="text-[10px] uppercase tracking-wider text-ink-3">With Basheer</div>
+        <div class="text-lg md:text-xl font-bold num mt-1" id="bal-cash_basheer">—</div>
+        <div class="text-[10px] text-ink-3 mt-0.5" id="last-cash_basheer">—</div>
+      </button>
+      <button class="card kpi-tile" data-pile="cash_nihaf" onclick="filterByInstrument('cash_nihaf')">
+        <div class="text-[10px] uppercase tracking-wider text-ink-3">With Nihaf</div>
+        <div class="text-lg md:text-xl font-bold num mt-1" id="bal-cash_nihaf">—</div>
+        <div class="text-[10px] text-ink-3 mt-0.5" id="last-cash_nihaf">—</div>
+      </button>
+      <div class="card kpi-tile col-span-2 md:col-span-1" style="background:rgba(232,147,12,.06); border-color:rgba(232,147,12,.3); cursor: default;">
+        <div class="text-[10px] uppercase tracking-wider text-brand-400">Total Live Cash</div>
+        <div class="text-xl md:text-2xl font-bold num mt-1 text-brand-400" id="bal-total">—</div>
+        <div class="text-[10px] text-ink-3 mt-0.5" id="settled-pending-split">—</div>
+      </div>
+    </div>
+    <div id="pending-strip" class="kpi-pending mt-3 hidden">
+      <div class="flex items-baseline justify-between gap-3">
+        <div>
+          <span class="text-[10px] uppercase tracking-wider" style="color:#fb923c">In flight (not yet in any pile)</span>
+          <span class="num font-semibold ml-2" id="pending-total">—</span>
+        </div>
+        <div class="text-[10px] text-ink-3" id="pending-breakdown">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filters + actions -->
+  <section class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap items-center gap-2">
+    <span class="text-xs text-ink-3 mr-1">date:</span>
+    <input id="date-from-input" type="date" class="input py-1 px-2 w-auto" style="font-size:12px" onchange="loadCash()"/>
+    <span class="text-ink-3">→</span>
+    <input id="date-to-input"   type="date" class="input py-1 px-2 w-auto" style="font-size:12px" onchange="loadCash()"/>
+    <span class="w-px h-4 bg-white/10 mx-1"></span>
+    <button class="chip chip-mute on" id="filter-all" onclick="filterByInstrument(null)">All piles</button>
+    <span class="ml-auto flex gap-2 flex-wrap">
+      <button class="btn" onclick="openTransferSheet()">Record Transfer</button>
+      <button class="btn btn-ghost" onclick="openDepositSheet()">Deposit to Bank</button>
+      <button class="btn btn-ghost" onclick="openExtCapSheet()" title="Owner injection / external cash IN">+ External In</button>
+      <button class="btn btn-ghost" onclick="runSync()" title="Pull latest events from outlet sources">Sync now</button>
+    </span>
+  </section>
+
+  <!-- Search -->
+  <section class="max-w-5xl mx-auto px-4 pt-3">
+    <input id="search-input" class="input"
+           placeholder="search vendor / category / runner / source / PO / notes…"
+           oninput="renderLedger()"/>
+  </section>
+
+  <!-- Sync status -->
+  <section class="max-w-5xl mx-auto px-4 pt-3">
+    <details class="card p-2">
+      <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1">sync status (per source) ▾</summary>
+      <div id="sync-rows" class="pt-2"></div>
+    </details>
+  </section>
+
+  <!-- Ledger -->
+  <main class="max-w-5xl mx-auto px-4 pt-4">
+    <div class="card overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="ledger-head">
+          <tr>
+            <th>Date</th><th>Brand</th><th>Source</th><th class="text-right">Amount</th>
+            <th>Pile</th><th>Vendor / Who</th><th class="hidden md:table-cell">Notes</th>
+            <th>Linked</th><th>Recorded by</th>
+          </tr>
+        </thead>
+        <tbody id="ledger-body">
+          <tr><td colspan="9" class="text-center text-ink-3 py-10"><span class="spinner"></span> loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ Record Transfer sheet ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="transfer-overlay" class="sheet-overlay hidden" onclick="closeSheet('transfer')"></div>
+<div id="transfer-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div class="text-base font-bold">Record Cash Transfer</div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeSheet('transfer')">×</button>
+    </div>
+    <div class="text-xs text-ink-3 mt-1">Pile → Pile only (zero-sum, two-leg). For deposits to bank use the separate "Deposit to Bank" flow.</div>
+  </div>
+  <div class="px-5 py-5 space-y-4">
+    <div><label class="text-xs text-ink-3 block mb-1.5">From</label>
+      <select id="xfer-from" class="input">
+        <option value="pos_counter_he">Counter HE</option>
+        <option value="pos_counter_nch">Counter NCH</option>
+        <option value="cash_basheer">With Basheer</option>
+        <option value="cash_nihaf">With Nihaf</option>
+      </select></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">To</label>
+      <select id="xfer-to" class="input">
+        <option value="cash_basheer">With Basheer</option>
+        <option value="cash_nihaf">With Nihaf</option>
+        <option value="pos_counter_he">Counter HE</option>
+        <option value="pos_counter_nch">Counter NCH</option>
+      </select></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Amount (₹)</label>
+      <input id="xfer-amount" type="number" inputmode="decimal" min="1" step="1" class="input" placeholder="0"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Date</label>
+      <input id="xfer-date" type="date" class="input"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Notes (optional)</label>
+      <input id="xfer-notes" type="text" class="input" placeholder="e.g. Basheer to Nihaf"/></div>
+    <div id="xfer-err" class="text-xs text-red-400 hidden"></div>
+    <button id="xfer-submit" class="btn w-full" onclick="submitTransfer()">Record Transfer</button>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ Deposit to Bank sheet ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="deposit-overlay" class="sheet-overlay hidden" onclick="closeSheet('deposit')"></div>
+<div id="deposit-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div class="text-base font-bold">Deposit Cash to Bank</div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeSheet('deposit')">×</button>
+    </div>
+    <div class="text-xs text-ink-3 mt-1">Records a 1-leg debit on the cash side. The bank credit lands separately when HDFC's email parser sees the deposit.</div>
+  </div>
+  <div class="px-5 py-5 space-y-4">
+    <div><label class="text-xs text-ink-3 block mb-1.5">From pile</label>
+      <select id="dep-from" class="input">
+        <option value="cash_basheer">With Basheer</option>
+        <option value="cash_nihaf">With Nihaf</option>
+        <option value="pos_counter_he">Counter HE</option>
+        <option value="pos_counter_nch">Counter NCH</option>
+      </select></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Amount (₹)</label>
+      <input id="dep-amount" type="number" inputmode="decimal" min="1" step="1" class="input"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Date</label>
+      <input id="dep-date" type="date" class="input"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Notes</label>
+      <input id="dep-notes" type="text" class="input" placeholder="HDFC counter / Federal NEFT…"/></div>
+    <div id="dep-err" class="text-xs text-red-400 hidden"></div>
+    <button id="dep-submit" class="btn w-full" onclick="submitDeposit()">Record Deposit</button>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ External Capital In sheet ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="extcap-overlay" class="sheet-overlay hidden" onclick="closeSheet('extcap')"></div>
+<div id="extcap-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div class="text-base font-bold">External Capital In</div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeSheet('extcap')">×</button>
+    </div>
+    <div class="text-xs text-ink-3 mt-1">Owner injection or third-party cash entering the system. Notes describing the source are required (≥5 chars).</div>
+  </div>
+  <div class="px-5 py-5 space-y-4">
+    <div><label class="text-xs text-ink-3 block mb-1.5">Pile</label>
+      <select id="ec-pile" class="input">
+        <option value="cash_basheer">With Basheer</option>
+        <option value="cash_nihaf">With Nihaf</option>
+      </select></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Amount (₹)</label>
+      <input id="ec-amount" type="number" inputmode="decimal" min="1" step="1" class="input"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Date</label>
+      <input id="ec-date" type="date" class="input"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Source / reason (required)</label>
+      <input id="ec-notes" type="text" class="input" placeholder="e.g. owner injection from HDFC withdrawal Apr 25"/></div>
+    <div id="ec-err" class="text-xs text-red-400 hidden"></div>
+    <button id="ec-submit" class="btn w-full" onclick="submitExtCap()">Record</button>
+  </div>
+</div>
+
+<script>
+let PIN = '';
+let WHO = null;
+let DATA = { balances: [], ledger: [], total_paise: 0, pending: { total_paise: 0, breakdown: [] } };
+let FILTER_INSTRUMENT = null;
+let POLL_TIMER = null;
+
+function pinPress(d) { if (PIN.length >= 4) return; PIN += d; drawPinDots(); if (PIN.length === 4) verifyPin(); }
+function pinClear() { PIN = ''; drawPinDots(); document.getElementById('pin-err').classList.add('hidden'); }
+function pinBack()  { PIN = PIN.slice(0, -1); drawPinDots(); }
+function drawPinDots() {
+  for (let i = 0; i < 4; i++) document.getElementById('pd-' + i).classList.toggle('filled', i < PIN.length);
+}
+
+async function verifyPin() {
+  try {
+    const r = await fetch('/api/cash?action=balance&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error || 'auth failed');
+    WHO = j.user;
+    document.getElementById('who').textContent = WHO;
+    document.getElementById('pin-gate').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    localStorage.setItem('hn-cash-pin', PIN);
+    initDateInputs();
+    loadCash();
+    loadSyncStatus();
+    schedulePoll();
+  } catch (e) {
+    document.getElementById('pin-err').textContent = e.message;
+    document.getElementById('pin-err').classList.remove('hidden');
+    PIN = ''; drawPinDots();
+  }
+}
+
+function initDateInputs() {
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 3600 * 1000);
+  const today = ist.toISOString().slice(0, 10);
+  // Default: NCH anchor → today
+  if (!document.getElementById('date-from-input').value) document.getElementById('date-from-input').value = '2026-04-19';
+  if (!document.getElementById('date-to-input').value)   document.getElementById('date-to-input').value = today;
+  document.getElementById('xfer-date').value = today;
+  document.getElementById('dep-date').value = today;
+  document.getElementById('ec-date').value = today;
+}
+
+async function loadCash() {
+  const from = document.getElementById('date-from-input').value;
+  const to   = document.getElementById('date-to-input').value;
+  let url = `/api/cash?action=trail&pin=${encodeURIComponent(PIN)}&from=${from}&to=${to}`;
+  if (FILTER_INSTRUMENT) url += `&instrument=${FILTER_INSTRUMENT}`;
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error || 'load failed');
+    DATA = j;
+    document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+    document.getElementById('live-dot').classList.remove('paused');
+    document.getElementById('live-label').textContent = 'live';
+    renderAll();
+  } catch (e) {
+    document.getElementById('live-dot').classList.add('paused');
+    document.getElementById('live-label').textContent = 'paused';
+    console.error(e);
+  }
+}
+
+async function loadSyncStatus() {
+  try {
+    const r = await fetch('/api/cash?action=sync-status&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) return;
+    const el = document.getElementById('sync-rows');
+    el.innerHTML = (j.sources || []).map((s) => `
+      <div class="sync-row">
+        <span class="sync-dot ${s.last_run_status || 'idle'}"></span>
+        <span class="text-ink-2 font-medium" style="min-width:200px">${s.sync_source}</span>
+        <span class="text-ink-3">last: ${s.last_run_at ? new Date(s.last_run_at).toLocaleString() : '—'}</span>
+        <span class="text-ink-3">rows: ${s.rows_added_total || 0}</span>
+        ${s.last_error ? `<span class="text-red-400 text-[11px]" title="${escapeHtml(s.last_error)}">err</span>` : ''}
+      </div>`).join('');
+  } catch (_) {}
+}
+
+function schedulePoll() { if (POLL_TIMER) clearInterval(POLL_TIMER); POLL_TIMER = setInterval(loadCash, 30000); }
+
+function fmtR(paise) {
+  if (paise == null) return '—';
+  const r = paise / 100;
+  return '₹' + r.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+}
+function fmtRSigned(paise, dir) {
+  return (dir === 'debit' ? '−' : '+') + ' ' + fmtR(Math.abs(paise || 0));
+}
+function fmtRel(iso) {
+  if (!iso) return 'no events';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (isNaN(ms)) return '—';
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  if (m < 1440) return Math.floor(m / 60) + 'h ago';
+  return Math.floor(m / 1440) + 'd ago';
+}
+
+function renderAll() { renderBalances(); renderLedger(); renderPending(); }
+
+function renderBalances() {
+  const map = Object.fromEntries((DATA.balances || []).map((b) => [b.instrument, b]));
+  for (const k of ['pos_counter_he','pos_counter_nch','cash_basheer','cash_nihaf']) {
+    const b = map[k];
+    document.getElementById('bal-' + k).textContent = b ? fmtR(b.balance_paise) : '—';
+    document.getElementById('last-' + k).textContent = b ? fmtRel(b.last_event_at) : 'no events';
+  }
+  document.getElementById('bal-total').textContent = fmtR(DATA.total_paise || 0);
+  const pending = (DATA.pending && DATA.pending.total_paise) || 0;
+  document.getElementById('settled-pending-split').textContent =
+    pending > 0 ? `${fmtR(DATA.total_paise)} settled · ${fmtR(pending)} in flight` : `${fmtR(DATA.total_paise)} settled`;
+}
+
+function renderPending() {
+  const p = DATA.pending || {};
+  const total = p.total_paise || 0;
+  const strip = document.getElementById('pending-strip');
+  if (total <= 0) { strip.classList.add('hidden'); return; }
+  strip.classList.remove('hidden');
+  document.getElementById('pending-total').textContent = fmtR(total);
+  const items = (p.breakdown || []).slice(0, 6).map((b) => `${b.who} ${fmtR(b.paise)}`).join(' · ');
+  const hint = items || 'with runners / captains';
+  document.getElementById('pending-breakdown').textContent = hint;
+}
+
+function renderLedger() {
+  const tbody = document.getElementById('ledger-body');
+  let rows = DATA.ledger || [];
+  const q = (document.getElementById('search-input').value || '').toLowerCase();
+  if (q) rows = rows.filter((r) =>
+    [r.vendor_name, r.category, r.product_name, r.linked_po_name, r.brand, r.source, r.notes, r.recorded_by_name]
+      .filter(Boolean).join(' ').toLowerCase().includes(q));
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-ink-3 py-10">no rows for this range</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map((r) => {
+    const linked = r.linked_po_name
+      ? `<span class="chip chip-act">${escapeHtml(r.linked_po_name)}</span>`
+      : r.matched_settlement_id ? `<span class="text-ink-4 text-[11px]">stl#${r.matched_settlement_id}</span>`
+      : r.matched_collection_id ? `<span class="text-ink-4 text-[11px]">col#${r.matched_collection_id}</span>`
+      : r.matched_shift_id ? `<span class="text-ink-4 text-[11px]">shift#${r.matched_shift_id}</span>`
+      : r.matched_expense_id ? `<span class="text-ink-4 text-[11px]">be#${r.matched_expense_id}</span>` : '';
+    return `
+    <tr class="ledger-row">
+      <td class="text-ink-2 num whitespace-nowrap">${escapeHtml((r.txn_at || '').slice(0, 16).replace('T',' '))}</td>
+      <td>${r.brand ? `<span class="chip chip-mute">${r.brand}</span>` : ''}</td>
+      <td><span class="source-pill ${escapeHtml(r.source || '')}">${escapeHtml(r.source || '')}</span></td>
+      <td class="text-right num font-semibold ${r.direction === 'debit' ? 'text-red-300' : 'text-green-300'}">${fmtRSigned(r.amount_paise, r.direction)}</td>
+      <td class="text-ink-3 text-xs">${pileLabel(r.instrument)}</td>
+      <td class="text-ink-2">${escapeHtml(r.vendor_name || r.product_name || '—')}</td>
+      <td class="text-ink-3 text-xs hidden md:table-cell" title="${escapeHtml(r.notes || '')}">${escapeHtml((r.notes || '').slice(0, 80))}</td>
+      <td>${linked}</td>
+      <td class="text-ink-3 text-xs">${escapeHtml(r.recorded_by_name || '—')}</td>
+    </tr>`;
+  }).join('');
+}
+
+function pileLabel(i) {
+  return ({ pos_counter_he: 'Counter HE', pos_counter_nch: 'Counter NCH',
+            cash_basheer: 'With Basheer', cash_nihaf: 'With Nihaf' })[i] || i;
+}
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" }[c]));
+}
+
+function filterByInstrument(instr) {
+  FILTER_INSTRUMENT = instr;
+  document.querySelectorAll('.kpi-tile').forEach((el) => el.classList.toggle('active', el.dataset.pile === instr));
+  document.getElementById('filter-all').classList.toggle('on', !instr);
+  loadCash();
+}
+
+function openSheet(name) {
+  document.getElementById(`${name}-overlay`).classList.remove('hidden');
+  document.getElementById(`${name}-sheet`).classList.add('open');
+}
+function closeSheet(name) {
+  document.getElementById(`${name}-overlay`).classList.add('hidden');
+  document.getElementById(`${name}-sheet`).classList.remove('open');
+}
+function openTransferSheet() { openSheet('transfer'); document.getElementById('xfer-amount').focus(); }
+function openDepositSheet()  { openSheet('deposit'); document.getElementById('dep-amount').focus(); }
+function openExtCapSheet()   { openSheet('extcap'); document.getElementById('ec-amount').focus(); }
+
+async function submitTransfer() {
+  const errEl = document.getElementById('xfer-err'); errEl.classList.add('hidden');
+  const from = document.getElementById('xfer-from').value;
+  const to   = document.getElementById('xfer-to').value;
+  const amt  = parseFloat(document.getElementById('xfer-amount').value);
+  const date = document.getElementById('xfer-date').value;
+  const notes= document.getElementById('xfer-notes').value;
+  if (!(amt > 0)) return showErr('xfer-err', 'amount must be > 0');
+  if (from === to) return showErr('xfer-err', 'from and to must differ');
+  const btn = document.getElementById('xfer-submit'); btn.disabled = true; btn.textContent = 'recording…';
+  try {
+    const j = await postJSON('/api/cash?action=transfer', {
+      pin: PIN, from_instrument: from, to_instrument: to,
+      amount_paise: Math.round(amt * 100),
+      txn_at: date ? new Date(date + 'T12:00:00+05:30').toISOString() : undefined,
+      notes,
+    });
+    if (!j.success) throw new Error(j.error);
+    closeSheet('transfer');
+    document.getElementById('xfer-amount').value = '';
+    document.getElementById('xfer-notes').value = '';
+    loadCash();
+  } catch (e) { showErr('xfer-err', e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Record Transfer'; }
+}
+
+async function submitDeposit() {
+  const errEl = document.getElementById('dep-err'); errEl.classList.add('hidden');
+  const from = document.getElementById('dep-from').value;
+  const amt  = parseFloat(document.getElementById('dep-amount').value);
+  const date = document.getElementById('dep-date').value;
+  const notes= document.getElementById('dep-notes').value;
+  if (!(amt > 0)) return showErr('dep-err', 'amount must be > 0');
+  const btn = document.getElementById('dep-submit'); btn.disabled = true; btn.textContent = 'recording…';
+  try {
+    const j = await postJSON('/api/cash?action=deposit-to-bank', {
+      pin: PIN, from_instrument: from,
+      amount_paise: Math.round(amt * 100),
+      txn_at: date ? new Date(date + 'T12:00:00+05:30').toISOString() : undefined,
+      notes,
+    });
+    if (!j.success) throw new Error(j.error);
+    closeSheet('deposit');
+    document.getElementById('dep-amount').value = '';
+    document.getElementById('dep-notes').value = '';
+    loadCash();
+  } catch (e) { showErr('dep-err', e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Record Deposit'; }
+}
+
+async function submitExtCap() {
+  const errEl = document.getElementById('ec-err'); errEl.classList.add('hidden');
+  const pile = document.getElementById('ec-pile').value;
+  const amt  = parseFloat(document.getElementById('ec-amount').value);
+  const date = document.getElementById('ec-date').value;
+  const notes= document.getElementById('ec-notes').value;
+  if (!(amt > 0)) return showErr('ec-err', 'amount must be > 0');
+  if (!notes || notes.trim().length < 5) return showErr('ec-err', 'notes ≥ 5 chars required');
+  const btn = document.getElementById('ec-submit'); btn.disabled = true; btn.textContent = 'recording…';
+  try {
+    const j = await postJSON('/api/cash?action=external-capital-in', {
+      pin: PIN, instrument: pile,
+      amount_paise: Math.round(amt * 100),
+      txn_at: date ? new Date(date + 'T12:00:00+05:30').toISOString() : undefined,
+      notes,
+    });
+    if (!j.success) throw new Error(j.error);
+    closeSheet('extcap');
+    document.getElementById('ec-amount').value = '';
+    document.getElementById('ec-notes').value = '';
+    loadCash();
+  } catch (e) { showErr('ec-err', e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Record'; }
+}
+
+async function runSync() {
+  const btn = event.target;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'syncing…';
+  try {
+    const j = await postJSON('/api/cash?action=sync', { pin: PIN });
+    if (!j.success) throw new Error(j.error || 'sync failed');
+    await loadCash();
+    await loadSyncStatus();
+  } catch (e) {
+    alert('sync error: ' + e.message);
+  }
+  btn.disabled = false; btn.textContent = orig;
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id); el.textContent = msg; el.classList.remove('hidden');
+}
+async function postJSON(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+  return r.json();
+}
+
+document.getElementById('refresh-btn').addEventListener('click', () => { loadCash(); loadSyncStatus(); });
+
+const cached = localStorage.getItem('hn-cash-pin');
+if (cached && /^\d{4}$/.test(cached)) { PIN = cached; drawPinDots(); verifyPin(); }
+</script>
+</body>
+</html>
