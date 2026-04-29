@@ -1121,6 +1121,9 @@ export async function onRequest(context) {
       const toParam   = url.searchParams.get('to')   || '2026-04-30';
       const brandParam = (url.searchParams.get('brand') || 'ALL').toUpperCase();
 
+      // We filter by the EFFECTIVE date — the user-picked expense date if set
+      // (covers /ops/expense Historical catch-up entries dated Apr 1-19 but
+      // physically written into D1 on Apr 20+), otherwise the IST date of recorded_at.
       const istDayStartUTC = (ymd) => {
         const d = new Date(Date.parse(`${ymd}T00:00:00.000Z`) - 5.5 * 3600 * 1000);
         return d.toISOString().replace('T', ' ').slice(0, 19);
@@ -1138,7 +1141,8 @@ export async function onRequest(context) {
                be.category, be.category_parent,
                be.amount, be.product_name, be.product_id, be.company_id,
                be.x_payment_method AS payment_method, be.x_location, be.x_pool,
-               be.recorded_by AS recorded_by_pin, be.recorded_at AS created_at, be.notes,
+               be.recorded_by AS recorded_by_pin, be.recorded_at AS created_at,
+               be.expense_date, be.notes,
                be.quantity, be.uom, be.vendor_id, be.vendor_name,
                COALESCE(be.uom, rmp.uom) AS uom_display,
                CASE WHEN ${isRmExpr} THEN 1 ELSE 0 END AS is_rm,
@@ -1171,21 +1175,24 @@ export async function onRequest(context) {
           FROM business_expenses be
           LEFT JOIN rm_products rmp
                  ON rmp.odoo_id = be.product_id AND rmp.odoo_id IS NOT NULL
-         WHERE be.recorded_at >= ? AND be.recorded_at < ?`;
-      const args = [startUTC, endUTC];
+         WHERE COALESCE(be.expense_date, DATE(be.recorded_at, '+5 hours', '+30 minutes')) >= ?
+           AND COALESCE(be.expense_date, DATE(be.recorded_at, '+5 hours', '+30 minutes')) <= ?`;
+      const args = [fromParam, toParam];
       if (brandParam !== 'ALL' && ['HE', 'NCH', 'HQ'].includes(brandParam)) {
         sql += ` AND be.x_location = ?`;
         args.push(brandParam);
       }
-      sql += ` ORDER BY be.recorded_at ASC LIMIT 2000`;
+      sql += ` ORDER BY COALESCE(be.expense_date, DATE(be.recorded_at, '+5 hours', '+30 minutes')) ASC, be.id ASC LIMIT 2000`;
 
       const rows = await DB.prepare(sql).bind(...args).all().catch(e => ({ results: [], error: e.message }));
       const items = (rows.results || []).map(r => {
-        const t = Date.parse((r.created_at || '').replace(' ', 'T') + 'Z');
-        const ist_date = isNaN(t) ? null : new Date(t + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
-        // Flag: cash/petty expense with no bill uploaded
+        // Effective date: user-picked expense_date if set, otherwise IST date of recorded_at
+        let ist_date = r.expense_date || null;
+        if (!ist_date) {
+          const t = Date.parse((r.created_at || '').replace(' ', 'T') + 'Z');
+          ist_date = isNaN(t) ? null : new Date(t + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+        }
         const needsBill = ['cash', 'petty_pool', 'counter_pool'].includes(r.payment_method) && (r.bill_count || 0) === 0;
-        // Flag: HDFC expense not found in bank feed
         const hdfcUnverified = r.payment_method === 'hdfc_bank' && r.hdfc_match_count === 0;
         return { ...r, ist_date, needs_bill: needsBill ? 1 : 0, hdfc_unverified: hdfcUnverified ? 1 : 0 };
       });
@@ -1251,6 +1258,50 @@ export async function onRequest(context) {
       vals.push(parseInt(expense_id, 10));
       await DB.prepare(`UPDATE business_expenses SET ${setClauses.join(',')} WHERE id=?`).bind(...vals).run();
       return json({ success: true, updated: { expense_id, quantity, uom, vendor_name, updated_by: user.name } });
+    }
+
+    // ── BACKFILL expense_date FROM ODOO hr.expense.date ────
+    // Historical catch-up entries had their picked date sent to Odoo but
+    // never persisted in D1 (recorded_at = write-time only). This pulls
+    // hr.expense.date back into business_expenses.expense_date so the
+    // export filter sees the EFFECTIVE date.
+    if (action === 'backfill-expense-date') {
+      if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user || !['admin', 'cfo'].includes(user.role)) {
+        return json({ success: false, error: 'Admin or CFO PIN required' }, 401);
+      }
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '500', 10), 1000);
+
+      const rows = await DB.prepare(
+        `SELECT id, odoo_id FROM business_expenses
+          WHERE expense_date IS NULL AND odoo_id IS NOT NULL
+          ORDER BY id ASC LIMIT ?`
+      ).bind(limit).all();
+      const targets = rows.results || [];
+      if (!targets.length) return json({ success: true, message: 'No rows to backfill', updated: 0 });
+
+      const odooIds = targets.map(r => r.odoo_id);
+      // Pull dates from Odoo in one batch read
+      const odooRows = await odoo(apiKey, 'hr.expense', 'read', [odooIds, ['id', 'date']]);
+      const dateById = new Map(odooRows.map(r => [r.id, r.date]));
+
+      let updated = 0, missing = 0;
+      const batch = DB.batch.bind(DB);
+      const stmts = [];
+      for (const t of targets) {
+        const d = dateById.get(t.odoo_id);
+        if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+          stmts.push(DB.prepare('UPDATE business_expenses SET expense_date=? WHERE id=?').bind(d, t.id));
+          updated++;
+        } else {
+          missing++;
+        }
+      }
+      if (stmts.length) await batch(stmts);
+      return json({ success: true, updated, missing, scanned: targets.length });
     }
 
     // ── RECORD EXPENSE (cats 3-13) → hr.expense ────────────
@@ -1488,18 +1539,18 @@ export async function onRequest(context) {
           const vName = body.vendor_name?.trim?.() || null;
           await DB.prepare(
             `INSERT INTO business_expenses
-               (recorded_by, recorded_at, amount, description, category, payment_mode, notes,
+               (recorded_by, recorded_at, expense_date, amount, description, category, payment_mode, notes,
                 odoo_id, company_id, product_id, product_name, category_parent,
                 x_pool, x_payment_method, x_location, x_excluded_from_pnl, odoo_synced_at,
                 x_payroll_period, x_payroll_intent, x_employee_odoo_id,
                 vendor_id, vendor_name, quantity, uom)
-             VALUES (?, datetime('now'), ?, ?, ?, ?, ?,
+             VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?,
                      ?, ?, ?, ?, ?,
                      ?, ?, ?, ?, datetime('now'),
                      ?, ?, ?,
                      ?, ?, ?, ?)`
           ).bind(
-            user.name, parseFloat(amount), prodName, cat.label, payMode, notes || '',
+            user.name, customDate, parseFloat(amount), prodName, cat.label, payMode, notes || '',
             expenseId, companyId, parseInt(product_id, 10), prodName, cat.parentName || null,
             expenseVals.x_pool, expenseVals.x_payment_method, brand, cat.id === 13 ? 1 : 0,
             payrollPeriod, payrollIntent, (cat.id === 3 || cat.id === 4) ? empId : null,
