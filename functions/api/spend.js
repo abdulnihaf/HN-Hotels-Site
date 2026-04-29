@@ -1144,6 +1144,7 @@ export async function onRequest(context) {
                be.recorded_by AS recorded_by_pin, be.recorded_at AS created_at,
                be.expense_date, be.notes,
                be.validated_at, be.validated_by,
+               be.is_petty_refill, be.refill_to_pile,
                be.quantity, be.uom, be.vendor_id, be.vendor_name,
                COALESCE(be.uom, rmp.uom) AS uom_display,
                CASE WHEN ${isRmExpr} THEN 1 ELSE 0 END AS is_rm,
@@ -1214,18 +1215,23 @@ export async function onRequest(context) {
       billSql += ` ORDER BY b.bill_date ASC LIMIT 500`;
       const billRows = await DB.prepare(billSql).bind(...billArgs).all().catch(() => ({ results: [] }));
 
-      const total          = items.reduce((s, r) => s + (r.amount || 0), 0);
-      const rm_rows        = items.filter(r => r.is_rm).length;
-      const qty_missing    = items.filter(r => r.qty_missing).length;
-      const vendor_missing = items.filter(r => r.vendor_missing).length;
-      const bill_missing   = items.filter(r => r.needs_bill).length;
-      const hdfc_unverified = items.filter(r => r.hdfc_unverified).length;
-      const dup_suspect    = items.filter(r => (r.v2_dup_count || 0) > 0).length;
+      // Petty refills are transfers (bank → cash float), NOT expenses — exclude from totals
+      const realExpenses    = items.filter(r => !r.is_petty_refill);
+      const total           = realExpenses.reduce((s, r) => s + (r.amount || 0), 0);
+      const refill_total    = items.filter(r => r.is_petty_refill).reduce((s, r) => s + (r.amount || 0), 0);
+      const refill_count    = items.filter(r => r.is_petty_refill).length;
+      const rm_rows         = realExpenses.filter(r => r.is_rm).length;
+      const qty_missing     = realExpenses.filter(r => r.qty_missing).length;
+      const vendor_missing  = realExpenses.filter(r => r.vendor_missing).length;
+      const bill_missing    = realExpenses.filter(r => r.needs_bill).length;
+      const hdfc_unverified = realExpenses.filter(r => r.hdfc_unverified).length;
+      const dup_suspect     = realExpenses.filter(r => (r.v2_dup_count || 0) > 0).length;
 
       return json({ success: true, entries: items, total,
         po_bills: billRows.results || [],
         summary: { total_rows: items.length, rm_rows, qty_missing, vendor_missing,
-                   bill_missing, hdfc_unverified, dup_suspect },
+                   bill_missing, hdfc_unverified, dup_suspect,
+                   refill_count, refill_total },
         from: fromParam, to: toParam, brand: brandParam });
     }
 
@@ -1277,6 +1283,35 @@ export async function onRequest(context) {
       vals.push(parseInt(expense_id, 10));
       await DB.prepare(`UPDATE business_expenses SET ${setClauses.join(',')} WHERE id=?`).bind(...vals).run();
       return json({ success: true, updated: { expense_id, quantity, uom, vendor_name, notes, validated: !!validate, by: user.name } });
+    }
+
+    // ── MARK as PETTY REFILL (transfer, not expense) ──
+    // Use case: Tanveer's HDFC withdrawal to fund his petty cash float was
+    // recorded as an HDFC expense in business_expenses, but the actual
+    // expenses are the cash spends from that float. Marking the bank entry
+    // as a refill prevents double-counting in audit totals.
+    // Optionally writes a cash_events transfer row so the cash pile gets
+    // the correct credit and the bank pile shows the corresponding debit.
+    if (action === 'expense-mark-refill' && request.method === 'POST') {
+      if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
+      const body = await request.json().catch(() => ({}));
+      const { pin, expense_id, refill_to_pile, undo } = body;
+      const user = resolveUser(pin);
+      if (!user || !['admin', 'cfo', 'gm'].includes(user.role)) {
+        return json({ success: false, error: 'Admin, CFO or GM PIN required' }, 401);
+      }
+      if (!expense_id) return json({ success: false, error: 'expense_id required' }, 400);
+
+      if (undo) {
+        await DB.prepare('UPDATE business_expenses SET is_petty_refill=0, refill_to_pile=NULL WHERE id=?')
+                .bind(parseInt(expense_id, 10)).run();
+        return json({ success: true, expense_id, marked: false });
+      }
+      // Free-text pile name (e.g. "Tanveer petty", "Basheer cash"). Stored as-is.
+      const pile = refill_to_pile && String(refill_to_pile).trim() || `${user.name} petty`;
+      await DB.prepare('UPDATE business_expenses SET is_petty_refill=1, refill_to_pile=?, validated_at=?, validated_by=? WHERE id=?')
+              .bind(pile, new Date().toISOString(), user.name, parseInt(expense_id, 10)).run();
+      return json({ success: true, expense_id, marked: true, refill_to_pile: pile, by: user.name });
     }
 
     // ── DELETE EXPENSE (duplicate cleanup — Basheer / admin / cfo) ──

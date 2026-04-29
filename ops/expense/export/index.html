@@ -86,8 +86,13 @@ td.hdfc-na { color:var(--text-dim); text-align:center; font-size:11px; }
 .ok-btn:hover { background:rgba(16,185,129,0.15); }
 .del-btn  { border:1px solid rgba(239,68,68,0.4); color:rgba(239,68,68,0.85); }
 .del-btn:hover { background:rgba(239,68,68,0.15); }
+.refill-btn { background:none; border:1px solid rgba(59,130,246,0.4); border-radius:4px;
+  color:rgba(59,130,246,0.9); font-size:10px; padding:2px 6px; cursor:pointer; white-space:nowrap; }
+.refill-btn:hover { background:rgba(59,130,246,0.15); }
 tr.validated td { opacity:0.55; }
 tr.validated td:nth-child(1)::after { content:" ✓"; color:var(--accent); font-weight:700; opacity:1; }
+tr.is-refill td { background:rgba(59,130,246,0.06) !important; }
+tr.is-refill td:nth-child(6)::after { content:" 🏦→💵 transfer, not expense"; color:#60a5fa; font-size:10px; margin-left:6px; }
 
 /* Edit modal */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100;
@@ -375,14 +380,15 @@ let _filter = 'all'; // all | rm | qty_missing | vendor_missing | bill_missing |
 
 function entryMatchesFilter(e) {
   switch (_filter) {
-    case 'rm':              return !!e.is_rm;
-    case 'qty_missing':     return !!e.qty_missing;
-    case 'vendor_missing':  return !!e.vendor_missing;
-    case 'bill_missing':    return !!e.needs_bill;
-    case 'hdfc_unverified': return !!e.hdfc_unverified;
-    case 'dup':             return (e.v2_dup_count || 0) > 0;
+    case 'rm':              return !!e.is_rm && !e.is_petty_refill;
+    case 'qty_missing':     return !!e.qty_missing && !e.is_petty_refill;
+    case 'vendor_missing':  return !!e.vendor_missing && !e.is_petty_refill;
+    case 'bill_missing':    return !!e.needs_bill && !e.is_petty_refill;
+    case 'hdfc_unverified': return !!e.hdfc_unverified && !e.is_petty_refill;
+    case 'dup':             return (e.v2_dup_count || 0) > 0 && !e.is_petty_refill;
     case 'validated':       return !!e.validated_at;
     case 'unvalidated':     return !e.validated_at;
+    case 'refill':          return !!e.is_petty_refill;
     default:                return true;
   }
 }
@@ -466,7 +472,8 @@ async function loadExport() {
     // Summary chips — clickable filters (data-filter), except non-filter chips marked .disabled
     const chips = [
       `<div class="stat-chip ok ${_filter==='all'?'active':''}" data-filter="all" onclick="setFilter('all')"><span class="n">${s.total_rows || _entries.length}</span>Total entries</div>`,
-      `<div class="stat-chip disabled"><span class="n">₹${fmtAmt(r.total)}</span>Total spend</div>`,
+      `<div class="stat-chip disabled"><span class="n">₹${fmtAmt(r.total)}</span>Net spend (refills excluded)</div>`,
+      s.refill_count ? `<div class="stat-chip ${_filter==='refill'?'active':''}" data-filter="refill" onclick="setFilter('refill')" style="border-color:rgba(59,130,246,0.4);"><span class="n" style="color:#60a5fa;">${s.refill_count} · ₹${fmtAmt(s.refill_total)}</span>Petty refills 🏦→💵</div>` : '',
       `<div class="stat-chip ${validatePct===100?'ok':'warn'} ${_filter==='unvalidated'?'active':''}" data-filter="unvalidated" onclick="setFilter('unvalidated')"><span class="n">${validatedCount} / ${_entries.length}</span>Validated (${validatePct}%) — click for unvalidated</div>`,
       `<div class="stat-chip ${_filter==='rm'?'active':''}" data-filter="rm" onclick="setFilter('rm')"><span class="n">${s.rm_rows || 0}</span>RM items</div>`,
       s.qty_missing ? `<div class="stat-chip warn ${_filter==='qty_missing'?'active':''}" data-filter="qty_missing" onclick="setFilter('qty_missing')"><span class="n">${s.qty_missing}</span>Qty missing ✏</div>` : '',
@@ -512,6 +519,8 @@ function renderTable(entries) {
     return;
   }
 
+  // Footer total: when not viewing the refill subset, exclude refills from total
+  const sumFiltered = filtered.reduce((s, e) => s + (_filter === 'refill' ? (e.amount || 0) : (e.is_petty_refill ? 0 : (e.amount || 0))), 0);
   filtered.forEach((e, i) => {
     const brand = e.x_location || (e.company_id===2?'HE':e.company_id===3?'NCH':e.company_id===1?'HQ':'?');
     const brandCls = brand==='HE'?'brand-he':brand==='NCH'?'brand-nch':brand==='HQ'?'brand-hq':'';
@@ -568,17 +577,30 @@ function renderTable(entries) {
     // Action buttons — every row gets actions when an editor is logged in
     let actions = '';
     if (canEdit()) {
-      const dupBtn = (e.v2_dup_count > 0)
+      const dupBtn = (e.v2_dup_count > 0 && !e.is_petty_refill)
         ? `<button class="del-btn no-print" onclick="openDelete(${e.id}, ${e.amount}, '${esc(e.product_name||e.category||'')}', '${esc(e.ist_date||'')}')">🗑 Dup</button>`
         : '';
-      const editBtn = `<button class="edit-btn no-print" onclick="openEdit(${e.id})">✏ Edit</button>`;
-      const okBtn   = !e.validated_at
+      const editBtn = !e.is_petty_refill
+        ? `<button class="edit-btn no-print" onclick="openEdit(${e.id})">✏ Edit</button>`
+        : '';
+      const okBtn = (!e.validated_at && !e.is_petty_refill)
         ? `<button class="ok-btn no-print" onclick="quickValidate(${e.id})" title="Mark validated without changes">✓ OK</button>`
         : '';
-      actions = `<div class="row-actions no-print">${editBtn}${okBtn}${dupBtn}</div>`;
+      // Refill button: bank-funded rows can be marked as petty refill (transfer, not expense).
+      // Already-marked rows show an undo.
+      const refillBtn = e.is_petty_refill
+        ? `<button class="refill-btn no-print" onclick="markRefill(${e.id}, true)" title="Undo — restore as expense">↩ Undo refill</button>`
+        : (['hdfc_bank','federal_bank','razorpay'].includes(e.payment_method)
+            ? `<button class="refill-btn no-print" onclick="markRefill(${e.id}, false)" title="This is a bank→cash transfer, not an expense">🏦→💵 Refill</button>`
+            : '');
+      actions = `<div class="row-actions no-print">${editBtn}${okBtn}${refillBtn}${dupBtn}</div>`;
     }
 
-    const rowCls = `${(e.v2_dup_count > 0) ? 'dup-suspect ' : ''}${e.validated_at ? 'validated' : ''}`.trim();
+    const rowCls = [
+      (e.v2_dup_count > 0 && !e.is_petty_refill) ? 'dup-suspect' : '',
+      e.validated_at ? 'validated' : '',
+      e.is_petty_refill ? 'is-refill' : '',
+    ].filter(Boolean).join(' ');
     total += e.amount || 0;
 
     html += `<tr class="${rowCls}" id="row-${e.id}">
@@ -601,11 +623,13 @@ function renderTable(entries) {
 
   tbody.innerHTML = html;
   const totalLabel = (_filter === 'all')
-    ? `TOTAL (${filtered.length} entries)`
-    : `TOTAL (${filtered.length} of ${entries.length} · filter: ${_filter})`;
+    ? `TOTAL (${filtered.length} entries · refills excluded)`
+    : (_filter === 'refill')
+      ? `REFILL TOTAL (${filtered.length} transfers)`
+      : `TOTAL (${filtered.length} of ${entries.length} · filter: ${_filter} · refills excluded)`;
   tfoot.innerHTML = `<tr class="total-row">
     <td colspan="8" style="text-align:right; font-size:11px;">${totalLabel}</td>
-    <td class="amount">₹${fmtAmt(total)}</td>
+    <td class="amount">₹${fmtAmt(sumFiltered)}</td>
     <td colspan="5"></td>
   </tr>`;
 }
@@ -722,6 +746,42 @@ async function saveEdit(validate) {
   }
 }
 function showEditErr(m) { document.getElementById('edit-err').textContent = m; }
+
+// Mark / unmark as petty refill (bank → cash float transfer, not expense)
+async function markRefill(id, undo) {
+  const e = _entries.find(x => x.id === id);
+  if (!e) return;
+  let pile = '';
+  if (!undo) {
+    pile = prompt(
+      `Mark this ₹${fmtAmt(e.amount)} ${e.payment_method.toUpperCase()} entry as a petty cash refill?\n\nWho received the cash float?`,
+      'Tanveer petty'
+    );
+    if (pile === null) return; // cancelled
+    pile = pile.trim() || `${PIN_MAP[PIN] || 'Unknown'} petty`;
+  }
+  try {
+    const r = await fetch(`${API}?action=expense-mark-refill`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ pin: PIN, expense_id: id, refill_to_pile: pile, undo: !!undo })
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Failed');
+    const idx = _entries.findIndex(x => x.id === id);
+    if (idx >= 0) {
+      if (undo) {
+        _entries[idx].is_petty_refill = 0;
+        _entries[idx].refill_to_pile = null;
+      } else {
+        _entries[idx].is_petty_refill = 1;
+        _entries[idx].refill_to_pile = pile;
+        _entries[idx].validated_at = new Date().toISOString();
+        _entries[idx].validated_by = PIN_MAP[PIN] || PIN;
+      }
+    }
+    // Re-fetch summary by reloading (simpler than recomputing client-side)
+    loadExport();
+  } catch (err) { alert('Refill mark failed: ' + err.message); }
+}
 
 // Quick "✓ OK" — mark validated without opening modal
 async function quickValidate(id) {
