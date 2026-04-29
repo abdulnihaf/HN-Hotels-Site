@@ -1106,6 +1106,79 @@ export async function onRequest(context) {
       return json({ success: true, entries: items, total, days, brand: brandParam, from: fromParam, to: toParam });
     }
 
+    // ── EXPENSE EXPORT (audit PDF source) ──────────────────
+    // Returns full granular rows for a date range — IST-tagged, RM-flagged.
+    // is_rm: 1 if product links to rm_products OR category_parent starts with '01 ·'
+    // qty_missing: 1 only for is_rm rows where quantity IS NULL (these need hand-entry)
+    // vendor_missing: 1 for is_rm rows where vendor_name IS NULL
+    if (action === 'expense-export') {
+      if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user || !['admin', 'cfo'].includes(user.role)) return json({ success: false, error: 'Admin or CFO PIN required' }, 401);
+
+      const fromParam = url.searchParams.get('from') || '2026-04-01';
+      const toParam   = url.searchParams.get('to')   || '2026-04-30';
+      const brandParam = (url.searchParams.get('brand') || 'ALL').toUpperCase();
+
+      const istDayStartUTC = (ymd) => {
+        const d = new Date(Date.parse(`${ymd}T00:00:00.000Z`) - 5.5 * 3600 * 1000);
+        return d.toISOString().replace('T', ' ').slice(0, 19);
+      };
+      const startUTC = istDayStartUTC(fromParam);
+      const toPlus1  = new Date(Date.parse(`${toParam}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
+      const endUTC   = istDayStartUTC(toPlus1);
+
+      let sql = `
+        SELECT be.id, be.odoo_id,
+               be.category, be.category_parent,
+               be.amount, be.product_name, be.product_id, be.company_id,
+               be.x_payment_method AS payment_method, be.x_location, be.x_pool,
+               be.recorded_by AS recorded_by_pin, be.recorded_at AS created_at, be.notes,
+               be.quantity, be.uom, be.vendor_id, be.vendor_name,
+               COALESCE(be.uom, rmp.uom) AS uom_display,
+               CASE WHEN rmp.uom IS NOT NULL
+                      OR LOWER(COALESCE(be.category_parent,'')) LIKE '01%'
+                      OR LOWER(COALESCE(be.category_parent,'')) LIKE '%raw material%'
+                    THEN 1 ELSE 0 END AS is_rm,
+               CASE WHEN (rmp.uom IS NOT NULL
+                            OR LOWER(COALESCE(be.category_parent,'')) LIKE '01%'
+                            OR LOWER(COALESCE(be.category_parent,'')) LIKE '%raw material%')
+                         AND be.quantity IS NULL
+                    THEN 1 ELSE 0 END AS qty_missing,
+               CASE WHEN (rmp.uom IS NOT NULL
+                            OR LOWER(COALESCE(be.category_parent,'')) LIKE '01%'
+                            OR LOWER(COALESCE(be.category_parent,'')) LIKE '%raw material%')
+                         AND (be.vendor_name IS NULL OR be.vendor_name = '')
+                    THEN 1 ELSE 0 END AS vendor_missing
+          FROM business_expenses be
+          LEFT JOIN rm_products rmp
+                 ON rmp.odoo_id = be.product_id AND rmp.odoo_id IS NOT NULL
+         WHERE be.recorded_at >= ? AND be.recorded_at < ?`;
+      const args = [startUTC, endUTC];
+      if (brandParam !== 'ALL' && ['HE', 'NCH', 'HQ'].includes(brandParam)) {
+        sql += ` AND be.x_location = ?`;
+        args.push(brandParam);
+      }
+      sql += ` ORDER BY be.recorded_at ASC LIMIT 2000`;
+
+      const rows = await DB.prepare(sql).bind(...args).all().catch(e => ({ results: [], error: e.message }));
+      const items = (rows.results || []).map(r => {
+        const t = Date.parse((r.created_at || '').replace(' ', 'T') + 'Z');
+        const ist_date = isNaN(t) ? null : new Date(t + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+        return { ...r, ist_date };
+      });
+
+      const total         = items.reduce((s, r) => s + (r.amount || 0), 0);
+      const rm_rows       = items.filter(r => r.is_rm);
+      const qty_missing   = items.filter(r => r.qty_missing).length;
+      const vendor_missing = items.filter(r => r.vendor_missing).length;
+
+      return json({ success: true, entries: items, total,
+        summary: { total_rows: items.length, rm_rows: rm_rows.length, qty_missing, vendor_missing },
+        from: fromParam, to: toParam, brand: brandParam });
+    }
+
     // ── RECORD EXPENSE (cats 3-13) → hr.expense ────────────
     if (action === 'record' && request.method === 'POST') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
