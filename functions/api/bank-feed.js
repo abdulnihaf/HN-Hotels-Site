@@ -118,6 +118,14 @@ export async function onRequestGet({ request, env }) {
                WHERE 1=1`;
     const binds = [];
     if (!status)                      sql += ` AND me.parse_status IN ('parsed','partial')`;
+    // Defensive default scope — /ops/bank/ should NEVER show non-bank rows
+    // (POS counter, runner cash, GM/owner pools etc.). Only when caller
+    // explicitly passes a `source` or `instrument` param do we trust their
+    // scope. Without this guard, manually-typed rows or any future
+    // non-bank instrument leaks into the bank ledger by default.
+    if (!source && !instrument) {
+      sql += ` AND me.source IN ('hdfc','federal','razorpay','paytm','zomato_delivery','zomato_dining','swiggy','eazydiner')`;
+    }
     if (since)                      { sql += ' AND (me.txn_at >= ? OR me.received_at >= ?)'; binds.push(since, since); }
     if (dir === 'credit' || dir === 'debit') { sql += ' AND me.direction=?'; binds.push(dir); }
     if (status === 'unreconciled')    sql += ` AND me.reconcile_status='unreconciled' AND me.parse_status='parsed'`;
