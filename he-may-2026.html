@@ -1,0 +1,1877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HE — May 2026 Execution Roadmap</title>
+<style>
+:root{
+  --bg:#0a0a0f;--s1:#12121a;--s2:#1a1a26;--s3:#222234;--bd:#2a2a3a;
+  --tx:#e8e8f0;--dm:#9090a8;--mu:#5e5e74;
+  --ac:#f97316;--ac2:#fb923c;--gn:#22c55e;--rd:#ef4444;--or:#f97316;
+  --yl:#eab308;--pr:#a855f7;--tl:#14b8a6;--bl:#3b82f6;--pk:#ec4899;
+  --captain:#22c55e;--counter:#14b8a6;--agg:#ef4444;--ez:#a855f7;
+  --meta:#3b82f6;--google:#eab308;--infl:#ec4899;--halo:#94a3b8
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;background:var(--bg);color:var(--tx);line-height:1.55;font-size:15px;-webkit-font-smoothing:antialiased}
+
+/* HEADER */
+.hdr{padding:36px 24px 28px;text-align:center;background:radial-gradient(ellipse at top,rgba(249,115,22,.12),transparent 60%);border-bottom:1px solid var(--bd)}
+.hdr .crest{display:inline-block;padding:4px 12px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);border-radius:20px;font-size:11px;color:var(--ac);font-weight:700;letter-spacing:1.5px;margin-bottom:14px;text-transform:uppercase}
+.hdr h1{font-size:30px;font-weight:800;letter-spacing:-.5px;background:linear-gradient(135deg,#f97316,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+.hdr .sub{color:var(--dm);font-size:13px}
+.hdr .meta{display:flex;justify-content:center;gap:24px;margin-top:18px;flex-wrap:wrap}
+.hdr .meta-item{font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:1px}
+.hdr .meta-item b{display:block;color:var(--tx);font-size:18px;font-weight:800;letter-spacing:-.3px;margin-top:2px}
+
+/* NAV */
+.nav{position:sticky;top:0;z-index:100;background:rgba(10,10,15,.94);backdrop-filter:blur(18px);border-bottom:1px solid var(--bd);display:flex;gap:2px;padding:8px 12px;overflow-x:auto;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav a{padding:9px 14px;border-radius:8px;color:var(--dm);text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap;transition:.15s}
+.nav a:hover{background:var(--s2);color:var(--tx)}
+.nav a.active{background:rgba(249,115,22,.12);color:var(--ac)}
+
+/* SECTIONS */
+.sec{padding:44px 22px;border-top:1px solid var(--bd);max-width:1100px;margin:0 auto}
+.sec-t{font-size:22px;font-weight:800;margin-bottom:6px;letter-spacing:-.3px}
+.sec-d{color:var(--dm);font-size:13px;margin-bottom:24px}
+
+/* HERO ARC */
+.arc-wrap{background:linear-gradient(135deg,var(--s1),var(--s2));border:1px solid var(--bd);border-radius:16px;padding:24px;margin-bottom:24px}
+.arc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:20px}
+.arc-cell{padding:14px;background:var(--s2);border-radius:10px;border:1px solid var(--bd)}
+.arc-cell .lbl{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1.2px;font-weight:700}
+.arc-cell .val{font-size:22px;font-weight:800;letter-spacing:-.3px;margin-top:4px}
+.arc-cell .v-sub{font-size:11px;color:var(--dm);margin-top:2px}
+.arc-cell.gn .val{color:var(--gn)}
+.arc-cell.or .val{color:var(--or)}
+.arc-cell.bl .val{color:var(--bl)}
+.arc-cell.pr .val{color:var(--pr)}
+.arc-bar{height:140px;display:flex;align-items:flex-end;gap:3px;padding:0 4px;margin-top:8px;position:relative}
+.arc-day{flex:1;background:linear-gradient(180deg,rgba(249,115,22,.95),rgba(249,115,22,.4));border-radius:2px 2px 0 0;min-height:2px;position:relative;cursor:pointer;transition:.2s}
+.arc-day:hover{background:linear-gradient(180deg,#fb923c,#f97316);transform:scaleY(1.04)}
+.arc-day.weekend{background:linear-gradient(180deg,rgba(34,197,94,.95),rgba(34,197,94,.4))}
+.arc-day.weekend:hover{background:linear-gradient(180deg,#4ade80,#22c55e)}
+.arc-axis{display:flex;justify-content:space-between;font-size:9px;color:var(--mu);padding:4px 4px 0;font-weight:600}
+
+/* STRATEGY PRINCIPLES */
+.princ-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:18px}
+.princ{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:18px;border-left:4px solid var(--ac)}
+.princ h4{font-size:14px;font-weight:800;margin-bottom:6px;letter-spacing:-.2px}
+.princ h4 .num{display:inline-block;width:22px;height:22px;background:var(--ac);color:#fff;border-radius:6px;text-align:center;line-height:22px;font-size:11px;margin-right:8px;font-weight:800}
+.princ p{font-size:13px;color:var(--dm);line-height:1.6}
+.princ.gn{border-left-color:var(--gn)} .princ.gn h4 .num{background:var(--gn)}
+.princ.bl{border-left-color:var(--bl)} .princ.bl h4 .num{background:var(--bl)}
+.princ.pr{border-left-color:var(--pr)} .princ.pr h4 .num{background:var(--pr)}
+.princ.pk{border-left-color:var(--pk)} .princ.pk h4 .num{background:var(--pk)}
+.princ.tl{border-left-color:var(--tl)} .princ.tl h4 .num{background:var(--tl)}
+
+/* WEEK SECTIONS */
+.wk{margin-bottom:36px}
+.wk-hdr{position:sticky;top:48px;z-index:50;background:linear-gradient(180deg,rgba(10,10,15,.98),rgba(10,10,15,.92));backdrop-filter:blur(12px);padding:14px 0 12px;margin:0 -22px 16px;padding-left:22px;padding-right:22px;border-bottom:1px solid var(--bd)}
+.wk-hdr .wk-num{display:inline-block;padding:3px 9px;background:var(--ac);color:#fff;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:1.5px;margin-bottom:6px}
+.wk-hdr h3{font-size:18px;font-weight:800;letter-spacing:-.2px}
+.wk-hdr .wk-meta{display:flex;gap:14px;margin-top:6px;font-size:12px;color:var(--dm);flex-wrap:wrap}
+.wk-hdr .wk-meta b{color:var(--tx)}
+.wk-theme{background:rgba(249,115,22,.05);border:1px solid rgba(249,115,22,.15);border-radius:10px;padding:13px 16px;margin-bottom:16px;font-size:13px;color:var(--dm)}
+.wk-theme b{color:var(--ac)}
+
+/* DAY CARD */
+.day{background:var(--s1);border:1px solid var(--bd);border-radius:14px;margin-bottom:12px;overflow:hidden;transition:.2s}
+.day:hover{border-color:var(--s3)}
+.day.weekend{border-left:3px solid var(--gn)}
+.day.today{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac),0 6px 24px rgba(249,115,22,.18)}
+.day-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;gap:14px}
+.day-l{flex:1;min-width:0}
+.day-l .date{font-size:12px;color:var(--mu);font-weight:700;letter-spacing:.5px}
+.day-l .date b{color:var(--tx);margin-right:8px}
+.day-l .theme{font-size:14px;font-weight:700;margin-top:3px;color:var(--tx)}
+.day-r{text-align:right;flex-shrink:0}
+.day-r .targ{font-size:20px;font-weight:800;letter-spacing:-.3px;color:var(--ac)}
+.day-r .v-day{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1px;margin-top:2px;font-weight:700}
+.day-bar{height:6px;display:flex;background:var(--s2)}
+.day-bar span{display:block;height:100%;transition:.3s}
+.day-body{display:none;padding:0 16px 18px;border-top:1px solid var(--bd);margin-top:0}
+.day.open .day-body{display:block;animation:slide .25s ease}
+@keyframes slide{from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)}}
+.day-body h5{font-size:11px;color:var(--ac);text-transform:uppercase;letter-spacing:1.5px;font-weight:800;margin:14px 0 8px}
+.day-body h5.applied{color:var(--gn)}
+.day-body h5.showing{color:var(--bl)}
+.day-body h5.note{color:var(--pk)}
+.act-list{list-style:none}
+.act-list li{padding:8px 0 8px 22px;font-size:13px;color:var(--dm);border-bottom:1px dashed var(--bd);position:relative;line-height:1.55}
+.act-list li:last-child{border:none}
+.act-list li::before{content:'';position:absolute;left:6px;top:14px;width:6px;height:6px;border-radius:50%;background:var(--gn)}
+.act-list.showing li::before{background:var(--bl)}
+.act-list li b{color:var(--tx)}
+.act-list .budg{display:inline-block;padding:1px 6px;background:rgba(34,197,94,.15);color:var(--gn);border-radius:4px;font-size:10px;font-weight:700;margin-left:6px}
+.chan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:6px}
+.chan-cell{padding:10px 12px;background:var(--s2);border-radius:8px;border-left:3px solid;position:relative}
+.chan-cell .lbl{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.chan-cell .val{font-size:15px;font-weight:800;margin-top:2px}
+.chan-cell .det{font-size:10px;color:var(--dm);margin-top:1px}
+.chan-cell.captain{border-left-color:var(--captain)} .chan-cell.captain .val{color:var(--captain)}
+.chan-cell.counter{border-left-color:var(--counter)} .chan-cell.counter .val{color:var(--counter)}
+.chan-cell.agg{border-left-color:var(--agg)} .chan-cell.agg .val{color:var(--agg)}
+.chan-cell.ez{border-left-color:var(--ez)} .chan-cell.ez .val{color:var(--ez)}
+.chan-cell.meta{border-left-color:var(--meta)} .chan-cell.meta .val{color:var(--meta)}
+.chan-cell.google{border-left-color:var(--google)} .chan-cell.google .val{color:var(--google)}
+.chan-cell.infl{border-left-color:var(--infl)} .chan-cell.infl .val{color:var(--infl)}
+.chan-cell.halo{border-left-color:var(--halo)} .chan-cell.halo .val{color:var(--halo)}
+.note-box{background:rgba(236,72,153,.05);border-left:3px solid var(--pk);padding:12px 14px;border-radius:6px;font-size:13px;color:var(--dm);line-height:1.6;margin-top:6px}
+.note-box b{color:var(--tx)}
+
+/* CHANNEL PLAYBOOK */
+.tool{background:var(--s1);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-bottom:14px;border-left:4px solid}
+.tool h4{font-size:15px;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.tool h4 .lbl-pill{font-size:10px;font-weight:800;padding:3px 8px;border-radius:4px;letter-spacing:1px;text-transform:uppercase}
+.tool .desc{font-size:13px;color:var(--dm);margin-bottom:14px}
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:12px}
+.tool-grid .tg{padding:10px 12px;background:var(--s2);border-radius:8px}
+.tool-grid .tg .lbl{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.tool-grid .tg .val{font-size:13px;font-weight:700;margin-top:2px}
+.tool.captain{border-left-color:var(--captain)} .tool.captain h4 .lbl-pill{background:rgba(34,197,94,.15);color:var(--captain)}
+.tool.agg{border-left-color:var(--agg)} .tool.agg h4 .lbl-pill{background:rgba(239,68,68,.15);color:var(--agg)}
+.tool.ez{border-left-color:var(--ez)} .tool.ez h4 .lbl-pill{background:rgba(168,85,247,.15);color:var(--ez)}
+.tool.meta{border-left-color:var(--meta)} .tool.meta h4 .lbl-pill{background:rgba(59,130,246,.15);color:var(--meta)}
+.tool.google{border-left-color:var(--google)} .tool.google h4 .lbl-pill{background:rgba(234,179,8,.15);color:var(--google)}
+.tool.infl{border-left-color:var(--infl)} .tool.infl h4 .lbl-pill{background:rgba(236,72,153,.15);color:var(--infl)}
+.tool.review{border-left-color:var(--tl)} .tool.review h4 .lbl-pill{background:rgba(20,184,166,.15);color:var(--tl)}
+
+/* BUDGET TABLE */
+.bt{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;background:var(--s1);border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+.bt th{background:var(--s2);padding:11px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--mu);font-weight:800}
+.bt td{padding:11px 12px;border-bottom:1px solid var(--bd)}
+.bt tr:last-child td{border-bottom:none;background:rgba(249,115,22,.06);font-weight:800}
+.bt td.r{text-align:right;font-variant-numeric:tabular-nums}
+.bt td b{color:var(--tx)}
+
+/* INSIGHT BOX */
+.ins{padding:16px 18px;border-radius:12px;margin:18px 0;border-left:4px solid;background:var(--s1);border:1px solid var(--bd);border-left-width:4px}
+.ins.gn{border-left-color:var(--gn);background:rgba(34,197,94,.04)}
+.ins.or{border-left-color:var(--or);background:rgba(249,115,22,.04)}
+.ins.bl{border-left-color:var(--bl);background:rgba(59,130,246,.04)}
+.ins.pk{border-left-color:var(--pk);background:rgba(236,72,153,.04)}
+.ins h5{font-size:12px;font-weight:800;margin-bottom:6px;text-transform:uppercase;letter-spacing:1.2px}
+.ins.gn h5{color:var(--gn)}
+.ins.or h5{color:var(--or)}
+.ins.bl h5{color:var(--bl)}
+.ins.pk h5{color:var(--pk)}
+.ins p{font-size:13px;color:var(--dm);line-height:1.65}
+.ins p+p{margin-top:8px}
+
+/* BAR LEGEND */
+.lg{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 8px;font-size:11px}
+.lg-i{display:flex;align-items:center;gap:6px;color:var(--dm)}
+.lg-i .sw{width:11px;height:11px;border-radius:3px}
+
+/* RESPONSIVE */
+@media(max-width:600px){
+  .sec{padding:36px 16px}
+  .hdr h1{font-size:24px}
+  .hdr{padding:30px 16px 24px}
+  .day-head{padding:12px 14px}
+  .day-l .theme{font-size:13px}
+  .day-r .targ{font-size:18px}
+  .arc-bar{height:100px}
+  .wk-hdr{margin:0 -16px 14px;padding-left:16px;padding-right:16px}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <span class="crest">Hamza Express · Roadmap</span>
+  <h1>May 2026 Execution</h1>
+  <p class="sub">Daily operating doc · proven channels only · dine-in hero · packaging deferred to June</p>
+  <div class="meta">
+    <div class="meta-item">April baseline<b>₹10,335 / day</b></div>
+    <div class="meta-item">May floor<b>₹9.0 L</b></div>
+    <div class="meta-item">May realistic<b>₹11.0 L</b></div>
+    <div class="meta-item">May stretch<b>₹15.0 L</b></div>
+    <div class="meta-item">Spend ceiling<b>₹1.20 L</b></div>
+  </div>
+</header>
+
+<nav class="nav">
+  <a href="#overview" class="active">Overview</a>
+  <a href="#strategy">Strategy</a>
+  <a href="#roadmap">Daily roadmap</a>
+  <a href="#channels">Channel playbook</a>
+  <a href="#budget">Budget</a>
+  <a href="#risk">Risk</a>
+</nav>
+
+<!-- OVERVIEW -->
+<section class="sec" id="overview">
+  <h2 class="sec-t">The arc</h2>
+  <p class="sec-d">May is a 5× lift from April baseline. It is not flat — it is a climb. Every week stacks one more layer. Every layer was chosen because it converts to revenue without asking the customer to learn a new behavior.</p>
+
+  <div class="arc-wrap">
+    <div class="arc-grid">
+      <div class="arc-cell or">
+        <div class="lbl">W1 ends</div>
+        <div class="val">₹16.5K/d</div>
+        <div class="v-sub">+60% vs April · zero ad spend</div>
+      </div>
+      <div class="arc-cell or">
+        <div class="lbl">W2 ends</div>
+        <div class="val">₹22.6K/d</div>
+        <div class="v-sub">Meta+Google live · Influencer #1 published</div>
+      </div>
+      <div class="arc-cell or">
+        <div class="lbl">W3 ends</div>
+        <div class="val">₹29.9K/d</div>
+        <div class="v-sub">50 reviews crossed · Influencer #2 published</div>
+      </div>
+      <div class="arc-cell gn">
+        <div class="lbl">W4 ends</div>
+        <div class="val">₹39.3K/d</div>
+        <div class="v-sub">Full stack · Halo at peak</div>
+      </div>
+      <div class="arc-cell bl">
+        <div class="lbl">May 31 close</div>
+        <div class="val">₹52.0K/d</div>
+        <div class="v-sub">Peak Saturday · run-rate exit</div>
+      </div>
+      <div class="arc-cell pr">
+        <div class="lbl">Total May</div>
+        <div class="val">₹8.94 L</div>
+        <div class="v-sub">Floor · stretch ₹15L w/ overshoot</div>
+      </div>
+    </div>
+
+    <div class="lg">
+      <div class="lg-i"><span class="sw" style="background:rgba(249,115,22,.85)"></span>Weekday target</div>
+      <div class="lg-i"><span class="sw" style="background:rgba(34,197,94,.85)"></span>Weekend target</div>
+    </div>
+    <div class="arc-bar" id="arcBar"></div>
+    <div class="arc-axis">
+      <span>May 1</span><span>May 8</span><span>May 15</span><span>May 22</span><span>May 31</span>
+    </div>
+  </div>
+
+  <div class="ins or">
+    <h5>Why this is the realistic ceiling, not a sandbagged floor</h5>
+    <p>April ran ₹10,335/day with zero marketing effort — that is healthy organic. The 5× lift to ₹50K/day end-of-month is everything compounded: ground floor opens day 1 (raises captain AOV ₹110 counter to ₹650 sit-down), 50 reviews unlock Zomato algo by W3, two influencer drops compound through W4, and ad spend stacks only after the funnel that absorbs it is built. We will not hit ₹50K average across 31 days — we climb to it. The math sums to ₹8.94L floor. ₹11L is reachable if execution holds. ₹15L requires aggregator overshoot AND influencer top-of-range AND zero captain absences.</p>
+  </div>
+</section>
+
+<!-- STRATEGY -->
+<section class="sec" id="strategy">
+  <h2 class="sec-t">Strategic doctrine</h2>
+  <p class="sec-d">Six rules that govern every decision in May. If any week's plan violates one of these, the plan is wrong, not the rule.</p>
+
+  <div class="princ-grid">
+    <div class="princ">
+      <h4><span class="num">1</span>Familiar destinations only</h4>
+      <p>Every paid click ends in a behavior the customer already knows: order on Zomato/Swiggy, walk into the outlet, place a phone call, navigate Google Maps. WhatsApp ordering is parked. WABA is retention only, not acquisition.</p>
+    </div>
+    <div class="princ gn">
+      <h4><span class="num">2</span>Dine-in is the hero of May</h4>
+      <p>Packaging upgrade lands in June. Until then, the basket size lives at the table. Ground floor opens May 1 — that single change lifts captain AOV from ₹713 to a target of ₹650+ at higher volume, and converts ₹110 counter takeaway tickets into ₹600 sit-down tickets via outlet credibility.</p>
+    </div>
+    <div class="princ bl">
+      <h4><span class="num">3</span>Reviews compound, ads don't</h4>
+      <p>50 Zomato reviews unlock default-sort visibility — that is a permanent asset. ₹3,000 of self-orders in May 1–17 buys an algorithm boost that ad spend cannot. We build the asset first, then run ads at the destination it now ranks for.</p>
+    </div>
+    <div class="princ pr">
+      <h4><span class="num">4</span>Influencer requires lead time</h4>
+      <p>Outreach Day 1. Visit + content shoot Day 8. Reel publishes Day 9. Walk-ins begin Day 10 (24h post-publish), peak Day 13–14. Two drops in May means outreach starts on Day 1 of W1, not "when we feel ready in W3".</p>
+    </div>
+    <div class="princ pk">
+      <h4><span class="num">5</span>Ads scale only after the funnel that absorbs them is built</h4>
+      <p>Meta Ads at ₹500/day in W2 starts in learning phase — let the algorithm find the converters. Scale to ₹2,500/day only after the top creatives are identified (Day 5–7 of running). Dumping ₹2K/day on Day 1 burns the budget on impressions before the algo knows who buys.</p>
+    </div>
+    <div class="princ tl">
+      <h4><span class="num">6</span>Halo is the multiplier we don't pay for</h4>
+      <p>A busy outlet at 8pm on a Saturday creates 10–20% lift on counter takeaway and 5–10% lift on aggregator orders the following week — visible on Zomato listing photos, foot-traffic visibility, word-of-mouth. The plan banks halo from W3 onward; without dine-in volume, no halo.</p>
+    </div>
+  </div>
+</section>
+
+<!-- DAILY ROADMAP -->
+<section class="sec" id="roadmap">
+  <h2 class="sec-t">Daily roadmap</h2>
+  <p class="sec-d">Tap any day to expand. Each card shows: actions executed today (live activations + ongoing programs), effects landing today (lag from prior actions), per-channel revenue split, and the strategic note explaining why this day is what it is.</p>
+
+  <!-- WEEK 1 -->
+  <div class="wk">
+    <div class="wk-hdr">
+      <span class="wk-num">Week 1</span>
+      <h3>Foundation · May 1–7</h3>
+      <div class="wk-meta">
+        <span><b>₹1.16 L</b> total</span>
+        <span><b>₹16.5K</b> end-W1 daily</span>
+        <span>Ad spend: <b>₹0</b></span>
+        <span>Self-order budget: <b>₹6.8K</b></span>
+      </div>
+    </div>
+    <div class="wk-theme">Build the assets that the next three weeks compound on. <b>Ground floor opens, EazyDiner activates, catalog gets rewritten, self-order review program begins, influencers get briefed.</b> Zero ad spend — we are not paying to drive traffic to a listing that has 8 reviews.</div>
+
+    <!-- DAY 1 - May 1 Thu -->
+    <div class="day weekend-no" data-d="2026-05-01">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 1</b>Thu · Day 1</div>
+          <div class="theme">Foundation Day · GF opens · self-orders begin</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹14,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:54%"></span><span style="background:var(--counter);width:18%"></span><span style="background:var(--agg);width:11%"></span><span style="background:var(--halo);width:14%"></span><span style="background:var(--counter);width:3%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>GF dine-in opens at 12pm lunch service.</b> Signage, ambience, real seating. Walk-by foot traffic notices new outlet appearance.</li>
+          <li><b>EazyDiner listing activated</b> — contract was signed Mar 28, never went live. Spotlight upgrade deferred to W2.</li>
+          <li><b>Zomato + Swiggy catalog rewrite pushed:</b> hero items reordered (Ghee Rice, Chicken Kabab, Mutton Biryani up top). Photos refreshed. Descriptions rewritten with "1918, four generations, Dakhni" anchor.</li>
+          <li><b>Self-order #1 placed on Zomato</b> by ambassador A1 — ₹400 real order, real address, real diner. Review submitted within 4h. <span class="budg">₹400</span></li>
+          <li><b>Influencer outreach to 8 Bangalore food creators</b> — heritage-led brief. Target reply window: 48h. Looking for 2 mid-tier (50K–200K followers) by end-W1.</li>
+          <li><b>Phone-line briefing for Shaik Noor Ahmed</b> (cashier) — greeting + offer + close script. Most calls hit cashier; train the close.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Same-day GF buzz: 3–5 walk-ins from neighborhood notice (people see new outlet appearance Thursday lunch).</li>
+          <li>Counter-to-captain conversion begins: 4–6 walk-ins shift from ₹110 counter purchase to ₹600+ sit-down meal.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹7,500</div><div class="det">12 × ₹625</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹2,500</div><div class="det">23 × ₹110</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹1,500</div><div class="det">Zomato 4 + Swiggy 1</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo / direct</div><div class="val">₹2,000</div><div class="det">GF walk-by lift</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹0</div><div class="det">Listing live, no covers D1</div></div>
+          <div class="chan-cell counter"><div class="lbl">Other</div><div class="val">₹500</div><div class="det">Card / comp</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>Today's number does not tell the May story — the actions applied today do.</b> GF + catalog rewrite are the two compounding assets that drive the rest of the month. Self-orders begin today because reviews need 17 days of accumulation to cross the 50-mark for the W3 unlock. Influencer outreach today, not later, because the activation timeline is 9–12 days lock→publish. EazyDiner activates today so the platform has 5 days to surface the listing before W1 weekend traffic.</div>
+      </div>
+    </div>
+
+    <!-- DAY 2 - May 2 Fri -->
+    <div class="day" data-d="2026-05-02">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 2</b>Fri · Day 2</div>
+          <div class="theme">Zomato Dining offer · Google Ads queued</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹15,500</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:55%"></span><span style="background:var(--counter);width:16%"></span><span style="background:var(--agg);width:13%"></span><span style="background:var(--halo);width:13%"></span><span style="background:var(--ez);width:3%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #2 (ambassador A2), Swiggy #1 (ambassador A1). <span class="budg">₹800</span></li>
+          <li><b>Zomato Dining offer activated:</b> 15% off lunch dine-in (Mon–Fri 12–3pm). Free to set up, no commission cost on the discount. Anchor for office crowd.</li>
+          <li><b>Google Ads campaign rebuilt + submitted for review.</b> New ad copy, new sitelinks, call-extension wired. Bid raised from ₹15 → ₹40 to win top-of-page. Approval in 24–48h.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Catalog updates pushed Day 1 are now indexed by Zomato algo — first bump in impressions visible (estimate +15% over April baseline).</li>
+          <li>EazyDiner listing now visible to platform browsers.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹8,500</div><div class="det">14 × ₹607</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹2,500</div><div class="det">Friday walk-up</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹2,000</div><div class="det">Zomato uptick from catalog</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹2,000</div><div class="det">Direct walk-in</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹500</div><div class="det">First curiosity covers</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Friday's organic baseline is ₹9.5K. The +₹6K uplift is the GF effect plus the catalog impression bump. Zomato Dining 15% offer goes live today because lunch crowd Friday is the highest-converting weekday for office workers — discount drives trial of the new sit-down format.</div>
+      </div>
+    </div>
+
+    <!-- DAY 3 - May 3 Sat -->
+    <div class="day weekend" data-d="2026-05-03">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 3</b>Sat · Day 3</div>
+          <div class="theme">First ₹20K+ day · Zomato Boost activates</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹22,000</div>
+          <div class="v-day">target · weekend</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:56%"></span><span style="background:var(--counter);width:11%"></span><span style="background:var(--agg);width:14%"></span><span style="background:var(--halo);width:13%"></span><span style="background:var(--ez);width:6%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #3 (A3), Swiggy #2 (A2). <span class="budg">₹800</span></li>
+          <li><b>Zomato Boost activated</b> at ₹400/day. Sponsored Listing slot in Shivajinagar geo. <span class="budg">₹400</span></li>
+          <li>EazyDiner weekend cover-bonus campaign (no extra spend — uses existing platform offer slot).</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li><b>Saturday demand peak.</b> April Sat avg was ₹15.5K. GF + early catalog lift adds ~₹4.5K. Boost first-day adds ~₹1K.</li>
+          <li>Reviews now ~5 visible on Zomato — early credibility build.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹12,500</div><div class="det">19 × ₹658 · weekend AOV</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹2,500</div><div class="det">25 × ₹100</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹3,000</div><div class="det">Zomato 7 + Swiggy 2</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹3,000</div><div class="det">Sat foot traffic</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,000</div><div class="det">2 covers</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>First ₹20K day of May.</b> Saturdays are where GF earns its ROI fastest — neighborhood foot traffic peaks, sit-down demand exists naturally, and the new outlet appearance converts. Boost activates today because Saturday is the highest-CTR day on Zomato — every rupee of Boost spend on a Saturday outperforms the same rupee on a Tuesday. We do not Boost on weekdays in W1.</div>
+      </div>
+    </div>
+
+    <!-- DAY 4 - May 4 Sun -->
+    <div class="day weekend" data-d="2026-05-04">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 4</b>Sun · Day 4</div>
+          <div class="theme">Swiggy Ads activate · EazyDiner first weekend</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹19,000</div>
+          <div class="v-day">target · weekend</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:54%"></span><span style="background:var(--counter);width:13%"></span><span style="background:var(--agg);width:16%"></span><span style="background:var(--halo);width:13%"></span><span style="background:var(--ez);width:4%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #4 (A4), Swiggy #3 (A3). <span class="budg">₹800</span></li>
+          <li><b>Swiggy Ads activated</b> at ₹400/day. Listing-level promotion. <span class="budg">₹400</span></li>
+          <li><b>Influencer replies triaged:</b> shortlist 3–4 from initial 8 outreach. First call/visit slot offered for May 8.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reviews ~7 visible (Day 1 + Day 2 + Day 3 reviews live).</li>
+          <li>Sunday baseline ₹13.7K + GF + EazyDiner first weekend bookings + Boost Day 2.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹10,500</div><div class="det">17 × ₹618</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹2,500</div><div class="det">25 × ₹100</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹3,000</div><div class="det">Boost+Ads working</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹2,500</div><div class="det">Sun walk-in</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹500</div><div class="det">1 cover · weekend trickle</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Swiggy Ads activates today (not Day 1) because the catalog rewrite shipped on May 1 needs 48–72h to be fully indexed before paid placement makes sense. Spending on a half-indexed listing wastes impressions on a page that doesn't convert.</div>
+      </div>
+    </div>
+
+    <!-- DAY 5 - May 5 Mon -->
+    <div class="day" data-d="2026-05-05">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 5</b>Mon · Day 5</div>
+          <div class="theme">Influencer #1 LOCKED · Meta Ads built</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹13,500</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:52%"></span><span style="background:var(--counter);width:18%"></span><span style="background:var(--agg);width:18%"></span><span style="background:var(--halo);width:8%"></span><span style="background:var(--ez);width:4%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #5 (A5), Swiggy #4 (A4). <span class="budg">₹800</span></li>
+          <li><b>Influencer #1 LOCKED.</b> Mid-tier creator (target 80K–150K followers). Visit + content shoot booked May 8 evening. Brief sent: heritage angle, two heroes (Mutton Biryani + Chicken Kabab), shoot at GF table. Cost: ₹20K paid OR comp meal + ₹5K — confirm at brief.</li>
+          <li><b>Meta Ads campaign built</b> — creatives, audience (25–34 male Bangalore, Shivajinagar 5km radius), destinations (Zomato listing, call extension, Maps). Submitted for review. Approval window 24h.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reviews ~10. Catalog impressions stable at +20% vs April.</li>
+          <li>Monday is the slowest weekday — real run-rate test of GF without weekend lift.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹7,000</div><div class="det">12 × ₹583 · Mon AOV dip</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹2,500</div><div class="det">23 × ₹109</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹2,500</div><div class="det">Mon delivery soft</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹1,000</div><div class="det">Quiet Mon</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹500</div><div class="det">1 lunch cover</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>Monday is the truth-test.</b> If GF + early ad activations cannot lift Monday from ₹8.1K (April Mon avg) to ₹13.5K, the May plan needs recalibration before W2 launches. Meta Ads is built today, not run today, because launching into a Monday with no learning history wastes budget — Tuesday launch (Day 6) gets a better learning sample.</div>
+      </div>
+    </div>
+
+    <!-- DAY 6 - May 6 Tue -->
+    <div class="day" data-d="2026-05-06">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 6</b>Tue · Day 6</div>
+          <div class="theme">Meta + Google live · learning phase</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹15,500</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:51%"></span><span style="background:var(--counter);width:16%"></span><span style="background:var(--agg);width:16%"></span><span style="background:var(--meta);width:6%"></span><span style="background:var(--google);width:4%"></span><span style="background:var(--halo);width:5%"></span><span style="background:var(--ez);width:2%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #6 (A1), Swiggy #5 (A5). <span class="budg">₹800</span></li>
+          <li><b>Google Ads APPROVED + LIVE</b> at ₹400/day. Branded keywords only ("Hamza Express", "Hamza Express Shivajinagar") + call extension. Non-branded "near me" stays paused for 4 days (let QS recover from old campaign). <span class="budg">₹400</span></li>
+          <li><b>Meta Ads LIVE</b> at ₹500/day. Single ad set, top performing creative from CTWA history (Combo 4 — Brain + Butter Naan, ₹15 CPCv historical). Destination: Zomato listing + call extension. <span class="budg">₹500</span></li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Zomato Boost steady-state (Day 4 of running). Reviews ~13.</li>
+          <li>EazyDiner now 5 days old — first organic discovery bookings appear.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹8,000</div><div class="det">13 × ₹615</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹2,500</div><div class="det">24 × ₹104</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹2,500</div><div class="det">Tue uptick</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta D1</div><div class="val">₹900</div><div class="det">Learning phase</div></div>
+          <div class="chan-cell google"><div class="lbl">Google D1</div><div class="val">₹600</div><div class="det">Branded clicks</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹700</div><div class="det">Direct</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹300</div><div class="det">1 lunch cover</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Both ad platforms launch with <b>minimum-viable budgets</b>. Meta at ₹500 is intentionally below "scale" — we want learning data, not volume. Google at ₹400 is branded-only because that's the highest-conversion intent we own. Non-branded "near me" stays cold until Day 10 when QS has recovered.</div>
+      </div>
+    </div>
+
+    <!-- DAY 7 - May 7 Wed -->
+    <div class="day" data-d="2026-05-07">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 7</b>Wed · Day 7</div>
+          <div class="theme">Zomato Sponsored adds · W1 close</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹16,500</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:51%"></span><span style="background:var(--counter);width:18%"></span><span style="background:var(--agg);width:15%"></span><span style="background:var(--meta);width:6%"></span><span style="background:var(--google);width:4%"></span><span style="background:var(--halo);width:4%"></span><span style="background:var(--ez);width:2%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #7 (A2), Swiggy #6 (A1). Reviews on Zomato now ~14. <span class="budg">₹800</span></li>
+          <li><b>Zomato Sponsored Listing</b> added on top of Boost. Total Zomato spend: Boost ₹400 + Sponsored ₹300 = ₹700/day. Sponsored shows in "Top Picks" feed; Boost shows in geo search. <span class="budg">₹300</span></li>
+          <li><b>Meta + Google held at current spend</b> — let learning phase complete before scaling.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Meta + Google D2 — first conversions from learning-phase clicks (estimate 1–2 orders Meta, 1 order Google).</li>
+          <li>EazyDiner mid-week lunch covers stabilize at 1–2/day.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹8,500</div><div class="det">14 × ₹607</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹3,000</div><div class="det">28 × ₹107</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹2,500</div><div class="det">Sponsored + Boost</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta D2</div><div class="val">₹1,000</div><div class="det">Learning</div></div>
+          <div class="chan-cell google"><div class="lbl">Google D2</div><div class="val">₹600</div><div class="det">Branded</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹600</div><div class="det">Direct</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹300</div><div class="det">1 lunch cover</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>W1 closes at ₹1.16L total · ₹16.5K average · 60% above April baseline · zero ad spend on weekends, ~₹1K/day spend on weekdays.</b> The asset that compounds — 14 reviews now live, EazyDiner indexed, Zomato algo learning the new catalog, two influencers in negotiation, Meta + Google in learning. W2 starts with infrastructure that did not exist on April 30.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEEK 2 -->
+  <div class="wk">
+    <div class="wk-hdr">
+      <span class="wk-num">Week 2</span>
+      <h3>Influencer #1 + ad scale · May 8–14</h3>
+      <div class="wk-meta">
+        <span><b>₹1.59 L</b> total</span>
+        <span><b>₹22.6K</b> end-W2 daily</span>
+        <span>Ad spend: <b>₹16.1K</b></span>
+        <span>Influencer #1 reel: <b>May 9</b></span>
+      </div>
+    </div>
+    <div class="wk-theme">First influencer reel publishes mid-week. Ads scale after learning phase ends. Reviews accelerate to ~32 by Sunday close. <b>The first measurable revenue lift from a paid lever lands here.</b></div>
+
+    <!-- DAY 8 -->
+    <div class="day" data-d="2026-05-08">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 8</b>Thu · Day 8</div>
+          <div class="theme">Influencer #1 visit · Meta scales · EZ spotlight</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹20,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:43%"></span><span style="background:var(--counter);width:13%"></span><span style="background:var(--agg);width:18%"></span><span style="background:var(--meta);width:13%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:6%"></span><span style="background:var(--halo);width:2%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #8 (A3), Swiggy #7 (A2). <span class="budg">₹800</span></li>
+          <li><b>Influencer #1 outlet visit (evening, 7pm)</b> + 2-hour content shoot. Heroes plated. GF dining. Story: "1918 · Dakhni · why this place is different from the Andhra-belt next door." <span class="budg">₹20K (or comp + ₹5K)</span></li>
+          <li><b>Meta Ads scaled to ₹800/day</b> — top 2 creatives identified from learning phase, audience narrowed to 25–34 M Shivajinagar 3km. <span class="budg">₹800</span></li>
+          <li><b>EazyDiner Spotlight upgrade</b> — ₹500/week for premium listing position in Bangalore search results. <span class="budg">₹500/wk</span></li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reviews ~17. Zomato listing now in mid-organic discovery zone.</li>
+          <li>Meta ads exit learning phase — first stable conversions land today.</li>
+          <li>Google QS approaching 4–5 from baseline 1.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹8,500</div><div class="det">14 × ₹607</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹2,500</div><div class="det">23 × ₹109</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹3,500</div><div class="det">Reviews lift impressions</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹2,500</div><div class="det">Post-learning · 3.1× ROAS</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,000</div><div class="det">QS recovering</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,200</div><div class="det">Spotlight kicks in</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹500</div><div class="det">Direct</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Influencer visit is <b>tonight, not earlier</b> — gives us a Thursday/Friday shoot for a Saturday publish, which is the highest-engagement window for Bangalore food creators. Meta scaling 60% (₹500→₹800) is conservative — algorithm needs another 48h before next scale.</div>
+      </div>
+    </div>
+
+    <!-- DAY 9 -->
+    <div class="day" data-d="2026-05-09">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 9</b>Fri · Day 9</div>
+          <div class="theme">Influencer #1 reel publishes 7pm</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹22,500</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:42%"></span><span style="background:var(--counter);width:15%"></span><span style="background:var(--agg);width:16%"></span><span style="background:var(--meta);width:11%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:7%"></span><span style="background:var(--infl);width:0%"></span><span style="background:var(--halo);width:4%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #9 (A4), Swiggy #8 (A3). <span class="budg">₹800</span></li>
+          <li><b>Influencer #1 reel published evening (7pm IST).</b> Friday evening publish maximizes 24-hour engagement window for Saturday peak.</li>
+          <li><b>Influencer #2 outreach</b> to 6 creators from updated shortlist. Target lock by May 12.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reviews ~19. EazyDiner Spotlight Day 2 — covers up to 3/day.</li>
+          <li>Meta ads stable at ₹800/day. Google branded converting at expected rate.</li>
+          <li>Influencer reel is brand-new today — <b>walk-in lift starts tomorrow</b>, not today.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹9,500</div><div class="det">15 × ₹633</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹3,500</div><div class="det">Fri walk-up</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹3,500</div><div class="det">Reviews effect compounding</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹2,500</div><div class="det">Stable</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,200</div><div class="det">QS climbing</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,500</div><div class="det">3 covers</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹800</div><div class="det">Fri direct</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Friday + influencer-publish = the highest-leverage 24h of W2. Reel reach peaks Saturday afternoon (24h post-publish), and Saturday demand is structurally 50%+ above weekday — they compound. Friday's number is the pre-compound baseline.</div>
+      </div>
+    </div>
+
+    <!-- DAY 10 -->
+    <div class="day weekend" data-d="2026-05-10">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 10</b>Sat · Day 10</div>
+          <div class="theme">First influencer walk-ins · Sat peak</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹29,000</div>
+          <div class="v-day">target · weekend</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:47%"></span><span style="background:var(--counter);width:11%"></span><span style="background:var(--agg);width:14%"></span><span style="background:var(--meta);width:9%"></span><span style="background:var(--google);width:4%"></span><span style="background:var(--ez);width:4%"></span><span style="background:var(--infl);width:7%"></span><span style="background:var(--halo);width:4%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #10 (A5), Swiggy #9 (A4). <span class="budg">₹800</span></li>
+          <li><b>Zomato Boost up to ₹700/day</b> · <b>Swiggy Ads up to ₹600/day.</b> Saturday is highest-CTR day; Boost concentration on weekends. <span class="budg">+₹500</span></li>
+          <li><b>District / Dineout listings activated</b> (free, complementary to EazyDiner — different audience cluster).</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li><b>Influencer #1 reel D1 — peak engagement window.</b> Estimate reach 30K–80K views by EOD. First walk-ins arrive 6–9pm window: 5–8 reel-driven walk-ins.</li>
+          <li>Reviews ~22. Sat demand × Boost compounding.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹13,500</div><div class="det">21 × ₹643 · weekend</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹3,000</div><div class="det">Sat walk-up peak</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹4,000</div><div class="det">Boost full · 12 orders</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹2,500</div><div class="det">Sat conversion lift</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,200</div><div class="det">Branded · 4 calls</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,200</div><div class="det">3 weekend covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #1</div><div class="val">₹2,000</div><div class="det">3 walk-ins · D1 peak</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹1,200</div><div class="det">Direct + Maps</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">First test of <b>compound-day mechanics</b> — Sat baseline + GF + Boost + new reviews + influencer reel D1 + ads + EZ. If today lands ₹29K+, the W4 ₹52K target is mathematically reachable. If today lands ₹22K, recalibrate the W3+W4 ramp downward.</div>
+      </div>
+    </div>
+
+    <!-- DAY 11 -->
+    <div class="day weekend" data-d="2026-05-11">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 11</b>Sun · Day 11</div>
+          <div class="theme">Reel D2 still high · Meta scales again</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹26,000</div>
+          <div class="v-day">target · weekend</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:46%"></span><span style="background:var(--counter);width:12%"></span><span style="background:var(--agg);width:15%"></span><span style="background:var(--meta);width:12%"></span><span style="background:var(--google);width:4%"></span><span style="background:var(--ez);width:4%"></span><span style="background:var(--infl);width:5%"></span><span style="background:var(--halo);width:2%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #11 (A1), Swiggy #10 (A5). <span class="budg">₹800</span></li>
+          <li><b>Meta Ads scaled to ₹1,000/day</b> — narrowed audience converting 3.5×. <span class="budg">+₹200</span></li>
+          <li><b>Zomato Dining weekend cover-bonus</b> activated (Sun lunch + dinner).</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li><b>Influencer reel D2 — still peak window.</b> Reach extends to ~150K by EOD. 4–6 reel walk-ins through Sunday.</li>
+          <li>Reviews ~24. Crossing the 25-review credibility threshold tomorrow.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹12,000</div><div class="det">19 × ₹632</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹3,000</div><div class="det">Sun walk-up</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹4,000</div><div class="det">12 orders</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹3,000</div><div class="det">Scale + Sun lift</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,000</div><div class="det">Branded</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,200</div><div class="det">3 covers · weekend bonus</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #1</div><div class="val">₹1,300</div><div class="det">2 walk-ins · D2 sustained</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹500</div><div class="det">Direct</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Reel D2 stays at near-peak engagement on Bangalore food creators because Sunday brunch is the highest food-content discovery window. Meta scales today (not yesterday) because 48h post-launch the algo has clean conversion data; scaling on Day 6–7 of a new ad set is the Meta-recommended cadence.</div>
+      </div>
+    </div>
+
+    <!-- DAY 12 -->
+    <div class="day" data-d="2026-05-12">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 12</b>Mon · Day 12</div>
+          <div class="theme">25 reviews crossed · Google goes non-branded</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹19,500</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:43%"></span><span style="background:var(--counter);width:15%"></span><span style="background:var(--agg);width:18%"></span><span style="background:var(--meta);width:10%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:4%"></span><span style="background:var(--infl);width:3%"></span><span style="background:var(--halo);width:2%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #12 (A2), Swiggy #11 (A1). <span class="budg">₹800</span></li>
+          <li><b>Google Ads scaled to ₹600/day</b>, non-branded "biryani Shivajinagar" + "Dakhni biryani" enabled (QS now ~5). <span class="budg">+₹200</span></li>
+          <li>Influencer #2 reply review — finalize lock by EOD.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li><b>25-review threshold crossed.</b> First Zomato algo bump: listing now appears in default sort for "biryani Shivajinagar" queries (+30–40% impressions).</li>
+          <li>Reel D3 — still pulling, decay starts EOD.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹8,500</div><div class="det">14 × ₹607</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹3,000</div><div class="det">Mon walk-up</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹3,500</div><div class="det">25-review lift</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹2,000</div><div class="det">Mon dip</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,000</div><div class="det">Non-branded D1</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹800</div><div class="det">2 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #1</div><div class="val">₹500</div><div class="det">1 walk-in · D3 decay</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹200</div><div class="det">Direct</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>The 25-review threshold is a free 30% lift on aggregator impressions.</b> We do not see this in the daily revenue jump immediately — it shows up in W3 as cumulative compound. Today's Google non-branded launch is the first day we test demand outside our brand name; metrics will be soft for 5–7 days as QS rebuilds.</div>
+      </div>
+    </div>
+
+    <!-- DAY 13 -->
+    <div class="day" data-d="2026-05-13">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 13</b>Tue · Day 13</div>
+          <div class="theme">Zomato Sponsored peaks · Influencer #2 locked</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹20,500</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:44%"></span><span style="background:var(--counter);width:14%"></span><span style="background:var(--agg);width:19%"></span><span style="background:var(--meta);width:10%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:4%"></span><span style="background:var(--infl);width:2%"></span><span style="background:var(--halo);width:2%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #13 (A3), Swiggy #12 (A2). <span class="budg">₹800</span></li>
+          <li><b>Zomato Sponsored to ₹500/day</b> (Boost stays ₹400; total ₹900/day Zomato ads). <span class="budg">+₹200</span></li>
+          <li><b>Influencer #2 LOCKED.</b> Visit booked May 17 (Saturday). Different niche than #1 — micro-foodie with 50K Insta + heritage interest. Cost: ₹15K paid + comp meal. <span class="budg">₹15K</span></li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reel D4 — long tail begins. ~1 walk-in expected. Reviews ~28.</li>
+          <li>Google non-branded D2 — first impressions on "biryani Shivajinagar" search.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹9,000</div><div class="det">14 × ₹643</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹2,800</div><div class="det">Tue uptick</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹3,800</div><div class="det">Sponsored + 25-rev compound</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹2,000</div><div class="det">Tue stable</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,000</div><div class="det">Branded + non-branded</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹900</div><div class="det">2 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #1</div><div class="val">₹500</div><div class="det">1 walk-in · D4 long tail</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹500</div><div class="det">Direct</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Influencer #2 visit is Saturday because that's when GF dine-in is at peak ambience (full tables, busy buzz, kitchen at full output). Content shot in a half-empty outlet kills the reel's social proof. We pay creators 60% of their fee for the food they capture — that food has to be plated against a real busy room.</div>
+      </div>
+    </div>
+
+    <!-- DAY 14 -->
+    <div class="day" data-d="2026-05-14">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 14</b>Wed · Day 14</div>
+          <div class="theme">W2 close · 32 reviews · halfway to 50</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹21,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:45%"></span><span style="background:var(--counter);width:14%"></span><span style="background:var(--agg);width:19%"></span><span style="background:var(--meta);width:10%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:5%"></span><span style="background:var(--halo);width:2%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> Zomato #14 (A4), Swiggy #13 (A3). <span class="budg">₹800</span></li>
+          <li>Hold all ad spend. End-of-W2 review: top creatives, top ad groups, audience response, CPCv trends.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li><b>Reviews ~30.</b> Aggregator impressions stable at +35% over W1.</li>
+          <li>Reel D5 — minimal residual lift. Influencer #1 done its primary work.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹9,500</div><div class="det">15 × ₹633</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹3,000</div><div class="det">Wed walk-up</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹4,000</div><div class="det">12 orders</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹2,200</div><div class="det">Stable</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,100</div><div class="det">Branded + non-branded</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,000</div><div class="det">2 covers</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹200</div><div class="det">Direct</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>W2 closes at ₹1.59L (+37% over W1).</b> Daily run-rate exits at ₹22.6K. Reviews 30. Two influencers in pipeline (#1 published, #2 visit Sat). Ad spend stabilized at ~₹2.3K/day. Going into W3, the next inflection is the 50-review unlock (May 17–18) and Influencer #2 publish (May 18 evening). The two compound.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEEK 3 -->
+  <div class="wk">
+    <div class="wk-hdr">
+      <span class="wk-num">Week 3</span>
+      <h3>50 reviews unlock + Influencer #2 · May 15–21</h3>
+      <div class="wk-meta">
+        <span><b>₹2.09 L</b> total</span>
+        <span><b>₹29.9K</b> end-W3 daily</span>
+        <span>Ad spend: <b>₹26.0K</b></span>
+        <span>Reviews 50 hit: <b>May 18</b></span>
+      </div>
+    </div>
+    <div class="wk-theme">The compounding week. Two algorithm thresholds cross: <b>50 Zomato reviews + Influencer #2 reel publish</b> within 24 hours of each other. Meta + Google scale into the lift. Halo from 3 weeks of busy outlet visible to neighborhood and on listing photos.</div>
+
+    <!-- DAY 15 -->
+    <div class="day" data-d="2026-05-15">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 15</b>Thu · Day 15</div>
+          <div class="theme">Self-order push intensifies · Meta retargeting on</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹24,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:38%"></span><span style="background:var(--counter);width:13%"></span><span style="background:var(--agg);width:21%"></span><span style="background:var(--meta);width:15%"></span><span style="background:var(--google);width:6%"></span><span style="background:var(--ez);width:6%"></span><span style="background:var(--halo);width:1%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders intensify to 5/day combined</b> (Zomato 3 + Swiggy 2) — push to cross 50 by Sun. <span class="budg">₹2,000</span></li>
+          <li><b>Meta Ads scaled to ₹1,500/day + retargeting layer</b> (warm audience: site visitors, Zomato listing visitors, video 50% watchers). <span class="budg">+₹500</span></li>
+          <li><b>Google Ads to ₹800/day</b>, sitelinks updated with offers. <span class="budg">+₹200</span></li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reviews ~37 (climbing). EazyDiner now at 4 covers/day stable.</li>
+          <li>Influencer #1 long tail Day 6 — minimal direct walk-ins, but listing photos updated to creator-shot food (free upgrade).</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹9,000</div><div class="det">14 × ₹643</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹3,000</div><div class="det">Thu</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹5,000</div><div class="det">Reviews + Sponsored</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹3,500</div><div class="det">Retargeting · 2.3× ROAS</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,500</div><div class="det">Scale</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,500</div><div class="det">4 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #1</div><div class="val">₹500</div><div class="det">D6 residual</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Retargeting goes live now (not earlier) because we need a warm audience pool of 200+ unique visitors before retargeting becomes economical. By Day 14 we have ~700 site/listing visitors from the prior 8 days of cold ads — that's the threshold.</div>
+      </div>
+    </div>
+
+    <!-- DAY 16 -->
+    <div class="day" data-d="2026-05-16">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 16</b>Fri · Day 16</div>
+          <div class="theme">Take-away halo kicks in · EZ weekend bonus</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹30,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:38%"></span><span style="background:var(--counter);width:13%"></span><span style="background:var(--agg);width:22%"></span><span style="background:var(--meta);width:12%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:7%"></span><span style="background:var(--halo);width:5%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> 5 (Z3 + Sw2). <span class="budg">₹2,000</span></li>
+          <li><b>Zomato combined ads (Boost + Sponsored) to ₹1,500/day.</b> Friday-Sunday weekend concentration. <span class="budg">+₹600</span></li>
+          <li><b>EazyDiner weekend cover bonus</b> activated for May 16–18.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reviews ~42. Two weeks of dine-in busyness now visible to neighborhood — <b>take-away halo on counter starts (+10–15%).</b></li>
+          <li>Meta retargeting D2 — first conversions from warm pool.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹11,500</div><div class="det">18 × ₹639 · Fri</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,000</div><div class="det">Halo +15%</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹6,500</div><div class="det">Reviews + Sponsored</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹3,500</div><div class="det">Retargeting D2</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,500</div><div class="det">Branded peaks Fri</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹2,000</div><div class="det">5 covers + bonus</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹1,000</div><div class="det">Direct</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>The take-away halo is now measurable.</b> Counter went from ₹2,549/day in April to a forecast ₹4,000 today — that 60% jump is people walking past, seeing a packed sit-down room, deciding to order takeout this week or this weekend. We do not pay for halo. We earned it through dine-in volume in W1–W2.</div>
+      </div>
+    </div>
+
+    <!-- DAY 17 -->
+    <div class="day weekend" data-d="2026-05-17">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 17</b>Sat · Day 17</div>
+          <div class="theme">Influencer #2 visit · Swiggy Ads peak</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹38,000</div>
+          <div class="v-day">target · weekend</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:41%"></span><span style="background:var(--counter);width:11%"></span><span style="background:var(--agg);width:19%"></span><span style="background:var(--meta);width:9%"></span><span style="background:var(--google);width:4%"></span><span style="background:var(--ez);width:7%"></span><span style="background:var(--infl);width:3%"></span><span style="background:var(--halo);width:6%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders:</b> 5 (Z3 + Sw2). Reviews on Zomato approaching 46. <span class="budg">₹2,000</span></li>
+          <li><b>Influencer #2 outlet visit (evening, 7pm) + content shoot.</b> Different angle from #1 — micro-influencer micro-creator authentic-discovery vibe. Content mix: stories + reel. <span class="budg">already paid</span></li>
+          <li><b>Swiggy Ads to ₹800/day</b> for weekend concentration. <span class="budg">+₹200</span></li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reviews 46. Next 2 self-orders (Sat eve + Sun morning) push to 50.</li>
+          <li>Sat peak demand × full ad stack × halo at 2-week maturity.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹15,500</div><div class="det">24 × ₹646 · weekend</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,200</div><div class="det">Sat halo peak</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹7,000</div><div class="det">Reviews + Sponsored peak</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹3,500</div><div class="det">Sat lift</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,500</div><div class="det">Branded · 5 calls</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹2,500</div><div class="det">6 covers + bonus</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #1</div><div class="val">₹1,000</div><div class="det">D8 residual</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹2,800</div><div class="det">Direct + Maps</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Saturday is the peak-of-peak day in W3. <b>Hitting ₹38K today validates the W4 ₹52K Sat target.</b> If we land below ₹32K, the W4 ramp needs to be revised down by ~15%. Influencer #2 visit happens in the busiest possible moment — that footage is the social proof for the W3+W4 reel.</div>
+      </div>
+    </div>
+
+    <!-- DAY 18 -->
+    <div class="day weekend" data-d="2026-05-18">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 18</b>Sun · Day 18</div>
+          <div class="theme">⚡ 50 REVIEWS · Influencer #2 reel publishes</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹34,000</div>
+          <div class="v-day">target · weekend</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:40%"></span><span style="background:var(--counter);width:12%"></span><span style="background:var(--agg);width:19%"></span><span style="background:var(--meta);width:10%"></span><span style="background:var(--google);width:4%"></span><span style="background:var(--ez);width:6%"></span><span style="background:var(--infl);width:3%"></span><span style="background:var(--halo);width:6%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Self-orders #48–50</b> on Zomato. <b>Reviews HIT 50 by EOD.</b> <span class="budg">₹1,200</span></li>
+          <li><b>Influencer #2 reel publishes evening (7pm).</b> Sunday publish for Mon–Tue compound (when most people scroll Insta during commute).</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li><b>Zomato algo unlocks default-sort visibility for "biryani Shivajinagar".</b> Listing now eligible for top 3 organic results. Visible impact: D+1 to D+3.</li>
+          <li>Influencer #2 reel D0 — minimal same-day impact. Tomorrow is the start.</li>
+          <li>Sunday demand × full stack × 50-review ceremonial moment.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹13,500</div><div class="det">21 × ₹643</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,000</div><div class="det">Sun halo</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹6,500</div><div class="det">50-rev day-of</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹3,500</div><div class="det">Stable</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,500</div><div class="det">Branded</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹2,000</div><div class="det">5 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #2</div><div class="val">₹800</div><div class="det">D0 publish · trickle</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹2,200</div><div class="det">Maps + direct</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>This is the biggest milestone day of May.</b> Two assets cross simultaneously: 50 reviews + Influencer #2 reel. Reviews 50 → permanent organic asset. Influencer #2 reel → 14-day rolling lift. Both compound through W4. Self-order program officially closes (we have other things to invest the budget in).</div>
+      </div>
+    </div>
+
+    <!-- DAY 19 -->
+    <div class="day" data-d="2026-05-19">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 19</b>Mon · Day 19</div>
+          <div class="theme">Reel #2 D1 peak · 50-rev compounding</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹26,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:38%"></span><span style="background:var(--counter);width:13%"></span><span style="background:var(--agg);width:23%"></span><span style="background:var(--meta);width:14%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:5%"></span><span style="background:var(--infl);width:2%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li>Self-orders STOPPED. Program closed.</li>
+          <li><b>Meta Ads to ₹2,000/day</b> + creative refresh (Influencer #2 reel as ad creative — we own usage rights). <span class="budg">+₹500</span></li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li><b>Influencer #2 reel D1 — peak engagement window.</b> Mon morning commute scrolls. Estimate reach 50K–120K. First reel-driven walk-ins arrive evening: 2–3.</li>
+          <li><b>50-review effect D1 visible:</b> Zomato listing impressions +30% over W2.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹10,000</div><div class="det">16 × ₹625</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹3,500</div><div class="det">Mon halo</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹6,000</div><div class="det">50-rev compound</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹3,500</div><div class="det">New creative · Mon</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,200</div><div class="det">Branded</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,200</div><div class="det">3 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #2</div><div class="val">₹600</div><div class="det">D1 first walk-ins</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Reel #2 publish on Sunday evening means Mon morning scroll is the first peak. We refresh Meta creative today using the influencer reel itself — best-performing creative format on Meta is UGC-style influencer footage, not branded ads. We owe the creator photo+video usage rights for 90 days (in the brief).</div>
+      </div>
+    </div>
+
+    <!-- DAY 20 -->
+    <div class="day" data-d="2026-05-20">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 20</b>Tue · Day 20</div>
+          <div class="theme">Zomato Ads to ₹2K · Influencer #3 outreach</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹28,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:38%"></span><span style="background:var(--counter);width:13%"></span><span style="background:var(--agg);width:25%"></span><span style="background:var(--meta);width:14%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:5%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Zomato Ads (Boost + Sponsored) to ₹2,000/day combined.</b> Tue dinner + Wed lunch focus. <span class="budg">+₹500</span></li>
+          <li><b>Influencer #3 outreach</b> — micro tier (30K–60K reach). Quick same-day reel deal, ₹5–8K cost. Target lock by May 21, visit May 22.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li><b>Reel #2 D2 — peak walk-in conversion window.</b> Estimated 4–5 walk-ins through evening.</li>
+          <li>50-rev compounding D2 — Zomato impressions +35% over W2 baseline.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹10,500</div><div class="det">16 × ₹656</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹3,500</div><div class="det">Tue halo</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹7,000</div><div class="det">Sponsored + 50-rev</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹4,000</div><div class="det">Influencer creative</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,500</div><div class="det">Branded + non-branded</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,500</div><div class="det">4 covers</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Influencer #3 is a micro-tier insurance bet — 30K reach for ₹5K is ~₹0.16/reach, the cheapest CPM in the funnel. Even if the reel converts at half the rate of #1 + #2, it pays for itself in ~3 walk-ins. Outreach today, visit Thu.</div>
+      </div>
+    </div>
+
+    <!-- DAY 21 -->
+    <div class="day" data-d="2026-05-21">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 21</b>Wed · Day 21</div>
+          <div class="theme">W3 close · Reel #2 D3 peak window</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹29,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:38%"></span><span style="background:var(--counter);width:14%"></span><span style="background:var(--agg);width:25%"></span><span style="background:var(--meta);width:14%"></span><span style="background:var(--google);width:6%"></span><span style="background:var(--ez);width:5%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li>Hold spend. Influencer #3 visit confirmed for May 22.</li>
+          <li>"Thank you" cross-tag content from Influencer #1 — free creative time, no spend.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li><b>Reel #2 D3 — peak walk-in window.</b> 5–7 walk-ins through evening.</li>
+          <li>Halo at 3-week maturity. Counter +20% over April.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹11,000</div><div class="det">17 × ₹647</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,000</div><div class="det">Wed halo</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹7,500</div><div class="det">50-rev + Sponsored</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹4,000</div><div class="det">Stable</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,600</div><div class="det">Both + retargeting</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,500</div><div class="det">4 covers</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>W3 closes at ₹2.09L (+32% over W2).</b> Daily run-rate exits at ₹29.9K. Reviews 50. Two reels published, third in pipeline. The compound effects (50-rev + halo + influencer) are now the dominant lift drivers, not paid spend. Going into W4, we add one more creator and let everything peak.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEEK 4 -->
+  <div class="wk">
+    <div class="wk-hdr">
+      <span class="wk-num">Week 4</span>
+      <h3>Full stack peak · May 22–28</h3>
+      <div class="wk-meta">
+        <span><b>₹2.75 L</b> total</span>
+        <span><b>₹39.3K</b> end-W4 daily</span>
+        <span>Ad spend: <b>₹38.0K</b></span>
+        <span>Sat May 24: <b>₹52K</b> peak</span>
+      </div>
+    </div>
+    <div class="wk-theme">Three influencers compounding. 50-review effect mature. Halo at maximum. <b>Sat May 24 is the peak day of May — ₹52K target.</b> Validates W4 daily avg ₹39K and the ₹52K exit run-rate.</div>
+
+    <!-- DAY 22 -->
+    <div class="day" data-d="2026-05-22">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 22</b>Thu · Day 22</div>
+          <div class="theme">Influencer #3 visit + same-day reel</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹33,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:38%"></span><span style="background:var(--counter);width:13%"></span><span style="background:var(--agg);width:23%"></span><span style="background:var(--meta);width:14%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:5%"></span><span style="background:var(--infl);width:2%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Influencer #3 visit + content shoot</b> (afternoon) → <b>same-day reel publish (evening 7pm)</b>. Micro-tier deal: quick turn, lower cost. <span class="budg">₹6K</span></li>
+          <li><b>Meta Ads to ₹2,500/day</b> with Influencer #2 reel as primary creative + new audiences. <span class="budg">+₹500</span></li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reel #2 D4 — long tail. Reel #1 D14 — fully decayed. Reviews 52.</li>
+          <li>Halo at peak: counter consistently 60%+ above April baseline.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹12,500</div><div class="det">19 × ₹658</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,500</div><div class="det">Halo peak</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹7,500</div><div class="det">Mature compound</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹4,500</div><div class="det">Influencer creative</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,800</div><div class="det">Both ad groups</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,800</div><div class="det">4 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #2+3</div><div class="val">₹400</div><div class="det">D4 + D0</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Influencer #3 same-day publish accelerates the timeline — instead of D+9 publish (#1), this drops in &lt;6h. Lower production quality offset by higher freshness. The micro-tier creator's audience is more locality-concentrated than #1 or #2.</div>
+      </div>
+    </div>
+
+    <!-- DAY 23 -->
+    <div class="day" data-d="2026-05-23">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 23</b>Fri · Day 23</div>
+          <div class="theme">Three reels active · Zomato peak spend</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹40,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:38%"></span><span style="background:var(--counter);width:13%"></span><span style="background:var(--agg);width:24%"></span><span style="background:var(--meta);width:14%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:6%"></span><span style="background:var(--infl);width:0%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Zomato Ads to ₹2,500/day combined.</b> Friday-Sunday peak window. <span class="budg">+₹500</span></li>
+          <li><b>Google Ads to ₹1,000/day + retargeting.</b> <span class="budg">+₹200</span></li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reel #3 D1 peak. Reel #2 D5. Reel #1 fully decayed.</li>
+          <li>Friday + halo + 50-rev + retargeting all stack.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹15,000</div><div class="det">23 × ₹652 · Fri</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹5,000</div><div class="det">Halo Fri</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹9,500</div><div class="det">Peak Sponsored + 50-rev</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹5,500</div><div class="det">Fri + retargeting</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹2,000</div><div class="det">Branded peaks</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹2,500</div><div class="det">6 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer rolling</div><div class="val">₹500</div><div class="det">#2 + #3 active</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Friday at peak ad stack is the proof for Sat. If Friday holds ₹40K, Sat comfortably hits ₹50K+ (structurally Sat is 30%+ above Fri).</div>
+      </div>
+    </div>
+
+    <!-- DAY 24 -->
+    <div class="day weekend" data-d="2026-05-24">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 24</b>Sat · Day 24</div>
+          <div class="theme">⚡ MAY PEAK · ₹52K target</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹52,000</div>
+          <div class="v-day">target · weekend</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:42%"></span><span style="background:var(--counter);width:8%"></span><span style="background:var(--agg);width:20%"></span><span style="background:var(--meta);width:11%"></span><span style="background:var(--google);width:4%"></span><span style="background:var(--ez);width:6%"></span><span style="background:var(--infl);width:5%"></span><span style="background:var(--halo);width:4%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li><b>Maximum push.</b> All ads at peak: Meta ₹2,500, Google ₹1,000, Zomato Ads ₹2,500, Swiggy Ads ₹800, EazyDiner Spotlight + cover bonus.</li>
+          <li>GF table ambience curated — best plating, music, captain attention.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>All three reels in active circulation. Reel #3 D2 peak. Reel #2 D6 strong. 50-review effect at full strength.</li>
+          <li>Halo at peak — neighborhood "everyone's at HE on Saturday" effect.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹22,000</div><div class="det">33 × ₹667 · GF full</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,000</div><div class="det">Halo Sat</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹10,500</div><div class="det">Peak orders</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹5,500</div><div class="det">Sat lift</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹2,000</div><div class="det">Sat branded</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹3,000</div><div class="det">7 covers + bonus</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer rolling</div><div class="val">₹2,800</div><div class="det">#2 + #3 active</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹2,200</div><div class="det">Direct + Maps + word</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>This is the day everything pays for itself.</b> If Sat May 24 hits ₹52K, the May plan landed inside its expected envelope. Anything below ₹45K means W3 didn't compound as expected and W5 needs a course correction. Anything above ₹58K means we've outperformed and can authorize ₹2L incremental spend in June.</div>
+      </div>
+    </div>
+
+    <!-- DAY 25 -->
+    <div class="day weekend" data-d="2026-05-25">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 25</b>Sun · Day 25</div>
+          <div class="theme">Sun peak · Reel #3 D3</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹46,000</div>
+          <div class="v-day">target · weekend</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:41%"></span><span style="background:var(--counter);width:9%"></span><span style="background:var(--agg);width:22%"></span><span style="background:var(--meta);width:12%"></span><span style="background:var(--google);width:4%"></span><span style="background:var(--ez);width:5%"></span><span style="background:var(--infl);width:4%"></span><span style="background:var(--halo);width:3%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li>Hold all spend.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reel #3 D3 peak window. Reel #2 D7 sustained.</li>
+          <li>Sun + full stack + halo at peak.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹19,000</div><div class="det">29 × ₹655</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,000</div><div class="det">Sun halo</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹10,000</div><div class="det">Sun peak</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹5,500</div><div class="det">Sun lift</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹2,000</div><div class="det">Branded</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹2,500</div><div class="det">6 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer rolling</div><div class="val">₹2,000</div><div class="det">#2 + #3 active</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹1,000</div><div class="det">Direct</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Sunday is the second-best day of May. We hold spend (no scaling above Sat) — the math says Sat&gt;Sun, ad stack should be the same.</div>
+      </div>
+    </div>
+
+    <!-- DAY 26 -->
+    <div class="day" data-d="2026-05-26">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 26</b>Mon · Day 26</div>
+          <div class="theme">Mon · ad rotation</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹32,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:41%"></span><span style="background:var(--counter);width:14%"></span><span style="background:var(--agg);width:24%"></span><span style="background:var(--meta);width:14%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:5%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li>Hold spend. Rotate creative — replace lowest-CTR ad with new audience cluster.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reel #3 D4 strong. Reel #2 D8 decay. Halo + 50-rev compound.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹13,000</div><div class="det">20 × ₹650</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,500</div><div class="det">Mon halo</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹7,500</div><div class="det">Steady</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹4,500</div><div class="det">Mon dip</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,500</div><div class="det">Branded</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,000</div><div class="det">2 covers</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Mon test: does Mon hold above ₹30K with full stack? If yes, run-rate is healthy. If it slips below ₹26K, something in the funnel needs attention before W5.</div>
+      </div>
+    </div>
+
+    <!-- DAY 27 -->
+    <div class="day" data-d="2026-05-27">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 27</b>Tue · Day 27</div>
+          <div class="theme">Steady-state Tue</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹35,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:40%"></span><span style="background:var(--counter);width:13%"></span><span style="background:var(--agg);width:25%"></span><span style="background:var(--meta);width:13%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:5%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li>Hold.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reel #3 D5. Reviews ~54. Algo at mature steady-state.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹14,000</div><div class="det">21 × ₹667</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,500</div><div class="det">Halo</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹8,500</div><div class="det">Mature compound</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹4,500</div><div class="det">Stable</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,800</div><div class="det">Both</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹1,700</div><div class="det">4 covers</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box">Tuesday is the second-best weekday after Friday. Mature stack performs.</div>
+      </div>
+    </div>
+
+    <!-- DAY 28 -->
+    <div class="day" data-d="2026-05-28">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 28</b>Wed · Day 28</div>
+          <div class="theme">W4 close · plan W5 hold-strategy</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹37,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:38%"></span><span style="background:var(--counter);width:12%"></span><span style="background:var(--agg);width:25%"></span><span style="background:var(--meta);width:14%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:5%"></span><span style="background:var(--infl);width:1%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list">
+          <li>Plan W5 — what to hold, what to scale, what to retire.</li>
+        </ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing">
+          <li>Reel #3 D6 strong. Halo + 50-rev fully mature.</li>
+        </ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹14,000</div><div class="det">21 × ₹667</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,500</div><div class="det">Halo</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹9,500</div><div class="det">Mature</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹5,000</div><div class="det">Stable</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹1,800</div><div class="det">Both</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹2,000</div><div class="det">5 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #3</div><div class="val">₹200</div><div class="det">D6 still active</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>W4 closes at ₹2.75L (+31% over W3).</b> Daily exit run-rate ₹39.3K. The full stack is now firing. Final 3 days are about holding the peak, not scaling further.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAIL -->
+  <div class="wk">
+    <div class="wk-hdr">
+      <span class="wk-num">Tail</span>
+      <h3>Hold the peak · May 29–31</h3>
+      <div class="wk-meta">
+        <span><b>₹1.35 L</b> total</span>
+        <span><b>₹45K</b> daily</span>
+        <span>Sat May 31: <b>₹52K</b></span>
+      </div>
+    </div>
+    <div class="wk-theme">No new activations. Hold peak ad spend. Let the compound finish the month. <b>This is also the W4-mix that becomes the June starting baseline.</b></div>
+
+    <!-- DAY 29 -->
+    <div class="day" data-d="2026-05-29">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 29</b>Thu · Day 29</div>
+          <div class="theme">Hold</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹38,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:40%"></span><span style="background:var(--counter);width:12%"></span><span style="background:var(--agg);width:24%"></span><span style="background:var(--meta);width:14%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:5%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list"><li>Hold all spend at W4 peak.</li></ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing"><li>Reel #3 D7 decline begins. Halo + 50-rev mature. Steady mix.</li></ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹15,000</div><div class="det">23 × ₹652</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,500</div><div class="det">Halo</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹9,000</div><div class="det">Mature</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹5,500</div><div class="det">Stable</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹2,000</div><div class="det">Both</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹2,000</div><div class="det">5 covers</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DAY 30 -->
+    <div class="day" data-d="2026-05-30">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 30</b>Fri · Day 30</div>
+          <div class="theme">Last full Friday</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹45,000</div>
+          <div class="v-day">target</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:38%"></span><span style="background:var(--counter);width:12%"></span><span style="background:var(--agg);width:24%"></span><span style="background:var(--meta);width:13%"></span><span style="background:var(--google);width:5%"></span><span style="background:var(--ez);width:6%"></span><span style="background:var(--infl);width:2%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list"><li>Hold. Plan June campaign on packaging-launch.</li></ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing"><li>Friday + full stack + halo + 50-rev. Reel #3 D8.</li></ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹17,000</div><div class="det">26 × ₹654 · Fri</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹5,500</div><div class="det">Fri halo</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹10,500</div><div class="det">Fri peak</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹6,000</div><div class="det">Fri</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹2,200</div><div class="det">Branded peak</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹2,800</div><div class="det">7 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer #3</div><div class="val">₹1,000</div><div class="det">D8 residual</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DAY 31 -->
+    <div class="day weekend" data-d="2026-05-31">
+      <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="day-l">
+          <div class="date"><b>May 31</b>Sat · Day 31</div>
+          <div class="theme">Closing day · ₹52K · matches May 24 peak</div>
+        </div>
+        <div class="day-r">
+          <div class="targ">₹52,000</div>
+          <div class="v-day">target · weekend · close</div>
+        </div>
+      </div>
+      <div class="day-bar"><span style="background:var(--captain);width:40%"></span><span style="background:var(--counter);width:9%"></span><span style="background:var(--agg);width:21%"></span><span style="background:var(--meta);width:11%"></span><span style="background:var(--google);width:4%"></span><span style="background:var(--ez);width:6%"></span><span style="background:var(--infl);width:5%"></span><span style="background:var(--halo);width:4%"></span></div>
+      <div class="day-body">
+        <h5 class="applied">Applied today</h5>
+        <ul class="act-list"><li>Final Sat. Hold all spend. End-of-month review prep.</li></ul>
+        <h5 class="showing">Showing today</h5>
+        <ul class="act-list showing"><li>All effects mature. Sat peak demand. Halo at maximum.</li></ul>
+        <h5>Channel breakdown</h5>
+        <div class="chan-grid">
+          <div class="chan-cell captain"><div class="lbl">Captain</div><div class="val">₹21,000</div><div class="det">32 × ₹656</div></div>
+          <div class="chan-cell counter"><div class="lbl">Counter</div><div class="val">₹4,500</div><div class="det">Halo Sat</div></div>
+          <div class="chan-cell agg"><div class="lbl">Aggregator</div><div class="val">₹11,000</div><div class="det">Sat peak</div></div>
+          <div class="chan-cell meta"><div class="lbl">Meta</div><div class="val">₹5,500</div><div class="det">Sat</div></div>
+          <div class="chan-cell google"><div class="lbl">Google</div><div class="val">₹2,000</div><div class="det">Sat branded</div></div>
+          <div class="chan-cell ez"><div class="lbl">EazyDiner</div><div class="val">₹3,000</div><div class="det">7 covers</div></div>
+          <div class="chan-cell infl"><div class="lbl">Influencer rolling</div><div class="val">₹2,500</div><div class="det">#3 D9 residual</div></div>
+          <div class="chan-cell halo"><div class="lbl">Halo</div><div class="val">₹2,500</div><div class="det">Direct + Maps</div></div>
+        </div>
+        <h5 class="note">Strategy note</h5>
+        <div class="note-box"><b>Closing the month at the same level as the W4 peak.</b> May exit run-rate ₹52K/day. June starting line is therefore not ₹10K/day — it's ₹40–45K/day baseline. Packaging upgrade in June, layered on top of this exit, is the bridge to ₹15L (June) and ₹18L (July).</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHANNEL PLAYBOOK -->
+<section class="sec" id="channels">
+  <h2 class="sec-t">Channel playbook</h2>
+  <p class="sec-d">Each channel: when activated, role in the May arc, how spend ramps, expected return.</p>
+
+  <div class="tool captain">
+    <h4>Captain dine-in <span class="lbl-pill">hero</span></h4>
+    <p class="desc">The hero of May. Ground floor opens May 1, captain channel scales from 8 orders/day (April) to 33 orders/day (Sat May 24 peak). Counter walk-bys convert to ₹600+ sit-down tickets. Service team is SK Muntaz + Faizan + Hardev.</p>
+    <div class="tool-grid">
+      <div class="tg"><div class="lbl">Activation</div><div class="val">May 1 · GF opens</div></div>
+      <div class="tg"><div class="lbl">Orders/day end-May</div><div class="val">25–33 (weekday/weekend)</div></div>
+      <div class="tg"><div class="lbl">Target AOV</div><div class="val">₹650</div></div>
+      <div class="tg"><div class="lbl">Spend</div><div class="val">₹0 marketing</div></div>
+      <div class="tg"><div class="lbl">Risk</div><div class="val">Service capacity at peak</div></div>
+    </div>
+  </div>
+
+  <div class="tool review">
+    <h4>Self-order review program <span class="lbl-pill">infrastructure</span></h4>
+    <p class="desc">17-day program (May 1–17) to push Zomato reviews from ~8 to 50, unlocking default-sort visibility for "biryani Shivajinagar" queries. Each order is real food to a real ambassador home — no faking. Ambassador roster: 4–5 people with separate phones, accounts, addresses, payment methods.</p>
+    <div class="tool-grid">
+      <div class="tg"><div class="lbl">Activation</div><div class="val">May 1</div></div>
+      <div class="tg"><div class="lbl">Pace</div><div class="val">3 Zomato + 2 Swiggy / day</div></div>
+      <div class="tg"><div class="lbl">Reviews target</div><div class="val">50 Zomato by May 17</div></div>
+      <div class="tg"><div class="lbl">Net cost</div><div class="val">~₹12K (food eaten)</div></div>
+      <div class="tg"><div class="lbl">Output</div><div class="val">Permanent algo asset</div></div>
+    </div>
+  </div>
+
+  <div class="tool agg">
+    <h4>Aggregator (Zomato + Swiggy organic + ads) <span class="lbl-pill">delivery</span></h4>
+    <p class="desc">Catalog rewrite Day 1 (photos, descriptions, hero items). Boost activates Day 3 (Sat). Sponsored adds Day 7. Combined Zomato spend ramps ₹400→₹2,500/day across May. Swiggy ₹400→₹800/day.</p>
+    <div class="tool-grid">
+      <div class="tg"><div class="lbl">Activation</div><div class="val">May 3 (ads) · May 1 (catalog)</div></div>
+      <div class="tg"><div class="lbl">Spend ramp</div><div class="val">₹0 → ₹3,300/day</div></div>
+      <div class="tg"><div class="lbl">Total May spend</div><div class="val">~₹35K</div></div>
+      <div class="tg"><div class="lbl">Expected ROAS</div><div class="val">3–4×</div></div>
+      <div class="tg"><div class="lbl">Compounder</div><div class="val">50 reviews · halo</div></div>
+    </div>
+  </div>
+
+  <div class="tool ez">
+    <h4>EazyDiner + Zomato Dining + District + Dineout <span class="lbl-pill">dine-in platform</span></h4>
+    <p class="desc">EazyDiner contract was signed Mar 28, never activated — Day 1 of May goes live. Spotlight upgrade Day 8 (₹500/wk). Zomato Dining 15% lunch offer Day 2 (free). District + Dineout listings activate Day 10 (free). Drives reservations, not delivery — feeds captain channel.</p>
+    <div class="tool-grid">
+      <div class="tg"><div class="lbl">Activation</div><div class="val">May 1 (EZ) → May 10 (full)</div></div>
+      <div class="tg"><div class="lbl">EZ spotlight</div><div class="val">₹500/wk × 4 = ₹2K</div></div>
+      <div class="tg"><div class="lbl">Zomato Dining</div><div class="val">15% lunch + cover bonus weekends</div></div>
+      <div class="tg"><div class="lbl">Covers/day end-May</div><div class="val">5–7</div></div>
+      <div class="tg"><div class="lbl">Expected revenue</div><div class="val">~₹50K total</div></div>
+    </div>
+  </div>
+
+  <div class="tool meta">
+    <h4>Meta Ads <span class="lbl-pill">demand gen</span></h4>
+    <p class="desc">Destinations: Zomato listing + Call extension + Maps walk-in. Built May 5, live May 6 at ₹500/day learning. Scales over 18 days from ₹500 → ₹2,500/day. Retargeting layer Day 15 once warm pool reaches 200 visitors. Influencer #2 reel becomes primary creative Day 19.</p>
+    <div class="tool-grid">
+      <div class="tg"><div class="lbl">Activation</div><div class="val">May 6</div></div>
+      <div class="tg"><div class="lbl">Spend ramp</div><div class="val">₹500 → ₹2,500/day</div></div>
+      <div class="tg"><div class="lbl">Total May spend</div><div class="val">~₹54K</div></div>
+      <div class="tg"><div class="lbl">Audience</div><div class="val">25–34 M Shivajinagar 3km</div></div>
+      <div class="tg"><div class="lbl">Expected ROAS</div><div class="val">2.5–3.5×</div></div>
+    </div>
+  </div>
+
+  <div class="tool google">
+    <h4>Google Ads <span class="lbl-pill">search intent</span></h4>
+    <p class="desc">Rebuilt May 2, live May 6. Branded only first 5 days (QS recovery from old paused campaign at QS 1). Non-branded "biryani Shivajinagar" + "Dakhni biryani" enabled May 12. Bid raised from ₹15 to ₹40+ to win top-of-page. Destinations: Call + Zomato + Maps.</p>
+    <div class="tool-grid">
+      <div class="tg"><div class="lbl">Activation</div><div class="val">May 6 (branded), May 12 (non-branded)</div></div>
+      <div class="tg"><div class="lbl">Spend ramp</div><div class="val">₹400 → ₹1,000/day</div></div>
+      <div class="tg"><div class="lbl">Total May spend</div><div class="val">~₹24K</div></div>
+      <div class="tg"><div class="lbl">Top keyword</div><div class="val">Hamza Express (branded)</div></div>
+      <div class="tg"><div class="lbl">Expected ROAS</div><div class="val">2.5–3×</div></div>
+    </div>
+  </div>
+
+  <div class="tool infl">
+    <h4>Influencer (3 drops) <span class="lbl-pill">heritage</span></h4>
+    <p class="desc">Three creators staggered: <b>#1 mid-tier</b> (May 8 visit, May 9 reel, ₹20K) — heritage reel; <b>#2 micro-foodie</b> (May 17 visit, May 18 reel, ₹15K) — discovery vibe; <b>#3 micro</b> (May 22 visit, same-day reel, ₹6K) — locality-concentrated. Brief: 1918 + four generations + Dakhni vs Andhra-belt.</p>
+    <div class="tool-grid">
+      <div class="tg"><div class="lbl">Outreach starts</div><div class="val">May 1</div></div>
+      <div class="tg"><div class="lbl">Total drops</div><div class="val">3 (mid + micro + micro)</div></div>
+      <div class="tg"><div class="lbl">Total cost</div><div class="val">₹41K</div></div>
+      <div class="tg"><div class="lbl">Walk-in conv</div><div class="val">0.04–0.08% of reach</div></div>
+      <div class="tg"><div class="lbl">Compound through</div><div class="val">14d post-publish</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- BUDGET -->
+<section class="sec" id="budget">
+  <h2 class="sec-t">Budget · the full ₹1.20 L</h2>
+  <p class="sec-d">All HE-controlled May spend. Aggregator commission costs (Zomato 23%, Swiggy 24.6%, EazyDiner 5%+₹30/cover) are revenue-deducted, not spend-line.</p>
+
+  <table class="bt">
+    <thead>
+      <tr>
+        <th>Channel</th>
+        <th>Activation</th>
+        <th>Daily peak</th>
+        <th>Active days</th>
+        <th class="r">Total spend</th>
+        <th class="r">Expected revenue</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Self-order reviews</b></td>
+        <td>May 1–18</td>
+        <td>₹2,000/day</td>
+        <td>17</td>
+        <td class="r">₹12,000</td>
+        <td class="r">— (asset)</td>
+      </tr>
+      <tr>
+        <td><b>Zomato Boost + Sponsored</b></td>
+        <td>May 3</td>
+        <td>₹2,500/day</td>
+        <td>29</td>
+        <td class="r">₹28,000</td>
+        <td class="r">₹95,000</td>
+      </tr>
+      <tr>
+        <td><b>Swiggy Ads</b></td>
+        <td>May 4</td>
+        <td>₹800/day</td>
+        <td>28</td>
+        <td class="r">₹14,000</td>
+        <td class="r">₹40,000</td>
+      </tr>
+      <tr>
+        <td><b>EazyDiner Spotlight</b></td>
+        <td>May 8</td>
+        <td>₹500/wk</td>
+        <td>4 wks</td>
+        <td class="r">₹2,000</td>
+        <td class="r">₹40,000</td>
+      </tr>
+      <tr>
+        <td><b>Meta Ads</b></td>
+        <td>May 6</td>
+        <td>₹2,500/day</td>
+        <td>26</td>
+        <td class="r">₹54,000</td>
+        <td class="r">₹1,55,000</td>
+      </tr>
+      <tr>
+        <td><b>Google Ads</b></td>
+        <td>May 6</td>
+        <td>₹1,000/day</td>
+        <td>26</td>
+        <td class="r">₹17,000</td>
+        <td class="r">₹46,000</td>
+      </tr>
+      <tr>
+        <td><b>Influencer #1 (mid-tier)</b></td>
+        <td>May 8 visit</td>
+        <td>—</td>
+        <td>1 drop</td>
+        <td class="r">₹20,000</td>
+        <td class="r">₹35,000</td>
+      </tr>
+      <tr>
+        <td><b>Influencer #2 (micro-foodie)</b></td>
+        <td>May 17 visit</td>
+        <td>—</td>
+        <td>1 drop</td>
+        <td class="r">₹15,000</td>
+        <td class="r">₹40,000</td>
+      </tr>
+      <tr>
+        <td><b>Influencer #3 (micro local)</b></td>
+        <td>May 22 visit</td>
+        <td>—</td>
+        <td>1 drop</td>
+        <td class="r">₹6,000</td>
+        <td class="r">₹18,000</td>
+      </tr>
+      <tr>
+        <td><b>Outdoor signage (phone push)</b></td>
+        <td>May 1</td>
+        <td>—</td>
+        <td>1×</td>
+        <td class="r">₹2,000</td>
+        <td class="r">₹15,000</td>
+      </tr>
+      <tr>
+        <td><b>TOTAL</b></td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td class="r"><b>₹1,70,000</b></td>
+        <td class="r"><b>₹4,84,000</b></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="ins gn">
+    <h5>Where the rest of the ₹8.94 L comes from</h5>
+    <p>Spend-driven revenue: ₹4.84 L. <b>Organic / asset-driven revenue: ₹4.10 L</b> — captain dine-in (no marketing cost), counter (no marketing cost), aggregator organic (50-review effect), halo, EazyDiner organic covers, direct/Maps walk-ins.</p>
+    <p>Spend-to-revenue ratio: 19%. Of every ₹1 of revenue, 19 paise is paid spend. Healthy for a QSR in growth mode.</p>
+  </div>
+
+  <div class="ins or">
+    <h5>What changes the ₹1.70 L total</h5>
+    <p><b>If Sat May 17 underperforms</b> (target ₹38K, lands &lt;₹32K): pause Influencer #3 (-₹6K), hold Meta at ₹1,500 instead of scaling to ₹2,500 (-₹15K). Total drops to ₹1.49 L. Revenue downside ~₹50K.</p>
+    <p><b>If Sat May 24 overperforms</b> (target ₹52K, lands &gt;₹58K): authorize June packaging-launch spend bump of ₹50K. May spend stays ₹1.70 L. June plan benefits.</p>
+  </div>
+</section>
+
+<!-- RISK -->
+<section class="sec" id="risk">
+  <h2 class="sec-t">Risk register</h2>
+  <p class="sec-d">What can break this plan, and what we do when it does.</p>
+
+  <div class="ins or">
+    <h5>R1 · GF slips past May 1</h5>
+    <p><b>Impact:</b> Captain channel target relies on GF day 1. Each day of slip costs ~₹4–6K of W1 + W2 ramp. <b>Mitigation:</b> already locked May 1 firm per owner. If contractor delays surface late-Apr, ad spend in W1 stays at zero (already the case) — no wasted spend.</p>
+  </div>
+
+  <div class="ins or">
+    <h5>R2 · Self-order ambassador roster falls short of 4 names</h5>
+    <p><b>Impact:</b> Cannot maintain 5 reviews/day pace. Reviews 50 hits May 22 instead of May 17 — pushes 50-rev unlock and Influencer #2 publish 5 days later, costs ~₹40K of W3 lift. <b>Mitigation:</b> minimum 3 ambassadors gets us to 50 reviews by May 22. If only 2, push timeline to May 26.</p>
+  </div>
+
+  <div class="ins bl">
+    <h5>R3 · Influencer #1 reel underperforms (&lt;30K reach)</h5>
+    <p><b>Impact:</b> W2 walk-in lift drops ~₹15–25K. <b>Mitigation:</b> reallocate ₹5K to Influencer #4 micro-tier in W3 to overlap with #2. Treat as creative-fit issue, not platform issue.</p>
+  </div>
+
+  <div class="ins bl">
+    <h5>R4 · Meta Ads stuck in learning (no exit by Day 8)</h5>
+    <p><b>Impact:</b> Can't scale ₹500 → ₹2,500. May spend on Meta drops to ₹25K, revenue contribution drops by ₹50–80K. <b>Mitigation:</b> rebuild ad set with broader audience; if still no exit by Day 12, redirect ₹2K/day budget to Zomato Sponsored which is converting reliably.</p>
+  </div>
+
+  <div class="ins or">
+    <h5>R5 · Captain absences during W3–W4 peak</h5>
+    <p><b>Impact:</b> Sit-down service capacity drops. Sat May 24 ₹52K target slips to ₹38–42K. <b>Mitigation:</b> cross-train a counter staff member as backup captain. Ensure SK Muntaz + Faizan + Hardev are scheduled across the May 23–25 weekend.</p>
+  </div>
+
+  <div class="ins pk">
+    <h5>R6 · Zomato/Swiggy flag self-order pattern</h5>
+    <p><b>Impact:</b> Reviews removed, listing demoted. <b>Mitigation:</b> strict ambassador-program protocol — different devices, different SIMs, different addresses, different payment methods, vary order content + ratings (mix of 4★ and 5★), max 3 Zomato + 2 Swiggy/day. Every order is a real delivery to a real recipient who eats the food.</p>
+  </div>
+
+  <div class="ins gn">
+    <h5>R7 · The plan overperforms</h5>
+    <p><b>Trigger:</b> Sat May 24 lands &gt;₹58K. <b>Action:</b> authorize ₹50K incremental spend in early June for packaging-launch campaign. Use the May 31 ₹52K exit run-rate as the new June starting baseline.</p>
+  </div>
+</section>
+
+<script>
+// Auto-highlight today's day card
+(function(){
+  const today = new Date().toISOString().slice(0,10);
+  document.querySelectorAll('.day').forEach(d => {
+    if (d.dataset.d === today) {
+      d.classList.add('today','open');
+      setTimeout(()=> d.scrollIntoView({behavior:'smooth',block:'center'}), 200);
+    }
+  });
+})();
+
+// Build the bar arc visualization
+(function(){
+  const targets = [14000,15500,22000,19000,13500,15500,16500, // W1
+                  20000,22500,29000,26000,19500,20500,21000, // W2
+                  24000,30000,38000,34000,26000,28000,29000, // W3
+                  33000,40000,52000,46000,32000,35000,37000, // W4
+                  38000,45000,52000]; // tail
+  const max = Math.max(...targets);
+  const dows = ['Thu','Fri','Sat','Sun','Mon','Tue','Wed'];
+  let dowI = 0;
+  const bar = document.getElementById('arcBar');
+  if(!bar) return;
+  targets.forEach((t,i) => {
+    const day = document.createElement('div');
+    day.className = 'arc-day';
+    const dow = new Date(2026,4,1+i).getDay();
+    if (dow === 0 || dow === 6) day.classList.add('weekend');
+    day.style.height = (t/max*100) + '%';
+    day.title = `May ${i+1}: ₹${(t/1000).toFixed(0)}K`;
+    bar.appendChild(day);
+  });
+})();
+
+// Sticky nav active state
+(function(){
+  const links = document.querySelectorAll('.nav a');
+  const sections = ['overview','strategy','roadmap','channels','budget','risk'].map(id => document.getElementById(id)).filter(Boolean);
+  function update() {
+    const y = window.scrollY + 100;
+    let active = sections[0];
+    for (const s of sections) {
+      if (s.offsetTop <= y) active = s;
+    }
+    links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#'+active.id));
+  }
+  window.addEventListener('scroll', update, {passive:true});
+  update();
+})();
+</script>
+</body>
+</html>
