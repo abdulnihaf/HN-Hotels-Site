@@ -128,6 +128,7 @@ export async function onRequest(context) {
     if (action === 'transfer'           && request.method === 'POST') return await transfer(request, env);
     if (action === 'deposit-to-bank'    && request.method === 'POST') return await depositToBank(request, env);
     if (action === 'external-capital-in'&& request.method === 'POST') return await externalCapitalIn(request, env);
+    if (action === 'reconcile'          && request.method === 'POST') return await reconcile(request, env);
     if (action === 'sync'               && request.method === 'POST') return await runSync(request, env);
     return json({ success: false, error: `Unknown action: ${action}` }, 400);
   } catch (e) {
@@ -137,34 +138,70 @@ export async function onRequest(context) {
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━ READ ENDPOINTS ━━━━━━━━━━━━━━━━━━━━━━━━
 
+// Balance computation uses the SAME anchor+delta pattern as
+// /api/bank-feed?action=summary uses for HDFC: find the latest event
+// per instrument carrying balance_paise_after (a reconcile snapshot),
+// then add the net of subsequent events whose txn_at > anchor.txn_at
+// (or same txn_at AND id > anchor.id). This makes the user's "today's
+// physical count at 14:30 IST" the authoritative pivot — pre-reconcile
+// rows stay visible in the trail but don't affect "current balance".
 async function balance(url, env) {
   const pin = url.searchParams.get('pin');
   const user = authedUser(pin);
   if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
 
-  const r = await env.DB.prepare(
-    `SELECT instrument,
-            SUM(CASE direction WHEN 'credit' THEN amount_paise ELSE -amount_paise END) AS balance_paise,
-            MAX(txn_at) AS last_event_at,
-            COUNT(*) AS event_count
-       FROM cash_events
-      WHERE instrument IN ('pos_counter_he','pos_counter_nch','cash_basheer','cash_nihaf')
-      GROUP BY instrument`
-  ).all().catch(() => ({ results: [] }));
-
   const seed = {
-    pos_counter_he:  { instrument: 'pos_counter_he',  balance_paise: 0, last_event_at: null, event_count: 0 },
-    pos_counter_nch: { instrument: 'pos_counter_nch', balance_paise: 0, last_event_at: null, event_count: 0 },
-    cash_basheer:    { instrument: 'cash_basheer',    balance_paise: 0, last_event_at: null, event_count: 0 },
-    cash_nihaf:      { instrument: 'cash_nihaf',      balance_paise: 0, last_event_at: null, event_count: 0 },
+    pos_counter_he:  { instrument: 'pos_counter_he',  balance_paise: 0, last_event_at: null, event_count: 0, anchor_at: null, anchor_paise: null },
+    pos_counter_nch: { instrument: 'pos_counter_nch', balance_paise: 0, last_event_at: null, event_count: 0, anchor_at: null, anchor_paise: null },
+    cash_basheer:    { instrument: 'cash_basheer',    balance_paise: 0, last_event_at: null, event_count: 0, anchor_at: null, anchor_paise: null },
+    cash_nihaf:      { instrument: 'cash_nihaf',      balance_paise: 0, last_event_at: null, event_count: 0, anchor_at: null, anchor_paise: null },
   };
-  for (const row of (r.results || [])) {
+
+  // Anchor + delta per pile.
+  const result = await env.DB.prepare(`
+    WITH anchor AS (
+      SELECT a.instrument, a.balance_paise_after AS bal_paise, a.txn_at AS anchor_at, a.id AS anchor_id
+        FROM cash_events a
+       WHERE a.balance_paise_after IS NOT NULL
+         AND a.id = (
+           SELECT b.id FROM cash_events b
+            WHERE b.instrument = a.instrument
+              AND b.balance_paise_after IS NOT NULL
+            ORDER BY b.txn_at DESC, b.id DESC LIMIT 1
+         )
+    )
+    SELECT i.instrument,
+           COALESCE(a.bal_paise, 0) + COALESCE((
+             SELECT SUM(CASE d.direction WHEN 'credit' THEN d.amount_paise ELSE -d.amount_paise END)
+               FROM cash_events d
+              WHERE d.instrument = i.instrument
+                AND d.balance_paise_after IS NULL
+                AND (
+                  a.anchor_at IS NULL
+                  OR d.txn_at > a.anchor_at
+                  OR (d.txn_at = a.anchor_at AND d.id > a.anchor_id)
+                )
+           ), 0) AS balance_paise,
+           a.anchor_at,
+           a.bal_paise AS anchor_paise,
+           (SELECT COUNT(*) FROM cash_events e WHERE e.instrument = i.instrument) AS event_count,
+           (SELECT MAX(txn_at) FROM cash_events e WHERE e.instrument = i.instrument) AS last_event_at
+      FROM (SELECT 'pos_counter_he' AS instrument
+              UNION SELECT 'pos_counter_nch'
+              UNION SELECT 'cash_basheer'
+              UNION SELECT 'cash_nihaf') i
+      LEFT JOIN anchor a ON a.instrument = i.instrument
+  `).all().catch(() => ({ results: [] }));
+
+  for (const row of (result.results || [])) {
     seed[row.instrument] = { ...row };
   }
+
   const balances = Object.values(seed).map((b) => ({
     ...b,
     label: instrumentLabel(b.instrument),
     balance_rupees: (b.balance_paise || 0) / 100,
+    anchor_rupees: b.anchor_paise != null ? b.anchor_paise / 100 : null,
   }));
   const total_paise = balances.reduce((s, b) => s + (b.balance_paise || 0), 0);
 
@@ -276,6 +313,83 @@ async function syncStatus(url, env) {
   if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
   const r = await env.DB.prepare(`SELECT * FROM cash_sync_state ORDER BY sync_source`).all();
   return json({ success: true, sources: r.results || [], user: user.name });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━ RECONCILE ━━━━━━━━━━━━━━━━━━━━━━━━
+//
+// Anchor a pile to a physical-count snapshot at a specific timestamp.
+// The event row carries balance_paise_after = the anchored amount.
+// All future balance reads compute as: anchored_amount + Σ(post-anchor events).
+// Pre-anchor events stay visible in the trail but no longer affect "current".
+//
+// Timestamp semantics:
+//   - txn_at REQUIRED. Owner-supplied wall-clock IST when count was taken.
+//   - Any event with txn_at <= anchor_txn_at is treated as already-counted.
+//   - Any event with txn_at >  anchor_txn_at decrements/increments live.
+//
+// Why an explicit reconcile event vs simply zeroing out: keeps the audit
+// trail intact (you can see what was inferred pre-reconcile vs anchored
+// vs post-anchor). Multiple reconciles over time are supported — the
+// most-recent one wins per pile.
+async function reconcile(request, env) {
+  const body = await request.json();
+  const { pin, instrument, balance_rupees, balance_paise, txn_at, notes } = body;
+  const user = authedUser(pin, TRANSFER_ROLES);
+  if (!user) return json({ success: false, error: 'Invalid PIN or insufficient role' }, 401);
+
+  if (!CASH_INSTRUMENTS.has(instrument)) {
+    return json({ success: false, error: `instrument must be one of pos_counter_he/nch, cash_basheer, cash_nihaf — got ${instrument}` }, 400);
+  }
+  // Timestamp is REQUIRED (owner emphasized this is the pivot).
+  if (!txn_at || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(txn_at)) {
+    return json({ success: false, error: 'txn_at required, ISO datetime e.g. 2026-04-29T14:30:00+05:30' }, 400);
+  }
+  // Accept either rupees or paise (rupees more natural for owner UI).
+  let bp = balance_paise;
+  if (bp == null && balance_rupees != null) bp = Math.round(parseFloat(balance_rupees) * 100);
+  if (!Number.isFinite(bp) || bp < 0) {
+    return json({ success: false, error: 'balance_rupees or balance_paise required, ≥ 0' }, 400);
+  }
+  const memo = String(notes || '').slice(0, 500) || `Reconcile snapshot ${instrument} = ₹${(bp/100).toFixed(2)} at ${txn_at}`;
+
+  // We write the anchor as a credit row carrying balance_paise_after.
+  // amount_paise is set to 0 because the row is a SNAPSHOT, not a flow —
+  // but CHECK requires amount_paise > 0. Workaround: write 1 paise credit
+  // with note explaining (or re-design CHECK). Cleanest: relax CHECK to
+  // amount_paise >= 0 for this row. Since CHECKs aren't ALTER-able in
+  // SQLite, we instead encode amount_paise = absolute(bp) and direction
+  // is 'credit' if it pushes the running balance toward bp, but with
+  // balance_paise_after set, the balance computation IGNORES amount_paise
+  // anyway (it uses balance_paise_after as the anchor base, then sums
+  // POST-anchor events only).
+  //
+  // To satisfy the >0 CHECK while keeping the math clean: amount_paise=1
+  // (token), direction='credit'. The anchor query reads balance_paise_after
+  // not amount_paise.
+  const txnAtNorm = txn_at; // keep the IST literal owner provided
+  const sourceRef = `reconcile:${instrument}:${Date.parse(txn_at)}`;
+  try {
+    await env.DB.prepare(
+      `INSERT INTO cash_events
+         (instrument, direction, amount_paise, source, source_ref,
+          txn_at, recorded_by_pin, recorded_by_name, balance_paise_after, notes)
+       VALUES (?, 'credit', 1, 'manual', ?, ?, ?, ?, ?, ?)`
+    ).bind(instrument, sourceRef, txnAtNorm, pin, user.name, bp, memo).run();
+  } catch (e) {
+    if (/UNIQUE/.test(e.message)) {
+      return json({ success: false, error: 'A reconcile event already exists for this exact timestamp. Adjust by 1 second or update the existing one.' }, 409);
+    }
+    return json({ success: false, error: e.message }, 500);
+  }
+  return json({
+    success: true,
+    instrument,
+    anchor_paise: bp,
+    anchor_rupees: bp / 100,
+    anchor_at: txnAtNorm,
+    recorded_by: user.name,
+    note: 'Future balance reads compute as anchor + sum(events with txn_at > anchor_at). Pre-anchor events remain in trail for audit.',
+  });
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━ WRITE ENDPOINTS ━━━━━━━━━━━━━━━━━━━━━━━━
