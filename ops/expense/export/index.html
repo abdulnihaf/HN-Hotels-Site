@@ -102,26 +102,50 @@ table.po-table td { padding:5px 8px; border:1px solid var(--border); font-size:1
 
 /* Print styles */
 @media print {
-  @page { size: A4 landscape; margin: 10mm 8mm; }
+  @page { size: A4 portrait; margin: 8mm 6mm; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  body { background:#fff !important; color:#000 !important; }
+  html, body { background:#fff !important; color:#000 !important; font-size:9pt; }
   #pin-screen, .filter-row, .print-btn, .legend, header, .no-print,
   .info-banner, .modal-overlay, .edit-btn { display:none !important; }
   #main-screen { display:block !important; padding:0 !important; }
-  .summary-bar { margin-bottom:8px; }
-  .stat-chip { border:1px solid #ccc; background:#f9f9f9 !important; padding:4px 10px;
-    border-radius:4px; font-size:10px; }
-  .stat-chip .n { font-size:13px; }
-  table.audit { font-size:8pt; }
-  table.audit th { background:#e5e7eb !important; color:#374151 !important; font-size:7pt; padding:3px 4px; }
-  table.audit td { padding:3px 4px; font-size:8pt; border:1px solid #d1d5db; }
+  .summary-bar { margin-bottom:6px; gap:5px; }
+  .stat-chip { border:1px solid #ccc; background:#f9f9f9 !important; padding:2px 6px;
+    border-radius:3px; font-size:8pt; }
+  .stat-chip .n { font-size:9pt; display:inline; margin-right:3px; }
+  /* Tighter table for portrait fit */
+  .audit-wrap { overflow:visible !important; }
+  table.audit { font-size:7pt; table-layout:fixed; width:100%; }
+  table.audit th { background:#e5e7eb !important; color:#111 !important; font-size:6pt;
+    padding:2px 3px; line-height:1.1; border:1px solid #9ca3af; }
+  table.audit td { padding:1.5px 3px; font-size:7pt; line-height:1.2; border:1px solid #d1d5db;
+    word-wrap:break-word; overflow-wrap:break-word; }
+  table.audit tr { page-break-inside:avoid; }
+  table.audit thead { display:table-header-group; }
   table.audit tr:nth-child(even) td { background:#f9fafb !important; }
-  td.qty-missing { background:rgba(245,158,11,0.15) !important; border:2px dashed #d97706 !important; color:#92400e !important; }
-  td.vendor-missing { background:rgba(239,68,68,0.10) !important; border:2px dashed #dc2626 !important; color:#991b1b !important; }
-  td.bill-missing { background:rgba(239,68,68,0.10) !important; border:2px dashed #dc2626 !important; color:#991b1b !important; }
+  /* Column widths tuned for 14 cols on A4 portrait (~190mm usable) */
+  table.audit th:nth-child(1), table.audit td:nth-child(1) { width:3%; }   /* # */
+  table.audit th:nth-child(2), table.audit td:nth-child(2) { width:6%; }   /* Date */
+  table.audit th:nth-child(3), table.audit td:nth-child(3) { width:5%; }   /* Brand */
+  table.audit th:nth-child(4), table.audit td:nth-child(4) { width:7%; }   /* Payment */
+  table.audit th:nth-child(5), table.audit td:nth-child(5) { width:11%; }  /* Vendor */
+  table.audit th:nth-child(6), table.audit td:nth-child(6) { width:14%; }  /* Product */
+  table.audit th:nth-child(7), table.audit td:nth-child(7) { width:5%; }   /* UOM */
+  table.audit th:nth-child(8), table.audit td:nth-child(8) { width:7%; }   /* Qty */
+  table.audit th:nth-child(9), table.audit td:nth-child(9) { width:8%; }   /* Amount */
+  table.audit th:nth-child(10), table.audit td:nth-child(10) { width:5%; } /* Bills */
+  table.audit th:nth-child(11), table.audit td:nth-child(11) { width:5%; } /* Bank */
+  table.audit th:nth-child(12), table.audit td:nth-child(12) { width:6%; } /* By */
+  table.audit th:nth-child(13), table.audit td:nth-child(13) { width:9%; } /* Cat */
+  table.audit th:nth-child(14), table.audit td:nth-child(14) { width:9%; white-space:normal; } /* Notes */
+  td.qty-missing { background:rgba(245,158,11,0.15) !important; border:1.5px dashed #d97706 !important; color:#92400e !important; }
+  td.vendor-missing { background:rgba(239,68,68,0.10) !important; border:1.5px dashed #dc2626 !important; color:#991b1b !important; }
+  td.bill-missing { background:rgba(239,68,68,0.10) !important; border:1.5px dashed #dc2626 !important; color:#991b1b !important; }
   td.hdfc-warn { background:rgba(245,158,11,0.12) !important; }
-  .total-row td { background:#e5e7eb !important; border-top:2px solid #374151 !important; }
+  .total-row td { background:#e5e7eb !important; border-top:1.5px solid #374151 !important; }
   .print-header { display:block !important; }
+  .section-title { font-size:9pt; margin:10px 0 4px; padding-top:6px; }
+  table.po-table { font-size:7pt; }
+  table.po-table th, table.po-table td { padding:2px 3px; font-size:7pt; }
 }
 .print-header { display:none; margin-bottom:10px; }
 .print-header h2 { font-size:13pt; margin:0 0 2px; }
