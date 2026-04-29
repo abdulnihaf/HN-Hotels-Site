@@ -93,6 +93,8 @@ tr.validated td { opacity:0.55; }
 tr.validated td:nth-child(1)::after { content:" ✓"; color:var(--accent); font-weight:700; opacity:1; }
 tr.is-refill td { background:rgba(59,130,246,0.06) !important; }
 tr.is-refill td:nth-child(6)::after { content:" 🏦→💵 transfer, not expense"; color:#60a5fa; font-size:10px; margin-left:6px; }
+tr.is-po-settled td { background:rgba(52,211,153,0.06) !important; }
+tr.is-po-settled td:nth-child(6)::after { content:" 📄→💵 PO settled at counter"; color:#34d399; font-size:10px; margin-left:6px; }
 
 /* Edit modal */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100;
@@ -252,6 +254,19 @@ table.po-table td { padding:5px 8px; border:1px solid var(--border); font-size:1
   <div class="print-btn no-print" id="action-bar" style="display:none;">
     <button class="btn btn-primary" onclick="window.print()">🖨 Print / PDF</button>
     <button class="btn btn-ghost btn-sm" onclick="downloadCsv()">↓ CSV</button>
+    <button class="btn btn-ghost btn-sm" onclick="autoFlagRefills()" title="Auto-detect HDFC entries that funded petty cash">🏦→💵 Auto-flag refills</button>
+    <button class="btn btn-ghost btn-sm" id="dup-analyze-btn" onclick="runDupAnalyze()" title="Classify each DUP suspect as PO-settled / hard-dup / ambiguous">🤖 Analyze dups</button>
+    <button class="btn btn-sm" id="dup-apply-btn" onclick="runDupResolve()" style="display:none; background:#f59e0b; color:#000;">✓ Apply resolution</button>
+  </div>
+
+  <!-- Dup analysis report (preview before apply) -->
+  <div id="dup-report" class="no-print" style="display:none; background:rgba(99,102,241,0.06); border:1px solid rgba(99,102,241,0.3); border-radius:10px; padding:14px 16px; margin-bottom:14px;"></div>
+
+  <!-- Manual review section for AMBIGUOUS rows -->
+  <div id="dup-review-panel" class="no-print" style="display:none; margin-bottom:18px;">
+    <h3 style="font-size:14px; margin:0 0 10px;">🔍 Ambiguous duplicates — manual review</h3>
+    <div class="sub" style="font-size:12px; margin-bottom:10px;">Each card shows the expense + the cash_events / PO context. Choose how to resolve.</div>
+    <div id="dup-review-list"></div>
   </div>
 
   <!-- Expense Table -->
@@ -389,6 +404,7 @@ function entryMatchesFilter(e) {
     case 'validated':       return !!e.validated_at;
     case 'unvalidated':     return !e.validated_at;
     case 'refill':          return !!e.is_petty_refill;
+    case 'po_settled':      return !!e.is_po_settled;
     default:                return true;
   }
 }
@@ -474,6 +490,7 @@ async function loadExport() {
       `<div class="stat-chip ok ${_filter==='all'?'active':''}" data-filter="all" onclick="setFilter('all')"><span class="n">${s.total_rows || _entries.length}</span>Total entries</div>`,
       `<div class="stat-chip disabled"><span class="n">₹${fmtAmt(r.total)}</span>Net spend (refills excluded)</div>`,
       s.refill_count ? `<div class="stat-chip ${_filter==='refill'?'active':''}" data-filter="refill" onclick="setFilter('refill')" style="border-color:rgba(59,130,246,0.4);"><span class="n" style="color:#60a5fa;">${s.refill_count} · ₹${fmtAmt(s.refill_total)}</span>Petty refills 🏦→💵</div>` : '',
+      s.po_settled_count ? `<div class="stat-chip ${_filter==='po_settled'?'active':''}" data-filter="po_settled" onclick="setFilter('po_settled')" style="border-color:rgba(52,211,153,0.4);"><span class="n" style="color:#34d399;">${s.po_settled_count} · ₹${fmtAmt(s.po_settled_total)}</span>PO settled 📄→💵</div>` : '',
       `<div class="stat-chip ${validatePct===100?'ok':'warn'} ${_filter==='unvalidated'?'active':''}" data-filter="unvalidated" onclick="setFilter('unvalidated')"><span class="n">${validatedCount} / ${_entries.length}</span>Validated (${validatePct}%) — click for unvalidated</div>`,
       `<div class="stat-chip ${_filter==='rm'?'active':''}" data-filter="rm" onclick="setFilter('rm')"><span class="n">${s.rm_rows || 0}</span>RM items</div>`,
       s.qty_missing ? `<div class="stat-chip warn ${_filter==='qty_missing'?'active':''}" data-filter="qty_missing" onclick="setFilter('qty_missing')"><span class="n">${s.qty_missing}</span>Qty missing ✏</div>` : '',
@@ -519,8 +536,13 @@ function renderTable(entries) {
     return;
   }
 
-  // Footer total: when not viewing the refill subset, exclude refills from total
-  const sumFiltered = filtered.reduce((s, e) => s + (_filter === 'refill' ? (e.amount || 0) : (e.is_petty_refill ? 0 : (e.amount || 0))), 0);
+  // Footer total: when viewing refill or po_settled subsets, sum those.
+  // Otherwise exclude refills + PO-settled from total (they're not new expenses).
+  const sumFiltered = filtered.reduce((s, e) => {
+    if (_filter === 'refill' || _filter === 'po_settled') return s + (e.amount || 0);
+    if (e.is_petty_refill || e.is_po_settled) return s;
+    return s + (e.amount || 0);
+  }, 0);
   filtered.forEach((e, i) => {
     const brand = e.x_location || (e.company_id===2?'HE':e.company_id===3?'NCH':e.company_id===1?'HQ':'?');
     const brandCls = brand==='HE'?'brand-he':brand==='NCH'?'brand-nch':brand==='HQ'?'brand-hq':'';
@@ -597,9 +619,10 @@ function renderTable(entries) {
     }
 
     const rowCls = [
-      (e.v2_dup_count > 0 && !e.is_petty_refill) ? 'dup-suspect' : '',
+      (e.v2_dup_count > 0 && !e.is_petty_refill && !e.is_po_settled && !e.dup_resolution) ? 'dup-suspect' : '',
       e.validated_at ? 'validated' : '',
       e.is_petty_refill ? 'is-refill' : '',
+      e.is_po_settled ? 'is-po-settled' : '',
     ].filter(Boolean).join(' ');
     total += e.amount || 0;
 
@@ -842,6 +865,163 @@ document.getElementById('edit-modal').addEventListener('click', e => {
 document.getElementById('delete-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('delete-modal')) closeDelete();
 });
+
+// ── Dup intelligence ─────────────────────────────────────────
+// Two-step: (1) Analyze (preview, no mutation) → show counts + ambiguous list.
+// (2) Apply → server-side classify + mutate (auto-mark PO settled, hard-delete
+// confirmed dups, leave ambiguous for manual review).
+let _lastAnalyze = null;
+
+async function runDupAnalyze() {
+  const from = document.getElementById('f-from').value;
+  const to   = document.getElementById('f-to').value;
+  const btn  = document.getElementById('dup-analyze-btn');
+  btn.disabled = true; btn.textContent = '🤖 Analyzing…';
+  document.getElementById('dup-report').style.display = 'none';
+  document.getElementById('dup-review-panel').style.display = 'none';
+  document.getElementById('dup-apply-btn').style.display = 'none';
+
+  try {
+    const r = await fetch(`${API}?action=dup-analyze&pin=${PIN}&from=${from}&to=${to}`).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Analyze failed');
+    _lastAnalyze = r;
+    const { po_settled, hard_dup, ambiguous } = r.counts;
+    const total = po_settled + hard_dup + ambiguous;
+
+    document.getElementById('dup-report').innerHTML = `
+      <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
+        <div><strong>${total}</strong> dup suspects analyzed</div>
+        <div style="color:#34d399;">✓ <strong>${po_settled}</strong> auto: PO settled at counter</div>
+        <div style="color:#ef4444;">🗑 <strong>${hard_dup}</strong> auto: confirmed duplicate (will delete)</div>
+        <div style="color:#f59e0b;">? <strong>${ambiguous}</strong> ambiguous → manual review below</div>
+      </div>
+      <div style="font-size:12px; color:var(--text-dim); margin-top:8px;">
+        Click <strong>✓ Apply resolution</strong> to mark PO-settled rows + delete hard duplicates.
+        Ambiguous rows stay untouched until you choose below.
+      </div>`;
+    document.getElementById('dup-report').style.display = '';
+    if (po_settled + hard_dup > 0) document.getElementById('dup-apply-btn').style.display = '';
+
+    // Render ambiguous review list
+    if (r.ambiguous && r.ambiguous.length) renderDupReview(r.ambiguous);
+  } catch (e) {
+    document.getElementById('dup-report').innerHTML = `<span style="color:var(--danger);">${esc(e.message)}</span>`;
+    document.getElementById('dup-report').style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = '🤖 Analyze dups';
+  }
+}
+
+async function runDupResolve() {
+  if (!confirm(`Apply auto-resolution?\n\nThis will:\n• Mark ${_lastAnalyze.counts.po_settled} rows as PO-settled (excluded from spend totals)\n• HARD-DELETE ${_lastAnalyze.counts.hard_dup} confirmed duplicates from D1 + Odoo\n\nAmbiguous rows stay untouched. Continue?`)) return;
+  const from = document.getElementById('f-from').value;
+  const to   = document.getElementById('f-to').value;
+  const btn  = document.getElementById('dup-apply-btn');
+  btn.disabled = true; btn.textContent = 'Applying…';
+  try {
+    const r = await fetch(`${API}?action=dup-resolve&pin=${PIN}&from=${from}&to=${to}`, { method:'POST' })
+                  .then(x => x.json()).catch(_ => fetch(`${API}?action=dup-resolve&pin=${PIN}&from=${from}&to=${to}`).then(x => x.json()));
+    if (!r.success) throw new Error(r.error || 'Resolve failed');
+    alert(`Done: ${r.counts.po_settled} marked PO-settled · ${r.counts.hard_dup} deleted · ${r.counts.ambiguous} left for manual review`);
+    btn.style.display = 'none';
+    document.getElementById('dup-report').style.display = 'none';
+    loadExport();  // refresh table + chips
+  } catch (e) {
+    alert('Resolve failed: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ Apply resolution';
+  }
+}
+
+function renderDupReview(items) {
+  const list = document.getElementById('dup-review-list');
+  list.innerHTML = items.map(it => {
+    const ce = (it.ce_matches || [])[0];
+    const po = it.po_match;
+    return `<div class="dup-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:700; font-size:13px;">${esc(it.product || '—')} · ₹${fmtAmt(it.amount)} · ${esc(it.brand)}</div>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">
+            be#${it.expense_id} · ${esc(it.expense_date || '?')} · ${esc(it.payment_method)} ·
+            by ${esc(pinName(it.recorded_by))} · vendor: ${esc(it.vendor || '?')}
+          </div>
+        </div>
+        <div style="font-size:10px; color:#f59e0b; max-width:340px; text-align:right;">${esc(it.reason)}</div>
+      </div>
+      ${ce ? `<div style="margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:11px;">
+        <strong style="color:#60a5fa;">Cash event ce#${ce.id}</strong> · ${esc(ce.txn_at?.slice(0,16) || '')} ·
+        ${esc(ce.product_name || '—')} · ₹${fmtAmt(ce.amount_paise/100)} ·
+        by ${esc(ce.recorded_by_name || ce.recorded_by_pin || '?')} · ${esc(ce.source)} · ${esc(ce.instrument)}
+        ${ce.notes ? `<br><span style="color:var(--text-dim);">notes: ${esc(ce.notes)}</span>` : ''}
+      </div>` : ''}
+      ${po ? `<div style="margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:11px;">
+        <strong style="color:#34d399;">PO ${esc(po.odoo_po_name || '?')}</strong> · ${esc(po.bill_date)} ·
+        ${esc(po.vendor_name)} · ₹${fmtAmt(po.amount_total)} · ${esc(po.payment_state)}
+      </div>` : ''}
+      <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="btn btn-sm" style="background:#34d399; color:#000;" onclick="dupManualMark(${it.expense_id}, 'po_settled')">✓ Mark PO settled</button>
+        <button class="btn btn-sm" style="background:#ef4444; color:#fff;" onclick="dupManualMark(${it.expense_id}, 'delete')">🗑 Confirm dup → delete</button>
+        <button class="btn btn-sm" style="background:rgba(99,102,241,0.4);" onclick="dupManualMark(${it.expense_id}, 'keep')">✓ Not a dup → keep both</button>
+        <button class="btn btn-sm btn-ghost" onclick="openEdit(${it.expense_id})">✏ Edit details</button>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('dup-review-panel').style.display = '';
+}
+
+async function dupManualMark(id, decision) {
+  try {
+    if (decision === 'delete') {
+      const reason = prompt('Reason for deleting this duplicate? (required, ≥5 chars)', 'Confirmed dup of cash_events row');
+      if (!reason || reason.trim().length < 5) return alert('Reason required');
+      const r = await fetch(`${API}?action=expense-delete`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ pin: PIN, expense_id: id, reason })
+      }).then(x => x.json());
+      if (!r.success) throw new Error(r.error);
+    } else if (decision === 'po_settled') {
+      const r = await fetch(`${API}?action=expense-update`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ pin: PIN, expense_id: id, validate: true,
+          mark_po_settled: true,
+          notes: `[manual: PO settled at counter]` })
+      }).then(x => x.json());
+      if (!r.success) throw new Error(r.error);
+    } else if (decision === 'keep') {
+      const r = await fetch(`${API}?action=expense-update`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ pin: PIN, expense_id: id, validate: true,
+          mark_keep_both: true,
+          notes: `[manual: confirmed not a dup — separate purchase]` })
+      }).then(x => x.json());
+      if (!r.success) throw new Error(r.error);
+    }
+    _lastAnalyze.ambiguous = (_lastAnalyze.ambiguous || []).filter(x => x.expense_id !== id);
+    renderDupReview(_lastAnalyze.ambiguous);
+    if (!_lastAnalyze.ambiguous.length) document.getElementById('dup-review-panel').style.display = 'none';
+  } catch (e) { alert('Failed: ' + e.message); }
+}
+
+// Auto-flag refills: scans HDFC/Federal entries matching petty/cash patterns
+async function autoFlagRefills() {
+  try {
+    const from = document.getElementById('f-from').value;
+    const to   = document.getElementById('f-to').value;
+    // Step 1: preview
+    const preview = await fetch(`${API}?action=auto-flag-refills&pin=${PIN}&from=${from}&to=${to}`)
+                      .then(x => x.json());
+    if (!preview.success) throw new Error(preview.error || 'preview failed');
+    if (!preview.count) return alert('No HDFC/Federal entries match petty-cash patterns in this range.');
+    if (!confirm(`Auto-flag ${preview.count} bank entries (₹${fmtAmt(preview.total)}) as petty refills?\n\nThese will be excluded from net spend. You can ↩ Undo any individual row.`)) return;
+    // Step 2: apply
+    const r = await fetch(`${API}?action=auto-flag-refills&pin=${PIN}&from=${from}&to=${to}&apply=1`, { method:'POST' })
+                  .then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'apply failed');
+    alert(`Marked ${r.updated} rows as petty refills (₹${fmtAmt(r.total)}). Net spend will drop by this amount.`);
+    loadExport();
+  } catch (e) { alert('Auto-flag failed: ' + e.message); }
+}
 
 // ── CSV export ───────────────────────────────────────────────
 function downloadCsv() {

@@ -1145,6 +1145,8 @@ export async function onRequest(context) {
                be.expense_date, be.notes,
                be.validated_at, be.validated_by,
                be.is_petty_refill, be.refill_to_pile,
+               be.is_po_settled, be.matched_po_bill_id, be.matched_cash_event_id,
+               be.dup_resolution,
                be.quantity, be.uom, be.vendor_id, be.vendor_name,
                COALESCE(be.uom, rmp.uom) AS uom_display,
                CASE WHEN ${isRmExpr} THEN 1 ELSE 0 END AS is_rm,
@@ -1215,23 +1217,27 @@ export async function onRequest(context) {
       billSql += ` ORDER BY b.bill_date ASC LIMIT 500`;
       const billRows = await DB.prepare(billSql).bind(...billArgs).all().catch(() => ({ results: [] }));
 
-      // Petty refills are transfers (bank → cash float), NOT expenses — exclude from totals
-      const realExpenses    = items.filter(r => !r.is_petty_refill);
+      // Petty refills (bank→cash float) and PO settlements (paying an existing
+      // bill at counter) are NOT new expenses — exclude from totals.
+      const realExpenses    = items.filter(r => !r.is_petty_refill && !r.is_po_settled);
       const total           = realExpenses.reduce((s, r) => s + (r.amount || 0), 0);
       const refill_total    = items.filter(r => r.is_petty_refill).reduce((s, r) => s + (r.amount || 0), 0);
       const refill_count    = items.filter(r => r.is_petty_refill).length;
+      const po_settled_total = items.filter(r => r.is_po_settled).reduce((s, r) => s + (r.amount || 0), 0);
+      const po_settled_count = items.filter(r => r.is_po_settled).length;
       const rm_rows         = realExpenses.filter(r => r.is_rm).length;
       const qty_missing     = realExpenses.filter(r => r.qty_missing).length;
       const vendor_missing  = realExpenses.filter(r => r.vendor_missing).length;
       const bill_missing    = realExpenses.filter(r => r.needs_bill).length;
       const hdfc_unverified = realExpenses.filter(r => r.hdfc_unverified).length;
-      const dup_suspect     = realExpenses.filter(r => (r.v2_dup_count || 0) > 0).length;
+      const dup_suspect     = realExpenses.filter(r => (r.v2_dup_count || 0) > 0 && !r.dup_resolution).length;
 
       return json({ success: true, entries: items, total,
         po_bills: billRows.results || [],
         summary: { total_rows: items.length, rm_rows, qty_missing, vendor_missing,
                    bill_missing, hdfc_unverified, dup_suspect,
-                   refill_count, refill_total },
+                   refill_count, refill_total,
+                   po_settled_count, po_settled_total },
         from: fromParam, to: toParam, brand: brandParam });
     }
 
@@ -1243,7 +1249,7 @@ export async function onRequest(context) {
     if (action === 'expense-update' && request.method === 'POST') {
       if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
       const body = await request.json().catch(() => ({}));
-      const { pin, expense_id, quantity, uom, vendor_name, notes, validate } = body;
+      const { pin, expense_id, quantity, uom, vendor_name, notes, validate, mark_po_settled, mark_keep_both } = body;
       const user = resolveUser(pin);
       if (!user || !['admin', 'cfo', 'gm'].includes(user.role)) {
         return json({ success: false, error: 'Admin, CFO or GM PIN required' }, 401);
@@ -1277,6 +1283,13 @@ export async function onRequest(context) {
         // explicit un-validate (e.g. cleared after a re-edit)
         setClauses.push('validated_at=?'); vals.push(null);
         setClauses.push('validated_by=?'); vals.push(null);
+      }
+      if (mark_po_settled === true) {
+        setClauses.push('is_po_settled=?'); vals.push(1);
+        setClauses.push('dup_resolution=?'); vals.push('manual_po_settled');
+      }
+      if (mark_keep_both === true) {
+        setClauses.push('dup_resolution=?'); vals.push('manual_keep');
       }
       if (!setClauses.length) return json({ success: false, error: 'Nothing to update' }, 400);
 
@@ -1312,6 +1325,267 @@ export async function onRequest(context) {
       await DB.prepare('UPDATE business_expenses SET is_petty_refill=1, refill_to_pile=?, validated_at=?, validated_by=? WHERE id=?')
               .bind(pile, new Date().toISOString(), user.name, parseInt(expense_id, 10)).run();
       return json({ success: true, expense_id, marked: true, refill_to_pile: pile, by: user.name });
+    }
+
+    // ── AUTO-FLAG PETTY REFILLS ──
+    // HDFC bank entries that funded a petty cash float are NOT expenses —
+    // they're transfers. Flag them automatically based on signals:
+    //   • payment_method = hdfc_bank | federal_bank
+    //   • AND (x_pool = 'petty' OR notes/product_name contain "petty"/"cash"/"tanveer"/"basheer")
+    // Returns a preview by default; pass apply=true to mutate.
+    if (action === 'auto-flag-refills') {
+      if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user || !['admin', 'cfo', 'gm'].includes(user.role)) {
+        return json({ success: false, error: 'Admin, CFO or GM PIN required' }, 401);
+      }
+      const apply = url.searchParams.get('apply') === '1' || request.method === 'POST';
+      const fromParam = url.searchParams.get('from') || '2026-04-01';
+      const toParam   = url.searchParams.get('to')   || '2026-04-30';
+
+      const rows = await DB.prepare(`
+        SELECT id, amount, x_payment_method AS payment_method, x_pool, x_location AS brand,
+               product_name, notes, vendor_name, expense_date, recorded_at, recorded_by
+          FROM business_expenses
+         WHERE x_payment_method IN ('hdfc_bank','federal_bank')
+           AND COALESCE(is_petty_refill,0) = 0
+           AND COALESCE(is_po_settled,0) = 0
+           AND COALESCE(expense_date, DATE(recorded_at, '+5 hours', '+30 minutes')) >= ?
+           AND COALESCE(expense_date, DATE(recorded_at, '+5 hours', '+30 minutes')) <= ?
+           AND (
+             x_pool = 'petty'
+             OR LOWER(COALESCE(product_name,'')) LIKE '%petty%'
+             OR LOWER(COALESCE(notes,''))        LIKE '%petty%'
+             OR LOWER(COALESCE(notes,''))        LIKE '%cash float%'
+             OR LOWER(COALESCE(notes,''))        LIKE '%cash advance%'
+             OR LOWER(COALESCE(notes,''))        LIKE '%tanveer%'
+             OR LOWER(COALESCE(notes,''))        LIKE '%basheer%'
+             OR LOWER(COALESCE(vendor_name,'')) LIKE '%tanveer%'
+             OR LOWER(COALESCE(vendor_name,'')) LIKE '%basheer%'
+             OR LOWER(COALESCE(product_name,'')) LIKE '%cash refill%'
+             OR LOWER(COALESCE(product_name,'')) LIKE '%cash advance%'
+           )
+         ORDER BY id ASC LIMIT 500
+      `).bind(fromParam, toParam).all();
+
+      const candidates = rows.results || [];
+      let total_paise = 0;
+      candidates.forEach(c => total_paise += Math.round(c.amount * 100));
+
+      if (!apply) {
+        return json({ success: true, applied: false, candidates,
+          count: candidates.length, total: total_paise / 100 });
+      }
+
+      let updated = 0;
+      for (const c of candidates) {
+        // Heuristic for pile name
+        const txt = `${c.product_name || ''} ${c.notes || ''} ${c.vendor_name || ''}`.toLowerCase();
+        let pile = 'Petty cash';
+        if (txt.includes('tanveer')) pile = 'Tanveer petty';
+        else if (txt.includes('basheer')) pile = 'Basheer petty';
+        else if (txt.includes('faheem')) pile = 'Faheem petty';
+        else if (c.x_pool === 'petty') pile = `${c.brand || 'HQ'} petty`;
+        await DB.prepare(`
+          UPDATE business_expenses
+             SET is_petty_refill=1, refill_to_pile=?,
+                 validated_at=COALESCE(validated_at, ?),
+                 validated_by=COALESCE(validated_by, ?)
+           WHERE id=?
+        `).bind(pile, new Date().toISOString(), `auto:${user.name}`, c.id).run();
+        updated++;
+      }
+      return json({ success: true, applied: true, updated, total: total_paise / 100 });
+    }
+
+    // ── DUP ANALYZE ─ classify each cross-source duplicate suspect ──
+    // For each business_expense flagged v2_dup_count > 0:
+    //   1. Look for matching rm_vendor_bill (PO) — same brand, ±5% amount,
+    //      ±2 days, fuzzy vendor match → classify PO_SETTLED.
+    //   2. Look for matching cash_events counter_expense — same brand, exact
+    //      paise, ±1 day → classify HARD_DUP if exactly one match and
+    //      product/notes line up, else AMBIGUOUS.
+    //   3. Default → AMBIGUOUS.
+    // Returns a preview with counts + per-row classification + match context.
+    // dryRun=true (default) does NOT mutate; apply=true writes the resolution.
+    if (action === 'dup-analyze' || action === 'dup-resolve') {
+      if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
+      const pin = url.searchParams.get('pin');
+      const user = resolveUser(pin);
+      if (!user || !['admin', 'cfo', 'gm'].includes(user.role)) {
+        return json({ success: false, error: 'Admin, CFO or GM PIN required' }, 401);
+      }
+      const apply = action === 'dup-resolve';
+      const fromParam = url.searchParams.get('from') || '2026-04-01';
+      const toParam   = url.searchParams.get('to')   || '2026-04-30';
+
+      // Pull all dup-suspect business_expense rows in range that are NOT
+      // already validated, NOT already classified, NOT marked petty refill.
+      const beRows = await DB.prepare(`
+        SELECT be.id, be.odoo_id, be.amount, be.product_name, be.product_id, be.notes,
+               be.x_location AS brand, be.x_payment_method AS payment_method,
+               be.vendor_name, be.vendor_id, be.expense_date, be.recorded_at, be.recorded_by,
+               be.category, be.category_parent
+          FROM business_expenses be
+          LEFT JOIN rm_products rmp ON rmp.odoo_id = be.product_id
+         WHERE COALESCE(be.expense_date, DATE(be.recorded_at, '+5 hours', '+30 minutes')) >= ?
+           AND COALESCE(be.expense_date, DATE(be.recorded_at, '+5 hours', '+30 minutes')) <= ?
+           AND COALESCE(be.is_petty_refill,0) = 0
+           AND COALESCE(be.is_po_settled,0) = 0
+           AND be.dup_resolution IS NULL
+           AND EXISTS (
+             SELECT 1 FROM cash_events ce
+              WHERE ce.source = 'counter_expense'
+                AND ce.direction = 'debit'
+                AND ce.amount_paise = CAST(ROUND(be.amount * 100) AS INTEGER)
+                AND (ce.brand IS NULL OR ce.brand = be.x_location)
+                AND DATE(ce.txn_at) >= DATE(COALESCE(be.expense_date, be.recorded_at), '-1 day')
+                AND DATE(ce.txn_at) <= DATE(COALESCE(be.expense_date, be.recorded_at), '+1 day')
+           )
+         ORDER BY be.id ASC LIMIT 1000
+      `).bind(fromParam, toParam).all();
+
+      const suspects = beRows.results || [];
+      if (!suspects.length) {
+        return json({ success: true, message: 'No dup suspects to classify', applied: false,
+          counts: { po_settled: 0, hard_dup: 0, ambiguous: 0, scanned: 0 } });
+      }
+
+      const fuzzyMatch = (a, b) => {
+        if (!a || !b) return false;
+        const A = String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+        const B = String(b).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!A || !B) return false;
+        if (A === B) return true;
+        if (A.includes(B) || B.includes(A)) return true;
+        // Token overlap
+        const tA = new Set(A.split(' ').filter(t => t.length >= 4));
+        const tB = new Set(B.split(' ').filter(t => t.length >= 4));
+        let overlap = 0;
+        for (const t of tA) if (tB.has(t)) overlap++;
+        return overlap >= 1 && overlap >= Math.min(tA.size, tB.size) * 0.5;
+      };
+
+      const classifications = [];
+      let counts = { po_settled: 0, hard_dup: 0, ambiguous: 0 };
+
+      for (const be of suspects) {
+        const paise = Math.round(be.amount * 100);
+        const minPaise = Math.round(paise * 0.95);
+        const maxPaise = Math.round(paise * 1.05);
+        const dateStr = be.expense_date || be.recorded_at?.slice(0, 10);
+
+        // 1. Search rm_vendor_bills (PO bills) for a match
+        const poRows = await DB.prepare(`
+          SELECT id, odoo_po_id, odoo_po_name, vendor_name, amount_total, bill_date, payment_state, bill_ref, brand
+            FROM rm_vendor_bills
+           WHERE brand = ?
+             AND CAST(ROUND(amount_total * 100) AS INTEGER) BETWEEN ? AND ?
+             AND DATE(bill_date) >= DATE(?, '-3 days')
+             AND DATE(bill_date) <= DATE(?, '+3 days')
+        `).bind(be.brand, minPaise, maxPaise, dateStr, dateStr).all();
+
+        const poMatches = (poRows.results || []).filter(p =>
+          !be.vendor_name || fuzzyMatch(p.vendor_name, be.vendor_name)
+        );
+        // Strongest PO match = exact amount, vendor match, closest date
+        const poMatch = poMatches.sort((a, b) => {
+          const aExact = Math.abs(Math.round(a.amount_total * 100) - paise);
+          const bExact = Math.abs(Math.round(b.amount_total * 100) - paise);
+          return aExact - bExact;
+        })[0] || null;
+
+        // 2. Search cash_events for matching counter_expense rows
+        const ceRows = await DB.prepare(`
+          SELECT id, txn_at, brand, amount_paise, product_name, vendor_name, notes,
+                 source, source_ref, recorded_by_pin, recorded_by_name, instrument
+            FROM cash_events
+           WHERE source = 'counter_expense'
+             AND direction = 'debit'
+             AND amount_paise = ?
+             AND (brand IS NULL OR brand = ?)
+             AND DATE(txn_at) >= DATE(?, '-1 day')
+             AND DATE(txn_at) <= DATE(?, '+1 day')
+        `).bind(paise, be.brand, dateStr, dateStr).all();
+        const ceMatches = ceRows.results || [];
+
+        // Classification logic
+        let classification, matchedPoId = null, matchedCeId = null, reason = '';
+        if (poMatch) {
+          classification = 'PO_SETTLED';
+          matchedPoId = poMatch.id;
+          reason = `PO ${poMatch.odoo_po_name || ''} from ${poMatch.vendor_name} — same vendor, ±5% amount, ±3 days`;
+          counts.po_settled++;
+        } else if (ceMatches.length === 1) {
+          // Single matching cash_events row + product alignment if possible
+          const ce = ceMatches[0];
+          const productAlign = !be.product_name || !ce.product_name || fuzzyMatch(be.product_name, ce.product_name);
+          if (productAlign) {
+            classification = 'HARD_DUP';
+            matchedCeId = ce.id;
+            reason = `cash_events#${ce.id} ${ce.txn_at?.slice(0,10)} via ${ce.source} (${ce.recorded_by_name || ce.recorded_by_pin || '?'}) — same brand, exact paise, ±1 day, product aligns`;
+            counts.hard_dup++;
+          } else {
+            classification = 'AMBIGUOUS';
+            matchedCeId = ce.id;
+            reason = `cash_events#${ce.id} matches amount + date but product differs ("${ce.product_name}" vs "${be.product_name}")`;
+            counts.ambiguous++;
+          }
+        } else if (ceMatches.length > 1) {
+          classification = 'AMBIGUOUS';
+          reason = `${ceMatches.length} cash_events rows match amount + date — cannot pick one safely`;
+          counts.ambiguous++;
+        } else {
+          classification = 'AMBIGUOUS';
+          reason = 'No PO bill matches and no cash_events match — re-check the dup detector';
+          counts.ambiguous++;
+        }
+
+        classifications.push({
+          expense_id: be.id, odoo_id: be.odoo_id, brand: be.brand,
+          amount: be.amount, product: be.product_name, vendor: be.vendor_name,
+          payment_method: be.payment_method, expense_date: dateStr,
+          recorded_by: be.recorded_by, classification, reason,
+          matched_po_id: matchedPoId, matched_ce_id: matchedCeId,
+          po_match: poMatch, ce_matches: ceMatches.slice(0, 3),
+        });
+
+        if (apply) {
+          if (classification === 'PO_SETTLED') {
+            // Mark as PO settlement, link, validate. Keep the row — it's a real
+            // payment, just classified differently from "expense".
+            await DB.prepare(`
+              UPDATE business_expenses
+                 SET is_po_settled = 1,
+                     matched_po_bill_id = ?,
+                     dup_resolution = 'auto_po_settled',
+                     dup_classified_at = ?,
+                     validated_at = COALESCE(validated_at, ?),
+                     validated_by = COALESCE(validated_by, ?)
+               WHERE id = ?
+            `).bind(matchedPoId, new Date().toISOString(), new Date().toISOString(), `auto:${user.name}`, be.id).run();
+          } else if (classification === 'HARD_DUP') {
+            // The cash_events counter row IS the truth. Delete the
+            // business_expenses dup. Also unlink from Odoo if odoo_id present.
+            if (be.odoo_id && apiKey) {
+              try { await odoo(apiKey, 'hr.expense', 'unlink', [[be.odoo_id]]); } catch (e) { /* ignore */ }
+            }
+            await DB.prepare('DELETE FROM business_expenses WHERE id = ?').bind(be.id).run();
+          }
+          // AMBIGUOUS — leave as-is for manual review
+        }
+      }
+
+      return json({
+        success: true,
+        applied: apply,
+        scanned: suspects.length,
+        counts,
+        classifications: apply ? null : classifications,  // omit on apply (large)
+        ambiguous: apply ? null : classifications.filter(c => c.classification === 'AMBIGUOUS'),
+        from: fromParam, to: toParam,
+      });
     }
 
     // ── DELETE EXPENSE (duplicate cleanup — Basheer / admin / cfo) ──
