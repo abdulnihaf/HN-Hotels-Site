@@ -3854,7 +3854,7 @@ export async function onRequest(context) {
       }
     }
 
-    return json({ success: false, error: 'Unknown action', actions: ['verify-pin','products','employees','vendors','recent','record','upload-bill','pay-bill','list-bills','payment-journals','settle-po'] }, 400);
+    return json({ success: false, error: 'Unknown action', actions: ['verify-pin','products','employees','vendors','recent','record','upload-bill','pay-bill','list-bills','payment-journals','settle-po','expense-export','expense-update'] }, 400);
   } catch (e) {
     return json({ success: false, error: e.message, stack: e.stack }, 500);
   }
