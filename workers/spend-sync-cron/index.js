@@ -696,15 +696,16 @@ async function recomputeFlags(env) {
 
 // ━━━ Dispatch ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function runSync(env, instancesRequested, opts = {}) {
-  const allKeys = [...Object.keys(INSTANCES), 'd1-nch', 'nch-sales'];
+  const allKeys = [...Object.keys(INSTANCES), 'd1-nch', 'nch-sales', 'he-sales'];
   const keys = instancesRequested === 'all' ? allKeys : [instancesRequested];
   const results = [];
   for (const k of keys) {
     try {
-      if (k === 'd1-nch')        results.push(await syncNchCounterExpenses(env, opts));
+      if (k === 'd1-nch')         results.push(await syncNchCounterExpenses(env, opts));
       else if (k === 'nch-sales') results.push(await syncNchSales(env, opts));
-      else if (INSTANCES[k])     results.push(await syncInstance(env, k, opts));
-      else                        results.push({ instance: k, error: 'unknown instance' });
+      else if (k === 'he-sales')  results.push(await syncHeSales(env, opts));
+      else if (INSTANCES[k])      results.push(await syncInstance(env, k, opts));
+      else                         results.push({ instance: k, error: 'unknown instance' });
     } catch (e) { results.push({ instance: k, error: e.message }); }
   }
   try { await recomputeFlags(env); } catch (e) { results.push({ flags_error: e.message }); }
@@ -1001,49 +1002,10 @@ async function syncNchSales(env, opts = {}) {
 
   // 6. recompute sales_recon_daily — rolling 14-day window
   await flow('nch_recon_daily_compute', async () => {
-    const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
-    const startTs = Date.parse(today + 'T00:00:00Z') - 13 * 86400 * 1000;
-    const days = [];
-    for (let i = 0; i < 14; i++) {
-      days.push(new Date(startTs + i * 86400 * 1000).toISOString().slice(0, 10));
-    }
-    const recomputeAt = new Date().toISOString();
+    const days = lastNDays(14);
     let touched = 0;
     for (const day of days) {
-      const computed = await computeReconDay(env, 'NCH', day);
-      await env.DB.prepare(
-        `INSERT INTO sales_recon_daily (
-           brand, day, gross_sales_paise,
-           counter_cash_paise, counter_upi_pos_paise, counter_upi_rzp_paise, counter_card_paise,
-           runner_sales_paise, runner_upi_paise, runner_cash_paise,
-           total_cash_paise, total_upi_paise, upi_discrepancy_paise,
-           complimentary_paise, unmapped_paise, order_count, last_recomputed_at)
-         VALUES ('NCH', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(brand, day) DO UPDATE SET
-           gross_sales_paise=excluded.gross_sales_paise,
-           counter_cash_paise=excluded.counter_cash_paise,
-           counter_upi_pos_paise=excluded.counter_upi_pos_paise,
-           counter_upi_rzp_paise=excluded.counter_upi_rzp_paise,
-           counter_card_paise=excluded.counter_card_paise,
-           runner_sales_paise=excluded.runner_sales_paise,
-           runner_upi_paise=excluded.runner_upi_paise,
-           runner_cash_paise=excluded.runner_cash_paise,
-           total_cash_paise=excluded.total_cash_paise,
-           total_upi_paise=excluded.total_upi_paise,
-           upi_discrepancy_paise=excluded.upi_discrepancy_paise,
-           complimentary_paise=excluded.complimentary_paise,
-           unmapped_paise=excluded.unmapped_paise,
-           order_count=excluded.order_count,
-           last_recomputed_at=excluded.last_recomputed_at`
-      ).bind(
-        day, computed.gross_sales_paise,
-        computed.counter_cash_paise, computed.counter_upi_pos_paise,
-        computed.counter_upi_rzp_paise, computed.counter_card_paise,
-        computed.runner_sales_paise, computed.runner_upi_paise, computed.runner_cash_paise,
-        computed.total_cash_paise, computed.total_upi_paise, computed.upi_discrepancy_paise,
-        computed.complimentary_paise, computed.unmapped_paise, computed.order_count,
-        recomputeAt
-      ).run();
+      await upsertReconDay(env, 'NCH', day);
       touched++;
     }
     return touched;
@@ -1053,20 +1015,310 @@ async function syncNchSales(env, opts = {}) {
   return stats;
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// HE SALES RECONCILIATION — sibling of syncNchSales
+// Source: test.hamzahotel.com (HE prod Odoo, despite name) company_id=1
+// UPI cross-check: money_events Paytm rows (HDFC bank feed already
+// captures Paytm settlements; no separate Razorpay-equivalent table).
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const HE_TEST_INSTANCE = { url: 'https://test.hamzahotel.com/jsonrpc', db: 'main', uid: 2 };
+const HE_COMPANY_ID = 1;
+
+async function syncHeSales(env, opts = {}) {
+  const stats = { instance: 'he-sales', rows: {}, errors: {} };
+  const apiKey = env.TEST_ODOO_KEY;
+  if (!apiKey) { stats.errors._init = 'TEST_ODOO_KEY missing — set via wrangler secret put'; return stats; }
+
+  const flow = async (source, fn) => {
+    await markSalesRunning(env, source);
+    try {
+      const added = await fn();
+      stats.rows[source] = added;
+      await markSalesDone(env, source, 'ok', added, null);
+    } catch (e) {
+      stats.errors[source] = e.message;
+      await markSalesDone(env, source, 'error', 0, e.message?.slice(0, 500));
+    }
+  };
+
+  // 1. pos.config refresh — daily; skip if recent
+  await flow('he_pos_config', async () => {
+    const cur = await getSalesCursor(env, 'he_pos_config');
+    if (!opts.force && cur?.last_run_at) {
+      const ageH = (Date.now() - new Date(cur.last_run_at).getTime()) / 3600000;
+      if (ageH < 24) return 0;
+    }
+    const cfgs = await odoo(HE_TEST_INSTANCE, apiKey, 'pos.config', 'search_read',
+      [[['company_id', '=', HE_COMPANY_ID]]],
+      { fields: ['id', 'name'] });
+    let n = 0;
+    for (const c of cfgs) {
+      await env.DB.prepare(
+        `INSERT INTO pos_config_registry (pos_config_id, brand, name, last_seen_at)
+         VALUES (?, 'HE', ?, ?)
+         ON CONFLICT(pos_config_id) DO UPDATE SET
+           name = excluded.name, last_seen_at = excluded.last_seen_at`
+      ).bind(c.id, c.name, new Date().toISOString()).run();
+      n++;
+    }
+    return n;
+  });
+
+  // 2. pos.order delta
+  await flow('he_pos_orders', async () => {
+    const cur = await getSalesCursor(env, 'he_pos_orders');
+    const sinceId = opts.force ? 0 : (cur?.last_synced_id || 0);
+    const orders = await odoo(HE_TEST_INSTANCE, apiKey, 'pos.order', 'search_read',
+      [[['company_id', '=', HE_COMPANY_ID],
+        ['state', 'in', ['paid', 'done', 'invoiced', 'posted']],
+        ['id', '>', sinceId]]],
+      { fields: ['id', 'name', 'date_order', 'amount_total', 'amount_tax', 'state',
+                 'company_id', 'session_id', 'config_id', 'payment_ids'],
+        order: 'id asc', limit: 1000 });
+    if (!orders.length) return 0;
+
+    const allPmIds = [...new Set(orders.flatMap(o => o.payment_ids || []))];
+    const pmRows = allPmIds.length
+      ? await odoo(HE_TEST_INSTANCE, apiKey, 'pos.payment', 'read', [allPmIds],
+          { fields: ['id', 'pos_order_id', 'payment_method_id'] })
+      : [];
+    const pmById = Object.fromEntries(pmRows.map(p => [p.id, p]));
+
+    let maxId = sinceId; let added = 0;
+    for (const o of orders) {
+      const dateIst = utcToIst(o.date_order);
+      const day = (dateIst || '').slice(0, 10);
+      const cfgId = o.config_id?.[0];
+      const sessId = o.session_id?.[0] || null;
+      const pmNames = (o.payment_ids || []).map(pid => pmById[pid]?.payment_method_id?.[1]).filter(Boolean);
+      const csv = [...new Set(pmNames)].join(',');
+      try {
+        await env.DB.prepare(
+          `INSERT INTO pos_orders_mirror (
+             odoo_pos_order_id, brand, pos_config_id, session_id, order_name,
+             order_date_ist, order_date_day,
+             amount_total_paise, amount_tax_paise,
+             state, payment_methods_csv, synced_at)
+           VALUES (?, 'HE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(odoo_pos_order_id) DO UPDATE SET
+             amount_total_paise = excluded.amount_total_paise,
+             payment_methods_csv= excluded.payment_methods_csv,
+             synced_at          = excluded.synced_at`
+        ).bind(
+          o.id, cfgId, sessId, o.name, dateIst, day,
+          Math.round((o.amount_total || 0) * 100),
+          Math.round((o.amount_tax || 0) * 100),
+          o.state, csv, new Date().toISOString()
+        ).run();
+        added++;
+      } catch (e) {/* skip */}
+      if (o.id > maxId) maxId = o.id;
+    }
+    if (maxId > sinceId) await setSalesCursor(env, 'he_pos_orders', { last_synced_id: maxId });
+    return added;
+  });
+
+  // 3. pos.payment delta
+  await flow('he_pos_payments', async () => {
+    const cur = await getSalesCursor(env, 'he_pos_payments');
+    const sinceId = opts.force ? 0 : (cur?.last_synced_id || 0);
+    const pays = await odoo(HE_TEST_INSTANCE, apiKey, 'pos.payment', 'search_read',
+      [[['id', '>', sinceId]]],
+      { fields: ['id', 'pos_order_id', 'payment_method_id', 'amount'],
+        order: 'id asc', limit: 2000 });
+    if (!pays.length) return 0;
+
+    const orderIds = [...new Set(pays.map(p => p.pos_order_id?.[0]).filter(Boolean))];
+    const placeholders = orderIds.map(() => '?').join(',');
+    const orderRows = orderIds.length
+      ? (await env.DB.prepare(
+          `SELECT odoo_pos_order_id, pos_config_id, order_date_day FROM pos_orders_mirror
+            WHERE brand='HE' AND odoo_pos_order_id IN (${placeholders})`
+        ).bind(...orderIds).all()).results
+      : [];
+    const orderById = Object.fromEntries(orderRows.map(r => [r.odoo_pos_order_id, r]));
+
+    let maxId = sinceId; let added = 0;
+    for (const p of pays) {
+      const oid = p.pos_order_id?.[0];
+      const meta = orderById[oid];
+      if (!meta) { if (p.id > maxId) maxId = p.id; continue; }
+      try {
+        await env.DB.prepare(
+          `INSERT INTO pos_payments_mirror (
+             odoo_pos_payment_id, odoo_pos_order_id, brand, order_date_day,
+             pos_config_id, payment_method_id, payment_method_name,
+             amount_paise, synced_at)
+           VALUES (?, ?, 'HE', ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(odoo_pos_payment_id) DO UPDATE SET
+             amount_paise = excluded.amount_paise,
+             payment_method_name = excluded.payment_method_name,
+             synced_at = excluded.synced_at`
+        ).bind(
+          p.id, oid, meta.order_date_day, meta.pos_config_id,
+          p.payment_method_id?.[0] || 0,
+          p.payment_method_id?.[1] || 'unknown',
+          Math.round((p.amount || 0) * 100),
+          new Date().toISOString()
+        ).run();
+        added++;
+      } catch (e) {/* skip */}
+      if (p.id > maxId) maxId = p.id;
+    }
+    if (maxId > sinceId) await setSalesCursor(env, 'he_pos_payments', { last_synced_id: maxId });
+    return added;
+  });
+
+  // 4. pos.order.line delta
+  await flow('he_pos_lines', async () => {
+    const cur = await getSalesCursor(env, 'he_pos_lines');
+    const sinceId = opts.force ? 0 : (cur?.last_synced_id || 0);
+    const lines = await odoo(HE_TEST_INSTANCE, apiKey, 'pos.order.line', 'search_read',
+      [[['id', '>', sinceId]]],
+      { fields: ['id', 'order_id', 'product_id', 'qty', 'price_subtotal_incl'],
+        order: 'id asc', limit: 2000 });
+    if (!lines.length) return 0;
+
+    const orderIds = [...new Set(lines.map(l => l.order_id?.[0]).filter(Boolean))];
+    const placeholders = orderIds.map(() => '?').join(',');
+    const orderRows = orderIds.length
+      ? (await env.DB.prepare(
+          `SELECT odoo_pos_order_id, pos_config_id, order_date_day FROM pos_orders_mirror
+            WHERE brand='HE' AND odoo_pos_order_id IN (${placeholders})`
+        ).bind(...orderIds).all()).results
+      : [];
+    const orderById = Object.fromEntries(orderRows.map(r => [r.odoo_pos_order_id, r]));
+
+    let maxId = sinceId; let added = 0;
+    for (const l of lines) {
+      const oid = l.order_id?.[0];
+      const meta = orderById[oid];
+      if (!meta) { if (l.id > maxId) maxId = l.id; continue; }
+      try {
+        await env.DB.prepare(
+          `INSERT INTO pos_lines_mirror (
+             odoo_pos_line_id, odoo_pos_order_id, brand, order_date_day,
+             pos_config_id, product_id, product_name,
+             qty, price_subtotal_incl_paise, synced_at)
+           VALUES (?, ?, 'HE', ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(odoo_pos_line_id) DO UPDATE SET
+             qty = excluded.qty,
+             price_subtotal_incl_paise = excluded.price_subtotal_incl_paise,
+             synced_at = excluded.synced_at`
+        ).bind(
+          l.id, oid, meta.order_date_day, meta.pos_config_id,
+          l.product_id?.[0] || 0, l.product_id?.[1] || null,
+          l.qty || 0,
+          Math.round((l.price_subtotal_incl || 0) * 100),
+          new Date().toISOString()
+        ).run();
+        added++;
+      } catch (e) {/* skip */}
+      if (l.id > maxId) maxId = l.id;
+    }
+    if (maxId > sinceId) await setSalesCursor(env, 'he_pos_lines', { last_synced_id: maxId });
+    return added;
+  });
+
+  // 5. Paytm settlement bookkeeping — no actual data fetch needed; the
+  // HDFC bank feed already populates money_events. We just refresh the
+  // cursor's last_run_at + count for visibility.
+  await flow('he_paytm_settlement', async () => {
+    const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+    const startTs = today.slice(0,7) + '-01';
+    const r = await env.DB.prepare(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(amount_paise), 0) AS p FROM money_events
+        WHERE source='hdfc' AND direction='credit'
+          AND substr(txn_at,1,10) >= ? AND substr(txn_at,1,10) <= ?
+          AND (LOWER(counterparty) LIKE '%paytm%' OR LOWER(narration) LIKE '%paytm%')`
+    ).bind(startTs, today).first();
+    return r?.n || 0;
+  });
+
+  // 6. recompute sales_recon_daily — rolling 14-day window
+  await flow('he_recon_daily_compute', async () => {
+    const days = lastNDays(14);
+    let touched = 0;
+    for (const day of days) {
+      await upsertReconDay(env, 'HE', day);
+      touched++;
+    }
+    return touched;
+  });
+
+  return stats;
+}
+
+// ━━━ Shared helpers (used by both NCH and HE recon flows) ━━━
+
+function lastNDays(n) {
+  const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+  const startTs = Date.parse(today + 'T00:00:00Z') - (n - 1) * 86400 * 1000;
+  const days = [];
+  for (let i = 0; i < n; i++) {
+    days.push(new Date(startTs + i * 86400 * 1000).toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+async function upsertReconDay(env, brand, day) {
+  const computed = await computeReconDay(env, brand, day);
+  await env.DB.prepare(
+    `INSERT INTO sales_recon_daily (
+       brand, day, gross_sales_paise,
+       counter_cash_paise, counter_upi_pos_paise, counter_upi_rzp_paise, counter_card_paise,
+       runner_sales_paise, runner_upi_paise, runner_cash_paise,
+       aggregator_paise, waba_paise,
+       total_cash_paise, total_upi_paise, upi_discrepancy_paise,
+       complimentary_paise, unmapped_paise, order_count, last_recomputed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(brand, day) DO UPDATE SET
+       gross_sales_paise=excluded.gross_sales_paise,
+       counter_cash_paise=excluded.counter_cash_paise,
+       counter_upi_pos_paise=excluded.counter_upi_pos_paise,
+       counter_upi_rzp_paise=excluded.counter_upi_rzp_paise,
+       counter_card_paise=excluded.counter_card_paise,
+       runner_sales_paise=excluded.runner_sales_paise,
+       runner_upi_paise=excluded.runner_upi_paise,
+       runner_cash_paise=excluded.runner_cash_paise,
+       aggregator_paise=excluded.aggregator_paise,
+       waba_paise=excluded.waba_paise,
+       total_cash_paise=excluded.total_cash_paise,
+       total_upi_paise=excluded.total_upi_paise,
+       upi_discrepancy_paise=excluded.upi_discrepancy_paise,
+       complimentary_paise=excluded.complimentary_paise,
+       unmapped_paise=excluded.unmapped_paise,
+       order_count=excluded.order_count,
+       last_recomputed_at=excluded.last_recomputed_at`
+  ).bind(
+    brand, day, computed.gross_sales_paise,
+    computed.counter_cash_paise, computed.counter_upi_pos_paise,
+    computed.counter_upi_rzp_paise, computed.counter_card_paise,
+    computed.runner_sales_paise, computed.runner_upi_paise, computed.runner_cash_paise,
+    computed.aggregator_paise || 0, computed.waba_paise || 0,
+    computed.total_cash_paise, computed.total_upi_paise, computed.upi_discrepancy_paise,
+    computed.complimentary_paise, computed.unmapped_paise, computed.order_count,
+    new Date().toISOString()
+  ).run();
+}
+
 // Compute the reconciliation row for one day from the mirror tables.
 // Pure read; called by both the cron flow and (in Slice C) /api/sales?action=recompute-day.
+// Brand-aware reconciliation. NCH and HE share the same column shape on
+// sales_recon_daily but the PM mapping + cross-check source differ:
+//
+//   NCH: razorpay_qr_collections (counter + 5 runner slots) is the truth
+//        for UPI received. runner_cash is DERIVED (sales − upi).
+//   HE:  Paytm settles to HDFC daily; we use money_events filtered to
+//        Paytm-counterparty rows for the day's UPI total. captain_cash
+//        is RECORDED directly (HE - Cash Captain PM), not derived.
+//        Aggregator (Swiggy/Zomato) and WABA get their own columns.
 async function computeReconDay(env, brand, day) {
   const pmRows = (await env.DB.prepare(
     `SELECT payment_method_name, SUM(amount_paise) AS p
        FROM pos_payments_mirror WHERE brand = ? AND order_date_day = ?
       GROUP BY payment_method_name`
-  ).bind(brand, day).all()).results || [];
-
-  const qrRows = (await env.DB.prepare(
-    `SELECT role, SUM(amount_paise) AS p
-       FROM razorpay_qr_collections
-      WHERE brand = ? AND captured_at_day = ? AND status = 'captured'
-      GROUP BY role`
   ).bind(brand, day).all()).results || [];
 
   const orderRow = await env.DB.prepare(
@@ -1079,24 +1331,41 @@ async function computeReconDay(env, brand, day) {
   ).bind(brand, day).first();
 
   const pm = (name) => pmRows.find(r => r.payment_method_name === name)?.p || 0;
+
+  if (brand === 'HE') return computeHeReconDay(env, day, pm, pmRows, orderRow);
+  return computeNchReconDay(env, day, pm, pmRows, orderRow);
+}
+
+async function computeNchReconDay(env, day, pm, pmRows, orderRow) {
+  const qrRows = (await env.DB.prepare(
+    `SELECT role, SUM(amount_paise) AS p
+       FROM razorpay_qr_collections
+      WHERE brand = 'NCH' AND captured_at_day = ? AND status = 'captured'
+      GROUP BY role`
+  ).bind(day).all()).results || [];
   const qr = (role) => qrRows.find(r => r.role === role)?.p || 0;
 
   const RECOGNISED = new Set([
     'NCH Cash', 'NCH UPI', 'NCH Card', 'NCH Runner Ledger', 'NCH Token Issue',
-    'Complimentary', 'Cash', 'UPI',
+    'NCH Swiggy', 'NCH Zomato', 'NCH WABA UPI', 'NCH WABA COD',
+    'NCH Runner 01 UPI', 'NCH Runner 02 UPI', 'NCH Runner 03 UPI', 'NCH Runner 04 UPI', 'NCH Runner 05 UPI',
+    'Complimentary', 'Cash', 'UPI', 'Card', 'Customer Account',
   ]);
   let unmapped = 0;
-  for (const r of pmRows) {
-    if (!RECOGNISED.has(r.payment_method_name)) unmapped += r.p || 0;
-  }
+  for (const r of pmRows) if (!RECOGNISED.has(r.payment_method_name)) unmapped += r.p || 0;
 
-  const counter_cash    = pm('NCH Cash') + pm('Cash');     // Cash fallback for legacy unbranded PM
-  const counter_upi_pos = pm('NCH UPI') + pm('UPI');
+  const counter_cash    = pm('NCH Cash') + pm('Cash');
+  const counter_upi_pos = pm('NCH UPI') + pm('UPI')
+                        + pm('NCH Runner 01 UPI') + pm('NCH Runner 02 UPI')
+                        + pm('NCH Runner 03 UPI') + pm('NCH Runner 04 UPI')
+                        + pm('NCH Runner 05 UPI');
   const counter_upi_rzp = qr('counter');
-  const counter_card    = pm('NCH Card');
+  const counter_card    = pm('NCH Card') + pm('Card');
   const runner_sales    = pm('NCH Runner Ledger') + pm('NCH Token Issue');
   const runner_upi      = qr('runner');
   const runner_cash     = Math.max(0, runner_sales - runner_upi);
+  const aggregator      = pm('NCH Swiggy') + pm('NCH Zomato');
+  const waba            = pm('NCH WABA UPI') + pm('NCH WABA COD');
   const total_cash      = counter_cash + runner_cash;
   const total_upi       = counter_upi_rzp + runner_upi;
   const upi_discrepancy = counter_upi_pos - counter_upi_rzp;
@@ -1110,6 +1379,67 @@ async function computeReconDay(env, brand, day) {
     runner_sales_paise: runner_sales,
     runner_upi_paise: runner_upi,
     runner_cash_paise: runner_cash,
+    aggregator_paise: aggregator,
+    waba_paise: waba,
+    total_cash_paise: total_cash,
+    total_upi_paise: total_upi,
+    upi_discrepancy_paise: upi_discrepancy,
+    complimentary_paise: orderRow?.comp || 0,
+    unmapped_paise: unmapped,
+    order_count: orderRow?.n || 0,
+  };
+}
+
+async function computeHeReconDay(env, day, pm, pmRows, orderRow) {
+  // Paytm settlement total for this day = Σ HDFC credits with Paytm
+  // counterparty/narration. Note: HDFC-side day may differ from POS-side
+  // day by 0–1 days due to settlement lag; for reconciliation purposes
+  // we sum same-IST-day. Phase 2 will add a +1d shift offset if drift
+  // proves systematic.
+  const paytmRow = await env.DB.prepare(
+    `SELECT COALESCE(SUM(amount_paise), 0) AS p, COUNT(*) AS n
+       FROM money_events
+      WHERE source = 'hdfc' AND direction = 'credit'
+        AND substr(txn_at, 1, 10) = ?
+        AND (LOWER(counterparty) LIKE '%paytm%' OR LOWER(narration) LIKE '%paytm%')`
+  ).bind(day).first();
+
+  const RECOGNISED = new Set([
+    'HE - Cash Counter', 'HE - UPI Counter', 'HE - Card',
+    'HE - Cash Captain', 'HE - UPI Captain',
+    'HE - Swiggy', 'HE - Zomato', 'HE - WABA General',
+    'HE UPI', 'HE Complimentary',
+    'Customer Account',
+  ]);
+  let unmapped = 0;
+  for (const r of pmRows) if (!RECOGNISED.has(r.payment_method_name)) unmapped += r.p || 0;
+
+  const counter_cash    = pm('HE - Cash Counter');
+  const counter_upi_pos = pm('HE - UPI Counter') + pm('HE UPI'); // legacy/generic UPI rolls to counter
+  const counter_card    = pm('HE - Card');
+  const captain_sales   = pm('HE - Cash Captain') + pm('HE - UPI Captain');
+  const captain_upi     = pm('HE - UPI Captain');
+  const captain_cash    = pm('HE - Cash Captain');               // recorded directly, not derived
+  const aggregator      = pm('HE - Swiggy') + pm('HE - Zomato');
+  const waba            = pm('HE - WABA General');
+  // Paytm UPI settlement = ALL HE UPI (counter + captain). Compare against POS sum.
+  const counter_upi_rzp = paytmRow?.p || 0; // we reuse the column name; semantically "Paytm settlement total"
+  const total_pos_upi   = counter_upi_pos + captain_upi;
+  const total_cash      = counter_cash + captain_cash;
+  const total_upi       = counter_upi_rzp || total_pos_upi;       // prefer Paytm side; fall back to POS if no settlement yet (latest day)
+  const upi_discrepancy = total_pos_upi - counter_upi_rzp;
+
+  return {
+    gross_sales_paise: orderRow?.gross || 0,
+    counter_cash_paise: counter_cash,
+    counter_upi_pos_paise: total_pos_upi,        // total POS UPI (counter + captain)
+    counter_upi_rzp_paise: counter_upi_rzp,      // Paytm settlement total
+    counter_card_paise: counter_card,
+    runner_sales_paise: captain_sales,           // captain pool
+    runner_upi_paise: captain_upi,
+    runner_cash_paise: captain_cash,
+    aggregator_paise: aggregator,
+    waba_paise: waba,
     total_cash_paise: total_cash,
     total_upi_paise: total_upi,
     upi_discrepancy_paise: upi_discrepancy,

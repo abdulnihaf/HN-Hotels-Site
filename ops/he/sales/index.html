@@ -4,91 +4,1042 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0c0c14">
-<title>sales · HE — coming soon</title>
+<title>sales · HE</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script>
 tailwind.config = { theme: { extend: {
   fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
   colors: {
-    brand:   { 400:'#f0a944', 500:'#e8930c' },
-    surface: { 0:'#0c0c14', 1:'#111118', 2:'#16161f' },
-    ink:     { 1:'#f5f5f7', 2:'#c4c4cc', 3:'#8e8e9e' },
+    brand:   { 400:'#f0a944', 500:'#e8930c', 600:'#c97508' },
+    surface: { 0:'#0c0c14', 1:'#111118', 2:'#16161f', 3:'#1c1c27' },
+    ink:     { 1:'#f5f5f7', 2:'#c4c4cc', 3:'#8e8e9e', 4:'#5e5e6e' },
+    ok:      '#4ade80',
+    warn:    '#fb923c',
+    err:     '#f87171',
   },
 }}}
 </script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { background: #0c0c14; color: #f5f5f7; font-family: 'Inter', sans-serif; }
-  .card { background: #16161f; border: 1px solid rgba(255,255,255,.05); border-radius: 14px; }
-  .glass { background: rgba(12,12,20,.85); backdrop-filter: blur(14px) saturate(1.2); border-bottom: 1px solid rgba(255,255,255,.05); }
-  .chip { display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:500; border:1px solid rgba(255,255,255,.06); }
-  .chip-mute  { background: rgba(255,255,255,.04); color: #8e8e9e; }
-  .chip-soon  { background: rgba(232,147,12,.10); color: #f0a944; border-color: rgba(232,147,12,.3); }
-  .chip-live  { background: rgba(34,197,94,.10);  color: #4ade80; border-color: rgba(34,197,94,.3); }
+  body { overscroll-behavior: none; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+
+  .card    { background: #16161f; border: 1px solid rgba(255,255,255,.05); border-radius: 14px; }
+  .card-hover { transition: background .12s, border-color .12s; cursor: pointer; }
+  .card-hover:hover { background: rgba(255,255,255,.02); border-color: rgba(255,255,255,.1); }
+  .glass   { background: rgba(12,12,20,.85); backdrop-filter: blur(14px) saturate(1.2); border-bottom: 1px solid rgba(255,255,255,.05); }
+
+  .chip       { display:inline-flex; align-items:center; gap:4px; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:500; border:1px solid transparent; white-space:nowrap; line-height: 1.4; }
+  .chip-ok    { background: rgba(74,222,128,.10); color: #4ade80; border-color: rgba(74,222,128,.3); }
+  .chip-warn  { background: rgba(251,146,60,.10); color: #fb923c; border-color: rgba(251,146,60,.3); }
+  .chip-err   { background: rgba(248,113,113,.10); color: #f87171; border-color: rgba(248,113,113,.3); }
+  .chip-mute  { background: rgba(255,255,255,.04); color: #8e8e9e; border-color: rgba(255,255,255,.06); }
+  .chip-mute.on { background: rgba(232,147,12,.15); color: #f0a944; border-color: rgba(232,147,12,.4); }
+
+  .input        { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 10px 14px; font-size: 14px; color: #f5f5f7; outline: none; width: 100%; }
+  .input:focus  { border-color: rgba(232,147,12,.45); background: rgba(255,255,255,.06); }
+
+  .btn       { background: rgba(232,147,12,.15); color: #f0a944; border: 1px solid rgba(232,147,12,.3); border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; min-height: 36px; cursor: pointer; }
+  .btn-ghost { background: transparent; color: #c4c4cc; border-color: rgba(255,255,255,.08); }
+  .btn-ghost:hover { background: rgba(255,255,255,.04); color: #f5f5f7; }
+
+  .live { display:inline-block; width:6px; height:6px; border-radius:50%; background:#4ade80; box-shadow:0 0 6px #4ade80; animation: pulse 2s infinite; }
+  .live.paused { background:#f87171; box-shadow:0 0 6px #f87171; animation: none; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+  .spinner { border: 2px solid rgba(255,255,255,.1); border-top-color: #e8930c; border-radius: 50%; width: 14px; height: 14px; animation: spin .8s linear infinite; display:inline-block; vertical-align:middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .pin-btn { background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px; font-size: 18px; font-weight: 600; color:#f5f5f7; cursor: pointer; min-height: 60px; }
+  .pin-btn:hover { background: rgba(255,255,255,.1); }
+  .pin-dot { width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,.1); }
+  .pin-dot.filled { background: #e8930c; }
+
+  /* Stacked horizontal bar (for Cash/UPI/Card split) */
+  .stack-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.04); }
+  .stack-bar > div { transition: width .3s; }
+
+  /* Day cells in the heatmap calendar */
+  .day-cell { aspect-ratio: 1; min-width: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; cursor: pointer; transition: transform .12s, border-color .12s; border: 1px solid transparent; }
+  .day-cell:hover { transform: scale(1.08); border-color: rgba(255,255,255,.3); }
+  .day-cell.ok    { background: rgba(74,222,128,.12);  color: #4ade80; }
+  .day-cell.warn  { background: rgba(251,146,60,.18);  color: #fb923c; }
+  .day-cell.err   { background: rgba(248,113,113,.22); color: #fca5a5; }
+  .day-cell.empty { background: rgba(255,255,255,.02); color: #5e5e6e; }
+  .day-cell.selected { border-color: #f0a944; box-shadow: 0 0 0 2px rgba(232,147,12,.2); }
+
+  /* Sparkline */
+  .spark-svg { width: 100%; height: 60px; }
+
+  /* Reconciliation diff bar — POS vs Paytm side-by-side */
+  .diff-bar-row { display: grid; grid-template-columns: 92px 1fr 92px; gap: 8px; align-items: center; font-size: 12px; }
+  .diff-bar-track { height: 22px; background: rgba(255,255,255,.03); border-radius: 6px; position: relative; overflow: hidden; }
+  .diff-bar-fill { position: absolute; top: 0; bottom: 0; left: 0; transition: width .3s; }
+
+  /* Flow rail (where money came from → where it landed) */
+  .rail { display: grid; grid-template-columns: minmax(120px, 1fr) auto minmax(140px, 1fr); gap: 8px; align-items: center; padding: 10px 0; }
+  .rail-from { font-size: 12px; color: #c4c4cc; text-align: right; }
+  .rail-arrow { color: #5e5e6e; font-size: 14px; }
+  .rail-to { font-size: 12px; }
+  .rail-amount { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .grid-row td, .grid-row th { padding: 10px 8px; vertical-align: top; font-size: 13px; }
+  .grid-row + .grid-row td { border-top: 1px solid rgba(255,255,255,.04); }
+  .grid-head th { padding: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #8e8e9e; text-align: left; font-weight: 500; }
+  .grid-row[data-day] { cursor: pointer; }
+  .grid-row[data-day]:hover { background: rgba(255,255,255,.02); }
+
+  .sync-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .sync-dot.ok { background: #4ade80; }
+  .sync-dot.idle { background: #5e5e6e; }
+  .sync-dot.running { background: #f0a944; animation: pulse 1.2s infinite; }
+  .sync-dot.error { background: #f87171; }
+
+  .empty-banner { background: rgba(251,146,60,.08); border: 1px solid rgba(251,146,60,.25); color: #fb923c; padding: 10px 14px; border-radius: 12px; font-size: 12px; }
+
+  /* Sheet modal for day drill-down */
+  .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 40; backdrop-filter: blur(2px); }
+  .sheet { position: fixed; bottom: 0; left: 0; right: 0; max-height: 92vh; background: #16161f; border-top-left-radius: 20px; border-top-right-radius: 20px; z-index: 41; transform: translateY(100%); transition: transform .25s cubic-bezier(.2,.7,.3,1); overflow-y: auto; }
+  .sheet.open { transform: translateY(0); }
+  @media (min-width: 768px) {
+    .sheet { max-width: 720px; left: 50%; transform: translate(-50%, 100%); border-radius: 20px; bottom: 5vh; max-height: 80vh; }
+    .sheet.open { transform: translate(-50%, 0); }
+  }
+
+  .hidden { display: none !important; }
+  .stat-num { font-size: 28px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  @media (min-width: 768px) { .stat-num { font-size: 36px; } }
 </style>
 </head>
-<body class="pb-24">
+<body>
 
-<header class="glass sticky top-0 z-30">
-  <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-    <div class="flex items-baseline gap-2">
-      <span class="text-base font-bold tracking-tight text-brand-400">HN</span>
-      <span class="text-sm text-ink-3">sales · HE</span>
-      <span class="chip chip-soon ml-2">coming soon</span>
+<!-- ━━━━━━━━━━━━━━━━━━━━━ PIN gate ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="pin-gate" class="fixed inset-0 flex items-center justify-center z-50 bg-surface-0">
+  <div class="card p-6 max-w-sm w-full mx-4">
+    <div class="text-center mb-4">
+      <div class="text-xl font-bold tracking-tight"><span class="text-brand-400">HN</span> <span class="text-ink-3">/</span> sales · HE</div>
+      <div class="text-xs text-ink-3 mt-1">enter PIN</div>
     </div>
-    <a href="/ops/nch/sales/" class="text-xs text-ink-3 hover:text-brand-400">→ NCH (live)</a>
+    <div class="flex justify-center gap-2 mb-5">
+      <div class="pin-dot" id="pd-0"></div><div class="pin-dot" id="pd-1"></div>
+      <div class="pin-dot" id="pd-2"></div><div class="pin-dot" id="pd-3"></div>
+    </div>
+    <div class="grid grid-cols-3 gap-2">
+      <button class="pin-btn" onclick="pinPress('1')">1</button>
+      <button class="pin-btn" onclick="pinPress('2')">2</button>
+      <button class="pin-btn" onclick="pinPress('3')">3</button>
+      <button class="pin-btn" onclick="pinPress('4')">4</button>
+      <button class="pin-btn" onclick="pinPress('5')">5</button>
+      <button class="pin-btn" onclick="pinPress('6')">6</button>
+      <button class="pin-btn" onclick="pinPress('7')">7</button>
+      <button class="pin-btn" onclick="pinPress('8')">8</button>
+      <button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn opacity-40" onclick="pinClear()">clear</button>
+      <button class="pin-btn" onclick="pinPress('0')">0</button>
+      <button class="pin-btn opacity-40" onclick="pinBack()">←</button>
+    </div>
+    <div id="pin-err" class="text-xs text-red-400 mt-3 text-center hidden">incorrect pin</div>
   </div>
-  <nav class="max-w-5xl mx-auto px-4 flex gap-4 text-xs overflow-x-auto">
-    <a href="/ops/money/"    class="text-ink-3 hover:text-brand-400 py-2">money</a>
-    <a href="/ops/bank/"     class="text-ink-3 hover:text-brand-400 py-2">bank</a>
-    <a href="/ops/cash/"     class="text-ink-3 hover:text-brand-400 py-2">cash</a>
-    <a href="/ops/nch/sales/" class="text-ink-3 hover:text-brand-400 py-2">sales · NCH</a>
-    <a href="/ops/he/sales/"  class="text-brand-400 border-b-2 border-brand-400 py-2 font-semibold">sales · HE</a>
-    <a href="/ops/expense/"  class="text-ink-3 hover:text-brand-400 py-2">expense</a>
-    <a href="/ops/purchase/" class="text-ink-3 hover:text-brand-400 py-2">purchase</a>
-    <a href="/ops/bills/"    class="text-ink-3 hover:text-brand-400 py-2">bills</a>
-    <a href="/ops/vendor/"   class="text-ink-3 hover:text-brand-400 py-2">vendor</a>
-  </nav>
-</header>
+</div>
 
-<main class="max-w-3xl mx-auto px-4 pt-8">
-  <div class="card p-6 md:p-8">
-    <div class="text-2xl md:text-3xl font-bold tracking-tight mb-2">Hamza Express sales reconciliation</div>
-    <div class="text-sm text-ink-3 mb-6">Sibling of <a href="/ops/nch/sales/" class="text-brand-400 hover:underline">/ops/nch/sales/</a> · launches after NCH ledger Phase 2</div>
+<!-- ━━━━━━━━━━━━━━━━━━━━━ Main app ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="app" class="hidden pb-24 md:pb-8">
 
-    <h2 class="text-xs uppercase tracking-wider text-ink-3 mb-2">What's already in place</h2>
-    <ul class="text-sm text-ink-2 space-y-1.5 mb-6 ml-5 list-disc">
-      <li>HE POS source: <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">test.hamzahotel.com</code> (HE prod Odoo, despite the name)</li>
-      <li>HE company_id auto-discovered at first sync; per-captain UPI PMs already in Odoo: <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">HE Captain 02 / 03 / 04 / 05 UPI</code> + <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">HE - Cash Counter / Captain</code> + Swiggy / Zomato / Card / WABA</li>
-      <li>Paytm credentials on hn-hotels-site Pages (PAYTM_MERCHANT_KEY · MID ZPrZuI15432995875112) — for the daily UPI cross-check via dashboard.paytm.com transactions</li>
-      <li>Schema is brand-aware: same <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">pos_orders_mirror</code> / <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">pos_payments_mirror</code> / <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">pos_lines_mirror</code> / <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">sales_recon_daily</code> tables work for HE without changes</li>
-    </ul>
+  <header class="glass sticky top-0 z-30">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-baseline gap-2">
+        <span class="text-base font-bold tracking-tight text-brand-400">HN</span>
+        <span class="text-sm text-ink-3">sales · <span class="text-ink-1 font-semibold">HE</span></span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-ink-3 hidden sm:inline" id="last-refresh">—</span>
+        <span class="flex items-center gap-1.5 text-xs text-ink-3">
+          <span id="live-dot" class="live"></span><span id="live-label">live</span>
+        </span>
+        <button id="refresh-btn" class="text-ink-3 hover:text-ink-1 text-sm" title="refresh">↻</button>
+        <span id="who" class="text-xs text-ink-3">—</span>
+      </div>
+    </div>
+    <nav class="max-w-5xl mx-auto px-4 flex gap-4 text-xs overflow-x-auto">
+      <a href="/ops/money/"      class="text-ink-3 hover:text-brand-400 py-2">money</a>
+      <a href="/ops/bank/"       class="text-ink-3 hover:text-brand-400 py-2">bank</a>
+      <a href="/ops/cash/"       class="text-ink-3 hover:text-brand-400 py-2">cash</a>
+      <a href="/ops/sales/"      class="text-ink-3 hover:text-brand-400 py-2">sales</a>
+      <a href="/ops/nch/sales/"  class="text-ink-3 hover:text-brand-400 py-2">↳ NCH</a>
+      <a href="/ops/he/sales/"   class="text-brand-400 border-b-2 border-brand-400 py-2 font-semibold">↳ HE</a>
+      <a href="/ops/expense/"    class="text-ink-3 hover:text-brand-400 py-2">expense</a>
+      <a href="/ops/purchase/"   class="text-ink-3 hover:text-brand-400 py-2">purchase</a>
+      <a href="/ops/bills/"      class="text-ink-3 hover:text-brand-400 py-2">bills</a>
+      <a href="/ops/vendor/"     class="text-ink-3 hover:text-brand-400 py-2">vendor</a>
+    </nav>
+  </header>
 
-    <h2 class="text-xs uppercase tracking-wider text-ink-3 mb-2">What's left to build</h2>
-    <ul class="text-sm text-ink-2 space-y-1.5 mb-6 ml-5 list-disc">
-      <li><strong>HE-specific PM recogniser</strong> in <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">computeReconDay</code> — maps "HE - Cash Counter" → counter cash, "HE Captain N UPI" → per-captain UPI roll-up, etc.</li>
-      <li><strong>Paytm cross-check</strong> via Claude-in-Chrome MCP against <a href="https://dashboard.paytm.com/next/transactions" class="text-brand-400 hover:underline" target="_blank" rel="noopener">dashboard.paytm.com/next/transactions</a> — daily total compared against Σ "HE - UPI Counter" + Σ captain UPI PMs</li>
-      <li><strong>Aggregator overlay</strong> — Swiggy/Zomato PMs on HE flow through here too; reconcile against <a href="/ops/aggregator/" class="text-brand-400 hover:underline">/ops/aggregator/</a> snapshots</li>
-      <li><strong>Captain-level attribution</strong> — unlike NCH (which needed a Razorpay QR registry), HE has per-captain PMs in Odoo natively. The dashboard surfaces UPI per captain without a separate registry.</li>
-    </ul>
+  <!-- Filter bar -->
+  <section class="max-w-5xl mx-auto px-4 pt-4 flex flex-wrap items-center gap-2">
+    <span class="text-xs text-ink-3 mr-1">range:</span>
+    <input id="date-from-input" type="date" class="input py-1 px-2 w-auto" style="font-size:12px" onchange="loadAll()"/>
+    <span class="text-ink-3">→</span>
+    <input id="date-to-input"   type="date" class="input py-1 px-2 w-auto" style="font-size:12px" onchange="loadAll()"/>
+    <button class="chip chip-mute on" id="r-mtd"  onclick="setRange('mtd')">MTD</button>
+    <button class="chip chip-mute"     id="r-7d"   onclick="setRange('7d')">7d</button>
+    <button class="chip chip-mute"     id="r-30d"  onclick="setRange('30d')">30d</button>
+    <button class="chip chip-mute"     id="r-today" onclick="setRange('today')">Today</button>
+  </section>
 
-    <h2 class="text-xs uppercase tracking-wider text-ink-3 mb-2">Sequencing</h2>
-    <ol class="text-sm text-ink-2 space-y-1.5 mb-6 ml-5 list-decimal">
-      <li>NCH ledger Phase 2 (expenses + POs + cash trail reconciled against this dashboard's daily grid) — informs HE schema gaps if any</li>
-      <li>HE POS sync: extend <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">syncNchSales</code> in <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">workers/spend-sync-cron</code> to a brand-parameterised <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">syncBrandSales(brand, hostUrl, companyId)</code></li>
-      <li>HE-specific PM recogniser + Paytm Chrome MCP scraper</li>
-      <li>HE backfill from Apr 1 → today</li>
-      <li>Dashboard renders this URL with the same components, brand=HE</li>
-    </ol>
+  <!-- ════════════════════════════════════════════════
+       SECTION 1 — TODAY HERO (the "is everything OK?" answer)
+       ════════════════════════════════════════════════ -->
+  <section class="max-w-5xl mx-auto px-4 pt-5">
+    <div class="card p-5 md:p-7" id="hero-card" style="background: linear-gradient(135deg, rgba(232,147,12,.05), rgba(255,255,255,.01));">
+      <div class="flex items-baseline justify-between mb-4">
+        <div>
+          <div class="text-[11px] uppercase tracking-wider text-ink-3 font-semibold" id="hero-label">Today</div>
+          <div class="text-xs text-ink-3 mt-0.5" id="hero-subtext">—</div>
+        </div>
+        <div id="hero-status" class="chip chip-mute">—</div>
+      </div>
 
-    <div class="flex items-center gap-2 pt-4 border-t border-white/5 text-xs text-ink-3">
-      <span class="chip chip-live">NCH live · 8154 orders Apr 1–29</span>
-      <span class="chip chip-soon">HE on deck</span>
-      <a href="/ops/nch/sales/" class="ml-auto text-brand-400 hover:underline">→ Open NCH</a>
+      <div class="flex items-baseline gap-3 mb-1">
+        <div class="stat-num text-ink-1" id="hero-gross">₹0</div>
+        <div class="text-sm text-ink-3" id="hero-orders">0 orders</div>
+      </div>
+      <div class="text-[11px] text-ink-3" id="hero-avg">avg ticket —</div>
+
+      <!-- Stacked split bar: Cash | UPI | Card | Complimentary -->
+      <div class="mt-5">
+        <div class="stack-bar" id="hero-bar">
+          <div style="width:0%; background:#4ade80" data-key="cash"></div>
+          <div style="width:0%; background:#60a5fa" data-key="upi"></div>
+          <div style="width:0%; background:#c084fc" data-key="card"></div>
+          <div style="width:0%; background:#5e5e6e" data-key="comp"></div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-xs">
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:#4ade80"></span><span class="text-ink-3">Cash</span><span class="num text-ink-1 ml-auto md:ml-2 font-semibold" id="legend-cash">—</span></div>
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:#60a5fa"></span><span class="text-ink-3">UPI</span><span class="num text-ink-1 ml-auto md:ml-2 font-semibold" id="legend-upi">—</span></div>
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:#c084fc"></span><span class="text-ink-3">Card</span><span class="num text-ink-1 ml-auto md:ml-2 font-semibold" id="legend-card">—</span></div>
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:#5e5e6e"></span><span class="text-ink-3">Comp</span><span class="num text-ink-1 ml-auto md:ml-2 font-semibold" id="legend-comp">—</span></div>
+        </div>
+      </div>
+
+      <!-- Inline alert when there's a real discrepancy -->
+      <div id="hero-alert" class="mt-4 hidden"></div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════
+       SECTION 2 — DISCREPANCY CALENDAR (heatmap of days)
+       ════════════════════════════════════════════════ -->
+  <section class="max-w-5xl mx-auto px-4 pt-5">
+    <div class="flex items-baseline justify-between mb-2 px-1">
+      <h2 class="text-xs uppercase tracking-wider text-ink-3 font-semibold">Day-by-day · tap any cell</h2>
+      <div class="flex items-center gap-2 text-[10px] text-ink-3">
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm" style="background:rgba(74,222,128,.4)"></span>matched</span>
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm" style="background:rgba(251,146,60,.4)"></span>in flight</span>
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm" style="background:rgba(248,113,113,.4)"></span>investigate</span>
+      </div>
+    </div>
+    <div class="card p-3 md:p-4">
+      <div id="cal-grid" class="grid gap-1.5" style="grid-template-columns: repeat(7, minmax(0, 1fr));">
+        <!-- weekday headers -->
+        <div class="text-[10px] text-ink-4 text-center">Mon</div>
+        <div class="text-[10px] text-ink-4 text-center">Tue</div>
+        <div class="text-[10px] text-ink-4 text-center">Wed</div>
+        <div class="text-[10px] text-ink-4 text-center">Thu</div>
+        <div class="text-[10px] text-ink-4 text-center">Fri</div>
+        <div class="text-[10px] text-ink-4 text-center">Sat</div>
+        <div class="text-[10px] text-ink-4 text-center">Sun</div>
+      </div>
+      <div id="cal-summary" class="mt-3 text-xs text-ink-3 flex flex-wrap gap-3"></div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════
+       SECTION 3 — TREND SPARKLINES
+       ════════════════════════════════════════════════ -->
+  <section class="max-w-5xl mx-auto px-4 pt-5">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="card p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <h3 class="text-xs uppercase tracking-wider text-ink-3 font-semibold">Sales trend</h3>
+          <span class="text-xs text-ink-3" id="trend-sales-summary">—</span>
+        </div>
+        <svg id="spark-sales" class="spark-svg" viewBox="0 0 300 60" preserveAspectRatio="none"></svg>
+        <div class="text-[10px] text-ink-4 flex justify-between mt-1" id="spark-sales-axis"><span>—</span><span>—</span></div>
+      </div>
+      <div class="card p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <h3 class="text-xs uppercase tracking-wider text-ink-3 font-semibold">Cash vs UPI mix</h3>
+          <span class="text-xs text-ink-3" id="trend-mix-summary">—</span>
+        </div>
+        <svg id="spark-mix" class="spark-svg" viewBox="0 0 300 60" preserveAspectRatio="none"></svg>
+        <div class="text-[10px] text-ink-4 flex justify-between mt-1">
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:#4ade80"></span>Cash</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:#60a5fa"></span>UPI</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════
+       SECTION 4 — MONEY FLOW (where each rupee came from / went)
+       ════════════════════════════════════════════════ -->
+  <section class="max-w-5xl mx-auto px-4 pt-5">
+    <div class="card p-4 md:p-5">
+      <div class="flex items-baseline justify-between mb-3">
+        <h3 class="text-xs uppercase tracking-wider text-ink-3 font-semibold">How the money flowed · range total</h3>
+        <span class="text-xs text-ink-3" id="flow-period">—</span>
+      </div>
+
+      <!-- Counter side -->
+      <div class="text-[11px] uppercase tracking-wider text-ink-2 mb-2 font-semibold flex items-center gap-2">
+        <span class="w-1 h-3 rounded-sm bg-brand-400"></span>Counter POS
+      </div>
+      <div id="flow-counter" class="space-y-1 mb-4"></div>
+
+      <!-- Runner side -->
+      <div class="text-[11px] uppercase tracking-wider text-ink-2 mb-2 font-semibold flex items-center gap-2">
+        <span class="w-1 h-3 rounded-sm" style="background:#60a5fa"></span>Captain pool
+      </div>
+      <div id="flow-runner" class="space-y-1"></div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════
+       SECTION 5 — DAILY GRID (the table, simplified)
+       ════════════════════════════════════════════════ -->
+  <section class="max-w-5xl mx-auto px-4 pt-5">
+    <details class="card p-2 md:p-3" open>
+      <summary class="cursor-pointer text-xs uppercase tracking-wider text-ink-3 font-semibold px-2 py-1 flex items-baseline justify-between">
+        <span>Daily ledger ▾</span>
+        <span class="text-[11px] normal-case text-ink-4 font-normal" id="grid-count">—</span>
+      </summary>
+      <div class="overflow-x-auto mt-2">
+        <table class="w-full">
+          <thead class="grid-head">
+            <tr>
+              <th>Day</th>
+              <th class="text-right">Sales</th>
+              <th class="text-right">Cash</th>
+              <th class="text-right">UPI</th>
+              <th class="text-right">Δ UPI</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="grid-body">
+            <tr><td colspan="6" class="text-center text-ink-3 py-8"><span class="spinner"></span> loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <!-- ════════════════════════════════════════════════
+       Advanced sections (collapsed by default)
+       ════════════════════════════════════════════════ -->
+  <section class="max-w-5xl mx-auto px-4 pt-3 space-y-2">
+    <details class="card p-2">
+      <summary class="cursor-pointer text-xs uppercase tracking-wider text-ink-3 px-2 py-1">items sold (top 200) ▾</summary>
+      <div class="px-2 pb-3 pt-2">
+        <input id="items-search" class="input mb-2" placeholder="search by item name…" oninput="loadItems()"/>
+        <div class="overflow-x-auto"><table class="w-full"><thead class="grid-head"><tr><th>Item</th><th class="text-right">Qty</th><th class="text-right">Orders</th><th class="text-right">Revenue</th></tr></thead><tbody id="items-body"><tr><td colspan="4" class="text-center text-ink-3 py-6">expand to load</td></tr></tbody></table></div>
+      </div>
+    </details>
+    <details class="card p-2">
+      <summary class="cursor-pointer text-xs uppercase tracking-wider text-ink-3 px-2 py-1">payment-method breakdown ▾</summary>
+      <div id="pm-body" class="px-2 pb-3 pt-2 text-sm text-ink-3">expand to load</div>
+    </details>
+    <details class="card p-2">
+      <summary class="cursor-pointer text-xs uppercase tracking-wider text-ink-3 px-2 py-1 flex items-center gap-2">
+        paytm settlement (read-only) ▾
+        <button onclick="event.preventDefault(); discoverQrs();" class="btn ml-auto" style="font-size:11px;padding:4px 10px;min-height:26px">Discover</button>
+        <button onclick="event.preventDefault(); openQrSheet();" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;min-height:26px">+ Add</button>
+      </summary>
+      <div id="qr-body" class="px-2 pb-3 pt-2"><div class="text-sm text-ink-3">expand to load</div></div>
+    </details>
+    <details class="card p-2">
+      <summary class="cursor-pointer text-xs uppercase tracking-wider text-ink-3 px-2 py-1">pos config labels ▾</summary>
+      <div id="cfg-body" class="px-2 pb-3 pt-2"><div class="text-sm text-ink-3">expand to load</div></div>
+    </details>
+    <details class="card p-2">
+      <summary class="cursor-pointer text-xs uppercase tracking-wider text-ink-3 px-2 py-1">sync status ▾</summary>
+      <div id="sync-rows" class="pt-2"></div>
+    </details>
+  </section>
+
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ DAY DRILL SHEET (modal) ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="day-overlay" class="sheet-overlay hidden" onclick="closeDaySheet()"></div>
+<div id="day-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-xs text-ink-3" id="day-sub">—</div>
+        <div class="text-lg font-bold mt-0.5" id="day-title">—</div>
+      </div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeDaySheet()">×</button>
     </div>
   </div>
-</main>
+  <div class="px-5 py-5 space-y-5" id="day-body"></div>
+</div>
 
+<!-- ━━━━━━━━━━━━━━━━━━━━━ QR add/edit sheet (kept) ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="qr-overlay" class="sheet-overlay hidden" onclick="closeQrSheet()"></div>
+<div id="qr-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div class="text-base font-bold" id="qr-sheet-title">Add Paytm QR (HE: Paytm has one merchant ID — no per-QR registry)</div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeQrSheet()">×</button>
+    </div>
+  </div>
+  <div class="px-5 py-5 space-y-3">
+    <div><label class="text-xs text-ink-3 block mb-1">QR Code ID</label><input id="qr-id" class="input" placeholder="qr_LzAcOHEIeAtssh"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1">Role</label><select id="qr-role" class="input"><option value="counter">Counter</option><option value="runner" selected>Runner</option></select></div>
+    <div><label class="text-xs text-ink-3 block mb-1">Display name</label><input id="qr-display" class="input" placeholder="Runner — Nafees / Counter NCH"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1">Runner name</label><input id="qr-runner-name" class="input" placeholder="(required for runner)"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1">Runner PIN</label><input id="qr-runner-pin" class="input" placeholder="optional · e.g. 8241" pattern="\d{4}"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1">Notes</label><input id="qr-notes" class="input"/></div>
+    <div id="qr-err" class="text-xs text-red-400 hidden"></div>
+    <div class="flex gap-2 pt-1">
+      <button id="qr-submit" class="btn flex-1" onclick="submitQr()">Save</button>
+      <button id="qr-deactivate" class="btn btn-ghost hidden" onclick="deactivateQr()">Deactivate</button>
+    </div>
+  </div>
+</div>
+<div id="cfg-overlay" class="sheet-overlay hidden" onclick="closeCfgSheet()"></div>
+<div id="cfg-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div class="text-base font-bold">Label POS config <span id="cfg-id-disp" class="text-ink-3 font-normal"></span></div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeCfgSheet()">×</button>
+    </div>
+  </div>
+  <div class="px-5 py-5 space-y-3">
+    <div><label class="text-xs text-ink-3 block mb-1">Owner label</label><input id="cfg-label" class="input" placeholder="Counter POS / Runner POS / Token POS"/></div>
+    <div><label class="text-xs text-ink-3 block mb-1">Station kind</label><select id="cfg-kind" class="input"><option value="">—</option><option value="counter">counter</option><option value="runner">runner</option><option value="token">token</option><option value="delivery">delivery</option><option value="other">other</option></select></div>
+    <div id="cfg-err" class="text-xs text-red-400 hidden"></div>
+    <button class="btn w-full" onclick="submitCfg()">Save</button>
+  </div>
+</div>
+
+<script>
+let PIN = '';
+let WHO = null;
+let POLL_TIMER = null;
+let DATA = null;
+let DAILY = [];
+let QR_CACHE = {};
+
+// ━━━ PIN gate ━━━
+function pinPress(d) { if (PIN.length >= 4) return; PIN += d; drawPinDots(); if (PIN.length === 4) verifyPin(); }
+function pinClear() { PIN = ''; drawPinDots(); document.getElementById('pin-err').classList.add('hidden'); }
+function pinBack()  { PIN = PIN.slice(0, -1); drawPinDots(); }
+function drawPinDots() { for (let i = 0; i < 4; i++) document.getElementById('pd-' + i).classList.toggle('filled', i < PIN.length); }
+
+async function verifyPin() {
+  try {
+    const r = await fetch('/api/sales?action=overview&pin=' + encodeURIComponent(PIN) + '&brand=HE');
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error || 'auth failed');
+    WHO = j.user;
+    document.getElementById('who').textContent = WHO;
+    document.getElementById('pin-gate').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    localStorage.setItem('hn-sales-pin', PIN);
+    initDateInputs();
+    await loadConfigs();
+    loadAll();
+    loadSyncStatus();
+    schedulePoll();
+  } catch (e) {
+    document.getElementById('pin-err').textContent = e.message;
+    document.getElementById('pin-err').classList.remove('hidden');
+    PIN = ''; drawPinDots();
+  }
+}
+
+// ━━━ Helpers ━━━
+const today = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+function fmtR(p) {
+  if (p == null) return '—';
+  return '₹' + Math.round(p / 100).toLocaleString('en-IN');
+}
+function fmtRSigned(p) { if (p == null || p === 0) return '—'; return (p > 0 ? '+' : '−') + fmtR(Math.abs(p)); }
+function fmtRel(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  const ms = Date.now() - d.getTime();
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + ' min ago';
+  if (m < 1440) return Math.floor(m/60) + 'h ago';
+  return Math.floor(m/1440) + 'd ago';
+}
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function chipFor(diff_paise) {
+  const d = Math.abs(diff_paise || 0);
+  if (d < 100) return { cls: 'ok',   label: '✓ matched',     short: '✓' };
+  if (d < 10000) return { cls: 'warn', label: 'in flight',    short: '~' };
+  return            { cls: 'err',  label: 'investigate',  short: '!' };
+}
+
+function initDateInputs() {
+  if (!document.getElementById('date-from-input').value) document.getElementById('date-from-input').value = '2026-04-01';
+  if (!document.getElementById('date-to-input').value)   document.getElementById('date-to-input').value = today();
+}
+function setRange(kind) {
+  const t = today();
+  const days = { mtd: t.slice(0,7) + '-01', '7d': isoDateMinus(7), '30d': isoDateMinus(30), today: t };
+  document.getElementById('date-from-input').value = days[kind];
+  document.getElementById('date-to-input').value = t;
+  ['mtd','7d','30d','today'].forEach(k => document.getElementById('r-'+k).classList.toggle('on', k === kind));
+  loadAll();
+}
+function isoDateMinus(n) {
+  const d = new Date(Date.now() + 5.5*3600*1000 - n*86400*1000);
+  return d.toISOString().slice(0, 10);
+}
+
+// ━━━ Load everything ━━━
+async function loadAll() {
+  const from = document.getElementById('date-from-input').value;
+  const to   = document.getElementById('date-to-input').value;
+  try {
+    const [overview, daily] = await Promise.all([
+      fetch(`/api/sales?action=overview&pin=${PIN}&brand=HE&from=${from}&to=${to}`).then(r => r.json()),
+      fetch(`/api/sales?action=daily&pin=${PIN}&brand=HE&from=${from}&to=${to}`).then(r => r.json()),
+    ]);
+    if (!overview.success) throw new Error(overview.error || 'fetch failed');
+    DATA = overview;
+    DAILY = (daily.success ? daily.rows : []).slice().sort((a,b) => a.day.localeCompare(b.day));
+    document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+    document.getElementById('live-dot').classList.remove('paused');
+    document.getElementById('live-label').textContent = 'live';
+    renderHero();
+    renderCalendar();
+    renderSparklines();
+    renderFlow();
+    renderGrid();
+  } catch (e) {
+    document.getElementById('live-dot').classList.add('paused');
+    document.getElementById('live-label').textContent = 'paused';
+    console.error(e);
+  }
+}
+
+// ━━━ Hero ━━━
+function renderHero() {
+  const t = DATA.totals || {};
+  const range = DATA.range || {};
+  const isToday = range.from === range.to && range.from === today();
+  const isMtd = range.from === today().slice(0,7) + '-01';
+  document.getElementById('hero-label').textContent = isToday ? 'Today' : isMtd ? 'Month-to-date' : `${range.from} → ${range.to}`;
+  const days = (DAILY.length || 1);
+  document.getElementById('hero-subtext').textContent =
+    isToday ? `as of ${new Date().toLocaleTimeString()} IST · synced ${fmtRel(DATA.last_recomputed_at)}`
+            : `${days} day${days>1?'s':''} · synced ${fmtRel(DATA.last_recomputed_at)}`;
+
+  document.getElementById('hero-gross').textContent  = fmtR(t.gross_sales_paise);
+  document.getElementById('hero-orders').textContent = (t.order_count || 0).toLocaleString('en-IN') + ' orders';
+  const avg = t.order_count ? Math.round((t.gross_sales_paise || 0) / t.order_count) : null;
+  document.getElementById('hero-avg').textContent = 'avg ticket ' + fmtR(avg);
+
+  // Stacked bar
+  const total = (t.total_cash_paise || 0) + (t.total_upi_paise || 0) + (t.total_card_paise || 0) + (t.complimentary_paise || 0);
+  const pct = (n) => total ? (n / total * 100).toFixed(2) + '%' : '0%';
+  document.querySelector('#hero-bar [data-key="cash"]').style.width = pct(t.total_cash_paise || 0);
+  document.querySelector('#hero-bar [data-key="upi"]').style.width  = pct(t.total_upi_paise || 0);
+  document.querySelector('#hero-bar [data-key="card"]').style.width = pct(t.total_card_paise || 0);
+  document.querySelector('#hero-bar [data-key="comp"]').style.width = pct(t.complimentary_paise || 0);
+  const sharePct = (n) => total ? Math.round(n / total * 100) + '%' : '—';
+  document.getElementById('legend-cash').textContent = `${fmtR(t.total_cash_paise)} · ${sharePct(t.total_cash_paise || 0)}`;
+  document.getElementById('legend-upi').textContent  = `${fmtR(t.total_upi_paise)} · ${sharePct(t.total_upi_paise || 0)}`;
+  document.getElementById('legend-card').textContent = `${fmtR(t.total_card_paise)} · ${sharePct(t.total_card_paise || 0)}`;
+  document.getElementById('legend-comp').textContent = `${fmtR(t.complimentary_paise)} · ${sharePct(t.complimentary_paise || 0)}`;
+
+  // Status chip + alert
+  const red = t.red_days || 0;
+  const yel = t.yellow_days || 0;
+  const statusEl = document.getElementById('hero-status');
+  const alertEl = document.getElementById('hero-alert');
+  if (red === 0 && yel === 0) {
+    statusEl.className = 'chip chip-ok';
+    statusEl.textContent = '✓ All reconciled';
+    alertEl.classList.add('hidden');
+  } else if (red === 0) {
+    statusEl.className = 'chip chip-warn';
+    statusEl.textContent = `${yel} day${yel>1?'s':''} in flight`;
+    alertEl.classList.add('hidden');
+  } else {
+    statusEl.className = 'chip chip-err';
+    statusEl.textContent = `${red} day${red>1?'s':''} need investigation`;
+    alertEl.classList.remove('hidden');
+    alertEl.innerHTML = `
+      <div class="card p-3" style="background:rgba(248,113,113,.06); border-color:rgba(248,113,113,.25)">
+        <div class="flex items-baseline gap-2 mb-1">
+          <span class="chip chip-err">!</span>
+          <span class="text-sm font-semibold text-red-300">${fmtR(t.abs_upi_discrepancy_paise)} unreconciled across ${red + yel} day${red+yel>1?'s':''}</span>
+        </div>
+        <div class="text-xs text-ink-3 leading-relaxed">
+          <strong class="text-red-300">${red} red</strong> (₹100+) — money received differs from POS.
+          <strong class="text-orange-300">${yel} yellow</strong> (₹1–99) — usually settlement in flight, resolves on next sync.
+          <span class="block mt-1.5">Tap a day in the calendar below or in the daily ledger to see the breakdown.</span>
+        </div>
+      </div>`;
+  }
+  if (t.unmapped_paise > 0) {
+    alertEl.classList.remove('hidden');
+    alertEl.innerHTML += `
+      <div class="card p-3 mt-2" style="background:rgba(251,146,60,.06); border-color:rgba(251,146,60,.3)">
+        <div class="text-sm font-semibold" style="color:#fb923c">⚠ ${fmtR(t.unmapped_paise)} on unrecognised payment methods</div>
+        <div class="text-xs text-ink-3 mt-1">A new PM appeared in Odoo that the recogniser doesn't know. Open the PM breakdown below to find it.</div>
+      </div>`;
+  }
+}
+
+// ━━━ Calendar heatmap ━━━
+function renderCalendar() {
+  const map = Object.fromEntries(DAILY.map(r => [r.day, r]));
+  const from = document.getElementById('date-from-input').value;
+  const to   = document.getElementById('date-to-input').value;
+  const start = new Date(from + 'T00:00:00Z');
+  const end = new Date(to + 'T00:00:00Z');
+  // Build a list of dates from `from` to `to`, padding leading weekday slots
+  const days = [];
+  const startDow = (start.getUTCDay() + 6) % 7; // Mon = 0
+  for (let i = 0; i < startDow; i++) days.push(null);
+  for (let d = start.getTime(); d <= end.getTime(); d += 86400000) {
+    const iso = new Date(d).toISOString().slice(0, 10);
+    days.push({ iso, row: map[iso] });
+  }
+  // Wipe old cells (everything after the 7 weekday headers)
+  const grid = document.getElementById('cal-grid');
+  while (grid.children.length > 7) grid.removeChild(grid.lastChild);
+  for (const d of days) {
+    const cell = document.createElement('div');
+    if (!d) {
+      cell.className = 'day-cell empty';
+      cell.textContent = '';
+    } else if (!d.row) {
+      cell.className = 'day-cell empty';
+      cell.textContent = parseInt(d.iso.slice(8,10), 10);
+      cell.title = `${d.iso} · no data`;
+    } else {
+      const c = chipFor(d.row.upi_discrepancy_paise);
+      cell.className = 'day-cell ' + c.cls;
+      cell.textContent = parseInt(d.iso.slice(8,10), 10);
+      cell.title = `${d.iso} · ${fmtR(d.row.gross_sales_paise)} · ${c.label}`;
+      cell.addEventListener('click', () => openDaySheet(d.iso));
+    }
+    grid.appendChild(cell);
+  }
+  // summary chips
+  const t = DATA.totals || {};
+  const cleanDays = (DAILY.length - (t.red_days||0) - (t.yellow_days||0));
+  document.getElementById('cal-summary').innerHTML = `
+    <span><strong class="text-green-400">${cleanDays}</strong> matched</span>
+    <span><strong class="text-orange-300">${t.yellow_days||0}</strong> in flight</span>
+    <span><strong class="text-red-300">${t.red_days||0}</strong> need check</span>
+    <span class="ml-auto text-ink-4">${DAILY.length} day${DAILY.length>1?'s':''} in range</span>`;
+}
+
+// ━━━ Sparklines ━━━
+function renderSparklines() {
+  if (!DAILY.length) {
+    document.getElementById('spark-sales').innerHTML = '';
+    document.getElementById('spark-mix').innerHTML = '';
+    return;
+  }
+  // Sales sparkline
+  const sales = DAILY.map(r => r.gross_sales_paise || 0);
+  const max = Math.max(...sales, 1);
+  const total = sales.reduce((a,b)=>a+b,0);
+  const avg = total / sales.length;
+  document.getElementById('trend-sales-summary').textContent =
+    `avg ${fmtR(avg)}/day · peak ${fmtR(max)}`;
+  document.getElementById('spark-sales').innerHTML = sparklineSvg(sales, '#f0a944', { showArea: true, max });
+  document.getElementById('spark-sales-axis').innerHTML = `<span>${DAILY[0].day.slice(5)}</span><span>${DAILY[DAILY.length-1].day.slice(5)}</span>`;
+
+  // Mix sparkline (cash vs UPI as % of sales over time)
+  const cashLine = DAILY.map(r => (r.gross_sales_paise > 0) ? (r.total_cash_paise || 0) / r.gross_sales_paise : 0);
+  const upiLine = DAILY.map(r => (r.gross_sales_paise > 0) ? (r.total_upi_paise || 0) / r.gross_sales_paise : 0);
+  const cashAvg = cashLine.reduce((a,b)=>a+b,0)/cashLine.length;
+  const upiAvg = upiLine.reduce((a,b)=>a+b,0)/upiLine.length;
+  document.getElementById('trend-mix-summary').textContent =
+    `cash ${Math.round(cashAvg*100)}% · upi ${Math.round(upiAvg*100)}%`;
+  const cashSvg = sparklineSvg(cashLine, '#4ade80', { showArea: false, max: 1 });
+  const upiSvg = sparklineSvg(upiLine, '#60a5fa', { showArea: false, max: 1 });
+  document.getElementById('spark-mix').innerHTML = cashSvg + upiSvg;
+}
+
+function sparklineSvg(values, color, opts = {}) {
+  const max = opts.max || Math.max(...values, 1);
+  const W = 300, H = 60, pad = 4;
+  const xStep = (W - pad*2) / Math.max(values.length - 1, 1);
+  let pts = values.map((v, i) => {
+    const x = pad + i * xStep;
+    const y = H - pad - (v / max) * (H - pad*2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  let svg = '';
+  if (opts.showArea && values.length > 1) {
+    svg += `<polygon points="${pad},${H-pad} ${pts.join(' ')} ${W-pad},${H-pad}" fill="${color}" fill-opacity="0.12"/>`;
+  }
+  svg += `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  return svg;
+}
+
+// ━━━ Money flow ━━━
+function renderFlow() {
+  const t = DATA.totals || {};
+  const range = DATA.range || {};
+  document.getElementById('flow-period').textContent = `${range.from} → ${range.to}`;
+
+  const counterRows = [
+    { label: 'Cash punched at till',     a: t.counter_cash_paise || 0,    color: '#4ade80', match: null },
+    { label: 'UPI punched at till',      a: t.counter_upi_pos_paise || 0, color: '#60a5fa', match: t.counter_upi_rzp_paise || 0, matchLabel: 'Paytm settlement (HDFC)' },
+    { label: 'Card swiped',              a: t.counter_card_paise || 0,    color: '#c084fc', match: null },
+  ];
+  const cMax = Math.max(...counterRows.map(r => r.a), 1);
+  document.getElementById('flow-counter').innerHTML = counterRows.map(r => renderFlowRow(r, cMax)).join('');
+
+  const runner = (t.runner_sales_paise || 0);
+  const runnerUpi = (t.runner_upi_paise || 0);
+  const runnerCash = (t.runner_cash_paise || 0);
+  const runnerRows = [
+    { label: 'Captain pool sales (POS)',        a: runner,     color: '#f0a944', sub: 'HE - UPI Captain + HE - Cash Captain' },
+    { label: 'Captain UPI (POS)',               a: runnerUpi,  color: '#60a5fa', sub: 'HE - UPI Captain' },
+    { label: 'Captain cash (POS)',              a: runnerCash, color: '#4ade80', sub: 'HE - Cash Captain (recorded directly)' },
+  ];
+  const rMax = Math.max(...runnerRows.map(x => x.a), 1);
+  document.getElementById('flow-runner').innerHTML = runnerRows.map(r => renderFlowRow(r, rMax)).join('');
+}
+function renderFlowRow(r, max) {
+  const w = (r.a / max * 100).toFixed(1) + '%';
+  let matchHtml = '';
+  if (r.match != null) {
+    const diff = r.a - r.match;
+    const dchip = chipFor(diff);
+    matchHtml = `
+      <div class="diff-bar-row mt-1">
+        <div class="text-right text-ink-3" style="font-size:11px">vs Paytm</div>
+        <div class="diff-bar-track">
+          <div class="diff-bar-fill" style="background:#60a5fa; opacity:.7; width:${(r.match/Math.max(r.a, r.match, 1)*100).toFixed(1)}%"></div>
+        </div>
+        <div class="rail-amount text-right num text-ink-2">${fmtR(r.match)}</div>
+      </div>
+      <div class="text-[11px] text-ink-3 mt-1">
+        <span class="chip chip-${dchip.cls}">${dchip.label}</span>
+        <span class="ml-1">${diff === 0 ? 'matches Paytm' : (diff > 0 ? `POS recorded <strong class="text-red-300">${fmtR(diff)} more</strong> than Paytm settlement (failed/pending UPI?)` : `Paytm received <strong class="text-red-300">${fmtR(-diff)} more</strong> than POS marked (UPI marked as cash?)`)}</span>
+      </div>`;
+  }
+  return `
+    <div class="diff-bar-row">
+      <div class="text-right text-ink-2" style="font-size:12px;line-height:1.2">${escapeHtml(r.label)}${r.sub ? `<div class="text-ink-4 text-[10px]">${escapeHtml(r.sub)}</div>` : ''}</div>
+      <div class="diff-bar-track">
+        <div class="diff-bar-fill" style="background:${r.color}; width:${w}"></div>
+      </div>
+      <div class="rail-amount text-right num">${fmtR(r.a)}</div>
+    </div>${matchHtml}<div class="my-2 border-t border-white/5"></div>`;
+}
+
+// ━━━ Daily grid (simplified) ━━━
+function renderGrid() {
+  document.getElementById('grid-count').textContent = `${DAILY.length} day${DAILY.length>1?'s':''}`;
+  const tbody = document.getElementById('grid-body');
+  if (!DAILY.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-ink-3 py-6">no rows</td></tr>';
+    return;
+  }
+  const rows = DAILY.slice().sort((a,b) => b.day.localeCompare(a.day));
+  tbody.innerHTML = rows.map(r => {
+    const c = chipFor(r.upi_discrepancy_paise);
+    return `
+      <tr class="grid-row" data-day="${r.day}" onclick="openDaySheet('${r.day}')">
+        <td class="num text-ink-2 whitespace-nowrap">${r.day}</td>
+        <td class="text-right num font-semibold">${fmtR(r.gross_sales_paise)}</td>
+        <td class="text-right num">${fmtR(r.total_cash_paise)}</td>
+        <td class="text-right num">${fmtR(r.total_upi_paise)}</td>
+        <td class="text-right num">${fmtRSigned(r.upi_discrepancy_paise)}</td>
+        <td><span class="chip chip-${c.cls}">${c.label}</span></td>
+      </tr>`;
+  }).join('');
+}
+
+// ━━━ Day drill-down sheet ━━━
+async function openDaySheet(day) {
+  const row = DAILY.find(r => r.day === day);
+  if (!row) return;
+  document.getElementById('day-sub').textContent = day;
+  document.getElementById('day-title').textContent = new Date(day + 'T00:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+  const c = chipFor(row.upi_discrepancy_paise);
+
+  const cash = row.total_cash_paise || 0;
+  const upi = row.total_upi_paise || 0;
+  const card = row.counter_card_paise || 0;
+  const comp = row.complimentary_paise || 0;
+  const total = cash + upi + card + comp;
+  const pct = (n) => total ? (n / total * 100).toFixed(1) + '%' : '0%';
+
+  // discrepancy explainer
+  const diff = row.upi_discrepancy_paise || 0;
+  let explainer;
+  if (Math.abs(diff) < 100) {
+    explainer = `<div class="card p-3" style="background:rgba(74,222,128,.06)"><div class="text-sm font-semibold text-green-400">✓ Reconciled</div><div class="text-xs text-ink-3 mt-1">Counter UPI on POS matches Paytm within ₹1.</div></div>`;
+  } else if (diff > 0) {
+    explainer = `<div class="card p-3" style="background:rgba(251,146,60,.06)">
+      <div class="text-sm font-semibold" style="color:#fb923c">POS UPI > Paytm settlement by ${fmtR(diff)}</div>
+      <div class="text-xs text-ink-3 mt-2 space-y-1">
+        <div>• Cashier marked UPI on POS but the customer's payment didn't reach Paytm yet</div>
+        <div>• Likely causes: <strong>failed UPI / timeout / pending settlement</strong></div>
+        <div>• If still red after 1–2 hours, investigate via NCH validator</div>
+      </div></div>`;
+  } else {
+    explainer = `<div class="card p-3" style="background:rgba(248,113,113,.06)">
+      <div class="text-sm font-semibold text-red-300">Paytm > POS UPI by ${fmtR(-diff)}</div>
+      <div class="text-xs text-ink-3 mt-2 space-y-1">
+        <div>• Money landed in Paytm but POS didn't credit UPI for it</div>
+        <div>• Likely causes: <strong>cashier marked Cash by mistake</strong>, OR customer scanned a different QR than the cashier expected</div>
+        <div>• Check NCH validator for the exact orders</div>
+      </div></div>`;
+  }
+
+  document.getElementById('day-body').innerHTML = `
+    <!-- Headline -->
+    <div>
+      <div class="flex items-baseline justify-between mb-1">
+        <div class="text-2xl font-bold num">${fmtR(row.gross_sales_paise)}</div>
+        <span class="chip chip-${c.cls}">${c.label}</span>
+      </div>
+      <div class="text-xs text-ink-3">${(row.order_count||0).toLocaleString('en-IN')} orders · avg ${fmtR(Math.round((row.gross_sales_paise||0)/(row.order_count||1)))}</div>
+    </div>
+
+    <!-- Where the money came from -->
+    <div>
+      <div class="text-[11px] uppercase tracking-wider text-ink-3 mb-2">Money received</div>
+      <div class="stack-bar mb-2">
+        <div style="width:${pct(cash)};  background:#4ade80"></div>
+        <div style="width:${pct(upi)};   background:#60a5fa"></div>
+        <div style="width:${pct(card)};  background:#c084fc"></div>
+        <div style="width:${pct(comp)};  background:#5e5e6e"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:#4ade80"></span><span class="text-ink-3">Cash</span><span class="num text-ink-1 ml-auto font-semibold">${fmtR(cash)}</span></div>
+        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:#60a5fa"></span><span class="text-ink-3">UPI</span><span class="num text-ink-1 ml-auto font-semibold">${fmtR(upi)}</span></div>
+        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:#c084fc"></span><span class="text-ink-3">Card</span><span class="num text-ink-1 ml-auto font-semibold">${fmtR(card)}</span></div>
+        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:#5e5e6e"></span><span class="text-ink-3">Comp</span><span class="num text-ink-1 ml-auto font-semibold">${fmtR(comp)}</span></div>
+      </div>
+    </div>
+
+    <!-- Counter UPI reconciliation -->
+    <div>
+      <div class="text-[11px] uppercase tracking-wider text-ink-3 mb-2">Counter UPI reconciliation</div>
+      <div class="diff-bar-row mb-1">
+        <div class="text-right text-ink-3" style="font-size:11px">POS marked UPI</div>
+        <div class="diff-bar-track">
+          <div class="diff-bar-fill" style="background:#60a5fa; width:${(row.counter_upi_pos_paise || 0) > 0 ? 100 : 0}%"></div>
+        </div>
+        <div class="rail-amount text-right num">${fmtR(row.counter_upi_pos_paise)}</div>
+      </div>
+      <div class="diff-bar-row">
+        <div class="text-right text-ink-3" style="font-size:11px">Paytm got</div>
+        <div class="diff-bar-track">
+          <div class="diff-bar-fill" style="background:#60a5fa; opacity:.5; width:${(row.counter_upi_rzp_paise || 0) > 0 && (row.counter_upi_pos_paise || 0) > 0 ? Math.min(100, row.counter_upi_rzp_paise / row.counter_upi_pos_paise * 100) : ((row.counter_upi_rzp_paise || 0) > 0 ? 100 : 0)}%"></div>
+        </div>
+        <div class="rail-amount text-right num">${fmtR(row.counter_upi_rzp_paise)}</div>
+      </div>
+      <div class="mt-3">${explainer}</div>
+    </div>
+
+    <!-- Runner side -->
+    <div>
+      <div class="text-[11px] uppercase tracking-wider text-ink-3 mb-2">Runner attribution</div>
+      <div class="space-y-1.5 text-xs">
+        <div class="flex justify-between"><span class="text-ink-3">Sales (Runner Ledger + Token Issue)</span><span class="num text-ink-1 font-semibold">${fmtR(row.runner_sales_paise)}</span></div>
+        <div class="flex justify-between"><span class="text-ink-3">UPI received on 5 runner QRs</span><span class="num text-ink-1 font-semibold">${fmtR(row.runner_upi_paise)}</span></div>
+        <div class="flex justify-between border-t border-white/5 pt-1.5"><span class="text-ink-3">Cash brought by runners <span class="text-ink-4">(derived)</span></span><span class="num text-ink-1 font-bold">${fmtR(row.runner_cash_paise)}</span></div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+      <button class="btn" onclick="recomputeDay('${row.day}')">↻ Recompute from latest data</button>
+      <a class="btn btn-ghost" href="https://hamzaexpress.in/ops/v2/" target="_blank" rel="noopener">→ HE /ops/v2 (when ready)</a>
+    </div>`;
+
+  document.getElementById('day-overlay').classList.remove('hidden');
+  document.getElementById('day-sheet').classList.add('open');
+}
+function closeDaySheet() {
+  document.getElementById('day-overlay').classList.add('hidden');
+  document.getElementById('day-sheet').classList.remove('open');
+}
+
+async function recomputeDay(day) {
+  try {
+    const r = await fetch('/api/sales?action=recompute-day', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN, day, brand: 'HE' })
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    closeDaySheet();
+    await loadAll();
+  } catch (e) { alert('Recompute error: ' + e.message); }
+}
+
+// ━━━ Configs (filter dropdown — kept so PM breakdown can filter) ━━━
+async function loadConfigs() {
+  try {
+    const r = await fetch('/api/sales?action=pos-configs&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) return;
+    window.__cfgs = j.configs || [];
+  } catch (_) {}
+}
+
+// ━━━ Lazy sections ━━━
+async function loadItems() {
+  const tbody = document.getElementById('items-body');
+  tbody.innerHTML = '<tr><td colspan="4" class="text-center text-ink-3 py-6"><span class="spinner"></span></td></tr>';
+  try {
+    const from = document.getElementById('date-from-input').value;
+    const to   = document.getElementById('date-to-input').value;
+    const search = document.getElementById('items-search').value.trim();
+    const sq = search ? `&search=${encodeURIComponent(search)}` : '';
+    const r = await fetch(`/api/sales?action=items&pin=${PIN}&brand=HE&from=${from}&to=${to}${sq}`);
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    if (!j.items.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-ink-3 py-6">no items</td></tr>'; return; }
+    tbody.innerHTML = j.items.map(i => `<tr class="grid-row"><td class="text-ink-2">${escapeHtml(i.product_name || ('#'+i.product_id))}</td><td class="text-right num">${(i.qty||0).toLocaleString('en-IN',{maximumFractionDigits:1})}</td><td class="text-right num">${i.orders}</td><td class="text-right num">${fmtR(i.revenue_paise)}</td></tr>`).join('');
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="4" class="text-center text-red-400 py-6">${escapeHtml(e.message)}</td></tr>`; }
+}
+async function loadPm() {
+  const body = document.getElementById('pm-body');
+  body.innerHTML = '<div class="text-sm text-ink-3 py-2"><span class="spinner"></span></div>';
+  try {
+    const from = document.getElementById('date-from-input').value;
+    const to   = document.getElementById('date-to-input').value;
+    const r = await fetch(`/api/sales?action=pm-breakdown&pin=${PIN}&brand=HE&from=${from}&to=${to}`);
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    if (!j.rows.length) { body.innerHTML = '<div class="text-sm text-ink-3 py-2">no payments</div>'; return; }
+    const totalAmt = j.rows.reduce((s, r) => s + (r.amount_paise || 0), 0);
+    body.innerHTML = `<table class="w-full"><thead class="grid-head"><tr><th>POS</th><th>Method</th><th class="text-right">Lines</th><th class="text-right">Amount</th><th class="text-right">Share</th></tr></thead><tbody>${j.rows.map(r => `<tr class="grid-row"><td class="num text-ink-3">#${r.pos_config_id}</td><td class="text-ink-2">${escapeHtml(r.payment_method_name)}${r.recognised ? '' : ' <span class="chip chip-warn ml-1">unmapped</span>'}</td><td class="text-right num">${r.lines}</td><td class="text-right num">${fmtR(r.amount_paise)}</td><td class="text-right num text-ink-3">${totalAmt ? Math.round(r.amount_paise/totalAmt*100)+'%' : '—'}</td></tr>`).join('')}</tbody></table>`;
+  } catch (e) { body.innerHTML = `<div class="text-sm text-red-400 py-2">${escapeHtml(e.message)}</div>`; }
+}
+async function loadQr() {
+  const body = document.getElementById('qr-body');
+  body.innerHTML = '<div class="text-sm text-ink-3 py-2"><span class="spinner"></span></div>';
+  try {
+    const r = await fetch('/api/sales?action=qr-registry&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    QR_CACHE = Object.fromEntries((j.qrs || []).map(q => [q.qr_code_id, q]));
+    if (!j.qrs.length) { body.innerHTML = '<div class="text-sm text-ink-3">Paytm uses a single merchant ID for HE — no per-QR registry. Daily settlement totals come from /ops/bank/ HDFC feed.</div>'; return; }
+    body.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${j.qrs.map(q => `<div class="card card-hover p-3" onclick="openQrSheet('${escapeHtml(q.qr_code_id)}')"><div class="flex items-baseline justify-between"><div class="font-semibold text-ink-1 text-sm">${escapeHtml(q.display_name)}${q.active ? '' : ' <span class="chip chip-warn ml-1">inactive</span>'}</div><span class="chip ${q.role==='counter'?'chip-mute on':'chip-mute'}">${q.role}</span></div><div class="text-[11px] text-ink-3 num truncate">${escapeHtml(q.qr_code_id)}</div><div class="mt-2 text-xs text-ink-3">Today <span class="num text-ink-1 font-semibold">${fmtR(q.today_paise)}</span> · MTD <span class="num text-ink-1 font-semibold">${fmtR(q.mtd_paise)}</span></div></div>`).join('')}</div>`;
+  } catch (e) { body.innerHTML = `<div class="text-sm text-red-400 py-2">${escapeHtml(e.message)}</div>`; }
+}
+async function loadCfg() {
+  const body = document.getElementById('cfg-body');
+  body.innerHTML = '<div class="text-sm text-ink-3 py-2"><span class="spinner"></span></div>';
+  try {
+    const r = await fetch('/api/sales?action=pos-configs&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    body.innerHTML = `<table class="w-full"><thead class="grid-head"><tr><th>POS #</th><th>Odoo name</th><th>Owner label</th><th>Kind</th><th></th></tr></thead><tbody>${(j.configs||[]).map(c=>`<tr class="grid-row"><td class="num text-ink-2">#${c.pos_config_id}</td><td class="text-ink-3 text-xs">${escapeHtml(c.name||'')}</td><td class="text-ink-2">${escapeHtml(c.label||'—')}</td><td class="text-ink-3 text-xs">${escapeHtml(c.station_kind||'—')}</td><td class="text-right"><button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;min-height:28px" onclick="openCfgSheet(${c.pos_config_id}, ${JSON.stringify(c.label||'').replace(/"/g,'&quot;')}, ${JSON.stringify(c.station_kind||'').replace(/"/g,'&quot;')})">edit</button></td></tr>`).join('')}</tbody></table>`;
+  } catch (e) { body.innerHTML = `<div class="text-sm text-red-400 py-2">${escapeHtml(e.message)}</div>`; }
+}
+async function loadSyncStatus() {
+  try {
+    const r = await fetch('/api/sales?action=sync-status&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) return;
+    document.getElementById('sync-rows').innerHTML = (j.sources||[]).map(s=>`<div class="sync-row"><span class="sync-dot ${s.last_run_status||'idle'}"></span><span class="text-ink-2 font-medium" style="min-width:200px">${s.sync_source}</span><span class="text-ink-3">last: ${s.last_run_at?new Date(s.last_run_at).toLocaleString():'—'}</span><span class="text-ink-3">rows: ${s.rows_added_total||0}</span>${s.last_error?`<span class="text-red-400 text-[11px]" title="${escapeHtml(s.last_error)}">err</span>`:''}</div>`).join('');
+  } catch (_) {}
+}
+
+// ━━━ QR + cfg sheets (functional, unchanged) ━━━
+function openQrSheet(qrCodeId) {
+  const editing = qrCodeId && QR_CACHE[qrCodeId];
+  document.getElementById('qr-sheet-title').textContent = editing ? 'Edit QR' : 'Add Paytm QR (HE: Paytm has one merchant ID — no per-QR registry)';
+  document.getElementById('qr-id').value = editing ? editing.qr_code_id : '';
+  document.getElementById('qr-id').disabled = !!editing;
+  document.getElementById('qr-role').value = editing ? editing.role : 'runner';
+  document.getElementById('qr-display').value = editing ? editing.display_name : '';
+  document.getElementById('qr-runner-name').value = editing ? (editing.runner_name||'') : '';
+  document.getElementById('qr-runner-pin').value = editing ? (editing.runner_pin||'') : '';
+  document.getElementById('qr-notes').value = editing ? (editing.notes||'') : '';
+  document.getElementById('qr-deactivate').classList.toggle('hidden', !editing || !editing.active);
+  document.getElementById('qr-err').classList.add('hidden');
+  document.getElementById('qr-overlay').classList.remove('hidden');
+  document.getElementById('qr-sheet').classList.add('open');
+}
+function closeQrSheet() { document.getElementById('qr-overlay').classList.add('hidden'); document.getElementById('qr-sheet').classList.remove('open'); }
+async function submitQr() {
+  const errEl = document.getElementById('qr-err'); errEl.classList.add('hidden');
+  const payload = { pin: PIN, qr_code_id: document.getElementById('qr-id').value.trim(), brand: 'HE', role: document.getElementById('qr-role').value, display_name: document.getElementById('qr-display').value.trim(), runner_name: document.getElementById('qr-runner-name').value.trim() || null, runner_pin: document.getElementById('qr-runner-pin').value.trim() || null, notes: document.getElementById('qr-notes').value.trim() || null, active: true };
+  const btn = document.getElementById('qr-submit'); btn.disabled = true; btn.textContent = 'saving…';
+  try {
+    const r = await fetch('/api/sales?action=upsert-qr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    closeQrSheet();
+    await loadQr();
+  } catch (e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); } finally { btn.disabled = false; btn.textContent = 'Save'; }
+}
+async function deactivateQr() {
+  const qr = document.getElementById('qr-id').value.trim();
+  if (!confirm(`Deactivate ${qr}?`)) return;
+  const r = await fetch('/api/sales?action=deactivate-qr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: PIN, qr_code_id: qr }) });
+  const j = await r.json();
+  if (j.success) { closeQrSheet(); await loadQr(); }
+}
+async function discoverQrs() {
+  if (!confirm('Discover from Razorpay only applies to NCH. HE uses Paytm.')) return;
+  try {
+    const r = await fetch('/api/sales?action=discover-qrs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: PIN }) });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    alert(`Discovered ${j.discovered} · registered ${j.registered}`);
+    await loadQr();
+  } catch (e) { alert('Discover error: ' + e.message); }
+}
+function openCfgSheet(cfgId, label, kind) {
+  document.getElementById('cfg-id-disp').textContent = '#' + cfgId;
+  document.getElementById('cfg-label').value = label || '';
+  document.getElementById('cfg-kind').value = kind || '';
+  document.getElementById('cfg-err').classList.add('hidden');
+  document.getElementById('cfg-overlay').classList.remove('hidden');
+  document.getElementById('cfg-sheet').classList.add('open');
+  document.getElementById('cfg-sheet').dataset.cfgId = cfgId;
+}
+function closeCfgSheet() { document.getElementById('cfg-overlay').classList.add('hidden'); document.getElementById('cfg-sheet').classList.remove('open'); }
+async function submitCfg() {
+  const cfgId = parseInt(document.getElementById('cfg-sheet').dataset.cfgId, 10);
+  const r = await fetch('/api/sales?action=upsert-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: PIN, pos_config_id: cfgId, label: document.getElementById('cfg-label').value.trim() || null, station_kind: document.getElementById('cfg-kind').value || null }) });
+  const j = await r.json();
+  if (j.success) { closeCfgSheet(); await loadCfg(); }
+}
+
+// Lazy-load expandable details
+document.addEventListener('toggle', (e) => {
+  if (!e.target.matches('details') || !e.target.open) return;
+  const t = e.target.querySelector('summary')?.textContent || '';
+  if (t.includes('payment-method')) loadPm();
+  else if (t.includes('items sold')) loadItems();
+  else if (t.includes('QR registry')) loadQr();
+  else if (t.includes('pos config')) loadCfg();
+}, true);
+
+function schedulePoll() { if (POLL_TIMER) clearInterval(POLL_TIMER); POLL_TIMER = setInterval(loadAll, 30000); }
+document.getElementById('refresh-btn').addEventListener('click', () => { loadAll(); loadSyncStatus(); });
+
+const cached = localStorage.getItem('hn-sales-pin');
+if (cached && /^\d{4}$/.test(cached)) { PIN = cached; drawPinDots(); verifyPin(); }
+</script>
 </body>
 </html>

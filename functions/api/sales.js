@@ -52,9 +52,20 @@ const SPEND_SYNC_URL = 'https://hn-spend-sync-cron.nihafwork.workers.dev';
 const RECOGNISED_NCH_PMS = new Set([
   'NCH Cash', 'NCH UPI', 'NCH Card',
   'NCH Runner Ledger', 'NCH Token Issue',
-  'Complimentary',
+  'NCH Swiggy', 'NCH Zomato',
+  'NCH WABA UPI', 'NCH WABA COD',
+  'NCH Runner 01 UPI', 'NCH Runner 02 UPI', 'NCH Runner 03 UPI',
+  'NCH Runner 04 UPI', 'NCH Runner 05 UPI',
+  'Complimentary', 'Customer Account', 'Card',
   // generic fallbacks observed in the snapshot:
   'Cash', 'UPI',
+]);
+const RECOGNISED_HE_PMS = new Set([
+  'HE - Cash Counter', 'HE - UPI Counter', 'HE - Card',
+  'HE - Cash Captain', 'HE - UPI Captain',
+  'HE - Swiggy', 'HE - Zomato', 'HE - WABA General',
+  'HE UPI', 'HE Complimentary',
+  'Customer Account',
 ]);
 
 function json(data, status = 200) {
@@ -217,10 +228,11 @@ async function pmBreakdown(url, env) {
      ORDER BY amount_paise DESC
   `).bind(...binds).all();
 
-  // Flag unrecognised PMs so the UI can banner them.
+  // Flag unrecognised PMs so the UI can banner them. Brand-aware.
+  const RECOGNISED = brand === 'HE' ? RECOGNISED_HE_PMS : RECOGNISED_NCH_PMS;
   const rows = (r.results || []).map(row => ({
     ...row,
-    recognised: RECOGNISED_NCH_PMS.has(row.payment_method_name),
+    recognised: RECOGNISED.has(row.payment_method_name),
   }));
 
   return json({ success: true, user: user.name, brand, range: { from, to }, pos_config_id: cfgId || null, rows });
@@ -454,14 +466,11 @@ async function recomputeDay(request, env) {
   const day = String(body.day || '').trim();
   const brand = String(body.brand || 'NCH').toUpperCase();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ success: false, error: 'day required (YYYY-MM-DD)' }, 400);
+  if (brand !== 'NCH' && brand !== 'HE') return json({ success: false, error: 'brand must be NCH or HE' }, 400);
 
   const pmRows = (await env.DB.prepare(
     `SELECT payment_method_name, SUM(amount_paise) AS p FROM pos_payments_mirror
       WHERE brand = ? AND order_date_day = ? GROUP BY payment_method_name`
-  ).bind(brand, day).all()).results || [];
-  const qrRows = (await env.DB.prepare(
-    `SELECT role, SUM(amount_paise) AS p FROM razorpay_qr_collections
-      WHERE brand = ? AND captured_at_day = ? AND status = 'captured' GROUP BY role`
   ).bind(brand, day).all()).results || [];
   const ord = await env.DB.prepare(
     `SELECT COUNT(*) AS n,
@@ -471,31 +480,79 @@ async function recomputeDay(request, env) {
                               THEN amount_total_paise ELSE 0 END), 0) AS comp
        FROM pos_orders_mirror WHERE brand = ? AND order_date_day = ?`
   ).bind(brand, day).first();
-
   const pm = (n) => pmRows.find(r => r.payment_method_name === n)?.p || 0;
-  const qr = (r) => qrRows.find(x => x.role === r)?.p || 0;
-  let unmapped = 0;
-  for (const r of pmRows) if (!RECOGNISED_NCH_PMS.has(r.payment_method_name)) unmapped += r.p || 0;
 
-  const counter_cash    = pm('NCH Cash') + pm('Cash');
-  const counter_upi_pos = pm('NCH UPI')  + pm('UPI');
-  const counter_upi_rzp = qr('counter');
-  const counter_card    = pm('NCH Card');
-  const runner_sales    = pm('NCH Runner Ledger') + pm('NCH Token Issue');
-  const runner_upi      = qr('runner');
-  const runner_cash     = Math.max(0, runner_sales - runner_upi);
-  const total_cash      = counter_cash + runner_cash;
-  const total_upi       = counter_upi_rzp + runner_upi;
-  const upi_discrepancy = counter_upi_pos - counter_upi_rzp;
+  let counter_cash, counter_upi_pos, counter_upi_rzp, counter_card,
+      runner_sales, runner_upi, runner_cash,
+      aggregator, waba, total_cash, total_upi, upi_discrepancy, unmapped = 0;
+
+  if (brand === 'NCH') {
+    const qrRows = (await env.DB.prepare(
+      `SELECT role, SUM(amount_paise) AS p FROM razorpay_qr_collections
+        WHERE brand='NCH' AND captured_at_day = ? AND status='captured' GROUP BY role`
+    ).bind(day).all()).results || [];
+    const qr = (r) => qrRows.find(x => x.role === r)?.p || 0;
+
+    const RECOGNISED = new Set([
+      'NCH Cash', 'NCH UPI', 'NCH Card', 'NCH Runner Ledger', 'NCH Token Issue',
+      'NCH Swiggy', 'NCH Zomato', 'NCH WABA UPI', 'NCH WABA COD',
+      'NCH Runner 01 UPI', 'NCH Runner 02 UPI', 'NCH Runner 03 UPI', 'NCH Runner 04 UPI', 'NCH Runner 05 UPI',
+      'Complimentary', 'Cash', 'UPI', 'Card', 'Customer Account',
+    ]);
+    for (const r of pmRows) if (!RECOGNISED.has(r.payment_method_name)) unmapped += r.p || 0;
+
+    counter_cash    = pm('NCH Cash') + pm('Cash');
+    counter_upi_pos = pm('NCH UPI') + pm('UPI')
+                    + pm('NCH Runner 01 UPI') + pm('NCH Runner 02 UPI')
+                    + pm('NCH Runner 03 UPI') + pm('NCH Runner 04 UPI')
+                    + pm('NCH Runner 05 UPI');
+    counter_upi_rzp = qr('counter');
+    counter_card    = pm('NCH Card') + pm('Card');
+    runner_sales    = pm('NCH Runner Ledger') + pm('NCH Token Issue');
+    runner_upi      = qr('runner');
+    runner_cash     = Math.max(0, runner_sales - runner_upi);
+    aggregator      = pm('NCH Swiggy') + pm('NCH Zomato');
+    waba            = pm('NCH WABA UPI') + pm('NCH WABA COD');
+    total_cash      = counter_cash + runner_cash;
+    total_upi       = counter_upi_rzp + runner_upi;
+    upi_discrepancy = counter_upi_pos - counter_upi_rzp;
+  } else { // HE
+    const paytm = await env.DB.prepare(
+      `SELECT COALESCE(SUM(amount_paise), 0) AS p FROM money_events
+        WHERE source='hdfc' AND direction='credit'
+          AND substr(txn_at,1,10) = ?
+          AND (LOWER(counterparty) LIKE '%paytm%' OR LOWER(narration) LIKE '%paytm%')`
+    ).bind(day).first();
+
+    for (const r of pmRows) if (!RECOGNISED_HE_PMS.has(r.payment_method_name)) unmapped += r.p || 0;
+
+    counter_cash    = pm('HE - Cash Counter');
+    counter_upi_pos = pm('HE - UPI Counter') + pm('HE UPI');
+    counter_card    = pm('HE - Card');
+    const captain_upi  = pm('HE - UPI Captain');
+    const captain_cash = pm('HE - Cash Captain');
+    runner_sales    = captain_upi + captain_cash;
+    runner_upi      = captain_upi;
+    runner_cash     = captain_cash;
+    aggregator      = pm('HE - Swiggy') + pm('HE - Zomato');
+    waba            = pm('HE - WABA General');
+    counter_upi_rzp = paytm?.p || 0;
+    const total_pos_upi = counter_upi_pos + captain_upi;
+    total_cash      = counter_cash + captain_cash;
+    total_upi       = counter_upi_rzp || total_pos_upi;
+    upi_discrepancy = total_pos_upi - counter_upi_rzp;
+    counter_upi_pos = total_pos_upi; // HE: store total POS UPI in this column
+  }
 
   await env.DB.prepare(
     `INSERT INTO sales_recon_daily (
        brand, day, gross_sales_paise,
        counter_cash_paise, counter_upi_pos_paise, counter_upi_rzp_paise, counter_card_paise,
        runner_sales_paise, runner_upi_paise, runner_cash_paise,
+       aggregator_paise, waba_paise,
        total_cash_paise, total_upi_paise, upi_discrepancy_paise,
        complimentary_paise, unmapped_paise, order_count, last_recomputed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(brand, day) DO UPDATE SET
        gross_sales_paise=excluded.gross_sales_paise,
        counter_cash_paise=excluded.counter_cash_paise,
@@ -505,6 +562,8 @@ async function recomputeDay(request, env) {
        runner_sales_paise=excluded.runner_sales_paise,
        runner_upi_paise=excluded.runner_upi_paise,
        runner_cash_paise=excluded.runner_cash_paise,
+       aggregator_paise=excluded.aggregator_paise,
+       waba_paise=excluded.waba_paise,
        total_cash_paise=excluded.total_cash_paise,
        total_upi_paise=excluded.total_upi_paise,
        upi_discrepancy_paise=excluded.upi_discrepancy_paise,
@@ -516,6 +575,7 @@ async function recomputeDay(request, env) {
     brand, day, ord?.gross || 0,
     counter_cash, counter_upi_pos, counter_upi_rzp, counter_card,
     runner_sales, runner_upi, runner_cash,
+    aggregator, waba,
     total_cash, total_upi, upi_discrepancy,
     ord?.comp || 0, unmapped, ord?.n || 0,
     new Date().toISOString()
@@ -528,6 +588,8 @@ async function recomputeDay(request, env) {
       total_cash_paise: total_cash,
       total_upi_paise:  total_upi,
       counter_card_paise: counter_card,
+      aggregator_paise: aggregator,
+      waba_paise: waba,
       upi_discrepancy_paise: upi_discrepancy,
       unmapped_paise: unmapped,
       order_count: ord?.n || 0,
