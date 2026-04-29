@@ -333,7 +333,7 @@ async function handlePost(request, env) {
   const ADMIN_ONLY = new Set([
     'extract', 'sync-step', 'sync-all', 'cleanup',
     'master-create', 'master-rename', 'master-archive',
-    'set-product-uom', 'refresh-variants',
+    'set-product-uom', 'create-uom', 'refresh-variants',
   ]);
   const minRole = ADMIN_ONLY.has(action) ? 'admin' : 'ops';
   const user = checkPin(pin, minRole);
@@ -433,6 +433,22 @@ async function handlePost(request, env) {
       odoo_template_id: tmplId, was_existing: existing.length > 0,
       d1_updated: !!hn_code,
     });
+  }
+
+  // POST {action:'create-uom', pin:'0305', uom_name:'box'}
+  if (action === 'create-uom') {
+    const { uom_name } = body;
+    if (!uom_name) return json({ error: 'Required: uom_name' }, 400);
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not set' }, 500);
+    const adminCall = (model, method, args, kwargs) =>
+      rpc('object', 'execute_kw', [ODOO_DB, 2, apiKey, model, method, args, kwargs || {}]);
+    const existing = await adminCall('uom.uom', 'search_read',
+      [[['name', '=ilike', uom_name]]], { fields: ['id', 'name'] });
+    if (existing.length > 0)
+      return json({ success: true, uom_id: existing[0].id, uom_name: existing[0].name, was_existing: true });
+    const uomId = await adminCall('uom.uom', 'create', [{ name: uom_name }]);
+    return json({ success: true, uom_id: uomId, uom_name, was_existing: false });
   }
 
   if (action === 'update-vendor') {
