@@ -502,14 +502,19 @@ async function loadRecent() {
                  <span class="meta">${rows.length} ${rows.length === 1 ? 'entry' : 'entries'} &middot; <b>₹${Math.round(total).toLocaleString('en-IN')}</b></span></div>`;
       for (const e of rows) {
         const br = brandOf(e);
+        const qtyStr = e.quantity ? `${e.quantity} ${esc(e.uom_display || '')}`.trim() : '';
+        const vendorStr = e.vendor_name ? esc(e.vendor_name) : '';
         html += `
           <div class="entry">
             <div style="flex:1; min-width:0;">
               <div>
                 ${HIST_BRAND === 'ALL' ? `<span class="brand-tag ${br}">${br}</span>` : ''}
                 ${esc(e.product_name || e.category)}
+                ${qtyStr ? `<span class="mute" style="font-size:11px; margin-left:4px;">${qtyStr}</span>` : ''}
               </div>
-              <div class="mute">${esc(e.category || '—')} &middot; ${esc(e.payment_method || '—')} &middot; by ${esc(e.recorded_by_pin || '?')} &middot; ${fmtTimeOnly(e.created_at)}</div>
+              <div class="mute">
+                ${vendorStr ? `${vendorStr} &middot; ` : ''}${esc(e.category || '—')} &middot; ${esc(e.payment_method || '—')} &middot; by ${esc(e.recorded_by_pin || '?')} &middot; ${fmtTimeOnly(e.created_at)}
+              </div>
               ${e.notes ? `<div class="mute" style="font-style:italic;margin-top:2px;">${esc(e.notes)}</div>` : ''}
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
@@ -615,14 +620,20 @@ async function buildGenericForm(cat) {
     const sb = document.getElementById('submit-btn');
     sb.classList.remove('hidden');
     sb.disabled = false; sb.textContent = 'Record';  // safety reset — covers any stale state
+    _productsForForm = products.products || [];
     fields.push(`
       <div class="row">
         <label>What</label>
         <select id="f-product" onchange="onProductPick(this, ${cat.id})">
           <option value="">— Select —</option>
-          ${products.products.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+          ${_productsForForm.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
           <option value="__new__" style="color: var(--accent);">+ Add new item…</option>
         </select>
+      </div>
+      <div class="row" id="f-qty-row" style="display:none;">
+        <label>Quantity <span id="f-uom-label" class="mute" style="font-weight:400; font-size:12px;"></span></label>
+        <input id="f-qty" type="number" inputmode="decimal" step="any" min="0.001" placeholder="e.g. 2.5">
+        <div class="mute" style="margin-top:4px; font-size:11px;">Enter the quantity purchased. Required for raw materials.</div>
       </div>
     `);
 
@@ -827,6 +838,14 @@ async function submitForm() {
         body.vendor_id = vSel?.value;
         body.vendor_name = vSel?.selectedOptions?.[0]?.text || '';
         if (!body.vendor_id) throw new Error('Pick a vendor — every expense must tie to a vendor');
+      }
+      // Quantity + UOM (optional — visible only when product has a UOM)
+      const qtyEl = document.getElementById('f-qty');
+      const qtyVal = qtyEl ? parseFloat(qtyEl.value) : NaN;
+      if (!isNaN(qtyVal) && qtyVal > 0) {
+        body.quantity = qtyVal;
+        const prod = _productsForForm.find(p => String(p.id) === String(body.product_id));
+        if (prod?.uom_name) body.uom = prod.uom_name;
       }
     }
     if (CURRENT_CAT.backend === 'account.move') {
@@ -1299,12 +1318,27 @@ async function submitCat15() {
 let _newProductForCat = null;
 let _uomsCache = null;
 let _newVendorContext = 'generic'; // 'generic' (form-screen select) | 'cart' (cat 1 vendor modal)
+let _productsForForm = []; // cached product list for current form — used by onProductPick for UOM
 
 async function onProductPick(el, catId) {
   if (el.value === '__new__') {
     _newProductForCat = catId;
     el.value = '';
     openNewProductModal(catId);
+    return;
+  }
+  const qtyRow  = document.getElementById('f-qty-row');
+  const uomLbl  = document.getElementById('f-uom-label');
+  const qtyInput = document.getElementById('f-qty');
+  if (!qtyRow) return;
+  if (el.value) {
+    const prod = _productsForForm.find(p => String(p.id) === String(el.value));
+    const uom  = prod?.uom_name || '';
+    qtyRow.style.display = '';
+    if (uomLbl) uomLbl.textContent = uom ? `(${uom})` : '';
+  } else {
+    qtyRow.style.display = 'none';
+    if (qtyInput) qtyInput.value = '';
   }
 }
 function onVendorPick(el) {
