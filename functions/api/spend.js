@@ -1115,7 +1115,7 @@ export async function onRequest(context) {
       if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
       const pin = url.searchParams.get('pin');
       const user = resolveUser(pin);
-      if (!user || !['admin', 'cfo'].includes(user.role)) return json({ success: false, error: 'Admin or CFO PIN required' }, 401);
+      if (!user || !['admin', 'cfo', 'gm'].includes(user.role)) return json({ success: false, error: 'Admin, CFO or GM PIN required' }, 401);
 
       const fromParam = url.searchParams.get('from') || '2026-04-01';
       const toParam   = url.searchParams.get('to')   || '2026-04-30';
@@ -1143,6 +1143,7 @@ export async function onRequest(context) {
                be.x_payment_method AS payment_method, be.x_location, be.x_pool,
                be.recorded_by AS recorded_by_pin, be.recorded_at AS created_at,
                be.expense_date, be.notes,
+               be.validated_at, be.validated_by,
                be.quantity, be.uom, be.vendor_id, be.vendor_name,
                COALESCE(be.uom, rmp.uom) AS uom_display,
                CASE WHEN ${isRmExpr} THEN 1 ELSE 0 END AS is_rm,
@@ -1228,11 +1229,15 @@ export async function onRequest(context) {
         from: fromParam, to: toParam, brand: brandParam });
     }
 
-    // ── UPDATE EXPENSE QTY / VENDOR (Basheer / admin / cfo) ──
+    // ── UPDATE EXPENSE — qty / uom / vendor / notes / validate (Basheer / admin / cfo) ──
+    // Used by /ops/expense/export/ to let GM (Basheer) clean April backfill:
+    //   • Fill missing qty + uom on RM rows
+    //   • Define vague "Petty / Operations" entries with a clear notes line
+    //   • Mark a row as validated (cleared from audit attention)
     if (action === 'expense-update' && request.method === 'POST') {
       if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
       const body = await request.json().catch(() => ({}));
-      const { pin, expense_id, quantity, uom, vendor_name } = body;
+      const { pin, expense_id, quantity, uom, vendor_name, notes, validate } = body;
       const user = resolveUser(pin);
       if (!user || !['admin', 'cfo', 'gm'].includes(user.role)) {
         return json({ success: false, error: 'Admin, CFO or GM PIN required' }, 401);
@@ -1253,11 +1258,57 @@ export async function onRequest(context) {
         setClauses.push('vendor_name=?');
         vals.push(vendor_name ? String(vendor_name).trim() : null);
       }
+      if (notes !== undefined) {
+        setClauses.push('notes=?');
+        vals.push(notes ? String(notes).trim() : null);
+      }
+      if (validate === true || validate === 1 || validate === '1') {
+        setClauses.push('validated_at=?');
+        vals.push(new Date().toISOString());
+        setClauses.push('validated_by=?');
+        vals.push(user.name);
+      } else if (validate === false || validate === 0 || validate === '0') {
+        // explicit un-validate (e.g. cleared after a re-edit)
+        setClauses.push('validated_at=?'); vals.push(null);
+        setClauses.push('validated_by=?'); vals.push(null);
+      }
       if (!setClauses.length) return json({ success: false, error: 'Nothing to update' }, 400);
 
       vals.push(parseInt(expense_id, 10));
       await DB.prepare(`UPDATE business_expenses SET ${setClauses.join(',')} WHERE id=?`).bind(...vals).run();
-      return json({ success: true, updated: { expense_id, quantity, uom, vendor_name, updated_by: user.name } });
+      return json({ success: true, updated: { expense_id, quantity, uom, vendor_name, notes, validated: !!validate, by: user.name } });
+    }
+
+    // ── DELETE EXPENSE (duplicate cleanup — Basheer / admin / cfo) ──
+    // Hard-deletes from D1; deletes from Odoo hr.expense too if odoo_id exists.
+    // Use case: cross-source duplicate flagged as DUP? — same purchase recorded
+    // both via /ops/expense (business_expenses) and /ops/v2 counter (cash_events).
+    if (action === 'expense-delete' && request.method === 'POST') {
+      if (!DB) return json({ success: false, error: 'DB not configured' }, 500);
+      const body = await request.json().catch(() => ({}));
+      const { pin, expense_id, reason } = body;
+      const user = resolveUser(pin);
+      if (!user || !['admin', 'cfo', 'gm'].includes(user.role)) {
+        return json({ success: false, error: 'Admin, CFO or GM PIN required' }, 401);
+      }
+      if (!expense_id) return json({ success: false, error: 'expense_id required' }, 400);
+
+      // Read first to get odoo_id
+      const row = await DB.prepare('SELECT id, odoo_id, amount, product_name FROM business_expenses WHERE id=?')
+                          .bind(parseInt(expense_id, 10)).first();
+      if (!row) return json({ success: false, error: 'Row not found' }, 404);
+
+      let odooDeleted = false, odooErr = null;
+      if (row.odoo_id && apiKey) {
+        try {
+          await odoo(apiKey, 'hr.expense', 'unlink', [[row.odoo_id]]);
+          odooDeleted = true;
+        } catch (e) { odooErr = e.message; }
+      }
+      await DB.prepare('DELETE FROM business_expenses WHERE id=?').bind(row.id).run();
+      // Audit trail in cash_events log if relevant — best-effort
+      console.log(`expense-delete by ${user.name}: id=${row.id} odoo=${row.odoo_id} ₹${row.amount} ${row.product_name} — reason: ${reason || 'none'}`);
+      return json({ success: true, deleted: { id: row.id, odoo_id: row.odoo_id, odoo_deleted: odooDeleted, odoo_error: odooErr, by: user.name } });
     }
 
     // ── BACKFILL expense_date FROM ODOO hr.expense.date ────

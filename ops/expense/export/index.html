@@ -70,11 +70,18 @@ td.hdfc-na { color:var(--text-dim); text-align:center; font-size:11px; }
 .leg-item { display:flex; align-items:center; gap:5px; }
 .leg-swatch { width:14px; height:14px; border-radius:3px; flex-shrink:0; }
 
-/* Edit button */
-.edit-btn { background:none; border:1px solid rgba(99,102,241,0.4); border-radius:4px;
-  color:rgba(99,102,241,0.8); font-size:10px; padding:2px 6px; cursor:pointer;
-  white-space:nowrap; }
+/* Action buttons */
+.row-actions { display:flex; gap:3px; flex-wrap:wrap; justify-content:center; }
+.edit-btn, .ok-btn, .del-btn { background:none; border-radius:4px; font-size:10px;
+  padding:2px 6px; cursor:pointer; white-space:nowrap; }
+.edit-btn { border:1px solid rgba(99,102,241,0.4); color:rgba(99,102,241,0.85); }
 .edit-btn:hover { background:rgba(99,102,241,0.15); }
+.ok-btn   { border:1px solid rgba(16,185,129,0.5); color:rgba(16,185,129,0.9); }
+.ok-btn:hover { background:rgba(16,185,129,0.15); }
+.del-btn  { border:1px solid rgba(239,68,68,0.4); color:rgba(239,68,68,0.85); }
+.del-btn:hover { background:rgba(239,68,68,0.15); }
+tr.validated td { opacity:0.55; }
+tr.validated td:nth-child(1)::after { content:" ✓"; color:var(--accent); font-weight:700; opacity:1; }
 
 /* Edit modal */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100;
@@ -284,31 +291,58 @@ table.po-table td { padding:5px 8px; border:1px solid var(--border); font-size:1
   <div id="load-err"  class="mute" style="display:none; color:var(--danger); padding:16px;"></div>
 </div>
 
-<!-- Edit Modal (Basheer / admin / cfo) -->
+<!-- Edit Modal (Basheer / admin / cfo / gm) -->
 <div class="modal-overlay hidden" id="edit-modal">
   <div class="modal-box">
-    <h3>Edit Entry</h3>
-    <div class="sub" id="edit-sub">Update qty and vendor for this RM item</div>
-    <div class="modal-field">
-      <label>Quantity</label>
-      <input id="e-qty" type="number" step="any" min="0.001" placeholder="e.g. 2.5">
+    <h3 id="edit-title">Validate Entry</h3>
+    <div class="sub" id="edit-sub"></div>
+
+    <!-- RM-only fields -->
+    <div id="rm-fields">
+      <div class="modal-field">
+        <label>Quantity <span style="color:var(--danger);" id="qty-req">*</span></label>
+        <input id="e-qty" type="number" step="any" min="0.001" placeholder="e.g. 2.5">
+      </div>
+      <div class="modal-field">
+        <label>Unit <span style="color:var(--danger);" id="uom-req">*</span> <span id="e-uom-hint" style="color:var(--text-dim); font-weight:400; text-transform:none;"></span></label>
+        <input id="e-uom" type="text" placeholder="kg / pcs / litre / dozen">
+      </div>
+      <div class="modal-field">
+        <label>Vendor name <span style="color:var(--danger);" id="vendor-req">*</span></label>
+        <input id="e-vendor" type="text" placeholder="Supplier name (required for RM)">
+      </div>
     </div>
+
+    <!-- Always-shown definition field -->
     <div class="modal-field">
-      <label>Unit <span id="e-uom-hint" style="color:var(--text-dim); font-weight:400; text-transform:none;"></span></label>
-      <input id="e-uom" type="text" placeholder="e.g. kg, pcs, litre">
+      <label>Description / Notes <span style="color:var(--danger);" id="notes-req"></span>
+        <span style="color:var(--text-dim); font-weight:400; text-transform:none;" id="notes-hint">Define the expense clearly — no vague "Petty"</span>
+      </label>
+      <input id="e-notes" type="text" placeholder="What was this for? Be specific.">
     </div>
-    <div class="modal-field">
-      <label>Vendor name</label>
-      <input id="e-vendor" type="text" placeholder="Supplier name">
-    </div>
-    <div class="modal-field">
-      <label>Notes (optional)</label>
-      <input id="e-notes" type="text" placeholder="Any clarification">
-    </div>
+
     <div id="edit-err" style="color:var(--danger); font-size:12px; min-height:16px; margin-top:4px;"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="saveEdit()">Save</button>
-      <button class="btn btn-ghost" onclick="closeEdit()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit(true)">Save &amp; Validate ✓</button>
+      <button class="btn btn-ghost btn-sm" onclick="saveEdit(false)">Save only</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeEdit()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div class="modal-overlay hidden" id="delete-modal">
+  <div class="modal-box">
+    <h3 style="color:var(--danger);">Delete duplicate?</h3>
+    <div class="sub" id="del-sub"></div>
+    <div class="modal-field">
+      <label>Reason (required)</label>
+      <input id="del-reason" type="text" placeholder="e.g. Duplicate of cash_events #123">
+    </div>
+    <div id="del-err" style="color:var(--danger); font-size:12px; min-height:16px;"></div>
+    <div class="modal-actions">
+      <button class="btn" style="background:var(--danger); color:#fff;" onclick="confirmDelete()">Delete from D1 + Odoo</button>
+      <button class="btn btn-ghost" onclick="closeDelete()">Cancel</button>
     </div>
   </div>
 </div>
@@ -395,16 +429,21 @@ async function loadExport() {
       return;
     }
 
+    // Validation progress (client-side from entries)
+    const validatedCount = _entries.filter(x => x.validated_at).length;
+    const validatePct = _entries.length ? Math.round((validatedCount / _entries.length) * 100) : 0;
+
     // Summary chips
     const chips = [
       `<div class="stat-chip ok"><span class="n">${s.total_rows || _entries.length}</span>Total entries</div>`,
       `<div class="stat-chip"><span class="n">₹${fmtAmt(r.total)}</span>Total spend</div>`,
+      `<div class="stat-chip ${validatePct === 100 ? 'ok' : 'warn'}"><span class="n">${validatedCount} / ${_entries.length}</span>Validated (${validatePct}%)</div>`,
       `<div class="stat-chip"><span class="n">${s.rm_rows || 0}</span>RM items</div>`,
       s.qty_missing ? `<div class="stat-chip warn"><span class="n">${s.qty_missing}</span>Qty missing ✏</div>` : '',
       s.vendor_missing ? `<div class="stat-chip danger"><span class="n">${s.vendor_missing}</span>Vendor missing</div>` : '',
       s.bill_missing  ? `<div class="stat-chip danger"><span class="n">${s.bill_missing}</span>No bill uploaded</div>` : '',
       s.hdfc_unverified ? `<div class="stat-chip warn"><span class="n">${s.hdfc_unverified}</span>HDFC unverified</div>` : '',
-      s.dup_suspect ? `<div class="stat-chip warn"><span class="n">${s.dup_suspect}</span>Dup suspect</div>` : '',
+      s.dup_suspect ? `<div class="stat-chip warn"><span class="n">${s.dup_suspect}</span>Dup suspect 🗑</div>` : '',
     ];
     const bar = document.getElementById('summary-bar');
     bar.innerHTML = chips.join('');
@@ -488,13 +527,20 @@ function renderTable(entries) {
       }
     }
 
-    // Edit button (for editors on RM rows with missing data)
-    const showEdit = canEdit() && e.is_rm;
-    const editBtn = showEdit
-      ? `<button class="edit-btn no-print" onclick="openEdit(${e.id}, '${esc(e.product_name||e.category||'')}', '${esc(e.vendor_name||'')}', ${e.quantity||'null'}, '${esc(e.uom_display||'')}')">✏ Edit</button>`
-      : '';
+    // Action buttons — every row gets actions when an editor is logged in
+    let actions = '';
+    if (canEdit()) {
+      const dupBtn = (e.v2_dup_count > 0)
+        ? `<button class="del-btn no-print" onclick="openDelete(${e.id}, ${e.amount}, '${esc(e.product_name||e.category||'')}', '${esc(e.ist_date||'')}')">🗑 Dup</button>`
+        : '';
+      const editBtn = `<button class="edit-btn no-print" onclick="openEdit(${e.id})">✏ Edit</button>`;
+      const okBtn   = !e.validated_at
+        ? `<button class="ok-btn no-print" onclick="quickValidate(${e.id})" title="Mark validated without changes">✓ OK</button>`
+        : '';
+      actions = `<div class="row-actions no-print">${editBtn}${okBtn}${dupBtn}</div>`;
+    }
 
-    const rowCls = (e.v2_dup_count > 0) ? 'dup-suspect' : '';
+    const rowCls = `${(e.v2_dup_count > 0) ? 'dup-suspect ' : ''}${e.validated_at ? 'validated' : ''}`.trim();
     total += e.amount || 0;
 
     html += `<tr class="${rowCls}" id="row-${e.id}">
@@ -505,13 +551,13 @@ function renderTable(entries) {
       <td class="${vendorCls}">${vendorContent}</td>
       <td>${esc(item)}${rmBadge}${dupBadge}</td>
       <td style="font-size:11px; color:var(--text-dim);">${esc(e.uom_display||'—')}</td>
-      <td class="${qtyCls}">${qtyContent}${editBtn}</td>
+      <td class="${qtyCls}">${qtyContent}</td>
       <td class="amount">₹${fmtAmt(e.amount)}</td>
       <td class="${billCls}">${billContent}</td>
       <td class="${hdfcCls}">${hdfcContent}</td>
       <td style="font-size:11px; color:var(--text-dim);">${esc(pinName(e.recorded_by_pin))}</td>
       <td style="font-size:11px; color:var(--text-dim);">${esc((e.category_parent||e.category||'—').replace(/^\d+\s*·\s*/,''))}</td>
-      <td style="font-size:11px; color:var(--text-dim); max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(e.notes||'')}">${esc(e.notes||'')}</td>
+      <td style="font-size:11px; color:var(--text-dim); max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(e.notes||'')}">${esc(e.notes||'')}${actions}</td>
     </tr>`;
   });
 
@@ -554,60 +600,146 @@ function renderPoBills(bills) {
 }
 
 // ── Edit modal ───────────────────────────────────────────────
-function openEdit(id, product, vendor, qty, uom) {
+function openEdit(id) {
+  const e = _entries.find(x => x.id === id);
+  if (!e) return;
   _editingId = id;
-  document.getElementById('edit-sub').textContent = product || '';
-  document.getElementById('e-qty').value = qty != null ? qty : '';
-  document.getElementById('e-uom').value = uom || '';
-  document.getElementById('e-uom-hint').textContent = uom ? `(current: ${uom})` : '';
-  document.getElementById('e-vendor').value = vendor || '';
-  document.getElementById('e-notes').value = '';
+  const isRm = !!e.is_rm;
+  document.getElementById('edit-title').textContent = isRm ? 'Validate RM Purchase' : 'Define this Expense';
+  document.getElementById('edit-sub').textContent =
+    `${fmtDate(e.ist_date)} · ${e.x_location||''} · ₹${fmtAmt(e.amount)} · ${e.product_name||e.category||''}`;
+
+  // RM fields visible only when row is RM
+  document.getElementById('rm-fields').style.display = isRm ? '' : 'none';
+  document.getElementById('e-qty').value = e.quantity != null ? e.quantity : '';
+  document.getElementById('e-uom').value = e.uom_display || '';
+  document.getElementById('e-uom-hint').textContent = e.uom_display ? `(current: ${e.uom_display})` : '';
+  document.getElementById('e-vendor').value = e.vendor_name || '';
+
+  document.getElementById('e-notes').value = e.notes || '';
+  // Mark notes required for non-RM rows (so vague entries get clarified)
+  document.getElementById('notes-req').textContent = isRm ? '' : '*';
+  document.getElementById('notes-hint').textContent = isRm
+    ? 'Optional — any clarification'
+    : 'Define clearly: what was bought, why, for whom';
+
   document.getElementById('edit-err').textContent = '';
   document.getElementById('edit-modal').classList.remove('hidden');
-  document.getElementById('e-qty').focus();
+  (isRm ? document.getElementById('e-qty') : document.getElementById('e-notes')).focus();
 }
 function closeEdit() {
   _editingId = null;
   document.getElementById('edit-modal').classList.add('hidden');
 }
-async function saveEdit() {
+async function saveEdit(validate) {
   if (!_editingId) return;
+  const e = _entries.find(x => x.id === _editingId);
+  const isRm = !!(e && e.is_rm);
   const qty    = document.getElementById('e-qty').value.trim();
   const uom    = document.getElementById('e-uom').value.trim();
   const vendor = document.getElementById('e-vendor').value.trim();
   const notes  = document.getElementById('e-notes').value.trim();
-  if (!qty && !vendor) {
-    document.getElementById('edit-err').textContent = 'Enter at least qty or vendor';
-    return;
+
+  // Validation rules
+  if (validate) {
+    if (isRm) {
+      if (!qty)    { return showEditErr('Quantity required for RM'); }
+      if (!uom)    { return showEditErr('UOM required for RM (kg/pcs/litre/...)'); }
+      if (!vendor) { return showEditErr('Vendor required for RM'); }
+    } else {
+      if (!notes || notes.length < 5) { return showEditErr('Define the expense clearly (min 5 chars)'); }
+    }
+  } else {
+    if (!qty && !uom && !vendor && !notes) { return showEditErr('Nothing to save'); }
   }
+
   try {
     const body = { pin: PIN, expense_id: _editingId };
-    if (qty)    { body.quantity = parseFloat(qty); }
-    if (uom)    { body.uom = uom; }
-    if (vendor) { body.vendor_name = vendor; }
-    if (notes)  { body.notes = notes; }
+    if (qty)    body.quantity = parseFloat(qty);
+    if (uom)    body.uom = uom;
+    if (vendor) body.vendor_name = vendor;
+    if (notes !== (e && e.notes || '')) body.notes = notes;
+    if (validate) body.validate = true;
 
     const r = await fetch(`${API}?action=expense-update`, {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
     }).then(x => x.json());
     if (!r.success) throw new Error(r.error || 'Update failed');
 
-    // Update local entry + re-render that row
-    const idx = _entries.findIndex(e => e.id === _editingId);
+    const idx = _entries.findIndex(x => x.id === _editingId);
     if (idx >= 0) {
       if (body.quantity != null) { _entries[idx].quantity = body.quantity; _entries[idx].qty_missing = 0; }
       if (body.uom)    { _entries[idx].uom = body.uom; _entries[idx].uom_display = body.uom; }
       if (body.vendor_name) { _entries[idx].vendor_name = body.vendor_name; _entries[idx].vendor_missing = 0; }
-      if (body.notes) { _entries[idx].notes = body.notes; }
+      if (body.notes !== undefined) { _entries[idx].notes = body.notes; }
+      if (validate) { _entries[idx].validated_at = new Date().toISOString(); _entries[idx].validated_by = PIN_MAP[PIN] || PIN; }
     }
     closeEdit();
     renderTable(_entries);
-  } catch (e) {
-    document.getElementById('edit-err').textContent = e.message;
+  } catch (err) {
+    showEditErr(err.message);
   }
 }
+function showEditErr(m) { document.getElementById('edit-err').textContent = m; }
+
+// Quick "✓ OK" — mark validated without opening modal
+async function quickValidate(id) {
+  try {
+    const r = await fetch(`${API}?action=expense-update`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ pin: PIN, expense_id: id, validate: true })
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Failed');
+    const idx = _entries.findIndex(x => x.id === id);
+    if (idx >= 0) {
+      _entries[idx].validated_at = new Date().toISOString();
+      _entries[idx].validated_by = PIN_MAP[PIN] || PIN;
+    }
+    renderTable(_entries);
+  } catch (e) { alert('Validate failed: ' + e.message); }
+}
+
+// Delete duplicate flow
+let _deletingId = null;
+function openDelete(id, amount, product, dateStr) {
+  _deletingId = id;
+  document.getElementById('del-sub').innerHTML =
+    `<strong>${esc(product)}</strong> · ${esc(dateStr)} · ₹${fmtAmt(amount)}<br>This will hard-delete from D1 AND Odoo. Cannot be undone.`;
+  document.getElementById('del-reason').value = '';
+  document.getElementById('del-err').textContent = '';
+  document.getElementById('delete-modal').classList.remove('hidden');
+  document.getElementById('del-reason').focus();
+}
+function closeDelete() {
+  _deletingId = null;
+  document.getElementById('delete-modal').classList.add('hidden');
+}
+async function confirmDelete() {
+  if (!_deletingId) return;
+  const reason = document.getElementById('del-reason').value.trim();
+  if (!reason || reason.length < 5) {
+    document.getElementById('del-err').textContent = 'Reason required (min 5 chars)';
+    return;
+  }
+  try {
+    const r = await fetch(`${API}?action=expense-delete`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ pin: PIN, expense_id: _deletingId, reason })
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Delete failed');
+    _entries = _entries.filter(x => x.id !== _deletingId);
+    closeDelete();
+    renderTable(_entries);
+  } catch (e) {
+    document.getElementById('del-err').textContent = e.message;
+  }
+}
+
 document.getElementById('edit-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('edit-modal')) closeEdit();
+});
+document.getElementById('delete-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('delete-modal')) closeDelete();
 });
 
 // ── CSV export ───────────────────────────────────────────────
