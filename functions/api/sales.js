@@ -90,7 +90,12 @@ export async function onRequest(context) {
     if (action === 'qr-collections')  return await qrCollections(url, env);
     if (action === 'sync-status')     return await syncStatus(url, env);
     if (action === 'pos-configs')     return await posConfigs(url, env);
-    if (action === 'sync' && request.method === 'POST') return await runSync(request, env);
+    if (action === 'sync' && request.method === 'POST')             return await runSync(request, env);
+    if (action === 'upsert-qr' && request.method === 'POST')        return await upsertQr(request, env);
+    if (action === 'deactivate-qr' && request.method === 'POST')    return await deactivateQr(request, env);
+    if (action === 'upsert-config' && request.method === 'POST')    return await upsertConfig(request, env);
+    if (action === 'recompute-day' && request.method === 'POST')    return await recomputeDay(request, env);
+    if (action === 'discover-qrs' && request.method === 'POST')     return await discoverQrs(request, env);
     return json({ success: false, error: `Unknown action: ${action}` }, 400);
   } catch (e) {
     return json({ success: false, error: e.message, stack: e.stack }, 500);
@@ -354,4 +359,261 @@ async function runSync(request, env) {
   const txt = await r.text();
   let body; try { body = JSON.parse(txt); } catch { body = { raw: txt.slice(0, 1000) }; }
   return json({ success: r.ok, ran_by: u.name, status: r.status, result: body });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━ WRITE ENDPOINTS — Slice C ━━━━━━━━━━━━━━━━━━━━━━━━
+
+// QR registry CRUD. Stored in razorpay_qr_registry; this is the editable
+// surface so runner attrition does not require a redeploy. PIN-gated to
+// admin/cfo because mis-attribution silently corrupts the daily recon.
+async function upsertQr(request, env) {
+  const body = await request.json();
+  const u = USERS[body.pin];
+  if (!u || !SYNC_ROLES.has(u.role)) return json({ success: false, error: 'admin/cfo only' }, 401);
+
+  const qr = String(body.qr_code_id || '').trim();
+  const brand = String(body.brand || 'NCH').toUpperCase();
+  const role = String(body.role || '').toLowerCase();
+  const display = String(body.display_name || '').trim();
+  const runnerName = body.runner_name ? String(body.runner_name).trim() : null;
+  const runnerPin = body.runner_pin ? String(body.runner_pin).trim() : null;
+  const active = body.active === false ? 0 : 1;
+  const notes = body.notes ? String(body.notes).slice(0, 500) : null;
+
+  if (!/^qr_[A-Za-z0-9]+$/.test(qr)) {
+    return json({ success: false, error: `qr_code_id must look like 'qr_XXXX' (got: ${qr})` }, 400);
+  }
+  if (brand !== 'NCH' && brand !== 'HE') return json({ success: false, error: 'brand must be NCH or HE' }, 400);
+  if (role !== 'counter' && role !== 'runner') return json({ success: false, error: "role must be 'counter' or 'runner'" }, 400);
+  if (display.length < 2) return json({ success: false, error: 'display_name required (≥ 2 chars)' }, 400);
+  if (role === 'runner' && !runnerName) return json({ success: false, error: 'runner_name required for role=runner' }, 400);
+
+  try {
+    await env.DB.prepare(
+      `INSERT INTO razorpay_qr_registry
+         (qr_code_id, brand, role, runner_name, runner_pin, display_name, active, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(qr_code_id) DO UPDATE SET
+         brand=excluded.brand,
+         role=excluded.role,
+         runner_name=excluded.runner_name,
+         runner_pin=excluded.runner_pin,
+         display_name=excluded.display_name,
+         active=excluded.active,
+         notes=excluded.notes,
+         deactivated_at = CASE WHEN excluded.active = 0 AND razorpay_qr_registry.active = 1
+                               THEN ? ELSE razorpay_qr_registry.deactivated_at END`
+    ).bind(qr, brand, role, runnerName, runnerPin, display, active, notes, new Date().toISOString()).run();
+  } catch (e) {
+    return json({ success: false, error: e.message }, 500);
+  }
+  return json({ success: true, qr_code_id: qr, brand, role, display_name: display, active, recorded_by: u.name });
+}
+
+async function deactivateQr(request, env) {
+  const body = await request.json();
+  const u = USERS[body.pin];
+  if (!u || !SYNC_ROLES.has(u.role)) return json({ success: false, error: 'admin/cfo only' }, 401);
+  const qr = String(body.qr_code_id || '').trim();
+  if (!qr) return json({ success: false, error: 'qr_code_id required' }, 400);
+  await env.DB.prepare(
+    `UPDATE razorpay_qr_registry SET active = 0, deactivated_at = ? WHERE qr_code_id = ?`
+  ).bind(new Date().toISOString(), qr).run();
+  return json({ success: true, qr_code_id: qr, recorded_by: u.name });
+}
+
+// pos.config label / station_kind editor. Names auto-flow from Odoo on
+// the daily refresh; the OWNER's label + kind is what the dashboard
+// renders ("Counter POS" / "Runner POS" / "Token POS").
+async function upsertConfig(request, env) {
+  const body = await request.json();
+  const u = USERS[body.pin];
+  if (!u || !SYNC_ROLES.has(u.role)) return json({ success: false, error: 'admin/cfo only' }, 401);
+
+  const cfgId = parseInt(body.pos_config_id, 10);
+  if (!Number.isFinite(cfgId) || cfgId <= 0) return json({ success: false, error: 'pos_config_id required (positive int)' }, 400);
+  const label = body.label ? String(body.label).slice(0, 80) : null;
+  const kind = body.station_kind ? String(body.station_kind).toLowerCase() : null;
+  if (kind && !['counter','runner','token','delivery','other'].includes(kind)) {
+    return json({ success: false, error: 'station_kind must be one of counter|runner|token|delivery|other' }, 400);
+  }
+  const r = await env.DB.prepare(
+    `UPDATE pos_config_registry SET label = ?, station_kind = ? WHERE pos_config_id = ?`
+  ).bind(label, kind, cfgId).run();
+  if (!r.meta?.changes) return json({ success: false, error: `pos_config_id ${cfgId} not in registry — wait for next sync` }, 404);
+  return json({ success: true, pos_config_id: cfgId, label, station_kind: kind, recorded_by: u.name });
+}
+
+// Force-refresh sales_recon_daily for one day. Runs the same in-Worker
+// computeReconDay logic — except the Function calls a SQL replica of
+// the math. Cleaner: we issue a small compute right here.
+async function recomputeDay(request, env) {
+  const body = await request.json();
+  const u = USERS[body.pin];
+  if (!u || !SYNC_ROLES.has(u.role)) return json({ success: false, error: 'admin/cfo only' }, 401);
+  const day = String(body.day || '').trim();
+  const brand = String(body.brand || 'NCH').toUpperCase();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ success: false, error: 'day required (YYYY-MM-DD)' }, 400);
+
+  const pmRows = (await env.DB.prepare(
+    `SELECT payment_method_name, SUM(amount_paise) AS p FROM pos_payments_mirror
+      WHERE brand = ? AND order_date_day = ? GROUP BY payment_method_name`
+  ).bind(brand, day).all()).results || [];
+  const qrRows = (await env.DB.prepare(
+    `SELECT role, SUM(amount_paise) AS p FROM razorpay_qr_collections
+      WHERE brand = ? AND captured_at_day = ? AND status = 'captured' GROUP BY role`
+  ).bind(brand, day).all()).results || [];
+  const ord = await env.DB.prepare(
+    `SELECT COUNT(*) AS n,
+            COALESCE(SUM(CASE WHEN COALESCE(payment_methods_csv,'') NOT LIKE '%Complimentary%'
+                              THEN amount_total_paise ELSE 0 END), 0) AS gross,
+            COALESCE(SUM(CASE WHEN COALESCE(payment_methods_csv,'') LIKE '%Complimentary%'
+                              THEN amount_total_paise ELSE 0 END), 0) AS comp
+       FROM pos_orders_mirror WHERE brand = ? AND order_date_day = ?`
+  ).bind(brand, day).first();
+
+  const pm = (n) => pmRows.find(r => r.payment_method_name === n)?.p || 0;
+  const qr = (r) => qrRows.find(x => x.role === r)?.p || 0;
+  let unmapped = 0;
+  for (const r of pmRows) if (!RECOGNISED_NCH_PMS.has(r.payment_method_name)) unmapped += r.p || 0;
+
+  const counter_cash    = pm('NCH Cash') + pm('Cash');
+  const counter_upi_pos = pm('NCH UPI')  + pm('UPI');
+  const counter_upi_rzp = qr('counter');
+  const counter_card    = pm('NCH Card');
+  const runner_sales    = pm('NCH Runner Ledger') + pm('NCH Token Issue');
+  const runner_upi      = qr('runner');
+  const runner_cash     = Math.max(0, runner_sales - runner_upi);
+  const total_cash      = counter_cash + runner_cash;
+  const total_upi       = counter_upi_rzp + runner_upi;
+  const upi_discrepancy = counter_upi_pos - counter_upi_rzp;
+
+  await env.DB.prepare(
+    `INSERT INTO sales_recon_daily (
+       brand, day, gross_sales_paise,
+       counter_cash_paise, counter_upi_pos_paise, counter_upi_rzp_paise, counter_card_paise,
+       runner_sales_paise, runner_upi_paise, runner_cash_paise,
+       total_cash_paise, total_upi_paise, upi_discrepancy_paise,
+       complimentary_paise, unmapped_paise, order_count, last_recomputed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(brand, day) DO UPDATE SET
+       gross_sales_paise=excluded.gross_sales_paise,
+       counter_cash_paise=excluded.counter_cash_paise,
+       counter_upi_pos_paise=excluded.counter_upi_pos_paise,
+       counter_upi_rzp_paise=excluded.counter_upi_rzp_paise,
+       counter_card_paise=excluded.counter_card_paise,
+       runner_sales_paise=excluded.runner_sales_paise,
+       runner_upi_paise=excluded.runner_upi_paise,
+       runner_cash_paise=excluded.runner_cash_paise,
+       total_cash_paise=excluded.total_cash_paise,
+       total_upi_paise=excluded.total_upi_paise,
+       upi_discrepancy_paise=excluded.upi_discrepancy_paise,
+       complimentary_paise=excluded.complimentary_paise,
+       unmapped_paise=excluded.unmapped_paise,
+       order_count=excluded.order_count,
+       last_recomputed_at=excluded.last_recomputed_at`
+  ).bind(
+    brand, day, ord?.gross || 0,
+    counter_cash, counter_upi_pos, counter_upi_rzp, counter_card,
+    runner_sales, runner_upi, runner_cash,
+    total_cash, total_upi, upi_discrepancy,
+    ord?.comp || 0, unmapped, ord?.n || 0,
+    new Date().toISOString()
+  ).run();
+
+  return json({
+    success: true, brand, day, recorded_by: u.name,
+    computed: {
+      gross_sales_paise: ord?.gross || 0,
+      total_cash_paise: total_cash,
+      total_upi_paise:  total_upi,
+      counter_card_paise: counter_card,
+      upi_discrepancy_paise: upi_discrepancy,
+      unmapped_paise: unmapped,
+      order_count: ord?.n || 0,
+    },
+  });
+}
+
+// Discover NCH Razorpay QRs autonomously instead of 6× "+ Add QR" clicks.
+// Calls Razorpay GET /v1/qr_codes (the merchant's QR list), classifies each
+// by name pattern, and bulk-upserts into razorpay_qr_registry with sensible
+// defaults that the owner can refine via the existing edit sheet if needed.
+//
+// Classification rules (in order):
+//   1. name contains "counter"  → role=counter
+//   2. name contains "runner"   → role=runner; runner_name = words after "runner"
+//   3. name matches a known NCH runner (Nafees / Kesmat / Mujib / Dhanush) → role=runner
+//   4. fallback → role=runner with notes="auto-classified, needs review"
+//
+// Returns a {discovered, registered, skipped} report so the UI can render
+// a one-shot result panel. Idempotent — re-running updates display_name +
+// notes from Razorpay-side changes; runner_pin/runner_name preserved on
+// rows the owner has already curated (NULLs only get filled, non-NULL
+// values are kept).
+async function discoverQrs(request, env) {
+  let pin;
+  try { pin = (await request.json()).pin; } catch { pin = new URL(request.url).searchParams.get('pin'); }
+  const u = USERS[pin];
+  if (!u || !SYNC_ROLES.has(u.role)) return json({ success: false, error: 'admin/cfo only' }, 401);
+  if (!env.RAZORPAY_KEY || !env.RAZORPAY_SECRET) {
+    return json({
+      success: false,
+      error: 'RAZORPAY_KEY / RAZORPAY_SECRET not set on this Pages project. Run: wrangler pages secret put RAZORPAY_KEY --project-name hn-hotels-site (value from HN-Hotels-Asset-Database.xlsx row 73), then RAZORPAY_SECRET (row 74).',
+    }, 503);
+  }
+
+  const auth = 'Basic ' + btoa(`${env.RAZORPAY_KEY}:${env.RAZORPAY_SECRET}`);
+  const r = await fetch('https://api.razorpay.com/v1/qr_codes?count=100', { headers: { Authorization: auth } });
+  if (!r.ok) {
+    const t = await r.text();
+    return json({ success: false, error: `Razorpay HTTP ${r.status}: ${t.slice(0, 300)}` }, 502);
+  }
+  const j = await r.json();
+  const items = j.items || [];
+
+  const KNOWN_RUNNERS = ['nafees', 'kesmat', 'mujib', 'dhanush', 'kismat', 'nafeez'];
+  const classify = (name) => {
+    const lc = String(name || '').toLowerCase();
+    if (lc.includes('counter')) return { role: 'counter', runner_name: null };
+    const m = lc.match(/runner[\s\-_:]+([a-z]+)/);
+    if (m) return { role: 'runner', runner_name: m[1].replace(/\b\w/g, c => c.toUpperCase()) };
+    for (const r of KNOWN_RUNNERS) {
+      if (lc.includes(r)) return { role: 'runner', runner_name: r.replace(/\b\w/g, c => c.toUpperCase()) };
+    }
+    return { role: 'runner', runner_name: null, needs_review: true };
+  };
+
+  const report = { discovered: items.length, registered: 0, skipped: 0, rows: [] };
+  for (const it of items) {
+    const cls = classify(it.name);
+    const display = String(it.name || it.id).slice(0, 80);
+    const noteParts = [];
+    if (it.description) noteParts.push(`desc: ${String(it.description).slice(0, 80)}`);
+    if (cls.needs_review) noteParts.push('auto-classified — review role/runner_name');
+    if (it.usage) noteParts.push(`usage=${it.usage}`);
+    const notes = noteParts.join(' · ').slice(0, 500) || null;
+
+    try {
+      // Preserve existing curated runner_name / runner_pin (only fill NULLs).
+      await env.DB.prepare(
+        `INSERT INTO razorpay_qr_registry
+           (qr_code_id, brand, role, runner_name, runner_pin, display_name, active, notes)
+         VALUES (?, 'NCH', ?, ?, NULL, ?, 1, ?)
+         ON CONFLICT(qr_code_id) DO UPDATE SET
+           role = CASE WHEN razorpay_qr_registry.role IN ('counter','runner')
+                       THEN razorpay_qr_registry.role
+                       ELSE excluded.role END,
+           runner_name = COALESCE(razorpay_qr_registry.runner_name, excluded.runner_name),
+           display_name = excluded.display_name,
+           notes = excluded.notes`
+      ).bind(it.id, cls.role, cls.runner_name, display, notes).run();
+      report.registered++;
+      report.rows.push({ qr_code_id: it.id, name: it.name, role: cls.role, runner_name: cls.runner_name, needs_review: !!cls.needs_review });
+    } catch (e) {
+      report.skipped++;
+      report.rows.push({ qr_code_id: it.id, error: e.message });
+    }
+  }
+  return json({ success: true, recorded_by: u.name, ...report });
 }
