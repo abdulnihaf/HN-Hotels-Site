@@ -109,12 +109,21 @@ async function handleWebhook(req, env) {
 
   const event = payload.event || 'unknown';
 
-  // Architecture pivot: do not write to money_events. Log + 200 so
-  // Razorpay stops retrying; signature verified, so we know the POST is
-  // authentic. Future: redirect to razorpay_payments reconciliation table.
+  // Architecture pivot 2026-04-23: do NOT write to money_events.
+  // Slice B (sales-recon) addition 2026-04-29: when the captured payment
+  // carries a qr_code_id matching razorpay_qr_registry, write to
+  // razorpay_qr_collections. money_events stays untouched. Webhook =
+  // real-time path, REST poll in spend-sync-cron = safety net.
+  if (event === 'payment.captured') {
+    try {
+      await ingestQrCapture(env, payload, eventId);
+    } catch (e) {
+      console.error('qr ingest failed (will retry via REST poll)', String(e).slice(0, 300));
+    }
+  }
   if (!INGEST_TO_MONEY_EVENTS) {
-    console.log('razorpay event received (not ingested)', { event, eventId });
-    return new Response('ok (not ingested per architecture pivot)', { status: 200 });
+    console.log('razorpay event received (qr-only ingest)', { event, eventId });
+    return new Response('ok (qr-only ingest)', { status: 200 });
   }
 
   // Events the Razorpay webhook carries — we handle the ones affecting
@@ -178,6 +187,51 @@ async function handleWebhook(req, env) {
     // duplicate inserts if the first partial-commit actually landed.
     return new Response('recorded-with-error', { status: 200 });
   }
+}
+
+// ━━━ QR collections ingest (sales-recon Slice B) ━━━━━━━━━━━━
+// Razorpay's payment.captured payload carries `entity` for the payment
+// itself; for QR-originated payments, the entity has a `qr_code_id`
+// field set to the QR's id (and may also include `notes.qr_code_id` if
+// the merchant configured it). Match against razorpay_qr_registry; if
+// no match, skip silently (REST poll will catch unregistered QR
+// payments later if/when their QR gets registered).
+async function ingestQrCapture(env, payload, eventId) {
+  const pay = payload?.payload?.payment?.entity;
+  if (!pay) return;
+  const qrId = pay.qr_code_id || pay.notes?.qr_code_id;
+  if (!qrId) return;
+
+  const reg = await env.DB.prepare(
+    `SELECT qr_code_id, brand, role, active FROM razorpay_qr_registry WHERE qr_code_id = ?`
+  ).bind(qrId).first();
+  if (!reg || !reg.active) return;
+
+  const capTs = pay.captured_at || pay.created_at;
+  const isoCap = new Date(capTs * 1000).toISOString();
+  const istDay = new Date(capTs * 1000 + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+
+  await env.DB.prepare(
+    `INSERT INTO razorpay_qr_collections (
+       razorpay_payment_id, qr_code_id, brand, role,
+       amount_paise, fee_paise, tax_paise, status, method,
+       vpa, contact, captured_at, captured_at_day,
+       synced_at, synced_via, raw_payload, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'webhook', ?, ?)
+     ON CONFLICT(razorpay_payment_id) DO UPDATE SET
+       amount_paise = excluded.amount_paise,
+       status       = excluded.status,
+       synced_at    = excluded.synced_at`
+  ).bind(
+    pay.id, qrId, reg.brand, reg.role,
+    pay.amount || 0, pay.fee || 0, pay.tax || 0,
+    pay.status || 'unknown', pay.method || null,
+    pay.vpa || null, pay.contact || null,
+    isoCap, istDay,
+    new Date().toISOString(),
+    JSON.stringify(pay).slice(0, 8000),
+    eventId ? `event_id=${eventId}` : null
+  ).run();
 }
 
 // ━━━ Event mapper ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
