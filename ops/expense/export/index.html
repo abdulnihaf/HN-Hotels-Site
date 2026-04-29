@@ -893,22 +893,23 @@ async function runDupAnalyze() {
     const r = await fetch(`${API}?action=dup-analyze&pin=${PIN}&from=${from}&to=${to}`).then(x => x.json());
     if (!r.success) throw new Error(r.error || 'Analyze failed');
     _lastAnalyze = r;
-    const { po_settled, hard_dup, ambiguous } = r.counts;
-    const total = po_settled + hard_dup + ambiguous;
+    const { po_settled, hard_dup, ambiguous, not_a_dup = 0 } = r.counts;
+    const total = po_settled + hard_dup + ambiguous + not_a_dup;
 
     document.getElementById('dup-report').innerHTML = `
       <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
-        <div><strong>${total}</strong> dup suspects analyzed</div>
+        <div><strong>${total}</strong> dup suspects analyzed (each row scored on product/notes alignment)</div>
         <div style="color:#34d399;">✓ <strong>${po_settled}</strong> auto: PO settled at counter</div>
         <div style="color:#ef4444;">🗑 <strong>${hard_dup}</strong> auto: confirmed duplicate (will delete)</div>
+        <div style="color:#9ca3af;">— <strong>${not_a_dup}</strong> auto: NOT a dup (crude flag was wrong; will clear)</div>
         <div style="color:#f59e0b;">? <strong>${ambiguous}</strong> ambiguous → manual review below</div>
       </div>
       <div style="font-size:12px; color:var(--text-dim); margin-top:8px;">
-        Click <strong>✓ Apply resolution</strong> to mark PO-settled rows + delete hard duplicates.
-        Ambiguous rows stay untouched until you choose below.
+        <strong>NOT a dup</strong> = same amount + date + brand was a coincidence (e.g. Samoosa ₹100 vs Beat Police ₹100 — different transactions). Clearing these drops them from the dup-suspect chip permanently.<br>
+        Click <strong>✓ Apply resolution</strong> to act on PO_SETTLED + HARD_DUP + NOT_A_DUP. Ambiguous rows wait for your manual choice below.
       </div>`;
     document.getElementById('dup-report').style.display = '';
-    if (po_settled + hard_dup > 0) document.getElementById('dup-apply-btn').style.display = '';
+    if (po_settled + hard_dup + not_a_dup > 0) document.getElementById('dup-apply-btn').style.display = '';
 
     // Render ambiguous review list
     if (r.ambiguous && r.ambiguous.length) renderDupReview(r.ambiguous);
@@ -921,7 +922,8 @@ async function runDupAnalyze() {
 }
 
 async function runDupResolve() {
-  if (!confirm(`Apply auto-resolution?\n\nThis will:\n• Mark ${_lastAnalyze.counts.po_settled} rows as PO-settled (excluded from spend totals)\n• HARD-DELETE ${_lastAnalyze.counts.hard_dup} confirmed duplicates from D1 + Odoo\n\nAmbiguous rows stay untouched. Continue?`)) return;
+  const c = _lastAnalyze.counts;
+  if (!confirm(`Apply auto-resolution?\n\nThis will:\n• Mark ${c.po_settled} rows as PO-settled (excluded from spend totals)\n• HARD-DELETE ${c.hard_dup} confirmed duplicates from D1 + Odoo\n• Clear ${c.not_a_dup||0} false-positive flags (no deletion — just removes them from dup-suspect)\n\n${c.ambiguous} ambiguous rows stay untouched for manual review. Continue?`)) return;
   const from = document.getElementById('f-from').value;
   const to   = document.getElementById('f-to').value;
   const btn  = document.getElementById('dup-apply-btn');
@@ -930,10 +932,10 @@ async function runDupResolve() {
     const r = await fetch(`${API}?action=dup-resolve&pin=${PIN}&from=${from}&to=${to}`, { method:'POST' })
                   .then(x => x.json()).catch(_ => fetch(`${API}?action=dup-resolve&pin=${PIN}&from=${from}&to=${to}`).then(x => x.json()));
     if (!r.success) throw new Error(r.error || 'Resolve failed');
-    alert(`Done: ${r.counts.po_settled} marked PO-settled · ${r.counts.hard_dup} deleted · ${r.counts.ambiguous} left for manual review`);
+    alert(`Done: ${r.counts.po_settled} marked PO-settled · ${r.counts.hard_dup} deleted · ${r.counts.not_a_dup||0} cleared as NOT-a-dup · ${r.counts.ambiguous} left for manual review`);
     btn.style.display = 'none';
     document.getElementById('dup-report').style.display = 'none';
-    loadExport();  // refresh table + chips
+    loadExport();
   } catch (e) {
     alert('Resolve failed: ' + e.message);
   } finally {

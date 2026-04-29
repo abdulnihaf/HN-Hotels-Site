@@ -1452,23 +1452,51 @@ export async function onRequest(context) {
           counts: { po_settled: 0, hard_dup: 0, ambiguous: 0, scanned: 0 } });
       }
 
+      const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+      const STOP = new Set(['nch','he','hq','counter','expense','purchase','bill','payment','cash','rs','rupees','for','the','and','from','with','of','in','on','as','to','a']);
+      const tokens = s => norm(s).split(' ').filter(t => t.length >= 4 && !STOP.has(t));
       const fuzzyMatch = (a, b) => {
-        if (!a || !b) return false;
-        const A = String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-        const B = String(b).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+        const A = norm(a), B = norm(b);
         if (!A || !B) return false;
         if (A === B) return true;
         if (A.includes(B) || B.includes(A)) return true;
-        // Token overlap
-        const tA = new Set(A.split(' ').filter(t => t.length >= 4));
-        const tB = new Set(B.split(' ').filter(t => t.length >= 4));
+        const tA = new Set(tokens(a)), tB = new Set(tokens(b));
         let overlap = 0;
         for (const t of tA) if (tB.has(t)) overlap++;
         return overlap >= 1 && overlap >= Math.min(tA.size, tB.size) * 0.5;
       };
+      // Alignment score 0..1 between a be row and a ce row.
+      // 0 = these are completely different transactions that just happen to
+      // share amount + date + brand (like Samoosa vs Beat Police).
+      // 1 = same product / strongly overlapping notes — almost certainly a dup.
+      const alignmentScore = (be, ce) => {
+        const beProd = norm(be.product_name);
+        const ceProd = norm(ce.product_name);
+        const beNotes = norm(be.notes);
+        const ceNotes = norm(ce.notes);
+        const beAll = `${beProd} ${beNotes}`.trim();
+        const ceAll = `${ceProd} ${ceNotes}`.trim();
+        if (!beAll || !ceAll) return 0.15;  // can't tell — neutral-low
+        // Direct product match
+        if (beProd && ceProd && beProd === ceProd) return 1.0;
+        if (beProd && ceProd && (beProd.includes(ceProd) || ceProd.includes(beProd))) return 0.9;
+        // Product-in-notes either direction
+        if (beProd && ceNotes && ceNotes.includes(beProd)) return 0.85;
+        if (ceProd && beNotes && beNotes.includes(ceProd)) return 0.85;
+        // Token overlap across all text
+        const tA = new Set(tokens(beAll)), tB = new Set(tokens(ceAll));
+        if (tA.size === 0 || tB.size === 0) return 0.2;
+        let overlap = 0;
+        for (const t of tA) if (tB.has(t)) overlap++;
+        const ratio = overlap / Math.min(tA.size, tB.size);
+        if (overlap === 0) return 0.0;
+        if (ratio >= 0.6) return 0.7;
+        if (ratio >= 0.3) return 0.45;
+        return 0.2;
+      };
 
       const classifications = [];
-      let counts = { po_settled: 0, hard_dup: 0, ambiguous: 0 };
+      let counts = { po_settled: 0, hard_dup: 0, ambiguous: 0, not_a_dup: 0 };
 
       for (const be of suspects) {
         const paise = Math.round(be.amount * 100);
@@ -1510,36 +1538,48 @@ export async function onRequest(context) {
         `).bind(paise, be.brand, dateStr, dateStr).all();
         const ceMatches = ceRows.results || [];
 
-        // Classification logic
+        // Classification logic — score alignment per ce match before deciding.
+        // The crude SQL flag (amount + date + brand) generates many false dup
+        // suspects (Samoosa ₹100 vs Beat Police ₹100). We score each ce match
+        // for product/notes alignment and only treat as a dup when the signal
+        // is strong. Otherwise → NOT_A_DUP (auto-clear, validate the row).
         let classification, matchedPoId = null, matchedCeId = null, reason = '';
+        const scored = ceMatches
+          .map(ce => ({ ce, score: alignmentScore(be, ce) }))
+          .sort((a, b) => b.score - a.score);
+        const top = scored[0];
+        const strong = scored.filter(s => s.score >= 0.7);
+
         if (poMatch) {
           classification = 'PO_SETTLED';
           matchedPoId = poMatch.id;
           reason = `PO ${poMatch.odoo_po_name || ''} from ${poMatch.vendor_name} — same vendor, ±5% amount, ±3 days`;
           counts.po_settled++;
-        } else if (ceMatches.length === 1) {
-          // Single matching cash_events row + product alignment if possible
-          const ce = ceMatches[0];
-          const productAlign = !be.product_name || !ce.product_name || fuzzyMatch(be.product_name, ce.product_name);
-          if (productAlign) {
-            classification = 'HARD_DUP';
-            matchedCeId = ce.id;
-            reason = `cash_events#${ce.id} ${ce.txn_at?.slice(0,10)} via ${ce.source} (${ce.recorded_by_name || ce.recorded_by_pin || '?'}) — same brand, exact paise, ±1 day, product aligns`;
-            counts.hard_dup++;
-          } else {
-            classification = 'AMBIGUOUS';
-            matchedCeId = ce.id;
-            reason = `cash_events#${ce.id} matches amount + date but product differs ("${ce.product_name}" vs "${be.product_name}")`;
-            counts.ambiguous++;
-          }
-        } else if (ceMatches.length > 1) {
+        } else if (strong.length === 1) {
+          // Exactly one ce row aligns strongly on product/notes
+          const ce = strong[0].ce;
+          classification = 'HARD_DUP';
+          matchedCeId = ce.id;
+          reason = `ce#${ce.id} aligns strongly (score ${strong[0].score.toFixed(2)}) — same brand, exact paise, ±1 day, product/notes match`;
+          counts.hard_dup++;
+        } else if (strong.length > 1) {
+          // Multiple strong matches — needs manual decision
           classification = 'AMBIGUOUS';
-          reason = `${ceMatches.length} cash_events rows match amount + date — cannot pick one safely`;
+          reason = `${strong.length} ce rows align strongly — pick correct dup manually`;
+          counts.ambiguous++;
+        } else if (top && top.score >= 0.4) {
+          // Moderate alignment — show for manual review
+          classification = 'AMBIGUOUS';
+          reason = `${ceMatches.length} ce candidate${ceMatches.length>1?'s':''} match amount/date; best alignment ${top.score.toFixed(2)} — verify`;
           counts.ambiguous++;
         } else {
-          classification = 'AMBIGUOUS';
-          reason = 'No PO bill matches and no cash_events match — re-check the dup detector';
-          counts.ambiguous++;
+          // No ce row aligns on product/notes. The crude amount+date+brand
+          // match was a coincidence (Samoosa ₹100 ≠ Beat Police ₹100). Clear it.
+          classification = 'NOT_A_DUP';
+          reason = ceMatches.length
+            ? `${ceMatches.length} ce row${ceMatches.length>1?'s':''} share amount+date but no product/notes alignment (top score ${top?.score?.toFixed(2) || '0.00'}) — different transactions`
+            : 'No matching cash_events found — crude flag was wrong';
+          counts.not_a_dup++;
         }
 
         // For AMBIGUOUS rows, pull richer context so the human reviewer can decide:
@@ -1601,8 +1641,6 @@ export async function onRequest(context) {
 
         if (apply) {
           if (classification === 'PO_SETTLED') {
-            // Mark as PO settlement, link, validate. Keep the row — it's a real
-            // payment, just classified differently from "expense".
             await DB.prepare(`
               UPDATE business_expenses
                  SET is_po_settled = 1,
@@ -1614,12 +1652,20 @@ export async function onRequest(context) {
                WHERE id = ?
             `).bind(matchedPoId, new Date().toISOString(), new Date().toISOString(), `auto:${user.name}`, be.id).run();
           } else if (classification === 'HARD_DUP') {
-            // The cash_events counter row IS the truth. Delete the
-            // business_expenses dup. Also unlink from Odoo if odoo_id present.
             if (be.odoo_id && apiKey) {
               try { await odoo(apiKey, 'hr.expense', 'unlink', [[be.odoo_id]]); } catch (e) { /* ignore */ }
             }
             await DB.prepare('DELETE FROM business_expenses WHERE id = ?').bind(be.id).run();
+          } else if (classification === 'NOT_A_DUP') {
+            // The crude flag was wrong — clear it so this row stops appearing
+            // in the dup-suspect chip. Don't auto-validate (the row may still
+            // need qty/uom/vendor or notes work — only the dup question is settled).
+            await DB.prepare(`
+              UPDATE business_expenses
+                 SET dup_resolution = 'auto_not_dup',
+                     dup_classified_at = ?
+               WHERE id = ?
+            `).bind(new Date().toISOString(), be.id).run();
           }
           // AMBIGUOUS — leave as-is for manual review
         }
