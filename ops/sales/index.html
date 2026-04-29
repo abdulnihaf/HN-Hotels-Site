@@ -72,6 +72,17 @@ tailwind.config = { theme: { extend: {
 
   .empty-banner { background: rgba(251,146,60,.08); border: 1px solid rgba(251,146,60,.25); color: #fb923c; padding: 12px 16px; border-radius: 12px; font-size: 13px; }
 
+  .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 40; }
+  .sheet { position: fixed; bottom: 0; left: 0; right: 0; max-height: 92vh; background: #16161f; border-top-left-radius: 20px; border-top-right-radius: 20px; z-index: 41; transform: translateY(100%); transition: transform .25s cubic-bezier(.2,.7,.3,1); overflow-y: auto; }
+  .sheet.open { transform: translateY(0); }
+  @media (min-width: 768px) {
+    .sheet { max-width: 560px; left: 50%; transform: translate(-50%, 100%); border-radius: 20px; bottom: 5vh; max-height: 80vh; }
+    .sheet.open { transform: translate(-50%, 0); }
+  }
+
+  .grid-row[data-day] { cursor: pointer; }
+  .grid-row[data-day]:hover { background: rgba(255,255,255,.02); }
+
   .hidden { display: none !important; }
 </style>
 </head>
@@ -257,14 +268,25 @@ tailwind.config = { theme: { extend: {
   <!-- §5 Razorpay QR registry -->
   <section class="max-w-5xl mx-auto px-4 pt-3">
     <details class="card p-2">
-      <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1">razorpay QR registry ▾</summary>
+      <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1 flex items-center gap-2">
+        razorpay QR registry ▾
+        <button onclick="event.preventDefault(); openQrSheet();" class="btn btn-ghost ml-auto" style="font-size:11px;padding:4px 10px;min-height:28px">+ Add QR</button>
+      </summary>
       <div id="qr-body" class="px-2 pb-3 pt-2">
         <div class="text-sm text-ink-3">expand to load</div>
       </div>
     </details>
   </section>
 
-  <!-- §6 Sync status -->
+  <!-- §6 POS config labels (admin/cfo only — small) -->
+  <section class="max-w-5xl mx-auto px-4 pt-3">
+    <details class="card p-2">
+      <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1">pos config labels ▾</summary>
+      <div id="cfg-body" class="px-2 pb-3 pt-2"><div class="text-sm text-ink-3">expand to load</div></div>
+    </details>
+  </section>
+
+  <!-- §7 Sync status -->
   <section class="max-w-5xl mx-auto px-4 pt-3">
     <details class="card p-2">
       <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1">sync status (per source) ▾</summary>
@@ -272,6 +294,84 @@ tailwind.config = { theme: { extend: {
     </details>
   </section>
 
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ QR add/edit sheet ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="qr-overlay" class="sheet-overlay hidden" onclick="closeQrSheet()"></div>
+<div id="qr-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div class="text-base font-bold" id="qr-sheet-title">Add Razorpay QR</div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeQrSheet()">×</button>
+    </div>
+    <div class="text-xs text-ink-3 mt-1">Maps a Razorpay QR code to a counter or runner. Used by sync to attribute UPI collections.</div>
+  </div>
+  <div class="px-5 py-5 space-y-4">
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">QR Code ID (from Razorpay dashboard)</label>
+      <input id="qr-id" class="input" placeholder="qr_LzAcOHEIeAtssh"/>
+      <div class="text-[10px] text-ink-3 mt-1">Razorpay → Payments → QR Codes → copy the QR's id (starts with <code>qr_</code>)</div>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Role</label>
+      <select id="qr-role" class="input">
+        <option value="counter">Counter (single fixed QR for the counter POS)</option>
+        <option value="runner" selected>Runner (one per field runner)</option>
+      </select>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Display name</label>
+      <input id="qr-display" class="input" placeholder="Runner — Nafees / Counter NCH"/>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Runner name (required for role=runner)</label>
+      <input id="qr-runner-name" class="input" placeholder="Nafees Ahmed"/>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Runner PIN (optional — links to /api/cash USERS)</label>
+      <input id="qr-runner-pin" class="input" placeholder="e.g. 8241" pattern="\d{4}"/>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Notes (optional)</label>
+      <input id="qr-notes" class="input" placeholder="e.g. Replaced by Yashwant on Apr 25"/>
+    </div>
+    <div id="qr-err" class="text-xs text-red-400 hidden"></div>
+    <div class="flex gap-2">
+      <button id="qr-submit" class="btn flex-1" onclick="submitQr()">Save</button>
+      <button id="qr-deactivate" class="btn btn-ghost hidden" onclick="deactivateQr()">Deactivate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ POS config label sheet ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="cfg-overlay" class="sheet-overlay hidden" onclick="closeCfgSheet()"></div>
+<div id="cfg-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div class="text-base font-bold">Label POS config <span id="cfg-id-disp" class="text-ink-3 font-normal"></span></div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeCfgSheet()">×</button>
+    </div>
+    <div class="text-xs text-ink-3 mt-1">Owner-friendly label + station kind. Drives the dashboard's POS filter dropdown.</div>
+  </div>
+  <div class="px-5 py-5 space-y-4">
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Owner label</label>
+      <input id="cfg-label" class="input" placeholder="e.g. Counter POS / Runner POS / Token POS"/>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Station kind</label>
+      <select id="cfg-kind" class="input">
+        <option value="">— unknown —</option>
+        <option value="counter">counter</option>
+        <option value="runner">runner</option>
+        <option value="token">token</option>
+        <option value="delivery">delivery</option>
+        <option value="other">other</option>
+      </select>
+    </div>
+    <div id="cfg-err" class="text-xs text-red-400 hidden"></div>
+    <button class="btn w-full" onclick="submitCfg()">Save</button>
+  </div>
 </div>
 
 <script>
@@ -330,12 +430,16 @@ async function loadConfigs() {
     const j = await r.json();
     if (!j.success) return;
     const sel = document.getElementById('cfg-filter');
+    const prev = sel.value; // preserve selection across refresh
+    // Reset to just "All POS"
+    while (sel.options.length > 1) sel.remove(1);
     for (const c of (j.configs || [])) {
       const o = document.createElement('option');
       o.value = c.pos_config_id;
       o.textContent = (c.label || c.name || ('config ' + c.pos_config_id)) + ' · #' + c.pos_config_id;
       sel.appendChild(o);
     }
+    sel.value = prev;
   } catch (_) {}
 }
 
@@ -408,7 +512,7 @@ async function loadDaily() {
                 : d < 10000 ? '<span class="chip chip-warn">in flight</span>'
                 : '<span class="chip chip-err">investigate</span>';
       return `
-      <tr class="grid-row">
+      <tr class="grid-row" data-day="${escapeHtml(r.day)}" onclick="recomputeDay('${escapeHtml(r.day)}')" title="tap to recompute">
         <td class="text-ink-2 num whitespace-nowrap">${escapeHtml(r.day)}</td>
         <td class="text-right num font-semibold">${fmtR(r.gross_sales_paise)}</td>
         <td class="text-right num">${fmtR(r.total_cash_paise)}</td>
@@ -471,20 +575,163 @@ async function loadQr() {
     const j = await r.json();
     if (!j.success) throw new Error(j.error);
     if (!j.qrs.length) {
-      body.innerHTML = `<div class="empty-banner">QR registry is empty. Sub-phase C will add the "Add QR" UI; for now seed via:
-        <code class="text-[11px] block mt-1">INSERT INTO razorpay_qr_registry (qr_code_id, brand, role, runner_name, display_name) VALUES (...)</code></div>`;
+      body.innerHTML = `<div class="empty-banner">QR registry is empty. Use the <strong>+ Add QR</strong> button (top-right of this section) to register your 6 NCH QRs (1 counter + 5 runners).</div>`;
       return;
     }
+    QR_CACHE = Object.fromEntries(j.qrs.map(q => [q.qr_code_id, q]));
     body.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${j.qrs.map(q => `
-      <div class="card p-3">
+      <div class="card p-3 cursor-pointer hover:bg-white/[.02]" onclick="openQrSheet('${escapeHtml(q.qr_code_id)}')">
         <div class="flex items-baseline justify-between">
-          <div class="font-semibold text-ink-1">${escapeHtml(q.display_name)}</div>
+          <div class="font-semibold text-ink-1">${escapeHtml(q.display_name)} ${q.active ? '' : '<span class="chip chip-warn ml-1">inactive</span>'}</div>
           <span class="chip ${q.role === 'counter' ? 'chip-mute on' : 'chip-mute'}">${q.role}</span>
         </div>
         <div class="text-[11px] text-ink-3 num">${escapeHtml(q.qr_code_id)}</div>
         <div class="mt-2 text-xs text-ink-3">Today <span class="num text-ink-1">${fmtR(q.today_paise)}</span> · MTD <span class="num text-ink-1">${fmtR(q.mtd_paise)}</span></div>
-      </div>`).join('')}</div>`;
+        ${q.runner_name ? `<div class="mt-1 text-[11px] text-ink-3">runner: ${escapeHtml(q.runner_name)}${q.runner_pin ? ' · pin '+q.runner_pin : ''}</div>` : ''}
+      </div>`).join('')}</div>
+      <div class="text-[11px] text-ink-3 mt-2">Tap a card to edit / deactivate.</div>`;
   } catch (e) { body.innerHTML = `<div class="text-sm text-red-400 py-2">${escapeHtml(e.message)}</div>`; }
+}
+
+let QR_CACHE = {};
+
+async function loadCfg() {
+  const body = document.getElementById('cfg-body');
+  body.innerHTML = '<div class="text-sm text-ink-3 py-2"><span class="spinner"></span> loading…</div>';
+  try {
+    const r = await fetch('/api/sales?action=pos-configs&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    body.innerHTML = `<table class="w-full"><thead class="grid-head"><tr>
+        <th>POS #</th><th>Odoo name</th><th>Owner label</th><th>Kind</th><th></th>
+      </tr></thead><tbody>${(j.configs || []).map(c => `
+        <tr class="grid-row" data-cfg="${c.pos_config_id}">
+          <td class="num text-ink-2">#${c.pos_config_id}</td>
+          <td class="text-ink-3 text-xs">${escapeHtml(c.name || '')}</td>
+          <td class="text-ink-2">${escapeHtml(c.label || '—')}</td>
+          <td class="text-ink-3 text-xs">${escapeHtml(c.station_kind || '—')}</td>
+          <td class="text-right"><button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;min-height:28px"
+            onclick="openCfgSheet(${c.pos_config_id}, ${JSON.stringify(c.label || '').replace(/"/g,'&quot;')}, ${JSON.stringify(c.station_kind || '').replace(/"/g,'&quot;')})">edit</button></td>
+        </tr>`).join('')}</tbody></table>`;
+  } catch (e) { body.innerHTML = `<div class="text-sm text-red-400 py-2">${escapeHtml(e.message)}</div>`; }
+}
+
+// QR sheet
+function openQrSheet(qrCodeId) {
+  const editing = qrCodeId && QR_CACHE[qrCodeId];
+  document.getElementById('qr-sheet-title').textContent = editing ? 'Edit QR' : 'Add Razorpay QR';
+  document.getElementById('qr-id').value          = editing ? editing.qr_code_id : '';
+  document.getElementById('qr-id').disabled       = !!editing; // primary key — don't allow rename
+  document.getElementById('qr-role').value        = editing ? editing.role : 'runner';
+  document.getElementById('qr-display').value     = editing ? editing.display_name : '';
+  document.getElementById('qr-runner-name').value = editing ? (editing.runner_name || '') : '';
+  document.getElementById('qr-runner-pin').value  = editing ? (editing.runner_pin || '') : '';
+  document.getElementById('qr-notes').value       = editing ? (editing.notes || '') : '';
+  document.getElementById('qr-deactivate').classList.toggle('hidden', !editing || !editing.active);
+  document.getElementById('qr-err').classList.add('hidden');
+  document.getElementById('qr-overlay').classList.remove('hidden');
+  document.getElementById('qr-sheet').classList.add('open');
+}
+function closeQrSheet() {
+  document.getElementById('qr-overlay').classList.add('hidden');
+  document.getElementById('qr-sheet').classList.remove('open');
+}
+async function submitQr() {
+  const errEl = document.getElementById('qr-err');
+  errEl.classList.add('hidden');
+  const payload = {
+    pin: PIN,
+    qr_code_id: document.getElementById('qr-id').value.trim(),
+    brand: 'NCH',
+    role: document.getElementById('qr-role').value,
+    display_name: document.getElementById('qr-display').value.trim(),
+    runner_name: document.getElementById('qr-runner-name').value.trim() || null,
+    runner_pin:  document.getElementById('qr-runner-pin').value.trim() || null,
+    notes:       document.getElementById('qr-notes').value.trim() || null,
+    active: true,
+  };
+  const btn = document.getElementById('qr-submit'); btn.disabled = true; btn.textContent = 'saving…';
+  try {
+    const r = await fetch('/api/sales?action=upsert-qr', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    closeQrSheet();
+    await loadQr();
+  } catch (e) {
+    errEl.textContent = e.message; errEl.classList.remove('hidden');
+  } finally { btn.disabled = false; btn.textContent = 'Save'; }
+}
+async function deactivateQr() {
+  const qr = document.getElementById('qr-id').value.trim();
+  if (!qr) return;
+  if (!confirm(`Deactivate ${qr}? It will stop receiving sync writes (existing rows preserved).`)) return;
+  try {
+    const r = await fetch('/api/sales?action=deactivate-qr', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN, qr_code_id: qr }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    closeQrSheet();
+    await loadQr();
+  } catch (e) {
+    const errEl = document.getElementById('qr-err');
+    errEl.textContent = e.message; errEl.classList.remove('hidden');
+  }
+}
+
+// Config label sheet
+function openCfgSheet(cfgId, label, kind) {
+  document.getElementById('cfg-id-disp').textContent = '#' + cfgId;
+  document.getElementById('cfg-label').value = label || '';
+  document.getElementById('cfg-kind').value  = kind || '';
+  document.getElementById('cfg-err').classList.add('hidden');
+  document.getElementById('cfg-overlay').classList.remove('hidden');
+  document.getElementById('cfg-sheet').classList.add('open');
+  document.getElementById('cfg-sheet').dataset.cfgId = cfgId;
+}
+function closeCfgSheet() {
+  document.getElementById('cfg-overlay').classList.add('hidden');
+  document.getElementById('cfg-sheet').classList.remove('open');
+}
+async function submitCfg() {
+  const cfgId = parseInt(document.getElementById('cfg-sheet').dataset.cfgId, 10);
+  const errEl = document.getElementById('cfg-err'); errEl.classList.add('hidden');
+  try {
+    const r = await fetch('/api/sales?action=upsert-config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pin: PIN, pos_config_id: cfgId,
+        label: document.getElementById('cfg-label').value.trim() || null,
+        station_kind: document.getElementById('cfg-kind').value || null,
+      }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    closeCfgSheet();
+    await loadCfg();
+    await loadConfigs();  // refresh the filter dropdown labels
+  } catch (e) {
+    errEl.textContent = e.message; errEl.classList.remove('hidden');
+  }
+}
+
+// Tap a daily row to recompute it (admin/cfo only — server enforces).
+async function recomputeDay(day) {
+  if (!confirm(`Recompute sales_recon_daily for ${day}?\nThis re-reads all mirror tables for that day.`)) return;
+  try {
+    const r = await fetch('/api/sales?action=recompute-day', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN, day, brand: 'NCH' }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    await loadDaily();
+    await loadOverview();
+  } catch (e) { alert('Recompute error: ' + e.message); }
 }
 
 async function loadSyncStatus() {
@@ -547,6 +794,7 @@ document.addEventListener('toggle', (e) => {
   if (sumText.includes('payment method')) loadPm();
   else if (sumText.includes('items sold')) loadItems();
   else if (sumText.includes('QR registry')) loadQr();
+  else if (sumText.includes('pos config labels')) loadCfg();
 }, true);
 
 document.getElementById('refresh-btn').addEventListener('click', () => { loadAll(); loadSyncStatus(); });
