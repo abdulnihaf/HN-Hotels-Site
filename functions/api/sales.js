@@ -95,6 +95,7 @@ export async function onRequest(context) {
     if (action === 'deactivate-qr' && request.method === 'POST')    return await deactivateQr(request, env);
     if (action === 'upsert-config' && request.method === 'POST')    return await upsertConfig(request, env);
     if (action === 'recompute-day' && request.method === 'POST')    return await recomputeDay(request, env);
+    if (action === 'discover-qrs' && request.method === 'POST')     return await discoverQrs(request, env);
     return json({ success: false, error: `Unknown action: ${action}` }, 400);
   } catch (e) {
     return json({ success: false, error: e.message, stack: e.stack }, 500);
@@ -532,4 +533,87 @@ async function recomputeDay(request, env) {
       order_count: ord?.n || 0,
     },
   });
+}
+
+// Discover NCH Razorpay QRs autonomously instead of 6× "+ Add QR" clicks.
+// Calls Razorpay GET /v1/qr_codes (the merchant's QR list), classifies each
+// by name pattern, and bulk-upserts into razorpay_qr_registry with sensible
+// defaults that the owner can refine via the existing edit sheet if needed.
+//
+// Classification rules (in order):
+//   1. name contains "counter"  → role=counter
+//   2. name contains "runner"   → role=runner; runner_name = words after "runner"
+//   3. name matches a known NCH runner (Nafees / Kesmat / Mujib / Dhanush) → role=runner
+//   4. fallback → role=runner with notes="auto-classified, needs review"
+//
+// Returns a {discovered, registered, skipped} report so the UI can render
+// a one-shot result panel. Idempotent — re-running updates display_name +
+// notes from Razorpay-side changes; runner_pin/runner_name preserved on
+// rows the owner has already curated (NULLs only get filled, non-NULL
+// values are kept).
+async function discoverQrs(request, env) {
+  let pin;
+  try { pin = (await request.json()).pin; } catch { pin = new URL(request.url).searchParams.get('pin'); }
+  const u = USERS[pin];
+  if (!u || !SYNC_ROLES.has(u.role)) return json({ success: false, error: 'admin/cfo only' }, 401);
+  if (!env.RAZORPAY_KEY || !env.RAZORPAY_SECRET) {
+    return json({
+      success: false,
+      error: 'RAZORPAY_KEY / RAZORPAY_SECRET not set on this Pages project. Run: wrangler pages secret put RAZORPAY_KEY --project-name hn-hotels-site (value from HN-Hotels-Asset-Database.xlsx row 73), then RAZORPAY_SECRET (row 74).',
+    }, 503);
+  }
+
+  const auth = 'Basic ' + btoa(`${env.RAZORPAY_KEY}:${env.RAZORPAY_SECRET}`);
+  const r = await fetch('https://api.razorpay.com/v1/qr_codes?count=100', { headers: { Authorization: auth } });
+  if (!r.ok) {
+    const t = await r.text();
+    return json({ success: false, error: `Razorpay HTTP ${r.status}: ${t.slice(0, 300)}` }, 502);
+  }
+  const j = await r.json();
+  const items = j.items || [];
+
+  const KNOWN_RUNNERS = ['nafees', 'kesmat', 'mujib', 'dhanush', 'kismat', 'nafeez'];
+  const classify = (name) => {
+    const lc = String(name || '').toLowerCase();
+    if (lc.includes('counter')) return { role: 'counter', runner_name: null };
+    const m = lc.match(/runner[\s\-_:]+([a-z]+)/);
+    if (m) return { role: 'runner', runner_name: m[1].replace(/\b\w/g, c => c.toUpperCase()) };
+    for (const r of KNOWN_RUNNERS) {
+      if (lc.includes(r)) return { role: 'runner', runner_name: r.replace(/\b\w/g, c => c.toUpperCase()) };
+    }
+    return { role: 'runner', runner_name: null, needs_review: true };
+  };
+
+  const report = { discovered: items.length, registered: 0, skipped: 0, rows: [] };
+  for (const it of items) {
+    const cls = classify(it.name);
+    const display = String(it.name || it.id).slice(0, 80);
+    const noteParts = [];
+    if (it.description) noteParts.push(`desc: ${String(it.description).slice(0, 80)}`);
+    if (cls.needs_review) noteParts.push('auto-classified — review role/runner_name');
+    if (it.usage) noteParts.push(`usage=${it.usage}`);
+    const notes = noteParts.join(' · ').slice(0, 500) || null;
+
+    try {
+      // Preserve existing curated runner_name / runner_pin (only fill NULLs).
+      await env.DB.prepare(
+        `INSERT INTO razorpay_qr_registry
+           (qr_code_id, brand, role, runner_name, runner_pin, display_name, active, notes)
+         VALUES (?, 'NCH', ?, ?, NULL, ?, 1, ?)
+         ON CONFLICT(qr_code_id) DO UPDATE SET
+           role = CASE WHEN razorpay_qr_registry.role IN ('counter','runner')
+                       THEN razorpay_qr_registry.role
+                       ELSE excluded.role END,
+           runner_name = COALESCE(razorpay_qr_registry.runner_name, excluded.runner_name),
+           display_name = excluded.display_name,
+           notes = excluded.notes`
+      ).bind(it.id, cls.role, cls.runner_name, display, notes).run();
+      report.registered++;
+      report.rows.push({ qr_code_id: it.id, name: it.name, role: cls.role, runner_name: cls.runner_name, needs_review: !!cls.needs_review });
+    } catch (e) {
+      report.skipped++;
+      report.rows.push({ qr_code_id: it.id, error: e.message });
+    }
+  }
+  return json({ success: true, recorded_by: u.name, ...report });
 }

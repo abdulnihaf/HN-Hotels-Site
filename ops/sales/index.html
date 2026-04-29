@@ -270,7 +270,9 @@ tailwind.config = { theme: { extend: {
     <details class="card p-2">
       <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1 flex items-center gap-2">
         razorpay QR registry ▾
-        <button onclick="event.preventDefault(); openQrSheet();" class="btn btn-ghost ml-auto" style="font-size:11px;padding:4px 10px;min-height:28px">+ Add QR</button>
+        <button onclick="event.preventDefault(); discoverQrs();" class="btn ml-auto" style="font-size:11px;padding:4px 10px;min-height:28px"
+                title="One-shot: pull all QRs from Razorpay /v1/qr_codes and auto-classify by name">Discover from Razorpay</button>
+        <button onclick="event.preventDefault(); openQrSheet();" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;min-height:28px">+ Add QR</button>
       </summary>
       <div id="qr-body" class="px-2 pb-3 pt-2">
         <div class="text-sm text-ink-3">expand to load</div>
@@ -717,6 +719,23 @@ async function submitCfg() {
   } catch (e) {
     errEl.textContent = e.message; errEl.classList.remove('hidden');
   }
+}
+
+// One-shot QR discovery via Razorpay /v1/qr_codes — auto-classifies by name.
+async function discoverQrs() {
+  if (!confirm('Pull all QRs from Razorpay and auto-register them?\nExisting curated runner_name / runner_pin values are preserved.')) return;
+  try {
+    const r = await fetch('/api/sales?action=discover-qrs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    const reviewCount = (j.rows || []).filter(x => x.needs_review).length;
+    alert(`Discovered ${j.discovered} · registered ${j.registered} · skipped ${j.skipped}` +
+          (reviewCount ? `\n${reviewCount} need role/runner review — open the cards to fix.` : ''));
+    await loadQr();
+  } catch (e) { alert('Discover error: ' + e.message); }
 }
 
 // Tap a daily row to recompute it (admin/cfo only — server enforces).
