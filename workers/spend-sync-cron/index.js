@@ -934,89 +934,69 @@ async function syncNchSales(env, opts = {}) {
     return added;
   });
 
-  // 5. Razorpay QR poll — per active registry row
+  // 5. Razorpay QR collections — mirror DB_NCH.razorpay_sync
+  //
+  // Architecture pivot 2026-04-29: NCH already syncs Razorpay → its own D1
+  // (nch-settlements.razorpay_sync) for /api/validator's QR-bucket recon.
+  // Mirroring that table is strictly better than calling Razorpay REST:
+  //   - no third-party rate limits
+  //   - no RAZORPAY_KEY/SECRET to manage on this worker
+  //   - eventually consistent with /ops/v2's source of truth
+  //   - qr_label (COUNTER / RUNNER_COUNTER / RUN001..005) is the operational
+  //     bucket the validator already uses; we just map to our role enum.
+  // Falls back to throwing if DB_NCH binding is missing (caller deals).
   await flow('nch_razorpay_qr_poll', async () => {
-    if (!env.RAZORPAY_KEY || !env.RAZORPAY_SECRET) {
-      throw new Error('RAZORPAY_KEY/RAZORPAY_SECRET secrets not set on this Worker');
-    }
-    const auth = 'Basic ' + btoa(`${env.RAZORPAY_KEY}:${env.RAZORPAY_SECRET}`);
-    const qrs = (await env.DB.prepare(
-      `SELECT qr_code_id, role, brand FROM razorpay_qr_registry
-        WHERE brand = 'NCH' AND active = 1`
-    ).all()).results || [];
-    if (!qrs.length) return 0;
+    if (!env.DB_NCH) throw new Error('DB_NCH binding missing — required for nch-settlements.razorpay_sync mirror');
+    const cur = await getSalesCursor(env, 'nch_razorpay_qr_poll');
+    const sinceId = opts.force ? 0 : (cur?.last_synced_id || 0);
 
-    let totalAdded = 0;
-    const now = Math.floor(Date.now() / 1000);
-    for (const qr of qrs) {
-      // Per-QR cursor: we extend sales_sync_state notes JSON with a {qr_id: lastTs}
-      // map. Cleaner than 6 PRIMARY KEY rows per QR.
-      const stRow = await env.DB.prepare(
-        `SELECT notes FROM sales_sync_state WHERE sync_source = 'nch_razorpay_qr_poll'`
-      ).first();
-      let cursors = {};
-      try { cursors = JSON.parse(stRow?.notes || '{}'); if (cursors.__seed) cursors = {}; } catch { cursors = {}; }
-      const fromTs = opts.force
-        ? Math.floor(new Date('2026-04-01T00:00:00+05:30').getTime() / 1000)
-        : (cursors[qr.qr_code_id] || Math.floor(new Date('2026-04-01T00:00:00+05:30').getTime() / 1000));
+    // Pull delta by id from the operational table. id is monotonic in nch-settlements.
+    const rows = (await env.DB_NCH.prepare(
+      `SELECT id, qr_id, qr_label, payment_id, amount, vpa, status, captured_at
+         FROM razorpay_sync
+        WHERE id > ?
+          AND captured_at >= '2026-04-01'
+        ORDER BY id ASC
+        LIMIT 5000`
+    ).bind(sinceId).all()).results || [];
+    if (!rows.length) return 0;
 
-      // Razorpay /v1/payments/qr_codes/:id/payments paginates via skip/count.
-      // Page through until we hit empty or 1000 (cap to avoid runaway).
-      let skip = 0;
-      const COUNT = 100;
-      let pageMaxTs = fromTs;
-      let qrAdded = 0;
-      let pages = 0;
-      while (pages < 10) {
-        const url = `${RAZORPAY_REST}/v1/payments/qr_codes/${encodeURIComponent(qr.qr_code_id)}/payments?from=${fromTs}&to=${now}&count=${COUNT}&skip=${skip}`;
-        const resp = await fetch(url, { headers: { Authorization: auth } });
-        if (!resp.ok) {
-          const txt = await resp.text();
-          throw new Error(`razorpay ${qr.qr_code_id} HTTP ${resp.status}: ${txt.slice(0, 200)}`);
-        }
-        const j = await resp.json();
-        const items = j.items || [];
-        if (!items.length) break;
-        for (const p of items) {
-          if (p.captured_at && p.captured_at > pageMaxTs) pageMaxTs = p.captured_at;
-          const isoCaptured = new Date((p.captured_at || p.created_at) * 1000).toISOString();
-          const istDay = new Date((p.captured_at || p.created_at) * 1000 + 5.5 * 3600 * 1000)
-            .toISOString().slice(0, 10);
-          try {
-            await env.DB.prepare(
-              `INSERT INTO razorpay_qr_collections (
-                 razorpay_payment_id, qr_code_id, brand, role,
-                 amount_paise, fee_paise, tax_paise, status, method,
-                 vpa, contact, captured_at, captured_at_day,
-                 synced_at, synced_via, raw_payload)
-               VALUES (?, ?, 'NCH', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rest_poll', ?)
-               ON CONFLICT(razorpay_payment_id) DO UPDATE SET
-                 amount_paise = excluded.amount_paise,
-                 status       = excluded.status,
-                 synced_at    = excluded.synced_at`
-            ).bind(
-              p.id, qr.qr_code_id, qr.role,
-              p.amount || 0, p.fee || 0, p.tax || 0,
-              p.status || 'unknown', p.method || null,
-              p.vpa || null, p.contact || null,
-              isoCaptured, istDay,
-              new Date().toISOString(),
-              JSON.stringify(p).slice(0, 8000)
-            ).run();
-            qrAdded++;
-          } catch (_) {/* skip */}
-        }
-        if (items.length < COUNT) break;
-        skip += COUNT;
-        pages++;
-      }
-      cursors[qr.qr_code_id] = pageMaxTs + 1;
-      await env.DB.prepare(
-        `UPDATE sales_sync_state SET notes = ? WHERE sync_source = 'nch_razorpay_qr_poll'`
-      ).bind(JSON.stringify(cursors)).run();
-      totalAdded += qrAdded;
+    let added = 0; let maxId = sinceId;
+    for (const r of rows) {
+      // qr_label → role mapping. COUNTER + RUNNER_COUNTER share the counter
+      // pool (validator treats them as the same bucket). RUN001..005 are
+      // per-runner-slot, all role=runner.
+      const role = (r.qr_label === 'COUNTER' || r.qr_label === 'RUNNER_COUNTER') ? 'counter' : 'runner';
+      const ts = r.captured_at;
+      const isoCap = ts.includes('T') ? ts : new Date(ts.replace(' ', 'T') + 'Z').toISOString();
+      const istDay = new Date(new Date(isoCap).getTime() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+      try {
+        await env.DB.prepare(
+          `INSERT INTO razorpay_qr_collections (
+             razorpay_payment_id, qr_code_id, brand, role,
+             amount_paise, fee_paise, tax_paise, status, method,
+             vpa, contact, captured_at, captured_at_day,
+             synced_at, synced_via, raw_payload, notes)
+           VALUES (?, ?, 'NCH', ?, ?, 0, 0, ?, 'upi', ?, NULL, ?, ?, ?, 'rest_poll', NULL, ?)
+           ON CONFLICT(razorpay_payment_id) DO UPDATE SET
+             amount_paise = excluded.amount_paise,
+             status       = excluded.status,
+             synced_at    = excluded.synced_at`
+        ).bind(
+          r.payment_id, r.qr_id, role,
+          Math.round((r.amount || 0) * 100),
+          r.status || 'unknown',
+          r.vpa || null,
+          isoCap, istDay,
+          new Date().toISOString(),
+          `nch-settlements.razorpay_sync id=${r.id} label=${r.qr_label}`
+        ).run();
+        added++;
+      } catch (_) {/* skip */}
+      if (r.id > maxId) maxId = r.id;
     }
-    return totalAdded;
+    if (maxId > sinceId) await setSalesCursor(env, 'nch_razorpay_qr_poll', { last_synced_id: maxId });
+    return added;
   });
 
   // 6. recompute sales_recon_daily — rolling 14-day window
