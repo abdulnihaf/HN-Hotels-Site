@@ -497,13 +497,12 @@ async function runSync(request, env) {
     'nch_settlement_history',
     'nch_collection_history',
     'nch_expense_history',
+    'nch_pos_main_cash',         // direct walk-in cash sales at NCH main counter
     'he_shift_expenses',
     'he_shift_handovers',
-    'central_business_expenses',
-    // 'nch_pos_main_cash' and 'he_pos_orders' are deferred — they require
-    // Odoo direct queries (separate Odoo instances ops.hamzahotel.com /
-    // test.hamzahotel.com); first cut relies on the operational endpoints
-    // above which already aggregate POS data.
+    'central_business_expenses', // D1 mirror of Odoo hr.expense (covers /api/spend?action=record path)
+    // Odoo-direct hr.expense (catches Odoo-native entries that bypass spend.js)
+    // is layered into central_business_expenses worker via a second pass.
   ];
 
   const results = {};
@@ -544,6 +543,7 @@ const SYNC_HANDLERS = {
   nch_settlement_history: syncNchSettlementHistory,
   nch_collection_history: syncNchCollectionHistory,
   nch_expense_history:    syncNchExpenseHistory,
+  nch_pos_main_cash:      syncNchPosMainCash,
   he_shift_expenses:      syncHeShiftExpenses,
   he_shift_handovers:     syncHeShiftHandovers,
   central_business_expenses: syncCentralBusinessExpenses,
@@ -672,6 +672,73 @@ async function syncNchExpenseHistory(env) {
     if (e.id > maxId) maxId = e.id;
   }
   if (maxId > (cur.last_synced_id || 0)) await setCursor(env, 'nch_expense_history', { last_synced_id: maxId });
+  return added;
+}
+
+// ── NCH: main-counter walk-in cash sales — daily aggregate ──
+// /api/nch-data exposes mainCounter.cash per (from,to) window. We pull
+// one day at a time so each day's row is idempotently keyed by date.
+// Anchor: 2026-04-19 (NCH cash trail anchor). Cursor advances per-day.
+//
+// Why this matters: without this, pos_counter_nch shows negative because
+// runner settlements + collection handovers + counter expenses are present
+// but the direct walk-in cash sales credit (≈₹2-3k/day) is not.
+async function syncNchPosMainCash(env) {
+  const cur = await getCursor(env, 'nch_pos_main_cash');
+  const since = (cur.last_synced_at || '2026-04-19T15:30:50Z').slice(0, 10);
+  const today = todayIST();
+  // Per-day iteration. First day to fetch: max(since-day, anchor-day).
+  // Last day: today (we re-fetch today's partial each run; idempotent).
+  let added = 0; let cursorDate = since;
+  const dayMs = 86400000;
+  let dayIso = since;
+  // Start at since (or anchor day if NULL), iterate forward to today inclusive.
+  // We include 'since' day on first run to capture from-anchor; subsequent
+  // runs skip it because the row is already inserted.
+  const iterFrom = new Date(`${since}T00:00:00+05:30`).getTime();
+  const iterTo   = new Date(`${today}T00:00:00+05:30`).getTime();
+  for (let t = iterFrom; t <= iterTo; t += dayMs) {
+    const d0 = new Date(t).toISOString().slice(0, 10);
+    const d1 = new Date(t + dayMs).toISOString().slice(0, 10);
+    const isToday = d0 === today;
+    let payload;
+    try {
+      const r = await fetch(`${NCH_BASE}/api/nch-data?from=${d0}&to=${d1}`);
+      payload = await r.json();
+    } catch (e) {
+      continue;
+    }
+    if (!payload?.success) continue;
+    const cashRupees = parseFloat(payload?.data?.mainCounter?.cash || 0);
+    const sourceRef = `nch:nch-data:${d0}:main_cash`;
+    // For TODAY (partial day), delete prior row and insert fresh — captures
+    // sales accumulated since last sync. For finished days, INSERT OR IGNORE
+    // (UNIQUE collision on second run is the desired idempotency).
+    if (isToday) {
+      await env.DB.prepare(
+        `DELETE FROM cash_events WHERE source = 'main_counter_cash' AND source_ref = ?`
+      ).bind(sourceRef).run().catch(() => {});
+    }
+    if (!(cashRupees > 0)) {
+      cursorDate = d0;
+      continue;
+    }
+    const ok = await insertEvent(env, {
+      instrument: 'pos_counter_nch', direction: 'credit',
+      amount_paise: Math.round(cashRupees * 100),
+      source: 'main_counter_cash', source_ref: sourceRef,
+      brand: 'NCH',
+      txn_at: `${d0}T12:00:00+05:30`,
+      recorded_by_name: 'system (nch-data sync)',
+      notes: `NCH main-counter walk-in cash sales for ${d0}${isToday ? ' (today, partial)' : ''} (orderCount=${payload?.data?.mainCounter?.orderCount}, upi=₹${payload?.data?.mainCounter?.upi}, comp=₹${payload?.data?.mainCounter?.complimentary})`,
+    });
+    if (ok) added++;
+    cursorDate = d0;
+  }
+  // Advance cursor to (cursorDate + 1) so next run starts at the day after the last successfully-processed.
+  // Keep cursor as ISO timestamp of last day's noon so the cursor format stays consistent.
+  const advance = new Date(`${cursorDate}T12:00:00+05:30`).toISOString();
+  await setCursor(env, 'nch_pos_main_cash', { last_synced_at: advance });
   return added;
 }
 
