@@ -1542,13 +1542,61 @@ export async function onRequest(context) {
           counts.ambiguous++;
         }
 
+        // For AMBIGUOUS rows, pull richer context so the human reviewer can decide:
+        //   • similar_be: same brand + (same product OR same vendor OR ±2% amount), ±14 days
+        //   • same_day_be: every other be at same brand on same day (sniff for batch entry pattern)
+        //   • recent_po: PO bills for same brand in last 30 days (vendor pattern)
+        let similar_be = [], same_day_be = [], recent_po = [];
+        if (classification === 'AMBIGUOUS' && !apply) {
+          const amtMin = Math.round(be.amount * 0.98);
+          const amtMax = Math.round(be.amount * 1.02);
+          try {
+            const sim = await DB.prepare(`
+              SELECT id, COALESCE(expense_date, DATE(recorded_at, '+5 hours', '+30 minutes')) AS d,
+                     amount, product_name, notes, vendor_name, x_payment_method AS pm, recorded_by
+                FROM business_expenses
+               WHERE id != ? AND x_location = ?
+                 AND (
+                   LOWER(COALESCE(product_name,'')) = LOWER(COALESCE(?,''))
+                   OR (? IS NOT NULL AND LOWER(COALESCE(vendor_name,'')) = LOWER(?))
+                   OR (amount BETWEEN ? AND ?)
+                 )
+                 AND DATE(COALESCE(expense_date, DATE(recorded_at, '+5 hours', '+30 minutes'))) >= DATE(?, '-14 days')
+                 AND DATE(COALESCE(expense_date, DATE(recorded_at, '+5 hours', '+30 minutes'))) <= DATE(?, '+14 days')
+               ORDER BY d DESC LIMIT 8
+            `).bind(be.id, be.brand, be.product_name, be.vendor_name, be.vendor_name, amtMin, amtMax, dateStr, dateStr).all();
+            similar_be = sim.results || [];
+
+            const sameDay = await DB.prepare(`
+              SELECT id, amount, product_name, notes, x_payment_method AS pm, recorded_by, category
+                FROM business_expenses
+               WHERE id != ? AND x_location = ?
+                 AND COALESCE(expense_date, DATE(recorded_at, '+5 hours', '+30 minutes')) = ?
+               ORDER BY id ASC LIMIT 12
+            `).bind(be.id, be.brand, dateStr).all();
+            same_day_be = sameDay.results || [];
+
+            const po = await DB.prepare(`
+              SELECT id, odoo_po_name, vendor_name, amount_total, bill_date, payment_state
+                FROM rm_vendor_bills
+               WHERE brand = ?
+                 AND DATE(bill_date) >= DATE(?, '-30 days')
+                 AND DATE(bill_date) <= DATE(?, '+5 days')
+               ORDER BY bill_date DESC LIMIT 6
+            `).bind(be.brand, dateStr, dateStr).all();
+            recent_po = po.results || [];
+          } catch (_) { /* tolerate per-row enrich failures */ }
+        }
+
         classifications.push({
           expense_id: be.id, odoo_id: be.odoo_id, brand: be.brand,
           amount: be.amount, product: be.product_name, vendor: be.vendor_name,
           payment_method: be.payment_method, expense_date: dateStr,
-          recorded_by: be.recorded_by, classification, reason,
+          recorded_by: be.recorded_by, notes: be.notes, category: be.category,
+          classification, reason,
           matched_po_id: matchedPoId, matched_ce_id: matchedCeId,
-          po_match: poMatch, ce_matches: ceMatches.slice(0, 3),
+          po_match: poMatch, ce_matches: ceMatches,  // full list (was sliced to 3)
+          similar_be, same_day_be, recent_po,
         });
 
         if (apply) {

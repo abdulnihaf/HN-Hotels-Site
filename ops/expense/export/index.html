@@ -7,6 +7,11 @@
 <title>HN Expense — Audit Export</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/ops-ui.css">
+<!-- SheetJS for XLSX export -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+<!-- jsPDF + autotable for PDF export -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js" defer></script>
 <style>
 .filter-row { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:16px; }
 .filter-row label { font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.4px;
@@ -251,9 +256,12 @@ table.po-table td { padding:5px 8px; border:1px solid var(--border); font-size:1
   </div>
 
   <!-- Actions -->
-  <div class="print-btn no-print" id="action-bar" style="display:none;">
-    <button class="btn btn-primary" onclick="window.print()">🖨 Print / PDF</button>
+  <div class="print-btn no-print" id="action-bar" style="display:none; flex-wrap:wrap;">
+    <button class="btn btn-primary" onclick="window.print()">🖨 Print</button>
+    <button class="btn btn-ghost btn-sm" onclick="downloadPdf()">↓ PDF</button>
+    <button class="btn btn-ghost btn-sm" onclick="downloadXlsx()">↓ XLSX</button>
     <button class="btn btn-ghost btn-sm" onclick="downloadCsv()">↓ CSV</button>
+    <span style="border-left:1px solid var(--border); margin:0 4px;"></span>
     <button class="btn btn-ghost btn-sm" onclick="autoFlagRefills()" title="Auto-detect HDFC entries that funded petty cash">🏦→💵 Auto-flag refills</button>
     <button class="btn btn-ghost btn-sm" id="dup-analyze-btn" onclick="runDupAnalyze()" title="Classify each DUP suspect as PO-settled / hard-dup / ambiguous">🤖 Analyze dups</button>
     <button class="btn btn-sm" id="dup-apply-btn" onclick="runDupResolve()" style="display:none; background:#f59e0b; color:#000;">✓ Apply resolution</button>
@@ -936,8 +944,71 @@ async function runDupResolve() {
 function renderDupReview(items) {
   const list = document.getElementById('dup-review-list');
   list.innerHTML = items.map(it => {
-    const ce = (it.ce_matches || [])[0];
-    const po = it.po_match;
+    const ces  = it.ce_matches || [];
+    const po   = it.po_match;
+    const sims = it.similar_be || [];
+    const same = it.same_day_be || [];
+    const recPo = it.recent_po || [];
+
+    const ceBlock = ces.length ? `
+      <details style="margin-top:8px;" open>
+        <summary style="cursor:pointer; font-size:11px; color:#60a5fa; font-weight:600;">
+          ${ces.length} matching cash_events row${ces.length>1?'s':''} (same brand · same paise · ±1 day)
+        </summary>
+        <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+          ${ces.map(ce => `<div style="padding:6px 8px; background:rgba(96,165,250,0.07); border:1px solid rgba(96,165,250,0.2); border-radius:5px; font-size:11px;">
+            <strong>ce#${ce.id}</strong> · ${esc(ce.txn_at?.slice(0,16) || '')} · ₹${fmtAmt(ce.amount_paise/100)}
+            · ${esc(ce.product_name || '—')} · ${esc(ce.source)} · ${esc(ce.instrument)}
+            · by ${esc(ce.recorded_by_name || ce.recorded_by_pin || '?')}
+            ${ce.notes ? `<br><span style="color:var(--text-dim);">notes: ${esc(ce.notes)}</span>` : ''}
+          </div>`).join('')}
+        </div>
+      </details>` : '';
+
+    const simBlock = sims.length ? `
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer; font-size:11px; color:#a78bfa; font-weight:600;">
+          🔁 ${sims.length} similar past expense${sims.length>1?'s':''} — same product / vendor / amount within ±14 days
+        </summary>
+        <div style="margin-top:6px; display:flex; flex-direction:column; gap:3px;">
+          ${sims.map(s => `<div style="padding:5px 8px; background:rgba(167,139,250,0.07); border:1px solid rgba(167,139,250,0.2); border-radius:5px; font-size:11px;">
+            <strong>be#${s.id}</strong> · ${esc(s.d)} · ₹${fmtAmt(s.amount)} · ${esc(s.product_name || '—')}
+            · ${esc(s.pm)} · vendor: ${esc(s.vendor_name || '?')} · by ${esc(pinName(s.recorded_by))}
+            ${s.notes ? ` · <span style="color:var(--text-dim);">${esc(s.notes)}</span>` : ''}
+          </div>`).join('')}
+        </div>
+        <div style="font-size:10px; color:var(--text-dim); margin-top:4px;">
+          → If this product is bought regularly at this amount, today's entry may be legitimate (not a dup).
+        </div>
+      </details>` : '';
+
+    const sameDayBlock = same.length ? `
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer; font-size:11px; color:#fbbf24; font-weight:600;">
+          📅 ${same.length} other entr${same.length>1?'ies':'y'} on the same day at ${esc(it.brand)}
+        </summary>
+        <div style="margin-top:6px; display:flex; flex-direction:column; gap:3px;">
+          ${same.map(s => `<div style="padding:5px 8px; background:rgba(251,191,36,0.06); border:1px solid rgba(251,191,36,0.2); border-radius:5px; font-size:11px;">
+            <strong>be#${s.id}</strong> · ₹${fmtAmt(s.amount)} · ${esc(s.product_name || '—')}
+            · ${esc(s.pm)} · ${esc(s.category || '')} · by ${esc(pinName(s.recorded_by))}
+            ${s.notes ? ` · <span style="color:var(--text-dim);">${esc(s.notes)}</span>` : ''}
+          </div>`).join('')}
+        </div>
+      </details>` : '';
+
+    const poRecBlock = recPo.length ? `
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer; font-size:11px; color:#34d399; font-weight:600;">
+          📄 ${recPo.length} recent PO bill${recPo.length>1?'s':''} for ${esc(it.brand)} (last 30 days)
+        </summary>
+        <div style="margin-top:6px; display:flex; flex-direction:column; gap:3px;">
+          ${recPo.map(p => `<div style="padding:5px 8px; background:rgba(52,211,153,0.06); border:1px solid rgba(52,211,153,0.2); border-radius:5px; font-size:11px;">
+            <strong>PO ${esc(p.odoo_po_name || '?')}</strong> · ${esc(p.bill_date)} · ₹${fmtAmt(p.amount_total)}
+            · ${esc(p.vendor_name)} · ${esc(p.payment_state)}
+          </div>`).join('')}
+        </div>
+      </details>` : '';
+
     return `<div class="dup-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px;">
       <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
         <div>
@@ -945,20 +1016,20 @@ function renderDupReview(items) {
           <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">
             be#${it.expense_id} · ${esc(it.expense_date || '?')} · ${esc(it.payment_method)} ·
             by ${esc(pinName(it.recorded_by))} · vendor: ${esc(it.vendor || '?')}
+            · cat: ${esc(it.category || '?')}
           </div>
+          ${it.notes ? `<div style="font-size:11px; color:var(--text-dim); margin-top:3px;">notes: ${esc(it.notes)}</div>` : ''}
         </div>
         <div style="font-size:10px; color:#f59e0b; max-width:340px; text-align:right;">${esc(it.reason)}</div>
       </div>
-      ${ce ? `<div style="margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:11px;">
-        <strong style="color:#60a5fa;">Cash event ce#${ce.id}</strong> · ${esc(ce.txn_at?.slice(0,16) || '')} ·
-        ${esc(ce.product_name || '—')} · ₹${fmtAmt(ce.amount_paise/100)} ·
-        by ${esc(ce.recorded_by_name || ce.recorded_by_pin || '?')} · ${esc(ce.source)} · ${esc(ce.instrument)}
-        ${ce.notes ? `<br><span style="color:var(--text-dim);">notes: ${esc(ce.notes)}</span>` : ''}
-      </div>` : ''}
-      ${po ? `<div style="margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:11px;">
-        <strong style="color:#34d399;">PO ${esc(po.odoo_po_name || '?')}</strong> · ${esc(po.bill_date)} ·
+      ${ceBlock}
+      ${po ? `<div style="margin-top:8px; padding:8px; background:rgba(52,211,153,0.07); border:1px solid rgba(52,211,153,0.2); border-radius:6px; font-size:11px;">
+        <strong style="color:#34d399;">Direct PO match: ${esc(po.odoo_po_name || '?')}</strong> · ${esc(po.bill_date)} ·
         ${esc(po.vendor_name)} · ₹${fmtAmt(po.amount_total)} · ${esc(po.payment_state)}
       </div>` : ''}
+      ${simBlock}
+      ${sameDayBlock}
+      ${poRecBlock}
       <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
         <button class="btn btn-sm" style="background:#34d399; color:#000;" onclick="dupManualMark(${it.expense_id}, 'po_settled')">✓ Mark PO settled</button>
         <button class="btn btn-sm" style="background:#ef4444; color:#fff;" onclick="dupManualMark(${it.expense_id}, 'delete')">🗑 Confirm dup → delete</button>
@@ -1023,32 +1094,136 @@ async function autoFlagRefills() {
   } catch (e) { alert('Auto-flag failed: ' + e.message); }
 }
 
-// ── CSV export ───────────────────────────────────────────────
+// ── Export helpers — all formats use the FILTERED subset ─────
+function _exportRows() {
+  // Honors current chip filter; tagged with status flags so downstream tools
+  // can audit even after the file leaves the system.
+  return _entries.filter(entryMatchesFilter).map((e, i) => ({
+    '#': i + 1,
+    'Date': e.ist_date || '',
+    'Brand': e.x_location || '',
+    'Payment': srcLabel(e.payment_method, e.x_pool),
+    'Vendor': e.vendor_name || '',
+    'Product / Item': e.product_name || e.category || '',
+    'UOM': e.uom_display || '',
+    'Qty': e.quantity != null ? e.quantity : '',
+    'Amount': e.amount || 0,
+    'Bills': e.bill_count || 0,
+    'Bank Match': e.hdfc_match_count != null ? e.hdfc_match_count : '',
+    'By': pinName(e.recorded_by_pin),
+    'Category': (e.category_parent || e.category || '').replace(/^\d+\s*·\s*/, ''),
+    'Notes': e.notes || '',
+    'Status': [
+      e.is_petty_refill ? 'PETTY_REFILL' : '',
+      e.is_po_settled ? 'PO_SETTLED' : '',
+      e.validated_at ? 'VALIDATED' : '',
+      (e.v2_dup_count||0) > 0 && !e.dup_resolution ? 'DUP_SUSPECT' : '',
+      e.qty_missing ? 'QTY_MISSING' : '',
+      e.vendor_missing ? 'VENDOR_MISSING' : '',
+      e.needs_bill ? 'NO_BILL' : '',
+      e.hdfc_unverified ? 'HDFC_UNVERIFIED' : '',
+      e.is_rm ? 'RM' : '',
+    ].filter(Boolean).join(' | '),
+  }));
+}
+function _filenameStem() {
+  const from = document.getElementById('f-from').value;
+  const to   = document.getElementById('f-to').value;
+  const filterTag = (_filter === 'all') ? 'all' : `filter-${_filter}`;
+  return `hn-expense-${from}-to-${to}-${filterTag}`;
+}
+function _exportTitle() {
+  const from = document.getElementById('f-from').value;
+  const to   = document.getElementById('f-to').value;
+  const brand = document.getElementById('f-brand').value;
+  return `HN Hotels Expense Audit · ${from} to ${to} · ${brand} · filter: ${_filter}`;
+}
+
+// ── CSV ──
 function downloadCsv() {
-  if (!_entries.length) return;
-  const cols = ['#','Date','Brand','Payment','Vendor','Product/Item','UOM','Qty','Amount',
-                'Bills','Bank_Match','By','Category','Notes',
-                'Qty_Missing','Vendor_Missing','Bill_Missing','HDFC_Unverified','Dup_Suspect','Is_RM'];
-  const rows = _entries.map((e, i) => {
-    const brand = e.x_location || '';
-    return [
-      i+1, e.ist_date||'', brand, srcLabel(e.payment_method, e.x_pool),
-      e.vendor_name||'', e.product_name||e.category||'',
-      e.uom_display||'', e.quantity!=null?e.quantity:'', e.amount||0,
-      e.bill_count||0, e.hdfc_match_count!=null?e.hdfc_match_count:'',
-      pinName(e.recorded_by_pin),
-      (e.category_parent||e.category||'').replace(/^\d+\s*·\s*/,''),
-      e.notes||'',
-      e.qty_missing?'YES':'', e.vendor_missing?'YES':'',
-      e.needs_bill?'YES':'', e.hdfc_unverified?'YES':'',
-      (e.v2_dup_count||0)>0?'YES':'', e.is_rm?'YES':'',
-    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
-  });
-  const csv = [cols.join(','), ...rows].join('\n');
+  const rows = _exportRows();
+  if (!rows.length) return alert('No rows to export');
+  const cols = Object.keys(rows[0]);
+  const csv = [
+    cols.join(','),
+    ...rows.map(r => cols.map(c => `"${String(r[c] ?? '').replace(/"/g, '""')}"`).join(','))
+  ].join('\n');
   const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = `hn-expense-${document.getElementById('f-from').value}-to-${document.getElementById('f-to').value}.csv`;
+  a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
+  a.download = `${_filenameStem()}.csv`;
   a.click();
+}
+
+// ── XLSX (SheetJS) ──
+function downloadXlsx() {
+  if (typeof XLSX === 'undefined') return alert('XLSX library still loading — try again in a moment');
+  const rows = _exportRows();
+  if (!rows.length) return alert('No rows to export');
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  // Auto column widths
+  const cols = Object.keys(rows[0]);
+  ws['!cols'] = cols.map(c => ({
+    wch: Math.min(40, Math.max(c.length, ...rows.map(r => String(r[c] ?? '').length)) + 2)
+  }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
+
+  // Summary sheet
+  const total = rows.reduce((s, r) => s + (Number(r.Amount) || 0), 0);
+  const summary = [
+    { Field: 'Title', Value: _exportTitle() },
+    { Field: 'Generated', Value: new Date().toLocaleString('en-IN') },
+    { Field: 'Filter', Value: _filter },
+    { Field: 'Rows', Value: rows.length },
+    { Field: 'Sum of Amount', Value: total },
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
+
+  XLSX.writeFile(wb, `${_filenameStem()}.xlsx`);
+}
+
+// ── PDF (jsPDF + autotable) ──
+function downloadPdf() {
+  if (typeof window.jspdf === 'undefined') return alert('PDF library still loading — try again in a moment');
+  const rows = _exportRows();
+  if (!rows.length) return alert('No rows to export');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  // Title block
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+  doc.text('HN Hotels — Expense Audit', 10, 12);
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+  const meta = `${document.getElementById('f-from').value} to ${document.getElementById('f-to').value} · ${document.getElementById('f-brand').value} · filter: ${_filter} · ${rows.length} rows · Generated ${new Date().toLocaleString('en-IN')}`;
+  doc.text(meta, 10, 17);
+
+  const total = rows.reduce((s, r) => s + (Number(r.Amount) || 0), 0);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Total: ₹${fmtAmt(total)}`, 10, 22);
+
+  const cols = ['#','Date','Brand','Payment','Vendor','Product / Item','UOM','Qty','Amount','By','Notes'];
+  const body = rows.map(r => cols.map(c => String(r[c] ?? '')));
+  doc.autoTable({
+    head: [cols],
+    body,
+    startY: 26,
+    styles: { fontSize: 6.5, cellPadding: 1, overflow: 'linebreak' },
+    headStyles: { fillColor: [229, 231, 235], textColor: [17, 24, 39], fontSize: 6 },
+    columnStyles: {
+      0: { cellWidth: 7 },   1: { cellWidth: 14 }, 2: { cellWidth: 10 },
+      3: { cellWidth: 14 },  4: { cellWidth: 24 }, 5: { cellWidth: 32 },
+      6: { cellWidth: 10 },  7: { cellWidth: 12 }, 8: { cellWidth: 16, halign: 'right' },
+      9: { cellWidth: 14 },  10:{ cellWidth: 'auto' },
+    },
+    didParseCell: (d) => {
+      const r = rows[d.row.index];
+      if (!r) return;
+      if (r.Status?.includes('PETTY_REFILL')) d.cell.styles.fillColor = [219, 234, 254];
+      else if (r.Status?.includes('PO_SETTLED')) d.cell.styles.fillColor = [220, 252, 231];
+      else if (r.Status?.includes('DUP_SUSPECT')) d.cell.styles.fillColor = [254, 243, 199];
+    },
+  });
+  doc.save(`${_filenameStem()}.pdf`);
 }
 </script>
 </body>
