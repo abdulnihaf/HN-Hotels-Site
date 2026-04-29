@@ -209,7 +209,8 @@ tailwind.config = { theme: { extend: {
     <span class="w-px h-4 bg-white/10 mx-1"></span>
     <button class="chip chip-mute on" id="filter-all" onclick="filterByInstrument(null)">All piles</button>
     <span class="ml-auto flex gap-2 flex-wrap">
-      <button class="btn" onclick="openTransferSheet()">Record Transfer</button>
+      <button class="btn" onclick="openReconcileSheet()" title="Anchor a pile to a physical-count snapshot at a specific timestamp">Reconcile</button>
+      <button class="btn btn-ghost" onclick="openTransferSheet()">Transfer</button>
       <button class="btn btn-ghost" onclick="openDepositSheet()">Deposit to Bank</button>
       <button class="btn btn-ghost" onclick="openExtCapSheet()" title="Owner injection / external cash IN">+ External In</button>
       <button class="btn btn-ghost" onclick="runSync()" title="Pull latest events from outlet sources">Sync now</button>
@@ -313,6 +314,38 @@ tailwind.config = { theme: { extend: {
       <input id="dep-notes" type="text" class="input" placeholder="HDFC counter / Federal NEFT…"/></div>
     <div id="dep-err" class="text-xs text-red-400 hidden"></div>
     <button id="dep-submit" class="btn w-full" onclick="submitDeposit()">Record Deposit</button>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ Reconcile sheet (timestamped anchor) ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="reconcile-overlay" class="sheet-overlay hidden" onclick="closeSheet('reconcile')"></div>
+<div id="reconcile-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div class="text-base font-bold">Reconcile pile (anchor to physical count)</div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeSheet('reconcile')">×</button>
+    </div>
+    <div class="text-xs text-ink-3 mt-1">Capture a physical count <strong>at a specific timestamp</strong>. Going-forward balance = this anchor + sum of events recorded AFTER this moment. Pre-anchor events stay in the trail (visible for audit) but no longer affect the live balance.</div>
+  </div>
+  <div class="px-5 py-5 space-y-4">
+    <div><label class="text-xs text-ink-3 block mb-1.5">Pile</label>
+      <select id="rec-pile" class="input">
+        <option value="cash_basheer">With Basheer</option>
+        <option value="cash_nihaf">With Nihaf</option>
+        <option value="pos_counter_he">Counter HE</option>
+        <option value="pos_counter_nch">Counter NCH</option>
+      </select></div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Counted amount (₹)</label>
+      <input id="rec-amount" type="number" inputmode="decimal" min="0" step="1" class="input" placeholder="e.g. 40000"/></div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Counted at (timestamp — IMPORTANT)</label>
+      <input id="rec-when" type="datetime-local" class="input" step="60"/>
+      <div class="text-[10px] text-ink-3 mt-1">Default = now (IST). Adjust if the count happened earlier — every event before this time is "already counted", every event after debits/credits live.</div>
+    </div>
+    <div><label class="text-xs text-ink-3 block mb-1.5">Notes (recommended)</label>
+      <input id="rec-notes" type="text" class="input" placeholder="e.g. Basheer arrived Apr 29 14:30 IST, counted with Nihaf"/></div>
+    <div id="rec-err" class="text-xs text-red-400 hidden"></div>
+    <button id="rec-submit" class="btn w-full" onclick="submitReconcile()">Anchor pile</button>
   </div>
 </div>
 
@@ -456,12 +489,17 @@ function renderBalances() {
   for (const k of ['pos_counter_he','pos_counter_nch','cash_basheer','cash_nihaf']) {
     const b = map[k];
     document.getElementById('bal-' + k).textContent = b ? fmtR(b.balance_paise) : '—';
-    document.getElementById('last-' + k).textContent = b ? fmtRel(b.last_event_at) : 'no events';
+    // Sub-label shows anchor info when reconciled (so owner sees "₹40k since Apr 29 14:30")
+    let sub = b ? fmtRel(b.last_event_at) : 'no events';
+    if (b && b.anchor_at) {
+      sub = `anchored ${fmtRel(b.anchor_at)} @ ₹${(b.anchor_paise/100).toLocaleString('en-IN')}`;
+    }
+    document.getElementById('last-' + k).textContent = sub;
   }
   document.getElementById('bal-total').textContent = fmtR(DATA.total_paise || 0);
   const pending = (DATA.pending && DATA.pending.total_paise) || 0;
   document.getElementById('settled-pending-split').textContent =
-    pending > 0 ? `${fmtR(DATA.total_paise)} settled · ${fmtR(pending)} in flight` : `${fmtR(DATA.total_paise)} settled`;
+    pending > 0 ? `${fmtR(DATA.total_paise)} live · ${fmtR(pending)} in flight` : `${fmtR(DATA.total_paise)} live`;
 }
 
 function renderPending() {
@@ -537,6 +575,40 @@ function closeSheet(name) {
 function openTransferSheet() { openSheet('transfer'); document.getElementById('xfer-amount').focus(); }
 function openDepositSheet()  { openSheet('deposit'); document.getElementById('dep-amount').focus(); }
 function openExtCapSheet()   { openSheet('extcap'); document.getElementById('ec-amount').focus(); }
+function openReconcileSheet() {
+  // Default the timestamp picker to NOW in IST.
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 3600 * 1000);
+  // datetime-local expects yyyy-MM-ddTHH:mm
+  const local = ist.toISOString().slice(0, 16);
+  document.getElementById('rec-when').value = local;
+  openSheet('reconcile');
+  document.getElementById('rec-amount').focus();
+}
+
+async function submitReconcile() {
+  const errEl = document.getElementById('rec-err'); errEl.classList.add('hidden');
+  const pile = document.getElementById('rec-pile').value;
+  const amt  = parseFloat(document.getElementById('rec-amount').value);
+  const when = document.getElementById('rec-when').value;
+  const notes= document.getElementById('rec-notes').value;
+  if (!Number.isFinite(amt) || amt < 0) return showErr('rec-err', 'amount must be ≥ 0');
+  if (!when) return showErr('rec-err', 'timestamp required');
+  // Convert local datetime-input ("yyyy-MM-ddTHH:mm") to IST ISO with +05:30 offset.
+  const txn_at = `${when}:00+05:30`;
+  const btn = document.getElementById('rec-submit'); btn.disabled = true; btn.textContent = 'anchoring…';
+  try {
+    const j = await postJSON('/api/cash?action=reconcile', {
+      pin: PIN, instrument: pile, balance_rupees: amt, txn_at, notes,
+    });
+    if (!j.success) throw new Error(j.error);
+    closeSheet('reconcile');
+    document.getElementById('rec-amount').value = '';
+    document.getElementById('rec-notes').value = '';
+    loadCash();
+  } catch (e) { showErr('rec-err', e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Anchor pile'; }
+}
 
 async function submitTransfer() {
   const errEl = document.getElementById('xfer-err'); errEl.classList.add('hidden');
