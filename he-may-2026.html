@@ -167,6 +167,62 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
 .lg-i{display:flex;align-items:center;gap:6px;color:var(--dm)}
 .lg-i .sw{width:11px;height:11px;border-radius:3px}
 
+/* CALENDAR GRID */
+.cal-wrap{background:linear-gradient(135deg,var(--s1),var(--s2));border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:18px}
+.cal-grid-h{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:8px}
+.cal-grid-h>div{text-align:center;font-size:10px;font-weight:800;color:var(--mu);text-transform:uppercase;letter-spacing:1.2px;padding:4px 0}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-c{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px 8px;text-decoration:none;color:var(--tx);transition:.15s;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:74px;position:relative;border-left:3px solid rgba(249,115,22,.7)}
+.cal-c:hover{transform:translateY(-2px);border-color:var(--ac);background:var(--s3)}
+.cal-c .d{font-size:11px;color:var(--mu);font-weight:700;letter-spacing:.5px}
+.cal-c .v{font-size:14px;font-weight:800;color:var(--ac);margin-top:2px;letter-spacing:-.3px}
+.cal-c .cm{font-size:9px;color:var(--mu);margin-top:3px;font-weight:600}
+.cal-c.empty{background:transparent;border:1px dashed rgba(255,255,255,.04);border-left:none;cursor:default}
+.cal-c.empty:hover{transform:none;background:transparent;border-color:rgba(255,255,255,.04)}
+.cal-c.we{border-left-color:var(--gn)}
+.cal-c.we .v{color:var(--gn)}
+.cal-c.wkc{border-left-color:var(--bl)}
+.cal-c.wkc .cm b,.cal-c.wkc .cm{color:var(--bl)}
+.cal-c.star{border-left-color:var(--pr);background:rgba(168,85,247,.06)}
+.cal-c.peak{border-left-color:var(--pk);background:rgba(236,72,153,.08);box-shadow:0 0 0 1px rgba(236,72,153,.3)}
+.cal-c.peak .v{color:var(--pk)}
+.cal-c.close{border-left-color:var(--pk);background:rgba(236,72,153,.05)}
+.wk-pip{display:inline-block;padding:1px 5px;background:var(--bl);color:#fff;border-radius:3px;font-size:8px;font-weight:800;margin-left:4px;letter-spacing:.5px}
+.star-pip{display:inline-block;padding:1px 5px;background:var(--pr);color:#fff;border-radius:3px;font-size:8px;font-weight:800;margin-left:4px;letter-spacing:.5px}
+.peak-pip{display:inline-block;padding:1px 5px;background:var(--pk);color:#fff;border-radius:3px;font-size:8px;font-weight:800;margin-left:4px;letter-spacing:.5px}
+.close-pip{display:inline-block;padding:1px 5px;background:var(--pk);color:#fff;border-radius:3px;font-size:8px;font-weight:800;margin-left:4px;letter-spacing:.5px}
+
+.cal-leg{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0 22px;padding:10px 14px;background:var(--s1);border:1px solid var(--bd);border-radius:10px;font-size:11px}
+.cl{display:flex;align-items:center;gap:6px;color:var(--dm)}
+.cl .dot{width:10px;height:10px;border-radius:3px}
+
+/* CUMULATIVE BAR */
+.cum-bar{margin:18px 0}
+.cum-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.cum-cell{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:14px;border-left:3px solid var(--bl);position:relative}
+.cum-cell.final{border-left-color:var(--ac);background:rgba(249,115,22,.04)}
+.cum-cell .cm-l{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1.2px;font-weight:700}
+.cum-cell .cm-v{font-size:20px;font-weight:800;letter-spacing:-.4px;margin-top:4px;color:var(--bl)}
+.cum-cell.final .cm-v{color:var(--ac)}
+.cum-cell .cm-pct{font-size:11px;color:var(--gn);font-weight:700;margin-top:1px}
+.cum-cell .cm-d{font-size:11px;color:var(--dm);margin-top:6px;line-height:1.45}
+
+/* PROJECTION TABLE */
+.proj-tbl-wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:12px;background:var(--s1)}
+.proj-tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+.proj-tbl th{background:var(--s2);padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--mu);font-weight:800;position:sticky;top:0;z-index:1}
+.proj-tbl th.r,.proj-tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
+.proj-tbl td{padding:9px 12px;border-bottom:1px solid var(--bd)}
+.proj-tbl tr:last-child td{border-bottom:none}
+.proj-tbl tr:hover td{background:rgba(249,115,22,.04)}
+.proj-tbl tr.we td{background:rgba(34,197,94,.04)}
+.proj-tbl tr.we:hover td{background:rgba(34,197,94,.08)}
+.proj-tbl tr.wkc td{background:rgba(59,130,246,.05);font-weight:600}
+.proj-tbl tr.star td{background:rgba(168,85,247,.06)}
+.proj-tbl tr.peak td{background:rgba(236,72,153,.08);font-weight:600}
+.proj-tbl tr.close td{background:rgba(236,72,153,.05);font-weight:600}
+.proj-tbl td b{color:var(--tx)}
+
 /* RESPONSIVE */
 @media(max-width:600px){
   .sec{padding:36px 16px}
@@ -177,6 +233,13 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
   .day-r .targ{font-size:18px}
   .arc-bar{height:100px}
   .wk-hdr{margin:0 -16px 14px;padding-left:16px;padding-right:16px}
+  .cal-c{min-height:62px;padding:7px 4px}
+  .cal-c .d{font-size:10px}
+  .cal-c .v{font-size:11px}
+  .cal-c .cm{font-size:8px}
+  .wk-pip,.star-pip,.peak-pip,.close-pip{font-size:7px;padding:1px 3px;margin-left:2px}
+  .cal-grid,.cal-grid-h{gap:4px}
+  .cum-cell .cm-v{font-size:17px}
 }
 </style>
 </head>
@@ -197,6 +260,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
 
 <nav class="nav">
   <a href="#overview" class="active">Overview</a>
+  <a href="#projection">31-day view</a>
   <a href="#strategy">Strategy</a>
   <a href="#roadmap">Daily roadmap</a>
   <a href="#channels">Channel playbook</a>
@@ -259,6 +323,144 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
   </div>
 </section>
 
+<!-- DAILY PROJECTION AT A GLANCE -->
+<section class="sec" id="projection">
+  <h2 class="sec-t">31-day projection at a glance</h2>
+  <p class="sec-d">Every day's projected revenue visible in one view. Calendar grid + linear list with cumulative running total. Tap any day to jump to its full execution breakdown below.</p>
+
+  <!-- Calendar grid -->
+  <div class="cal-wrap">
+    <div class="cal-grid-h">
+      <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+    </div>
+    <div class="cal-grid">
+      <!-- May 2026 starts on Thursday — 4 empty cells before May 1 -->
+      <div class="cal-c empty"></div>
+      <div class="cal-c empty"></div>
+      <div class="cal-c empty"></div>
+      <div class="cal-c empty"></div>
+      <a href="#d-1" class="cal-c"><div class="d">1</div><div class="v">₹14K</div><div class="cm">₹0.14L</div></a>
+      <a href="#d-2" class="cal-c"><div class="d">2</div><div class="v">₹15.5K</div><div class="cm">₹0.30L</div></a>
+      <a href="#d-3" class="cal-c we"><div class="d">3</div><div class="v">₹22K</div><div class="cm">₹0.52L</div></a>
+
+      <a href="#d-4" class="cal-c we"><div class="d">4</div><div class="v">₹19K</div><div class="cm">₹0.71L</div></a>
+      <a href="#d-5" class="cal-c"><div class="d">5</div><div class="v">₹13.5K</div><div class="cm">₹0.84L</div></a>
+      <a href="#d-6" class="cal-c"><div class="d">6</div><div class="v">₹15.5K</div><div class="cm">₹1.00L</div></a>
+      <a href="#d-7" class="cal-c wkc"><div class="d">7</div><div class="v">₹16.5K</div><div class="cm">₹1.16L<span class="wk-pip">W1</span></div></a>
+      <a href="#d-8" class="cal-c"><div class="d">8</div><div class="v">₹20K</div><div class="cm">₹1.36L</div></a>
+      <a href="#d-9" class="cal-c"><div class="d">9</div><div class="v">₹22.5K</div><div class="cm">₹1.59L</div></a>
+      <a href="#d-10" class="cal-c we"><div class="d">10</div><div class="v">₹29K</div><div class="cm">₹1.88L</div></a>
+
+      <a href="#d-11" class="cal-c we"><div class="d">11</div><div class="v">₹26K</div><div class="cm">₹2.14L</div></a>
+      <a href="#d-12" class="cal-c"><div class="d">12</div><div class="v">₹19.5K</div><div class="cm">₹2.33L</div></a>
+      <a href="#d-13" class="cal-c"><div class="d">13</div><div class="v">₹20.5K</div><div class="cm">₹2.54L</div></a>
+      <a href="#d-14" class="cal-c wkc"><div class="d">14</div><div class="v">₹21K</div><div class="cm">₹2.75L<span class="wk-pip">W2</span></div></a>
+      <a href="#d-15" class="cal-c"><div class="d">15</div><div class="v">₹24K</div><div class="cm">₹2.99L</div></a>
+      <a href="#d-16" class="cal-c"><div class="d">16</div><div class="v">₹30K</div><div class="cm">₹3.29L</div></a>
+      <a href="#d-17" class="cal-c we star"><div class="d">17</div><div class="v">₹38K</div><div class="cm">₹3.67L</div></a>
+
+      <a href="#d-18" class="cal-c we star"><div class="d">18</div><div class="v">₹34K</div><div class="cm">₹4.01L<span class="star-pip">50★</span></div></a>
+      <a href="#d-19" class="cal-c"><div class="d">19</div><div class="v">₹26K</div><div class="cm">₹4.27L</div></a>
+      <a href="#d-20" class="cal-c"><div class="d">20</div><div class="v">₹28K</div><div class="cm">₹4.55L</div></a>
+      <a href="#d-21" class="cal-c wkc"><div class="d">21</div><div class="v">₹29K</div><div class="cm">₹4.84L<span class="wk-pip">W3</span></div></a>
+      <a href="#d-22" class="cal-c"><div class="d">22</div><div class="v">₹33K</div><div class="cm">₹5.17L</div></a>
+      <a href="#d-23" class="cal-c"><div class="d">23</div><div class="v">₹40K</div><div class="cm">₹5.57L</div></a>
+      <a href="#d-24" class="cal-c we peak"><div class="d">24</div><div class="v">₹52K</div><div class="cm">₹6.09L<span class="peak-pip">PEAK</span></div></a>
+
+      <a href="#d-25" class="cal-c we"><div class="d">25</div><div class="v">₹46K</div><div class="cm">₹6.55L</div></a>
+      <a href="#d-26" class="cal-c"><div class="d">26</div><div class="v">₹32K</div><div class="cm">₹6.87L</div></a>
+      <a href="#d-27" class="cal-c"><div class="d">27</div><div class="v">₹35K</div><div class="cm">₹7.22L</div></a>
+      <a href="#d-28" class="cal-c wkc"><div class="d">28</div><div class="v">₹37K</div><div class="cm">₹7.59L<span class="wk-pip">W4</span></div></a>
+      <a href="#d-29" class="cal-c"><div class="d">29</div><div class="v">₹38K</div><div class="cm">₹7.97L</div></a>
+      <a href="#d-30" class="cal-c"><div class="d">30</div><div class="v">₹45K</div><div class="cm">₹8.42L</div></a>
+      <a href="#d-31" class="cal-c we close"><div class="d">31</div><div class="v">₹52K</div><div class="cm">₹8.94L<span class="close-pip">FINAL</span></div></a>
+    </div>
+  </div>
+
+  <!-- Calendar legend -->
+  <div class="cal-leg">
+    <div class="cl"><span class="dot" style="background:rgba(249,115,22,.85)"></span>Weekday</div>
+    <div class="cl"><span class="dot" style="background:rgba(34,197,94,.85)"></span>Weekend</div>
+    <div class="cl"><span class="dot" style="background:rgba(168,85,247,.9)"></span>50-review unlock (May 17–18)</div>
+    <div class="cl"><span class="dot" style="background:rgba(236,72,153,.9)"></span>Peak day (May 24)</div>
+  </div>
+
+  <!-- Cumulative milestone bar -->
+  <div class="cum-bar">
+    <div class="cum-row">
+      <div class="cum-cell">
+        <div class="cm-l">May 7</div><div class="cm-v">₹1.16L</div><div class="cm-pct">13%</div>
+        <div class="cm-d">W1 close · zero ad spend</div>
+      </div>
+      <div class="cum-cell">
+        <div class="cm-l">May 14</div><div class="cm-v">₹2.75L</div><div class="cm-pct">31%</div>
+        <div class="cm-d">W2 close · Influencer #1 published</div>
+      </div>
+      <div class="cum-cell">
+        <div class="cm-l">May 21</div><div class="cm-v">₹4.84L</div><div class="cm-pct">54%</div>
+        <div class="cm-d">W3 close · 50 reviews unlocked</div>
+      </div>
+      <div class="cum-cell">
+        <div class="cm-l">May 28</div><div class="cm-v">₹7.59L</div><div class="cm-pct">85%</div>
+        <div class="cm-d">W4 close · full stack firing</div>
+      </div>
+      <div class="cum-cell final">
+        <div class="cm-l">May 31</div><div class="cm-v">₹8.94L</div><div class="cm-pct">100%</div>
+        <div class="cm-d">Final · floor target hit</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Linear projection table -->
+  <h3 style="font-size:16px;font-weight:800;margin:30px 0 10px">Daily projection — linear table</h3>
+  <div class="proj-tbl-wrap">
+    <table class="proj-tbl">
+      <thead>
+        <tr><th>Date</th><th>DoW</th><th class="r">Target</th><th class="r">Cumulative</th><th class="r">vs April</th><th>Anchor moment</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><b>May 1</b></td><td>Thu</td><td class="r">₹14,000</td><td class="r">₹14,000</td><td class="r">1.4×</td><td>GF opens · self-orders begin</td></tr>
+        <tr><td><b>May 2</b></td><td>Fri</td><td class="r">₹15,500</td><td class="r">₹29,500</td><td class="r">1.5×</td><td>Zomato Dining offer live</td></tr>
+        <tr class="we"><td><b>May 3</b></td><td>Sat</td><td class="r">₹22,000</td><td class="r">₹51,500</td><td class="r">1.4×</td><td>Zomato Boost activates · first ₹20K+ day</td></tr>
+        <tr class="we"><td><b>May 4</b></td><td>Sun</td><td class="r">₹19,000</td><td class="r">₹70,500</td><td class="r">1.4×</td><td>Swiggy Ads activate</td></tr>
+        <tr><td><b>May 5</b></td><td>Mon</td><td class="r">₹13,500</td><td class="r">₹84,000</td><td class="r">1.7×</td><td>Influencer #1 LOCKED</td></tr>
+        <tr><td><b>May 6</b></td><td>Tue</td><td class="r">₹15,500</td><td class="r">₹99,500</td><td class="r">1.6×</td><td>Meta + Google Ads LIVE</td></tr>
+        <tr class="wkc"><td><b>May 7</b></td><td>Wed</td><td class="r">₹16,500</td><td class="r"><b>₹1.16L</b></td><td class="r">2.0×</td><td>W1 close · Zomato Sponsored adds</td></tr>
+        <tr><td><b>May 8</b></td><td>Thu</td><td class="r">₹20,000</td><td class="r">₹1.36L</td><td class="r">1.9×</td><td>Influencer #1 visit · Meta scales</td></tr>
+        <tr><td><b>May 9</b></td><td>Fri</td><td class="r">₹22,500</td><td class="r">₹1.59L</td><td class="r">2.4×</td><td><b>Influencer #1 reel publishes</b></td></tr>
+        <tr class="we"><td><b>May 10</b></td><td>Sat</td><td class="r">₹29,000</td><td class="r">₹1.88L</td><td class="r">1.9×</td><td>First reel-driven walk-ins</td></tr>
+        <tr class="we"><td><b>May 11</b></td><td>Sun</td><td class="r">₹26,000</td><td class="r">₹2.14L</td><td class="r">1.9×</td><td>Reel D2 peak · Meta scales</td></tr>
+        <tr><td><b>May 12</b></td><td>Mon</td><td class="r">₹19,500</td><td class="r">₹2.33L</td><td class="r">2.4×</td><td>25 reviews crossed · Google non-branded on</td></tr>
+        <tr><td><b>May 13</b></td><td>Tue</td><td class="r">₹20,500</td><td class="r">₹2.54L</td><td class="r">2.2×</td><td>Influencer #2 LOCKED</td></tr>
+        <tr class="wkc"><td><b>May 14</b></td><td>Wed</td><td class="r">₹21,000</td><td class="r"><b>₹2.75L</b></td><td class="r">2.5×</td><td>W2 close · 30 reviews</td></tr>
+        <tr><td><b>May 15</b></td><td>Thu</td><td class="r">₹24,000</td><td class="r">₹2.99L</td><td class="r">2.3×</td><td>Meta retargeting layer on</td></tr>
+        <tr><td><b>May 16</b></td><td>Fri</td><td class="r">₹30,000</td><td class="r">₹3.29L</td><td class="r">3.2×</td><td>Take-away halo kicks in (+15%)</td></tr>
+        <tr class="we star"><td><b>May 17</b></td><td>Sat</td><td class="r">₹38,000</td><td class="r">₹3.67L</td><td class="r">2.5×</td><td>Influencer #2 visit · Swiggy Ads peak</td></tr>
+        <tr class="we star"><td><b>May 18</b></td><td>Sun</td><td class="r">₹34,000</td><td class="r">₹4.01L</td><td class="r">2.5×</td><td>⚡ <b>50 REVIEWS · Influencer #2 reel publishes</b></td></tr>
+        <tr><td><b>May 19</b></td><td>Mon</td><td class="r">₹26,000</td><td class="r">₹4.27L</td><td class="r">3.2×</td><td>Reel #2 D1 peak · Meta to ₹2K</td></tr>
+        <tr><td><b>May 20</b></td><td>Tue</td><td class="r">₹28,000</td><td class="r">₹4.55L</td><td class="r">3.0×</td><td>Zomato Ads to ₹2K · Influencer #3 outreach</td></tr>
+        <tr class="wkc"><td><b>May 21</b></td><td>Wed</td><td class="r">₹29,000</td><td class="r"><b>₹4.84L</b></td><td class="r">3.5×</td><td>W3 close · Reel #2 D3 peak</td></tr>
+        <tr><td><b>May 22</b></td><td>Thu</td><td class="r">₹33,000</td><td class="r">₹5.17L</td><td class="r">3.2×</td><td>Influencer #3 visit + same-day reel</td></tr>
+        <tr><td><b>May 23</b></td><td>Fri</td><td class="r">₹40,000</td><td class="r">₹5.57L</td><td class="r">4.2×</td><td>Three reels active · Zomato Ads peak</td></tr>
+        <tr class="we peak"><td><b>May 24</b></td><td>Sat</td><td class="r"><b>₹52,000</b></td><td class="r">₹6.09L</td><td class="r">3.4×</td><td>⚡ <b>MAY PEAK</b></td></tr>
+        <tr class="we"><td><b>May 25</b></td><td>Sun</td><td class="r">₹46,000</td><td class="r">₹6.55L</td><td class="r">3.4×</td><td>Sun peak · Reel #3 D3</td></tr>
+        <tr><td><b>May 26</b></td><td>Mon</td><td class="r">₹32,000</td><td class="r">₹6.87L</td><td class="r">4.0×</td><td>Mon · ad rotation</td></tr>
+        <tr><td><b>May 27</b></td><td>Tue</td><td class="r">₹35,000</td><td class="r">₹7.22L</td><td class="r">3.7×</td><td>Steady-state Tue</td></tr>
+        <tr class="wkc"><td><b>May 28</b></td><td>Wed</td><td class="r">₹37,000</td><td class="r"><b>₹7.59L</b></td><td class="r">4.4×</td><td>W4 close · plan W5 hold</td></tr>
+        <tr><td><b>May 29</b></td><td>Thu</td><td class="r">₹38,000</td><td class="r">₹7.97L</td><td class="r">3.7×</td><td>Hold</td></tr>
+        <tr><td><b>May 30</b></td><td>Fri</td><td class="r">₹45,000</td><td class="r">₹8.42L</td><td class="r">4.7×</td><td>Last full Friday</td></tr>
+        <tr class="we close"><td><b>May 31</b></td><td>Sat</td><td class="r"><b>₹52,000</b></td><td class="r"><b>₹8.94L</b></td><td class="r">3.4×</td><td>⚡ <b>CLOSING DAY · matches peak</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ins bl">
+    <h5>How to read this</h5>
+    <p><b>Daily target</b> is what each day must do to land May at ₹8.94L floor. <b>Cumulative</b> is the running month-to-date — at any point, look here to know if you're on/off pace. <b>vs April</b> shows the multiplier over April's ₹10,335/day baseline. <b>Anchor moment</b> is the single most important thing about that day.</p>
+    <p>Three days carry disproportionate weight: <b>May 9</b> (Influencer #1 reel — first paid creative goes live) · <b>May 18</b> (50 reviews unlock + Influencer #2 reel — twin compounding event) · <b>May 24</b> (peak day — validates the ramp).</p>
+  </div>
+</section>
+
 <!-- STRATEGY -->
 <section class="sec" id="strategy">
   <h2 class="sec-t">Strategic doctrine</h2>
@@ -312,7 +514,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     <div class="wk-theme">Build the assets that the next three weeks compound on. <b>Ground floor opens, EazyDiner activates, catalog gets rewritten, self-order review program begins, influencers get briefed.</b> Zero ad spend — we are not paying to drive traffic to a listing that has 8 reviews.</div>
 
     <!-- DAY 1 - May 1 Thu -->
-    <div class="day weekend-no" data-d="2026-05-01">
+    <div class="day weekend-no" id="d-1" data-d="2026-05-01">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 1</b>Thu · Day 1</div>
@@ -354,7 +556,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 2 - May 2 Fri -->
-    <div class="day" data-d="2026-05-02">
+    <div class="day" id="d-2" data-d="2026-05-02">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 2</b>Fri · Day 2</div>
@@ -392,7 +594,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 3 - May 3 Sat -->
-    <div class="day weekend" data-d="2026-05-03">
+    <div class="day weekend" id="d-3" data-d="2026-05-03">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 3</b>Sat · Day 3</div>
@@ -430,7 +632,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 4 - May 4 Sun -->
-    <div class="day weekend" data-d="2026-05-04">
+    <div class="day weekend" id="d-4" data-d="2026-05-04">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 4</b>Sun · Day 4</div>
@@ -468,7 +670,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 5 - May 5 Mon -->
-    <div class="day" data-d="2026-05-05">
+    <div class="day" id="d-5" data-d="2026-05-05">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 5</b>Mon · Day 5</div>
@@ -506,7 +708,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 6 - May 6 Tue -->
-    <div class="day" data-d="2026-05-06">
+    <div class="day" id="d-6" data-d="2026-05-06">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 6</b>Tue · Day 6</div>
@@ -546,7 +748,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 7 - May 7 Wed -->
-    <div class="day" data-d="2026-05-07">
+    <div class="day" id="d-7" data-d="2026-05-07">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 7</b>Wed · Day 7</div>
@@ -601,7 +803,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     <div class="wk-theme">First influencer reel publishes mid-week. Ads scale after learning phase ends. Reviews accelerate to ~32 by Sunday close. <b>The first measurable revenue lift from a paid lever lands here.</b></div>
 
     <!-- DAY 8 -->
-    <div class="day" data-d="2026-05-08">
+    <div class="day" id="d-8" data-d="2026-05-08">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 8</b>Thu · Day 8</div>
@@ -643,7 +845,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 9 -->
-    <div class="day" data-d="2026-05-09">
+    <div class="day" id="d-9" data-d="2026-05-09">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 9</b>Fri · Day 9</div>
@@ -684,7 +886,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 10 -->
-    <div class="day weekend" data-d="2026-05-10">
+    <div class="day weekend" id="d-10" data-d="2026-05-10">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 10</b>Sat · Day 10</div>
@@ -725,7 +927,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 11 -->
-    <div class="day weekend" data-d="2026-05-11">
+    <div class="day weekend" id="d-11" data-d="2026-05-11">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 11</b>Sun · Day 11</div>
@@ -766,7 +968,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 12 -->
-    <div class="day" data-d="2026-05-12">
+    <div class="day" id="d-12" data-d="2026-05-12">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 12</b>Mon · Day 12</div>
@@ -807,7 +1009,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 13 -->
-    <div class="day" data-d="2026-05-13">
+    <div class="day" id="d-13" data-d="2026-05-13">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 13</b>Tue · Day 13</div>
@@ -848,7 +1050,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 14 -->
-    <div class="day" data-d="2026-05-14">
+    <div class="day" id="d-14" data-d="2026-05-14">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 14</b>Wed · Day 14</div>
@@ -902,7 +1104,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     <div class="wk-theme">The compounding week. Two algorithm thresholds cross: <b>50 Zomato reviews + Influencer #2 reel publish</b> within 24 hours of each other. Meta + Google scale into the lift. Halo from 3 weeks of busy outlet visible to neighborhood and on listing photos.</div>
 
     <!-- DAY 15 -->
-    <div class="day" data-d="2026-05-15">
+    <div class="day" id="d-15" data-d="2026-05-15">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 15</b>Thu · Day 15</div>
@@ -942,7 +1144,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 16 -->
-    <div class="day" data-d="2026-05-16">
+    <div class="day" id="d-16" data-d="2026-05-16">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 16</b>Fri · Day 16</div>
@@ -982,7 +1184,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 17 -->
-    <div class="day weekend" data-d="2026-05-17">
+    <div class="day weekend" id="d-17" data-d="2026-05-17">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 17</b>Sat · Day 17</div>
@@ -1023,7 +1225,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 18 -->
-    <div class="day weekend" data-d="2026-05-18">
+    <div class="day weekend" id="d-18" data-d="2026-05-18">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 18</b>Sun · Day 18</div>
@@ -1064,7 +1266,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 19 -->
-    <div class="day" data-d="2026-05-19">
+    <div class="day" id="d-19" data-d="2026-05-19">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 19</b>Mon · Day 19</div>
@@ -1103,7 +1305,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 20 -->
-    <div class="day" data-d="2026-05-20">
+    <div class="day" id="d-20" data-d="2026-05-20">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 20</b>Tue · Day 20</div>
@@ -1141,7 +1343,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 21 -->
-    <div class="day" data-d="2026-05-21">
+    <div class="day" id="d-21" data-d="2026-05-21">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 21</b>Wed · Day 21</div>
@@ -1194,7 +1396,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     <div class="wk-theme">Three influencers compounding. 50-review effect mature. Halo at maximum. <b>Sat May 24 is the peak day of May — ₹52K target.</b> Validates W4 daily avg ₹39K and the ₹52K exit run-rate.</div>
 
     <!-- DAY 22 -->
-    <div class="day" data-d="2026-05-22">
+    <div class="day" id="d-22" data-d="2026-05-22">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 22</b>Thu · Day 22</div>
@@ -1233,7 +1435,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 23 -->
-    <div class="day" data-d="2026-05-23">
+    <div class="day" id="d-23" data-d="2026-05-23">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 23</b>Fri · Day 23</div>
@@ -1272,7 +1474,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 24 -->
-    <div class="day weekend" data-d="2026-05-24">
+    <div class="day weekend" id="d-24" data-d="2026-05-24">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 24</b>Sat · Day 24</div>
@@ -1312,7 +1514,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 25 -->
-    <div class="day weekend" data-d="2026-05-25">
+    <div class="day weekend" id="d-25" data-d="2026-05-25">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 25</b>Sun · Day 25</div>
@@ -1351,7 +1553,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 26 -->
-    <div class="day" data-d="2026-05-26">
+    <div class="day" id="d-26" data-d="2026-05-26">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 26</b>Mon · Day 26</div>
@@ -1387,7 +1589,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 27 -->
-    <div class="day" data-d="2026-05-27">
+    <div class="day" id="d-27" data-d="2026-05-27">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 27</b>Tue · Day 27</div>
@@ -1423,7 +1625,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 28 -->
-    <div class="day" data-d="2026-05-28">
+    <div class="day" id="d-28" data-d="2026-05-28">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 28</b>Wed · Day 28</div>
@@ -1474,7 +1676,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     <div class="wk-theme">No new activations. Hold peak ad spend. Let the compound finish the month. <b>This is also the W4-mix that becomes the June starting baseline.</b></div>
 
     <!-- DAY 29 -->
-    <div class="day" data-d="2026-05-29">
+    <div class="day" id="d-29" data-d="2026-05-29">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 29</b>Thu · Day 29</div>
@@ -1504,7 +1706,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 30 -->
-    <div class="day" data-d="2026-05-30">
+    <div class="day" id="d-30" data-d="2026-05-30">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 30</b>Fri · Day 30</div>
@@ -1535,7 +1737,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
     </div>
 
     <!-- DAY 31 -->
-    <div class="day weekend" data-d="2026-05-31">
+    <div class="day weekend" id="d-31" data-d="2026-05-31">
       <div class="day-head" onclick="this.parentElement.classList.toggle('open')">
         <div class="day-l">
           <div class="date"><b>May 31</b>Sat · Day 31</div>
@@ -1860,7 +2062,7 @@ body{font-family:-apple-system,'SF Pro Text','Inter',system-ui,sans-serif;backgr
 // Sticky nav active state
 (function(){
   const links = document.querySelectorAll('.nav a');
-  const sections = ['overview','strategy','roadmap','channels','budget','risk'].map(id => document.getElementById(id)).filter(Boolean);
+  const sections = ['overview','projection','strategy','roadmap','channels','budget','risk'].map(id => document.getElementById(id)).filter(Boolean);
   function update() {
     const y = window.scrollY + 100;
     let active = sections[0];
