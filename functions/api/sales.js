@@ -44,6 +44,10 @@ const USERS = {
   '5050': { name: 'Nisar',    role: 'viewer'   },
 };
 const READ_ROLES = new Set(['admin','cfo','gm','asstmgr','purchase','cashier','viewer']);
+const SYNC_ROLES = new Set(['admin','cfo']);
+
+// Slice B: dashboard "Sync now" button proxies to spend-sync-cron.
+const SPEND_SYNC_URL = 'https://hn-spend-sync-cron.nihafwork.workers.dev';
 
 const RECOGNISED_NCH_PMS = new Set([
   'NCH Cash', 'NCH UPI', 'NCH Card',
@@ -86,7 +90,8 @@ export async function onRequest(context) {
     if (action === 'qr-collections')  return await qrCollections(url, env);
     if (action === 'sync-status')     return await syncStatus(url, env);
     if (action === 'pos-configs')     return await posConfigs(url, env);
-    return json({ success: false, error: `Unknown action: ${action}. Slice A is read-only — write actions land in Slice B/C.` }, 400);
+    if (action === 'sync' && request.method === 'POST') return await runSync(request, env);
+    return json({ success: false, error: `Unknown action: ${action}` }, 400);
   } catch (e) {
     return json({ success: false, error: e.message, stack: e.stack }, 500);
   }
@@ -320,4 +325,33 @@ async function posConfigs(url, env) {
   const brand = (url.searchParams.get('brand') || 'NCH').toUpperCase();
   const r = await env.DB.prepare(`SELECT * FROM pos_config_registry WHERE brand = ? ORDER BY pos_config_id`).bind(brand).all();
   return json({ success: true, user: user.name, brand, configs: r.results || [] });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━ SYNC PROXY ━━━━━━━━━━━━━━━━━━━━━━━━
+//
+// "Sync now" button in /ops/sales/ pings spend-sync-cron, which runs the
+// nch-sales flows (Slice B) and reports each sub-flow's row count + error.
+// admin/cfo only — same role gate /api/cash uses.
+
+async function runSync(request, env) {
+  let pin, force;
+  try {
+    const body = await request.json();
+    pin = body.pin; force = !!body.force;
+  } catch {
+    pin = new URL(request.url).searchParams.get('pin');
+    force = new URL(request.url).searchParams.get('force') === '1';
+  }
+  const u = USERS[pin];
+  if (!u || !SYNC_ROLES.has(u.role)) {
+    return json({ success: false, error: 'admin/cfo only' }, 401);
+  }
+  if (!env.DASHBOARD_KEY) {
+    return json({ success: false, error: 'DASHBOARD_KEY not set on this Pages project' }, 500);
+  }
+  const url = `${SPEND_SYNC_URL}/?key=${encodeURIComponent(env.DASHBOARD_KEY)}&instance=nch-sales${force ? '&force=1' : ''}`;
+  const r = await fetch(url);
+  const txt = await r.text();
+  let body; try { body = JSON.parse(txt); } catch { body = { raw: txt.slice(0, 1000) }; }
+  return json({ success: r.ok, ran_by: u.name, status: r.status, result: body });
 }

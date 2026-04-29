@@ -696,18 +696,477 @@ async function recomputeFlags(env) {
 
 // ━━━ Dispatch ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function runSync(env, instancesRequested, opts = {}) {
-  const allKeys = [...Object.keys(INSTANCES), 'd1-nch'];
+  const allKeys = [...Object.keys(INSTANCES), 'd1-nch', 'nch-sales'];
   const keys = instancesRequested === 'all' ? allKeys : [instancesRequested];
   const results = [];
   for (const k of keys) {
     try {
-      if (k === 'd1-nch') results.push(await syncNchCounterExpenses(env, opts));
-      else if (INSTANCES[k]) results.push(await syncInstance(env, k, opts));
-      else results.push({ instance: k, error: 'unknown instance' });
+      if (k === 'd1-nch')        results.push(await syncNchCounterExpenses(env, opts));
+      else if (k === 'nch-sales') results.push(await syncNchSales(env, opts));
+      else if (INSTANCES[k])     results.push(await syncInstance(env, k, opts));
+      else                        results.push({ instance: k, error: 'unknown instance' });
     } catch (e) { results.push({ instance: k, error: e.message }); }
   }
   try { await recomputeFlags(env); } catch (e) { results.push({ flags_error: e.message }); }
   return { ran_at: new Date().toISOString(), results };
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * NCH SALES RECONCILIATION — Slice B
+ * Spec: docs/OPS-NCH-SALES-RECON-SPEC.md §6.2
+ *
+ * Six idempotent sub-flows. Cursors live in sales_sync_state (Slice A).
+ * Each flow soft-fails and reports its own row count + error.
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+// Recognised NCH POS configs sourced from rm-ops.js + asset DB row 67.
+// We don't hard-code labels — pos_config_registry is auto-populated by
+// syncNchPosConfig and labelled by the owner via /api/sales (Slice C).
+const NCH_OPS_COMPANY_ID = 10;
+
+// Razorpay-side flag: payments to a runner QR are matched via
+// razorpay_qr_registry. The 'role' on that row drives recon math.
+const RAZORPAY_REST = 'https://api.razorpay.com';
+
+async function syncNchSales(env, opts = {}) {
+  const stats = { instance: 'nch-sales', rows: {}, errors: {} };
+  const apiKey = env.ODOO_KEY_OPS_HAMZA;
+  if (!apiKey) { stats.errors._init = 'ODOO_KEY_OPS_HAMZA missing'; return stats; }
+  const opsInst = INSTANCES['ops-hamza'];
+
+  const flow = async (source, fn) => {
+    await markSalesRunning(env, source);
+    try {
+      const added = await fn();
+      stats.rows[source] = added;
+      await markSalesDone(env, source, 'ok', added, null);
+    } catch (e) {
+      stats.errors[source] = e.message;
+      await markSalesDone(env, source, 'error', 0, e.message?.slice(0, 500));
+    }
+  };
+
+  // 1. pos.config refresh — daily; skip if recent
+  await flow('nch_pos_config', async () => {
+    const cur = await getSalesCursor(env, 'nch_pos_config');
+    if (!opts.force && cur?.last_run_at) {
+      const ageH = (Date.now() - new Date(cur.last_run_at).getTime()) / 3600000;
+      if (ageH < 24) return 0;
+    }
+    const cfgs = await odoo(opsInst, apiKey, 'pos.config', 'search_read',
+      [[['company_id', '=', NCH_OPS_COMPANY_ID]]],
+      { fields: ['id', 'name'] });
+    let n = 0;
+    for (const c of cfgs) {
+      await env.DB.prepare(
+        `INSERT INTO pos_config_registry (pos_config_id, brand, name, last_seen_at)
+         VALUES (?, 'NCH', ?, ?)
+         ON CONFLICT(pos_config_id) DO UPDATE SET
+           name = excluded.name, last_seen_at = excluded.last_seen_at`
+      ).bind(c.id, c.name, new Date().toISOString()).run();
+      n++;
+    }
+    return n;
+  });
+
+  // 2. pos.order delta — by id since last cursor
+  await flow('nch_pos_orders', async () => {
+    const cur = await getSalesCursor(env, 'nch_pos_orders');
+    const sinceId = opts.force ? 0 : (cur?.last_synced_id || 0);
+    const orders = await odoo(opsInst, apiKey, 'pos.order', 'search_read',
+      [[['company_id', '=', NCH_OPS_COMPANY_ID],
+        ['state', 'in', ['paid', 'done', 'invoiced', 'posted']],
+        ['id', '>', sinceId]]],
+      { fields: ['id', 'name', 'date_order', 'amount_total', 'amount_tax',
+                 'state', 'company_id', 'session_id', 'config_id', 'payment_ids'],
+        order: 'id asc', limit: 1000 });
+    if (!orders.length) return 0;
+
+    // Pull PM names per order in one shot for payment_methods_csv denorm
+    const allPmIds = [...new Set(orders.flatMap(o => o.payment_ids || []))];
+    const pmRows = allPmIds.length
+      ? await odoo(opsInst, apiKey, 'pos.payment', 'read', [allPmIds],
+          { fields: ['id', 'pos_order_id', 'payment_method_id'] })
+      : [];
+    const pmById = Object.fromEntries(pmRows.map(p => [p.id, p]));
+
+    let maxId = sinceId;
+    let added = 0;
+    for (const o of orders) {
+      const dateIst = utcToIst(o.date_order);
+      const day = (dateIst || '').slice(0, 10);
+      const cfgId = o.config_id?.[0];
+      const sessId = o.session_id?.[0] || null;
+      const pmNames = (o.payment_ids || []).map(pid => pmById[pid]?.payment_method_id?.[1]).filter(Boolean);
+      const csv = [...new Set(pmNames)].join(',');
+      try {
+        await env.DB.prepare(
+          `INSERT INTO pos_orders_mirror (
+             odoo_pos_order_id, brand, pos_config_id, session_id, order_name,
+             order_date_ist, order_date_day,
+             amount_total_paise, amount_tax_paise,
+             state, payment_methods_csv, synced_at)
+           VALUES (?, 'NCH', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(odoo_pos_order_id) DO UPDATE SET
+             amount_total_paise = excluded.amount_total_paise,
+             amount_tax_paise   = excluded.amount_tax_paise,
+             state              = excluded.state,
+             payment_methods_csv= excluded.payment_methods_csv,
+             synced_at          = excluded.synced_at`
+        ).bind(
+          o.id, cfgId, sessId, o.name,
+          dateIst, day,
+          Math.round((o.amount_total || 0) * 100),
+          Math.round((o.amount_tax || 0) * 100),
+          o.state, csv, new Date().toISOString()
+        ).run();
+        added++;
+      } catch (e) {/* skip malformed row, continue */}
+      if (o.id > maxId) maxId = o.id;
+    }
+    if (maxId > sinceId) await setSalesCursor(env, 'nch_pos_orders', { last_synced_id: maxId });
+    return added;
+  });
+
+  // 3. pos.payment delta — bound to recently-synced orders only
+  await flow('nch_pos_payments', async () => {
+    const cur = await getSalesCursor(env, 'nch_pos_payments');
+    const sinceId = opts.force ? 0 : (cur?.last_synced_id || 0);
+    const pays = await odoo(opsInst, apiKey, 'pos.payment', 'search_read',
+      [[['id', '>', sinceId]]],
+      { fields: ['id', 'pos_order_id', 'payment_method_id', 'amount'],
+        order: 'id asc', limit: 2000 });
+    if (!pays.length) return 0;
+
+    // Filter to NCH orders we already mirrored. Fetches order metadata
+    // from D1 (cheaper than re-querying Odoo).
+    const orderIds = [...new Set(pays.map(p => p.pos_order_id?.[0]).filter(Boolean))];
+    const placeholders = orderIds.map(() => '?').join(',');
+    const orderRows = orderIds.length
+      ? (await env.DB.prepare(
+          `SELECT odoo_pos_order_id, pos_config_id, order_date_day
+             FROM pos_orders_mirror WHERE odoo_pos_order_id IN (${placeholders})`
+        ).bind(...orderIds).all()).results
+      : [];
+    const orderById = Object.fromEntries(orderRows.map(r => [r.odoo_pos_order_id, r]));
+
+    let maxId = sinceId;
+    let added = 0;
+    for (const p of pays) {
+      const oid = p.pos_order_id?.[0];
+      const meta = orderById[oid];
+      if (!meta) { if (p.id > maxId) maxId = p.id; continue; } // not NCH or not yet mirrored
+      try {
+        await env.DB.prepare(
+          `INSERT INTO pos_payments_mirror (
+             odoo_pos_payment_id, odoo_pos_order_id, brand, order_date_day,
+             pos_config_id, payment_method_id, payment_method_name,
+             amount_paise, synced_at)
+           VALUES (?, ?, 'NCH', ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(odoo_pos_payment_id) DO UPDATE SET
+             amount_paise = excluded.amount_paise,
+             payment_method_name = excluded.payment_method_name,
+             synced_at    = excluded.synced_at`
+        ).bind(
+          p.id, oid, meta.order_date_day, meta.pos_config_id,
+          p.payment_method_id?.[0] || 0,
+          p.payment_method_id?.[1] || 'unknown',
+          Math.round((p.amount || 0) * 100),
+          new Date().toISOString()
+        ).run();
+        added++;
+      } catch (e) {/* skip */}
+      if (p.id > maxId) maxId = p.id;
+    }
+    if (maxId > sinceId) await setSalesCursor(env, 'nch_pos_payments', { last_synced_id: maxId });
+    return added;
+  });
+
+  // 4. pos.order.line delta — same shape, item-level
+  await flow('nch_pos_lines', async () => {
+    const cur = await getSalesCursor(env, 'nch_pos_lines');
+    const sinceId = opts.force ? 0 : (cur?.last_synced_id || 0);
+    const lines = await odoo(opsInst, apiKey, 'pos.order.line', 'search_read',
+      [[['id', '>', sinceId]]],
+      { fields: ['id', 'order_id', 'product_id', 'qty', 'price_subtotal_incl'],
+        order: 'id asc', limit: 2000 });
+    if (!lines.length) return 0;
+
+    const orderIds = [...new Set(lines.map(l => l.order_id?.[0]).filter(Boolean))];
+    const placeholders = orderIds.map(() => '?').join(',');
+    const orderRows = orderIds.length
+      ? (await env.DB.prepare(
+          `SELECT odoo_pos_order_id, pos_config_id, order_date_day
+             FROM pos_orders_mirror WHERE odoo_pos_order_id IN (${placeholders})`
+        ).bind(...orderIds).all()).results
+      : [];
+    const orderById = Object.fromEntries(orderRows.map(r => [r.odoo_pos_order_id, r]));
+
+    let maxId = sinceId;
+    let added = 0;
+    for (const l of lines) {
+      const oid = l.order_id?.[0];
+      const meta = orderById[oid];
+      if (!meta) { if (l.id > maxId) maxId = l.id; continue; }
+      try {
+        await env.DB.prepare(
+          `INSERT INTO pos_lines_mirror (
+             odoo_pos_line_id, odoo_pos_order_id, brand, order_date_day,
+             pos_config_id, product_id, product_name,
+             qty, price_subtotal_incl_paise, synced_at)
+           VALUES (?, ?, 'NCH', ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(odoo_pos_line_id) DO UPDATE SET
+             qty = excluded.qty,
+             price_subtotal_incl_paise = excluded.price_subtotal_incl_paise,
+             synced_at = excluded.synced_at`
+        ).bind(
+          l.id, oid, meta.order_date_day, meta.pos_config_id,
+          l.product_id?.[0] || 0, l.product_id?.[1] || null,
+          l.qty || 0,
+          Math.round((l.price_subtotal_incl || 0) * 100),
+          new Date().toISOString()
+        ).run();
+        added++;
+      } catch (e) {/* skip */}
+      if (l.id > maxId) maxId = l.id;
+    }
+    if (maxId > sinceId) await setSalesCursor(env, 'nch_pos_lines', { last_synced_id: maxId });
+    return added;
+  });
+
+  // 5. Razorpay QR poll — per active registry row
+  await flow('nch_razorpay_qr_poll', async () => {
+    if (!env.RAZORPAY_KEY || !env.RAZORPAY_SECRET) {
+      throw new Error('RAZORPAY_KEY/RAZORPAY_SECRET secrets not set on this Worker');
+    }
+    const auth = 'Basic ' + btoa(`${env.RAZORPAY_KEY}:${env.RAZORPAY_SECRET}`);
+    const qrs = (await env.DB.prepare(
+      `SELECT qr_code_id, role, brand FROM razorpay_qr_registry
+        WHERE brand = 'NCH' AND active = 1`
+    ).all()).results || [];
+    if (!qrs.length) return 0;
+
+    let totalAdded = 0;
+    const now = Math.floor(Date.now() / 1000);
+    for (const qr of qrs) {
+      // Per-QR cursor: we extend sales_sync_state notes JSON with a {qr_id: lastTs}
+      // map. Cleaner than 6 PRIMARY KEY rows per QR.
+      const stRow = await env.DB.prepare(
+        `SELECT notes FROM sales_sync_state WHERE sync_source = 'nch_razorpay_qr_poll'`
+      ).first();
+      let cursors = {};
+      try { cursors = JSON.parse(stRow?.notes || '{}'); if (cursors.__seed) cursors = {}; } catch { cursors = {}; }
+      const fromTs = opts.force
+        ? Math.floor(new Date('2026-04-01T00:00:00+05:30').getTime() / 1000)
+        : (cursors[qr.qr_code_id] || Math.floor(new Date('2026-04-01T00:00:00+05:30').getTime() / 1000));
+
+      // Razorpay /v1/payments/qr_codes/:id/payments paginates via skip/count.
+      // Page through until we hit empty or 1000 (cap to avoid runaway).
+      let skip = 0;
+      const COUNT = 100;
+      let pageMaxTs = fromTs;
+      let qrAdded = 0;
+      let pages = 0;
+      while (pages < 10) {
+        const url = `${RAZORPAY_REST}/v1/payments/qr_codes/${encodeURIComponent(qr.qr_code_id)}/payments?from=${fromTs}&to=${now}&count=${COUNT}&skip=${skip}`;
+        const resp = await fetch(url, { headers: { Authorization: auth } });
+        if (!resp.ok) {
+          const txt = await resp.text();
+          throw new Error(`razorpay ${qr.qr_code_id} HTTP ${resp.status}: ${txt.slice(0, 200)}`);
+        }
+        const j = await resp.json();
+        const items = j.items || [];
+        if (!items.length) break;
+        for (const p of items) {
+          if (p.captured_at && p.captured_at > pageMaxTs) pageMaxTs = p.captured_at;
+          const isoCaptured = new Date((p.captured_at || p.created_at) * 1000).toISOString();
+          const istDay = new Date((p.captured_at || p.created_at) * 1000 + 5.5 * 3600 * 1000)
+            .toISOString().slice(0, 10);
+          try {
+            await env.DB.prepare(
+              `INSERT INTO razorpay_qr_collections (
+                 razorpay_payment_id, qr_code_id, brand, role,
+                 amount_paise, fee_paise, tax_paise, status, method,
+                 vpa, contact, captured_at, captured_at_day,
+                 synced_at, synced_via, raw_payload)
+               VALUES (?, ?, 'NCH', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rest_poll', ?)
+               ON CONFLICT(razorpay_payment_id) DO UPDATE SET
+                 amount_paise = excluded.amount_paise,
+                 status       = excluded.status,
+                 synced_at    = excluded.synced_at`
+            ).bind(
+              p.id, qr.qr_code_id, qr.role,
+              p.amount || 0, p.fee || 0, p.tax || 0,
+              p.status || 'unknown', p.method || null,
+              p.vpa || null, p.contact || null,
+              isoCaptured, istDay,
+              new Date().toISOString(),
+              JSON.stringify(p).slice(0, 8000)
+            ).run();
+            qrAdded++;
+          } catch (_) {/* skip */}
+        }
+        if (items.length < COUNT) break;
+        skip += COUNT;
+        pages++;
+      }
+      cursors[qr.qr_code_id] = pageMaxTs + 1;
+      await env.DB.prepare(
+        `UPDATE sales_sync_state SET notes = ? WHERE sync_source = 'nch_razorpay_qr_poll'`
+      ).bind(JSON.stringify(cursors)).run();
+      totalAdded += qrAdded;
+    }
+    return totalAdded;
+  });
+
+  // 6. recompute sales_recon_daily — rolling 14-day window
+  await flow('nch_recon_daily_compute', async () => {
+    const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+    const startTs = Date.parse(today + 'T00:00:00Z') - 13 * 86400 * 1000;
+    const days = [];
+    for (let i = 0; i < 14; i++) {
+      days.push(new Date(startTs + i * 86400 * 1000).toISOString().slice(0, 10));
+    }
+    const recomputeAt = new Date().toISOString();
+    let touched = 0;
+    for (const day of days) {
+      const computed = await computeReconDay(env, 'NCH', day);
+      await env.DB.prepare(
+        `INSERT INTO sales_recon_daily (
+           brand, day, gross_sales_paise,
+           counter_cash_paise, counter_upi_pos_paise, counter_upi_rzp_paise, counter_card_paise,
+           runner_sales_paise, runner_upi_paise, runner_cash_paise,
+           total_cash_paise, total_upi_paise, upi_discrepancy_paise,
+           complimentary_paise, unmapped_paise, order_count, last_recomputed_at)
+         VALUES ('NCH', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(brand, day) DO UPDATE SET
+           gross_sales_paise=excluded.gross_sales_paise,
+           counter_cash_paise=excluded.counter_cash_paise,
+           counter_upi_pos_paise=excluded.counter_upi_pos_paise,
+           counter_upi_rzp_paise=excluded.counter_upi_rzp_paise,
+           counter_card_paise=excluded.counter_card_paise,
+           runner_sales_paise=excluded.runner_sales_paise,
+           runner_upi_paise=excluded.runner_upi_paise,
+           runner_cash_paise=excluded.runner_cash_paise,
+           total_cash_paise=excluded.total_cash_paise,
+           total_upi_paise=excluded.total_upi_paise,
+           upi_discrepancy_paise=excluded.upi_discrepancy_paise,
+           complimentary_paise=excluded.complimentary_paise,
+           unmapped_paise=excluded.unmapped_paise,
+           order_count=excluded.order_count,
+           last_recomputed_at=excluded.last_recomputed_at`
+      ).bind(
+        day, computed.gross_sales_paise,
+        computed.counter_cash_paise, computed.counter_upi_pos_paise,
+        computed.counter_upi_rzp_paise, computed.counter_card_paise,
+        computed.runner_sales_paise, computed.runner_upi_paise, computed.runner_cash_paise,
+        computed.total_cash_paise, computed.total_upi_paise, computed.upi_discrepancy_paise,
+        computed.complimentary_paise, computed.unmapped_paise, computed.order_count,
+        recomputeAt
+      ).run();
+      touched++;
+    }
+    return touched;
+  });
+
+  stats.duration_ms = Date.now() - parseInt(stats.duration_ms || Date.now(), 10);
+  return stats;
+}
+
+// Compute the reconciliation row for one day from the mirror tables.
+// Pure read; called by both the cron flow and (in Slice C) /api/sales?action=recompute-day.
+async function computeReconDay(env, brand, day) {
+  const pmRows = (await env.DB.prepare(
+    `SELECT payment_method_name, SUM(amount_paise) AS p
+       FROM pos_payments_mirror WHERE brand = ? AND order_date_day = ?
+      GROUP BY payment_method_name`
+  ).bind(brand, day).all()).results || [];
+
+  const qrRows = (await env.DB.prepare(
+    `SELECT role, SUM(amount_paise) AS p
+       FROM razorpay_qr_collections
+      WHERE brand = ? AND captured_at_day = ? AND status = 'captured'
+      GROUP BY role`
+  ).bind(brand, day).all()).results || [];
+
+  const orderRow = await env.DB.prepare(
+    `SELECT COUNT(*) AS n,
+            COALESCE(SUM(CASE WHEN COALESCE(payment_methods_csv,'') NOT LIKE '%Complimentary%'
+                              THEN amount_total_paise ELSE 0 END), 0) AS gross,
+            COALESCE(SUM(CASE WHEN COALESCE(payment_methods_csv,'') LIKE '%Complimentary%'
+                              THEN amount_total_paise ELSE 0 END), 0) AS comp
+       FROM pos_orders_mirror WHERE brand = ? AND order_date_day = ?`
+  ).bind(brand, day).first();
+
+  const pm = (name) => pmRows.find(r => r.payment_method_name === name)?.p || 0;
+  const qr = (role) => qrRows.find(r => r.role === role)?.p || 0;
+
+  const RECOGNISED = new Set([
+    'NCH Cash', 'NCH UPI', 'NCH Card', 'NCH Runner Ledger', 'NCH Token Issue',
+    'Complimentary', 'Cash', 'UPI',
+  ]);
+  let unmapped = 0;
+  for (const r of pmRows) {
+    if (!RECOGNISED.has(r.payment_method_name)) unmapped += r.p || 0;
+  }
+
+  const counter_cash    = pm('NCH Cash') + pm('Cash');     // Cash fallback for legacy unbranded PM
+  const counter_upi_pos = pm('NCH UPI') + pm('UPI');
+  const counter_upi_rzp = qr('counter');
+  const counter_card    = pm('NCH Card');
+  const runner_sales    = pm('NCH Runner Ledger') + pm('NCH Token Issue');
+  const runner_upi      = qr('runner');
+  const runner_cash     = Math.max(0, runner_sales - runner_upi);
+  const total_cash      = counter_cash + runner_cash;
+  const total_upi       = counter_upi_rzp + runner_upi;
+  const upi_discrepancy = counter_upi_pos - counter_upi_rzp;
+
+  return {
+    gross_sales_paise: orderRow?.gross || 0,
+    counter_cash_paise: counter_cash,
+    counter_upi_pos_paise: counter_upi_pos,
+    counter_upi_rzp_paise: counter_upi_rzp,
+    counter_card_paise: counter_card,
+    runner_sales_paise: runner_sales,
+    runner_upi_paise: runner_upi,
+    runner_cash_paise: runner_cash,
+    total_cash_paise: total_cash,
+    total_upi_paise: total_upi,
+    upi_discrepancy_paise: upi_discrepancy,
+    complimentary_paise: orderRow?.comp || 0,
+    unmapped_paise: unmapped,
+    order_count: orderRow?.n || 0,
+  };
+}
+
+async function getSalesCursor(env, src) {
+  return await env.DB.prepare(
+    `SELECT last_synced_id, last_synced_at, last_run_at, notes
+       FROM sales_sync_state WHERE sync_source = ?`
+  ).bind(src).first();
+}
+async function setSalesCursor(env, src, fields) {
+  const sets = []; const binds = [];
+  if ('last_synced_id' in fields) { sets.push('last_synced_id = ?'); binds.push(fields.last_synced_id); }
+  if ('last_synced_at' in fields) { sets.push('last_synced_at = ?'); binds.push(fields.last_synced_at); }
+  if (!sets.length) return;
+  binds.push(src);
+  await env.DB.prepare(`UPDATE sales_sync_state SET ${sets.join(', ')} WHERE sync_source = ?`).bind(...binds).run();
+}
+async function markSalesRunning(env, src) {
+  await env.DB.prepare(
+    `UPDATE sales_sync_state SET last_run_status = 'running', last_run_at = ? WHERE sync_source = ?`
+  ).bind(new Date().toISOString(), src).run();
+}
+async function markSalesDone(env, src, status, added, err) {
+  await env.DB.prepare(
+    `UPDATE sales_sync_state
+        SET last_run_status = ?, last_run_at = ?,
+            rows_added_last_run = ?,
+            rows_added_total = COALESCE(rows_added_total, 0) + ?,
+            last_error = ?
+      WHERE sync_source = ?`
+  ).bind(status, new Date().toISOString(), added, added, err, src).run();
 }
 
 // ━━━ Worker exports ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

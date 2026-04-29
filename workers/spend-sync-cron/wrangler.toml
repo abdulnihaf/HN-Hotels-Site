@@ -28,7 +28,12 @@ database_id = "3388724b-41b2-4925-a7df-12f068c19e6e"
 
 # Secrets (wrangler secret put <NAME> --config workers/spend-sync-cron/wrangler.toml):
 #   ODOO_KEY_HNHOTELS   — API key for odoo.hnhotels.in (admin uid=2)
-#   ODOO_KEY_OPS_HAMZA  — API key for ops.hamzahotel.com (admin uid=2, legacy NCH v2 expenses)
+#   ODOO_KEY_OPS_HAMZA  — API key for ops.hamzahotel.com (admin uid=2, legacy NCH v2 expenses
+#                          + NCH POS read for sales-recon Slice B)
 #   DASHBOARD_KEY       — for manual /?key=... trigger
+#   RAZORPAY_KEY        — Razorpay live key id    (sales-recon Slice B; copy from NCH Pages
+#                          project — HN-Hotels-Asset-Database.xlsx row 73)
+#   RAZORPAY_SECRET     — Razorpay live key secret (sales-recon Slice B; copy from NCH Pages
+#                          project — HN-Hotels-Asset-Database.xlsx row 74)
 [vars]
 # No non-secret vars needed

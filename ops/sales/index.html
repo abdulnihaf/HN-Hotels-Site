@@ -150,6 +150,8 @@ tailwind.config = { theme: { extend: {
       <input type="checkbox" id="discrep-only" onchange="loadDaily()"/>
       Discrepancies only
     </label>
+    <button id="sync-now-btn" class="btn btn-ghost ml-auto" style="font-size:12px;padding:6px 10px;min-height:32px"
+            onclick="runSyncNow()" title="admin/cfo only — pings spend-sync-cron to refresh now">Sync now</button>
   </section>
 
   <!-- Empty-state banner — shown when sync hasn't yet populated -->
@@ -503,6 +505,27 @@ async function loadSyncStatus() {
 }
 
 function schedulePoll() { if (POLL_TIMER) clearInterval(POLL_TIMER); POLL_TIMER = setInterval(loadOverview, 30000); }
+
+async function runSyncNow() {
+  const btn = document.getElementById('sync-now-btn');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'syncing…';
+  try {
+    const r = await fetch('/api/sales?action=sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error || 'sync failed');
+    await loadAll();
+    await loadSyncStatus();
+  } catch (e) {
+    alert('Sync error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
 
 function fmtR(paise) {
   if (paise == null) return '—';
