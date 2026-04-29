@@ -14,7 +14,13 @@
 .filter-row input, .filter-row select { min-height:36px; padding:6px 10px; font-size:13px; }
 .summary-bar { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
 .stat-chip { background:var(--surface); border:1px solid var(--border); border-radius:8px;
-  padding:8px 14px; font-size:12px; }
+  padding:8px 14px; font-size:12px; cursor:pointer; transition:all .15s ease;
+  user-select:none; }
+.stat-chip:hover { border-color:rgba(99,102,241,0.6); transform:translateY(-1px); }
+.stat-chip.active { border-color:var(--accent); background:rgba(99,102,241,0.12);
+  box-shadow:0 0 0 1px var(--accent); }
+.stat-chip.disabled { cursor:default; opacity:0.85; }
+.stat-chip.disabled:hover { border-color:var(--border); transform:none; }
 .stat-chip .n { font-size:18px; font-weight:700; display:block; }
 .stat-chip.warn .n { color:#f59e0b; }
 .stat-chip.danger .n { color:var(--danger); }
@@ -365,6 +371,29 @@ const PIN_ROLES = {
 
 let PIN = '', PIN_ROLE = '';
 let _entries = [], _editingId = null;
+let _filter = 'all'; // all | rm | qty_missing | vendor_missing | bill_missing | hdfc_unverified | dup | validated | unvalidated
+
+function entryMatchesFilter(e) {
+  switch (_filter) {
+    case 'rm':              return !!e.is_rm;
+    case 'qty_missing':     return !!e.qty_missing;
+    case 'vendor_missing':  return !!e.vendor_missing;
+    case 'bill_missing':    return !!e.needs_bill;
+    case 'hdfc_unverified': return !!e.hdfc_unverified;
+    case 'dup':             return (e.v2_dup_count || 0) > 0;
+    case 'validated':       return !!e.validated_at;
+    case 'unvalidated':     return !e.validated_at;
+    default:                return true;
+  }
+}
+function setFilter(f) {
+  _filter = (_filter === f) ? 'all' : f; // toggle off if clicking the active one
+  renderTable(_entries);
+  // Highlight active chip
+  document.querySelectorAll('.stat-chip').forEach(el => {
+    el.classList.toggle('active', el.dataset.filter === _filter);
+  });
+}
 
 function verifyPin() {
   const v = document.getElementById('pin-input').value.trim();
@@ -431,19 +460,20 @@ async function loadExport() {
 
     // Validation progress (client-side from entries)
     const validatedCount = _entries.filter(x => x.validated_at).length;
+    const unvalidatedCount = _entries.length - validatedCount;
     const validatePct = _entries.length ? Math.round((validatedCount / _entries.length) * 100) : 0;
 
-    // Summary chips
+    // Summary chips — clickable filters (data-filter), except non-filter chips marked .disabled
     const chips = [
-      `<div class="stat-chip ok"><span class="n">${s.total_rows || _entries.length}</span>Total entries</div>`,
-      `<div class="stat-chip"><span class="n">₹${fmtAmt(r.total)}</span>Total spend</div>`,
-      `<div class="stat-chip ${validatePct === 100 ? 'ok' : 'warn'}"><span class="n">${validatedCount} / ${_entries.length}</span>Validated (${validatePct}%)</div>`,
-      `<div class="stat-chip"><span class="n">${s.rm_rows || 0}</span>RM items</div>`,
-      s.qty_missing ? `<div class="stat-chip warn"><span class="n">${s.qty_missing}</span>Qty missing ✏</div>` : '',
-      s.vendor_missing ? `<div class="stat-chip danger"><span class="n">${s.vendor_missing}</span>Vendor missing</div>` : '',
-      s.bill_missing  ? `<div class="stat-chip danger"><span class="n">${s.bill_missing}</span>No bill uploaded</div>` : '',
-      s.hdfc_unverified ? `<div class="stat-chip warn"><span class="n">${s.hdfc_unverified}</span>HDFC unverified</div>` : '',
-      s.dup_suspect ? `<div class="stat-chip warn"><span class="n">${s.dup_suspect}</span>Dup suspect 🗑</div>` : '',
+      `<div class="stat-chip ok ${_filter==='all'?'active':''}" data-filter="all" onclick="setFilter('all')"><span class="n">${s.total_rows || _entries.length}</span>Total entries</div>`,
+      `<div class="stat-chip disabled"><span class="n">₹${fmtAmt(r.total)}</span>Total spend</div>`,
+      `<div class="stat-chip ${validatePct===100?'ok':'warn'} ${_filter==='unvalidated'?'active':''}" data-filter="unvalidated" onclick="setFilter('unvalidated')"><span class="n">${validatedCount} / ${_entries.length}</span>Validated (${validatePct}%) — click for unvalidated</div>`,
+      `<div class="stat-chip ${_filter==='rm'?'active':''}" data-filter="rm" onclick="setFilter('rm')"><span class="n">${s.rm_rows || 0}</span>RM items</div>`,
+      s.qty_missing ? `<div class="stat-chip warn ${_filter==='qty_missing'?'active':''}" data-filter="qty_missing" onclick="setFilter('qty_missing')"><span class="n">${s.qty_missing}</span>Qty missing ✏</div>` : '',
+      s.vendor_missing ? `<div class="stat-chip danger ${_filter==='vendor_missing'?'active':''}" data-filter="vendor_missing" onclick="setFilter('vendor_missing')"><span class="n">${s.vendor_missing}</span>Vendor missing</div>` : '',
+      s.bill_missing  ? `<div class="stat-chip danger ${_filter==='bill_missing'?'active':''}" data-filter="bill_missing" onclick="setFilter('bill_missing')"><span class="n">${s.bill_missing}</span>No bill uploaded</div>` : '',
+      s.hdfc_unverified ? `<div class="stat-chip warn ${_filter==='hdfc_unverified'?'active':''}" data-filter="hdfc_unverified" onclick="setFilter('hdfc_unverified')"><span class="n">${s.hdfc_unverified}</span>HDFC unverified</div>` : '',
+      s.dup_suspect ? `<div class="stat-chip warn ${_filter==='dup'?'active':''}" data-filter="dup" onclick="setFilter('dup')"><span class="n">${s.dup_suspect}</span>Dup suspect 🗑</div>` : '',
     ];
     const bar = document.getElementById('summary-bar');
     bar.innerHTML = chips.join('');
@@ -472,9 +502,17 @@ async function loadExport() {
 function renderTable(entries) {
   const tbody = document.getElementById('audit-body');
   const tfoot = document.getElementById('audit-foot');
+  // Apply chip filter to the rendered subset (chip totals stay over the full set)
+  const filtered = entries.filter(entryMatchesFilter);
   let html = '', total = 0;
 
-  entries.forEach((e, i) => {
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="14" class="mute" style="text-align:center; padding:20px;">No rows match the current filter (${_filter}). Click "Total entries" to clear.</td></tr>`;
+    tfoot.innerHTML = '';
+    return;
+  }
+
+  filtered.forEach((e, i) => {
     const brand = e.x_location || (e.company_id===2?'HE':e.company_id===3?'NCH':e.company_id===1?'HQ':'?');
     const brandCls = brand==='HE'?'brand-he':brand==='NCH'?'brand-nch':brand==='HQ'?'brand-hq':'';
     const src = srcLabel(e.payment_method, e.x_pool);
@@ -562,8 +600,11 @@ function renderTable(entries) {
   });
 
   tbody.innerHTML = html;
+  const totalLabel = (_filter === 'all')
+    ? `TOTAL (${filtered.length} entries)`
+    : `TOTAL (${filtered.length} of ${entries.length} · filter: ${_filter})`;
   tfoot.innerHTML = `<tr class="total-row">
-    <td colspan="8" style="text-align:right; font-size:11px;">TOTAL (${entries.length} entries)</td>
+    <td colspan="8" style="text-align:right; font-size:11px;">${totalLabel}</td>
     <td class="amount">₹${fmtAmt(total)}</td>
     <td colspan="5"></td>
   </tr>`;
