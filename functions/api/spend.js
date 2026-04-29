@@ -504,16 +504,22 @@ export async function onRequest(context) {
       // Base set: all active can-be-expensed products in those categories
       const all = await odoo(apiKey, 'product.product', 'search_read',
         [[['categ_id', 'in', categIds], ['can_be_expensed', '=', true], ['active', '=', true]]],
-        { fields: ['id', 'name', 'default_code', 'standard_price', 'create_date'], order: 'name asc', limit: 500 });
+        { fields: ['id', 'name', 'default_code', 'standard_price', 'create_date', 'uom_id'], order: 'name asc', limit: 500 });
+
+      // Flatten uom_id [id, name] → uom_name string for the client
+      const withUom = all.map(p => ({
+        ...p,
+        uom_name: Array.isArray(p.uom_id) ? p.uom_id[1] : (p.uom_id || null),
+      }));
 
       // Brand filter: if &brand=NCH|HE|HQ — keep only products that have been bought
       // for that company (via purchase.order.line) OR are recently created (<7 days).
       // Absent brand param → return all (back-compat for /ops/expense/ central view).
       const brandParam = (url.searchParams.get('brand') || '').toUpperCase();
       const wantCompanyId = BRAND_COMPANY[brandParam];
-      if (wantCompanyId && all.length) {
+      if (wantCompanyId && withUom.length) {
         try {
-          const allIds = all.map(p => p.id);
+          const allIds = withUom.map(p => p.id);
           // Pull all POs for this company that reference any of these products
           const lines = await odoo(apiKey, 'purchase.order.line', 'search_read',
             [[['company_id', '=', wantCompanyId], ['product_id', 'in', allIds]]],
@@ -529,20 +535,20 @@ export async function onRequest(context) {
           // Recently created products (< 7d) always pass the filter so new items don't disappear
           const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().replace('T', ' ').slice(0, 19);
 
-          const filtered = all.filter(p =>
+          const filtered = withUom.filter(p =>
             brandProductIds.has(p.id) ||
             (p.create_date && p.create_date >= sevenDaysAgo)
           );
 
           // If filter collapsed to nothing sensible (<3 items), fall back to full set with a flag
           if (filtered.length < 3) {
-            return json({ success: true, products: all, brand_filtered: false,
+            return json({ success: true, products: withUom, brand_filtered: false,
                           reason: 'Not enough brand history — showing full registry' });
           }
           return json({ success: true, products: filtered, brand_filtered: true, brand: brandParam });
         } catch (e) { console.error('brand filter fail:', e.message); }
       }
-      return json({ success: true, products: all, brand_filtered: false });
+      return json({ success: true, products: withUom, brand_filtered: false });
     }
 
     // ── EMPLOYEES (for Salary / Advance categories) ────────
@@ -1072,17 +1078,22 @@ export async function onRequest(context) {
         endUTC = istDayStartUTC(toPlus1);
       }
 
-      let sql = `SELECT odoo_id, category, category_parent, amount, product_name, company_id,
-                        x_payment_method as payment_method, x_location, x_pool,
-                        recorded_by as recorded_by_pin, recorded_at as created_at, notes
-                   FROM business_expenses
-                  WHERE recorded_at >= ? AND recorded_at < ?`;
+      let sql = `SELECT be.id, be.odoo_id, be.category, be.category_parent, be.amount,
+                        be.product_name, be.product_id, be.company_id,
+                        be.x_payment_method as payment_method, be.x_location, be.x_pool,
+                        be.recorded_by as recorded_by_pin, be.recorded_at as created_at, be.notes,
+                        be.quantity, be.uom, be.vendor_id, be.vendor_name,
+                        COALESCE(be.uom, rmp.uom) as uom_display
+                   FROM business_expenses be
+                   LEFT JOIN rm_products rmp
+                          ON rmp.odoo_id = be.product_id AND rmp.odoo_id IS NOT NULL
+                  WHERE be.recorded_at >= ? AND be.recorded_at < ?`;
       const args = [startUTC, endUTC];
       if (brandParam !== 'ALL' && ['HE', 'NCH', 'HQ'].includes(brandParam)) {
-        sql += ` AND x_location = ?`;
+        sql += ` AND be.x_location = ?`;
         args.push(brandParam);
       }
-      sql += ` ORDER BY recorded_at DESC LIMIT 500`;
+      sql += ` ORDER BY be.recorded_at DESC LIMIT 500`;
 
       const rows = await DB.prepare(sql).bind(...args).all().catch((e) => ({ results: [], _err: e.message }));
       // Tag each row with IST date for client-side grouping
