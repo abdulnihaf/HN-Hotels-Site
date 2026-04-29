@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<title>sales · HN</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = { theme: { extend: {
+  fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+  colors: {
+    brand:   { 400:'#f0a944', 500:'#e8930c', 600:'#c97508' },
+    surface: { 0:'#0c0c14', 1:'#111118', 2:'#16161f', 3:'#1c1c27' },
+    ink:     { 1:'#f5f5f7', 2:'#c4c4cc', 3:'#8e8e9e', 4:'#5e5e6e' },
+  },
+}}}
+</script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #0c0c14; color: #f5f5f7; font-family: 'Inter', sans-serif; }
+  body { overscroll-behavior: none; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+
+  .card    { background: #16161f; border: 1px solid rgba(255,255,255,.05); border-radius: 14px; }
+  .glass   { background: rgba(12,12,20,.85); backdrop-filter: blur(14px) saturate(1.2); border-bottom: 1px solid rgba(255,255,255,.05); }
+
+  .chip       { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; white-space: nowrap; border: 1px solid transparent; }
+  .chip-mute  { background: rgba(255,255,255,.04); color: #8e8e9e; border-color: rgba(255,255,255,.06); }
+  .chip-mute.on { background: rgba(232,147,12,.15); color: #f0a944; border-color: rgba(232,147,12,.4); }
+  .chip-ok    { background: rgba(34,197,94,.10);  color: #4ade80; border-color: rgba(34,197,94,.25); }
+  .chip-warn  { background: rgba(251,146,60,.10); color: #fb923c; border-color: rgba(251,146,60,.25); }
+  .chip-err   { background: rgba(239,68,68,.10);  color: #f87171; border-color: rgba(239,68,68,.25); }
+
+  .input        { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 10px 14px; font-size: 14px; color: #f5f5f7; outline: none; width: 100%; }
+  .input:focus  { border-color: rgba(232,147,12,.45); background: rgba(255,255,255,.06); }
+
+  .btn       { background: rgba(232,147,12,.15); color: #f0a944; border: 1px solid rgba(232,147,12,.3); border-radius: 10px; padding: 12px 16px; font-size: 14px; font-weight: 600; min-height: 44px; cursor: pointer; }
+  .btn:hover { background: rgba(232,147,12,.22); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: #c4c4cc; border-color: rgba(255,255,255,.08); }
+  .btn-ghost:hover { background: rgba(255,255,255,.04); color: #f5f5f7; }
+
+  .live { display:inline-block; width:6px; height:6px; border-radius:50%; background:#4ade80; box-shadow:0 0 6px #4ade80; animation: pulse 2s infinite; }
+  .live.paused { background:#f87171; box-shadow:0 0 6px #f87171; animation: none; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+  .spinner { border: 2px solid rgba(255,255,255,.1); border-top-color: #e8930c; border-radius: 50%; width: 14px; height: 14px; animation: spin .8s linear infinite; display:inline-block; vertical-align:middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .pin-btn { background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px; font-size: 18px; font-weight: 600; color:#f5f5f7; cursor: pointer; min-height: 60px; }
+  .pin-btn:hover { background: rgba(255,255,255,.1); }
+  .pin-dot { width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,.1); }
+  .pin-dot.filled { background: #e8930c; }
+
+  .kpi-tile { padding: 14px 16px; min-height: 88px; transition: background .12s; text-align: left; width: 100%; }
+  .kpi-tile.total { background: rgba(232,147,12,.06); border-color: rgba(232,147,12,.3); }
+
+  .section-head { display:flex; align-items:center; justify-content:space-between; padding: 6px 4px 8px; }
+  .section-head h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #8e8e9e; font-weight: 600; }
+
+  .grid-row td, .grid-row th { padding: 10px 8px; vertical-align: top; font-size: 13px; }
+  .grid-row + .grid-row td { border-top: 1px solid rgba(255,255,255,.04); }
+  .grid-head th { padding: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #8e8e9e; text-align: left; font-weight: 500; }
+
+  .sync-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .sync-dot.ok { background: #4ade80; }
+  .sync-dot.idle { background: #5e5e6e; }
+  .sync-dot.running { background: #f0a944; animation: pulse 1.2s infinite; }
+  .sync-dot.error { background: #f87171; }
+
+  .empty-banner { background: rgba(251,146,60,.08); border: 1px solid rgba(251,146,60,.25); color: #fb923c; padding: 12px 16px; border-radius: 12px; font-size: 13px; }
+
+  .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 40; }
+  .sheet { position: fixed; bottom: 0; left: 0; right: 0; max-height: 92vh; background: #16161f; border-top-left-radius: 20px; border-top-right-radius: 20px; z-index: 41; transform: translateY(100%); transition: transform .25s cubic-bezier(.2,.7,.3,1); overflow-y: auto; }
+  .sheet.open { transform: translateY(0); }
+  @media (min-width: 768px) {
+    .sheet { max-width: 560px; left: 50%; transform: translate(-50%, 100%); border-radius: 20px; bottom: 5vh; max-height: 80vh; }
+    .sheet.open { transform: translate(-50%, 0); }
+  }
+
+  .grid-row[data-day] { cursor: pointer; }
+  .grid-row[data-day]:hover { background: rgba(255,255,255,.02); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ PIN gate ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="pin-gate" class="fixed inset-0 flex items-center justify-center z-50 bg-surface-0">
+  <div class="card p-6 max-w-sm w-full mx-4">
+    <div class="text-center mb-4">
+      <div class="text-xl font-bold tracking-tight"><span class="text-brand-400">HN</span> <span class="text-ink-3">/</span> sales</div>
+      <div class="text-xs text-ink-3 mt-1">enter PIN</div>
+    </div>
+    <div class="flex justify-center gap-2 mb-5">
+      <div class="pin-dot" id="pd-0"></div><div class="pin-dot" id="pd-1"></div>
+      <div class="pin-dot" id="pd-2"></div><div class="pin-dot" id="pd-3"></div>
+    </div>
+    <div class="grid grid-cols-3 gap-2">
+      <button class="pin-btn" onclick="pinPress('1')">1</button>
+      <button class="pin-btn" onclick="pinPress('2')">2</button>
+      <button class="pin-btn" onclick="pinPress('3')">3</button>
+      <button class="pin-btn" onclick="pinPress('4')">4</button>
+      <button class="pin-btn" onclick="pinPress('5')">5</button>
+      <button class="pin-btn" onclick="pinPress('6')">6</button>
+      <button class="pin-btn" onclick="pinPress('7')">7</button>
+      <button class="pin-btn" onclick="pinPress('8')">8</button>
+      <button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn opacity-40" onclick="pinClear()">clear</button>
+      <button class="pin-btn" onclick="pinPress('0')">0</button>
+      <button class="pin-btn opacity-40" onclick="pinBack()">←</button>
+    </div>
+    <div id="pin-err" class="text-xs text-red-400 mt-3 text-center hidden">incorrect pin</div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ Main app ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="app" class="hidden pb-24 md:pb-8">
+
+  <header class="glass sticky top-0 z-30">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-baseline gap-2">
+        <span class="text-base font-bold tracking-tight text-brand-400">HN</span>
+        <span class="text-sm text-ink-3">sales · NCH</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-ink-3 hidden sm:inline" id="last-refresh">—</span>
+        <span class="flex items-center gap-1.5 text-xs text-ink-3">
+          <span id="live-dot" class="live"></span><span id="live-label">live</span>
+        </span>
+        <button id="refresh-btn" class="text-ink-3 hover:text-ink-1 text-sm" title="refresh">↻</button>
+        <span id="who" class="text-xs text-ink-3">—</span>
+      </div>
+    </div>
+    <nav class="max-w-5xl mx-auto px-4 flex gap-4 text-xs overflow-x-auto">
+      <a href="/ops/money/"      class="text-ink-3 hover:text-brand-400 py-2">money</a>
+      <a href="/ops/bank/"       class="text-ink-3 hover:text-brand-400 py-2">bank</a>
+      <a href="/ops/cash/"       class="text-ink-3 hover:text-brand-400 py-2">cash</a>
+      <a href="/ops/nch/sales/"  class="text-brand-400 border-b-2 border-brand-400 py-2 font-semibold">sales · NCH</a>
+      <a href="/ops/he/sales/"   class="text-ink-3 hover:text-brand-400 py-2">sales · HE</a>
+      <a href="/ops/expense/"    class="text-ink-3 hover:text-brand-400 py-2">expense</a>
+      <a href="/ops/purchase/"   class="text-ink-3 hover:text-brand-400 py-2">purchase</a>
+      <a href="/ops/bills/"      class="text-ink-3 hover:text-brand-400 py-2">bills</a>
+      <a href="/ops/vendor/"     class="text-ink-3 hover:text-brand-400 py-2">vendor</a>
+    </nav>
+  </header>
+
+  <!-- Filter bar -->
+  <section class="max-w-5xl mx-auto px-4 pt-4 flex flex-wrap items-center gap-2">
+    <span class="text-xs text-ink-3 mr-1">date:</span>
+    <input id="date-from-input" type="date" class="input py-1 px-2 w-auto" style="font-size:12px" onchange="loadAll()"/>
+    <span class="text-ink-3">→</span>
+    <input id="date-to-input"   type="date" class="input py-1 px-2 w-auto" style="font-size:12px" onchange="loadAll()"/>
+    <span class="w-px h-4 bg-white/10 mx-1"></span>
+    <select id="cfg-filter" class="input py-1 px-2 w-auto" style="font-size:12px" onchange="loadAll()">
+      <option value="">All POS</option>
+    </select>
+    <label class="flex items-center gap-1 text-xs text-ink-3 ml-1 cursor-pointer">
+      <input type="checkbox" id="discrep-only" onchange="loadDaily()"/>
+      Discrepancies only
+    </label>
+    <button id="sync-now-btn" class="btn btn-ghost ml-auto" style="font-size:12px;padding:6px 10px;min-height:32px"
+            onclick="runSyncNow()" title="admin/cfo only — pings spend-sync-cron to refresh now">Sync now</button>
+  </section>
+
+  <!-- Empty-state banner — shown when sync hasn't yet populated -->
+  <section class="max-w-5xl mx-auto px-4 pt-3">
+    <div id="empty-banner" class="empty-banner hidden">
+      <strong>Awaiting first sync.</strong>
+      Schema is in place but <code>sales_recon_daily</code> has no rows yet. Sub-phase B (workers/spend-sync-cron extension + April back-fill) will populate this view.
+      <span id="empty-banner-detail" class="block mt-1 text-ink-3 text-[11px]"></span>
+    </div>
+  </section>
+
+  <!-- §1 KPI tiles -->
+  <section class="max-w-5xl mx-auto px-4 pt-3">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div class="card kpi-tile">
+        <div class="text-[10px] uppercase tracking-wider text-ink-3">Sales</div>
+        <div class="text-lg md:text-xl font-bold num mt-1" id="kpi-gross">—</div>
+        <div class="text-[10px] text-ink-3 mt-0.5" id="kpi-orders">—</div>
+      </div>
+      <div class="card kpi-tile">
+        <div class="text-[10px] uppercase tracking-wider text-ink-3">Cash</div>
+        <div class="text-lg md:text-xl font-bold num mt-1" id="kpi-cash">—</div>
+        <div class="text-[10px] text-ink-3 mt-0.5" id="kpi-cash-split">counter + runner</div>
+      </div>
+      <div class="card kpi-tile">
+        <div class="text-[10px] uppercase tracking-wider text-ink-3">UPI</div>
+        <div class="text-lg md:text-xl font-bold num mt-1" id="kpi-upi">—</div>
+        <div class="text-[10px] text-ink-3 mt-0.5" id="kpi-upi-split">counter QR + 5 runners</div>
+      </div>
+      <div class="card kpi-tile total">
+        <div class="text-[10px] uppercase tracking-wider text-brand-400">UPI Discrepancy</div>
+        <div class="text-lg md:text-xl font-bold num mt-1 text-brand-400" id="kpi-discrep">—</div>
+        <div class="text-[10px] text-ink-3 mt-0.5" id="kpi-discrep-detail">POS UPI vs Razorpay</div>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-ink-3">
+      <span class="chip chip-mute">Card <span id="kpi-card" class="num text-ink-2 ml-1">—</span></span>
+      <span class="chip chip-mute">Complimentary <span id="kpi-comp" class="num text-ink-2 ml-1">—</span></span>
+      <span class="chip chip-mute">Avg ticket <span id="kpi-avg" class="num text-ink-2 ml-1">—</span></span>
+      <span class="chip chip-mute" id="kpi-unmapped-chip" style="display:none">Unmapped <span id="kpi-unmapped" class="num ml-1">—</span></span>
+    </div>
+  </section>
+
+  <!-- §2 Daily reconciliation grid -->
+  <section class="max-w-5xl mx-auto px-4 pt-5">
+    <div class="section-head">
+      <h2>Daily reconciliation</h2>
+      <span class="text-[11px] text-ink-3" id="daily-count">—</span>
+    </div>
+    <div class="card overflow-x-auto">
+      <table class="w-full">
+        <thead class="grid-head">
+          <tr>
+            <th>Day</th>
+            <th class="text-right">Sales</th>
+            <th class="text-right">Cash</th>
+            <th class="text-right">UPI</th>
+            <th class="text-right hidden md:table-cell">Card</th>
+            <th class="text-right">Δ UPI</th>
+            <th class="hidden md:table-cell">Status</th>
+          </tr>
+        </thead>
+        <tbody id="daily-body">
+          <tr><td colspan="7" class="text-center text-ink-3 py-8"><span class="spinner"></span> loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §3 PM breakdown -->
+  <section class="max-w-5xl mx-auto px-4 pt-5">
+    <details class="card p-2">
+      <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1">payment method breakdown ▾</summary>
+      <div id="pm-body" class="px-2 pb-3 pt-2 text-sm text-ink-3">collapsed — expand to load</div>
+    </details>
+  </section>
+
+  <!-- §4 Items -->
+  <section class="max-w-5xl mx-auto px-4 pt-3">
+    <details class="card p-2" id="items-section">
+      <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1">items sold (top 200) ▾</summary>
+      <div class="px-2 pb-3 pt-2">
+        <input id="items-search" class="input mb-2" placeholder="search by item name…" oninput="loadItems()"/>
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="grid-head">
+              <tr>
+                <th>Item</th>
+                <th class="text-right">Qty</th>
+                <th class="text-right">Orders</th>
+                <th class="text-right">Revenue</th>
+              </tr>
+            </thead>
+            <tbody id="items-body">
+              <tr><td colspan="4" class="text-center text-ink-3 py-6">expand to load</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- §5 Razorpay QR registry -->
+  <section class="max-w-5xl mx-auto px-4 pt-3">
+    <details class="card p-2">
+      <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1 flex items-center gap-2">
+        razorpay QR registry ▾
+        <button onclick="event.preventDefault(); discoverQrs();" class="btn ml-auto" style="font-size:11px;padding:4px 10px;min-height:28px"
+                title="One-shot: pull all QRs from Razorpay /v1/qr_codes and auto-classify by name">Discover from Razorpay</button>
+        <button onclick="event.preventDefault(); openQrSheet();" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;min-height:28px">+ Add QR</button>
+      </summary>
+      <div id="qr-body" class="px-2 pb-3 pt-2">
+        <div class="text-sm text-ink-3">expand to load</div>
+      </div>
+    </details>
+  </section>
+
+  <!-- §6 POS config labels (admin/cfo only — small) -->
+  <section class="max-w-5xl mx-auto px-4 pt-3">
+    <details class="card p-2">
+      <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1">pos config labels ▾</summary>
+      <div id="cfg-body" class="px-2 pb-3 pt-2"><div class="text-sm text-ink-3">expand to load</div></div>
+    </details>
+  </section>
+
+  <!-- §7 Sync status -->
+  <section class="max-w-5xl mx-auto px-4 pt-3">
+    <details class="card p-2">
+      <summary class="text-xs text-ink-3 cursor-pointer px-2 py-1">sync status (per source) ▾</summary>
+      <div id="sync-rows" class="pt-2"></div>
+    </details>
+  </section>
+
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ QR add/edit sheet ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="qr-overlay" class="sheet-overlay hidden" onclick="closeQrSheet()"></div>
+<div id="qr-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div class="text-base font-bold" id="qr-sheet-title">Add Razorpay QR</div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeQrSheet()">×</button>
+    </div>
+    <div class="text-xs text-ink-3 mt-1">Maps a Razorpay QR code to a counter or runner. Used by sync to attribute UPI collections.</div>
+  </div>
+  <div class="px-5 py-5 space-y-4">
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">QR Code ID (from Razorpay dashboard)</label>
+      <input id="qr-id" class="input" placeholder="qr_LzAcOHEIeAtssh"/>
+      <div class="text-[10px] text-ink-3 mt-1">Razorpay → Payments → QR Codes → copy the QR's id (starts with <code>qr_</code>)</div>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Role</label>
+      <select id="qr-role" class="input">
+        <option value="counter">Counter (single fixed QR for the counter POS)</option>
+        <option value="runner" selected>Runner (one per field runner)</option>
+      </select>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Display name</label>
+      <input id="qr-display" class="input" placeholder="Runner — Nafees / Counter NCH"/>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Runner name (required for role=runner)</label>
+      <input id="qr-runner-name" class="input" placeholder="Nafees Ahmed"/>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Runner PIN (optional — links to /api/cash USERS)</label>
+      <input id="qr-runner-pin" class="input" placeholder="e.g. 8241" pattern="\d{4}"/>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Notes (optional)</label>
+      <input id="qr-notes" class="input" placeholder="e.g. Replaced by Yashwant on Apr 25"/>
+    </div>
+    <div id="qr-err" class="text-xs text-red-400 hidden"></div>
+    <div class="flex gap-2">
+      <button id="qr-submit" class="btn flex-1" onclick="submitQr()">Save</button>
+      <button id="qr-deactivate" class="btn btn-ghost hidden" onclick="deactivateQr()">Deactivate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━ POS config label sheet ━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="cfg-overlay" class="sheet-overlay hidden" onclick="closeCfgSheet()"></div>
+<div id="cfg-sheet" class="sheet">
+  <div class="px-5 pt-5 pb-4 sticky top-0 bg-surface-2 border-b border-white/5 z-10">
+    <div class="flex items-center justify-between">
+      <div class="text-base font-bold">Label POS config <span id="cfg-id-disp" class="text-ink-3 font-normal"></span></div>
+      <button class="text-ink-3 hover:text-ink-1 text-2xl leading-none" onclick="closeCfgSheet()">×</button>
+    </div>
+    <div class="text-xs text-ink-3 mt-1">Owner-friendly label + station kind. Drives the dashboard's POS filter dropdown.</div>
+  </div>
+  <div class="px-5 py-5 space-y-4">
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Owner label</label>
+      <input id="cfg-label" class="input" placeholder="e.g. Counter POS / Runner POS / Token POS"/>
+    </div>
+    <div>
+      <label class="text-xs text-ink-3 block mb-1.5">Station kind</label>
+      <select id="cfg-kind" class="input">
+        <option value="">— unknown —</option>
+        <option value="counter">counter</option>
+        <option value="runner">runner</option>
+        <option value="token">token</option>
+        <option value="delivery">delivery</option>
+        <option value="other">other</option>
+      </select>
+    </div>
+    <div id="cfg-err" class="text-xs text-red-400 hidden"></div>
+    <button class="btn w-full" onclick="submitCfg()">Save</button>
+  </div>
+</div>
+
+<script>
+let PIN = '';
+let WHO = null;
+let POLL_TIMER = null;
+
+function pinPress(d) { if (PIN.length >= 4) return; PIN += d; drawPinDots(); if (PIN.length === 4) verifyPin(); }
+function pinClear() { PIN = ''; drawPinDots(); document.getElementById('pin-err').classList.add('hidden'); }
+function pinBack()  { PIN = PIN.slice(0, -1); drawPinDots(); }
+function drawPinDots() {
+  for (let i = 0; i < 4; i++) document.getElementById('pd-' + i).classList.toggle('filled', i < PIN.length);
+}
+
+async function verifyPin() {
+  try {
+    const r = await fetch('/api/sales?action=overview&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error || 'auth failed');
+    WHO = j.user;
+    document.getElementById('who').textContent = WHO;
+    document.getElementById('pin-gate').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    localStorage.setItem('hn-sales-pin', PIN);
+    initDateInputs();
+    await loadConfigs();
+    loadAll();
+    loadSyncStatus();
+    schedulePoll();
+  } catch (e) {
+    document.getElementById('pin-err').textContent = e.message;
+    document.getElementById('pin-err').classList.remove('hidden');
+    PIN = ''; drawPinDots();
+  }
+}
+
+function initDateInputs() {
+  const ist = new Date(Date.now() + 5.5 * 3600 * 1000);
+  const today = ist.toISOString().slice(0, 10);
+  if (!document.getElementById('date-from-input').value) document.getElementById('date-from-input').value = '2026-04-01';
+  if (!document.getElementById('date-to-input').value)   document.getElementById('date-to-input').value = today;
+}
+
+function rangeQS() {
+  const from = document.getElementById('date-from-input').value;
+  const to   = document.getElementById('date-to-input').value;
+  const cfg  = document.getElementById('cfg-filter').value;
+  let qs = `pin=${encodeURIComponent(PIN)}&from=${from}&to=${to}`;
+  if (cfg) qs += `&pos_config_id=${cfg}`;
+  return qs;
+}
+
+async function loadConfigs() {
+  try {
+    const r = await fetch('/api/sales?action=pos-configs&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) return;
+    const sel = document.getElementById('cfg-filter');
+    const prev = sel.value; // preserve selection across refresh
+    // Reset to just "All POS"
+    while (sel.options.length > 1) sel.remove(1);
+    for (const c of (j.configs || [])) {
+      const o = document.createElement('option');
+      o.value = c.pos_config_id;
+      o.textContent = (c.label || c.name || ('config ' + c.pos_config_id)) + ' · #' + c.pos_config_id;
+      sel.appendChild(o);
+    }
+    sel.value = prev;
+  } catch (_) {}
+}
+
+async function loadAll() { await Promise.all([loadOverview(), loadDaily()]); }
+
+async function loadOverview() {
+  try {
+    const r = await fetch(`/api/sales?action=overview&${rangeQS()}`);
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error || 'fetch failed');
+    document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+    document.getElementById('live-dot').classList.remove('paused');
+    document.getElementById('live-label').textContent = 'live';
+    renderKpi(j);
+  } catch (e) {
+    document.getElementById('live-dot').classList.add('paused');
+    document.getElementById('live-label').textContent = 'paused';
+  }
+}
+
+function renderKpi(j) {
+  const t = j.totals || {};
+  document.getElementById('kpi-gross').textContent = fmtR(t.gross_sales_paise);
+  document.getElementById('kpi-orders').textContent = (t.order_count || 0) + ' orders';
+  document.getElementById('kpi-cash').textContent  = fmtR(t.total_cash_paise);
+  document.getElementById('kpi-cash-split').textContent =
+    `counter ${fmtR(t.counter_cash_paise)} · runner ${fmtR(t.runner_cash_paise)}`;
+  document.getElementById('kpi-upi').textContent   = fmtR(t.total_upi_paise);
+  document.getElementById('kpi-upi-split').textContent =
+    `counter ${fmtR(t.counter_upi_rzp_paise)} · 5 runners ${fmtR(t.runner_upi_paise)}`;
+  document.getElementById('kpi-discrep').textContent = fmtR(t.abs_upi_discrepancy_paise);
+  const dd = `${t.red_days || 0} red · ${t.yellow_days || 0} yellow`;
+  document.getElementById('kpi-discrep-detail').textContent = dd;
+  document.getElementById('kpi-card').textContent = fmtR(t.total_card_paise);
+  document.getElementById('kpi-comp').textContent = fmtR(t.complimentary_paise);
+  document.getElementById('kpi-avg').textContent  = t.order_count ? fmtR(Math.round((t.gross_sales_paise || 0) / t.order_count)) : '—';
+  if ((t.unmapped_paise || 0) > 0) {
+    document.getElementById('kpi-unmapped-chip').style.display = '';
+    document.getElementById('kpi-unmapped').textContent = fmtR(t.unmapped_paise);
+  } else {
+    document.getElementById('kpi-unmapped-chip').style.display = 'none';
+  }
+
+  // Empty-state banner
+  const banner = document.getElementById('empty-banner');
+  const detail = document.getElementById('empty-banner-detail');
+  if (j.awaiting_sync) {
+    banner.classList.remove('hidden');
+    detail.textContent = `Range ${j.range.from} → ${j.range.to} · last_recomputed_at: ${j.last_recomputed_at || 'never'}`;
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+async function loadDaily() {
+  const tbody = document.getElementById('daily-body');
+  try {
+    const only = document.getElementById('discrep-only').checked ? '&only_discrepancy=1' : '';
+    const r = await fetch(`/api/sales?action=daily&${rangeQS()}${only}`);
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error || 'fetch failed');
+    document.getElementById('daily-count').textContent = (j.rows || []).length + ' days';
+    if (!j.rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-ink-3 py-8">no rows yet — Sub-phase B back-fill will populate</td></tr>';
+      return;
+    }
+    tbody.innerHTML = j.rows.map(r => {
+      const d = Math.abs(r.upi_discrepancy_paise || 0);
+      const chip = d < 100 ? '<span class="chip chip-ok">✓ ok</span>'
+                : d < 10000 ? '<span class="chip chip-warn">in flight</span>'
+                : '<span class="chip chip-err">investigate</span>';
+      return `
+      <tr class="grid-row" data-day="${escapeHtml(r.day)}" onclick="recomputeDay('${escapeHtml(r.day)}')" title="tap to recompute">
+        <td class="text-ink-2 num whitespace-nowrap">${escapeHtml(r.day)}</td>
+        <td class="text-right num font-semibold">${fmtR(r.gross_sales_paise)}</td>
+        <td class="text-right num">${fmtR(r.total_cash_paise)}</td>
+        <td class="text-right num">${fmtR(r.total_upi_paise)}</td>
+        <td class="text-right num hidden md:table-cell">${fmtR(r.counter_card_paise)}</td>
+        <td class="text-right num">${fmtRSigned(r.upi_discrepancy_paise)}</td>
+        <td class="hidden md:table-cell">${chip}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-red-400 py-8">${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function loadPm() {
+  const body = document.getElementById('pm-body');
+  body.innerHTML = '<div class="text-sm text-ink-3 py-2"><span class="spinner"></span> loading…</div>';
+  try {
+    const r = await fetch(`/api/sales?action=pm-breakdown&${rangeQS()}`);
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    if (!j.rows.length) { body.innerHTML = '<div class="text-sm text-ink-3 py-2">no payments yet</div>'; return; }
+    body.innerHTML = `<table class="w-full"><thead class="grid-head"><tr>
+        <th>POS</th><th>Payment method</th><th class="text-right">Lines</th><th class="text-right">Amount</th>
+      </tr></thead><tbody>${j.rows.map(r => `
+        <tr class="grid-row">
+          <td class="num text-ink-3">#${r.pos_config_id}</td>
+          <td class="text-ink-2">${escapeHtml(r.payment_method_name)} ${r.recognised ? '' : '<span class="chip chip-warn ml-1">unmapped</span>'}</td>
+          <td class="text-right num">${r.lines}</td>
+          <td class="text-right num">${fmtR(r.amount_paise)}</td>
+        </tr>`).join('')}</tbody></table>`;
+  } catch (e) { body.innerHTML = `<div class="text-sm text-red-400 py-2">${escapeHtml(e.message)}</div>`; }
+}
+
+async function loadItems() {
+  const tbody = document.getElementById('items-body');
+  tbody.innerHTML = '<tr><td colspan="4" class="text-center text-ink-3 py-6"><span class="spinner"></span> loading…</td></tr>';
+  try {
+    const search = document.getElementById('items-search').value.trim();
+    const sq = search ? `&search=${encodeURIComponent(search)}` : '';
+    const r = await fetch(`/api/sales?action=items&${rangeQS()}${sq}`);
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    if (!j.items.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-ink-3 py-6">no items</td></tr>'; return; }
+    tbody.innerHTML = j.items.map(i => `
+      <tr class="grid-row">
+        <td class="text-ink-2">${escapeHtml(i.product_name || ('#'+i.product_id))}</td>
+        <td class="text-right num">${(i.qty || 0).toLocaleString('en-IN', { maximumFractionDigits: 1 })}</td>
+        <td class="text-right num">${i.orders}</td>
+        <td class="text-right num">${fmtR(i.revenue_paise)}</td>
+      </tr>`).join('');
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="4" class="text-center text-red-400 py-6">${escapeHtml(e.message)}</td></tr>`; }
+}
+
+async function loadQr() {
+  const body = document.getElementById('qr-body');
+  body.innerHTML = '<div class="text-sm text-ink-3 py-2"><span class="spinner"></span> loading…</div>';
+  try {
+    const r = await fetch('/api/sales?action=qr-registry&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    if (!j.qrs.length) {
+      body.innerHTML = `<div class="empty-banner">QR registry is empty. Use the <strong>+ Add QR</strong> button (top-right of this section) to register your 6 NCH QRs (1 counter + 5 runners).</div>`;
+      return;
+    }
+    QR_CACHE = Object.fromEntries(j.qrs.map(q => [q.qr_code_id, q]));
+    body.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${j.qrs.map(q => `
+      <div class="card p-3 cursor-pointer hover:bg-white/[.02]" onclick="openQrSheet('${escapeHtml(q.qr_code_id)}')">
+        <div class="flex items-baseline justify-between">
+          <div class="font-semibold text-ink-1">${escapeHtml(q.display_name)} ${q.active ? '' : '<span class="chip chip-warn ml-1">inactive</span>'}</div>
+          <span class="chip ${q.role === 'counter' ? 'chip-mute on' : 'chip-mute'}">${q.role}</span>
+        </div>
+        <div class="text-[11px] text-ink-3 num">${escapeHtml(q.qr_code_id)}</div>
+        <div class="mt-2 text-xs text-ink-3">Today <span class="num text-ink-1">${fmtR(q.today_paise)}</span> · MTD <span class="num text-ink-1">${fmtR(q.mtd_paise)}</span></div>
+        ${q.runner_name ? `<div class="mt-1 text-[11px] text-ink-3">runner: ${escapeHtml(q.runner_name)}${q.runner_pin ? ' · pin '+q.runner_pin : ''}</div>` : ''}
+      </div>`).join('')}</div>
+      <div class="text-[11px] text-ink-3 mt-2">Tap a card to edit / deactivate.</div>`;
+  } catch (e) { body.innerHTML = `<div class="text-sm text-red-400 py-2">${escapeHtml(e.message)}</div>`; }
+}
+
+let QR_CACHE = {};
+
+async function loadCfg() {
+  const body = document.getElementById('cfg-body');
+  body.innerHTML = '<div class="text-sm text-ink-3 py-2"><span class="spinner"></span> loading…</div>';
+  try {
+    const r = await fetch('/api/sales?action=pos-configs&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    body.innerHTML = `<table class="w-full"><thead class="grid-head"><tr>
+        <th>POS #</th><th>Odoo name</th><th>Owner label</th><th>Kind</th><th></th>
+      </tr></thead><tbody>${(j.configs || []).map(c => `
+        <tr class="grid-row" data-cfg="${c.pos_config_id}">
+          <td class="num text-ink-2">#${c.pos_config_id}</td>
+          <td class="text-ink-3 text-xs">${escapeHtml(c.name || '')}</td>
+          <td class="text-ink-2">${escapeHtml(c.label || '—')}</td>
+          <td class="text-ink-3 text-xs">${escapeHtml(c.station_kind || '—')}</td>
+          <td class="text-right"><button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;min-height:28px"
+            onclick="openCfgSheet(${c.pos_config_id}, ${JSON.stringify(c.label || '').replace(/"/g,'&quot;')}, ${JSON.stringify(c.station_kind || '').replace(/"/g,'&quot;')})">edit</button></td>
+        </tr>`).join('')}</tbody></table>`;
+  } catch (e) { body.innerHTML = `<div class="text-sm text-red-400 py-2">${escapeHtml(e.message)}</div>`; }
+}
+
+// QR sheet
+function openQrSheet(qrCodeId) {
+  const editing = qrCodeId && QR_CACHE[qrCodeId];
+  document.getElementById('qr-sheet-title').textContent = editing ? 'Edit QR' : 'Add Razorpay QR';
+  document.getElementById('qr-id').value          = editing ? editing.qr_code_id : '';
+  document.getElementById('qr-id').disabled       = !!editing; // primary key — don't allow rename
+  document.getElementById('qr-role').value        = editing ? editing.role : 'runner';
+  document.getElementById('qr-display').value     = editing ? editing.display_name : '';
+  document.getElementById('qr-runner-name').value = editing ? (editing.runner_name || '') : '';
+  document.getElementById('qr-runner-pin').value  = editing ? (editing.runner_pin || '') : '';
+  document.getElementById('qr-notes').value       = editing ? (editing.notes || '') : '';
+  document.getElementById('qr-deactivate').classList.toggle('hidden', !editing || !editing.active);
+  document.getElementById('qr-err').classList.add('hidden');
+  document.getElementById('qr-overlay').classList.remove('hidden');
+  document.getElementById('qr-sheet').classList.add('open');
+}
+function closeQrSheet() {
+  document.getElementById('qr-overlay').classList.add('hidden');
+  document.getElementById('qr-sheet').classList.remove('open');
+}
+async function submitQr() {
+  const errEl = document.getElementById('qr-err');
+  errEl.classList.add('hidden');
+  const payload = {
+    pin: PIN,
+    qr_code_id: document.getElementById('qr-id').value.trim(),
+    brand: 'NCH',
+    role: document.getElementById('qr-role').value,
+    display_name: document.getElementById('qr-display').value.trim(),
+    runner_name: document.getElementById('qr-runner-name').value.trim() || null,
+    runner_pin:  document.getElementById('qr-runner-pin').value.trim() || null,
+    notes:       document.getElementById('qr-notes').value.trim() || null,
+    active: true,
+  };
+  const btn = document.getElementById('qr-submit'); btn.disabled = true; btn.textContent = 'saving…';
+  try {
+    const r = await fetch('/api/sales?action=upsert-qr', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    closeQrSheet();
+    await loadQr();
+  } catch (e) {
+    errEl.textContent = e.message; errEl.classList.remove('hidden');
+  } finally { btn.disabled = false; btn.textContent = 'Save'; }
+}
+async function deactivateQr() {
+  const qr = document.getElementById('qr-id').value.trim();
+  if (!qr) return;
+  if (!confirm(`Deactivate ${qr}? It will stop receiving sync writes (existing rows preserved).`)) return;
+  try {
+    const r = await fetch('/api/sales?action=deactivate-qr', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN, qr_code_id: qr }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    closeQrSheet();
+    await loadQr();
+  } catch (e) {
+    const errEl = document.getElementById('qr-err');
+    errEl.textContent = e.message; errEl.classList.remove('hidden');
+  }
+}
+
+// Config label sheet
+function openCfgSheet(cfgId, label, kind) {
+  document.getElementById('cfg-id-disp').textContent = '#' + cfgId;
+  document.getElementById('cfg-label').value = label || '';
+  document.getElementById('cfg-kind').value  = kind || '';
+  document.getElementById('cfg-err').classList.add('hidden');
+  document.getElementById('cfg-overlay').classList.remove('hidden');
+  document.getElementById('cfg-sheet').classList.add('open');
+  document.getElementById('cfg-sheet').dataset.cfgId = cfgId;
+}
+function closeCfgSheet() {
+  document.getElementById('cfg-overlay').classList.add('hidden');
+  document.getElementById('cfg-sheet').classList.remove('open');
+}
+async function submitCfg() {
+  const cfgId = parseInt(document.getElementById('cfg-sheet').dataset.cfgId, 10);
+  const errEl = document.getElementById('cfg-err'); errEl.classList.add('hidden');
+  try {
+    const r = await fetch('/api/sales?action=upsert-config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pin: PIN, pos_config_id: cfgId,
+        label: document.getElementById('cfg-label').value.trim() || null,
+        station_kind: document.getElementById('cfg-kind').value || null,
+      }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    closeCfgSheet();
+    await loadCfg();
+    await loadConfigs();  // refresh the filter dropdown labels
+  } catch (e) {
+    errEl.textContent = e.message; errEl.classList.remove('hidden');
+  }
+}
+
+// One-shot QR discovery via Razorpay /v1/qr_codes — auto-classifies by name.
+async function discoverQrs() {
+  if (!confirm('Pull all QRs from Razorpay and auto-register them?\nExisting curated runner_name / runner_pin values are preserved.')) return;
+  try {
+    const r = await fetch('/api/sales?action=discover-qrs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    const reviewCount = (j.rows || []).filter(x => x.needs_review).length;
+    alert(`Discovered ${j.discovered} · registered ${j.registered} · skipped ${j.skipped}` +
+          (reviewCount ? `\n${reviewCount} need role/runner review — open the cards to fix.` : ''));
+    await loadQr();
+  } catch (e) { alert('Discover error: ' + e.message); }
+}
+
+// Tap a daily row to recompute it (admin/cfo only — server enforces).
+async function recomputeDay(day) {
+  if (!confirm(`Recompute sales_recon_daily for ${day}?\nThis re-reads all mirror tables for that day.`)) return;
+  try {
+    const r = await fetch('/api/sales?action=recompute-day', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN, day, brand: 'NCH' }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+    await loadDaily();
+    await loadOverview();
+  } catch (e) { alert('Recompute error: ' + e.message); }
+}
+
+async function loadSyncStatus() {
+  try {
+    const r = await fetch('/api/sales?action=sync-status&pin=' + encodeURIComponent(PIN));
+    const j = await r.json();
+    if (!j.success) return;
+    const el = document.getElementById('sync-rows');
+    el.innerHTML = (j.sources || []).map(s => `
+      <div class="sync-row">
+        <span class="sync-dot ${s.last_run_status || 'idle'}"></span>
+        <span class="text-ink-2 font-medium" style="min-width:200px">${s.sync_source}</span>
+        <span class="text-ink-3">last: ${s.last_run_at ? new Date(s.last_run_at).toLocaleString() : '—'}</span>
+        <span class="text-ink-3">rows: ${s.rows_added_total || 0}</span>
+        ${s.last_error ? `<span class="text-red-400 text-[11px]" title="${escapeHtml(s.last_error)}">err</span>` : ''}
+      </div>`).join('');
+  } catch (_) {}
+}
+
+function schedulePoll() { if (POLL_TIMER) clearInterval(POLL_TIMER); POLL_TIMER = setInterval(loadOverview, 30000); }
+
+async function runSyncNow() {
+  const btn = document.getElementById('sync-now-btn');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'syncing…';
+  try {
+    const r = await fetch('/api/sales?action=sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error || 'sync failed');
+    await loadAll();
+    await loadSyncStatus();
+  } catch (e) {
+    alert('Sync error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+function fmtR(paise) {
+  if (paise == null) return '—';
+  return '₹' + Math.round(paise / 100).toLocaleString('en-IN');
+}
+function fmtRSigned(paise) {
+  if (paise == null || paise === 0) return '—';
+  return (paise > 0 ? '+' : '−') + fmtR(Math.abs(paise));
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Lazy-load expandable sections
+document.addEventListener('toggle', (e) => {
+  if (!e.target.matches('details')) return;
+  if (!e.target.open) return;
+  const sumText = e.target.querySelector('summary')?.textContent || '';
+  if (sumText.includes('payment method')) loadPm();
+  else if (sumText.includes('items sold')) loadItems();
+  else if (sumText.includes('QR registry')) loadQr();
+  else if (sumText.includes('pos config labels')) loadCfg();
+}, true);
+
+document.getElementById('refresh-btn').addEventListener('click', () => { loadAll(); loadSyncStatus(); });
+
+const cached = localStorage.getItem('hn-sales-pin');
+if (cached && /^\d{4}$/.test(cached)) { PIN = cached; drawPinDots(); verifyPin(); }
+</script>
+</body>
+</html>

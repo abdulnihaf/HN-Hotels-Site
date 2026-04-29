@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<title>sales · HE — coming soon</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = { theme: { extend: {
+  fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+  colors: {
+    brand:   { 400:'#f0a944', 500:'#e8930c' },
+    surface: { 0:'#0c0c14', 1:'#111118', 2:'#16161f' },
+    ink:     { 1:'#f5f5f7', 2:'#c4c4cc', 3:'#8e8e9e' },
+  },
+}}}
+</script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #0c0c14; color: #f5f5f7; font-family: 'Inter', sans-serif; }
+  .card { background: #16161f; border: 1px solid rgba(255,255,255,.05); border-radius: 14px; }
+  .glass { background: rgba(12,12,20,.85); backdrop-filter: blur(14px) saturate(1.2); border-bottom: 1px solid rgba(255,255,255,.05); }
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:500; border:1px solid rgba(255,255,255,.06); }
+  .chip-mute  { background: rgba(255,255,255,.04); color: #8e8e9e; }
+  .chip-soon  { background: rgba(232,147,12,.10); color: #f0a944; border-color: rgba(232,147,12,.3); }
+  .chip-live  { background: rgba(34,197,94,.10);  color: #4ade80; border-color: rgba(34,197,94,.3); }
+</style>
+</head>
+<body class="pb-24">
+
+<header class="glass sticky top-0 z-30">
+  <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-baseline gap-2">
+      <span class="text-base font-bold tracking-tight text-brand-400">HN</span>
+      <span class="text-sm text-ink-3">sales · HE</span>
+      <span class="chip chip-soon ml-2">coming soon</span>
+    </div>
+    <a href="/ops/nch/sales/" class="text-xs text-ink-3 hover:text-brand-400">→ NCH (live)</a>
+  </div>
+  <nav class="max-w-5xl mx-auto px-4 flex gap-4 text-xs overflow-x-auto">
+    <a href="/ops/money/"    class="text-ink-3 hover:text-brand-400 py-2">money</a>
+    <a href="/ops/bank/"     class="text-ink-3 hover:text-brand-400 py-2">bank</a>
+    <a href="/ops/cash/"     class="text-ink-3 hover:text-brand-400 py-2">cash</a>
+    <a href="/ops/nch/sales/" class="text-ink-3 hover:text-brand-400 py-2">sales · NCH</a>
+    <a href="/ops/he/sales/"  class="text-brand-400 border-b-2 border-brand-400 py-2 font-semibold">sales · HE</a>
+    <a href="/ops/expense/"  class="text-ink-3 hover:text-brand-400 py-2">expense</a>
+    <a href="/ops/purchase/" class="text-ink-3 hover:text-brand-400 py-2">purchase</a>
+    <a href="/ops/bills/"    class="text-ink-3 hover:text-brand-400 py-2">bills</a>
+    <a href="/ops/vendor/"   class="text-ink-3 hover:text-brand-400 py-2">vendor</a>
+  </nav>
+</header>
+
+<main class="max-w-3xl mx-auto px-4 pt-8">
+  <div class="card p-6 md:p-8">
+    <div class="text-2xl md:text-3xl font-bold tracking-tight mb-2">Hamza Express sales reconciliation</div>
+    <div class="text-sm text-ink-3 mb-6">Sibling of <a href="/ops/nch/sales/" class="text-brand-400 hover:underline">/ops/nch/sales/</a> · launches after NCH ledger Phase 2</div>
+
+    <h2 class="text-xs uppercase tracking-wider text-ink-3 mb-2">What's already in place</h2>
+    <ul class="text-sm text-ink-2 space-y-1.5 mb-6 ml-5 list-disc">
+      <li>HE POS source: <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">test.hamzahotel.com</code> (HE prod Odoo, despite the name)</li>
+      <li>HE company_id auto-discovered at first sync; per-captain UPI PMs already in Odoo: <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">HE Captain 02 / 03 / 04 / 05 UPI</code> + <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">HE - Cash Counter / Captain</code> + Swiggy / Zomato / Card / WABA</li>
+      <li>Paytm credentials on hn-hotels-site Pages (PAYTM_MERCHANT_KEY · MID ZPrZuI15432995875112) — for the daily UPI cross-check via dashboard.paytm.com transactions</li>
+      <li>Schema is brand-aware: same <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">pos_orders_mirror</code> / <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">pos_payments_mirror</code> / <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">pos_lines_mirror</code> / <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">sales_recon_daily</code> tables work for HE without changes</li>
+    </ul>
+
+    <h2 class="text-xs uppercase tracking-wider text-ink-3 mb-2">What's left to build</h2>
+    <ul class="text-sm text-ink-2 space-y-1.5 mb-6 ml-5 list-disc">
+      <li><strong>HE-specific PM recogniser</strong> in <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">computeReconDay</code> — maps "HE - Cash Counter" → counter cash, "HE Captain N UPI" → per-captain UPI roll-up, etc.</li>
+      <li><strong>Paytm cross-check</strong> via Claude-in-Chrome MCP against <a href="https://dashboard.paytm.com/next/transactions" class="text-brand-400 hover:underline" target="_blank" rel="noopener">dashboard.paytm.com/next/transactions</a> — daily total compared against Σ "HE - UPI Counter" + Σ captain UPI PMs</li>
+      <li><strong>Aggregator overlay</strong> — Swiggy/Zomato PMs on HE flow through here too; reconcile against <a href="/ops/aggregator/" class="text-brand-400 hover:underline">/ops/aggregator/</a> snapshots</li>
+      <li><strong>Captain-level attribution</strong> — unlike NCH (which needed a Razorpay QR registry), HE has per-captain PMs in Odoo natively. The dashboard surfaces UPI per captain without a separate registry.</li>
+    </ul>
+
+    <h2 class="text-xs uppercase tracking-wider text-ink-3 mb-2">Sequencing</h2>
+    <ol class="text-sm text-ink-2 space-y-1.5 mb-6 ml-5 list-decimal">
+      <li>NCH ledger Phase 2 (expenses + POs + cash trail reconciled against this dashboard's daily grid) — informs HE schema gaps if any</li>
+      <li>HE POS sync: extend <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">syncNchSales</code> in <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">workers/spend-sync-cron</code> to a brand-parameterised <code class="text-[12px] bg-white/5 px-1.5 py-0.5 rounded">syncBrandSales(brand, hostUrl, companyId)</code></li>
+      <li>HE-specific PM recogniser + Paytm Chrome MCP scraper</li>
+      <li>HE backfill from Apr 1 → today</li>
+      <li>Dashboard renders this URL with the same components, brand=HE</li>
+    </ol>
+
+    <div class="flex items-center gap-2 pt-4 border-t border-white/5 text-xs text-ink-3">
+      <span class="chip chip-live">NCH live · 8154 orders Apr 1–29</span>
+      <span class="chip chip-soon">HE on deck</span>
+      <a href="/ops/nch/sales/" class="ml-auto text-brand-400 hover:underline">→ Open NCH</a>
+    </div>
+  </div>
+</main>
+
+</body>
+</html>
