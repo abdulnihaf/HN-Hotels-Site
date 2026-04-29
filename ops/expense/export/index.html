@@ -952,18 +952,31 @@ function renderDupReview(items) {
     const same = it.same_day_be || [];
     const recPo = it.recent_po || [];
 
+    // Color-code each ce row by alignment score: strong matches (>=0.7) green,
+    // moderate (0.4–0.7) amber, weak (<0.4) dim. The user can then SEE which
+    // 4 of 8 are the actual Beat-Police-vs-Beat-Police matches.
+    const scoreStyle = s => {
+      if (s >= 0.7) return { bg:'rgba(52,211,153,0.10)', border:'rgba(52,211,153,0.4)', tag:'#34d399', label:'STRONG' };
+      if (s >= 0.4) return { bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.3)', tag:'#f59e0b', label:'moderate' };
+      return { bg:'rgba(120,120,120,0.05)', border:'rgba(120,120,120,0.2)', tag:'#6b7280', label:'no align' };
+    };
+    const strongCes = ces.filter(c => (c._score||0) >= 0.7).length;
     const ceBlock = ces.length ? `
       <details style="margin-top:8px;" open>
         <summary style="cursor:pointer; font-size:11px; color:#60a5fa; font-weight:600;">
-          ${ces.length} matching cash_events row${ces.length>1?'s':''} (same brand · same paise · ±1 day)
+          ${ces.length} matching cash_events (same paise · ±1 day) ·
+          <span style="color:#34d399;">${strongCes} strong</span> ·
+          <span style="color:#f59e0b;">${ces.filter(c => (c._score||0)>=0.4 && (c._score||0)<0.7).length} moderate</span> ·
+          <span style="color:#6b7280;">${ces.filter(c => (c._score||0)<0.4).length} no align</span>
         </summary>
         <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
-          ${ces.map(ce => `<div style="padding:6px 8px; background:rgba(96,165,250,0.07); border:1px solid rgba(96,165,250,0.2); border-radius:5px; font-size:11px;">
+          ${ces.map(ce => { const s = scoreStyle(ce._score||0); return `<div style="padding:6px 8px; background:${s.bg}; border:1px solid ${s.border}; border-radius:5px; font-size:11px; ${(ce._score||0)<0.4?'opacity:0.55;':''}">
+            <span style="background:${s.bg}; color:${s.tag}; font-size:9px; font-weight:700; padding:1px 5px; border-radius:3px; border:1px solid ${s.border}; margin-right:6px;">${s.label} · ${(ce._score||0).toFixed(2)}</span>
             <strong>ce#${ce.id}</strong> · ${esc(ce.txn_at?.slice(0,16) || '')} · ₹${fmtAmt(ce.amount_paise/100)}
             · ${esc(ce.product_name || '—')} · ${esc(ce.source)} · ${esc(ce.instrument)}
             · by ${esc(ce.recorded_by_name || ce.recorded_by_pin || '?')}
-            ${ce.notes ? `<br><span style="color:var(--text-dim);">notes: ${esc(ce.notes)}</span>` : ''}
-          </div>`).join('')}
+            ${ce.notes ? `<br><span style="color:var(--text-dim); margin-left:54px;">notes: ${esc(ce.notes)}</span>` : ''}
+          </div>`; }).join('')}
         </div>
       </details>` : '';
 

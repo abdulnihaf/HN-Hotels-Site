@@ -1168,14 +1168,17 @@ export async function onRequest(context) {
                              AND DATE(me.txn_at) >= DATE(be.recorded_at, '-1 day')
                              AND DATE(me.txn_at) <= DATE(be.recorded_at, '+2 day'))
                     ELSE NULL END AS hdfc_match_count,
-               -- Counter-expense duplicate: same amount on same day in cash_events
+               -- Counter-expense duplicate: same amount near the EFFECTIVE date.
+               -- Uses expense_date when available (Historical catch-up backfill),
+               -- otherwise IST-converted recorded_at — the same date the chip
+               -- filter and dup-analyze use, so counts stay consistent.
                (SELECT COUNT(*) FROM cash_events ce
                  WHERE ce.source='counter_expense'
                    AND (ce.brand IS NULL OR ce.brand = COALESCE(be.x_location, ce.brand))
                    AND ce.direction='debit'
                    AND ce.amount_paise=CAST(ROUND(be.amount*100) AS INTEGER)
-                   AND DATE(ce.txn_at) >= DATE(be.recorded_at, '-1 day')
-                   AND DATE(ce.txn_at) <= DATE(be.recorded_at, '+1 day')) AS v2_dup_count
+                   AND DATE(ce.txn_at) >= DATE(COALESCE(be.expense_date, DATE(be.recorded_at, '+5 hours', '+30 minutes')), '-1 day')
+                   AND DATE(ce.txn_at) <= DATE(COALESCE(be.expense_date, DATE(be.recorded_at, '+5 hours', '+30 minutes')), '+1 day')) AS v2_dup_count
           FROM business_expenses be
           LEFT JOIN rm_products rmp
                  ON rmp.odoo_id = be.product_id AND rmp.odoo_id IS NOT NULL
@@ -1635,7 +1638,10 @@ export async function onRequest(context) {
           recorded_by: be.recorded_by, notes: be.notes, category: be.category,
           classification, reason,
           matched_po_id: matchedPoId, matched_ce_id: matchedCeId,
-          po_match: poMatch, ce_matches: ceMatches,  // full list (was sliced to 3)
+          po_match: poMatch,
+          // Each ce match annotated with alignment score; sorted strongest-first
+          // so the UI can dim or hide low-score noise.
+          ce_matches: scored.map(s => ({ ...s.ce, _score: Number(s.score.toFixed(2)) })),
           similar_be, same_day_be, recent_po,
         });
 
