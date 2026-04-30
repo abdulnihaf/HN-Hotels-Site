@@ -216,6 +216,66 @@ export async function onRequest(context) {
     }, result.ok ? 200 : (result.status || 500));
   }
 
+  if (action === 'optin-send') {
+    // Send the opt-in template to a staff phone, log to comms_optin as 'pending'.
+    // Reply YES on WhatsApp will be captured by /api/comms-webhook and flip status to 'opted_in'.
+    const {
+      brand = 'he',
+      phone,
+      staff_name = '',
+      staff_role = '',
+      template = 'hello_world', // default Meta template; replace with 'staff_optin_v1' once registered
+      vars = [],
+    } = body;
+
+    if (!phone) return json({ error: 'phone required' }, 400);
+    const recipient = normalizePhone(phone);
+
+    // Insert pending opt-in row (UNIQUE on phone+brand+channel — INSERT OR IGNORE keeps existing)
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO comms_optin (phone, brand, channel, staff_name, staff_role, status)
+      VALUES (?, ?, 'waba', ?, ?, 'pending')
+    `).bind(recipient, brand, staff_name, staff_role).run();
+
+    // Send template
+    const result = await sendWaba(env, { brand, phone: recipient, template, vars });
+    const status = result.ok ? 'sent' : 'failed';
+    const errText = result.ok ? null : (typeof result.response === 'string' ? result.response : JSON.stringify(result.response));
+
+    await logOutbox(env, {
+      tier: 'info', brand, channel: 'waba',
+      recipient_phone: recipient, template_name: template, template_vars: vars,
+      body_text: 'OPT-IN REQUEST',
+      status,
+      provider_msg_id: result.provider_msg_id,
+      provider_response: result.response,
+      error_text: errText,
+    });
+
+    // Link the outbox row to the opt-in row
+    if (result.ok && result.provider_msg_id) {
+      await env.DB.prepare(`
+        UPDATE comms_optin SET consent_msg_id = ?
+         WHERE phone = ? AND brand = ? AND channel = 'waba' AND status = 'pending'
+      `).bind(result.provider_msg_id, recipient, brand).run();
+    }
+
+    return json({ ok: result.ok, status, recipient, provider_msg_id: result.provider_msg_id, response: result.response });
+  }
+
+  if (action === 'optin-confirm') {
+    // Manual override: mark a phone as opted in (for testing or admin override).
+    const { phone, brand = 'he', consent_text = 'manual' } = body;
+    if (!phone) return json({ error: 'phone required' }, 400);
+    const recipient = normalizePhone(phone);
+    const r = await env.DB.prepare(`
+      UPDATE comms_optin
+         SET status = 'opted_in', consented_at = datetime('now'), consent_text = ?
+       WHERE phone = ? AND brand = ? AND channel = 'waba'
+    `).bind(consent_text, recipient, brand).run();
+    return json({ ok: true, changes: r.meta?.changes || 0 });
+  }
+
   if (action === 'list-outbox') {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
     const rs = await env.DB.prepare(`
