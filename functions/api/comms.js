@@ -24,7 +24,12 @@ async function sendWaba(env, { brand, phone, template, vars = [], language = 'en
     brand === 'nch' ? env.WA_NCH_PHONE_ID :
     brand === 'he'  ? env.WA_HE_PHONE_ID  :
     env.WA_HE_PHONE_ID;
-  const token = env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN;
+  // Prefer brand-specific token, fall back to shared, fall back to legacy.
+  // NCH WABA lives outside HN Hotels Pvt Ltd portfolio — uses its own token.
+  const token =
+    brand === 'nch' ? (env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN) :
+    brand === 'he'  ? (env.WA_HE_TOKEN  || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN) :
+    (env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN);
   if (!phoneId || !token) {
     return { ok: false, status: 500, response: { error: 'WABA not configured for brand: ' + brand } };
   }
@@ -129,9 +134,15 @@ export async function onRequest(context) {
       configured: {
         waba_he_phone_id: !!env.WA_HE_PHONE_ID,
         waba_nch_phone_id: !!env.WA_NCH_PHONE_ID,
-        waba_token: !!(env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN),
+        waba_he_token: !!(env.WA_HE_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN),
+        waba_nch_token: !!(env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN),
         fast2sms_key: !!env.FAST2SMS_API_KEY,
         d1_bound: !!env.DB,
+      },
+      notes: {
+        nch_token_source: env.WA_NCH_TOKEN ? 'WA_NCH_TOKEN (brand-specific)'
+          : env.WA_COMMS_TOKEN ? 'WA_COMMS_TOKEN (shared, may be HE-only-scoped)'
+          : env.WA_ACCESS_TOKEN ? 'WA_ACCESS_TOKEN (legacy)' : 'NOT SET',
       },
     });
   }
