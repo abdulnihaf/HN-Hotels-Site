@@ -122,7 +122,7 @@ async function sendWelcomeReply(env, to, brand, staffName) {
   const greeting = staffName ? `Hi ${staffName}!` : 'Hi!';
   const body = `${greeting} You're now subscribed to HN Hotels Ops alerts via WhatsApp.\n\nFrom now on you'll receive shift alerts, settlement reminders, and discrepancy notifications here.\n\nReply STOP anytime to opt out.`;
   try {
-    await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
+    const res = await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -132,6 +132,16 @@ async function sendWelcomeReply(env, to, brand, staffName) {
         text: { body },
       }),
     });
+    const respText = await res.text();
+    let respJson = null;
+    try { respJson = JSON.parse(respText); } catch {}
+    const wamid = respJson?.messages?.[0]?.id || null;
+    // Log to outbox for audit trail
+    await env.DB.prepare(`
+      INSERT INTO comms_outbox
+        (alert_id, tier, brand, channel, recipient_phone, body_text, status, provider_msg_id, sent_at)
+      VALUES (?, 'optin-welcome', ?, 'waba', ?, ?, ?, ?, datetime('now'))
+    `).bind('optin-welcome', brand, to, body, res.ok ? 'sent' : 'failed', wamid).run();
   } catch (e) {
     console.error('sendWelcomeReply failed:', e?.message || e);
   }
