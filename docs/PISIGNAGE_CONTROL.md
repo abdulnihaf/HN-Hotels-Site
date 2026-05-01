@@ -17,25 +17,36 @@ This is the canonical reference for controlling Hamza Express's PiSignage deploy
 
 ## Authentication strategies (ranked best → worst)
 
-### A · API Token via POST /api/session (RECOMMENDED for terminal autonomy · NOT YET CONFIGURED)
+### A · API Token via POST /api/session (CONFIGURED · 4-hour TTL · refreshable)
 
-The v2 UI does **not** expose "Generate API Token" in the Change Profile modal — that button only existed in the old AngularJS UI (now retired). The documented method per piathome.com/apidocs/ is:
+The v2 UI does **not** expose "Generate API Token" — that button only existed in the old AngularJS UI (retired). The token is a 4-hour JWT from `POST /api/session`. Token is **currently saved** in `.env.local`.
+
+**To refresh** (PiSignage sends an email OTP on new-IP logins even with TOTP 2FA off):
 
 ```bash
-# Run this once in terminal — paste the output into .env.local
+# Step 1: trigger OTP — check hnhotelsindia@gmail.com for 6-digit code
 curl -s -X POST https://hamzaexpress.pisignage.com/api/session \
   -H "Content-Type: application/json" \
-  -d '{"email":"hnhotelsindia@gmail.com","password":"YOUR_PASSWORD","getToken":true}' \
-  | python3 -c "import json,sys; d=json.load(sys.stdin); print('PISIGNAGE_TOKEN=' + d['data']['token'])"
+  -d '{"email":"hnhotelsindia@gmail.com","password":"PASS","getToken":true}' | python3 -m json.tool
+
+# Step 2: submit OTP (parameter name is "code", not "otp") + save token
+NEW_TOKEN=$(curl -s -X POST https://hamzaexpress.pisignage.com/api/session \
+  -H "Content-Type: application/json" \
+  -d '{"email":"hnhotelsindia@gmail.com","password":"PASS","getToken":true,"code":"OTP_HERE"}' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['token'])")
+
+# Upsert into .env.local
+if grep -q PISIGNAGE_TOKEN .env.local; then
+  sed -i '' "s|^PISIGNAGE_TOKEN=.*|PISIGNAGE_TOKEN=$NEW_TOKEN|" .env.local
+else
+  echo "PISIGNAGE_TOKEN=$NEW_TOKEN" >> .env.local
+fi
 ```
 
-Save token to:
-- `~/Documents/Tech/HN-Hotels-Site/.env.local` as `PISIGNAGE_TOKEN=<token>`
-- OR Cloudflare secret: `npx wrangler secret put PISIGNAGE_TOKEN`
+Auth header for all API calls: `x-access-token: $PISIGNAGE_TOKEN`
 
-Auth header for all API calls: `x-access-token: <token>`
-
-⚠️ 2FA must be OFF on the account for `getToken` to work without an OTP step. 2FA is currently DISABLED on this account (disabled 2026-05-01).
+⚠️ Token expires in **4 hours**. Re-run Step 2 any time scripts return 401.  
+⚠️ 2FA (TOTP) is DISABLED on account. Location-based email OTP still fires for new IPs.
 
 ### B · Session cookie via Chrome MCP (CURRENT WORKING METHOD)
 
