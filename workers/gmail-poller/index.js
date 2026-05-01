@@ -31,7 +31,7 @@ const INSTR_COMPANY  = 'hdfc_ca_4680';
 const INSTR_PERSONAL = 'hdfc_sa_4005';
 const PROCESSED_LABEL = 'bank-feed-processed';
 const HDFC_FROM = '(alerts@hdfcbank.bank.in OR alerts@hdfcbank.net OR InstaAlert@hdfcbank.net OR instaalerts@hdfcbank.net)';
-const TAIL_COMPANY  = '("XX4680" OR "ending 4680" OR "A/c 4680" OR "ending 7103" OR "ending xx7103" OR "ending XX7103")';
+const TAIL_COMPANY  = '("XX4680" OR "**4680" OR "ending 4680" OR "A/c 4680" OR "ending 7103" OR "ending xx7103" OR "ending XX7103")';
 const TAIL_PERSONAL = '("XX4005" OR "ending 4005" OR "A/c 4005" OR "ending 8891" OR "ending xx8891" OR "ending XX8891")';
 // Free-tier worker has a 50-subrequest cap per invocation. Each message
 // costs ~3 subreqs (raw fetch + label apply + D1 insert), plus ~4 for
