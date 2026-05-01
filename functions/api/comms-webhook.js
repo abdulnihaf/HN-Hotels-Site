@@ -28,9 +28,11 @@ const SNOOZE_RX = /^\s*(snooze|later|busy|wait|hold)\s*\.?\s*$/i;
 async function handleInboundMessage(env, { from_phone, msg_text, msg_id, business_phone_id }) {
   const recipient = normalizePhone(from_phone);
 
-  // Determine brand by which business phone the message came in to
-  let brand = 'he';
-  if (business_phone_id === env.WA_NCH_PHONE_ID) brand = 'nch';
+  // Determine brand by which business phone the message came in to.
+  // Sparksol is the dedicated comms WABA for staff alerts.
+  let brand = 'sparksol';
+  if (business_phone_id === env.WA_SPARKSOL_PHONE_ID) brand = 'sparksol';
+  else if (business_phone_id === env.WA_NCH_PHONE_ID) brand = 'nch';
   else if (business_phone_id === env.WA_HE_PHONE_ID) brand = 'he';
 
   const body = (msg_text || '').trim();
@@ -131,6 +133,8 @@ async function handleStatusUpdate(env, { msg_id, status, ts }) {
 }
 
 async function forwardToBrand(env, brand, payload) {
+  // Sparksol has no customer flow — never forward.
+  if (brand === 'sparksol') return;
   // Forward unhandled inbound to existing brand whatsapp.js so customer order flow keeps working.
   const url =
     brand === 'nch' ? 'https://nawabichaihouse.com/api/whatsapp'

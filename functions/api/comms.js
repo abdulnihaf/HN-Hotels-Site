@@ -20,18 +20,22 @@ function normalizePhone(raw) {
 }
 
 async function sendWaba(env, { brand, phone, template, vars = [], language = 'en' }) {
+  // Sparksol is the dedicated comms WABA for staff alerts (no customer flow on it).
+  // HE / NCH WABAs are reserved for customer order flows and untouched.
+  // Default brand for comms = sparksol.
+  const b = brand || 'sparksol';
   const phoneId =
-    brand === 'nch' ? env.WA_NCH_PHONE_ID :
-    brand === 'he'  ? env.WA_HE_PHONE_ID  :
-    env.WA_HE_PHONE_ID;
-  // Prefer brand-specific token, fall back to shared, fall back to legacy.
-  // NCH WABA lives outside HN Hotels Pvt Ltd portfolio — uses its own token.
+    b === 'sparksol' ? env.WA_SPARKSOL_PHONE_ID :
+    b === 'nch'      ? env.WA_NCH_PHONE_ID :
+    b === 'he'       ? env.WA_HE_PHONE_ID  :
+    env.WA_SPARKSOL_PHONE_ID;
   const token =
-    brand === 'nch' ? (env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN) :
-    brand === 'he'  ? (env.WA_HE_TOKEN  || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN) :
-    (env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN);
+    b === 'sparksol' ? (env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN) :
+    b === 'nch'      ? (env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN) :
+    b === 'he'       ? (env.WA_HE_TOKEN  || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN) :
+    (env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN);
   if (!phoneId || !token) {
-    return { ok: false, status: 500, response: { error: 'WABA not configured for brand: ' + brand } };
+    return { ok: false, status: 500, response: { error: 'WABA not configured for brand: ' + b } };
   }
 
   const to = normalizePhone(phone);
@@ -131,18 +135,16 @@ export async function onRequest(context) {
     return json({
       ok: true,
       time: new Date().toISOString(),
+      default_brand: 'sparksol',
       configured: {
+        waba_sparksol_phone_id: !!env.WA_SPARKSOL_PHONE_ID,
+        waba_sparksol_token: !!env.WA_SPARKSOL_TOKEN,
         waba_he_phone_id: !!env.WA_HE_PHONE_ID,
         waba_nch_phone_id: !!env.WA_NCH_PHONE_ID,
         waba_he_token: !!(env.WA_HE_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN),
         waba_nch_token: !!(env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN),
         fast2sms_key: !!env.FAST2SMS_API_KEY,
         d1_bound: !!env.DB,
-      },
-      notes: {
-        nch_token_source: env.WA_NCH_TOKEN ? 'WA_NCH_TOKEN (brand-specific)'
-          : env.WA_COMMS_TOKEN ? 'WA_COMMS_TOKEN (shared, may be HE-only-scoped)'
-          : env.WA_ACCESS_TOKEN ? 'WA_ACCESS_TOKEN (legacy)' : 'NOT SET',
       },
     });
   }
