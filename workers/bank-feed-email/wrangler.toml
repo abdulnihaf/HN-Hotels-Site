@@ -4,11 +4,11 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
 
-# No cron trigger — this Worker is invoked by Cloudflare Email Routing
-# whenever an email arrives at hdfc-alerts@hnhotels.in. CF Email Workers
-# are free and don't count against the 5-cron account cap.
-#
-# Email Routing → Destinations → "Send to a Worker" → pick this worker.
+# Cron: re-parse any partial/quarantined rows (from email format changes,
+# base64 bodies, etc.) every 4 hours. Promotes rows to parse_status='parsed'
+# so they flow into balance and rollup queries automatically.
+[triggers]
+crons = ["0 */4 * * *"]
 
 [[d1_databases]]
 binding = "DB"

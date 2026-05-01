@@ -39,7 +39,7 @@ const TAIL_PERSONAL = '("XX4005" OR "ending 4005" OR "A/c 4005" OR "ending 8891"
 // per pipe → 10×3 + 4 ≈ 34 worst-case for a one-pipe run; both pipes
 // share one invocation budget, so cap at 6 per pipe = ~40 total. Bumps
 // to 25 once on Workers Paid (1000 subreqs/invocation).
-const MAX_PER_POLL = 6;
+const MAX_PER_POLL = 25;
 
 export default {
   async scheduled(event, env, ctx) {
@@ -550,7 +550,7 @@ function parseHdfcAlert({ subject, body }) {
   //   "Rs.INR 5,718.00 has been ... added"  (double prefix Rs.INR — yes really)
   //   "Rs. 22,500.00 has been deducted"
   // The currency-prefix part must allow either form, so we factor it.
-  const amountRe1 = /(?:rs\.?\s*(?:inr\s+)?|inr\s+|₹\s*)([\d,]{1,15}(?:\.\d{1,2})?)\s+(?:is\s+|was\s+|will\s+be\s+|has\s+been\s+(?:successfully\s+)?)?(?:debited|credited|withdrawn|sent|paid|received|debit|credit|added|deducted|deposited|transferred|reversed)/i;
+  const amountRe1 = /(?:rs\.?\s*(?:inr\s+)?|inr\s+|₹\s*)([\d,]{1,15}(?:\.\d{1,2})?)\s+(?:(?:is(?:\s+\w+){0,2}|was|will\s+be|has\s+been(?:\s+successfully)?)\s+)?(?:debited|credited|withdrawn|sent|paid|received|debit|credit|added|deducted|deposited|transferred|reversed)/i;
   const amountRe2 = /(?:debited|credited|withdrawn|sent|paid|received|added|deducted|deposited|transferred|reversed)[^.]{0,40}?(?:rs\.?\s*(?:inr\s+)?|inr\s+|₹\s*)([\d,]{1,15}(?:\.\d{1,2})?)/i;
   const amtMatch = text.match(amountRe1) || text.match(amountRe2);
   const amountRupees = amtMatch ? Number(amtMatch[1].replace(/,/g, '')) : null;
@@ -599,7 +599,8 @@ function parseHdfcAlert({ subject, body }) {
       if (m3) counterparty = m3[1].trim();
     }
   } else if (direction === 'credit') {
-    const m = text.match(/(?:received\s+from|from)\s+([A-Z][A-Za-z0-9 &._\-]{1,59}?)\s+(?:vpa\b|on\b|,|\.|\/|ref\b|rs\b|inr\b|upi\b|imps\b|neft\b)/i);
+    const m = text.match(/(?:received\s+from|from)\s+([A-Z][A-Za-z0-9 &._\-]{1,59}?)\s+(?:vpa\b|on\b|,|\.|\/|ref\b|rs\b|inr\b|upi\b|imps\b|neft\b)/i)
+      || text.match(/\bby\s+VPA\s+\S+\s+([A-Za-z][A-Za-z0-9 &._\-]{1,59}?)\s+on\b/i);
     if (m) counterparty = m[1].trim();
     // NEFT-credit "added to your account ending XX4680 from NEFT Cr-YESB...-PAYTM PAYMENTS SERVICES LIMITED PA -HN HOTELS..."
     if (!counterparty) {

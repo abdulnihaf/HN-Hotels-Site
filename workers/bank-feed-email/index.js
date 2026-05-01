@@ -47,6 +47,43 @@ const MAX_BODY_BYTES = 512 * 1024;      // 512 KB cap on ingested email size
 const MAX_DRY_RUN_BYTES = 256 * 1024;   // 256 KB cap on dry-run POST
 
 export default {
+  // Cron: every 4h — re-parse partial/quarantined rows in-process.
+  // Catches rows that failed due to email format changes or body encoding
+  // issues. Promotes them to parse_status='parsed' automatically.
+  async scheduled(_event, env, _ctx) {
+    const rows = await env.DB.prepare(`
+      SELECT id, raw_subject, raw_body FROM money_events
+      WHERE source=? AND parse_status IN ('partial','quarantined','failed')
+      ORDER BY id DESC LIMIT 500
+    `).bind(SOURCE).all();
+    let fixed = 0;
+    for (const r of rows.results || []) {
+      const p = parseHdfcAlert({ subject: r.raw_subject || '', body: r.raw_body || '' });
+      if (p.parse_status === 'parsed') {
+        await env.DB.prepare(`
+          UPDATE money_events
+          SET direction           = COALESCE(?, direction),
+              amount_paise        = COALESCE(?, amount_paise),
+              balance_paise_after = COALESCE(?, balance_paise_after),
+              channel             = COALESCE(?, channel),
+              counterparty        = COALESCE(?, counterparty),
+              counterparty_ref    = COALESCE(?, counterparty_ref),
+              source_ref          = COALESCE(?, source_ref),
+              txn_at              = COALESCE(?, txn_at),
+              narration           = COALESCE(?, narration),
+              parse_status        = 'parsed'
+          WHERE id=?
+        `).bind(
+          p.direction, p.amount_paise, p.balance_paise_after, p.channel,
+          p.counterparty, p.counterparty_ref, p.source_ref,
+          p.txn_at, p.narration, r.id,
+        ).run();
+        fixed++;
+      }
+    }
+    console.log(`cron reparse: scanned=${rows.results?.length ?? 0} fixed=${fixed}`);
+  },
+
   async email(message, env, ctx) {
     const received_at = nowIso();
     let raw;
