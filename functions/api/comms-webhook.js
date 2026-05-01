@@ -45,16 +45,8 @@ async function handleInboundMessage(env, { from_phone, msg_text, msg_id, busines
   `).bind(recipient, brand).first();
 
   if (pendingOptin && pendingOptin.status === 'pending') {
-    if (YES_RX.test(body)) {
-      await env.DB.prepare(`
-        UPDATE comms_optin
-           SET status = 'opted_in',
-               consented_at = datetime('now'),
-               consent_text = ?
-         WHERE id = ?
-      `).bind(body, pendingOptin.id).run();
-      return { handled: 'optin-yes', recipient, brand };
-    }
+    // Inbound-first opt-in: ANY message that isn't an explicit STOP/NO/REVOKE
+    // counts as consent. If they messaged us, they opted in.
     if (NO_RX.test(body)) {
       await env.DB.prepare(`
         UPDATE comms_optin
@@ -65,6 +57,17 @@ async function handleInboundMessage(env, { from_phone, msg_text, msg_id, busines
       `).bind(body, pendingOptin.id).run();
       return { handled: 'optin-no', recipient, brand };
     }
+    // Otherwise: opt them in (anything else = consent)
+    await env.DB.prepare(`
+      UPDATE comms_optin
+         SET status = 'opted_in',
+             consented_at = datetime('now'),
+             consent_text = ?
+       WHERE id = ?
+    `).bind(body, pendingOptin.id).run();
+    // Auto-reply welcome (free-form, allowed within 24h window opened by their inbound)
+    await sendWelcomeReply(env, recipient, brand, pendingOptin.staff_name || '');
+    return { handled: 'optin-auto', recipient, brand };
   }
 
   // 2. Already opted-in users can revoke any time via STOP / NO
@@ -109,6 +112,29 @@ async function handleInboundMessage(env, { from_phone, msg_text, msg_id, busines
   }
 
   return { handled: 'none' };
+}
+
+async function sendWelcomeReply(env, to, brand, staffName) {
+  // Free-form text message inside the 24h window — works only because user just messaged us.
+  const phoneId = brand === 'sparksol' ? env.WA_SPARKSOL_PHONE_ID : env.WA_HE_PHONE_ID;
+  const token = brand === 'sparksol' ? env.WA_SPARKSOL_TOKEN : (env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN);
+  if (!phoneId || !token) return;
+  const greeting = staffName ? `Hi ${staffName}!` : 'Hi!';
+  const body = `${greeting} You're now subscribed to HN Hotels Ops alerts via WhatsApp.\n\nFrom now on you'll receive shift alerts, settlement reminders, and discrepancy notifications here.\n\nReply STOP anytime to opt out.`;
+  try {
+    await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'text',
+        text: { body },
+      }),
+    });
+  } catch (e) {
+    console.error('sendWelcomeReply failed:', e?.message || e);
+  }
 }
 
 async function handleStatusUpdate(env, { msg_id, status, ts }) {
