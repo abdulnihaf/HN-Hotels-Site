@@ -9,7 +9,7 @@ This is the canonical reference for controlling Hamza Express's PiSignage deploy
 | **Dashboard URL** | https://hamzaexpress.pisignage.com |
 | **API Base URL** | https://hamzaexpress.pisignage.com/api |
 | **Login email** | hnhotelsindia@gmail.com |
-| **Subscription** | Standard $60/yr · 5 of 7 licenses · 6 GB storage · valid till 2027-02-26 |
+| **Subscription** | Standard $60/yr · 5 of 7 licenses used (2 free + 3 paid) · 6 GB storage · valid till 2027-02-26 · next billing 2026-05-26 |
 | **Server version** | 3.9.7 |
 | **UI version** | 1.0.2 |
 
@@ -17,19 +17,25 @@ This is the canonical reference for controlling Hamza Express's PiSignage deploy
 
 ## Authentication strategies (ranked best → worst)
 
-### A · API Token (RECOMMENDED for terminal autonomy · NOT YET CONFIGURED)
+### A · API Token via POST /api/session (RECOMMENDED for terminal autonomy · NOT YET CONFIGURED)
 
-Requires user to manually generate via UI:
-1. Log into hamzaexpress.pisignage.com
-2. Top-right user menu → Change Profile (requires password re-entry)
-3. Generate API Token
-4. Save value to:
-   - `~/Documents/Tech/HN-Hotels-Site/.env.local` as `PISIGNAGE_TOKEN=<token>`
-   - OR Cloudflare secret: `npx wrangler secret put PISIGNAGE_TOKEN`
+The v2 UI does **not** expose "Generate API Token" in the Change Profile modal — that button only existed in the old AngularJS UI (now retired). The documented method per piathome.com/apidocs/ is:
 
-Auth header: `x-access-token: <token>`
+```bash
+# Run this once in terminal — paste the output into .env.local
+curl -s -X POST https://hamzaexpress.pisignage.com/api/session \
+  -H "Content-Type: application/json" \
+  -d '{"email":"hnhotelsindia@gmail.com","password":"YOUR_PASSWORD","getToken":true}' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print('PISIGNAGE_TOKEN=' + d['data']['token'])"
+```
 
-⚠️ Claude (or any AI) cannot generate this token autonomously — the password re-auth step is intentionally outside agent capability.
+Save token to:
+- `~/Documents/Tech/HN-Hotels-Site/.env.local` as `PISIGNAGE_TOKEN=<token>`
+- OR Cloudflare secret: `npx wrangler secret put PISIGNAGE_TOKEN`
+
+Auth header for all API calls: `x-access-token: <token>`
+
+⚠️ 2FA must be OFF on the account for `getToken` to work without an OTP step. 2FA is currently DISABLED on this account (disabled 2026-05-01).
 
 ### B · Session cookie via Chrome MCP (CURRENT WORKING METHOD)
 
@@ -167,45 +173,97 @@ fetch(`/api/playlists/${encodeURIComponent(playlistName)}`, {
 
 ---
 
-## Asset Upload (cannot fully automate · file-pick required)
+## Asset Upload (two-step API · verified from piathome docs)
 
-Two paths:
-1. **Chrome MCP UI driving** (current): Open `/v2/assets/` → click + Add Asset → click "video" tile → user clicks "Choose files" → Claude clicks Save & Continue
-2. **Direct API upload from terminal** (after PISIGNAGE_TOKEN is configured):
-   ```bash
-   curl -X POST https://hamzaexpress.pisignage.com/api/files/upload \
-     -H "x-access-token: $PISIGNAGE_TOKEN" \
-     -F "assets=@/path/to/video.mp4"
-   ```
+The API requires TWO calls after a file upload — missing `POST /postupload` was a doc gap:
 
-Currently the user must do option 1 because we don't have a saved API token.
+**Step 1: Upload the file**
+```bash
+curl -X POST https://hamzaexpress.pisignage.com/api/files \
+  -H "x-access-token: $PISIGNAGE_TOKEN" \
+  -F "assets=@/path/to/video.mp4"
+```
+
+**Step 2: Store file details (MUST call immediately after upload)**
+```bash
+curl -X POST https://hamzaexpress.pisignage.com/api/postupload \
+  -H "x-access-token: $PISIGNAGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"filename":"video.mp4"}'
+```
+
+Without Step 2, the file appears in storage but is not recognized by the playlist engine.
+
+**Chrome MCP UI path** (when no token): Open `/v2/assets/` → click + Add Asset → click "video" tile → user clicks "Choose files" → Claude clicks Save & Continue. (The UI handles both steps internally.)
 
 ---
 
-## API Endpoints Surface (verified)
+## API Endpoints Surface (full · verified from piathome.com/apidocs/ · 2026-05-01)
 
-| Method | Path | Purpose | Tested |
-|---|---|---|---|
-| GET | `/api/players` | List all 5 devices · returns id/group/version/playlist/online/disk/wgetSpeed | ✅ |
-| GET | `/api/players/<_id>` | Single device details | ✅ |
-| GET | `/api/playlists` | List all playlists with assets array, layout, templateName | ✅ |
-| POST | `/api/playlists/<name>` | Create or update playlist (replaces assets) | ✅ |
-| GET | `/api/files` | List file names in storage (no metadata) | ✅ |
-| GET | `/api/users/me` | Current user · email, role, settings | ✅ |
-| POST | `/api/files/upload` | Multipart asset upload | Need token to test from terminal |
-| POST | `/api/groups/<groupId>` | Assign playlist to group (Step 3) | ✅ |
-| POST | `/api/session` | Login · returns JWT (now requires OTP unless 2FA off) | Bypassed via session cookie |
+### Server API (base: `https://hamzaexpress.pisignage.com/api`)
 
-## Endpoints that DON'T exist (probed and got 404)
+| Tag | Method | Path | Purpose | Status |
+|---|---|---|---|---|
+| session | POST | `/session` | Login with email+password; `getToken:true` returns JWT | ✅ verified |
+| session | DELETE | `/session` | Logout | — |
+| session | POST | `/token-session` | Login using an existing token (refresh) | — |
+| asset | GET | `/files` | List all uploaded files | ✅ |
+| asset | POST | `/files` | Upload file(s) multipart | ✅ |
+| asset | POST | `/postupload` | **REQUIRED after /files upload** — stores file details in DB | ⚠️ was missing from our docs |
+| asset | GET | `/files/{file}` | Get single asset metadata | — |
+| asset | POST | `/files/{file}` | Update/rename an asset | — |
+| asset | DELETE | `/files/{file}` | Remove an asset | — |
+| asset | POST | `/links` | Add a URL link as an asset | — |
+| asset | POST | `/notices` | Create a notice asset | — |
+| playlist | GET | `/playlists` | List all playlists with assets array | ✅ |
+| playlist | POST | `/playlists/{name}` | Create/update playlist (replaces assets array) | ✅ |
+| playlist | GET | `/playlists/{name}` | Get single playlist | — |
+| playlist | DELETE | `/playlists/{name}` | Remove playlist | — |
+| player | GET | `/players` | List all players (serial, group, playlist, online, disk, wget) | ✅ |
+| player | POST | `/players` | Create new player | — |
+| player | GET | `/players/{id}` | Single player details | ✅ |
+| player | POST | `/players/{id}` | Update player / **Re-deploy** (empty body) | ✅ |
+| player | DELETE | `/players/{id}` | Remove player | — |
+| player | GET | `/screens` | List all players incl. collaborator accounts | — |
+| player | POST | `/pitv/{id}` | Switch TV on/off via CEC | — |
+| player | POST | `/playlistmedia/{id}/{action}` | Playlist media controls (pause/resume/next) | — |
+| player | POST | `/setplaylist/{id}/{playlist}` | **Force-play a specific playlist once immediately** | — |
+| group | GET | `/groups` | List all groups | — |
+| group | POST | `/groups` | Create group | — |
+| group | GET | `/groups/{groupId}` | Get group info | — |
+| group | POST | `/groups/{groupId}` | **Update group AND deploy to devices** | ✅ |
+| group | DELETE | `/groups/{groupId}` | Remove group | — |
+| category | GET | `/labels/{id}` | Get category | — |
+| category | POST | `/labels` | Create category | — |
+| user | GET | `/users/me` | Current user info (no token field exposed) | ✅ |
+| user | GET | `/downloadauth` | Pi device download credentials (user:`pi`, pass:`pi`) | ✅ |
+| user | GET | `/installationsettings` | Installation-level settings | ✅ |
+| user | POST | `/installationsettings` | Update installation settings | — |
+| user | GET | `/licensedetails` | Subscription details (licenses, storage, credits, billing) | ✅ |
+| user | GET | `/licenselist` | Individual player license objects | ✅ |
+| report | GET | `/getevents` | Last 200 events log | — |
+
+### Pi Player API (base: `http://<pi_ip>:8000/api`)
+Direct device control when on same LAN. Uses Basic auth (default `pi:pi`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/play/playlists/{file}` | Play or stop a playlist |
+| POST | `/play/files/{action}` | Play or stop a file |
+| POST | `/playlistmedia/{action}` | Media controls |
+| GET | `/status` | Player status |
+| GET | `/settings` | Player settings |
+| POST | `/settings/hostname` | Set device name |
+| POST | `/settings/sleep` | Set TV on/off schedule |
+| POST | `/settings/orienetation` | Set display orientation |
+| GET | `/settings/wifiscan` | Scan available WiFi networks |
+
+### Endpoints confirmed 404 (don't use)
 
 - `/api/playlists/<name>/deploy`
-- `/api/players/<id>/cmd`
-- `/api/players/<id>/installation`
-- `/api/installations/<id>/sync`
-- `/api/players/<id>/sync`
-- `/api/players/<id>/resync`
-- `/api/groups/<id>/deploy`  ← **but POST /api/groups/<id> (no /deploy) DOES work for Step 3**
-- `/api/me`, `/api/profile`, `/api/account`, `/api/tokens`, `/api/api-keys`, `/api/apikeys`, `/api/auth/token`
+- `/api/players/<id>/cmd`, `/sync`, `/resync`, `/installation`
+- `/api/groups/<id>/deploy` ← deploy happens via POST `/api/groups/<id>` (no suffix)
+- `/api/me`, `/api/profile`, `/api/account`, `/api/tokens`, `/api/api-keys`, `/api/auth/token`
 
 ---
 
@@ -342,10 +400,32 @@ All in `scripts/pisignage/`:
 
 ---
 
+## Subscription snapshot (verified 2026-05-01 via /api/licensedetails + UI)
+
+| | |
+|---|---|
+| **Plan** | Standard |
+| **Price** | $60/year (2 free forever + $20/screen/year after that) |
+| **Licenses purchased** | 7 total (2 free + 5 paid slots) |
+| **Licenses in use** | 5 (2 unused slots available — can add TV-H2 + 1 more free) |
+| **Storage** | 6 GB total · 0.1 GB used · 5.9 GB free |
+| **Content downloaded** | ~54 MB (of unlimited) |
+| **Content uploaded** | ~11 MB |
+| **Subscription expires** | 2027-02-26 (11 months remaining) |
+| **Next billing** | 2026-05-26 |
+| **Credits** | 60/cycle · 61 remaining · needs 5/month for 5 screens |
+| **Whitelabel** | Unlocks at 50+ screens (not relevant) |
+
+**Plan includes:** Cloud hosting, email support, all API access, template designer, collaborator accounts.
+
+---
+
 ## Critical operational notes
 
-1. **2FA was disabled by user 2026-05-01** to allow programmatic auth attempts. Re-enable after launch is stable.
+1. **2FA is DISABLED** (disabled 2026-05-01 to enable `POST /api/session` token generation). Re-enable after `PISIGNAGE_TOKEN` is saved to `.env.local`.
 2. **Original v3 menu PNGs are STILL in the asset library** — can be re-added to any playlist if needed.
-3. **TV-H2 is standalone USB MARQ LED** — not part of PiSignage. Requires manual USB drive with JPGs in numbered order.
+3. **TV-H2 is standalone USB MARQ LED** — not part of PiSignage. Requires manual USB drive with JPGs in numbered order. Has 2 free license slots available if ever adding it to PiSignage.
 4. **All Group IDs captured** — see Device/Player Map above. All 5 group IDs verified 2026-05-01.
+5. **Asset upload requires two API calls** — `POST /api/files` then `POST /api/postupload`. UI handles this automatically; terminal scripts must do both.
+6. **`POST /setplaylist/{playerId}/{playlist}`** — can force-play a playlist on a specific device once without changing the group assignment. Useful for testing a new playlist on one screen before deploying to all.
 5. **Device IDs:** The `_id` field from `/api/players` is what PiSignage uses internally. The CPU serial number is what's shown on device config screens. Both are listed in the Device Map above.
