@@ -1190,9 +1190,9 @@ async function deleteAttachment(attId, btn) {
   const status = document.getElementById('d-upload-status');
   if (status) { status.textContent = 'Deleting…'; status.style.color = 'var(--text-dim)'; }
   try {
-    const r = await fetch(API, {
+    const r = await fetch(`${API}?action=delete-bill-attachment`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete-bill-attachment', pin: PIN, attachment_id: attId }),
+      body: JSON.stringify({ pin: PIN, attachment_id: attId }),
     }).then(x => x.json());
     if (!r.success) throw new Error(r.error || 'Delete failed');
     // Remove from in-memory state + fade out the card

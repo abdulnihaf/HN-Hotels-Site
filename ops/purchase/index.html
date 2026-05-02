@@ -794,9 +794,9 @@ async function markPOReceived(poId, poName, brand) {
 async function cancelPOEntry(poId, poName) {
   if (!confirm(`Cancel PO ${poName || '#' + poId}?\n\nThis marks it cancelled in Odoo. Cannot be undone from here.`)) return;
   try {
-    const r = await fetch(API, {
+    const r = await fetch(`${API}?action=cancel-po`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'cancel-po', pin: PIN, po_id: poId }),
+      body: JSON.stringify({ pin: PIN, po_id: poId }),
     }).then(x => x.json());
     if (!r.success) { toast(r.error || 'Cancel failed', 'err'); return; }
     toast(`✓ PO ${r.po_name || poName} cancelled`, 'ok');
