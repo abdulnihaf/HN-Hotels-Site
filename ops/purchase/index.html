@@ -747,6 +747,8 @@ async function loadPastEntries() {
         // marked received yet. State == 'purchase' (Odoo confirmed).
         const isPO = e.kind === 'PO';
         const canMarkReceived = isPO && e.state === 'purchase' && !e.received_at;
+        // Cancel button: draft or confirmed POs that haven't been physically received
+        const canCancel = isPO && (e.state === 'draft' || e.state === 'purchase') && !e.received_at;
         const receivedBadge = e.received_at
           ? `<span style="font-size:10px; color:#fbbf24; margin-left:6px;">📦 received ${shortDateOnly(e.received_at)}${e.received_by ? ' · ' + esc(e.received_by) : ''}</span>`
           : '';
@@ -764,6 +766,7 @@ async function loadPastEntries() {
             <div style="display:flex; align-items:center; gap:10px;">
               <div class="amount">₹${Number(e.amount || 0).toLocaleString('en-IN')}</div>
               ${canMarkReceived ? `<button class="btn btn-ghost btn-sm" style="font-size:11px; padding:4px 8px;" onclick="markPOReceived(${e.odoo_id}, '${esc(e.odoo_name || '')}', '${e.brand}')">📦 Mark received</button>` : ''}
+              ${canCancel ? `<button class="btn btn-ghost btn-sm" style="font-size:11px; padding:4px 8px; color:#f87171;" onclick="cancelPOEntry(${e.odoo_id}, '${esc(e.odoo_name || '')}')">✕ Cancel</button>` : ''}
             </div>
           </div>`;
       }
@@ -787,6 +790,20 @@ async function markPOReceived(poId, poName, brand) {
     loadPastEntries();
   } catch (e) { toast(e.message, 'err'); }
 }
+
+async function cancelPOEntry(poId, poName) {
+  if (!confirm(`Cancel PO ${poName || '#' + poId}?\n\nThis marks it cancelled in Odoo. Cannot be undone from here.`)) return;
+  try {
+    const r = await fetch(API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cancel-po', pin: PIN, po_id: poId }),
+    }).then(x => x.json());
+    if (!r.success) { toast(r.error || 'Cancel failed', 'err'); return; }
+    toast(`✓ PO ${r.po_name || poName} cancelled`, 'ok');
+    loadPastEntries();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
 function shortDateOnly(s) {
   if (!s) return '';
   const d = new Date(s);
