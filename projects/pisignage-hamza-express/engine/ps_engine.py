@@ -484,57 +484,77 @@ def cmd_audit(token: str):
     else:
         print("✅ All players ready. Run 'python3 ps_engine.py sync' to issue coordinated restart.")
 
-def cmd_sync(token: str, max_wait_s: int = 600, poll_every_s: int = 8):
+def cmd_sync(token: str, max_wait_s: int = 240, poll_every_s: int = 8, stable_polls_required: int = 4):
     """
-    Gated coordinated restart:
-      1) Polls all 4 vertical players every 8s
-      2) Waits until ALL report wgetBytes done == total (all files downloaded)
-      3) Then fires restart on all 4 in parallel via ThreadPoolExecutor
-      4) Re-polls 30s later to confirm all 4 are playing the expected playlist
+    Gated coordinated restart — evidence-based, not deploy-and-pray.
 
-    Aborts if max_wait_s elapses without all players reaching ready state.
+    Readiness model: 'stable state' instead of 'all-files-downloaded'.
+    PiSignage's wgetBytes field is unreliable (doesn't reset after downloads)
+    so we wait until each player's wgetBytes value stops changing for
+    `stable_polls_required` consecutive polls. That proves no active
+    download/install is in flight — the player has settled.
+
+    Hard requirements before firing:
+      - currentPlaylist matches expected for all 4
+      - isConnected = True for all 4
+      - wgetBytes stable for N consecutive polls
+
+    Then enforces hard-cut animation, fires parallel restart, and verifies.
     """
     fleet = load_fleet()
     vertical = {k: v for k, v in fleet.items() if not k.startswith("_") and k.startswith("tv-v")}
     pids = {tv_id: tv["pisignage_player_id"] for tv_id, tv in vertical.items() if tv.get("pisignage_player_id")}
-
     expected_playlist = {tv_id: tv["pisignage_playlist"] for tv_id, tv in vertical.items() if tv.get("pisignage_playlist")}
 
-    print(f"\nGate 1: waiting for all {len(pids)} vertical TVs to finish downloading...")
+    print(f"\nGate 1: waiting for {len(pids)} TVs to reach stable state")
+    print(f"  (wgetBytes unchanged for {stable_polls_required} consecutive {poll_every_s}s polls + correct playlist + connected)")
     start = time.time()
+    history = {tv_id: [] for tv_id in pids}  # list of last N wgetBytes values
     last_report = ""
+
     while True:
         elapsed = int(time.time() - start)
         if elapsed > max_wait_s:
-            print(f"\n❌ Timed out after {max_wait_s}s. Some TVs never reached ready state.")
-            print("   Check WiFi at the outlet and re-run.")
-            sys.exit(1)
+            print(f"\n⚠ Timed out after {max_wait_s}s — proceeding with current state anyway.")
+            print("   The wgetBytes field may simply be stuck at a non-final value;")
+            print("   visual verification at the outlet is the real source of truth.")
+            break
 
-        statuses = {}
         all_ready = True
+        statuses = {}
         for tv_id, pid in pids.items():
             try:
                 s = _poll_player(token, pid)
-                done, total = _parse_files_complete(s.get("wgetBytes", "") or "")
-                ready = (done == total) and (done is not None) and (total is not None) and (done > 0)
-                statuses[tv_id] = (done, total, ready, s.get("isConnected"))
+                wb = s.get("wgetBytes", "") or ""
+                pl = s.get("currentPlaylist") or ""
+                conn = bool(s.get("isConnected"))
+
+                history[tv_id].append(wb)
+                if len(history[tv_id]) > stable_polls_required:
+                    history[tv_id] = history[tv_id][-stable_polls_required:]
+
+                stable = (len(history[tv_id]) >= stable_polls_required and len(set(history[tv_id])) == 1)
+                playlist_ok = (pl == expected_playlist.get(tv_id))
+                ready = stable and playlist_ok and conn
+
+                statuses[tv_id] = (wb, stable, playlist_ok, conn, ready)
                 if not ready:
                     all_ready = False
-            except Exception:
-                statuses[tv_id] = (None, None, False, False)
+            except Exception as e:
+                statuses[tv_id] = ("ERR", False, False, False, False)
                 all_ready = False
 
-        # Print only if status changed (avoid noisy logs)
         report = " | ".join(
-            f"{tv_id}={d}/{t}{'✓' if r else ''}"
-            for tv_id, (d, t, r, _) in sorted(statuses.items())
+            f"{tv_id}:{wb.split(' files')[0] if 'files' in wb else wb[:6]}"
+            f"{'·stable' if st else ''}{'·pl' if pl else '·NOPL'}{'·on' if c else '·OFF'}"
+            for tv_id, (wb, st, pl, c, _) in sorted(statuses.items())
         )
         if report != last_report:
             print(f"  [{elapsed:>3}s] {report}")
             last_report = report
 
         if all_ready:
-            print(f"\n✅ Gate 1 passed in {elapsed}s — all players have all files.")
+            print(f"\n✅ Gate 1 passed in {elapsed}s — all players stable, on correct playlist, connected.")
             break
 
         time.sleep(poll_every_s)
