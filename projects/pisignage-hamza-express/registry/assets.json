@@ -158,7 +158,7 @@
     "combos": ["C3", "C4"],
     "label": "Protein Ladder · C3 ₹249 vs C4 ₹289",
     "version": 3,
-    "status": "pending_upload",
+    "status": "live",
     "tags": ["vertical", "multicombo", "comparison", "upsell"]
   },
 
@@ -170,7 +170,7 @@
     "combos": ["C1", "C2"],
     "label": "Veg Ladder · C1 ₹149 vs C2 ₹199",
     "version": 3,
-    "status": "pending_upload",
+    "status": "live",
     "tags": ["vertical", "multicombo", "comparison", "value"]
   },
 
@@ -182,7 +182,7 @@
     "combos": ["C5", "C6"],
     "label": "Biryani Ladder · C5 ₹229 vs C6 ₹309",
     "version": 3,
-    "status": "pending_upload",
+    "status": "live",
     "tags": ["vertical", "multicombo", "comparison", "upsell"]
   },
 
@@ -194,7 +194,7 @@
     "combos": ["C1", "C2", "C3", "C4"],
     "label": "All Ghee Rice combos in one decision-matrix view",
     "version": 3,
-    "status": "pending_upload",
+    "status": "live",
     "tags": ["vertical", "multicombo", "menu_overview"]
   }
 }
