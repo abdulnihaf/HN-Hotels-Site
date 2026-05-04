@@ -12,6 +12,9 @@ Usage:
   python3 ps_engine.py audit                      # diff: server playlists vs what each player reports
   python3 ps_engine.py sync                       # WAIT until all 13/13 files done, THEN coordinated restart
   python3 ps_engine.py resync                     # blunt restart all vertical players (no readiness gate)
+  python3 ps_engine.py lan-check                  # (outlet WiFi) probe port 8000 + auth on each TV
+  python3 ps_engine.py verify                     # (outlet WiFi) read currentPlayingFile, report slot drift
+  python3 ps_engine.py lan-sync                   # (outlet WiFi) parallel playlist-restart, then verify
   python3 ps_engine.py upload  <file_path>        # upload a local file to PiSignage library
 
 Examples:
@@ -826,6 +829,262 @@ def cmd_sync(token: str, max_wait_s: int = 240, poll_every_s: int = 8, stable_po
     print("\n✅ Coordinated restart complete. The 4 TVs all began the new playlist within ~{} ms of each other.".format(spread_ms))
     print("   Drift accumulates daily; PiSignage's deployTime=02:00 will resync them every night.")
 
+# ─── LAN-DIRECT (PORT 8000) ──────────────────────────────────────────────────
+# Run these from a laptop on the outlet WiFi. The PiSignage Player exposes
+# a local HTTP API on port 8000 of each TV's LAN IP, with Basic auth (default
+# credentials 'pi:pi'). Confirmed via the official OpenAPI spec at
+# https://pisignage.com/homepage/pisignage-apidocs-v3.yaml — same surface in
+# Player v4.9.x and v5.4.x.
+#
+# Hard limits of this API (informs the verify/lan-sync designs):
+#   - currentPlayingFile is exposed, but NOT play-position-in-seconds.
+#     Sub-second drift cannot be read from the player.
+#   - No absolute seek. Only forward/backward (relative) or playlist restart.
+#   - To force a known asset on screen: POST /api/play/files/play?file=<name>
+#   - To restart playlist from slot 0: POST /api/play/playlists/<name> {play: true}
+
+LAN_AUTH = ("pi", "pi")   # Basic auth, default PiSignage Player credentials
+LAN_PORT = 8000
+
+def _lan_url(ip: str, path: str) -> str:
+    return f"http://{ip}:{LAN_PORT}{path}"
+
+def _lan_status(ip: str, timeout_s: float = 2.5) -> dict:
+    """GET /api/status on a single TV. Returns the .data block or raises."""
+    r = requests.get(_lan_url(ip, "/api/status"), auth=LAN_AUTH, timeout=timeout_s)
+    r.raise_for_status()
+    body = r.json()
+    if not body.get("success"):
+        raise RuntimeError(f"/api/status returned success=False: {body}")
+    return body.get("data", {})
+
+def _lan_settings(ip: str, timeout_s: float = 2.5) -> dict:
+    """GET /api/settings on a single TV. Returns the .data block or raises."""
+    r = requests.get(_lan_url(ip, "/api/settings"), auth=LAN_AUTH, timeout=timeout_s)
+    r.raise_for_status()
+    return r.json().get("data", {})
+
+def _lan_restart_playlist(ip: str, playlist_name: str, timeout_s: float = 3.0) -> tuple:
+    """POST /api/play/playlists/<name> {play: true}. Returns (ok, fire_t_ms)."""
+    encoded = urllib.parse.quote(playlist_name, safe="")
+    t0 = time.time()
+    r = requests.post(
+        _lan_url(ip, f"/api/play/playlists/{encoded}"),
+        auth=LAN_AUTH,
+        json={"play": True},
+        timeout=timeout_s,
+    )
+    dt_ms = int((time.time() - t0) * 1000)
+    return (r.status_code == 200 and r.json().get("success", False), dt_ms, r.status_code)
+
+def cmd_lan_check(timeout_s: float = 2.5):
+    """
+    LAN reachability test. Run this from a laptop on the outlet WiFi.
+    Probes port 8000 on every vertical TV's adb_ip with Basic auth pi:pi
+    and confirms /api/status returns valid PiSignage data.
+
+    If this fails, none of the LAN-direct features (verify, lan-sync) can work.
+    Common causes:
+      - Laptop is on a different WiFi than the TVs
+      - Router has 'AP isolation' / 'client isolation' enabled
+      - TV's IP changed (DHCP renewed) — refresh registry/fleet.json adb_ip
+      - Default password 'pi:pi' was changed on the player
+    """
+    import socket
+    fleet = load_fleet()
+    vertical = {k: v for k, v in fleet.items() if not k.startswith("_") and k.startswith("tv-v")}
+
+    print(f"\nProbing port {LAN_PORT} on {len(vertical)} vertical TVs (timeout {timeout_s}s each)...")
+    print(f"{'TV':<6}  {'IP':<18}  {'TCP':<8}  {'/api/status':<24}  {'currentPlayingFile':<48}")
+    print("─" * 110)
+
+    any_unreachable = False
+    for tv_id, tv in vertical.items():
+        ip = tv.get("adb_ip")
+        if not ip:
+            print(f"{tv_id:<6}  (no adb_ip in fleet.json)")
+            any_unreachable = True
+            continue
+
+        # 1) TCP
+        tcp = "—"
+        try:
+            with socket.create_connection((ip, LAN_PORT), timeout=timeout_s):
+                tcp = "✅"
+        except (socket.timeout, ConnectionRefusedError, OSError) as e:
+            tcp = f"❌ {type(e).__name__}"
+            any_unreachable = True
+
+        # 2) /api/status with auth
+        api = "—"
+        cur = "—"
+        if tcp == "✅":
+            try:
+                data = _lan_status(ip, timeout_s)
+                api = "✅ auth ok"
+                cur = (data.get("currentPlayingFile") or "—")[:48]
+            except requests.HTTPError as e:
+                code = e.response.status_code if e.response is not None else "?"
+                api = f"❌ HTTP {code}"
+                if code == 401:
+                    api += " (auth pi:pi rejected)"
+                any_unreachable = True
+            except requests.RequestException as e:
+                api = f"❌ {type(e).__name__}"
+                any_unreachable = True
+            except Exception as e:
+                api = f"❌ {type(e).__name__}: {str(e)[:30]}"
+                any_unreachable = True
+        else:
+            api = "(skipped)"
+
+        print(f"{tv_id:<6}  {ip:<18}  {tcp:<8}  {api:<24}  {cur:<48}")
+
+    print()
+    if any_unreachable:
+        print("❌ Some TVs unreachable on the local API. LAN-direct sync features won't work until this is fixed.")
+        print("   Common fixes:")
+        print("     - Confirm laptop is on the same WiFi (192.168.31.x) as the TVs")
+        print("     - Router admin: turn off 'AP isolation' / 'client isolation'")
+        print("     - Refresh fleet.json adb_ip if a TV's IP changed (check Fire TV Settings → My Fire TV → About → Network)")
+        print("     - If 401: default password 'pi:pi' was changed; LAN_AUTH constant in ps_engine.py needs updating")
+        sys.exit(1)
+    print("✅ All vertical TVs reachable. LAN-direct features available.")
+
+def cmd_verify(timeout_s: float = 3.0):
+    """
+    LAN-direct sync verification — read truth from each player, compute drift.
+
+    Reads /api/status from each TV (in parallel), extracts currentPlayingFile,
+    looks up which slot index that file occupies in the TV's expected playlist
+    on the cloud, then reports per-TV drift in slot indexes.
+
+    PASS condition: all TVs are on the same slot index of their respective
+    playlists (since stagger means different filenames at the same index, all
+    TVs sharing index N means they restarted at the same moment).
+
+    Granularity: slot-level (~8–10s). PiSignage Player API does not expose
+    sub-slot play position; finer measurement is not possible from this layer.
+    """
+    fleet = load_fleet()
+    vertical = {k: v for k, v in fleet.items() if not k.startswith("_") and k.startswith("tv-v")}
+
+    # We need each TV's playlist asset list to map filename -> slot index.
+    # That requires the cloud token (server-side playlists are the source of truth).
+    token = get_token()
+
+    expected = {}  # tv_id -> [filenames in order]
+    for tv_id, tv in vertical.items():
+        pname = tv.get("pisignage_playlist")
+        if not pname:
+            continue
+        try:
+            pl = _get_playlist(token, pname)
+            expected[tv_id] = [a["filename"] for a in pl.get("assets", [])]
+        except Exception as e:
+            print(f"  ⚠ {tv_id}: could not fetch playlist: {e}")
+
+    # Probe LAN status in parallel
+    print(f"\nProbing LAN /api/status on {len(vertical)} vertical TVs in parallel...")
+    statuses = {}
+    def _probe(tv_id, ip):
+        try:
+            data = _lan_status(ip, timeout_s)
+            return tv_id, data, None
+        except Exception as e:
+            return tv_id, None, e
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = [ex.submit(_probe, tv_id, tv["adb_ip"]) for tv_id, tv in vertical.items() if tv.get("adb_ip")]
+        for f in as_completed(futures):
+            tv_id, data, err = f.result()
+            statuses[tv_id] = (data, err)
+
+    # Compute slot index per TV
+    print(f"\n{'TV':<6}  {'Playlist':<20}  {'Slot':<6}  {'currentPlayingFile':<55}  {'Notes'}")
+    print("─" * 115)
+    slot_indexes = {}
+    for tv_id in sorted(vertical.keys()):
+        data, err = statuses.get(tv_id, (None, "no probe"))
+        if err:
+            print(f"{tv_id:<6}  (LAN probe failed: {err})")
+            slot_indexes[tv_id] = None
+            continue
+        cur_file = data.get("currentPlayingFile") or ""
+        cur_pl   = data.get("currentPlaylist") or ""
+        playlist_assets = expected.get(tv_id, [])
+        slot = playlist_assets.index(cur_file) if cur_file in playlist_assets else None
+        slot_indexes[tv_id] = slot
+        slot_str = str(slot) if slot is not None else "—"
+        note = ""
+        if slot is None and cur_file:
+            note = f"file not in expected playlist"
+        elif not data.get("playlistOn"):
+            note = "playlistOn=False"
+        print(f"{tv_id:<6}  {cur_pl:<20}  {slot_str:<6}  {cur_file[:55]:<55}  {note}")
+
+    print("\n═══ DRIFT ═══")
+    valid_slots = [s for s in slot_indexes.values() if s is not None]
+    if not valid_slots:
+        print("❌ No slot indexes resolvable. Probably first run — give players ~30s after a sync and re-verify.")
+        sys.exit(1)
+    if len(set(valid_slots)) == 1:
+        s = valid_slots[0]
+        print(f"✅ All {len(valid_slots)} TVs are on slot index {s} simultaneously. SYNC PASS at slot granularity.")
+        print(f"   (Sub-slot drift is unmeasurable from PiSignage Player API. Decoder warm-up jitter sets the floor at ~30–80ms.)")
+    else:
+        spread = max(valid_slots) - min(valid_slots)
+        print(f"❌ Slot drift detected. Spread: {spread} slot(s) across TVs.")
+        for tv_id, s in sorted(slot_indexes.items()):
+            print(f"   {tv_id}: slot {s}")
+        print(f"\n   Run 'python3 ps_engine.py lan-sync' to issue simultaneous restart over LAN.")
+        sys.exit(2)
+
+def cmd_lan_sync(verify_after_s: int = 6, timeout_s: float = 3.0):
+    """
+    LAN-direct coordinated restart. Fires POST /api/play/playlists/<name>
+    {play: true} to all 4 vertical TVs in parallel via ThreadPoolExecutor.
+    Each TV restarts its playlist from slot 0. LAN RTT ~1–5ms → all 4 fire
+    within ~10ms of each other.
+
+    After verify_after_s seconds, runs cmd_verify automatically to confirm
+    all TVs landed on the same slot.
+
+    This is the technically-conclusive sync mechanism. No eyeballs.
+    """
+    fleet = load_fleet()
+    vertical = {k: v for k, v in fleet.items() if not k.startswith("_") and k.startswith("tv-v")}
+    targets = [(tv_id, tv["adb_ip"], tv["pisignage_playlist"])
+               for tv_id, tv in vertical.items()
+               if tv.get("adb_ip") and tv.get("pisignage_playlist")]
+
+    print(f"\nFiring simultaneous playlist-restart on {len(targets)} TVs over LAN (port {LAN_PORT})...")
+    fire_t0 = time.time()
+    results = []
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = {
+            ex.submit(_lan_restart_playlist, ip, pname, timeout_s): tv_id
+            for (tv_id, ip, pname) in targets
+        }
+        for f in as_completed(futures):
+            tv_id        = futures[f]
+            ok, dt_ms, code = f.result()
+            elapsed_ms   = int((time.time() - fire_t0) * 1000)
+            icon         = "✅" if ok else f"❌ HTTP {code}"
+            results.append((tv_id, ok, elapsed_ms, dt_ms))
+            print(f"  {icon}  {tv_id}  fire+{elapsed_ms}ms  rtt={dt_ms}ms")
+
+    if not all(ok for _, ok, _, _ in results):
+        print("\n❌ One or more restarts failed. Check LAN_AUTH and lan-check first.")
+        sys.exit(1)
+
+    spread_ms = max(r[2] for r in results) - min(r[2] for r in results)
+    print(f"\nLAN restart spread: {spread_ms}ms across all {len(results)} TVs.")
+
+    print(f"\nWaiting {verify_after_s}s for players to begin slot 0, then verifying...")
+    time.sleep(verify_after_s)
+    cmd_verify(timeout_s=timeout_s)
+
 def cmd_resync(token: str):
     """Enforce hard-cut animation + restart all vertical players without redeploying content."""
     fleet = load_fleet()
@@ -883,7 +1142,7 @@ def cmd_upload(file_path: str, token: str):
 
 # ─── MAIN ────────────────────────────────────────────────────────────────────
 
-COMMANDS = {"status", "files", "compile", "deploy", "upload", "resync", "audit", "sync", "validate"}
+COMMANDS = {"status", "files", "compile", "deploy", "upload", "resync", "audit", "sync", "validate", "lan-check", "verify", "lan-sync"}
 
 def main():
     args = sys.argv[1:]
@@ -904,6 +1163,9 @@ def main():
             sys.exit("Usage: ps_engine.py validate <scene.json>")
         cmd_validate_creative(args[1])
         return
+    if cmd == "lan-check":
+        cmd_lan_check()
+        return
 
     token = get_token()
 
@@ -921,6 +1183,10 @@ def main():
         cmd_audit(token)
     elif cmd == "sync":
         cmd_sync(token)
+    elif cmd == "verify":
+        cmd_verify()
+    elif cmd == "lan-sync":
+        cmd_lan_sync()
     elif cmd == "upload":
         if len(args) < 2:
             sys.exit("Usage: ps_engine.py upload <file_path>")

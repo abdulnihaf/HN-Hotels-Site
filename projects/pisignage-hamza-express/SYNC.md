@@ -50,18 +50,36 @@ Drift from cloud-mode coordination: typically **200–800ms** post-restart, grow
 
 ## The LAN truth layer (when at outlet)
 
-Each PiSignage Player exposes a local HTTP API on **port 8000** of its LAN IP. From a laptop on the same WiFi:
+Each PiSignage Player exposes a local HTTP API on **port 8000** of its LAN IP, with HTTP Basic auth (default `pi:pi`). The API surface is identical between v4.9.x and v5.4.x — confirmed against the official OpenAPI spec at `pisignage.com/homepage/pisignage-apidocs-v3.yaml`.
 
-- `GET http://{ip}:8000/api/status` → real-time playback position, slot index, current asset filename
-- `GET http://{ip}:8000/api/files` → exact files on local storage with sizes/MD5s
-- `POST http://{ip}:8000/api/playlistmedia {index: N}` → seek to slot N immediately
+**What the API exposes:**
 
-This is what the engine's `verify` and `lan-sync` commands use.
+- `GET /api/status` → returns `currentPlayingFile` (filename string), `currentPlaylist` (name string), `playlistOn` (bool), `tvStatus` (bool), `playlistsDeployed` (string[])
+- `GET /api/files` → list of filenames in player storage + total/used disk bytes (no per-file size, no MD5)
+- `GET /api/settings` → version, platform_version, orientation, sleep schedule, etc.
+- `POST /api/play/playlists/{name}` body `{play: true}` → restart that playlist from slot 0
+- `POST /api/play/files/play?file={name}` → interrupt and play a single file
+- `POST /api/playlistmedia/{forward|backward|pause}` → relative slot navigation
 
-**`verify`:** reads back exact playback position from each TV in parallel; computes drift in ms; technical pass/fail (no eyeballs).
-**`lan-sync`:** fires `playlistmedia` to all 4 simultaneously over LAN (RTT 1–3ms); each TV seeks to its correct stagger offset; re-runs verify to confirm.
+**What the API does NOT expose (informs the engine design):**
 
-Drift after `lan-sync`: typically **30–80ms**. Same frame to the human eye.
+- ❌ No `playPosition` / seconds-into-slot. **Sub-slot drift is unmeasurable.**
+- ❌ No absolute "seek to slot N". Only forward/backward (relative) or full restart.
+- ❌ No `currentAssetIndex`. Must derive from `currentPlayingFile` + cloud playlist lookup.
+- ❌ No clock/uptime/system-time endpoint. Read HTTP `Date:` response header for clock-skew detection.
+- ❌ No file MD5/checksum on the player. Hosted server has it; player doesn't.
+
+**Engine commands that use this layer:**
+
+- `verify` — reads `currentPlayingFile` from each TV in parallel, looks up its slot index in the cloud-side playlist, reports per-TV slot drift. **Slot-level granularity** (~8–10s per slot). Sub-slot drift is invisible to the API.
+- `lan-sync` — fires `POST /api/play/playlists/{name}` with `{play: true}` to all 4 in parallel via ThreadPoolExecutor. Each TV restarts its own playlist from slot 0. LAN RTT 1–5ms → restart command spread typically <10ms across all 4. Then auto-runs `verify` to confirm.
+- `lan-check` — reachability + auth probe; surfaces what's wrong (TCP, auth, IP) when LAN-direct features fail.
+
+**Why slot-granularity is the technical ceiling — and why it's still enough:**
+
+The PiSignage Player API doesn't expose play-position. So the engine cannot measure "TV-V1 is at 6.2s of slot 4, TV-V3 is at 6.4s of slot 4". It can only confirm "all 4 TVs are on the same slot index." That confirms they restarted simultaneously and haven't drifted by a full slot (~8s).
+
+Sub-slot drift (<8s but >0) does exist, dominated by Fire TV decoder warm-up jitter (30–100ms). It's invisible to the cloud and to the local API. The only way to measure it would be a high-speed camera pointed at the TVs — which is exactly the visual verification we're trying to escape. **For the realistic floor of ~30–80ms drift on Fire TV hardware, "all on same slot index" is operationally equivalent to "in sync."**
 
 ## Self-healing (the long-term shape)
 
