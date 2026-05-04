@@ -1,0 +1,53 @@
+{
+  "_doc": "16-creative deployment: 10 statics + 6 videos across 4 vertical TVs. Each TV has a 4-slot loop (10s per slot = 40s total). V1+V3 carry 2 videos each (decision-zone TVs); V2+V4 carry 1 video each (reading-zone TVs). Every creative appears exactly once across all 16 slots — zero waste.",
+  "_inventory": "10 statics: 6 single-combo (C1-C6) + 4 multi-combo (VegPair C1-C2, ProteinPair C3-C4, BiryaniPair C5-C6, AllInOne C1-C4). 6 videos: V_C1 through V_C6.",
+  "_psychology": {
+    "loop_duration":   "40s — fast enough to keep attention, slow enough to read each frame",
+    "slot_duration":   "10s each — hard cut transitions every 10s synchronously across all 4 TVs",
+    "motion_pattern":  "Slot 0: outer pair (V1+V3) pulses with hero videos. Slot 1: V2 (left) pulses. Slot 2: outer pair pulses again with second wave. Slot 3: V4 (counter) pulses. Customer's gaze is pulled outer→left→outer→counter→loop.",
+    "v1_narrative":    "CENTER hero — Smart Pick video → Full menu → Premium video → Protein comparison. The decision pillar.",
+    "v3_narrative":    "RIGHT premium — Mutton Biryani static → Chicken Biryani video → Biryani price ladder → Mutton Chatpata video. Premium upsell.",
+    "v2_narrative":    "LEFT entry — C1 ₹149 anchor → C2 motion → Veg pair value comparison → C2 static close. Friendly affordable arc.",
+    "v4_narrative":    "BAIN MARIE counter — C4 premium hero → C5 bestseller → Smart Pick at counter → Ghee Rice motion close. Decision-trigger arc."
+  },
+
+  "name": "psychology_v2_16creatives",
+  "description": "16-creative attention-rotation choreography. 4 TVs × 4 slots × 10s = 40s loop. 10 unique statics + 6 unique videos, each used exactly once.",
+  "mode": "timeline",
+
+  "screens": ["tv-v2", "tv-v1", "tv-v3", "tv-v4"],
+
+  "_slot_map": {
+    "slot_0_t0s":  {"_dish_set": "{C1, C3, C4, C5}",        "_motion": "V1+V3 video", "tv-v2": "S_C1 ₹149", "tv-v1": "V_C3 SMART", "tv-v3": "V_C5 BIRYANI", "tv-v4": "S_C4 PREMIUM"},
+    "slot_1_t10s": {"_dish_set": "{C2, C5, C6} + AllInOne", "_motion": "V2 video",    "tv-v2": "V_C2",      "tv-v1": "S_AllInOne", "tv-v3": "S_C6 ₹309",   "tv-v4": "S_C5 ₹229"},
+    "slot_2_t20s": {"_dish_set": "{C3, C4, C6} + VegPair",  "_motion": "V1+V3 video", "tv-v2": "S_VegPair", "tv-v1": "V_C6 PREMIUM", "tv-v3": "V_C4",      "tv-v4": "S_C3 SMART"},
+    "slot_3_t30s": {"_dish_set": "{C1, C2} + 2 pair cards", "_motion": "V4 video",    "tv-v2": "S_C2",      "tv-v1": "S_ProteinPair", "tv-v3": "S_BiryaniPair", "tv-v4": "V_C1"},
+    "slot_4_t40s": "→ loops to slot 0"
+  },
+
+  "timeline": [
+    {"_slot": 0, "_motion": "V1+V3", "duration": 10,
+     "tv-v2": "c1_ghee_dal_fry_static_v3",
+     "tv-v1": "c3_ghee_butter_chx_kabab_video_v3",
+     "tv-v3": "c5_chx_biryani_kabab_video_v3",
+     "tv-v4": "c4_ghee_mutton_chatpata_kabab_static_v3"},
+
+    {"_slot": 1, "_motion": "V2", "duration": 10,
+     "tv-v2": "c2_ghee_dal_kabab_video_v3",
+     "tv-v1": "gr_all_in_one_c1_c2_c3_c4_static_v3",
+     "tv-v3": "c6_mutton_biryani_kabab_static_v3",
+     "tv-v4": "c5_chx_biryani_kabab_static_v3"},
+
+    {"_slot": 2, "_motion": "V1+V3", "duration": 10,
+     "tv-v2": "gr_veg_pair_c1_c2_static_v3",
+     "tv-v1": "c6_mutton_biryani_kabab_video_v3",
+     "tv-v3": "c4_ghee_mutton_chatpata_kabab_video_v3",
+     "tv-v4": "c3_ghee_butter_chx_kabab_static_v3"},
+
+    {"_slot": 3, "_motion": "V4", "duration": 10,
+     "tv-v2": "c2_ghee_dal_kabab_static_v3",
+     "tv-v1": "gr_protein_pair_c3_c4_static_v3",
+     "tv-v3": "biryani_pair_c5_c6_static_v3",
+     "tv-v4": "c1_ghee_dal_fry_video_v3"}
+  ]
+}

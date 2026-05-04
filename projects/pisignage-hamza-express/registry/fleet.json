@@ -1,0 +1,84 @@
+{
+  "_doc": "Hardware registry. Maps tv-id to all PiSignage and ADB identifiers. Edit only when hardware changes. Source of truth for all IDs.",
+  "_verified": "2026-05-04",
+
+  "tv-v1": {
+    "label": "COMBOS · center customer wall · portrait",
+    "pisignage_playlist": "Menu Page 1",
+    "pisignage_player_id": "69a0bd975b9a6c146ac9dfae",
+    "pisignage_group_id": "69a0c685c219823ea50b6532",
+    "pisignage_group_name": "Menu Screen 3 - Page 1",
+    "orientation": "portrait",
+    "adb_ip": "192.168.31.113",
+    "adb_port": 5555,
+    "wifi_mac": "80:0c:f9:37:87:12",
+    "fire_tv_serial": "GT51WC1054130C1T"
+  },
+
+  "tv-v2": {
+    "label": "KATHI · left customer wall · portrait",
+    "pisignage_playlist": "Menu Page 2",
+    "pisignage_player_id": "69a0dd165b9a6c146ad84a85",
+    "pisignage_group_id": "69a0a25ac219823ea504241d",
+    "pisignage_group_name": "Menu Screen 2 - Page 2",
+    "orientation": "portrait",
+    "adb_ip": "192.168.31.81",
+    "adb_port": 5555,
+    "wifi_mac": "00:f3:61:dc:3b:1c",
+    "fire_tv_serial": "GT51WC10543707L6"
+  },
+
+  "tv-v3": {
+    "label": "SHAWARMA · right customer wall · portrait",
+    "pisignage_playlist": "Menu Page 3",
+    "pisignage_player_id": "69a0dd165b9a6c146ad84a7d",
+    "pisignage_group_id": "69a0a259c219823ea50423bf",
+    "pisignage_group_name": "Menu Screen 1 - Page 3",
+    "orientation": "portrait",
+    "adb_ip": "192.168.31.135",
+    "adb_port": 5555,
+    "wifi_mac": "10:09:f9:f8:e1:89",
+    "fire_tv_serial": "GT51WC085235022Q"
+  },
+
+  "tv-v4": {
+    "label": "SHEEK · Bain Marie · portrait",
+    "pisignage_playlist": "KDS Bain Marie",
+    "pisignage_player_id": "69a060985b9a6c146a9dc94f",
+    "pisignage_group_id": "69a0b678c219823ea507ef1e",
+    "pisignage_group_name": "Bain Marie - KDS",
+    "orientation": "portrait",
+    "adb_ip": "192.168.31.164",
+    "adb_port": 5555,
+    "wifi_mac": "44:6D:7F:7B:2E:5B",
+    "fire_tv_serial": null,
+    "_note": "Firestick was moved to outdoor temp — needs to be plugged back at BM position"
+  },
+
+  "tv-h1": {
+    "label": "GRILL · Kitchen Pass · landscape",
+    "pisignage_playlist": "KDS Kitchen Pass",
+    "pisignage_player_id": "69a05aad5b9a6c146a9ae416",
+    "pisignage_group_id": "69a0b677c219823ea507ef0e",
+    "pisignage_group_name": "Kitchen Pass - KDS",
+    "orientation": "landscape",
+    "adb_ip": "192.168.31.33",
+    "adb_port": 5555,
+    "wifi_mac": "00:f3:61:c1:ec:23",
+    "fire_tv_serial": "G4N1WC0744820M7M"
+  },
+
+  "tv-h2": {
+    "label": "OUTDOOR · street façade · landscape",
+    "pisignage_playlist": null,
+    "pisignage_player_id": "69f5dffd7eb139d455d00901",
+    "pisignage_group_id": "69f6013bedc3464da687f668",
+    "pisignage_group_name": "Outdoor Facade",
+    "orientation": "landscape",
+    "adb_ip": "192.168.31.103",
+    "adb_port": 5555,
+    "wifi_mac": "EC:0D:E4:BA:D6:A0",
+    "fire_tv_serial": "G4N1WC06438500LX",
+    "_note": "Registered 2026-05-04. No playlist assigned yet."
+  }
+}

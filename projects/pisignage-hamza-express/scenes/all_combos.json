@@ -1,0 +1,97 @@
+{
+  "name": "all_combos_staggered",
+  "description": "All 6 combos cycling across 4 vertical TVs. Staggered so no 2 TVs ever show the same combo at the same moment. 108s loop. Simultaneous transitions.",
+
+  "_timing": "Each combo = 18s (8s static + 10s video). 6 combos x 18s = 108s total. All TVs identical = simultaneous transitions.",
+
+  "_stagger": {
+    "tv-v2": "offset 0 — C1 first  (left wall)",
+    "tv-v1": "offset 2 — C3 first  (center wall)",
+    "tv-v3": "offset 4 — C5 first  (right wall)",
+    "tv-v4": "offset 1 — C2 first  (Bain Marie)"
+  },
+
+  "_slot_map": {
+    "t_0s":   {"tv-v2": "C1", "tv-v1": "C3", "tv-v3": "C5", "tv-v4": "C2"},
+    "t_18s":  {"tv-v2": "C2", "tv-v1": "C4", "tv-v3": "C6", "tv-v4": "C3"},
+    "t_36s":  {"tv-v2": "C3", "tv-v1": "C5", "tv-v3": "C1", "tv-v4": "C4"},
+    "t_54s":  {"tv-v2": "C4", "tv-v1": "C6", "tv-v3": "C2", "tv-v4": "C5"},
+    "t_72s":  {"tv-v2": "C5", "tv-v1": "C1", "tv-v3": "C3", "tv-v4": "C6"},
+    "t_90s":  {"tv-v2": "C6", "tv-v1": "C2", "tv-v3": "C4", "tv-v4": "C1"},
+    "t_108s": "→ loops back to t_0s"
+  },
+
+  "conveyances": {
+    "c1_ghee_dal_fry": [
+      {"asset_id": "c1_ghee_dal_fry_static_v3", "duration": 8},
+      {"asset_id": "c1_ghee_dal_fry_video_v3",  "duration": 10}
+    ],
+    "c2_ghee_dal_kabab": [
+      {"asset_id": "c2_ghee_dal_kabab_static_v3", "duration": 8},
+      {"asset_id": "c2_ghee_dal_kabab_video_v3",  "duration": 10}
+    ],
+    "c3_ghee_butter_chx_kabab": [
+      {"asset_id": "c3_ghee_butter_chx_kabab_static_v3", "duration": 8},
+      {"asset_id": "c3_ghee_butter_chx_kabab_video_v3",  "duration": 10}
+    ],
+    "c4_ghee_mutton_chatpata_kabab": [
+      {"asset_id": "c4_ghee_mutton_chatpata_kabab_static_v3", "duration": 8},
+      {"asset_id": "c4_ghee_mutton_chatpata_kabab_video_v3",  "duration": 10}
+    ],
+    "c5_chx_biryani_kabab": [
+      {"asset_id": "c5_chx_biryani_kabab_static_v3", "duration": 8},
+      {"asset_id": "c5_chx_biryani_kabab_video_v3",  "duration": 10}
+    ],
+    "c6_mutton_biryani_kabab": [
+      {"asset_id": "c6_mutton_biryani_kabab_static_v3", "duration": 8},
+      {"asset_id": "c6_mutton_biryani_kabab_video_v3",  "duration": 10}
+    ]
+  },
+
+  "screens": {
+    "tv-v2": {
+      "_label": "LEFT wall · offset 0 · starts C1",
+      "conveyance_order": [
+        "c1_ghee_dal_fry",
+        "c2_ghee_dal_kabab",
+        "c3_ghee_butter_chx_kabab",
+        "c4_ghee_mutton_chatpata_kabab",
+        "c5_chx_biryani_kabab",
+        "c6_mutton_biryani_kabab"
+      ]
+    },
+    "tv-v1": {
+      "_label": "CENTER wall · offset 2 · starts C3",
+      "conveyance_order": [
+        "c3_ghee_butter_chx_kabab",
+        "c4_ghee_mutton_chatpata_kabab",
+        "c5_chx_biryani_kabab",
+        "c6_mutton_biryani_kabab",
+        "c1_ghee_dal_fry",
+        "c2_ghee_dal_kabab"
+      ]
+    },
+    "tv-v3": {
+      "_label": "RIGHT wall · offset 4 · starts C5",
+      "conveyance_order": [
+        "c5_chx_biryani_kabab",
+        "c6_mutton_biryani_kabab",
+        "c1_ghee_dal_fry",
+        "c2_ghee_dal_kabab",
+        "c3_ghee_butter_chx_kabab",
+        "c4_ghee_mutton_chatpata_kabab"
+      ]
+    },
+    "tv-v4": {
+      "_label": "BAIN MARIE · offset 1 · starts C2",
+      "conveyance_order": [
+        "c2_ghee_dal_kabab",
+        "c3_ghee_butter_chx_kabab",
+        "c4_ghee_mutton_chatpata_kabab",
+        "c5_chx_biryani_kabab",
+        "c6_mutton_biryani_kabab",
+        "c1_ghee_dal_fry"
+      ]
+    }
+  }
+}

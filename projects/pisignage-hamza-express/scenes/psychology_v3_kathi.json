@@ -1,0 +1,60 @@
+{
+  "_doc": "Phase 2 deployment: V2 LEFT swaps to Kathi-exclusive identity. Loop expanded from 40s to 50s (5 slots × 10s) to use all 5 Kathi creatives + maximize total inventory utilization. V1, V3, V4 retain Phase 1 architecture, each gains 1 new slot for previously-reserved combos. 20 of 21 creatives in active scene; 1 reserved (S_C2 single static).",
+  "_phase": "Phase 2 of 3",
+  "_inventory_used": "20 of 21 — full library minus c2_ghee_dal_kabab_static_v3 (held for daypart scenes)",
+  "_psychology": {
+    "loop_duration":      "50s — slightly slower cycle than Phase 1's 40s; trades pace for variety and full inventory utilization",
+    "v2_role_change":     "FROM combo entry/anchor → Kathi-exclusive (₹90 anchor, both K1 + KT cinemagraphs, K1 vs KT pair card)",
+    "motion_intensity":   "8 motions per 50s loop (was 6 per 40s in Phase 1) — denser, more engaging rhythm",
+    "v1_5th_slot":        "S_C1 ₹149 — 'value pop' on the hero TV; reminds customer the price-floor exists even on the recommended-dish screen",
+    "v3_5th_slot":        "S_VegPair — broadens premium TV's range, anchors at the bottom of the price ladder",
+    "v4_5th_slot":        "V_C2 motion — Ghee+Dal+Kabab in motion at counter, visually appetizing close before order"
+  },
+
+  "name": "psychology_v3_kathi",
+  "description": "Phase 2 — V2 LEFT switches to Kathi-exclusive (5 Kathi creatives, all used). 5 slots × 10s = 50s loop. V1/V3/V4 each gain a 5th slot for previously-reserved combos. 20 of 21 creatives in active scene.",
+  "mode": "timeline",
+
+  "screens": ["tv-v2", "tv-v1", "tv-v3", "tv-v4"],
+
+  "_slot_map": {
+    "slot_0_t0s":  {"_motion": "V1+V3", "tv-v2": "S_K1 ₹90 anchor",   "tv-v1": "V_C3 SMART",    "tv-v3": "V_C5 BIRYANI",   "tv-v4": "S_C4 ₹289"},
+    "slot_1_t10s": {"_motion": "V2",    "tv-v2": "V_K1 cinemagraph",  "tv-v1": "S_AllInOne menu", "tv-v3": "S_C6 ₹309",    "tv-v4": "S_C5 ₹229 bestseller"},
+    "slot_2_t20s": {"_motion": "V1+V3", "tv-v2": "S_KathiPair K1+KT", "tv-v1": "V_C6 PREMIUM",  "tv-v3": "V_C4 ₹289",     "tv-v4": "S_C3 SMART"},
+    "slot_3_t30s": {"_motion": "V4",    "tv-v2": "S_KT premium",      "tv-v1": "S_ProteinPair", "tv-v3": "S_BiryaniPair", "tv-v4": "V_C1 ₹149 motion"},
+    "slot_4_t40s": {"_motion": "V2+V4", "tv-v2": "V_KT cinemagraph",  "tv-v1": "S_C1 ₹149 pop", "tv-v3": "S_VegPair",     "tv-v4": "V_C2 ₹199 motion"},
+    "slot_5_t50s": "→ loops back to slot 0"
+  },
+
+  "timeline": [
+    {"_slot": 0, "_motion": "V1+V3", "duration": 10,
+     "tv-v2": "k1_chicken_kathi_static_v3",
+     "tv-v1": "c3_ghee_butter_chx_kabab_video_v3",
+     "tv-v3": "c5_chx_biryani_kabab_video_v3",
+     "tv-v4": "c4_ghee_mutton_chatpata_kabab_static_v3"},
+
+    {"_slot": 1, "_motion": "V2_KATHI", "duration": 10,
+     "tv-v2": "k1_chicken_kathi_video_v3",
+     "tv-v1": "gr_all_in_one_c1_c2_c3_c4_static_v3",
+     "tv-v3": "c6_mutton_biryani_kabab_static_v3",
+     "tv-v4": "c5_chx_biryani_kabab_static_v3"},
+
+    {"_slot": 2, "_motion": "V1+V3", "duration": 10,
+     "tv-v2": "kathi_pair_k1_kt_static_v3",
+     "tv-v1": "c6_mutton_biryani_kabab_video_v3",
+     "tv-v3": "c4_ghee_mutton_chatpata_kabab_video_v3",
+     "tv-v4": "c3_ghee_butter_chx_kabab_static_v3"},
+
+    {"_slot": 3, "_motion": "V4", "duration": 10,
+     "tv-v2": "kt_chicken_tikka_kathi_static_v3",
+     "tv-v1": "gr_protein_pair_c3_c4_static_v3",
+     "tv-v3": "biryani_pair_c5_c6_static_v3",
+     "tv-v4": "c1_ghee_dal_fry_video_v3"},
+
+    {"_slot": 4, "_motion": "V2_KATHI+V4", "duration": 10,
+     "tv-v2": "kt_chicken_tikka_kathi_video_v3",
+     "tv-v1": "c1_ghee_dal_fry_static_v3",
+     "tv-v3": "gr_veg_pair_c1_c2_static_v3",
+     "tv-v4": "c2_ghee_dal_kabab_video_v3"}
+  ]
+}
