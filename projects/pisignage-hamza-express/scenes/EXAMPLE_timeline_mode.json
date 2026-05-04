@@ -1,0 +1,35 @@
+{
+  "_doc": "EXAMPLE: timeline-mode scene. Each row = one synchronized moment. Every TV cuts to its row[tv_id] asset at the same instant. Designed for frame-by-frame consumer-psychology choreography. Scales to any number of rows / creatives / screens.",
+
+  "name": "example_timeline_choreography",
+  "description": "Demonstration of timeline mode — replicates the all_combos stagger but in row-per-moment form to show how it scales to non-stagger choreographies.",
+  "mode": "timeline",
+
+  "screens": ["tv-v2", "tv-v1", "tv-v3", "tv-v4"],
+
+  "_authoring_notes": {
+    "row_count":    "12 rows (matches the 6-combo × 2-state stagger). Could be 100 rows for finer choreography.",
+    "duration":     "Per-row duration in seconds. ALL TVs see the same duration on the same row → timing contract is automatic.",
+    "asset_per_tv": "Each row must specify an asset_id for EVERY screen listed in 'screens'. No omissions."
+  },
+
+  "timeline": [
+    {"_t": 0,  "duration":  8, "tv-v2": "c1_ghee_dal_fry_static_v3",        "tv-v1": "c3_ghee_butter_chx_kabab_static_v3",    "tv-v3": "c5_chx_biryani_kabab_static_v3",         "tv-v4": "c2_ghee_dal_kabab_static_v3"},
+    {"_t": 8,  "duration": 10, "tv-v2": "c1_ghee_dal_fry_video_v3",         "tv-v1": "c3_ghee_butter_chx_kabab_video_v3",     "tv-v3": "c5_chx_biryani_kabab_video_v3",          "tv-v4": "c2_ghee_dal_kabab_video_v3"},
+
+    {"_t": 18, "duration":  8, "tv-v2": "c2_ghee_dal_kabab_static_v3",      "tv-v1": "c4_ghee_mutton_chatpata_kabab_static_v3", "tv-v3": "c6_mutton_biryani_kabab_static_v3",   "tv-v4": "c3_ghee_butter_chx_kabab_static_v3"},
+    {"_t": 26, "duration": 10, "tv-v2": "c2_ghee_dal_kabab_video_v3",       "tv-v1": "c4_ghee_mutton_chatpata_kabab_video_v3",  "tv-v3": "c6_mutton_biryani_kabab_video_v3",    "tv-v4": "c3_ghee_butter_chx_kabab_video_v3"},
+
+    {"_t": 36, "duration":  8, "tv-v2": "c3_ghee_butter_chx_kabab_static_v3",        "tv-v1": "c5_chx_biryani_kabab_static_v3",       "tv-v3": "c1_ghee_dal_fry_static_v3",          "tv-v4": "c4_ghee_mutton_chatpata_kabab_static_v3"},
+    {"_t": 44, "duration": 10, "tv-v2": "c3_ghee_butter_chx_kabab_video_v3",         "tv-v1": "c5_chx_biryani_kabab_video_v3",        "tv-v3": "c1_ghee_dal_fry_video_v3",           "tv-v4": "c4_ghee_mutton_chatpata_kabab_video_v3"},
+
+    {"_t": 54, "duration":  8, "tv-v2": "c4_ghee_mutton_chatpata_kabab_static_v3",   "tv-v1": "c6_mutton_biryani_kabab_static_v3",    "tv-v3": "c2_ghee_dal_kabab_static_v3",        "tv-v4": "c5_chx_biryani_kabab_static_v3"},
+    {"_t": 62, "duration": 10, "tv-v2": "c4_ghee_mutton_chatpata_kabab_video_v3",    "tv-v1": "c6_mutton_biryani_kabab_video_v3",     "tv-v3": "c2_ghee_dal_kabab_video_v3",         "tv-v4": "c5_chx_biryani_kabab_video_v3"},
+
+    {"_t": 72, "duration":  8, "tv-v2": "c5_chx_biryani_kabab_static_v3",            "tv-v1": "c1_ghee_dal_fry_static_v3",            "tv-v3": "c3_ghee_butter_chx_kabab_static_v3", "tv-v4": "c6_mutton_biryani_kabab_static_v3"},
+    {"_t": 80, "duration": 10, "tv-v2": "c5_chx_biryani_kabab_video_v3",             "tv-v1": "c1_ghee_dal_fry_video_v3",             "tv-v3": "c3_ghee_butter_chx_kabab_video_v3",  "tv-v4": "c6_mutton_biryani_kabab_video_v3"},
+
+    {"_t": 90, "duration":  8, "tv-v2": "c6_mutton_biryani_kabab_static_v3",         "tv-v1": "c2_ghee_dal_kabab_static_v3",          "tv-v3": "c4_ghee_mutton_chatpata_kabab_static_v3", "tv-v4": "c1_ghee_dal_fry_static_v3"},
+    {"_t": 98, "duration": 10, "tv-v2": "c6_mutton_biryani_kabab_video_v3",          "tv-v1": "c2_ghee_dal_kabab_video_v3",           "tv-v3": "c4_ghee_mutton_chatpata_kabab_video_v3",  "tv-v4": "c1_ghee_dal_fry_video_v3"}
+  ]
+}

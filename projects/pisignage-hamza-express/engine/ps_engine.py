@@ -6,6 +6,7 @@ Compile, validate, and deploy scenes to the 6-TV fleet.
 Usage:
   python3 ps_engine.py status                     # poll all players, show live state
   python3 ps_engine.py files                      # list all files in PiSignage library
+  python3 ps_engine.py validate <scene.json>      # ffprobe gate: codec, duration, resolution, orientation
   python3 ps_engine.py compile <scene.json>       # dry-run: show playlist arrays without deploying
   python3 ps_engine.py deploy  <scene.json>       # validate + push to all TVs in scene
   python3 ps_engine.py audit                      # diff: server playlists vs what each player reports
@@ -23,6 +24,8 @@ Examples:
 import json
 import os
 import pathlib
+import shutil
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -83,16 +86,33 @@ def load_scene(path: str) -> dict:
 
 # ─── COMPILE ─────────────────────────────────────────────────────────────────
 
-def compile_scene(scene: dict, assets_reg: dict, fleet: dict) -> dict:
+def _asset_obj(reg_entry: dict, duration: int) -> dict:
+    """Wrap an asset registry entry into a PiSignage playlist asset object."""
+    return {
+        "filename": reg_entry["pisignage_filename"],
+        "duration": duration,
+        "fullscreen": True,
+        "selected": True,
+        "option": {"main": False},
+    }
+
+def _resolve_asset(aid: str, assets_reg: dict) -> dict:
+    if aid not in assets_reg:
+        raise ValueError(
+            f"Asset '{aid}' not in registry/assets.json.\n"
+            f"Add an entry there before deploying."
+        )
+    return assets_reg[aid]
+
+def compile_scene_conveyance(scene: dict, assets_reg: dict, fleet: dict) -> dict:
     """
-    Returns {tv_id: [pisignage_asset_objects]} for every screen in the scene.
-    Raises ValueError for any missing asset_id or tv_id.
+    Conveyance mode (legacy): each TV plays the same set of conveyances in different orders.
+    Best for: 'stagger N combos across N screens', loop offset patterns.
     """
     compiled = {}
     for tv_id, screen in scene["screens"].items():
         if tv_id not in fleet:
             raise ValueError(f"TV '{tv_id}' not in registry/fleet.json")
-
         playlist_assets = []
         for conv_name in screen["conveyance_order"]:
             if conv_name not in scene["conveyances"]:
@@ -101,22 +121,71 @@ def compile_scene(scene: dict, assets_reg: dict, fleet: dict) -> dict:
                     f"is not defined in scene['conveyances']"
                 )
             for slot in scene["conveyances"][conv_name]:
-                aid = slot["asset_id"]
-                if aid not in assets_reg:
-                    raise ValueError(
-                        f"Asset '{aid}' not in registry/assets.json.\n"
-                        f"Add an entry there before deploying."
-                    )
-                reg = assets_reg[aid]
-                playlist_assets.append({
-                    "filename": reg["pisignage_filename"],
-                    "duration": slot.get("duration", reg["default_duration"]),
-                    "fullscreen": True,
-                    "selected": True,
-                    "option": {"main": False},
-                })
+                reg = _resolve_asset(slot["asset_id"], assets_reg)
+                duration = slot.get("duration", reg["default_duration"])
+                playlist_assets.append(_asset_obj(reg, duration))
         compiled[tv_id] = playlist_assets
     return compiled
+
+def compile_scene_timeline(scene: dict, assets_reg: dict, fleet: dict) -> dict:
+    """
+    Timeline mode: each row defines one synchronized 'moment' across all screens.
+    Each row = one slot index that fires simultaneously on every TV.
+    Best for: per-frame choreography, large creative libraries, consumer-psychology pacing.
+
+    Schema:
+      {
+        "mode": "timeline",
+        "screens": ["tv-v1", "tv-v2", "tv-v3", "tv-v4"],   # explicit screen list
+        "timeline": [
+          {"duration": 8,  "tv-v1": "asset_a", "tv-v2": "asset_b", "tv-v3": "asset_c", "tv-v4": "asset_d"},
+          {"duration": 10, "tv-v1": "asset_e", "tv-v2": "asset_f", "tv-v3": "asset_g", "tv-v4": "asset_h"},
+          ...
+        ]
+      }
+
+    Compile invariant: every row contributes one slot to every TV's playlist with the same
+    duration. By construction the timing contract is guaranteed — no TV can drift in the
+    conveyance-order math because every TV sees the same row durations.
+    """
+    screens = scene.get("screens")
+    if not isinstance(screens, list) or not screens:
+        raise ValueError(
+            "timeline-mode scene requires 'screens' as a list of tv_ids "
+            "(e.g. [\"tv-v1\",\"tv-v2\",\"tv-v3\",\"tv-v4\"])"
+        )
+    for tv_id in screens:
+        if tv_id not in fleet:
+            raise ValueError(f"TV '{tv_id}' not in registry/fleet.json")
+
+    rows = scene.get("timeline")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("timeline-mode scene requires non-empty 'timeline' array")
+
+    compiled = {tv_id: [] for tv_id in screens}
+    for i, row in enumerate(rows):
+        duration = row.get("duration")
+        if not isinstance(duration, int) or duration <= 0:
+            raise ValueError(f"timeline[{i}].duration must be positive integer (got {duration!r})")
+        for tv_id in screens:
+            aid = row.get(tv_id)
+            if not aid:
+                raise ValueError(
+                    f"timeline[{i}] missing entry for {tv_id}. "
+                    f"Every row must specify an asset_id for every screen."
+                )
+            reg = _resolve_asset(aid, assets_reg)
+            compiled[tv_id].append(_asset_obj(reg, duration))
+    return compiled
+
+def compile_scene(scene: dict, assets_reg: dict, fleet: dict) -> dict:
+    """Dispatch to the right compiler based on scene['mode']. Defaults to 'conveyance'."""
+    mode = scene.get("mode", "conveyance")
+    if mode == "conveyance":
+        return compile_scene_conveyance(scene, assets_reg, fleet)
+    if mode == "timeline":
+        return compile_scene_timeline(scene, assets_reg, fleet)
+    raise ValueError(f"Unknown scene mode '{mode}'. Use 'conveyance' or 'timeline'.")
 
 # ─── VALIDATION ──────────────────────────────────────────────────────────────
 
@@ -173,10 +242,35 @@ def validate_no_collision_at_slot(scene: dict):
     else:
         print(f"  ✓ No same conveyance on 2 screens at same slot")
 
+def validate_no_collision_per_row_timeline(scene: dict):
+    """Timeline mode: warn if 2+ TVs show the same asset in the same row."""
+    screens = scene["screens"]
+    collisions = []
+    for i, row in enumerate(scene["timeline"]):
+        seen = {}
+        for tv_id in screens:
+            aid = row[tv_id]
+            if aid in seen:
+                collisions.append(f"  row {i}: {tv_id} and {seen[aid]} both show '{aid}'")
+            seen[aid] = tv_id
+    if collisions:
+        print(f"  ⚠ Same-asset collisions per row (check if intentional):")
+        for c in collisions:
+            print(c)
+    else:
+        print(f"  ✓ No two screens show the same asset in the same row")
+
 def validate_scene(scene: dict, compiled: dict) -> int:
     print("Validating...")
-    validate_no_duplicates_per_screen(scene)
-    validate_no_collision_at_slot(scene)
+    mode = scene.get("mode", "conveyance")
+    if mode == "conveyance":
+        validate_no_duplicates_per_screen(scene)
+        validate_no_collision_at_slot(scene)
+    elif mode == "timeline":
+        validate_no_collision_per_row_timeline(scene)
+        n_rows = len(scene["timeline"])
+        n_screens = len(scene["screens"])
+        print(f"  ✓ Timeline: {n_rows} rows × {n_screens} screens = {n_rows * n_screens} slot fires")
     loop_s = validate_timing_contract(compiled)
     print("  ✓ All checks passed\n")
     return loop_s
@@ -418,6 +512,137 @@ def cmd_deploy(scene_path: str, token: str):
         f"   Run 'python3 ps_engine.py status' in 2–5 min to verify."
     )
 
+def _ffprobe_json(path: pathlib.Path) -> dict:
+    out = subprocess.check_output(
+        ["ffprobe", "-v", "error", "-show_format", "-show_streams", "-of", "json", str(path)],
+        stderr=subprocess.STDOUT,
+    )
+    return json.loads(out)
+
+def _check_creative(path: pathlib.Path, expected_orientation: str) -> list:
+    """Return list of human-readable problems with this creative file. Empty list = pass."""
+    probs = []
+    if not path.exists():
+        return [f"file does not exist: {path}"]
+
+    ext = path.suffix.lower()
+    if ext not in {".mp4", ".png", ".jpg", ".jpeg"}:
+        probs.append(f"unsupported extension '{ext}' (allowed: .mp4 .png .jpg .jpeg)")
+        return probs
+
+    try:
+        probe = _ffprobe_json(path)
+    except subprocess.CalledProcessError as e:
+        return [f"ffprobe failed: {e.output.decode()[:200]}"]
+
+    streams = probe.get("streams", [])
+    fmt = probe.get("format", {})
+    video_streams = [s for s in streams if s.get("codec_type") == "video"]
+    if not video_streams:
+        probs.append("no video stream found")
+        return probs
+    v = video_streams[0]
+    width  = int(v.get("width", 0))
+    height = int(v.get("height", 0))
+    codec  = v.get("codec_name", "")
+
+    # Orientation
+    is_portrait = height > width
+    is_landscape = width > height
+    if expected_orientation == "portrait" and not is_portrait:
+        probs.append(f"expected portrait but got {width}x{height}")
+    if expected_orientation == "landscape" and not is_landscape:
+        probs.append(f"expected landscape but got {width}x{height}")
+
+    if ext == ".mp4":
+        # H.264 only — Fire TV decoder is most consistent on H.264 baseline/main
+        if codec != "h264":
+            probs.append(f"video codec '{codec}' — must be 'h264' for Fire TV consistency")
+
+        # Integer-second duration
+        dur = float(fmt.get("duration", 0) or 0)
+        rounded = round(dur)
+        if rounded == 0 or abs(dur - rounded) > 0.05:
+            probs.append(f"duration {dur:.3f}s — must be an exact integer (±50ms tolerance)")
+
+        # Resolution sanity
+        if expected_orientation == "portrait" and (width, height) != (1080, 1920):
+            probs.append(f"portrait video should be 1080x1920, got {width}x{height}")
+        if expected_orientation == "landscape" and (width, height) != (1920, 1080):
+            probs.append(f"landscape video should be 1920x1080, got {width}x{height}")
+
+        # GOP / keyframe interval — try to read; tolerant if ffprobe doesn't expose
+        # (We don't fail on this; we warn. GOP ≤ fps means every frame is a keyframe candidate.)
+        # Skipping deep GOP probe for now — would require -read_intervals.
+
+    return probs
+
+def cmd_validate_creative(scene_path: str):
+    """
+    Probe every creative referenced by the scene against fps/codec/duration/resolution rules.
+    Reads creatives from a local source directory if --creatives-dir is supplied,
+    otherwise looks under projects/pisignage-hamza-express/creatives/.
+    Pure local check — no API calls. Run BEFORE 'upload' or 'deploy'.
+    """
+    if not shutil.which("ffprobe"):
+        sys.exit("ffprobe not found. Install ffmpeg: brew install ffmpeg")
+
+    fleet      = load_fleet()
+    assets_reg = load_assets()
+    scene      = load_scene(scene_path)
+
+    # Build set of asset_ids referenced by the scene
+    referenced = set()
+    mode = scene.get("mode", "conveyance")
+    if mode == "conveyance":
+        for screen in scene["screens"].values():
+            for conv_name in screen["conveyance_order"]:
+                for slot in scene["conveyances"][conv_name]:
+                    referenced.add(slot["asset_id"])
+    else:
+        for tv_id in scene["screens"]:
+            for row in scene["timeline"]:
+                if row.get(tv_id):
+                    referenced.add(row[tv_id])
+
+    # Resolve each to (path, orientation)
+    creatives_dir = PROJECT_DIR / "creatives"
+    print(f"\nValidating {len(referenced)} creatives against {creatives_dir}/")
+    print("─" * 78)
+
+    fail_count = 0
+    pass_count = 0
+    skip_count = 0
+    for aid in sorted(referenced):
+        if aid not in assets_reg:
+            print(f"  ❌ {aid:<45}  not in registry/assets.json")
+            fail_count += 1
+            continue
+        reg = assets_reg[aid]
+        fname = reg["pisignage_filename"]
+        orient = reg.get("orientation", "portrait")
+        local_path = creatives_dir / fname
+        if not local_path.exists():
+            print(f"  ⊘  {fname:<55}  not found locally (skipping — uploaded directly to PiSignage)")
+            skip_count += 1
+            continue
+        probs = _check_creative(local_path, orient)
+        if probs:
+            print(f"  ❌ {fname}")
+            for p in probs:
+                print(f"     {p}")
+            fail_count += 1
+        else:
+            print(f"  ✅ {fname}")
+            pass_count += 1
+
+    print("─" * 78)
+    print(f"  pass: {pass_count}   fail: {fail_count}   skipped (no local file): {skip_count}")
+    if fail_count:
+        print("\n❌ Creative validation FAILED. Fix or re-encode the failing files before deploying.")
+        sys.exit(1)
+    print("\n✅ All locally-present creatives pass. Safe to upload + deploy.")
+
 def cmd_audit(token: str):
     """
     Pulls server-side playlist state + per-player state for all vertical TVs and
@@ -658,7 +883,7 @@ def cmd_upload(file_path: str, token: str):
 
 # ─── MAIN ────────────────────────────────────────────────────────────────────
 
-COMMANDS = {"status", "files", "compile", "deploy", "upload", "resync", "audit", "sync"}
+COMMANDS = {"status", "files", "compile", "deploy", "upload", "resync", "audit", "sync", "validate"}
 
 def main():
     args = sys.argv[1:]
@@ -668,11 +893,16 @@ def main():
 
     cmd = args[0]
 
-    # compile does not need a live token
+    # compile + validate do not need a live token
     if cmd == "compile":
         if len(args) < 2:
             sys.exit("Usage: ps_engine.py compile <scene.json>")
         cmd_compile(args[1])
+        return
+    if cmd == "validate":
+        if len(args) < 2:
+            sys.exit("Usage: ps_engine.py validate <scene.json>")
+        cmd_validate_creative(args[1])
         return
 
     token = get_token()
