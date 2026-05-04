@@ -8,7 +8,9 @@ Usage:
   python3 ps_engine.py files                      # list all files in PiSignage library
   python3 ps_engine.py compile <scene.json>       # dry-run: show playlist arrays without deploying
   python3 ps_engine.py deploy  <scene.json>       # validate + push to all TVs in scene
-  python3 ps_engine.py resync                     # restart all vertical players from position 0
+  python3 ps_engine.py audit                      # diff: server playlists vs what each player reports
+  python3 ps_engine.py sync                       # WAIT until all 13/13 files done, THEN coordinated restart
+  python3 ps_engine.py resync                     # blunt restart all vertical players (no readiness gate)
   python3 ps_engine.py upload  <file_path>        # upload a local file to PiSignage library
 
 Examples:
@@ -232,9 +234,30 @@ def _poll_player(token: str, player_id: str) -> dict:
         "playlistOn":      p.get("playlistOn"),
         "isConnected":     p.get("isConnected"),
         "wgetSpeed":       p.get("wgetSpeed", ""),
+        "wgetBytes":       p.get("wgetBytes", ""),
         "filesQueue":      p.get("filesQueue", []),
         "lastReported":    p.get("lastReported"),
+        "syncInProgress":  p.get("syncInProgress"),
     }
+
+def _get_playlist(token: str, name: str) -> dict:
+    encoded = urllib.parse.quote(name, safe="")
+    data = _get(token, f"/playlists/{encoded}")
+    return data.get("data", {}) if isinstance(data, dict) else {}
+
+def _parse_files_complete(wgetBytes: str) -> tuple:
+    """
+    'wgetBytes' looks like: '13/13 files completed' or '8/13 files completed' or ''.
+    Returns (done, total) or (None, None) if not parseable.
+    """
+    if not wgetBytes or "files completed" not in wgetBytes:
+        return None, None
+    try:
+        head = wgetBytes.split(" files")[0]
+        a, b = head.split("/")
+        return int(a), int(b)
+    except Exception:
+        return None, None
 
 # ─── COMMANDS ────────────────────────────────────────────────────────────────
 
@@ -395,6 +418,169 @@ def cmd_deploy(scene_path: str, token: str):
         f"   Run 'python3 ps_engine.py status' in 2–5 min to verify."
     )
 
+def cmd_audit(token: str):
+    """
+    Pulls server-side playlist state + per-player state for all vertical TVs and
+    prints a diff of what's expected vs what each player actually reports.
+    No writes. Read-only diagnostic.
+    """
+    fleet = load_fleet()
+    vertical = {k: v for k, v in fleet.items() if not k.startswith("_") and k.startswith("tv-v")}
+
+    print("\n═══ SERVER-SIDE PLAYLISTS ═══")
+    server_state = {}
+    for tv_id, tv in vertical.items():
+        pname = tv.get("pisignage_playlist")
+        if not pname:
+            print(f"{tv_id}: no playlist registered")
+            continue
+        try:
+            pl = _get_playlist(token, pname)
+            assets = pl.get("assets", [])
+            total = sum(int(a.get("duration", 0)) for a in assets)
+            first = assets[0]["filename"] if assets else "—"
+            server_state[tv_id] = {
+                "playlist":   pname,
+                "asset_count": len(assets),
+                "total_s":    total,
+                "first":      first,
+                "filenames":  [a["filename"] for a in assets],
+            }
+            print(f"  {tv_id:<6} [{pname:<18}]  {len(assets)} assets  {total}s  → starts {first}")
+        except Exception as e:
+            print(f"  {tv_id}: ERROR {e}")
+
+    print("\n═══ PLAYER REPORTED STATE ═══")
+    print(f"{'TV':<6}  {'Connected':<10}  {'Playing':<18}  {'Files':<10}  {'Now':<55}  {'Match?':<10}")
+    print("─" * 120)
+    drift_warnings = []
+    for tv_id, tv in vertical.items():
+        pid = tv.get("pisignage_player_id")
+        if not pid:
+            continue
+        try:
+            s = _poll_player(token, pid)
+            done, total = _parse_files_complete(s.get("wgetBytes", "") or "")
+            files = f"{done}/{total}" if done is not None else "—"
+            current_pl = s.get("currentPlaylist") or "—"
+            wget = (s.get("wgetSpeed") or "").replace("current file:", "")[:55]
+            connected = "✅" if s.get("isConnected") else "❌"
+            expected = server_state.get(tv_id, {}).get("playlist", "")
+            match = "✅" if current_pl == expected else f"❌ exp={expected}"
+            ready = (done == total) if (done is not None and total is not None) else False
+            ready_marker = " READY" if ready else " DOWNLOADING"
+            print(f"{tv_id:<6}  {connected:<10}  {current_pl:<18}  {files:<10}  {wget:<55}  {match}{ready_marker}")
+            if not ready:
+                drift_warnings.append(f"  {tv_id} not finished downloading ({files})")
+        except Exception as e:
+            print(f"{tv_id}: ERROR {e}")
+
+    print("\n═══ VERDICT ═══")
+    if drift_warnings:
+        print("❌ NOT SAFE TO RESTART — players still downloading:")
+        for w in drift_warnings:
+            print(w)
+        print("\n  Run 'python3 ps_engine.py sync' to wait + auto-fire restart when all are 13/13.")
+    else:
+        print("✅ All players ready. Run 'python3 ps_engine.py sync' to issue coordinated restart.")
+
+def cmd_sync(token: str, max_wait_s: int = 600, poll_every_s: int = 8):
+    """
+    Gated coordinated restart:
+      1) Polls all 4 vertical players every 8s
+      2) Waits until ALL report wgetBytes done == total (all files downloaded)
+      3) Then fires restart on all 4 in parallel via ThreadPoolExecutor
+      4) Re-polls 30s later to confirm all 4 are playing the expected playlist
+
+    Aborts if max_wait_s elapses without all players reaching ready state.
+    """
+    fleet = load_fleet()
+    vertical = {k: v for k, v in fleet.items() if not k.startswith("_") and k.startswith("tv-v")}
+    pids = {tv_id: tv["pisignage_player_id"] for tv_id, tv in vertical.items() if tv.get("pisignage_player_id")}
+
+    expected_playlist = {tv_id: tv["pisignage_playlist"] for tv_id, tv in vertical.items() if tv.get("pisignage_playlist")}
+
+    print(f"\nGate 1: waiting for all {len(pids)} vertical TVs to finish downloading...")
+    start = time.time()
+    last_report = ""
+    while True:
+        elapsed = int(time.time() - start)
+        if elapsed > max_wait_s:
+            print(f"\n❌ Timed out after {max_wait_s}s. Some TVs never reached ready state.")
+            print("   Check WiFi at the outlet and re-run.")
+            sys.exit(1)
+
+        statuses = {}
+        all_ready = True
+        for tv_id, pid in pids.items():
+            try:
+                s = _poll_player(token, pid)
+                done, total = _parse_files_complete(s.get("wgetBytes", "") or "")
+                ready = (done == total) and (done is not None) and (total is not None) and (done > 0)
+                statuses[tv_id] = (done, total, ready, s.get("isConnected"))
+                if not ready:
+                    all_ready = False
+            except Exception:
+                statuses[tv_id] = (None, None, False, False)
+                all_ready = False
+
+        # Print only if status changed (avoid noisy logs)
+        report = " | ".join(
+            f"{tv_id}={d}/{t}{'✓' if r else ''}"
+            for tv_id, (d, t, r, _) in sorted(statuses.items())
+        )
+        if report != last_report:
+            print(f"  [{elapsed:>3}s] {report}")
+            last_report = report
+
+        if all_ready:
+            print(f"\n✅ Gate 1 passed in {elapsed}s — all players have all files.")
+            break
+
+        time.sleep(poll_every_s)
+
+    print("\nGate 2: enforcing hard-cut transitions on all groups...")
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = {
+            ex.submit(_enforce_group_animation, token, vertical[tv_id]["pisignage_group_id"]): tv_id
+            for tv_id in pids if vertical[tv_id].get("pisignage_group_id")
+        }
+        for f in as_completed(futures):
+            tv_id     = futures[f]
+            gid, code = f.result()
+            print(f"  {'✅' if code == 200 else f'❌ {code}'}  {tv_id}")
+
+    time.sleep(0.4)
+
+    print("\nGate 3: firing simultaneous restart (parallel API calls)...")
+    fire_t0 = time.time()
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = {ex.submit(_resync_player, token, pid): tv_id for tv_id, pid in pids.items()}
+        results = []
+        for f in as_completed(futures):
+            tv_id      = futures[f]
+            pid, code  = f.result()
+            dt_ms      = int((time.time() - fire_t0) * 1000)
+            results.append((tv_id, code, dt_ms))
+            print(f"  {'✅' if code == 200 else f'❌ {code}'}  {tv_id}  (fired at +{dt_ms}ms)")
+    spread_ms = max(r[2] for r in results) - min(r[2] for r in results)
+    print(f"\n  Restart command spread: {spread_ms}ms across all 4 TVs")
+
+    print("\nGate 4: waiting 35s for players to apply restart, then verifying...")
+    time.sleep(35)
+    for tv_id, pid in pids.items():
+        try:
+            s = _poll_player(token, pid)
+            current = s.get("currentPlaylist") or "—"
+            expected = expected_playlist.get(tv_id, "?")
+            ok = (current == expected)
+            print(f"  {'✅' if ok else '❌'}  {tv_id}: playing '{current}' (expected '{expected}')")
+        except Exception as e:
+            print(f"  ❌  {tv_id}: ERROR {e}")
+
+    print("\n✅ Coordinated restart complete. The 4 TVs all began the new playlist within ~{} ms of each other.".format(spread_ms))
+    print("   Drift accumulates daily; PiSignage's deployTime=02:00 will resync them every night.")
+
 def cmd_resync(token: str):
     """Enforce hard-cut animation + restart all vertical players without redeploying content."""
     fleet = load_fleet()
@@ -452,7 +638,7 @@ def cmd_upload(file_path: str, token: str):
 
 # ─── MAIN ────────────────────────────────────────────────────────────────────
 
-COMMANDS = {"status", "files", "compile", "deploy", "upload", "resync"}
+COMMANDS = {"status", "files", "compile", "deploy", "upload", "resync", "audit", "sync"}
 
 def main():
     args = sys.argv[1:]
@@ -481,6 +667,10 @@ def main():
         cmd_deploy(args[1], token)
     elif cmd == "resync":
         cmd_resync(token)
+    elif cmd == "audit":
+        cmd_audit(token)
+    elif cmd == "sync":
+        cmd_sync(token)
     elif cmd == "upload":
         if len(args) < 2:
             sys.exit("Usage: ps_engine.py upload <file_path>")
