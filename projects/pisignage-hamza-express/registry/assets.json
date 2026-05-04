@@ -196,5 +196,67 @@
     "version": 3,
     "status": "live",
     "tags": ["vertical", "multicombo", "menu_overview"]
+  },
+
+  "_section_kathi": "── Kathi conveyance (added 2026-05-04, target TV-V2 LEFT in psychology_v3_kathi) ──",
+
+  "k1_chicken_kathi_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V11_K1_Chicken_Kathi.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combo": "K1",
+    "label": "Chicken Kathi · ₹90",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "kathi", "anchor"]
+  },
+
+  "k1_chicken_kathi_video_v3": {
+    "pisignage_filename": "Video_v3_TV-V11_K1_Chicken_Kathi_c.mp4",
+    "orientation": "portrait",
+    "type": "video",
+    "default_duration": 10,
+    "combo": "K1",
+    "label": "Chicken Kathi cinemagraph · steam wisps",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "kathi", "cinemagraph"]
+  },
+
+  "kt_chicken_tikka_kathi_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V12_KT_Chicken_Tikka_Kathi.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combo": "KT",
+    "label": "Chicken Tikka Kathi · premium",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "kathi", "premium"]
+  },
+
+  "kt_chicken_tikka_kathi_video_v3": {
+    "pisignage_filename": "Video_v3_TV-V12_KT_Chicken_Tikka_Kathi_c.mp4",
+    "orientation": "portrait",
+    "type": "video",
+    "default_duration": 10,
+    "combo": "KT",
+    "label": "Chicken Tikka Kathi cinemagraph · char glow",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "kathi", "cinemagraph", "premium"]
+  },
+
+  "kathi_pair_k1_kt_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V13_Kathi_Pair_K1_KT.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combos": ["K1", "KT"],
+    "label": "Kathi Ladder · K1 ₹90 vs KT premium",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "kathi", "multicombo", "comparison"]
   }
 }
