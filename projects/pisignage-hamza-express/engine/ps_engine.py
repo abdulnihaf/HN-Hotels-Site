@@ -304,6 +304,37 @@ def _update_playlist(token: str, name: str, assets: list) -> tuple:
     )
     return name, r.status_code
 
+def _push_deploy_to_group(token: str, group_id: str, playlist_name: str, asset_filenames: list) -> tuple:
+    """
+    The CRITICAL deploy step — writes deployedAssets, deployedPlaylists, and lastDeployed
+    on the group object. Without this, PiSignage players ignore the new playlist content
+    even though /api/playlists/<name> was updated.
+
+    The v2 UI's Deploy button does this; the deprecated cloud endpoint /api/groups/<id>?deploy=true
+    with empty body schedules for daily deployTime instead. This function pushes the deploy NOW.
+
+    asset_filenames: list of filenames to mark as deployed (the playlist's asset list + the
+    auto-generated playlist json file like "__Menu Page 1.json").
+    """
+    full_assets = list(asset_filenames) + [f"__{playlist_name}.json"]
+    pl_obj = [{"name": playlist_name, "plType": "regular", "skipForSchedule": False}]
+    payload = {
+        "playlists":         pl_obj,
+        "deployedPlaylists": pl_obj,
+        "assets":            full_assets,
+        "deployedAssets":    full_assets,
+        "lastDeployed":      str(int(time.time() * 1000)),
+        "animationEnable":   False,
+        "animationType":     "none",
+    }
+    r = requests.post(
+        f"{BASE_URL}/groups/{group_id}?deploy=true",
+        headers=_headers(token),
+        json=payload,
+        timeout=15,
+    )
+    return group_id, r.status_code
+
 def _enforce_group_animation(token: str, group_id: str) -> tuple:
     """Hard-cut transitions: disables slideInRight which adds variable drift."""
     r = requests.post(
@@ -480,8 +511,30 @@ def cmd_deploy(scene_path: str, token: str):
     # Brief pause to ensure playlist writes are committed server-side
     time.sleep(0.8)
 
-    # Step 2 — Enforce hard-cut animation on all groups (prevents slideInRight drift)
-    print("Step 2 — Enforcing hard-cut transitions on groups (parallel)...")
+    # Step 2 — PUSH DEPLOY (writes deployedAssets + lastDeployed on each group).
+    # Without this step, PiSignage players ignore the new playlist content because
+    # they read from `deployedAssets` (the player-side cached list), not from the
+    # /api/playlists/<name> content. This is what the v2 UI's "Deploy" button does.
+    print("Step 2 — Pushing deploy to groups (writes deployedAssets, parallel)...")
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = {}
+        for tv_id, assets in compiled.items():
+            playlist_name = fleet[tv_id]["pisignage_playlist"]
+            group_id      = fleet[tv_id]["pisignage_group_id"]
+            asset_fns     = [a["filename"] for a in assets]
+            fut = ex.submit(_push_deploy_to_group, token, group_id, playlist_name, asset_fns)
+            futures[fut] = tv_id
+        for f in as_completed(futures):
+            tv_id     = futures[f]
+            gid, code = f.result()
+            icon      = "✅" if code == 200 else f"❌ HTTP {code}"
+            print(f"  {icon}  {tv_id}  (deployedAssets updated)")
+
+    time.sleep(0.4)
+
+    # Step 3 — Enforce hard-cut animation on all groups (prevents slideInRight drift).
+    # Note: _push_deploy_to_group already sets animation off, this is a belt+suspenders.
+    print("Step 3 — Confirming hard-cut transitions on groups (parallel)...")
     with ThreadPoolExecutor(max_workers=6) as ex:
         futures = {
             ex.submit(_enforce_group_animation, token, fleet[tv_id]["pisignage_group_id"]): tv_id
@@ -495,8 +548,8 @@ def cmd_deploy(scene_path: str, token: str):
 
     time.sleep(0.3)
 
-    # Step 3 — Force-resync all players in parallel (skips heartbeat wait)
-    print("\nStep 3 — Resyncing players (parallel)...")
+    # Step 4 — Force-resync all players in parallel (makes them pull deployedAssets NOW)
+    print("\nStep 4 — Resyncing players (parallel)...")
     with ThreadPoolExecutor(max_workers=6) as ex:
         futures = {
             ex.submit(_resync_player, token, fleet[tv_id]["pisignage_player_id"]): tv_id
