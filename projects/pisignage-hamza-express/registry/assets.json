@@ -146,5 +146,55 @@
     "version": 3,
     "status": "live",
     "tags": ["vertical", "combo", "cinemagraph"]
+  },
+
+  "_section_multicombo_pairs": "── Multi-combo composition cards (added 2026-05-04 for psychology_v2 deployment) ──",
+
+  "gr_protein_pair_c3_c4_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V7_GR_ProteinPair_C3_C4.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combos": ["C3", "C4"],
+    "label": "Protein Ladder · C3 ₹249 vs C4 ₹289",
+    "version": 3,
+    "status": "pending_upload",
+    "tags": ["vertical", "multicombo", "comparison", "upsell"]
+  },
+
+  "gr_veg_pair_c1_c2_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V8_GR_VegPair_C1_C2.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combos": ["C1", "C2"],
+    "label": "Veg Ladder · C1 ₹149 vs C2 ₹199",
+    "version": 3,
+    "status": "pending_upload",
+    "tags": ["vertical", "multicombo", "comparison", "value"]
+  },
+
+  "biryani_pair_c5_c6_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V9_Biryani_Pair_C5_C6.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combos": ["C5", "C6"],
+    "label": "Biryani Ladder · C5 ₹229 vs C6 ₹309",
+    "version": 3,
+    "status": "pending_upload",
+    "tags": ["vertical", "multicombo", "comparison", "upsell"]
+  },
+
+  "gr_all_in_one_c1_c2_c3_c4_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V10_GR_AllInOne_C1_C2_C3_C4.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combos": ["C1", "C2", "C3", "C4"],
+    "label": "All Ghee Rice combos in one decision-matrix view",
+    "version": 3,
+    "status": "pending_upload",
+    "tags": ["vertical", "multicombo", "menu_overview"]
   }
 }
