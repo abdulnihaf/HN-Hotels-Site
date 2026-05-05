@@ -283,17 +283,18 @@ function bucketOf(n) {
 
 // ─── Business Information API ────────────────────────────────────────────
 async function fetchProfile(token, locationName) {
+  // Request whole sub-objects rather than nested-path cherry-picks. The API
+  // silently returns an empty body for the GET /v1/locations/{id} endpoint
+  // when too many nested paths are specified — verified 2026-05-05 live.
+  // Whole-object readMask returns the data correctly.
   const readMask = [
-    'name','title','storeCode',
-    'phoneNumbers.primaryPhone','phoneNumbers.additionalPhones',
-    'categories.primaryCategory.displayName','categories.primaryCategory.name',
-    'categories.additionalCategories.displayName',
+    'name', 'title', 'storeCode',
+    'categories', 'phoneNumbers',
     'websiteUri',
-    'regularHours','specialHours',
-    'profile.description',
-    'metadata.placeId','metadata.mapsUri','metadata.newReviewUri','metadata.canHaveFoodMenus',
-    'openInfo.status','openInfo.canReopen',
-    'serviceArea',
+    'regularHours', 'specialHours',
+    'profile',
+    'openInfo',
+    'metadata',
     'labels',
     'latlng',
   ].join(',');
