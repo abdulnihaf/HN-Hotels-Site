@@ -238,6 +238,11 @@ async function rangeCapture(env) {
     const orLow = q.ohlc?.low_paise || entryEstimate;
     const orVolume = q.volume || 0;
 
+    // BUG FIX (May 5 2026): was is_active=0, which caused priceMonitor's continuous
+    // breakout-trigger block (filters WHERE is_active=1) to never fire entries on
+    // these new WATCHING rows. Only the every-15-min Opus entryDecision could enter
+    // them. Today's outcome: 0 of 3 picks transitioned end-to-end. Setting is_active=1
+    // restores continuous breakout-trigger as intended.
     await db.prepare(`
       INSERT INTO paper_trades
         (symbol, qty, entry_paise, stop_paise, target_paise, rr_ratio,
@@ -245,7 +250,7 @@ async function rangeCapture(env) {
          auto_managed, trader_state, verdict_id, created_at,
          entry_at, q1_passed, q2_passed, q3_passed,
          or_high_paise, or_low_paise, or_volume)
-      VALUES (?,?,?,?,?,?, 'base', ?, ?, 'auto_trader', 0,
+      VALUES (?,?,?,?,?,?, 'base', ?, ?, 'auto_trader', 1,
               1, 'WATCHING', ?, ?, ?, 1, 1, 1,
               ?, ?, ?)
     `).bind(
@@ -647,7 +652,8 @@ async function priceMonitor(env) {
       // Fire partial exit (50%) — book first-target gain, keep runner
       const halfQty = Math.floor(a.qty / 2);
       const partialGrossPaise = (q.ltp_paise - a.entry_paise) * halfQty;
-      const partialCostPaise = Math.round(Math.abs(a.entry_paise * halfQty) * 0.003);
+      // BUG FIX (May 5 2026): was 0.3% flat — replaced with realistic Zerodha intraday MIS
+      const partialCostPaise = realisticIntradayCostPaise(a.entry_paise, q.ltp_paise, halfQty);
       const partialNetPaise = partialGrossPaise - partialCostPaise;
       await db.prepare(`
         UPDATE paper_trades
@@ -1288,11 +1294,12 @@ async function hardExit(env) {
   for (const r of remaining) {
     const q = ltp[r.symbol];
     const exitPrice = q?.ltp_paise || r.entry_paise; // fallback to entry if no LTP (rare)
-    await firePaperExit(db, r, exitPrice, 'HARD_EXIT_1430');
+    // Decision name now matches actual cron-fire time (15:10 IST, 5min before MIS auto-square at 15:15)
+    await firePaperExit(db, r, exitPrice, 'HARD_EXIT_1510');
     exited++;
     await logDecision(db, {
-      cron_phase: 'hard_exit_1430', symbol: r.symbol, trade_id: r.id,
-      state_before: 'ENTERED', decision: 'HARD_EXIT_1430', state_after: 'EXITED',
+      cron_phase: 'hard_exit_1510', symbol: r.symbol, trade_id: r.id,
+      state_before: 'ENTERED', decision: 'HARD_EXIT_1510', state_after: 'EXITED',
       ltp_paise: exitPrice, composed_by_model: 'deterministic',
     });
   }
@@ -1301,10 +1308,31 @@ async function hardExit(env) {
 }
 
 // Helper — write paper exit (closes the trade row)
+//
+// COST MODEL: Zerodha intraday MIS realistic round-trip cost. Replaces the old
+// flat 0.3%-of-entry-side approximation that was overstating fees ~6× and
+// dragging net P&L down vs reality.
+//   - Brokerage:  ₹20/side capped (₹40 round-trip in paise = 4000)
+//   - STT:        0.025% on sell-side turnover
+//   - Exchange:   0.00322% on each side
+//   - Stamp duty: 0.003% on buy-side
+//   - GST:        18% on (brokerage + exchange)
+// Total ≈ 0.04-0.06% of total turnover round-trip. Matches simulateTradeChronological()
+// in functions/api/trading.js so live execution + replay use the same cost model.
+function realisticIntradayCostPaise(entryPaise, exitPaise, qty) {
+  const buyTurnover  = Math.abs(entryPaise) * qty;
+  const sellTurnover = Math.abs(exitPaise)  * qty;
+  const brokerage    = 4000;                                  // ₹40 round-trip
+  const sttSell      = sellTurnover * 0.00025;
+  const exchangeBoth = (buyTurnover + sellTurnover) * 0.0000322;
+  const stampBuy     = buyTurnover * 0.00003;
+  const gst          = (brokerage + exchangeBoth) * 0.18;
+  return Math.round(brokerage + sttSell + exchangeBoth + stampBuy + gst);
+}
+
 async function firePaperExit(db, trade, exitPaise, reason) {
   const pnlGrossPaise = (exitPaise - trade.entry_paise) * trade.qty;
-  // Approximate cost: ~0.3% round-trip on intraday equity (STT + brokerage + GST)
-  const costPaise = Math.round(Math.abs(trade.entry_paise * trade.qty) * 0.003);
+  const costPaise = realisticIntradayCostPaise(trade.entry_paise, exitPaise, trade.qty);
   const pnlNetPaise = pnlGrossPaise - costPaise;
   const winLoss = pnlNetPaise > 0 ? 'win' : (pnlNetPaise < 0 ? 'loss' : 'breakeven');
 
