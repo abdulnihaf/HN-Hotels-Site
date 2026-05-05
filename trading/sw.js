@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v28';  // v28: Watchlist expanded — full OHLC per stock + ₹10L hypothetical scenarios (peak/close/drawdown)
+const CACHE_VERSION = 'wealth-v30';  // v30: trade_cards on Execute now use the same rich format (shared WatchlistComponent)
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -15,6 +15,7 @@ const PRECACHE_URLS = [
   '/trading/icons/icon-512.svg',
   '/trading/icons/icon-maskable-512.svg',
   '/trading/_lib/picker.js',
+  '/trading/_lib/watchlist-component.js',
 ];
 
 // Install — pre-cache app shell

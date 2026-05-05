@@ -1343,6 +1343,89 @@ async function getExecuteView(db, env) {
      FROM kite_orders_log ORDER BY placed_at DESC LIMIT 10`
   ).all()).results || [];
 
+  // ─── ENRICH trade_cards with day OHLC + ₹10L hypothetical ──────────────
+  // Owner asked May 5: render the 15 trade cards in the same rich format as
+  // the Today's Watchlist (open / peak / low / close + ₹10L peak/close/drawdown
+  // scenario per stock). Reuses the same logic as todays_watchlist.
+  if (tradeCards.length > 0) {
+    const istDate = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+    const tcSymbols = [...new Set(tradeCards.map(c => c.symbol))];
+    const placeholders = tcSymbols.map(() => '?').join(',');
+
+    const ohlcRows = (await db.prepare(`
+      SELECT b.symbol,
+        MIN(CASE WHEN ts = (SELECT MIN(ts) FROM intraday_bars b2 WHERE b2.symbol=b.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN open_paise END) AS day_open,
+        MAX(b.high_paise) AS day_high,
+        MIN(b.low_paise)  AS day_low,
+        MAX(CASE WHEN ts = (SELECT MAX(ts) FROM intraday_bars b3 WHERE b3.symbol=b.symbol AND b3.trade_date=? AND b3.interval='5minute') THEN close_paise END) AS day_close,
+        SUM(b.volume) AS day_volume
+      FROM intraday_bars b
+      WHERE b.symbol IN (${placeholders}) AND b.trade_date=? AND b.interval='5minute'
+      GROUP BY b.symbol
+    `).bind(istDate, istDate, ...tcSymbols, istDate).all().catch(() => ({ results: [] }))).results || [];
+    const ohlcMap = {};
+    for (const r of ohlcRows) ohlcMap[r.symbol] = r;
+
+    const liveTickRows = (await db.prepare(`
+      SELECT t1.symbol, t1.ltp_paise, t1.ts FROM intraday_ticks t1
+      JOIN (SELECT symbol, MAX(ts) AS m FROM intraday_ticks WHERE symbol IN (${placeholders}) GROUP BY symbol) t2
+        ON t1.symbol=t2.symbol AND t1.ts=t2.m
+    `).bind(...tcSymbols).all().catch(() => ({ results: [] }))).results || [];
+    const ltpMap = {};
+    for (const t of liveTickRows) ltpMap[t.symbol] = t.ltp_paise;
+
+    const prevCloseRows = (await db.prepare(`
+      SELECT symbol, close_paise FROM equity_eod
+      WHERE symbol IN (${placeholders})
+        AND trade_date = (SELECT MAX(trade_date) FROM equity_eod WHERE trade_date < ?)
+    `).bind(...tcSymbols, istDate).all().catch(() => ({ results: [] }))).results || [];
+    const prevCloseMap = {};
+    for (const r of prevCloseRows) prevCloseMap[r.symbol] = r.close_paise;
+
+    const TEN_LAKH = 100000000;
+    const zerodhaCost = (e, x, q) => {
+      const buy = Math.abs(e) * q, sell = Math.abs(x) * q;
+      return Math.round(4000 + sell * 0.00025 + (buy + sell) * 0.0000322 + buy * 0.00003 + (4000 + (buy + sell) * 0.0000322) * 0.18);
+    };
+
+    for (const card of tradeCards) {
+      const ohlc = ohlcMap[card.symbol];
+      const dayOpen   = ohlc?.day_open  || null;
+      const dayHigh   = ohlc?.day_high  || null;
+      const dayLow    = ohlc?.day_low   || null;
+      const dayClose  = ohlc?.day_close || null;
+      const dayVolume = ohlc?.day_volume || null;
+      const liveLtp = ltpMap[card.symbol] || null;
+      const prevClose = prevCloseMap[card.symbol] || null;
+      const cur = liveLtp || dayClose || null;
+
+      card.day_open_paise  = dayOpen;
+      card.day_high_paise  = dayHigh;
+      card.day_low_paise   = dayLow;
+      card.day_close_paise = dayClose;
+      card.day_volume      = dayVolume;
+      card.live_ltp_paise  = liveLtp;
+      card.prev_close_paise = prevClose;
+      card.day_change_pct = (cur && dayOpen) ? +(((cur - dayOpen) / dayOpen) * 100).toFixed(2) : null;
+      card.gap_from_prev_close_pct = (dayOpen && prevClose) ? +(((dayOpen - prevClose) / prevClose) * 100).toFixed(2) : null;
+
+      // ₹10L hypothetical scenarios (same shape as todays_watchlist)
+      if (dayOpen && dayOpen > 100) {
+        const qty = Math.floor(TEN_LAKH / dayOpen);
+        card.if_10L_invested = {
+          qty,
+          deployed_paise: qty * dayOpen,
+          if_exited_at_peak_paise: dayHigh ? (dayHigh - dayOpen) * qty - zerodhaCost(dayOpen, dayHigh, qty) : null,
+          if_exited_at_peak_pct: dayHigh ? +(((dayHigh - dayOpen) / dayOpen) * 100).toFixed(2) : null,
+          if_held_to_close_paise: dayClose ? (dayClose - dayOpen) * qty - zerodhaCost(dayOpen, dayClose, qty) : null,
+          if_held_to_close_pct: dayClose ? +(((dayClose - dayOpen) / dayOpen) * 100).toFixed(2) : null,
+          if_held_live_paise: cur ? (cur - dayOpen) * qty - zerodhaCost(dayOpen, cur, qty) : null,
+          max_intraday_drawdown_paise: dayLow ? (dayLow - dayOpen) * qty - zerodhaCost(dayOpen, dayLow, qty) : null,
+        };
+      }
+    }
+  }
+
   return {
     user_name: c.user_full_name || c.user_name || 'Trader',
     kite_user_id: c.kite_user_id || null,
