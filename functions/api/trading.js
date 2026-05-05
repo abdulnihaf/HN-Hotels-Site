@@ -1819,13 +1819,37 @@ async function searchSymbols(db, url) {
 // ═══════════════════════════════════════════════════════════════════════════
 async function getPaperTrades(db, url, env) {
   const onlyOpen = url.searchParams.get('open') === '1';
-  const where = onlyOpen ? `WHERE is_active=1` : '';
+  // BUG FIX (May 5 2026 evening): use trader_state for classification, not
+  // is_active alone. Old logic treated any is_active=0 row as "closed" — but
+  // WATCHING rows inserted before tonight's rangeCapture fix had is_active=0
+  // and showed up as bogus "closed" rows with ₹0 exit + ₹0 P&L on the UI.
+  const where = onlyOpen
+    ? `WHERE trader_state IN ('WATCHING','ENTERED','HELD_OVERNIGHT') OR (is_active=1 AND trader_state IS NULL)`
+    : '';
   const rows = (await db.prepare(`
     SELECT * FROM paper_trades ${where} ORDER BY entry_at DESC LIMIT 100
   `).all()).results || [];
 
-  const open = rows.filter(r => r.is_active);
-  const closed = rows.filter(r => !r.is_active);
+  // OPEN = actively being managed (WATCHING, ENTERED, HELD_OVERNIGHT)
+  // For legacy rows without trader_state, fall back to is_active.
+  const open = rows.filter(r =>
+    r.trader_state === 'WATCHING' ||
+    r.trader_state === 'ENTERED' ||
+    r.trader_state === 'HELD_OVERNIGHT' ||
+    (r.trader_state == null && r.is_active === 1)
+  );
+  // CLOSED = lifecycle completed via EXITED, OR has exit_at set
+  const closed = rows.filter(r =>
+    r.trader_state === 'EXITED' || (r.trader_state == null && r.exit_at != null)
+  );
+  // SKIPPED/ABANDONED — never completed lifecycle (no real entry, no real exit)
+  // Surfaced separately so UI doesn't pollute "closed" count + 0% win rate.
+  const skipped = rows.filter(r =>
+    r.trader_state === 'SKIPPED' ||
+    r.trader_state === 'ABANDONED' ||
+    // WATCHING + is_active=0 = stuck rows from before tonight's is_active fix
+    (r.trader_state === 'WATCHING' && r.is_active === 0)
+  );
 
   // Live MTM cascade: intraday_ticks (≤5min old) → Kite live LTP → EOD close
   // Bulk-fetch Kite LTP for all open symbols in ONE call to save subrequests
@@ -1882,6 +1906,7 @@ async function getPaperTrades(db, url, env) {
     summary: {
       open_count: open.length,
       closed_count: closed.length,
+      skipped_count: skipped.length,           // ← NEW: trades that never completed lifecycle
       wins, losses,
       win_rate_pct: closed.length > 0 ? parseFloat((wins / closed.length * 100).toFixed(1)) : null,
       realized_pnl_paise: totalPnl,
@@ -1890,6 +1915,7 @@ async function getPaperTrades(db, url, env) {
     },
     open_trades: open,
     recent_closed: closed.slice(0, 25),
+    recent_skipped: skipped.slice(0, 25),       // ← NEW: separate from closed so UI can show "skipped"
     generated_at: Date.now(),
   };
 }
