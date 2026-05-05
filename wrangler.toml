@@ -3,7 +3,7 @@ pages_build_output_dir = "."
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# Secrets (set via: wrangler pages secret put <NAME>)
+# Secrets (set via: wrangler pages secret put <NAME> --project-name hn-hotels-site)
 # WA_ACCESS_TOKEN        — Meta WhatsApp Cloud API bearer token
 # WA_PHONE_ID            — WhatsApp phone number ID
 # DASHBOARD_KEY          — Dashboard authentication key
@@ -14,11 +14,24 @@ compatibility_flags = ["nodejs_compat"]
 # ODOO_KEY_ZOYA          — Zoya's Odoo API key
 # ODOO_UID_FAHEEM        — Faheem's Odoo user ID (for settlement tracking)
 # ODOO_KEY_FAHEEM        — Faheem's Odoo API key
+# KITE_API_SECRET        — Zerodha Kite Connect API secret (used by /wealth/auth/callback)
+
+[vars]
+# Kite Connect public-ish API key — exposed in Worker env, used by OAuth flow
+KITE_API_KEY = "85yfvys3t9t66l35"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "hn-hiring"
 database_id = "a0107321-790a-4d46-ac3c-a54a676c6bcb"
+
+# Wealth engine D1 — read by /api/trading.js for the /trading dashboard.
+# Created via: wrangler d1 create wealth-engine
+# Replace database_id with output of that command.
+[[d1_databases]]
+binding = "WEALTH_DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"
 
 # KV for storing Swiggy/Zomato auth sessions (captured by extension, read by cron worker)
 [[kv_namespaces]]

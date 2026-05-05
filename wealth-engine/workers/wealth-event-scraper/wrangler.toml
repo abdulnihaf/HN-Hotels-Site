@@ -1,0 +1,27 @@
+name = "wealth-event-scraper"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+# Cloudflare crons run in UTC.  IST = UTC+5:30.
+# 06:00 IST = 00:30 UTC; 06:30 IST = 01:00 UTC.
+# Market window 09:00-15:30 IST = 03:30-10:00 UTC.
+#
+# Each cron expression must be unique (Cloudflare uses literal expr as
+# dispatch key) — duplicates silently collapse into one trigger.
+[triggers]
+crons = [
+  # ─── Daily event-calendar refresh ───────────────────────────────
+  "30 0 * * *",          # 06:00 IST  daily      board meetings (NSE)
+  "0 1 * * *",           # 06:30 IST  daily      results calendar (derived)
+  # ─── Bond yields — every 30 min during India market ─────────────
+  "0,30 3-10 * * 1-5",   # every 30 min,  09:00-15:30 IST  (India 10Y/5Y/1Y + US 10Y)
+  # ─── USD/INR forwards — 15-min offset to avoid collisions ───────
+  "15,45 3-10 * * 1-5",  # every 30 min,  09:15-15:45 IST  (synthetic via IRP)
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"

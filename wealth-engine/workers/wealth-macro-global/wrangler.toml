@@ -1,0 +1,21 @@
+name = "wealth-macro-global"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+[triggers]
+crons = [
+  # ─── Cross-asset every 5 min (paid tier max freshness) ────
+  "*/5 * * * 1-5",        # Rates: DXY, US10Y, US2Y, USDINR, VIX
+  "1-56/5 * * * 1-5",     # Equity futures: S&P/Nasdaq/Dow (offset 1 min, was disabled)
+  "2-57/5 * * * 1-5",     # Commodities: Brent/WTI/Gold/Silver/Copper (offset 2 min, was disabled)
+  "*/10 0-9 * * 1-5",     # Asian indices Nikkei/HSI/KOSPI
+  # ─── FRED daily release ──────────────────────────────────
+  "30 2 * * *",           # FRED 08:00 IST
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"

@@ -1,0 +1,29 @@
+name = "wealth-trader"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+# Multi-cron precision schedule. Audit removed redundant 5-min catch-all that
+# was double-firing alongside 1-min/3-min crons during market hours.
+[triggers]
+crons = [
+  # ENTRY WINDOW — every minute UTC 04:00-04:59 = IST 09:30-10:29
+  # Catches breakout triggers within 60s of trigger event.
+  "* 4 * * 1-5",
+
+  # ACTIVE TRADING — every 3 min UTC 05:00-09:59 = IST 10:30-15:29
+  # Trailing stop + halt + profit-lock checks at tight cadence.
+  "*/3 5-9 * * 1-5",
+
+  # PRE-MARKET WARM-UP — UTC 03 = IST 08:30-09:29 (just before market opens)
+  "*/15 3 * * 1-5",
+
+  # POST-MARKET TRANSITION — UTC 10 = IST 15:30-16:00 (final hard exit + cleanup)
+  "*/5 10 * * 1-5",
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"

@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Wealth Engine — Trading Dashboard</title>
+<!-- PWA -->
+<link rel="manifest" href="/trading/manifest.json">
+<meta name="theme-color" content="#0a0f1c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wealth">
+<link rel="apple-touch-icon" href="/trading/icons/icon-192.svg">
+<meta name="color-scheme" content="dark">
+<style>
+  :root {
+    --bg: #0a0f1c; --panel: #121a2e; --panel-2: #1a2540;
+    --border: #2a3656; --text: #e6ecff; --muted: #8a96b8;
+    --green: #2ecc71; --red: #e74c3c; --yellow: #f5b041; --blue: #4fa3ff;
+    --accent: #7c5cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.4; min-height: 100vh;
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
+    overscroll-behavior-y: none;
+  }
+  header {
+    padding: 12px 16px; background: rgba(18, 26, 46, 0.92);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .meta { font-size: 12px; color: var(--muted); }
+  main { padding: 16px; max-width: 1400px; margin: 0 auto; }
+  .pin-gate {
+    max-width: 380px; margin: 80px auto; padding: 28px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  }
+  .pin-gate h2 { margin-bottom: 14px; }
+  .pin-gate input {
+    width: 100%; padding: 12px; font-size: 16px; margin: 10px 0;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+  }
+  .pin-gate button {
+    width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+    background: var(--accent); color: white; border: none;
+    border-radius: 8px; cursor: pointer; min-height: 44px;
+  }
+  .pin-gate button:hover { background: #6a4dff; }
+  .pin-gate .err { color: var(--red); font-size: 13px; margin-top: 8px; min-height: 18px; }
+
+  .grid { display: grid; gap: 14px; }
+  .grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px;
+  }
+  .panel h3 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between;
+  }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .kpi {
+    background: var(--panel-2); padding: 12px; border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .kpi .label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+  .kpi .value { font-size: 20px; font-weight: 600; margin-top: 4px; }
+  .kpi .delta { font-size: 12px; margin-top: 2px; }
+  .kpi .delta.pos { color: var(--green); }
+  .kpi .delta.neg { color: var(--red); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 11px; font-weight: 500;
+  }
+  .pill.ok { background: rgba(46,204,113,0.18); color: var(--green); }
+  .pill.warn { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .pill.err { background: rgba(231,76,60,0.18); color: var(--red); }
+  .pill.idle { background: rgba(138,150,184,0.18); color: var(--muted); }
+
+  /* Top-level cross-view nav (Hub / Execute / Ops) — always visible */
+  .tab-nav { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .tab-nav a {
+    padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 500;
+    text-decoration: none; border: 1px solid var(--border); color: var(--muted);
+    background: var(--panel-2);
+  }
+  .tab-nav a.active {
+    background: rgba(124,92,255,0.18); color: var(--accent); border-color: var(--accent);
+    font-weight: 600;
+  }
+
+  .tabs { display: flex; gap: 6px; margin: 12px 0; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 10px 14px; cursor: pointer; color: var(--muted);
+    border-bottom: 2px solid transparent; min-height: 44px;
+    display: flex; align-items: center;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .toolbar {
+    display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;
+  }
+  .toolbar input, .toolbar select, .toolbar button {
+    padding: 8px 10px; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; font-size: 13px; min-height: 38px;
+  }
+  .toolbar button { cursor: pointer; }
+  .toolbar button.primary { background: var(--accent); color: white; border: none; }
+
+  .empty { text-align: center; color: var(--muted); padding: 30px; font-size: 14px; }
+  .loading { color: var(--muted); padding: 20px; text-align: center; font-size: 13px; }
+
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  .small { font-size: 11px; color: var(--muted); }
+
+  @media (max-width: 720px) {
+    main { padding: 10px; }
+    header h1 { font-size: 16px; }
+    .panel { padding: 10px; }
+    th, td { padding: 6px 6px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="gate" class="pin-gate">
+  <h2>Wealth Engine</h2>
+  <p class="small">Enter dashboard key to access trading data.</p>
+  <input id="pin" type="password" placeholder="Dashboard key" autocomplete="off" />
+  <button onclick="login()">Unlock</button>
+  <div class="err" id="gateErr"></div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <div style="flex:1;min-width:0">
+      <h1>Wealth Engine — Trading Dashboard</h1>
+      <nav class="tab-nav" aria-label="Views">
+        <a href="/trading/" class="active">🏠 Hub</a>
+        <a href="/trading/today/">📋 Today</a>
+        <a href="/trading/execute/">🎯 Execute</a>
+        <a href="/trading/ops/">⚙️ Ops</a>
+      </nav>
+    </div>
+    <div class="meta">
+      <span id="kiteStatus" class="pill idle" title="Kite Connect status">⏳ Kite</span>
+      &nbsp;·&nbsp;
+      <span id="lastRefresh">—</span>
+      &nbsp;·&nbsp;
+      <span id="universeMeta">—</span>
+      &nbsp;·&nbsp;
+      <button onclick="refresh()" style="background:transparent; border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:6px; cursor:pointer; font-size:12px;">↻ Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('overview', event)">Overview</div>
+      <div class="tab" onclick="showTab('briefing', event)">Briefing</div>
+      <div class="tab" onclick="showTab('alerts', event)">Alerts <span id="alertBadge" style="display:none;background:var(--red);color:white;padding:1px 6px;border-radius:9px;font-size:10px;margin-left:4px"></span></div>
+      <div class="tab" onclick="showTab('portfolio', event)">Portfolio P&amp;L</div>
+      <div class="tab" onclick="showTab('positions', event)">Positions</div>
+      <div class="tab" onclick="showTab('signals', event)">Signals</div>
+      <div class="tab" onclick="showTab('cascades', event)">Cascades</div>
+      <div class="tab" onclick="showTab('flow', event)">FII / DII Flow</div>
+      <div class="tab" onclick="showTab('options', event)">Option Chain</div>
+      <div class="tab" onclick="showTab('layer1', event)">Price/Volume</div>
+      <div class="tab" onclick="showTab('extremes', event)">52w + Circuits</div>
+      <div class="tab" onclick="showTab('preopen', event)">Pre-Open</div>
+      <div class="tab" onclick="showTab('intraday', event)">Intraday</div>
+      <div class="tab" onclick="showTab('announcements', event)">Announcements</div>
+      <div class="tab" onclick="showTab('macro', event)">Macro</div>
+      <div class="tab" onclick="showTab('crossasset', event)">Cross-Asset</div>
+      <div class="tab" onclick="showTab('news', event)">News</div>
+      <div class="tab" onclick="showTab('sectors', event)">Sectors</div>
+      <div class="tab" onclick="showTab('calendar', event)">Calendar</div>
+      <div class="tab" onclick="showTab('kite', event)">Kite</div>
+      <div class="tab" onclick="showTab('ops', event)">Cron Health</div>
+      <div class="tab" onclick="showTab('explain', event)">How This Works</div>
+    </div>
+
+    <!-- OVERVIEW -->
+    <section id="tab-overview" class="tab-content active">
+      <div class="grid cols-3" style="margin-bottom:14px">
+        <div class="panel">
+          <h3>Universe Loaded</h3>
+          <div class="kpi-grid" id="kpiUniverse"><div class="loading">Loading…</div></div>
+        </div>
+        <div class="panel">
+          <h3>Cron Activity (24h)</h3>
+          <div class="kpi-grid" id="kpiCron"><div class="loading">Loading…</div></div>
+        </div>
+        <div class="panel">
+          <h3>Market Pulse</h3>
+          <div class="kpi-grid" id="kpiPulse"><div class="loading">Loading…</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Indices — Latest Snapshot</h3>
+        <div id="indicesTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- LAYER 1 -->
+    <section id="tab-layer1" class="tab-content">
+      <div class="panel">
+        <h3>EOD Price History</h3>
+        <div class="toolbar">
+          <select id="eodExchange">
+            <option value="NSE">NSE</option>
+            <option value="BSE">BSE</option>
+          </select>
+          <input id="eodSymbol" placeholder="Symbol e.g. RELIANCE" value="RELIANCE" />
+          <input id="eodFrom" type="date" />
+          <input id="eodTo" type="date" />
+          <button class="primary" onclick="loadEod()">Load</button>
+        </div>
+        <div id="eodTable"></div>
+      </div>
+    </section>
+
+    <!-- EXTREMES -->
+    <section id="tab-extremes" class="tab-content">
+      <div class="grid cols-2">
+        <div class="panel">
+          <h3>52-Week Highs / Lows (today)</h3>
+          <div id="extremesTable" class="loading">Loading…</div>
+        </div>
+        <div class="panel">
+          <h3>Circuit Hits (today)</h3>
+          <div id="circuitsTable" class="loading">Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRE-OPEN -->
+    <section id="tab-preopen" class="tab-content">
+      <div class="panel">
+        <h3>Pre-Open Indicative Equilibrium (top moves)</h3>
+        <div id="preopenTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- INTRADAY -->
+    <section id="tab-intraday" class="tab-content">
+      <div class="panel">
+        <h3>Latest Intraday Ticks (watchlist)</h3>
+        <div id="intradayTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- BRIEFING -->
+    <section id="tab-briefing" class="tab-content">
+      <div class="panel">
+        <h3>Daily Morning Briefing <span id="briefingDate" class="small" style="color:var(--muted)"></span></h3>
+        <div id="briefingNarrative" class="loading">Loading…</div>
+      </div>
+      <div class="grid cols-2" style="margin-top:14px">
+        <div class="panel"><h3>Top 10 Signals Today</h3><div id="briefingSignals">—</div></div>
+        <div class="panel"><h3>Active Cascades</h3><div id="briefingCascades">—</div></div>
+      </div>
+      <div class="grid cols-2" style="margin-top:14px">
+        <div class="panel"><h3>FII / DII Yesterday</h3><div id="briefingFii">—</div></div>
+        <div class="panel"><h3>Earnings Today</h3><div id="briefingEarnings">—</div></div>
+      </div>
+      <div class="grid cols-2" style="margin-top:14px">
+        <div class="panel"><h3>Key Macro</h3><div id="briefingMacro">—</div></div>
+        <div class="panel"><h3>Upcoming Events (5d)</h3><div id="briefingEvents">—</div></div>
+      </div>
+    </section>
+
+    <!-- ALERTS -->
+    <section id="tab-alerts" class="tab-content">
+      <div class="panel">
+        <h3>System Alerts</h3>
+        <div class="toolbar">
+          <button onclick="loadAlerts(false)">All</button>
+          <button onclick="loadAlerts(true)" class="primary">Unread only</button>
+        </div>
+        <div id="alertsTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- PORTFOLIO -->
+    <section id="tab-portfolio" class="tab-content">
+      <div class="panel">
+        <h3>Portfolio P&amp;L Snapshot</h3>
+        <div class="kpi-grid" id="portfolioKpis"><div class="loading">Loading…</div></div>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <h3>Holdings (latest)</h3>
+        <div id="portfolioTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- POSITIONS -->
+    <section id="tab-positions" class="tab-content">
+      <div class="panel">
+        <h3>Active Positions (algo watchlist with stop/target alerts)</h3>
+        <p class="small" style="margin-bottom:10px">Stop-loss watcher runs every 5 min during market hours. Breach triggers a critical alert.</p>
+        <details style="background:var(--panel-2);padding:10px;border-radius:6px;margin-bottom:14px">
+          <summary style="cursor:pointer">+ Add Position</summary>
+          <div class="toolbar" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">
+            <select id="newPosTranche">
+              <option value="base">Base</option>
+              <option value="aggressive">Aggressive</option>
+              <option value="stretch">Stretch</option>
+            </select>
+            <input id="newPosSymbol" placeholder="Symbol" />
+            <input id="newPosQty" type="number" placeholder="Qty" />
+            <input id="newPosEntry" type="number" step="0.01" placeholder="Entry ₹" />
+            <input id="newPosStop" type="number" step="0.01" placeholder="Stop ₹" />
+            <input id="newPosTarget" type="number" step="0.01" placeholder="Target ₹ (opt)" />
+            <button class="primary" onclick="addPosition()">Add</button>
+          </div>
+        </details>
+        <div id="positionsTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- SIGNALS -->
+    <section id="tab-signals" class="tab-content">
+      <div class="panel">
+        <h3>Signal Scores — Top 20 (composite of all 7 dimensions)</h3>
+        <div id="signalsTable" class="loading">Loading…</div>
+        <p class="small" style="margin-top:14px">Composite score = 0.20·trend + 0.18·flow + 0.12·options + 0.15·catalyst + 0.15·macro + 0.10·sentiment + 0.10·breadth. Highest scores = strongest setups for entry.</p>
+      </div>
+    </section>
+
+    <!-- CASCADES -->
+    <section id="tab-cascades" class="tab-content">
+      <div class="panel">
+        <h3>Active Cascade Patterns (event → predicted reaction)</h3>
+        <div id="cascadesTable" class="loading">Loading…</div>
+        <p class="small" style="margin-top:14px">5 patterns monitored: RBI rate-cut → NBFC lag, FII heavy selling → quality bounce, crude drop → aviation/paint, repeat block buyer, promoter pledge spike risk.</p>
+      </div>
+    </section>
+
+    <!-- FII/DII FLOW -->
+    <section id="tab-flow" class="tab-content">
+      <div class="grid cols-2">
+        <div class="panel">
+          <h3>FII / DII Daily Flows (last 60 days)</h3>
+          <div id="flowTable" class="loading">Loading…</div>
+        </div>
+        <div class="panel">
+          <h3>Recent Bulk + Block Deals (30d)</h3>
+          <div id="bulkBlockTable" class="loading">Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPTIONS -->
+    <section id="tab-options" class="tab-content">
+      <div class="panel">
+        <h3>Option Chain — latest snapshot</h3>
+        <div class="toolbar">
+          <select id="ocUnderlying">
+            <option>NIFTY</option><option>BANKNIFTY</option><option>FINNIFTY</option>
+            <option>RELIANCE</option><option>HDFCBANK</option><option>ICICIBANK</option>
+          </select>
+          <button class="primary" onclick="loadOptionChain()">Load</button>
+        </div>
+        <div id="optionChainTable"></div>
+      </div>
+    </section>
+
+    <!-- ANNOUNCEMENTS -->
+    <section id="tab-announcements" class="tab-content">
+      <div class="panel">
+        <h3>Material Corporate Announcements (NSE + BSE)</h3>
+        <div id="announcementsTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- MACRO -->
+    <section id="tab-macro" class="tab-content">
+      <div class="panel">
+        <h3>Macro Indicators — Latest Readings</h3>
+        <div id="macroTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- CROSS-ASSET -->
+    <section id="tab-crossasset" class="tab-content">
+      <div class="panel">
+        <h3>Cross-Asset Snapshot (DXY, US Yields, VIX, Crude, Gold, Asian indices)</h3>
+        <div id="crossAssetTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- NEWS -->
+    <section id="tab-news" class="tab-content">
+      <div class="grid cols-2">
+        <div class="panel">
+          <h3>Top Material News (last 24h)</h3>
+          <div id="newsTable" class="loading">Loading…</div>
+        </div>
+        <div class="panel">
+          <h3>Social Sentiment (Reddit + Nitter + StockTwits)</h3>
+          <div id="socialTable" class="loading">Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTORS -->
+    <section id="tab-sectors" class="tab-content">
+      <div class="panel">
+        <h3>Sector Indices — Today's Snapshot</h3>
+        <div id="sectorsTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- CALENDAR -->
+    <section id="tab-calendar" class="tab-content">
+      <div class="grid cols-2">
+        <div class="panel">
+          <h3>Upcoming Macro Events</h3>
+          <div id="macroCalTable" class="loading">Loading…</div>
+        </div>
+        <div class="panel">
+          <h3>Upcoming Earnings</h3>
+          <div id="earningsCalTable" class="loading">Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- KITE -->
+    <section id="tab-kite" class="tab-content">
+      <div class="grid cols-2">
+        <div class="panel">
+          <h3>Connection Status</h3>
+          <div id="kitePanelStatus" class="loading">Loading…</div>
+          <div style="margin-top:12px">
+            <a href="/wealth/auth/login" class="pill ok" style="display:inline-block;padding:10px 14px;text-decoration:none;cursor:pointer">↻ Reconnect / Refresh Token</a>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Live Quote</h3>
+          <div class="toolbar">
+            <input id="kiteSymbol" placeholder="NSE:RELIANCE,NSE:HDFCBANK" value="NSE:RELIANCE,NSE:HDFCBANK,NSE:INFY" style="flex:1" />
+            <button class="primary" onclick="loadKiteQuote()">Fetch</button>
+          </div>
+          <div id="kiteQuoteTable"></div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <h3>Holdings</h3>
+        <button class="primary" onclick="loadKiteHoldings()" style="margin-bottom:10px">Load Holdings</button>
+        <div id="kiteHoldingsTable"></div>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <h3>API Call Log (last 30)</h3>
+        <p class="small">Visible after first call. Useful for debugging rate limits.</p>
+      </div>
+    </section>
+
+    <!-- OPS -->
+    <section id="tab-ops" class="tab-content">
+      <div class="grid cols-2">
+        <div class="panel">
+          <h3>Source Health</h3>
+          <div id="sourceHealthTable" class="loading">Loading…</div>
+        </div>
+        <div class="panel">
+          <h3>Recent Cron Runs</h3>
+          <div id="cronRunsTable" class="loading">Loading…</div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <h3>Backfill Progress</h3>
+        <div id="backfillTable" class="loading">Loading…</div>
+      </div>
+    </section>
+
+    <!-- EXPLAIN -->
+    <section id="tab-explain" class="tab-content">
+      <div class="panel">
+        <h3>How This Engine Works</h3>
+        <div style="font-size:14px; line-height:1.7">
+          <p><strong>Layered architecture.</strong> Eight data layers feed a signal engine that scores every Nifty-500 stock daily. Money rotates only when the signal score-delta justifies it.</p>
+          <ol style="margin: 12px 0 12px 20px">
+            <li><strong>Layer 1 — Price &amp; Volume</strong> (10 sources): NSE/BSE bhavcopies, indices, pre-open, intraday, delivery %, GIFT Nifty, 52w extremes, circuits. <span class="pill ok">Live</span></li>
+            <li><strong>Layer 2 — Institutional Flow</strong> (8 sources): FII/DII cash + derivatives, F&amp;O participant OI, bulk/block deals, F&amp;O ban list, MWPL. <span class="pill ok">Live</span></li>
+            <li><strong>Layer 3 — Options &amp; Volatility</strong> (5 sources): Nifty/BankNifty/FinNifty/stock option chains + India VIX. <span class="pill ok">Live</span></li>
+            <li><strong>Layer 4 — Corporate Intelligence</strong> (8 sources): announcements, insider trades, corp actions, board meetings, results, shareholding, pledges. <span class="pill ok">Live</span></li>
+            <li><strong>Layer 5 — Macro &amp; Cross-Asset</strong> (12 sources): FRED, RBI, GST, MoSPI, PMI, DXY, US10Y, VIX, S&amp;P futures, crude, gold, Asian indices. <span class="pill ok">Live</span></li>
+            <li><strong>Layer 6 — News &amp; Sentiment</strong> (10 sources): GDELT, ET, MoneyControl, LiveMint, BS, Reuters, BQ, Reddit, Nitter, StockTwits. <span class="pill ok">Live</span></li>
+            <li><strong>Layer 7 — Event Calendar</strong> (4 sources): Investing.com, NSE earnings, IMD, POSOCO. <span class="pill ok">Live</span></li>
+            <li><strong>Layer 8 — Sector &amp; Breadth</strong> (4 sources): sector indices, most-active, advance/decline, bond yields. <span class="pill ok">Live</span></li>
+          </ol>
+          <p><strong>Signal engine (Worker W9)</strong> runs nightly at 19:00 IST and assigns each stock a 0-100 composite score across 7 dimensions: trend, flow, options, catalyst, macro, sentiment, breadth.</p>
+          <p><strong>Money rotation rule:</strong> a held position is rotated out only when its composite score drops &gt;15 points below a candidate stock that has score &gt;70 with at least 2 confirming dimensions. Every rotation is logged with full rationale.</p>
+          <p><strong>Stop-loss &amp; targets</strong> are written before entry, never after. Position sizing follows Kelly 0.25× — disciplined, not heroic.</p>
+          <p class="small" style="margin-top:14px">Realistic target: 25-30% annual on the blended ₹10L portfolio. Worst-realistic year: -15%.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const STORE_KEY = 'wealth_dashboard_key';
+let DASHBOARD_KEY = localStorage.getItem(STORE_KEY) || '';
+
+if (DASHBOARD_KEY) tryAutoLogin();
+
+function login() {
+  const v = document.getElementById('pin').value.trim();
+  if (!v) return;
+  DASHBOARD_KEY = v;
+  fetchSummary().then(j => {
+    if (j.error) {
+      document.getElementById('gateErr').textContent = j.error;
+      DASHBOARD_KEY = '';
+      return;
+    }
+    localStorage.setItem(STORE_KEY, v);
+    showApp(j);
+  }).catch(e => {
+    document.getElementById('gateErr').textContent = String(e.message || e);
+  });
+}
+async function tryAutoLogin() {
+  try {
+    const j = await fetchSummary();
+    if (j.error) { localStorage.removeItem(STORE_KEY); DASHBOARD_KEY = ''; return; }
+    showApp(j);
+  } catch (e) {}
+}
+async function fetchSummary() {
+  const r = await fetch('/api/trading?action=summary&key=' + encodeURIComponent(DASHBOARD_KEY));
+  return r.json();
+}
+async function fetchAction(action, qs = '') {
+  const r = await fetch('/api/trading?action=' + action + '&key=' + encodeURIComponent(DASHBOARD_KEY) + (qs ? '&' + qs : ''));
+  return r.json();
+}
+
+function showApp(summary) {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  render(summary);
+  // default date inputs
+  const today = new Date().toISOString().slice(0, 10);
+  const start = '2024-05-03';
+  document.getElementById('eodFrom').value = start;
+  document.getElementById('eodTo').value = today;
+  // Refresh Kite status
+  refreshKiteStatus();
+  setInterval(refreshKiteStatus, 60000);
+  // If we just returned from a successful Kite OAuth, show a banner
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('kite') === 'connected') {
+    setTimeout(() => alert('Kite connected. Token valid until 06:00 IST tomorrow.'), 200);
+    history.replaceState({}, '', '/trading/');
+  }
+}
+
+async function refreshKiteStatus() {
+  try {
+    const r = await fetch('/api/kite?action=status&key=' + encodeURIComponent(DASHBOARD_KEY));
+    const j = await r.json();
+    const el = document.getElementById('kiteStatus');
+    if (!el) return;
+    if (j.connected) {
+      const mins = j.expires_in_min || 0;
+      const hrs = Math.floor(mins / 60);
+      const mm = mins % 60;
+      el.className = 'pill ok';
+      el.innerHTML = `🔗 Kite — ${j.user_name || 'connected'} <span class="small" style="opacity:0.7">(${hrs}h ${mm}m left)</span>`;
+      el.style.cursor = 'default';
+      el.onclick = null;
+      el.title = 'Connected as ' + j.user_name + '. Expires ' + new Date(j.expires_at).toLocaleString();
+    } else {
+      el.className = 'pill warn';
+      el.innerHTML = `⚠️ Kite — ${j.reason === 'expired' ? 'expired' : 'not connected'} · <a href="/wealth/auth/login" style="color:inherit; text-decoration:underline">Connect now</a>`;
+      el.style.cursor = 'pointer';
+      el.title = j.reason === 'expired' ? 'Token expired at 06:00 IST. Re-authenticate.' : 'No active Kite token. Click to log in.';
+    }
+  } catch (e) {
+    const el = document.getElementById('kiteStatus');
+    if (el) {
+      el.className = 'pill err';
+      el.textContent = '❌ Kite — error';
+    }
+  }
+}
+
+function render(s) {
+  document.getElementById('lastRefresh').textContent = 'Updated ' + new Date(s.generated_at).toLocaleTimeString();
+  renderUniverse(s.universe);
+  renderCronKpis(s.health);
+  renderPulse(s.indices);
+  renderIndices(s.indices);
+  renderExtremes(s.extremes);
+  renderCircuits(s.circuits);
+  renderSourceHealth(s.health);
+  renderCronRuns(s.health);
+  renderBackfill(s.backfill);
+  // Update alert badge from summary
+  const unreadTotal = (s.alerts?.unread_counts || []).reduce((a, r) => a + r.n, 0);
+  const badge = document.getElementById('alertBadge');
+  if (badge) {
+    if (unreadTotal > 0) { badge.textContent = unreadTotal; badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
+  }
+}
+
+function renderUniverse(u) {
+  const eod = u.eod || [];
+  const total = eod.reduce((a, r) => a + (r.total_rows || 0), 0);
+  const symbols = eod.reduce((a, r) => a + (r.symbols || 0), 0);
+  const days = Math.max(...eod.map(r => r.days || 0), 0);
+  document.getElementById('kpiUniverse').innerHTML = `
+    <div class="kpi"><div class="label">Total Rows</div><div class="value">${formatNum(total)}</div></div>
+    <div class="kpi"><div class="label">Symbols</div><div class="value">${formatNum(symbols)}</div></div>
+    <div class="kpi"><div class="label">Trading Days</div><div class="value">${formatNum(days)}</div></div>
+  `;
+  document.getElementById('universeMeta').textContent = `${formatNum(symbols)} symbols · ${formatNum(days)} days`;
+}
+
+function renderCronKpis(h) {
+  const last = h.last_24h || [];
+  const totalRuns = last.reduce((a, r) => a + (r.runs || 0), 0);
+  const success = last.reduce((a, r) => a + (r.success || 0), 0);
+  const rows = last.reduce((a, r) => a + (r.rows || 0), 0);
+  const successRate = totalRuns ? Math.round(100 * success / totalRuns) : 0;
+  document.getElementById('kpiCron').innerHTML = `
+    <div class="kpi"><div class="label">Cron Runs</div><div class="value">${totalRuns}</div></div>
+    <div class="kpi"><div class="label">Success %</div><div class="value">${successRate}%</div></div>
+    <div class="kpi"><div class="label">Rows Written</div><div class="value">${formatNum(rows)}</div></div>
+  `;
+}
+
+function renderPulse(idx) {
+  const list = idx.indices || [];
+  const find = (n) => list.find(i => i.index_name === n);
+  const nifty = find('NIFTY 50') || find('Nifty 50');
+  const bank = find('NIFTY BANK') || find('Nifty Bank');
+  const vix = find('INDIA VIX') || find('India VIX');
+  const fmt = (i) => {
+    if (!i) return `<div class="kpi"><div class="label">—</div><div class="value">—</div></div>`;
+    const change = i.close_paise && i.prev_close_paise ? ((i.close_paise - i.prev_close_paise) / i.prev_close_paise * 100) : 0;
+    const cls = change >= 0 ? 'pos' : 'neg';
+    return `<div class="kpi"><div class="label">${i.index_name}</div><div class="value">${(i.close_paise/100).toFixed(2)}</div><div class="delta ${cls}">${change.toFixed(2)}%</div></div>`;
+  };
+  document.getElementById('kpiPulse').innerHTML = fmt(nifty) + fmt(bank) + fmt(vix);
+}
+
+function renderIndices(idx) {
+  const list = idx.indices || [];
+  if (!list.length) {
+    document.getElementById('indicesTable').innerHTML = '<div class="empty">No indices loaded yet. Run W1 cron `nse_indices` once.</div>';
+    return;
+  }
+  const html = `<table>
+    <thead><tr><th>Index</th><th class="num">Open</th><th class="num">High</th><th class="num">Low</th><th class="num">Close</th><th class="num">Δ%</th><th class="num">PE</th><th class="num">PB</th><th class="num">Div Y%</th></tr></thead>
+    <tbody>${list.map(i => {
+      const ch = i.close_paise && i.prev_close_paise ? (i.close_paise - i.prev_close_paise) / i.prev_close_paise * 100 : 0;
+      const cls = ch >= 0 ? 'pos' : 'neg';
+      return `<tr>
+        <td>${i.index_name}</td>
+        <td class="num">${fmtP(i.open_paise)}</td>
+        <td class="num">${fmtP(i.high_paise)}</td>
+        <td class="num">${fmtP(i.low_paise)}</td>
+        <td class="num">${fmtP(i.close_paise)}</td>
+        <td class="num"><span class="${cls}">${ch.toFixed(2)}%</span></td>
+        <td class="num">${i.pe_ratio ?? '—'}</td>
+        <td class="num">${i.pb_ratio ?? '—'}</td>
+        <td class="num">${i.div_yield ?? '—'}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+  document.getElementById('indicesTable').innerHTML = html;
+}
+
+function renderExtremes(e) {
+  const rows = e.rows || [];
+  if (!rows.length) {
+    document.getElementById('extremesTable').innerHTML = '<div class="empty">No 52w extremes for today yet.</div>';
+    return;
+  }
+  document.getElementById('extremesTable').innerHTML = `<table>
+    <thead><tr><th>Symbol</th><th>Type</th><th class="num">Price</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td>${r.symbol}</td>
+      <td><span class="pill ${r.extreme_type === '52w_high' ? 'ok' : 'err'}">${r.extreme_type}</span></td>
+      <td class="num">${fmtP(r.price_paise)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function renderCircuits(c) {
+  const rows = c.rows || [];
+  if (!rows.length) {
+    document.getElementById('circuitsTable').innerHTML = '<div class="empty">No circuit hits today.</div>';
+    return;
+  }
+  document.getElementById('circuitsTable').innerHTML = `<table>
+    <thead><tr><th>Symbol</th><th>Type</th><th class="num">Band%</th><th class="num">LTP</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td>${r.symbol}</td>
+      <td><span class="pill ${r.circuit_type === 'upper' ? 'ok' : 'err'}">${r.circuit_type}</span></td>
+      <td class="num">${r.band_pct ?? '—'}</td>
+      <td class="num">${fmtP(r.ltp_paise)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function renderSourceHealth(h) {
+  const rows = h.source_health || [];
+  if (!rows.length) {
+    document.getElementById('sourceHealthTable').innerHTML = '<div class="empty">No source health data yet — runs will populate this.</div>';
+    return;
+  }
+  document.getElementById('sourceHealthTable').innerHTML = `<table>
+    <thead><tr><th>Source</th><th>Status</th><th>Last Success</th><th class="num">Fails</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const cls = r.is_circuit_broken ? 'err' : (r.consecutive_failures > 0 ? 'warn' : 'ok');
+      const status = r.is_circuit_broken ? 'broken' : (r.consecutive_failures > 0 ? 'degraded' : 'healthy');
+      return `<tr>
+        <td class="mono">${r.source_name}</td>
+        <td><span class="pill ${cls}">${status}</span></td>
+        <td class="small">${r.last_success_ts ? new Date(r.last_success_ts).toLocaleString() : '—'}</td>
+        <td class="num">${r.consecutive_failures || 0}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+function renderCronRuns(h) {
+  const rows = h.recent_runs || [];
+  if (!rows.length) {
+    document.getElementById('cronRunsTable').innerHTML = '<div class="empty">No cron runs logged yet.</div>';
+    return;
+  }
+  document.getElementById('cronRunsTable').innerHTML = `<table>
+    <thead><tr><th>Cron</th><th>Status</th><th>Time</th><th class="num">Rows</th><th class="num">ms</th></tr></thead>
+    <tbody>${rows.slice(0, 15).map(r => {
+      const cls = r.status === 'success' ? 'ok' : r.status === 'failed' ? 'err' : 'warn';
+      return `<tr>
+        <td class="mono">${r.cron_name}</td>
+        <td><span class="pill ${cls}">${r.status}</span></td>
+        <td class="small">${new Date(r.started_at).toLocaleTimeString()}</td>
+        <td class="num">${r.rows_written || 0}</td>
+        <td class="num">${r.duration_ms || '—'}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+function renderBackfill(b) {
+  const rows = b.rows || [];
+  if (!rows.length) {
+    document.getElementById('backfillTable').innerHTML = '<div class="empty">No backfill jobs yet. Trigger via /run/backfill?source=nse_bhavcopy&from=2024-05-03&to=2026-05-02</div>';
+    return;
+  }
+  document.getElementById('backfillTable').innerHTML = `<table>
+    <thead><tr><th>Source</th><th>From</th><th>To</th><th>Completed Through</th><th class="num">Rows</th><th>Status</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td class="mono">${r.source_name}</td>
+      <td>${r.date_from}</td>
+      <td>${r.date_to}</td>
+      <td>${r.date_completed || '—'}</td>
+      <td class="num">${formatNum(r.rows_loaded || 0)}</td>
+      <td><span class="pill ${r.status === 'complete' ? 'ok' : r.status === 'error' ? 'err' : 'warn'}">${r.status}</span></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadEod() {
+  const sym = document.getElementById('eodSymbol').value.trim();
+  const exch = document.getElementById('eodExchange').value;
+  const from = document.getElementById('eodFrom').value;
+  const to = document.getElementById('eodTo').value;
+  document.getElementById('eodTable').innerHTML = '<div class="loading">Loading…</div>';
+  const j = await fetchAction('eod', `symbol=${encodeURIComponent(sym)}&exchange=${exch}&from=${from}&to=${to}`);
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('eodTable').innerHTML = '<div class="empty">No data for this range — make sure backfill has run.</div>';
+    return;
+  }
+  document.getElementById('eodTable').innerHTML = `<table>
+    <thead><tr><th>Date</th><th class="num">Open</th><th class="num">High</th><th class="num">Low</th><th class="num">Close</th><th class="num">Δ%</th><th class="num">Vol</th><th class="num">Deliv%</th></tr></thead>
+    <tbody>${rows.slice().reverse().slice(0, 200).map(r => {
+      const ch = r.close_paise && r.prev_close_paise ? (r.close_paise - r.prev_close_paise) / r.prev_close_paise * 100 : 0;
+      const cls = ch >= 0 ? 'pos' : 'neg';
+      return `<tr>
+        <td>${r.trade_date}</td>
+        <td class="num">${fmtP(r.open_paise)}</td>
+        <td class="num">${fmtP(r.high_paise)}</td>
+        <td class="num">${fmtP(r.low_paise)}</td>
+        <td class="num">${fmtP(r.close_paise)}</td>
+        <td class="num"><span class="${cls}">${ch.toFixed(2)}%</span></td>
+        <td class="num">${formatNum(r.volume || 0)}</td>
+        <td class="num">${r.delivery_pct ?? '—'}</td>
+      </tr>`;
+    }).join('')}</tbody></table>
+    <p class="small" style="margin-top:8px">Showing ${Math.min(200, rows.length)} of ${rows.length} rows</p>`;
+}
+
+async function loadPreopen() {
+  const j = await fetchAction('preopen');
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('preopenTable').innerHTML = '<div class="empty">No pre-open data — runs at 09:00-09:08 IST on market days.</div>';
+    return;
+  }
+  document.getElementById('preopenTable').innerHTML = `<table>
+    <thead><tr><th>Symbol</th><th class="num">IEP</th><th class="num">Δ%</th><th class="num">Buy Qty</th><th class="num">Sell Qty</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const cls = (r.iep_change_pct || 0) >= 0 ? 'pos' : 'neg';
+      return `<tr>
+        <td>${r.symbol}</td>
+        <td class="num">${fmtP(r.iep_paise)}</td>
+        <td class="num"><span class="${cls}">${(r.iep_change_pct || 0).toFixed(2)}%</span></td>
+        <td class="num">${formatNum(r.total_buy_qty || 0)}</td>
+        <td class="num">${formatNum(r.total_sell_qty || 0)}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function loadIntraday() {
+  const j = await fetchAction('intraday');
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('intradayTable').innerHTML = '<div class="empty">No intraday ticks yet — runs every 5 min during market.</div>';
+    return;
+  }
+  document.getElementById('intradayTable').innerHTML = `<table>
+    <thead><tr><th>Symbol</th><th>Time</th><th class="num">LTP</th><th class="num">Bid</th><th class="num">Ask</th><th class="num">Buy Qty</th><th class="num">Sell Qty</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td>${r.symbol}</td>
+      <td class="small">${new Date(r.ts).toLocaleTimeString()}</td>
+      <td class="num">${fmtP(r.ltp_paise)}</td>
+      <td class="num">${fmtP(r.bid_paise)}</td>
+      <td class="num">${fmtP(r.ask_paise)}</td>
+      <td class="num">${formatNum(r.buy_qty || 0)}</td>
+      <td class="num">${formatNum(r.sell_qty || 0)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadSignals() {
+  const j = await fetchAction('signals');
+  const rows = j.signals || [];
+  if (!rows.length) {
+    document.getElementById('signalsTable').innerHTML = '<div class="empty">' + (j.note || 'No signals yet — engine deploys after Layers 2-8.') + '</div>';
+    return;
+  }
+  document.getElementById('signalsTable').innerHTML = `<table>
+    <thead><tr><th>Symbol</th><th class="num">Composite</th><th class="num">Trend</th><th class="num">Flow</th><th class="num">Catalyst</th><th class="num">Macro</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td>${r.symbol}</td>
+      <td class="num"><strong>${(r.composite_score || 0).toFixed(1)}</strong></td>
+      <td class="num">${(r.trend_score || 0).toFixed(1)}</td>
+      <td class="num">${(r.flow_score || 0).toFixed(1)}</td>
+      <td class="num">${(r.catalyst_score || 0).toFixed(1)}</td>
+      <td class="num">${(r.macro_score || 0).toFixed(1)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function showTab(name, ev) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  if (ev) ev.currentTarget.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'preopen') loadPreopen();
+  if (name === 'intraday') loadIntraday();
+  if (name === 'signals') loadSignals();
+  if (name === 'cascades') loadCascades();
+  if (name === 'flow') { loadFlow(); loadBulkBlock(); }
+  if (name === 'options') loadOptionChain();
+  if (name === 'announcements') loadAnnouncements();
+  if (name === 'macro') loadMacro();
+  if (name === 'crossasset') loadCrossAsset();
+  if (name === 'news') { loadNews(); loadSocial(); }
+  if (name === 'sectors') loadSectors();
+  if (name === 'calendar') loadCalendar();
+  if (name === 'kite') loadKitePanel();
+  if (name === 'briefing') loadBriefing();
+  if (name === 'alerts') loadAlerts(true);
+  if (name === 'portfolio') loadPortfolio();
+  if (name === 'positions') loadPositions();
+}
+
+async function loadBriefing() {
+  const j = await fetchAction('briefing');
+  const b = j.briefing;
+  if (!b) {
+    document.getElementById('briefingNarrative').innerHTML = '<div class="empty">No briefing yet — runs daily 08:30 IST after market data lands.</div>';
+    return;
+  }
+  document.getElementById('briefingDate').textContent = '· ' + b.briefing_date;
+  document.getElementById('briefingNarrative').innerHTML = `<p style="font-size:16px;line-height:1.7">${b.narrative}</p>`;
+  document.getElementById('briefingSignals').innerHTML = (b.top_signals || []).slice(0,10).map(s => `<div style="padding:6px 0;border-bottom:1px solid var(--border)"><strong>${s.symbol}</strong> — ${(s.composite_score||0).toFixed(1)} <span class="small">(t:${(s.trend_score||0).toFixed(0)} f:${(s.flow_score||0).toFixed(0)} c:${(s.catalyst_score||0).toFixed(0)} m:${(s.macro_score||0).toFixed(0)})</span></div>`).join('') || '<div class="empty">None</div>';
+  document.getElementById('briefingCascades').innerHTML = (b.active_cascades || []).map(c => {
+    const syms = (() => { try { return JSON.parse(c.affected_symbols||'[]').join(', '); } catch { return ''; }})();
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--border)"><strong class="mono">${c.pattern_name}</strong><br><span class="small">${syms} · ${((c.historical_win_rate||0)*100).toFixed(0)}% · ${(c.expected_return_pct||0).toFixed(1)}%</span></div>`;
+  }).join('') || '<div class="empty">None</div>';
+  document.getElementById('briefingFii').innerHTML = (b.fii_dii_yesterday || []).map(f => `<div>${f.trade_date} · FII <span class="${(f.fii_net_cr||0)>=0?'pos':'neg'}">${(f.fii_net_cr||0).toFixed(0)} Cr</span> · DII <span class="${(f.dii_net_cr||0)>=0?'pos':'neg'}">${(f.dii_net_cr||0).toFixed(0)} Cr</span></div>`).join('') || '<div class="empty">None</div>';
+  document.getElementById('briefingEarnings').innerHTML = (b.earnings_today || []).slice(0,15).map(e => `<div>${e.symbol}</div>`).join('') || '<div class="empty">No earnings today</div>';
+  document.getElementById('briefingMacro').innerHTML = (b.key_macro || []).map(m => `<div class="mono">${m.indicator_code}: <strong>${(m.value||0).toFixed(2)}</strong> <span class="small">${m.observation_date}</span></div>`).join('') || '<div class="empty">None</div>';
+  document.getElementById('briefingEvents').innerHTML = (b.upcoming_events || []).slice(0,8).map(e => `<div class="small">${new Date(e.event_ts).toLocaleString()} · ${e.country || ''} · ${e.event_name||''}</div>`).join('') || '<div class="empty">None</div>';
+}
+
+async function loadAlerts(unreadOnly) {
+  const j = await fetchAction('alerts', unreadOnly ? 'unread=1&limit=100' : 'limit=100');
+  const rows = j.alerts || [];
+  // Update header badge
+  const unreadTotal = (j.unread_counts || []).reduce((a, r) => a + r.n, 0);
+  const badge = document.getElementById('alertBadge');
+  if (badge) {
+    if (unreadTotal > 0) { badge.textContent = unreadTotal; badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
+  }
+  if (!rows.length) {
+    document.getElementById('alertsTable').innerHTML = '<div class="empty">No alerts.</div>';
+    return;
+  }
+  document.getElementById('alertsTable').innerHTML = `<table>
+    <thead><tr><th>Time</th><th>Severity</th><th>Category</th><th>Title</th><th>Body</th><th></th></tr></thead>
+    <tbody>${rows.map(a => {
+      const cls = a.severity === 'critical' ? 'err' : a.severity === 'warn' ? 'warn' : 'ok';
+      return `<tr style="${a.is_read ? 'opacity:0.6' : ''}">
+        <td class="small">${new Date(a.ts).toLocaleString()}</td>
+        <td><span class="pill ${cls}">${a.severity}</span></td>
+        <td class="small">${a.category}</td>
+        <td><strong>${a.title}</strong></td>
+        <td class="small" style="max-width:400px">${a.body || ''}</td>
+        <td>${a.is_read ? '✓' : `<button onclick="markAlertRead(${a.id})" style="background:transparent;border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px">Read</button>`}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function markAlertRead(id) {
+  await fetchAction('mark_alert_read', `id=${id}`);
+  loadAlerts(true);
+}
+
+async function loadPortfolio() {
+  const j = await fetchAction('portfolio');
+  const s = j.summary || {};
+  const cls = (s.total_pnl_paise || 0) >= 0 ? 'pos' : 'neg';
+  document.getElementById('portfolioKpis').innerHTML = `
+    <div class="kpi"><div class="label">Latest</div><div class="value" style="font-size:14px">${s.latest_date || '—'}</div></div>
+    <div class="kpi"><div class="label">Positions</div><div class="value">${s.position_count || 0}</div></div>
+    <div class="kpi"><div class="label">Market Value</div><div class="value">₹${formatNum((s.total_value_paise || 0)/100)}</div></div>
+    <div class="kpi"><div class="label">Unrealized P&amp;L</div><div class="value ${cls}">₹${formatNum((s.total_pnl_paise || 0)/100)}</div></div>
+  `;
+  const rows = (j.rows || []).filter(r => r.snapshot_date === s.latest_date);
+  if (!rows.length) {
+    document.getElementById('portfolioTable').innerHTML = '<div class="empty">No portfolio snapshot yet — runs daily 16:00 IST after market close.</div>';
+    return;
+  }
+  document.getElementById('portfolioTable').innerHTML = `<table>
+    <thead><tr><th>Symbol</th><th class="num">Qty</th><th class="num">Avg</th><th class="num">LTP</th><th class="num">Value</th><th class="num">P&amp;L</th><th class="num">Day Δ%</th><th class="num">Total Ret%</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const pcls = (r.pnl_paise||0) >= 0 ? 'pos' : 'neg';
+      return `<tr>
+        <td>${r.symbol}</td>
+        <td class="num">${r.qty || 0}</td>
+        <td class="num">${fmtP(r.avg_price_paise)}</td>
+        <td class="num">${fmtP(r.ltp_paise)}</td>
+        <td class="num">${fmtP(r.market_value_paise)}</td>
+        <td class="num"><span class="${pcls}">${fmtP(r.pnl_paise)}</span></td>
+        <td class="num"><span class="${(r.day_change_pct||0)>=0?'pos':'neg'}">${(r.day_change_pct||0).toFixed(2)}%</span></td>
+        <td class="num"><span class="${(r.total_return_pct||0)>=0?'pos':'neg'}">${(r.total_return_pct||0).toFixed(2)}%</span></td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function loadPositions() {
+  const j = await fetchAction('positions');
+  const rows = j.positions || [];
+  if (!rows.length) {
+    document.getElementById('positionsTable').innerHTML = '<div class="empty">No active positions. Add one above to enable stop-loss + target alerts.</div>';
+    return;
+  }
+  document.getElementById('positionsTable').innerHTML = `<table>
+    <thead><tr><th>Tranche</th><th>Symbol</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Stop</th><th class="num">Target</th><th class="num">High Water</th><th>Date</th><th></th></tr></thead>
+    <tbody>${rows.map(p => `<tr>
+      <td><span class="pill ${p.tranche === 'stretch' ? 'err' : p.tranche === 'aggressive' ? 'warn' : 'ok'}">${p.tranche || 'base'}</span></td>
+      <td>${p.symbol}</td>
+      <td class="num">${p.qty}</td>
+      <td class="num">${fmtP(p.entry_price_paise)}</td>
+      <td class="num">${fmtP(p.stop_paise)}</td>
+      <td class="num">${fmtP(p.target_paise)}</td>
+      <td class="num">${fmtP(p.high_water_paise)}</td>
+      <td class="small">${p.entry_date}</td>
+      <td><button onclick="closePosition(${p.id})" style="background:transparent;border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px">Close</button></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function addPosition() {
+  const params = new URLSearchParams({
+    tranche: document.getElementById('newPosTranche').value,
+    symbol: document.getElementById('newPosSymbol').value.trim(),
+    qty: document.getElementById('newPosQty').value,
+    entry: document.getElementById('newPosEntry').value,
+    stop: document.getElementById('newPosStop').value,
+  });
+  const target = document.getElementById('newPosTarget').value;
+  if (target) params.set('target', target);
+  const j = await fetchAction('add_position', params.toString());
+  if (j.error) alert(j.error);
+  else { document.getElementById('newPosSymbol').value = ''; document.getElementById('newPosQty').value = ''; document.getElementById('newPosEntry').value = ''; document.getElementById('newPosStop').value = ''; document.getElementById('newPosTarget').value = ''; loadPositions(); }
+}
+
+async function closePosition(id) {
+  if (!confirm('Close this position?')) return;
+  await fetchAction('close_position', `id=${id}`);
+  loadPositions();
+}
+
+async function loadKitePanel() {
+  const r = await fetch('/api/kite?action=status&key=' + encodeURIComponent(DASHBOARD_KEY));
+  const j = await r.json();
+  const el = document.getElementById('kitePanelStatus');
+  if (j.connected) {
+    el.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi"><div class="label">Status</div><div class="value" style="color:var(--green)">Connected</div></div>
+        <div class="kpi"><div class="label">User</div><div class="value">${j.user_name || j.user_id || '—'}</div></div>
+        <div class="kpi"><div class="label">Email</div><div class="value" style="font-size:14px">${j.email || '—'}</div></div>
+        <div class="kpi"><div class="label">Expires</div><div class="value" style="font-size:14px">${new Date(j.expires_at).toLocaleString()}</div></div>
+        <div class="kpi"><div class="label">Time Left</div><div class="value">${Math.floor((j.expires_in_min||0)/60)}h ${(j.expires_in_min||0)%60}m</div></div>
+      </div>`;
+  } else {
+    el.innerHTML = `<div class="empty">
+      <p style="color:var(--yellow)">${j.reason === 'expired' ? '⚠️ Token expired (06:00 IST cutoff)' : '⚠️ Not connected'}</p>
+      <p class="small" style="margin-top:8px">API Key configured: ${j.api_key_configured ? '✓' : '✗'} · Secret configured: ${j.api_secret_configured ? '✓' : '✗'}</p>
+      <p style="margin-top:14px">Click <strong>Reconnect / Refresh Token</strong> below to OAuth in.</p>
+    </div>`;
+  }
+}
+
+async function loadKiteQuote() {
+  const symbols = document.getElementById('kiteSymbol').value.trim();
+  if (!symbols) return;
+  document.getElementById('kiteQuoteTable').innerHTML = '<div class="loading">Loading…</div>';
+  const params = symbols.split(',').map(s => `i=${encodeURIComponent(s.trim())}`).join('&');
+  const r = await fetch(`/api/kite?action=quote&${params}&key=${encodeURIComponent(DASHBOARD_KEY)}`);
+  const j = await r.json();
+  if (j.error) {
+    document.getElementById('kiteQuoteTable').innerHTML = `<div class="empty"><p style="color:var(--red)">${j.error}</p><p class="small">${j.message || ''}</p></div>`;
+    return;
+  }
+  const data = j.data || {};
+  const rows = Object.entries(data);
+  if (!rows.length) {
+    document.getElementById('kiteQuoteTable').innerHTML = '<div class="empty">No quotes returned.</div>';
+    return;
+  }
+  document.getElementById('kiteQuoteTable').innerHTML = `<table>
+    <thead><tr><th>Instrument</th><th class="num">LTP</th><th class="num">Open</th><th class="num">High</th><th class="num">Low</th><th class="num">Close</th><th class="num">Volume</th></tr></thead>
+    <tbody>${rows.map(([sym, q]) => `<tr>
+      <td>${sym}</td>
+      <td class="num"><strong>${(q.last_price || 0).toFixed(2)}</strong></td>
+      <td class="num">${(q.ohlc?.open || 0).toFixed(2)}</td>
+      <td class="num">${(q.ohlc?.high || 0).toFixed(2)}</td>
+      <td class="num">${(q.ohlc?.low || 0).toFixed(2)}</td>
+      <td class="num">${(q.ohlc?.close || 0).toFixed(2)}</td>
+      <td class="num">${formatNum(q.volume || 0)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadKiteHoldings() {
+  document.getElementById('kiteHoldingsTable').innerHTML = '<div class="loading">Loading…</div>';
+  const r = await fetch(`/api/kite?action=holdings&key=${encodeURIComponent(DASHBOARD_KEY)}`);
+  const j = await r.json();
+  if (j.error) {
+    document.getElementById('kiteHoldingsTable').innerHTML = `<div class="empty"><p style="color:var(--red)">${j.error}</p><p class="small">${j.message || ''}</p></div>`;
+    return;
+  }
+  const rows = j.data || [];
+  if (!rows.length) {
+    document.getElementById('kiteHoldingsTable').innerHTML = '<div class="empty">No holdings (or none in your demat).</div>';
+    return;
+  }
+  document.getElementById('kiteHoldingsTable').innerHTML = `<table>
+    <thead><tr><th>Symbol</th><th class="num">Qty</th><th class="num">Avg</th><th class="num">LTP</th><th class="num">P&L</th><th class="num">Day Δ%</th></tr></thead>
+    <tbody>${rows.map(h => {
+      const pnl = ((h.last_price || 0) - (h.average_price || 0)) * (h.quantity || 0);
+      const cls = pnl >= 0 ? 'pos' : 'neg';
+      return `<tr>
+        <td>${h.tradingsymbol}</td>
+        <td class="num">${h.quantity || 0}</td>
+        <td class="num">${(h.average_price || 0).toFixed(2)}</td>
+        <td class="num">${(h.last_price || 0).toFixed(2)}</td>
+        <td class="num"><span class="${cls}">${pnl.toFixed(0)}</span></td>
+        <td class="num"><span class="${(h.day_change_percentage || 0) >= 0 ? 'pos' : 'neg'}">${(h.day_change_percentage || 0).toFixed(2)}%</span></td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function loadCascades() {
+  const j = await fetchAction('cascades');
+  const rows = j.cascades || [];
+  if (!rows.length) {
+    document.getElementById('cascadesTable').innerHTML = '<div class="empty">No active cascades — patterns appear when triggers fire (RBI cut, FII selling, crude drop, block-buyer repeat, pledge spike).</div>';
+    return;
+  }
+  document.getElementById('cascadesTable').innerHTML = `<table>
+    <thead><tr><th>Pattern</th><th>Detected</th><th>Window End</th><th>Symbols</th><th class="num">Win %</th><th class="num">Exp Return</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const syms = (() => { try { return JSON.parse(r.affected_symbols || '[]').join(', '); } catch { return r.affected_symbols; } })();
+      const cls = (r.expected_return_pct || 0) >= 0 ? 'pos' : 'neg';
+      return `<tr>
+        <td class="mono">${r.pattern_name}</td>
+        <td class="small">${new Date(r.detected_at).toLocaleString()}</td>
+        <td class="small">${new Date(r.expected_window_end).toLocaleDateString()}</td>
+        <td>${syms}</td>
+        <td class="num">${((r.historical_win_rate || 0) * 100).toFixed(0)}%</td>
+        <td class="num"><span class="${cls}">${(r.expected_return_pct || 0).toFixed(1)}%</span></td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function loadFlow() {
+  const j = await fetchAction('fii_dii');
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('flowTable').innerHTML = '<div class="empty">No FII/DII data yet.</div>';
+    return;
+  }
+  document.getElementById('flowTable').innerHTML = `<table>
+    <thead><tr><th>Date</th><th>Segment</th><th class="num">FII Net (Cr)</th><th class="num">DII Net (Cr)</th></tr></thead>
+    <tbody>${rows.slice(0, 30).map(r => {
+      const fc = (r.fii_net_cr || 0) >= 0 ? 'pos' : 'neg';
+      const dc = (r.dii_net_cr || 0) >= 0 ? 'pos' : 'neg';
+      return `<tr>
+        <td>${r.trade_date}</td>
+        <td>${r.segment}</td>
+        <td class="num"><span class="${fc}">${(r.fii_net_cr || 0).toFixed(0)}</span></td>
+        <td class="num"><span class="${dc}">${(r.dii_net_cr || 0).toFixed(0)}</span></td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function loadBulkBlock() {
+  const j = await fetchAction('bulk_block');
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('bulkBlockTable').innerHTML = '<div class="empty">No bulk/block deals.</div>';
+    return;
+  }
+  document.getElementById('bulkBlockTable').innerHTML = `<table>
+    <thead><tr><th>Date</th><th>Symbol</th><th>Type</th><th>Client</th><th>Side</th><th class="num">Qty</th><th class="num">Price</th></tr></thead>
+    <tbody>${rows.slice(0, 50).map(r => `<tr>
+      <td class="small">${r.trade_date}</td>
+      <td>${r.symbol}</td>
+      <td>${r.deal_type}</td>
+      <td class="small">${(r.client_name || '').slice(0, 30)}</td>
+      <td><span class="pill ${r.txn_type === 'buy' ? 'ok' : 'err'}">${r.txn_type}</span></td>
+      <td class="num">${formatNum(r.qty || 0)}</td>
+      <td class="num">${fmtP(r.price_paise)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadOptionChain() {
+  const u = document.getElementById('ocUnderlying').value;
+  document.getElementById('optionChainTable').innerHTML = '<div class="loading">Loading…</div>';
+  const j = await fetchAction('option_chain', `underlying=${u}`);
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('optionChainTable').innerHTML = '<div class="empty">No option chain data.</div>';
+    return;
+  }
+  document.getElementById('optionChainTable').innerHTML = `<table>
+    <thead><tr><th class="num">CE OI</th><th class="num">CE ΔOI</th><th class="num">CE IV</th><th class="num">CE LTP</th><th class="num">Strike</th><th class="num">PE LTP</th><th class="num">PE IV</th><th class="num">PE ΔOI</th><th class="num">PE OI</th></tr></thead>
+    <tbody>${rows.slice(0, 40).map(r => `<tr>
+      <td class="num">${formatNum(r.ce_oi || 0)}</td>
+      <td class="num">${formatNum(r.ce_chg_oi || 0)}</td>
+      <td class="num">${(r.ce_iv || 0).toFixed(1)}</td>
+      <td class="num">${fmtP(r.ce_ltp_paise)}</td>
+      <td class="num"><strong>${fmtP(r.strike_paise)}</strong></td>
+      <td class="num">${fmtP(r.pe_ltp_paise)}</td>
+      <td class="num">${(r.pe_iv || 0).toFixed(1)}</td>
+      <td class="num">${formatNum(r.pe_chg_oi || 0)}</td>
+      <td class="num">${formatNum(r.pe_oi || 0)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadAnnouncements() {
+  const j = await fetchAction('announcements');
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('announcementsTable').innerHTML = '<div class="empty">No material announcements yet.</div>';
+    return;
+  }
+  document.getElementById('announcementsTable').innerHTML = `<table>
+    <thead><tr><th>Time</th><th>Symbol</th><th>Subject</th><th class="num">Mat</th><th class="num">Sent</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td class="small">${new Date(r.ann_time).toLocaleString()}</td>
+      <td>${r.symbol}</td>
+      <td class="small" style="max-width:500px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.subject || ''}</td>
+      <td class="num">${((r.materiality_score || 0) * 100).toFixed(0)}</td>
+      <td class="num"><span class="${(r.sentiment_score || 0) >= 0 ? 'pos' : 'neg'}">${((r.sentiment_score || 0) * 100).toFixed(0)}</span></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadMacro() {
+  const j = await fetchAction('macro');
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('macroTable').innerHTML = '<div class="empty">No macro readings yet.</div>';
+    return;
+  }
+  document.getElementById('macroTable').innerHTML = `<table>
+    <thead><tr><th>Indicator</th><th>Date</th><th class="num">Value</th><th>Source</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td class="mono">${r.indicator_code}</td>
+      <td>${r.observation_date}</td>
+      <td class="num"><strong>${(r.value || 0).toFixed(2)}</strong></td>
+      <td class="small">${r.source || ''}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadCrossAsset() {
+  const j = await fetchAction('crossasset');
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('crossAssetTable').innerHTML = '<div class="empty">No cross-asset data yet.</div>';
+    return;
+  }
+  document.getElementById('crossAssetTable').innerHTML = `<table>
+    <thead><tr><th>Asset</th><th class="num">Value</th><th>Time</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td class="mono">${r.asset_code}</td>
+      <td class="num"><strong>${(r.value || 0).toFixed(4)}</strong></td>
+      <td class="small">${new Date(r.ts).toLocaleString()}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadNews() {
+  const j = await fetchAction('news');
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('newsTable').innerHTML = '<div class="empty">No news yet.</div>';
+    return;
+  }
+  document.getElementById('newsTable').innerHTML = `<table>
+    <thead><tr><th>Time</th><th>Source</th><th>Headline</th><th class="num">Sent</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td class="small">${new Date(r.published_at).toLocaleString()}</td>
+      <td class="small">${r.source}</td>
+      <td class="small" style="max-width:400px;">${r.url ? `<a href="${r.url}" target="_blank" style="color:var(--blue)">${r.headline}</a>` : r.headline}</td>
+      <td class="num"><span class="${(r.sentiment_score || 0) >= 0 ? 'pos' : 'neg'}">${((r.sentiment_score || 0) * 100).toFixed(0)}</span></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadSocial() {
+  const j = await fetchAction('social');
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('socialTable').innerHTML = '<div class="empty">No social posts yet.</div>';
+    return;
+  }
+  document.getElementById('socialTable').innerHTML = `<table>
+    <thead><tr><th>Time</th><th>Platform</th><th>Content</th><th class="num">Sent</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td class="small">${new Date(r.posted_at).toLocaleString()}</td>
+      <td><span class="pill idle">${r.platform}</span></td>
+      <td class="small" style="max-width:400px;">${(r.content || '').slice(0, 150)}</td>
+      <td class="num"><span class="${(r.sentiment_score || 0) >= 0 ? 'pos' : 'neg'}">${((r.sentiment_score || 0) * 100).toFixed(0)}</span></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadSectors() {
+  const j = await fetchAction('sectors');
+  const rows = j.rows || [];
+  if (!rows.length) {
+    document.getElementById('sectorsTable').innerHTML = '<div class="empty">No sector data yet.</div>';
+    return;
+  }
+  document.getElementById('sectorsTable').innerHTML = `<table>
+    <thead><tr><th>Sector</th><th>Date</th><th class="num">Open</th><th class="num">High</th><th class="num">Low</th><th class="num">Close</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td>${r.index_name}</td>
+      <td class="small">${r.trade_date}</td>
+      <td class="num">${fmtP(r.open_paise)}</td>
+      <td class="num">${fmtP(r.high_paise)}</td>
+      <td class="num">${fmtP(r.low_paise)}</td>
+      <td class="num"><strong>${fmtP(r.close_paise)}</strong></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadCalendar() {
+  const j = await fetchAction('calendar');
+  const macroRows = j.macro || [];
+  const earnRows = j.earnings || [];
+  document.getElementById('macroCalTable').innerHTML = macroRows.length ? `<table>
+    <thead><tr><th>Time</th><th>Country</th><th>Event</th><th class="num">Imp</th></tr></thead>
+    <tbody>${macroRows.slice(0, 30).map(r => `<tr>
+      <td class="small">${new Date(r.event_ts).toLocaleString()}</td>
+      <td>${r.country || ''}</td>
+      <td class="small">${r.event_name || ''}</td>
+      <td class="num">${'★'.repeat(r.importance || 0)}</td>
+    </tr>`).join('')}</tbody></table>` : '<div class="empty">No upcoming events.</div>';
+  document.getElementById('earningsCalTable').innerHTML = earnRows.length ? `<table>
+    <thead><tr><th>Symbol</th><th>Result Date</th></tr></thead>
+    <tbody>${earnRows.slice(0, 30).map(r => `<tr>
+      <td>${r.symbol}</td>
+      <td>${r.result_date}</td>
+    </tr>`).join('')}</tbody></table>` : '<div class="empty">No upcoming earnings.</div>';
+}
+
+async function refresh() {
+  const j = await fetchSummary();
+  if (j.error) return;
+  render(j);
+}
+
+function fmtP(p) { return p == null ? '—' : (p / 100).toFixed(2); }
+function formatNum(n) {
+  n = Number(n) || 0;
+  if (n >= 1e7) return (n / 1e7).toFixed(2) + ' Cr';
+  if (n >= 1e5) return (n / 1e5).toFixed(2) + ' L';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+  return n.toString();
+}
+
+// Auto-refresh every 60s
+setInterval(refresh, 60000);
+</script>
+</body>
+</html>

@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Wealth Engine — Ops Health</title>
+<!-- PWA -->
+<link rel="manifest" href="/trading/manifest.json">
+<meta name="theme-color" content="#0a0f1c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ops">
+<link rel="apple-touch-icon" href="/trading/icons/icon-192.svg">
+<meta name="color-scheme" content="dark">
+<style>
+  :root {
+    --bg: #0a0f1c; --panel: #121a2e; --panel-2: #1a2540;
+    --border: #2a3656; --text: #e6ecff; --muted: #8a96b8;
+    --green: #2ecc71; --red: #e74c3c; --yellow: #f5b041; --blue: #4fa3ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.4; min-height: 100vh;
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
+    overscroll-behavior-y: none;
+  }
+  header { padding: 12px 16px; background: rgba(18, 26, 46, 0.92); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  header h1 { font-size: 18px; font-weight: 600; }
+  /* Top-level cross-view nav (Hub / Execute / Ops) — always visible on mobile */
+  .tab-nav { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .tab-nav a {
+    padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 500;
+    text-decoration: none; border: 1px solid var(--border); color: var(--muted);
+    background: var(--panel-2);
+  }
+  .tab-nav a.active {
+    background: rgba(124,92,255,0.18); color: #7c5cff; border-color: #7c5cff;
+    font-weight: 600;
+  }
+  main { padding: 16px; max-width: 1400px; margin: 0 auto; }
+  .pin-gate { max-width: 380px; margin: 80px auto; padding: 28px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 12px; }
+  .pin-gate input { width: 100%; padding: 12px; font-size: 16px; margin: 10px 0;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+  .pin-gate button { width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+    background: #7c5cff; color: white; border: none; border-radius: 8px; cursor: pointer; min-height: 44px; }
+  .grid { display: grid; gap: 14px; }
+  .grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); margin-bottom: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+  .pill.ok { background: rgba(46,204,113,0.18); color: var(--green); }
+  .pill.warn { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .pill.err { background: rgba(231,76,60,0.18); color: var(--red); }
+  .pill.idle { background: rgba(138,150,184,0.18); color: var(--muted); }
+  .traffic-light {
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    padding: 28px; border-radius: 16px; min-height: 200px;
+  }
+  .traffic-light.healthy { background: linear-gradient(135deg, rgba(46,204,113,0.2), rgba(46,204,113,0.05)); border: 1px solid var(--green); }
+  .traffic-light.degraded { background: linear-gradient(135deg, rgba(245,176,65,0.2), rgba(245,176,65,0.05)); border: 1px solid var(--yellow); }
+  .traffic-light.critical { background: linear-gradient(135deg, rgba(231,76,60,0.2), rgba(231,76,60,0.05)); border: 1px solid var(--red); }
+  .traffic-light .dot { width: 80px; height: 80px; border-radius: 50%; }
+  .traffic-light.healthy .dot { background: var(--green); box-shadow: 0 0 30px var(--green); }
+  .traffic-light.degraded .dot { background: var(--yellow); box-shadow: 0 0 30px var(--yellow); }
+  .traffic-light.critical .dot { background: var(--red); box-shadow: 0 0 30px var(--red); }
+  .traffic-light .label { font-size: 22px; font-weight: 700; margin-top: 14px; text-transform: uppercase; }
+  .traffic-light .score { font-size: 14px; margin-top: 4px; color: var(--muted); }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .kpi { background: var(--panel-2); padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
+  .kpi .label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+  .kpi .value { font-size: 20px; font-weight: 600; margin-top: 4px; }
+  .empty { text-align: center; color: var(--muted); padding: 30px; font-size: 14px; }
+  .loading { color: var(--muted); padding: 20px; text-align: center; font-size: 13px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  .small { font-size: 11px; color: var(--muted); }
+  /* iPhone 17 Pro mobile optimization */
+  @media (max-width: 480px) {
+    main { padding: 12px; }
+    header h1 { font-size: 14px; }
+    header h1 a { font-size: 12px; }
+    .panel { padding: 12px; }
+    .traffic-light { padding: 22px 16px; min-height: 160px; }
+    .traffic-light .dot { width: 60px; height: 60px; }
+    .traffic-light .label { font-size: 18px; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .kpi { padding: 10px 12px; }
+    .kpi .value { font-size: 17px; }
+    th, td { padding: 6px 4px; font-size: 11px; }
+    .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr; }
+    /* Make tables horizontally scrollable */
+    .panel > div { -webkit-overflow-scrolling: touch; }
+    table { font-size: 11px; }
+  }
+  button, [role="button"] {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+  input { font-size: 16px; }
+</style>
+</head>
+<body>
+
+<div id="gate" class="pin-gate">
+  <h2>Ops Health</h2>
+  <input id="pin" type="password" placeholder="Dashboard key" autocomplete="off" />
+  <button onclick="login()">Unlock</button>
+  <div id="gateErr" style="color:var(--red);font-size:13px;margin-top:8px;min-height:18px"></div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <div style="flex:1;min-width:0">
+      <h1>⚙️ Ops Health</h1>
+      <nav class="tab-nav" aria-label="Views">
+        <a href="/trading/">🏠 Hub</a>
+        <a href="/trading/today/">📋 Today</a>
+        <a href="/trading/execute/">🎯 Execute</a>
+        <a href="/trading/ops/" class="active">⚙️ Ops</a>
+      </nav>
+    </div>
+    <div class="small">
+      <span id="lastUpdated">—</span>
+      <button onclick="refresh()" style="margin-left:10px;background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px">↻</button>
+    </div>
+  </header>
+  <main>
+    <div class="grid cols-3" style="margin-bottom:14px">
+      <div id="trafficLight" class="traffic-light healthy">
+        <div class="dot"></div>
+        <div class="label" id="trafficLabel">healthy</div>
+        <div class="score" id="trafficScore">—</div>
+      </div>
+      <div class="panel">
+        <h3>Last 24h Activity</h3>
+        <div class="kpi-grid" id="kpiActivity"><div class="loading">…</div></div>
+      </div>
+      <div class="panel">
+        <h3>Backfill Status</h3>
+        <div class="kpi-grid" id="kpiBackfill"><div class="loading">…</div></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:14px">
+      <h3>Database — Row Counts</h3>
+      <div class="kpi-grid" id="tableRows"><div class="loading">…</div></div>
+    </div>
+
+    <div class="grid cols-2" style="margin-bottom:14px">
+      <div class="panel">
+        <h3>Source Health (per cron)</h3>
+        <div id="sourceHealthTable"><div class="loading">…</div></div>
+      </div>
+      <div class="panel">
+        <h3>Cron Stats — last 24h</h3>
+        <div id="cronStatsTable"><div class="loading">…</div></div>
+      </div>
+    </div>
+
+    <!-- ─── BACKTEST RUNNER + RESULTS ─── -->
+    <div class="panel" style="margin-bottom:14px">
+      <h3 style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <span>🔬 Backtest — walk-forward replay</span>
+        <span class="small" style="color:var(--muted);font-weight:400">empirical validation of the trade-card system</span>
+      </h3>
+      <p class="small" style="color:var(--muted);line-height:1.6;margin-bottom:12px">
+        Replays the simplified scorer against historical equity_eod data.
+        Each run = N most-liquid stocks × date range. Result = win-rate, expectancy, drawdown, Sharpe — broken down by score band + tranche, after full transaction costs (STT, GST, brokerage, exchange, SEBI, DP).
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px">
+        <label class="small">From <input type="date" id="btFrom" style="width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px"></label>
+        <label class="small">To <input type="date" id="btTo" style="width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px"></label>
+        <label class="small">Top N stocks <input type="number" id="btTopN" value="30" min="5" max="200" style="width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px"></label>
+        <label class="small">Min score <input type="number" id="btMinScore" value="70" min="50" max="95" style="width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px"></label>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="runBacktest('adaptive')" class="btn" style="background:#7c5cff;color:white;border:none;padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer">▶ Run (Adaptive R:R + Kelly)</button>
+        <button onclick="runBacktest('flat')" class="btn" style="background:var(--panel-2);color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer">▶ Run (Flat 2:1 + 2%)</button>
+        <button onclick="compareBacktest()" class="btn" style="background:rgba(46,204,113,0.18);color:var(--green);border:1px solid var(--green);padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer">⚡ Compare both rules</button>
+      </div>
+      <div id="btStatus" class="small" style="margin-top:10px;color:var(--muted)"></div>
+      <div id="btResults" style="margin-top:14px"></div>
+      <div id="btRunsHistory" style="margin-top:14px"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Recent Errors (last 24h)</h3>
+      <div id="errorsTable"><div class="loading">…</div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const STORE_KEY = 'wealth_dashboard_key';
+let DASHBOARD_KEY = localStorage.getItem(STORE_KEY) || '';
+if (DASHBOARD_KEY) tryAutoLogin();
+
+function login() {
+  const v = document.getElementById('pin').value.trim();
+  if (!v) return;
+  DASHBOARD_KEY = v;
+  fetchOps().then(j => {
+    if (j.error) { document.getElementById('gateErr').textContent = j.error; DASHBOARD_KEY = ''; return; }
+    localStorage.setItem(STORE_KEY, v);
+    showApp(j);
+  }).catch(e => document.getElementById('gateErr').textContent = String(e.message || e));
+}
+
+async function tryAutoLogin() {
+  try {
+    const j = await fetchOps();
+    if (!j.error) showApp(j);
+  } catch {}
+}
+
+async function fetchOps() {
+  const r = await fetch('/api/trading?action=ops_health&key=' + encodeURIComponent(DASHBOARD_KEY));
+  return r.json();
+}
+
+function showApp(j) {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  render(j);
+}
+
+async function refresh() {
+  const j = await fetchOps();
+  if (!j.error) render(j);
+}
+
+function render(j) {
+  document.getElementById('lastUpdated').textContent = 'Updated ' + new Date(j.generated_at).toLocaleTimeString();
+
+  // Traffic light
+  const tl = document.getElementById('trafficLight');
+  tl.className = 'traffic-light ' + (j.health_label || 'critical');
+  document.getElementById('trafficLabel').textContent = j.health_label || '—';
+  document.getElementById('trafficScore').textContent = `Score ${j.health_score}/100 · ${j.summary.broken_sources}/${j.summary.total_sources} sources broken`;
+
+  // Activity KPIs
+  document.getElementById('kpiActivity').innerHTML = `
+    <div class="kpi"><div class="label">Cron Runs</div><div class="value">${j.summary.runs_24h}</div></div>
+    <div class="kpi"><div class="label">Success</div><div class="value">${j.summary.success_24h}</div></div>
+    <div class="kpi"><div class="label">Success Rate</div><div class="value">${j.summary.success_rate_pct}%</div></div>
+  `;
+
+  // Backfill KPIs
+  const bf = j.backfill_summary || [];
+  const get = (s) => bf.find(b => b.status === s) || { n: 0, total_rows: 0 };
+  document.getElementById('kpiBackfill').innerHTML = `
+    <div class="kpi"><div class="label">Queued</div><div class="value">${get('queued').n}</div></div>
+    <div class="kpi"><div class="label">Running</div><div class="value">${get('running').n}</div></div>
+    <div class="kpi"><div class="label">Complete</div><div class="value" style="color:var(--green)">${get('complete').n}</div></div>
+    <div class="kpi"><div class="label">Error</div><div class="value" style="color:var(--red)">${get('error').n}</div></div>
+  `;
+
+  // Table row counts
+  const tr = j.table_rows || {};
+  document.getElementById('tableRows').innerHTML = Object.entries(tr).map(([t, n]) => {
+    const cls = n === -1 ? 'err' : n === 0 ? 'warn' : 'ok';
+    return `<div class="kpi"><div class="label">${t}</div><div class="value" style="font-size:14px"><span class="pill ${cls}">${n === -1 ? 'err' : formatNum(n)}</span></div></div>`;
+  }).join('');
+
+  // Source Health
+  const sh = j.source_health || [];
+  document.getElementById('sourceHealthTable').innerHTML = sh.length ? `<table>
+    <thead><tr><th>Source</th><th>Status</th><th>Last Success</th><th class="num">Fails</th></tr></thead>
+    <tbody>${sh.map(s => {
+      const cls = s.is_circuit_broken ? 'err' : s.consecutive_failures > 0 ? 'warn' : 'ok';
+      const status = s.is_circuit_broken ? 'broken' : s.consecutive_failures > 0 ? 'degraded' : 'healthy';
+      return `<tr>
+        <td class="mono">${s.source_name}</td>
+        <td><span class="pill ${cls}">${status}</span></td>
+        <td class="small">${s.last_success_ts ? new Date(s.last_success_ts).toLocaleString() : '—'}</td>
+        <td class="num">${s.consecutive_failures || 0}</td>
+      </tr>`;
+    }).join('')}</tbody></table>` : '<div class="empty">No source health data yet.</div>';
+
+  // Cron Stats
+  const cs = j.cron_stats || [];
+  document.getElementById('cronStatsTable').innerHTML = cs.length ? `<table>
+    <thead><tr><th>Worker</th><th>Cron</th><th class="num">Runs</th><th class="num">Success</th><th class="num">Failed</th><th class="num">Avg ms</th><th class="num">Rows</th></tr></thead>
+    <tbody>${cs.map(c => {
+      const okPct = c.runs_24h ? (c.success_24h / c.runs_24h * 100) : 0;
+      const cls = okPct >= 95 ? 'ok' : okPct >= 70 ? 'warn' : 'err';
+      return `<tr>
+        <td class="small">${(c.worker_name || '').replace('wealth-', '')}</td>
+        <td class="mono">${c.cron_name}</td>
+        <td class="num">${c.runs_24h}</td>
+        <td class="num"><span class="pill ${cls}">${c.success_24h}</span></td>
+        <td class="num">${c.failed_24h ? `<span class="pill err">${c.failed_24h}</span>` : '0'}</td>
+        <td class="num">${Math.round(c.avg_duration_ms || 0)}</td>
+        <td class="num">${formatNum(c.rows_written_24h || 0)}</td>
+      </tr>`;
+    }).join('')}</tbody></table>` : '<div class="empty">No cron runs in last 24h yet.</div>';
+
+  // Recent errors
+  const er = j.recent_errors || [];
+  document.getElementById('errorsTable').innerHTML = er.length ? `<table>
+    <thead><tr><th>Time</th><th>Worker</th><th>Cron</th><th>Error</th></tr></thead>
+    <tbody>${er.map(e => `<tr>
+      <td class="small">${new Date(e.started_at).toLocaleString()}</td>
+      <td class="small">${(e.worker_name || '').replace('wealth-', '')}</td>
+      <td class="mono">${e.cron_name}</td>
+      <td class="small" style="max-width:600px">${(e.error_message || '').slice(0, 250)}</td>
+    </tr>`).join('')}</tbody></table>` : '<div class="empty" style="color:var(--green)">No errors in last 24h ✅</div>';
+}
+
+function formatNum(n) {
+  n = Number(n) || 0;
+  if (n >= 1e7) return (n / 1e7).toFixed(2) + ' Cr';
+  if (n >= 1e5) return (n / 1e5).toFixed(2) + ' L';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+  return n.toString();
+}
+
+setInterval(() => { if (DASHBOARD_KEY && document.getElementById('app').style.display === 'block') refresh(); }, 60000);
+
+// ───────────────────────────────────────────────────────────
+// Backtest runner + renderer
+// ───────────────────────────────────────────────────────────
+
+// Default the date pickers to last 6 months
+document.addEventListener('DOMContentLoaded', () => {
+  const today = new Date();
+  const sixMo = new Date(today.getTime() - 180 * 86400000);
+  const ymd = (d) => d.toISOString().slice(0, 10);
+  const f = document.getElementById('btFrom');
+  const t = document.getElementById('btTo');
+  if (f && !f.value) f.value = ymd(sixMo);
+  if (t && !t.value) t.value = ymd(today);
+  loadBacktestHistory();
+});
+
+function fmtPaiseR(p) {
+  const n = Math.abs(p);
+  if (n >= 1e9) return '₹' + (p / 1e9).toFixed(2) + ' Cr';
+  if (n >= 1e7) return '₹' + (p / 1e7).toFixed(2) + ' L';
+  if (n >= 1e5) return '₹' + (p / 1e5).toFixed(1) + 'k';
+  return '₹' + Math.round(p / 100).toLocaleString('en-IN');
+}
+
+async function runBacktest(rule) {
+  const from = document.getElementById('btFrom').value;
+  const to   = document.getElementById('btTo').value;
+  const topN = document.getElementById('btTopN').value || 30;
+  const minScore = document.getElementById('btMinScore').value || 70;
+  const status = document.getElementById('btStatus');
+  status.innerHTML = `⏳ Running ${rule} backtest from ${from} to ${to}, top ${topN} stocks. This may take 20-60 sec…`;
+  const url = `/api/backtest?action=run&from=${from}&to=${to}&topN=${topN}&minScore=${minScore}` +
+    `&rrRule=${rule}&riskRule=${rule}&key=${encodeURIComponent(DASHBOARD_KEY)}`;
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) {
+      status.innerHTML = `<span style="color:var(--red)">❌ ${j.error}</span>`;
+      return;
+    }
+    status.innerHTML = `✅ Run ${j.run_id} complete · ${j.trades} trades · ${j.win_rate_pct}% win-rate · ${j.total_return_pct}% return`;
+    renderBacktestResult(j);
+    loadBacktestHistory();
+  } catch (e) {
+    status.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
+  }
+}
+
+async function compareBacktest() {
+  const from = document.getElementById('btFrom').value;
+  const to   = document.getElementById('btTo').value;
+  const topN = document.getElementById('btTopN').value || 30;
+  const minScore = document.getElementById('btMinScore').value || 70;
+  const status = document.getElementById('btStatus');
+  status.innerHTML = `⏳ Running BOTH rules side-by-side from ${from} to ${to}. This will take 40-120 sec…`;
+  try {
+    const r = await fetch(`/api/backtest?action=compare_rr&from=${from}&to=${to}&topN=${topN}&minScore=${minScore}&key=${encodeURIComponent(DASHBOARD_KEY)}`);
+    const j = await r.json();
+    if (j.error) { status.innerHTML = `<span style="color:var(--red)">❌ ${j.error}</span>`; return; }
+    status.innerHTML = `✅ Comparison complete · adaptive run ${j.adaptive_kelly.run_id} · flat run ${j.flat_2_to_1_2pct.run_id}`;
+    renderComparison(j);
+    loadBacktestHistory();
+  } catch (e) {
+    status.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
+  }
+}
+
+function renderBacktestResult(r) {
+  const wr = r.win_rate_pct || 0;
+  const ret = r.total_return_pct || 0;
+  const dd = r.max_drawdown_pct || 0;
+  const sharpe = r.sharpe || 0;
+  const wrCls = wr >= 55 ? 'pos' : wr >= 45 ? '' : 'neg';
+  const retCls = ret > 0 ? 'pos' : 'neg';
+  const ddCls = dd < 10 ? 'pos' : dd < 20 ? '' : 'neg';
+  const shCls = sharpe > 1 ? 'pos' : sharpe > 0 ? '' : 'neg';
+  document.getElementById('btResults').innerHTML = `
+    <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:14px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px">
+        <div><div class="small" style="color:var(--muted)">TRADES</div><div style="font-size:18px;font-weight:600">${r.trades}</div></div>
+        <div><div class="small" style="color:var(--muted)">WIN RATE</div><div style="font-size:18px;font-weight:600" class="${wrCls}">${wr.toFixed(1)}%</div></div>
+        <div><div class="small" style="color:var(--muted)">EXPECTANCY</div><div style="font-size:18px;font-weight:600" class="${(r.expectancy_pct||0)>0?'pos':'neg'}">${(r.expectancy_pct||0).toFixed(2)}% / trade</div></div>
+        <div><div class="small" style="color:var(--muted)">TOTAL RETURN</div><div style="font-size:18px;font-weight:600" class="${retCls}">${ret>=0?'+':''}${ret.toFixed(2)}%</div></div>
+        <div><div class="small" style="color:var(--muted)">MAX DD</div><div style="font-size:18px;font-weight:600" class="${ddCls}">${dd.toFixed(2)}%</div></div>
+        <div><div class="small" style="color:var(--muted)">SHARPE</div><div style="font-size:18px;font-weight:600" class="${shCls}">${sharpe.toFixed(2)}</div></div>
+        <div><div class="small" style="color:var(--muted)">COSTS</div><div style="font-size:14px;font-weight:600">${fmtPaiseR(r.costs_paise||0)}</div></div>
+        <div><div class="small" style="color:var(--muted)">FINAL CAPITAL</div><div style="font-size:14px;font-weight:600">${fmtPaiseR(r.final_capital_paise||0)}</div></div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)">
+        Run ID: <code>${r.run_id}</code> · Universe: ${r.universe_size} stocks · ${r.signal_dates_count} signal days
+        <button onclick="loadRunDetail('${r.run_id}')" style="margin-left:10px;background:transparent;border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer">View per-trade detail →</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderComparison(j) {
+  const flat = j.flat_2_to_1_2pct;
+  const adapt = j.adaptive_kelly;
+  const cell = (label, flatV, adaptV, isPct = true, higherBetter = true) => {
+    const better = (higherBetter ? adaptV > flatV : adaptV < flatV);
+    const aCls = better ? 'pos' : (adaptV === flatV ? '' : 'neg');
+    const fmt = (v) => isPct ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}${typeof v === 'number' ? '%' : ''}` : v;
+    return `<tr style="border-bottom:1px solid rgba(42,54,86,0.4)">
+      <td style="padding:6px 4px">${label}</td>
+      <td style="padding:6px 4px;text-align:right;font-variant-numeric:tabular-nums">${fmt(flatV)}</td>
+      <td style="padding:6px 4px;text-align:right;font-variant-numeric:tabular-nums" class="${aCls}"><strong>${fmt(adaptV)}</strong></td>
+      <td style="padding:6px 4px;text-align:right;font-variant-numeric:tabular-nums" class="${aCls}">${better?'▲':(adaptV===flatV?'=':'▼')}</td>
+    </tr>`;
+  };
+  const winner = adapt.total_return_pct > flat.total_return_pct ? 'Adaptive' : 'Flat';
+  const winnerColor = winner === 'Adaptive' ? 'var(--green)' : 'var(--yellow)';
+  document.getElementById('btResults').innerHTML = `
+    <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+        <strong>⚔️ Adaptive vs Flat 2:1 — head to head</strong>
+        <span style="color:${winnerColor};font-weight:600">${winner} rule wins</span>
+      </div>
+      <table style="width:100%;font-size:13px">
+        <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase">
+          <th style="text-align:left;padding:6px 4px">Metric</th>
+          <th style="text-align:right;padding:6px 4px">Flat 2:1 / 2%</th>
+          <th style="text-align:right;padding:6px 4px">Adaptive R:R / Kelly</th>
+          <th style="text-align:right;padding:6px 4px">Δ</th>
+        </tr></thead>
+        <tbody>
+          ${cell('Trades taken', flat.trades, adapt.trades, false, true)}
+          ${cell('Win rate %', flat.win_rate_pct, adapt.win_rate_pct, true, true)}
+          ${cell('Avg win %', flat.avg_win_pct, adapt.avg_win_pct, true, true)}
+          ${cell('Avg loss %', flat.avg_loss_pct, adapt.avg_loss_pct, true, false)}
+          ${cell('Expectancy %', flat.expectancy_pct, adapt.expectancy_pct, true, true)}
+          ${cell('Total return %', flat.total_return_pct, adapt.total_return_pct, true, true)}
+          ${cell('Max drawdown %', flat.max_drawdown_pct, adapt.max_drawdown_pct, true, false)}
+          ${cell('Sharpe', flat.sharpe, adapt.sharpe, false, true)}
+        </tbody>
+      </table>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)">
+        Costs: Flat ${fmtPaiseR(flat.costs_paise)} · Adaptive ${fmtPaiseR(adapt.costs_paise)}.
+        <button onclick="loadRunDetail('${adapt.run_id}')" style="margin-left:10px;background:transparent;border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer">Adaptive detail →</button>
+        <button onclick="loadRunDetail('${flat.run_id}')" style="margin-left:6px;background:transparent;border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer">Flat detail →</button>
+      </div>
+    </div>
+  `;
+}
+
+async function loadBacktestHistory() {
+  try {
+    const r = await fetch(`/api/backtest?action=runs&limit=10&key=${encodeURIComponent(DASHBOARD_KEY)}`);
+    const j = await r.json();
+    const runs = j.runs || [];
+    if (runs.length === 0) {
+      document.getElementById('btRunsHistory').innerHTML = '';
+      return;
+    }
+    document.getElementById('btRunsHistory').innerHTML = `
+      <details>
+        <summary class="small" style="color:var(--muted);cursor:pointer">📚 Run history (${runs.length})</summary>
+        <table style="width:100%;font-size:12px;margin-top:8px">
+          <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px;text-transform:uppercase">
+            <th style="text-align:left;padding:5px 4px">Run</th>
+            <th style="text-align:left;padding:5px 4px">When</th>
+            <th style="text-align:right;padding:5px 4px">Trades</th>
+            <th style="text-align:right;padding:5px 4px">Win %</th>
+            <th style="text-align:right;padding:5px 4px">Return</th>
+            <th style="text-align:right;padding:5px 4px">DD</th>
+          </tr></thead>
+          <tbody>
+            ${runs.map(r => {
+              const cfg = (() => { try { return JSON.parse(r.config_json); } catch { return {}; } })();
+              const when = new Date(r.started_at).toLocaleString('en-IN', { dateStyle:'short', timeStyle:'short' });
+              const retCls = (r.total_return_pct || 0) > 0 ? 'pos' : 'neg';
+              return `<tr style="border-bottom:1px solid rgba(42,54,86,0.4)">
+                <td style="padding:5px 4px"><code style="font-size:10px">${r.run_id.slice(-10)}</code> <span class="small" style="color:var(--muted)">(${cfg.rrRule||'?'})</span></td>
+                <td style="padding:5px 4px;color:var(--muted)">${when}</td>
+                <td style="padding:5px 4px;text-align:right">${r.total_trades}</td>
+                <td style="padding:5px 4px;text-align:right">${(r.win_rate_pct||0).toFixed(1)}%</td>
+                <td style="padding:5px 4px;text-align:right" class="${retCls}">${(r.total_return_pct||0).toFixed(1)}%</td>
+                <td style="padding:5px 4px;text-align:right">${(r.max_drawdown_pct||0).toFixed(1)}%</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </details>
+    `;
+  } catch {}
+}
+
+async function loadRunDetail(runId) {
+  const status = document.getElementById('btStatus');
+  status.innerHTML = `⏳ Loading run detail…`;
+  try {
+    const r = await fetch(`/api/backtest?action=run_detail&run_id=${runId}&key=${encodeURIComponent(DASHBOARD_KEY)}`);
+    const j = await r.json();
+    if (j.error) { status.innerHTML = `❌ ${j.error}`; return; }
+    status.innerHTML = `Run ${runId} — ${j.trades.length} trades`;
+    const byScore = j.by_score_band || {};
+    const byTr = j.by_tranche || {};
+    document.getElementById('btResults').innerHTML = `
+      <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div>
+            <h4 class="small" style="color:var(--muted);text-transform:uppercase;margin-bottom:6px">By score band</h4>
+            <table style="width:100%;font-size:12px">
+              <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px"><th style="text-align:left;padding:4px">Band</th><th style="text-align:right;padding:4px">N</th><th style="text-align:right;padding:4px">Win %</th><th style="text-align:right;padding:4px">PnL</th></tr></thead>
+              <tbody>${Object.entries(byScore).map(([k,v]) => `<tr><td style="padding:4px">${k}</td><td style="padding:4px;text-align:right">${v.count}</td><td style="padding:4px;text-align:right">${v.count?Math.round(v.wins/v.count*100):0}%</td><td style="padding:4px;text-align:right" class="${v.pnl>=0?'pos':'neg'}">${fmtPaiseR(v.pnl)}</td></tr>`).join('')}</tbody>
+            </table>
+          </div>
+          <div>
+            <h4 class="small" style="color:var(--muted);text-transform:uppercase;margin-bottom:6px">By tranche</h4>
+            <table style="width:100%;font-size:12px">
+              <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px"><th style="text-align:left;padding:4px">Tranche</th><th style="text-align:right;padding:4px">N</th><th style="text-align:right;padding:4px">Win %</th><th style="text-align:right;padding:4px">PnL</th></tr></thead>
+              <tbody>${Object.entries(byTr).map(([k,v]) => `<tr><td style="padding:4px">${k}</td><td style="padding:4px;text-align:right">${v.count}</td><td style="padding:4px;text-align:right">${v.count?Math.round(v.wins/v.count*100):0}%</td><td style="padding:4px;text-align:right" class="${v.pnl>=0?'pos':'neg'}">${fmtPaiseR(v.pnl)}</td></tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+        <details>
+          <summary class="small" style="color:var(--muted);cursor:pointer">Per-trade detail (${j.trades.length})</summary>
+          <table style="width:100%;font-size:11px;margin-top:8px">
+            <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:9px"><th style="text-align:left;padding:4px">Sig date</th><th style="text-align:left;padding:4px">Sym</th><th style="text-align:right;padding:4px">Score</th><th style="text-align:left;padding:4px">Tr</th><th style="text-align:right;padding:4px">Entry</th><th style="text-align:right;padding:4px">Exit</th><th style="text-align:left;padding:4px">Reason</th><th style="text-align:right;padding:4px">Hold</th><th style="text-align:right;padding:4px">Net P&L</th></tr></thead>
+            <tbody>${j.trades.slice(0, 200).map(t => `<tr style="border-bottom:1px solid rgba(42,54,86,0.4)">
+              <td style="padding:3px 4px">${t.signal_date}</td>
+              <td style="padding:3px 4px"><strong>${t.symbol}</strong></td>
+              <td style="padding:3px 4px;text-align:right">${(t.composite_score||0).toFixed(0)}</td>
+              <td style="padding:3px 4px">${t.tranche.slice(0,3)}</td>
+              <td style="padding:3px 4px;text-align:right">₹${(t.entry_paise/100).toFixed(2)}</td>
+              <td style="padding:3px 4px;text-align:right">₹${(t.exit_paise/100).toFixed(2)}</td>
+              <td style="padding:3px 4px;font-size:9px">${t.exit_reason||'—'}</td>
+              <td style="padding:3px 4px;text-align:right">${t.hold_days||0}d</td>
+              <td style="padding:3px 4px;text-align:right" class="${t.win_loss==='win'?'pos':t.win_loss==='loss'?'neg':''}">${t.pnl_net_paise>=0?'+':''}${fmtPaiseR(t.pnl_net_paise||0)}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+          ${j.trades.length > 200 ? `<div class="small" style="color:var(--muted);margin-top:6px">…${j.trades.length-200} more trades not shown</div>` : ''}
+        </details>
+      </div>
+    `;
+  } catch (e) {
+    status.innerHTML = `❌ ${e.message}`;
+  }
+}
+
+</script>
+</body>
+</html>

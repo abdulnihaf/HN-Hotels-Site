@@ -1,0 +1,26 @@
+name = "wealth-signal-engine"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+[triggers]
+crons = [
+  # Nightly 19:00 IST → UTC 13:30 — full recompute + cascade detection
+  "30 13 * * 1-5",
+  # Pre-market 08:30 IST → UTC 03:00 — cascade refresh on overnight data
+  "0 3 * * 1-5",
+  # Market hours 09:30-15:30 IST → UTC 04:00-09:00 hourly — live composite recompute
+  "0 4-9 * * 1-5",
+  # Market hours every 30 min — cascade re-scan
+  "*/30 4-9 * * 1-5",
+  # 18:05 IST → UTC 12:35 — REPEAT_BLOCK_BUYER detector after bulk/block refresh
+  "35 12 * * 1-5",
+  # Sunday 08:30 IST → UTC 03:00 Sun — weekly sector classification refresh
+  "0 3 * * 7",
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"

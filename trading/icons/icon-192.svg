@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c5cff"/>
+      <stop offset="100%" stop-color="#4fa3ff"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2ecc71"/>
+      <stop offset="100%" stop-color="#27ae60"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="#0a0f1c"/>
+  <rect x="2" y="2" width="188" height="188" rx="40" fill="url(#bg)" opacity="0.12"/>
+  <!-- Upward chart line -->
+  <polyline points="28,140 56,118 84,128 112,76 140,86 164,52"
+            fill="none" stroke="url(#green)" stroke-width="6"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- End-point dot -->
+  <circle cx="164" cy="52" r="9" fill="#2ecc71"/>
+  <circle cx="164" cy="52" r="5" fill="#0a0f1c"/>
+  <!-- Wealth symbol ₹ -->
+  <text x="96" y="178" font-family="-apple-system, system-ui, sans-serif"
+        font-size="24" font-weight="700" fill="#e6ecff" text-anchor="middle"
+        letter-spacing="1">WEALTH</text>
+</svg>

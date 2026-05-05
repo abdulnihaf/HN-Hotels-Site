@@ -1,0 +1,26 @@
+name = "wealth-flow-engine"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+[triggers]
+crons = [
+  # ─── Intraday F&O ban refresh (3× daily during market) ─────
+  "0 6 * * 1-5",        # 11:30 IST
+  "0 8 * * 1-5",        # 13:30 IST
+  "0 9 * * 1-5",        # 14:30 IST
+  # ─── EOD reports (post-market sequence) ────────────────────
+  "0 12 * * 1-5",       # 17:30 IST  NSE bulk + block deals
+  "15 12 * * 1-5",      # 17:45 IST  BSE bulk + block deals
+  "30 12 * * 1-5",      # 18:00 IST  F&O ban list final
+  "0 13 * * 1-5",       # 18:30 IST  FII/DII cash
+  "30 13 * * 1-5",      # 19:00 IST  FII derivative
+  "31 13 * * 1-5",      # 19:01 IST  MWPL (was colliding with fii_deriv)
+  "0 14 * * 1-5",       # 19:30 IST  F&O participant OI
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"
