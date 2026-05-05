@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v27';  // v27: Today's Watchlist section — frozen candidate pool + 3 ⭐ picks + Copy-to-Kite
+const CACHE_VERSION = 'wealth-v28';  // v28: Watchlist expanded — full OHLC per stock + ₹10L hypothetical scenarios (peak/close/drawdown)
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
