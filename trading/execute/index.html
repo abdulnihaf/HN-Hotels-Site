@@ -841,10 +841,17 @@ function renderImpl(j) {
         }</p>
       </div>`;
   } else {
+    // Owner asked: render trade cards in the SAME rich format as Today's Watchlist.
+    // Map each trade_card to the watchlist-card schema, then call the shared component.
+    const richCards = cards.map(c => mapTradeCardToWatchlistCard(c));
+    const cardsHtml = window.WatchlistComponent
+      ? richCards.map((w, i) => window.WatchlistComponent.renderCard(w, i)).join('')
+      : cards.map(c => renderCard(c)).join('');  // legacy fallback
     document.getElementById('tradeCards').innerHTML = `
       <h2 style="margin-bottom:10px">🎯 Today's Trade Candidates (${cards.length})</h2>
-      <p class="small" style="margin-bottom:14px">Math pre-computed for your ₹10L capital. Reward:risk ≥ 2:1 only.</p>
-    ` + cards.map(c => renderCard(c)).join('');
+      <p class="small" style="margin-bottom:14px">Engine-driven candidates ranked by composite_score. Math pre-computed for ₹10L capital. R:R ≥ 2:1.</p>
+      <div class="wl-list">${cardsHtml}</div>
+    `;
   }
 
   // Live Kite holdings
@@ -933,6 +940,43 @@ function renderImpl(j) {
   } else {
     document.getElementById('positionsPanel').style.display = 'none';
   }
+}
+
+// Map a trade_card from execute_view → the watchlist-card schema so the
+// shared WatchlistComponent.renderCard can render it identically to /today.
+// Trade cards have engine sub-scores + R:R math; watchlist cards have OHLC +
+// ₹10L hypothetical. We MERGE both views for the richest possible card.
+function mapTradeCardToWatchlistCard(c) {
+  return {
+    symbol: c.symbol,
+    composite_score: c.composite_score,
+    hybrid_score: c.composite_score,        // use composite as the "score" shown
+    regime: c.regime || (c.tranche ? c.tranche.toUpperCase() : ''),
+    intraday_history: null,                  // trade_cards don't have 90d history
+    // Day OHLC (just enriched in the API)
+    day_open_paise:  c.day_open_paise,
+    day_high_paise:  c.day_high_paise,
+    day_low_paise:   c.day_low_paise,
+    day_close_paise: c.day_close_paise,
+    day_volume:      c.day_volume,
+    prev_close_paise: c.prev_close_paise,
+    gap_from_prev_close_pct: c.gap_from_prev_close_pct,
+    // Live
+    live_ltp_paise: c.live_ltp_paise,
+    day_change_pct: c.day_change_pct,
+    // ₹10L hypothetical (from the API enrichment)
+    if_10L_invested: c.if_10L_invested,
+    // Pick metadata — synthesize from trade_card fields so the rich card
+    // header still shows "target/stop/qty/RR" for these dynamic candidates.
+    is_final_pick: false,
+    pick_weight_pct: c.capital_deployed_pct,
+    pick_target_pct: c.target_pct,
+    pick_stop_pct:   c.stop_pct,
+    pick_rationale:  c.rationale,
+    trader_state: null, trader_qty: c.qty,
+    trader_entry_paise: c.entry_paise,
+    trader_pnl_net_paise: null,
+  };
 }
 
 function renderCard(c) {

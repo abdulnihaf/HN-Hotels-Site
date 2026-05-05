@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v29';  // v29: shared watchlist component on both /today and /execute (single source of truth)
+const CACHE_VERSION = 'wealth-v30';  // v30: trade_cards on Execute now use the same rich format (shared WatchlistComponent)
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
