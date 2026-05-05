@@ -1,0 +1,61 @@
+name = "wealth-orchestrator"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+# IST = UTC + 5:30
+# Reference:
+#   IST 06:05  = UTC 00:35   IST 08:00  = UTC 02:30   IST 08:30  = UTC 03:00
+#   IST 09:15  = UTC 03:45   IST 15:30  = UTC 10:00   IST 16:00  = UTC 10:30
+#   IST 18:00  = UTC 12:30   IST Sat 02:00 = UTC Fri 20:30  IST Sun 18:00 = UTC Sun 12:30
+[triggers]
+crons = [
+  # ─── Automation ─────────────────────────────────────────
+  "*/2 * * * *",            # 1. Backfill drain    every 2 min
+  "*/15 * * * *",           # 2. Watchdog          every 15 min
+  "30 2 * * 1-5",           # 3. Pre-market brief  08:00 IST M-F
+  "0 3 * * 1-5",            # 4. Daily briefing    08:30 IST M-F
+  "*/5 3-10 * * 1-5",       # 5. Cascade alerts    every 5 min market (offset 0)
+  "*/2 3-10 * * 1-5",       # 6. Stop-loss watcher every 2 min market
+  "3-58/5 3-10 * * 1-5",    # 6a. Paper-trade auto-close every 5 min market (offset 3) — closes on stop/target
+  "1-56/5 3-10 * * 1-5",    # 6b. Kite reconcile   every 5 min market (offset 1) — holdings, funds, orders, trades
+  "15 3 * * 1-5",           # 6c. Sync instruments 08:45 IST — Kite NSE instruments CSV → kite_instruments
+  "30 3 * * 1-5",           # 6d. Sync NFO instr.  09:00 IST — Kite NFO CSV (NIFTY/BANKNIFTY/FINNIFTY/MIDCPNIFTY only) → kite_instruments
+  "55 0 * * 1-5",           # 7. Kite reminder PRE  05:55 IST
+  "0 1 * * 1-5",            # 7b Kite reminder POST 06:30 IST
+  "30 10 * * 1-5",          # 8. EOD portfolio     16:00 IST M-F
+  "30 20 * * 6",            # 9. DB vacuum         Sat 02:00 IST
+  "30 12 * * 7",            # 10. Weekly digest    Sun 18:00 IST
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Service Bindings — internal Worker-to-Worker calls (bypasses Cloudflare's
+# "no public Worker-to-Worker fetch" restriction that was causing error 1042).
+# Each binding maps an env property to a sibling Worker's fetch handler.
+# Usage in code:
+#    await env.WEALTH_PRICE_CORE.fetch('https://internal/backfill?...')
+# ─────────────────────────────────────────────────────────────────────────
+[[services]]
+binding = "WEALTH_PRICE_CORE"
+service = "wealth-price-core"
+
+[[services]]
+binding = "WEALTH_FLOW_ENGINE"
+service = "wealth-flow-engine"
+
+[[services]]
+binding = "WEALTH_SIGNAL_ENGINE"
+service = "wealth-signal-engine"
+
+[vars]
+# Kite Connect public API key — used to authenticate Kite REST calls. Token in kite_tokens table.
+KITE_API_KEY = "85yfvys3t9t66l35"
+
+# Secrets (wrangler secret put):
+#   DASHBOARD_KEY   — same key as Pages site

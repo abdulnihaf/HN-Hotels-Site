@@ -1,0 +1,24 @@
+name = "wealth-intraday-bars"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+[triggers]
+crons = [
+  # Refresh Kite instrument-token mapping every Monday 06:00 IST = 00:30 UTC.
+  "30 0 * * 1",
+
+  # Daily intraday-bar fetch for top 50 intraday-suitable stocks.
+  # 16:00 IST = 10:30 UTC, after market close, fetches today's 5-min bars.
+  "30 10 * * 1-5",
+
+  # Weekly enrich: Saturday 07:00 IST = Sat 01:30 UTC, refresh intraday_suitability with
+  # last-week intraday data so picking is informed by recent regime.
+  "30 1 * * 6",
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"

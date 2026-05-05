@@ -1,0 +1,23 @@
+name = "wealth-corp-intel"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+[triggers]
+crons = [
+  # ─── Announcements stream — paid tier max freshness ─────
+  "*/5 2-17 * * *",        # NSE announcements every 5 min  08:00-23:00 IST
+  "2-57/5 2-17 * * *",     # BSE announcements every 5 min  (offset 2 min)
+  # ─── EOD reports — daily Mon-Fri ────────────────────────
+  "30 11 * * 1-5",         # Corp actions          17:00 IST
+  "30 12 * * 1-5",         # Insider trades        18:00 IST  (NSE PIT + BSE Reg 7)
+  "5 13 * * 1-5",          # Promoter pledge       18:35 IST  (NSE pledgedata + BSE Reg 31, daily)
+  # ─── Weekly ─────────────────────────────────────────────
+  "0 13 * * 6",            # Shareholding pattern  Sat 18:30 IST
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"

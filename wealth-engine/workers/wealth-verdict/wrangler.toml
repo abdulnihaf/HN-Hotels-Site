@@ -1,0 +1,53 @@
+name = "wealth-verdict"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+# All 4 phases live in this single worker — one cron deploy, one secret store.
+# UTC times: IST = UTC + 5:30 IST
+# Market hours IST 09:15–15:30 = UTC 03:45–10:00
+[triggers]
+crons = [
+  # ─── PRE-MARKET (added with paid-plan unlimited crons) ──────────────────
+  # Phase A0 — Pre-market enrichment compose (Opus). 07:30 IST = 02:00 UTC, Mon-Fri.
+  # Reads overnight US close, GIFT Nifty, Asia session, breaking news → enriched
+  # context for the 08:30 main compose. Improves selection quality.
+  "0 2 * * 1-5",
+
+  # ─── MORNING ────────────────────────────────────────────────────────────
+  # Phase A — Morning verdict compose (Opus). 08:30 IST = 03:00 UTC, Mon-Fri.
+  "0 3 * * 1-5",
+
+  # ─── ALWAYS-ON ──────────────────────────────────────────────────────────
+  # Phase B — Alert triager (Haiku). Every 5 min around the clock.
+  "*/5 * * * *",
+
+  # ─── MARKET HOURS ───────────────────────────────────────────────────────
+  # Phase C — Verdict invalidator (Opus, only fires on material change).
+  # Every 15 min during market hours: 03:45 → 10:00 UTC = 09:15 → 15:30 IST.
+  "0,15,30,45 4-9 * * 1-5",
+
+  # ─── POST-MARKET ────────────────────────────────────────────────────────
+  # Phase D.1 — Paper trade autopsy (Sonnet). 16:00 IST = 10:30 UTC.
+  "30 10 * * 1-5",
+
+  # Phase D.3 — Daily intraday-suitability refresh. 16:30 IST = 11:00 UTC.
+  # Recomputes 90-day backtest with today's data → tomorrow picks from freshest universe.
+  "0 11 * * 1-5",
+
+  # Phase D.4 — EOD Learning Audit (auto-fires daily, persists to eod_learning_audits).
+  # 18:30 IST = 13:00 UTC, after EOD bhavcopy + intraday_bars + autopsy settled.
+  # Computes RIGHT/MISSED/LEARNED/LUCK attribution + Sonnet narrative.
+  # Builds the compounding self-learning trail.
+  "0 13 * * 1-5",
+
+  # ─── WEEKLY ─────────────────────────────────────────────────────────────
+  # Phase D.2 — Weekly review (Sonnet). Mon 09:00 IST = 03:30 UTC.
+  "30 3 * * 1",
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"

@@ -1,0 +1,21 @@
+name = "wealth-macro-in"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+[triggers]
+crons = [
+  "0 3 * * *",        # RBI 08:30 IST
+  "30 4 * * *",       # POSOCO 10:00 IST
+  "30 8 * * *",       # IMD 14:00 IST
+  "30 12 * * 1-5",    # Bond yields 18:00 IST
+  "0 13 1 * *",       # GST monthly
+  "0 13 3 * *",       # PMI monthly
+  "0 13 12 * *",      # MoSPI monthly
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"

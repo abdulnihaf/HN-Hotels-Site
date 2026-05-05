@@ -1,0 +1,17 @@
+name = "wealth-fundamentals"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+[triggers]
+crons = [
+  # Weekly refresh — Saturday 06:30 IST → UTC 01:00
+  # Fundamentals don't change daily; once a week is plenty.
+  "0 1 * * 6",
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"

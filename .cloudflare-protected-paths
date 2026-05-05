@@ -1,0 +1,41 @@
+# Cloudflare Pages — Protected Deployment Paths
+#
+# These paths must NEVER be removed by an unrelated PR.
+# The trading system is extremely deep + surgical — losing these files
+# breaks production at trade.hnhotels.in.
+#
+# Validated by: scripts/verify-trading-deploy.sh
+# Run pre-merge: bash scripts/verify-trading-deploy.sh
+#
+# If a future Claude session needs to delete or move ANY of these paths,
+# the PR description must include the line:
+#   ACK: trading-deploy-touched-with-owner-approval
+#
+# without that line, scripts/verify-trading-deploy.sh exits 1.
+
+functions/api/trading.js
+functions/api/kite.js
+functions/api/backtest.js
+functions/api/_lib/anthropic.js
+functions/api/_lib/coaching.js
+functions/api/_lib/costModel.js
+functions/api/_lib/optionAnalytics.js
+functions/api/_lib/bayesianLearner.js
+functions/api/_lib/backtester.js
+functions/_middleware.js
+functions/wealth/
+trading/index.html
+trading/today/index.html
+trading/execute/index.html
+trading/ops/index.html
+trading/sw.js
+trading/manifest.json
+trading/_lib/picker.js
+trading/_context/
+wealth-engine/migrations/
+wealth-engine/workers/
+wealth-engine/workers/wealth-trader/wrangler.toml
+wealth-engine/workers/wealth-verdict/wrangler.toml
+wealth-engine/workers/wealth-orchestrator/wrangler.toml
+wealth-engine/workers/wealth-price-core/wrangler.toml
+scripts/sync-trading-docs.js
