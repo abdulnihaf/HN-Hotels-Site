@@ -946,15 +946,106 @@ async function positionManagement(env) {
     };
   }
 
-  // Build per-position context (now richer)
+  // ─── EXIT-INTELLIGENCE ENRICHMENT (May 5 evening) ────────────────────────
+  // Owner asked: "exiting at the right time is extremely important — is that
+  // layer carefully and intelligently architectured?"
+  //
+  // Audit revealed: Opus position_mgmt was reading LTP/peak/trail/news/sector
+  // but NOT the per-stock 90-day statistical priors (hit_2pct_rate,
+  // avg_open_to_high_pct, green_close_rate). Those tell Opus things like:
+  //   "this stock typically peaks at +2.92%; we're at +2.5% = 86% captured"
+  //   "30% of typical days hit 3%+; we're at 1.5% = still upside likely"
+  //   "62% green-close rate; afternoon recovery probable if down now"
+  //
+  // We now batch-fetch intraday_suitability stats + derive peak_at_ts per
+  // position from intraday_bars + compute IST phase + classify trajectory.
+  // ─────────────────────────────────────────────────────────────────────────
+  const heldSymbols = positions.map(p => p.symbol).filter(Boolean);
+  const placeholdersIS = heldSymbols.map(() => '?').join(',');
+  const istNow = istHHMM();
+  const [istHnow, istMnow] = istNow.split(':').map(Number);
+
+  // Batch 1: 90-day statistical priors per symbol
+  const suitabilityRows = heldSymbols.length > 0 ? (await db.prepare(`
+    SELECT symbol, hit_2pct_rate, hit_3pct_rate, hit_5pct_rate,
+           avg_open_to_high_pct, avg_open_to_low_pct, avg_daily_range_pct,
+           green_close_rate, avg_turnover_cr, days_sampled,
+           hit_2pct_last_week, avg_up_last_week_pct, green_close_last_week
+    FROM intraday_suitability WHERE symbol IN (${placeholdersIS})
+  `).bind(...heldSymbols).all().catch(() => ({ results: [] }))).results || [] : [];
+  const statsBySymbol = {};
+  for (const s of suitabilityRows) statsBySymbol[s.symbol] = s;
+
+  // Batch 2: today's high + low + low timestamp + peak timestamp per symbol.
+  // peak_at_ts = ts of the bar where high == max(high) for today (latest match).
+  const istDate = istToday();
+  const dayExtremes = heldSymbols.length > 0 ? (await db.prepare(`
+    SELECT
+      b.symbol,
+      MAX(b.high_paise) AS day_high,
+      MIN(b.low_paise)  AS day_low,
+      (SELECT MAX(ts) FROM intraday_bars WHERE symbol=b.symbol AND trade_date=? AND interval='5minute' AND high_paise = (SELECT MAX(high_paise) FROM intraday_bars WHERE symbol=b.symbol AND trade_date=? AND interval='5minute')) AS peak_at_ts,
+      (SELECT MAX(ts) FROM intraday_bars WHERE symbol=b.symbol AND trade_date=? AND interval='5minute' AND low_paise  = (SELECT MIN(low_paise)  FROM intraday_bars WHERE symbol=b.symbol AND trade_date=? AND interval='5minute')) AS low_at_ts
+    FROM intraday_bars b
+    WHERE b.symbol IN (${placeholdersIS}) AND b.trade_date=? AND b.interval='5minute'
+    GROUP BY b.symbol
+  `).bind(istDate, istDate, istDate, istDate, ...heldSymbols, istDate).all().catch(() => ({ results: [] }))).results || [] : [];
+  const extremesBySymbol = {};
+  for (const e of dayExtremes) extremesBySymbol[e.symbol] = e;
+
+  // IST phase — Indian intraday has known time profiles. Embed this so Opus
+  // applies different exit logic per phase.
+  const istMinutesFromOpen = (istHnow - 9) * 60 + istMnow - 15;
+  let istPhase;
+  if (istMinutesFromOpen < 75) istPhase = 'morning_breakout_window';        // 09:15-10:30
+  else if (istMinutesFromOpen < 255) istPhase = 'midday_consolidation';      // 10:30-13:30
+  else if (istMinutesFromOpen < 345) istPhase = 'afternoon_momentum_window'; // 13:30-15:00
+  else istPhase = 'pre_close_window';                                         // 15:00-15:30
+
+  // Build per-position context (now with statistical priors + trajectory)
   const positionsContext = positions.map(p => {
     const q = ltp[p.symbol];
     const pnlPaise = q?.ltp_paise ? (q.ltp_paise - p.entry_paise) * p.qty : 0;
-    const pnlPct = q?.ltp_paise ? ((q.ltp_paise - p.entry_paise) / p.entry_paise * 100).toFixed(2) : null;
-    const peakPnlPct = p.peak_price_paise ? ((p.peak_price_paise - p.entry_paise) / p.entry_paise * 100).toFixed(2) : null;
+    const pnlPctNow = q?.ltp_paise ? +((q.ltp_paise - p.entry_paise) / p.entry_paise * 100).toFixed(2) : null;
+    const peakPnlPct = p.peak_price_paise ? +((p.peak_price_paise - p.entry_paise) / p.entry_paise * 100).toFixed(2) : null;
     const minutesHeld = p.entry_at ? Math.round((Date.now() - p.entry_at) / 60000) : 0;
     const en = enrichBySymbol[p.symbol] || {};
+    const stats = statsBySymbol[p.symbol] || {};
+    const ext = extremesBySymbol[p.symbol] || {};
     const ltpRs = q?.ltp_paise / 100;
+
+    // ── STATISTICAL: pct_of_typical_move_captured ──
+    // If avg_open_to_high_pct = 2.92 and we're at +2.5% gain, ratio = 0.86 (86% of
+    // typical max captured). > 0.8 means tighten aggressively. > 1.0 means exit.
+    const pctOfTypicalMoveCaptured = (pnlPctNow && stats.avg_open_to_high_pct && stats.avg_open_to_high_pct > 0)
+      ? +(pnlPctNow / stats.avg_open_to_high_pct).toFixed(2)
+      : null;
+
+    // ── TIMING: time_since_peak_min ──
+    const peakAtTs = ext.peak_at_ts || null;
+    const timeSincePeakMin = peakAtTs ? Math.round((Date.now() - peakAtTs) / 60000) : null;
+    const lowAtTs = ext.low_at_ts || null;
+    const timeSinceLowMin = lowAtTs ? Math.round((Date.now() - lowAtTs) / 60000) : null;
+
+    // ── DRAWDOWN: give-back-from-peak-pct (recoverable vs reversal) ──
+    const giveBackPct = (peakPnlPct != null && pnlPctNow != null && peakPnlPct > 0)
+      ? +((peakPnlPct - pnlPctNow) / peakPnlPct).toFixed(2)  // 0.0=at peak, 1.0=fully back to entry
+      : null;
+    // Day-low-pct (lowest point today vs entry, for V-recovery detection)
+    const dayLowPaise = ext.day_low || null;
+    const dayLowPct = (dayLowPaise && p.entry_paise)
+      ? +((dayLowPaise - p.entry_paise) / p.entry_paise * 100).toFixed(2)
+      : null;
+    const dayLowToNowPct = (dayLowPct != null && pnlPctNow != null)
+      ? +(pnlPctNow - dayLowPct).toFixed(2)
+      : null;
+
+    // ── TRAJECTORY classification ──
+    let trajectory = 'STAIR_STEP';
+    if (dayLowPct != null && dayLowPct < -0.5 && pnlPctNow > 0) trajectory = 'V_RECOVERY';
+    else if (dayLowPct != null && dayLowPct > -0.3 && (giveBackPct == null || giveBackPct < 0.3)) trajectory = 'LINEAR_UP';
+    else if (giveBackPct != null && giveBackPct > 0.4) trajectory = 'FADING_FROM_PEAK';
+
     return {
       trade_id: p.id,
       symbol: p.symbol,
@@ -962,18 +1053,40 @@ async function positionManagement(env) {
       entry_price: p.entry_paise / 100,
       current_ltp: ltpRs,
       peak_price: p.peak_price_paise ? p.peak_price_paise / 100 : null,
+      day_low: dayLowPaise ? dayLowPaise / 100 : null,
       stop_price: p.stop_paise / 100,
       target_price: p.target_paise / 100,
       trailing_stop: p.trailing_stop_paise ? p.trailing_stop_paise / 100 : null,
       qty: p.qty,
       pnl_rupees: Math.round(pnlPaise / 100),
-      pnl_pct_now: pnlPct,
+      pnl_pct_now: pnlPctNow,
       pnl_pct_at_peak: peakPnlPct,
-      give_back_from_peak_pct: peakPnlPct && pnlPct ? +(parseFloat(peakPnlPct) - parseFloat(pnlPct)).toFixed(2) : null,
+      day_low_pct: dayLowPct,
+      day_low_to_now_pct: dayLowToNowPct,
+      give_back_from_peak_pct: giveBackPct,
+      time_since_peak_min: timeSincePeakMin,
+      time_since_low_min: timeSinceLowMin,
       minutes_held: minutesHeld,
+      trajectory,
+      ist_phase: istPhase,
+      // ★ STATISTICAL PRIORS — 90-day per-stock baseline
+      stat_priors: stats.avg_open_to_high_pct != null ? {
+        hit_2pct_rate_90d: stats.hit_2pct_rate,
+        hit_3pct_rate_90d: stats.hit_3pct_rate,
+        hit_5pct_rate_90d: stats.hit_5pct_rate,
+        avg_open_to_high_pct_90d: stats.avg_open_to_high_pct,
+        avg_open_to_low_pct_90d: stats.avg_open_to_low_pct,
+        green_close_rate_90d: stats.green_close_rate,
+        avg_daily_range_pct_90d: stats.avg_daily_range_pct,
+        // last-week trend (more recent)
+        hit_2pct_last_week: stats.hit_2pct_last_week,
+        avg_up_last_week_pct: stats.avg_up_last_week_pct,
+        green_close_last_week: stats.green_close_last_week,
+        days_sampled: stats.days_sampled,
+      } : null,
+      pct_of_typical_move_captured: pctOfTypicalMoveCaptured,
       original_thesis: (p.rationale || '').slice(0, 200),
       news_last_4h: newsBySymbol[p.symbol] || [],
-      // PROMOTION CONTEXT (new) — Opus needs this to decide swing-promote
       sector: en.sector,
       vol_sustaining_pct: en.vol_sustaining_pct,
       news_velocity_last_60min: en.news_count_last_60min,
@@ -1035,6 +1148,59 @@ When HOLD_OVERNIGHT fires:
   - If pre-market gap-down >2%, system force-exits at open (no questions)
 
 If you invoke HOLD_OVERNIGHT, your rationale MUST cite: (a) which catalyst extends beyond today, (b) D/W/M alignment confirmation, (c) why exit-now would leave significant value.
+
+═══ STATISTICAL EXIT INTELLIGENCE (added May 5 evening) ═══
+Each position now arrives with the per-stock 90-day priors AND today's trajectory shape.
+USE THESE AGGRESSIVELY for exit timing — they are the difference between skill and luck.
+
+Key fields you'll see in each position object:
+  stat_priors.avg_open_to_high_pct_90d   ← typical max gain achievable in a day
+  stat_priors.avg_open_to_low_pct_90d    ← typical max drawdown
+  stat_priors.green_close_rate_90d       ← % of days this stock closes green
+  stat_priors.hit_2pct/3pct/5pct_rate_90d ← how often it reaches each level
+  pct_of_typical_move_captured           ← current_gain / avg_open_to_high (0=zero, 1=at typical max, >1=above-average day)
+  give_back_from_peak_pct                ← 0=at peak, 1.0=back to entry, > 0.5=meaningful reversal
+  time_since_peak_min                    ← stale peak = unlikely to revisit
+  trajectory                             ← V_RECOVERY / LINEAR_UP / FADING_FROM_PEAK / STAIR_STEP
+  ist_phase                              ← morning_breakout_window / midday_consolidation / afternoon_momentum_window / pre_close_window
+
+STATISTICAL EXIT RULES (apply BEFORE the discretionary thesis-based ones):
+
+  Rule S1 — STATISTICAL_TARGET_REACHED (FULL_EXIT or strong TIGHTEN):
+    pct_of_typical_move_captured ≥ 1.0 → you've hit the 90-day average max for this stock
+    Default: FULL_EXIT (mean-reversion likely from here)
+    Override only if: trajectory='LINEAR_UP' AND ist_phase='afternoon_momentum_window'
+    AND breaking_5day_high (real continuation possible)
+
+  Rule S2 — APPROACHING_TYPICAL_MAX (TIGHTEN_TRAIL hard):
+    pct_of_typical_move_captured 0.7-1.0 → near the 90-day avg max
+    Action: TIGHTEN_TRAIL to 0.5% below peak (lock most of the gain)
+
+  Rule S3 — STALE_PEAK_FADING (FULL_EXIT):
+    time_since_peak_min > 60 AND trajectory='FADING_FROM_PEAK' AND give_back_from_peak_pct > 0.4
+    Action: FULL_EXIT — peak is stale + fading is confirmed, peak unlikely to revisit
+
+  Rule S4 — V_RECOVERY MID-DAY (HOLD with confidence):
+    trajectory='V_RECOVERY' AND time_since_low_min > 30 AND green_close_rate_90d > 0.55
+    Action: HOLD — recoveries from intraday lows that hold for 30+ min often continue
+
+  Rule S5 — IST PHASE-AWARE TRAILS (apply to TIGHTEN_TRAIL trail %):
+    ist_phase='morning_breakout_window'   → use 1.0% trail (let momentum run)
+    ist_phase='midday_consolidation'      → use 0.6% trail (chop is common)
+    ist_phase='afternoon_momentum_window' → use 1.2% trail (allow afternoon move)
+    ist_phase='pre_close_window'          → use 0.4% trail (lock gains aggressively)
+
+  Rule S6 — LOW HIT-RATE TARGET (don't get greedy):
+    target_pct_remaining > avg_up_last_week_pct AND hit_3pct_rate_90d < 0.3
+    Action: PARTIAL_EXIT_50 + TIGHTEN_TRAIL — historical odds say full target rarely hits
+
+  Rule S7 — STRONG WEEK + DAY MATCH (let it run):
+    avg_up_last_week_pct > avg_open_to_high_pct_90d × 1.3 AND green_close_last_week ≥ 4/5
+    Action: HOLD even at pct_of_typical_move_captured=0.9 (recent regime stronger than 90d avg)
+
+PRINCIPLE: rule conflicts? Statistical rules (S1-S7) WIN over discretionary rules unless
+news_last_4h has a strong-positive catalyst (sentiment > +0.5, importance ≥ 4) explaining
+why TODAY is special. Document any override in rationale.
 
 Be DECISIVE. Most healthy positions = HOLD. Most exits = FULL_EXIT or trailing-stop-fired. HOLD_OVERNIGHT is the rare 1-in-20-days call.`;
 
