@@ -937,6 +937,7 @@
 
 <!-- Shared stock picker -->
 <script src="/trading/_lib/picker.js"></script>
+<script src="/trading/_lib/watchlist-component.js"></script>
 
 <script>
 const STORE_KEY = 'wealth_dashboard_key';
@@ -2273,14 +2274,19 @@ async function loadDayPnlHero() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TODAY'S WATCHLIST — frozen candidate pool + 3 final picks ⭐
-// Owner asked May 5 evening: "create a watchlist named 5 MAY with all the top
-// picks (not just final 3)". Kite Connect API doesn't expose watchlist
-// management. So we render OUR canonical list here, with one-tap copy-to-Kite.
-// Auto-refreshes every 30s. Sorted: final picks ⭐ first, then by hybrid_score.
+// TODAY'S WATCHLIST — uses shared component at /trading/_lib/watchlist-component.js
+// (Same component used on /trading/execute/ — single source of truth for
+// the rich pick-card design.)
 // ═══════════════════════════════════════════════════════════════════════════
-let _watchlistTimer = null;
-async function loadWatchlist() {
+let _watchlistHandle = null;
+function loadWatchlist() {
+  if (_watchlistHandle) _watchlistHandle.stop();
+  _watchlistHandle = window.WatchlistComponent.load('watchlistSection', DASHBOARD_KEY, { refreshMs: 30000 });
+}
+
+// LEGACY render — kept for fallback only if shared component fails to load.
+// Active code path is the shared component above.
+async function _loadWatchlistLegacy_DEPRECATED() {
   const el = document.getElementById('watchlistSection');
   if (!el) return;
   try {
@@ -2288,14 +2294,10 @@ async function loadWatchlist() {
     const j = await r.json();
     if (!j.ok) {
       el.innerHTML = `<div class="watchlist-section"><h3>📋 Today's Watchlist <span class="obs-tag idle">${j.reason || 'no data'}</span></h3><div class="wl-meta">No verdict found for today yet — composeVerdict fires at 08:30 IST.</div></div>`;
-      _watchlistTimer = setTimeout(loadWatchlist, 60000);
       return;
     }
     const fmtP = (p) => p == null ? '—' : '₹' + (p / 100).toFixed(2);
     const fmtPct = (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
-    const dateLabel = new Date(j.date + 'T00:00:00').toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
-
-    // Build the date title like "5 May 2026" → for owner-facing label "📋 5 MAY"
     const dateShort = new Date(j.date + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short' }).toUpperCase();
 
     let html = `

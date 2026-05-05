@@ -354,6 +354,12 @@
     <!-- Pre-launch / shadow-run banner (visible only when block_real_orders=1) -->
     <div id="preLaunchBanner" style="display:none"></div>
 
+    <!-- ═══ TODAY'S WATCHLIST — same shared component as /trading/today/ ═══
+         Single source of truth for the rich pick-card design. Frozen candidate
+         pool from Opus's 08:30 verdict + 3 ⭐ picks + full OHLC + ₹10L hypothetical
+         per stock. Rendered by /trading/_lib/watchlist-component.js. ═══════════ -->
+    <div id="watchlistSection"></div>
+
     <!-- TODAY panel — briefing + market pulse + cascade chips + signal count -->
     <div class="panel" id="todayPanel" style="display:none;padding:16px">
       <h2 style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -577,6 +583,7 @@
 
 <!-- Shared Stock Picker module (used by manual paper form) -->
 <script src="/trading/_lib/picker.js"></script>
+<script src="/trading/_lib/watchlist-component.js"></script>
 
 <script>
 const STORE_KEY = 'wealth_dashboard_key';
@@ -603,6 +610,9 @@ async function loadAll() {
   return r.json();
 }
 
+// Shared watchlist component handle (auto-refreshes every 30s while page open)
+let _sharedWatchlistHandle = null;
+
 function showApp(j) {
   document.getElementById('gate').style.display = 'none';
   document.getElementById('app').style.display = 'block';
@@ -611,6 +621,14 @@ function showApp(j) {
   loadMarkets101();
   loadMorningBriefing();
   loadWatchlist();
+  // ★ Shared Today's Watchlist component — same cards as /trading/today/.
+  // Frozen candidate pool + ⭐ picks + full OHLC + ₹10L hypothetical per stock.
+  if (window.WatchlistComponent) {
+    if (_sharedWatchlistHandle) _sharedWatchlistHandle.stop();
+    _sharedWatchlistHandle = window.WatchlistComponent.load(
+      'watchlistSection', DASHBOARD_KEY, { refreshMs: 30000 }
+    );
+  }
   loadReadiness();
   loadPaperTrades();
   loadAlerts();
