@@ -112,6 +112,7 @@ export async function onRequest(context) {
       case 'briefing_v2':        return Response.json(await getBriefingV2(db, env), { headers });
       case 'analyze_concall':    return Response.json(await analyzeConcallPages(db, env, request), { headers });
       case 'verdict_today':      return Response.json(await getVerdictToday(db, env), { headers });
+      case 'todays_watchlist':   return Response.json(await getTodaysWatchlist(db, url), { headers });
       case 'auto_trader_state':  return Response.json(await getAutoTraderState(db), { headers });
       case 'trader_timeline':    return Response.json(await getTraderTimeline(db, url), { headers });
       case 'intelligence_audit': return Response.json(await getIntelligenceAudit(db), { headers });
@@ -2681,6 +2682,149 @@ tone_score: -1.0 = very defensive/negative, 0.0 = neutral/factual, +1.0 = very c
 // ═══════════════════════════════════════════════════════════════════════════
 // /api/trading?action=verdict_today
 //
+// ═══════════════════════════════════════════════════════════════════════════
+// /api/trading?action=todays_watchlist[&date=YYYY-MM-DD]
+//
+// Owner asked May 5: "different stock lists in /today vs /execute is confusing.
+// Can we have ONE canonical list — the candidate pool Opus shortlisted at 08:30,
+// the 3 final picks marked, with live LTP, refreshed?"
+//
+// Returns: the FROZEN candidate pool (top ~10 from intraday_suitable_picks the
+// engine pre-filtered for Opus) + the 3 final picks marked, + live LTP joined
+// from intraday_ticks, + Kite-format string for clipboard import.
+//
+// Source of truth:
+//   daily_verdicts.context_snapshot_json.intraday_suitable_picks  (the pool)
+//   daily_verdicts.picks_json                                     (the 3 picks)
+//
+// Both frozen at 08:30 IST when Opus composes. Doesn't drift through the day.
+// ═══════════════════════════════════════════════════════════════════════════
+async function getTodaysWatchlist(db, url) {
+  const istNow = new Date(Date.now() + 5.5 * 3600000);
+  const requestedDate = url.searchParams.get('date') || istNow.toISOString().slice(0, 10);
+
+  const verdict = await db.prepare(`
+    SELECT id, trade_date, verdict_type, composed_at, context_snapshot_json, picks_json
+    FROM daily_verdicts
+    WHERE trade_date = ? AND verdict_type='morning'
+    ORDER BY composed_at DESC LIMIT 1
+  `).bind(requestedDate).first();
+
+  if (!verdict) {
+    return { ok: false, reason: 'no-verdict-on-date', date: requestedDate };
+  }
+
+  let candidates = [];
+  let finalPicks = [];
+  try {
+    const ctx = JSON.parse(verdict.context_snapshot_json || '{}');
+    candidates = ctx.intraday_suitable_picks || [];
+  } catch {}
+  try {
+    finalPicks = JSON.parse(verdict.picks_json || '[]');
+  } catch {}
+
+  const finalPickSymbols = new Set(finalPicks.map(p => p.symbol).filter(Boolean));
+  const allSymbols = [...new Set([
+    ...candidates.map(c => c.symbol).filter(Boolean),
+    ...finalPickSymbols,
+  ])];
+
+  if (allSymbols.length === 0) {
+    return { ok: false, reason: 'no-symbols', date: requestedDate };
+  }
+
+  // Live LTP — most recent intraday_ticks per symbol (already populated by
+  // wealth-price-core every 1 min during market hours)
+  const placeholders = allSymbols.map(() => '?').join(',');
+  const liveTicks = (await db.prepare(`
+    SELECT t1.symbol, t1.ltp_paise, t1.ts
+    FROM intraday_ticks t1
+    JOIN (SELECT symbol, MAX(ts) AS m FROM intraday_ticks WHERE symbol IN (${placeholders}) GROUP BY symbol) t2
+      ON t1.symbol = t2.symbol AND t1.ts = t2.m
+  `).bind(...allSymbols).all().catch(() => ({ results: [] }))).results || [];
+  const ltpMap = {};
+  for (const t of liveTicks) ltpMap[t.symbol] = { ltp_paise: t.ltp_paise, ts: t.ts };
+
+  // Day open from earliest intraday_bar today (or yesterday's close if pre-market)
+  const dayOpens = (await db.prepare(`
+    SELECT b1.symbol, b1.open_paise
+    FROM intraday_bars b1
+    JOIN (SELECT symbol, MIN(ts) AS m FROM intraday_bars WHERE symbol IN (${placeholders}) AND trade_date=? AND interval='5minute' GROUP BY symbol) b2
+      ON b1.symbol = b2.symbol AND b1.ts = b2.m
+  `).bind(...allSymbols, requestedDate).all().catch(() => ({ results: [] }))).results || [];
+  const openMap = {};
+  for (const r of dayOpens) openMap[r.symbol] = r.open_paise;
+
+  // Trader state per symbol (for the 3 final picks)
+  const traderRows = (await db.prepare(`
+    SELECT symbol, trader_state, qty, entry_paise, exit_paise, exit_reason, pnl_net_paise
+    FROM paper_trades
+    WHERE auto_managed=1 AND DATE(created_at/1000, 'unixepoch') = ?
+  `).bind(requestedDate).all().catch(() => ({ results: [] }))).results || [];
+  const traderMap = {};
+  for (const r of traderRows) traderMap[r.symbol] = r;
+
+  // Build watchlist rows
+  const enriched = candidates.map(c => {
+    const live = ltpMap[c.symbol];
+    const dayOpen = openMap[c.symbol];
+    const dayChangePct = (live?.ltp_paise && dayOpen)
+      ? +(((live.ltp_paise - dayOpen) / dayOpen) * 100).toFixed(2)
+      : null;
+    const finalPick = finalPicks.find(p => p.symbol === c.symbol);
+    const trader = traderMap[c.symbol];
+    return {
+      symbol: c.symbol,
+      composite_score: c.composite_score,
+      hybrid_score: c.hybrid_score,
+      regime: c.regime,
+      mtf: c.mtf,
+      intraday_history: c.intraday_history,
+      live_ltp_paise: live?.ltp_paise || null,
+      live_ltp_ts: live?.ts || null,
+      day_open_paise: dayOpen || null,
+      day_change_pct: dayChangePct,
+      is_final_pick: !!finalPick,
+      pick_weight_pct: finalPick?.weight_pct || null,
+      pick_target_pct: finalPick?.target_pct || null,
+      pick_stop_pct: finalPick?.stop_pct || null,
+      trader_state: trader?.trader_state || null,
+      trader_qty: trader?.qty || null,
+      trader_entry_paise: trader?.entry_paise || null,
+      trader_exit_paise: trader?.exit_paise || null,
+      trader_exit_reason: trader?.exit_reason || null,
+      trader_pnl_net_paise: trader?.pnl_net_paise || null,
+    };
+  });
+
+  // Sort: final picks first (⭐), then by hybrid_score DESC
+  enriched.sort((a, b) => {
+    if (a.is_final_pick && !b.is_final_pick) return -1;
+    if (!a.is_final_pick && b.is_final_pick) return 1;
+    return (b.hybrid_score || 0) - (a.hybrid_score || 0);
+  });
+
+  // Kite-format string for clipboard (manual paste into Kite app watchlist)
+  const kiteFormat = enriched.map(e => `NSE:${e.symbol}`).join('\n');
+
+  return {
+    ok: true,
+    date: requestedDate,
+    composed_at: verdict.composed_at,
+    composed_at_ist: new Date(verdict.composed_at + 5.5 * 3600000).toISOString().replace('T',' ').slice(0, 19),
+    summary: {
+      candidate_count: candidates.length,
+      final_pick_count: finalPicks.length,
+      live_data_available: Object.keys(ltpMap).length > 0,
+    },
+    watchlist: enriched,
+    kite_format: kiteFormat,           // for "Copy to Kite" button
+    final_picks_kite_format: finalPicks.map(p => `NSE:${p.symbol}`).join('\n'),
+    generated_at: Date.now(),
+  };
+}
+
 // Returns the latest verdict for today (morning OR most recent invalidator).
 // Worker only stores the SYMBOL Opus picked; this reader joins with the live
 // top_recommendation engine to attach a fresh trade plan (entry/stop/target/qty).
