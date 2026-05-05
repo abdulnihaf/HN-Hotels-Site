@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HE-L1 Inflow · The Closed Circle</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c14;
+    --panel: rgba(22,22,31,0.7);
+    --border: rgba(255,255,255,0.08);
+    --ink: #e4e4ed;
+    --ink-dim: #94a3b8;
+    --accent: #e8930c;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --info: #60a5fa;
+    --purple: #c084fc;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.5; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .glass { background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(20px); border-radius: 14px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .pill-pos { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-pm { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .pill-usr { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-eq { background: rgba(168,85,247,0.18); color: var(--purple); }
+  .pill-warn { background: rgba(251,191,36,0.20); color: var(--warn); }
+  .pill-future { background: rgba(248,113,113,0.10); color: var(--bad); border: 1px dashed rgba(248,113,113,0.35); }
+  .grad-fade { background: linear-gradient(180deg, rgba(15,15,26,0.85) 0%, rgba(12,12,20,1) 100%); }
+  table.codes { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.codes th, table.codes td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.codes th { color: var(--ink-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  .panel-h { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .equation { background: rgba(0,0,0,0.35); border-left: 3px solid var(--purple); padding: 10px 12px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.6; margin: 6px 0; }
+  .equation .lhs { color: var(--purple); font-weight: 700; }
+  .equation .op  { color: var(--accent); }
+  .stat-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat-card .label { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .stat-card .meta { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .scroll-x { overflow-x: auto; }
+  .ag-card { background: rgba(192,132,252,0.04); border: 1px solid rgba(192,132,252,0.20); border-left: 3px solid var(--purple); padding: 10px 12px; border-radius: 8px; font-size: 12px; }
+  .future-tag { color: var(--bad); font-weight: 600; font-size: 10px; letter-spacing: 0.05em; }
+  .delta-card { background: rgba(232,147,12,0.05); border: 1px solid rgba(232,147,12,0.25); border-left: 3px solid var(--accent); padding: 10px 12px; border-radius: 8px; font-size: 12px; }
+  .delta-card .delta-h { color: var(--accent); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .node-rect { fill: rgba(255,255,255,0.04); stroke: rgba(255,255,255,0.18); stroke-width: 1; }
+  .node-rect.pos { fill: rgba(232,147,12,0.10); stroke: rgba(232,147,12,0.50); }
+  .node-rect.pm { fill: rgba(192,132,252,0.08); stroke: rgba(192,132,252,0.45); }
+  .node-rect.actor { fill: rgba(96,165,250,0.10); stroke: rgba(96,165,250,0.55); }
+  .node-rect.dest { fill: rgba(251,191,36,0.10); stroke: rgba(251,191,36,0.55); stroke-width: 1.5; }
+  .node-rect.dest.bank { fill: rgba(96,165,250,0.10); stroke: rgba(96,165,250,0.55); }
+  .node-rect.dest.owes { fill: rgba(248,113,113,0.10); stroke: rgba(248,113,113,0.55); }
+  .node-rect.deploy { fill: rgba(52,211,153,0.06); stroke: rgba(52,211,153,0.40); stroke-dasharray: 4 3; }
+  .node-rect.warn { fill: rgba(251,191,36,0.06); stroke: rgba(251,191,36,0.45); }
+  .node-text { fill: #e4e4ed; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500; pointer-events: none; }
+  .node-text.title { font-size: 12px; font-weight: 700; }
+  .node-text.dim { fill: #94a3b8; font-size: 9.5px; }
+  .arrow { stroke: rgba(255,255,255,0.30); stroke-width: 1.5; fill: none; }
+  .arrow.cash { stroke: rgba(251,191,36,0.55); }
+  .arrow.bank { stroke: rgba(96,165,250,0.55); }
+  .arrow.owes { stroke: rgba(248,113,113,0.55); }
+  .arrow.warn { stroke: rgba(251,191,36,0.55); stroke-dasharray: 5 4; }
+  .arrow.deferred { stroke-dasharray: 5 4; opacity: 0.5; }
+  .arrow.observe { stroke: rgba(52,211,153,0.40); stroke-dasharray: 3 3; }
+  .lane-label { fill: #94a3b8; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  .lane-bg { fill: rgba(255,255,255,0.015); rx: 8; }
+</style>
+</head>
+<body>
+
+<header class="border-b border-white/5 px-6 py-5 grad-fade">
+  <div class="max-w-[1400px] mx-auto flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <div class="flex items-center gap-3 mb-1">
+        <span class="text-2xl">⚡</span>
+        <h1 class="text-xl font-bold tracking-tight">HE-L1 · Inflow Layer</h1>
+        <span class="pill pill-pos">CO_1 HN Hotels Pvt Ltd · HE</span>
+      </div>
+      <p class="text-sm text-white/60">Closed circle for Hamza Express. Identity is POS-user-PIN (flexible, any logged-in employee owns the cash). UPI flows direct to bank — no per-captain promise pile.</p>
+    </div>
+    <div class="flex items-center gap-3 text-xs">
+      <a href="/ops/visual/nch-l1/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">↗ NCH-L1</a>
+      <a href="https://hamzaexpress.in/ops/v2/" target="_blank" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">/ops/v2</a>
+      <a href="/ops/messaging/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">/ops/messaging</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
+
+  <!-- TOP STATS -->
+  <section class="grid grid-cols-2 md:grid-cols-6 gap-3">
+    <div class="stat-card"><div class="label">Sources</div><div class="value">5</div><div class="meta">POS configs at test.hamzahotel.com</div></div>
+    <div class="stat-card"><div class="label">Active PMs</div><div class="value">12</div><div class="meta">11 + 14 + 19 + 52 + 58 + ...</div></div>
+    <div class="stat-card"><div class="label">Cash actors</div><div class="value">PIN</div><div class="meta">flexible · POS user logged-in</div></div>
+    <div class="stat-card"><div class="label">UPI gateway</div><div class="value">Paytm</div><div class="meta">CSV reconcile · API key pending</div></div>
+    <div class="stat-card"><div class="label">Destinations</div><div class="value">3</div><div class="meta">D1 · BNK_HDFC_HE · D3</div></div>
+    <div class="stat-card"><div class="label">Aggregator src</div><div class="value">scrape</div><div class="meta">/ops/aggregator extension · same as NCH</div></div>
+  </section>
+
+  <!-- NCH→HE DELTAS -->
+  <section class="glass p-4">
+    <h2 class="panel-h">Architectural Deltas vs NCH-L1 · Same skeleton, simpler mechanic</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="delta-card">
+        <div class="delta-h">Identity</div>
+        <strong class="text-white/90">NCH:</strong> RNR_64–RNR_68 (5 fixed runners with barcodes + dedicated QRs)<br>
+        <strong class="text-white/90">HE:</strong> POS_USER_PIN — whoever logs into the POS to take the order owns settlement responsibility for that ticket. Flexible, anyone can be on shift.
+      </div>
+      <div class="delta-card">
+        <div class="delta-h">Captain promise</div>
+        <strong class="text-white/90">NCH runner:</strong> owes cash AND UPI (per-runner Razorpay QR fan-in)<br>
+        <strong class="text-white/90">HE captain/waiter:</strong> owes <strong>only cash</strong>. UPI flows direct to the bank — no per-captain QR. Settlement equation is pure cash. Simpler.
+      </div>
+      <div class="delta-card">
+        <div class="delta-h">UPI gateway</div>
+        <strong class="text-white/90">NCH:</strong> Razorpay live API + webhook (✓ events real-time)<br>
+        <strong class="text-white/90">HE:</strong> Paytm (no API key yet) → manual CSV reconciliation by agent until API arrives. Lower volume = no live data isn't a deal-breaker.
+      </div>
+    </div>
+  </section>
+
+  <!-- DIAGRAM -->
+  <section class="glass p-4">
+    <h2 class="panel-h">The Closed Circle · POS → PM → Cash-owed-by-PIN → Land</h2>
+    <div class="scroll-x">
+      <svg viewBox="0 0 1400 720" style="width:100%; min-width:1100px; height:auto;">
+        <rect x="20" y="40" width="1360" height="100" class="lane-bg"/>
+        <rect x="20" y="160" width="1360" height="160" class="lane-bg"/>
+        <rect x="20" y="340" width="1360" height="160" class="lane-bg"/>
+        <rect x="20" y="520" width="1360" height="180" class="lane-bg"/>
+
+        <text x="32" y="62" class="lane-label">SOURCES · 5 POS configs</text>
+        <text x="32" y="182" class="lane-label">CHANNELS · Payment Methods</text>
+        <text x="32" y="362" class="lane-label">INTERMEDIATE · Cash-owed-per-PIN + Paytm CSV reconcile</text>
+        <text x="32" y="542" class="lane-label">DESTINATIONS</text>
+
+        <!-- 5 POS Sources -->
+        <g><rect x="40" y="76" width="200" height="46" rx="6" class="node-rect pos"/>
+          <text x="50" y="94" class="node-text title">POS_5</text>
+          <text x="50" y="110" class="node-text dim">HE Cash Counter</text></g>
+        <g><rect x="280" y="76" width="200" height="46" rx="6" class="node-rect pos"/>
+          <text x="290" y="94" class="node-text title">POS_6</text>
+          <text x="290" y="110" class="node-text dim">HE Captain</text></g>
+        <g><rect x="520" y="76" width="200" height="46" rx="6" class="node-rect pos"/>
+          <text x="530" y="94" class="node-text title">POS_32</text>
+          <text x="530" y="110" class="node-text dim">HE GF Waiter Non-AC</text></g>
+        <g><rect x="760" y="76" width="200" height="46" rx="6" class="node-rect deploy"/>
+          <text x="770" y="94" class="node-text title" style="fill:#34d399">POS_7 · DEP_AGG</text>
+          <text x="770" y="110" class="node-text dim">Delivery · scraper-fed (POS not used directly)</text></g>
+        <g><rect x="1000" y="76" width="200" height="46" rx="6" class="node-rect warn"/>
+          <text x="1010" y="94" class="node-text title" style="fill:#fbbf24">POS_10</text>
+          <text x="1010" y="110" class="node-text dim">HE WABA · baseline only, not active</text></g>
+
+        <!-- PMs row 1: Cash counter PMs -->
+        <g><rect x="40" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="48" y="216" class="node-text title">PM_11</text>
+          <text x="48" y="230" class="node-text dim">Cash Counter</text></g>
+        <g><rect x="155" y="200" width="105" height="36" rx="4" class="node-rect pm" style="opacity:0.55"/>
+          <text x="163" y="216" class="node-text title">PM_12</text>
+          <text x="163" y="230" class="node-text dim">Card · low use</text></g>
+        <g><rect x="270" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="278" y="216" class="node-text title">PM_14</text>
+          <text x="278" y="230" class="node-text dim">UPI Counter · Paytm</text></g>
+
+        <!-- Captain PMs -->
+        <g><rect x="290" y="245" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="298" y="261" class="node-text title">PM_19</text>
+          <text x="298" y="275" class="node-text dim">Cash Captain</text></g>
+        <g><rect x="405" y="245" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="413" y="261" class="node-text title">PM_52</text>
+          <text x="413" y="275" class="node-text dim">UPI Captain · Paytm</text></g>
+
+        <!-- Waiter PMs -->
+        <g><rect x="525" y="245" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="533" y="261" class="node-text title">PM_64</text>
+          <text x="533" y="275" class="node-text dim">Cash GF Waiter</text></g>
+
+        <!-- Shared HE UPI / Complimentary -->
+        <g><rect x="385" y="200" width="120" height="36" rx="4" class="node-rect pm"/>
+          <text x="393" y="216" class="node-text title">PM_58</text>
+          <text x="393" y="230" class="node-text dim">HE UPI · HDFC jrn</text></g>
+        <g><rect x="515" y="200" width="120" height="36" rx="4" class="node-rect pm"/>
+          <text x="523" y="216" class="node-text title">PM_57 · 65</text>
+          <text x="523" y="230" class="node-text dim">Complimentary</text></g>
+
+        <!-- Aggregator -->
+        <g><rect x="785" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="793" y="216" class="node-text title">PM_15</text>
+          <text x="793" y="230" class="node-text dim">Swiggy 24.60%</text></g>
+        <g><rect x="900" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="908" y="216" class="node-text title">PM_16</text>
+          <text x="908" y="230" class="node-text dim">Zomato Del 23.41%</text></g>
+        <g><rect x="785" y="245" width="220" height="36" rx="4" class="node-rect pm"/>
+          <text x="793" y="261" class="node-text title">AGG_HE_ZOMATO_DINING</text>
+          <text x="793" y="275" class="node-text dim">8.26% · HE only · Dining contract</text></g>
+
+        <!-- WABA channel -->
+        <g><rect x="1040" y="200" width="120" height="36" rx="4" class="node-rect warn" style="opacity:0.6"/>
+          <text x="1048" y="216" class="node-text title">PM_17</text>
+          <text x="1048" y="230" class="node-text dim">WABA · baseline</text></g>
+
+        <!-- Source → Channel arrows -->
+        <path d="M 90 122 L 90 200" class="arrow"/>
+        <path d="M 140 122 L 200 200" class="arrow"/>
+        <path d="M 180 122 L 320 200" class="arrow"/>
+        <path d="M 220 122 L 440 200" class="arrow"/>
+        <path d="M 240 122 L 560 200" class="arrow"/>
+        <path d="M 380 122 L 340 245" class="arrow"/>
+        <path d="M 410 122 L 460 245" class="arrow"/>
+        <path d="M 440 122 L 460 200" class="arrow"/>
+        <path d="M 470 122 L 560 200" class="arrow"/>
+        <path d="M 620 122 L 580 245" class="arrow"/>
+        <path d="M 640 122 L 600 245" class="arrow"/>
+        <path d="M 660 122 L 600 200" class="arrow"/>
+        <path d="M 690 122 L 800 200" class="arrow observe"/>
+        <path d="M 850 122 L 840 200" class="arrow"/>
+        <path d="M 880 122 L 950 200" class="arrow"/>
+        <path d="M 920 122 L 870 245" class="arrow"/>
+        <path d="M 1100 122 L 1100 200" class="arrow deferred"/>
+
+        <!-- INTERMEDIATE: PIN promise + Paytm CSV recon -->
+        <g><rect x="40" y="370" width="500" height="115" rx="10" class="node-rect actor" style="stroke-width:1.5"/>
+          <text x="55" y="395" class="node-text title" style="fill:#60a5fa; font-size:13px">EQ_HE_CAPTAIN_CASH_OWED(USR_PIN_X)</text>
+          <text x="55" y="416" class="node-text" style="font-size:10.5px">= Σ pos.payment</text>
+          <text x="55" y="431" class="node-text" style="font-size:10.5px">  WHERE config_id ∈ {POS_5, POS_6, POS_32}</text>
+          <text x="55" y="446" class="node-text" style="font-size:10.5px">  AND pm_id ∈ {PM_11, PM_19, PM_64}  ← cash only</text>
+          <text x="55" y="461" class="node-text" style="font-size:10.5px">  AND user_id_pin = PIN_X</text>
+          <text x="55" y="478" class="node-text dim" style="font-size:10px">No UPI subtraction. No QR-bound runner equation. Only cash.</text></g>
+
+        <g><rect x="570" y="370" width="380" height="115" rx="10" class="node-rect warn"/>
+          <text x="585" y="395" class="node-text title" style="fill:#fbbf24; font-size:13px">EQ_HE_PAYTM_RECON</text>
+          <text x="585" y="416" class="node-text" style="font-size:10.5px">manual until Paytm API key available</text>
+          <text x="585" y="432" class="node-text" style="font-size:10.5px">= Σ pos.payment WHERE pm_id ∈ {PM_14, PM_52, PM_58}</text>
+          <text x="585" y="448" class="node-text" style="font-size:10.5px">  vs  Paytm CSV upload (daily)</text>
+          <text x="585" y="464" class="node-text dim" style="font-size:10px">Drift &gt; ₹500 → fire RULE_H_PAYTM_DRIFT</text>
+          <text x="585" y="478" class="node-text dim" style="font-size:10px">Today: caught last month's ₹9k Paytm gap manually</text></g>
+
+        <!-- Aggregator equation -->
+        <g><rect x="980" y="370" width="380" height="115" rx="10" class="node-rect deploy"/>
+          <text x="995" y="395" class="node-text title" style="fill:#34d399; font-size:13px">EQ_HE_AGG_NET_EXPECTED</text>
+          <text x="995" y="416" class="node-text" style="font-size:10.5px">= Σ POS_7 gross sale × (1 − comm_pct ± 0.5%)</text>
+          <text x="995" y="432" class="node-text" style="font-size:10.5px">where comm_pct =</text>
+          <text x="995" y="446" class="node-text" style="font-size:10.5px">  AGG_SWIGGY: 24.60%</text>
+          <text x="995" y="460" class="node-text" style="font-size:10.5px">  AGG_ZOMATO_DEL: 23.41%</text>
+          <text x="995" y="474" class="node-text" style="font-size:10.5px">  AGG_ZOMATO_DINING: 8.26%</text></g>
+
+        <!-- Channel → Equation arrows -->
+        <path d="M 90 236 Q 90 320 200 370" class="arrow cash"/>
+        <path d="M 340 281 Q 340 320 290 370" class="arrow cash"/>
+        <path d="M 580 281 Q 580 320 380 370" class="arrow cash"/>
+        <path d="M 320 236 Q 400 320 660 370" class="arrow warn"/>
+        <path d="M 460 281 Q 540 320 720 370" class="arrow warn"/>
+        <path d="M 460 236 Q 600 320 750 370" class="arrow warn"/>
+        <path d="M 840 236 Q 950 320 1130 370" class="arrow"/>
+        <path d="M 950 236 Q 1050 320 1170 370" class="arrow"/>
+        <path d="M 900 281 Q 1000 320 1150 370" class="arrow"/>
+
+        <!-- DESTINATIONS -->
+        <g><rect x="60" y="555" width="280" height="80" rx="10" class="node-rect dest"/>
+          <text x="72" y="578" class="node-text title" style="fill:#fbbf24">D1_HE · CASH DRAWER</text>
+          <text x="72" y="598" class="node-text dim">Realized in DEP_HE_V2 (/ops/v2)</text>
+          <text x="72" y="613" class="node-text dim">HE counter pile · captain returns cash here</text>
+          <text x="72" y="628" class="node-text dim">EQ_HE_CASH_DRAWER must = physical count</text></g>
+        <g><rect x="380" y="555" width="280" height="80" rx="10" class="node-rect dest bank"/>
+          <text x="392" y="578" class="node-text title" style="fill:#60a5fa">BNK_HDFC_HE</text>
+          <text x="392" y="598" class="node-text dim">Receives Paytm payouts (T+1)</text>
+          <text x="392" y="613" class="node-text dim">Receives aggregator settlements (T+contract)</text>
+          <text x="392" y="628" class="node-text dim">Same HDFC account as NCH currently</text></g>
+        <g><rect x="700" y="555" width="280" height="80" rx="10" class="node-rect dest owes"/>
+          <text x="712" y="578" class="node-text title" style="fill:#f87171">D3_HE · NAMED OWES</text>
+          <text x="712" y="598" class="node-text dim">PM_57 · PM_65 Complimentary</text>
+          <text x="712" y="613" class="node-text dim">Captain/waiter takes free order for staff</text>
+          <text x="712" y="628" class="node-text dim">Zero money · audit only · reconcile to monthly comp budget</text></g>
+
+        <g><rect x="1020" y="555" width="320" height="80" rx="10" class="node-rect deploy"/>
+          <text x="1032" y="578" class="node-text title" style="fill:#34d399">OBSERVERS</text>
+          <text x="1032" y="595" class="node-text dim">DEP_HE_V2 · /ops/v2 cashier UI · drives EQ_HE_CAPTAIN_CASH_OWED</text>
+          <text x="1032" y="608" class="node-text dim">DEP_HE_SALES · /ops/sales</text>
+          <text x="1032" y="621" class="node-text dim">DEP_HE_ITEM_COUNTER · /ops/item-counter (live count)</text>
+          <text x="1032" y="634" class="node-text dim">DEP_HQ_BANK · /ops/bank · DEP_HQ_MONEY · /ops/money (shared)</text></g>
+
+        <!-- Equation → Destination -->
+        <path d="M 290 485 Q 290 525 180 555" class="arrow cash"/>
+        <path d="M 760 485 Q 700 525 480 555" class="arrow bank"/>
+        <path d="M 1170 485 Q 1000 525 540 555" class="arrow bank"/>
+        <path d="M 580 281 Q 800 400 800 555" class="arrow owes"/>
+      </svg>
+    </div>
+    <div class="text-xs text-white/40 mt-2">
+      <span style="color:#fbbf24">━</span> Cash flow ·
+      <span style="color:#60a5fa">━</span> Bank flow ·
+      <span style="color:#fbbf24; opacity:0.7">┄</span> Paytm CSV (manual recon) ·
+      <span style="color:#f87171">━</span> Named-owes ·
+      <span style="color:#34d399; opacity:0.7">┄</span> Observer reads
+    </div>
+  </section>
+
+  <!-- LIVE STATE + EQUATIONS -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <div class="glass p-4">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="panel-h">Live State <span class="future-tag ml-2">FUTURE</span></h2>
+      </div>
+      <p class="text-xs text-white/50 mb-3">
+        Computed by Claude agent: <span class="mono">closing_inv + new_purchase − live_pos_sale = live_count</span>
+      </p>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+        <div class="stat-card" style="border-color:rgba(248,113,113,0.3)"><div class="label">Chicken Kabab raw</div><div class="value mono">—</div><div class="meta">threshold &lt; 5kg</div></div>
+        <div class="stat-card" style="border-color:rgba(248,113,113,0.3)"><div class="label">Mutton raw</div><div class="value mono">—</div><div class="meta">threshold &lt; 3kg</div></div>
+        <div class="stat-card" style="border-color:rgba(248,113,113,0.3)"><div class="label">Biryani rice raw</div><div class="value mono">—</div><div class="meta">threshold &lt; 10kg</div></div>
+        <div class="stat-card"><div class="label">HE counter cash</div><div class="value mono">—</div><div class="meta">opening + Σcash − Σout</div></div>
+        <div class="stat-card"><div class="label">Paytm wallet</div><div class="value mono">—</div><div class="meta">awaiting CSV upload</div></div>
+        <div class="stat-card"><div class="label">Open captain owes</div><div class="value mono">—</div><div class="meta">PINs with non-zero</div></div>
+      </div>
+    </div>
+
+    <div class="glass p-4">
+      <h2 class="panel-h">Equations · The Mathematical Spine</h2>
+      <div class="equation">
+        <span class="lhs">EQ_HE_CAPTAIN_CASH_OWED(USR_PIN_X)</span> <span class="op">=</span><br>
+        &nbsp;&nbsp;Σ pos.payment <span class="op">WHERE</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;config_id ∈ {POS_5, POS_6, POS_32}<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="op">AND</span> pm_id ∈ {PM_11, PM_19, PM_64}<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="op">AND</span> user_id_pin = PIN_X<br>
+        &nbsp;&nbsp;<span class="op">⇒</span> <span style="color:#fbbf24">MUST = cash returned at shift close per PIN</span>
+      </div>
+      <div class="equation">
+        <span class="lhs">EQ_HE_PAYTM_RECON</span> <span class="op">=</span><br>
+        &nbsp;&nbsp;Σ pos.payment <span class="op">WHERE</span> pm_id ∈ {PM_14, PM_52, PM_58}<br>
+        &nbsp;&nbsp;<span class="op">vs</span> Paytm CSV (manual upload pending API key)<br>
+        &nbsp;&nbsp;<span class="op">⇒</span> drift &gt; ₹500 fires <span style="color:#fbbf24">RULE_H_PAYTM_DRIFT</span>
+      </div>
+      <div class="equation">
+        <span class="lhs">EQ_HE_AGG_NET_EXPECTED(platform)</span> <span class="op">=</span><br>
+        &nbsp;&nbsp;Σ POS_7_gross × (1 − comm_pct ± 0.5%)<br>
+        &nbsp;&nbsp;<span class="op">⇒</span> match BNK_HDFC_HE credit T + contract days
+      </div>
+      <div class="equation">
+        <span class="lhs">EQ_HE_CASH_DRAWER</span> <span class="op">=</span><br>
+        &nbsp;&nbsp;opening_float<br>
+        &nbsp;&nbsp;<span class="op">+</span> Σ cash_in (PM_11 + captain settled + waiter settled)<br>
+        &nbsp;&nbsp;<span class="op">−</span> Σ cash_out (counter expenses + handovers_out)<br>
+        &nbsp;&nbsp;<span class="op">⇒</span> <span style="color:#fbbf24">MUST = physical drawer count</span>
+      </div>
+      <div class="equation">
+        <span class="lhs">EQ_LIVE_INVENTORY(item)</span> <span class="op">=</span> <span class="op">// shared with NCH</span><br>
+        &nbsp;&nbsp;closing_count(yesterday)<br>
+        &nbsp;&nbsp;<span class="op">+</span> Σ purchase.receive(item, today)<br>
+        &nbsp;&nbsp;<span class="op">−</span> Σ pos.sale × BoM(item, product)<br>
+        &nbsp;&nbsp;<span class="op">−</span> Σ wastage(item, today)
+      </div>
+    </div>
+  </section>
+
+  <!-- AGENTS -->
+  <section class="glass p-4">
+    <h2 class="panel-h">Claude Agent Layer · HE-specific <span class="future-tag ml-2">FUTURE</span></h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_HE_INVENTORY_WATCHDOG</div>
+        <div class="text-white/60">Cron every 5 min · Reads HE POS sales · BoM-decomposes (chicken kabab raw, mutton, biryani rice, ghee, breads) · Fires WABA template when item drops below threshold.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">cron: */5 * * * * · template: ops_alert_v1</div>
+      </div>
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_HE_PAYTM_CSV_RECON <span class="pill pill-warn">manual</span></div>
+        <div class="text-white/60">Until Paytm API key arrives: triggered on CSV upload · Matches each Paytm row to pos.payment within ±10 min · Unmatched &gt; ₹500 fires RULE_H_PAYTM_DRIFT (the ₹9k miss last month is exactly this).</div>
+        <div class="mt-1 mono text-[11px] text-white/40">trigger: csv_upload · template: paytm_mismatch_v1</div>
+      </div>
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_HE_CAPTAIN_CLOSURE</div>
+        <div class="text-white/60">Cron every 30 min · Per active POS-user PIN, computes EQ_HE_CAPTAIN_CASH_OWED · If non-zero &gt; 6h after their last sale, raises WARN to that PIN's WABA contact.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">cron: */30 * * * * · template: ops_followup_v1</div>
+      </div>
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_HE_AGG_RECON</div>
+        <div class="text-white/60">Daily 00:30 IST · Computes EQ_HE_AGG_NET_EXPECTED for Swiggy + Zomato Del + Zomato Dining · Compares to actual HDFC credits · Drift outside ±0.5% band fires WARN to Nihaf with disputable amount.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">cron: 30 0 * * * · template: agg_commission_drift_v1</div>
+      </div>
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_HE_CASH_RECONCILE</div>
+        <div class="text-white/60">Triggered on shift close · Compares physical count to EQ_HE_CASH_DRAWER · Drift &gt; ₹500 attributed to closing PIN.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">trigger: shift_close · template: cash_drift_v1</div>
+      </div>
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_HE_COMP_AUDIT</div>
+        <div class="text-white/60">Monthly · Sums PM_57 + PM_65 complimentary by partner_id · Compares to staff comp budget · Over-budget = WARN to Nihaf.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">cron: 0 9 1 * * · template: ops_digest_v1</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ASSET REGISTRY -->
+  <section class="glass p-4">
+    <h2 class="panel-h">Asset Code Registry · HE</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L1 · POS Configs <span class="text-white/40 font-normal">(test.hamzahotel.com · co=HN Hotels Pvt Ltd CO_1)</span></div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>name</th><th>active</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">POS_5</td><td>HE - Cash Counter</td><td>✓ central settle</td></tr>
+            <tr><td class="mono">POS_6</td><td>HE - Captain</td><td>✓ field collector</td></tr>
+            <tr><td class="mono">POS_32</td><td>HE - GF Waiter Non-AC</td><td>✓ field collector</td></tr>
+            <tr><td class="mono">POS_7</td><td>HE - Delivery</td><td>✓ scraper-fed</td></tr>
+            <tr><td class="mono">POS_10</td><td>HE - WABA</td><td>baseline · not active</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L2 · Payment Methods</div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>name</th><th>journal</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">PM_11</td><td>HE Cash Counter · is_cash</td><td>HE - Cash Counter</td></tr>
+            <tr><td class="mono">PM_12</td><td>HE Card · low use</td><td>Razorpay</td></tr>
+            <tr><td class="mono">PM_14</td><td>HE UPI Counter</td><td>Razorpay → Paytm now</td></tr>
+            <tr><td class="mono">PM_15</td><td>HE Swiggy</td><td>Swiggy</td></tr>
+            <tr><td class="mono">PM_16</td><td>HE Zomato</td><td>Zomato</td></tr>
+            <tr><td class="mono">PM_17</td><td>HE WABA · baseline</td><td>HE WABA UPI</td></tr>
+            <tr><td class="mono">PM_19</td><td>HE Cash Captain · is_cash</td><td>HE - Cash Captain</td></tr>
+            <tr><td class="mono">PM_52</td><td>HE UPI Captain</td><td>HE Captain 01 UPI</td></tr>
+            <tr><td class="mono">PM_57</td><td>HE Complimentary</td><td>HE Complimentary</td></tr>
+            <tr><td class="mono">PM_58</td><td>HE UPI · shared</td><td>HDFC Bank - HN Hotels</td></tr>
+            <tr><td class="mono">PM_64</td><td>HE Cash GF Waiter · is_cash</td><td>HE - Cash GF Waiter</td></tr>
+            <tr><td class="mono">PM_65</td><td>HE Complimentary (waiter)</td><td>HE Complimentary</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L5 · Cash Actors <span class="text-white/40 font-normal">(no fixed table — POS-user PIN owns cash)</span></div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>scope</th><th>note</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">USR_PIN_*</td><td>any active hr_employee with HE-counter access</td><td>flexible · whoever logs in owns settlement</td></tr>
+            <tr><td class="mono">USR_PIN_CASHIER</td><td>person at HE counter station</td><td>collects from captain/waiter at shift close</td></tr>
+            <tr><td class="mono">USR_PIN_CAPTAIN</td><td>field collector at AC floor</td><td>1 active today · flexible</td></tr>
+            <tr><td class="mono">USR_PIN_WAITER</td><td>field collector at GF Non-AC</td><td>1 active today · flexible</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L6 · UPI gateway · L7 · Bank</div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>purpose</th><th>state</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">PAYTM_HE</td><td>UPI gateway for PM_14/52/58</td><td><span class="pill pill-warn">no API key — CSV recon</span></td></tr>
+            <tr><td class="mono">BNK_HDFC_HE</td><td>Paytm payout T+1 · aggregator settlement</td><td>✓ active</td></tr>
+            <tr><td class="mono">AGG_SWIGGY</td><td>commission 24.60% ± 0.5%</td><td>contract 02 Mar 2026</td></tr>
+            <tr><td class="mono">AGG_ZOMATO_DEL</td><td>commission 23.41% ± 0.5%</td><td>contract 02 Mar 2026</td></tr>
+            <tr><td class="mono">AGG_ZOMATO_DINING</td><td>commission 8.26%</td><td>HE only · valid till 2046</td></tr>
+            <tr><td class="mono">AGG_EZD</td><td>EazyDiner ₹30/cover + 5% + 1.8%</td><td>HE only · 28 Mar 2026</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L8 · Custom Deployments</div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>route</th><th>role</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">DEP_HE_V2</td><td>hamzaexpress.in/ops/v2</td><td>Cashier UI · drives captain/waiter cash settlement</td></tr>
+            <tr><td class="mono">DEP_HE_SALES</td><td>/ops/sales</td><td>HE sales analytics</td></tr>
+            <tr><td class="mono">DEP_HE_ITEM_COUNTER</td><td>/ops/item-counter</td><td>Live item counter (existing)</td></tr>
+            <tr><td class="mono">DEP_HE_KITCHEN</td><td>/ops/kitchen-intel</td><td>Prep times · KDS</td></tr>
+            <tr><td class="mono">DEP_AGG</td><td>/ops/aggregator (HQ)</td><td>Shared scraper for Swiggy + Zomato</td></tr>
+            <tr><td class="mono">DEP_HQ_BANK</td><td>/ops/bank (HQ)</td><td>Shared HDFC ledger</td></tr>
+            <tr><td class="mono">DEP_HQ_MONEY</td><td>/ops/money (HQ)</td><td>Shared cash + bank cockpit</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- COMPARISON -->
+  <section class="glass p-4">
+    <h2 class="panel-h">NCH ↔ HE · Side-by-side</h2>
+    <div class="scroll-x">
+      <table class="codes" style="font-size:12.5px">
+        <thead>
+          <tr><th>Aspect</th><th>NCH</th><th>HE</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Odoo instance</td><td class="mono">ops.hamzahotel.com · CO_10</td><td class="mono">test.hamzahotel.com · CO_1</td></tr>
+          <tr><td>POS configs</td><td>POS_27 · 28 · 29</td><td>POS_5 · 6 · 7 · 10 · 32</td></tr>
+          <tr><td>Cash actor identity</td><td>Runner with barcode (RNR_64–68)</td><td>POS-user PIN (flexible, any employee)</td></tr>
+          <tr><td>Cash actor count</td><td>5 fixed runners</td><td>1 captain + 1 waiter today (flexible)</td></tr>
+          <tr><td>Promise mechanic</td><td>Cash AND UPI (per-runner Razorpay QR)</td><td>Cash only · UPI direct to bank</td></tr>
+          <tr><td>UPI gateway</td><td>Razorpay live API + webhook</td><td>Paytm CSV (no API key yet) · manual recon</td></tr>
+          <tr><td>QR fan-in</td><td>5 dedicated runner QRs + 2 counter QRs</td><td>None per-captain · single Paytm gateway</td></tr>
+          <tr><td>Token Issuance</td><td>PM_48 (chai tokens to runners)</td><td>n/a</td></tr>
+          <tr><td>Aggregator source</td><td>POS_29 dead · /ops/aggregator scrape</td><td>POS_7 · /ops/aggregator scrape (same)</td></tr>
+          <tr><td>Commission rates</td><td>Swiggy 24.60% · Zomato Del 23.41%</td><td>Same + Zomato Dining 8.26% · EZD ₹30+5%+1.8%</td></tr>
+          <tr><td>Bank pile</td><td>BNK_HDFC_MAIN + BNK_HDFC_OPS (split)</td><td>BNK_HDFC_HE (same HDFC currently)</td></tr>
+          <tr><td>Complementary</td><td>PM_49 → D3 named-owes</td><td>PM_57 + PM_65 → D3 named-owes (same pattern)</td></tr>
+          <tr><td>Avg ticket</td><td>~₹349 (chai cafe)</td><td>~₹464 (QSR biryani)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- NEXT -->
+  <section class="glass p-4">
+    <h2 class="panel-h">Next · Now Both Brands Have L1 Locked</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+      <div>
+        <div class="font-bold text-white/80 mb-2"><span class="pill pill-pos">L1 · INFLOW ✓</span></div>
+        <div class="text-white/60">NCH and HE both mapped. Codes locked. Equations defined. Agents queued. Waiting on: BSNL DLT approval (SMS), Paytm KYC re-verification (HE UPI live API), Exotel signup (voice).</div>
+      </div>
+      <div>
+        <div class="font-bold text-white/80 mb-2"><span class="pill pill-pm">L2 · OUTFLOW</span></div>
+        <div class="text-white/60">Purchase + Expense for both brands. Vendor master, PO with UoM, receipt, bill, payment. Federal Bank pile. Cross-brand HQ purchases.</div>
+      </div>
+      <div>
+        <div class="font-bold text-white/80 mb-2"><span class="pill pill-eq">L3 · DAILY SETTLEMENT</span></div>
+        <div class="text-white/60">L1 ↔ L2 closure. BoM-driven inventory variance. Per-PIN/per-runner staff discrepancy ledger. Auto-purchase suggestions. Leakage detection. Vendor-rate drift.</div>
+      </div>
+    </div>
+    <div class="mt-4 p-3 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-white/60">
+      <strong class="text-white/80">End game:</strong> agent crons + comms layer + HE/NCH-specific equations → Basheer fixes the few breaches at the moment of error → Nihaf gets the trail without doing reconciliation.
+    </div>
+  </section>
+
+</main>
+
+<footer class="border-t border-white/5 px-6 py-4 text-xs text-white/40 text-center">
+  HE-L1 visual mapping · live config from test.hamzahotel.com pulled 2026-05-01 · companion to <a href="/ops/visual/nch-l1/" class="text-white/60 hover:text-white">NCH-L1</a>
+</footer>
+
+</body>
+</html>
