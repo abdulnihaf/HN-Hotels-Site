@@ -4,6 +4,32 @@
 
 ---
 
+## ⚠️ Important scope clarification
+
+**This guardrail is about preventing DELETION / RENAMING / MOVING of trading files in unrelated PRs. It does NOT restrict optimization, refactoring, or feature work on the trading system itself.**
+
+| Activity | Allowed? | By whom |
+|---|---|---|
+| Edit `functions/api/trading.js` to add a feature | ✅ Yes | Trading-focused session |
+| Refactor `wealth-engine/workers/wealth-trader/src/index.js` | ✅ Yes | Trading-focused session |
+| Add new `_context/*.md` doc | ✅ Yes | Trading-focused session |
+| Bump SW version, ship hero P&L card upgrades | ✅ Yes | Trading-focused session |
+| Fix bugs anywhere in `trading/`, `wealth-engine/`, `functions/api/trading.js` | ✅ Yes | Trading-focused session |
+| **Delete** `trading/today/index.html` because "it's getting big" | ❌ No | Anyone |
+| **Move** `functions/api/trading.js` → `functions/trading/api.js` | ❌ No without owner sign-off | Anyone |
+| Strip `functions/_middleware.js` because "it looks unused" | ❌ No | Anyone |
+| Modify `wrangler.toml` to remove `WEALTH_DB` D1 binding | ❌ No | Anyone |
+| Edit `index.html` (root marketing) in a way that conflicts with `_middleware.js` routing | ❌ No without re-testing | Anyone |
+| Add new `?action=` route to `trading.js` | ✅ Yes | Trading-focused session |
+| Add new D1 migration in `wealth-engine/migrations/` | ✅ Yes | Trading-focused session |
+| Edit a comms / hiring / odoo / nch / he file outside trading paths | ✅ Yes | Any session |
+
+**TL;DR for trading-focused sessions:** the guardrail is invisible to you. Optimize freely. The check (`scripts/verify-trading-deploy.sh`) only fires if you've *deleted* something — and even then it tells you exactly which files are missing. Run it pre-PR for safety.
+
+**TL;DR for non-trading sessions** (e.g., GMB Cockpit, comms, NCH POS, expense ops): don't delete or rename anything in `.cloudflare-protected-paths`. The script will block your PR if you do.
+
+---
+
 ## What happened on May 5, 2026
 
 A Google My Business / Cockpit API session merged a PR to `main`. That merge replaced the production Cloudflare Pages deployment with a version of `main` that **did not contain `functions/api/trading.js`** (because trading files only existed in claude/* worktrees, never in main).

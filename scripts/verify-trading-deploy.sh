@@ -1,9 +1,17 @@
 #!/bin/sh
 # verify-trading-deploy.sh — guardrail against accidental trading-deploy clobbering
 #
-# When ANY PR is merged to main, the production Cloudflare Pages deploy is
-# replaced. If the merge doesn't include trading.js / kite.js / trading/ tree,
-# the production /api/trading endpoint vanishes and the trading PWA breaks.
+# THIS SCRIPT IS A DELETION-DETECTION CHECK, NOT A MODIFICATION BLOCK.
+# Trading-focused work (refactoring, feature additions, bug fixes inside
+# trading/, wealth-engine/, functions/api/trading.js, etc.) is unaffected.
+# This script only fires if a PR removes one of the trading-deploy paths
+# (deletion, rename, or move). Modifications are completely fine.
+#
+# Why: when ANY PR is merged to main, the production Cloudflare Pages deploy
+# is replaced. If the merge doesn't include trading.js / kite.js / trading/
+# tree, the production /api/trading endpoint vanishes and the trading PWA
+# breaks. (This happened May 5 2026 — Google My Business Cockpit merge
+# clobbered the trading deployment.)
 #
 # This script verifies all paths in .cloudflare-protected-paths exist as files
 # or non-empty directories. Run pre-merge in CI and locally before pushing.
