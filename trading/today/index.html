@@ -111,6 +111,61 @@
     .day-pnl-hero .h-val { font-size: 28px; }
   }
 
+  /* ═════════════════════════════════════════════════════════════════════
+     TODAY'S WATCHLIST — frozen candidate pool + 3 final picks ⭐
+     Owner asked May 5 evening: unify the conflicting "top picks" lists
+     across /today and /execute. This is the single canonical view.
+     ═════════════════════════════════════════════════════════════════════ */
+  .watchlist-section {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
+  }
+  .watchlist-section h3 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--muted); margin-bottom: 4px; display: flex;
+    justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+  }
+  .watchlist-section .wl-meta {
+    font-size: 11px; color: var(--muted); margin-bottom: 10px; line-height: 1.5;
+  }
+  .watchlist-section .wl-actions {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .watchlist-section .wl-btn {
+    padding: 5px 10px; border-radius: 14px; font-size: 11px; font-weight: 500;
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .watchlist-section .wl-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .watchlist-section .wl-btn.copied { background: rgba(46,204,113,0.18); color: var(--green); border-color: var(--green); }
+  .wl-list { display: flex; flex-direction: column; gap: 6px; }
+  .wl-row {
+    display: grid; grid-template-columns: auto 1fr auto auto auto auto;
+    gap: 10px; align-items: center;
+    padding: 8px 12px; background: var(--panel-2); border-radius: 8px;
+    border-left: 3px solid transparent;
+    font-size: 12px;
+  }
+  .wl-row.final { border-left-color: var(--accent); background: linear-gradient(90deg, rgba(124,92,255,0.10), var(--panel-2)); }
+  .wl-row .wl-rank { font-size: 10px; color: var(--muted); width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+  .wl-row .wl-sym { font-size: 14px; font-weight: 700; }
+  .wl-row .wl-pick-tag { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 700; background: var(--accent); color: white; margin-left: 6px; vertical-align: middle; }
+  .wl-row .wl-state-tag { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 700; margin-left: 6px; vertical-align: middle; }
+  .wl-row .wl-state-tag.WATCHING { background: rgba(138,150,184,0.20); color: var(--muted); }
+  .wl-row .wl-state-tag.ENTERED { background: rgba(79,163,255,0.20); color: var(--blue); }
+  .wl-row .wl-state-tag.EXITED { background: rgba(46,204,113,0.20); color: var(--green); }
+  .wl-row .wl-state-tag.SKIPPED, .wl-row .wl-state-tag.ABANDONED { background: rgba(231,76,60,0.20); color: var(--red); }
+  .wl-row .wl-ltp { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .wl-row .wl-chg { font-variant-numeric: tabular-nums; font-size: 11px; min-width: 56px; text-align: right; }
+  .wl-row .wl-chg.pos { color: var(--green); }
+  .wl-row .wl-chg.neg { color: var(--red); }
+  .wl-row .wl-meta-tiny { font-size: 10px; color: var(--muted); text-align: right; }
+  .wl-row .wl-history { font-size: 10px; color: var(--muted); }
+  @media (max-width: 600px) {
+    .wl-row { grid-template-columns: auto 1fr auto auto; gap: 6px; padding: 8px 10px; }
+    .wl-row .wl-history, .wl-row .wl-meta-tiny { display: none; }
+  }
+
   /* Phase clock — top of screen, always visible */
   .phase-clock {
     background: linear-gradient(135deg, var(--accent-soft), rgba(79,163,255,0.05));
@@ -777,6 +832,9 @@
     <div id="phaseClock" class="phase-clock"></div>
     <div id="alertsPanel"></div>            <!-- Critical alerts only (post-triager) -->
 
+    <!-- ═══ TODAY'S WATCHLIST — frozen at 08:30 IST, candidates pool + 3 final picks ═══ -->
+    <div id="watchlistSection"></div>
+
     <!-- ═══ THE VERDICT — Opus-composed, single source of truth ═══ -->
     <div id="verdictCard"><div class="loading">Loading today's verdict…</div></div>
 
@@ -960,6 +1018,8 @@ async function refreshAll() {
     renderPhaseClock(plan);
     // HERO P&L — bottom-line for the day at the very top
     loadDayPnlHero();        // Refreshes every 60s while page open
+    // ★ TODAY'S WATCHLIST — full candidate pool + 3 final picks, live LTP
+    loadWatchlist();         // Refreshes every 30s
     // V3 PRIMARY: load the Opus verdict first — this is the lead.
     loadVerdict();
     // Always-visible secondary: alerts + open paper trades
@@ -2182,6 +2242,99 @@ async function loadDayPnlHero() {
     `;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TODAY'S WATCHLIST — frozen candidate pool + 3 final picks ⭐
+// Owner asked May 5 evening: "create a watchlist named 5 MAY with all the top
+// picks (not just final 3)". Kite Connect API doesn't expose watchlist
+// management. So we render OUR canonical list here, with one-tap copy-to-Kite.
+// Auto-refreshes every 30s. Sorted: final picks ⭐ first, then by hybrid_score.
+// ═══════════════════════════════════════════════════════════════════════════
+let _watchlistTimer = null;
+async function loadWatchlist() {
+  const el = document.getElementById('watchlistSection');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/trading?action=todays_watchlist&key=' + encodeURIComponent(DASHBOARD_KEY));
+    const j = await r.json();
+    if (!j.ok) {
+      el.innerHTML = `<div class="watchlist-section"><h3>📋 Today's Watchlist <span class="obs-tag idle">${j.reason || 'no data'}</span></h3><div class="wl-meta">No verdict found for today yet — composeVerdict fires at 08:30 IST.</div></div>`;
+      _watchlistTimer = setTimeout(loadWatchlist, 60000);
+      return;
+    }
+    const fmtP = (p) => p == null ? '—' : '₹' + (p / 100).toFixed(2);
+    const fmtPct = (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+    const dateLabel = new Date(j.date + 'T00:00:00').toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+
+    // Build the date title like "5 May 2026" → for owner-facing label "📋 5 MAY"
+    const dateShort = new Date(j.date + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short' }).toUpperCase();
+
+    let html = `
+      <div class="watchlist-section">
+        <h3>
+          📋 ${escapeHtml(dateShort)} Watchlist
+          <span class="obs-summary">${j.summary.candidate_count} candidates · ${j.summary.final_pick_count} ⭐ picks</span>
+        </h3>
+        <div class="wl-meta">
+          Frozen at <strong>${escapeHtml(j.composed_at_ist?.slice(11,16) || '—')} IST</strong> when Opus composed the morning verdict ·
+          ⭐ = the 3 stocks the auto-trader is actively managing ·
+          Live LTP refreshes every 30s
+        </div>
+        <div class="wl-actions">
+          <span class="wl-btn" onclick="copyKiteFormat(this, ${JSON.stringify(j.kite_format).replace(/"/g, '&quot;')}, 'all ${j.watchlist.length}')">📋 Copy ALL ${j.watchlist.length} to Kite format</span>
+          <span class="wl-btn" onclick="copyKiteFormat(this, ${JSON.stringify(j.final_picks_kite_format).replace(/"/g, '&quot;')}, '⭐ 3 picks')">⭐ Copy 3 picks only</span>
+          <a class="wl-btn" href="https://kite.zerodha.com/" target="_blank" rel="noopener" style="text-decoration:none">🚀 Open Kite Web</a>
+        </div>
+        <div class="wl-list">`;
+
+    j.watchlist.forEach((w, i) => {
+      const chgClass = w.day_change_pct == null ? '' : (w.day_change_pct >= 0 ? 'pos' : 'neg');
+      const stateTag = w.trader_state ? `<span class="wl-state-tag ${w.trader_state}">${w.trader_state}</span>` : '';
+      const pickTag = w.is_final_pick ? `<span class="wl-pick-tag">⭐ PICK</span>` : '';
+      const hist = w.intraday_history;
+      const histStr = hist
+        ? `2%:${hist.hit_2pct_pct_of_days?.toFixed(0)}% · 3%:${hist.hit_3pct_pct_of_days?.toFixed(0)}% · grn:${hist.green_close_rate?.toFixed(0)}%`
+        : '—';
+      html += `
+        <div class="wl-row ${w.is_final_pick ? 'final' : ''}">
+          <span class="wl-rank">#${i + 1}</span>
+          <div>
+            <span class="wl-sym">${escapeHtml(w.symbol)}</span>${pickTag}${stateTag}
+            <div class="wl-history">${histStr} · score ${w.hybrid_score?.toFixed(1) || '—'} · ${w.regime || '—'}</div>
+          </div>
+          <span class="wl-ltp">${fmtP(w.live_ltp_paise)}</span>
+          <span class="wl-chg ${chgClass}">${fmtPct(w.day_change_pct)}</span>
+          <div class="wl-meta-tiny">
+            ${w.is_final_pick && w.pick_target_pct ? `T ${w.pick_target_pct.toFixed(1)}% / S ${w.pick_stop_pct.toFixed(1)}%` : ''}
+          </div>
+          <div class="wl-meta-tiny">
+            ${w.trader_pnl_net_paise != null ? `<span class="${w.trader_pnl_net_paise >= 0 ? 'pos' : 'neg'}">${w.trader_pnl_net_paise >= 0 ? '+' : '−'}₹${Math.abs(Math.round(w.trader_pnl_net_paise/100)).toLocaleString('en-IN')}</span>` : ''}
+          </div>
+        </div>`;
+    });
+
+    html += `</div></div>`;
+    el.innerHTML = html;
+
+    if (_watchlistTimer) clearTimeout(_watchlistTimer);
+    _watchlistTimer = setTimeout(loadWatchlist, 30000);
+  } catch (e) {
+    el.innerHTML = `<div class="watchlist-section"><h3>📋 Today's Watchlist <span class="obs-tag err">error</span></h3><div class="wl-meta" style="color:var(--red)">${escapeHtml(e.message)}</div></div>`;
+  }
+}
+
+// Copy-to-Kite-format helper — puts NSE:SYM list on clipboard, pastes ready
+// for the Kite UI's "Add multiple" watchlist input.
+window.copyKiteFormat = function (btn, text, label) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = `✓ ${label} copied — paste into Kite watchlist`;
+    btn.classList.add('copied');
+    setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 3500);
+  }).catch(() => {
+    alert('Could not copy. Manual list:\n\n' + text);
+  });
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SECTION 4: LIVE AUTO-TRADER POSITIONS
