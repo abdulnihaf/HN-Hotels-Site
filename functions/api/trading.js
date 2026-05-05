@@ -2746,15 +2746,32 @@ async function getTodaysWatchlist(db, url) {
   const ltpMap = {};
   for (const t of liveTicks) ltpMap[t.symbol] = { ltp_paise: t.ltp_paise, ts: t.ts };
 
-  // Day open from earliest intraday_bar today (or yesterday's close if pre-market)
-  const dayOpens = (await db.prepare(`
-    SELECT b1.symbol, b1.open_paise
-    FROM intraday_bars b1
-    JOIN (SELECT symbol, MIN(ts) AS m FROM intraday_bars WHERE symbol IN (${placeholders}) AND trade_date=? AND interval='5minute' GROUP BY symbol) b2
-      ON b1.symbol = b2.symbol AND b1.ts = b2.m
+  // Full day OHLC aggregated from intraday 5-min bars: open (first bar's open),
+  // high (max), low (min), close (last bar's close).
+  const dayOhlcRows = (await db.prepare(`
+    SELECT
+      b.symbol,
+      MIN(CASE WHEN ts = (SELECT MIN(ts) FROM intraday_bars b2 WHERE b2.symbol=b.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN open_paise END) AS day_open,
+      MAX(b.high_paise) AS day_high,
+      MIN(b.low_paise)  AS day_low,
+      MAX(CASE WHEN ts = (SELECT MAX(ts) FROM intraday_bars b3 WHERE b3.symbol=b.symbol AND b3.trade_date=? AND b3.interval='5minute') THEN close_paise END) AS day_close,
+      SUM(b.volume) AS day_volume,
+      COUNT(*) AS bars_count
+    FROM intraday_bars b
+    WHERE b.symbol IN (${placeholders}) AND b.trade_date=? AND b.interval='5minute'
+    GROUP BY b.symbol
+  `).bind(requestedDate, requestedDate, ...allSymbols, requestedDate).all().catch(() => ({ results: [] }))).results || [];
+  const ohlcMap = {};
+  for (const r of dayOhlcRows) ohlcMap[r.symbol] = r;
+
+  // Yesterday's close (for gap-from-prev-close context)
+  const prevCloseRows = (await db.prepare(`
+    SELECT symbol, close_paise FROM equity_eod
+    WHERE symbol IN (${placeholders})
+      AND trade_date = (SELECT MAX(trade_date) FROM equity_eod WHERE trade_date < ?)
   `).bind(...allSymbols, requestedDate).all().catch(() => ({ results: [] }))).results || [];
-  const openMap = {};
-  for (const r of dayOpens) openMap[r.symbol] = r.open_paise;
+  const prevCloseMap = {};
+  for (const r of prevCloseRows) prevCloseMap[r.symbol] = r.close_paise;
 
   // Trader state per symbol (for the 3 final picks)
   const traderRows = (await db.prepare(`
@@ -2765,13 +2782,66 @@ async function getTodaysWatchlist(db, url) {
   const traderMap = {};
   for (const r of traderRows) traderMap[r.symbol] = r;
 
-  // Build watchlist rows
+  // Helper: realistic Zerodha intraday MIS round-trip cost (matches simulator)
+  const zerodhaCost = (entryPaise, exitPaise, qty) => {
+    const buyTo = Math.abs(entryPaise) * qty;
+    const sellTo = Math.abs(exitPaise) * qty;
+    const brokerage = 4000;
+    const stt = sellTo * 0.00025;
+    const exch = (buyTo + sellTo) * 0.0000322;
+    const stamp = buyTo * 0.00003;
+    const gst = (brokerage + exch) * 0.18;
+    return Math.round(brokerage + stt + exch + stamp + gst);
+  };
+
+  // ★ Build watchlist rows with FULL OHLC + ₹10L hypothetical scenarios.
+  // Owner asked May 5 evening: "show start, peak, close, and scenario if 10L
+  // was invested in that stock — for ALL top picks not just final 3."
+  const TEN_LAKH_PAISE = 100000000;  // ₹10,00,000
   const enriched = candidates.map(c => {
     const live = ltpMap[c.symbol];
-    const dayOpen = openMap[c.symbol];
-    const dayChangePct = (live?.ltp_paise && dayOpen)
-      ? +(((live.ltp_paise - dayOpen) / dayOpen) * 100).toFixed(2)
+    const ohlc = ohlcMap[c.symbol];
+    const prevClose = prevCloseMap[c.symbol];
+    const dayOpen   = ohlc?.day_open  || null;
+    const dayHigh   = ohlc?.day_high  || null;
+    const dayLow    = ohlc?.day_low   || null;
+    const dayClose  = ohlc?.day_close || null;
+    const dayVolume = ohlc?.day_volume || null;
+    const currentPaise = live?.ltp_paise || dayClose || null;
+    const dayChangePct = (currentPaise && dayOpen)
+      ? +(((currentPaise - dayOpen) / dayOpen) * 100).toFixed(2)
       : null;
+    const gapFromPrevClosePct = (dayOpen && prevClose)
+      ? +(((dayOpen - prevClose) / prevClose) * 100).toFixed(2)
+      : null;
+
+    // ─── ₹10L HYPOTHETICAL ───
+    // Assume ₹10L deployed entirely on this single stock at day open. Compute:
+    //   qty = floor(₹10L ÷ open)
+    //   peak_pnl  = (high - open) × qty - cost   (best-case if exited at peak)
+    //   close_pnl = (close - open) × qty - cost  (passive hold to close)
+    //   live_pnl  = (now  - open) × qty - cost   (current MTM if still held)
+    //   max_dd    = (low  - open) × qty - cost   (worst intraday drawdown)
+    let if10L = null;
+    if (dayOpen && dayOpen > 100) {
+      const qty = Math.floor(TEN_LAKH_PAISE / dayOpen);
+      const deployed = qty * dayOpen;
+      const peakPnL = dayHigh ? (dayHigh - dayOpen) * qty - zerodhaCost(dayOpen, dayHigh, qty) : null;
+      const closePnL = dayClose ? (dayClose - dayOpen) * qty - zerodhaCost(dayOpen, dayClose, qty) : null;
+      const livePnL = currentPaise ? (currentPaise - dayOpen) * qty - zerodhaCost(dayOpen, currentPaise, qty) : null;
+      const maxDD = dayLow ? (dayLow - dayOpen) * qty - zerodhaCost(dayOpen, dayLow, qty) : null;
+      if10L = {
+        qty,
+        deployed_paise: deployed,
+        if_exited_at_peak_paise: peakPnL,
+        if_exited_at_peak_pct: dayHigh ? +(((dayHigh - dayOpen) / dayOpen) * 100).toFixed(2) : null,
+        if_held_to_close_paise: closePnL,
+        if_held_to_close_pct: dayClose ? +(((dayClose - dayOpen) / dayOpen) * 100).toFixed(2) : null,
+        if_held_live_paise: livePnL,
+        max_intraday_drawdown_paise: maxDD,
+      };
+    }
+
     const finalPick = finalPicks.find(p => p.symbol === c.symbol);
     const trader = traderMap[c.symbol];
     return {
@@ -2781,14 +2851,26 @@ async function getTodaysWatchlist(db, url) {
       regime: c.regime,
       mtf: c.mtf,
       intraday_history: c.intraday_history,
+      // FULL DAY OHLC
+      day_open_paise: dayOpen,
+      day_high_paise: dayHigh,
+      day_low_paise: dayLow,
+      day_close_paise: dayClose,
+      day_volume: dayVolume,
+      prev_close_paise: prevClose || null,
+      gap_from_prev_close_pct: gapFromPrevClosePct,
+      // LIVE
       live_ltp_paise: live?.ltp_paise || null,
       live_ltp_ts: live?.ts || null,
-      day_open_paise: dayOpen || null,
       day_change_pct: dayChangePct,
+      // ★ HYPOTHETICAL ₹10L SCENARIO
+      if_10L_invested: if10L,
+      // PICK / TRADER STATE
       is_final_pick: !!finalPick,
       pick_weight_pct: finalPick?.weight_pct || null,
       pick_target_pct: finalPick?.target_pct || null,
       pick_stop_pct: finalPick?.stop_pct || null,
+      pick_rationale: finalPick?.rationale || null,
       trader_state: trader?.trader_state || null,
       trader_qty: trader?.qty || null,
       trader_entry_paise: trader?.entry_paise || null,
