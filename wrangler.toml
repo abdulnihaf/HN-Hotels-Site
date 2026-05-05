@@ -14,6 +14,10 @@ compatibility_flags = ["nodejs_compat"]
 # ODOO_KEY_ZOYA          — Zoya's Odoo API key
 # ODOO_UID_FAHEEM        — Faheem's Odoo user ID (for settlement tracking)
 # ODOO_KEY_FAHEEM        — Faheem's Odoo API key
+# EXOTEL_SID             — Exotel account SID (hnhotels1) ✅ set 2026-05-05
+# EXOTEL_API_KEY         — Exotel API key (username) ✅ set 2026-05-05
+# EXOTEL_API_TOKEN       — Exotel API token (password) ✅ set 2026-05-05
+# EXOTEL_CALLER_ID       — Exotel virtual ExoPhone number (set after KYC + recharge + ExoPhone assignment)
 
 [[d1_databases]]
 binding = "DB"
