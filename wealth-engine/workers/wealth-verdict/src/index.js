@@ -132,8 +132,9 @@ async function composePreMarketBriefing(env, opts = {}) {
     db.prepare(`SELECT ltp, change_pct, ts FROM gift_nifty_ticks ORDER BY ts DESC LIMIT 1`).first().catch(() => null),
     db.prepare(`SELECT * FROM fii_dii_daily ORDER BY trade_date DESC LIMIT 1`).first().catch(() => null),
     db.prepare(`SELECT vix FROM india_vix_ticks ORDER BY ts DESC LIMIT 1`).first().catch(() => null),
+    // BUG FIX (May 5 2026 evening): news_articles → news_items, title → headline
     db.prepare(`
-      SELECT title, source, published_at FROM news_articles
+      SELECT headline AS title, source, published_at FROM news_items
       WHERE published_at > strftime('%s','now')*1000 - 12*3600000
       ORDER BY published_at DESC LIMIT 10
     `).all().catch(() => ({ results: [] })),
@@ -224,10 +225,11 @@ async function reviewOvernightCarryovers(env) {
   // Pull recent overnight news per symbol
   const decisions = [];
   for (const pos of carryovers) {
+    // BUG FIX: news_articles → news_items, title → headline, symbols_extracted → symbols_tagged
     const news = (await db.prepare(`
-      SELECT title, sentiment_score, source FROM news_articles
+      SELECT headline AS title, sentiment_score, source FROM news_items
       WHERE published_at > strftime('%s','now')*1000 - 18*3600000
-        AND (title LIKE ? OR symbols_extracted LIKE ?)
+        AND (headline LIKE ? OR symbols_tagged LIKE ?)
       ORDER BY published_at DESC LIMIT 5
     `).bind(`%${pos.symbol}%`, `%${pos.symbol}%`).all().catch(() => ({ results: [] }))).results || [];
 

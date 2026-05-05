@@ -3068,7 +3068,9 @@ async function getIntelligenceAudit(db) {
     },
     {
       name: 'News articles',
-      query: `SELECT MAX(published_at) AS last_ts FROM news_articles`,
+      // BUG FIX (May 5 2026 evening): real table is news_items, not news_articles.
+      // intelligence_audit was reporting "no_data" silently because of wrong name.
+      query: `SELECT MAX(published_at) AS last_ts FROM news_items`,
       staleness_threshold_ms: 30 * 60 * 1000,
       severity: 'medium',
       used_by: 'position_mgmt news velocity + autopsy context',

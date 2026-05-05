@@ -476,11 +476,28 @@ async function priceMonitor(env) {
             AND trade_date >= date('now', '-14 days')
         `).bind(w.symbol).first().catch(() => null);
         const avgVol5min = volRow?.avg_vol || 0;
-        // Quote endpoint returns day-cumulative volume — if avg_vol exists, ratio check
-        const volRatio = (avgVol5min > 0 && q.volume) ? (q.volume / (avgVol5min * 12)) : null;
-        // Need ratio ≥ 0.8 of expected so-far (gives breakout some slack early in day)
+        // BUG FIX (May 5 2026 evening): TIME-AWARE volume threshold.
+        // Old formula: volRatio = q.volume / (avgVol5min × 12) — compared cumulative
+        // day volume against "what 60 min of avg volume would be." But at 09:30 IST,
+        // only 15 min has elapsed since 09:15 open, so even on a strong-volume day
+        // the ratio is ~0.25, far below the 0.8 threshold. Result: continuous
+        // breakout-trigger never fired in the 09:30-10:00 IST window — exactly when
+        // most breakouts happen.
+        //
+        // New formula: compare against expected-by-now volume. minutes_since_open
+        // ÷ 5 = bars_elapsed; expected_vol = avg_vol_per_5min × bars_elapsed.
+        // Ratio = 1.0 means current volume matches the avg-day pace at this hour.
+        // Threshold 0.8 = need 80% of expected pace = same semantic intent as before.
+        const istHM = istHHMM();
+        const [istH, istM] = istHM.split(':').map(Number);
+        const minutesSinceOpen = Math.max(15, (istH - 9) * 60 + istM - 15);
+        const barsSinceOpen = Math.max(3, minutesSinceOpen / 5);  // floor 3 bars (15 min)
+        const expectedVolByNow = avgVol5min * barsSinceOpen;
+        const volRatio = (avgVol5min > 0 && q.volume && expectedVolByNow > 0)
+          ? (q.volume / expectedVolByNow) : null;
+        // Need ≥ 0.8× expected pace. NULL → no historical baseline yet → allow.
         if (volRatio !== null && volRatio < 0.8) {
-          continue; // weak volume, wait
+          continue; // weak volume vs expected at this hour, wait
         }
 
         // ─── FIRE ENTRY at actual breakout price ─────────────────────
@@ -790,13 +807,17 @@ async function positionManagement(env) {
   if (ltp._error) return { rows: 0, error: ltp._error };
 
   // Pull RECENT news per symbol (last 4 hours) — context for Opus
+  // BUG FIX (May 5 2026 evening): was querying non-existent news_articles table
+  // with wrong column names (title, symbols_extracted). Real table is news_items
+  // with headline + symbols_tagged. Three places, all silently returning empty
+  // for 5+ days — Opus has been making position decisions WITHOUT news context.
   const newsBySymbol = {};
   for (const sym of symbols) {
     const news = (await db.prepare(`
-      SELECT title, sentiment_score, source, published_at
-      FROM news_articles
+      SELECT headline AS title, sentiment_score, source, published_at
+      FROM news_items
       WHERE published_at > strftime('%s','now')*1000 - 4*3600000
-        AND (title LIKE ? OR symbols_extracted LIKE ?)
+        AND (headline LIKE ? OR symbols_tagged LIKE ?)
       ORDER BY published_at DESC LIMIT 5
     `).bind(`%${sym}%`, `%${sym}%`).all().catch(() => ({ results: [] }))).results || [];
     if (news.length > 0) newsBySymbol[sym] = news;
@@ -879,11 +900,11 @@ async function positionManagement(env) {
       WHERE symbol=? AND trade_date >= date('now', '-7 days') AND trade_date < date('now')
     `).bind(sym).first().catch(() => null);
 
-    // News velocity last 60 min
+    // News velocity last 60 min — same bug fix (news_articles → news_items)
     const newsCount = await db.prepare(`
-      SELECT COUNT(*) AS n FROM news_articles
+      SELECT COUNT(*) AS n FROM news_items
       WHERE published_at > strftime('%s','now')*1000 - 60*60*1000
-        AND (title LIKE ? OR symbols_extracted LIKE ?)
+        AND (headline LIKE ? OR symbols_tagged LIKE ?)
     `).bind(`%${sym}%`, `%${sym}%`).first().catch(() => null);
 
     enrichBySymbol[sym] = {
@@ -1198,13 +1219,13 @@ async function sonnetSafetyCheck(env) {
   const ltp = await getKiteLtp(env, positions.map(p => p.symbol));
   if (ltp._error) return { rows: 0, error: ltp._error };
 
-  // Pull last 30 min of news per held symbol
+  // Pull last 30 min of news per held symbol — same bug fix
   const newsBySymbol = {};
   for (const p of positions) {
     const news = (await db.prepare(`
-      SELECT title, sentiment_score FROM news_articles
+      SELECT headline AS title, sentiment_score FROM news_items
       WHERE published_at > strftime('%s','now')*1000 - 30*60*1000
-        AND (title LIKE ? OR symbols_extracted LIKE ?)
+        AND (headline LIKE ? OR symbols_tagged LIKE ?)
       ORDER BY published_at DESC LIMIT 3
     `).bind(`%${p.symbol}%`, `%${p.symbol}%`).all().catch(() => ({ results: [] }))).results || [];
     if (news.length > 0) newsBySymbol[p.symbol] = news;
