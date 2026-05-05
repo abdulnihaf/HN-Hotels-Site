@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HN Wealth Engine — System Wireframe</title>
+<style>
+  :root {
+    --bg: #0a0f1c; --panel: #121a2e; --panel-2: #1a2540;
+    --border: #2a3656; --text: #e6ecff; --muted: #8a96b8;
+    --green: #2ecc71; --red: #e74c3c; --yellow: #f5b041; --blue: #4fa3ff;
+    --accent: #7c5cff; --orange: #ff8a3c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px; line-height: 1.45; }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h1 .badge { display: inline-block; font-size: 11px; padding: 3px 10px; border-radius: 12px;
+    background: rgba(124,92,255,0.18); color: var(--accent); vertical-align: middle; margin-left: 10px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 12px 14px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 22px;
+    font-size: 12px; }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 14px; height: 14px; border-radius: 3px; }
+  .layer {
+    border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px;
+    background: var(--panel); overflow: hidden;
+  }
+  .layer-head {
+    padding: 14px 18px; background: var(--panel-2); border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  }
+  .layer-head .title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .layer-head .title .num {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--accent);
+    color: #fff; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+  }
+  .layer-head .meta { color: var(--muted); font-size: 11px; }
+  .layer-body { padding: 16px 18px; }
+  .nodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .node {
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+    background: var(--bg); position: relative;
+  }
+  .node .nname { font-size: 13px; font-weight: 700; margin-bottom: 4px; display: flex; gap: 6px; align-items: center; }
+  .node .nmeta { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+  .node .nbody { font-size: 12px; color: var(--text); line-height: 1.5; }
+  .node .nfoot { margin-top: 8px; font-size: 10px; color: var(--muted); border-top: 1px dashed var(--border); padding-top: 6px; }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.3px; }
+  .pill.opus    { background: rgba(124,92,255,0.20); color: var(--accent); }
+  .pill.sonnet  { background: rgba(79,163,255,0.20); color: var(--blue); }
+  .pill.haiku   { background: rgba(46,204,113,0.20); color: var(--green); }
+  .pill.engine  { background: rgba(138,150,184,0.20); color: var(--muted); }
+  .pill.cron    { background: rgba(245,176,65,0.20); color: var(--yellow); }
+  .pill.kite    { background: rgba(255,138,60,0.20); color: var(--orange); }
+  .pill.d1      { background: rgba(46,204,113,0.10); color: var(--green); border: 1px solid rgba(46,204,113,0.4); }
+  .arrow {
+    text-align: center; color: var(--muted); font-size: 22px; margin: -2px 0 -4px;
+  }
+  .timeline {
+    display: grid; grid-template-columns: 110px 1fr 200px; gap: 10px;
+    align-items: center; padding: 8px 0; border-bottom: 1px dashed rgba(42,54,86,0.5);
+    font-size: 12px;
+  }
+  .timeline:last-child { border: none; }
+  .timeline .t { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .timeline .e { color: var(--text); }
+  .timeline .m { color: var(--muted); font-size: 11px; text-align: right; }
+  .data-flow {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center;
+    padding: 8px; background: var(--bg); border-radius: 6px; margin: 6px 0;
+    font-size: 12px;
+  }
+  .data-flow .from { font-weight: 600; }
+  .data-flow .to { color: var(--green); font-weight: 600; }
+  .data-flow .arr { color: var(--muted); font-size: 18px; }
+  table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.tbl th, table.tbl td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  table.tbl th { color: var(--muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+  table.tbl tr:last-child td { border-bottom: none; }
+  table.tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .funnel {
+    display: grid; gap: 4px; margin: 8px 0;
+  }
+  .funnel-row {
+    padding: 8px 12px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px;
+  }
+  .funnel-row .lbl { font-weight: 600; }
+  .funnel-row .num-data { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 700; }
+  .f1 { background: linear-gradient(90deg, rgba(124,92,255,0.30), rgba(124,92,255,0.10)); }
+  .f2 { background: linear-gradient(90deg, rgba(79,163,255,0.30), rgba(79,163,255,0.08)); }
+  .f3 { background: linear-gradient(90deg, rgba(46,204,113,0.30), rgba(46,204,113,0.08)); }
+  .f4 { background: linear-gradient(90deg, rgba(245,176,65,0.30), rgba(245,176,65,0.08)); }
+  .f5 { background: linear-gradient(90deg, rgba(255,138,60,0.30), rgba(255,138,60,0.08)); }
+  .f6 { background: linear-gradient(90deg, rgba(231,76,60,0.30), rgba(231,76,60,0.08)); }
+  .f7 { background: linear-gradient(90deg, rgba(46,204,113,0.40), rgba(46,204,113,0.15)); border: 1px solid var(--green); }
+  details summary { cursor: pointer; padding: 8px 0; color: var(--muted); font-size: 11px; }
+  details summary:hover { color: var(--text); }
+  .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .grid-2col { grid-template-columns: 1fr; } }
+  code { background: var(--panel-2); padding: 1px 5px; border-radius: 3px; font-size: 11px; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>HN Wealth Engine — Architecture Wireframe <span class="badge">v1.0 · May 5 2026</span></h1>
+<div class="sub">
+  Visual representation of how raw market data → intelligence layers → ONE surgical paper-trade execution.<br>
+  Open this file directly in a browser. Self-contained, no dependencies.
+</div>
+
+<div class="legend">
+  <div class="item"><span class="swatch" style="background:var(--accent)"></span> Opus 4.5 (decisions)</div>
+  <div class="item"><span class="swatch" style="background:var(--blue)"></span> Sonnet 4.5 (analysis)</div>
+  <div class="item"><span class="swatch" style="background:var(--green)"></span> Haiku 4.5 (extraction)</div>
+  <div class="item"><span class="swatch" style="background:var(--muted)"></span> Engine (deterministic)</div>
+  <div class="item"><span class="swatch" style="background:var(--yellow)"></span> Cron trigger</div>
+  <div class="item"><span class="swatch" style="background:var(--orange)"></span> Kite Connect (Zerodha)</div>
+  <div class="item"><span class="swatch" style="background:rgba(46,204,113,0.4)"></span> D1 table</div>
+</div>
+
+<!-- ═══ FUNNEL — the big picture ═══ -->
+<div class="layer">
+  <div class="layer-head">
+    <div class="title"><span class="num" style="background:var(--green)">★</span> THE FUNNEL — From thousands of inputs to one decision</div>
+    <div class="meta">Read top-to-bottom. Each row narrows the universe.</div>
+  </div>
+  <div class="layer-body">
+    <div class="funnel">
+      <div class="funnel-row f1"><span class="lbl">Raw market universe</span><span class="num-data">~2,000 NSE EQ stocks</span></div>
+      <div class="funnel-row f2"><span class="lbl">Liquid universe (intraday_suitability table)</span><span class="num-data">~400 stocks (HOT/STABLE regimes)</span></div>
+      <div class="funnel-row f3"><span class="lbl">Top hybrid-score candidates (sector cap applied)</span><span class="num-data">Top 30</span></div>
+      <div class="funnel-row f4"><span class="lbl">Opus 08:30 IST shortlist (passed to LLM)</span><span class="num-data">Top 5</span></div>
+      <div class="funnel-row f5"><span class="lbl">Opus picks (with conviction-weighted sizing)</span><span class="num-data">2–3 picks</span></div>
+      <div class="funnel-row f6"><span class="lbl">Picks that fire breakout (LTP &gt; OR-high × 1.001 + vol ≥ 0.8x)</span><span class="num-data">0–3 enter</span></div>
+      <div class="funnel-row f7"><span class="lbl">★ FINAL ACTION — Surgical paper-trade with exact entry + exit</span><span class="num-data">qty × ₹entry → qty × ₹exit</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TIMELINE — chronological flow of a single trading day ═══ -->
+<div class="layer">
+  <div class="layer-head">
+    <div class="title"><span class="num">⏰</span> Trading Day Timeline (IST)</div>
+    <div class="meta">All times Indian Standard Time. Crons in UTC + 5:30 = IST.</div>
+  </div>
+  <div class="layer-body">
+    <div class="timeline"><span class="t">07:30</span><span class="e">Pre-market enrichment compose <span class="pill opus">Opus</span></span><span class="m">wealth-verdict · reads US close, GIFT Nifty, Asia, breaking news</span></div>
+    <div class="timeline"><span class="t">08:00</span><span class="e">Pre-market briefing snapshot <span class="pill engine">engine</span></span><span class="m">wealth-orchestrator</span></div>
+    <div class="timeline"><span class="t">08:15</span><span class="e">★ Owner connects Kite OAuth (re-link daily)</span><span class="m">trade.hnhotels.in/wealth/auth/login</span></div>
+    <div class="timeline"><span class="t">08:30</span><span class="e">★ Main verdict compose <span class="pill opus">Opus</span> — 2-3 picks selected</span><span class="m">wealth-verdict · daily_verdicts INSERT</span></div>
+    <div class="timeline"><span class="t">09:00</span><span class="e">Pre-market readiness audit (scheduled)</span><span class="m">Audits Pages, OAuth, workers, force-refresh EOD</span></div>
+    <div class="timeline"><span class="t">09:15</span><span class="e">★ Indian market opens — NSE EQ trading begins</span><span class="m">intraday_bars + intraday_ticks start flowing</span></div>
+    <div class="timeline"><span class="t">09:30</span><span class="e">range_capture <span class="pill engine">engine</span> — creates WATCHING rows</span><span class="m">paper_trades INSERT (is_active=1, OR captured)</span></div>
+    <div class="timeline"><span class="t">09:30+</span><span class="e">★ Continuous breakout-trigger <span class="pill engine">every 1min</span></span><span class="m">Fires ENTER if LTP &gt; OR-high × 1.001 + vol ≥ 0.8x</span></div>
+    <div class="timeline"><span class="t">09:45</span><span class="e">entry_1 <span class="pill opus">Opus</span> — backup ENTER decision</span><span class="m">If breakout already fired, no-op</span></div>
+    <div class="timeline"><span class="t">10:00</span><span class="e">entry_2 <span class="pill opus">Opus</span></span><span class="m">Same logic, second attempt</span></div>
+    <div class="timeline"><span class="t">10:15</span><span class="e">entry_3 <span class="pill opus">Opus</span></span><span class="m">Final attempt; ABANDON if still no breakout</span></div>
+    <div class="timeline"><span class="t">10:30+</span><span class="e">price_monitor <span class="pill engine">every 3min</span></span><span class="m">Trailing stop, partial exit at 60% target, full exit on stop/target/trail</span></div>
+    <div class="timeline"><span class="t">11:00</span><span class="e">position_mgmt #1 <span class="pill opus">Opus</span></span><span class="m">HOLD / TIGHTEN / PARTIAL / FULL_EXIT per position</span></div>
+    <div class="timeline"><span class="t">11:30, 12:00, ...</span><span class="e">position_mgmt every 30min <span class="pill opus">Opus</span></span><span class="m">9 calls between 11:00 and 15:00</span></div>
+    <div class="timeline"><span class="t">11:15, 11:45, ...</span><span class="e">sonnet_safety between Opus calls <span class="pill sonnet">Sonnet</span></span><span class="m">Lighter check-in, ~0.1× the cost of Opus</span></div>
+    <div class="timeline"><span class="t">14:30</span><span class="e">Opus mode promotion review <span class="pill opus">Opus</span></span><span class="m">Promote winners to SWING_CANDIDATE (1.5% trail)</span></div>
+    <div class="timeline"><span class="t">15:00</span><span class="e">Final Opus position review <span class="pill opus">Opus</span></span><span class="m">Tighten or hold based on momentum + sector + news</span></div>
+    <div class="timeline"><span class="t">15:10</span><span class="e">★ HARD_EXIT_1510 <span class="pill engine">deterministic</span></span><span class="m">Square off all INTRADAY/SWING_CANDIDATE positions</span></div>
+    <div class="timeline"><span class="t">15:15</span><span class="e">Kite MIS auto-square-off (broker level)</span><span class="m">Safety net — rarely triggers if 15:10 worked</span></div>
+    <div class="timeline"><span class="t">15:30</span><span class="e">Market close — NSE EQ session ends</span><span class="m">Final intraday_bars + intraday_ticks rows</span></div>
+    <div class="timeline"><span class="t">16:00</span><span class="e">Paper-trade autopsy <span class="pill sonnet">Sonnet</span></span><span class="m">MFE/MAE/slippage/timing per closed trade</span></div>
+    <div class="timeline"><span class="t">16:30</span><span class="e">Suitability refresh <span class="pill engine">engine</span></span><span class="m">90-day backtest → tomorrow picks from freshest universe</span></div>
+    <div class="timeline"><span class="t">18:00</span><span class="e">EOD bhavcopy <span class="pill engine">engine</span></span><span class="m">NSE/BSE EOD daily_bars</span></div>
+    <div class="timeline"><span class="t">18:30</span><span class="e">★ EOD Learning Audit <span class="pill sonnet">Sonnet</span></span><span class="m">4-bucket attribution: RIGHT/MISSED/LEARNED/LUCK + skill%</span></div>
+    <div class="timeline"><span class="t">Mon 09:00</span><span class="e">Weekly review <span class="pill sonnet">Sonnet</span></span><span class="m">5-day pattern + tuning suggestions</span></div>
+  </div>
+</div>
+
+<!-- ═══ LAYER 1 — DATA INGESTION ═══ -->
+<div class="layer">
+  <div class="layer-head">
+    <div class="title"><span class="num">1</span> Data Ingestion Layer — 15 Workers, 98 Crons</div>
+    <div class="meta">Every byte Opus reads, sourced + timestamped</div>
+  </div>
+  <div class="layer-body">
+    <div class="nodes">
+      <div class="node">
+        <div class="nname">wealth-kite-bhavcopy <span class="pill cron">EOD</span></div>
+        <div class="nmeta">EOD daily OHLCV · 16:00 IST</div>
+        <div class="nbody">NSE EQ + BSE EQ EOD bhavcopy → <span class="pill d1">daily_bars</span> <span class="pill d1">equity_eod</span></div>
+        <div class="nfoot">~2000 symbols/day × 365 days = full backtest fuel</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-intraday-bars <span class="pill cron">5min</span></div>
+        <div class="nmeta">5-min OHLCV · market hours</div>
+        <div class="nbody">Kite historical 5-min API → <span class="pill d1">intraday_bars</span></div>
+        <div class="nfoot">3,675 rows captured today</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-price-core <span class="pill cron">1min</span></div>
+        <div class="nmeta">Live LTP + bid/ask · market hours</div>
+        <div class="nbody">Kite quote API → <span class="pill d1">intraday_ticks</span> + indices/preopen/circuits</div>
+        <div class="nfoot">18,207 ticks captured today</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-options <span class="pill cron">1-10min</span></div>
+        <div class="nmeta">Option chain · OI · IV · VIX</div>
+        <div class="nbody">NSE option chain → <span class="pill d1">option_chain_snapshot</span> <span class="pill d1">india_vix_ticks</span></div>
+        <div class="nfoot">17,052 snapshots today · Nifty 1min · BankNifty 2min · VIX 3min</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-news <span class="pill cron">5min</span></div>
+        <div class="nmeta">RSS · GDELT · Reddit · StockTwits · Nitter</div>
+        <div class="nbody">Multi-source news → <span class="pill d1">news_items</span> with Haiku-tagged sentiment</div>
+        <div class="nfoot">935 fires/24h, hourly Haiku LLM tagging</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-flow-engine <span class="pill cron">EOD</span></div>
+        <div class="nmeta">FII/DII · Bulk + block deals · F&amp;O OI</div>
+        <div class="nbody">NSE flow data → <span class="pill d1">fii_dii_daily</span> <span class="pill d1">fii_deriv_daily</span> <span class="pill d1">bulk_block_deals</span></div>
+        <div class="nfoot">Critical institutional flow signal</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-corp-intel <span class="pill cron">5min</span></div>
+        <div class="nmeta">Announcements · insider · pledge</div>
+        <div class="nbody">NSE/BSE corp filings → <span class="pill d1">corp_announcements</span> <span class="pill d1">insider_trades</span></div>
+        <div class="nfoot">Catches material news inside 5 min of disclosure</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-macro-global <span class="pill cron">5min</span></div>
+        <div class="nmeta">DXY · US10Y · USDINR · Equity futures · Commodities</div>
+        <div class="nbody">Yahoo + FRED → <span class="pill d1">crossasset_ticks</span> <span class="pill d1">gift_nifty_ticks</span></div>
+        <div class="nfoot">Pre-market overnight cue + intraday risk-on/risk-off</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-macro-in <span class="pill cron">daily</span></div>
+        <div class="nmeta">RBI · POSOCO · IMD · GST · PMI</div>
+        <div class="nbody">Indian macro → <span class="pill d1">macro_indicators</span> <span class="pill d1">bond_yields</span></div>
+        <div class="nfoot">Monthly + quarterly catalysts</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-calendar-breadth <span class="pill cron">5-15min</span></div>
+        <div class="nmeta">Most-active · A/D · sector indices · earnings</div>
+        <div class="nbody">→ <span class="pill d1">most_active</span> <span class="pill d1">breadth_data</span> <span class="pill d1">indices_eod</span></div>
+        <div class="nfoot">Breadth reads market regime in real-time</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-event-scraper <span class="pill cron">30min</span></div>
+        <div class="nmeta">Board meetings · results calendar · bond yields</div>
+        <div class="nbody">→ <span class="pill d1">macro_calendar</span> <span class="pill d1">board_meetings</span></div>
+        <div class="nfoot">Earnings blackout (5d window) for picks</div>
+      </div>
+      <div class="node">
+        <div class="nname">wealth-fundamentals <span class="pill cron">weekly</span></div>
+        <div class="nmeta">P/E, P/B, ROE, debt/equity</div>
+        <div class="nbody">→ <span class="pill d1">fundamentals_snapshot</span></div>
+        <div class="nfoot">Background quality signal</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LAYER 2 — INTELLIGENCE / DECISION ═══ -->
+<div class="layer">
+  <div class="layer-head">
+    <div class="title"><span class="num">2</span> Intelligence Layer — wealth-verdict (Opus brain)</div>
+    <div class="meta">Where raw data becomes 2-3 stock picks</div>
+  </div>
+  <div class="layer-body">
+    <div class="grid-2col">
+      <div>
+        <h3 style="font-size:13px; margin-bottom:8px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Input context Opus reads at 08:30 IST</h3>
+        <div class="nodes" style="grid-template-columns:1fr;">
+          <div class="node"><div class="nname">Pre-market enrichment <span class="pill opus">Opus</span></div><div class="nbody">07:30 IST briefing — US close, GIFT Nifty, Asia, breaking news, FII/DII flow, VIX, cross-asset</div></div>
+          <div class="node"><div class="nname">Top 30 from suitability table</div><div class="nbody">Filtered to HOT/STABLE regimes, sector cap applied (max 1/sector)</div></div>
+          <div class="node"><div class="nname">Per-stock 90-day stats</div><div class="nbody">RR ratio · green-day-rate · liquidity · recency · sector_bucket · ATR</div></div>
+          <div class="node"><div class="nname">Last 5 days' autopsies</div><div class="nbody">What worked, what broke — Sonnet narratives</div></div>
+          <div class="node"><div class="nname">Open carryover positions</div><div class="nbody">HELD_OVERNIGHT positions to review at open</div></div>
+          <div class="node"><div class="nname">Earnings blackout filter</div><div class="nbody">Skip stocks with earnings in next 5 days</div></div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:13px; margin-bottom:8px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Output Opus produces (strict JSON)</h3>
+        <div class="node" style="background:var(--panel-2);">
+          <div class="nbody" style="font-family:monospace; font-size:11px;">
+            <span style="color:var(--accent)">verdict</span>: TRADE / SIT_OUT / OBSERVE<br><br>
+            <span style="color:var(--accent)">picks[2-3]</span>:<br>
+            &nbsp;&nbsp;symbol, conviction (HIGH/MED/LOW)<br>
+            &nbsp;&nbsp;allocation_pct (35/30/25)<br>
+            &nbsp;&nbsp;entry_zone_paise [low,high]<br>
+            &nbsp;&nbsp;<b>stop_pct, target_pct</b><br>
+            &nbsp;&nbsp;rationale (1 sentence)<br>
+            &nbsp;&nbsp;sector_bucket, expected_holding_min<br><br>
+            <span style="color:var(--accent)">alternatives[]</span>:<br>
+            &nbsp;&nbsp;[symbol] + why_not<br><br>
+            <span style="color:var(--accent)">portfolio_summary</span>:<br>
+            &nbsp;&nbsp;total_deployed_paise<br>
+            &nbsp;&nbsp;daily_loss_limit (-₹30K)<br>
+            &nbsp;&nbsp;profit_lock (+₹30K)<br><br>
+            <span style="color:var(--accent)">halt_rules</span>: VIX, news, sector
+          </div>
+        </div>
+        <div class="data-flow" style="margin-top:8px;">
+          <span class="from">JSON</span><span class="arr">→</span><span class="to"><span class="pill d1">daily_verdicts</span> INSERT</span>
+        </div>
+        <div class="data-flow">
+          <span class="from"><span class="pill d1">daily_verdicts</span></span><span class="arr">→</span><span class="to">consumed by wealth-trader at 09:30</span>
+        </div>
+      </div>
+    </div>
+    <details style="margin-top:14px;">
+      <summary>Hybrid scoring formula + sector cap algorithm</summary>
+      <div style="padding:10px 0; font-family:monospace; font-size:11px; color:var(--muted);">
+        <pre style="white-space:pre-wrap;">
+hybrid_score = rr_ratio × green_day_rate × log(liquidity_score+1) × recency_factor
+
+For top 30 candidates by hybrid_score:
+  for each pick (max 3):
+    select highest hybrid_score where sector_bucket NOT IN already-picked
+    if conviction = HIGH: weight = 35%
+    elif MED:            weight = 30%
+    else LOW:            weight = 25%
+  normalize weights to ≤ 95% (5% slippage buffer)
+
+LLM fallback: Opus → Sonnet → Haiku → engine_only (mechanical R:R rank)
+Cost cap: ₹9999999/day during paper-trade phase (effectively unlimited)
+        </pre>
+      </div>
+    </details>
+  </div>
+</div>
+
+<!-- ═══ LAYER 3 — EXECUTION ═══ -->
+<div class="layer">
+  <div class="layer-head">
+    <div class="title"><span class="num">3</span> Execution Layer — wealth-trader (THE FINAL ACTION)</div>
+    <div class="meta">2-3 picks → exact entry → managed → exact exit</div>
+  </div>
+  <div class="layer-body">
+    <h3 style="font-size:13px; margin-bottom:8px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">State machine per pick</h3>
+    <table class="tbl">
+      <tr>
+        <th>State</th><th>Color</th><th>How it gets here</th><th>Exact entry / exit</th>
+      </tr>
+      <tr>
+        <td>WATCHING</td><td>gray</td><td>09:30 range_capture creates row from picks_json</td><td>—</td>
+      </tr>
+      <tr>
+        <td>ENTERED</td><td>blue</td><td>Continuous trigger (every 1min): LTP &gt; OR_high × 1.001 + vol ≥ 0.8x avg<br>OR Opus entryDecision (09:45/10:00/10:15) says ENTER_NOW</td><td><b>entry_paise</b> = LTP at trigger moment</td>
+      </tr>
+      <tr>
+        <td>EXITED.win</td><td>green</td><td>Stop hit / target hit / trail hit / 15:10 hard exit / partial-exit + runner</td><td><b>exit_paise</b> = LTP at exit moment</td>
+      </tr>
+      <tr>
+        <td>EXITED.loss</td><td>red</td><td>Same exit triggers, P&amp;L &lt; 0</td><td><b>exit_paise</b> = LTP at exit moment</td>
+      </tr>
+      <tr>
+        <td>SKIPPED</td><td>muted</td><td>Gap above target OR gap below stop at entry-decision time</td><td>No entry placed</td>
+      </tr>
+      <tr>
+        <td>ABANDONED</td><td>muted</td><td>Opus says ABANDON on 3rd attempt — no breakout signal</td><td>No entry placed</td>
+      </tr>
+      <tr>
+        <td>HELD_OVERNIGHT</td><td>purple</td><td>Promoted to SWING_CONFIRMED at 14:30+ if strong winner</td><td>Continues next day</td>
+      </tr>
+    </table>
+
+    <h3 style="font-size:13px; margin:18px 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Exact P&amp;L formula at exit</h3>
+    <div class="node" style="background:var(--panel-2);">
+      <div class="nbody" style="font-family:monospace; font-size:11px; line-height:1.7;">
+gross_pnl   = (exit_paise − entry_paise) × qty<br><br>
+fees        = ₹40 brokerage<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ sell_turnover × 0.025% (STT)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ (buy + sell turnover) × 0.00322% (exchange)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ buy_turnover × 0.003% (stamp)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ (brokerage + exchange) × 18% (GST)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--green)">→ ~0.04-0.06% round-trip (Zerodha intraday MIS realistic)</span><br><br>
+net_pnl_paise = gross_pnl − fees<br>
+win_loss      = net &gt; 0 ? 'win' : net &lt; 0 ? 'loss' : 'breakeven'
+      </div>
+    </div>
+
+    <h3 style="font-size:13px; margin:18px 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Risk envelope (hard-coded, cannot be overridden)</h3>
+    <div class="nodes">
+      <div class="node"><div class="nname">Per pick max</div><div class="nbody">30% of ₹10L = ₹3L</div></div>
+      <div class="node"><div class="nname">Default stop</div><div class="nbody">−1.2% (max −2.0%)</div></div>
+      <div class="node"><div class="nname">Default target</div><div class="nbody">+2.5% (R:R ≥ 1.8)</div></div>
+      <div class="node"><div class="nname">Trailing stop</div><div class="nbody">0.8% (intraday) · 1.5% (swing-cand) · 2.0% (swing-conf)</div></div>
+      <div class="node"><div class="nname">Profit lock</div><div class="nbody">+₹30K → exit all + halt</div></div>
+      <div class="node"><div class="nname">Loss halt</div><div class="nbody">−₹30K → exit all + halt</div></div>
+      <div class="node"><div class="nname">VIX spike guard</div><div class="nbody">VIX &gt; 22 + Δ &gt; 1.5 → tighten trails</div></div>
+      <div class="node"><div class="nname">Hard exit</div><div class="nbody">15:10 IST forced (5min before MIS auto-square)</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LAYER 4 — SELF-LEARNING ═══ -->
+<div class="layer">
+  <div class="layer-head">
+    <div class="title"><span class="num">4</span> Self-Learning Loop — Compounds skill, not luck</div>
+    <div class="meta">Every day's outcome tunes tomorrow's pick selection</div>
+  </div>
+  <div class="layer-body">
+    <div class="nodes">
+      <div class="node">
+        <div class="nname">16:00 — Paper-trade autopsy <span class="pill sonnet">Sonnet</span></div>
+        <div class="nbody">For each EXITED trade: MFE, MAE, slippage, time-to-MFE, post-exit move. Sonnet narrates lesson + confidence.</div>
+        <div class="nfoot">Stores <span class="pill d1">paper_trade_autopsies</span></div>
+      </div>
+      <div class="node">
+        <div class="nname">16:30 — Suitability refresh <span class="pill engine">engine</span></div>
+        <div class="nbody">Last 90d daily_bars + intraday_bars → recompute hybrid_score, regime classification (HOT/STABLE/COOLING/ILLIQUID), sector_bucket per symbol.</div>
+        <div class="nfoot">Tomorrow's picks come from this fresh universe.</div>
+      </div>
+      <div class="node">
+        <div class="nname">18:30 — EOD Learning Audit <span class="pill sonnet">Sonnet</span></div>
+        <div class="nbody">4-bucket attribution per pick:<br>
+          <b style="color:var(--green)">RIGHT</b>: picked + won + skill (not luck)<br>
+          <b style="color:var(--yellow)">MISSED</b>: didn't pick, would have won<br>
+          <b style="color:var(--blue)">LEARNED</b>: picked + lost, articulable reason<br>
+          <b style="color:var(--red)">LUCK</b>: picked + won but random catalyst<br>
+          <b>skill_pct</b> = RIGHT / (RIGHT+LEARNED+LUCK+counterfactual_MISSED)
+        </div>
+        <div class="nfoot">Stores <span class="pill d1">eod_learning_audits</span></div>
+      </div>
+      <div class="node">
+        <div class="nname">Mon 09:00 — Weekly review <span class="pill sonnet">Sonnet</span></div>
+        <div class="nbody">5-day pattern analysis. Top 3 takeaways. 1 strategy adjustment (suggestion only — owner approves).</div>
+        <div class="nfoot">Stores <span class="pill d1">weekly_reviews</span></div>
+      </div>
+    </div>
+    <h3 style="font-size:13px; margin:18px 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Compounding flow</h3>
+    <div class="data-flow"><span class="from">Day N: pick → trade → autopsy → audit → tuning</span><span class="arr">→</span><span class="to">Day N+1: suitability v2 has new data</span></div>
+    <div class="data-flow"><span class="from">7 days = first weekly review</span><span class="arr">→</span><span class="to">30 days = monthly trail visible</span></div>
+    <div class="data-flow"><span class="from">60 days sustained skill_pct &gt; 55%</span><span class="arr">→</span><span class="to">★ Switch from paper to real ₹10L</span></div>
+  </div>
+</div>
+
+<!-- ═══ LAYER 5 — UI / OBSERVATION ═══ -->
+<div class="layer">
+  <div class="layer-head">
+    <div class="title"><span class="num">5</span> UI / Observation Layer — trade.hnhotels.in</div>
+    <div class="meta">Owner is observer. No buttons that change state.</div>
+  </div>
+  <div class="layer-body">
+    <div class="grid-2col">
+      <div>
+        <h3 style="font-size:13px; margin-bottom:8px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">/trading/today/ — 9 sections</h3>
+        <ol style="font-size:12px; padding-left:20px; line-height:1.9;">
+          <li><b>Hero P&amp;L</b> — color-coded with LIVE/REPLAY/NO-DATA badge</li>
+          <li><b>Phase Clock</b> — IST + current cron phase</li>
+          <li><b>Alerts</b> — critical only (post-Haiku triager)</li>
+          <li><b>Verdict Card</b> — Opus 08:30 picks with rationale</li>
+          <li><b>Auto-Trader Positions</b> — state, P&amp;L, mode, decisions</li>
+          <li><b>Timeline</b> — every cron + decision today</li>
+          <li><b>Intelligence Audit</b> — 12 sources rated fresh/stale</li>
+          <li><b>System Health</b> — cron fires, spend, Kite token</li>
+          <li><b>EOD Learning Audit</b> — 4 buckets + skill%</li>
+          <li><b>Monthly Trail</b> — 30-day cumulative</li>
+        </ol>
+      </div>
+      <div>
+        <h3 style="font-size:13px; margin-bottom:8px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">API endpoints (70 total)</h3>
+        <div style="font-family:monospace; font-size:11px; line-height:1.8; color:var(--muted);">
+/api/trading?action=<br>
+&nbsp;&nbsp;<span style="color:var(--accent)">verdict_today</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">auto_trader_state</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">trader_timeline</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">intelligence_audit</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">system_health</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">eod_learning_audit</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">monthly_learning_trail</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">stock_picker</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">analyze_concall</span><br>
+&nbsp;&nbsp;... 60+ more
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ THE LEAK FIXED TODAY ═══ -->
+<div class="layer">
+  <div class="layer-head">
+    <div class="title"><span class="num" style="background:var(--green)">✓</span> The leak — fixed May 5 evening</div>
+    <div class="meta">Why today's 3 picks didn't transition WATCHING → ENTERED → EXITED</div>
+  </div>
+  <div class="layer-body">
+    <table class="tbl">
+      <tr>
+        <th>Bug</th><th>Severity</th><th>Symptom today</th><th>Fix shipped</th>
+      </tr>
+      <tr>
+        <td>rangeCapture inserts is_active=0</td>
+        <td><span class="pill" style="background:rgba(231,76,60,0.20);color:var(--red)">HIGH</span></td>
+        <td>Continuous breakout-trigger (filters is_active=1) couldn't see new WATCHING rows. 0 breakout_trigger decisions logged today.</td>
+        <td>Set is_active=1 at insert. Continuous trigger now fires within 60s of breakout.</td>
+      </tr>
+      <tr>
+        <td>firePaperExit cost = 0.3% flat</td>
+        <td><span class="pill" style="background:rgba(231,76,60,0.20);color:var(--red)">HIGH</span></td>
+        <td>Overstated fees ~6× vs reality. Net P&amp;L dragged ~₹3K/day.</td>
+        <td>realisticIntradayCostPaise() helper. ~0.04-0.06% round-trip. Matches replay simulator.</td>
+      </tr>
+      <tr>
+        <td>priceMonitor partial-exit cost</td>
+        <td><span class="pill" style="background:rgba(245,176,65,0.20);color:var(--yellow)">MED</span></td>
+        <td>Same 0.3% issue on partial exits at first-target.</td>
+        <td>Same helper.</td>
+      </tr>
+      <tr>
+        <td>HARD_EXIT_1430 name</td>
+        <td><span class="pill" style="background:rgba(138,150,184,0.20);color:var(--muted)">LOW</span></td>
+        <td>Decision name says "1430" but cron fires at 15:10 IST.</td>
+        <td>Renamed to HARD_EXIT_1510.</td>
+      </tr>
+    </table>
+    <div style="margin-top:14px; padding:12px; background:rgba(46,204,113,0.08); border:1px solid var(--green); border-radius:8px; font-size:12px;">
+      <b style="color:var(--green)">✓ wealth-trader deployed</b> · Version 487b88cb-a2e2-4dfd-b771-07fd1e8686ed · live as of 20:47 IST May 5<br>
+      <b style="color:var(--green)">✓ PR #48 merged to main</b> · Source-of-truth synced<br>
+      <b style="color:var(--green)">✓ Pre-market audit scheduled</b> · 08:00 IST May 6 — verifies the fix works on live tape
+    </div>
+  </div>
+</div>
+
+<!-- ═══ END ═══ -->
+<div style="text-align:center; color:var(--muted); font-size:11px; padding:20px 0;">
+  Generated 2026-05-05 evening IST · v1.0 · trading/_context/wireframe.html<br>
+  Open this file directly in a browser to view.
+</div>
+
+</body>
+</html>
