@@ -4,16 +4,19 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
 # Secrets (set via: wrangler pages secret put <NAME>)
-# WA_ACCESS_TOKEN        — Meta WhatsApp Cloud API bearer token
-# WA_PHONE_ID            — WhatsApp phone number ID
-# DASHBOARD_KEY          — Dashboard authentication key
-# GEMINI_API_KEY         — Google Gemini API key for AI role mapping
-# GOOGLE_PLACES_API_KEY  — Google Places API (New) for expansion intelligence
-# ODOO_API_KEY           — Odoo 19 API key (user: yash@gmail.com) for system reads + admin sync
-# ODOO_UID_ZOYA          — Zoya's Odoo user ID (for purchase order tracking)
-# ODOO_KEY_ZOYA          — Zoya's Odoo API key
-# ODOO_UID_FAHEEM        — Faheem's Odoo user ID (for settlement tracking)
-# ODOO_KEY_FAHEEM        — Faheem's Odoo API key
+# WA_ACCESS_TOKEN              — Meta WhatsApp Cloud API bearer token
+# WA_PHONE_ID                  — WhatsApp phone number ID
+# DASHBOARD_KEY                — Dashboard authentication key
+# GEMINI_API_KEY               — Google Gemini API key for AI role mapping
+# GOOGLE_PLACES_API_KEY        — Google Places API (New). Used by /api/gbp-cockpit for review aggregates and by expansion intelligence
+# ODOO_API_KEY                 — Odoo 19 API key (user: yash@gmail.com) for system reads + admin sync
+# ODOO_UID_ZOYA                — Zoya's Odoo user ID (for purchase order tracking)
+# ODOO_KEY_ZOYA                — Zoya's Odoo API key
+# ODOO_UID_FAHEEM              — Faheem's Odoo user ID (for settlement tracking)
+# ODOO_KEY_FAHEEM              — Faheem's Odoo API key
+# GOOGLE_ADS_CLIENT_ID         — OAuth client ID (NCH Marketing Web). Used by /api/gbp-cockpit
+# GOOGLE_ADS_CLIENT_SECRET     — OAuth client secret. Used by /api/gbp-cockpit
+# GOOGLE_ORGANIC_REFRESH_TOKEN — refresh token with scopes adwords + webmasters.readonly + business.manage. Used by /api/gbp-cockpit. See docs/GBP_COCKPIT_RUNBOOK.md
 
 [[d1_databases]]
 binding = "DB"
