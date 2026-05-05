@@ -338,6 +338,27 @@ async function entryDecision(env, attemptNum) {
     const volRatio = (expectedVolFor15Min > 0 && q.volume) ? +(q.volume / expectedVolFor15Min).toFixed(2) : null;
     const volumeConfirmed = volRatio !== null && volRatio >= 1.2;
 
+    // ─── B-2: NEWS CONTEXT for entry-time decision ─────────────────────
+    // Until tonight, entryDecision was price-only. If a pick fired breakout but
+    // breaking BAD news arrived between 08:30 verdict and the entry attempt,
+    // Opus would still say ENTER_NOW. Now we pull last 60 min of news for the
+    // symbol and feed it to Opus so it can ABANDON on negative news.
+    const recentNews = (await db.prepare(`
+      SELECT headline, sentiment_score, importance_score, source,
+             datetime(published_at/1000,'unixepoch','+5 hours','+30 minutes') AS ist_time
+      FROM news_items
+      WHERE published_at > strftime('%s','now')*1000 - 60*60*1000
+        AND (headline LIKE ? OR symbols_tagged LIKE ?)
+      ORDER BY importance_score DESC, published_at DESC LIMIT 5
+    `).bind(`%${w.symbol}%`, `%${w.symbol}%`).all().catch(() => ({ results: [] }))).results || [];
+    // Compact summary for the prompt (avg sentiment, headline previews)
+    const newsSummary = recentNews.length > 0 ? {
+      count_60min: recentNews.length,
+      avg_sentiment: +(recentNews.reduce((s, n) => s + (n.sentiment_score || 0), 0) / recentNews.length).toFixed(2),
+      max_importance: Math.max(...recentNews.map(n => n.importance_score || 0)),
+      headlines: recentNews.map(n => `[${n.ist_time}] ${(n.headline || '').slice(0, 100)} (s=${n.sentiment_score?.toFixed(2) || '?'})`),
+    } : null;
+
     // Opus call — should we enter NOW?
     const ctx = {
       symbol: w.symbol,
@@ -362,9 +383,11 @@ async function entryDecision(env, attemptNum) {
       pick_rationale: w.rationale,
       is_fno_expiry_day: isFnoExpiryDay(),
       days_to_fno_expiry: daysToFnoExpiry(),
+      // B-2: news context — Opus now sees what happened in last 60 min
+      recent_news_60min: newsSummary,
     };
 
-    const system = `You are an intraday entry-execution decider for an Indian-equity paper trading system. The morning verdict already picked this stock. Your job: given current LTP, 15-min opening range, AND VOLUME RATIO vs 14-day average, decide ENTER_NOW or WAIT.
+    const system = `You are an intraday entry-execution decider for an Indian-equity paper trading system. The morning verdict already picked this stock. Your job: given current LTP, 15-min opening range, VOLUME RATIO vs 14-day average, AND RECENT NEWS (last 60 min), decide ENTER_NOW / WAIT / ABANDON.
 
 Output STRICT JSON: { "decision": "ENTER_NOW" | "WAIT" | "ABANDON", "rationale": "1 sentence", "confidence": 0.0-1.0 }
 
@@ -372,10 +395,14 @@ Rules:
 - ENTER_NOW requires ALL THREE: (a) LTP > 15-min high (price confirmed), (b) volume_ratio ≥ 1.2 (volume confirmed — 20%+ above avg), (c) LTP < planned_target × 0.7 (room to run)
 - WAIT if: LTP still inside 15-min range OR breakout but volume_ratio < 1.2 (weak breakout) OR very close to target
 - ABANDON if: attempt = 3 AND no breakout signal — too late for daily-profit window
+- ABANDON if: recent_news_60min has STRONG NEGATIVE catalyst (avg_sentiment < -0.4 with max_importance ≥ 3) — thesis broken regardless of price action
+- WAIT (downgrade from ENTER) if: recent_news_60min has mild-negative (avg_sentiment between -0.1 and -0.4) — wait one more attempt to see if price absorbs the news
 
 Volume confirmation is CRITICAL — fake breakouts on low volume are the #1 source of intraday losses. If volume_ratio < 1.2, default to WAIT even if price broke out, unless attempt = 3.
 
-Be decisive. Most attempts should be ENTER_NOW (with vol confirmed) or WAIT (without). ABANDON only on attempt 3 with no clear signal.`;
+NEWS GUARD is CRITICAL — entering against a fresh negative catalyst is the #2 source of losses. If avg_sentiment < -0.4, ABANDON even if price/volume look good.
+
+Be decisive. Most attempts should be ENTER_NOW (with vol confirmed + no negative news) or WAIT (without). ABANDON only on attempt 3 with no clear signal, OR on strong negative news.`;
 
     const userPrompt = `Decide entry for this paper trade:\n\n${JSON.stringify(ctx, null, 2)}`;
 
@@ -1382,7 +1409,44 @@ async function firePaperExit(db, trade, exitPaise, reason) {
 // ═══════════════════════════════════════════════════════════════════════════
 async function dispatch(env, opts = {}) {
   const t = istHHMM();
-  const phase = opts.force || routeByIstTime(t);
+  let phase = opts.force || routeByIstTime(t);
+
+  // ─── B-1 SAFETY NET: range_capture single-point-of-failure protection ───
+  // Original behaviour: rangeCapture only fires at exact hhmm '09:30'. If the
+  // Cloudflare cron has any delay or the 09:30 invocation fails, no WATCHING
+  // rows get created and the entire trading day is dead.
+  //
+  // Fallback: any cron tick during 09:30-10:30 IST that lands in the entry
+  // window will check if rows exist for today; if none, runs rangeCapture as
+  // safety net before the routed phase. Idempotent — rangeCapture's
+  // `if (exists) continue` per pick means it's a no-op if rows already exist.
+  if (!opts.force) {
+    const [istH, istM] = t.split(':').map(Number);
+    const inEntryWindow =
+      (istH === 9 && istM >= 30) || (istH === 10 && istM <= 30);
+    if (inEntryWindow) {
+      const today = istToday();
+      const exists = await env.DB.prepare(
+        `SELECT 1 FROM paper_trades
+         WHERE auto_managed=1 AND DATE(created_at/1000, 'unixepoch') = ?
+         LIMIT 1`
+      ).bind(today).first().catch(() => null);
+      if (!exists) {
+        // No rows yet for today — run rangeCapture as safety net
+        const rcResult = await rangeCapture(env);
+        await logDecision(env.DB, {
+          cron_phase: 'range_capture_fallback',
+          decision: `safety-net fired at ${t} IST: ${JSON.stringify(rcResult).slice(0, 200)}`,
+          composed_by_model: 'deterministic',
+        });
+        // If we just successfully ran range_capture, continue normally (don't
+        // double-fire it). If routeByIstTime returned 'range_capture', skip
+        // the second call.
+        if (phase === 'range_capture') phase = null;
+      }
+    }
+  }
+
   if (!phase) return { rows: 0, skipped: `no-phase-at-${t}` };
 
   const id = await logCronStart(env.DB, phase);
