@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NCH · L2 Inventory Efficiency</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c14;
+    --panel: rgba(22,22,31,0.7);
+    --border: rgba(255,255,255,0.08);
+    --ink: #e4e4ed;
+    --ink-dim: #94a3b8;
+    --accent: #e8930c;
+    --tea: #d4a574;
+    --milk: #fcfaf3;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --info: #60a5fa;
+    --purple: #c084fc;
+    --pink: #ec4899;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.5; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .glass { background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(20px); border-radius: 14px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .pill-pos { background: rgba(212,165,116,0.15); color: var(--tea); }
+  .pill-def { background: rgba(52,211,153,0.15); color: var(--good); border: 1px solid rgba(52,211,153,0.30); }
+  .pill-apx { background: rgba(232,147,12,0.13); color: var(--accent); border: 1px solid rgba(232,147,12,0.30); }
+  .pill-batch { background: rgba(192,132,252,0.13); color: var(--purple); border: 1px solid rgba(192,132,252,0.30); }
+  .pill-gap { background: rgba(248,113,113,0.10); color: var(--bad); border: 1px dashed rgba(248,113,113,0.40); }
+  .pill-master { background: rgba(96,165,250,0.10); color: var(--info); border: 1px solid rgba(96,165,250,0.30); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .pill-adhoc { background: rgba(251,191,36,0.10); color: var(--warn); border: 1px dashed rgba(251,191,36,0.40); font-size: 10px; }
+  .pill-warn { background: rgba(251,191,36,0.10); color: var(--warn); border: 1px solid rgba(251,191,36,0.30); }
+  .grad-fade { background: linear-gradient(180deg, rgba(15,15,26,0.85) 0%, rgba(12,12,20,1) 100%); }
+  .panel-h { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .stat-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat-card .label { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .stat-card .meta { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .item-card { background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; transition: border-color 0.15s; }
+  .item-card:hover { border-color: rgba(212,165,116,0.35); }
+  .item-card .item-name { font-weight: 600; font-size: 13.5px; line-height: 1.3; }
+  .item-card .item-meta { font-size: 10.5px; color: var(--ink-dim); margin-top: 1px; font-family: 'JetBrains Mono', monospace; }
+  .recipe-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; border-top: 1px dashed rgba(255,255,255,0.05); margin-top: 6px; padding-top: 6px; }
+  .recipe-row:first-of-type { border-top: 1px solid rgba(255,255,255,0.10); }
+  .qty { font-family: 'JetBrains Mono', monospace; color: var(--ink); min-width: 60px; }
+  .rm-name { color: var(--ink-dim); flex: 1; }
+  .rm-name strong { color: var(--ink); font-weight: 500; }
+  .batch-card { background: rgba(192,132,252,0.04); border: 1px solid rgba(192,132,252,0.25); border-left: 3px solid var(--purple); padding: 14px 16px; border-radius: 10px; }
+  .batch-card .batch-h { color: var(--purple); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; display:flex; gap:6px; align-items:baseline; }
+  .batch-card .batch-eq { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink); line-height: 1.7; }
+  .batch-card .batch-eq .arr { color: var(--accent); }
+  .batch-card .yield-pill { background: rgba(52,211,153,0.12); color: var(--good); border: 1px solid rgba(52,211,153,0.30); border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 600; margin-left: 4px; }
+  .shape-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; font-family: 'JetBrains Mono', monospace; }
+  .shape-S1  { background: rgba(52,211,153,0.13); color: #34d399; border: 1px solid rgba(52,211,153,0.40); }
+  .shape-S2  { background: rgba(110,231,183,0.13); color: #6ee7b7; border: 1px solid rgba(110,231,183,0.40); }
+  .shape-S3  { background: rgba(251,191,36,0.13); color: #fbbf24; border: 1px solid rgba(251,191,36,0.40); }
+  .shape-S4  { background: rgba(232,147,12,0.13); color: #e8930c; border: 1px solid rgba(232,147,12,0.40); }
+  .shape-S5  { background: rgba(192,132,252,0.16); color: #c084fc; border: 1px solid rgba(192,132,252,0.45); }
+  .shape-S6  { background: rgba(167,139,250,0.13); color: #a78bfa; border: 1px solid rgba(167,139,250,0.40); }
+  .shape-S7  { background: rgba(96,165,250,0.16); color: #60a5fa; border: 1px solid rgba(96,165,250,0.45); }
+  .shape-S8  { background: rgba(248,113,113,0.10); color: #f87171; border: 1px solid rgba(248,113,113,0.30); }
+  .shape-S9  { background: rgba(236,72,153,0.13); color: #ec4899; border: 1px solid rgba(236,72,153,0.40); }
+  .shape-S10 { background: rgba(148,163,184,0.13); color: #94a3b8; border: 1px solid rgba(148,163,184,0.40); }
+  .shape-card { background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; transition: all 0.15s; }
+  .shape-card.unused { opacity: 0.45; border-style: dashed; }
+  .shape-card .formula { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink); background: rgba(0,0,0,0.32); padding: 8px 10px; border-radius: 6px; margin: 8px 0; line-height: 1.6; }
+  .shape-card .examples { font-size: 11px; color: var(--ink-dim); }
+  .cat-h { font-size: 16px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 28px; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .cat-h .cat-meta { font-size: 11px; color: var(--ink-dim); font-weight: 500; letter-spacing: 0.04em; text-transform: none; font-family: 'JetBrains Mono', monospace; }
+  .grid-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 10px; }
+  /* SVG spine */
+  .spine-bg { background: rgba(255,255,255,0.015); border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
+  .lane-label { fill: #94a3b8; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  .node-rm { fill: rgba(232,147,12,0.10); stroke: rgba(232,147,12,0.50); stroke-width: 1; }
+  .node-batch { fill: rgba(192,132,252,0.12); stroke: rgba(192,132,252,0.55); stroke-width: 1.5; }
+  .node-pos { fill: rgba(96,165,250,0.10); stroke: rgba(96,165,250,0.50); stroke-width: 1; }
+  .node-text { fill: #e4e4ed; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500; pointer-events: none; }
+  .node-text.title { font-size: 11.5px; font-weight: 700; }
+  .node-text.dim { fill: #94a3b8; font-size: 9.5px; }
+  .arrow { stroke: rgba(255,255,255,0.30); stroke-width: 1.3; fill: none; }
+  .arrow.batch-in { stroke: rgba(232,147,12,0.45); }
+  .arrow.batch-out { stroke: rgba(192,132,252,0.55); }
+  .arrow.direct { stroke: rgba(96,165,250,0.40); }
+  .schema-block { background: rgba(0,0,0,0.30); border: 1px solid rgba(96,165,250,0.20); border-left: 3px solid var(--info); padding: 12px 16px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.65; color: var(--ink); white-space: pre; overflow-x: auto; }
+  .schema-block .kw { color: var(--purple); font-weight: 600; }
+  .schema-block .cmt { color: var(--ink-dim); }
+  .schema-block .typ { color: var(--good); }
+  .gap-card { background: rgba(248,113,113,0.04); border: 1px solid rgba(248,113,113,0.25); border-left: 3px solid var(--bad); padding: 12px 14px; border-radius: 8px; }
+  .gap-card .gap-h { color: var(--bad); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .migration-card { background: rgba(52,211,153,0.04); border: 1px solid rgba(52,211,153,0.25); border-left: 3px solid var(--good); padding: 12px 14px; border-radius: 8px; }
+  .migration-card .mig-h { color: var(--good); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  details > summary { cursor: pointer; color: var(--accent); font-weight: 600; padding: 6px 0; user-select: none; }
+  details > summary::marker { color: var(--accent); }
+  /* Three-layer cards */
+  .layer-card { background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; transition: all 0.15s; position: relative; }
+  .layer-card.l1 { border-left: 4px solid var(--info); }
+  .layer-card.l2 { border-left: 4px solid var(--purple); background: rgba(192,132,252,0.05); border-color: rgba(192,132,252,0.30); }
+  .layer-card.l3 { border-left: 4px solid var(--ink-dim); opacity: 0.78; }
+  .layer-card .layer-h { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; }
+  .layer-card.l1 .layer-h { color: var(--info); }
+  .layer-card.l2 .layer-h { color: var(--purple); }
+  .layer-card.l3 .layer-h { color: var(--ink-dim); }
+  .layer-card .layer-status { font-size: 11px; margin-top: 3px; font-weight: 600; }
+  .layer-card.l1 .layer-status { color: var(--good); }
+  .layer-card.l2 .layer-status { color: var(--accent); }
+  .layer-card.l3 .layer-status { color: var(--ink-dim); }
+  .layer-card .layer-question { font-size: 14px; font-weight: 500; margin: 10px 0 8px 0; color: var(--ink); font-style: italic; }
+  .layer-card ul { font-size: 12px; color: var(--ink-dim); padding-left: 16px; margin: 8px 0; line-height: 1.7; }
+  .layer-card ul li strong { color: var(--ink); font-weight: 500; }
+  .layer-card .layer-link { display: inline-block; margin-top: 10px; font-size: 11px; color: var(--accent); text-decoration: underline; font-family: 'JetBrains Mono', monospace; }
+  .closure-row { display: grid; grid-template-columns: 180px 1fr 220px; gap: 16px; padding: 10px 0; border-top: 1px dashed var(--border); align-items: center; font-size: 12.5px; }
+  .closure-row:first-of-type { border-top: 1px solid rgba(255,255,255,0.10); margin-top: 12px; padding-top: 14px; }
+  .closure-row .c-num { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-weight: 700; font-size: 13px; }
+  .closure-row .c-eq { color: var(--ink); }
+  .closure-row .c-eq .mono { color: var(--purple); font-weight: 500; }
+  .closure-row .c-catch { color: var(--good); font-weight: 600; font-size: 11.5px; text-align: right; }
+</style>
+</head>
+<body>
+
+<header class="border-b border-white/5 px-6 py-5 grad-fade">
+  <div class="max-w-[1400px] mx-auto flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <div class="flex items-center gap-3 mb-1">
+        <span class="text-2xl">☕</span>
+        <h1 class="text-xl font-bold tracking-tight">NCH · L2 Inventory Efficiency</h1>
+        <span class="pill pill-pos">CO_10 Nawabi Chai House</span>
+        <span class="pill" style="background:rgba(192,132,252,0.15);color:#c084fc;border:1px solid rgba(192,132,252,0.30)">Layer 2 of 3</span>
+      </div>
+      <p class="text-sm text-white/60 max-w-3xl">
+        L2 = costing, leakage, wastage, BoM, recipe-driven RM consumption, variance scoring.
+        It <strong>starts from L1</strong> (the POS sales feed already architected for NCH at <a href="/ops/visual/nch-l1/" class="underline text-amber-300">/ops/visual/nch-l1/</a>) — every POS line in L1 deducts named RM from L2's inventory pool.
+        It is <strong>independent of L3</strong> (money-out: purchase, expense, salary, bills) — L2 measures in grams/ml/units, not rupees. The two layers cross-reference only at month-close to compute cost-of-sale.
+      </p>
+    </div>
+    <div class="flex items-center gap-3 text-xs">
+      <a href="/ops/visual/nch-l1/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">↗ NCH-L1</a>
+      <a href="/ops/visual/he-l1/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">↗ HE-L1</a>
+      <a href="/ops/visual/he-rm-map/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">↗ HE-RM</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1400px] mx-auto px-6 py-6 space-y-7">
+
+<!-- ============================================================== -->
+<!-- THREE-LAYER ARCHITECTURE -->
+<!-- ============================================================== -->
+<section class="glass p-5">
+  <div class="panel-h" style="margin-bottom:6px">The intelligent circle · L1 + L2 + L3</div>
+  <p class="text-sm text-white/60 mb-4 max-w-4xl">
+    Three independent layers — different scoring units, different actors, different cadences, different failure modes — each with its own agent.
+    They cross-reference at <strong class="text-amber-300">three pre-defined closure points</strong>, never continuously.
+    Without all three, the circle doesn't close and leakage hides.
+  </p>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+    <div class="layer-card l1">
+      <div class="layer-h">L1 · INFLOW</div>
+      <div class="layer-status">✅ Architected · live</div>
+      <div class="layer-question">"What did I sell?"</div>
+      <ul>
+        <li><strong>Actor:</strong> counter cashier (Mujib · Kesmat · Nafees · token-issuer)</li>
+        <li><strong>Unit:</strong> ₹ rupees + payment mode (cash / UPI / Razorpay / aggregator)</li>
+        <li><strong>Cadence:</strong> every minute (per POS order)</li>
+        <li><strong>Failure mode:</strong> cash short, UPI mismatch, PIN-less order</li>
+        <li><strong>Data:</strong> <span class="mono">pos.order</span> · <span class="mono">pos.order.line</span> · <span class="mono">cash_events</span> · <span class="mono">money_events</span></li>
+      </ul>
+      <a href="/ops/visual/nch-l1/" class="layer-link">↗ /ops/visual/nch-l1/</a>
+    </div>
+
+    <div class="layer-card l2">
+      <div class="layer-h">L2 · INVENTORY EFFICIENCY</div>
+      <div class="layer-status">🔨 This page · spec</div>
+      <div class="layer-question">"What did I consume?"</div>
+      <ul>
+        <li><strong>Actor:</strong> kitchen (cook on bhati, batch-prepper, runner)</li>
+        <li><strong>Unit:</strong> grams / ml / Units · NEVER rupees</li>
+        <li><strong>Cadence:</strong> every 3–4 hours (per batch close-out)</li>
+        <li><strong>Failure mode:</strong> over-pouring, batch yield drift, ad-hoc RM bypass, wastage not logged</li>
+        <li><strong>Data:</strong> <span class="mono">rm_products</span> · <span class="mono">batch_run</span> · <span class="mono">rm_consumption_event</span> · <span class="mono">wastage_log</span></li>
+      </ul>
+      <span class="layer-link">↓ defined below</span>
+    </div>
+
+    <div class="layer-card l3">
+      <div class="layer-h">L3 · OUTFLOW / MONEY OPS</div>
+      <div class="layer-status">⏭ Next · parallel build</div>
+      <div class="layer-question">"What did I pay for?"</div>
+      <ul>
+        <li><strong>Actor:</strong> Zoya (purchase) · Faheem (settlement) · Owner (approvals)</li>
+        <li><strong>Unit:</strong> ₹ rupees + vendor identity + payment mode</li>
+        <li><strong>Cadence:</strong> daily (PO burst) · weekly (bills) · monthly (salary)</li>
+        <li><strong>Failure mode:</strong> PO never closed, bill never matched, advance never adjusted, vendor overpaid</li>
+        <li><strong>Data:</strong> <span class="mono">po_lifecycle</span> · <span class="mono">vendor_bills</span> · <span class="mono">salary_run</span> · <span class="mono">expense</span></li>
+      </ul>
+      <span class="layer-link">queued · separate spec</span>
+    </div>
+  </div>
+
+  <!-- CLOSURE POINTS -->
+  <div class="mt-2">
+    <div class="panel-h" style="margin-top:18px;margin-bottom:0px">Three closure points (the only place layers cross)</div>
+    <div class="closure-row">
+      <div class="c-num">1. L1 → L2</div>
+      <div class="c-eq">"100 Irani Chais sold" (L1) <span class="mono">→</span> "should have consumed 6 L milk + 4 L decoction" (L2) <span class="mono">→</span> did the actual batch yield support it within 5%?</div>
+      <div class="c-catch">catches kitchen leakage<br><span style="color:var(--ink-dim);font-weight:500">per sale · real-time</span></div>
+    </div>
+    <div class="closure-row">
+      <div class="c-num">2. L2 → L3</div>
+      <div class="c-eq">"Consumed 80 L milk this month" (L2) <span class="mono">×</span> "paid Prabhu ₹2,200/L avg" (L3) <span class="mono">=</span> milk cost-of-sale ₹1.76 L</div>
+      <div class="c-catch">catches purchase leakage<br><span style="color:var(--ink-dim);font-weight:500">per month · cost-of-sale</span></div>
+    </div>
+    <div class="closure-row">
+      <div class="c-num">3. L3 → L1</div>
+      <div class="c-eq">"Paid vendors ₹X this week" (L3) <span class="mono">→</span> next batch of RM available <span class="mono">→</span> next chai sold (L1)</div>
+      <div class="c-catch">catches working-capital leakage<br><span style="color:var(--ink-dim);font-weight:500">per cycle · cash flow</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- TOP STATS -->
+<!-- ============================================================== -->
+<section class="grid grid-cols-2 md:grid-cols-6 gap-3">
+  <div class="stat-card">
+    <div class="label">POS Items</div>
+    <div class="value">34</div>
+    <div class="meta">14 chai · 18 snacks · 1 shared · 1 uncat</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Shapes used</div>
+    <div class="value">5 / 10</div>
+    <div class="meta">S1, S2, S3, S5, S7</div>
+  </div>
+  <div class="stat-card">
+    <div class="label" style="color:var(--purple)">Batches</div>
+    <div class="value" style="color:var(--purple)">3</div>
+    <div class="meta">Decoction · Milk · Khajoor</div>
+  </div>
+  <div class="stat-card">
+    <div class="label" style="color:var(--good)">Master-coded</div>
+    <div class="value" style="color:var(--good)">26 / 34</div>
+    <div class="meta">≥ 76% with NCH- or HN-RM-XXX</div>
+  </div>
+  <div class="stat-card">
+    <div class="label" style="color:var(--bad)">BoM gaps</div>
+    <div class="value" style="color:var(--bad)">3</div>
+    <div class="meta">Black Coffee · Boost · Roll/Fajita</div>
+  </div>
+  <div class="stat-card">
+    <div class="label" style="color:var(--bad)">Catalog dups</div>
+    <div class="value" style="color:var(--bad)">2+</div>
+    <div class="meta">Code NCH-BM × 2 · 5 dup product IDs</div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- THE TWO-BATCH SPINE -->
+<!-- ============================================================== -->
+<section>
+  <div class="panel-h" style="margin-bottom:14px">The Two-Batch Spine — NCH operational logic</div>
+  <p class="text-sm text-white/60 mb-4 max-w-4xl">
+    NCH is fundamentally a <strong>two-batch business</strong>. The decoction pool and the milk pool are the upstream RM consumers; ~80% of POS items pull a portion from one or both.
+    The remaining ~20% are direct-from-shelf (resale: biscuits, water, niloufer boxes) or simple def+apx wraps (bun + spread).
+    The Khajoor batch is a third, smaller batch that produces 155 pieces per run.
+  </p>
+
+  <div class="spine-bg overflow-x-auto">
+    <svg viewBox="0 0 1100 580" width="100%" style="min-width:980px">
+      <!-- LANE LABELS -->
+      <text class="lane-label" x="50" y="30">RAW MATERIALS</text>
+      <text class="lane-label" x="430" y="30">BATCH POOLS</text>
+      <text class="lane-label" x="800" y="30">POS ITEMS</text>
+
+      <!-- Lane backgrounds -->
+      <rect x="20" y="40" width="320" height="520" rx="8" fill="rgba(232,147,12,0.025)"/>
+      <rect x="380" y="40" width="320" height="520" rx="8" fill="rgba(192,132,252,0.04)"/>
+      <rect x="740" y="40" width="340" height="520" rx="8" fill="rgba(96,165,250,0.025)"/>
+
+      <!-- ====== MILK BATCH inputs ====== -->
+      <rect class="node-rm" x="40" y="60" width="280" height="34" rx="6"/>
+      <text class="node-text title" x="55" y="80">Buffalo Milk · 80 L</text>
+      <text class="node-text dim" x="55" y="92">[HN-RM-200] Prabhu Vendor</text>
+
+      <rect class="node-rm" x="40" y="105" width="280" height="34" rx="6"/>
+      <text class="node-text title" x="55" y="125">Skimmed Milk Powder · 2 kg</text>
+      <text class="node-text dim" x="55" y="137">[HN-RM-201] Jay &amp; Jay</text>
+
+      <rect class="node-rm" x="40" y="150" width="280" height="34" rx="6"/>
+      <text class="node-text title" x="55" y="170">Sugar · 1.5 kg</text>
+      <text class="node-text dim" x="55" y="182">[HN-RM-029]</text>
+
+      <rect class="node-rm" x="40" y="195" width="280" height="34" rx="6"/>
+      <text class="node-text title" x="55" y="215">Condensed Milk (MilkMaid) · 1.5 kg</text>
+      <text class="node-text dim" x="55" y="227">[HN-RM-209]</text>
+
+      <!-- ====== DECOCTION BATCH inputs ====== -->
+      <rect class="node-rm" x="40" y="280" width="280" height="34" rx="6"/>
+      <text class="node-text title" x="55" y="300">Filter Water · 9 L</text>
+      <text class="node-text dim" x="55" y="312">[HN-RM-203]</text>
+
+      <rect class="node-rm" x="40" y="325" width="280" height="34" rx="6"/>
+      <text class="node-text title" x="55" y="345">Tea Powder · 400 g</text>
+      <text class="node-text dim" x="55" y="357">[HN-RM-202] Afeefa</text>
+
+      <rect class="node-rm" x="40" y="370" width="280" height="34" rx="6"/>
+      <text class="node-text title" x="55" y="390">Sugar · 800 g</text>
+      <text class="node-text dim" x="55" y="402">[HN-RM-029]</text>
+
+      <rect class="node-rm" x="40" y="415" width="280" height="34" rx="6"/>
+      <text class="node-text title" x="55" y="435">Charcoal · 4 kg (fuel)</text>
+      <text class="node-text dim" x="55" y="447">[HN-RM-095] consumed, not in dish</text>
+
+      <!-- ====== KHAJOOR BATCH simplified ====== -->
+      <rect class="node-rm" x="40" y="490" width="280" height="44" rx="6"/>
+      <text class="node-text title" x="55" y="510">Khajoor mix · 5kg maida + 2kg sooji</text>
+      <text class="node-text dim" x="55" y="524">+ custard, saunf, oil, kaju, seeds, soda, elaichi</text>
+
+      <!-- ====== BATCHES ====== -->
+      <rect class="node-batch" x="395" y="115" width="290" height="56" rx="8"/>
+      <text class="node-text title" x="410" y="140">MILK BATCH</text>
+      <text class="node-text" x="410" y="156">→ 75 L · 3-hr reduction · yield 93.75%</text>
+      <text class="node-text dim" x="410" y="168">≈ ~1,250 servings @ 60ml each</text>
+
+      <rect class="node-batch" x="395" y="335" width="290" height="56" rx="8"/>
+      <text class="node-text title" x="410" y="360">DECOCTION BATCH</text>
+      <text class="node-text" x="410" y="376">→ 3.6 L · 1-hr boil on bhati</text>
+      <text class="node-text dim" x="410" y="388">≈ 90 servings @ 40ml each</text>
+
+      <rect class="node-batch" x="395" y="490" width="290" height="44" rx="8"/>
+      <text class="node-text title" x="410" y="510">KHAJOOR BATCH</text>
+      <text class="node-text" x="410" y="524">→ 155 pieces per run</text>
+
+      <!-- ====== POS ITEMS ====== -->
+      <rect class="node-pos" x="755" y="60" width="320" height="34" rx="6"/>
+      <text class="node-text title" x="770" y="82">Irani Chai · 60ml milk + 40ml decoction</text>
+
+      <rect class="node-pos" x="755" y="100" width="320" height="34" rx="6"/>
+      <text class="node-text title" x="770" y="122">Kadak Chai · 40ml milk + 60ml decoction</text>
+
+      <rect class="node-pos" x="755" y="140" width="320" height="34" rx="6"/>
+      <text class="node-text title" x="770" y="162">Zafrani / Ginger / Chocolate Tea (60+40)</text>
+
+      <rect class="node-pos" x="755" y="180" width="320" height="34" rx="6"/>
+      <text class="node-text title" x="770" y="202">Irani Milk · 100ml milk only</text>
+
+      <rect class="node-pos" x="755" y="220" width="320" height="34" rx="6"/>
+      <text class="node-text title" x="770" y="242">Badam / Horlicks / Boost (87+addon)</text>
+
+      <rect class="node-pos" x="755" y="260" width="320" height="34" rx="6"/>
+      <text class="node-text title" x="770" y="282">Nawabi / Zafrani Coffee (98ml + pouch)</text>
+
+      <rect class="node-pos" x="755" y="300" width="320" height="34" rx="6"/>
+      <text class="node-text title" x="770" y="322">Black Coffee · water + pouch (BoM gap)</text>
+
+      <rect class="node-pos" x="755" y="345" width="320" height="34" rx="6"/>
+      <text class="node-text title" x="770" y="367">Lemon Tea · 10ml decoction + sabja + ginger</text>
+
+      <rect class="node-pos" x="755" y="385" width="320" height="34" rx="6"/>
+      <text class="node-text title" x="770" y="407">Black Tea · 100ml decoction + sugar</text>
+
+      <rect class="node-pos" x="755" y="490" width="320" height="34" rx="6"/>
+      <text class="node-text title" x="770" y="512">Khajor · 1 pc (from batch of 155)</text>
+
+      <!-- ====== ARROWS: RM → MILK BATCH ====== -->
+      <path class="arrow batch-in" d="M 320 77 Q 360 77 380 130"/>
+      <path class="arrow batch-in" d="M 320 122 Q 360 122 380 142"/>
+      <path class="arrow batch-in" d="M 320 167 Q 360 167 380 152"/>
+      <path class="arrow batch-in" d="M 320 212 Q 360 212 380 165"/>
+
+      <!-- ARROWS: RM → DECOCTION BATCH -->
+      <path class="arrow batch-in" d="M 320 297 Q 360 297 380 355"/>
+      <path class="arrow batch-in" d="M 320 342 Q 360 342 380 363"/>
+      <path class="arrow batch-in" d="M 320 387 Q 360 387 380 372"/>
+      <path class="arrow batch-in" d="M 320 432 Q 360 432 380 380" stroke-dasharray="4 3"/>
+
+      <!-- ARROWS: RM → KHAJOOR -->
+      <path class="arrow batch-in" d="M 320 510 L 380 510"/>
+
+      <!-- ARROWS: BATCHES → POS ITEMS -->
+      <!-- Milk batch → milk-using items -->
+      <path class="arrow batch-out" d="M 685 142 Q 720 100 750 78"/>
+      <path class="arrow batch-out" d="M 685 142 Q 720 130 750 116"/>
+      <path class="arrow batch-out" d="M 685 142 Q 720 145 750 156"/>
+      <path class="arrow batch-out" d="M 685 142 Q 720 175 750 196"/>
+      <path class="arrow batch-out" d="M 685 142 Q 720 200 750 236"/>
+      <path class="arrow batch-out" d="M 685 142 Q 720 235 750 276"/>
+
+      <!-- Decoction → decoction-using items -->
+      <path class="arrow batch-out" d="M 685 363 Q 720 220 750 78"/>
+      <path class="arrow batch-out" d="M 685 363 Q 720 240 750 116"/>
+      <path class="arrow batch-out" d="M 685 363 Q 720 290 750 156"/>
+      <path class="arrow batch-out" d="M 685 363 Q 720 363 750 360"/>
+      <path class="arrow batch-out" d="M 685 363 Q 720 380 750 400"/>
+
+      <!-- Khajoor → Khajor item -->
+      <path class="arrow batch-out" d="M 685 510 L 750 510"/>
+
+      <!-- Direct RM → POS (e.g. Coffee Pouch unit, water bottle, sugar additive)
+           drawn dashed to indicate skip-the-batch path -->
+    </svg>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+    <div class="batch-card">
+      <div class="batch-h">Milk Batch <span class="yield-pill">75 L yield · 93.75%</span></div>
+      <div class="batch-eq">
+        80 L Buffalo Milk <span class="arr">+</span> 2 kg SMP <span class="arr">+</span> 1.5 kg Sugar <span class="arr">+</span> 1.5 kg Condensed Milk
+        <br><span class="arr">→ 3-hr reduction →</span> <strong>75 L Milk Batch</strong>
+      </div>
+      <div class="text-xs text-white/50 mt-2">Variance band: <strong>5–10%</strong> on yield (cook drift) and <strong>5%</strong> on per-cup dispense (60ml/cup target).</div>
+    </div>
+
+    <div class="batch-card">
+      <div class="batch-h">Decoction Batch <span class="yield-pill">3.6 L · ~90 servings</span></div>
+      <div class="batch-eq">
+        9 L Filter Water <span class="arr">+</span> 400 g Tea Powder <span class="arr">+</span> 800 g Sugar
+        <br><span class="arr">→ 1-hr boil on bhati (4 kg charcoal) →</span> <strong>3.6 L Decoction</strong>
+      </div>
+      <div class="text-xs text-white/50 mt-2">Variance band: <strong>5–10%</strong> on yield, <strong>5%</strong> on per-cup dispense (40ml/cup standard, 60ml for Kadak).</div>
+    </div>
+
+    <div class="batch-card">
+      <div class="batch-h">Khajoor Batch <span class="yield-pill">155 pcs / run</span></div>
+      <div class="batch-eq">
+        5 kg Maida <span class="arr">+</span> 2 kg Sooji <span class="arr">+</span> 200 g Custard Powder <span class="arr">+</span> 100 g Saunf <span class="arr">+</span> 6 L Oil
+        <br><span class="arr">+</span> 200 g Kaju <span class="arr">+</span> 200 g Pumpkin Seeds <span class="arr">+</span> 30 g Baking Soda <span class="arr">+</span> 50 g Elaichi
+        <br><span class="arr">→</span> <strong>155 pieces</strong>
+      </div>
+      <div class="text-xs text-white/50 mt-2">Variance band: <strong>5%</strong> on piece-count yield. Once baked, each Khajor sold = 1 DEF.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SHAPE CATALOG -->
+<!-- ============================================================== -->
+<section>
+  <div class="panel-h" style="margin-bottom:6px">Shape Catalog · 10 logical permutations</div>
+  <p class="text-sm text-white/60 mb-4 max-w-4xl">
+    Every POS item — current or future — falls into one of these 10 shapes.
+    Adding a new product = pick a shape and fill its parameters.
+    NCH currently uses <strong class="text-amber-400">5 shapes</strong>; the other 5 are future-ready (HE uses all 10).
+  </p>
+
+  <div id="shapes" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+</section>
+
+<!-- ============================================================== -->
+<!-- ITEMS BY SHAPE -->
+<!-- ============================================================== -->
+<section>
+  <div class="panel-h" style="margin-bottom:6px">All NCH POS items, grouped by shape</div>
+  <p class="text-sm text-white/60 mb-4">Each item card shows the shape badge, master code (or ad-hoc flag), price, and atomic recipe.</p>
+  <div id="items"></div>
+</section>
+
+<!-- ============================================================== -->
+<!-- BoM GAPS + DUPLICATES -->
+<!-- ============================================================== -->
+<section>
+  <div class="panel-h" style="margin-bottom:14px">Cleanup checklist before automation locks down</div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div class="gap-card">
+      <div class="gap-h">3 BoM gaps · need staff input (Mujib / Tanveer)</div>
+      <ul class="text-sm text-white/80 list-disc pl-5 space-y-1">
+        <li><strong>Black Coffee</strong> [1639] — qty of coffee pouch + sugar not in PDF.</li>
+        <li><strong>Irani Boost</strong> [1638] — recipe inferred (Horlicks-pattern: 87ml milk + 3g sugar + 10g Boost). Confirm.</li>
+        <li><strong>Chicken Roll / Chicken Fajita / Cream Bun</strong> [1374, 1376, 1645] — composition unclear (resale vs in-house assembly + qty of filling).</li>
+      </ul>
+    </div>
+    <div class="gap-card">
+      <div class="gap-h">Catalog dedup · before locking master</div>
+      <ul class="text-sm text-white/80 list-disc pl-5 space-y-1">
+        <li><strong>Code <span class="mono">NCH-BM</span></strong> shared by Bun Maska (1029) AND Malai Bun (1100). Will collide on barcode lookup.</li>
+        <li>Recent NCH POS sales reference duplicate IDs <span class="mono">1102 / 1118 / 1115 / 1453 / 1655</span> for items already present at lower IDs. Dedup before custom-layer cutover.</li>
+        <li><strong>Haleem family (5 SKUs)</strong> exists in Odoo with <span class="mono">available_in_pos = false</span>. Currently sold via WhatsApp/manual flow → invisible to POS variance logic. Either POS-enable Haleem or build a parallel non-POS sales feeder.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- POST-ODOO MIGRATION SKETCH (L2 only) -->
+<!-- ============================================================== -->
+<section>
+  <div class="panel-h" style="margin-bottom:14px">L2 stack · custom build target (independent of L3)</div>
+  <p class="text-sm text-white/60 mb-4 max-w-4xl">
+    The L2 layer — RM master, recipes (10 shapes), batch runs, per-sale RM consumption, variance scoring — moves to <strong class="text-emerald-300">D1 + Cloudflare Functions</strong>.
+    L3 (vendor bills, salary, expense) lives in its own parallel D1 schema; the two cross-reference only at month-close on the <strong>L2 → L3 closure point</strong>.
+    Odoo (<span class="mono">odoo.hnhotels.in</span>) retreats from operational truth to nightly compliance posting. POS Odoos (<span class="mono">test/ops.hamzahotel.com</span>) stay untouched — they remain L1's sales-truth source.
+  </p>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="space-y-3">
+      <div class="migration-card">
+        <div class="mig-h">D1 schema sketch · 6 tables drive the entire layer</div>
+        <pre class="schema-block"><span class="cmt">-- 1. Canonical RM master (replaces Odoo product.template + product.category)</span>
+<span class="kw">CREATE TABLE</span> rm_products (
+  id            <span class="typ">INTEGER PRIMARY KEY</span>,
+  code          <span class="typ">TEXT UNIQUE</span>,         <span class="cmt">-- HN-RM-XXX or NCH-XX</span>
+  name          <span class="typ">TEXT</span>,
+  category      <span class="typ">TEXT</span>,
+  uom           <span class="typ">TEXT</span>,                <span class="cmt">-- kg, g, L, ml, Units, can ...</span>
+  current_cost_paise <span class="typ">INTEGER</span>,        <span class="cmt">-- live vendor price</span>
+  vendor_id     <span class="typ">INTEGER</span>,
+  is_batch_intermediate <span class="typ">BOOLEAN</span>      <span class="cmt">-- true for "Milk Batch", "Decoction", "Khajoor Batch"</span>
+);
+
+<span class="cmt">-- 2. Per-RM tolerance bands (variance scoring)</span>
+<span class="kw">CREATE TABLE</span> rm_tolerance (
+  rm_id         <span class="typ">INTEGER REFERENCES</span> rm_products(id),
+  tolerance_pct <span class="typ">INTEGER</span>            <span class="cmt">-- 0 for DEF, 5–15 for APX</span>
+);
+
+<span class="cmt">-- 3. POS recipe = which shape + parameters</span>
+<span class="kw">CREATE TABLE</span> pos_recipe (
+  pos_item_id   <span class="typ">INTEGER PRIMARY KEY</span>,  <span class="cmt">-- maps to product_id from POS Odoo</span>
+  brand         <span class="typ">TEXT</span>,                <span class="cmt">-- 'NCH' or 'HE'</span>
+  shape_code    <span class="typ">TEXT</span>,                <span class="cmt">-- 'S1'..'S10'</span>
+  params_json   <span class="typ">TEXT</span>                 <span class="cmt">-- shape-specific component list</span>
+);
+
+<span class="cmt">-- 4. Production batch run (NEW concept — doesn't exist in Odoo today)</span>
+<span class="kw">CREATE TABLE</span> batch_run (
+  id            <span class="typ">INTEGER PRIMARY KEY</span>,
+  batch_rm_id   <span class="typ">INTEGER REFERENCES</span> rm_products(id),
+  brand         <span class="typ">TEXT</span>,
+  started_at    <span class="typ">TEXT</span>,
+  completed_at  <span class="typ">TEXT</span>,
+  expected_yield <span class="typ">REAL</span>,               <span class="cmt">-- 75 L for Milk, 3.6 L for Decoction</span>
+  actual_yield  <span class="typ">REAL</span>,                <span class="cmt">-- staff-logged at end of cook</span>
+  prepared_by_pin <span class="typ">TEXT</span>
+);
+
+<span class="cmt">-- 5. Inputs to a batch run (denorm of recipe at run time)</span>
+<span class="kw">CREATE TABLE</span> batch_run_input (
+  batch_run_id  <span class="typ">INTEGER REFERENCES</span> batch_run(id),
+  rm_id         <span class="typ">INTEGER REFERENCES</span> rm_products(id),
+  qty_used      <span class="typ">REAL</span>,
+  uom           <span class="typ">TEXT</span>
+);
+
+<span class="cmt">-- 6. Per-sale RM consumption (one row per recipe component per sale)</span>
+<span class="kw">CREATE TABLE</span> rm_consumption_event (
+  id            <span class="typ">INTEGER PRIMARY KEY</span>,
+  pos_order_line_id <span class="typ">TEXT</span>,           <span class="cmt">-- from POS Odoo</span>
+  occurred_at   <span class="typ">TEXT</span>,
+  rm_id         <span class="typ">INTEGER</span>,
+  source_batch_run_id <span class="typ">INTEGER</span>,      <span class="cmt">-- NULL if direct-RM (no batch)</span>
+  expected_qty  <span class="typ">REAL</span>,                <span class="cmt">-- from recipe</span>
+  actual_qty    <span class="typ">REAL</span>,                <span class="cmt">-- system-deducted = expected (no live measure)</span>
+  variance_qty  <span class="typ">REAL</span>                 <span class="cmt">-- computed at batch close-out</span>
+);
+</pre>
+      </div>
+    </div>
+    <div class="space-y-3">
+      <div class="migration-card">
+        <div class="mig-h">Daily flow · how variance gets caught at the moment of error</div>
+        <ol class="text-sm text-white/85 list-decimal pl-5 space-y-2">
+          <li><strong>Batch start (e.g., 6:30am):</strong> Mujib opens "Start Decoction Batch" on PIN-gated UI. System creates <span class="mono">batch_run</span> with expected_yield = 3.6 L, decrements <span class="mono">rm_products</span> on-hand for 9 L water + 400g tea + 800g sugar (the inputs).</li>
+          <li><strong>Batch end (~7:30am):</strong> Mujib enters actual yield (e.g., "3.4 L"). System computes batch yield variance = (3.4 − 3.6) / 3.6 = −5.5% — within tolerance. Logged to <span class="mono">batch_run.actual_yield</span>.</li>
+          <li><strong>Throughout the day:</strong> Each Irani Chai sale at the POS triggers <span class="mono">rm_consumption_event</span> rows: 60ml from Milk Batch + 40ml from Decoction Batch. The batch's "remaining" auto-decrements.</li>
+          <li><strong>Batch close-out (when remaining = 0):</strong> System checks: did the actual servings × per-cup ml match the actual yield? If servings × 40ml &gt; actual yield + tolerance, that's <strong>over-dispensing</strong> (free chai → leakage). If &lt; actual yield − tolerance, <strong>under-dispensing</strong> or unrecorded sale (cash in pocket).</li>
+          <li><strong>Variance alert:</strong> Agent fires WABA to Mujib first ("Decoction batch closed with -8% variance: 80 servings sold but yield 3.4L = 85 servings expected"). 30 min SLA → escalate to owner.</li>
+        </ol>
+      </div>
+
+      <div class="migration-card">
+        <div class="mig-h">Why L2 leaves Odoo (L2-specific reasons)</div>
+        <ul class="text-sm text-white/85 list-disc pl-5 space-y-1.5">
+          <li><strong>No <span class="mono">mrp.bom</span> on this Odoo</strong> — manufacturing module not installed → can't model the two-layer BoM (Decoction batch + per-cup portion) at all.</li>
+          <li><strong>No first-class concept of "batch run"</strong> — Odoo has no native "Mujib started a 9L decoction batch at 6:30am, finished at 7:30am with 3.4L actual yield" event. We'd have to misuse <span class="mono">mrp.production</span> or invent custom models — both fragile.</li>
+          <li><strong>Variance & WABA-alert agents need millisecond-grade reads</strong> from a local D1 — not JSON-RPC round-trips to a hosted Odoo. Per-sale recipe deduction at POS scale needs &lt; 50ms; Odoo can't.</li>
+          <li><strong>10-shape recipe vocabulary</strong> doesn't fit Odoo's BoM model cleanly. Custom <span class="mono">pos_recipe</span> table with shape_code + params_json is dead simple in D1.</li>
+          <li><strong>Cost-of-sale crosses into L3</strong> at month-close, not continuously. Keeping L2 in D1 means the L1↔L2 closure is fast and L2↔L3 is a once-a-month batch — no live coupling needed.</li>
+          <li><strong>POS Odoos (HE prod, NCH prod) remain untouched</strong> as L1's source. Compliance Odoo (<span class="mono">odoo.hnhotels.in</span>) keeps GST/audit ledger only.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="border-t border-white/5 px-6 py-6 mt-8 text-center text-xs text-white/40">
+  <p>Generated from <span class="mono">ops.hamzahotel.com</span> POS configs (NCH = company_id 10) + Master Production Sheet · 5 May 2026</p>
+  <p class="mt-1">34 active POS items · 3 batch constants · 5 of 10 shapes used · 3 BoM gaps · 2+ catalog dedups</p>
+</footer>
+
+<script>
+// =================================================================
+// SHAPE CATALOG (10 shapes; 5 used by NCH)
+// =================================================================
+const SHAPES = [
+  {id:"S1",name:"RESALE",used:true,formula:"1× DEF",desc:"Buy 1 unit, sell 1 unit. No transformation. Variance impossible.",examples:"Niloufer biscuits (5 SKUs), Water bottle, Osmania Biscuit, Cheese Balls, Chicken Cutlet, Pyaaz Samosa, Khajor (1pc from batch of 155)"},
+  {id:"S2",name:"MULTI_UNIT",used:true,formula:"N× DEF",desc:"Buy as units, sell N counted units (with optional batch coating).",examples:"Osmania Biscuit Pack of 3 — 3 pieces of HN-RM-205"},
+  {id:"S3",name:"SINGLE_PORTION",used:true,formula:"1× APX",desc:"One bulk RM portioned per dish. The whole dish IS the portion.",examples:"Irani Milk = 100ml from milk batch + 3g sugar (the milk is the dish)"},
+  {id:"S4",name:"MULTI_PORTION",used:false,formula:"N× APX",desc:"Two or more bulk RMs portioned and combined, no batch, no def unit.",examples:"(unused at NCH) — HE: Aloo Gobi (70g aloo + 70g gobi)"},
+  {id:"S5",name:"BATCH+PROTEIN",used:true,formula:"1× APX-BATCH + 1× APX (or N× APX-BATCH)",desc:"Pre-prep batch + per-dish portion. The two-layer BoM signature. NCH uses BATCH+BATCH (milk + decoction).",examples:"Irani Chai = 60ml milk-batch + 40ml decoction-batch · Kadak Chai · Zafrani · Ginger Tea · Chocolate Tea · Lemon Tea · Black Tea · Badam Milk · Horlicks · Boost · Coffee variants"},
+  {id:"S6",name:"MARINATED_PROTEIN",used:false,formula:"1× APX protein + 1× APX-BATCH marinade",desc:"Protein + marinade portion, no gravy served. Tandoor signature.",examples:"(unused at NCH) — HE: Tandoori Chicken, all Tikka, all Kabab"},
+  {id:"S7",name:"WRAP",used:true,formula:"1× DEF wrap + 1× APX filling (+ optional APX veg)",desc:"Definitive envelope + portioned filling.",examples:"Bun Maska = 1 bun + 36g butter · Malai Bun = 1 bun + 100g malai · Nutella Bun = 1 bun + 15g nutella · Bun Maska Jam = 1 bun + 50g jam · Cream Bun (BoM gap)"},
+  {id:"S8",name:"UNIT_PROTEIN",used:false,formula:"1× DEF organ (+ optional batch)",desc:"Whole organ/cut sold as 1 portion.",examples:"(unused at NCH) — HE: Mutton Brain, Mutton Brain Dry"},
+  {id:"S9",name:"COMPOSITE",used:false,formula:"Σ component POS items",desc:"Combo built from M existing POS items. No new RM logic.",examples:"(unused at NCH today) — HE: Chicken Biryani + 2pc Kabab, all CM01–05, Family Combo"},
+  {id:"S10",name:"NO_RM",used:false,formula:"∅ (empty)",desc:"Charge line. Doesn't consume RM.",examples:"(no charge lines on NCH POS today) — HE: Packaging Charges, Delivery Charges"},
+];
+
+const shapesEl = document.getElementById('shapes');
+shapesEl.innerHTML = SHAPES.map(s => `
+  <div class="shape-card ${s.used ? '' : 'unused'}">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="shape-pill shape-${s.id}">${s.id}</span>
+      <span class="font-semibold text-base">${s.name}</span>
+      ${s.used ? '<span class="pill pill-def" style="margin-left:auto">in use</span>' : '<span class="pill pill-adhoc" style="margin-left:auto">unused at NCH</span>'}
+    </div>
+    <div class="formula">${s.formula}</div>
+    <div class="text-sm text-white/70 mb-2">${s.desc}</div>
+    <div class="examples"><strong class="text-white/85">examples:</strong> ${s.examples}</div>
+  </div>
+`).join('');
+
+// =================================================================
+// NCH POS ITEMS — recipe map
+// =================================================================
+const NCH = [
+  // ── Chai / Coffee (S5 + S3) ───────────────────────────────────────
+  {id:1028,name:"Irani Chai",code:"NCH-IC",price:20,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Milk Batch",code:null,qty:60,uom:"ml",type:"apx",tol:5,batch:true,note:"from 75L milk batch"},
+    {rm:"Decoction Batch",code:null,qty:40,uom:"ml",type:"apx",tol:5,batch:true,note:"from 3.6L decoction batch"},
+  ]},
+  {id:1632,name:"Kadak Chai",code:"NCH-KC",price:20,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Milk Batch",code:null,qty:40,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Decoction Batch",code:null,qty:60,uom:"ml",type:"apx",tol:5,batch:true},
+  ]},
+  {id:1633,name:"Zafrani Chai",code:"NCH-ZC",price:50,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Milk Batch",code:null,qty:60,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Decoction Batch",code:null,qty:40,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Saffron (Kesar)",code:"HN-RM-216",qty:0.04,uom:"g",type:"apx",tol:15,note:"sub-gram, hard to score"},
+  ]},
+  {id:1634,name:"Irani Ginger Tea",code:"NCH-IGT",price:20,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Milk Batch",code:null,qty:60,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Decoction Batch",code:null,qty:40,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Ginger",code:"HN-RM-059",qty:1,uom:"g",type:"apx",tol:15},
+  ]},
+  {id:1635,name:"Irani Black Tea",code:"NCH-IBT",price:20,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Decoction Batch",code:null,qty:100,uom:"ml",type:"apx",tol:5,batch:true,note:"no milk, only decoction"},
+    {rm:"Sugar (extra)",code:"HN-RM-029",qty:3,uom:"g",type:"apx",tol:10},
+  ]},
+  {id:1636,name:"Irani Chocolate Tea",code:"NCH-ICT",price:30,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Milk Batch",code:null,qty:60,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Decoction Batch",code:null,qty:30,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Chocolate",code:null,qty:10,uom:"g",type:"apx",tol:10,gap:true,note:"chocolate not in master"},
+  ]},
+  {id:1085,name:"Lemon Tea",code:null,price:20,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Decoction Batch",code:null,qty:10,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Sabja Seeds (Basil)",code:"HN-RM-217",qty:5,uom:"g",type:"apx",tol:10},
+    {rm:"Ginger",code:"HN-RM-059",qty:1,uom:"g",type:"apx",tol:15},
+    {rm:"Lemon (Nimbu)",code:"HN-RM-065",qty:0.25,uom:"Units",type:"def",note:"~quarter lemon per cup"},
+  ]},
+  {id:1641,name:"Irani Milk",code:"NCH-IM",price:20,cat:"Chai",shape:"S3",recipe:[
+    {rm:"Milk Batch",code:null,qty:100,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Sugar (extra)",code:"HN-RM-029",qty:3,uom:"g",type:"apx",tol:10},
+  ]},
+  {id:1640,name:"Irani Badam Milk",code:"NCH-IBM",price:30,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Milk Batch",code:null,qty:87,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Sugar (extra)",code:"HN-RM-029",qty:3,uom:"g",type:"apx",tol:10},
+    {rm:"Almonds (Badam)",code:"HN-RM-117",qty:10,uom:"g",type:"apx",tol:10},
+  ]},
+  {id:1637,name:"Irani Horlicks",code:"NCH-IH",price:30,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Milk Batch",code:null,qty:87,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Sugar (extra)",code:"HN-RM-029",qty:3,uom:"g",type:"apx",tol:10},
+    {rm:"Horlicks",code:null,qty:10,uom:"g",type:"apx",tol:10,gap:true,note:"not in master"},
+  ]},
+  {id:1638,name:"Irani Boost",code:"NCH-IB",price:30,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Milk Batch",code:null,qty:87,uom:"ml",type:"apx",tol:5,batch:true,note:"inferred from Horlicks pattern"},
+    {rm:"Sugar (extra)",code:"HN-RM-029",qty:3,uom:"g",type:"apx",tol:10},
+    {rm:"Boost",code:null,qty:10,uom:"g",type:"apx",tol:10,gap:true,note:"BoM not in PDF — needs Mujib confirm"},
+  ]},
+  {id:1084,name:"Nawabi Special Coffee",code:"NCH-NSC",price:30,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Milk Batch",code:null,qty:98,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Coffee Pouch",code:"HN-RM-218",qty:1,uom:"Units",type:"def"},
+  ]},
+  {id:1642,name:"Zafrani Coffee",code:"NCH-ZCF",price:60,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Milk Batch",code:null,qty:98,uom:"ml",type:"apx",tol:5,batch:true},
+    {rm:"Coffee Pouch",code:"HN-RM-218",qty:1,uom:"Units",type:"def"},
+    {rm:"Saffron (Kesar)",code:"HN-RM-216",qty:0.04,uom:"g",type:"apx",tol:15,note:"BoM inferred from Zafrani Chai"},
+  ]},
+  {id:1639,name:"Black Coffee",code:"NCH-BC",price:30,cat:"Chai",shape:"S5",recipe:[
+    {rm:"Hot Water",code:null,qty:100,uom:"ml",type:"apx",tol:5,gap:true,note:"BoM gap — qty unclear"},
+    {rm:"Coffee Pouch",code:"HN-RM-218",qty:1,uom:"Units",type:"def",gap:true},
+    {rm:"Sugar",code:"HN-RM-029",qty:3,uom:"g",type:"apx",tol:10,gap:true},
+  ]},
+
+  // ── Snacks / Buns (S7 + S1 + S2) ─────────────────────────────────
+  {id:1029,name:"Bun Maska (Maska Bun)",code:"NCH-BM",price:40,cat:"Snacks",shape:"S7",recipe:[
+    {rm:"Buns",code:"HN-RM-204",qty:1,uom:"Units",type:"def"},
+    {rm:"Amul Butter",code:"HN-RM-046",qty:36,uom:"g",type:"apx",tol:10,note:"36g from 400g block"},
+  ]},
+  {id:1644,name:"Bun Maska Jam",code:"NCH-BMJ",price:50,cat:"Snacks",shape:"S7",recipe:[
+    {rm:"Buns",code:"HN-RM-204",qty:1,uom:"Units",type:"def"},
+    {rm:"Jam",code:null,qty:50,uom:"g",type:"apx",tol:10,gap:true,note:"jam not in master"},
+  ]},
+  {id:1100,name:"Malai Bun",code:"NCH-BM",price:30,cat:"Snacks",shape:"S7",recipe:[
+    {rm:"Buns",code:"HN-RM-204",qty:1,uom:"Units",type:"def"},
+    {rm:"Malai (clotted cream)",code:null,qty:100,uom:"g",type:"apx",tol:10,gap:true,note:"prepared in-house? master entry needed"},
+  ]},
+  {id:1645,name:"Cream Bun",code:"NCH-CRB",price:50,cat:"Snacks",shape:"S7",recipe:[
+    {rm:"Buns",code:"HN-RM-204",qty:1,uom:"Units",type:"def"},
+    {rm:"Cream",code:null,qty:50,uom:"g",type:"apx",tol:10,gap:true,note:"qty not in PDF"},
+  ]},
+  {id:1643,name:"Nutella Bun",code:"NCH-NB",price:60,cat:"Snacks",shape:"S7",recipe:[
+    {rm:"Buns",code:"HN-RM-204",qty:1,uom:"Units",type:"def"},
+    {rm:"Nutella",code:null,qty:15,uom:"g",type:"apx",tol:10,gap:true,note:"nutella not in master"},
+  ]},
+  {id:1435,name:"Khajor",code:"NCH-KH",price:25,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Khajoor (1 piece from batch of 155)",code:null,qty:1,uom:"Units",type:"def",batch:true,note:"1 pc DEF — but the unit itself comes from the Khajoor batch (5kg maida + ...)"},
+  ]},
+  {id:1030,name:"Osmania Biscuit",code:"NCH-OB",price:8,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Osmania Biscuit (Loose)",code:"HN-RM-205",qty:1,uom:"Units",type:"def"},
+  ]},
+  {id:1033,name:"Osmania Biscuit · Pack of 3",code:"NCH-OB3",price:20,cat:"Snacks",shape:"S2",recipe:[
+    {rm:"Osmania Biscuit (Loose)",code:"HN-RM-205",qty:3,uom:"Units",type:"def"},
+  ]},
+  {id:1093,name:"Niloufer Osmania 500g",code:"NCH-OBBOX",price:250,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Osmania Biscuit Box (Niloufer)",code:"HN-RM-208",qty:1,uom:"Units",type:"def"},
+  ]},
+  {id:1383,name:"Niloufer DCC 75g",code:"HN-RM-221",price:120,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Niloufer DCC 75g",code:"HN-RM-221",qty:1,uom:"Units",type:"def"},
+  ]},
+  {id:1384,name:"Niloufer Fruit 100g",code:"HN-RM-222",price:70,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Niloufer Fruit 100g",code:"HN-RM-222",qty:1,uom:"Units",type:"def"},
+  ]},
+  {id:1385,name:"Niloufer Fruit 200g",code:"HN-RM-223",price:150,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Niloufer Fruit 200g",code:"HN-RM-223",qty:1,uom:"Units",type:"def"},
+  ]},
+  {id:1405,name:"Niloufer Osmania 100g",code:null,price:60,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Niloufer Osmania 100g",code:null,qty:1,uom:"Units",type:"def",gap:true,note:"master code missing — needs canonicalisation"},
+  ]},
+  {id:1031,name:"Chicken Cutlet",code:"NCH-CC",price:25,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Chicken Cutlet (Unfried)",code:"HN-RM-206",qty:1,uom:"Units",type:"def",note:"fried in-house — frying oil consumed at batch level, not per-cutlet"},
+  ]},
+  {id:1099,name:"Cheese Balls",code:"NCH-CB",price:50,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Cheese Balls Raw",code:"HN-RM-219",qty:1,uom:"Units",type:"def"},
+  ]},
+  {id:1097,name:"Pyaaz Samosa",code:"NCH-PS",price:15,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Samosa Raw",code:"HN-RM-210",qty:1,uom:"Units",type:"def"},
+  ]},
+  {id:1374,name:"Chicken Roll (with mayo)",code:"NCH-CMR",price:50,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Chicken Roll (pre-made or assembled?)",code:null,qty:1,uom:"Units",type:"def",gap:true,note:"unclear — could be 1 roti + chicken APX + mayo APX (S7) or 1 pre-made roll (S1)"},
+  ]},
+  {id:1376,name:"Chicken Fajita",code:"NCH-FAJ",price:30,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Chicken Fajita (pre-made?)",code:null,qty:1,uom:"Units",type:"def",gap:true,note:"composition unclear"},
+  ]},
+  {id:1076,name:"Water",code:"NCH-WTR",price:10,cat:"Snacks",shape:"S1",recipe:[
+    {rm:"Bottled Water 500ml",code:"HN-RM-207",qty:1,uom:"Units",type:"def"},
+  ]},
+
+  // ── Uncategorised ────────────────────────────────────────────────
+  {id:1092,name:"Osmania Biscuit Box (Niloufer) (uncategorised)",code:"HN-RM-208",price:0,cat:"(uncategorized)",shape:"S1",recipe:[
+    {rm:"Osmania Biscuit Box (Niloufer)",code:"HN-RM-208",qty:1,uom:"Units",type:"def",note:"price 0 in catalog — duplicate of 1093 or admin entry"},
+  ]},
+];
+
+// =================================================================
+// RENDER ITEMS BY SHAPE
+// =================================================================
+function pillFor(c) {
+  const out = [];
+  if (c.type === 'def') out.push('<span class="pill pill-def">DEF</span>');
+  else out.push(`<span class="pill pill-apx">APX ${c.tol||5}%</span>`);
+  if (c.batch) out.push('<span class="pill pill-batch">BATCH</span>');
+  if (c.code) out.push(`<span class="pill pill-master">${c.code}</span>`);
+  else out.push('<span class="pill pill-adhoc">ad-hoc</span>');
+  if (c.gap) out.push('<span class="pill pill-gap">BoM gap</span>');
+  return out.join(' ');
+}
+
+function renderItem(item) {
+  const recipe = item.recipe.map(c => `
+    <div class="recipe-row">
+      <div class="qty">${c.qty || ''} ${c.uom || ''}</div>
+      <div class="rm-name"><strong>${c.rm}</strong>${c.note ? `<div class="text-[10.5px] text-white/40 mt-0.5">${c.note}</div>` : ''}</div>
+      <div class="ml-auto whitespace-nowrap">${pillFor(c)}</div>
+    </div>
+  `).join('');
+  return `
+    <div class="item-card">
+      <div class="flex justify-between items-start gap-2">
+        <div>
+          <div class="item-name">${item.name}</div>
+          <div class="item-meta">id ${item.id}${item.code ? ' · ' + item.code : ''} · ₹${item.price}</div>
+        </div>
+        <span class="shape-pill shape-${item.shape}">${item.shape}</span>
+      </div>
+      ${recipe}
+    </div>
+  `;
+}
+
+const byShape = {};
+NCH.forEach(it => {
+  if (!byShape[it.shape]) byShape[it.shape] = [];
+  byShape[it.shape].push(it);
+});
+
+const shapeOrder = ["S5","S7","S1","S2","S3","S4","S6","S8","S9","S10"];
+const shapeNames = Object.fromEntries(SHAPES.map(s => [s.id, s.name]));
+
+let html = '';
+for (const sid of shapeOrder) {
+  if (!byShape[sid]) continue;
+  const items = byShape[sid];
+  html += `<h2 class="cat-h"><span><span class="shape-pill shape-${sid}" style="margin-right:8px">${sid}</span>${shapeNames[sid]}</span><span class="cat-meta">${items.length} items</span></h2>`;
+  html += `<div class="grid-items">${items.map(renderItem).join('')}</div>`;
+}
+document.getElementById('items').innerHTML = html;
+</script>
+
+</body>
+</html>
