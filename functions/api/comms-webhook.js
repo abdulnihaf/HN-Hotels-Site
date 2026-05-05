@@ -1,7 +1,7 @@
-// /api/comms-webhook — Meta WhatsApp inbound webhook
-// Receives delivery receipts + inbound replies. Captures opt-in YES/NO into comms_optin
-// and ack actions (RESOLVE/SNOOZE) into comms_outbox.
-// Forwards everything else to brand site so existing whatsapp.js flows keep working.
+// /api/comms-webhook — inbound webhook hub
+// Handles: Meta WhatsApp delivery receipts + replies, Exotel voice status + DTMF.
+// Captures opt-in YES/NO into comms_optin, ack actions into comms_outbox.
+// Forwards unhandled WhatsApp messages to brand site.
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -18,6 +18,10 @@ function normalizePhone(raw) {
   if (digits.length === 12 && digits.startsWith('91')) return digits;
   if (digits.length === 13 && digits.startsWith('091')) return digits.slice(1);
   return digits;
+}
+
+function escapeXml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 const YES_RX = /^\s*(yes|y|ok|okay|haan|han|haa|sure|confirm|confirmed|consent|agree|agreed|haa\.?)\s*\.?\s*$/i;
@@ -154,6 +158,70 @@ async function forwardToBrand(env, brand, payload) {
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
+  const action = url.searchParams.get('action');
+
+  // ── Exotel: TTS call-flow (GET) ───────────────────────────────────────────
+  // Exotel fetches this URL when an outbound call connects; we return ExoML.
+  if (action === 'exotel-tts') {
+    const msgText = url.searchParams.get('text') || 'HN Hotels alert requires your attention.';
+    const alertId = url.searchParams.get('alert_id') || '';
+    const base = `${url.protocol}//${url.host}`;
+    const dtmfUrl = `${base}/api/comms-webhook?action=exotel-dtmf&alert_id=${encodeURIComponent(alertId)}`;
+    const exoml = `<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="en-IN">${escapeXml(msgText)}</Say><Gather numDigits="1" action="${escapeXml(dtmfUrl)}" method="POST" timeout="10"><Say voice="en-IN">Press 1 to acknowledge. Press 2 to snooze for 30 minutes.</Say></Gather><Say voice="en-IN">No input received. Goodbye.</Say></Response>`;
+    return new Response(exoml, { headers: { 'content-type': 'application/xml' } });
+  }
+
+  // ── Exotel: DTMF digit capture (POST) ─────────────────────────────────────
+  // Exotel posts here after the Gather node captures a digit.
+  if (action === 'exotel-dtmf' && request.method === 'POST') {
+    let formData;
+    try { formData = await request.formData(); } catch { return json({ error: 'invalid form' }, 400); }
+    const digit = formData.get('Digits') || formData.get('digit') || '';
+    const callSid = formData.get('CallSid') || formData.get('Sid') || '';
+    const alertId = url.searchParams.get('alert_id') || '';
+
+    const row = callSid
+      ? await env.DB.prepare(`SELECT id FROM comms_outbox WHERE provider_msg_id=? LIMIT 1`).bind(callSid).first()
+      : alertId
+        ? await env.DB.prepare(`SELECT id FROM comms_outbox WHERE alert_id=? AND channel='voice' ORDER BY id DESC LIMIT 1`).bind(alertId).first()
+        : null;
+
+    if (row && (digit === '1' || digit === '2')) {
+      const ackAction = digit === '1' ? 'resolved' : 'snooze';
+      await env.DB.prepare(
+        `UPDATE comms_outbox SET acked_at=datetime('now'), ack_action=?, ack_payload=? WHERE id=?`
+      ).bind(ackAction, digit, row.id).run();
+    }
+
+    const sayText = digit === '1' ? 'Acknowledged. Thank you.'
+      : digit === '2' ? 'Snoozed for 30 minutes. We will call again if needed.'
+      : 'Invalid input. Goodbye.';
+    return new Response(
+      `<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="en-IN">${escapeXml(sayText)}</Say><Hangup/></Response>`,
+      { headers: { 'content-type': 'application/xml' } }
+    );
+  }
+
+  // ── Exotel: call status callback (POST) ───────────────────────────────────
+  // Exotel posts here when a call terminates (completed/no-answer/busy/failed).
+  if (action === 'exotel-status' && request.method === 'POST') {
+    let formData;
+    try { formData = await request.formData(); } catch { return json({ ok: true }); }
+    const callSid = formData.get('CallSid') || formData.get('Sid') || '';
+    const status = (formData.get('Status') || formData.get('DialCallStatus') || '').toLowerCase();
+    if (callSid && status) {
+      if (status === 'completed') {
+        await env.DB.prepare(
+          `UPDATE comms_outbox SET status='delivered', delivered_at=datetime('now') WHERE provider_msg_id=? AND delivered_at IS NULL`
+        ).bind(callSid).run();
+      } else if (['no-answer', 'busy', 'failed', 'cancelled'].includes(status)) {
+        await env.DB.prepare(
+          `UPDATE comms_outbox SET status='failed', error_text=? WHERE provider_msg_id=?`
+        ).bind(status, callSid).run();
+      }
+    }
+    return json({ ok: true });
+  }
 
   // Meta webhook verification (GET)
   if (request.method === 'GET') {
