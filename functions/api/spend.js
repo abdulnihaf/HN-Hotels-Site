@@ -2112,6 +2112,65 @@ export async function onRequest(context) {
       return json({ success: true, deleted_odoo_id: odoo_id });
     }
 
+    // ── DELETE BILL ATTACHMENT — remove a mistakenly uploaded receipt photo ──
+    // Deletes from D1 bill_attachments + Odoo ir.attachment (best-effort).
+    // Any role that can view the ledger (admin/cfo/purchase/gm/asstmgr/ops) can delete.
+    if (action === 'delete-bill-attachment' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, attachment_id } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!['admin','cfo','purchase','gm','asstmgr','ops'].includes(user.role)) {
+        return json({ success: false, error: 'Not authorised to delete attachments' }, 403);
+      }
+      if (!attachment_id) return json({ success: false, error: 'attachment_id required' }, 400);
+      if (!DB) return json({ success: false, error: 'DB not available' }, 500);
+
+      const att = await DB.prepare('SELECT * FROM bill_attachments WHERE id = ?')
+        .bind(parseInt(attachment_id, 10)).first();
+      if (!att) return json({ success: false, error: 'Attachment not found in D1' }, 404);
+
+      // Best-effort Odoo ir.attachment delete
+      let odooDeleted = false;
+      if (att.odoo_attachment_id) {
+        try {
+          await odoo(apiKey, 'ir.attachment', 'unlink', [[parseInt(att.odoo_attachment_id, 10)]]);
+          odooDeleted = true;
+        } catch (e) { console.error('ir.attachment unlink fail:', e.message); }
+      }
+
+      await DB.prepare('DELETE FROM bill_attachments WHERE id = ?')
+        .bind(parseInt(attachment_id, 10)).run();
+
+      return json({ success: true, attachment_id, odoo_deleted: odooDeleted, filename: att.filename });
+    }
+
+    // ── CANCEL PO — cancel a purchase order (leaves it in Odoo as cancelled) ──
+    // Shown for draft/confirmed POs that haven't been marked received yet.
+    if (action === 'cancel-po' && request.method === 'POST') {
+      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      const body = await request.json();
+      const { pin, po_id } = body;
+      const user = resolveUser(pin);
+      if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
+      if (!['admin','cfo','purchase','gm','asstmgr','ops'].includes(user.role)) {
+        return json({ success: false, error: 'Not authorised to cancel POs' }, 403);
+      }
+      if (!po_id) return json({ success: false, error: 'po_id required' }, 400);
+
+      const poArr = await odoo(apiKey, 'purchase.order', 'read', [[parseInt(po_id, 10)]],
+        { fields: ['id', 'name', 'state'] });
+      if (!poArr?.length) return json({ success: false, error: 'PO not found' }, 404);
+      const po = poArr[0];
+
+      if (po.state === 'cancel') return json({ success: true, po_name: po.name, already_cancelled: true });
+      if (po.state === 'done')   return json({ success: false, error: 'PO is done/received — cannot cancel' }, 400);
+
+      await odoo(apiKey, 'purchase.order', 'button_cancel', [[parseInt(po_id, 10)]]);
+      return json({ success: true, po_name: po.name, already_cancelled: false });
+    }
+
     // ── PATCH EXPENSE NAME (admin / cfo only) — fix description without delete/re-create ──
     if (action === 'patch-expense' && request.method === 'POST') {
       if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
@@ -2222,7 +2281,8 @@ export async function onRequest(context) {
       if (DB) {
         try {
           const res = await DB.prepare(`
-            SELECT entry_kind, entry_odoo_id, drive_file_id, drive_view_url, drive_folder_path,
+            SELECT id, entry_kind, entry_odoo_id, odoo_attachment_id,
+                   drive_file_id, drive_view_url, drive_folder_path,
                    filename, file_size_kb, uploaded_by_pin, uploaded_by_name, uploaded_at
             FROM bill_attachments
             WHERE entry_date BETWEEN ? AND ?
@@ -2232,6 +2292,8 @@ export async function onRequest(context) {
             const key = `${row.entry_kind}-${row.entry_odoo_id}`;
             if (!d1Atts[key]) d1Atts[key] = [];
             d1Atts[key].push({
+              id: row.id,
+              odoo_attachment_id: row.odoo_attachment_id,
               drive_file_id: row.drive_file_id,
               drive_url: row.drive_view_url,
               drive_path: row.drive_folder_path,

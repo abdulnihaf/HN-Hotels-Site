@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HN Ops · Messaging Test Console</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --panel-2: #334155; --ink: #e2e8f0; --ink-dim: #94a3b8;
+    --accent: #38bdf8; --good: #4ade80; --warn: #fbbf24; --bad: #f87171; --border: #475569;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.45; font-size: 14px; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 18px; }
+  header .small { font-size: 12px; color: var(--ink-dim); }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 24px 80px; display: grid; gap: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .panel h2 { margin: 0 0 10px; font-size: 14px; color: var(--accent); }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .kpi { background: #0b1220; border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
+  .kpi .label { font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .kpi .value { font-size: 16px; font-weight: 600; margin-top: 2px; }
+  label { display: block; font-size: 12px; color: var(--ink-dim); margin: 8px 0 4px; }
+  input[type=text], textarea, select { width: 100%; padding: 8px 10px; background: #0b1220; color: var(--ink);
+    border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 13px; }
+  textarea { resize: vertical; min-height: 70px; }
+  button { padding: 8px 14px; background: var(--accent); color: #0b1220; border: 0; border-radius: 6px;
+    font-weight: 600; cursor: pointer; font-size: 13px; }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary { background: var(--panel-2); color: var(--ink); }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .pill.good { background: #14532d; color: #bbf7d0; }
+  .pill.warn { background: #78350f; color: #fde68a; }
+  .pill.bad { background: #7f1d1d; color: #fecaca; }
+  .pill.dim { background: #334155; color: #cbd5e1; }
+  .toggle-group { display: inline-flex; gap: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .toggle-group button { background: transparent; color: var(--ink-dim); border-radius: 0; padding: 6px 14px; }
+  .toggle-group button.active { background: var(--accent); color: #0b1220; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border-bottom: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { color: var(--ink-dim); font-weight: 500; font-size: 11px; text-transform: uppercase; }
+  tr.dim td { color: var(--ink-dim); }
+  .staff-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+  .staff-row { padding: 6px 10px; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 8px; }
+  .staff-row:hover { background: #0b1220; }
+  .staff-row input[type=checkbox] { margin: 0; }
+  .staff-row .name { flex: 1; }
+  .staff-row .meta { font-size: 11px; color: var(--ink-dim); }
+  pre { background: #0b1220; padding: 8px 10px; border-radius: 6px; overflow-x: auto; font-size: 11.5px; max-height: 200px; }
+  .cost { color: var(--warn); font-weight: 600; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>HN Ops · Messaging Test Console</h1>
+    <div class="small">Manual layer test. WABA via Sparksol. SMS via Fast2SMS quick route.</div>
+  </div>
+  <div>
+    <label class="small" style="margin: 0;">Dashboard key</label>
+    <input id="dk" type="text" placeholder="x-dashboard-key" style="width: 240px; font-family: ui-monospace, monospace;" />
+  </div>
+</header>
+
+<main>
+
+<section class="panel">
+  <h2>Overview</h2>
+  <div id="kpis" class="row">Loading…</div>
+</section>
+
+<section class="panel">
+  <h2>Send</h2>
+
+  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+    <span style="font-size: 12px; color: var(--ink-dim); align-self: center;">Recipient mode:</span>
+    <div class="toggle-group" id="modeGroup">
+      <button data-mode="individual" class="active">Individual</button>
+      <button data-mode="selected">Multi-select</button>
+      <button data-mode="all">All staff</button>
+    </div>
+
+    <span style="font-size: 12px; color: var(--ink-dim); align-self: center; margin-left: 16px;">Channel:</span>
+    <div class="toggle-group" id="channelGroup">
+      <button data-channel="waba" class="active">WABA</button>
+      <button data-channel="sms">SMS</button>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <div id="recipientPane">
+        <div id="paneIndividual">
+          <label>Phone (10 digit Indian or E.164)</label>
+          <input id="indiPhone" type="text" placeholder="7010426808" />
+        </div>
+        <div id="paneSelected" style="display: none;">
+          <label>Filter</label>
+          <input id="staffFilter" type="text" placeholder="Search by name or brand" />
+          <div class="staff-list" id="staffList">Loading staff…</div>
+          <div class="small" style="margin-top: 4px;">
+            <span id="selectedCount">0</span> selected ·
+            <button class="secondary" type="button" onclick="selectAll()" style="padding: 2px 8px; font-size: 11px;">Select all</button>
+            <button class="secondary" type="button" onclick="selectNone()" style="padding: 2px 8px; font-size: 11px;">None</button>
+            <button class="secondary" type="button" onclick="selectByBrand('HQ')" style="padding: 2px 8px; font-size: 11px;">HQ only</button>
+            <button class="secondary" type="button" onclick="selectByBrand('HE')" style="padding: 2px 8px; font-size: 11px;">HE only</button>
+            <button class="secondary" type="button" onclick="selectByBrand('NCH')" style="padding: 2px 8px; font-size: 11px;">NCH only</button>
+          </div>
+        </div>
+        <div id="paneAll" style="display: none;">
+          <div class="small" style="padding: 8px;">Will send to <strong id="allCount">…</strong> active staff with <strong>opted_in</strong> on the selected channel.</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div id="wabaPane">
+        <label>Brand</label>
+        <select id="wabaBrand">
+          <option value="sparksol" selected>Sparksol (default)</option>
+          <option value="he">HE</option>
+          <option value="nch">NCH</option>
+        </select>
+
+        <label>Template</label>
+        <select id="wabaTemplate">
+          <option value="">Loading…</option>
+        </select>
+
+        <div id="varsContainer"></div>
+
+        <label>Preview</label>
+        <pre id="wabaPreview" style="margin: 0;">Pick a template…</pre>
+      </div>
+
+      <div id="smsPane" style="display: none;">
+        <label>Message body (max 160 chars per segment)</label>
+        <textarea id="smsBody" maxlength="500" placeholder="Hi {Name}, ..."></textarea>
+        <div class="small" style="margin-top: 4px;">
+          <span id="smsLen">0</span> chars · <span id="smsCost" class="cost">₹0.00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
+    <button id="sendBtn" onclick="onSend()">Send</button>
+    <span id="sendCost" class="cost"></span>
+    <span id="sendStatus" style="font-size: 12px; color: var(--ink-dim);"></span>
+  </div>
+
+  <div id="sendResult" style="margin-top: 12px;"></div>
+</section>
+
+<section class="panel">
+  <h2>Recent outbox · last 30</h2>
+  <div id="outboxTable">Loading…</div>
+</section>
+
+</main>
+
+<script>
+const dkInput = document.getElementById('dk');
+let mode = 'individual';
+let channel = 'waba';
+let staffData = [];
+let templatesData = [];
+let selectedTemplate = null;
+
+dkInput.value = localStorage.getItem('hn_dk') || '';
+dkInput.addEventListener('change', () => localStorage.setItem('hn_dk', dkInput.value));
+
+const SMS_RATE_PAISE = 14.3; // 14.3 paise per SMS quick-route Fast2SMS
+const WABA_UTILITY_PAISE = 14.5; // 14.5 paise per UTILITY template per Meta Jan 2026
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, opts);
+  return res.json();
+}
+
+async function loadOverview() {
+  const o = await api('/api/messaging?action=overview');
+  const kpis = document.getElementById('kpis');
+  const optin = (o.counts?.optin || []);
+  const wabaIn = optin.find(x => x.channel === 'waba' && x.status === 'opted_in')?.cnt || 0;
+  const wabaPe = optin.find(x => x.channel === 'waba' && x.status === 'pending')?.cnt || 0;
+  const smsIn = optin.find(x => x.channel === 'sms' && x.status === 'opted_in')?.cnt || 0;
+  const wallet = o.fast2sms?.wallet ? `₹${o.fast2sms.wallet}` : '—';
+  const smsLeft = o.fast2sms?.sms_count ?? '—';
+  kpis.innerHTML = `
+    <div class="kpi"><div class="label">WABA opted-in</div><div class="value">${wabaIn} / ${wabaIn + wabaPe}</div></div>
+    <div class="kpi"><div class="label">WABA pending</div><div class="value">${wabaPe}</div></div>
+    <div class="kpi"><div class="label">SMS opted-in</div><div class="value">${smsIn}</div></div>
+    <div class="kpi"><div class="label">Fast2SMS wallet</div><div class="value">${wallet}</div></div>
+    <div class="kpi"><div class="label">SMS units left</div><div class="value">${smsLeft}</div></div>
+    <div class="kpi"><div class="label">Sparksol</div><div class="value">${o.configured?.sparksol_token ? '✓ ready' : '✗ missing'}</div></div>
+  `;
+}
+
+async function loadStaff() {
+  const r = await api('/api/messaging?action=staff');
+  staffData = r.staff || [];
+  document.getElementById('allCount').textContent = staffData.length;
+  renderStaff();
+}
+
+function renderStaff() {
+  const filterText = (document.getElementById('staffFilter').value || '').toLowerCase();
+  const list = document.getElementById('staffList');
+  const filtered = staffData.filter(s =>
+    !filterText || s.name.toLowerCase().includes(filterText) || (s.brand || '').toLowerCase().includes(filterText)
+  );
+  list.innerHTML = filtered.map(s => {
+    const wabaPill = s.waba_status === 'opted_in' ? '<span class="pill good">WABA ✓</span>'
+      : s.waba_status === 'pending' ? '<span class="pill warn">WABA pend</span>'
+      : '<span class="pill dim">WABA —</span>';
+    const smsPill = s.sms_status === 'opted_in' ? '<span class="pill good">SMS ✓</span>' : '<span class="pill dim">SMS —</span>';
+    return `<label class="staff-row">
+      <input type="checkbox" data-phone="${s.e164}" data-brand="${s.brand}" />
+      <span class="name">${s.name}</span>
+      <span class="meta">${s.brand} · ${s.phone}</span>
+      ${wabaPill}${smsPill}
+    </label>`;
+  }).join('');
+  list.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', updateSelectedCount));
+}
+
+function updateSelectedCount() {
+  const cs = document.querySelectorAll('#staffList input[type=checkbox]:checked');
+  document.getElementById('selectedCount').textContent = cs.length;
+  refreshCost();
+}
+
+function selectAll() { document.querySelectorAll('#staffList input[type=checkbox]').forEach(cb => cb.checked = true); updateSelectedCount(); }
+function selectNone() { document.querySelectorAll('#staffList input[type=checkbox]').forEach(cb => cb.checked = false); updateSelectedCount(); }
+function selectByBrand(b) {
+  document.querySelectorAll('#staffList input[type=checkbox]').forEach(cb => cb.checked = (cb.dataset.brand === b));
+  updateSelectedCount();
+}
+
+document.getElementById('staffFilter').addEventListener('input', renderStaff);
+
+async function loadTemplates() {
+  const r = await api('/api/messaging?action=templates');
+  templatesData = r.templates || [];
+  const sel = document.getElementById('wabaTemplate');
+  sel.innerHTML = '<option value="">— pick a template —</option>' +
+    templatesData.map(t => `<option value="${t.name}">${t.name} (${t.var_count} vars)</option>`).join('');
+  sel.addEventListener('change', onTemplateChange);
+}
+
+function onTemplateChange() {
+  const name = document.getElementById('wabaTemplate').value;
+  selectedTemplate = templatesData.find(t => t.name === name);
+  const c = document.getElementById('varsContainer');
+  if (!selectedTemplate) { c.innerHTML = ''; document.getElementById('wabaPreview').textContent = 'Pick a template…'; return; }
+  c.innerHTML = '';
+  for (let i = 1; i <= selectedTemplate.var_count; i++) {
+    const lbl = document.createElement('label'); lbl.textContent = 'var {{' + i + '}}';
+    const inp = document.createElement('input'); inp.type = 'text'; inp.dataset.varIdx = i;
+    inp.addEventListener('input', renderPreview);
+    c.appendChild(lbl); c.appendChild(inp);
+  }
+  renderPreview();
+}
+
+function renderPreview() {
+  if (!selectedTemplate) return;
+  let txt = selectedTemplate.body_text;
+  document.querySelectorAll('#varsContainer input').forEach(inp => {
+    const idx = inp.dataset.varIdx;
+    txt = txt.replace(new RegExp('\\{\\{' + idx + '\\}\\}', 'g'), inp.value || '{{' + idx + '}}');
+  });
+  document.getElementById('wabaPreview').textContent = txt;
+}
+
+document.getElementById('modeGroup').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+  document.getElementById('modeGroup').querySelectorAll('button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); mode = b.dataset.mode;
+  document.getElementById('paneIndividual').style.display = mode === 'individual' ? 'block' : 'none';
+  document.getElementById('paneSelected').style.display = mode === 'selected' ? 'block' : 'none';
+  document.getElementById('paneAll').style.display = mode === 'all' ? 'block' : 'none';
+  refreshCost();
+}));
+
+document.getElementById('channelGroup').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+  document.getElementById('channelGroup').querySelectorAll('button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); channel = b.dataset.channel;
+  document.getElementById('wabaPane').style.display = channel === 'waba' ? 'block' : 'none';
+  document.getElementById('smsPane').style.display = channel === 'sms' ? 'block' : 'none';
+  refreshCost();
+}));
+
+document.getElementById('smsBody').addEventListener('input', () => {
+  const len = document.getElementById('smsBody').value.length;
+  document.getElementById('smsLen').textContent = len;
+  refreshCost();
+});
+
+function getRecipients() {
+  if (mode === 'individual') {
+    const v = document.getElementById('indiPhone').value.trim();
+    return v ? [v] : [];
+  }
+  if (mode === 'selected') {
+    return Array.from(document.querySelectorAll('#staffList input[type=checkbox]:checked')).map(cb => cb.dataset.phone);
+  }
+  if (mode === 'all') {
+    return staffData.filter(s => (channel === 'waba' ? s.waba_status : s.sms_status) === 'opted_in').map(s => s.e164);
+  }
+  return [];
+}
+
+function refreshCost() {
+  const n = getRecipients().length;
+  const rate = channel === 'sms' ? SMS_RATE_PAISE : WABA_UTILITY_PAISE;
+  const total = (n * rate / 100).toFixed(2);
+  document.getElementById('sendCost').textContent = n > 0 ? `Cost: ~₹${total} (${n} × ${(rate/100).toFixed(3)})` : '';
+  if (channel === 'sms') {
+    document.getElementById('smsCost').textContent = `≈ ₹${total}`;
+  }
+}
+
+async function onSend() {
+  const dk = dkInput.value.trim();
+  if (!dk) { alert('Set dashboard key first'); return; }
+  const recipients = getRecipients();
+  if (recipients.length === 0) { alert('No recipients'); return; }
+
+  let body;
+  if (channel === 'waba') {
+    if (!selectedTemplate) { alert('Pick a template'); return; }
+    const vars = Array.from(document.querySelectorAll('#varsContainer input')).map(i => i.value);
+    body = { channel, brand: document.getElementById('wabaBrand').value, recipients, template: selectedTemplate.name, vars };
+  } else {
+    const message = document.getElementById('smsBody').value.trim();
+    if (!message) { alert('SMS body required'); return; }
+    body = { channel, recipients, message };
+  }
+
+  if (recipients.length > 5) {
+    if (!confirm(`Send to ${recipients.length} recipients via ${channel.toUpperCase()}?`)) return;
+  }
+
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('sendStatus').textContent = `Sending ${recipients.length}…`;
+
+  try {
+    const action = recipients.length === 1 ? 'send' : 'send-bulk';
+    const reqBody = recipients.length === 1
+      ? { ...body, phone: recipients[0], recipients: undefined }
+      : body;
+    const res = await fetch(`/api/messaging?action=${action}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify(reqBody),
+    });
+    const data = await res.json();
+    document.getElementById('sendResult').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+    document.getElementById('sendStatus').textContent = action === 'send-bulk'
+      ? `${data.ok}/${data.total} ok, ${data.failed} failed`
+      : (data.ok ? 'OK' : 'failed');
+    setTimeout(() => { loadOverview(); loadOutbox(); }, 1500);
+  } catch (e) {
+    document.getElementById('sendResult').innerHTML = `<pre>${e.message}</pre>`;
+  } finally {
+    document.getElementById('sendBtn').disabled = false;
+  }
+}
+
+async function loadOutbox() {
+  const r = await api('/api/messaging?action=outbox&limit=30');
+  const rows = r.outbox || [];
+  if (!rows.length) { document.getElementById('outboxTable').innerHTML = '<div class="small">No outbox rows.</div>'; return; }
+  document.getElementById('outboxTable').innerHTML = `<table>
+    <thead><tr><th>id</th><th>ts</th><th>ch</th><th>brand</th><th>recipient</th><th>template / body</th><th>status</th><th>delivered</th><th>read</th><th>ack</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td>${r.id}</td>
+      <td>${(r.sent_at || '').slice(11, 19)}</td>
+      <td>${r.channel}</td>
+      <td>${r.brand}</td>
+      <td>${r.recipient_phone}</td>
+      <td>${(r.template_name || (r.body_text || '').slice(0, 40)) || '—'}</td>
+      <td><span class="pill ${r.status === 'sent' ? 'good' : (r.status === 'failed' ? 'bad' : 'dim')}">${r.status}</span></td>
+      <td>${r.delivered_at ? '✓' : '·'}</td>
+      <td>${r.read_at ? '✓' : '·'}</td>
+      <td>${r.ack_action || '—'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+(async () => {
+  await loadOverview();
+  await loadStaff();
+  await loadTemplates();
+  await loadOutbox();
+})();
+</script>
+</body>
+</html>

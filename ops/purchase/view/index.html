@@ -639,12 +639,15 @@ function openDrawer(idx) {
           ? `<a href="${esc(a.drive_url)}" target="_blank" rel="noopener" class="att-drive-btn" title="Open this bill in Google Drive">Drive ↗</a>`
           : `<a href="https://drive.google.com/drive/u/0/search?q=${driveSearchQ}" target="_blank" rel="noopener" class="att-drive-btn" title="Drive URL not stored — search by date + brand">Drive search ↗</a>`;
         html += `
-          <div class="att-item">
+          <div class="att-item" data-att-id="${a.id || ''}">
             <div style="flex:1; min-width:0;">
               <div class="att-name">${esc(a.filename || 'bill.jpg')}</div>
               <div class="att-meta">by ${esc(a.uploaded_by || '—')}${uploadedAt ? ' · ' + uploadedAt : ''}${sizeText}</div>
             </div>
             ${driveBtn}
+            ${a.id ? `<button onclick="deleteAttachment(${a.id}, this)" title="Delete this bill photo"
+              style="background:none;border:none;color:#f87171;cursor:pointer;font-size:18px;padding:0 4px;flex-shrink:0;line-height:1;"
+              aria-label="Delete attachment">×</button>` : ''}
           </div>`;
       }
       html += `</div>`;
@@ -1177,6 +1180,35 @@ function fmtDateTime(s) {
   if (isNaN(d)) return s;
   return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata',
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+// ── Delete bill attachment ─────────────────────────────────────
+async function deleteAttachment(attId, btn) {
+  if (!confirm('Delete this bill photo? This removes it from the record. Cannot be undone.')) return;
+  const item = btn?.closest('.att-item');
+  if (btn) btn.disabled = true;
+  const status = document.getElementById('d-upload-status');
+  if (status) { status.textContent = 'Deleting…'; status.style.color = 'var(--text-dim)'; }
+  try {
+    const r = await fetch(`${API}?action=delete-bill-attachment`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: PIN, attachment_id: attId }),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Delete failed');
+    // Remove from in-memory state + fade out the card
+    if (STATE.currentRow?.attachments) {
+      STATE.currentRow.attachments = STATE.currentRow.attachments.filter(a => a.id !== attId);
+      STATE.currentRow.attachment_count = Math.max(0, (STATE.currentRow.attachment_count || 1) - 1);
+      STATE.currentRow.has_attachment = STATE.currentRow.attachment_count > 0;
+    }
+    if (item) item.remove();
+    if (status) { status.textContent = '✓ Photo deleted'; status.style.color = '#34d399'; }
+    render();  // refresh badge in table row
+    setTimeout(() => { if (status) status.textContent = ''; }, 2500);
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    if (status) { status.textContent = '✗ ' + e.message; status.style.color = '#f87171'; }
+  }
 }
 </script>
 

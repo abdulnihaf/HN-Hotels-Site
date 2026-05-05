@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NCH-L1 Inflow · The Closed Circle</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c14;
+    --panel: rgba(22,22,31,0.7);
+    --border: rgba(255,255,255,0.08);
+    --ink: #e4e4ed;
+    --ink-dim: #94a3b8;
+    --accent: #f0a944;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --info: #60a5fa;
+    --purple: #c084fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.5;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .glass {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    border-radius: 14px;
+  }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .pill-pos { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-pm { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .pill-rnr { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-rpqr { background: rgba(52,211,153,0.15); color: var(--good); }
+  .pill-d1 { background: rgba(251,191,36,0.18); color: var(--warn); }
+  .pill-d2 { background: rgba(96,165,250,0.18); color: var(--info); }
+  .pill-d3 { background: rgba(248,113,113,0.18); color: var(--bad); }
+  .pill-eq { background: rgba(168,85,247,0.18); color: var(--purple); }
+  .pill-dep { background: rgba(255,255,255,0.06); color: var(--ink-dim); }
+  .pill-future { background: rgba(248,113,113,0.10); color: var(--bad); border: 1px dashed rgba(248,113,113,0.35); }
+  .grad-fade {
+    background: linear-gradient(180deg, rgba(15,15,26,0.85) 0%, rgba(12,12,20,1) 100%);
+  }
+  table.codes { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.codes th, table.codes td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.codes th { color: var(--ink-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  .panel-h { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .equation { background: rgba(0,0,0,0.35); border-left: 3px solid var(--purple); padding: 10px 12px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.6; margin: 6px 0; }
+  .equation .lhs { color: var(--purple); font-weight: 700; }
+  .equation .op  { color: var(--accent); }
+  .stat-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat-card .label { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .stat-card .meta { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .scroll-x { overflow-x: auto; }
+  .ag-card {
+    background: rgba(192,132,252,0.04);
+    border: 1px solid rgba(192,132,252,0.20);
+    border-left: 3px solid var(--purple);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  .future-tag { color: var(--bad); font-weight: 600; font-size: 10px; letter-spacing: 0.05em; }
+  /* SVG nodes */
+  .node-rect { fill: rgba(255,255,255,0.04); stroke: rgba(255,255,255,0.18); stroke-width: 1; }
+  .node-rect.pos { fill: rgba(232,147,12,0.10); stroke: rgba(232,147,12,0.50); }
+  .node-rect.pm { fill: rgba(192,132,252,0.08); stroke: rgba(192,132,252,0.45); }
+  .node-rect.promise { fill: rgba(168,85,247,0.10); stroke: rgba(168,85,247,0.55); stroke-width: 1.5; }
+  .node-rect.runner { fill: rgba(96,165,250,0.08); stroke: rgba(96,165,250,0.45); }
+  .node-rect.dest { fill: rgba(251,191,36,0.10); stroke: rgba(251,191,36,0.55); stroke-width: 1.5; }
+  .node-rect.dest.bank { fill: rgba(96,165,250,0.10); stroke: rgba(96,165,250,0.55); }
+  .node-rect.dest.owes { fill: rgba(248,113,113,0.10); stroke: rgba(248,113,113,0.55); }
+  .node-rect.deploy { fill: rgba(52,211,153,0.06); stroke: rgba(52,211,153,0.40); stroke-dasharray: 4 3; }
+  .node-text { fill: #e4e4ed; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500; pointer-events: none; }
+  .node-text.title { font-size: 12px; font-weight: 700; }
+  .node-text.dim { fill: #94a3b8; font-size: 9.5px; }
+  .arrow { stroke: rgba(255,255,255,0.30); stroke-width: 1.5; fill: none; }
+  .arrow.cash { stroke: rgba(251,191,36,0.55); }
+  .arrow.bank { stroke: rgba(96,165,250,0.55); }
+  .arrow.owes { stroke: rgba(248,113,113,0.55); }
+  .arrow.deferred { stroke-dasharray: 5 4; opacity: 0.5; }
+  .arrow.observe { stroke: rgba(52,211,153,0.40); stroke-dasharray: 3 3; }
+  .edge-label { fill: #94a3b8; font-family: 'JetBrains Mono', monospace; font-size: 9px; }
+  .lane-label { fill: #94a3b8; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  .lane-bg { fill: rgba(255,255,255,0.015); rx: 8; }
+</style>
+</head>
+<body>
+
+<!-- ━━━ HEADER ━━━ -->
+<header class="border-b border-white/5 px-6 py-5 grad-fade">
+  <div class="max-w-[1400px] mx-auto flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <div class="flex items-center gap-3 mb-1">
+        <span class="text-2xl">⚡</span>
+        <h1 class="text-xl font-bold tracking-tight">NCH-L1 · Inflow Layer</h1>
+        <span class="pill pill-pos">CO_10 NCH</span>
+      </div>
+      <p class="text-sm text-white/60">The closed circle: where every NCH rupee originates, transits, and lands. Locked May-1 baseline; live agent state plugs in here.</p>
+    </div>
+    <div class="flex items-center gap-3 text-xs">
+      <a href="https://www.figma.com/board/I2eJy40OlqvQphzQPRLN4c" target="_blank"
+         class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">↗ FigJam source</a>
+      <a href="/ops/messaging/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">/ops/messaging</a>
+      <a href="/ops/hr/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">/ops/hr</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
+
+  <!-- ━━━ TOP STATS ━━━ -->
+  <section class="grid grid-cols-2 md:grid-cols-6 gap-3">
+    <div class="stat-card"><div class="label">Sources</div><div class="value">3</div><div class="meta">POS_27 · 28 · DEP_AGG</div></div>
+    <div class="stat-card"><div class="label">Channels</div><div class="value">10</div><div class="meta">7 PMs + 3 aggregator</div></div>
+    <div class="stat-card"><div class="label">Runners</div><div class="value">5</div><div class="meta">RNR_64–RNR_68</div></div>
+    <div class="stat-card"><div class="label">Razorpay QRs</div><div class="value">7</div><div class="meta">2 counter + 5 runner</div></div>
+    <div class="stat-card"><div class="label">Destinations</div><div class="value">3</div><div class="meta">D1 · D2 · D3</div></div>
+    <div class="stat-card"><div class="label">Deployments</div><div class="value">7</div><div class="meta">/ops/v2 · sales · cash · bank · money · agg · item-counter</div></div>
+  </section>
+
+  <!-- ━━━ THE CIRCLE (SVG DIAGRAM) ━━━ -->
+  <section class="glass p-4">
+    <h2 class="panel-h">The Closed Circle · Sale → Channel → Promise → Land</h2>
+    <div class="scroll-x">
+      <svg viewBox="0 0 1400 720" style="width:100%; min-width:1100px; height:auto;">
+
+        <!-- Lane backgrounds -->
+        <rect x="20"  y="40" width="1360" height="100" class="lane-bg"/>
+        <rect x="20"  y="160" width="1360" height="160" class="lane-bg"/>
+        <rect x="20"  y="340" width="1360" height="160" class="lane-bg"/>
+        <rect x="20"  y="520" width="1360" height="180" class="lane-bg"/>
+
+        <text x="32" y="62" class="lane-label">SOURCES</text>
+        <text x="32" y="182" class="lane-label">CHANNELS · Payment Methods + Aggregator</text>
+        <text x="32" y="362" class="lane-label">INTERMEDIATE · Runner Promise (per runner)</text>
+        <text x="32" y="542" class="lane-label">DESTINATIONS · Where Rupees Finally Land</text>
+
+        <!-- ─── SOURCES (top row) ─── -->
+        <!-- POS_27 -->
+        <g>
+          <rect x="200" y="76" width="220" height="46" rx="6" class="node-rect pos"/>
+          <text x="210" y="94" class="node-text title">POS_27</text>
+          <text x="210" y="110" class="node-text dim">NCH Cash Counter · cfg 27</text>
+        </g>
+        <!-- POS_28 -->
+        <g>
+          <rect x="600" y="76" width="220" height="46" rx="6" class="node-rect pos"/>
+          <text x="610" y="94" class="node-text title">POS_28</text>
+          <text x="610" y="110" class="node-text dim">NCH Runner Counter · cfg 28</text>
+        </g>
+        <!-- DEP_AGG -->
+        <g>
+          <rect x="1000" y="76" width="220" height="46" rx="6" class="node-rect deploy"/>
+          <text x="1010" y="94" class="node-text title" style="fill:#34d399">DEP_AGG</text>
+          <text x="1010" y="110" class="node-text dim">/ops/aggregator · POS_29 dead</text>
+        </g>
+
+        <!-- ─── CHANNELS (PMs row) ─── -->
+        <!-- POS_27 PMs -->
+        <g>
+          <rect x="40" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="48" y="216" class="node-text title">PM_37</text>
+          <text x="48" y="230" class="node-text dim">NCH Cash</text>
+        </g>
+        <g>
+          <rect x="155" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="163" y="216" class="node-text title">PM_38<tspan fill="#94a3b8" font-size="9">·C</tspan></text>
+          <text x="163" y="230" class="node-text dim">UPI · Counter QR</text>
+        </g>
+        <g>
+          <rect x="270" y="200" width="105" height="36" rx="4" class="node-rect pm" style="opacity:0.5"/>
+          <text x="278" y="216" class="node-text title">PM_39</text>
+          <text x="278" y="230" class="node-text dim">Card · DEFERRED</text>
+        </g>
+        <g>
+          <rect x="385" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="393" y="216" class="node-text title">PM_48</text>
+          <text x="393" y="230" class="node-text dim">Token Issue</text>
+        </g>
+        <g>
+          <rect x="500" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="508" y="216" class="node-text title">PM_49</text>
+          <text x="508" y="230" class="node-text dim">Complimentary</text>
+        </g>
+
+        <!-- POS_28 PMs -->
+        <g>
+          <rect x="640" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="648" y="216" class="node-text title">PM_38<tspan fill="#94a3b8" font-size="9">·R</tspan></text>
+          <text x="648" y="230" class="node-text dim">UPI · Runner QR</text>
+        </g>
+        <g>
+          <rect x="755" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="763" y="216" class="node-text title">PM_40</text>
+          <text x="763" y="230" class="node-text dim">Runner Ledger</text>
+        </g>
+
+        <!-- AGG channels -->
+        <g>
+          <rect x="950" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="958" y="216" class="node-text title">AGG_SWIGGY</text>
+          <text x="958" y="230" class="node-text dim">via DEP_AGG</text>
+        </g>
+        <g>
+          <rect x="1065" y="200" width="105" height="36" rx="4" class="node-rect pm"/>
+          <text x="1073" y="216" class="node-text title">AGG_ZOMATO</text>
+          <text x="1073" y="230" class="node-text dim">via DEP_AGG</text>
+        </g>
+        <g>
+          <rect x="1180" y="200" width="115" height="36" rx="4" class="node-rect pm" style="opacity:0.5"/>
+          <text x="1188" y="216" class="node-text title">AGG_WABA</text>
+          <text x="1188" y="230" class="node-text dim">DEFERRED</text>
+        </g>
+
+        <!-- Source → Channel arrows -->
+        <path d="M 250 122 L 90 200" class="arrow"/>
+        <path d="M 280 122 L 200 200" class="arrow"/>
+        <path d="M 310 122 L 320 200" class="arrow deferred"/>
+        <path d="M 340 122 L 435 200" class="arrow"/>
+        <path d="M 380 122 L 550 200" class="arrow"/>
+        <path d="M 690 122 L 690 200" class="arrow"/>
+        <path d="M 730 122 L 805 200" class="arrow"/>
+        <path d="M 1080 122 L 1000 200" class="arrow"/>
+        <path d="M 1110 122 L 1115 200" class="arrow"/>
+        <path d="M 1140 122 L 1235 200" class="arrow deferred"/>
+
+        <!-- ─── INTERMEDIATE: Runner Promise + Equation ─── -->
+        <g>
+          <rect x="40" y="370" width="430" height="115" rx="10" class="node-rect promise"/>
+          <text x="55" y="395" class="node-text title" style="fill:#c084fc; font-size:13px">EQ_PROMISE_PILE(RNR_X)</text>
+          <text x="55" y="416" class="node-text" style="font-size:10.5px">= Σ(PM_48 + PM_40 to X)</text>
+          <text x="55" y="431" class="node-text" style="font-size:10.5px">  − Σ(UPI on RPQR of X)</text>
+          <text x="55" y="446" class="node-text" style="font-size:10.5px">  − CCR_X (cross-credit)</text>
+          <text x="55" y="461" class="node-text" style="font-size:10.5px">  − cash_settled(X)</text>
+          <text x="55" y="478" class="node-text dim" style="font-size:10px">MUST = 0 at runner shift close</text>
+        </g>
+
+        <!-- 5 Runner boxes -->
+        <g>
+          <rect x="510" y="380" width="160" height="40" rx="4" class="node-rect runner"/>
+          <text x="518" y="396" class="node-text title">RNR_64 · RUN001</text>
+          <text x="518" y="411" class="node-text dim">RPQR_SPTqwgC6ssVDDb</text>
+        </g>
+        <g>
+          <rect x="510" y="425" width="160" height="40" rx="4" class="node-rect runner"/>
+          <text x="518" y="441" class="node-text title">RNR_65 · RUN002</text>
+          <text x="518" y="456" class="node-text dim">RPQR_SPTrTvvh9AKsW0</text>
+        </g>
+        <g>
+          <rect x="700" y="380" width="160" height="40" rx="4" class="node-rect runner"/>
+          <text x="708" y="396" class="node-text title">RNR_66 · RUN003</text>
+          <text x="708" y="411" class="node-text dim">RPQR_SBgTo2a39kYmET</text>
+        </g>
+        <g>
+          <rect x="700" y="425" width="160" height="40" rx="4" class="node-rect runner"/>
+          <text x="708" y="441" class="node-text title">RNR_67 · RUN004</text>
+          <text x="708" y="456" class="node-text dim">RPQR_SBgTtFrfddY4AW</text>
+        </g>
+        <g>
+          <rect x="890" y="380" width="160" height="40" rx="4" class="node-rect runner"/>
+          <text x="898" y="396" class="node-text title">RNR_68 · RUN005</text>
+          <text x="898" y="411" class="node-text dim">RPQR_SBgTyFKUsdwLe1</text>
+        </g>
+
+        <!-- Channel → Promise arrows -->
+        <path d="M 437 236 Q 430 320 280 370" class="arrow" style="stroke:#c084fc"/>
+        <path d="M 692 236 Q 600 320 380 370" class="arrow" style="stroke:#c084fc"/>
+        <path d="M 807 236 Q 700 320 420 370" class="arrow" style="stroke:#c084fc"/>
+
+        <!-- Promise → Runners (fan out) -->
+        <path d="M 470 410 L 510 400" class="arrow"/>
+        <path d="M 470 430 L 510 445" class="arrow"/>
+        <path d="M 670 400 L 700 400" class="arrow"/>
+        <path d="M 670 445 L 700 445" class="arrow"/>
+        <path d="M 670 415 Q 770 415 890 400" class="arrow"/>
+
+        <!-- ─── DESTINATIONS ─── -->
+        <g>
+          <rect x="60" y="555" width="220" height="80" rx="10" class="node-rect dest"/>
+          <text x="72" y="578" class="node-text title" style="fill:#fbbf24">D1 · CASH DRAWER</text>
+          <text x="72" y="598" class="node-text dim">Realized in DEP_CASH (/ops/cash)</text>
+          <text x="72" y="613" class="node-text dim">NCH counter pile + Basheer + Nihaf</text>
+          <text x="72" y="628" class="node-text dim">Spendable: immediate</text>
+        </g>
+        <g>
+          <rect x="320" y="555" width="220" height="80" rx="10" class="node-rect dest bank"/>
+          <text x="332" y="578" class="node-text title" style="fill:#60a5fa">BNK_HDFC_MAIN</text>
+          <text x="332" y="598" class="node-text dim">Razorpay payouts T+1</text>
+          <text x="332" y="613" class="node-text dim">Counter UPI + Runner UPI</text>
+          <text x="332" y="628" class="node-text dim">Realized in DEP_BANK</text>
+        </g>
+        <g>
+          <rect x="580" y="555" width="220" height="80" rx="10" class="node-rect dest bank"/>
+          <text x="592" y="578" class="node-text title" style="fill:#60a5fa">BNK_HDFC_OPS</text>
+          <text x="592" y="598" class="node-text dim">Aggregator settlements</text>
+          <text x="592" y="613" class="node-text dim">Net of commission ±0.5%</text>
+          <text x="592" y="628" class="node-text dim">T + contract days</text>
+        </g>
+        <g>
+          <rect x="840" y="555" width="220" height="80" rx="10" class="node-rect dest owes"/>
+          <text x="852" y="578" class="node-text title" style="fill:#f87171">D3 · NAMED OWES</text>
+          <text x="852" y="598" class="node-text dim">STAFF_id or CUST_id</text>
+          <text x="852" y="613" class="node-text dim">Zero money · audit only</text>
+          <text x="852" y="628" class="node-text dim">From Complimentary PM_49</text>
+        </g>
+
+        <!-- Observer deployments -->
+        <g>
+          <rect x="1100" y="555" width="270" height="80" rx="10" class="node-rect deploy"/>
+          <text x="1112" y="578" class="node-text title" style="fill:#34d399">OBSERVERS</text>
+          <text x="1112" y="595" class="node-text dim">DEP_V2 · /ops/v2 cashier+runner UI</text>
+          <text x="1112" y="608" class="node-text dim">DEP_SALES · /ops/sales read-only</text>
+          <text x="1112" y="621" class="node-text dim">DEP_MONEY · /ops/money unified</text>
+          <text x="1112" y="634" class="node-text dim">DEP_ITEM_COUNTER · live count (was chai-counter)</text>
+        </g>
+
+        <!-- Channel → Destination arrows -->
+        <path d="M 90 236 Q 90 400 145 555" class="arrow cash"/>
+        <path d="M 200 236 Q 200 400 350 555" class="arrow bank"/>
+        <path d="M 320 236 Q 320 400 400 555" class="arrow bank deferred"/>
+        <path d="M 550 236 Q 700 380 880 555" class="arrow owes"/>
+        <path d="M 690 236 Q 580 400 430 555" class="arrow bank"/>
+        <path d="M 1000 236 Q 800 400 650 555" class="arrow bank"/>
+        <path d="M 1115 236 Q 900 400 700 555" class="arrow bank"/>
+        <path d="M 1235 236 Q 1100 400 750 555" class="arrow bank deferred"/>
+
+        <!-- Promise/Runner → D1 + HDFC -->
+        <path d="M 590 465 Q 400 525 200 555" class="arrow cash"/>
+        <path d="M 780 465 Q 500 525 380 555" class="arrow bank"/>
+        <path d="M 970 465 Q 700 525 480 555" class="arrow bank"/>
+
+        <!-- Sources → Observers (read) -->
+        <path d="M 310 100 Q 1100 320 1200 555" class="arrow observe"/>
+        <path d="M 710 100 Q 1180 320 1230 555" class="arrow observe"/>
+        <path d="M 1110 100 Q 1280 320 1280 555" class="arrow observe"/>
+      </svg>
+    </div>
+    <div class="text-xs text-white/40 mt-2">
+      <span style="color:#fbbf24">━</span> Cash flow ·
+      <span style="color:#60a5fa">━</span> Bank flow ·
+      <span style="color:#c084fc">━</span> Promise updates ·
+      <span style="color:#f87171">━</span> Named-owes ·
+      <span style="color:#34d399; opacity:0.7">┄</span> Observer reads ·
+      <span style="opacity:0.4">┄</span> Deferred channels (Card · WABA delivery)
+    </div>
+  </section>
+
+  <!-- ━━━ TWO-COLUMN: LIVE DATA (future) + EQUATIONS ━━━ -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- LIVE STATE PANEL -->
+    <div class="glass p-4">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="panel-h">Live State · Item-Level <span class="future-tag ml-2">FUTURE · agent-driven</span></h2>
+        <button onclick="refreshLive()" class="text-xs text-white/40 hover:text-white">↻ refresh</button>
+      </div>
+      <p class="text-xs text-white/50 mb-3">
+        Computed by Claude agent cron: <span class="mono">closing_inv + new_purchase − live_pos_sale = live_count</span>
+      </p>
+      <div id="live-grid" class="grid grid-cols-2 md:grid-cols-3 gap-2">
+        <div class="stat-card" style="border-color:rgba(248,113,113,0.3)">
+          <div class="label">Bun (kitchen)</div>
+          <div class="value mono" id="liveBun">—</div>
+          <div class="meta">awaiting agent · threshold &lt; 20 alerts</div>
+        </div>
+        <div class="stat-card" style="border-color:rgba(248,113,113,0.3)">
+          <div class="label">Milk (L)</div>
+          <div class="value mono" id="liveMilk">—</div>
+          <div class="meta">awaiting agent · threshold &lt; 5 alerts</div>
+        </div>
+        <div class="stat-card" style="border-color:rgba(248,113,113,0.3)">
+          <div class="label">Butter (kg)</div>
+          <div class="value mono" id="liveButter">—</div>
+          <div class="meta">awaiting agent · threshold &lt; 1 alerts</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">NCH cash drawer</div>
+          <div class="value mono" id="liveCash">—</div>
+          <div class="meta">opening + Σcash − Σout</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">RP wallet</div>
+          <div class="value mono" id="liveRP">—</div>
+          <div class="meta">awaiting payout</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Open promise</div>
+          <div class="value mono" id="livePromise">—</div>
+          <div class="meta">runners with non-zero promise</div>
+        </div>
+      </div>
+      <div class="mt-3 text-xs text-white/50 leading-relaxed">
+        Each card hosts an agent computation. When a value crosses its threshold, the comms layer fires:
+        WABA template → Basheer (4h SLA) → SMS escalate (30m) → Voice CRITICAL (5m). Owner only sees breaches Basheer didn't close.
+      </div>
+    </div>
+
+    <!-- EQUATIONS -->
+    <div class="glass p-4">
+      <h2 class="panel-h">Equations · The Mathematical Spine</h2>
+      <div class="equation">
+        <span class="lhs">EQ_PROMISE_PILE(RNR_X)</span> <span class="op">=</span><br>
+        &nbsp;&nbsp;Σ pos.payment <span class="op">WHERE</span> pm_id ∈ {PM_48, PM_40} <span class="op">AND</span> partner_id = RNR_X<br>
+        &nbsp;&nbsp;<span class="op">−</span> Σ razorpay.payment <span class="op">WHERE</span> qr_id = qr_for(RNR_X)<br>
+        &nbsp;&nbsp;<span class="op">−</span> CCR_X <span class="op">−</span> cash_settled(X)<br>
+        &nbsp;&nbsp;<span class="op">⇒</span> <span style="color:#fbbf24">MUST = 0 at shift close</span>
+      </div>
+      <div class="equation">
+        <span class="lhs">EQ_AGG_NET_EXPECTED</span> <span class="op">=</span><br>
+        &nbsp;&nbsp;Σ pos.order <span class="op">WHERE</span> config = POS_29 <span class="op">∧</span> pm_id = PM_46 (Swiggy)<br>
+        &nbsp;&nbsp;× (1 − 0.246 ± 0.005)<br>
+        &nbsp;&nbsp;<span class="op">⇒</span> match BNK_HDFC_OPS credit T+contract days
+      </div>
+      <div class="equation">
+        <span class="lhs">EQ_RZP_PAYOUT_EXPECTED</span> <span class="op">=</span><br>
+        &nbsp;&nbsp;Σ razorpay.payment(d) <span class="op">−</span> Razorpay fees<br>
+        &nbsp;&nbsp;<span class="op">⇒</span> match BNK_HDFC_MAIN credit on (d+1)
+      </div>
+      <div class="equation">
+        <span class="lhs">EQ_CASH_PILE_NCH</span> <span class="op">=</span><br>
+        &nbsp;&nbsp;opening_float<br>
+        &nbsp;&nbsp;<span class="op">+</span> Σ cash_in (PM_37 sales + runner cash_settled + handovers_in)<br>
+        &nbsp;&nbsp;<span class="op">−</span> Σ cash_out (counter expenses + handovers_out)<br>
+        &nbsp;&nbsp;<span class="op">⇒</span> <span style="color:#fbbf24">MUST = physical drawer count at shift close</span>
+      </div>
+      <div class="equation">
+        <span class="lhs">EQ_LIVE_INVENTORY(item)</span> <span class="op">=</span><br>
+        &nbsp;&nbsp;closing_count(yesterday)<br>
+        &nbsp;&nbsp;<span class="op">+</span> Σ purchase.receive(item, today)<br>
+        &nbsp;&nbsp;<span class="op">−</span> Σ pos.sale × BoM(item, product) (live)<br>
+        &nbsp;&nbsp;<span class="op">−</span> Σ wastage(item, today)
+      </div>
+    </div>
+  </section>
+
+  <!-- ━━━ AGENT EXECUTION (FUTURE) ━━━ -->
+  <section class="glass p-4">
+    <h2 class="panel-h">Claude Agent Execution Layer <span class="future-tag ml-2">FUTURE · cron-driven</span></h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_INVENTORY_WATCHDOG</div>
+        <div class="text-white/60">Cron: every 5 min · Reads live POS sales (Odoo JSON-RPC) · BoM-decomposes into items · Computes EQ_LIVE_INVENTORY(item) for every definitive item · Fires WABA template to Basheer when item drops below threshold.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">cron: */5 * * * * · template: ops_alert_v1 · scope: NCH definitive items</div>
+      </div>
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_RZP_POS_RECON</div>
+        <div class="text-white/60">Cron: every 5 min · Pulls Razorpay payments since last cursor · For each, checks pos.payment exists within ±10 min · If unmatched, raises RULE_G5 alert.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">cron: */5 * * * * · template: rp_no_pos_v1 · scope: 7 RPQR codes</div>
+      </div>
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_PROMISE_CLOSURE</div>
+        <div class="text-white/60">Cron: every 30 min · Per RNR, computes EQ_PROMISE_PILE · If any has been &gt; 6h non-zero, fires WARN; &gt; 24h fires ERROR.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">cron: */30 * * * * · template: ops_followup_v1 · scope: RNR_64–RNR_68</div>
+      </div>
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_BANK_RECON</div>
+        <div class="text-white/60">Cron: 00:30 IST daily · For each bank instrument, computes EQ_RZP_PAYOUT_EXPECTED + aggregator nets · Compares to actual HDFC/Federal credits · Drift &gt; ₹100 = ERROR.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">cron: 30 0 * * * · template: hdfc_eod_drift_v1 · scope: BNK_HDFC_MAIN, BNK_HDFC_OPS</div>
+      </div>
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_CASH_RECONCILE</div>
+        <div class="text-white/60">Triggered on shift close in /ops/v2 · Compares physical drawer count to EQ_CASH_PILE_NCH · Drift &gt; ₹500 attributes to closing PIN as discrepancy.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">trigger: shift_close · template: cash_drift_v1 · scope: NCH counter pile</div>
+      </div>
+      <div class="ag-card">
+        <div class="font-bold mb-1">AG_DIGEST_MORNING</div>
+        <div class="text-white/60">Cron: 09:00 IST daily · Summarises yesterday's resolved + pending alerts + manager ack times · Fires ops_digest_v1 to Nihaf.</div>
+        <div class="mt-1 mono text-[11px] text-white/40">cron: 0 9 * * * · template: ops_digest_v1 · scope: events_bus 24h</div>
+      </div>
+    </div>
+
+    <div class="mt-4 p-3 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-white/60 leading-relaxed">
+      <div class="font-bold text-white/80 mb-1">Architecture:</div>
+      Every agent is a Cloudflare Worker triggered by cron. They use the Anthropic Claude API (key on CF secrets) to evaluate complex variance situations, call <span class="mono">/api/comms?action=send</span> with the right template + tier, and write results to <span class="mono">events_bus</span>. The owner only sees breaches Basheer didn't close in time. Manager efficiency is tracked in <span class="mono">comms_outbox.acked_at − sent_at</span> per ack_action.
+    </div>
+  </section>
+
+  <!-- ━━━ ASSET CODE REGISTRY ━━━ -->
+  <section class="glass p-4">
+    <h2 class="panel-h">Asset Code Registry · 12 Layers</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- POS configs -->
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L1 · POS Configs <span class="text-white/40 font-normal">(pos.config in Odoo)</span></div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>name</th><th>company</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">POS_27</td><td>NCH - Cash Counter</td><td>CO_10</td></tr>
+            <tr><td class="mono">POS_28</td><td>NCH - Runner Counter</td><td>CO_10</td></tr>
+            <tr><td class="mono">POS_29</td><td>NCH - Delivery <span style="color:#f87171">·dead</span></td><td>CO_10</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- PMs -->
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L2 · Payment Methods <span class="text-white/40 font-normal">(10 bound, 8 unbound)</span></div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>name</th><th>journal</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">PM_37</td><td>NCH Cash · is_cash</td><td>JRN_56</td></tr>
+            <tr><td class="mono">PM_38</td><td>NCH UPI · cross-POS</td><td>JRN_57</td></tr>
+            <tr><td class="mono">PM_39</td><td>NCH Card · DEFERRED</td><td>JRN_58</td></tr>
+            <tr><td class="mono">PM_40</td><td>NCH Runner Ledger</td><td>JRN_59</td></tr>
+            <tr><td class="mono">PM_46</td><td>NCH Swiggy</td><td>JRN_65</td></tr>
+            <tr><td class="mono">PM_47</td><td>NCH Zomato</td><td>JRN_66</td></tr>
+            <tr><td class="mono">PM_48</td><td>NCH Token Issue · is_cash</td><td>JRN_67</td></tr>
+            <tr><td class="mono">PM_49</td><td>NCH Complimentary</td><td>JRN_68</td></tr>
+            <tr><td class="mono">PM_50</td><td>NCH WABA COD · is_cash</td><td>JRN_69</td></tr>
+            <tr><td class="mono">PM_51</td><td>NCH WABA UPI</td><td>JRN_70</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Runners -->
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L5 · Runners <span class="text-white/40 font-normal">(barcode RUN###)</span></div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>partner_id</th><th>barcode</th><th>QR mapping</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">RNR_64</td><td>64</td><td>RUN001</td><td class="mono">RPQR_SPTqwgC6ssVDDb</td></tr>
+            <tr><td class="mono">RNR_65</td><td>65</td><td>RUN002</td><td class="mono">RPQR_SPTrTvvh9AKsW0</td></tr>
+            <tr><td class="mono">RNR_66</td><td>66</td><td>RUN003</td><td class="mono">RPQR_SBgTo2a39kYmET</td></tr>
+            <tr><td class="mono">RNR_67</td><td>67</td><td>RUN004</td><td class="mono">RPQR_SBgTtFrfddY4AW</td></tr>
+            <tr><td class="mono">RNR_68</td><td>68</td><td>RUN005</td><td class="mono">RPQR_SBgTyFKUsdwLe1</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Razorpay QRs -->
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L6 · Razorpay QRs</div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>purpose</th><th>pairs to</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">RPQR_SBdtUCLSHVfRtT</td><td>Counter UPI</td><td>POS_27 + PM_38</td></tr>
+            <tr><td class="mono">RPQR_SBuDBQDKrC8Bch</td><td>Runner Counter UPI</td><td>POS_28 + PM_38</td></tr>
+            <tr><td class="mono">RPQR_SPTqwgC6ssVDDb</td><td>RUN001 customer UPI</td><td>RNR_64</td></tr>
+            <tr><td class="mono">RPQR_SPTrTvvh9AKsW0</td><td>RUN002 customer UPI</td><td>RNR_65</td></tr>
+            <tr><td class="mono">RPQR_SBgTo2a39kYmET</td><td>RUN003 customer UPI</td><td>RNR_66</td></tr>
+            <tr><td class="mono">RPQR_SBgTtFrfddY4AW</td><td>RUN004 customer UPI</td><td>RNR_67</td></tr>
+            <tr><td class="mono">RPQR_SBgTyFKUsdwLe1</td><td>RUN005 customer UPI</td><td>RNR_68</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Banks -->
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L7 · Bank Instruments</div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>purpose</th><th>receives</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">BNK_HDFC_MAIN</td><td>Primary collection</td><td>RP payouts (counter + runner UPI)</td></tr>
+            <tr><td class="mono">BNK_HDFC_OPS</td><td>Aggregator settlements</td><td>Swiggy, Zomato, EZD</td></tr>
+            <tr><td class="mono">BNK_FED_EXP</td><td>L2 only · expense outflows</td><td>(future layer)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Deployments -->
+      <div>
+        <div class="text-xs font-bold text-white/80 mb-2">L8 · Custom Deployments</div>
+        <table class="codes">
+          <thead><tr><th>code</th><th>route</th><th>role</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">DEP_V2</td><td>/ops/v2/</td><td>Cashier + Runner UI · drives EQ_PROMISE</td></tr>
+            <tr><td class="mono">DEP_SALES</td><td>/ops/sales/</td><td>Read-only sales feed</td></tr>
+            <tr><td class="mono">DEP_AGG</td><td>/ops/aggregator/</td><td>Swiggy + Zomato truth</td></tr>
+            <tr><td class="mono">DEP_CASH</td><td>/ops/cash/</td><td>D1 ledger embodiment</td></tr>
+            <tr><td class="mono">DEP_BANK</td><td>/ops/bank/</td><td>D2 ledger embodiment</td></tr>
+            <tr><td class="mono">DEP_MONEY</td><td>/ops/money/</td><td>D1 + D2 unified cockpit</td></tr>
+            <tr><td class="mono">DEP_ITEM_COUNTER</td><td>/ops/chai-counter/ <span style="color:#fbbf24">→ rename</span></td><td>Live count of every POS item</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ━━━ NEXT LAYERS ━━━ -->
+  <section class="glass p-4">
+    <h2 class="panel-h">Next Layers · The Money Story Completes</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+      <div>
+        <div class="font-bold text-white/80 mb-2"><span class="pill pill-pos">L1 · INFLOW ✓</span></div>
+        <div class="text-white/60">This page. Where money comes from + where it lands. NCH locked. <strong>HE next</strong> — same shape, different POS configs (5/6 captain), Paytm CSV, captain mechanic instead of runners.</div>
+      </div>
+      <div>
+        <div class="font-bold text-white/80 mb-2"><span class="pill pill-pm">L2 · OUTFLOW</span></div>
+        <div class="text-white/60">Purchase + Expense. Where landed money gets spent. PO → Receipt → Bill → Pay. Vendor ledger. RM with UoM. Non-RM categories. Federal Bank pile.</div>
+      </div>
+      <div>
+        <div class="font-bold text-white/80 mb-2"><span class="pill pill-eq">L3 · DAILY SETTLEMENT</span></div>
+        <div class="text-white/60">Maps L1 ↔ L2. Inventory settlement (BoM-driven), variance attribution per staff PIN, leakage detection, wastage tracking, vendor-rate analysis, auto-purchase suggestions.</div>
+      </div>
+    </div>
+    <div class="mt-4 p-3 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-white/60">
+      <strong class="text-white/80">End game:</strong> Once L1 + L2 + L3 are mapped + agents wired, the system tells you: when to purchase, how much to purchase, where leakage is, who's wasteful, where you're overpaying — without you ever opening a spreadsheet.
+    </div>
+  </section>
+
+</main>
+
+<footer class="border-t border-white/5 px-6 py-4 text-xs text-white/40 text-center">
+  NCH-L1 visual mapping · derived from <a href="https://www.figma.com/board/I2eJy40OlqvQphzQPRLN4c" target="_blank" class="text-white/60 hover:text-white">FigJam source</a> ·
+  Codes pulled live from ops.hamzahotel.com Odoo · Asset registry: <span class="mono">~/Desktop/NCH-L1_Asset_Registry_2026-04-30.xlsx</span>
+</footer>
+
+<script>
+  async function refreshLive() {
+    // FUTURE: hits /api/agents?layer=nch-l1&q=live-state which will:
+    //  1. compute EQ_LIVE_INVENTORY for definitive items
+    //  2. read DEP_CASH live balance
+    //  3. read RP wallet via webhook
+    //  4. read open promises per runner
+    // For now stub:
+    const stubs = {
+      liveBun: 'agent pending',
+      liveMilk: 'agent pending',
+      liveButter: 'agent pending',
+      liveCash: 'agent pending',
+      liveRP: 'agent pending',
+      livePromise: 'agent pending',
+    };
+    for (const [id, txt] of Object.entries(stubs)) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = txt;
+    }
+  }
+  // refreshLive();  // disabled until /api/agents exists
+</script>
+</body>
+</html>
