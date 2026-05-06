@@ -122,6 +122,7 @@ export async function onRequest(context) {
       case 'eod_learning_audit': return Response.json(await getEodLearningAudit(db, env, url), { headers });
       case 'readiness_report':   return Response.json(await getReadinessReport(db, url), { headers });
       case 'top_strip':          return Response.json(await getTopStrip(db), { headers });
+      case 'today_consolidated': return Response.json(await getTodayConsolidated(db), { headers });
       case 'monthly_learning_trail': return Response.json(await getMonthlyLearningTrail(db, url), { headers });
       case 'weekly_review_latest': return Response.json(await getLatestWeeklyReview(db), { headers });
       case 'autopsy_latest':     return Response.json(await getLatestAutopsies(db, url), { headers });
@@ -3362,6 +3363,241 @@ async function getTopStrip(db) {
       go_no_go,
       days_to_real_money,
     },
+    generated_at: nowMs,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE B — TODAY CONSOLIDATED — single-call backing the new /trading/today/ view
+// per doc 19 §6.1.
+//
+// Per doc 18 §3 (additive read-only). Reads only existing tables, no writes,
+// no external API calls.
+//
+// Returns 5 sections:
+//   1. pre_market_integrity   (audit_findings layer 1 + 2)
+//   2. verdict                (today's morning daily_verdicts + override status)
+//   3. pool_top10             (intraday_suitability ranked by owner_score)
+//   4. pre_market_feed        (latest crossasset + GIFT NIFTY + breaking news)
+//   5. swing_candidates       (signal_scores composite >= 70, capped to 8)
+// ═══════════════════════════════════════════════════════════════════════════
+async function getTodayConsolidated(db) {
+  const nowMs = Date.now();
+  const istNow = new Date(nowMs + 5.5 * 3600 * 1000);
+  const today = istNow.toISOString().slice(0, 10);
+  const istMins = istNow.getUTCHours() * 60 + istNow.getUTCMinutes();
+
+  // ─── 1. PRE-MARKET INTEGRITY (today's findings, layer 1 + 2) ────────────────
+  const integrityRows = (await db.prepare(`
+    SELECT category, severity, layer, signature, title, detail, data_json,
+           detected_at, resolved_at
+    FROM audit_findings
+    WHERE category='pre_market_integrity' AND trade_date=?
+    ORDER BY detected_at DESC
+  `).bind(today).all().catch(() => ({ results: [] }))).results || [];
+
+  // Pick latest per (layer, category) since cron may have fired multiple times
+  const intByLayer = {};
+  for (const r of integrityRows) {
+    if (!intByLayer[r.layer] || intByLayer[r.layer].detected_at < r.detected_at) {
+      intByLayer[r.layer] = r;
+    }
+  }
+  const parseChecks = (row) => {
+    if (!row?.data_json) return [];
+    try { return JSON.parse(row.data_json).checks || []; } catch { return []; }
+  };
+  const pre_market_integrity = {
+    layer1: intByLayer.intelligence ? {
+      severity: intByLayer.intelligence.severity,
+      title: intByLayer.intelligence.title,
+      checks: parseChecks(intByLayer.intelligence),
+      detected_at: intByLayer.intelligence.detected_at,
+    } : null,
+    layer2: intByLayer.execution ? {
+      severity: intByLayer.execution.severity,
+      title: intByLayer.execution.title,
+      checks: parseChecks(intByLayer.execution),
+      detected_at: intByLayer.execution.detected_at,
+    } : null,
+    next_check_ist: '08:25',
+  };
+
+  // ─── 2. TODAY'S VERDICT + OVERRIDE STATUS ───────────────────────────────────
+  const verdictRow = await db.prepare(`
+    SELECT id, verdict_type, decision, headline, narrative,
+           recommended_symbol, picks_json, alternatives_json,
+           context_snapshot_json, composed_at, composed_by_model, cost_paise,
+           portfolio_capital_paise, strategy_mode, entry_window, horizon
+    FROM daily_verdicts
+    WHERE trade_date=? AND verdict_type='morning'
+    ORDER BY id DESC LIMIT 1
+  `).bind(today).first().catch(() => null);
+
+  const overrideRow = verdictRow ? await db.prepare(`
+    SELECT overridden_at, original_picks_json, new_picks_json, override_reason, overridden_by
+    FROM pick_overrides
+    WHERE trade_date=?
+    ORDER BY id DESC LIMIT 1
+  `).bind(today).first().catch(() => null) : null;
+
+  let verdict = null;
+  if (verdictRow) {
+    let picks = [];
+    try { picks = JSON.parse(verdictRow.picks_json || '[]'); } catch {}
+    let alternatives = [];
+    try { alternatives = JSON.parse(verdictRow.alternatives_json || '[]'); } catch {}
+    let context = {};
+    try { context = JSON.parse(verdictRow.context_snapshot_json || '{}'); } catch {}
+    verdict = {
+      id: verdictRow.id,
+      type: verdictRow.verdict_type,
+      decision: verdictRow.decision,
+      headline: verdictRow.headline,
+      narrative: verdictRow.narrative,
+      recommended_symbol: verdictRow.recommended_symbol,
+      picks,
+      alternatives,
+      context,
+      composed_at: verdictRow.composed_at,
+      composed_by_model: verdictRow.composed_by_model,
+      cost_paise: verdictRow.cost_paise,
+      portfolio_capital_paise: verdictRow.portfolio_capital_paise,
+      strategy_mode: verdictRow.strategy_mode,
+      entry_window: verdictRow.entry_window,
+      override: overrideRow ? {
+        overridden_at: overrideRow.overridden_at,
+        original_picks: (() => { try { return JSON.parse(overrideRow.original_picks_json); } catch { return []; } })(),
+        new_picks: (() => { try { return JSON.parse(overrideRow.new_picks_json); } catch { return []; } })(),
+        reason: overrideRow.override_reason,
+        by: overrideRow.overridden_by,
+      } : null,
+    };
+  }
+
+  // ─── 3. 90D POOL TOP-10 BY OWNER_SCORE ──────────────────────────────────────
+  const pool_top10 = (await db.prepare(`
+    SELECT
+      symbol,
+      ROUND(intraday_score, 1) AS intraday_score,
+      ROUND(owner_score, 1) AS owner_score,
+      ROUND(loss_resistance_score, 1) AS loss_resistance_score,
+      ROUND(avg_open_to_high_pct, 2) AS avg_open_to_high_pct,
+      ROUND(avg_up_last_week_pct, 2) AS avg_up_last_week_pct,
+      hit_2pct_rate, hit_3pct_rate, hit_5pct_rate,
+      green_close_rate, hit_neg_2pct_rate,
+      hit_2pct_last_week, green_close_last_week,
+      sector
+    FROM intraday_suitability
+    WHERE owner_score IS NOT NULL
+    ORDER BY owner_score DESC, intraday_score DESC
+    LIMIT 10
+  `).all().catch(() => ({ results: [] }))).results || [];
+
+  // ─── 4. LIVE PRE-MARKET FEED ────────────────────────────────────────────────
+  // Mix of: latest crossasset moves, GIFT NIFTY ticks, breaking news (last 12h)
+  const cutoff12h = nowMs - 12 * 3600 * 1000;
+
+  // 4a. Cross-asset latest + previous (24h ago) for delta
+  const xaLatest = (await db.prepare(`
+    SELECT c1.asset_code, c1.value, c1.ts
+    FROM crossasset_ticks c1
+    JOIN (SELECT asset_code, MAX(ts) AS m FROM crossasset_ticks
+          WHERE asset_code IN ('USDINR','DXY','BRENT','US10Y','GOLD','VIX_US')
+          GROUP BY asset_code) c2
+      ON c1.asset_code = c2.asset_code AND c1.ts = c2.m
+  `).all().catch(() => ({ results: [] }))).results || [];
+
+  const xaPrev = (await db.prepare(`
+    SELECT c1.asset_code, c1.value
+    FROM crossasset_ticks c1
+    JOIN (SELECT asset_code, MAX(ts) AS m FROM crossasset_ticks
+          WHERE asset_code IN ('USDINR','DXY','BRENT','US10Y','GOLD','VIX_US')
+            AND ts < ?
+          GROUP BY asset_code) c2
+      ON c1.asset_code = c2.asset_code AND c1.ts = c2.m
+  `).bind(nowMs - 26 * 3600 * 1000).all().catch(() => ({ results: [] }))).results || [];
+  const prevByCode = Object.fromEntries(xaPrev.map(r => [r.asset_code, r.value]));
+
+  // 4b. GIFT NIFTY latest
+  const giftLatest = await db.prepare(
+    `SELECT value, ts FROM gift_nifty_ticks ORDER BY ts DESC LIMIT 1`
+  ).first().catch(() => null);
+
+  // 4c. Recent news with sentiment
+  const newsRows = (await db.prepare(`
+    SELECT headline, source, published_at, sentiment_score, importance_score, symbols_tagged
+    FROM news_items
+    WHERE published_at > ?
+    ORDER BY published_at DESC
+    LIMIT 8
+  `).bind(cutoff12h).all().catch(() => ({ results: [] }))).results || [];
+
+  // Compose the feed: each row has {ts, kind, label, value, change, headline, source}
+  const feed = [];
+  for (const x of xaLatest) {
+    const prev = prevByCode[x.asset_code];
+    const change_pct = prev ? +(((x.value - prev) / prev) * 100).toFixed(2) : null;
+    feed.push({
+      ts: x.ts, kind: 'crossasset',
+      label: x.asset_code, value: x.value, change_pct,
+    });
+  }
+  if (giftLatest) {
+    feed.push({
+      ts: giftLatest.ts, kind: 'gift_nifty',
+      label: 'GIFT NIFTY', value: giftLatest.value, change_pct: null,
+    });
+  }
+  for (const n of newsRows) {
+    feed.push({
+      ts: n.published_at, kind: 'news',
+      headline: n.headline, source: n.source,
+      sentiment: n.sentiment_score, importance: n.importance_score,
+      symbols_tagged: n.symbols_tagged,
+    });
+  }
+  feed.sort((a, b) => b.ts - a.ts);
+  const pre_market_feed = feed.slice(0, 12);
+
+  // ─── 5. SWING CANDIDATES (composite_score >= 70, latest snapshot, top 8) ────
+  const latestSig = await db.prepare(
+    `SELECT MAX(computed_at) AS m FROM signal_scores`
+  ).first().catch(() => null);
+
+  let swing_candidates = { computed_at: null, candidates: [] };
+  if (latestSig?.m) {
+    const sig = (await db.prepare(`
+      SELECT symbol, ROUND(composite_score, 1) AS composite_score, regime,
+             trend_score, momentum_score, breakout_score
+      FROM signal_scores
+      WHERE computed_at = ? AND composite_score >= 70
+      ORDER BY composite_score DESC LIMIT 8
+    `).bind(latestSig.m).all().catch(() => ({ results: [] }))).results || [];
+    swing_candidates = { computed_at: latestSig.m, candidates: sig };
+  }
+
+  // ─── 6. PHASE (same logic as top_strip but local — saves another roundtrip) ─
+  let phaseLabel;
+  const dow = istNow.getUTCDay();
+  if (dow === 0 || dow === 6) phaseLabel = 'OFF_HOURS';
+  else if (istMins < 6 * 60) phaseLabel = 'OFF_HOURS';
+  else if (istMins < 9 * 60) phaseLabel = 'PRE_MARKET';
+  else if (istMins < 9 * 60 + 15) phaseLabel = 'PRE_OPEN';
+  else if (istMins < 15 * 60 + 30) phaseLabel = 'LIVE';
+  else if (istMins < 16 * 60) phaseLabel = 'CLOSE';
+  else if (istMins < 23 * 60) phaseLabel = 'POST_CLOSE';
+  else phaseLabel = 'OFF_HOURS';
+
+  return {
+    trade_date: today,
+    ist_now_minutes: istMins,
+    phase: phaseLabel,
+    pre_market_integrity,
+    verdict,
+    pool_top10,
+    pre_market_feed,
+    swing_candidates,
     generated_at: nowMs,
   };
 }
