@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v31';  // v31: /trading/compare/ — actual vs Opus picks live comparison + post-exit trail panic detector
+const CACHE_VERSION = 'wealth-v32';  // v32: /trading/audit/ — operations audit log + architecture findings for tonight's fix session
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -11,6 +11,7 @@ const PRECACHE_URLS = [
   '/trading/ops/',
   '/trading/today/',
   '/trading/compare/',
+  '/trading/audit/',
   '/trading/manifest.json',
   '/trading/icons/icon-192.svg',
   '/trading/icons/icon-512.svg',
