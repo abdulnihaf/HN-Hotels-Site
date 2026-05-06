@@ -1230,6 +1230,26 @@ async function runAuditScanner(env) {
     }
   }
 
+  // ─── AUTO-RESOLVE: any open finding whose signature is NOT in current scan ───
+  // (i.e., the underlying condition has been fixed since last scan)
+  // Only auto-resolve same-day findings to keep scope tight.
+  const currentSignatures = new Set(findings.map(f => f.signature));
+  const openSameDay = (await db.prepare(`
+    SELECT id, signature, title FROM audit_findings
+    WHERE trade_date=? AND resolved_at IS NULL
+  `).bind(today).all().catch(() => ({ results: [] }))).results || [];
+  let autoResolved = 0;
+  for (const open of openSameDay) {
+    if (!currentSignatures.has(open.signature)) {
+      await db.prepare(`
+        UPDATE audit_findings
+        SET resolved_at=?, resolved_by='auto_scanner_no_longer_detects_condition'
+        WHERE id=?
+      `).bind(now, open.id).run().catch(() => {});
+      autoResolved++;
+    }
+  }
+
   // ─── INSERT findings (deduped by signature in last 6 hours) ───
   let inserted = 0;
   for (const f of findings) {
@@ -1250,7 +1270,7 @@ async function runAuditScanner(env) {
     inserted++;
   }
 
-  return { rows: inserted, scanned_categories: 9, total_findings_now: findings.length };
+  return { rows: inserted, scanned_categories: 9, total_findings_now: findings.length, auto_resolved: autoResolved };
 }
 
 // ────────────────────────────────────────────────────────────────────────
