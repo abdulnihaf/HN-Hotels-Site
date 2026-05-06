@@ -316,112 +316,6 @@
   }
   /* Dark mode tap highlight */
   a:active, button:active { opacity: 0.7; }
-
-  /* ═════════════════════════════════════════════════════════════════════
-   * PR-A: persistent index strip + capital ribbon
-   * Both live INSIDE the sticky <header> so they share blur + safe-area.
-   * Always visible on every view, every mode, every scroll position.
-   *
-   * Five-tier responsive system (matches HIG + iPad + Mac form factors):
-   *   ≤480       iPhone portrait              compact, pri-1 only
-   *   481–767    iPhone landscape / small     single-line, pri-1 only
-   *   768–1023   iPad portrait                comfortable, all items
-   *   1024–1279  iPad landscape / small lap   spacious, all items
-   *   ≥1280      laptop / desktop wide        large + last-updated meta
-   * ═════════════════════════════════════════════════════════════════════ */
-  .index-strip, .capital-ribbon {
-    display: flex; align-items: center; gap: 0;
-    margin-top: 8px; padding-top: 6px;
-    border-top: 1px solid var(--border);
-    font-variant-numeric: tabular-nums;
-    overflow-x: auto;                /* safety net only — content sized to fit */
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .index-strip::-webkit-scrollbar,
-  .capital-ribbon::-webkit-scrollbar { display: none; }
-
-  /* — Base styling (phone landscape baseline; overridden by tier rules) — */
-  .idx-item, .cap-item {
-    display: inline-flex; align-items: baseline; gap: 6px;
-    flex: 0 0 auto;                  /* content-width, never auto-grow */
-    white-space: nowrap;
-    padding: 0 12px;
-  }
-  .idx-item + .idx-item,
-  .cap-item + .cap-item { border-left: 1px solid var(--border); }
-  .idx-item .nm, .cap-item .lbl {
-    color: var(--muted); font-weight: 500;
-    text-transform: uppercase; letter-spacing: 0.4px;
-    font-size: 10px;
-  }
-  .idx-item .val, .cap-item .val {
-    color: var(--text); font-weight: 700; font-size: 13px;
-  }
-  .idx-item .dlt { font-weight: 600; font-size: 11px; }
-  .idx-item .dlt.up { color: var(--green); }
-  .idx-item .dlt.dn { color: var(--red); }
-  .idx-item .dlt.flat { color: var(--muted); }
-  .cap-item.pnl-pos .val { color: var(--green); }
-  .cap-item.pnl-neg .val { color: var(--red); }
-  .cap-item.shadow .val::after {
-    content: ' SHADOW'; font-size: 9px; color: var(--yellow);
-    margin-left: 4px; letter-spacing: 0.5px; font-weight: 600;
-  }
-  .strip-meta {
-    margin-left: auto; flex: 0 0 auto;
-    color: var(--muted); font-size: 10px;
-    padding: 0 12px;
-    font-variant-numeric: tabular-nums;
-  }
-  .strip-skel { color: var(--muted); font-size: 11px; padding: 4px 12px; opacity: 0.7; }
-
-  /* ─── Tier 1 + 2: iPhone portrait ≤480, phone-landscape 481-767 ─────
-     All compact phones AND iPad-mini-portrait edge cases. Show pri-1 only
-     so we never trigger horizontal scroll on a 568-744px width. ──────── */
-  @media (max-width: 767px) {
-    .index-strip, .capital-ribbon { margin-top: 6px; padding-top: 4px; }
-    .idx-item, .cap-item { padding: 0 10px; gap: 5px; }
-    .idx-item .nm, .cap-item .lbl { font-size: 9px; letter-spacing: 0.3px; }
-    .idx-item .val, .cap-item .val { font-size: 12px; }
-    .idx-item .dlt { font-size: 10px; }
-    .idx-item[data-pri="2"], .cap-item[data-pri="2"] { display: none; }
-    .strip-meta { display: none; }     /* no room — hide on phones */
-  }
-  /* iPhone portrait — even tighter padding to absolutely guarantee single line */
-  @media (max-width: 480px) {
-    .idx-item, .cap-item { padding: 0 8px; }
-  }
-
-  /* ─── Tier 3: iPad portrait (768-1023) ─────────────────────────────── */
-  @media (min-width: 768px) and (max-width: 1023px) {
-    .idx-item, .cap-item { padding: 0 14px; gap: 8px; }
-    .idx-item .nm, .cap-item .lbl { font-size: 10px; }
-    .idx-item .val, .cap-item .val { font-size: 14px; }
-    .idx-item .dlt { font-size: 12px; }
-  }
-
-  /* ─── Tier 4: iPad landscape, small laptop (1024-1279) ─────────────── */
-  @media (min-width: 1024px) and (max-width: 1279px) {
-    .idx-item, .cap-item { padding: 0 16px; gap: 8px; }
-    .idx-item .nm, .cap-item .lbl { font-size: 10px; }
-    .idx-item .val, .cap-item .val { font-size: 14px; }
-    .idx-item .dlt { font-size: 12px; }
-  }
-
-  /* ─── Tier 5: laptop wide / desktop (≥1280) ────────────────────────── */
-  @media (min-width: 1280px) {
-    .index-strip, .capital-ribbon { margin-top: 10px; padding-top: 8px; }
-    .idx-item, .cap-item { padding: 0 18px; gap: 10px; }
-    .idx-item .nm, .cap-item .lbl { font-size: 11px; letter-spacing: 0.5px; }
-    .idx-item .val, .cap-item .val { font-size: 15px; }
-    .idx-item .dlt { font-size: 12px; }
-  }
-
-  /* Reduced-motion preference — disable any pulse / flash animations */
-  @media (prefers-reduced-motion: reduce) {
-    .idx-item .val, .cap-item .val { transition: none; }
-  }
 </style>
 </head>
 <body>
@@ -454,14 +348,6 @@
       </div>
     </div>
     <div class="small" id="kiteStatus" style="text-align:right">Kite: …</div>
-    <!-- ─── PR-A: persistent index strip ─── -->
-    <div id="indexStrip" class="index-strip" aria-live="polite" style="width:100%">
-      <div class="strip-skel">Loading market data…</div>
-    </div>
-    <!-- ─── PR-A: persistent capital ribbon ─── -->
-    <div id="capitalRibbon" class="capital-ribbon" aria-live="polite" style="width:100%">
-      <div class="strip-skel">Loading portfolio…</div>
-    </div>
   </header>
 
   <main>
@@ -724,105 +610,6 @@ async function loadAll() {
   return r.json();
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// PR-A — persistent top strip (indices + capital ribbon)
-// One round-trip every 30s while tab is visible. Single source of truth
-// at /api/trading?action=top_strip — keeps strip atomic, no race.
-// ═══════════════════════════════════════════════════════════════════
-let _stripLastUpdate = 0;
-async function loadTopStrip() {
-  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-  try {
-    const r = await fetch('/api/trading?action=top_strip&key=' + encodeURIComponent(DASHBOARD_KEY));
-    if (!r.ok) return;
-    const j = await r.json();
-    renderTopStrip(j);
-    _stripLastUpdate = Date.now();
-    tickStripMeta();
-  } catch (e) { /* silent — strip is informational only */ }
-}
-
-// Update the "updated 4s ago" meta every 5s without re-fetching
-function tickStripMeta() {
-  const el = document.getElementById('capUpdated');
-  if (!el || !_stripLastUpdate) return;
-  const dt = Math.round((Date.now() - _stripLastUpdate) / 1000);
-  el.textContent = dt < 5  ? 'just now'
-                 : dt < 60 ? dt + 's ago'
-                 :           Math.round(dt / 60) + 'm ago';
-}
-
-function renderTopStrip(j) {
-  // ── Index strip: NIFTY 50, BANK NIFTY, INDIA VIX, USDINR ──
-  const idxEl = document.getElementById('indexStrip');
-  if (idxEl) {
-    const findIdx = nm => (j.indices || []).find(i => i.name === nm);
-    const usd = j.crossasset && j.crossasset.USDINR;
-    const items = [];
-
-    const fmtIdx = (label, value, change_pct, opts = {}) => {
-      if (value == null || isNaN(value)) return '';
-      const cls = change_pct == null ? 'flat' : (change_pct > 0.01 ? 'up' : change_pct < -0.01 ? 'dn' : 'flat');
-      const arrow = cls === 'up' ? '▴' : cls === 'dn' ? '▾' : '·';
-      const sign = change_pct > 0 ? '+' : '';
-      const dlt = change_pct == null ? '' : `<span class="dlt ${cls}">${arrow} ${sign}${change_pct.toFixed(2)}%</span>`;
-      const valStr = opts.fmt === 'inr' ? '₹' + value.toFixed(2)
-                   : opts.fmt === 'vix' ? value.toFixed(1)
-                   : Math.round(value).toLocaleString('en-IN');
-      return `<span class="idx-item" data-pri="${opts.pri || 1}">
-        <span class="nm">${label}</span>
-        <span class="val">${valStr}</span>
-        ${dlt}
-      </span>`;
-    };
-
-    const n50 = findIdx('NIFTY 50');
-    if (n50) items.push(fmtIdx('NIFTY', n50.value, n50.change_pct, { pri: 1 }));
-    const bnk = findIdx('NIFTY BANK');
-    if (bnk) items.push(fmtIdx('BANKNIFTY', bnk.value, bnk.change_pct, { pri: 2 }));
-    const vix = findIdx('INDIA VIX');
-    if (vix) items.push(fmtIdx('VIX', vix.value, vix.change_pct, { fmt: 'vix', pri: 1 }));
-    if (usd && usd.value) items.push(fmtIdx('USDINR', usd.value, usd.change_pct, { fmt: 'inr', pri: 2 }));
-
-    idxEl.innerHTML = items.join('') || '<div class="strip-skel">market data unavailable</div>';
-  }
-
-  // ── Capital ribbon: total · deployed · positions · today's P&L ──
-  const capEl = document.getElementById('capitalRibbon');
-  if (capEl && j.capital) {
-    const c = j.capital;
-    const fmtCr = p => '₹' + Math.round(p / 100).toLocaleString('en-IN');
-    const fmtPnl = p => {
-      const r = Math.round(p / 100);
-      const sign = r > 0 ? '+' : r < 0 ? '−' : '';
-      return sign + '₹' + Math.abs(r).toLocaleString('en-IN');
-    };
-    const pnlCls = c.today_pnl_paise > 0 ? 'pnl-pos'
-                 : c.today_pnl_paise < 0 ? 'pnl-neg' : '';
-    const shadowCls = c.block_real_orders ? 'shadow' : '';
-
-    capEl.innerHTML = `
-      <span class="cap-item ${shadowCls}" data-pri="2">
-        <span class="lbl">Capital</span>
-        <span class="val">${fmtCr(c.total_paise)}</span>
-      </span>
-      <span class="cap-item" data-pri="1">
-        <span class="lbl">Deployed</span>
-        <span class="val">${fmtCr(c.deployed_paise)} <span style="color:var(--muted);font-weight:500;font-size:10px">(${(c.deployed_pct||0).toFixed(1)}%)</span></span>
-      </span>
-      <span class="cap-item" data-pri="2">
-        <span class="lbl">Positions</span>
-        <span class="val">${c.position_count}</span>
-      </span>
-      <span class="cap-item ${pnlCls}" data-pri="1">
-        <span class="lbl">Today P&amp;L</span>
-        <span class="val">${fmtPnl(c.today_pnl_paise)}</span>
-      </span>
-      <span class="strip-meta">updated <span id="capUpdated">just now</span></span>
-    `;
-  }
-}
-
 // Shared watchlist component handle (auto-refreshes every 30s while page open)
 let _sharedWatchlistHandle = null;
 
@@ -830,7 +617,6 @@ function showApp(j) {
   document.getElementById('gate').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   render(j);
-  loadTopStrip();                       // PR-A: paint strip ASAP
   refreshKiteStatus();
   loadMarkets101();
   loadMorningBriefing();
@@ -858,13 +644,6 @@ function showApp(j) {
   setInterval(loadReadiness, 120000);
   // Alerts every 60s
   setInterval(loadAlerts, 60000);
-  // PR-A: top strip — 30s data refresh during market, paused while tab hidden
-  setInterval(loadTopStrip, 30000);
-  // 5s relative-time ticker for the "updated Ns ago" meta (laptop only)
-  setInterval(tickStripMeta, 5000);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') loadTopStrip();
-  });
 }
 
 async function refresh() {
