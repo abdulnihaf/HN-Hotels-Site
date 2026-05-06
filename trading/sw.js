@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v36';  // v36: Phase A — THE SPINE (top strip + bottom phase indicator) per doc 19
+const CACHE_VERSION = 'wealth-v37';  // v37: Phase B — TODAY consolidation per doc 19 §6.1 (5 sections + swing toggle)
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [

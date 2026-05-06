@@ -3,3000 +3,479 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Today — Wealth Engine (Guided Mode)</title>
+<title>Wealth Engine — Today</title>
 <link rel="manifest" href="/trading/manifest.json">
 <meta name="theme-color" content="#0a0f1c">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Today">
-<link rel="apple-touch-icon" href="/trading/icons/icon-192.svg">
 <meta name="color-scheme" content="dark">
 <style>
   :root {
     --bg: #0a0f1c; --panel: #121a2e; --panel-2: #1a2540;
     --border: #2a3656; --text: #e6ecff; --muted: #8a96b8;
     --green: #2ecc71; --red: #e74c3c; --yellow: #f5b041; --blue: #4fa3ff;
-    --accent: #7c5cff; --accent-soft: rgba(124,92,255,0.12);
+    --accent: #7c5cff; --orange: #ff8a3c; --purple: #b164ff;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html { -webkit-text-size-adjust: 100%; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.55; min-height: 100vh;
-    padding-top: env(safe-area-inset-top, 0);
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    padding-left: env(safe-area-inset-left, 0);
-    padding-right: env(safe-area-inset-right, 0);
-    overscroll-behavior-y: none;
+    font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh;
+    padding: 14px; padding-top: env(safe-area-inset-top, 14px);
+    font-variant-numeric: tabular-nums;
   }
-  header {
-    padding: 12px 16px; background: rgba(18, 26, 46, 0.92);
-    border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 100;
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  }
-  header h1 { font-size: 17px; font-weight: 700; }
+  header { margin-bottom: 14px; }
+  h1 { font-size: 17px; font-weight: 700; }
+  h1 .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 3px; }
   .tab-nav { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
   .tab-nav a {
-    padding: 5px 11px; border-radius: 14px; font-size: 11px; font-weight: 500;
+    padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 500;
     text-decoration: none; border: 1px solid var(--border); color: var(--muted);
     background: var(--panel-2);
   }
-  .tab-nav a.active {
-    background: rgba(124,92,255,0.18); color: var(--accent); border-color: var(--accent);
-    font-weight: 600;
-  }
+  .tab-nav a.active { background: rgba(124,92,255,0.18); color: var(--accent); border-color: var(--accent); }
 
-  main { padding: 16px; max-width: 880px; margin: 0 auto; padding-bottom: max(80px, env(safe-area-inset-bottom, 0) + 60px); }
-
-  /* PIN gate */
-  .pin-gate { max-width: 380px; margin: 80px auto; padding: 28px; background: var(--panel);
-    border: 1px solid var(--border); border-radius: 12px; }
+  .pin-gate { max-width: 380px; margin: 80px auto; padding: 28px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
   .pin-gate input { width: 100%; padding: 12px; font-size: 16px; margin: 10px 0;
     background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
   .pin-gate button { width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
     background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; min-height: 44px; }
 
-  /* ═════════════════════════════════════════════════════════════════════
-     HERO TODAY'S P&L — top of screen, unmistakable bottom-line
-     Owner asked May 5: "today is showing as a win but from the UI I am not
-     able to understand how" — this is the fix.
-     ═════════════════════════════════════════════════════════════════════ */
-  .day-pnl-hero {
-    border-radius: 14px; padding: 18px 20px; margin-bottom: 14px;
-    display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.25);
-    transition: background 0.4s ease, border-color 0.4s ease;
-  }
-  .day-pnl-hero.win    { background: linear-gradient(135deg, rgba(46,204,113,0.20), rgba(46,204,113,0.06)); border: 1.5px solid var(--green); }
-  .day-pnl-hero.loss   { background: linear-gradient(135deg, rgba(231,76,60,0.20), rgba(231,76,60,0.06));   border: 1.5px solid var(--red); }
-  .day-pnl-hero.flat   { background: linear-gradient(135deg, rgba(138,150,184,0.18), rgba(138,150,184,0.04)); border: 1.5px solid var(--border); }
-  .day-pnl-hero .h-tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-weight: 600; }
-  .day-pnl-hero .h-val { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; margin-top: 2px; }
-  .day-pnl-hero.win  .h-val  { color: var(--green); }
-  .day-pnl-hero.loss .h-val  { color: var(--red); }
-  .day-pnl-hero.flat .h-val  { color: var(--text); }
-  .day-pnl-hero .h-meta { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
-  .day-pnl-hero .h-meta strong { color: var(--text); font-weight: 600; }
-  .day-pnl-hero .h-progress {
-    height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; margin-top: 10px; overflow: hidden;
-  }
-  .day-pnl-hero .h-progress-bar { height: 100%; transition: width 0.6s ease; }
-  .day-pnl-hero.win  .h-progress-bar { background: var(--green); }
-  .day-pnl-hero.loss .h-progress-bar { background: var(--red); }
-  .day-pnl-hero.flat .h-progress-bar { background: var(--muted); }
-  .day-pnl-hero .h-side {
-    text-align: right; font-size: 11px; color: var(--muted); line-height: 1.5;
-  }
-  .day-pnl-hero .h-side .h-side-num { display: block; font-size: 20px; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .day-pnl-hero .h-side .h-side-sub { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-  /* Provenance badge — distinguishes LIVE (real trader executed) vs REPLAY
-     (post-hoc walk against intraday_bars) vs NO-DATA. */
-  .day-pnl-hero .h-prov {
-    display: inline-block; padding: 2px 8px; border-radius: 10px;
-    font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
-    margin-left: 8px; vertical-align: middle;
-  }
-  .day-pnl-hero .h-prov.live    { background: rgba(46,204,113,0.20); color: var(--green); border: 1px solid var(--green); }
-  .day-pnl-hero .h-prov.replay  { background: rgba(245,176,65,0.18); color: var(--yellow); border: 1px solid var(--yellow); }
-  .day-pnl-hero .h-prov.no-data { background: rgba(138,150,184,0.15); color: var(--muted); border: 1px solid var(--border); }
-  .day-pnl-hero .h-prov-tip {
-    display: block; font-size: 10px; color: var(--muted); margin-top: 8px; line-height: 1.45;
-    padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06);
-  }
-  .day-pnl-hero .h-prov-tip strong { color: var(--text); }
-  @media (max-width: 480px) {
-    .day-pnl-hero { grid-template-columns: 1fr; }
-    .day-pnl-hero .h-side { text-align: left; }
-    .day-pnl-hero .h-val { font-size: 28px; }
-  }
+  .section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .section h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .section h2 .meta { margin-left: auto; font-size: 10px; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
 
-  /* ═════════════════════════════════════════════════════════════════════
-     TODAY'S WATCHLIST — frozen candidate pool + 3 final picks ⭐
-     Owner asked May 5 evening: unify the conflicting "top picks" lists
-     across /today and /execute. This is the single canonical view.
-     ═════════════════════════════════════════════════════════════════════ */
-  .watchlist-section {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
-  }
-  .watchlist-section h3 {
-    font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px;
-    color: var(--muted); margin-bottom: 4px; display: flex;
-    justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
-  }
-  .watchlist-section .wl-meta {
-    font-size: 11px; color: var(--muted); margin-bottom: 10px; line-height: 1.5;
-  }
-  .watchlist-section .wl-actions {
-    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;
-  }
-  .watchlist-section .wl-btn {
-    padding: 5px 10px; border-radius: 14px; font-size: 11px; font-weight: 500;
-    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
-    cursor: pointer;
-  }
-  .watchlist-section .wl-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .watchlist-section .wl-btn.copied { background: rgba(46,204,113,0.18); color: var(--green); border-color: var(--green); }
-  .wl-list { display: flex; flex-direction: column; gap: 8px; }
-  /* ── EXPANDED WATCHLIST CARDS — full OHLC + ₹10L hypothetical ── */
-  .wl-card {
-    background: var(--panel-2); border-radius: 10px;
-    border-left: 3px solid transparent; padding: 12px 14px;
-    font-size: 12px;
-  }
-  .wl-card.final { border-left-color: var(--accent); background: linear-gradient(90deg, rgba(124,92,255,0.10), var(--panel-2)); }
-  .wl-card-head {
-    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
-    margin-bottom: 8px;
-  }
-  .wl-card-head .wl-rank { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .wl-card-head .wl-sym { font-size: 16px; font-weight: 700; margin-left: 6px; }
-  .wl-card-head .wl-pick-tag { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 700; background: var(--accent); color: white; margin-left: 6px; vertical-align: middle; }
-  .wl-card-head .wl-state-tag { display: inline-block; padding: 2px 7px; border-radius: 8px; font-size: 9px; font-weight: 700; margin-left: 6px; vertical-align: middle; }
-  .wl-card-head .wl-state-tag.WATCHING { background: rgba(138,150,184,0.20); color: var(--muted); }
-  .wl-card-head .wl-state-tag.ENTERED { background: rgba(79,163,255,0.20); color: var(--blue); }
-  .wl-card-head .wl-state-tag.EXITED { background: rgba(46,204,113,0.20); color: var(--green); }
-  .wl-card-head .wl-state-tag.SKIPPED, .wl-card-head .wl-state-tag.ABANDONED { background: rgba(231,76,60,0.20); color: var(--red); }
-  .wl-card-head .wl-ltp { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .wl-card-head .wl-chg { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; }
-  .wl-card-head .wl-chg.pos { color: var(--green); }
-  .wl-card-head .wl-chg.neg { color: var(--red); }
+  .phase-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-radius: 12px; margin-bottom: 12px; font-size: 12px; flex-wrap: wrap; }
+  .phase-head .pill { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+  .phase-head.PRE_MARKET .pill { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .phase-head.PRE_OPEN .pill   { background: rgba(79,163,255,0.18); color: var(--blue); }
+  .phase-head.LIVE .pill       { background: rgba(46,204,113,0.18); color: var(--green); }
+  .phase-head.CLOSE .pill      { background: rgba(177,100,255,0.18); color: var(--purple); }
+  .phase-head.POST_CLOSE .pill { background: rgba(192,138,91,0.18); color: var(--orange); }
+  .phase-head.OFF_HOURS .pill  { background: rgba(138,150,184,0.18); color: var(--muted); }
 
-  .wl-ohlc-row {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-    background: rgba(0,0,0,0.2); border-radius: 6px; padding: 8px 10px;
-    margin-bottom: 8px;
-  }
-  .wl-ohlc-cell { display: flex; flex-direction: column; }
-  .wl-ohlc-cell .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
-  .wl-ohlc-cell .val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .wl-ohlc-cell .val.peak { color: var(--green); }
-  .wl-ohlc-cell .val.low { color: var(--red); }
+  .integrity-row { display: flex; gap: 10px; margin-bottom: 8px; }
+  @media (max-width: 600px) { .integrity-row { flex-direction: column; } }
+  .integrity-card { flex: 1; padding: 10px; background: var(--panel-2); border-radius: 8px;
+    border-top: 4px solid var(--border); min-width: 0; }
+  .integrity-card.critical { border-top-color: var(--red); }
+  .integrity-card.warning  { border-top-color: var(--yellow); }
+  .integrity-card.info     { border-top-color: var(--green); }
+  .integrity-card .layer-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .integrity-card .layer-name { font-size: 13px; font-weight: 700; margin-top: 2px; margin-bottom: 8px; }
+  .integrity-card .check-row { display: flex; gap: 6px; padding: 3px 0; font-size: 11px; }
+  .integrity-card .check-row .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .integrity-card .dot.pass { background: var(--green); }
+  .integrity-card .dot.warn { background: var(--yellow); }
+  .integrity-card .dot.fail { background: var(--red); }
+  .integrity-card .check-name { color: var(--text); flex: 1; min-width: 0; word-wrap: break-word; }
+  .integrity-card .check-name .det { color: var(--muted); font-size: 10px; margin-top: 1px; }
 
-  .wl-10L {
-    background: rgba(124,92,255,0.08); border: 1px solid rgba(124,92,255,0.30);
-    border-radius: 6px; padding: 8px 10px; margin-bottom: 8px;
-  }
-  .wl-10L .lbl-row { font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; font-weight: 600; }
-  .wl-10L-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .wl-10L-cell { display: flex; flex-direction: column; }
-  .wl-10L-cell .lbl { font-size: 9px; color: var(--muted); }
-  .wl-10L-cell .val { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .wl-10L-cell .val.pos { color: var(--green); }
-  .wl-10L-cell .val.neg { color: var(--red); }
-  .wl-10L-cell .sub { font-size: 10px; color: var(--muted); }
+  .verdict-decision { display: inline-block; padding: 6px 14px; border-radius: 12px;
+    font-size: 14px; font-weight: 700; letter-spacing: 0.4px; margin-bottom: 8px; }
+  .verdict-decision.TRADE    { background: rgba(46,204,113,0.18); color: var(--green); }
+  .verdict-decision.SIT_OUT  { background: rgba(231,76,60,0.18);  color: var(--red); }
+  .verdict-decision.OBSERVE  { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .verdict-decision.PENDING  { background: rgba(138,150,184,0.18); color: var(--muted); }
+  .verdict-headline { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .verdict-narrative { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; padding: 10px; background: var(--panel-2); border-radius: 8px; }
+  .pick-card { background: var(--panel-2); border-radius: 8px; padding: 12px; margin-bottom: 8px; border-left: 3px solid var(--border); }
+  .pick-card.pick-1 { border-left-color: var(--green); }
+  .pick-card.pick-2 { border-left-color: var(--blue); }
+  .pick-card.pick-3 { border-left-color: var(--purple); }
+  .pick-card .pick-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+  .pick-card .pick-rank { font-size: 10px; color: var(--muted); }
+  .pick-card .pick-symbol { font-size: 14px; font-weight: 700; }
+  .pick-card .pick-weight { padding: 1px 7px; border-radius: 8px; font-size: 9px; background: rgba(124,92,255,0.18); color: var(--accent); font-weight: 700; }
+  .pick-card .pick-rationale { font-size: 11px; color: var(--muted); line-height: 1.45; }
 
-  .wl-meta-row { font-size: 10px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; }
-  .wl-meta-row .meta-item strong { color: var(--text); }
+  .override-banner { padding: 10px; background: rgba(245,176,65,0.12); border-left: 3px solid var(--yellow); border-radius: 6px; margin-top: 10px; font-size: 11px; }
+  .override-banner strong { color: var(--yellow); }
 
-  @media (max-width: 600px) {
-    .wl-ohlc-row { grid-template-columns: repeat(2, 1fr); }
-    .wl-10L-grid { grid-template-columns: 1fr 1fr; }
-  }
+  .pool-list { display: flex; flex-direction: column; gap: 4px; }
+  .pool-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center;
+    padding: 8px 10px; background: var(--panel-2); border-radius: 6px; font-size: 12px; }
+  .pool-row.in-picks { background: rgba(46,204,113,0.08); border-left: 2px solid var(--green); }
+  .pool-row .rank { color: var(--muted); font-size: 10px; }
+  .pool-row .symbol { font-weight: 700; font-size: 13px; }
+  .pool-row .scores { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pool-row .score-pill { padding: 1px 6px; border-radius: 4px; font-size: 10px; }
+  .pool-row .score-pill.high   { background: rgba(46,204,113,0.18); color: var(--green); }
+  .pool-row .score-pill.med    { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .pool-row .score-pill.low    { background: rgba(138,150,184,0.18); color: var(--muted); }
 
-  /* Phase clock — top of screen, always visible */
-  .phase-clock {
-    background: linear-gradient(135deg, var(--accent-soft), rgba(79,163,255,0.05));
-    border: 1px solid var(--accent); border-radius: 12px; padding: 14px 16px;
-    margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
-  }
-  .phase-clock .time-block { font-variant-numeric: tabular-nums; }
-  .phase-clock .ist-time { font-size: 22px; font-weight: 700; color: var(--accent); }
-  .phase-clock .phase-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-top: 2px; }
-  .phase-clock .phase-name { font-size: 14px; font-weight: 600; }
-  .phase-clock .market-status {
-    padding: 6px 12px; border-radius: 16px; font-size: 12px; font-weight: 600;
-  }
-  .phase-clock .market-status.open { background: rgba(46,204,113,0.18); color: var(--green); }
-  .phase-clock .market-status.closed { background: rgba(138,150,184,0.18); color: var(--muted); }
+  .feed { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; }
+  .feed-row { display: grid; grid-template-columns: 50px 1fr; gap: 10px; padding: 6px 0; font-size: 11px;
+    border-bottom: 1px solid var(--border); }
+  .feed-row:last-child { border-bottom: none; }
+  .feed-row .ts { color: var(--muted); font-size: 10px; }
+  .feed-row .body { min-width: 0; }
+  .feed-row.crossasset .label { font-weight: 700; color: var(--text); }
+  .feed-row.crossasset .delta.up { color: var(--green); }
+  .feed-row.crossasset .delta.down { color: var(--red); }
+  .feed-row.crossasset .delta.flat { color: var(--muted); }
+  .feed-row.news .headline { color: var(--text); line-height: 1.4; }
+  .feed-row.news .src { font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .feed-row.news .sent { display: inline-block; width: 4px; height: 14px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .feed-row.news .sent.pos { background: var(--green); }
+  .feed-row.news .sent.neg { background: var(--red); }
+  .feed-row.news .sent.neu { background: var(--muted); }
 
-  /* Current step — the main focal point */
-  .step-card {
-    background: var(--panel); border: 2px solid var(--accent); border-radius: 14px;
-    padding: 18px; margin-bottom: 14px; box-shadow: 0 4px 16px rgba(124,92,255,0.15);
-  }
-  .step-card .step-tag {
-    display: inline-block; padding: 3px 9px; background: var(--accent-soft);
-    color: var(--accent); border-radius: 12px; font-size: 11px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
-  }
-  .step-card h2 {
-    font-size: 19px; font-weight: 700; line-height: 1.35; margin-bottom: 8px;
-  }
-  .step-card .step-what {
-    font-size: 14px; color: var(--text); line-height: 1.6; margin-bottom: 10px;
-  }
-  .step-card .step-why-toggle {
-    display: inline-flex; align-items: center; gap: 6px;
-    color: var(--accent); cursor: pointer; font-size: 12px; font-weight: 500;
-    padding: 6px 0;
-  }
-  .step-card .step-why-content {
-    display: none; background: var(--panel-2); padding: 12px 14px; border-radius: 8px;
-    margin-top: 8px; font-size: 13px; line-height: 1.65; color: var(--text);
-    border-left: 3px solid var(--accent);
-  }
-  .step-card.show-why .step-why-content { display: block; }
-  .step-card.show-why .step-why-toggle::after { content: ' ▲'; }
-  .step-card:not(.show-why) .step-why-toggle::after { content: ' ▼'; }
-  .step-card .step-actions {
-    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;
-  }
-  .step-card .step-actions button, .step-card .step-actions a {
-    padding: 9px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
-    text-decoration: none; cursor: pointer; min-height: 40px;
-    display: inline-flex; align-items: center; gap: 6px;
-    border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
-  }
-  .step-card .step-actions .primary {
-    background: var(--accent); color: white; border-color: var(--accent);
-  }
-  .step-card.blocking { border-color: var(--red); box-shadow: 0 4px 16px rgba(231,76,60,0.2); }
-  .step-card.blocking .step-tag { background: rgba(231,76,60,0.18); color: var(--red); }
-  .step-card.blocking { background: linear-gradient(135deg, var(--panel), rgba(231,76,60,0.05)); }
+  .swing-toggle { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; user-select: none;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; font-size: 12px; }
+  .swing-toggle .arrow { transition: transform 0.2s; }
+  .swing-toggle.open .arrow { transform: rotate(90deg); }
+  .swing-toggle .lbl { color: var(--muted); }
+  .swing-toggle .lbl strong { color: var(--text); }
+  .swing-content { display: none; }
+  .swing-content.open { display: block; }
 
-  /* Next steps — preview list */
-  .next-steps { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-  .next-steps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 10px; }
-  .next-step-item { padding: 10px 0; border-bottom: 1px solid rgba(42,54,86,0.4); }
-  .next-step-item:last-child { border-bottom: none; }
-  .next-step-item .ns-num { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: var(--panel-2); color: var(--muted); text-align: center; line-height: 22px; font-size: 11px; font-weight: 600; margin-right: 8px; }
-  .next-step-item .ns-text { font-size: 13px; color: var(--text); }
-  .next-step-item .ns-why { font-size: 11px; color: var(--muted); margin-top: 4px; margin-left: 30px; }
-
-  /* Live data strip — passive context */
-  .live-strip {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px 14px; margin-bottom: 14px; font-size: 12px;
-  }
-  .live-strip h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 8px; }
-  .live-strip .strip-row {
-    display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline;
-  }
-  .live-strip .strip-item { display: flex; gap: 4px; align-items: baseline; }
-  .live-strip .strip-label { color: var(--muted); font-size: 11px; }
-  .live-strip .strip-value { font-weight: 600; font-variant-numeric: tabular-nums; }
-
-  /* Open paper trades — compact */
-  .open-papers { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-  .open-papers h3 { font-size: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; }
-  .paper-item { padding: 10px 0; border-bottom: 1px solid rgba(42,54,86,0.4); }
-  .paper-item:last-child { border-bottom: none; }
-  .paper-item .pi-row1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .paper-item .pi-sym { font-size: 14px; font-weight: 700; }
-  .paper-item .pi-mtm { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .paper-item .pi-row2 { font-size: 11px; color: var(--muted); margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
-  .paper-item .pi-thesis { font-size: 12px; color: var(--text); margin-top: 6px; padding: 6px 10px; background: var(--panel-2); border-radius: 6px; font-style: italic; }
-  .pos { color: var(--green); }
-  .neg { color: var(--red); }
-
-  /* Cards — engine signals */
-  .signals { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-  .signals h3 { font-size: 14px; margin-bottom: 10px; }
-  .sig-card {
-    padding: 12px; background: var(--panel-2); border-radius: 8px; margin-bottom: 10px;
-    border-left: 3px solid var(--accent);
-  }
-  .sig-card .sig-row1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .sig-card .sig-sym { font-size: 16px; font-weight: 700; }
-  .sig-card .sig-score { padding: 2px 8px; border-radius: 10px; font-size: 11px; background: rgba(124,92,255,0.18); color: var(--accent); font-weight: 600; }
-  .sig-card .sig-rationale { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
-  .sig-card .sig-math { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; }
-  .sig-card .sig-math span { color: var(--muted); }
-  .sig-card .sig-math strong { color: var(--text); font-variant-numeric: tabular-nums; }
-  .sig-card .sig-actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
-  .sig-card .sig-actions button { padding: 6px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; min-height: 36px; }
-  .sig-card .sig-actions button.paper { background: var(--blue); color: white; border-color: var(--blue); }
-
-  /* Glossary tooltip — for inline term explanations */
-  .term {
-    border-bottom: 1px dashed var(--accent); cursor: help;
-    color: var(--text); position: relative;
-  }
-  .term:hover { color: var(--accent); }
-  .term .tip {
-    display: none; position: absolute; bottom: 100%; left: 0; transform: translateY(-6px);
-    background: var(--panel-2); border: 1px solid var(--accent); border-radius: 8px;
-    padding: 10px 12px; min-width: 240px; max-width: 320px; font-size: 12px; line-height: 1.5;
-    z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,0.4); color: var(--text); font-weight: normal;
-  }
-  .term:hover .tip, .term.tap-active .tip { display: block; }
-  .term .tip strong { color: var(--accent); display: block; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .term .tip em { color: var(--muted); font-style: normal; display: block; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 11px; }
-
-  /* TOP RECOMMENDATION — the decisive card */
-  .top-rec {
-    background: linear-gradient(135deg, rgba(124,92,255,0.12), rgba(46,204,113,0.06));
-    border: 2px solid var(--accent); border-radius: 14px; padding: 20px;
-    margin-bottom: 14px; box-shadow: 0 4px 24px rgba(124,92,255,0.18);
-  }
-  .top-rec .rec-tag {
-    display: inline-block; padding: 4px 10px; background: var(--accent);
-    color: white; border-radius: 12px; font-size: 11px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 12px;
-  }
-  .top-rec .action-headline {
-    font-size: 17px; font-weight: 700; line-height: 1.4; margin-bottom: 12px;
-    color: var(--text);
-  }
-  .top-rec .verdict {
-    background: rgba(124,92,255,0.10); padding: 10px 14px; border-radius: 8px;
-    font-size: 13px; line-height: 1.55; margin-bottom: 14px; color: var(--text);
-    border-left: 3px solid var(--accent);
-  }
-  .top-rec h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
-    color: var(--muted); margin: 14px 0 8px; }
-  .top-rec .narr-list { list-style: none; padding: 0; margin: 0; }
-  .top-rec .narr-list li {
-    padding: 8px 12px; background: var(--panel-2); border-radius: 6px; margin-bottom: 6px;
-    font-size: 12.5px; line-height: 1.55; color: var(--text);
-  }
-  .top-rec .plan-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: 8px; margin-top: 10px;
-  }
-  .top-rec .plan-cell {
-    background: var(--panel-2); padding: 10px 12px; border-radius: 6px;
-  }
-  .top-rec .plan-cell .label {
-    font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px;
-  }
-  .top-rec .plan-cell .value {
-    font-size: 16px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums;
-  }
-  .top-rec .plan-cell.entry .value { color: var(--text); }
-  .top-rec .plan-cell.stop .value { color: var(--red); }
-  .top-rec .plan-cell.target .value { color: var(--green); }
-  .top-rec .plan-cell.qty .value { color: var(--blue); }
-  .top-rec .plan-cell.rr .value { color: var(--accent); }
-  .top-rec .plan-cell .sub {
-    font-size: 10px; color: var(--muted); margin-top: 2px;
-  }
-  .top-rec .cta-row {
-    display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;
-  }
-  .top-rec .cta-primary {
-    flex: 1; min-width: 220px; padding: 14px 18px; background: var(--blue);
-    color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
-    cursor: pointer; box-shadow: 0 2px 8px rgba(79,163,255,0.3);
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    text-decoration: none;
-  }
-  .top-rec .cta-primary:hover { background: #3d8de0; }
-  .top-rec .cta-secondary {
-    padding: 14px 18px; background: var(--panel-2); color: var(--text);
-    border: 1px solid var(--border); border-radius: 10px; font-size: 14px;
-    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
-  }
-
-  /* No-recommendation state */
-  .top-rec.empty {
-    background: var(--panel); border-color: var(--border);
-    box-shadow: none;
-  }
-  .top-rec.empty .action-headline { color: var(--muted); font-weight: 500; font-size: 15px; }
-
-  /* Alternatives section */
-  .alt-section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-  .alt-section summary { cursor: pointer; font-size: 13px; color: var(--muted); list-style: none; }
-  .alt-section summary::-webkit-details-marker { display: none; }
-  .alt-section[open] summary { margin-bottom: 10px; }
-
-  /* CTA / nav back to execute */
-  .footer-nav {
-    text-align: center; padding: 16px 0; margin-top: 14px; color: var(--muted); font-size: 12px;
-  }
-  .footer-nav a { color: var(--accent); text-decoration: none; font-weight: 500; }
-
-  /* Loading */
-  .loading { color: var(--muted); padding: 20px; text-align: center; font-size: 13px; }
-  .empty { color: var(--muted); text-align: center; padding: 20px; font-size: 13px; }
-
-  /* P1.3 — Briefing v2 (LLM-composed pre-market) */
-  .brief-v2 {
-    background: linear-gradient(135deg, rgba(124,92,255,0.10), rgba(46,204,113,0.04));
-    border: 1px solid var(--accent); border-radius: 12px; padding: 16px;
-    margin-bottom: 14px;
-  }
-  .brief-v2 .bv-tag {
-    display:inline-block; padding: 3px 9px; background: var(--accent-soft);
-    color: var(--accent); border-radius: 12px; font-size: 11px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
-  }
-  .brief-v2 .bv-narrative {
-    font-size: 13.5px; line-height: 1.65; color: var(--text); white-space: pre-wrap;
-    background: var(--panel-2); padding: 12px 14px; border-radius: 8px;
-    border-left: 3px solid var(--accent);
-  }
-  .brief-v2 .bv-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }
-  .brief-v2 details { margin-top: 10px; }
-  .brief-v2 summary {
-    cursor: pointer; font-size: 12px; color: var(--muted);
-    list-style: none; padding: 6px 0;
-  }
-  .brief-v2 summary::-webkit-details-marker { display: none; }
-  .brief-v2 summary::before { content: '▸ '; transition: transform 0.15s; display: inline-block; }
-  .brief-v2 details[open] summary::before { content: '▾ '; }
-  .brief-v2 .bv-facts { margin: 6px 0 0 6px; padding: 0; list-style: none; }
-  .brief-v2 .bv-facts li {
-    font-size: 12px; color: var(--text); padding: 5px 0;
-    border-bottom: 1px solid rgba(42,54,86,0.4);
-  }
-  .brief-v2 .bv-facts li:last-child { border: none; }
-  .brief-v2 .bv-meta {
-    margin-top: 8px; font-size: 10px; color: var(--muted); text-align: right;
-  }
-
-  /* P1.2 — Engine State transparency panel */
-  .engine-state {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px; margin-bottom: 14px;
-  }
-  .engine-state h3 { font-size: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .es-regime { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-  .es-regime.aggressive { background: rgba(46,204,113,0.18); color: var(--green); }
-  .es-regime.cautious { background: rgba(245,176,65,0.18); color: var(--yellow); }
-  .es-regime.sit_out { background: rgba(231,76,60,0.18); color: var(--red); }
-  .es-regime.fade { background: rgba(79,163,255,0.18); color: var(--blue); }
-  .es-regime.neutral, .es-regime.unknown { background: rgba(138,150,184,0.18); color: var(--muted); }
-  .es-explainer { font-size: 12.5px; color: var(--text); line-height: 1.55; padding: 10px 12px; background: var(--panel-2); border-radius: 8px; margin-bottom: 12px; }
-  .es-evidence { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-bottom: 12px; }
-  .es-evidence strong { color: var(--text); font-variant-numeric: tabular-nums; }
-  .es-row-h { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin: 12px 0 6px; }
-  .es-mtf-bar { display: flex; height: 22px; border-radius: 5px; overflow: hidden; background: var(--panel-2); margin-bottom: 6px; }
-  .es-mtf-seg { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: white; min-width: 0; padding: 0 4px; }
-  .es-mtf-seg.aligned_up { background: var(--green); }
-  .es-mtf-seg.against_macro, .es-mtf-seg.aligned_down { background: var(--red); }
-  .es-mtf-seg.partial { background: var(--yellow); color: #000; }
-  .es-mtf-seg.neutral, .es-mtf-seg.macro_only, .es-mtf-seg.unknown { background: var(--muted); }
-  .es-mtf-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 10px; color: var(--muted); }
-  .es-dim-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 6px; }
-  .es-dim {
-    background: var(--panel-2); padding: 8px 10px; border-radius: 6px; font-size: 11px;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .es-dim.live::before { content: '●'; color: var(--green); margin-right: 4px; font-size: 9px; }
-  .es-dim.partial::before { content: '●'; color: var(--yellow); margin-right: 4px; font-size: 9px; }
-  .es-dim.dead::before { content: '●'; color: var(--red); margin-right: 4px; font-size: 9px; }
-  .es-dim .es-dim-pct { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
-  .es-cascades { font-size: 12px; }
-  .es-cascade-item { padding: 6px 10px; background: rgba(124,92,255,0.10); border-left: 2px solid var(--accent); border-radius: 4px; margin-bottom: 4px; }
-  .es-bands { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-  .es-band {
-    padding: 4px 9px; border-radius: 12px; font-size: 11px; background: var(--panel-2);
-    color: var(--text); font-variant-numeric: tabular-nums;
-  }
-  .es-band.high { background: rgba(46,204,113,0.18); color: var(--green); font-weight: 600; }
-  .es-band.below { color: var(--muted); }
-
-  /* P1.4 — Bayesian state preview (buckets filling) */
-  .bayes-preview {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px; margin-bottom: 14px;
-  }
-  .bayes-preview h3 { font-size: 14px; margin-bottom: 6px; }
-  .bayes-preview .bp-sub { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
-  .bp-summary {
-    display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; margin-bottom: 12px;
-    padding: 10px 12px; background: var(--panel-2); border-radius: 8px;
-  }
-  .bp-summary .bp-stat { display: flex; flex-direction: column; gap: 2px; }
-  .bp-summary .bp-stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
-  .bp-summary .bp-stat-value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .bp-bucket {
-    padding: 8px 10px; background: var(--panel-2); border-radius: 6px; margin-bottom: 6px;
-    display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap;
-  }
-  .bp-bucket-key { font-size: 11px; color: var(--text); font-family: ui-monospace, monospace; }
-  .bp-bucket-bar {
-    flex: 1; min-width: 90px; height: 6px; background: rgba(42,54,86,0.6);
-    border-radius: 3px; overflow: hidden; position: relative;
-  }
-  .bp-bucket-fill { height: 100%; background: var(--accent); border-radius: 3px; }
-  .bp-bucket-fill.active { background: var(--green); }
-  .bp-bucket-stats { font-size: 10px; color: var(--muted); white-space: nowrap; }
-  .bp-bucket-stats strong { color: var(--text); }
-  .bp-empty { color: var(--muted); font-size: 12px; padding: 12px; text-align: center; }
-
-  /* ═════════════════════════════════════════════════════════════════════
-     VERDICT CARD v3 — the new default Today view (Opus-composed daily)
-     ═════════════════════════════════════════════════════════════════════ */
-  .verdict-card {
-    border-radius: 16px; padding: 22px; margin-bottom: 14px;
-    box-shadow: 0 6px 28px rgba(0,0,0,0.4);
-  }
-  .verdict-card.trade {
-    background: linear-gradient(135deg, rgba(46,204,113,0.18), rgba(124,92,255,0.06));
-    border: 2px solid var(--green);
-  }
-  .verdict-card.sit_out {
-    background: linear-gradient(135deg, rgba(231,76,60,0.14), rgba(138,150,184,0.04));
-    border: 2px solid var(--red);
-  }
-  .verdict-card.observe {
-    background: linear-gradient(135deg, rgba(245,176,65,0.16), rgba(124,92,255,0.04));
-    border: 2px solid var(--yellow);
-  }
-  .verdict-card.empty {
-    background: var(--panel); border: 1px dashed var(--border);
-  }
-  .vc-tag {
-    display: inline-block; padding: 4px 12px; border-radius: 14px;
-    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px;
-    margin-bottom: 14px;
-  }
-  .verdict-card.trade .vc-tag { background: var(--green); color: white; }
-  .verdict-card.sit_out .vc-tag { background: var(--red); color: white; }
-  .verdict-card.observe .vc-tag { background: var(--yellow); color: #000; }
-  .verdict-card.empty .vc-tag { background: var(--muted); color: var(--bg); }
-  .vc-headline {
-    font-size: 18px; font-weight: 700; line-height: 1.4; margin-bottom: 14px; color: var(--text);
-  }
-  .vc-narrative {
-    background: rgba(255,255,255,0.04); padding: 14px 16px; border-radius: 10px;
-    font-size: 14px; line-height: 1.65; color: var(--text); white-space: pre-wrap;
-    border-left: 3px solid; margin-bottom: 14px;
-  }
-  .verdict-card.trade .vc-narrative { border-left-color: var(--green); }
-  .verdict-card.sit_out .vc-narrative { border-left-color: var(--red); }
-  .verdict-card.observe .vc-narrative { border-left-color: var(--yellow); }
-  .vc-plan-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: 8px; margin-bottom: 14px;
-  }
-  .vc-plan-cell {
-    background: rgba(0,0,0,0.25); padding: 10px 12px; border-radius: 8px;
-  }
-  .vc-plan-cell .vc-label {
-    font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px;
-  }
-  .vc-plan-cell .vc-val {
-    font-size: 16px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums;
-  }
-  .vc-plan-cell.stop .vc-val { color: var(--red); }
-  .vc-plan-cell.target .vc-val { color: var(--green); }
-  .vc-plan-cell.qty .vc-val { color: var(--blue); }
-  .vc-plan-cell.rr .vc-val { color: var(--accent); }
-  .vc-cta-row {
-    display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;
-  }
-  .vc-cta-primary {
-    flex: 1; min-width: 220px; padding: 14px 18px;
-    color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
-    cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    text-decoration: none; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-  }
-  .verdict-card.trade .vc-cta-primary { background: var(--green); }
-  .verdict-card.sit_out .vc-cta-primary { background: var(--muted); color: var(--bg); }
-  .verdict-card.observe .vc-cta-primary { background: var(--yellow); color: #000; }
-  .vc-cta-secondary {
-    padding: 14px 18px; background: rgba(0,0,0,0.25); color: var(--text);
-    border: 1px solid var(--border); border-radius: 10px; font-size: 14px;
-    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
-  }
-  .vc-meta {
-    margin-top: 14px; font-size: 11px; color: var(--muted); text-align: right;
-  }
-  .vc-invalidator-banner {
-    background: rgba(245,176,65,0.16); border: 1px solid var(--yellow); border-radius: 8px;
-    padding: 8px 12px; font-size: 12px; color: var(--text); margin-bottom: 10px;
-  }
-  .vc-invalidator-banner strong { color: var(--yellow); }
-  .vc-alts {
-    margin-top: 10px;
-  }
-  .vc-alts summary {
-    cursor: pointer; font-size: 12px; color: var(--muted); list-style: none; padding: 6px 0;
-  }
-  .vc-alts summary::-webkit-details-marker { display: none; }
-  .vc-alts summary::before { content: '▸ '; }
-  .vc-alts[open] summary::before { content: '▾ '; }
-  .vc-alts ul { list-style: none; padding: 0; margin: 6px 0 0; }
-  .vc-alts li {
-    padding: 8px 12px; background: rgba(0,0,0,0.20); border-radius: 6px; margin-bottom: 5px;
-    font-size: 12px; line-height: 1.55;
-  }
-  .vc-alts li strong { color: var(--text); }
-  .vc-alts li .why-not { color: var(--muted); display: block; margin-top: 3px; }
-
-  /* Show-the-math wrapper */
-  .show-math {
-    margin-top: 18px; border-top: 1px dashed var(--border); padding-top: 14px;
-  }
-  .show-math summary {
-    cursor: pointer; font-size: 13px; color: var(--muted); list-style: none;
-    padding: 10px 14px; background: var(--panel); border-radius: 10px; border: 1px solid var(--border);
-    text-align: center; font-weight: 500;
-  }
-  .show-math summary::-webkit-details-marker { display: none; }
-  .show-math summary::before { content: '▸ '; }
-  .show-math[open] summary::before { content: '▾ '; }
-  .show-math summary:hover { color: var(--text); }
-  .show-math[open] summary { margin-bottom: 14px; }
-
-  /* ═════════════════════════════════════════════════════════════════════
-     AUTO-TRADER OBSERVATION SECTIONS (Live · Timeline · Gaps · System)
-     Designed for passive viewing — owner connects Kite, then watches.
-     ═════════════════════════════════════════════════════════════════════ */
-  .obs-section {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
-  }
-  .obs-section h3 {
-    font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px;
-    color: var(--muted); margin-bottom: 10px; display: flex;
-    justify-content: space-between; align-items: center;
-  }
-  .obs-section h3 .obs-summary {
-    font-size: 12px; color: var(--text); font-weight: 500; text-transform: none;
-    letter-spacing: 0;
-  }
-  .obs-section h3 .obs-tag {
-    padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;
-  }
-  .obs-section h3 .obs-tag.ok { background: rgba(46,204,113,0.18); color: var(--green); }
-  .obs-section h3 .obs-tag.warn { background: rgba(245,176,65,0.18); color: var(--yellow); }
-  .obs-section h3 .obs-tag.err { background: rgba(231,76,60,0.18); color: var(--red); }
-
-  /* Auto-trader position cards */
-  .at-grid { display: flex; flex-direction: column; gap: 10px; }
-  .at-card {
-    background: var(--panel-2); border-radius: 10px; padding: 12px 14px;
-    border-left: 3px solid var(--border);
-  }
-  .at-card.WATCHING { border-left-color: var(--muted); }
-  .at-card.ENTERED { border-left-color: var(--blue); }
-  .at-card.HELD_OVERNIGHT { border-left-color: var(--accent); }
-  .at-card.EXITED.win { border-left-color: var(--green); }
-  .at-card.EXITED.loss { border-left-color: var(--red); }
-  .at-card.SKIPPED, .at-card.ABANDONED { border-left-color: var(--muted); opacity: 0.6; }
-  .at-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .at-sym { font-size: 15px; font-weight: 700; }
-  .at-state {
-    padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.4px;
-  }
-  .at-state.WATCHING { background: rgba(138,150,184,0.20); color: var(--muted); }
-  .at-state.ENTERED { background: rgba(79,163,255,0.20); color: var(--blue); }
-  .at-state.HELD_OVERNIGHT { background: rgba(124,92,255,0.20); color: var(--accent); }
-  .at-state.EXITED { background: rgba(138,150,184,0.20); color: var(--muted); }
-  .at-state.SKIPPED, .at-state.ABANDONED { background: rgba(138,150,184,0.15); color: var(--muted); }
-  .at-mode {
-    padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;
-    background: rgba(124,92,255,0.10); color: var(--accent);
-  }
-  .at-mode.SWING_CANDIDATE { background: rgba(245,176,65,0.18); color: var(--yellow); }
-  .at-mode.SWING_CONFIRMED { background: rgba(46,204,113,0.18); color: var(--green); }
-  .at-pnl-pos { color: var(--green); font-weight: 700; }
-  .at-pnl-neg { color: var(--red); font-weight: 700; }
-  .at-stats {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
-    gap: 6px; margin-top: 10px;
-  }
-  .at-stat {
-    background: rgba(0,0,0,0.20); padding: 6px 8px; border-radius: 5px; font-size: 11px;
-  }
-  .at-stat .label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
-  .at-stat .value { font-size: 12px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .at-recent {
-    margin-top: 8px; padding: 8px 10px; background: rgba(0,0,0,0.15);
-    border-radius: 6px; font-size: 10.5px; color: var(--muted); line-height: 1.55;
-  }
-  .at-recent .at-d-row { padding: 3px 0; border-bottom: 1px solid rgba(42,54,86,0.3); }
-  .at-recent .at-d-row:last-child { border-bottom: none; }
-  .at-recent .at-d-time { color: var(--accent); font-variant-numeric: tabular-nums; }
-
-  /* Timeline */
-  .tl-list { font-size: 12px; max-height: 320px; overflow-y: auto; }
-  .tl-row {
-    padding: 6px 8px; border-bottom: 1px solid rgba(42,54,86,0.3);
-    display: flex; gap: 10px; align-items: flex-start;
-  }
-  .tl-row:last-child { border-bottom: none; }
-  .tl-time { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; min-width: 50px; }
-  .tl-icon { width: 14px; }
-  .tl-body { flex: 1; min-width: 0; }
-  .tl-action { color: var(--text); }
-  .tl-rationale { color: var(--muted); font-size: 11px; margin-top: 2px; line-height: 1.5; }
-  .tl-decision-EBREAKOUT_ENTER { color: var(--green); }
-  .tl-decision-FULL_TARGET_HIT { color: var(--green); }
-  .tl-decision-STOP_HIT { color: var(--red); }
-  .tl-decision-TRAILING_STOP_HIT { color: var(--yellow); }
-  .tl-decision-WAIT { color: var(--muted); }
-  .tl-decision-ENTER_NOW { color: var(--green); }
-
-  /* Intelligence Gaps */
-  .ig-list { font-size: 12px; }
-  .ig-row {
-    padding: 8px 10px; border-radius: 6px; margin-bottom: 6px;
-    display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  }
-  .ig-row.fresh { background: rgba(46,204,113,0.07); }
-  .ig-row.stale { background: rgba(245,176,65,0.10); }
-  .ig-row.no_data { background: rgba(231,76,60,0.10); }
-  .ig-name { font-weight: 600; color: var(--text); }
-  .ig-used { font-size: 10px; color: var(--muted); margin-top: 2px; }
-  .ig-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
-  .ig-status.fresh { background: rgba(46,204,113,0.20); color: var(--green); }
-  .ig-status.stale { background: rgba(245,176,65,0.20); color: var(--yellow); }
-  .ig-status.no_data { background: rgba(231,76,60,0.20); color: var(--red); }
-
-  /* System Health */
-  .sh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
-  .sh-card {
-    padding: 10px 12px; background: var(--panel-2); border-radius: 6px;
-  }
-  .sh-card .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
-  .sh-card .value { font-size: 16px; font-weight: 700; margin-top: 4px; }
-  .sh-card .sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
-
-  /* Alerts panel — inline, collapsible */
-  .alerts-panel {
-    background: var(--panel); border: 1px solid var(--red);
-    border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;
-  }
-  .alerts-panel.empty { display: none; }
-  .alerts-panel .ap-head {
-    display: flex; justify-content: space-between; align-items: center;
-    cursor: pointer; gap: 10px; flex-wrap: wrap;
-  }
-  .alerts-panel .ap-title { font-size: 14px; font-weight: 600; color: var(--red); }
-  .alerts-panel .ap-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .alerts-panel .ap-btn {
-    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
-    border-radius: 6px; padding: 5px 10px; font-size: 11px; cursor: pointer;
-  }
-  .alerts-panel .ap-btn.primary { background: var(--red); color: white; border-color: var(--red); }
-  .alerts-panel .ap-list { display: none; margin-top: 10px; }
-  .alerts-panel.open .ap-list { display: block; }
-  .alerts-panel.open .ap-toggle::after { content: ' ▲'; }
-  .alerts-panel:not(.open) .ap-toggle::after { content: ' ▼'; }
-  .alert-item {
-    padding: 8px 10px; background: var(--panel-2); border-radius: 6px;
-    margin-bottom: 6px; display: flex; justify-content: space-between;
-    align-items: flex-start; gap: 8px; font-size: 12px;
-  }
-  .alert-item .ai-body { flex: 1; min-width: 0; }
-  .alert-item .ai-sev {
-    display: inline-block; padding: 1px 6px; border-radius: 8px;
-    font-size: 10px; font-weight: 700; text-transform: uppercase; margin-right: 6px;
-  }
-  .alert-item .ai-sev.critical { background: rgba(231,76,60,0.25); color: var(--red); }
-  .alert-item .ai-sev.warn { background: rgba(245,176,65,0.25); color: var(--yellow); }
-  .alert-item .ai-sev.info { background: rgba(79,163,255,0.25); color: var(--blue); }
-  .alert-item .ai-title { font-weight: 600; color: var(--text); }
-  .alert-item .ai-msg { color: var(--muted); margin-top: 4px; line-height: 1.45; }
-  .alert-item .ai-meta { font-size: 10px; color: var(--muted); margin-top: 4px; }
-  .alert-item .ai-mark {
-    background: transparent; border: 1px solid var(--border); color: var(--muted);
-    border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; white-space: nowrap;
-  }
-  .alert-item .ai-mark:hover { color: var(--text); border-color: var(--text); }
-
-  /* Concall result */
-  .cc-result {
-    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
-    padding: 12px 14px; margin-top: 8px;
-  }
-  .cc-result h4 { font-size: 13px; margin-bottom: 8px; color: var(--accent); }
-  .cc-result .cc-tone {
-    display: inline-block; padding: 3px 9px; border-radius: 12px; font-weight: 700;
-    font-size: 12px; margin-bottom: 10px; font-variant-numeric: tabular-nums;
-  }
-  .cc-result .cc-tone.pos { background: rgba(46,204,113,0.18); color: var(--green); }
-  .cc-result .cc-tone.neu { background: rgba(138,150,184,0.18); color: var(--muted); }
-  .cc-result .cc-tone.neg { background: rgba(231,76,60,0.18); color: var(--red); }
-  .cc-result dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 10px; font-size: 12px; }
-  .cc-result dt { color: var(--muted); font-weight: 600; }
-  .cc-result dd { color: var(--text); line-height: 1.5; }
-  .cc-result .cc-meta { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted); }
-
-  /* Mobile tweaks */
-  @media (max-width: 480px) {
-    main { padding: 12px; }
-    .step-card { padding: 14px; }
-    .step-card h2 { font-size: 16px; }
-    .step-card .step-actions button, .step-card .step-actions a {
-      width: 100%; justify-content: center; min-height: 44px;
-    }
-    .phase-clock .ist-time { font-size: 18px; }
-    .term .tip { left: -10px; right: -10px; min-width: auto; max-width: calc(100vw - 40px); }
-  }
-
-  /* Accessibility — bigger tap targets */
-  button, .btn, a { touch-action: manipulation; }
-  input { font-size: 16px; }
+  .loading { text-align: center; padding: 40px; color: var(--muted); }
+  .empty { text-align: center; padding: 30px; color: var(--muted); font-size: 12px; }
+  .small-meta { font-size: 10px; color: var(--muted); margin-top: 8px; }
 </style>
 </head>
 <body>
-
-<div id="gate" class="pin-gate">
-  <h2>📋 Today (Guided Mode)</h2>
-  <input id="pin" type="password" placeholder="Dashboard key" />
-  <button onclick="login()">Unlock</button>
-  <div id="gateErr" style="color:var(--red);font-size:13px;margin-top:8px;min-height:18px"></div>
-</div>
-
-<div id="app" style="display:none">
-  <header>
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-      <div>
-        <h1>📋 Today — Guided Mode</h1>
-        <p style="font-size:11px;color:var(--muted);margin-top:2px">Step-by-step, with the logic behind each action. Tap underlined terms for inline definitions.</p>
-      </div>
-    </div>
-    <nav class="tab-nav" aria-label="Views">
-      <a href="/trading/">🏠 Hub</a>
-      <a href="/trading/today/" class="active">📋 Today</a>
-      <a href="/trading/execute/">🎯 Execute</a>
-      <a href="/trading/ops/">⚙️ Ops</a>
-    </nav>
-  </header>
-
-  <main>
-    <!-- ═══ HERO TODAY'S P&L — first thing owner sees ═══ -->
-    <div id="dayPnlHero"></div>
-
-    <div id="phaseClock" class="phase-clock"></div>
-    <div id="alertsPanel"></div>            <!-- Critical alerts only (post-triager) -->
-
-    <!-- ═══ TODAY'S WATCHLIST — frozen at 08:30 IST, candidates pool + 3 final picks ═══ -->
-    <div id="watchlistSection"></div>
-
-    <!-- ═══ THE VERDICT — Opus-composed, single source of truth ═══ -->
-    <div id="verdictCard"><div class="loading">Loading today's verdict…</div></div>
-
-    <!-- ═══ Section 4: LIVE AUTO-TRADER POSITIONS (auto-execution status) ═══ -->
-    <div id="autoTraderSection"></div>
-
-    <!-- ═══ Section 5: TIMELINE (every decision today) ═══ -->
-    <div id="timelineSection"></div>
-
-    <!-- ═══ Section 6: INTELLIGENCE GAPS (meta-audit of Opus's context) ═══ -->
-    <div id="intelligenceGapsSection"></div>
-
-    <!-- ═══ Section 7: SYSTEM HEALTH (cron + spend + data freshness) ═══ -->
-    <div id="systemHealthSection"></div>
-
-    <!-- ═══ Section 8: EOD LEARNING AUDIT — 4 buckets RIGHT/MISSED/LEARNED/LUCK ═══ -->
-    <div id="eodLearningSection"></div>
-
-    <!-- ═══ Section 9: MONTHLY LEARNING TRAIL — compounding 30-day pattern ═══ -->
-    <div id="monthlyTrailSection"></div>
-
-    <!-- Open paper trades — manual paper-trade rows separate from auto-trader -->
-    <div id="openPapers"></div>
-
-    <!-- ═══ SHOW THE MATH — audit / diagnostic panels (collapsed by default) ═══ -->
-    <details class="show-math">
-      <summary>🔬 Show the math · regime · 9-dim health · MTF · Bayesian · raw signals</summary>
-      <div id="briefingV2"></div>
-      <div id="currentStep"></div>
-      <div id="liveStrip"></div>
-      <div id="engineState"></div>
-      <div id="signalsView"></div>
-      <div id="bayesianPreview"></div>
-      <div id="nextSteps"></div>
-    </details>
-
-    <div class="footer-nav">
-      <button onclick="todayPickStock()" style="background:var(--accent);color:white;border:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;margin-bottom:10px">
-        🔍 Pick a stock to paper-trade
-      </button>
-      <button onclick="openConcallModal()" style="background:var(--panel-2);color:var(--text);border:1px solid var(--border);padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:8px;margin-bottom:14px;margin-left:8px">
-        📞 Analyze a concall transcript
-      </button>
-      <br>
-      Want the full power dashboard? <a href="/trading/execute/">Switch to Execute mode →</a><br>
-      <span style="font-size:11px;opacity:0.7">Once you've done 30+ paper trades, the Execute view becomes your daily home.</span>
-    </div>
-
-    <!-- P1.5: Concall analyzer modal -->
-    <div id="concallModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;padding:20px">
-      <div style="background:var(--panel);border:2px solid var(--accent);border-radius:14px;padding:22px;max-width:680px;width:100%;max-height:90vh;overflow-y:auto">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <h2 style="font-size:17px;margin:0">📞 Analyze concall transcript</h2>
-          <button onclick="closeConcallModal()" style="background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:22px;padding:0 8px">×</button>
-        </div>
-        <p class="small" style="color:var(--muted);margin-bottom:12px;line-height:1.5">
-          Paste the transcript text from any company's quarterly earnings call. Claude Haiku extracts management tone (revenue outlook · margins · capex · cautionary notes) and stores it as a catalyst signal. Cost ~₹0.18/transcript. Cached 90 days.
-        </p>
-        <input id="concallSymbol" type="text" placeholder="Symbol (e.g. RELIANCE)" style="width:100%;padding:10px 12px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;text-transform:uppercase;margin-bottom:8px">
-        <input id="concallPeriod" type="text" placeholder="Fiscal period (e.g. Q4-FY26)" style="width:100%;padding:10px 12px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;margin-bottom:8px">
-        <textarea id="concallText" placeholder="Paste transcript text here (≥200 chars)" style="width:100%;padding:10px 12px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;min-height:240px;resize:vertical;font-family:ui-monospace,monospace"></textarea>
-        <div style="display:flex;gap:10px;margin-top:12px">
-          <button onclick="closeConcallModal()" class="btn" style="background:var(--panel-2);color:var(--text);border:1px solid var(--border);padding:10px 16px;border-radius:6px;cursor:pointer">Cancel</button>
-          <button id="concallSubmit" onclick="submitConcall()" class="btn" style="flex:1;background:var(--accent);color:white;border:none;padding:10px 16px;border-radius:6px;font-weight:600;cursor:pointer">🧠 Analyze with Claude Haiku</button>
-        </div>
-        <div id="concallResult" style="margin-top:14px"></div>
-      </div>
-    </div>
-  </main>
-</div>
-
-<!-- Shared stock picker -->
-<script src="/trading/_lib/picker.js"></script>
-<script src="/trading/_lib/watchlist-component.js"></script>
+<div id="content"><div class="loading">Loading…</div></div>
 
 <script>
-const STORE_KEY = 'wealth_dashboard_key';
-let DASHBOARD_KEY = localStorage.getItem(STORE_KEY) || '';
-let GLOSSARY = {};
+  const STORE_KEY = 'wealth_dashboard_key';
+  let DASHBOARD_KEY = localStorage.getItem(STORE_KEY) || '';
+  let _data = null;
 
-if (DASHBOARD_KEY) tryAutoLogin();
-
-// ─────────────────────────────────────────────────────────────────────
-// Resilient PIN gate — does NOT lock owner out if API endpoint returns
-// HTML (e.g., 404/500 falls through to SPA) or any non-JSON response.
-// On parse failure, we accept the PIN locally and let individual API
-// calls inside the app surface the real error per-section.
-// ─────────────────────────────────────────────────────────────────────
-async function safeFetchJson(urlStr) {
-  const r = await fetch(urlStr);
-  const txt = await r.text();
-  // Heuristic: HTML response = endpoint not deployed / SPA fallback. Surface a
-  // distinct error code instead of choking on JSON.parse.
-  if (txt.startsWith('<') || (r.headers.get('content-type') || '').includes('text/html')) {
-    return { __endpoint_html: true, status: r.status, body_preview: txt.slice(0, 120) };
+  function showPinGate(err) {
+    document.getElementById('content').innerHTML = `
+      <div class="pin-gate">
+        <h2 style="margin-bottom: 6px;">Today</h2>
+        <p style="font-size: 12px; color: var(--muted); margin-bottom: 14px;">Enter dashboard key</p>
+        <input type="password" id="pin-input" placeholder="dashboard key" autofocus>
+        <button onclick="loginAndLoad()">Unlock</button>
+        ${err ? `<div style="color: var(--red); font-size: 11px; margin-top: 8px;">${err}</div>` : ''}
+      </div>`;
+    document.getElementById('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') loginAndLoad(); });
   }
-  try { return JSON.parse(txt); }
-  catch (e) { return { __parse_error: e.message, body_preview: txt.slice(0, 120) }; }
-}
 
-function login() {
-  const v = document.getElementById('pin').value.trim();
-  if (!v) return;
-  DASHBOARD_KEY = v;
-  loadAll().then(j => {
-    // Endpoint deployment broken — accept the PIN locally so owner can still
-    // see the cached UI shell + per-section errors. Do NOT clear DASHBOARD_KEY.
-    if (j && j.__endpoint_html) {
-      document.getElementById('gateErr').innerHTML =
-        `⚠️ <strong>API endpoint unavailable</strong> (status ${j.status}). ` +
-        `PIN saved locally — entering app. Per-section errors will explain. ` +
-        `<br><span style="font-size:11px;opacity:0.75">Likely cause: trading.js Pages Function failed to load. ` +
-        `Check <code>wrangler pages deployment tail</code>.</span>`;
-      localStorage.setItem(STORE_KEY, v);
-      // Give owner 1.5s to read message, then enter app anyway
-      setTimeout(showApp, 1500);
-      return;
-    }
-    if (j && j.__parse_error) {
-      document.getElementById('gateErr').textContent =
-        `Server response not JSON: ${j.__parse_error}. PIN saved locally.`;
-      localStorage.setItem(STORE_KEY, v);
-      setTimeout(showApp, 1500);
-      return;
-    }
-    if (j && j.error) {
-      document.getElementById('gateErr').textContent = j.error;
-      DASHBOARD_KEY = '';
-      return;
-    }
-    localStorage.setItem(STORE_KEY, v);
-    showApp();
-  }).catch(e => {
-    // Network failure (offline, DNS) — let user in if they have a saved key
-    if (DASHBOARD_KEY && localStorage.getItem(STORE_KEY) === DASHBOARD_KEY) {
-      document.getElementById('gateErr').textContent =
-        `Network error (${e.message}). Using cached session.`;
-      setTimeout(showApp, 1200);
-    } else {
-      document.getElementById('gateErr').textContent = String(e.message || e);
-    }
-  });
-}
-
-async function tryAutoLogin() {
-  const j = await safeFetchJson('/api/trading?action=todays_plan&key=' + encodeURIComponent(DASHBOARD_KEY));
-  // Permissive: only block auto-login if server explicitly says key is wrong
-  if (j && j.error && /key|auth|forbidden|unauthor/i.test(j.error)) return;
-  showApp();   // includes endpoint_html / parse_error cases — let app handle gracefully
-}
-
-async function loadAll() {
-  return safeFetchJson('/api/trading?action=todays_plan&key=' + encodeURIComponent(DASHBOARD_KEY));
-}
-
-async function showApp() {
-  document.getElementById('gate').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  await loadGlossary();
-  refreshAll();
-  setInterval(refreshAll, 60000); // refresh every 60s
-  // Phase clock ticks every second
-  setInterval(updatePhaseClock, 1000);
-  updatePhaseClock();
-}
-
-async function loadGlossary() {
-  try {
-    const r = await fetch('/api/trading?action=glossary&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    GLOSSARY = j.glossary || {};
-  } catch {}
-}
-
-async function refreshAll() {
-  try {
-    const plan = await loadAll();
-    if (plan.error) {
-      document.getElementById('verdictCard').innerHTML = `<div class="verdict-card empty"><span class="vc-tag">⚠️ Error</span><div class="vc-headline">${plan.error}</div></div>`;
-      return;
-    }
-    renderPhaseClock(plan);
-    // HERO P&L — bottom-line for the day at the very top
-    loadDayPnlHero();        // Refreshes every 60s while page open
-    // ★ TODAY'S WATCHLIST — full candidate pool + 3 final picks, live LTP
-    loadWatchlist();         // Refreshes every 30s
-    // V3 PRIMARY: load the Opus verdict first — this is the lead.
-    loadVerdict();
-    // Always-visible secondary: alerts + open paper trades
-    loadAlerts();
-    loadPaperTrades();
-    // ─── Auto-trader observation sections (the new UI for paper-trade phase) ───
-    loadAutoTrader();        // Live positions + states + recent decisions
-    loadTimeline();          // Today's full execution log
-    loadIntelligenceGaps();  // What Opus saw / missed
-    loadSystemHealth();      // Cron health + spend + errors
-    loadEodLearningAudit();  // 4-bucket EOD audit (RIGHT/MISSED/LEARNED/LUCK)
-    loadMonthlyTrail();      // 30-day compounding pattern
-    // "Show the math" loads on-demand the first time it's opened (lazy)
-    if (window._showMathOpen) loadShowMathPanels(plan);
-  } catch (e) {
-    document.getElementById('verdictCard').innerHTML = `<div class="verdict-card empty"><span class="vc-tag">⚠️ Network</span><div class="vc-headline">${e.message}</div></div>`;
+  async function loginAndLoad() {
+    const v = document.getElementById('pin-input').value.trim();
+    if (!v) return;
+    DASHBOARD_KEY = v;
+    const ok = await load();
+    if (ok) localStorage.setItem(STORE_KEY, v);
   }
-}
 
-// Lazy-load the diagnostic panels — only when user expands "Show the math"
-function loadShowMathPanels(plan) {
-  if (plan) {
-    renderCurrentStep(plan);
-    renderNextSteps(plan);
-    renderLiveStrip(plan.state);
+  async function load() {
+    if (!DASHBOARD_KEY) { showPinGate(); return false; }
+    try {
+      const res = await fetch('/api/trading?action=today_consolidated&key=' + encodeURIComponent(DASHBOARD_KEY));
+      if (res.status === 401) { showPinGate('Wrong key'); return false; }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      _data = await res.json();
+      render(_data);
+      return true;
+    } catch (e) {
+      document.getElementById('content').innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+      return false;
+    }
   }
-  loadBriefingV2();
-  loadSignals();
-  loadEngineState();
-  loadBayesianPreview();
-}
 
-// Hook: when user opens <details class="show-math">, load panels
-document.addEventListener('toggle', (e) => {
-  if (e.target.classList.contains('show-math') && e.target.open && !window._showMathOpen) {
-    window._showMathOpen = true;
-    // Re-fetch plan once (cheap) for the panels that need it
-    loadAll().then(plan => { if (!plan.error) loadShowMathPanels(plan); });
+  function fmtIstFromMs(ms) {
+    if (!ms) return '—';
+    const d = new Date(ms + 5.5 * 3600000);
+    return ('0' + d.getUTCHours()).slice(-2) + ':' + ('0' + d.getUTCMinutes()).slice(-2);
   }
-}, true);
+  function fmtRelative(ms) {
+    if (!ms) return '—';
+    const diffMin = Math.round((Date.now() - ms) / 60000);
+    if (diffMin < 1) return 'now';
+    if (diffMin < 60) return diffMin + 'm ago';
+    if (diffMin < 1440) return Math.round(diffMin / 60) + 'h ago';
+    return Math.round(diffMin / 1440) + 'd ago';
+  }
+  function fmtPct(v) {
+    if (v == null || isNaN(v)) return '—';
+    const sign = v > 0 ? '+' : '';
+    return sign + Number(v).toFixed(2) + '%';
+  }
+  function deltaCls(v) {
+    if (v == null || isNaN(v)) return 'flat';
+    if (v > 0.05) return 'up'; if (v < -0.05) return 'down'; return 'flat';
+  }
+  function scoreClass(v, thresholds) {
+    if (v == null || isNaN(v)) return 'low';
+    if (v >= thresholds[0]) return 'high';
+    if (v >= thresholds[1]) return 'med';
+    return 'low';
+  }
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
 
-function updatePhaseClock() {
-  const el = document.getElementById('phaseClock');
-  if (!el || !el.firstChild) return;
-  const now = new Date();
-  // IST = UTC + 5:30
-  const ist = new Date(now.getTime() + 5.5 * 3600 * 1000);
-  const h = String(ist.getUTCHours()).padStart(2, '0');
-  const m = String(ist.getUTCMinutes()).padStart(2, '0');
-  const s = String(ist.getUTCSeconds()).padStart(2, '0');
-  const timeEl = el.querySelector('.ist-time');
-  if (timeEl) timeEl.textContent = `${h}:${m}:${s}`;
-}
-
-function renderPhaseClock(plan) {
-  const phaseLabels = {
-    overnight: '🌙 Overnight',
-    pre_market: '☀️ Pre-Market Prep',
-    opening: '🚀 Market Open (Watch)',
-    morning: '📈 Morning (Best entries)',
-    lunch: '🍽 Lunch Chop (Caution)',
-    afternoon: '📊 Afternoon Trend',
-    close: '🔔 Close Window',
-    post_market: '📓 Post-Market Review',
+  const PHASE_DESC = {
+    PRE_MARKET:  { lbl: 'Pre-market', help: 'Verdict composes at 08:30 IST.' },
+    PRE_OPEN:    { lbl: 'NSE pre-open', help: 'Live opens at 09:15 IST.' },
+    LIVE:        { lbl: 'Market live', help: 'Hard exit at 15:10 IST.' },
+    CLOSE:       { lbl: 'Closing tick', help: 'Final settlement.' },
+    POST_CLOSE:  { lbl: 'Closed', help: 'Tomorrow opens at 09:15 IST.' },
+    OFF_HOURS:   { lbl: 'Off-hours', help: 'Market closed.' },
   };
-  const phaseDesc = {
-    overnight: 'NSE closed. Time to prep, not trade.',
-    pre_market: 'Read briefing, set watchlist, wait for 09:15.',
-    opening: 'First 15 min = volatility. Observe, don\'t enter.',
-    morning: 'Best window for new entries. Execute with discipline.',
-    lunch: 'Volume drops 50%. Manage existing, avoid new.',
-    afternoon: 'Second wave of moves. Trend confirms or fades.',
-    close: 'Last 30 min = institutional traffic. No new entries.',
-    post_market: 'Review every trade. This is where 80% of learning happens.',
-  };
-  const isMkt = plan.state.is_market_day;
-  const open = plan.phase === 'opening' || plan.phase === 'morning' || plan.phase === 'lunch' || plan.phase === 'afternoon' || plan.phase === 'close';
 
-  document.getElementById('phaseClock').innerHTML = `
-    <div class="time-block">
-      <div class="ist-time">${plan.time.replace(' IST','')}</div>
-      <div class="phase-label">India Standard Time</div>
-    </div>
-    <div style="flex:1;min-width:160px">
-      <div class="phase-name">${phaseLabels[plan.phase] || plan.phase}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${phaseDesc[plan.phase] || ''}</div>
-    </div>
-    <div class="market-status ${open ? 'open' : 'closed'}">
-      ${isMkt ? (open ? '● MARKET OPEN' : '○ MARKET CLOSED') : '○ NON-MARKET DAY'}
-    </div>
-  `;
-}
-
-function renderCurrentStep(plan) {
-  const cs = plan.current_step;
-  if (!cs) {
-    document.getElementById('currentStep').innerHTML = '<div class="empty">No active step. Check back later.</div>';
-    return;
-  }
-  const tag = cs.blocking ? '⛔ BLOCKING — must do first' : 'CURRENT STEP — do this now';
-  const cls = cs.blocking ? 'step-card blocking' : 'step-card';
-  document.getElementById('currentStep').innerHTML = `
-    <div class="${cls}" id="csCard">
-      <span class="step-tag">${tag}</span>
-      <h2>${cs.step}</h2>
-      <p class="step-what">${termify(cs.what, cs.tooltip_terms)}</p>
-      <div class="step-why-toggle" onclick="document.getElementById('csCard').classList.toggle('show-why')">
-        💡 Why this matters
-      </div>
-      <div class="step-why-content">${termify(cs.why, cs.tooltip_terms)}</div>
-      ${renderStepActions(cs)}
-    </div>
-  `;
-}
-
-function renderStepActions(cs) {
-  const actions = [];
-  switch (cs.action) {
-    case 'reconnect_kite':
-      actions.push(`<a class="primary" href="${cs.url || '/wealth/auth/login'}">🔗 Reconnect Kite</a>`);
-      break;
-    case 'open_briefing':
-      actions.push(`<a class="primary" href="/trading/execute/#briefing">📰 Read briefing</a>`);
-      break;
-    case 'open_alerts':
-      actions.push(`<a class="primary" href="/trading/execute/">🔔 View alerts</a>`);
-      break;
-    case 'open_watchlist':
-      actions.push(`<a class="primary" href="/trading/execute/#watchlist">📌 Manage watchlist</a>`);
-      break;
-    case 'open_first_card':
-      actions.push(`<a class="primary" href="/trading/execute/#cards">🎯 Open trade cards</a>`);
-      break;
-    case 'open_manual_paper':
-      actions.push(`<a class="primary" href="/trading/execute/#paper">📝 Manual paper trade</a>`);
-      break;
-    case 'review_open_papers':
-    case 'review_paper_history':
-    case 'review_papers':
-      actions.push(`<a class="primary" href="/trading/execute/#paper">📊 Review paper trades</a>`);
-      break;
-    case 'use_manual_paper':
-      actions.push(`<a class="primary" href="/trading/execute/#paper">📝 Open paper-trade form</a>`);
-      break;
-    case 'view_bayesian':
-      actions.push(`<a class="primary" href="/trading/ops/">🧠 View Bayesian state</a>`);
-      break;
-    case 'wait':
-    case 'observe':
-    case 'manage_existing':
-    case 'review':
-    case 'review_cards':
-      actions.push(`<button onclick="markStepDone()">✓ Got it</button>`);
-      break;
-    default:
-      actions.push(`<button onclick="markStepDone()">✓ Got it</button>`);
-  }
-  return `<div class="step-actions">${actions.join('')}</div>`;
-}
-
-function markStepDone() {
-  // Soft acknowledgment — refresh to potentially reveal next step
-  refreshAll();
-}
-
-function renderNextSteps(plan) {
-  const ns = plan.next_steps || [];
-  if (ns.length === 0) {
-    document.getElementById('nextSteps').innerHTML = '';
-    return;
-  }
-  document.getElementById('nextSteps').innerHTML = `
-    <div class="next-steps">
-      <h3>Coming up next (${ns.length})</h3>
-      ${ns.map((s, i) => `
-        <div class="next-step-item">
-          <div><span class="ns-num">${i + 2}</span><span class="ns-text">${s.step}</span></div>
-          <div class="ns-why">${(s.what || '').slice(0, 140)}${(s.what || '').length > 140 ? '…' : ''}</div>
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
-
-function renderLiveStrip(state) {
-  if (!state) return;
-  const fii = state.fii_yesterday_cr;
-  const dii = state.dii_yesterday_cr;
-  const fiiCls = fii > 0 ? 'pos' : 'neg';
-  const diiCls = dii > 0 ? 'pos' : 'neg';
-  document.getElementById('liveStrip').innerHTML = `
-    <div class="live-strip">
-      <h3>Live context (passive — read while doing your step)</h3>
-      <div class="strip-row">
-        <div class="strip-item"><span class="strip-label">Yesterday <span class="term" data-term="FII">FII</span>:</span><span class="strip-value ${fiiCls}">${fii != null ? '₹' + Math.round(fii) + ' Cr' : '—'}</span></div>
-        <div class="strip-item"><span class="strip-label"><span class="term" data-term="DII">DII</span>:</span><span class="strip-value ${diiCls}">${dii != null ? '₹' + Math.round(dii) + ' Cr' : '—'}</span></div>
-        <div class="strip-item"><span class="strip-label">Engine <span class="term" data-term="composite score">cards</span>:</span><span class="strip-value">${state.cards_today}</span></div>
-        <div class="strip-item"><span class="strip-label">Max score:</span><span class="strip-value">${(state.signal_max_today || 0).toFixed(0)}</span></div>
-        <div class="strip-item"><span class="strip-label">Open paper:</span><span class="strip-value">${state.paper_open_count}</span></div>
-        <div class="strip-item"><span class="strip-label">Watchlist:</span><span class="strip-value">${state.watchlist_count}</span></div>
-        ${state.unread_alerts > 0 ? `<div class="strip-item"><span class="strip-value" style="color:var(--red)">🔔 ${state.unread_alerts} alerts</span></div>` : ''}
-        ${state.kite_connected ? `<div class="strip-item"><span class="strip-value pos">🔗 Kite OK (${state.kite_expires_in_min}m)</span></div>` : `<div class="strip-item"><span class="strip-value neg">⚠️ Kite disconnected</span></div>`}
-      </div>
-    </div>
-  `;
-  attachTermTooltips();
-}
-
-async function loadPaperTrades() {
-  try {
-    const r = await fetch('/api/trading?action=paper_trades&open=1&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    const open = j.open_trades || [];
-    if (open.length === 0) {
-      document.getElementById('openPapers').innerHTML = '';
-      return;
-    }
-    const fmtR = (p) => '₹' + Math.round(p / 100).toLocaleString('en-IN');
-    document.getElementById('openPapers').innerHTML = `
-      <div class="open-papers">
-        <h3><span>📝 Open paper trades (${open.length})</span><span style="font-size:11px;color:var(--muted);font-weight:400">Live <span class="term" data-term="MTM">MTM</span></span></h3>
-        ${open.map(t => {
-          const mtm = t.live_mtm_net_paise || 0;
-          const cls = mtm >= 0 ? 'pos' : 'neg';
-          return `<div class="paper-item">
-            <div class="pi-row1">
-              <div><span class="pi-sym">${t.symbol}</span> <span style="font-size:11px;color:var(--muted)">× ${t.qty}</span></div>
-              <div class="pi-mtm ${cls}">${mtm >= 0 ? '+' : ''}${fmtR(mtm)} <span style="font-size:11px;font-weight:400">(${(t.live_mtm_pct || 0).toFixed(2)}%)</span></div>
-            </div>
-            <div class="pi-row2">
-              <span>Entry ₹${(t.entry_paise/100).toFixed(2)}</span>
-              <span>Now ₹${t.live_ltp_paise ? (t.live_ltp_paise/100).toFixed(2) : '—'}</span>
-              <span class="neg">→<span class="term" data-term="stop">Stop</span> ${(t.distance_to_stop_pct || 0).toFixed(2)}%</span>
-              <span class="pos">→Target ${(t.distance_to_target_pct || 0).toFixed(2)}%</span>
-            </div>
-            ${t.user_thesis ? `<div class="pi-thesis">"${t.user_thesis}"</div>` : ''}
-          </div>`;
-        }).join('')}
-      </div>
-    `;
-    attachTermTooltips();
-  } catch {}
-}
-
-async function loadSignals() {
-  try {
-    const r = await fetch('/api/trading?action=top_recommendation&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    if (!j.ok) {
-      // No qualifying cards — engine saying sit-out
-      document.getElementById('signalsView').innerHTML = `
-        <div class="top-rec empty">
-          <span class="rec-tag" style="background:var(--muted);color:var(--bg)">No engine pick right now</span>
-          <div class="action-headline">${j.message || 'Engine sees no high-conviction setup. Sit out OR pick a watchlist stock to paper-trade with your own thesis.'}</div>
-          <div class="cta-row">
-            <button onclick="todayPickStock()" class="cta-primary" style="background:var(--accent)">🔍 Pick a stock yourself</button>
-          </div>
-          ${j.max_score ? `<div class="small" style="color:var(--muted);margin-top:10px">Max engine score today: ${j.max_score.toFixed(1)} (threshold ${j.threshold})</div>` : ''}
-        </div>
-      `;
-      return;
-    }
-    renderTopRecommendation(j);
-    attachTermTooltips();
-  } catch (e) {
-    document.getElementById('signalsView').innerHTML = `<div class="empty" style="color:var(--red)">Recommendation failed: ${e.message}</div>`;
-  }
-}
-
-function renderTopRecommendation(j) {
-  const p = j.plan;
-  const fmtR = (v) => '₹' + Math.round(v).toLocaleString('en-IN');
-  const fmtP = (v) => '₹' + v.toFixed(2);
-
-  // P1.1 — Render llm_narrative if available (Claude Haiku 2-paragraph thesis)
-  const llmBlock = j.llm_narrative
-    ? `<h4>🧠 Claude's read on this trade</h4>
-       <div style="background:linear-gradient(135deg,rgba(124,92,255,0.12),rgba(79,163,255,0.04));border:1px solid var(--accent);border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:13px;line-height:1.65;color:var(--text);white-space:pre-wrap">${escapeHtml(j.llm_narrative)}</div>`
-    : (j.llm_narrative_error
-        ? `<h4>🧠 Claude's read</h4><div style="font-size:11px;color:var(--muted);margin-bottom:8px">LLM unavailable: ${escapeHtml(j.llm_narrative_error)}</div>`
-        : '');
-
-  document.getElementById('signalsView').innerHTML = `
-    <div class="top-rec">
-      <span class="rec-tag">⚡ Engine recommends — paper-trade this</span>
-      <div class="action-headline">${j.action_headline}</div>
-      <div class="verdict">${j.verdict}</div>
-
-      ${llmBlock}
-
-      <h4>Why this stock right now (raw signals)</h4>
-      <ul class="narr-list">
-        ${(j.narrative_bits || []).map(b => `<li>${b}</li>`).join('') || '<li style="color:var(--muted)">Limited narrative data — engine basing this on price/volume signals only.</li>'}
-      </ul>
-
-      <h4>Trade plan (engine pre-computed)</h4>
-      <div class="plan-grid">
-        <div class="plan-cell entry">
-          <div class="label">Entry</div>
-          <div class="value">${fmtP(p.entry_price)}</div>
-          <div class="sub">live LTP</div>
-        </div>
-        <div class="plan-cell stop">
-          <div class="label">Stop -${p.stop_pct}%</div>
-          <div class="value">${fmtP(p.stop_price)}</div>
-          <div class="sub">max risk</div>
-        </div>
-        <div class="plan-cell target">
-          <div class="label">Target +${p.target_pct?.toFixed(1)}%</div>
-          <div class="value">${fmtP(p.target_price)}</div>
-          <div class="sub">first scale-out</div>
-        </div>
-        <div class="plan-cell qty">
-          <div class="label">Quantity</div>
-          <div class="value">${p.qty}</div>
-          <div class="sub">${fmtR(p.capital_deployed)} capital</div>
-        </div>
-        <div class="plan-cell rr">
-          <div class="label"><span class="term" data-term="R:R">R:R</span></div>
-          <div class="value">${p.rr_ratio}:1</div>
-          <div class="sub">${p.tranche}</div>
-        </div>
-        <div class="plan-cell">
-          <div class="label">Net Loss / Gain</div>
-          <div class="value" style="font-size:13px"><span class="neg">-${fmtR(p.net_loss_rupees)}</span> / <span class="pos">+${fmtR(p.net_gain_rupees)}</span></div>
-          <div class="sub">after costs</div>
-        </div>
-      </div>
-
-      <div class="cta-row">
-        <a href="/trading/execute/?sym=${encodeURIComponent(p.symbol)}&ltp=${p.entry_price}#paper" class="cta-primary">
-          📝 Paper-trade ${p.symbol} — 3-question test next
-        </a>
-        <button onclick="todayPickStock()" class="cta-secondary">🔍 Pick something else</button>
-      </div>
-    </div>
-
-    ${(j.alternatives && j.alternatives.length > 0) ? `
-    <details class="alt-section">
-      <summary>▼ Other engine candidates (${j.alternatives.length}) · click to expand</summary>
-      ${j.alternatives.map(a => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(42,54,86,0.4);font-size:13px">
-          <div>
-            <strong>${a.symbol}</strong>
-            <span class="small" style="color:var(--muted);margin-left:8px">${a.tranche}</span>
-            <div class="small" style="color:var(--muted);font-size:11px;margin-top:2px">${a.rationale?.slice(0, 120)}${a.rationale?.length > 120 ? '…' : ''}</div>
-          </div>
-          <span class="sig-score" style="white-space:nowrap">${a.composite_score?.toFixed(1)}</span>
-        </div>
-      `).join('')}
-    </details>` : ''}
-  `;
-}
-
-function renderWatchSig(w) {
-  const fmtP = (p) => '₹' + (p / 100).toFixed(2);
-  return `
-    <div class="sig-card" style="opacity:0.85;border-left-color:var(--muted)">
-      <div class="sig-row1">
-        <div><span class="sig-sym">${w.symbol}</span></div>
-        <span class="sig-score" style="background:rgba(138,150,184,0.18);color:var(--muted)"><span class="term" data-term="composite score">${w.composite_score?.toFixed(1)}</span></span>
-      </div>
-      <div class="sig-rationale">${w.skip_message || 'Watch list — engine signal below R:R threshold'}</div>
-      ${w.entry_paise ? `<div class="sig-math">
-        <span>Entry <strong>${fmtP(w.entry_paise)}</strong></span>
-        ${w.stop_pct ? `<span><span class="term" data-term="stop">Stop</span> <strong>-${w.stop_pct}%</strong></span>` : ''}
-        ${w.rr_ratio ? `<span><span class="term" data-term="R:R">R:R</span> <strong>${w.rr_ratio}:1</strong></span>` : ''}
-      </div>` : ''}
-    </div>
-  `;
-}
-
-function renderSigCard(c) {
-  const fmtR = (p) => '₹' + Math.round(p / 100).toLocaleString('en-IN');
-  const fmtP = (p) => '₹' + (p / 100).toFixed(2);
-  return `
-    <div class="sig-card">
-      <div class="sig-row1">
-        <div><span class="sig-sym">${c.symbol}</span></div>
-        <span class="sig-score"><span class="term" data-term="composite score">${c.composite_score?.toFixed(1)}</span> · ${c.tranche}</span>
-      </div>
-      <div class="sig-rationale">${c.rationale || ''}</div>
-      <div class="sig-math">
-        <span>Entry <strong>${fmtP(c.entry_paise)}</strong></span>
-        <span><span class="term" data-term="stop">Stop</span> <strong class="neg">${fmtP(c.stop_paise)}</strong></span>
-        <span>Target <strong class="pos">${fmtP(c.target_paise)}</strong></span>
-        <span><span class="term" data-term="R:R">R:R</span> <strong>${c.rr_ratio}:1</strong></span>
-        <span>Risk <strong>${fmtR(c.max_loss_paise)}</strong></span>
-        <span>Reward <strong>${fmtR(c.max_gain_paise)}</strong></span>
-      </div>
-      <div class="sig-actions">
-        <a class="paper" style="text-decoration:none;color:white;display:inline-flex;align-items:center;padding:6px 10px;font-size:12px;border-radius:6px;background:var(--blue);min-height:36px" href="/trading/execute/#paper-${c.symbol}">📝 Paper trade this</a>
-      </div>
-    </div>
-  `;
-}
-
-// ───────────────────────────────────────────────────────────
-// HTML escape helper — used by LLM narrative + concall result rendering
-// ───────────────────────────────────────────────────────────
-function escapeHtml(s) {
-  if (s == null) return '';
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// VERDICT — the new lead view (Opus-composed daily, replaces 12 panels)
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadVerdict() {
-  const el = document.getElementById('verdictCard');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/trading?action=verdict_today&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-
-    if (!j.ok) {
-      el.innerHTML = `
-        <div class="verdict-card empty">
-          <span class="vc-tag">⏳ Verdict pending</span>
-          <div class="vc-headline">${escapeHtml(j.reason === 'no-verdict-yet-today' ? "No verdict for today yet — composes at 08:30 IST Mon-Fri." : (j.reason || 'Unknown state'))}</div>
-          <div style="font-size:13px;color:var(--muted);margin-bottom:14px">${escapeHtml(j.hint || 'Open "Show the math" below for raw engine state.')}</div>
-          <div class="vc-cta-row">
-            <button onclick="forceComposeVerdict()" class="vc-cta-secondary">⚡ Force compose now</button>
-          </div>
+  function renderIntegritySection(d) {
+    const i = d.pre_market_integrity || {};
+    const renderLayer = (label, lay) => {
+      if (!lay) {
+        return `<div class="integrity-card">
+          <div class="layer-lbl">${label}</div>
+          <div class="layer-name" style="color: var(--muted)">no check yet today</div>
         </div>`;
-      return;
+      }
+      const checks = (lay.checks || []).map(c => `
+        <div class="check-row">
+          <div class="dot ${c.status}"></div>
+          <div class="check-name">${escapeHtml(c.check)}<div class="det">${escapeHtml(c.detail || '')}</div></div>
+        </div>`).join('');
+      return `<div class="integrity-card ${lay.severity}">
+        <div class="layer-lbl">${label} · ${lay.severity.toUpperCase()}</div>
+        <div class="layer-name">${escapeHtml(lay.title || label)}</div>
+        ${checks}
+      </div>`;
+    };
+    return `<div class="section">
+      <h2>🔍 Pre-market integrity check
+        <span class="meta">next at ${i.next_check_ist || '08:25 IST'} weekday</span>
+      </h2>
+      <div class="integrity-row">
+        ${renderLayer('L1 · Intelligence', i.layer1)}
+        ${renderLayer('L2 · Execution', i.layer2)}
+      </div>
+      <div class="small-meta">
+        Each layer must be GREEN for May 11 real-money launch.
+      </div>
+    </div>`;
+  }
+
+  function renderVerdictSection(d) {
+    const v = d.verdict;
+    if (!v) {
+      const isPreMarket = d.phase === 'PRE_MARKET';
+      return `<div class="section">
+        <h2>🎯 Today's verdict</h2>
+        <div class="empty">
+          ${isPreMarket
+            ? `Verdict has not composed yet. Opus fires at 08:30 IST (after 07:30 enrichment + 08:25 integrity check).`
+            : `No morning verdict for today found.`}
+        </div>
+      </div>`;
     }
 
-    const v = j.verdict;
-    const decisionClass = v.decision.toLowerCase();
-    const isIntradayPortfolio = v.strategy_mode === 'intraday_daily_profit' && Array.isArray(v.picks) && v.picks.length > 0;
-    const tagText = {
-      TRADE: isIntradayPortfolio ? `✅ TRADE TODAY — ${v.picks.length} PICK PORTFOLIO` : '✅ TRADE TODAY',
-      SIT_OUT: '🛑 SIT OUT TODAY',
-      OBSERVE: '👁 OBSERVE — DO NOT ENTER',
-    }[v.decision] || v.decision;
+    const decisionClass = v.decision || 'PENDING';
+    const composedIst = fmtIstFromMs(v.composed_at);
+    const composedRel = fmtRelative(v.composed_at);
+    const isOverridden = !!v.override;
+    const picksToShow = isOverridden ? v.override.new_picks : (v.picks || []);
 
-    // PORTFOLIO MODE — render N picks instead of single plan grid
-    let portfolioHtml = '';
-    if (isIntradayPortfolio) {
-      const ps = v.portfolio_summary || {};
-      const fmtR = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
-      const fmtP = (paise) => '₹' + ((paise || 0) / 100).toFixed(2);
+    const pickCards = picksToShow.map((p, i) => `
+      <div class="pick-card pick-${i + 1}">
+        <div class="pick-head">
+          <span class="pick-rank">#${i + 1}</span>
+          <span class="pick-symbol">${escapeHtml(p.symbol)}</span>
+          ${p.weight_pct ? `<span class="pick-weight">${p.weight_pct}% capital</span>` : ''}
+          ${p.target_pct ? `<span style="font-size:10px;color:var(--green)">target +${p.target_pct}%</span>` : ''}
+          ${p.stop_pct ? `<span style="font-size:10px;color:var(--red)">stop -${p.stop_pct}%</span>` : ''}
+        </div>
+        ${p.entry_window ? `<div style="font-size:10px;color:var(--muted);margin-bottom:4px">Entry: ${escapeHtml(p.entry_window)}${p.hard_exit_ist ? ` · Hard exit: ${escapeHtml(p.hard_exit_ist)}` : ''}</div>` : ''}
+        <div class="pick-rationale">${escapeHtml(p.rationale || '')}</div>
+      </div>`).join('');
 
-      portfolioHtml += `
-        <div style="background:rgba(0,0,0,0.25);border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">📊 Portfolio summary · ₹${(ps.capital_paise/100/100000).toFixed(0)}L paper capital</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">
-            <div style="padding:8px 10px;background:rgba(0,0,0,0.20);border-radius:6px">
-              <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Deployed</div>
-              <div style="font-size:14px;font-weight:600">${fmtR(ps.capital_deployed_paise)}</div>
-              <div style="font-size:10px;color:var(--muted)">${ps.capital_deployed_pct}% of cap</div>
-            </div>
-            <div style="padding:8px 10px;background:rgba(231,76,60,0.10);border-radius:6px">
-              <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Max loss</div>
-              <div style="font-size:14px;font-weight:600;color:var(--red)">-${fmtR(ps.max_portfolio_loss_paise)}</div>
-              <div style="font-size:10px;color:var(--muted)">-${ps.max_loss_pct_of_capital}% of cap</div>
-            </div>
-            <div style="padding:8px 10px;background:rgba(46,204,113,0.10);border-radius:6px">
-              <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Max gain (target)</div>
-              <div style="font-size:14px;font-weight:600;color:var(--green)">+${fmtR(ps.max_portfolio_gain_paise)}</div>
-              <div style="font-size:10px;color:var(--muted)">+${ps.max_gain_pct_of_capital}% of cap</div>
-            </div>
-            <div style="padding:8px 10px;background:rgba(245,176,65,0.10);border-radius:6px">
-              <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Daily loss halt</div>
-              <div style="font-size:14px;font-weight:600;color:var(--yellow)">-${fmtR(ps.daily_loss_limit_paise)}</div>
-              <div style="font-size:10px;color:var(--muted)">-2% auto-stop</div>
-            </div>
-          </div>
-          <div style="margin-top:10px;padding:8px 10px;background:rgba(124,92,255,0.10);border-radius:6px;font-size:11px;color:var(--text)">
-            <strong style="color:var(--accent)">MIS 5× simulation:</strong> Same trades with intraday leverage → max gain <span style="color:var(--green)">+${fmtR(ps.mis_5x_max_gain_paise)} (+${ps.mis_5x_gain_pct}%)</span>, max loss <span style="color:var(--red)">-${fmtR(ps.mis_5x_max_loss_paise)} (-${ps.mis_5x_loss_pct}%)</span>. Paper trades remain at 1× until 30-day baseline proves consistent.
-          </div>
-        </div>`;
-
-      // Render each pick as a card
-      portfolioHtml += `<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">`;
-      v.picks.forEach((p, i) => {
-        const histStats = p.intraday_history || {};
-        portfolioHtml += `
-          <div style="background:rgba(0,0,0,0.30);border-radius:10px;padding:14px;border-left:3px solid var(--green)">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-              <div>
-                <span style="font-size:16px;font-weight:700">Pick ${i+1}: ${escapeHtml(p.symbol)}</span>
-                <span style="margin-left:8px;font-size:11px;color:var(--muted)">${p.weight_pct}% weight · ${fmtR(p.capital_deployed_paise)}</span>
-              </div>
-              <span style="padding:3px 8px;background:rgba(124,92,255,0.18);color:var(--accent);border-radius:10px;font-size:11px;font-weight:600">R:R ${p.rr_ratio}:1</span>
-            </div>
-            <div style="font-size:12.5px;color:var(--text);margin-bottom:10px;line-height:1.5">${escapeHtml(p.rationale || '')}</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:6px;margin-bottom:8px">
-              <div style="padding:7px 9px;background:rgba(0,0,0,0.20);border-radius:5px">
-                <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Qty</div>
-                <div style="font-size:13px;font-weight:600;color:var(--blue)">${p.qty || '—'}</div>
-              </div>
-              <div style="padding:7px 9px;background:rgba(0,0,0,0.20);border-radius:5px">
-                <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Entry est.</div>
-                <div style="font-size:13px;font-weight:600">${fmtP(p.live_entry_estimate_paise)}</div>
-              </div>
-              <div style="padding:7px 9px;background:rgba(231,76,60,0.10);border-radius:5px">
-                <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Stop -${p.stop_pct}%</div>
-                <div style="font-size:13px;font-weight:600;color:var(--red)">${fmtP(p.stop_paise)}</div>
-              </div>
-              <div style="padding:7px 9px;background:rgba(46,204,113,0.10);border-radius:5px">
-                <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Target +${p.target_pct}%</div>
-                <div style="font-size:13px;font-weight:600;color:var(--green)">${fmtP(p.target_paise)}</div>
-              </div>
-              <div style="padding:7px 9px;background:rgba(0,0,0,0.20);border-radius:5px">
-                <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Trail</div>
-                <div style="font-size:11px;font-weight:600">arm +${p.trail_after_pct}% · give ${p.trail_pct}%</div>
-              </div>
-              <div style="padding:7px 9px;background:rgba(0,0,0,0.20);border-radius:5px">
-                <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Loss / Gain</div>
-                <div style="font-size:11px"><span style="color:var(--red)">-${fmtR(p.max_loss_paise)}</span> / <span style="color:var(--green)">+${fmtR(p.max_gain_paise)}</span></div>
-              </div>
-            </div>
-            <div style="font-size:10.5px;color:var(--muted);line-height:1.5">
-              <strong>90-day history:</strong> hits +2% on ${histStats.hit_2pct_pct_of_days || '—'}% of days · +3% on ${histStats.hit_3pct_pct_of_days || '—'}% · +5% on ${histStats.hit_5pct_pct_of_days || '—'}% · green close ${histStats.green_close_rate || '—'}% · turnover ₹${Math.round(histStats.avg_turnover_cr || 0)} Cr/day
-            </div>
-            <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
-              <a href="/trading/execute/?sym=${encodeURIComponent(p.symbol)}&ltp=${(p.live_entry_estimate_paise || 0)/100}#paper" style="padding:8px 12px;background:var(--blue);color:white;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none">📝 Paper-trade ${escapeHtml(p.symbol)}</a>
-            </div>
-          </div>`;
-      });
-      portfolioHtml += `</div>`;
-
-      // Daily-profit instructions banner
-      portfolioHtml += `
-        <div style="background:rgba(245,176,65,0.10);border:1px solid var(--yellow);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px">
-          <div style="font-weight:600;color:var(--yellow);margin-bottom:6px">⏱ INTRADAY EXECUTION FLOW</div>
-          <div style="line-height:1.7;color:var(--text)">
-            <strong>09:30 IST</strong> Open observation. Don't enter.<br>
-            <strong>09:45 IST</strong> If price > 09:30 high + volume confirms → enter at limit.<br>
-            <strong>+1.5%</strong> Trailing stop arms (gives back ${v.picks[0]?.trail_pct || 1}% from peak).<br>
-            <strong>14:30 IST</strong> Hard exit ALL positions. No overnight. Sleep flat.<br>
-            <strong>Halt rule:</strong> If portfolio P&L hits -2% (-₹${Math.round((v.portfolio_summary?.daily_loss_limit_paise || 0)/100).toLocaleString('en-IN')}) any time, close all + stop trading for the day.
-          </div>
-        </div>`;
-    }
-
-    // Plan grid (legacy single-pick fallback — only shown when TRADE + plan + NOT portfolio mode)
-    let planHtml = '';
-    if (!isIntradayPortfolio && v.decision === 'TRADE' && v.recommended_plan) {
-      const p = v.recommended_plan;
-      const fmtP = (paise) => '₹' + (paise / 100).toFixed(2);
-      const fmtR = (paise) => '₹' + Math.round(paise / 100).toLocaleString('en-IN');
-      planHtml = `
-        <div class="vc-plan-grid">
-          <div class="vc-plan-cell"><div class="vc-label">Symbol</div><div class="vc-val">${escapeHtml(p.symbol || v.recommended_symbol)}</div></div>
-          <div class="vc-plan-cell"><div class="vc-label">Entry</div><div class="vc-val">${fmtP(p.entry_paise)}</div></div>
-          <div class="vc-plan-cell stop"><div class="vc-label">Stop -${p.stop_pct}%</div><div class="vc-val">${fmtP(p.stop_paise)}</div></div>
-          <div class="vc-plan-cell target"><div class="vc-label">Target +${p.target_pct?.toFixed(1)}%</div><div class="vc-val">${fmtP(p.target_paise)}</div></div>
-          <div class="vc-plan-cell qty"><div class="vc-label">Quantity</div><div class="vc-val">${p.qty}</div></div>
-          <div class="vc-plan-cell rr"><div class="vc-label">R:R</div><div class="vc-val">${p.rr_ratio}:1</div></div>
-          <div class="vc-plan-cell">
-            <div class="vc-label">Net loss / gain</div>
-            <div class="vc-val" style="font-size:12px"><span style="color:var(--red)">-${fmtR(p.net_loss_paise)}</span> / <span style="color:var(--green)">+${fmtR(p.net_gain_paise)}</span></div>
-          </div>
-        </div>`;
-    }
-
-    // Alternatives
-    const alts = (v.alternatives && v.alternatives.alternatives) || [];
-    const altsHtml = alts.length > 0 ? `
-      <details class="vc-alts">
-        <summary>🤔 Other ideas Claude considered (${alts.length})</summary>
-        <ul>
-          ${alts.map(a => `<li><strong>${escapeHtml(a.symbol)}</strong><span class="why-not">${escapeHtml(a.why_not || '')}</span></li>`).join('')}
-        </ul>
-      </details>` : '';
-
-    // Risk flags
-    const flags = (v.alternatives && v.alternatives.risk_flags) || [];
-    const flagsHtml = flags.length > 0 ? `
-      <div style="margin-top:10px;font-size:12px;color:var(--muted)">
-        <strong style="color:var(--yellow)">Watch for:</strong> ${flags.map(escapeHtml).join(' · ')}
+    const overrideBanner = isOverridden ? `
+      <div class="override-banner">
+        <strong>OWNER OVERRIDE</strong> — composed verdict was ${(v.override.original_picks || []).map(p => escapeHtml(p.symbol)).join(' / ')},
+        replaced with ${(v.override.new_picks || []).map(p => escapeHtml(p.symbol)).join(' / ')}.
+        <div style="margin-top:4px;color:var(--muted)">${escapeHtml(v.override.reason || '')}</div>
+        <div style="margin-top:4px;color:var(--muted);font-size:10px">by ${escapeHtml(v.override.by || '')} at ${fmtIstFromMs(v.override.overridden_at)} IST</div>
       </div>` : '';
 
-    // CTAs
-    let ctaHtml = '';
-    if (v.decision === 'TRADE' && v.recommended_symbol) {
-      const ltp = v.recommended_plan ? (v.recommended_plan.entry_paise / 100) : '';
-      ctaHtml = `
-        <div class="vc-cta-row">
-          <a href="/trading/execute/?sym=${encodeURIComponent(v.recommended_symbol)}&ltp=${ltp}#paper" class="vc-cta-primary">📝 Paper-trade ${escapeHtml(v.recommended_symbol)}</a>
-          <button onclick="todayPickStock()" class="vc-cta-secondary">🔍 Pick something else</button>
-        </div>`;
-    } else {
-      ctaHtml = `
-        <div class="vc-cta-row">
-          <button onclick="todayPickStock()" class="vc-cta-primary">🔍 Pick a stock anyway (override)</button>
-        </div>`;
+    return `<div class="section">
+      <h2>🎯 Today's verdict
+        <span class="meta">composed ${composedIst} IST · ${composedRel} · ${escapeHtml(v.composed_by_model || '')}</span>
+      </h2>
+      <span class="verdict-decision ${decisionClass}">${escapeHtml(v.decision)}</span>
+      ${v.headline ? `<div class="verdict-headline">${escapeHtml(v.headline)}</div>` : ''}
+      ${v.narrative ? `<div class="verdict-narrative">${escapeHtml(v.narrative)}</div>` : ''}
+      ${pickCards || (v.decision === 'SIT_OUT' ? '<div class="empty">No picks today.</div>' : '')}
+      ${overrideBanner}
+    </div>`;
+  }
+
+  function renderPoolSection(d) {
+    const pool = d.pool_top10 || [];
+    const pickedSyms = new Set();
+    if (d.verdict?.picks) for (const p of d.verdict.picks) pickedSyms.add(p.symbol);
+    if (d.verdict?.override?.new_picks) for (const p of d.verdict.override.new_picks) pickedSyms.add(p.symbol);
+
+    if (!pool.length) {
+      return `<div class="section">
+        <h2>📊 90-day pool top 10</h2>
+        <div class="empty">No suitability data — F-DATA-1 may not have populated yet.</div>
+      </div>`;
     }
 
-    // Invalidator banner (only if latest is an invalidator update)
-    let invalidatorBanner = '';
-    if (v.type === 'invalidator' && v.invalidator_reason) {
-      invalidatorBanner = `
-        <div class="vc-invalidator-banner">
-          <strong>⚡ Verdict updated mid-day.</strong> Reason: ${escapeHtml(v.invalidator_reason)}
-          ${j.morning_verdict ? ` · This morning's verdict was: <em>${escapeHtml(j.morning_verdict.headline || j.morning_verdict.decision)}</em>` : ''}
-        </div>`;
-    }
-
-    const composedAt = new Date(v.composed_at);
-    const istComposed = new Date(composedAt.getTime() + 5.5 * 3600000);
-    const composedStr = istComposed.toISOString().slice(11, 16) + ' IST';
-    const costR = v.cost_paise != null ? '₹' + (v.cost_paise / 100).toFixed(2) : '—';
-
-    el.innerHTML = `
-      <div class="verdict-card ${decisionClass}">
-        <span class="vc-tag">${tagText}</span>
-        ${invalidatorBanner}
-        ${v.headline ? `<div class="vc-headline">${escapeHtml(v.headline)}</div>` : ''}
-        ${v.narrative ? `<div class="vc-narrative">${escapeHtml(v.narrative)}</div>` : ''}
-        ${portfolioHtml}
-        ${planHtml}
-        ${(v.entry_window || v.horizon || v.time_stop_days || v.pre_event_exit) ? `
-        <div style="background:rgba(0,0,0,0.20);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">⏱ Time dimensions</div>
-          ${v.entry_window ? `<div style="margin-bottom:6px"><strong style="color:var(--green)">Entry:</strong> ${escapeHtml(v.entry_window)}</div>` : ''}
-          ${v.horizon ? `<div style="margin-bottom:6px"><strong style="color:var(--blue)">Horizon:</strong> ${escapeHtml(v.horizon)}${v.time_stop_days ? ` · max ${v.time_stop_days} day${v.time_stop_days === 1 ? '' : 's'}` : ''}</div>` : ''}
-          ${v.pre_event_exit ? `<div style="color:var(--yellow)"><strong>⚠️ Pre-event exit:</strong> ${escapeHtml(v.pre_event_exit)}</div>` : ''}
-        </div>` : ''}
-        ${flagsHtml}
-        ${altsHtml}
-        ${ctaHtml}
-        <div class="vc-meta">
-          Composed ${composedStr} by ${v.composed_by_model || 'Claude'} ${v.cached ? '· cache hit' : `· cost ${costR}`}
-          · <a href="#" onclick="forceComposeVerdict();return false;" style="color:var(--muted)">refresh</a>
+    const rows = pool.map((r, i) => {
+      const inPicks = pickedSyms.has(r.symbol);
+      return `<div class="pool-row ${inPicks ? 'in-picks' : ''}">
+        <span class="rank">#${i + 1}</span>
+        <div>
+          <div class="symbol">${escapeHtml(r.symbol)}${inPicks ? ' <span style="font-size:10px;color:var(--green)">✓ in picks</span>' : ''}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">
+            ${r.sector ? escapeHtml(r.sector) + ' · ' : ''}aoh ${(r.avg_open_to_high_pct || 0).toFixed(1)}% · h2 ${Math.round(((r.hit_2pct_rate || 0) > 1 ? r.hit_2pct_rate / 100 : r.hit_2pct_rate) * 100)}% · gc ${Math.round(((r.green_close_rate || 0) > 1 ? r.green_close_rate / 100 : r.green_close_rate) * 100)}%
+          </div>
+        </div>
+        <div class="scores">
+          <span class="score-pill ${scoreClass(r.owner_score, [50, 45])}">o ${r.owner_score}</span>
+          <span class="score-pill ${scoreClass(r.intraday_score, [50, 45])}">i ${r.intraday_score}</span>
+          ${r.avg_up_last_week_pct != null ? `<span class="score-pill ${scoreClass(r.avg_up_last_week_pct, [4, 2])}">aw ${r.avg_up_last_week_pct.toFixed(1)}%</span>` : '<span class="score-pill low">aw n/a</span>'}
         </div>
       </div>`;
-  } catch (e) {
-    el.innerHTML = `<div class="verdict-card empty"><span class="vc-tag">⚠️ Failed</span><div class="vc-headline">Verdict load failed: ${escapeHtml(e.message)}</div></div>`;
-  }
-}
-
-window.forceComposeVerdict = async function () {
-  const el = document.getElementById('verdictCard');
-  el.innerHTML = `<div class="verdict-card empty"><span class="vc-tag">⏳ Composing</span><div class="vc-headline">Asking Opus 4.5 to compose today's verdict…</div><div style="color:var(--muted);font-size:12px">This takes 10–30 seconds.</div></div>`;
-  try {
-    const r = await fetch('https://wealth-verdict.nihafwork.workers.dev/run/compose?force=1&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    if (j.ok) {
-      // Wait 1s for D1 write to propagate, then reload
-      setTimeout(loadVerdict, 1200);
-    } else {
-      el.innerHTML = `<div class="verdict-card empty"><span class="vc-tag">⚠️ Failed</span><div class="vc-headline">${escapeHtml(j.error || 'Compose failed')}</div></div>`;
-    }
-  } catch (e) {
-    el.innerHTML = `<div class="verdict-card empty"><span class="vc-tag">⚠️ Failed</span><div class="vc-headline">${escapeHtml(e.message)}</div></div>`;
-  }
-};
-
-// ───────────────────────────────────────────────────────────
-// Alerts panel — show unread, with one-tap clear-all
-// ───────────────────────────────────────────────────────────
-async function loadAlerts() {
-  const el = document.getElementById('alertsPanel');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/trading?action=alerts&unread=1&limit=20&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    const alerts = j.alerts || [];
-    if (alerts.length === 0) {
-      el.innerHTML = '';
-      el.classList.add('empty');
-      return;
-    }
-    el.classList.remove('empty');
-    const fmtTs = (ts) => {
-      const d = new Date(ts);
-      const now = Date.now();
-      const mins = Math.round((now - ts) / 60000);
-      if (mins < 60) return mins + 'm ago';
-      if (mins < 1440) return Math.round(mins/60) + 'h ago';
-      return Math.round(mins/1440) + 'd ago';
-    };
-    el.innerHTML = `
-      <div class="alerts-panel${(window._alertsOpen ? ' open' : '')}">
-        <div class="ap-head">
-          <div class="ap-title ap-toggle" onclick="toggleAlertsPanel()">🔔 ${alerts.length} unread alert${alerts.length === 1 ? '' : 's'}</div>
-          <div class="ap-actions">
-            <button class="ap-btn primary" onclick="markAllAlertsReadNow()">✓ Clear all</button>
-            <button class="ap-btn ap-toggle" onclick="toggleAlertsPanel()">${window._alertsOpen ? 'Hide' : 'Show'}</button>
-          </div>
-        </div>
-        <div class="ap-list">
-          ${alerts.map(a => `
-            <div class="alert-item" id="alert-${a.id}">
-              <div class="ai-body">
-                <span class="ai-sev ${a.severity || 'info'}">${a.severity || 'info'}</span>
-                <span class="ai-title">${escapeHtml(a.title || '')}</span>
-                ${a.message ? `<div class="ai-msg">${escapeHtml(a.message)}</div>` : ''}
-                <div class="ai-meta">${escapeHtml(a.category || '')} · ${a.ts ? fmtTs(a.ts) : ''}</div>
-              </div>
-              <button class="ai-mark" onclick="markAlertReadNow(${a.id})">✓</button>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  } catch (e) {
-    el.innerHTML = `<div class="alerts-panel"><div class="ap-title" style="color:var(--red)">Alerts load failed: ${escapeHtml(e.message)}</div></div>`;
-  }
-}
-
-window.toggleAlertsPanel = function () {
-  window._alertsOpen = !window._alertsOpen;
-  document.querySelector('.alerts-panel')?.classList.toggle('open', window._alertsOpen);
-  // Update the "Show/Hide" button text without re-render
-  document.querySelectorAll('.alerts-panel .ap-btn.ap-toggle').forEach(b => {
-    b.textContent = window._alertsOpen ? 'Hide' : 'Show';
-  });
-};
-
-window.markAlertReadNow = async function (id) {
-  if (!id) return;
-  try {
-    await fetch('/api/trading?action=mark_alert_read&id=' + id + '&key=' + encodeURIComponent(DASHBOARD_KEY));
-    document.getElementById('alert-' + id)?.remove();
-    // Reload to update count + state
-    setTimeout(loadAlerts, 200);
-  } catch (e) { /* swallow */ }
-};
-
-window.markAllAlertsReadNow = async function () {
-  try {
-    await fetch('/api/trading?action=mark_all_alerts_read&key=' + encodeURIComponent(DASHBOARD_KEY));
-    window._alertsOpen = false;
-    loadAlerts();
-    // Live strip count will refresh on the next refreshAll tick
-    setTimeout(refreshAll, 300);
-  } catch (e) { /* swallow */ }
-};
-
-// ───────────────────────────────────────────────────────────
-// P1.3 — Briefing v2 (LLM-composed pre-market story)
-// ───────────────────────────────────────────────────────────
-async function loadBriefingV2() {
-  const el = document.getElementById('briefingV2');
-  if (!el) return;
-  // Only show pre-market + opening + morning phases — once mid-session, the
-  // briefing becomes stale context noise. We re-show it overnight for next day.
-  try {
-    const r = await fetch('/api/trading?action=briefing_v2&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    if (!j.ok) { el.innerHTML = ''; return; }
-
-    const facts = (j.supporting_facts || []).filter(Boolean);
-    const narrativeHtml = j.llm_narrative
-      ? `<div class="bv-narrative">${escapeHtml(j.llm_narrative)}</div>`
-      : (j.llm_error
-          ? `<div class="bv-empty">LLM unavailable: ${escapeHtml(j.llm_error)} — showing raw facts only.</div>`
-          : '<div class="bv-empty">No LLM narrative — Anthropic key not configured. Showing raw facts.</div>');
-
-    el.innerHTML = `
-      <div class="brief-v2">
-        <span class="bv-tag">📰 Pre-market briefing — ${escapeHtml(j.date || '')}</span>
-        ${narrativeHtml}
-        ${facts.length ? `
-          <details>
-            <summary>Supporting facts (${facts.length}) · click to expand</summary>
-            <ul class="bv-facts">
-              ${facts.map(f => `<li>${escapeHtml(f)}</li>`).join('')}
-            </ul>
-          </details>` : ''}
-        <div class="bv-meta">Composed by Claude Haiku · cached 6hr · cost ~₹0.08/refresh</div>
-      </div>
-    `;
-  } catch (e) {
-    el.innerHTML = `<div class="brief-v2"><div class="bv-empty" style="color:var(--red)">Briefing v2 failed: ${escapeHtml(e.message)}</div></div>`;
-  }
-}
-
-// ───────────────────────────────────────────────────────────
-// P1.2 — Engine State (regime + MTF + dim health + cascades)
-// ───────────────────────────────────────────────────────────
-async function loadEngineState() {
-  const el = document.getElementById('engineState');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/trading?action=engine_state&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    if (!j.ok) {
-      el.innerHTML = `<div class="engine-state"><h3>🧪 Engine state</h3><div class="empty">${escapeHtml(j.reason || 'No engine compute yet today.')}</div></div>`;
-      return;
-    }
-
-    const reg = j.regime || {};
-    const ev = reg.evidence || {};
-    const tone = reg.explainer?.tone || 'neutral';
-    const mtfTotal = j.mtf_alignment?.total_universe || 1;
-    const mtfDist = j.mtf_alignment?.distribution || [];
-    const vetoedPct = j.mtf_alignment?.vetoed_pct ?? 0;
-
-    // Build MTF stacked bar (each segment width = % of universe)
-    const mtfBarSegs = mtfDist.map(d => {
-      const pct = (d.n || 0) / mtfTotal * 100;
-      if (pct < 0.5) return '';
-      const cls = (d.mtf_alignment || 'unknown').replace(/[^a-z_]/gi, '');
-      return `<div class="es-mtf-seg ${cls}" style="width:${pct.toFixed(1)}%" title="${escapeHtml(d.mtf_alignment)}: ${d.n}">${pct >= 8 ? `${pct.toFixed(0)}%` : ''}</div>`;
-    }).join('');
-    const mtfLegend = mtfDist.map(d => `<span>${escapeHtml(d.mtf_alignment)}: <strong style="color:var(--text)">${d.n}</strong></span>`).join('');
-
-    // Per-dim health
-    const dimHealthHtml = (j.dim_health || []).map(d => {
-      let cls = 'dead';
-      if (d.coverage_pct >= 60) cls = 'live';
-      else if (d.coverage_pct >= 25) cls = 'partial';
-      const label = d.dim.replace(/_/g, ' ');
-      return `<div class="es-dim ${cls}"><span>${label}</span><span class="es-dim-pct">${d.coverage_pct}%</span></div>`;
     }).join('');
 
-    // Score bands
-    const bandsHtml = (j.score_distribution || []).map(b => {
-      const cls = (b.band === '90+' || b.band === '80-90' || b.band === '70-80')
-        ? 'high' : (b.band === '<60' ? 'below' : '');
-      return `<span class="es-band ${cls}">${escapeHtml(b.band)}: ${b.n}</span>`;
-    }).join('');
-
-    // Cascades
-    const cascadesHtml = (j.cascades_active || []).length
-      ? (j.cascades_active || []).map(c => `<div class="es-cascade-item">⚡ ${escapeHtml(c.pattern_name)} firing on ${c.n} stock${c.n === 1 ? '' : 's'}</div>`).join('')
-      : '<div style="color:var(--muted);font-size:11px">No active cascades — engine waiting for pattern triggers.</div>';
-
-    el.innerHTML = `
-      <div class="engine-state">
-        <h3>
-          <span>🧪 Engine state — how decisions get made</span>
-          <span class="es-regime ${tone}">${escapeHtml(reg.current || 'unknown')}</span>
-        </h3>
-        <div class="es-explainer">${escapeHtml(reg.explainer?.desc || '—')}</div>
-        <div class="es-evidence">
-          ${ev.nifty_20d_pct != null ? `<div>Nifty 20d: <strong>${ev.nifty_20d_pct >= 0 ? '+' : ''}${ev.nifty_20d_pct}%</strong></div>` : ''}
-          ${ev.nifty_50d_pct != null ? `<div>Nifty 50d: <strong>${ev.nifty_50d_pct >= 0 ? '+' : ''}${ev.nifty_50d_pct}%</strong></div>` : ''}
-          ${ev.india_vix != null ? `<div>VIX: <strong>${Number(ev.india_vix).toFixed(1)}</strong></div>` : ''}
-          <div>Max score today: <strong>${(j.max_score_today || 0).toFixed(1)}</strong> / threshold <strong>${j.threshold}</strong></div>
-          <div>Cards firing: <strong>${j.cards_today}</strong></div>
-        </div>
-
-        <div class="es-row-h"><span class="term" data-term="MTF">MTF</span> alignment across universe — vetoed: <strong style="color:var(--red)">${vetoedPct}%</strong></div>
-        <div class="es-mtf-bar">${mtfBarSegs}</div>
-        <div class="es-mtf-legend">${mtfLegend}</div>
-
-        <div class="es-row-h">9-dim health (% of universe with non-default scores)</div>
-        <div class="es-dim-grid">${dimHealthHtml}</div>
-
-        <div class="es-row-h">Score distribution</div>
-        <div class="es-bands">${bandsHtml || '<span style="color:var(--muted);font-size:11px">No score data</span>'}</div>
-
-        <div class="es-row-h">Cascade triggers active</div>
-        <div class="es-cascades">${cascadesHtml}</div>
+    return `<div class="section">
+      <h2>📊 90-day pool · top 10 by owner_score
+        <span class="meta">refreshed daily 16:30 IST</span>
+      </h2>
+      <div class="pool-list">${rows}</div>
+      <div class="small-meta">
+        owner_score = intraday_score × 0.6 + loss_resistance_score × 0.4 (per F-L1).
+        ✓ marker = stock is in today's verdict picks (composed or overridden).
       </div>
-    `;
-    attachTermTooltips();
-  } catch (e) {
-    el.innerHTML = `<div class="engine-state"><div class="empty" style="color:var(--red)">Engine state failed: ${escapeHtml(e.message)}</div></div>`;
+    </div>`;
   }
-}
 
-// ───────────────────────────────────────────────────────────
-// P1.4 — Bayesian state preview (buckets filling toward 30 trades)
-// ───────────────────────────────────────────────────────────
-async function loadBayesianPreview() {
-  const el = document.getElementById('bayesianPreview');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/trading?action=bayesian_state&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    const summary = j.summary || {};
-    const buckets = j.by_bucket || [];
-
-    if (buckets.length === 0) {
-      el.innerHTML = `
-        <div class="bayes-preview">
-          <h3>🧠 Bayesian state — empirical learning</h3>
-          <div class="bp-sub">Empty. Engine uses hardcoded priors until you've done ≥30 paper trades per (tranche × score-band × cascade × regime) bucket. Click "Pick a stock" to start filling.</div>
-        </div>
-      `;
-      return;
+  function renderFeedSection(d) {
+    const feed = d.pre_market_feed || [];
+    if (!feed.length) {
+      return `<div class="section">
+        <h2>📡 Live feed</h2>
+        <div class="empty">No recent activity in last 12h.</div>
+      </div>`;
     }
-
-    const overallWr = summary.overall_win_rate;
-    const totalTrades = summary.total_trades_recorded || 0;
-    const totalBuckets = summary.total_buckets_observed || 0;
-
-    // Top 8 buckets by total_trades
-    const topBuckets = buckets.slice(0, 8).map(b => {
-      const pct = Math.min(100, (b.total_trades / 30) * 100);
-      const active = b.total_trades >= 30;
-      const wr = b.posterior_win_rate != null ? (b.posterior_win_rate * 100).toFixed(0) + '%' : '—';
-      return `
-        <div class="bp-bucket">
-          <span class="bp-bucket-key">${escapeHtml(b.bucket_key || `${b.tranche}/${b.score_band}/${b.regime}`)}</span>
-          <div class="bp-bucket-bar"><div class="bp-bucket-fill ${active ? 'active' : ''}" style="width:${pct}%"></div></div>
-          <span class="bp-bucket-stats">
-            <strong>${b.total_trades}</strong>/30 ·
-            WR <strong>${wr}</strong> ·
-            ${b.win_count}W ${b.loss_count}L
-            ${active ? ' · <span style="color:var(--green)">ACTIVE</span>' : ''}
-          </span>
+    const rows = feed.map(f => {
+      const ts = fmtIstFromMs(f.ts);
+      if (f.kind === 'crossasset' || f.kind === 'gift_nifty') {
+        const dCls = deltaCls(f.change_pct);
+        const dStr = f.change_pct == null ? '' : fmtPct(f.change_pct);
+        return `<div class="feed-row crossasset">
+          <span class="ts">${ts}</span>
+          <div class="body"><span class="label">${escapeHtml(f.label)}</span> ${Number(f.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${dStr ? `<span class="delta ${dCls}">${dStr}</span>` : ''}
+          </div>
+        </div>`;
+      }
+      const sentClass = f.sentiment > 0.1 ? 'pos' : f.sentiment < -0.1 ? 'neg' : 'neu';
+      return `<div class="feed-row news">
+        <span class="ts">${ts}</span>
+        <div class="body">
+          <span class="sent ${sentClass}"></span>
+          <span class="headline">${escapeHtml(f.headline)}</span>
+          <div class="src">${escapeHtml(f.source || '')}${f.symbols_tagged ? ' · ' + escapeHtml(f.symbols_tagged) : ''}</div>
         </div>
-      `;
+      </div>`;
     }).join('');
+    return `<div class="section">
+      <h2>📡 Live feed
+        <span class="meta">cross-asset moves + breaking news (last 12h)</span>
+      </h2>
+      <div class="feed">${rows}</div>
+    </div>`;
+  }
 
-    el.innerHTML = `
-      <div class="bayes-preview">
-        <h3>🧠 Bayesian state — empirical learning</h3>
-        <div class="bp-sub">Each bucket activates after ≥30 trades. Until then, engine uses hardcoded priors. Top 8 most-traded buckets shown.</div>
-        <div class="bp-summary">
-          <div class="bp-stat">
-            <span class="bp-stat-label">Total trades</span>
-            <span class="bp-stat-value">${totalTrades}</span>
-          </div>
-          <div class="bp-stat">
-            <span class="bp-stat-label">Buckets seen</span>
-            <span class="bp-stat-value">${totalBuckets}</span>
-          </div>
-          <div class="bp-stat">
-            <span class="bp-stat-label">Overall win-rate</span>
-            <span class="bp-stat-value ${overallWr != null && overallWr >= 0.5 ? 'pos' : 'neg'}">${overallWr != null ? (overallWr * 100).toFixed(0) + '%' : '—'}</span>
+  function renderSwingToggle(d) {
+    const sc = d.swing_candidates || {};
+    const candidates = sc.candidates || [];
+    const computedIst = sc.computed_at ? fmtIstFromMs(sc.computed_at) : null;
+    const computedRel = sc.computed_at ? fmtRelative(sc.computed_at) : null;
+
+    const candidateRows = candidates.map((c, i) => `
+      <div class="pool-row">
+        <span class="rank">#${i + 1}</span>
+        <div>
+          <div class="symbol">${escapeHtml(c.symbol)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">regime: ${escapeHtml(c.regime || 'unknown')}</div>
+        </div>
+        <span class="score-pill high">${c.composite_score}</span>
+      </div>`).join('');
+
+    return `
+      <div class="swing-toggle" id="swing-toggle">
+        <span class="arrow">▶</span>
+        <span class="lbl">Show <strong>swing/positional candidates</strong> (composite ≥ 70 · separate from intraday) · ${candidates.length} stocks</span>
+      </div>
+      <div class="swing-content" id="swing-content">
+        <div class="section">
+          <h2>📈 Swing candidates · composite_score ≥ 70
+            <span class="meta">${computedIst ? `computed ${computedIst} IST · ${computedRel}` : 'no recent compute'}</span>
+          </h2>
+          ${candidates.length ? `<div class="pool-list">${candidateRows}</div>` : '<div class="empty">No candidates above threshold.</div>'}
+          <div class="small-meta">
+            ⚠ This is a SEPARATE intelligence layer from intraday paper-trading.
+            Multi-day to weeks horizon. NOT relevant for May 11 real-money intraday launch.
+            Full candidates at <a href="/trading/execute/" style="color: var(--accent)">/trading/execute/</a>.
           </div>
         </div>
-        ${topBuckets || '<div class="bp-empty">No buckets with trades yet.</div>'}
+      </div>`;
+  }
+
+  function render(d) {
+    const phase = d.phase || 'OFF_HOURS';
+    const phaseDesc = PHASE_DESC[phase] || PHASE_DESC.OFF_HOURS;
+
+    const html = `
+      <header>
+        <h1>Today
+          <span class="sub">Pre-market verdict + 90D pool ranking + live feed · per doc 19 §6.1</span>
+        </h1>
+        <nav class="tab-nav">
+          <a href="/trading/">Hub</a>
+          <a href="/trading/today/" class="active">Today</a>
+          <a href="/trading/execute/">Execute</a>
+          <a href="/trading/ops/">Ops</a>
+          <a href="/trading/audit/">Audit</a>
+          <a href="/trading/readiness/">Readiness</a>
+          <a href="/trading/roadmap/">Roadmap</a>
+        </nav>
+      </header>
+
+      <div class="phase-head ${phase}">
+        <span class="pill">${phaseDesc.lbl}</span>
+        <span style="color: var(--muted)">${phaseDesc.help}</span>
+      </div>
+
+      ${renderVerdictSection(d)}
+      ${renderIntegritySection(d)}
+      ${renderPoolSection(d)}
+      ${renderFeedSection(d)}
+      ${renderSwingToggle(d)}
+
+      <div class="small-meta" style="text-align:center;margin-top:14px">
+        Auto-refreshes every 60s · last updated ${fmtIstFromMs(d.generated_at)} IST
       </div>
     `;
-  } catch (e) {
-    el.innerHTML = `<div class="bayes-preview"><div class="bp-empty" style="color:var(--red)">Bayesian state failed: ${escapeHtml(e.message)}</div></div>`;
-  }
-}
 
-// ───────────────────────────────────────────────────────────
-// P1.5 — Concall analyzer modal (Claude Haiku JSON extraction)
-// ───────────────────────────────────────────────────────────
-window.openConcallModal = function () {
-  document.getElementById('concallModal').style.display = 'flex';
-  document.getElementById('concallResult').innerHTML = '';
-  document.getElementById('concallSubmit').disabled = false;
-  document.getElementById('concallSubmit').textContent = '🧠 Analyze with Claude Haiku';
-  setTimeout(() => document.getElementById('concallSymbol').focus(), 50);
-};
+    document.getElementById('content').innerHTML = html;
 
-window.closeConcallModal = function () {
-  document.getElementById('concallModal').style.display = 'none';
-};
-
-window.submitConcall = async function () {
-  const symbol = document.getElementById('concallSymbol').value.trim().toUpperCase();
-  const fiscalPeriod = document.getElementById('concallPeriod').value.trim() || 'unknown';
-  const transcript = document.getElementById('concallText').value.trim();
-  const resultEl = document.getElementById('concallResult');
-  const btn = document.getElementById('concallSubmit');
-
-  if (!symbol) { resultEl.innerHTML = '<div style="color:var(--red);font-size:12px;padding:8px 0">Symbol required.</div>'; return; }
-  if (transcript.length < 200) { resultEl.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px 0">Transcript too short (${transcript.length} chars · need ≥200).</div>`; return; }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Analyzing… (5–15s)';
-  resultEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">Sending to Claude Haiku · cached 90 days per (symbol, period, length)…</div>';
-
-  try {
-    const r = await fetch('/api/trading?action=analyze_concall&key=' + encodeURIComponent(DASHBOARD_KEY), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol, fiscal_period: fiscalPeriod, transcript }),
-    });
-    const j = await r.json();
-    btn.disabled = false;
-    btn.textContent = '🧠 Analyze with Claude Haiku';
-
-    if (!j.ok) {
-      resultEl.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px 0">Failed: ${escapeHtml(j.error || 'unknown')}</div>`;
-      return;
-    }
-
-    const tone = j.tone_score != null ? Number(j.tone_score) : 0;
-    const toneCls = tone > 0.2 ? 'pos' : tone < -0.2 ? 'neg' : 'neu';
-    const toneLabel = tone > 0.2 ? '📈 Confident' : tone < -0.2 ? '📉 Defensive' : '⚖️ Neutral';
-    const s = j.summary || {};
-    const costRupees = j.cost_paise != null ? (j.cost_paise / 100).toFixed(2) : '—';
-
-    resultEl.innerHTML = `
-      <div class="cc-result">
-        <h4>${escapeHtml(j.symbol)} · ${escapeHtml(j.fiscal_period)}</h4>
-        <span class="cc-tone ${toneCls}">${toneLabel} · tone ${tone >= 0 ? '+' : ''}${tone.toFixed(2)}</span>
-        <dl>
-          ${s.raw_summary ? `<dt>Big picture</dt><dd>${escapeHtml(s.raw_summary)}</dd>` : ''}
-          ${s.revenue_outlook ? `<dt>Revenue</dt><dd>${escapeHtml(s.revenue_outlook)}</dd>` : ''}
-          ${s.margin_commentary ? `<dt>Margins</dt><dd>${escapeHtml(s.margin_commentary)}</dd>` : ''}
-          ${s.capex_plans ? `<dt>Capex</dt><dd>${escapeHtml(s.capex_plans)}</dd>` : ''}
-          ${s.cautionary_notes ? `<dt>Risks</dt><dd>${escapeHtml(s.cautionary_notes)}</dd>` : ''}
-        </dl>
-        <div class="cc-meta">
-          ${j.cached ? '✓ cache hit (free)' : `✓ fresh call · cost ₹${costRupees}`}
-          · stored as catalyst signal · regenerates score on next compute
-        </div>
-      </div>
-    `;
-  } catch (e) {
-    btn.disabled = false;
-    btn.textContent = '🧠 Analyze with Claude Haiku';
-    resultEl.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px 0">Network error: ${escapeHtml(e.message)}</div>`;
-  }
-};
-
-// Close modal on Escape key
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('concallModal')?.style.display === 'flex') {
-    closeConcallModal();
-  }
-});
-
-// ───────────────────────────────────────────────────────────
-// GLOSSARY TOOLTIPS — turn .term[data-term] into hoverable definitions
-// ───────────────────────────────────────────────────────────
-function attachTermTooltips() {
-  document.querySelectorAll('.term[data-term]').forEach(el => {
-    if (el.dataset.tooltipAttached) return;
-    el.dataset.tooltipAttached = '1';
-    const term = el.dataset.term;
-    const def = GLOSSARY[term] || GLOSSARY[term.toUpperCase()];
-    if (!def) return;
-    const tip = document.createElement('span');
-    tip.className = 'tip';
-    tip.innerHTML = `<strong>${def.full || term}</strong>${def.short || ''}<em>${def.why || ''}</em>`;
-    el.appendChild(tip);
-    // Mobile: tap to toggle
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      document.querySelectorAll('.term.tap-active').forEach(x => { if (x !== el) x.classList.remove('tap-active'); });
-      el.classList.toggle('tap-active');
-    });
-  });
-  document.addEventListener('click', () => {
-    document.querySelectorAll('.term.tap-active').forEach(x => x.classList.remove('tap-active'));
-  });
-}
-
-// Helper: wrap glossary terms in step text with .term[data-term]="X" spans
-function termify(text, terms) {
-  if (!text || !terms || terms.length === 0) return text;
-  let out = text;
-  for (const term of terms) {
-    // Word-boundary safe replacement, case-insensitive
-    const re = new RegExp(`\\b(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'i');
-    out = out.replace(re, `<span class="term" data-term="${term}">$1</span>`);
-  }
-  return out;
-}
-
-// ───────────────────────────────────────────────────────────
-// Quick Paper Trade — invoke Stock Picker from Today UI
-// User clicks → picker opens → they pick → bounces to Execute with state
-// ───────────────────────────────────────────────────────────
-window.todayPickStock = function () {
-  if (typeof openStockPicker !== 'function') {
-    window.location.href = '/trading/execute/#paper';
-    return;
-  }
-  openStockPicker({
-    dashboardKey: DASHBOARD_KEY,
-    defaultTab: 'watchlist',
-    onPick: (stock) => {
-      // Encode pick into URL hash so Execute can pre-fill
-      const params = new URLSearchParams({
-        sym: stock.symbol,
-        ltp: (stock.live_ltp_rupees ?? stock.last_close_rupees ?? '').toString(),
+    const tog = document.getElementById('swing-toggle');
+    const cnt = document.getElementById('swing-content');
+    if (tog && cnt) {
+      tog.addEventListener('click', () => {
+        tog.classList.toggle('open');
+        cnt.classList.toggle('open');
       });
-      window.location.href = '/trading/execute/?' + params.toString() + '#paper';
-    },
+    }
+  }
+
+  load();
+  setInterval(load, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') load();
   });
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// HERO TODAY'S P&L — top of page, unmistakable bottom-line
-// Fix for May 5 owner question: "today is showing as a win but from the UI
-// I am not able to understand how"
-// Reads from auto_trader_state and renders as ₹X large + meta + progress bar
-// toward profit-lock (+₹30K) or loss-halt (-₹30K).
-// Auto-refreshes every 60s while page is open.
-// ═══════════════════════════════════════════════════════════════════════════
-let _dayPnlHeroTimer = null;
-async function loadDayPnlHero() {
-  const el = document.getElementById('dayPnlHero');
-  if (!el) return;
-  try {
-    // Fetch in parallel: live trader state + EOD audit (if available)
-    const [r1, r2] = await Promise.all([
-      fetch('/api/trading?action=auto_trader_state&key=' + encodeURIComponent(DASHBOARD_KEY)),
-      fetch('/api/trading?action=eod_learning_audit&key=' + encodeURIComponent(DASHBOARD_KEY)).catch(() => null),
-    ]);
-    const j  = await r1.json();
-    const j2 = r2 ? await r2.json().catch(() => null) : null;
-    const s = j.summary || {};
-    const positions = j.positions || [];
-
-    // ─── Determine provenance ──────────────────────────────────────
-    // LIVE   = real trader fired end-to-end (auto_managed=1 EXITED row exists)
-    // REPLAY = no live execution but EOD audit has chronological replay numbers
-    // NO-DATA = neither
-    const liveExecutedCount = positions.filter(p =>
-      p.auto_managed && (p.trader_state === 'EXITED' || p.trader_state === 'ENTERED' || p.trader_state === 'HELD_OVERNIGHT')
-    ).length;
-    let provenance = 'no-data';
-    let provLabel  = 'No data';
-    let provTip    = 'No paper-trade ran today, and no replay is available yet.';
-    let displayPnL = 0;
-
-    if (liveExecutedCount > 0) {
-      provenance = 'live';
-      provLabel  = 'LIVE';
-      provTip    = `<strong>Real auto-trader execution.</strong> ${liveExecutedCount} position${liveExecutedCount===1?'':'s'} fired end-to-end on Kite LTP.`;
-    } else if (j2?.ok && j2?.summary) {
-      provenance = 'replay';
-      provLabel  = 'REPLAY';
-      const sQual = j2.summary.simulation_quality || 'unknown';
-      const breakouts = j2.summary.breakouts_fired || 0;
-      const skipped = j2.summary.skipped_no_breakout || 0;
-      const total = j2.summary.picks_total || 0;
-      provTip = `<strong>Post-hoc replay against intraday tape</strong> (no live execution today). `
-        + `${breakouts}/${total} breakouts fired, ${skipped} skipped (no breakout). `
-        + `Quality: <strong>${sQual.replace(/_/g, ' ')}</strong>. Idealized fills, no slippage. `
-        + `Treat this as a directional indicator, NOT a skill measurement.`;
-      // Use audit's chronological-replay number — it's more honest than aggregate-min/max
-      displayPnL = j2.summary.realized_pnl_paise || 0;
-    }
-
-    // Net P&L — prefer trader sum (live), else fall back to audit replay
-    let netPaise = s.total_pnl_realized_paise || 0;
-    let openPnL = 0, openCount = 0, closedCount = 0, winCount = 0, lossCount = 0;
-    for (const p of positions) {
-      if (p.trader_state === 'EXITED') {
-        closedCount++;
-        if ((p.pnl_net_paise || 0) > 0) winCount++;
-        else if ((p.pnl_net_paise || 0) < 0) lossCount++;
-      } else if (p.trader_state === 'ENTERED' || p.trader_state === 'HELD_OVERNIGHT') {
-        openCount++;
-        if (p.live_ltp_paise && p.entry_paise && p.qty) {
-          openPnL += (p.live_ltp_paise - p.entry_paise) * p.qty;
-        }
-      }
-    }
-    netPaise = (s.total_pnl_realized_paise || 0) + openPnL;
-    // If no live executions, use the replay number from EOD audit
-    if (liveExecutedCount === 0 && provenance === 'replay') {
-      netPaise = displayPnL;
-    }
-
-    const winLossClass = netPaise > 50 ? 'win' : netPaise < -50 ? 'loss' : 'flat';
-    const sign = netPaise >= 0 ? '+' : '';
-    const fmt = (paise) => '₹' + Math.abs(Math.round(paise / 100)).toLocaleString('en-IN');
-    const fmtSigned = (paise) => (paise >= 0 ? '+' : '−') + fmt(paise);
-
-    // Progress toward profit-lock (+₹30K) or loss-halt (-₹30K)
-    const PROFIT_LOCK = 3000000, LOSS_HALT = 3000000; // paise (₹30K)
-    let progressPct = 0, progressLabel = '';
-    if (netPaise >= 0) {
-      progressPct = Math.min(100, (netPaise / PROFIT_LOCK) * 100);
-      progressLabel = `${progressPct.toFixed(0)}% to +₹30K profit-lock`;
-    } else {
-      progressPct = Math.min(100, (Math.abs(netPaise) / LOSS_HALT) * 100);
-      progressLabel = `${progressPct.toFixed(0)}% to −₹30K halt`;
-    }
-
-    const totalCount = openCount + closedCount;
-    const winRate = closedCount > 0 ? Math.round((winCount / closedCount) * 100) : null;
-
-    // Tag for tag context (e.g., trading vs flat day vs system idle)
-    let tag, tagSub;
-    if (totalCount === 0) {
-      tag = 'No positions yet';
-      tagSub = 'Auto-trader fires when Opus says ENTER + breakout confirms';
-    } else if (openCount > 0 && closedCount === 0) {
-      tag = 'Live · in-trade';
-      tagSub = `${openCount} position${openCount===1?'':'s'} working`;
-    } else if (openCount === 0 && closedCount > 0) {
-      tag = winLossClass === 'win' ? 'Day closed · WIN' : winLossClass === 'loss' ? 'Day closed · LOSS' : 'Day closed · flat';
-      tagSub = `${closedCount} closed · ${winCount}W / ${lossCount}L`;
-    } else {
-      tag = 'Live · mixed';
-      tagSub = `${openCount} open · ${closedCount} closed (${winCount}W/${lossCount}L)`;
-    }
-
-    el.className = 'day-pnl-hero ' + winLossClass;
-    el.innerHTML = `
-      <div>
-        <div class="h-tag">${tag}<span class="h-prov ${provenance}">${provLabel}</span></div>
-        <div class="h-val">${fmtSigned(netPaise)}</div>
-        <div class="h-meta">
-          <strong>${tagSub}</strong>
-          ${winRate !== null ? ` · win rate <strong>${winRate}%</strong>` : ''}
-          ${s.total_deployed_paise ? ` · deployed <strong>₹${Math.round(s.total_deployed_paise/100).toLocaleString('en-IN')}</strong>` : ''}
-        </div>
-        <div class="h-progress" title="${progressLabel}">
-          <div class="h-progress-bar" style="width:${progressPct}%"></div>
-        </div>
-        <div class="h-meta" style="margin-top:5px">${progressLabel}</div>
-        <div class="h-prov-tip">${provTip}</div>
-      </div>
-      <div class="h-side">
-        <span class="h-side-num">${totalCount || (j2?.summary?.picks_total || 0)}</span>
-        <span class="h-side-sub">picks today</span>
-        ${closedCount > 0 ? `<span class="h-side-num" style="margin-top:6px">${winCount}/${closedCount}</span><span class="h-side-sub">won</span>` : ''}
-      </div>
-    `;
-
-    // Auto-refresh every 60s while page is open
-    if (_dayPnlHeroTimer) clearTimeout(_dayPnlHeroTimer);
-    _dayPnlHeroTimer = setTimeout(loadDayPnlHero, 60000);
-  } catch (e) {
-    el.className = 'day-pnl-hero flat';
-    el.innerHTML = `
-      <div>
-        <div class="h-tag">Today's P&L</div>
-        <div class="h-val">—</div>
-        <div class="h-meta" style="color:var(--red)">Could not load: ${escapeHtml(e.message)}</div>
-      </div>
-      <div class="h-side"></div>
-    `;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// TODAY'S WATCHLIST — uses shared component at /trading/_lib/watchlist-component.js
-// (Same component used on /trading/execute/ — single source of truth for
-// the rich pick-card design.)
-// ═══════════════════════════════════════════════════════════════════════════
-let _watchlistHandle = null;
-function loadWatchlist() {
-  if (_watchlistHandle) _watchlistHandle.stop();
-  _watchlistHandle = window.WatchlistComponent.load('watchlistSection', DASHBOARD_KEY, { refreshMs: 30000 });
-}
-
-// LEGACY render — kept for fallback only if shared component fails to load.
-// Active code path is the shared component above.
-async function _loadWatchlistLegacy_DEPRECATED() {
-  const el = document.getElementById('watchlistSection');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/trading?action=todays_watchlist&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    if (!j.ok) {
-      el.innerHTML = `<div class="watchlist-section"><h3>📋 Today's Watchlist <span class="obs-tag idle">${j.reason || 'no data'}</span></h3><div class="wl-meta">No verdict found for today yet — composeVerdict fires at 08:30 IST.</div></div>`;
-      return;
-    }
-    const fmtP = (p) => p == null ? '—' : '₹' + (p / 100).toFixed(2);
-    const fmtPct = (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
-    const dateShort = new Date(j.date + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short' }).toUpperCase();
-
-    let html = `
-      <div class="watchlist-section">
-        <h3>
-          📋 ${escapeHtml(dateShort)} Watchlist
-          <span class="obs-summary">${j.summary.candidate_count} candidates · ${j.summary.final_pick_count} ⭐ picks</span>
-        </h3>
-        <div class="wl-meta">
-          Frozen at <strong>${escapeHtml(j.composed_at_ist?.slice(11,16) || '—')} IST</strong> when Opus composed the morning verdict ·
-          ⭐ = the 3 stocks the auto-trader is actively managing ·
-          Live LTP refreshes every 30s
-        </div>
-        <div class="wl-actions">
-          <span class="wl-btn" onclick="copyKiteFormat(this, ${JSON.stringify(j.kite_format).replace(/"/g, '&quot;')}, 'all ${j.watchlist.length}')">📋 Copy ALL ${j.watchlist.length} to Kite format</span>
-          <span class="wl-btn" onclick="copyKiteFormat(this, ${JSON.stringify(j.final_picks_kite_format).replace(/"/g, '&quot;')}, '⭐ 3 picks')">⭐ Copy 3 picks only</span>
-          <a class="wl-btn" href="https://kite.zerodha.com/" target="_blank" rel="noopener" style="text-decoration:none">🚀 Open Kite Web</a>
-        </div>
-        <div class="wl-list">`;
-
-    // Helpers for hypothetical block
-    const fmtRupees = (paise) => paise == null ? '—' : (paise >= 0 ? '+' : '−') + '₹' + Math.abs(Math.round(paise / 100)).toLocaleString('en-IN');
-    const sgn = (paise) => paise == null ? '' : (paise >= 0 ? 'pos' : 'neg');
-
-    j.watchlist.forEach((w, i) => {
-      const chgClass = w.day_change_pct == null ? '' : (w.day_change_pct >= 0 ? 'pos' : 'neg');
-      const stateTag = w.trader_state ? `<span class="wl-state-tag ${w.trader_state}">${w.trader_state}</span>` : '';
-      const pickTag = w.is_final_pick ? `<span class="wl-pick-tag">⭐ PICK</span>` : '';
-      const hist = w.intraday_history;
-      const histStr = hist
-        ? `2%-day rate ${hist.hit_2pct_pct_of_days?.toFixed(0)}% · 3%-day ${hist.hit_3pct_pct_of_days?.toFixed(0)}% · 5%-day ${hist.hit_5pct_pct_of_days?.toFixed(0)}% · green-close ${hist.green_close_rate?.toFixed(0)}%`
-        : '';
-      const tenL = w.if_10L_invested;
-      // 10L hypothetical: peak/close/live/drawdown
-      const tenLBlock = tenL ? `
-        <div class="wl-10L">
-          <div class="lbl-row">💰 If ₹10,00,000 invested in ${escapeHtml(w.symbol)} alone (qty ${tenL.qty.toLocaleString('en-IN')} @ ₹${(tenL.deployed_paise/100).toLocaleString('en-IN', {maximumFractionDigits:0})} deployed)</div>
-          <div class="wl-10L-grid">
-            <div class="wl-10L-cell">
-              <span class="lbl">If exited at PEAK</span>
-              <span class="val ${sgn(tenL.if_exited_at_peak_paise)}">${fmtRupees(tenL.if_exited_at_peak_paise)}</span>
-              <span class="sub">${fmtPct(tenL.if_exited_at_peak_pct)}</span>
-            </div>
-            <div class="wl-10L-cell">
-              <span class="lbl">If held to CLOSE</span>
-              <span class="val ${sgn(tenL.if_held_to_close_paise)}">${fmtRupees(tenL.if_held_to_close_paise)}</span>
-              <span class="sub">${fmtPct(tenL.if_held_to_close_pct)}</span>
-            </div>
-            <div class="wl-10L-cell">
-              <span class="lbl">Max drawdown intraday</span>
-              <span class="val neg">${fmtRupees(tenL.max_intraday_drawdown_paise)}</span>
-              <span class="sub">at day low</span>
-            </div>
-          </div>
-        </div>` : '';
-
-      // Final-pick metadata (target/stop/rationale)
-      const pickMeta = w.is_final_pick ? `
-        <div class="wl-meta-row" style="margin-bottom:6px">
-          <span class="meta-item">⭐ allocation <strong>${w.pick_weight_pct}%</strong></span>
-          <span class="meta-item">target <strong>+${w.pick_target_pct?.toFixed(2)}%</strong></span>
-          <span class="meta-item">stop <strong>−${w.pick_stop_pct?.toFixed(2)}%</strong></span>
-          ${w.trader_state ? `<span class="meta-item">trader → <strong>${w.trader_state}</strong></span>` : ''}
-          ${w.trader_pnl_net_paise != null ? `<span class="meta-item">P&L <strong class="${w.trader_pnl_net_paise>=0?'pos':'neg'}" style="color:${w.trader_pnl_net_paise>=0?'var(--green)':'var(--red)'}">${fmtRupees(w.trader_pnl_net_paise)}</strong></span>` : ''}
-        </div>` : '';
-
-      html += `
-        <div class="wl-card ${w.is_final_pick ? 'final' : ''}">
-          <div class="wl-card-head">
-            <div>
-              <span class="wl-rank">#${i + 1}</span>
-              <span class="wl-sym">${escapeHtml(w.symbol)}</span>${pickTag}${stateTag}
-            </div>
-            <div style="text-align:right">
-              <span class="wl-ltp">${fmtP(w.live_ltp_paise || w.day_close_paise)}</span>
-              <span class="wl-chg ${chgClass}" style="margin-left:8px">${fmtPct(w.day_change_pct)}</span>
-            </div>
-          </div>
-
-          ${pickMeta}
-
-          <div class="wl-ohlc-row">
-            <div class="wl-ohlc-cell">
-              <span class="lbl">Open</span>
-              <span class="val">${fmtP(w.day_open_paise)}</span>
-            </div>
-            <div class="wl-ohlc-cell">
-              <span class="lbl">Peak (high)</span>
-              <span class="val peak">${fmtP(w.day_high_paise)}</span>
-            </div>
-            <div class="wl-ohlc-cell">
-              <span class="lbl">Low</span>
-              <span class="val low">${fmtP(w.day_low_paise)}</span>
-            </div>
-            <div class="wl-ohlc-cell">
-              <span class="lbl">Close</span>
-              <span class="val">${fmtP(w.day_close_paise)}</span>
-            </div>
-          </div>
-
-          ${tenLBlock}
-
-          <div class="wl-meta-row">
-            ${histStr ? `<span class="meta-item">${histStr}</span>` : ''}
-            ${w.gap_from_prev_close_pct != null ? `<span class="meta-item">gap from prev close <strong>${fmtPct(w.gap_from_prev_close_pct)}</strong></span>` : ''}
-            <span class="meta-item">hybrid score <strong>${w.hybrid_score?.toFixed(1) || '—'}</strong></span>
-            <span class="meta-item">regime <strong>${w.regime || '—'}</strong></span>
-            ${w.day_volume ? `<span class="meta-item">vol <strong>${(w.day_volume/100000).toFixed(1)}L</strong></span>` : ''}
-          </div>
-        </div>`;
-    });
-
-    html += `</div></div>`;
-    el.innerHTML = html;
-
-    if (_watchlistTimer) clearTimeout(_watchlistTimer);
-    _watchlistTimer = setTimeout(loadWatchlist, 30000);
-  } catch (e) {
-    el.innerHTML = `<div class="watchlist-section"><h3>📋 Today's Watchlist <span class="obs-tag err">error</span></h3><div class="wl-meta" style="color:var(--red)">${escapeHtml(e.message)}</div></div>`;
-  }
-}
-
-// Copy-to-Kite-format helper — puts NSE:SYM list on clipboard, pastes ready
-// for the Kite UI's "Add multiple" watchlist input.
-window.copyKiteFormat = function (btn, text, label) {
-  navigator.clipboard.writeText(text).then(() => {
-    const orig = btn.innerHTML;
-    btn.innerHTML = `✓ ${label} copied — paste into Kite watchlist`;
-    btn.classList.add('copied');
-    setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 3500);
-  }).catch(() => {
-    alert('Could not copy. Manual list:\n\n' + text);
-  });
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SECTION 4: LIVE AUTO-TRADER POSITIONS
-// Shows every auto-managed paper trade with state, P&L, mode, recent decisions
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadAutoTrader() {
-  const el = document.getElementById('autoTraderSection');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/trading?action=auto_trader_state&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    if (!j.ok || j.positions.length === 0) {
-      el.innerHTML = '<div class="obs-section"><h3>🤖 Auto-trader positions <span class="obs-tag ok">idle</span></h3><div style="font-size:12px;color:var(--muted)">No positions today. Auto-trader fires when Opus says ENTER + breakout confirms.</div></div>';
-      return;
-    }
-    const fmtR = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
-    const fmtP = (paise) => '₹' + ((paise || 0) / 100).toFixed(2);
-    const summary = j.summary || {};
-    const totalPnL = (summary.total_pnl_realized_paise || 0) / 100;
-    const pnlClass = totalPnL > 0 ? 'at-pnl-pos' : totalPnL < 0 ? 'at-pnl-neg' : '';
-
-    let html = `
-      <div class="obs-section">
-        <h3>🤖 Auto-trader positions
-          <span class="obs-summary">
-            ${summary.total_positions || 0} positions ·
-            deployed ${fmtR(summary.total_deployed_paise)} ·
-            P&L <span class="${pnlClass}">${totalPnL >= 0 ? '+' : ''}${fmtR(summary.total_pnl_realized_paise || 0)}</span>
-          </span>
-        </h3>
-        <div class="at-grid">`;
-
-    for (const p of j.positions) {
-      const state = p.trader_state || 'WATCHING';
-      const mode = p.strategy_mode || 'INTRADAY_DEFAULT';
-      const winLossClass = p.win_loss === 'win' ? 'win' : p.win_loss === 'loss' ? 'loss' : '';
-      const pnlPaise = p.pnl_net_paise || 0;
-      const pnlClassP = pnlPaise > 0 ? 'at-pnl-pos' : pnlPaise < 0 ? 'at-pnl-neg' : '';
-
-      html += `
-        <div class="at-card ${state} ${winLossClass}">
-          <div class="at-row">
-            <div>
-              <span class="at-sym">${escapeHtml(p.symbol)}</span>
-              <span class="at-state ${state}">${state.replace('_', ' ')}</span>
-              ${mode !== 'INTRADAY_DEFAULT' ? `<span class="at-mode ${mode}">${mode.replace('_', ' ')}</span>` : ''}
-            </div>
-            <div>
-              ${state === 'EXITED'
-                ? `<span class="${pnlClassP}">${pnlPaise >= 0 ? '+' : ''}${fmtR(pnlPaise)}</span> <span style="font-size:10px;color:var(--muted)">${p.exit_reason || ''}</span>`
-                : `<span style="font-size:11px;color:var(--muted)">qty ${p.qty} · ${fmtP(p.entry_paise)}</span>`
-              }
-            </div>
-          </div>
-          <div class="at-stats">
-            <div class="at-stat"><div class="label">Entry</div><div class="value">${fmtP(p.entry_paise)}</div></div>
-            <div class="at-stat"><div class="label">Stop</div><div class="value" style="color:var(--red)">${fmtP(p.stop_paise)}</div></div>
-            <div class="at-stat"><div class="label">Target</div><div class="value" style="color:var(--green)">${fmtP(p.target_paise)}</div></div>
-            ${p.peak_price_paise ? `<div class="at-stat"><div class="label">Peak</div><div class="value">${fmtP(p.peak_price_paise)}</div></div>` : ''}
-            ${p.trailing_stop_paise ? `<div class="at-stat"><div class="label">Trail</div><div class="value" style="color:var(--yellow)">${fmtP(p.trailing_stop_paise)}</div></div>` : ''}
-            ${p.exit_paise ? `<div class="at-stat"><div class="label">Exit</div><div class="value">${fmtP(p.exit_paise)}</div></div>` : ''}
-          </div>
-          ${(p.recent_decisions && p.recent_decisions.length > 0) ? `
-            <div class="at-recent">
-              <div style="font-weight:600;margin-bottom:4px;color:var(--accent);font-size:10px">▸ Last decisions:</div>
-              ${p.recent_decisions.map(d => {
-                const ist = new Date(d.ts + 5.5*3600000).toISOString().slice(11,16);
-                return `<div class="at-d-row"><span class="at-d-time">${ist}</span> [${d.cron_phase || '-'}] <strong>${d.decision || '-'}</strong>: ${escapeHtml((d.rationale || '').slice(0, 110))}</div>`;
-              }).join('')}
-            </div>
-          ` : ''}
-        </div>`;
-    }
-
-    html += '</div></div>';
-    el.innerHTML = html;
-  } catch (e) {
-    el.innerHTML = `<div class="obs-section"><h3>🤖 Auto-trader <span class="obs-tag err">error</span></h3><div style="font-size:11px;color:var(--red)">${escapeHtml(e.message)}</div></div>`;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SECTION 5: TIMELINE — every Opus decision + cron fire today
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadTimeline() {
-  const el = document.getElementById('timelineSection');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/trading?action=trader_timeline&hours=12&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    const events = j.timeline || [];
-    if (events.length === 0) {
-      el.innerHTML = '<div class="obs-section"><h3>📋 Today\'s timeline <span class="obs-tag ok">no events yet</span></h3><div style="font-size:11px;color:var(--muted)">Cron fires + Opus decisions will appear here as they happen.</div></div>';
-      return;
-    }
-
-    let html = `
-      <div class="obs-section">
-        <h3>📋 Today's timeline <span class="obs-summary">${events.length} events</span></h3>
-        <div class="tl-list">`;
-    for (const e of events) {
-      const ist = e.ist_time || (e.ts ? new Date(e.ts + 5.5*3600000).toISOString().slice(11,16) : '?');
-      const isDecision = e.type === 'decision';
-      const icon = isDecision ? '🧠' : (e.status === 'failed' ? '❌' : '✓');
-      const decisionClass = isDecision ? `tl-decision-${(e.decision || '').replace(/[^A-Z_]/g, '')}` : '';
-      const action = isDecision
-        ? `<span class="${decisionClass}"><strong>${e.decision || e.what}</strong></span> ${e.symbol ? `<span style="color:var(--accent)">${e.symbol}</span>` : ''} <span style="color:var(--muted);font-size:10px">[${e.what}]</span>`
-        : `${e.what} <span style="color:${e.status === 'failed' ? 'var(--red)' : 'var(--muted)'};font-size:10px">${e.status} · ${e.rows_written || 0} rows</span>`;
-      const rationale = isDecision ? (e.rationale || '') : (e.error_message || '');
-
-      html += `
-        <div class="tl-row">
-          <span class="tl-time">${ist}</span>
-          <span class="tl-icon">${icon}</span>
-          <div class="tl-body">
-            <div class="tl-action">${action}</div>
-            ${rationale ? `<div class="tl-rationale">${escapeHtml(rationale.slice(0, 200))}</div>` : ''}
-          </div>
-        </div>`;
-    }
-    html += '</div></div>';
-    el.innerHTML = html;
-  } catch (e) {
-    el.innerHTML = `<div class="obs-section"><h3>📋 Timeline <span class="obs-tag err">error</span></h3><div style="font-size:11px;color:var(--red)">${escapeHtml(e.message)}</div></div>`;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SECTION 6: INTELLIGENCE GAPS — meta-audit of Opus's data context
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadIntelligenceGaps() {
-  const el = document.getElementById('intelligenceGapsSection');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/trading?action=intelligence_audit&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    if (!j.ok) { el.innerHTML = ''; return; }
-
-    const sum = j.summary;
-    const tag = sum.critical_stale > 0 ? 'err' : sum.stale > 2 ? 'warn' : 'ok';
-    const tagText = sum.critical_stale > 0
-      ? `${sum.critical_stale} critical stale`
-      : sum.stale > 0
-      ? `${sum.stale} stale`
-      : 'all fresh';
-
-    let html = `
-      <div class="obs-section">
-        <h3>🔍 Intelligence audit — what Opus sees
-          <span class="obs-tag ${tag}">${tagText}</span>
-          <span class="obs-summary">${sum.fresh}/${sum.total_sources} fresh · health ${sum.health_score_pct}%</span>
-        </h3>
-        <div class="ig-list">`;
-    for (const s of j.sources) {
-      const cls = s.status;
-      const ageStr = s.age_minutes == null
-        ? '—'
-        : s.age_minutes < 60
-        ? `${s.age_minutes} min`
-        : s.age_minutes < 1440
-        ? `${Math.round(s.age_minutes/60)} hr`
-        : `${Math.round(s.age_minutes/1440)} d`;
-      const sevDot = s.severity === 'critical' ? '🔴' : s.severity === 'high' ? '🟠' : '🟡';
-      html += `
-        <div class="ig-row ${cls}">
-          <div style="flex:1;min-width:0">
-            <div class="ig-name">${sevDot} ${escapeHtml(s.name)}</div>
-            <div class="ig-used">used by: ${escapeHtml(s.used_by)}</div>
-          </div>
-          <div style="text-align:right">
-            <div class="ig-status ${cls}">${cls.replace('_', ' ')}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">${ageStr} ago</div>
-          </div>
-        </div>`;
-    }
-    html += '</div>';
-
-    // Show morning verdict's dim coverage (a measure of context quality)
-    if (j.morning_verdict_dim_coverage) {
-      html += `
-        <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);font-size:11px">
-          <div style="color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;font-size:10px;margin-bottom:6px">9-dim coverage in this morning's verdict</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-      `;
-      for (const d of j.morning_verdict_dim_coverage) {
-        const c = d.status === 'live' ? 'var(--green)' : d.status === 'partial' ? 'var(--yellow)' : 'var(--red)';
-        html += `<span style="padding:3px 8px;background:${c}33;color:${c};border-radius:6px;font-size:10px">${d.dim} ${d.pct}%</span>`;
-      }
-      html += '</div></div>';
-    }
-
-    html += '</div>';
-    el.innerHTML = html;
-  } catch (e) {
-    el.innerHTML = `<div class="obs-section"><h3>🔍 Intelligence audit <span class="obs-tag err">error</span></h3><div style="font-size:11px;color:var(--red)">${escapeHtml(e.message)}</div></div>`;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SECTION 7: SYSTEM HEALTH — cron + Anthropic spend + errors + Kite
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadSystemHealth() {
-  const el = document.getElementById('systemHealthSection');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/trading?action=system_health&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    if (!j.ok) { el.innerHTML = ''; return; }
-
-    const cron = j.cron_health || {};
-    const anth = j.anthropic_spend || {};
-    const kite = j.kite_token;
-    const failedPct = cron.cron_fires_24h > 0 ? Math.round(cron.failed_24h / cron.cron_fires_24h * 100) : 0;
-    const tag = failedPct > 5 ? 'err' : failedPct > 1 ? 'warn' : 'ok';
-    const todayR = (anth.today_paise || 0) / 100;
-    const monthR = (anth.month_paise || 0) / 100;
-
-    let html = `
-      <details class="obs-section" style="cursor:pointer">
-        <summary style="list-style:none;cursor:pointer;outline:none">
-          <h3 style="margin-bottom:0">⚙️ System health
-            <span class="obs-tag ${tag}">${cron.cron_fires_24h || 0} cron fires/24h${cron.failed_24h ? ` · ${cron.failed_24h} failed` : ''}</span>
-            <span class="obs-summary">spend ₹${todayR.toFixed(2)}/day · ₹${monthR.toFixed(2)}/mo</span>
-          </h3>
-        </summary>
-        <div style="margin-top:12px">
-          <div class="sh-grid">
-            <div class="sh-card">
-              <div class="label">Cron 24h</div>
-              <div class="value">${cron.cron_fires_24h || 0}</div>
-              <div class="sub">${cron.success_24h || 0}✓ ${cron.failed_24h || 0}✗</div>
-            </div>
-            <div class="sh-card">
-              <div class="label">Workers active</div>
-              <div class="value">${cron.total_workers || 0}</div>
-              <div class="sub">distinct cron names</div>
-            </div>
-            <div class="sh-card">
-              <div class="label">Anthropic today</div>
-              <div class="value">₹${todayR.toFixed(0)}</div>
-              <div class="sub">${anth.today_calls || 0} calls</div>
-            </div>
-            <div class="sh-card">
-              <div class="label">Anthropic month</div>
-              <div class="value">₹${monthR.toFixed(0)}</div>
-              <div class="sub">soft cap ₹5k</div>
-            </div>
-            <div class="sh-card">
-              <div class="label">Kite token</div>
-              <div class="value" style="color:${kite?.active ? 'var(--green)' : 'var(--red)'}">${kite?.active ? '✓' : '✗'}</div>
-              <div class="sub">${kite?.active ? `${kite.minutes_remaining || '?'} min left` : 'reconnect'}</div>
-            </div>
-            <div class="sh-card">
-              <div class="label">Alerts unread</div>
-              <div class="value" style="color:${j.alerts_unread > 0 ? 'var(--yellow)' : 'var(--muted)'}">${j.alerts_unread || 0}</div>
-            </div>
-          </div>`;
-    if ((j.recent_errors || []).length > 0) {
-      html += `<div style="margin-top:10px;padding:10px;background:rgba(231,76,60,0.10);border-radius:6px;font-size:11px">
-        <div style="color:var(--red);font-weight:600;margin-bottom:6px">Recent errors:</div>`;
-      for (const err of j.recent_errors.slice(0, 5)) {
-        const ist = new Date(err.started_at + 5.5*3600000).toISOString().slice(11,16);
-        html += `<div style="padding:3px 0;border-bottom:1px solid rgba(231,76,60,0.1)"><span style="color:var(--accent)">${ist}</span> ${escapeHtml(err.cron_name)}: ${escapeHtml((err.error_message || '').slice(0, 100))}</div>`;
-      }
-      html += '</div>';
-    }
-    html += '</div></details>';
-    el.innerHTML = html;
-  } catch (e) {
-    el.innerHTML = `<div class="obs-section"><h3>⚙️ System health <span class="obs-tag err">error</span></h3><div style="font-size:11px;color:var(--red)">${escapeHtml(e.message)}</div></div>`;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SECTION 8: EOD LEARNING AUDIT (4-section self-learning post-market analysis)
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadEodLearningAudit() {
-  const el = document.getElementById('eodLearningSection');
-  if (!el) return;
-  // Only attempt fetch after 15:30 IST (market closed)
-  const istNow = new Date(Date.now() + 5.5 * 3600000);
-  const istHour = istNow.getUTCHours();
-  if (istHour < 15 || (istHour === 15 && istNow.getUTCMinutes() < 30)) {
-    el.innerHTML = '<div class="obs-section" style="opacity:0.6"><h3>📊 EOD learning audit <span class="obs-tag">post-market only</span></h3><div style="font-size:11px;color:var(--muted)">Auto-fires daily at 18:30 IST. Will show 4-bucket attribution: RIGHT / MISSED / LEARNED / LUCK.</div></div>';
-    return;
-  }
-  try {
-    const r = await fetch('/api/trading?action=eod_learning_audit&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    if (!j.ok) {
-      el.innerHTML = `<div class="obs-section"><h3>📊 EOD audit</h3><div style="font-size:11px;color:var(--muted)">${escapeHtml(j.reason || 'Not available')}</div></div>`;
-      return;
-    }
-
-    const fmtR = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
-    const fmtPct = (pct) => (pct >= 0 ? '+' : '') + pct + '%';
-    const sum = j.summary || {};
-    const sec = j.sections || {};
-    const sonnet = j.sonnet_attribution || {};
-
-    // Compute skill vs luck split
-    const skillPct = parseInt(sonnet?.engine_skill_pct || 50);
-    const luckPct = 100 - skillPct;
-    const skillBarColor = skillPct >= 70 ? 'var(--green)' : skillPct >= 40 ? 'var(--yellow)' : 'var(--red)';
-
-    let html = `
-      <div class="obs-section">
-        <h3>📊 EOD Learning Audit · ${j.audit_date || 'today'}
-          <span class="obs-tag ${sum.picks_correct >= sum.picks_total / 2 ? 'ok' : 'warn'}">
-            ${sum.picks_correct || 0}/${sum.picks_total || 0} picks won
-          </span>
-          <span class="obs-summary">
-            P&L ${(sum.realized_pnl_paise || 0) >= 0 ? '+' : ''}${fmtR(sum.realized_pnl_paise || 0)}
-            ${j.composed_by ? ` · ${j.composed_by}` : ''}
-          </span>
-        </h3>`;
-
-    // SKILL vs LUCK bar (top of audit — most important takeaway)
-    html += `
-      <div style="margin-bottom:16px;padding:12px;background:rgba(0,0,0,0.20);border-radius:8px">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">
-          <span>Today's outcome attribution</span>
-          <span>SKILL ${skillPct}% · LUCK ${luckPct}%</span>
-        </div>
-        <div style="height:14px;background:rgba(0,0,0,0.30);border-radius:7px;overflow:hidden;display:flex">
-          <div style="width:${skillPct}%;background:${skillBarColor};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white">${skillPct >= 15 ? `SKILL ${skillPct}%` : ''}</div>
-          <div style="width:${luckPct}%;background:rgba(138,150,184,0.5);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white">${luckPct >= 15 ? `LUCK ${luckPct}%` : ''}</div>
-        </div>
-        <div style="font-size:10.5px;color:var(--muted);margin-top:6px;font-style:italic">
-          Sonnet's honest attribution. 1-day samples are noisy — trust the trend over the trail, not single days.
-        </div>
-      </div>`;
-
-    // KEY LESSON (callout)
-    if (sonnet?.key_lesson_for_tomorrow) {
-      html += `<div style="background:rgba(124,92,255,0.10);border-left:3px solid var(--accent);padding:10px 12px;border-radius:6px;margin-bottom:14px;font-size:13px;line-height:1.5"><strong style="color:var(--accent)">🎯 Key lesson for tomorrow:</strong> ${escapeHtml(sonnet.key_lesson_for_tomorrow)}</div>`;
-    }
-
-    // ═══ 4-BUCKET CLEAR VIEW (RIGHT / MISSED / LEARNED / LUCK) ═══
-    html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:14px">`;
-
-    // Bucket 1: WHAT OPUS GOT RIGHT
-    html += `
-      <div style="background:rgba(46,204,113,0.08);border:1px solid rgba(46,204,113,0.30);border-radius:8px;padding:12px">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--green);font-weight:700;margin-bottom:6px">✅ Got right</div>
-        <div style="font-size:12px;color:var(--text);line-height:1.55">${escapeHtml(sonnet?.what_engine_got_RIGHT || 'No clear wins to attribute today.')}</div>
-      </div>`;
-
-    // Bucket 2: WHAT OPUS MISSED
-    html += `
-      <div style="background:rgba(79,163,255,0.08);border:1px solid rgba(79,163,255,0.30);border-radius:8px;padding:12px">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--blue);font-weight:700;margin-bottom:6px">🚨 Missed</div>
-        <div style="font-size:12px;color:var(--text);line-height:1.55">${escapeHtml(sonnet?.what_engine_MISSED || 'No notable misses.')}</div>
-      </div>`;
-
-    // Bucket 3: WHAT OPUS LEARNED
-    html += `
-      <div style="background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.30);border-radius:8px;padding:12px">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);font-weight:700;margin-bottom:6px">📚 Learned</div>
-        <div style="font-size:12px;color:var(--text);line-height:1.55">${escapeHtml(sonnet?.what_engine_LEARNED || 'No new pattern surfaced today.')}</div>
-      </div>`;
-
-    // Bucket 4: PURE LUCK (the new one — non-data-driven)
-    html += `
-      <div style="background:rgba(138,150,184,0.08);border:1px solid rgba(138,150,184,0.30);border-radius:8px;padding:12px">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);font-weight:700;margin-bottom:6px">🎲 Pure luck</div>
-        <div style="font-size:12px;color:var(--text);line-height:1.55">${escapeHtml(sonnet?.what_was_LUCK || 'No notable luck factor identified.')}</div>
-      </div>`;
-
-    html += '</div>';
-
-    // SECTION 1: WHAT OPUS GOT RIGHT
-    const winners = sec.what_engine_got_right || [];
-    if (winners.length > 0 || sonnet.what_engine_got_right) {
-      html += '<div style="margin-bottom:14px"><div style="font-weight:600;color:var(--green);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">✅ What Opus got right</div>';
-      if (sonnet.what_engine_got_right) {
-        html += `<div style="padding:8px 12px;background:rgba(46,204,113,0.08);border-radius:6px;font-size:12px;line-height:1.5;margin-bottom:6px">${escapeHtml(sonnet.what_engine_got_right)}</div>`;
-      }
-      for (const w of winners) {
-        const pnl = w.simulated?.net_pnl_paise || 0;
-        html += `<div style="padding:6px 10px;background:rgba(46,204,113,0.05);border-radius:5px;margin-bottom:4px;font-size:12px">
-          <strong>${escapeHtml(w.symbol)}</strong> <span style="color:var(--green)">+${fmtR(pnl)}</span>
-          <span style="color:var(--muted);font-size:10.5px">peak ${fmtPct(w.peak_pct)} · close ${fmtPct(w.day_change_pct)} · ${w.simulated?.exit_reason || ''}</span>
-        </div>`;
-      }
-      html += '</div>';
-    }
-
-    // SECTION 2: REJECTED — opportunity cost
-    const rejected = sec.rejected_opportunity_cost || [];
-    if (rejected.length > 0) {
-      html += '<div style="margin-bottom:14px"><div style="font-weight:600;color:var(--yellow);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">🤔 Rejected from top 10 — opportunity cost</div>';
-      if (sonnet.rejection_validated) {
-        html += `<div style="padding:8px 12px;background:rgba(245,176,65,0.08);border-radius:6px;font-size:12px;line-height:1.5;margin-bottom:6px">${escapeHtml(sonnet.rejection_validated)}</div>`;
-      }
-      for (const r of rejected.slice(0, 5)) {
-        const correct = r.rejection_was_correct;
-        const flag = correct ? '✓ correct' : '✗ would have made';
-        const flagColor = correct ? 'var(--green)' : 'var(--red)';
-        html += `<div style="padding:6px 10px;background:rgba(245,176,65,0.05);border-radius:5px;margin-bottom:4px;font-size:12px">
-          <strong>${escapeHtml(r.symbol)}</strong>
-          <span style="color:${flagColor};font-size:10.5px">${flag} ${(r.simulated_pnl_paise || 0) >= 0 ? '+' : ''}${fmtR(r.simulated_pnl_paise || 0)}</span>
-          <span style="color:var(--muted);font-size:10.5px">peak ${fmtPct(r.peak_pct)}, close ${fmtPct(r.day_change_pct)}</span>
-          <div style="color:var(--muted);font-size:10.5px;margin-top:2px">why rejected: ${escapeHtml(r.why_rejected || '')}</div>
-        </div>`;
-      }
-      html += '</div>';
-    }
-
-    // SECTION 3: UNIVERSE WINNERS WE MISSED
-    const missed = sec.universe_winners_missed || [];
-    if (missed.length > 0) {
-      html += '<div style="margin-bottom:14px"><div style="font-weight:600;color:var(--blue);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">🚨 Day winners NOT in top picks</div>';
-      if (sonnet.missed_winners_analysis) {
-        html += `<div style="padding:8px 12px;background:rgba(79,163,255,0.08);border-radius:6px;font-size:12px;line-height:1.5;margin-bottom:6px">${escapeHtml(sonnet.missed_winners_analysis)}</div>`;
-      }
-      for (const m of missed.slice(0, 6)) {
-        html += `<div style="padding:6px 10px;background:rgba(79,163,255,0.05);border-radius:5px;margin-bottom:4px;font-size:12px">
-          <strong>${escapeHtml(m.symbol)}</strong>
-          <span style="color:var(--green)">${fmtPct(m.day_change_pct)}</span>
-          <span style="color:var(--muted);font-size:10.5px">~${fmtR(m.hypothetical_pnl_at_30pct_capital)} if picked</span>
-          <div style="color:var(--muted);font-size:10.5px;margin-top:2px">gap: ${escapeHtml(m.gap_type)}</div>
-        </div>`;
-      }
-      html += '</div>';
-    }
-
-    // SECTION 4: LOSERS — what Opus missed
-    const losers = sec.losers_what_opus_missed || [];
-    if (losers.length > 0) {
-      html += '<div style="margin-bottom:14px"><div style="font-weight:600;color:var(--red);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">❌ Top 3 losers — what Opus missed</div>';
-      if (sonnet.loser_attribution) {
-        html += `<div style="padding:8px 12px;background:rgba(231,76,60,0.08);border-radius:6px;font-size:12px;line-height:1.5;margin-bottom:6px">${escapeHtml(sonnet.loser_attribution)}</div>`;
-      }
-      for (const l of losers) {
-        html += `<div style="padding:6px 10px;background:rgba(231,76,60,0.05);border-radius:5px;margin-bottom:4px;font-size:12px">
-          <strong>${escapeHtml(l.symbol)}</strong>
-          <span style="color:var(--red)">${fmtR(l.actual_loss_paise)}</span>
-          <span style="color:var(--muted);font-size:10.5px">exit: ${escapeHtml(l.exit_reason || '')}</span>
-          <div style="color:var(--muted);font-size:10.5px;margin-top:2px">peak only ${fmtPct(l.actual_action?.peak_pct || 0)}</div>
-        </div>`;
-      }
-      html += '</div>';
-    }
-
-    // TUNING SUGGESTIONS (the actionable part)
-    if (sonnet.tuning_suggestions && sonnet.tuning_suggestions.length > 0) {
-      html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border)"><div style="font-weight:600;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">🔧 Tuning suggestions for tomorrow</div>';
-      for (const s of sonnet.tuning_suggestions) {
-        html += `<div style="padding:6px 10px;background:rgba(124,92,255,0.05);border-radius:5px;margin-bottom:4px;font-size:12px;line-height:1.5">→ ${escapeHtml(s)}</div>`;
-      }
-      html += '</div>';
-    }
-
-    html += '</div>';
-    el.innerHTML = html;
-  } catch (e) {
-    el.innerHTML = `<div class="obs-section"><h3>📊 EOD audit <span class="obs-tag err">error</span></h3><div style="font-size:11px;color:var(--red)">${escapeHtml(e.message)}</div></div>`;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SECTION 9: MONTHLY LEARNING TRAIL — compounding 30-day pattern recognition
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadMonthlyTrail() {
-  const el = document.getElementById('monthlyTrailSection');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/trading?action=monthly_learning_trail&days=30&key=' + encodeURIComponent(DASHBOARD_KEY));
-    const j = await r.json();
-    if (!j.ok || j.days_audited === 0) {
-      el.innerHTML = `
-        <div class="obs-section" style="opacity:0.7">
-          <h3>📈 Monthly learning trail <span class="obs-tag">empty</span></h3>
-          <div style="font-size:11px;color:var(--muted)">
-            EOD audits compound here daily. After a few trading days, this section shows
-            cumulative P&L, win rate, recurring missed winners, and accumulated tuning suggestions.
-          </div>
-        </div>`;
-      return;
-    }
-    const fmtR = (paise) => (paise >= 0 ? '+' : '') + '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
-    const sum = j.summary || {};
-
-    // Day-by-day mini cards
-    let trailHtml = '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px">';
-    for (const d of (j.trail || []).reverse()) {  // oldest left → newest right
-      const color = d.day_class === 'win' ? 'var(--green)' : d.day_class === 'loss' ? 'var(--red)' : 'var(--muted)';
-      const pnlR = (d.pnl_paise || 0) / 100;
-      trailHtml += `
-        <div title="${d.date}: ${d.picks_correct}/${d.picks_total} picks · ₹${pnlR.toFixed(0)}"
-             style="width:34px;height:34px;border-radius:6px;background:${color}20;border:2px solid ${color};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:help">
-          <div style="font-size:8px;color:${color};font-weight:700">${d.date.slice(8)}</div>
-          <div style="font-size:8px;color:${color}">${d.pnl_pct >= 0 ? '+' : ''}${d.pnl_pct}%</div>
-        </div>`;
-    }
-    trailHtml += '</div>';
-
-    let html = `
-      <div class="obs-section">
-        <h3>📈 Monthly learning trail · ${j.days_audited} days audited
-          <span class="obs-tag ${sum.cumulative_pnl_paise >= 0 ? 'ok' : 'err'}">
-            ${fmtR(sum.cumulative_pnl_paise)} cumulative
-          </span>
-          <span class="obs-summary">
-            ${sum.win_rate_pct}% win rate · pick accuracy ${sum.pick_accuracy}%
-          </span>
-        </h3>
-
-        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Day-by-day P&L (oldest → newest)</div>
-        ${trailHtml}
-
-        <div class="sh-grid" style="margin-bottom:14px">
-          <div class="sh-card">
-            <div class="label">Win days</div>
-            <div class="value" style="color:var(--green)">${sum.winning_days}</div>
-          </div>
-          <div class="sh-card">
-            <div class="label">Loss days</div>
-            <div class="value" style="color:var(--red)">${sum.losing_days}</div>
-          </div>
-          <div class="sh-card">
-            <div class="label">Realized</div>
-            <div class="value">${fmtR(sum.cumulative_pnl_paise)}</div>
-            <div class="sub">${sum.cumulative_pnl_pct}% of cap</div>
-          </div>
-          <div class="sh-card">
-            <div class="label">Opportunity cost</div>
-            <div class="value" style="color:var(--yellow)">${fmtR(sum.opportunity_cost_paise)}</div>
-            <div class="sub">if all top-10 picked</div>
-          </div>
-        </div>`;
-
-    // Recent missed winners (pattern indicator)
-    if ((j.recent_missed_winners || []).length > 0) {
-      html += '<div style="margin-bottom:14px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--blue);font-weight:700;margin-bottom:6px">🚨 Recent missed winners</div>';
-      for (const m of j.recent_missed_winners.slice(0, 5)) {
-        html += `<div style="padding:5px 10px;background:rgba(79,163,255,0.06);border-radius:5px;margin-bottom:3px;font-size:11.5px;display:flex;justify-content:space-between">
-          <span><strong>${escapeHtml(m.symbol)}</strong> <span style="color:var(--muted)">${m.date}</span></span>
-          <span style="color:var(--green)">+${m.pct?.toFixed(1)}%</span>
-        </div>`;
-      }
-      html += '</div>';
-    }
-
-    // Recent tuning suggestions (the actionable accumulated learnings)
-    if ((j.recent_tuning_suggestions || []).length > 0) {
-      html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border)"><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);font-weight:700;margin-bottom:6px">🔧 Accumulated tuning suggestions (most recent first)</div>';
-      for (const s of j.recent_tuning_suggestions.slice(0, 8)) {
-        html += `<div style="padding:5px 10px;background:rgba(124,92,255,0.05);border-radius:5px;margin-bottom:3px;font-size:11.5px;line-height:1.5">→ ${escapeHtml(s)}</div>`;
-      }
-      html += '</div>';
-    }
-
-    html += '</div>';
-    el.innerHTML = html;
-  } catch (e) {
-    el.innerHTML = `<div class="obs-section"><h3>📈 Monthly trail <span class="obs-tag err">error</span></h3><div style="font-size:11px;color:var(--red)">${escapeHtml(e.message)}</div></div>`;
-  }
-}
-
-// PWA service worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/trading/sw.js').catch(() => {});
-}
 </script>
 <script src="/trading/_lib/spine.js" defer></script>
 </body>
