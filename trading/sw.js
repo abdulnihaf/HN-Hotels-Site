@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v35';  // v35: real-money readiness audit (2-layer) + /readiness/ page + F-DATA-1 + F-EXIT-1
+const CACHE_VERSION = 'wealth-v36';  // v36: Phase A — THE SPINE (top strip + bottom phase indicator) per doc 19
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -20,6 +20,7 @@ const PRECACHE_URLS = [
   '/trading/icons/icon-maskable-512.svg',
   '/trading/_lib/picker.js',
   '/trading/_lib/watchlist-component.js',
+  '/trading/_lib/spine.js',
 ];
 
 // Install — pre-cache app shell
