@@ -234,7 +234,7 @@ function render(j) {
         <span class="id-tag">${esc(f.id)}</span>
         <span class="layer-tag">${esc(f.layer)}</span>
       </div>
-      <div class="title">${esc(f.title)}</div>
+      <div class="title">${esc(f.title)} ${f.auto_detected ? '<span style="background:rgba(255,138,60,0.18);color:var(--orange);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;margin-left:6px">🔬 AUTO-DETECTED</span>' : ''}</div>
       <div class="observed"><strong>Observed:</strong> ${typeof f.observed === 'string' ? esc(f.observed) : '<code style="font-size:10px;color:var(--muted)">' + esc(JSON.stringify(f.observed)) + '</code>'}</div>
       <div class="fix">★ Fix: ${esc(f.proposed_fix)}</div>
       <div class="effort">Effort: ${esc(f.effort_lines)}</div>
@@ -242,7 +242,9 @@ function render(j) {
   `).join('');
   document.getElementById('findings').innerHTML = `
     <div class="findings-block">
-      <h2>🎯 Architecture findings (priority-ranked) — fix at market close</h2>
+      <h2>🎯 Architecture findings (priority-ranked) — fix at market close
+        ${j.summary.persisted_findings > 0 ? `<span style="font-size:11px;color:var(--orange);font-weight:600;margin-left:8px">${j.summary.persisted_findings} 🔬 auto-detected by cron</span>` : ''}
+      </h2>
       ${findingsHtml}
     </div>
   `;

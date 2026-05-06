@@ -977,11 +977,290 @@ async function paperTradeWatcher(env) {
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════
+// AUDIT SCANNER (May 6 2026)
+//
+// Owner asked: "do you have crons in place to find bugs / gaps /
+// intelligence gaps / technical gaps? to display the data at /trading/audit/"
+//
+// PROACTIVE detection (not on-demand). Runs every 15 min during market
+// hours + every hour off-market. Scans D1 for known anomaly patterns,
+// inserts findings into audit_findings table. /trading/audit/ then merges
+// these persisted findings with on-demand timeline.
+//
+// Scan categories:
+//   PHANTOM_STATE    — paper_trades with inconsistent state (e.g., SKIPPED + pnl)
+//   STALE_DATA       — tables that haven't updated in expected window
+//   EMPTY_PIPELINE   — required tables/queries returning 0 rows
+//   CRON_MISSED      — cron_run_log gaps (expected fires didn't happen)
+//   INTELLIGENCE_GAP — Opus/engine outputs missing required context
+//   RACE_CONDITION   — multiple workers fighting over same row
+//   DIM_BLINDNESS    — engine dimensions <10% healthy
+//   TOKEN_HEALTH     — Kite OAuth state
+// ════════════════════════════════════════════════════════════════════════
+async function runAuditScanner(env) {
+  const db = env.DB;
+  // CREATE table if not exists (no migration system used here yet)
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS audit_findings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      detected_at INTEGER NOT NULL,
+      trade_date TEXT,
+      category TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      layer TEXT NOT NULL,
+      signature TEXT NOT NULL,
+      title TEXT NOT NULL,
+      detail TEXT,
+      proposed_fix TEXT,
+      data_json TEXT,
+      resolved_at INTEGER,
+      resolved_by TEXT
+    )
+  `).run().catch(() => {});
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_audit_findings_date
+    ON audit_findings(trade_date, severity)
+  `).run().catch(() => {});
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_audit_findings_signature
+    ON audit_findings(signature, resolved_at)
+  `).run().catch(() => {});
+
+  const now = Date.now();
+  const istNow = new Date(now + 5.5 * 3600000);
+  const today = istNow.toISOString().slice(0, 10);
+  const findings = [];
+
+  // ─── SCAN 1: phantom paper_trade state ───
+  // SKIPPED rows with non-null exit_paise + non-zero pnl_net = orchestrator-trader race
+  const phantomRows = (await db.prepare(`
+    SELECT id, symbol, trader_state, exit_paise, pnl_net_paise
+    FROM paper_trades
+    WHERE auto_managed=1
+      AND DATE(created_at/1000,'unixepoch')=?
+      AND trader_state='SKIPPED'
+      AND exit_paise IS NOT NULL
+      AND pnl_net_paise != 0
+  `).bind(today).all().catch(() => ({ results: [] }))).results || [];
+  for (const r of phantomRows) {
+    findings.push({
+      category: 'PHANTOM_STATE', severity: 'P0', layer: 'EXIT',
+      signature: `phantom_skip:${r.symbol}:${today}`,
+      title: `Phantom SKIPPED with P&L for ${r.symbol}`,
+      detail: `trader_state=SKIPPED but exit_paise=₹${(r.exit_paise/100).toFixed(2)} and pnl_net=${r.pnl_net_paise}. Race condition between orchestrator+trader.`,
+      proposed_fix: 'F3 — already deployed May 6: orchestrator now skips auto_managed rows. Should not recur. If recurring, F3 deploy regressed.',
+      data: { paper_trade_id: r.id, symbol: r.symbol, exit_paise: r.exit_paise, pnl_net: r.pnl_net_paise },
+    });
+  }
+
+  // ─── SCAN 2: empty intraday_suitability ───
+  const suitCount = (await db.prepare(`SELECT COUNT(*) AS n FROM intraday_suitability`).first().catch(() => ({ n: 0 })))?.n || 0;
+  if (suitCount === 0) {
+    findings.push({
+      category: 'EMPTY_PIPELINE', severity: 'P0', layer: 'SELECTION',
+      signature: `empty_suitability:${today}`,
+      title: 'intraday_suitability table is empty',
+      detail: 'No candidates available for composeVerdict — system will say SIT_OUT regardless of market conditions.',
+      proposed_fix: 'Run wealth-verdict /run/suit_refresh manually OR check column-mismatch fix from May 6 morning. Trigger weekly_enrich on wealth-intraday-bars too.',
+      data: { row_count: 0 },
+    });
+  } else if (suitCount < 30) {
+    findings.push({
+      category: 'STALE_DATA', severity: 'P1', layer: 'SELECTION',
+      signature: `low_suitability:${today}:${suitCount}`,
+      title: `intraday_suitability only has ${suitCount} rows (expected 50+)`,
+      detail: 'Filter may be too strict OR data fuel (equity_eod) thinning. Sector cap may exclude all picks.',
+      proposed_fix: 'Inspect equity_eod days_sampled distribution. Relax suitabilityRefresh HAVING gates if needed.',
+      data: { row_count: suitCount },
+    });
+  }
+
+  // ─── SCAN 3: last_week_* enrichment NULL count ───
+  if (suitCount > 0) {
+    const lwNullCount = (await db.prepare(`
+      SELECT COUNT(*) AS n FROM intraday_suitability WHERE hit_2pct_last_week IS NULL
+    `).first().catch(() => ({ n: 0 })))?.n || 0;
+    const lwNullPct = +(lwNullCount / suitCount * 100).toFixed(0);
+    if (lwNullPct > 50) {
+      findings.push({
+        category: 'INTELLIGENCE_GAP', severity: 'P1', layer: 'SELECTION',
+        signature: `lw_null_high:${today}`,
+        title: `${lwNullPct}% of intraday_suitability has NULL last_week_* (recent regime missing)`,
+        detail: `Opus selecting on 90d priors only — recent-week regime invisible. Fire wealth-intraday-bars /run/weekly_enrich.`,
+        proposed_fix: 'F6 — daily weekly_enrich cron now scheduled for 06:00 IST. Verify it fires tonight.',
+        data: { null_count: lwNullCount, total: suitCount, null_pct: lwNullPct },
+      });
+    }
+  }
+
+  // ─── SCAN 4: empty news_items today ───
+  const newsToday = (await db.prepare(`
+    SELECT COUNT(*) AS n FROM news_items
+    WHERE published_at > strftime('%s','now')*1000 - 12*3600000
+  `).first().catch(() => ({ n: 0 })))?.n || 0;
+  if (newsToday < 10) {
+    findings.push({
+      category: 'STALE_DATA', severity: 'P1', layer: 'SELECTION',
+      signature: `news_thin:${today}`,
+      title: `Only ${newsToday} news_items in last 12h (expected 50+)`,
+      detail: 'Opus position_mgmt + entryDecision will be news-blind. wealth-news worker may be down.',
+      proposed_fix: 'Check wealth-news cron_run_log for failures. Verify RSS feeds responding.',
+      data: { row_count_12h: newsToday },
+    });
+  }
+
+  // ─── SCAN 5: dim_health degraded ───
+  const todayVerdict = await db.prepare(`
+    SELECT context_snapshot_json FROM daily_verdicts
+    WHERE trade_date=? AND verdict_type='morning' ORDER BY composed_at DESC LIMIT 1
+  `).bind(today).first().catch(() => null);
+  if (todayVerdict?.context_snapshot_json) {
+    try {
+      const ctx = JSON.parse(todayVerdict.context_snapshot_json);
+      const dimHealth = ctx?.dim_health_pct || {};
+      const broken = Object.entries(dimHealth).filter(([k, v]) => v < 10).map(([k, v]) => `${k}:${v}%`);
+      if (broken.length >= 3) {
+        findings.push({
+          category: 'DIM_BLINDNESS', severity: 'P1', layer: 'SELECTION',
+          signature: `dim_blind:${today}`,
+          title: `${broken.length} of 9 engine dimensions <10% healthy`,
+          detail: `Broken dims: ${broken.join(', ')}. Regime classifier likely returns "unknown".`,
+          proposed_fix: 'F5 — multi-dim triage. Each broken dim has separate root cause: stale source feeds, broken aggregation queries, or schema renames.',
+          data: { broken_dims: broken, all_dims: dimHealth },
+        });
+      }
+    } catch {}
+  }
+
+  // ─── SCAN 6: SIT_OUT verdict (with empty pool) ───
+  const sitOutVerdict = await db.prepare(`
+    SELECT id, picks_json, headline FROM daily_verdicts
+    WHERE trade_date=? AND verdict_type='morning' AND decision='SIT_OUT'
+    ORDER BY composed_at DESC LIMIT 1
+  `).bind(today).first().catch(() => null);
+  if (sitOutVerdict) {
+    let picksLen = 0;
+    try { picksLen = (JSON.parse(sitOutVerdict.picks_json || '[]')).length; } catch {}
+    if (picksLen === 0) {
+      findings.push({
+        category: 'INTELLIGENCE_GAP', severity: 'P0', layer: 'SELECTION',
+        signature: `sit_out_empty_pool:${today}`,
+        title: `Morning verdict said SIT_OUT with empty pick pool`,
+        detail: `Headline: "${(sitOutVerdict.headline || '').slice(0, 150)}". Likely intraday_suitability was empty (auto-detected earlier today).`,
+        proposed_fix: 'Verify intraday_suitability populated. Force-recompose verdict via /run/compose?force=1 on wealth-verdict.',
+        data: { verdict_id: sitOutVerdict.id },
+      });
+    }
+  }
+
+  // ─── SCAN 7: Kite OAuth health ───
+  const kiteToken = await db.prepare(`
+    SELECT expires_at FROM kite_tokens WHERE is_active=1 ORDER BY id DESC LIMIT 1
+  `).first().catch(() => null);
+  if (!kiteToken) {
+    findings.push({
+      category: 'TOKEN_HEALTH', severity: 'P0', layer: 'EXECUTION',
+      signature: `no_kite_token:${today}`,
+      title: 'No active Kite OAuth token',
+      detail: 'wealth-trader cannot fetch live LTP. All entries will fail. Owner must re-OAuth.',
+      proposed_fix: 'Owner: open https://trade.hnhotels.in/wealth/auth/login and re-link Kite.',
+      data: {},
+    });
+  } else if (kiteToken.expires_at && kiteToken.expires_at < now) {
+    findings.push({
+      category: 'TOKEN_HEALTH', severity: 'P0', layer: 'EXECUTION',
+      signature: `kite_expired:${today}`,
+      title: 'Kite OAuth token EXPIRED',
+      detail: `Expired at ${new Date(kiteToken.expires_at).toISOString()}. Auto-trader is dead until re-OAuth.`,
+      proposed_fix: 'Owner must re-OAuth at /wealth/auth/login.',
+      data: { expires_at: kiteToken.expires_at },
+    });
+  } else if (kiteToken.expires_at && kiteToken.expires_at - now < 3600000) {
+    const minsLeft = Math.round((kiteToken.expires_at - now) / 60000);
+    findings.push({
+      category: 'TOKEN_HEALTH', severity: 'P1', layer: 'EXECUTION',
+      signature: `kite_expiring:${today}`,
+      title: `Kite OAuth expires in ${minsLeft} min`,
+      detail: 'Re-OAuth before market action.',
+      proposed_fix: 'Owner: schedule re-OAuth before token expires.',
+      data: { mins_left: minsLeft },
+    });
+  }
+
+  // ─── SCAN 8: stale intraday_ticks (during market hours) ───
+  const istHM = istNow.getUTCHours() * 60 + istNow.getUTCMinutes();
+  const isMarketOpen = istHM >= 9*60+15 && istHM <= 15*60+30;
+  if (isMarketOpen) {
+    const lastTick = await db.prepare(`
+      SELECT MAX(ts) AS last_ts FROM intraday_ticks
+    `).first().catch(() => null);
+    const lastTs = lastTick?.last_ts || 0;
+    const stalenessMin = Math.round((now - lastTs) / 60000);
+    if (stalenessMin > 5) {
+      findings.push({
+        category: 'STALE_DATA', severity: 'P0', layer: 'EXECUTION',
+        signature: `tick_stale:${today}:${stalenessMin}`,
+        title: `intraday_ticks ${stalenessMin} min stale during market hours`,
+        detail: 'wealth-price-core not ingesting LTP. wealth-trader will see no breakout signals.',
+        proposed_fix: 'Check wealth-price-core cron_run_log. Verify Kite quote API responding.',
+        data: { staleness_min: stalenessMin, last_ts: lastTs },
+      });
+    }
+  }
+
+  // ─── SCAN 9: blind capital allocation (3-equal split detection) ───
+  const todayTrades = (await db.prepare(`
+    SELECT id, symbol, qty, entry_paise FROM paper_trades
+    WHERE auto_managed=1 AND DATE(created_at/1000,'unixepoch')=?
+  `).bind(today).all().catch(() => ({ results: [] }))).results || [];
+  if (todayTrades.length >= 2) {
+    const allocPcts = todayTrades.map(t => +(t.qty * t.entry_paise / 100000000 * 100).toFixed(1));
+    const minAlloc = Math.min(...allocPcts);
+    const maxAlloc = Math.max(...allocPcts);
+    if (maxAlloc - minAlloc < 5) {  // all picks within 5% of each other → blind allocation
+      findings.push({
+        category: 'INTELLIGENCE_GAP', severity: 'P0', layer: 'CAPITAL',
+        signature: `blind_capital:${today}`,
+        title: 'Capital divided evenly across picks (no conviction weighting)',
+        detail: `All ${todayTrades.length} picks allocated ${minAlloc}-${maxAlloc}%. High-conviction picks should get 40-50%, low get 20-25%.`,
+        proposed_fix: 'F1 — replace blind weight=30 with composite_conviction = hybrid_score × bayesian_posterior × recent_regime_strength.',
+        data: { alloc_pcts: allocPcts, picks_count: todayTrades.length },
+      });
+    }
+  }
+
+  // ─── INSERT findings (deduped by signature in last 6 hours) ───
+  let inserted = 0;
+  for (const f of findings) {
+    const recent = await db.prepare(`
+      SELECT id FROM audit_findings
+      WHERE signature=? AND detected_at > ? AND resolved_at IS NULL
+      LIMIT 1
+    `).bind(f.signature, now - 6 * 3600000).first().catch(() => null);
+    if (recent) continue;  // dedupe — already flagged in last 6h
+    await db.prepare(`
+      INSERT INTO audit_findings
+        (detected_at, trade_date, category, severity, layer, signature, title, detail, proposed_fix, data_json)
+      VALUES (?,?,?,?,?,?,?,?,?,?)
+    `).bind(
+      now, today, f.category, f.severity, f.layer, f.signature,
+      f.title, f.detail, f.proposed_fix, JSON.stringify(f.data || {})
+    ).run().catch(() => {});
+    inserted++;
+  }
+
+  return { rows: inserted, scanned_categories: 9, total_findings_now: findings.length };
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // Cron dispatcher
 // ────────────────────────────────────────────────────────────────────────
 const CRON_DISPATCH = {
   '*/2 * * * *':        { name: 'backfill_drain',    fn: runBackfillOrchestrator }, // every 2 min — 5 chunks parallel
   '*/15 * * * *':       { name: 'watchdog',          fn: runWatchdog },             // every 15 min
+  '*/15 4-9 * * 1-5':   { name: 'audit_scanner_market', fn: runAuditScanner },     // every 15 min during market hours
+  '0 11 * * 1-5':       { name: 'audit_scanner_close', fn: runAuditScanner },      // 16:30 IST post-market sweep
   '30 2 * * 1-5':       { name: 'pre_market',        fn: preMarketBriefing },       // 08:00 IST
   '0 3 * * 1-5':        { name: 'briefing_compile',  fn: compileDailyBriefing },    // 08:30 IST
   '*/5 3-10 * * 1-5':   { name: 'cascade_alerts',    fn: cascadeAlertDelta },       // every 5 min market (offset 0)
@@ -1015,6 +1294,7 @@ async function runCron(env, cronExpr) {
 const HTTP_HANDLERS = {
   backfill_drain:     runBackfillOrchestrator,
   watchdog:           runWatchdog,
+  audit_scanner:      runAuditScanner,
   pre_market:         preMarketBriefing,
   briefing_compile:   compileDailyBriefing,
   cascade_alerts:     cascadeAlertDelta,

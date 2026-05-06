@@ -3238,6 +3238,41 @@ async function getOpsAuditToday(db, url) {
     },
   ];
 
+  // ─── PERSISTED FINDINGS from audit_findings table (cron-collected) ─────
+  // wealth-orchestrator runAuditScanner runs every 15min during market hours
+  // and writes findings here. Append unresolved findings to the architecture
+  // findings list so /audit/ UI surfaces them automatically.
+  const persistedFindings = (await db.prepare(`
+    SELECT id, detected_at, category, severity, layer, signature,
+           title, detail, proposed_fix, data_json
+    FROM audit_findings
+    WHERE trade_date=? AND resolved_at IS NULL
+    ORDER BY
+      CASE severity WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END,
+      detected_at DESC
+    LIMIT 30
+  `).bind(date).all().catch(() => ({ results: [] }))).results || [];
+
+  const persistedAsFindings = persistedFindings.map(p => {
+    let parsedData = {};
+    try { parsedData = JSON.parse(p.data_json || '{}'); } catch {}
+    return {
+      id: `cron:${p.id}`,
+      severity: p.severity,
+      layer: p.layer,
+      title: p.title,
+      observed: p.detail,
+      proposed_fix: p.proposed_fix,
+      effort_lines: 'auto-detected at ' + new Date(p.detected_at + 5.5*3600000).toISOString().replace('T',' ').slice(11,19) + ' IST',
+      category: p.category,
+      auto_detected: true,
+      data: parsedData,
+    };
+  });
+
+  // Merge: cron-detected findings first (auto-current), then static architecture findings
+  const allFindings = [...persistedAsFindings, ...findings];
+
   return {
     ok: true,
     date,
@@ -3258,9 +3293,11 @@ async function getOpsAuditToday(db, url) {
         gap: events.filter(e => e.surgical_catch === 'gap').length,
         override: events.filter(e => e.surgical_catch === 'override').length,
       },
+      persisted_findings: persistedFindings.length,
+      cron_scanned_at: persistedFindings[0]?.detected_at || null,
     },
     timeline: events,
-    architecture_findings: findings,
+    architecture_findings: allFindings,
     generated_at: Date.now(),
   };
 }
