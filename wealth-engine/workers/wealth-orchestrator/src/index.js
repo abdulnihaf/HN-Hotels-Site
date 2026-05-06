@@ -867,8 +867,13 @@ async function paperTradeWatcher(env) {
   const istHour = (now.getUTCHours() * 60 + now.getUTCMinutes() + 330) % 1440 / 60;
   if (istHour < 9.25 || istHour > 15.5) return { rows: 0, skipped: 'outside-market-hours' };
 
+  // BUG FIX (May 6 2026, F3 from /trading/audit/): orchestrator's paper_trade
+  // watcher was firing phantom exits on auto_managed rows still in WATCHING
+  // state — wealth-trader owns those. Today created bogus -₹3,931 P&L for
+  // DEEDEV/STLTECH that never actually entered. Skip auto_managed rows here:
+  // wealth-trader manages their full lifecycle.
   const open = (await env.DB.prepare(
-    `SELECT * FROM paper_trades WHERE is_active=1`
+    `SELECT * FROM paper_trades WHERE is_active=1 AND COALESCE(auto_managed,0)=0`
   ).all()).results || [];
   if (open.length === 0) return { rows: 0, skipped: 'no-open-paper-trades' };
 
