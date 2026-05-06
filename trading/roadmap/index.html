@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Wealth Engine — Roadmap</title>
+<link rel="manifest" href="/trading/manifest.json">
+<meta name="theme-color" content="#0a0f1c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="color-scheme" content="dark">
+<style>
+  :root {
+    --bg: #0a0f1c; --panel: #121a2e; --panel-2: #1a2540;
+    --border: #2a3656; --text: #e6ecff; --muted: #8a96b8;
+    --green: #2ecc71; --red: #e74c3c; --yellow: #f5b041; --blue: #4fa3ff;
+    --accent: #7c5cff; --orange: #ff8a3c; --pink: #ff6ec4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5;
+    padding: 14px; padding-top: env(safe-area-inset-top, 14px);
+  }
+  header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  h1 { font-size: 17px; font-weight: 700; }
+  h1 .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 3px; }
+  .tab-nav { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .tab-nav a {
+    padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 500;
+    text-decoration: none; border: 1px solid var(--border); color: var(--muted); background: var(--panel-2);
+  }
+  .tab-nav a.active { background: rgba(124,92,255,0.18); color: var(--accent); border-color: var(--accent); }
+
+  /* Kanban-style board */
+  .board {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 1100px) { .board { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 700px) { .board { grid-template-columns: 1fr; } }
+  .col {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px; min-height: 200px;
+  }
+  .col h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px;
+    margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .col h2 .count { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+  .col.shipped h2 { color: var(--green); border-color: var(--green); }
+  .col.shipped h2 .count { background: rgba(46,204,113,0.20); }
+  .col.in-progress h2 { color: var(--blue); border-color: var(--blue); }
+  .col.in-progress h2 .count { background: rgba(79,163,255,0.20); }
+  .col.next h2 { color: var(--yellow); border-color: var(--yellow); }
+  .col.next h2 .count { background: rgba(245,176,65,0.20); }
+  .col.blocked h2 { color: var(--red); border-color: var(--red); }
+  .col.blocked h2 .count { background: rgba(231,76,60,0.20); }
+
+  .card {
+    background: var(--panel-2); border-radius: 8px; padding: 10px 12px;
+    margin-bottom: 8px; border-left: 3px solid;
+    font-size: 12px; line-height: 1.5;
+  }
+  .card.P0 { border-left-color: var(--red); }
+  .card.P1 { border-left-color: var(--yellow); }
+  .card.P2 { border-left-color: var(--blue); }
+  .card.P3 { border-left-color: var(--muted); }
+  .card .title-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+  .card .id-pill { padding: 1px 5px; border-radius: 5px; font-size: 9px; font-weight: 700; background: rgba(124,92,255,0.18); color: var(--accent); }
+  .card .sev-pill { padding: 1px 5px; border-radius: 5px; font-size: 9px; font-weight: 700; }
+  .card .sev-pill.P0 { background: rgba(231,76,60,0.20); color: var(--red); }
+  .card .sev-pill.P1 { background: rgba(245,176,65,0.20); color: var(--yellow); }
+  .card .sev-pill.P2 { background: rgba(79,163,255,0.20); color: var(--blue); }
+  .card .sev-pill.P3 { background: rgba(138,150,184,0.20); color: var(--muted); }
+  .card .layer-pill { padding: 1px 5px; border-radius: 5px; font-size: 9px; font-weight: 700; background: rgba(255,138,60,0.20); color: var(--orange); }
+  .card .title { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+  .card .body { color: var(--muted); font-size: 11px; }
+  .card .body strong { color: var(--text); }
+  .card .meta { font-size: 10px; color: var(--muted); margin-top: 6px; padding-top: 5px; border-top: 1px dashed var(--border); }
+  .card .meta a { color: var(--accent); text-decoration: none; }
+
+  /* Outcome guardrails section */
+  .guards {
+    background: linear-gradient(135deg, rgba(124,92,255,0.06), rgba(46,204,113,0.04));
+    border: 1px solid var(--accent); border-radius: 12px; padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+  .guards h3 { font-size: 13px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .guards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .guard-cell {
+    background: rgba(0,0,0,0.20); border-radius: 8px; padding: 10px 12px;
+    font-size: 12px;
+  }
+  .guard-cell .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
+  .guard-cell .val { font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .guard-cell .desc { font-size: 11px; color: var(--muted); }
+
+  /* Priorities by layer */
+  .layers {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 16px;
+  }
+  .layers h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .layer-row {
+    display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center;
+    padding: 8px 0; border-bottom: 1px dashed rgba(42,54,86,0.4);
+    font-size: 12px;
+  }
+  .layer-row:last-child { border-bottom: none; }
+  .layer-row .name { font-weight: 700; color: var(--accent); font-size: 13px; }
+  .layer-row .desc { color: var(--muted); }
+
+  .footer { text-align: center; color: var(--muted); font-size: 11px; padding: 20px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🗺️ Wealth Engine — Product Roadmap
+      <span class="sub">Living document · what's shipped, what's next, what's blocked. Snapshot of architecture state for fix-prioritization.</span>
+    </h1>
+  </div>
+  <div class="tab-nav">
+    <a href="/trading/">🏠 Hub</a>
+    <a href="/trading/today/">📋 Today</a>
+    <a href="/trading/compare/">📊 Compare</a>
+    <a href="/trading/audit/">🔬 Audit</a>
+    <a href="/trading/roadmap/" class="active">🗺️ Roadmap</a>
+    <a href="/trading/ops/">⚙️ Ops</a>
+  </div>
+</header>
+
+<!-- ─── OUTCOME GUARDRAILS — keeps execution focused ─── -->
+<div class="guards">
+  <h3>🎯 Outcome Guardrails — what success looks like</h3>
+  <div class="guards-grid">
+    <div class="guard-cell">
+      <div class="lbl">Phase</div>
+      <div class="val">Paper-trade validation</div>
+      <div class="desc">5–30 days of clean execution with honest skill% before flipping to ₹10L real capital</div>
+    </div>
+    <div class="guard-cell">
+      <div class="lbl">Daily target</div>
+      <div class="val">+₹30K profit-lock / −₹30K loss-halt</div>
+      <div class="desc">Both are HARD stops. Day ends instantly when either hit.</div>
+    </div>
+    <div class="guard-cell">
+      <div class="lbl">Skill threshold for real capital</div>
+      <div class="val">skill_pct &gt; 55% sustained 30+ days</div>
+      <div class="desc">Measured via 4-bucket EOD attribution (RIGHT/MISSED/LEARNED/LUCK)</div>
+    </div>
+    <div class="guard-cell">
+      <div class="lbl">Owner role</div>
+      <div class="val">Observer (post-08:15 Kite OAuth)</div>
+      <div class="desc">No buttons that change state. System fully autonomous. Owner reviews EOD.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── KANBAN BOARD ─── -->
+<div class="board">
+
+  <!-- COL 1: SHIPPED -->
+  <div class="col shipped">
+    <h2>✅ Shipped (today, May 6) <span class="count" id="shippedCount">—</span></h2>
+
+    <div class="card P0">
+      <div class="title-row">
+        <span class="id-pill">F3</span>
+        <span class="sev-pill P0">P0</span>
+        <span class="layer-pill">EXIT</span>
+      </div>
+      <div class="title">Race condition fix — orchestrator vs trader</div>
+      <div class="body">Added <strong>AND auto_managed=0</strong> to orchestrator.paperTradeWatcher. wealth-trader now exclusively owns auto-managed lifecycle. Stops phantom -₹3,931 P&Ls.</div>
+      <div class="meta">Deployed: orchestrator v 2f71d1c0 · 09:55 IST · 1 line</div>
+    </div>
+
+    <div class="card P2">
+      <div class="title-row">
+        <span class="id-pill">F6</span>
+        <span class="sev-pill P2">P2</span>
+        <span class="layer-pill">SELECTION</span>
+      </div>
+      <div class="title">Daily weekly-enrich cron</div>
+      <div class="body">Added <strong>30 0 * * 1-5</strong> (06:00 IST weekday). last_week_* was 5 days stale by Friday — now refreshed daily so next-day Opus picks see fresh recent-regime.</div>
+      <div class="meta">Deployed: intraday-bars v 307620dd · 09:55 IST · 1 line</div>
+    </div>
+
+    <div class="card P0">
+      <div class="title-row">
+        <span class="id-pill">SUIT</span>
+        <span class="sev-pill P0">P0</span>
+        <span class="layer-pill">SELECTION</span>
+      </div>
+      <div class="title">suitabilityRefresh column-mismatch fix</div>
+      <div class="body">15-vs-12 column INSERT bug had been silently truncating intraday_suitability daily. Caught at 08:50 IST when verdict said SIT_OUT due to empty pool. Manual repopulate + source fix.</div>
+      <div class="meta">Deployed: verdict v 47d6ef5a · 08:55 IST · 10 lines</div>
+    </div>
+
+    <div class="card P0">
+      <div class="title-row">
+        <span class="id-pill">B-1</span>
+        <span class="sev-pill P0">P0</span>
+        <span class="layer-pill">ENTRY</span>
+      </div>
+      <div class="title">range_capture safety net (single-point-of-failure protection)</div>
+      <div class="body">Added fallback: if no auto_managed paper_trades exist for today by 09:30-10:30 IST window, runs rangeCapture as backup. <strong>Fired in production today at 09:31:52 — saved the trading day.</strong></div>
+      <div class="meta">Shipped May 5 evening · Verified live May 6 09:31 IST</div>
+    </div>
+
+    <div class="card P0">
+      <div class="title-row">
+        <span class="id-pill">B-2</span>
+        <span class="sev-pill P0">P0</span>
+        <span class="layer-pill">ENTRY</span>
+      </div>
+      <div class="title">News context for entry decisions</div>
+      <div class="body">Opus entryDecision now reads news_items last 60min before ENTER_NOW. New rules: ABANDON if avg_sentiment &lt; -0.4 with importance ≥3.</div>
+      <div class="meta">Shipped May 5 evening · Active for today's entries</div>
+    </div>
+
+    <div class="card P0">
+      <div class="title-row">
+        <span class="id-pill">S1-S7</span>
+        <span class="sev-pill P0">P0</span>
+        <span class="layer-pill">EXIT</span>
+      </div>
+      <div class="title">Statistical exit intelligence (7 rules)</div>
+      <div class="body">Opus position_mgmt now reads 90d priors (hit_2pct rate, avg_open_to_high, green_close) + computes pct_of_typical_move_captured, time_since_peak, trajectory. Rules S1-S7 govern exit timing.</div>
+      <div class="meta">Shipped May 5 evening · Activates 11:00 IST today</div>
+    </div>
+
+    <div class="card P1">
+      <div class="title-row">
+        <span class="id-pill">UI</span>
+        <span class="sev-pill P1">P1</span>
+        <span class="layer-pill">UI</span>
+      </div>
+      <div class="title">/compare/ + /audit/ + /roadmap/ pages live</div>
+      <div class="body">Live counterfactual comparison (actual vs Opus picks), surgical ops audit log with architecture findings, this roadmap dashboard. SW v32.</div>
+      <div class="meta">Pages deployed via Cloudflare auto-deploy · 09:50-10:05 IST</div>
+    </div>
+  </div>
+
+  <!-- COL 2: IN PROGRESS / ACTIVE -->
+  <div class="col in-progress">
+    <h2>🔵 In progress / observing <span class="count">2</span></h2>
+
+    <div class="card P0">
+      <div class="title-row">
+        <span class="id-pill">LIVE</span>
+        <span class="sev-pill P0">P0</span>
+        <span class="layer-pill">EXECUTION</span>
+      </div>
+      <div class="title">Today's trade — DEEDEV / AGIIL / STLTECH</div>
+      <div class="body">Owner override at 09:11 IST. Currently AGIIL still WATCHING. DEEDEV/STLTECH show phantom SKIPPED+P&L (race condition F3 — fixed for tomorrow).</div>
+      <div class="meta">Watch via /trading/today/ · /trading/compare/</div>
+    </div>
+
+    <div class="card P0">
+      <div class="title-row">
+        <span class="id-pill">8AM</span>
+        <span class="sev-pill P0">P0</span>
+        <span class="layer-pill">META</span>
+      </div>
+      <div class="title">Pre-market readiness audit (scheduled task)</div>
+      <div class="body">Fires daily 08:00 IST. Pre-market verification of Pages, OAuth, workers, intraday_suitability. Runs before owner connects Kite.</div>
+      <div class="meta">Last fire: today 08:00 IST · auto-disables after one-time fire (need to re-arm for tomorrow)</div>
+    </div>
+  </div>
+
+  <!-- COL 3: UP NEXT -->
+  <div class="col next">
+    <h2>🟡 Up next (post market close today) <span class="count">3</span></h2>
+
+    <div class="card P0">
+      <div class="title-row">
+        <span class="id-pill">F1</span>
+        <span class="sev-pill P0">P0</span>
+        <span class="layer-pill">CAPITAL</span>
+      </div>
+      <div class="title">Conviction-weighted capital allocation</div>
+      <div class="body">Replace blind 30/30/30 with <strong>weight = composite_conviction (hybrid_score × bayesian_posterior × recent_regime_strength)</strong>. Range 20-50%. Top conviction gets 40-50%, low gets 20-25%.</div>
+      <div class="meta">Effort: ~30 lines composeVerdict + Opus prompt update · Risk: medium</div>
+    </div>
+
+    <div class="card P0">
+      <div class="title-row">
+        <span class="id-pill">F2</span>
+        <span class="sev-pill P0">P0</span>
+        <span class="layer-pill">ENTRY</span>
+      </div>
+      <div class="title">3-stage surgical entry (replace naive 09:31 LTP)</div>
+      <div class="body">(a) observe 09:15-09:30 range. (b) wait for first DIP and bounce confirmation. (c) THEN place entry above the dip-low. Stop = dip-low − ATR-buffer (NOT entry × 0.988). Today's DEEDEV/STLTECH would have entered post-dip at higher confidence.</div>
+      <div class="meta">Effort: ~80 lines rangeCapture + new entryDipDetector · Risk: HIGH (new code path, needs paper-day testing)</div>
+    </div>
+
+    <div class="card P1">
+      <div class="title-row">
+        <span class="id-pill">F4</span>
+        <span class="sev-pill P1">P1</span>
+        <span class="layer-pill">SELECTION</span>
+      </div>
+      <div class="title">Cross-reference signal_scores in candidate pool</div>
+      <div class="body">composeVerdict reads only intraday_suitability (90d historical). Add second track: signal_scores top-50 with looser intraday-history requirement. ABCAPITAL / IDEAFORGE / CAMS at 73-74 score never reached Opus today.</div>
+      <div class="meta">Effort: ~50 lines composeVerdict shortlist · Risk: medium</div>
+    </div>
+  </div>
+
+  <!-- COL 4: BLOCKED / DEEP WORK -->
+  <div class="col blocked">
+    <h2>🔴 Deep work / multi-day <span class="count">3</span></h2>
+
+    <div class="card P1">
+      <div class="title-row">
+        <span class="id-pill">F5</span>
+        <span class="sev-pill P1">P1</span>
+        <span class="layer-pill">META</span>
+      </div>
+      <div class="title">Fix 6 of 9 broken dim_health dimensions</div>
+      <div class="body">flow 0.7%, options 0%, sentiment 2.9%, macro 3.8%, retail_buzz 0.2%, quality 4.7%. Engine "regime classifier" returns "unknown" because it can't fuse these dims. Each dim needs separate root-cause investigation.</div>
+      <div class="meta">Effort: ~6 hours (~1h per dim) · Risk: medium · Blocking: Opus regime intelligence</div>
+    </div>
+
+    <div class="card P2">
+      <div class="title-row">
+        <span class="id-pill">UI-2</span>
+        <span class="sev-pill P2">P2</span>
+        <span class="layer-pill">UI</span>
+      </div>
+      <div class="title">Live MTM in Hero P&L card (refresh per LTP tick)</div>
+      <div class="body">Hero P&L currently reads stored data at 60s intervals. ENTERED positions show stale unrealized P&L. Need: API computes live MTM by joining latest intraday_ticks per symbol on every poll.</div>
+      <div class="meta">Effort: ~30 lines getAutoTraderState · Risk: low</div>
+    </div>
+
+    <div class="card P2">
+      <div class="title-row">
+        <span class="id-pill">VAR</span>
+        <span class="sev-pill P2">P2</span>
+        <span class="layer-pill">EXECUTION</span>
+      </div>
+      <div class="title">VIX-adaptive loss halt</div>
+      <div class="body">Fixed at -₹30K. On VIX&gt;22 days, drawdown to -₹30K is more likely. Should scale: <code>loss_halt = -₹30K × max(1, VIX/14)</code></div>
+      <div class="meta">Effort: ~10 lines wealth-trader · Risk: low</div>
+    </div>
+
+    <div class="card P3">
+      <div class="title-row">
+        <span class="id-pill">B-3</span>
+        <span class="sev-pill P3">P3</span>
+        <span class="layer-pill">EXECUTION</span>
+      </div>
+      <div class="title">HELD_OVERNIGHT risk management</div>
+      <div class="body">Positions promoted to SWING_CONFIRMED skip 15:10 hard exit. Between 15:30 today and 09:15 next morning = 18 unmonitored hours. Need pre-market 06:00 IST gap-check to force-exit if gap &gt; 3%.</div>
+      <div class="meta">Effort: new wealth-trader phase · Risk: medium · Trigger: only when first SWING_CONFIRMED fires (not yet observed)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── PRIORITIES BY LAYER ─── -->
+<div class="layers">
+  <h3>🏗️ Architecture layers (priority order)</h3>
+  <div class="layer-row">
+    <span class="name">Layer 1: SELECTION</span>
+    <span class="desc">composeVerdict picks 2-3 stocks at 08:30 from intraday_suitability + signal_scores · F4, F5, F6</span>
+  </div>
+  <div class="layer-row">
+    <span class="name">Layer 2: CAPITAL</span>
+    <span class="desc">qty per pick = (capital × weight_pct) ÷ entry_paise · <strong>F1 (currently blind 30/30/30 — fix tonight)</strong></span>
+  </div>
+  <div class="layer-row">
+    <span class="name">Layer 3: ENTRY</span>
+    <span class="desc">range_capture → continuous breakout-trigger → Opus entryDecision · <strong>F2 (currently naive — fix tonight after testing)</strong></span>
+  </div>
+  <div class="layer-row">
+    <span class="name">Layer 4: MANAGEMENT</span>
+    <span class="desc">price_monitor (trail/partial) + Opus position_mgmt (S1-S7 statistical rules) ✓ shipped May 5</span>
+  </div>
+  <div class="layer-row">
+    <span class="name">Layer 5: EXIT</span>
+    <span class="desc">stop/target/trail/hard_exit_1510 + race-condition fix · <strong>F3 ✓ deployed today</strong></span>
+  </div>
+  <div class="layer-row">
+    <span class="name">Layer 6: LEARNING</span>
+    <span class="desc">autopsy 16:00 + suitability refresh 16:30 + EOD audit 18:30 + weekly review Mon 09:00</span>
+  </div>
+</div>
+
+<div class="footer">
+  Updated <span id="updated">at deploy</span> · Living document — edit at /trading/_context/ROADMAP.md or this file
+</div>
+
+<script>
+document.getElementById('updated').textContent = 'May 6 2026 ~10:00 IST · ' + new Date().toLocaleTimeString('en-IN', {hour12:false});
+const shipped = document.querySelectorAll('.col.shipped .card').length;
+document.getElementById('shippedCount').textContent = shipped;
+</script>
+
+</body>
+</html>
