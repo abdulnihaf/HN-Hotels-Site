@@ -112,6 +112,7 @@ export async function onRequest(context) {
       case 'briefing_v2':        return Response.json(await getBriefingV2(db, env), { headers });
       case 'analyze_concall':    return Response.json(await analyzeConcallPages(db, env, request), { headers });
       case 'verdict_today':      return Response.json(await getVerdictToday(db, env), { headers });
+      case 'trade_comparison':   return Response.json(await getTradeComparison(db, url), { headers });
       case 'todays_watchlist':   return Response.json(await getTodaysWatchlist(db, url), { headers });
       case 'auto_trader_state':  return Response.json(await getAutoTraderState(db), { headers });
       case 'trader_timeline':    return Response.json(await getTraderTimeline(db, url), { headers });
@@ -2986,6 +2987,247 @@ async function getTodaysWatchlist(db, url) {
     watchlist: enriched,
     kite_format: kiteFormat,           // for "Copy to Kite" button
     final_picks_kite_format: finalPicks.map(p => `NSE:${p.symbol}`).join('\n'),
+    generated_at: Date.now(),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// /api/trading?action=trade_comparison[&date=YYYY-MM-DD][&opus_symbols=A,B,C]
+//
+// Owner asked May 6 morning: "compare our current position vs what would have
+// been our position if we had entered using the Claude Opus selection stocks.
+// Show a live feed of that today, in a different UI."
+//
+// Context: today owner manually overrode Opus's picks (TDPOWERSYS/HFCL/AEROFLEX)
+// with DEEDEV/AGIIL/STLTECH. This endpoint shows side-by-side how each path is
+// performing in real-time.
+//
+// Returns:
+//   actual_picks[]    — today's auto_managed paper_trades with live LTP +
+//                       post-exit trail (max LTP since exit, current LTP,
+//                       did it recover above stop)
+//   opus_picks[]      — counterfactual: what would have happened if we had
+//                       paper-traded Opus's original 3 instead. Per-pick:
+//                       hypothetical entry (open price), live LTP, day OHLC,
+//                       hypothetical P&L if held to current LTP
+//   summary           — totals for both paths
+// ═══════════════════════════════════════════════════════════════════════════
+async function getTradeComparison(db, url) {
+  const istNow = new Date(Date.now() + 5.5 * 3600000);
+  const date = url.searchParams.get('date') || istNow.toISOString().slice(0, 10);
+
+  // For 2026-05-06 the Opus-original picks are hardcoded (since they were
+  // overridden in picks_json). For other dates we parse from the first verdict.
+  const opusOverride = url.searchParams.get('opus_symbols');
+  const opusOriginal = opusOverride
+    ? opusOverride.split(',').map(s => s.trim().toUpperCase())
+    : (date === '2026-05-06' ? ['TDPOWERSYS', 'HFCL', 'AEROFLEX'] : []);
+
+  // ─── ACTUAL PICKS: today's auto-managed paper_trades ──────────────────
+  const actual = (await db.prepare(`
+    SELECT id, symbol, trader_state, qty, entry_paise, stop_paise, target_paise,
+           or_high_paise, or_low_paise, exit_paise, exit_reason, exit_at,
+           pnl_net_paise, peak_price_paise, trader_notes, is_active,
+           datetime(created_at/1000,'unixepoch','+5 hours','+30 minutes') AS created_ist,
+           datetime(coalesce(exit_at,0)/1000,'unixepoch','+5 hours','+30 minutes') AS exit_ist
+    FROM paper_trades
+    WHERE auto_managed=1 AND DATE(created_at/1000,'unixepoch')=?
+    ORDER BY id ASC
+  `).bind(date).all()).results || [];
+
+  const allSymbols = [
+    ...new Set([...actual.map(a => a.symbol), ...opusOriginal])
+  ].filter(Boolean);
+
+  if (allSymbols.length === 0) {
+    return { ok: false, reason: 'no-trades-or-opus-picks', date };
+  }
+
+  const placeholders = allSymbols.map(() => '?').join(',');
+
+  // ─── Day OHLC + live LTP per symbol ────────────────────────────────────
+  const ohlcRows = (await db.prepare(`
+    SELECT b.symbol,
+      MIN(CASE WHEN ts = (SELECT MIN(ts) FROM intraday_bars b2 WHERE b2.symbol=b.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN open_paise END) AS day_open,
+      MAX(b.high_paise) AS day_high,
+      MIN(b.low_paise)  AS day_low,
+      MAX(CASE WHEN ts = (SELECT MAX(ts) FROM intraday_bars b3 WHERE b3.symbol=b.symbol AND b3.trade_date=? AND b3.interval='5minute') THEN close_paise END) AS day_close
+    FROM intraday_bars b
+    WHERE b.symbol IN (${placeholders}) AND b.trade_date=? AND b.interval='5minute'
+    GROUP BY b.symbol
+  `).bind(date, date, ...allSymbols, date).all().catch(() => ({ results: [] }))).results || [];
+  const ohlcMap = {};
+  for (const r of ohlcRows) ohlcMap[r.symbol] = r;
+
+  const liveTickRows = (await db.prepare(`
+    SELECT t1.symbol, t1.ltp_paise, t1.ts FROM intraday_ticks t1
+    JOIN (SELECT symbol, MAX(ts) AS m FROM intraday_ticks WHERE symbol IN (${placeholders}) GROUP BY symbol) t2
+      ON t1.symbol=t2.symbol AND t1.ts=t2.m
+  `).bind(...allSymbols).all().catch(() => ({ results: [] }))).results || [];
+  const ltpMap = {};
+  for (const t of liveTickRows) ltpMap[t.symbol] = { ltp: t.ltp_paise, ts: t.ts };
+
+  // ─── Post-exit max LTP for exited/SKIPPED rows (the "panic-exit" check) ─
+  // For each actual pick that's no longer live: how high did the stock go AFTER
+  // exit? If it recovered above stop or hit target, exit was premature.
+  const postExitMaxBySymbol = {};
+  for (const a of actual) {
+    if (a.exit_at && a.exit_at > 0) {
+      const peakAfterExit = await db.prepare(`
+        SELECT MAX(high_paise) AS max_h, MIN(low_paise) AS min_l, MAX(close_paise) AS last_close
+        FROM intraday_bars
+        WHERE symbol=? AND trade_date=? AND interval='5minute' AND ts > ?
+      `).bind(a.symbol, date, a.exit_at).first().catch(() => null);
+      postExitMaxBySymbol[a.symbol] = {
+        max_high_paise:  peakAfterExit?.max_h || null,
+        min_low_paise:   peakAfterExit?.min_l || null,
+        last_close_paise: peakAfterExit?.last_close || null,
+      };
+    }
+  }
+
+  // Helper: compute realistic Zerodha intraday MIS round-trip cost
+  const zerodhaCost = (e, x, q) => {
+    const buy = Math.abs(e) * q, sell = Math.abs(x) * q;
+    return Math.round(4000 + sell * 0.00025 + (buy + sell) * 0.0000322 + buy * 0.00003 + (4000 + (buy + sell) * 0.0000322) * 0.18);
+  };
+  const TEN_LAKH = 100000000;
+  const PER_PICK_CAPITAL = 30000000;  // ₹3L per pick (30%)
+
+  // ─── ACTUAL PICKS — enrich with live data + post-exit trail ────────────
+  const actualEnriched = actual.map(a => {
+    const live = ltpMap[a.symbol];
+    const ohlc = ohlcMap[a.symbol];
+    const post = postExitMaxBySymbol[a.symbol];
+    const cur = live?.ltp || ohlc?.day_close || null;
+
+    // Did the system "panic exit" — i.e., did the stock recover above the stop
+    // or even hit target after we exited?
+    let panicExitFlag = null;
+    let recoveryMaxPaise = null;
+    let wouldHaveHit = null;
+    if (a.exit_at && post && post.max_high_paise) {
+      recoveryMaxPaise = post.max_high_paise;
+      wouldHaveHit = a.target_paise && post.max_high_paise >= a.target_paise
+        ? 'target' : (post.max_high_paise > a.entry_paise ? 'recovered_above_entry' : 'stayed_below_entry');
+      panicExitFlag = wouldHaveHit !== 'stayed_below_entry';
+    }
+
+    // If the position is still live (WATCHING/ENTERED), compute live MTM
+    let liveMtm = null;
+    if (a.trader_state === 'ENTERED' && cur && a.entry_paise) {
+      const gross = (cur - a.entry_paise) * a.qty;
+      const cost = zerodhaCost(a.entry_paise, cur, a.qty);
+      liveMtm = gross - cost;
+    }
+
+    return {
+      symbol: a.symbol,
+      trader_state: a.trader_state,
+      qty: a.qty,
+      entry_paise: a.entry_paise,
+      stop_paise: a.stop_paise,
+      target_paise: a.target_paise,
+      or_high_paise: a.or_high_paise,
+      or_low_paise: a.or_low_paise,
+      exit_paise: a.exit_paise,
+      exit_reason: a.exit_reason,
+      exit_ist: a.exit_ist,
+      pnl_net_paise: a.pnl_net_paise,
+      live_ltp_paise: live?.ltp || null,
+      live_mtm_paise: liveMtm,
+      day_open_paise: ohlc?.day_open || null,
+      day_high_paise: ohlc?.day_high || null,
+      day_low_paise:  ohlc?.day_low  || null,
+      day_close_paise: ohlc?.day_close || null,
+      day_change_pct: (cur && ohlc?.day_open) ? +(((cur - ohlc.day_open) / ohlc.day_open) * 100).toFixed(2) : null,
+      // Post-exit trail
+      post_exit: a.exit_at ? {
+        max_high_paise_since_exit: recoveryMaxPaise,
+        last_close_paise: post?.last_close_paise,
+        would_have_hit: wouldHaveHit,           // 'target' | 'recovered_above_entry' | 'stayed_below_entry'
+        was_panic_exit: panicExitFlag,
+        // What we'd have made if we had stayed in
+        if_held_to_now_paise: cur && a.entry_paise && a.qty
+          ? (cur - a.entry_paise) * a.qty - zerodhaCost(a.entry_paise, cur, a.qty)
+          : null,
+      } : null,
+    };
+  });
+
+  // ─── OPUS PICKS — counterfactual ──────────────────────────────────────
+  const opusEnriched = opusOriginal.map(symbol => {
+    const live = ltpMap[symbol];
+    const ohlc = ohlcMap[symbol];
+    const cur = live?.ltp || ohlc?.day_close || null;
+    const dayOpen = ohlc?.day_open || null;
+
+    // Hypothetical: paper-trade was placed at day_open with same params
+    // (₹3L allocation, 1.2% stop, 2.8% target — same as actual override params)
+    let hypothetical = null;
+    if (dayOpen && dayOpen > 100 && cur) {
+      const qty = Math.floor(PER_PICK_CAPITAL / dayOpen);
+      const stop = Math.round(dayOpen * 0.988);
+      const target = Math.round(dayOpen * 1.028);
+      const grossNow = (cur - dayOpen) * qty;
+      const costNow = zerodhaCost(dayOpen, cur, qty);
+      // Did stop or target hit during the day?
+      const dayHigh = ohlc.day_high || cur;
+      const dayLow  = ohlc.day_low  || cur;
+      let simExit = null;
+      let simExitPaise = null;
+      if (dayLow <= stop) { simExit = 'stop_hit'; simExitPaise = stop; }
+      else if (dayHigh >= target) { simExit = 'target_hit'; simExitPaise = target; }
+      const simPnL = simExitPaise
+        ? (simExitPaise - dayOpen) * qty - zerodhaCost(dayOpen, simExitPaise, qty)
+        : grossNow - costNow;  // still open hypothetically; live MTM
+      hypothetical = {
+        entry_paise: dayOpen,
+        qty,
+        deployed_paise: qty * dayOpen,
+        stop_paise: stop,
+        target_paise: target,
+        sim_exit: simExit,                   // null = still open
+        sim_exit_paise: simExitPaise,
+        sim_pnl_paise: simPnL,
+        if_held_live_paise: grossNow - costNow,
+      };
+    }
+
+    return {
+      symbol,
+      live_ltp_paise: live?.ltp || null,
+      day_open_paise: dayOpen,
+      day_high_paise: ohlc?.day_high || null,
+      day_low_paise:  ohlc?.day_low || null,
+      day_close_paise: ohlc?.day_close || null,
+      day_change_pct: (cur && dayOpen) ? +(((cur - dayOpen) / dayOpen) * 100).toFixed(2) : null,
+      hypothetical,
+    };
+  });
+
+  // ─── Summary totals ────────────────────────────────────────────────────
+  const actualRealizedPnL = actualEnriched.reduce((s, a) => s + (a.pnl_net_paise || 0), 0);
+  const actualLiveMtm = actualEnriched.reduce((s, a) => s + (a.live_mtm_paise || 0), 0);
+  const actualPostExitWouldHave = actualEnriched.reduce((s, a) => s + (a.post_exit?.if_held_to_now_paise || 0), 0);
+  const opusSimPnL = opusEnriched.reduce((s, o) => s + (o.hypothetical?.sim_pnl_paise || 0), 0);
+
+  return {
+    ok: true,
+    date,
+    summary: {
+      actual_picks_count: actualEnriched.length,
+      actual_realized_pnl_paise: actualRealizedPnL,
+      actual_live_mtm_paise: actualLiveMtm,
+      actual_total_pnl_paise: actualRealizedPnL + actualLiveMtm,
+      // What we'd have made if we'd held the exited positions instead of cutting
+      actual_if_held_post_exit_paise: actualPostExitWouldHave,
+      opus_picks_count: opusEnriched.length,
+      opus_sim_pnl_paise: opusSimPnL,
+      delta_paise: (actualRealizedPnL + actualLiveMtm) - opusSimPnL,
+    },
+    actual_picks: actualEnriched,
+    opus_picks: opusEnriched,
     generated_at: Date.now(),
   };
 }

@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v30';  // v30: trade_cards on Execute now use the same rich format (shared WatchlistComponent)
+const CACHE_VERSION = 'wealth-v31';  // v31: /trading/compare/ — actual vs Opus picks live comparison + post-exit trail panic detector
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -10,6 +10,7 @@ const PRECACHE_URLS = [
   '/trading/execute/',
   '/trading/ops/',
   '/trading/today/',
+  '/trading/compare/',
   '/trading/manifest.json',
   '/trading/icons/icon-192.svg',
   '/trading/icons/icon-512.svg',

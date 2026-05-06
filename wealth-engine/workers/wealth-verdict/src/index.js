@@ -1243,8 +1243,18 @@ async function suitabilityRefresh(env) {
   try {
     // Atomic refresh: delete + insert in transaction (D1 doesn't support BEGIN, so back-to-back)
     await db.prepare(`DELETE FROM intraday_suitability`).run();
+    // BUG FIX (May 6 2026 morning): table has 15 columns (the 12 below + 3
+    // last-week enrichment columns added by wealth-intraday-bars). Without an
+    // explicit column list, the INSERT requires all 15 values. Result: every
+    // 16:30 IST cron fire DELETEd then INSERT failed silently → empty table →
+    // composeVerdict had zero candidates → SIT_OUT. Caught morning of May 6.
+    // Now: explicit column list, last-week columns left NULL for weekly enrich.
     const r = await db.prepare(`
       INSERT INTO intraday_suitability
+        (symbol, hit_2pct_rate, hit_3pct_rate, hit_5pct_rate,
+         avg_open_to_high_pct, avg_open_to_low_pct, avg_daily_range_pct,
+         green_close_rate, avg_turnover_cr, days_sampled,
+         intraday_score, computed_at)
       SELECT
         symbol,
         ROUND(AVG(CASE WHEN (high_paise - open_paise) * 100.0 / open_paise >= 2 THEN 1.0 ELSE 0.0 END) * 100, 1) AS hit_2pct_rate,

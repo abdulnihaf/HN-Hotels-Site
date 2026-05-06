@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Wealth Engine — Compare</title>
+<link rel="manifest" href="/trading/manifest.json">
+<meta name="theme-color" content="#0a0f1c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="color-scheme" content="dark">
+<style>
+  :root {
+    --bg: #0a0f1c; --panel: #121a2e; --panel-2: #1a2540;
+    --border: #2a3656; --text: #e6ecff; --muted: #8a96b8;
+    --green: #2ecc71; --red: #e74c3c; --yellow: #f5b041; --blue: #4fa3ff;
+    --accent: #7c5cff; --orange: #ff8a3c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.45; min-height: 100vh;
+    padding: 14px; padding-top: env(safe-area-inset-top, 14px);
+  }
+  header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
+  }
+  h1 { font-size: 17px; font-weight: 700; }
+  h1 .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 3px; }
+  .tab-nav { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .tab-nav a {
+    padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 500;
+    text-decoration: none; border: 1px solid var(--border); color: var(--muted);
+    background: var(--panel-2);
+  }
+  .tab-nav a.active {
+    background: rgba(124,92,255,0.18); color: var(--accent); border-color: var(--accent);
+  }
+
+  .pin-gate { max-width: 380px; margin: 80px auto; padding: 28px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+  .pin-gate input { width: 100%; padding: 12px; font-size: 16px; margin: 10px 0;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+  .pin-gate button { width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+    background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; min-height: 44px; }
+
+  /* Headline summary block */
+  .summary-hero {
+    background: linear-gradient(135deg, rgba(124,92,255,0.10), rgba(79,163,255,0.05));
+    border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+    margin-bottom: 14px;
+  }
+  .summary-hero h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  @media (max-width: 600px) { .summary-grid { grid-template-columns: 1fr; } }
+  .summary-cell { padding: 10px 12px; background: rgba(0,0,0,0.20); border-radius: 8px; }
+  .summary-cell .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .summary-cell .val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; }
+  .summary-cell .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .delta {
+    border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px;
+    font-size: 13px;
+  }
+  .delta strong { font-size: 18px; }
+
+  /* Two-column layout for actual vs Opus */
+  .compare-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  @media (max-width: 800px) { .compare-grid { grid-template-columns: 1fr; } }
+  .col-section {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px;
+  }
+  .col-section h3 {
+    font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .col-section h3 .total { font-size: 14px; color: var(--text); font-variant-numeric: tabular-nums; font-weight: 700; }
+  .col-section.actual h3 { color: var(--accent); }
+  .col-section.opus h3 { color: var(--orange); }
+
+  .pick-card {
+    background: var(--panel-2); border-radius: 10px; padding: 12px;
+    margin-bottom: 10px; border-left: 3px solid var(--border);
+  }
+  .pick-card.WATCHING { border-left-color: var(--muted); }
+  .pick-card.ENTERED { border-left-color: var(--blue); }
+  .pick-card.EXITED, .pick-card.SKIPPED { border-left-color: var(--red); opacity: 0.95; }
+  .pick-card.target-hit { border-left-color: var(--green); }
+  .pick-card.opus { border-left-color: var(--orange); }
+  .pick-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px; }
+  .pick-card .sym { font-size: 15px; font-weight: 700; }
+  .pick-card .state-tag { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 9px; font-weight: 700; margin-left: 6px; }
+  .state-tag.WATCHING { background: rgba(138,150,184,0.20); color: var(--muted); }
+  .state-tag.ENTERED { background: rgba(79,163,255,0.20); color: var(--blue); }
+  .state-tag.EXITED, .state-tag.SKIPPED { background: rgba(231,76,60,0.20); color: var(--red); }
+  .state-tag.HYPOTHETICAL { background: rgba(255,138,60,0.20); color: var(--orange); }
+  .state-tag.target_hit { background: rgba(46,204,113,0.20); color: var(--green); }
+  .state-tag.stop_hit { background: rgba(231,76,60,0.20); color: var(--red); }
+  .pick-card .ltp { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; }
+  .pick-card .chg { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .levels-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; font-size: 11px; }
+  .levels-cell { background: rgba(0,0,0,0.25); border-radius: 5px; padding: 5px 7px; }
+  .levels-cell .l { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+  .levels-cell .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .levels-cell .v.peak { color: var(--green); }
+  .levels-cell .v.low { color: var(--red); }
+  .levels-cell .v.entry { color: var(--blue); }
+  .levels-cell .v.target { color: var(--green); }
+  .levels-cell .v.stop { color: var(--red); }
+
+  .pnl-row {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 8px 10px; background: rgba(0,0,0,0.30); border-radius: 6px;
+    margin-bottom: 6px; font-size: 12px;
+  }
+  .pnl-row .lbl { color: var(--muted); }
+  .pnl-row .v { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; }
+
+  /* Post-exit trail block — the panic-exit detector */
+  .post-exit {
+    margin-top: 8px; padding: 8px 10px;
+    border: 1px dashed var(--border); border-radius: 6px;
+    font-size: 11px; line-height: 1.5;
+  }
+  .post-exit.panic { border-color: var(--red); background: rgba(231,76,60,0.06); }
+  .post-exit.recovered { border-color: var(--yellow); background: rgba(245,176,65,0.05); }
+  .post-exit .pe-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+  .post-exit .pe-row { display: flex; justify-content: space-between; gap: 8px; }
+  .post-exit .verdict-line { margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--border); font-weight: 600; }
+  .post-exit.panic .verdict-line { color: var(--red); }
+  .post-exit.recovered .verdict-line { color: var(--yellow); }
+
+  .footer {
+    margin-top: 20px; text-align: center; color: var(--muted); font-size: 11px; padding-bottom: 30px;
+  }
+  .refreshing { display: inline-block; padding: 2px 8px; background: rgba(124,92,255,0.18); color: var(--accent); border-radius: 10px; font-size: 10px; }
+</style>
+</head>
+<body>
+
+<div id="gate" class="pin-gate">
+  <h2>📊 Compare — Actual vs Opus picks</h2>
+  <input id="pin" type="password" placeholder="Dashboard PIN" autocomplete="off">
+  <button onclick="login()">Unlock</button>
+  <div id="gateErr" style="color:var(--red);font-size:13px;margin-top:8px;min-height:18px"></div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <div>
+      <h1>📊 Compare — Actual vs Opus picks
+        <span class="sub">Live feed · refreshes every 30s · today's manual override vs the original Opus selection</span>
+      </h1>
+    </div>
+    <div class="tab-nav">
+      <a href="/trading/">🏠 Hub</a>
+      <a href="/trading/today/">📋 Today</a>
+      <a href="/trading/execute/">🎯 Execute</a>
+      <a href="/trading/compare/" class="active">📊 Compare</a>
+      <a href="/trading/ops/">⚙️ Ops</a>
+    </div>
+  </header>
+
+  <div id="summary"></div>
+  <div id="comparison"></div>
+
+  <div class="footer">
+    Last refreshed: <span id="lastRefresh">—</span>
+    · <span class="refreshing">auto-refresh 30s</span>
+  </div>
+</div>
+
+<script>
+const STORE_KEY = 'wealth_dashboard_key';
+let DASHBOARD_KEY = localStorage.getItem(STORE_KEY) || '';
+if (DASHBOARD_KEY) tryAutoLogin();
+
+function login() {
+  const v = document.getElementById('pin').value.trim();
+  if (!v) return;
+  DASHBOARD_KEY = v;
+  load().then(j => {
+    if (j && j.ok) {
+      localStorage.setItem(STORE_KEY, v);
+      showApp(j);
+    } else {
+      document.getElementById('gateErr').textContent = j?.reason || 'failed';
+    }
+  }).catch(e => {
+    document.getElementById('gateErr').textContent = String(e.message || e);
+  });
+}
+async function tryAutoLogin() {
+  try { const j = await load(); if (j && j.ok) showApp(j); } catch {}
+}
+function showApp(j) {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  render(j);
+  setInterval(refresh, 30000);
+}
+async function load() {
+  const r = await fetch('/api/trading?action=trade_comparison&key=' + encodeURIComponent(DASHBOARD_KEY));
+  return r.json();
+}
+async function refresh() {
+  try { const j = await load(); if (j && j.ok) render(j); } catch {}
+}
+
+const fmtP = (paise) => paise == null ? '—' : '₹' + (paise / 100).toFixed(2);
+const fmtR = (paise) => paise == null ? '—'
+  : (paise >= 0 ? '+' : '−') + '₹' + Math.abs(Math.round(paise / 100)).toLocaleString('en-IN');
+const fmtPct = (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+const sgnCls = (paise) => paise == null ? '' : (paise >= 0 ? 'pos' : 'neg');
+const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function render(j) {
+  const s = j.summary;
+  const actualTotal = s.actual_total_pnl_paise;
+  const opusTotal   = s.opus_sim_pnl_paise;
+  const delta       = s.delta_paise;
+
+  // ─── Summary hero ───
+  document.getElementById('summary').innerHTML = `
+    <div class="summary-hero">
+      <h2>📊 Today's path comparison</h2>
+      <div class="summary-grid">
+        <div class="summary-cell">
+          <div class="lbl">⭐ ACTUAL — your override</div>
+          <div class="val ${sgnCls(actualTotal)}">${fmtR(actualTotal)}</div>
+          <div class="sub">${s.actual_picks_count} picks · realized ${fmtR(s.actual_realized_pnl_paise)} + live ${fmtR(s.actual_live_mtm_paise)}</div>
+        </div>
+        <div class="summary-cell">
+          <div class="lbl">🤖 OPUS — what was originally suggested</div>
+          <div class="val ${sgnCls(opusTotal)}">${fmtR(opusTotal)}</div>
+          <div class="sub">${s.opus_picks_count} picks · simulated entry at day open, ₹3L each, 1.2% stop / 2.8% target</div>
+        </div>
+        <div class="summary-cell">
+          <div class="lbl">Δ DELTA — your gain/loss vs Opus</div>
+          <div class="val ${sgnCls(delta)}">${fmtR(delta)}</div>
+          <div class="sub">${delta >= 0 ? 'override beating Opus' : 'Opus would have done better'}</div>
+        </div>
+      </div>
+      ${s.actual_if_held_post_exit_paise ? `
+        <div class="delta">
+          <span style="color:var(--muted)">⚠️ "If we'd held instead of cutting" — total of post-exit MTM for stocks that were already exited:</span>
+          <strong class="${sgnCls(s.actual_if_held_post_exit_paise)}">${fmtR(s.actual_if_held_post_exit_paise)}</strong>
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  // ─── Two columns ───
+  const actualHtml = j.actual_picks.map(a => renderActualCard(a)).join('');
+  const opusHtml = j.opus_picks.map(o => renderOpusCard(o)).join('');
+
+  document.getElementById('comparison').innerHTML = `
+    <div class="compare-grid">
+      <div class="col-section actual">
+        <h3>⭐ ACTUAL POSITIONS (your override) <span class="total ${sgnCls(actualTotal)}">${fmtR(actualTotal)}</span></h3>
+        ${actualHtml || '<div style="color:var(--muted);font-size:12px">No positions yet</div>'}
+      </div>
+      <div class="col-section opus">
+        <h3>🤖 OPUS PICKS (counterfactual) <span class="total ${sgnCls(opusTotal)}">${fmtR(opusTotal)}</span></h3>
+        ${opusHtml || '<div style="color:var(--muted);font-size:12px">No data</div>'}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString('en-IN', {hour12:false});
+}
+
+function renderActualCard(a) {
+  const stateClass = a.trader_state === 'EXITED' && a.pnl_net_paise > 0 ? 'target-hit' : a.trader_state;
+  const dayChg = a.day_change_pct;
+  const dayChgClass = dayChg == null ? '' : (dayChg >= 0 ? 'pos' : 'neg');
+
+  // Post-exit panic detector
+  let postExitBlock = '';
+  if (a.post_exit) {
+    const pe = a.post_exit;
+    let cls = '';
+    let verdict = '';
+    if (pe.would_have_hit === 'target') {
+      cls = 'panic'; verdict = '🚨 PANIC EXIT — stock hit target after we cut!';
+    } else if (pe.would_have_hit === 'recovered_above_entry') {
+      cls = 'recovered'; verdict = '⚠️ Recovered above entry after exit — stop was tight';
+    } else {
+      verdict = '✓ Exit was correct — stock stayed below entry';
+    }
+    postExitBlock = `
+      <div class="post-exit ${cls}">
+        <div class="pe-label">Post-exit trail</div>
+        <div class="pe-row"><span>max LTP since exit:</span><span style="font-variant-numeric:tabular-nums;font-weight:600">${fmtP(pe.max_high_paise_since_exit)}</span></div>
+        <div class="pe-row"><span>last close:</span><span style="font-variant-numeric:tabular-nums">${fmtP(pe.last_close_paise)}</span></div>
+        ${pe.if_held_to_now_paise != null ? `
+          <div class="pe-row"><span>If we'd held to NOW:</span><span class="${sgnCls(pe.if_held_to_now_paise)}" style="font-weight:700">${fmtR(pe.if_held_to_now_paise)}</span></div>
+        ` : ''}
+        <div class="verdict-line">${verdict}</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="pick-card ${stateClass}">
+      <div class="head">
+        <div>
+          <span class="sym">${esc(a.symbol)}</span>
+          <span class="state-tag ${a.trader_state}">${esc(a.trader_state)}</span>
+        </div>
+        <div>
+          <span class="ltp">${fmtP(a.live_ltp_paise || a.day_close_paise)}</span>
+          <span class="chg ${dayChgClass}" style="margin-left:8px">${fmtPct(a.day_change_pct)}</span>
+        </div>
+      </div>
+      <div class="levels-row">
+        <div class="levels-cell"><span class="l">Entry</span><span class="v entry">${fmtP(a.entry_paise)}</span></div>
+        <div class="levels-cell"><span class="l">Stop</span><span class="v stop">${fmtP(a.stop_paise)}</span></div>
+        <div class="levels-cell"><span class="l">Target</span><span class="v target">${fmtP(a.target_paise)}</span></div>
+        <div class="levels-cell"><span class="l">Qty</span><span class="v">${a.qty}</span></div>
+      </div>
+      <div class="levels-row">
+        <div class="levels-cell"><span class="l">Day Open</span><span class="v">${fmtP(a.day_open_paise)}</span></div>
+        <div class="levels-cell"><span class="l">Peak</span><span class="v peak">${fmtP(a.day_high_paise)}</span></div>
+        <div class="levels-cell"><span class="l">Low</span><span class="v low">${fmtP(a.day_low_paise)}</span></div>
+        <div class="levels-cell"><span class="l">OR-high</span><span class="v">${fmtP(a.or_high_paise)}</span></div>
+      </div>
+      ${a.exit_paise ? `
+        <div class="pnl-row">
+          <span class="lbl">EXITED at ${fmtP(a.exit_paise)} (${esc(a.exit_reason || '?')}) · ${esc(a.exit_ist)}</span>
+          <span class="v ${sgnCls(a.pnl_net_paise)}">${fmtR(a.pnl_net_paise)}</span>
+        </div>
+      ` : a.live_mtm_paise != null ? `
+        <div class="pnl-row">
+          <span class="lbl">Live MTM @ ${fmtP(a.live_ltp_paise)}</span>
+          <span class="v ${sgnCls(a.live_mtm_paise)}">${fmtR(a.live_mtm_paise)}</span>
+        </div>
+      ` : `
+        <div class="pnl-row">
+          <span class="lbl">Watching · breakout above ${fmtP(a.or_high_paise)} × 1.001</span>
+          <span class="v" style="color:var(--muted)">—</span>
+        </div>
+      `}
+      ${postExitBlock}
+    </div>
+  `;
+}
+
+function renderOpusCard(o) {
+  const h = o.hypothetical;
+  const stateTag = h?.sim_exit
+    ? `<span class="state-tag ${h.sim_exit}">${esc(h.sim_exit)}</span>`
+    : `<span class="state-tag HYPOTHETICAL">HYPOTHETICAL</span>`;
+  const dayChgClass = o.day_change_pct == null ? '' : (o.day_change_pct >= 0 ? 'pos' : 'neg');
+
+  return `
+    <div class="pick-card opus">
+      <div class="head">
+        <div>
+          <span class="sym">${esc(o.symbol)}</span>
+          ${stateTag}
+        </div>
+        <div>
+          <span class="ltp">${fmtP(o.live_ltp_paise || o.day_close_paise)}</span>
+          <span class="chg ${dayChgClass}" style="margin-left:8px">${fmtPct(o.day_change_pct)}</span>
+        </div>
+      </div>
+      ${h ? `
+        <div class="levels-row">
+          <div class="levels-cell"><span class="l">Hyp. Entry</span><span class="v entry">${fmtP(h.entry_paise)}</span></div>
+          <div class="levels-cell"><span class="l">Stop</span><span class="v stop">${fmtP(h.stop_paise)}</span></div>
+          <div class="levels-cell"><span class="l">Target</span><span class="v target">${fmtP(h.target_paise)}</span></div>
+          <div class="levels-cell"><span class="l">Qty</span><span class="v">${h.qty}</span></div>
+        </div>
+        <div class="levels-row">
+          <div class="levels-cell"><span class="l">Day Open</span><span class="v">${fmtP(o.day_open_paise)}</span></div>
+          <div class="levels-cell"><span class="l">Peak</span><span class="v peak">${fmtP(o.day_high_paise)}</span></div>
+          <div class="levels-cell"><span class="l">Low</span><span class="v low">${fmtP(o.day_low_paise)}</span></div>
+          <div class="levels-cell"><span class="l">Capital</span><span class="v">${fmtR(h.deployed_paise)}</span></div>
+        </div>
+        <div class="pnl-row">
+          <span class="lbl">${h.sim_exit ? `Sim exit @ ${fmtP(h.sim_exit_paise)} (${esc(h.sim_exit)})` : 'Sim live MTM (still open hypothetically)'}</span>
+          <span class="v ${sgnCls(h.sim_pnl_paise)}">${fmtR(h.sim_pnl_paise)}</span>
+        </div>
+      ` : `
+        <div class="pnl-row" style="color:var(--muted)">
+          <span class="lbl">Day open not yet captured for ${esc(o.symbol)}</span>
+          <span class="v">—</span>
+        </div>
+      `}
+    </div>
+  `;
+}
+</script>
+
+</body>
+</html>
