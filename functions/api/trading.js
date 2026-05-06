@@ -4311,6 +4311,86 @@ async function getEodLearningAudit(db, env, url) {
     actual_action: { peak_pct: s.peak_pct, drawdown_pct: s.drawdown_pct, close: s.bars.close },
   }));
 
+  // ─── SELF-LEARNING ENRICHMENT (May 6 2026) ─────────────────────────────
+  // Owner asked: "Is the system self-learning without gaps? Is the self-learning
+  // breaking when I am manually ingesting logics like we did today? In scenarios
+  // like today, the entire trail of what we did needs to be used for self-learning."
+  //
+  // CRITICAL: today the owner overrode Opus's picks AND there was a race
+  // condition that created phantom -₹3,931 P&L on never-entered trades. If we
+  // feed THIS to Sonnet without context, skill% gets corrupted.
+  //
+  // Three enrichments:
+  // 1. Read pick_overrides — preserves Opus original vs what owner picked
+  // 2. Read audit_findings (the new cron-collected bug log) — Sonnet sees
+  //    the day's bugs/gaps separately from trade outcomes
+  // 3. Detect phantom exits (trader_state=SKIPPED with non-zero pnl) — flag
+  //    them as system_bug, NOT trade_outcome, in skill% calc
+  // ───────────────────────────────────────────────────────────────────────
+
+  // (1) Override history — does the date have a manual override?
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS pick_overrides (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trade_date TEXT NOT NULL,
+      overridden_at INTEGER NOT NULL,
+      original_picks_json TEXT,
+      new_picks_json TEXT,
+      override_reason TEXT,
+      overridden_by TEXT
+    )
+  `).run().catch(() => {});
+
+  const overrideRow = await db.prepare(`
+    SELECT * FROM pick_overrides WHERE trade_date=? ORDER BY id DESC LIMIT 1
+  `).bind(requestedDate).first().catch(() => null);
+  let overrideContext = null;
+  if (overrideRow) {
+    let origPicks = [];
+    let newPicks = [];
+    try { origPicks = JSON.parse(overrideRow.original_picks_json || '[]'); } catch {}
+    try { newPicks = JSON.parse(overrideRow.new_picks_json || '[]'); } catch {}
+    overrideContext = {
+      had_override: true,
+      original_opus_picks: origPicks.map(p => p.symbol || p),
+      owner_chose_picks: newPicks.map(p => p.symbol || p),
+      reason: overrideRow.override_reason,
+      overridden_by: overrideRow.overridden_by,
+      overridden_at_ist: new Date(overrideRow.overridden_at + 5.5*3600000).toISOString().replace('T',' ').slice(0, 19),
+    };
+  }
+
+  // (2) Audit findings for the date — bugs/gaps detected by cron during the day
+  const todaysFindings = (await db.prepare(`
+    SELECT category, severity, layer, title, detail, proposed_fix
+    FROM audit_findings WHERE trade_date=?
+    ORDER BY CASE severity WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END
+    LIMIT 20
+  `).bind(requestedDate).all().catch(() => ({ results: [] }))).results || [];
+
+  // (3) Detect phantom exits in section1 — trades marked SKIPPED with non-zero pnl
+  // should be EXCLUDED from skill% calc (they're system_bug residue, not real outcomes)
+  const phantomSymbols = section1.filter(s =>
+    s.simulated && s.simulated.error === undefined && s.simulated.exit_reason === undefined
+  ).map(s => s.symbol);  // (phantom exits stay as 'simulated' but we tag them)
+
+  // Recompute skill-eligible vs phantom-tagged for honest accounting
+  const sectionEligible = [];
+  const sectionPhantom = [];
+  // Cross-reference paper_trades for this date — if trader_state='SKIPPED' AND
+  // pnl_net_paise != 0, it's a phantom exit (race condition residue from F3 bug)
+  const phantomCheck = (await db.prepare(`
+    SELECT symbol FROM paper_trades
+    WHERE auto_managed=1 AND DATE(created_at/1000,'unixepoch')=?
+      AND trader_state IN ('SKIPPED','ABANDONED')
+      AND pnl_net_paise IS NOT NULL AND pnl_net_paise != 0
+  `).bind(requestedDate).all().catch(() => ({ results: [] }))).results || [];
+  const phantomSet = new Set(phantomCheck.map(r => r.symbol));
+  for (const s of section1) {
+    if (phantomSet.has(s.symbol)) sectionPhantom.push(s);
+    else sectionEligible.push(s);
+  }
+
   // ─── Sonnet narrative — qualitative analysis with lessons ──────────
   let sonnetText = null, sonnetCost = 0, modelId = 'none';
   try {
@@ -4318,27 +4398,58 @@ async function getEodLearningAudit(db, env, url) {
       const { callSonnet } = await import('./_lib/anthropic.js');
       const sys = `You are a trading-system auditor reviewing a paper-trade day. CRITICAL: distinguish DATA-DRIVEN signals (engine could have foreseen) from PURE LUCK (random variance, not predictable from data). This separation is what makes the engine improvable.
 
+You are now also given (a) override_context if owner manually replaced Opus's picks, and (b) system_bugs_today (cron-detected anomalies). DO NOT confuse system bugs with trade outcomes — phantom exits from race conditions are NOT real losses, they are software defects to be flagged separately.
+
 Output STRICT JSON.
 
 Schema:
 {
-  "what_engine_got_RIGHT": "1-2 sentences. Picks where Opus's reasoning held up. What data signals correctly led to the win.",
-  "what_engine_MISSED": "1-2 sentences. Stocks that won but weren't picked, OR rejected stocks that would have won. WHY the engine missed — what data was Opus blind to?",
-  "what_engine_LEARNED": "1-2 sentences. Concrete pattern from today that should improve tomorrow's selection. e.g. 'Volume confirmation was too lenient — false breakouts cost ₹X'.",
-  "what_was_LUCK": "1-2 sentences. Outcomes that were RANDOM — luck (good or bad) that's not data-driven and shouldn't be used to praise/blame the engine. e.g. 'HFCL +5% was a market-wide telecom rally on news Opus had no way to predict'.",
+  "what_engine_got_RIGHT": "1-2 sentences. Picks where Opus's reasoning held up. Skill-eligible only — exclude phantom exits.",
+  "what_engine_MISSED": "1-2 sentences. Stocks that won but weren't picked, OR rejected stocks that would have won. WHY the engine missed?",
+  "what_engine_LEARNED": "1-2 sentences. Concrete pattern from today that should improve tomorrow's selection.",
+  "what_was_LUCK": "1-2 sentences. RANDOM outcomes — luck not data-driven.",
+  "what_was_SYSTEM_BUG": "1-2 sentences. Anything in system_bugs_today array that materially affected the day. SEPARATE from skill calculation.",
+  "owner_override_assessment": "1-2 sentences. ONLY if override_context.had_override is true: did owner-override outperform what Opus would have done? Praise or critique honestly. NULL if no override.",
   "tuning_suggestions": [
-    "concrete-changes-3-to-5-items, each citing a specific gap"
+    "concrete-changes-3-to-5-items, each citing a specific gap. Reference findings IDs from system_bugs_today when relevant."
   ],
   "key_lesson_for_tomorrow": "1 sentence — single most important takeaway",
-  "engine_skill_pct": "0-100. Of today's outcome, what % was attributable to engine SKILL vs LUCK. Be honest. If 1 of 3 picks won and that pick was LUCKY_WIN, skill_pct is low even if P&L is positive."
+  "engine_skill_pct": "0-100. EXCLUDE phantom exits + system bugs from this calc. Of skill-eligible trades only, what % was attributable to engine SKILL vs LUCK?",
+  "data_quality_pct": "0-100. How much can we trust today's signal for forward inference? If 6/9 dim_health <10%, this is low. If override_context exists + outcome differs materially, this is also low."
 }
 
 Rules:
 - Be RUTHLESS on luck attribution. Most short-period results are mostly luck.
 - "LEARNED" must cite a SPECIFIC engine change. "Be more careful" is not a lesson.
-- "Tuning suggestions" must be implementable. e.g. "increase volume_ratio threshold from 1.2 to 1.5" not "improve volume signal".
-- "engine_skill_pct" — be conservative. 1-day samples are noisy. If outcome could have been replicated by a coin flip, skill_pct is ≤30%.`;
-      const userPrompt = `Audit data for ${requestedDate}:\n\nSection 1 (picks won/lost):\n${JSON.stringify(section1, null, 2)}\n\nSection 2 (rejected from top 10):\n${JSON.stringify(section2, null, 2)}\n\nSection 3 (universe winners we missed):\n${JSON.stringify(top10MissedWinners.slice(0, 5), null, 2)}\n\nSection 4 (top 3 losers):\n${JSON.stringify(section4, null, 2)}\n\nWrite the audit JSON.`;
+- "Tuning suggestions" must be implementable.
+- "engine_skill_pct" — be conservative. EXCLUDE phantom_exits from numerator AND denominator.
+- If override_context exists, calc owner_picks_pnl vs opus_picks_pnl_counterfactual and assess.
+- Reference system_bugs_today titles in your narrative — owner needs to see Sonnet acknowledged them.`;
+
+      const userPrompt = `Audit data for ${requestedDate}:
+
+═══ OVERRIDE CONTEXT (manual intervention) ═══
+${JSON.stringify(overrideContext || { had_override: false }, null, 2)}
+
+═══ SYSTEM BUGS DETECTED TODAY (cron audit) ═══
+${todaysFindings.length > 0 ? JSON.stringify(todaysFindings, null, 2) : '(none — clean day)'}
+
+═══ PHANTOM EXITS (race-condition residue, EXCLUDE from skill calc) ═══
+${sectionPhantom.length > 0 ? JSON.stringify(sectionPhantom.map(s => ({ symbol: s.symbol, fake_pnl: s.simulated?.net_pnl_paise })), null, 2) : '(none)'}
+
+═══ SKILL-ELIGIBLE TRADES (use for skill_pct denominator) ═══
+${JSON.stringify(sectionEligible, null, 2)}
+
+═══ Section 2 (rejected from top 10) ═══
+${JSON.stringify(section2, null, 2)}
+
+═══ Section 3 (universe winners we missed) ═══
+${JSON.stringify(top10MissedWinners.slice(0, 5), null, 2)}
+
+═══ Section 4 (top 3 losers) ═══
+${JSON.stringify(section4, null, 2)}
+
+Write the audit JSON. Be honest about today's degraded data quality if applicable.`;
       const result = await callSonnet(env, {
         prompt: userPrompt, system: sys, max_tokens: 800,
         purpose: 'eod_learning_audit', worker: 'pages-trading',
