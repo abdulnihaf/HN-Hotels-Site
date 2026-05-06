@@ -626,6 +626,106 @@
     .wl-row .wl-spark svg { width: 120px; height: 32px; }
     .wl-row { padding: 12px 14px; }
   }
+
+  /* ═════════════════════════════════════════════════════════════════════
+   * PR-D: 3-pane Trade Desk on iPad+
+   *   < 1024px         → single column (existing accordion behavior)
+   *   1024–1279        → 2-pane: left rail (watchlist) + center
+   *   ≥ 1280px         → 3-pane: left rail + center + right context
+   *
+   * Both rails are position:sticky inside <main> so they stay visible while
+   * the center pane scrolls. JS sets --sticky-top from header height.
+   * ═════════════════════════════════════════════════════════════════════ */
+  :root { --sticky-top: 220px; }   /* fallback; JS overrides on load + resize */
+
+  /* Right context pane — hidden by default until ≥1280 media query */
+  .context-pane { display: none; }
+  .context-pane h3 {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.5px; margin: 0 0 8px;
+  }
+  .context-pane .ctx-section {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+  }
+  .context-pane .ctx-row {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(42,54,86,0.4);
+    font-size: 12px; line-height: 1.4;
+  }
+  .context-pane .ctx-row:last-child { border-bottom: none; }
+  .context-pane .ctx-row a {
+    color: var(--text); text-decoration: none;
+    display: block;
+  }
+  .context-pane .ctx-row a:hover { color: var(--accent); }
+  .context-pane .ctx-row .meta {
+    color: var(--muted); font-size: 10px; margin-top: 2px;
+  }
+  .context-pane .ctx-empty {
+    color: var(--muted); font-size: 12px; padding: 8px 0;
+    font-style: italic;
+  }
+  .context-pane .ctx-fii-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 6px 0; font-variant-numeric: tabular-nums;
+  }
+  .context-pane .ctx-fii-row strong { font-size: 14px; font-weight: 700; }
+  .context-pane .ctx-fii-row .pos { color: var(--green); }
+  .context-pane .ctx-fii-row .neg { color: var(--red); }
+
+  /* — 2-pane layout: 1024-1279 (iPad landscape, small laptop) — */
+  @media (min-width: 1024px) {
+    main {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    /* Watchlist becomes left rail, sticky inside main */
+    main > #watchlistPanel {
+      grid-column: 1;
+      grid-row: 1 / span 99;     /* span all rows so other items default to col 2 */
+      position: sticky;
+      top: var(--sticky-top);
+      align-self: start;
+      max-height: calc(100vh - var(--sticky-top) - 24px);
+      overflow-y: auto;
+      margin-bottom: 0;
+      /* Keep rail content padding tight (already a panel) */
+    }
+    /* Watchlist scrollbar styling — hidden but functional */
+    main > #watchlistPanel::-webkit-scrollbar { width: 4px; }
+    main > #watchlistPanel::-webkit-scrollbar-track { background: transparent; }
+    main > #watchlistPanel::-webkit-scrollbar-thumb {
+      background: var(--border); border-radius: 2px;
+    }
+  }
+
+  /* — 3-pane layout: ≥1280 (iPad Pro landscape, laptop, desktop) — */
+  @media (min-width: 1280px) {
+    main {
+      grid-template-columns: 280px minmax(0, 1fr) 320px;
+    }
+    .context-pane {
+      display: block;
+      grid-column: 3;
+      grid-row: 1 / span 99;
+      position: sticky;
+      top: var(--sticky-top);
+      align-self: start;
+      max-height: calc(100vh - var(--sticky-top) - 24px);
+      overflow-y: auto;
+    }
+    .context-pane::-webkit-scrollbar { width: 4px; }
+    .context-pane::-webkit-scrollbar-track { background: transparent; }
+    .context-pane::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  }
+
+  /* — Wide laptop ≥1600: roomier rails — */
+  @media (min-width: 1600px) {
+    main { grid-template-columns: 320px minmax(0, 1fr) 360px; }
+  }
 </style>
 </head>
 <body>
@@ -910,6 +1010,22 @@
         <div class="item">✅ <span><strong>Rule 8:</strong> After 3 losses, week off — system enters cooldown</span></div>
       </div>
     </details>
+
+    <!-- ─── PR-D: right context pane (≥1280px, live + close modes) ─── -->
+    <aside class="context-pane" id="contextPane" data-modes="live close" aria-label="Context sidebar">
+      <div class="ctx-section">
+        <h3>⚡ Cascades firing</h3>
+        <div id="ctxCascadesList" class="ctx-empty">Loading…</div>
+      </div>
+      <div class="ctx-section">
+        <h3>🌊 FII / DII flow</h3>
+        <div id="ctxFIIBody" class="ctx-empty">Loading…</div>
+      </div>
+      <div class="ctx-section">
+        <h3>📰 Recent news</h3>
+        <div id="ctxNewsList" class="ctx-empty">Loading…</div>
+      </div>
+    </aside>
   </main>
 </div>
 
@@ -947,6 +1063,103 @@ async function loadAll() {
 // One round-trip every 30s while tab is visible. Single source of truth
 // at /api/trading?action=top_strip — keeps strip atomic, no race.
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// PR-D — 3-pane Trade Desk: sticky offset measurement + context pane
+// ═══════════════════════════════════════════════════════════════════
+function updateStickyOffset() {
+  const h = document.querySelector('header');
+  if (!h) return;
+  const offset = h.offsetHeight + 8;       // 8px breathing room below header
+  document.documentElement.style.setProperty('--sticky-top', offset + 'px');
+}
+
+async function loadContextPane() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  // Only fetch when right pane is actually visible (live or close mode + ≥1280px)
+  const pane = document.getElementById('contextPane');
+  if (!pane || pane.classList.contains('mode-hidden')) return;
+  if (!_currentMode || !['live', 'close'].includes(_currentMode)) return;
+
+  // 3 parallel fetches — existing endpoints, no new server work
+  try {
+    const k = encodeURIComponent(DASHBOARD_KEY);
+    const [casc, fii, news] = await Promise.all([
+      fetch('/api/trading?action=cascades&key=' + k).then(r => r.json()).catch(() => null),
+      fetch('/api/trading?action=fii_dii&key=' + k).then(r => r.json()).catch(() => null),
+      fetch('/api/trading?action=news&limit=6&key=' + k).then(r => r.json()).catch(() => null),
+    ]);
+    renderContextPane({ cascades: casc, fii, news });
+  } catch (e) { /* context pane is informational; never block UI */ }
+}
+
+function renderContextPane(d) {
+  // ── Cascades firing ──
+  const cEl = document.getElementById('ctxCascadesList');
+  if (cEl) {
+    const items = ((d.cascades && d.cascades.cascades) || []).slice(0, 4);
+    cEl.innerHTML = items.length === 0
+      ? `<div class="ctx-empty">No cascades firing right now.</div>`
+      : items.map(c => {
+          const syms = (c.affected_symbols || '').replace(/[\[\]"]/g, '').split(',').slice(0, 3).join(', ');
+          const win = c.historical_win_rate != null ? Math.round(c.historical_win_rate * 100) + '%' : '—';
+          return `<div class="ctx-row">
+            <strong>⚡ ${escapeHtml(c.pattern_name || 'cascade')}</strong>
+            <div class="meta">${escapeHtml(syms || 'broad')} · win rate ${win}</div>
+          </div>`;
+        }).join('');
+  }
+
+  // ── FII / DII ──
+  const fEl = document.getElementById('ctxFIIBody');
+  if (fEl) {
+    const rows = (d.fii && d.fii.rows) || [];
+    // Pick latest cash segment row (most users care about cash flow)
+    const latest = rows.find(r => r.segment === 'cash') || rows[0];
+    if (latest) {
+      const fiiNet = latest.fii_net_cr || 0;
+      const diiNet = latest.dii_net_cr || 0;
+      const fmt = v => (v >= 0 ? '+' : '−') + '₹' + Math.abs(v).toFixed(0) + ' cr';
+      fEl.innerHTML = `
+        <div class="ctx-fii-row">
+          <span style="color:var(--muted)">FII (${escapeHtml(latest.segment || 'cash')})</span>
+          <strong class="${fiiNet >= 0 ? 'pos' : 'neg'}">${fmt(fiiNet)}</strong>
+        </div>
+        <div class="ctx-fii-row">
+          <span style="color:var(--muted)">DII</span>
+          <strong class="${diiNet >= 0 ? 'pos' : 'neg'}">${fmt(diiNet)}</strong>
+        </div>
+        <div class="meta" style="margin-top:6px;color:var(--muted);font-size:10px">${latest.trade_date}</div>
+      `;
+    } else {
+      fEl.innerHTML = `<div class="ctx-empty">No FII/DII data yet.</div>`;
+    }
+  }
+
+  // ── News ──
+  const nEl = document.getElementById('ctxNewsList');
+  if (nEl) {
+    const items = ((d.news && d.news.rows) || []).slice(0, 6);
+    nEl.innerHTML = items.length === 0
+      ? `<div class="ctx-empty">No recent news.</div>`
+      : items.map(n => {
+          const t = n.published_at ? relTimeShort(n.published_at) : '';
+          const url = n.url || '#';
+          return `<div class="ctx-row">
+            <a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(n.headline || n.title || '(untitled)')}</a>
+            <div class="meta">${escapeHtml(n.source || '')} ${t ? '· ' + t : ''}</div>
+          </div>`;
+        }).join('');
+  }
+}
+
+function relTimeShort(ts) {
+  const dt = Math.round((Date.now() - ts) / 1000);
+  if (dt < 60) return dt + 's';
+  if (dt < 3600) return Math.round(dt / 60) + 'm';
+  if (dt < 86400) return Math.round(dt / 3600) + 'h';
+  return Math.round(dt / 86400) + 'd';
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // PR-B — mode switcher (☀️ Pre-Market · 🟢 Live · 🌙 Close · 📚 Research)
 // Default: AUTO — follows server-returned phase from /api/trading?action=top_strip.
@@ -1000,6 +1213,10 @@ function applyMode() {
       st.textContent = 'AUTO';
     }
   }
+  // 4) PR-D: refresh right context pane on mode change (e.g. switching into Live)
+  if (typeof loadContextPane === 'function') loadContextPane();
+  // 5) PR-D: re-measure sticky offset (header height changes on tier breaks)
+  if (typeof updateStickyOffset === 'function') updateStickyOffset();
 }
 
 function bootMode() {
@@ -1122,7 +1339,9 @@ function showApp(j) {
   document.getElementById('app').style.display = 'block';
   bootMode();                           // PR-B: pick up manual override before render
   render(j);
+  updateStickyOffset();                 // PR-D: measure header height for sticky rails
   loadTopStrip();                       // PR-A: paint strip + first auto-mode resolution
+  loadContextPane();                    // PR-D: paint right context pane (≥1280, live+close)
   refreshKiteStatus();
   loadMarkets101();
   loadMorningBriefing();
@@ -1154,8 +1373,15 @@ function showApp(j) {
   setInterval(loadTopStrip, 30000);
   // 5s relative-time ticker for the "updated Ns ago" meta (laptop only)
   setInterval(tickStripMeta, 5000);
+  // PR-D: right context pane — 60s refresh during live/close modes
+  setInterval(loadContextPane, 60000);
+  // PR-D: re-measure sticky offset when window resizes (orientation change, etc)
+  window.addEventListener('resize', updateStickyOffset);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') loadTopStrip();
+    if (document.visibilityState === 'visible') {
+      loadTopStrip();
+      loadContextPane();
+    }
   });
 }
 
