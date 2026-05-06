@@ -38,19 +38,11 @@
   header {
     padding: 10px 14px; background: rgba(18, 26, 46, 0.92);
     border-bottom: 1px solid var(--border);
-    /* PR-E fix: wrap is required so the full-width strips drop to their
-       own rows instead of getting squished into row 1 with the title.
-       Use flex-direction: column for the most predictable stacking. */
-    display: flex; flex-direction: column; gap: 8px;
+    display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: nowrap; gap: 10px;
+    /* Sticky on mobile so Kite status always visible */
     position: sticky; top: 0; z-index: 100;
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   }
-  /* Top row: title + nav + alerts/kite-status (horizontal on desktop, wraps on phone) */
-  .header-top {
-    display: flex; align-items: flex-start; justify-content: space-between;
-    gap: 10px; flex-wrap: wrap;
-  }
-  .header-top > .left { flex: 1; min-width: 0; }
   header h1 { font-size: 17px; font-weight: 700; }
   /* Top tab nav — all 3 views always reachable */
   .tab-nav { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
@@ -324,491 +316,9 @@
   }
   /* Dark mode tap highlight */
   a:active, button:active { opacity: 0.7; }
-
-  /* ═════════════════════════════════════════════════════════════════════
-   * PR-A: persistent index strip + capital ribbon
-   * Both live INSIDE the sticky <header> so they share blur + safe-area.
-   * Always visible on every view, every mode, every scroll position.
-   *
-   * Five-tier responsive system (matches HIG + iPad + Mac form factors):
-   *   ≤480       iPhone portrait              compact, pri-1 only
-   *   481–767    iPhone landscape / small     single-line, pri-1 only
-   *   768–1023   iPad portrait                comfortable, all items
-   *   1024–1279  iPad landscape / small lap   spacious, all items
-   *   ≥1280      laptop / desktop wide        large + last-updated meta
-   * ═════════════════════════════════════════════════════════════════════ */
-  .index-strip, .capital-ribbon {
-    display: flex; align-items: center; gap: 0;
-    margin-top: 8px; padding-top: 6px;
-    border-top: 1px solid var(--border);
-    font-variant-numeric: tabular-nums;
-    overflow-x: auto;                /* safety net only — content sized to fit */
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .index-strip::-webkit-scrollbar,
-  .capital-ribbon::-webkit-scrollbar { display: none; }
-
-  /* — Base styling (phone landscape baseline; overridden by tier rules) — */
-  .idx-item, .cap-item {
-    display: inline-flex; align-items: baseline; gap: 6px;
-    flex: 0 0 auto;                  /* content-width, never auto-grow */
-    white-space: nowrap;
-    padding: 0 12px;
-  }
-  .idx-item + .idx-item,
-  .cap-item + .cap-item { border-left: 1px solid var(--border); }
-  .idx-item .nm, .cap-item .lbl {
-    color: var(--muted); font-weight: 500;
-    text-transform: uppercase; letter-spacing: 0.4px;
-    font-size: 10px;
-  }
-  .idx-item .val, .cap-item .val {
-    color: var(--text); font-weight: 700; font-size: 13px;
-  }
-  .idx-item .dlt { font-weight: 600; font-size: 11px; }
-  .idx-item .dlt.up { color: var(--green); }
-  .idx-item .dlt.dn { color: var(--red); }
-  .idx-item .dlt.flat { color: var(--muted); }
-  .cap-item.pnl-pos .val { color: var(--green); }
-  .cap-item.pnl-neg .val { color: var(--red); }
-  .cap-item.shadow .val::after {
-    content: ' SHADOW'; font-size: 9px; color: var(--yellow);
-    margin-left: 4px; letter-spacing: 0.5px; font-weight: 600;
-  }
-  .strip-meta {
-    margin-left: auto; flex: 0 0 auto;
-    color: var(--muted); font-size: 10px;
-    padding: 0 12px;
-    font-variant-numeric: tabular-nums;
-  }
-  .strip-skel { color: var(--muted); font-size: 11px; padding: 4px 12px; opacity: 0.7; }
-
-  /* ─── Tier 1 + 2: iPhone portrait ≤480, phone-landscape 481-767 ─────
-     All compact phones AND iPad-mini-portrait edge cases. Show pri-1 only
-     so we never trigger horizontal scroll on a 568-744px width. ──────── */
-  @media (max-width: 767px) {
-    .index-strip, .capital-ribbon { margin-top: 6px; padding-top: 4px; }
-    .idx-item, .cap-item { padding: 0 10px; gap: 5px; }
-    .idx-item .nm, .cap-item .lbl { font-size: 9px; letter-spacing: 0.3px; }
-    .idx-item .val, .cap-item .val { font-size: 12px; }
-    .idx-item .dlt { font-size: 10px; }
-    .idx-item[data-pri="2"], .cap-item[data-pri="2"] { display: none; }
-    .strip-meta { display: none; }     /* no room — hide on phones */
-  }
-  /* iPhone portrait — even tighter padding to absolutely guarantee single line */
-  @media (max-width: 480px) {
-    .idx-item, .cap-item { padding: 0 8px; }
-  }
-
-  /* ─── Tier 3: iPad portrait (768-1023) ─────────────────────────────── */
-  @media (min-width: 768px) and (max-width: 1023px) {
-    .idx-item, .cap-item { padding: 0 14px; gap: 8px; }
-    .idx-item .nm, .cap-item .lbl { font-size: 10px; }
-    .idx-item .val, .cap-item .val { font-size: 14px; }
-    .idx-item .dlt { font-size: 12px; }
-  }
-
-  /* ─── Tier 4: iPad landscape, small laptop (1024-1279) ─────────────── */
-  @media (min-width: 1024px) and (max-width: 1279px) {
-    .idx-item, .cap-item { padding: 0 16px; gap: 8px; }
-    .idx-item .nm, .cap-item .lbl { font-size: 10px; }
-    .idx-item .val, .cap-item .val { font-size: 14px; }
-    .idx-item .dlt { font-size: 12px; }
-  }
-
-  /* ─── Tier 5: laptop wide / desktop (≥1280) ────────────────────────── */
-  @media (min-width: 1280px) {
-    .index-strip, .capital-ribbon { margin-top: 10px; padding-top: 8px; }
-    .idx-item, .cap-item { padding: 0 18px; gap: 10px; }
-    .idx-item .nm, .cap-item .lbl { font-size: 11px; letter-spacing: 0.5px; }
-    .idx-item .val, .cap-item .val { font-size: 15px; }
-    .idx-item .dlt { font-size: 12px; }
-  }
-
-  /* Reduced-motion preference — disable any pulse / flash animations */
-  @media (prefers-reduced-motion: reduce) {
-    .idx-item .val, .cap-item .val { transition: none; }
-  }
-
-  /* ═════════════════════════════════════════════════════════════════════
-   * PR-B: mode switcher (☀️ Pre-Market · 🟢 Live · 🌙 Close · 📚 Research)
-   * Auto-selects from server-returned `phase`; manual override persists in
-   * localStorage. Each existing block tagged with data-modes="..."; the
-   * .mode-hidden class hides blocks not in the current mode.
-   * ═════════════════════════════════════════════════════════════════════ */
-  .mode-switch {
-    display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
-    margin-top: 6px; padding-top: 6px;
-    border-top: 1px solid var(--border);
-  }
-  .mode-pill {
-    background: var(--panel-2); color: var(--muted);
-    border: 1px solid var(--border); border-radius: 14px;
-    padding: 5px 11px; font-size: 11px; font-weight: 500;
-    cursor: pointer; min-height: 28px;
-    display: inline-flex; align-items: center; gap: 4px;
-    -webkit-tap-highlight-color: transparent;
-    transition: background 150ms, border-color 150ms, color 150ms;
-  }
-  .mode-pill:hover { color: var(--text); border-color: var(--muted); }
-  .mode-pill[aria-selected="true"] {
-    background: rgba(124,92,255,0.18); color: var(--accent);
-    border-color: var(--accent); font-weight: 600;
-  }
-  .mode-pill[aria-selected="true"][data-source="manual"] {
-    background: var(--accent); color: #fff;
-  }
-  .mode-status {
-    margin-left: auto; font-size: 10px; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.5px;
-    display: inline-flex; align-items: center; gap: 4px;
-  }
-  .mode-status .reset-auto {
-    background: none; border: none; color: var(--blue);
-    cursor: pointer; padding: 2px 4px; font-size: 10px;
-    text-transform: none; letter-spacing: 0;
-  }
-  .mode-status .reset-auto:hover { text-decoration: underline; }
-  /* Mode-hidden — driven by JS applyMode(). !important beats inline display. */
-  .mode-hidden { display: none !important; }
-
-  /* iPhone — stack mode pills tightly */
-  @media (max-width: 480px) {
-    .mode-switch { gap: 3px; margin-top: 4px; padding-top: 4px; }
-    .mode-pill { padding: 4px 8px; font-size: 10.5px; min-height: 26px; }
-    .mode-status { font-size: 9px; }
-    /* On phone hide emoji to save width — initial letter is enough */
-    .mode-pill .mode-icon { display: none; }
-  }
-  /* iPad and laptop — comfortable */
-  @media (min-width: 768px) {
-    .mode-pill { padding: 6px 13px; font-size: 12px; min-height: 32px; }
-    .mode-status { font-size: 11px; }
-  }
-  @media (min-width: 1280px) {
-    .mode-pill { padding: 7px 16px; font-size: 13px; min-height: 36px; }
-  }
-
-  /* ═════════════════════════════════════════════════════════════════════
-   * PR-C: unified watchlist rail — rich rows with inline SVG sparklines,
-   * tap-to-expand for sub-scores + alert price inputs + actions.
-   * Layout hooks (wl-rail-container) ready for PR-D's left-rail activation.
-   * ═════════════════════════════════════════════════════════════════════ */
-  .wl-section-h {
-    font-size: 10px; color: var(--muted); text-transform: uppercase;
-    letter-spacing: 0.6px; font-weight: 600;
-    margin: 14px 0 8px;
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .wl-section-h .count { color: var(--muted); font-weight: 500; }
-  .wl-row {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 10px; align-items: center;
-    padding: 10px 12px; margin-bottom: 4px;
-    background: var(--panel-2);
-    border: 1px solid var(--border); border-radius: 8px;
-    cursor: pointer;
-    transition: border-color 150ms, background 150ms;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .wl-row:hover { border-color: var(--accent); }
-  .wl-row[aria-expanded="true"] {
-    border-color: var(--accent);
-    background: rgba(124,92,255,0.08);
-  }
-  .wl-row.cascade { border-left: 3px solid var(--yellow); }
-  .wl-row .wl-sym {
-    display: flex; flex-direction: column; gap: 2px; min-width: 0;
-  }
-  .wl-row .wl-sym-line {
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  }
-  .wl-row .wl-sym-name {
-    font-weight: 700; font-size: 14px; color: var(--text);
-  }
-  .wl-row .wl-score-pill {
-    background: rgba(46,204,113,0.18); color: var(--green);
-    padding: 1px 7px; border-radius: 10px;
-    font-size: 10px; font-weight: 600;
-  }
-  .wl-row .wl-score-pill.lo { background: rgba(245,176,65,0.18); color: var(--yellow); }
-  .wl-row .wl-thesis {
-    font-size: 11px; color: var(--muted); line-height: 1.4;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .wl-row .wl-spark { line-height: 0; }
-  .wl-row .wl-price {
-    text-align: right; font-variant-numeric: tabular-nums;
-  }
-  .wl-row .wl-ltp { font-size: 13px; font-weight: 600; color: var(--text); }
-  .wl-row .wl-chg { font-size: 11px; font-weight: 600; }
-  .wl-row .wl-chg.pos { color: var(--green); }
-  .wl-row .wl-chg.neg { color: var(--red); }
-  .wl-row .wl-chg.flat { color: var(--muted); }
-
-  /* Inline SVG sparkline */
-  .spark { vertical-align: middle; display: inline-block; }
-  .spark polyline {
-    fill: none; stroke-width: 1.4;
-    stroke-linecap: round; stroke-linejoin: round;
-  }
-  .spark.spark-up polyline { stroke: var(--green); }
-  .spark.spark-dn polyline { stroke: var(--red); }
-  .spark.spark-flat polyline { stroke: var(--muted); }
-
-  /* Expanded row body */
-  .wl-row-body {
-    grid-column: 1 / -1;
-    margin-top: 10px; padding-top: 10px;
-    border-top: 1px solid var(--border);
-    display: none;
-  }
-  .wl-row[aria-expanded="true"] .wl-row-body { display: block; }
-  .wl-row-body .wl-subscores {
-    display: grid; grid-template-columns: repeat(7, 1fr);
-    gap: 4px; margin-bottom: 12px;
-  }
-  .wl-row-body .wl-subscore {
-    background: var(--panel); padding: 5px 4px; border-radius: 4px;
-    text-align: center; min-width: 0;
-  }
-  .wl-row-body .wl-subscore .lbl {
-    font-size: 8px; color: var(--muted); text-transform: uppercase;
-  }
-  .wl-row-body .wl-subscore .val {
-    font-size: 12px; font-weight: 600;
-  }
-  .wl-row-body .wl-subscore.hi .val { color: var(--green); }
-  .wl-row-body .wl-subscore.mid .val { color: var(--yellow); }
-  .wl-row-body .wl-subscore.lo .val { color: var(--muted); }
-  .wl-row-body .wl-alerts {
-    display: grid; grid-template-columns: 1fr 1fr;
-    gap: 8px; margin-bottom: 10px;
-  }
-  .wl-row-body .wl-alerts label {
-    display: flex; flex-direction: column; gap: 3px;
-  }
-  .wl-row-body .wl-alerts label span {
-    font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px;
-  }
-  .wl-row-body .wl-alerts input {
-    padding: 7px 9px; background: var(--panel); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text); font-size: 13px;
-    font-variant-numeric: tabular-nums;
-  }
-  .wl-row-body .wl-actions {
-    display: flex; gap: 6px; flex-wrap: wrap;
-  }
-  .wl-row-body .wl-actions .btn { padding: 7px 12px; font-size: 12px; min-height: 36px; }
-
-  /* Click-not-bubble guard for inputs/buttons inside expanded body */
-  .wl-row-body input, .wl-row-body button { cursor: default; }
-  .wl-row-body button { cursor: pointer; }
-
-  /* Empty state */
-  .wl-empty {
-    padding: 16px 12px; text-align: center;
-    color: var(--muted); font-size: 12px;
-    background: var(--panel-2); border: 1px dashed var(--border); border-radius: 8px;
-  }
-
-  /* Layout hook for PR-D — flips watchlistPanel into left-rail at ≥1024 */
-  /* Inactive in PR-C; PR-D adds .wl-rail-active class to enable */
-  .wl-rail-active #watchlistPanel { /* placeholder for PR-D */ }
-
-  /* iPhone — even denser grid */
-  @media (max-width: 480px) {
-    .wl-row { padding: 8px 10px; gap: 8px; }
-    .wl-row .wl-sym-name { font-size: 13px; }
-    .wl-row .wl-ltp { font-size: 12px; }
-    .wl-row .wl-thesis { display: none; }      /* save vertical space */
-    .wl-row-body .wl-subscores { grid-template-columns: repeat(4, 1fr); }
-  }
-  /* iPad and laptop — sparkline gets more horizontal room */
-  @media (min-width: 768px) {
-    .wl-row .wl-spark svg { width: 100px; height: 28px; }
-  }
-  @media (min-width: 1280px) {
-    .wl-row .wl-spark svg { width: 120px; height: 32px; }
-    .wl-row { padding: 12px 14px; }
-  }
-
-  /* ═════════════════════════════════════════════════════════════════════
-   * PR-D: 3-pane Trade Desk on iPad+
-   *   < 1024px         → single column (existing accordion behavior)
-   *   1024–1279        → 2-pane: left rail (watchlist) + center
-   *   ≥ 1280px         → 3-pane: left rail + center + right context
-   *
-   * Both rails are position:sticky inside <main> so they stay visible while
-   * the center pane scrolls. JS sets --sticky-top from header height.
-   * ═════════════════════════════════════════════════════════════════════ */
-  :root { --sticky-top: 220px; }   /* fallback; JS overrides on load + resize */
-
-  /* Right context pane — hidden by default until ≥1280 media query */
-  .context-pane { display: none; }
-  .context-pane h3 {
-    font-size: 11px; color: var(--muted); text-transform: uppercase;
-    letter-spacing: 0.5px; margin: 0 0 8px;
-  }
-  .context-pane .ctx-section {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
-  }
-  .context-pane .ctx-row {
-    padding: 6px 0;
-    border-bottom: 1px solid rgba(42,54,86,0.4);
-    font-size: 12px; line-height: 1.4;
-  }
-  .context-pane .ctx-row:last-child { border-bottom: none; }
-  .context-pane .ctx-row a {
-    color: var(--text); text-decoration: none;
-    display: block;
-  }
-  .context-pane .ctx-row a:hover { color: var(--accent); }
-  .context-pane .ctx-row .meta {
-    color: var(--muted); font-size: 10px; margin-top: 2px;
-  }
-  .context-pane .ctx-empty {
-    color: var(--muted); font-size: 12px; padding: 8px 0;
-    font-style: italic;
-  }
-  .context-pane .ctx-fii-row {
-    display: flex; justify-content: space-between; align-items: baseline;
-    padding: 6px 0; font-variant-numeric: tabular-nums;
-  }
-  .context-pane .ctx-fii-row strong { font-size: 14px; font-weight: 700; }
-  .context-pane .ctx-fii-row .pos { color: var(--green); }
-  .context-pane .ctx-fii-row .neg { color: var(--red); }
-
-  /* — 2-pane layout: 1024-1279 (iPad landscape, small laptop) — */
-  @media (min-width: 1024px) {
-    main {
-      display: grid;
-      grid-template-columns: 260px minmax(0, 1fr);
-      gap: 16px;
-      align-items: start;
-    }
-    /* Watchlist becomes left rail, sticky inside main */
-    main > #watchlistPanel {
-      grid-column: 1;
-      grid-row: 1 / span 99;     /* span all rows so other items default to col 2 */
-      position: sticky;
-      top: var(--sticky-top);
-      align-self: start;
-      max-height: calc(100vh - var(--sticky-top) - 24px);
-      overflow-y: auto;
-      margin-bottom: 0;
-      /* Keep rail content padding tight (already a panel) */
-    }
-    /* Watchlist scrollbar styling — hidden but functional */
-    main > #watchlistPanel::-webkit-scrollbar { width: 4px; }
-    main > #watchlistPanel::-webkit-scrollbar-track { background: transparent; }
-    main > #watchlistPanel::-webkit-scrollbar-thumb {
-      background: var(--border); border-radius: 2px;
-    }
-  }
-
-  /* — 3-pane layout: ≥1280 (iPad Pro landscape, laptop, desktop) — */
-  @media (min-width: 1280px) {
-    main {
-      grid-template-columns: 280px minmax(0, 1fr) 320px;
-    }
-    .context-pane {
-      display: block;
-      grid-column: 3;
-      grid-row: 1 / span 99;
-      position: sticky;
-      top: var(--sticky-top);
-      align-self: start;
-      max-height: calc(100vh - var(--sticky-top) - 24px);
-      overflow-y: auto;
-    }
-    .context-pane::-webkit-scrollbar { width: 4px; }
-    .context-pane::-webkit-scrollbar-track { background: transparent; }
-    .context-pane::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-  }
-
-  /* — Wide laptop ≥1600: roomier rails — */
-  @media (min-width: 1600px) {
-    main { grid-template-columns: 320px minmax(0, 1fr) 360px; }
-  }
-
-  /* ═════════════════════════════════════════════════════════════════════
-   * PR-E: OBSERVER MODE
-   * The user studies the engine, doesn't act. Auto-trader executes every
-   * order via Kite Wealth API. UI hides all "do something" affordances and
-   * replaces with "what the engine is doing / would do" displays.
-   *
-   * Driven by <body data-role="observer"> (default).
-   * Switch to <body data-role="trader"> via localStorage to see action buttons.
-   * ═════════════════════════════════════════════════════════════════════ */
-  .observer-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: rgba(124,92,255,0.18); color: var(--accent);
-    padding: 2px 8px; border-radius: 10px;
-    font-size: 10px; font-weight: 600; letter-spacing: 0.4px;
-    margin-left: 8px; vertical-align: middle;
-    text-transform: uppercase;
-  }
-  /* Hidden when user explicitly switches to trader mode */
-  body[data-role="trader"] .observer-badge { display: none; }
-
-  /* In observer mode, hide all action buttons + manual-input forms */
-  body[data-role="observer"] [data-observer="hide"],
-  body[data-role="observer"] .trade-card .actions,
-  body[data-role="observer"] .trade-card .checklist,
-  body[data-role="observer"] #manualPickerStep1,
-  body[data-role="observer"] #manualForm,
-  body[data-role="observer"] #pickerOpen { display: none !important; }
-
-  /* Show observer-only displays only in observer role */
-  [data-observer="show"] { display: none; }
-  body[data-role="observer"] [data-observer="show"] { display: block; }
-
-  /* "Engine play" summary — replaces the act buttons in observer mode */
-  .engine-play {
-    margin-top: 14px; padding: 12px 14px;
-    background: rgba(124,92,255,0.08);
-    border: 1px solid rgba(124,92,255,0.35);
-    border-radius: 10px;
-    font-size: 13px; line-height: 1.55;
-  }
-  .engine-play .play-line {
-    color: var(--text); font-weight: 500;
-  }
-  .engine-play .play-line strong { color: var(--accent); }
-  .engine-play .play-meta {
-    color: var(--muted); font-size: 11px; margin-top: 6px;
-  }
-
-  /* "Why this matters" sub-line — short educational copy under each section */
-  .layer-explainer {
-    color: var(--muted); font-size: 11px; line-height: 1.55;
-    margin: 4px 0 10px;
-    padding: 6px 10px;
-    background: var(--panel-2); border-left: 3px solid var(--accent);
-    border-radius: 0 6px 6px 0;
-  }
-  .layer-explainer strong { color: var(--text); }
-
-  /* Pre-launch banner restyle: smaller, less screaming */
-  body[data-role="observer"] #preLaunchBanner {
-    padding: 10px 14px;
-    background: rgba(245,176,65,0.08);
-    border: 1px solid rgba(245,176,65,0.35);
-  }
 </style>
 </head>
-<body data-role="observer">
-<script>
-  // PR-E: read userRole override from localStorage before any render
-  try {
-    const r = localStorage.getItem('userRole_v1');
-    if (r === 'trader') document.body.setAttribute('data-role', 'trader');
-  } catch(e) {}
-</script>
+<body>
 
 <div id="gate" class="pin-gate">
   <h2>Execute</h2>
@@ -819,22 +329,16 @@
 
 <div id="app" style="display:none">
   <header>
-    <!-- PR-E: explicit top row that wraps cleanly on phone, stays on one line on desktop -->
-    <div class="header-top">
-      <div class="left">
-        <h1 style="margin-bottom:6px">🎯 Execute <span id="observerBadge" class="observer-badge" title="You are observing. The auto-trader runs every order. You learn from what happens.">👁 OBSERVING</span></h1>
-        <nav class="tab-nav" aria-label="Views">
-          <a href="/trading/">🏠 Hub</a>
-          <a href="/trading/today/">📋 Today</a>
-          <a href="/trading/execute/" class="active">🎯 Execute</a>
-          <a href="/trading/ops/">⚙️ Ops</a>
-        </nav>
-        <div id="sysStatusBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px"></div>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">
-        <button id="alertsBell" onclick="toggleAlertsDrawer()" style="display:none;background:rgba(231,76,60,0.18);color:var(--red);border:1px solid var(--red);border-radius:14px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600;min-height:28px">🔔 <span id="alertsCount">0</span></button>
-        <div class="small" id="kiteStatus" style="text-align:right">Kite: …</div>
-      </div>
+    <div style="flex:1;min-width:0">
+      <h1 style="margin-bottom:6px">🎯 Execute</h1>
+      <nav class="tab-nav" aria-label="Views">
+        <a href="/trading/">🏠 Hub</a>
+        <a href="/trading/today/">📋 Today</a>
+        <a href="/trading/execute/" class="active">🎯 Execute</a>
+        <a href="/trading/ops/">⚙️ Ops</a>
+      </nav>
+      <div id="sysStatusBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px"></div>
+      <button id="alertsBell" onclick="toggleAlertsDrawer()" style="display:none;position:absolute;top:10px;right:90px;background:rgba(231,76,60,0.18);color:var(--red);border:1px solid var(--red);border-radius:14px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600">🔔 <span id="alertsCount">0</span></button>
       <div id="alertsDrawer" style="display:none;position:fixed;top:60px;right:14px;background:var(--panel);border:1px solid var(--red);border-radius:10px;padding:12px;max-width:380px;width:90vw;max-height:60vh;overflow-y:auto;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <strong style="font-size:14px">🔔 Alerts</strong>
@@ -843,76 +347,21 @@
         <div id="alertsList"></div>
       </div>
     </div>
-    <!-- ─── PR-B: mode switcher (auto-detects phase, manual override) ─── -->
-    <div class="mode-switch" role="tablist" aria-label="Trading day phase" style="width:100%">
-      <button class="mode-pill" data-mode="pre_market" role="tab" aria-selected="false" onclick="setMode('pre_market', 'manual')"><span class="mode-icon">☀️</span> Pre</button>
-      <button class="mode-pill" data-mode="live"       role="tab" aria-selected="false" onclick="setMode('live', 'manual')"><span class="mode-icon">🟢</span> Live</button>
-      <button class="mode-pill" data-mode="close"      role="tab" aria-selected="false" onclick="setMode('close', 'manual')"><span class="mode-icon">🌙</span> Close</button>
-      <button class="mode-pill" data-mode="research"   role="tab" aria-selected="false" onclick="setMode('research', 'manual')"><span class="mode-icon">📚</span> Research</button>
-      <span class="mode-status" id="modeStatus">AUTO</span>
-    </div>
-    <!-- ─── PR-A: persistent index strip ─── -->
-    <div id="indexStrip" class="index-strip" aria-live="polite" style="width:100%">
-      <div class="strip-skel">Loading market data…</div>
-    </div>
-    <!-- ─── PR-A: persistent capital ribbon ─── -->
-    <div id="capitalRibbon" class="capital-ribbon" aria-live="polite" style="width:100%">
-      <div class="strip-skel">Loading portfolio…</div>
-    </div>
+    <div class="small" id="kiteStatus" style="text-align:right">Kite: …</div>
   </header>
 
   <main>
     <!-- Pre-launch / shadow-run banner (visible only when block_real_orders=1) -->
     <div id="preLaunchBanner" style="display:none"></div>
 
-    <!-- PR-E: observer-mode intro — explains what you're looking at + every layer of intelligence -->
-    <details class="panel" id="observerIntro" data-observer="show" style="margin-bottom:14px;padding:14px;border-color:var(--accent);background:rgba(124,92,255,0.05)" open>
-      <summary style="cursor:pointer;list-style:none;font-size:15px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <span>👁 You're observing a 6-layer wealth engine</span>
-        <span class="small" style="color:var(--muted);font-weight:400">▼ what each layer does</span>
-      </summary>
-      <p class="small" style="margin-top:10px;line-height:1.6;color:var(--text)">
-        This dashboard shows what your <strong>auto-trader</strong> is doing — not what you should do.
-        Real orders fire via Kite Wealth API once shadow-run is unblocked. You watch, learn, and refine.
-      </p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:12px;font-size:12px;line-height:1.5">
-        <div class="layer-explainer">
-          <strong>L1 · Data Foundation.</strong> 61 sources → 50 D1 tables. NSE bhav, RBI rates, FII/DII, options OI,
-          news/social, GIFT Nifty, DXY, Brent, US10Y. Refreshed 5min–nightly via 10 Cloudflare Workers.
-        </div>
-        <div class="layer-explainer">
-          <strong>L2 · Signal Engine.</strong> Composite score 0–100 on 7 dims (Trend · Flow · Catalyst · Macro · Options · Sentiment · Breadth) for every Nifty-500 stock. + 5 cascade pattern detectors.
-        </div>
-        <div class="layer-explainer">
-          <strong>L3 · Risk Engine.</strong> 2% daily-loss cap · R:R ≥ 2:1 · tranche position sizing · auto stop/target.
-          Cards that fail R:R math never reach the UI.
-        </div>
-        <div class="layer-explainer">
-          <strong>L4 · Execution Bridge.</strong> Kite Connect API places MARKET BUY → polls fill → attaches GTT OCO (stop + target).
-          Stop-loss watcher cron monitors every 2 min. Tags <code>HN_WE_*</code>.
-        </div>
-        <div class="layer-explainer">
-          <strong>L5 · Decision UI.</strong> This page — Pre-Market / Live / Close / Research modes auto-shift by IST clock.
-          Watchlist shows engine's top picks; you set alert prices.
-        </div>
-        <div class="layer-explainer">
-          <strong>L6 · Observability.</strong> Cron health, source freshness, circuit breakers. Status pills near the title.
-          Traffic light at <code>/trading/ops/</code>: GREEN ≥ 90 → trade · YELLOW 70–89 → degraded · RED &lt; 70 → don't trade.
-        </div>
-      </div>
-      <p class="small" style="margin-top:12px;color:var(--muted);font-style:italic">
-        Switch to trader mode (full action UI) by running this in console: <code>localStorage.setItem('userRole_v1','trader');location.reload()</code>
-      </p>
-    </details>
-
     <!-- ═══ TODAY'S WATCHLIST — same shared component as /trading/today/ ═══
          Single source of truth for the rich pick-card design. Frozen candidate
          pool from Opus's 08:30 verdict + 3 ⭐ picks + full OHLC + ₹10L hypothetical
          per stock. Rendered by /trading/_lib/watchlist-component.js. ═══════════ -->
-    <div id="watchlistSection" data-modes="pre_market live"></div>
+    <div id="watchlistSection"></div>
 
     <!-- TODAY panel — briefing + market pulse + cascade chips + signal count -->
-    <div class="panel" id="todayPanel" data-modes="pre_market live" style="display:none;padding:16px">
+    <div class="panel" id="todayPanel" style="display:none;padding:16px">
       <h2 style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>📅 <span id="todayDate">Today</span></span>
         <span id="engineHealth" class="small" style="font-weight:400"></span>
@@ -925,21 +374,16 @@
     <!-- ── DESKTOP 2-COL GRID for context panels ── -->
     <div class="desktop-grid">
     <!-- ── PRE-MARKET BRIEFING ── (auto-collapsed during market hours, open pre-market) -->
-    <details class="panel" id="briefingPanel" data-modes="pre_market" open style="margin-bottom:14px;padding:14px">
+    <details class="panel" id="briefingPanel" open style="margin-bottom:14px;padding:14px">
       <summary style="cursor:pointer;list-style:none;font-size:18px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>🌅 Morning Briefing</span>
         <span class="small" style="color:var(--muted);font-weight:400">▼ what changed since yesterday</span>
       </summary>
-      <div class="layer-explainer" style="margin-top:10px">
-        <strong>Layer 1 → 5 — Pre-market roll-up.</strong> What changed overnight (US close · DXY · US10Y · Brent · Asian markets),
-        what India macro shifted (RBI · CPI · GST), what cascade patterns fired, what FII/DII did yesterday,
-        and which sectors are tilting. Composed once at 08:30 IST by Opus before market open.
-      </div>
       <div id="briefingContent" style="margin-top:10px"><div class="loading">Loading briefing…</div></div>
     </details>
 
     <!-- ── READINESS GATE ── (only shown if not yet ready) -->
-    <div class="panel" id="readinessPanel" data-observer="hide" style="display:none;margin-bottom:14px;padding:14px;border-color:var(--yellow);background:rgba(245,176,65,0.08)">
+    <div class="panel" id="readinessPanel" style="display:none;margin-bottom:14px;padding:14px;border-color:var(--yellow);background:rgba(245,176,65,0.08)">
       <h2 style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:17px">
         <span>🚦 Readiness check</span>
         <span id="readinessProgress" class="small" style="color:var(--muted);font-weight:400"></span>
@@ -950,36 +394,28 @@
       <div id="readinessGates"></div>
     </div>
 
-    <!-- ── WATCHLIST — engine-driven, zero manual curation ── -->
-    <details class="panel" id="watchlistPanel" data-modes="pre_market live" open style="margin-bottom:14px;padding:14px">
+    <!-- ── WATCHLIST ── -->
+    <details class="panel" id="watchlistPanel" open style="margin-bottom:14px;padding:14px">
       <summary style="cursor:pointer;list-style:none;font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>👀 Watchlist</span>
-        <span class="small" style="color:var(--muted);font-weight:400">▼ engine's live ranking · score ≥ 70</span>
+        <span class="small" style="color:var(--muted);font-weight:400">▼ stocks you're tracking + engine top picks</span>
       </summary>
       <div style="margin-top:12px">
-        <div class="layer-explainer">
-          <strong>Layer 2 — Signal Engine.</strong> Every stock in Nifty-500 is scored on 7 dimensions:
-          <strong>Trend</strong> (price vs DMAs · 20%) ·
-          <strong>Flow</strong> (institutional buying · 18%) ·
-          <strong>Catalyst</strong> (announcements · 15%) ·
-          <strong>Macro</strong> (sector tilt · 15%) ·
-          <strong>Options</strong> (OI/IV · 12%) ·
-          <strong>Sentiment</strong> (news+social · 10%) ·
-          <strong>Breadth</strong> (delivery % · 10%).
-          Recomputed nightly 19:00 IST + every hour during market.
-          Stocks scoring ≥ 70 surface here. Tap any row to set alert prices.
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <input id="wlSymbol" type="text" placeholder="SYMBOL (e.g. RELIANCE)" style="flex:1;min-width:160px;padding:8px 10px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;text-transform:uppercase">
+          <input id="wlThesis" type="text" placeholder="One-line thesis (optional)" style="flex:2;min-width:200px;padding:8px 10px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
+          <button onclick="addToWatchlist()" class="btn primary" style="padding:8px 14px">+ Add</button>
         </div>
-        <h4 class="wl-section-h" data-wl-section="engine" style="margin-top:0">
-          <span>🎯 Live engine ranking</span>
-          <span class="count">—</span>
-        </h4>
-        <div id="enginePicks"></div>
+        <h4 class="small" style="color:var(--muted);text-transform:uppercase;margin:10px 0 6px;letter-spacing:0.5px">Your watchlist</h4>
+        <div id="userWatchlist" class="small" style="color:var(--muted)">none yet</div>
+        <h4 class="small" style="color:var(--muted);text-transform:uppercase;margin:14px 0 6px;letter-spacing:0.5px">Engine top picks (auto)</h4>
+        <div id="enginePicks" class="small" style="color:var(--muted)">loading…</div>
       </div>
     </details>
     </div><!-- /.desktop-grid -->
 
     <!-- ── PAPER-TRADING TRACKER ── -->
-    <details class="panel" id="paperPanel" data-observer="hide" style="margin-bottom:14px;padding:14px;border-color:var(--blue)">
+    <details class="panel" id="paperPanel" style="margin-bottom:14px;padding:14px;border-color:var(--blue)">
       <summary style="cursor:pointer;list-style:none;font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>📝 Paper trades</span>
         <span class="small" id="paperSummaryLine" style="color:var(--muted);font-weight:400">▼ rehearse before going live</span>
@@ -1042,7 +478,7 @@
 
     <!-- MARKETS 101 — Learn Mode. Five lenses to understand today's market.
          Default-open while in shadow_run + learning_phase. -->
-    <details class="panel" id="markets101Panel" data-modes="research" style="margin-bottom:14px">
+    <details class="panel" id="markets101Panel" style="margin-bottom:14px">
       <summary style="cursor:pointer;list-style:none;font-size:18px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>📚 Markets 101 — Learn Mode</span>
         <span class="small" style="color:var(--muted);font-weight:400">▼ tap to collapse</span>
@@ -1056,7 +492,7 @@
     </details>
 
     <!-- Capital banner — collapsible on mobile, summary line shown -->
-    <details id="capitalDetails" data-observer="hide" style="margin-bottom:14px">
+    <details id="capitalDetails" style="margin-bottom:14px">
       <summary id="capitalSummary" style="cursor:pointer;padding:12px 14px;background:var(--panel);border:1px solid var(--border);border-radius:12px;list-style:none;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
         <span><strong>💰 Capital</strong></span>
         <span id="capitalSummaryLine" class="small" style="color:var(--muted);font-weight:500;flex:1;text-align:right">loading…</span>
@@ -1068,10 +504,10 @@
     <div id="blockers"></div>
 
     <!-- Trade cards (filtered for actionable 2:1 R:R math) -->
-    <div id="tradeCards" data-modes="live"></div>
+    <div id="tradeCards"></div>
 
     <!-- WATCH LIST — all signals ≥ 70 composite, even those skipped by R:R math (LEARNING VIEW) -->
-    <details class="panel" id="watchListDetails" data-modes="research" style="margin-bottom:14px;display:none">
+    <details class="panel" id="watchListDetails" style="margin-bottom:14px;display:none">
       <summary style="cursor:pointer;list-style:none;padding:0;margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
         <span><strong>🎓 Learning view — all signals</strong> <span id="watchListCount" class="small" style="color:var(--muted)"></span></span>
         <span class="small" style="color:var(--muted)">▼ what the engine sees + why some skip</span>
@@ -1084,7 +520,7 @@
     </details>
 
     <!-- Active positions -->
-    <div class="panel" id="positionsPanel" data-modes="live close" style="display:none">
+    <div class="panel" id="positionsPanel" style="display:none">
       <h2>📍 Active Positions</h2>
       <div class="pos-row" style="font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px">
         <div>Tranche</div><div>Symbol</div><div class="num">Entry</div>
@@ -1094,7 +530,7 @@
     </div>
 
     <!-- ═════════ KITE TRADE DESK — full execution surface ═════════ -->
-    <details class="panel" id="tradeDeskPanel" data-modes="live close" data-observer="hide" style="margin-bottom:14px;padding:14px;border-color:var(--accent)">
+    <details class="panel" id="tradeDeskPanel" style="margin-bottom:14px;padding:14px;border-color:var(--accent)">
       <summary style="cursor:pointer;list-style:none;font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>🎛 Kite Trade Desk</span>
         <span class="small" id="tdSummary" style="color:var(--muted);font-weight:400">▼ orders · GTTs · funds · holdings</span>
@@ -1115,14 +551,14 @@
     </details>
 
     <!-- Kite holdings (LEGACY — kept for backward compatibility, hidden) -->
-    <div class="panel" id="kiteHoldingsPanel" data-modes="live close" style="display:none">
+    <div class="panel" id="kiteHoldingsPanel" style="display:none">
       <h2>💼 Kite Holdings (live)</h2>
       <p class="small" style="margin-bottom:10px">Synced from Zerodha every 5 min during market. P&L is real-time.</p>
       <div id="kiteHoldingsTable"></div>
     </div>
 
     <!-- Recent Kite orders (today's activity log) -->
-    <div class="panel" id="kiteActivityPanel" data-modes="live close" style="display:none">
+    <div class="panel" id="kiteActivityPanel" style="display:none">
       <h2>📋 Today's Kite Activity</h2>
       <p class="small" style="margin-bottom:10px">Every order placed today (engine + manual). Tags filter engine-placed (HN_WE_*).</p>
       <div id="kiteActivityTable"></div>
@@ -1142,22 +578,6 @@
         <div class="item">✅ <span><strong>Rule 8:</strong> After 3 losses, week off — system enters cooldown</span></div>
       </div>
     </details>
-
-    <!-- ─── PR-D: right context pane (≥1280px, live + close modes) ─── -->
-    <aside class="context-pane" id="contextPane" data-modes="live close" aria-label="Context sidebar">
-      <div class="ctx-section">
-        <h3>⚡ Cascades firing</h3>
-        <div id="ctxCascadesList" class="ctx-empty">Loading…</div>
-      </div>
-      <div class="ctx-section">
-        <h3>🌊 FII / DII flow</h3>
-        <div id="ctxFIIBody" class="ctx-empty">Loading…</div>
-      </div>
-      <div class="ctx-section">
-        <h3>📰 Recent news</h3>
-        <div id="ctxNewsList" class="ctx-empty">Loading…</div>
-      </div>
-    </aside>
   </main>
 </div>
 
@@ -1190,291 +610,13 @@ async function loadAll() {
   return r.json();
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// PR-A — persistent top strip (indices + capital ribbon)
-// One round-trip every 30s while tab is visible. Single source of truth
-// at /api/trading?action=top_strip — keeps strip atomic, no race.
-// ═══════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════
-// PR-D — 3-pane Trade Desk: sticky offset measurement + context pane
-// ═══════════════════════════════════════════════════════════════════
-function updateStickyOffset() {
-  const h = document.querySelector('header');
-  if (!h) return;
-  const offset = h.offsetHeight + 8;       // 8px breathing room below header
-  document.documentElement.style.setProperty('--sticky-top', offset + 'px');
-}
-
-async function loadContextPane() {
-  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-  // Only fetch when right pane is actually visible (live or close mode + ≥1280px)
-  const pane = document.getElementById('contextPane');
-  if (!pane || pane.classList.contains('mode-hidden')) return;
-  if (!_currentMode || !['live', 'close'].includes(_currentMode)) return;
-
-  // 3 parallel fetches — existing endpoints, no new server work
-  try {
-    const k = encodeURIComponent(DASHBOARD_KEY);
-    const [casc, fii, news] = await Promise.all([
-      fetch('/api/trading?action=cascades&key=' + k).then(r => r.json()).catch(() => null),
-      fetch('/api/trading?action=fii_dii&key=' + k).then(r => r.json()).catch(() => null),
-      fetch('/api/trading?action=news&limit=6&key=' + k).then(r => r.json()).catch(() => null),
-    ]);
-    renderContextPane({ cascades: casc, fii, news });
-  } catch (e) { /* context pane is informational; never block UI */ }
-}
-
-function renderContextPane(d) {
-  // ── Cascades firing ──
-  const cEl = document.getElementById('ctxCascadesList');
-  if (cEl) {
-    const items = ((d.cascades && d.cascades.cascades) || []).slice(0, 4);
-    cEl.innerHTML = items.length === 0
-      ? `<div class="ctx-empty">No cascades firing right now.</div>`
-      : items.map(c => {
-          const syms = (c.affected_symbols || '').replace(/[\[\]"]/g, '').split(',').slice(0, 3).join(', ');
-          const win = c.historical_win_rate != null ? Math.round(c.historical_win_rate * 100) + '%' : '—';
-          return `<div class="ctx-row">
-            <strong>⚡ ${escapeHtml(c.pattern_name || 'cascade')}</strong>
-            <div class="meta">${escapeHtml(syms || 'broad')} · win rate ${win}</div>
-          </div>`;
-        }).join('');
-  }
-
-  // ── FII / DII ──
-  const fEl = document.getElementById('ctxFIIBody');
-  if (fEl) {
-    const rows = (d.fii && d.fii.rows) || [];
-    // Pick latest cash segment row (most users care about cash flow)
-    const latest = rows.find(r => r.segment === 'cash') || rows[0];
-    if (latest) {
-      const fiiNet = latest.fii_net_cr || 0;
-      const diiNet = latest.dii_net_cr || 0;
-      const fmt = v => (v >= 0 ? '+' : '−') + '₹' + Math.abs(v).toFixed(0) + ' cr';
-      fEl.innerHTML = `
-        <div class="ctx-fii-row">
-          <span style="color:var(--muted)">FII (${escapeHtml(latest.segment || 'cash')})</span>
-          <strong class="${fiiNet >= 0 ? 'pos' : 'neg'}">${fmt(fiiNet)}</strong>
-        </div>
-        <div class="ctx-fii-row">
-          <span style="color:var(--muted)">DII</span>
-          <strong class="${diiNet >= 0 ? 'pos' : 'neg'}">${fmt(diiNet)}</strong>
-        </div>
-        <div class="meta" style="margin-top:6px;color:var(--muted);font-size:10px">${latest.trade_date}</div>
-      `;
-    } else {
-      fEl.innerHTML = `<div class="ctx-empty">No FII/DII data yet.</div>`;
-    }
-  }
-
-  // ── News ──
-  const nEl = document.getElementById('ctxNewsList');
-  if (nEl) {
-    const items = ((d.news && d.news.rows) || []).slice(0, 6);
-    nEl.innerHTML = items.length === 0
-      ? `<div class="ctx-empty">No recent news.</div>`
-      : items.map(n => {
-          const t = n.published_at ? relTimeShort(n.published_at) : '';
-          const url = n.url || '#';
-          return `<div class="ctx-row">
-            <a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(n.headline || n.title || '(untitled)')}</a>
-            <div class="meta">${escapeHtml(n.source || '')} ${t ? '· ' + t : ''}</div>
-          </div>`;
-        }).join('');
-  }
-}
-
-function relTimeShort(ts) {
-  const dt = Math.round((Date.now() - ts) / 1000);
-  if (dt < 60) return dt + 's';
-  if (dt < 3600) return Math.round(dt / 60) + 'm';
-  if (dt < 86400) return Math.round(dt / 3600) + 'h';
-  return Math.round(dt / 86400) + 'd';
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// PR-B — mode switcher (☀️ Pre-Market · 🟢 Live · 🌙 Close · 📚 Research)
-// Default: AUTO — follows server-returned phase from /api/trading?action=top_strip.
-// User taps a pill → MANUAL — locked to that mode, persists in localStorage.
-// "AUTO" link in mode-status row clears manual override.
-// ═══════════════════════════════════════════════════════════════════
-const MODES = ['pre_market', 'live', 'close', 'research'];
-const MODE_STORE_KEY = 'tradeDeskMode_v1';
-let _currentMode = null;
-let _modeSource  = 'auto';   // 'auto' | 'manual'
-let _serverPhase = null;     // most recent phase reported by server
-
-function setMode(mode, source = 'auto') {
-  if (!MODES.includes(mode)) return;
-  _currentMode = mode;
-  _modeSource = source;
-  if (source === 'manual') {
-    try { localStorage.setItem(MODE_STORE_KEY, mode); } catch (e) {}
-  }
-  applyMode();
-}
-
-function clearManualMode() {
-  _modeSource = 'auto';
-  try { localStorage.removeItem(MODE_STORE_KEY); } catch (e) {}
-  if (_serverPhase) setMode(_serverPhase, 'auto');
-  else applyMode();
-}
-
-function applyMode() {
-  if (!_currentMode) return;
-  // 1) Hide/show every block tagged with data-modes
-  document.querySelectorAll('[data-modes]').forEach(el => {
-    const modes = (el.dataset.modes || '').trim().split(/\s+/);
-    const visible = modes.includes(_currentMode) || modes.includes('all');
-    el.classList.toggle('mode-hidden', !visible);
-  });
-  // 2) Update pill aria-selected + data-source
-  document.querySelectorAll('.mode-pill').forEach(p => {
-    const sel = p.dataset.mode === _currentMode;
-    p.setAttribute('aria-selected', sel ? 'true' : 'false');
-    if (sel) p.dataset.source = _modeSource;
-    else p.removeAttribute('data-source');
-  });
-  // 3) Update status indicator
-  const st = document.getElementById('modeStatus');
-  if (st) {
-    if (_modeSource === 'manual') {
-      st.innerHTML = `MANUAL <button class="reset-auto" onclick="clearManualMode()" aria-label="Reset to auto mode">↺ auto</button>`;
-    } else {
-      st.textContent = 'AUTO';
-    }
-  }
-  // 4) PR-D: refresh right context pane on mode change (e.g. switching into Live)
-  if (typeof loadContextPane === 'function') loadContextPane();
-  // 5) PR-D: re-measure sticky offset (header height changes on tier breaks)
-  if (typeof updateStickyOffset === 'function') updateStickyOffset();
-}
-
-function bootMode() {
-  // Read manual override from localStorage if present
-  let stored = null;
-  try { stored = localStorage.getItem(MODE_STORE_KEY); } catch (e) {}
-  if (stored && MODES.includes(stored)) {
-    setMode(stored, 'manual');
-  }
-  // Otherwise wait for top_strip's first response to set auto-mode
-}
-
-let _stripLastUpdate = 0;
-async function loadTopStrip() {
-  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-  try {
-    const r = await fetch('/api/trading?action=top_strip&key=' + encodeURIComponent(DASHBOARD_KEY));
-    if (!r.ok) return;
-    const j = await r.json();
-    renderTopStrip(j);
-    _stripLastUpdate = Date.now();
-    tickStripMeta();
-  } catch (e) { /* silent — strip is informational only */ }
-}
-
-// Update the "updated 4s ago" meta every 5s without re-fetching
-function tickStripMeta() {
-  const el = document.getElementById('capUpdated');
-  if (!el || !_stripLastUpdate) return;
-  const dt = Math.round((Date.now() - _stripLastUpdate) / 1000);
-  el.textContent = dt < 5  ? 'just now'
-                 : dt < 60 ? dt + 's ago'
-                 :           Math.round(dt / 60) + 'm ago';
-}
-
-function renderTopStrip(j) {
-  // PR-B: capture server phase + apply auto-mode if user hasn't picked manually
-  if (j && j.phase) {
-    _serverPhase = j.phase;
-    if (_modeSource === 'auto' && _currentMode !== j.phase) {
-      setMode(j.phase, 'auto');
-    }
-  }
-
-  // ── Index strip: NIFTY 50, BANK NIFTY, INDIA VIX, USDINR ──
-  const idxEl = document.getElementById('indexStrip');
-  if (idxEl) {
-    const findIdx = nm => (j.indices || []).find(i => i.name === nm);
-    const usd = j.crossasset && j.crossasset.USDINR;
-    const items = [];
-
-    const fmtIdx = (label, value, change_pct, opts = {}) => {
-      if (value == null || isNaN(value)) return '';
-      const cls = change_pct == null ? 'flat' : (change_pct > 0.01 ? 'up' : change_pct < -0.01 ? 'dn' : 'flat');
-      const arrow = cls === 'up' ? '▴' : cls === 'dn' ? '▾' : '·';
-      const sign = change_pct > 0 ? '+' : '';
-      const dlt = change_pct == null ? '' : `<span class="dlt ${cls}">${arrow} ${sign}${change_pct.toFixed(2)}%</span>`;
-      const valStr = opts.fmt === 'inr' ? '₹' + value.toFixed(2)
-                   : opts.fmt === 'vix' ? value.toFixed(1)
-                   : Math.round(value).toLocaleString('en-IN');
-      return `<span class="idx-item" data-pri="${opts.pri || 1}">
-        <span class="nm">${label}</span>
-        <span class="val">${valStr}</span>
-        ${dlt}
-      </span>`;
-    };
-
-    const n50 = findIdx('NIFTY 50');
-    if (n50) items.push(fmtIdx('NIFTY', n50.value, n50.change_pct, { pri: 1 }));
-    const bnk = findIdx('NIFTY BANK');
-    if (bnk) items.push(fmtIdx('BANKNIFTY', bnk.value, bnk.change_pct, { pri: 2 }));
-    const vix = findIdx('INDIA VIX');
-    if (vix) items.push(fmtIdx('VIX', vix.value, vix.change_pct, { fmt: 'vix', pri: 1 }));
-    if (usd && usd.value) items.push(fmtIdx('USDINR', usd.value, usd.change_pct, { fmt: 'inr', pri: 2 }));
-
-    idxEl.innerHTML = items.join('') ||
-      `<div class="strip-skel">market data warming up — engine cron seeds indices_eod after first run</div>`;
-  }
-
-  // ── Capital ribbon: total · deployed · positions · today's P&L ──
-  const capEl = document.getElementById('capitalRibbon');
-  if (capEl && j.capital) {
-    const c = j.capital;
-    const fmtCr = p => '₹' + Math.round(p / 100).toLocaleString('en-IN');
-    const fmtPnl = p => {
-      const r = Math.round(p / 100);
-      const sign = r > 0 ? '+' : r < 0 ? '−' : '';
-      return sign + '₹' + Math.abs(r).toLocaleString('en-IN');
-    };
-    const pnlCls = c.today_pnl_paise > 0 ? 'pnl-pos'
-                 : c.today_pnl_paise < 0 ? 'pnl-neg' : '';
-    const shadowCls = c.block_real_orders ? 'shadow' : '';
-
-    capEl.innerHTML = `
-      <span class="cap-item ${shadowCls}" data-pri="2">
-        <span class="lbl">Capital</span>
-        <span class="val">${fmtCr(c.total_paise)}</span>
-      </span>
-      <span class="cap-item" data-pri="1">
-        <span class="lbl">Deployed</span>
-        <span class="val">${fmtCr(c.deployed_paise)} <span style="color:var(--muted);font-weight:500;font-size:10px">(${(c.deployed_pct||0).toFixed(1)}%)</span></span>
-      </span>
-      <span class="cap-item" data-pri="2">
-        <span class="lbl">Positions</span>
-        <span class="val">${c.position_count}</span>
-      </span>
-      <span class="cap-item ${pnlCls}" data-pri="1">
-        <span class="lbl">Today P&amp;L</span>
-        <span class="val">${fmtPnl(c.today_pnl_paise)}</span>
-      </span>
-      <span class="strip-meta">updated <span id="capUpdated">just now</span></span>
-    `;
-  }
-}
-
 // Shared watchlist component handle (auto-refreshes every 30s while page open)
 let _sharedWatchlistHandle = null;
 
 function showApp(j) {
   document.getElementById('gate').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  bootMode();                           // PR-B: pick up manual override before render
   render(j);
-  updateStickyOffset();                 // PR-D: measure header height for sticky rails
-  loadTopStrip();                       // PR-A: paint strip + first auto-mode resolution
-  loadContextPane();                    // PR-D: paint right context pane (≥1280, live+close)
   refreshKiteStatus();
   loadMarkets101();
   loadMorningBriefing();
@@ -1502,20 +644,6 @@ function showApp(j) {
   setInterval(loadReadiness, 120000);
   // Alerts every 60s
   setInterval(loadAlerts, 60000);
-  // PR-A: top strip — 30s data refresh during market, paused while tab hidden
-  setInterval(loadTopStrip, 30000);
-  // 5s relative-time ticker for the "updated Ns ago" meta (laptop only)
-  setInterval(tickStripMeta, 5000);
-  // PR-D: right context pane — 60s refresh during live/close modes
-  setInterval(loadContextPane, 60000);
-  // PR-D: re-measure sticky offset when window resizes (orientation change, etc)
-  window.addEventListener('resize', updateStickyOffset);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      loadTopStrip();
-      loadContextPane();
-    }
-  });
 }
 
 async function refresh() {
@@ -1879,44 +1007,24 @@ function renderCard(c) {
       <div class="cell"><div class="label">Max loss / gain</div><div class="value" style="font-size:13px"><span class="neg">-${fmt(c.max_loss_paise)}</span> / <span class="pos">+${fmt(c.max_gain_paise)}</span></div></div>
     </div>
 
-    <!-- PR-E: observer-mode "Engine play" summary (replaces action buttons) -->
-    <div class="engine-play" data-observer="show">
-      <div class="play-line">
-        🤖 <strong>Engine play:</strong> would BUY <strong>${c.qty}</strong> <strong>${c.symbol}</strong>
-        at ${fmtP(c.entry_paise)} — stop ${fmtP(c.stop_paise)} (-${c.stop_pct}%),
-        target ${fmtP(c.target_paise)} (+${c.target_pct.toFixed(1)}%),
-        R:R <strong>${c.rr_ratio}:1</strong>.
-      </div>
-      <div class="play-meta">
-        Capital deployed ${fmt(c.capital_deployed_paise)} (${c.capital_deployed_pct}% of total).
-        Max loss <span class="neg">-${fmt(c.max_loss_paise)}</span> · max gain <span class="pos">+${fmt(c.max_gain_paise)}</span>.
-        ${c.cascade_match ? '<span class="pill warn" style="margin-left:6px">⚡ cascade-driven</span>' : ''}
-      </div>
-      <div class="play-meta" style="margin-top:8px;font-style:italic;color:var(--muted)">
-        Auto-trader handles execution via Kite Wealth API once real-orders are unblocked. You observe.
-      </div>
+    <div class="checklist">
+      <h4>The 3-question test before you trade</h4>
+      <div class="item"><input type="checkbox" id="q1-${c.symbol}"> <label for="q1-${c.symbol}"><strong>Q1 Logic:</strong> Can I explain in one sentence why this should go up? <em>(${c.rationale.slice(0, 80)}...)</em></label></div>
+      <div class="item"><input type="checkbox" id="q2-${c.symbol}"> <label for="q2-${c.symbol}"><strong>Q2 Risk:</strong> If wrong, max loss is ${fmt(c.max_loss_paise)}. Can I sleep with that?</label></div>
+      <div class="item"><input type="checkbox" id="q3-${c.symbol}"> <label for="q3-${c.symbol}"><strong>Q3 Reward:</strong> Reward:risk is ${c.rr_ratio}:1. Math works.</label></div>
     </div>
 
-    <!-- Trader-mode UI (only shown when localStorage userRole_v1='trader') -->
-    <div data-observer="hide">
-      <div class="checklist">
-        <h4>The 3-question test before you trade</h4>
-        <div class="item"><input type="checkbox" id="q1-${c.symbol}"> <label for="q1-${c.symbol}"><strong>Q1 Logic:</strong> Can I explain in one sentence why this should go up? <em>(${c.rationale.slice(0, 80)}...)</em></label></div>
-        <div class="item"><input type="checkbox" id="q2-${c.symbol}"> <label for="q2-${c.symbol}"><strong>Q2 Risk:</strong> If wrong, max loss is ${fmt(c.max_loss_paise)}. Can I sleep with that?</label></div>
-        <div class="item"><input type="checkbox" id="q3-${c.symbol}"> <label for="q3-${c.symbol}"><strong>Q3 Reward:</strong> Reward:risk is ${c.rr_ratio}:1. Math works.</label></div>
-      </div>
-      <div class="actions">
-        <button id="confirm-${c.symbol}" disabled onclick='openConfirmModal(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="btn primary" data-needs-3q>
-          🚀 CONFIRM &amp; PLACE — ${c.qty} ${c.symbol}
-        </button>
-        <button onclick='openPaperFromCard(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="btn" style="background:rgba(79,163,255,0.18);color:var(--blue);border:1px solid var(--blue)">
-          📝 Paper trade
-        </button>
-        <button onclick="dismissCard('${c.symbol}')" class="btn">
-          🚫 Pass
-        </button>
-        <span class="small" style="margin-left:8px;color:var(--muted)">Tick all 3 boxes to enable Confirm. Paper-trade always available.</span>
-      </div>
+    <div class="actions">
+      <button id="confirm-${c.symbol}" disabled onclick='openConfirmModal(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="btn primary" data-needs-3q>
+        🚀 CONFIRM &amp; PLACE — ${c.qty} ${c.symbol}
+      </button>
+      <button onclick='openPaperFromCard(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="btn" style="background:rgba(79,163,255,0.18);color:var(--blue);border:1px solid var(--blue)">
+        📝 Paper trade
+      </button>
+      <button onclick="dismissCard('${c.symbol}')" class="btn">
+        🚫 Pass
+      </button>
+      <span class="small" style="margin-left:8px;color:var(--muted)">Tick all 3 boxes to enable Confirm. Paper-trade always available.</span>
     </div>
   </div>`;
 }
@@ -2821,226 +1929,52 @@ async function populateSymbolAutocomplete() {
   } catch {}
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// PR-C — unified watchlist rail with inline SVG sparklines + tap-to-expand.
-// Each row: symbol · score/thesis · LTP · change% · 30-day sparkline.
-// Tap row → expand to show full sub-scores + alert price inputs + actions.
-// ═══════════════════════════════════════════════════════════════════
-const SPARK_CACHE = {};   // symbol → array<{d, c}>  (in-memory, refreshed on each watchlist load)
-
-// Render a polyline sparkline from an array of close prices.
-function svgSparkline(closes, opts) {
-  opts = opts || {};
-  if (!closes || closes.length < 2) {
-    return `<svg class="spark spark-flat" width="${opts.w||80}" height="${opts.h||24}"></svg>`;
-  }
-  const w = opts.w || 80, h = opts.h || 24;
-  let min = Infinity, max = -Infinity;
-  for (const c of closes) { if (c < min) min = c; if (c > max) max = c; }
-  const range = (max - min) || 1;
-  const last = closes.length - 1;
-  let pts = '';
-  for (let i = 0; i <= last; i++) {
-    const x = (i / last) * (w - 2) + 1;
-    const y = h - ((closes[i] - min) / range) * (h - 2) - 1;
-    pts += (i ? ' ' : '') + x.toFixed(1) + ',' + y.toFixed(1);
-  }
-  const trend = closes[last] >= closes[0] ? 'up' : 'dn';
-  return `<svg class="spark spark-${trend}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
-    <polyline points="${pts}" />
-  </svg>`;
-}
-
 function renderWatchlist(j) {
-  // PR-D.1: engine-only watchlist — no user-curated list, no manual add.
-  // Alert prices are still user-set (in expanded row), but they piggyback
-  // the existing user_watchlist table as a hidden "alerts" store.
+  const userEl = document.getElementById('userWatchlist');
   const engineEl = document.getElementById('enginePicks');
-  if (!engineEl) return;
-  // Build a quick lookup of any alert prices the user has saved for engine
-  // picks (so the expanded row pre-fills above/below inputs).
-  const alertsBySym = {};
-  (j.user_watchlist || []).forEach(u => {
-    alertsBySym[u.symbol] = { alert_above: u.alert_above, alert_below: u.alert_below, id: u.id };
-  });
+  if (!userEl || !engineEl) return;
 
-  const renderRow = (s, isEngine) => {
-    const alertRec = alertsBySym[s.symbol] || {};
-    const id = isEngine ? `wl-eng-${s.symbol}` : `wl-usr-${s.id}`;
+  const renderItem = (s, isEngine = false) => {
     const ltp = s.latest;
-    const chg = ltp && ltp.prev_close_paise > 0
-      ? ((ltp.close_paise - ltp.prev_close_paise) / ltp.prev_close_paise * 100)
-      : null;
-    const chgCls = chg == null ? 'flat' : chg > 0.01 ? 'pos' : chg < -0.01 ? 'neg' : 'flat';
-    const chgStr = chg == null ? '—' : (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
-    const ltpStr = ltp ? '₹' + (ltp.close_paise / 100).toFixed(2) : '—';
-
-    // Score pill or thesis in subline
-    const scorePill = (isEngine && s.composite_score != null)
-      ? `<span class="wl-score-pill ${s.composite_score >= 75 ? '' : 'lo'}">${s.composite_score.toFixed(0)}</span>`
-      : '';
-    const subLine = isEngine
-      ? (s.cascade_match ? '<span class="wl-thesis">⚡ cascade firing</span>' : `<span class="wl-thesis">engine pick</span>`)
-      : (s.thesis ? `<span class="wl-thesis">${escapeHtml(s.thesis)}</span>` : '<span class="wl-thesis" style="opacity:0.5">no thesis</span>');
-
-    const cascadeCls = (isEngine && s.cascade_match) ? 'cascade' : '';
-    // Pre-fill alerts from alertsBySym (engine picks pull saved alerts by symbol)
-    const aboveVal = isEngine ? alertRec.alert_above : s.alert_above;
-    const belowVal = isEngine ? alertRec.alert_below : s.alert_below;
-    const userAlertId = isEngine ? alertRec.id : s.id;
-    const subData = JSON.stringify({
-      symbol: s.symbol, isEngine, id: userAlertId || null,
-      sub_scores: isEngine ? {
-        Trend: s.trend_score, Flow: s.flow_score,
-        Catalyst: s.catalyst_score, Macro: s.macro_score,
-        Options: s.options_score, Sentiment: s.sentiment_score, Breadth: s.breadth_score,
-      } : null,
-      alert_above: aboveVal, alert_below: belowVal,
-      thesis: s.thesis,
-    }).replace(/'/g, '&apos;');
-
-    return `<div class="wl-row ${cascadeCls}" id="${id}" role="button" aria-expanded="false"
-                 onclick="toggleWatchRow('${id}', '${subData}')">
-      <div class="wl-sym">
-        <div class="wl-sym-line">
-          <span class="wl-sym-name">${s.symbol}</span>
-          ${scorePill}
-        </div>
-        ${subLine}
+    const chg = ltp && ltp.prev_close_paise > 0 ? ((ltp.close_paise - ltp.prev_close_paise) / ltp.prev_close_paise * 100).toFixed(2) : null;
+    const cls = chg && chg >= 0 ? 'pos' : 'neg';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(42,54,86,0.3);font-size:13px">
+      <div style="flex:1;min-width:0">
+        <strong>${s.symbol}</strong>
+        ${s.thesis ? `<div class="small" style="color:var(--muted);font-size:11px;margin-top:2px">${s.thesis}</div>` : ''}
+        ${isEngine && s.composite_score ? `<span class="pill ok" style="font-size:9px;padding:1px 5px;margin-left:6px">${s.composite_score.toFixed(0)}</span>` : ''}
       </div>
-      <div class="wl-spark" data-spark-sym="${s.symbol}">
-        ${SPARK_CACHE[s.symbol] ? svgSparkline(SPARK_CACHE[s.symbol]) : svgSparkline(null)}
+      <div style="text-align:right;font-variant-numeric:tabular-nums;flex-shrink:0">
+        ${ltp ? `<div style="font-size:13px">₹${(ltp.close_paise/100).toFixed(2)}</div>` : '<span class="small" style="color:var(--muted)">no price</span>'}
+        ${chg ? `<div class="small ${cls}" style="font-size:11px">${chg >= 0 ? '+' : ''}${chg}%</div>` : ''}
       </div>
-      <div class="wl-price">
-        <div class="wl-ltp">${ltpStr}</div>
-        <div class="wl-chg ${chgCls}">${chgStr}</div>
-      </div>
-      <div class="wl-row-body" id="${id}-body" onclick="event.stopPropagation()"></div>
+      ${!isEngine ? `<button onclick="removeFromWatchlist(${s.id})" class="btn" style="padding:3px 7px;font-size:11px;min-height:auto;margin-left:8px;background:rgba(231,76,60,0.18);color:var(--red);border:1px solid var(--red)">×</button>` : ''}
     </div>`;
   };
 
-  // — Engine picks (the only watchlist surface) —
+  userEl.innerHTML = (j.user_watchlist?.length > 0)
+    ? j.user_watchlist.map(s => renderItem(s, false)).join('')
+    : '<span class="small" style="color:var(--muted)">No symbols added. Try RELIANCE, HDFCBANK, INFY.</span>';
   engineEl.innerHTML = (j.engine_picks?.length > 0)
-    ? j.engine_picks.map(s => renderRow(s, true)).join('')
-    : `<div class="wl-empty">Engine ranking populates when signal_scores has stocks scoring ≥ 70 — usually after the next nightly recompute (19:00 IST) or hourly market update.</div>`;
-
-  // Update count
-  const engH = document.querySelector('h4[data-wl-section="engine"]');
-  if (engH) engH.querySelector('.count').textContent = (j.engine_picks?.length || 0) + ' stocks';
-
-  // Fire batched sparkline fetch
-  const symbols = (j.engine_picks || []).map(s => s.symbol);
-  if (symbols.length > 0) loadSparklines([...new Set(symbols)]);
+    ? j.engine_picks.map(s => renderItem(s, true)).join('')
+    : '<span class="small" style="color:var(--muted)">Engine top picks will populate when signal_scores has data above threshold.</span>';
 }
 
-async function loadSparklines(symbols) {
-  // Skip ones we already have cached (cheap; no re-fetch on every loadWatchlist)
-  const need = symbols.filter(s => !SPARK_CACHE[s]);
-  if (need.length === 0) return;
-  try {
-    const url = '/api/trading?action=watchlist_sparklines&days=30&symbols=' +
-                encodeURIComponent(need.join(',')) +
-                '&key=' + encodeURIComponent(DASHBOARD_KEY);
-    const r = await fetch(url);
-    const j = await r.json();
-    if (!j.data) return;
-    for (const sym of Object.keys(j.data)) {
-      const closes = j.data[sym].map(p => p.c);
-      SPARK_CACHE[sym] = closes;
-      // Re-paint that row's sparkline cell in place (no full re-render)
-      document.querySelectorAll(`[data-spark-sym="${sym}"]`).forEach(el => {
-        el.innerHTML = svgSparkline(closes);
-      });
-    }
-  } catch (e) { /* sparklines are decorative; never block UI */ }
-}
-
-function toggleWatchRow(rowId, dataJson) {
-  const row = document.getElementById(rowId);
-  if (!row) return;
-  const expanded = row.getAttribute('aria-expanded') === 'true';
-  // Collapse all others (single-expand to keep the rail clean)
-  document.querySelectorAll('.wl-row[aria-expanded="true"]').forEach(r => {
-    r.setAttribute('aria-expanded', 'false');
-  });
-  if (expanded) return;   // was open → just closed
-  row.setAttribute('aria-expanded', 'true');
-
-  const body = document.getElementById(rowId + '-body');
-  if (!body) return;
-  const data = JSON.parse(dataJson.replace(/&apos;/g, "'"));
-  body.innerHTML = renderWatchRowBody(data);
-}
-
-function renderWatchRowBody(d) {
-  const subScores = d.sub_scores || {};
-  const subHtml = Object.keys(subScores).length > 0
-    ? `<div class="wl-subscores">${
-        Object.entries(subScores).map(([k, v]) => {
-          if (v == null) return '';
-          const cls = v >= 75 ? 'hi' : v >= 60 ? 'mid' : 'lo';
-          return `<div class="wl-subscore ${cls}"><div class="lbl">${k.slice(0,4)}</div><div class="val">${Math.round(v)}</div></div>`;
-        }).join('')
-      }</div>`
-    : '';
-
-  const above = d.alert_above != null ? (d.alert_above / 100).toFixed(2) : '';
-  const below = d.alert_below != null ? (d.alert_below / 100).toFixed(2) : '';
-
-  // Every row is an engine pick — single action: save alert prices
-  const idArg = d.id != null ? d.id : 'null';
-  const clearBtn = d.id != null
-    ? `<button class="btn" onclick="clearWatchAlerts(${d.id})" style="background:rgba(138,150,184,0.18);color:var(--muted);border:1px solid var(--border)">⊘ Clear alerts</button>`
-    : '';
-  const actionBtns = `
-    <button class="btn" onclick="saveWatchAlerts(${idArg}, '${d.symbol}')"
-            style="background:rgba(46,204,113,0.18);color:var(--green);border:1px solid var(--green)">
-      💾 Save alerts
-    </button>
-    ${clearBtn}
-  `;
-
-  return `
-    ${subHtml}
-    <div class="wl-alerts">
-      <label>
-        <span>Alert above</span>
-        <input type="number" step="0.05" id="wl-above-${d.symbol}" value="${above}" placeholder="₹ price">
-      </label>
-      <label>
-        <span>Alert below</span>
-        <input type="number" step="0.05" id="wl-below-${d.symbol}" value="${below}" placeholder="₹ price">
-      </label>
-    </div>
-    <div class="wl-actions">${actionBtns}</div>
-  `;
-}
-
-// PR-D.1: alerts work via the existing watchlist_add (INSERT OR REPLACE).
-// user_watchlist is now an INVISIBLE alerts store — never rendered, only
-// powers price-cross notifications. The visible list is always engine picks.
-async function saveWatchAlerts(id, sym) {
-  const above = document.getElementById('wl-above-' + sym)?.value;
-  const below = document.getElementById('wl-below-' + sym)?.value;
-  const params = new URLSearchParams({ symbol: sym });
-  if (above) params.set('alert_above', above);
-  if (below) params.set('alert_below', below);
+async function addToWatchlist() {
+  const symbol = document.getElementById('wlSymbol').value.trim().toUpperCase();
+  const thesis = document.getElementById('wlThesis').value.trim();
+  if (!symbol) return;
+  const params = new URLSearchParams({ symbol, thesis });
   await fetch('/api/trading?action=watchlist_add&key=' + encodeURIComponent(DASHBOARD_KEY) + '&' + params);
+  document.getElementById('wlSymbol').value = '';
+  document.getElementById('wlThesis').value = '';
   loadWatchlist();
 }
 
-async function clearWatchAlerts(id) {
-  if (!id) return;
-  await fetch('/api/trading?action=watchlist_remove&id=' + id + '&key=' + encodeURIComponent(DASHBOARD_KEY));
+async function removeFromWatchlist(id) {
+  await fetch(`/api/trading?action=watchlist_remove&id=${id}&key=` + encodeURIComponent(DASHBOARD_KEY));
   loadWatchlist();
 }
-
-function escapeHtml(s) {
-  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-// PR-D.1: legacy addToWatchlist / removeFromWatchlist removed. The watchlist
-// is now 100% engine-driven — see saveWatchAlerts / clearWatchAlerts above.
 
 // ───────────────────────────────────────────────────────────
 // READINESS GATE
