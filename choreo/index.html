@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>HE Choreography</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; overflow: hidden;
+    width: 100vw; height: 100vh;
+    background: #000;
+    font-family: -apple-system, system-ui, sans-serif;
+  }
+  #stage {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    background: #000;
+  }
+  .frame {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 250ms linear;
+    pointer-events: none;
+  }
+  .frame.live { opacity: 1; }
+  #debug {
+    position: fixed;
+    bottom: 6px; left: 6px;
+    color: #fff;
+    background: rgba(0,0,0,0.55);
+    padding: 4px 8px;
+    font: 11px ui-monospace, Menlo, monospace;
+    border-radius: 3px;
+    z-index: 100;
+    opacity: 0.55;
+  }
+  #status {
+    position: fixed;
+    inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    font-size: 24px;
+    background: #000;
+    z-index: 50;
+  }
+  #status.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+<div id="status">Initializing…</div>
+<div id="debug"></div>
+
+<script>
+"use strict";
+
+// ============================================================
+//  HE CHOREOGRAPHY SYNCHRONIZER
+//  psychology_v3_kathi: 5 slots × 10s each = 50s loop
+//
+//  Each TV reads the SAME master clock (server) and computes
+//  its own slot index. All 4 TVs render the same beat at the
+//  same wall-clock instant. Achievable precision: <100ms.
+// ============================================================
+
+const LOOP_MS = 50000;          // total loop length
+const SLOT_MS = 10000;          // slot length
+const NUM_SLOTS = LOOP_MS / SLOT_MS;
+const TIME_RESYNC_MS = 60000;   // re-sync master clock every 60s
+const TICK_MS = 100;            // poll wall-clock every 100ms
+
+// Choreography spec: [tv][slot] → asset filename in PiSignage library.
+// Source: registry/assets.json + scenes/psychology_v3_kathi.json
+const CHOREO = {
+  v1: [
+    "Video_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.mp4",  // slot 0: V_C3 motion
+    "Final_v3_TV-V10_GR_AllInOne_C1_C2_C3_C4.png",         // slot 1: AllInOne menu
+    "Video_v3_TV-V6_C6_MuttonBiryani_Kabab.mp4",           // slot 2: V_C6 motion
+    "Final_v3_TV-V7_GR_ProteinPair_C3_C4.png",             // slot 3: ProteinPair
+    "Final_v3_TV-V2_C1_GheeRice_DalFry.png"                // slot 4: C1 ₹149
+  ],
+  v2: [
+    "Final_v3_TV-V11_K1_Chicken_Kathi.png",                // slot 0: K1 ₹90 anchor
+    "Video_v3_TV-V11_K1_Chicken_Kathi_c.mp4",              // slot 1: V_K1 cinemagraph
+    "Final_v3_TV-V13_Kathi_Pair_K1_KT.png",                // slot 2: KathiPair
+    "Final_v3_TV-V12_KT_Chicken_Tikka_Kathi.png",          // slot 3: KT premium
+    "Video_v3_TV-V12_KT_Chicken_Tikka_Kathi_c.mp4"         // slot 4: V_KT cinemagraph
+  ],
+  v3: [
+    "Video_v3_TV-V5_C5_ChickenBiryani_Kabab.mp4",          // slot 0: V_C5 motion
+    "Final_v3_TV-V6_C6_MuttonBiryani_Kabab.png",           // slot 1: C6 ₹309
+    "Video_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.mp4", // slot 2: V_C4 motion
+    "Final_v3_TV-V9_Biryani_Pair_C5_C6.png",               // slot 3: BiryaniPair
+    "Final_v3_TV-V8_GR_VegPair_C1_C2.png"                  // slot 4: VegPair
+  ],
+  v4: [
+    "Final_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.png", // slot 0: C4 ₹289
+    "Final_v3_TV-V5_C5_ChickenBiryani_Kabab.png",          // slot 1: C5 ₹229
+    "Final_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.png",  // slot 2: C3 SMART
+    "Video_v3_TV-V2_C1_GheeRice_DalFry.mp4",               // slot 3: V_C1 motion
+    "Video_v3_TV-V1_C2_GheeRice_DalFry_Kabab.mp4"          // slot 4: V_C2 motion
+  ]
+};
+
+// Read TV id from URL ?tv=v1
+const params = new URLSearchParams(location.search);
+const TV = (params.get("tv") || "").toLowerCase();
+const debug = document.getElementById("debug");
+const status = document.getElementById("status");
+const stage = document.getElementById("stage");
+
+if (!CHOREO[TV]) {
+  status.textContent = "Unknown TV id: " + TV + " — expected v1, v2, v3, or v4";
+  status.style.background = "#600";
+  throw new Error("bad tv id");
+}
+
+// ============================================================
+//  Master clock — fetched from server, drift-corrected.
+//  All 4 TVs converge to the same `masterNow()`.
+// ============================================================
+let timeOffset = 0;       // ms to add to local Date.now() to get master time
+let lastSyncRtt = 0;
+let lastSyncOk = false;
+
+async function syncTime() {
+  const t0 = Date.now();
+  try {
+    const r = await fetch("/api/choreo/time?_=" + t0, { cache: "no-store" });
+    const t1 = Date.now();
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    const rtt = t1 - t0;
+    // Server time was sampled mid-RTT (assume symmetric round-trip)
+    const localMid = t0 + rtt / 2;
+    timeOffset = j.now - localMid;
+    lastSyncRtt = rtt;
+    lastSyncOk = true;
+  } catch (e) {
+    lastSyncOk = false;
+    console.error("[time-sync] failed:", e);
+  }
+}
+
+function masterNow() { return Date.now() + timeOffset; }
+function currentSlot() { return Math.floor((masterNow() % LOOP_MS) / SLOT_MS); }
+function slotPhaseSec() { return (masterNow() % SLOT_MS) / 1000; }
+
+// ============================================================
+//  Stage build — pre-create one element per slot for instant swap
+// ============================================================
+const elements = [];
+
+function assetUrl(filename) {
+  // Proxy through our CF Pages Function (which holds the JWT for PiSignage CDN)
+  return "/api/choreo/asset?f=" + encodeURIComponent(filename);
+}
+
+function buildStage() {
+  stage.innerHTML = "";
+  elements.length = 0;
+  for (let i = 0; i < NUM_SLOTS; i++) {
+    const filename = CHOREO[TV][i];
+    const isVideo = /\.mp4$/i.test(filename);
+    let el;
+    if (isVideo) {
+      el = document.createElement("video");
+      el.src = assetUrl(filename);
+      el.muted = true;
+      el.autoplay = true;
+      el.loop = true;
+      el.playsInline = true;
+      el.preload = "auto";
+    } else {
+      el = document.createElement("img");
+      el.src = assetUrl(filename);
+      el.alt = "";
+    }
+    el.className = "frame";
+    el.dataset.slot = String(i);
+    stage.appendChild(el);
+    elements.push(el);
+  }
+}
+
+// ============================================================
+//  Slot ticker — every 100ms, compute correct slot, swap if needed
+// ============================================================
+let liveSlot = -1;
+
+function tick() {
+  const slot = currentSlot();
+  if (slot !== liveSlot) {
+    // Cross-fade: turn off everything, turn on the new one
+    elements.forEach((el, i) => {
+      if (i === slot) {
+        el.classList.add("live");
+        if (el.tagName === "VIDEO") {
+          // Restart video at slot start so it loops cleanly
+          try { el.currentTime = 0; el.play(); } catch (_) {}
+        }
+      } else {
+        el.classList.remove("live");
+        if (el.tagName === "VIDEO") {
+          try { el.pause(); } catch (_) {}
+        }
+      }
+    });
+    liveSlot = slot;
+  }
+  debug.textContent =
+    "tv=" + TV +
+    " slot=" + slot +
+    " t=" + slotPhaseSec().toFixed(1) + "s" +
+    " offset=" + timeOffset.toFixed(0) + "ms" +
+    " rtt=" + lastSyncRtt + "ms" +
+    " sync=" + (lastSyncOk ? "ok" : "FAIL");
+}
+
+// ============================================================
+//  Boot — sync clock, build stage, start ticker
+// ============================================================
+(async () => {
+  status.textContent = "Syncing master clock…";
+  await syncTime();
+  status.textContent = "Loading assets…";
+  buildStage();
+  // Wait briefly so first slot's asset has had time to start loading
+  await new Promise(r => setTimeout(r, 800));
+  status.classList.add("hidden");
+  tick();
+  setInterval(tick, TICK_MS);
+  setInterval(syncTime, TIME_RESYNC_MS);
+})();
+
+// Auto-recover from network blips: if document hidden and back, re-sync immediately
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) syncTime();
+});
+</script>
+
+</body>
+</html>
