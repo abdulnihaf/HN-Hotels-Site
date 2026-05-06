@@ -113,6 +113,7 @@ export async function onRequest(context) {
       case 'analyze_concall':    return Response.json(await analyzeConcallPages(db, env, request), { headers });
       case 'verdict_today':      return Response.json(await getVerdictToday(db, env), { headers });
       case 'trade_comparison':   return Response.json(await getTradeComparison(db, url), { headers });
+      case 'ops_audit_today':    return Response.json(await getOpsAuditToday(db, url), { headers });
       case 'todays_watchlist':   return Response.json(await getTodaysWatchlist(db, url), { headers });
       case 'auto_trader_state':  return Response.json(await getAutoTraderState(db), { headers });
       case 'trader_timeline':    return Response.json(await getTraderTimeline(db, url), { headers });
@@ -2987,6 +2988,279 @@ async function getTodaysWatchlist(db, url) {
     watchlist: enriched,
     kite_format: kiteFormat,           // for "Copy to Kite" button
     final_picks_kite_format: finalPicks.map(p => `NSE:${p.symbol}`).join('\n'),
+    generated_at: Date.now(),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// /api/trading?action=ops_audit_today[&date=YYYY-MM-DD]
+//
+// Owner asked May 6 morning during live trading:
+// "build an audit log for today's entire operation to test the entire
+// architecture you built. Starting with the intelligence of stock selection,
+// the capital division (3 equal parts is BLIND — more capital should go to
+// stocks more sure to increase), the entry point (are we firing at 09:30 or
+// waiting for the initial dip?). Lay surgical catches across the entire ops
+// flow so at market close we can fix the entire intelligence + execution layer."
+//
+// Returns a chronological timeline of EVERY decision the system (and the owner)
+// made today, classified by layer:
+//
+//   SELECTION  — pre-market brief, morning verdict, owner override
+//   CAPITAL    — how qty was computed per pick (currently blind-equal — must fix)
+//   ENTRY      — range_capture, breakout-trigger, Opus entryDecision, fallbacks
+//   MANAGEMENT — trail updates, position_mgmt, sonnet safety
+//   EXIT       — stop_hit / target_hit / trail_hit / hard_exit / orchestrator races
+//   META       — system bugs, race conditions, cron misses
+//
+// Each event has a "surgical_catch" classification:
+//   ok       — system worked as intended
+//   warning  — system worked but suboptimal (e.g., blind equal capital split)
+//   bug      — system had a real defect (e.g., orchestrator vs trader race)
+//   gap      — missing intelligence (e.g., entry-timing strategy not surgical)
+//
+// At market close, owner reviews this list and fixes top-priority items.
+// ═══════════════════════════════════════════════════════════════════════════
+async function getOpsAuditToday(db, url) {
+  const istNow = new Date(Date.now() + 5.5 * 3600000);
+  const date = url.searchParams.get('date') || istNow.toISOString().slice(0, 10);
+
+  // ─── Pull ALL today's events from each source table ────────────────────
+  const verdicts = (await db.prepare(`
+    SELECT id, verdict_type, decision, recommended_symbol, headline,
+           composed_by_model, datetime(composed_at/1000,'unixepoch','+5 hours','+30 minutes') AS ist,
+           composed_at AS ts_ms, picks_json, narrative
+    FROM daily_verdicts WHERE trade_date=? ORDER BY composed_at ASC
+  `).bind(date).all()).results || [];
+
+  const trades = (await db.prepare(`
+    SELECT id, symbol, trader_state, qty, entry_paise, stop_paise, target_paise,
+           or_high_paise, exit_paise, exit_reason, pnl_net_paise,
+           datetime(created_at/1000,'unixepoch','+5 hours','+30 minutes') AS created_ist,
+           datetime(coalesce(exit_at,0)/1000,'unixepoch','+5 hours','+30 minutes') AS exit_ist,
+           created_at AS created_ms, exit_at AS exit_ms, trader_notes,
+           is_active, auto_managed
+    FROM paper_trades
+    WHERE auto_managed=1 AND DATE(created_at/1000,'unixepoch')=?
+    ORDER BY created_at ASC
+  `).bind(date).all()).results || [];
+
+  const decisions = (await db.prepare(`
+    SELECT cron_phase, symbol, decision, ltp_paise, ts AS ts_ms,
+           datetime(ts/1000,'unixepoch','+5 hours','+30 minutes') AS ist,
+           composed_by_model, rationale
+    FROM trader_decisions
+    WHERE ts > strftime('%s','now')*1000 - 86400000
+      AND DATE(ts/1000,'unixepoch','+5 hours','+30 minutes')=?
+    ORDER BY ts ASC
+  `).bind(date).all().catch(() => ({ results: [] }))).results || [];
+
+  const cronFires = (await db.prepare(`
+    SELECT worker_name, cron_name, status, rows_written, error_message,
+           started_at AS ts_ms,
+           datetime(started_at/1000,'unixepoch','+5 hours','+30 minutes') AS ist,
+           duration_ms
+    FROM cron_run_log
+    WHERE DATE(started_at/1000,'unixepoch','+5 hours','+30 minutes')=?
+      AND worker_name IN ('wealth-verdict','wealth-trader','wealth-orchestrator','wealth-intraday-bars')
+    ORDER BY started_at ASC
+  `).bind(date).all().catch(() => ({ results: [] }))).results || [];
+
+  // ─── BUILD TIMELINE EVENTS ────────────────────────────────────────────
+  const events = [];
+
+  // SELECTION events (verdicts)
+  for (const v of verdicts) {
+    let picks = [];
+    try { picks = JSON.parse(v.picks_json || '[]'); } catch {}
+    const pickSyms = picks.map(p => p.symbol).join(', ');
+    const isOverride = (v.narrative || '').toLowerCase().includes('owner override') || (v.headline || '').toLowerCase().includes('override');
+    events.push({
+      ts_ms: v.ts_ms,
+      ist: v.ist,
+      layer: 'SELECTION',
+      title: `${v.verdict_type === 'morning' ? 'Morning verdict' : v.verdict_type === 'pre_market' ? 'Pre-market brief' : v.verdict_type} → ${v.decision}`,
+      detail: `${v.headline || ''}${pickSyms ? ' · picks: ' + pickSyms : ''}`,
+      surgical_catch: isOverride ? 'override'
+        : v.decision === 'SIT_OUT' ? (picks.length === 0 ? 'gap' : 'ok')
+        : 'ok',
+      catch_note: isOverride ? 'Owner manually replaced Opus picks — sector cap bypassed deliberately for intraday-only'
+        : v.decision === 'SIT_OUT' && picks.length === 0 ? 'BUG: empty pool from suitabilityRefresh column-count mismatch (15 vs 12). Caused entire system to skip the day until manual fix at 08:55 IST.'
+        : null,
+      data: { model: v.composed_by_model, picks_count: picks.length },
+    });
+  }
+
+  // CAPITAL events (per-trade qty/stop/target shown for "blind 3-equal" critique)
+  for (const t of trades) {
+    const TEN_LAKH = 100000000;
+    const deployed = t.qty * t.entry_paise;
+    const allocPct = +(deployed / TEN_LAKH * 100).toFixed(1);
+    events.push({
+      ts_ms: t.created_ms,
+      ist: t.created_ist,
+      layer: 'CAPITAL',
+      title: `${t.symbol} — capital allocation: ${allocPct}%`,
+      detail: `qty ${t.qty} × ₹${(t.entry_paise/100).toFixed(2)} entry estimate = ₹${Math.round(deployed/100).toLocaleString('en-IN')} deployed (~${allocPct}% of ₹10L). Stop ₹${(t.stop_paise/100).toFixed(2)} · Target ₹${(t.target_paise/100).toFixed(2)}`,
+      surgical_catch: allocPct >= 28 && allocPct <= 32 ? 'warning' : 'ok',
+      catch_note: allocPct >= 28 && allocPct <= 32
+        ? 'CAPITAL DIVISION IS BLIND — every pick gets ~30% regardless of conviction strength. FIX: weight by hybrid_score × signal_score × bayesian_posterior. High-confidence picks should get 40-45%, low get 20-25%. Owner asked for this fix at market close.'
+        : null,
+      data: { qty: t.qty, deployed_paise: deployed, alloc_pct: allocPct },
+    });
+  }
+
+  // ENTRY events (range_capture, breakout-trigger, entryDecision)
+  for (const d of decisions) {
+    let layer = 'ENTRY';
+    if (d.cron_phase === 'price_monitor' || d.cron_phase?.includes('mgmt')) layer = 'MANAGEMENT';
+    if (d.decision?.includes('EXIT') || d.decision?.includes('STOP_HIT') || d.decision?.includes('TARGET_HIT') || d.decision?.includes('SKIP_GAPPED')) layer = 'EXIT';
+
+    let surgicalCatch = 'ok';
+    let catchNote = null;
+    if (d.decision === 'SKIP_GAPPED_BELOW_STOP') {
+      surgicalCatch = 'gap';
+      catchNote = 'GAP: entry strategy is naive — uses 09:31 LTP as entry estimate, then SKIPs if LTP drops below the resulting stop. Better: wait for stock to make initial dip + recovery before placing entry. Or use OR-low + ATR-buffer as stop floor.';
+    } else if (d.cron_phase === 'range_capture_fallback') {
+      surgicalCatch = 'bug';
+      catchNote = 'BUG-CAUGHT: B-1 safety net fired because main 09:30 cron didn\'t fire on time. Needs investigation: why did Cloudflare cron miss?';
+    } else if (d.decision === 'WAIT' && d.cron_phase?.startsWith('entry_')) {
+      surgicalCatch = 'ok';
+      catchNote = 'Opus correctly held entry — LTP below OR-high, no breakout confirmed.';
+    }
+    events.push({
+      ts_ms: d.ts_ms,
+      ist: d.ist,
+      layer,
+      title: `${d.symbol || '(system)'} ${d.cron_phase} → ${d.decision || 'no-op'}`,
+      detail: d.rationale ? d.rationale.slice(0, 300) : (d.ltp_paise ? `LTP ₹${(d.ltp_paise/100).toFixed(2)}` : '—'),
+      surgical_catch: surgicalCatch,
+      catch_note: catchNote,
+      data: { model: d.composed_by_model, ltp_paise: d.ltp_paise },
+    });
+  }
+
+  // EXIT events (paper_trades exited rows + race-condition flag)
+  for (const t of trades.filter(t => t.exit_paise || (t.trader_state && t.trader_state !== 'WATCHING' && t.trader_state !== 'ENTERED'))) {
+    const isPhantomExit = t.trader_state === 'SKIPPED' && t.exit_paise && t.pnl_net_paise;
+    events.push({
+      ts_ms: t.exit_ms || t.created_ms,
+      ist: t.exit_ist || t.created_ist,
+      layer: 'EXIT',
+      title: `${t.symbol} — ${t.trader_state} (${t.exit_reason || 'no-reason'})`,
+      detail: t.exit_paise
+        ? `Exit @ ₹${(t.exit_paise/100).toFixed(2)} · P&L ${(t.pnl_net_paise || 0) >= 0 ? '+' : ''}₹${Math.round((t.pnl_net_paise||0)/100).toLocaleString('en-IN')}`
+        : `state: ${t.trader_state}`,
+      surgical_catch: isPhantomExit ? 'bug' : 'ok',
+      catch_note: isPhantomExit
+        ? 'BUG: PHANTOM EXIT. trader_state=SKIPPED but exit_paise + pnl_net set. Caused by orchestrator paperTradeWatcher race: it iterates ALL is_active=1 rows including WATCHING ones, and treats LTP <= stop as exit even before any real entry. wealth-trader then overwrote trader_state to SKIPPED. Both deny each other. FIX: orchestrator must skip auto_managed=1 rows (let trader own lifecycle) OR skip trader_state IN (WATCHING, SKIPPED).'
+        : null,
+      data: { state: t.trader_state, exit_paise: t.exit_paise, pnl: t.pnl_net_paise },
+    });
+  }
+
+  // META events (cron health)
+  for (const c of cronFires) {
+    if (c.status !== 'success') {
+      events.push({
+        ts_ms: c.ts_ms,
+        ist: c.ist,
+        layer: 'META',
+        title: `${c.worker_name} :: ${c.cron_name} — ${c.status}`,
+        detail: c.error_message?.slice(0, 200) || `${c.duration_ms}ms`,
+        surgical_catch: 'bug',
+        catch_note: c.status === 'failed'
+          ? `Cron failed — investigate ${c.worker_name}/${c.cron_name}`
+          : 'Cron status not 200 OK',
+        data: { worker: c.worker_name, cron: c.cron_name, dur_ms: c.duration_ms },
+      });
+    }
+  }
+
+  // ─── SORT chronologically ─────────────────────────────────────────────
+  events.sort((a, b) => (a.ts_ms || 0) - (b.ts_ms || 0));
+
+  // ─── ARCHITECTURE-LEVEL FINDINGS for tonight's fix session ────────────
+  const findings = [
+    {
+      id: 'F1',
+      severity: 'P0',
+      layer: 'CAPITAL',
+      title: 'Capital division is BLIND — equal 30/30/30 ignores conviction strength',
+      observed: trades.map(t => ({ symbol: t.symbol, alloc_pct: +(t.qty * t.entry_paise / 100000000 * 100).toFixed(1) })),
+      proposed_fix: 'Weight by composite conviction = (hybrid_score × bayesian_posterior_win_rate × recent_regime_strength). Range: 20-50% per pick. Top conviction gets 40-50%, bottom 20-25%.',
+      effort_lines: '~30 lines in wealth-verdict::composeVerdict + Opus prompt update',
+    },
+    {
+      id: 'F2',
+      severity: 'P0',
+      layer: 'ENTRY',
+      title: 'Entry timing is naive — uses 09:31 LTP as entry estimate, then skips on first dip',
+      observed: 'DEEDEV/STLTECH SKIPPED before any breakout. The LTP at 09:31 was BETWEEN OR-low and OR-high. Stop was set 1.2% below this midpoint. When price made a normal post-09:30 dip below that arbitrary stop, the system thought it was "gapping past stop."',
+      proposed_fix: 'Three-stage entry: (a) initial range observed 09:15-09:30. (b) wait for first DIP and bounce confirmation. (c) THEN place entry above the dip-low. Stop = dip-low − ATR-buffer (NOT entry × 0.988). Target = entry + 2.5×R. This is "surgical entry" — caught the dip, ran with the recovery.',
+      effort_lines: '~80 lines in wealth-trader::rangeCapture + new entryDipDetector function',
+    },
+    {
+      id: 'F3',
+      severity: 'P0',
+      layer: 'EXIT',
+      title: 'Race condition: orchestrator paperTradeWatcher fires phantom exits on WATCHING rows',
+      observed: 'DEEDEV / STLTECH show trader_state=SKIPPED but with exit_paise + non-zero pnl_net. Two systems fought for the row: orchestrator marked EXITED (with stop_hit), then wealth-trader overwrote trader_state=SKIPPED. Result: misleading P&L numbers in the Hero card.',
+      proposed_fix: 'Add `AND auto_managed=0` to wealth-orchestrator paperTradeWatcher\'s SELECT (line ~870). Auto-managed trades belong to wealth-trader exclusively.',
+      effort_lines: '1-line SQL fix in wealth-orchestrator',
+    },
+    {
+      id: 'F4',
+      severity: 'P1',
+      layer: 'SELECTION',
+      title: 'composeVerdict reads ONLY intraday_suitability, ignores live signal_scores',
+      observed: 'Today signal_scores has ABCAPITAL/IDEAFORGE/CAMS/CALSOFT/WOCKPHARMA all at 73-74 composite_score, transitioning regime, aligned_up. NONE were in the 84-pool because they don\'t pass historical hit_2pct >= 50. So Opus never saw them.',
+      proposed_fix: 'Cross-reference: pick from INTERSECTION (intraday-suitable AND signal-score-top-50) OR add a 2nd track that shortlists from signal_scores + bayesian_posteriors but with looser intraday-history requirement.',
+      effort_lines: '~50 lines in wealth-verdict::composeVerdict candidate-shortlist',
+    },
+    {
+      id: 'F5',
+      severity: 'P1',
+      layer: 'META',
+      title: '6 of 9 dim_health dimensions are <10% — engine is half-blind',
+      observed: 'flow 0.7%, options 0%, sentiment 2.9%, macro 3.8%, retail_buzz 0.2%, quality 4.7%. The regime classifier returns "unknown" because it can\'t fuse these dims.',
+      proposed_fix: 'Triage each broken dim — likely separate root causes: stale source feeds, broken aggregation queries, schema renames. ~1 hour per dim.',
+      effort_lines: '~6 hours total root-cause + fix across 6 dims',
+    },
+    {
+      id: 'F6',
+      severity: 'P2',
+      layer: 'SELECTION',
+      title: 'last_week_* enrichment was 100% NULL until manual trigger this morning',
+      observed: 'wealth-intraday-bars Saturday cron last fired May 4. Today (Tuesday) the last-week data was 5 days stale. Manual trigger this morning at 09:25 populated 48/84.',
+      proposed_fix: 'Add a daily 06:00 IST trigger for weekly_enrich (currently weekly only). last_week_* should ALWAYS reflect last 5 trading days.',
+      effort_lines: '1-line cron addition in wealth-intraday-bars wrangler.toml',
+    },
+  ];
+
+  return {
+    ok: true,
+    date,
+    summary: {
+      total_events: events.length,
+      by_layer: {
+        SELECTION: events.filter(e => e.layer === 'SELECTION').length,
+        CAPITAL: events.filter(e => e.layer === 'CAPITAL').length,
+        ENTRY: events.filter(e => e.layer === 'ENTRY').length,
+        MANAGEMENT: events.filter(e => e.layer === 'MANAGEMENT').length,
+        EXIT: events.filter(e => e.layer === 'EXIT').length,
+        META: events.filter(e => e.layer === 'META').length,
+      },
+      by_catch: {
+        ok: events.filter(e => e.surgical_catch === 'ok').length,
+        warning: events.filter(e => e.surgical_catch === 'warning').length,
+        bug: events.filter(e => e.surgical_catch === 'bug').length,
+        gap: events.filter(e => e.surgical_catch === 'gap').length,
+        override: events.filter(e => e.surgical_catch === 'override').length,
+      },
+    },
+    timeline: events,
+    architecture_findings: findings,
     generated_at: Date.now(),
   };
 }

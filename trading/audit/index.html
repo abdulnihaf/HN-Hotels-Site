@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Wealth Engine — Today's Audit</title>
+<link rel="manifest" href="/trading/manifest.json">
+<meta name="theme-color" content="#0a0f1c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="color-scheme" content="dark">
+<style>
+  :root {
+    --bg: #0a0f1c; --panel: #121a2e; --panel-2: #1a2540;
+    --border: #2a3656; --text: #e6ecff; --muted: #8a96b8;
+    --green: #2ecc71; --red: #e74c3c; --yellow: #f5b041; --blue: #4fa3ff;
+    --accent: #7c5cff; --orange: #ff8a3c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh;
+    padding: 14px; padding-top: env(safe-area-inset-top, 14px);
+  }
+  header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  h1 { font-size: 17px; font-weight: 700; }
+  h1 .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 3px; }
+  .tab-nav { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .tab-nav a {
+    padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 500;
+    text-decoration: none; border: 1px solid var(--border); color: var(--muted);
+    background: var(--panel-2);
+  }
+  .tab-nav a.active { background: rgba(124,92,255,0.18); color: var(--accent); border-color: var(--accent); }
+
+  .pin-gate { max-width: 380px; margin: 80px auto; padding: 28px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+  .pin-gate input { width: 100%; padding: 12px; font-size: 16px; margin: 10px 0;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+  .pin-gate button { width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+    background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; min-height: 44px; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .stat-cell { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+  .stat-cell .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .stat-cell .val { font-size: 22px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stat-cell.bug .val { color: var(--red); }
+  .stat-cell.gap .val { color: var(--orange); }
+  .stat-cell.warn .val { color: var(--yellow); }
+  .stat-cell.ok .val { color: var(--green); }
+  .stat-cell.override .val { color: var(--accent); }
+
+  .findings-block {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 14px;
+  }
+  .findings-block h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .finding-card {
+    background: var(--panel-2); border-radius: 8px; padding: 12px; margin-bottom: 8px;
+    border-left: 4px solid var(--border);
+  }
+  .finding-card.P0 { border-left-color: var(--red); }
+  .finding-card.P1 { border-left-color: var(--yellow); }
+  .finding-card.P2 { border-left-color: var(--blue); }
+  .finding-card .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .finding-card .sev { padding: 2px 7px; border-radius: 8px; font-size: 9px; font-weight: 700; }
+  .finding-card .sev.P0 { background: rgba(231,76,60,0.20); color: var(--red); }
+  .finding-card .sev.P1 { background: rgba(245,176,65,0.20); color: var(--yellow); }
+  .finding-card .sev.P2 { background: rgba(79,163,255,0.20); color: var(--blue); }
+  .finding-card .layer-tag { padding: 2px 7px; border-radius: 8px; font-size: 9px; background: rgba(138,150,184,0.20); color: var(--muted); font-weight: 600; }
+  .finding-card .id-tag { padding: 2px 7px; border-radius: 8px; font-size: 9px; background: rgba(124,92,255,0.18); color: var(--accent); font-weight: 700; }
+  .finding-card .title { font-size: 14px; font-weight: 700; margin-top: 2px; }
+  .finding-card .observed { font-size: 12px; color: var(--text); margin-top: 6px; }
+  .finding-card .observed strong { color: var(--muted); }
+  .finding-card .fix { font-size: 12px; color: var(--green); margin-top: 6px; padding: 6px 8px; background: rgba(46,204,113,0.06); border-left: 2px solid var(--green); border-radius: 4px; }
+  .finding-card .effort { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+  .timeline-block {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 14px;
+  }
+  .timeline-block h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; font-size: 11px; }
+  .filter-row label { padding: 4px 8px; border-radius: 12px; cursor: pointer; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+  .filter-row label.active { background: rgba(124,92,255,0.18); color: var(--accent); border-color: var(--accent); }
+  .filter-row input { display: none; }
+
+  .event-row {
+    display: grid; grid-template-columns: 60px 90px 1fr; gap: 10px; align-items: start;
+    padding: 8px 10px; border-bottom: 1px dashed rgba(42,54,86,0.4);
+    font-size: 12px; line-height: 1.5;
+  }
+  .event-row:last-child { border-bottom: none; }
+  .event-row .time { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; font-size: 11px; }
+  .event-row .layer-pill { padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: 700; text-align: center; }
+  .layer-pill.SELECTION { background: rgba(124,92,255,0.18); color: var(--accent); }
+  .layer-pill.CAPITAL { background: rgba(255,138,60,0.20); color: var(--orange); }
+  .layer-pill.ENTRY { background: rgba(79,163,255,0.20); color: var(--blue); }
+  .layer-pill.MANAGEMENT { background: rgba(46,204,113,0.20); color: var(--green); }
+  .layer-pill.EXIT { background: rgba(231,76,60,0.20); color: var(--red); }
+  .layer-pill.META { background: rgba(138,150,184,0.20); color: var(--muted); }
+  .event-row .title-line { font-weight: 600; }
+  .event-row .detail { color: var(--muted); margin-top: 2px; font-size: 11px; }
+  .event-row .catch-pill {
+    display: inline-block; padding: 1px 6px; border-radius: 6px; font-size: 9px; font-weight: 700; margin-left: 6px;
+  }
+  .catch-pill.ok { background: rgba(46,204,113,0.16); color: var(--green); }
+  .catch-pill.warning { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .catch-pill.bug { background: rgba(231,76,60,0.20); color: var(--red); }
+  .catch-pill.gap { background: rgba(255,138,60,0.20); color: var(--orange); }
+  .catch-pill.override { background: rgba(124,92,255,0.18); color: var(--accent); }
+  .event-row .catch-note {
+    font-size: 11px; color: var(--text); margin-top: 5px; padding: 6px 8px;
+    background: rgba(0,0,0,0.20); border-left: 2px solid; border-radius: 4px;
+  }
+  .catch-note.bug { border-left-color: var(--red); background: rgba(231,76,60,0.05); }
+  .catch-note.gap { border-left-color: var(--orange); background: rgba(255,138,60,0.05); }
+  .catch-note.warning { border-left-color: var(--yellow); background: rgba(245,176,65,0.05); }
+  .catch-note.override { border-left-color: var(--accent); background: rgba(124,92,255,0.05); }
+
+  @media (max-width: 600px) {
+    .event-row { grid-template-columns: 1fr; gap: 4px; }
+    .event-row .time { font-size: 10px; }
+  }
+
+  .footer { margin-top: 20px; text-align: center; color: var(--muted); font-size: 11px; padding-bottom: 30px; }
+</style>
+</head>
+<body>
+
+<div id="gate" class="pin-gate">
+  <h2>🔬 Today's Operations Audit</h2>
+  <input id="pin" type="password" placeholder="Dashboard PIN" autocomplete="off">
+  <button onclick="login()">Unlock</button>
+  <div id="gateErr" style="color:var(--red);font-size:13px;margin-top:8px;min-height:18px"></div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <div>
+      <h1>🔬 Today's Operations Audit
+        <span class="sub">Surgical catches across SELECTION → CAPITAL → ENTRY → MANAGEMENT → EXIT · refresh 30s · review at market close to fix architecture</span>
+      </h1>
+    </div>
+    <div class="tab-nav">
+      <a href="/trading/">🏠 Hub</a>
+      <a href="/trading/today/">📋 Today</a>
+      <a href="/trading/execute/">🎯 Execute</a>
+      <a href="/trading/compare/">📊 Compare</a>
+      <a href="/trading/audit/" class="active">🔬 Audit</a>
+      <a href="/trading/ops/">⚙️ Ops</a>
+    </div>
+  </header>
+
+  <div id="stats"></div>
+  <div id="findings"></div>
+
+  <div class="timeline-block">
+    <h2>📋 Chronological event timeline</h2>
+    <div class="filter-row">
+      <label class="active"><input type="checkbox" data-filter="all" checked> All</label>
+      <label><input type="checkbox" data-filter="SELECTION" checked> SELECTION</label>
+      <label><input type="checkbox" data-filter="CAPITAL" checked> CAPITAL</label>
+      <label><input type="checkbox" data-filter="ENTRY" checked> ENTRY</label>
+      <label><input type="checkbox" data-filter="MANAGEMENT" checked> MANAGEMENT</label>
+      <label><input type="checkbox" data-filter="EXIT" checked> EXIT</label>
+      <label><input type="checkbox" data-filter="META" checked> META</label>
+      <label><input type="checkbox" data-filter="bugs_only"> 🚨 Bugs/Gaps only</label>
+    </div>
+    <div id="timeline"></div>
+  </div>
+
+  <div class="footer">
+    Refreshed <span id="lastRefresh">—</span> · auto-refresh 30s
+  </div>
+</div>
+
+<script>
+const STORE_KEY = 'wealth_dashboard_key';
+let DASHBOARD_KEY = localStorage.getItem(STORE_KEY) || '';
+let _data = null;
+if (DASHBOARD_KEY) tryAutoLogin();
+
+function login() {
+  const v = document.getElementById('pin').value.trim();
+  if (!v) return;
+  DASHBOARD_KEY = v;
+  load().then(j => {
+    if (j && j.ok) { localStorage.setItem(STORE_KEY, v); showApp(j); }
+    else document.getElementById('gateErr').textContent = j?.reason || 'failed';
+  });
+}
+async function tryAutoLogin() { try { const j = await load(); if (j && j.ok) showApp(j); } catch {} }
+function showApp(j) {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  _data = j;
+  render(j);
+  setInterval(refresh, 30000);
+  // Filter listeners
+  document.querySelectorAll('.filter-row input').forEach(input => {
+    input.addEventListener('change', () => {
+      input.parentElement.classList.toggle('active', input.checked);
+      renderTimeline(_data);
+    });
+  });
+}
+async function load() {
+  const r = await fetch('/api/trading?action=ops_audit_today&key=' + encodeURIComponent(DASHBOARD_KEY));
+  return r.json();
+}
+async function refresh() { try { const j = await load(); if (j && j.ok) { _data = j; render(j); } } catch {} }
+
+const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function render(j) {
+  // Stats row
+  const c = j.summary.by_catch;
+  document.getElementById('stats').innerHTML = `
+    <div class="stats-row">
+      <div class="stat-cell"><div class="lbl">Total events</div><div class="val">${j.summary.total_events}</div></div>
+      <div class="stat-cell ok"><div class="lbl">✓ OK</div><div class="val">${c.ok}</div></div>
+      <div class="stat-cell warn"><div class="lbl">⚠ Warning</div><div class="val">${c.warning}</div></div>
+      <div class="stat-cell bug"><div class="lbl">🚨 Bug</div><div class="val">${c.bug}</div></div>
+      <div class="stat-cell gap"><div class="lbl">⊗ Gap</div><div class="val">${c.gap}</div></div>
+      <div class="stat-cell override"><div class="lbl">★ Override</div><div class="val">${c.override}</div></div>
+    </div>
+  `;
+
+  // Findings
+  const findingsHtml = j.architecture_findings.map(f => `
+    <div class="finding-card ${esc(f.severity)}">
+      <div class="head">
+        <span class="sev ${esc(f.severity)}">${esc(f.severity)}</span>
+        <span class="id-tag">${esc(f.id)}</span>
+        <span class="layer-tag">${esc(f.layer)}</span>
+      </div>
+      <div class="title">${esc(f.title)}</div>
+      <div class="observed"><strong>Observed:</strong> ${typeof f.observed === 'string' ? esc(f.observed) : '<code style="font-size:10px;color:var(--muted)">' + esc(JSON.stringify(f.observed)) + '</code>'}</div>
+      <div class="fix">★ Fix: ${esc(f.proposed_fix)}</div>
+      <div class="effort">Effort: ${esc(f.effort_lines)}</div>
+    </div>
+  `).join('');
+  document.getElementById('findings').innerHTML = `
+    <div class="findings-block">
+      <h2>🎯 Architecture findings (priority-ranked) — fix at market close</h2>
+      ${findingsHtml}
+    </div>
+  `;
+
+  renderTimeline(j);
+  document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString('en-IN', {hour12:false});
+}
+
+function renderTimeline(j) {
+  const inputs = [...document.querySelectorAll('.filter-row input')];
+  const bugsOnly = inputs.find(i => i.dataset.filter === 'bugs_only')?.checked;
+  const enabledLayers = new Set(inputs
+    .filter(i => i.checked && ['SELECTION','CAPITAL','ENTRY','MANAGEMENT','EXIT','META'].includes(i.dataset.filter))
+    .map(i => i.dataset.filter));
+
+  const visible = j.timeline.filter(e => {
+    if (bugsOnly) return e.surgical_catch === 'bug' || e.surgical_catch === 'gap' || e.surgical_catch === 'warning';
+    return enabledLayers.has(e.layer);
+  });
+
+  document.getElementById('timeline').innerHTML = visible.map(e => {
+    const time = e.ist ? e.ist.slice(11, 19) : '—';
+    const noteHtml = e.catch_note
+      ? `<div class="catch-note ${esc(e.surgical_catch)}">${esc(e.catch_note)}</div>` : '';
+    return `
+      <div class="event-row">
+        <div class="time">${esc(time)}</div>
+        <div><span class="layer-pill ${esc(e.layer)}">${esc(e.layer)}</span></div>
+        <div>
+          <div class="title-line">
+            ${esc(e.title)}
+            <span class="catch-pill ${esc(e.surgical_catch)}">${esc(e.surgical_catch)}</span>
+          </div>
+          <div class="detail">${esc(e.detail || '')}</div>
+          ${noteHtml}
+        </div>
+      </div>
+    `;
+  }).join('') || '<div style="color:var(--muted);font-size:12px;padding:14px">No events match filter</div>';
+}
+</script>
+
+</body>
+</html>
