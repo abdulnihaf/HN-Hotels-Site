@@ -74,16 +74,17 @@ The system has exactly **two layers** that need to be ready independently. Each 
 | **L2.8** | Loss halt at −₹30K | 🟢 | DAILY_HALT_LOSS_30K already exists (predates today). | If portfolio hits −₹30K, halt fires. Same Sunday-fresh-read if untriggered. |
 | **L2.9** | Worker version drift (main vs prod) | 🟡 | PR #65 just merged; main and prod aligned. But future deploys might drift. | Daily check Thu+Fri: every wealth-* worker's deployed version_id matches the latest main branch commit. |
 | **L2.10** | Anthropic / Kite quota headroom | 🟡 | No daily quota tracking exists. | Daily quota usage % logged; alert if any source >80% of cap. |
+| **L2.11** | Protected-surface drift (UI/UX vs intelligence) | 🟢 | Doc `18-PROTECTED-SURFACES.md` + `scripts/verify-no-drift.sh` shipped. Other chat ran 6 UI experiments today + reverted all in PR #76 → net zero protected-surface change. Spot-check confirmed all intelligence intact. | Run `bash scripts/verify-no-drift.sh` at start of every session; expect exit 0. Pre-market integrity check at 08:25 IST also includes drift gate. |
 
-**Layer 2 rollup**: 4 GREEN, 5 YELLOW, 1 RED. Layer 2 NOT READY for real money currently.
+**Layer 2 rollup**: 5 GREEN, 5 YELLOW, 1 RED. Layer 2 NOT READY for real money currently — but tripwire is now in place to prevent silent regressions from parallel UI work.
 
 ### Combined readiness rollup
 
 | Layer | Green | Yellow | Red | Status |
 |---|:-:|:-:|:-:|:-:|
 | Layer 1 — Intelligence | 2 | 2 | 2 | 🔴 Not ready |
-| Layer 2 — Execution | 4 | 5 | 1 | 🔴 Not ready |
-| **Combined** | **6** | **7** | **3** | 🔴 **NO-GO** at current hour |
+| Layer 2 — Execution | 5 | 5 | 1 | 🔴 Not ready |
+| **Combined** | **7** | **7** | **3** | 🔴 **NO-GO** at current hour |
 
 **Required for GO Mon morning**: Each layer independently has 0 RED + ≤2 YELLOW. Currently Layer 1 has 2 RED, Layer 2 has 1 RED. The 3 RED items (L1.2 / L1.4 / L2.4) are the blocking work between now and Sunday.
 
