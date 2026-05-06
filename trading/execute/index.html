@@ -481,6 +481,151 @@
   @media (min-width: 1280px) {
     .mode-pill { padding: 7px 16px; font-size: 13px; min-height: 36px; }
   }
+
+  /* ═════════════════════════════════════════════════════════════════════
+   * PR-C: unified watchlist rail — rich rows with inline SVG sparklines,
+   * tap-to-expand for sub-scores + alert price inputs + actions.
+   * Layout hooks (wl-rail-container) ready for PR-D's left-rail activation.
+   * ═════════════════════════════════════════════════════════════════════ */
+  .wl-section-h {
+    font-size: 10px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.6px; font-weight: 600;
+    margin: 14px 0 8px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .wl-section-h .count { color: var(--muted); font-weight: 500; }
+  .wl-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px; align-items: center;
+    padding: 10px 12px; margin-bottom: 4px;
+    background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 150ms, background 150ms;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wl-row:hover { border-color: var(--accent); }
+  .wl-row[aria-expanded="true"] {
+    border-color: var(--accent);
+    background: rgba(124,92,255,0.08);
+  }
+  .wl-row.cascade { border-left: 3px solid var(--yellow); }
+  .wl-row .wl-sym {
+    display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  }
+  .wl-row .wl-sym-line {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .wl-row .wl-sym-name {
+    font-weight: 700; font-size: 14px; color: var(--text);
+  }
+  .wl-row .wl-score-pill {
+    background: rgba(46,204,113,0.18); color: var(--green);
+    padding: 1px 7px; border-radius: 10px;
+    font-size: 10px; font-weight: 600;
+  }
+  .wl-row .wl-score-pill.lo { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .wl-row .wl-thesis {
+    font-size: 11px; color: var(--muted); line-height: 1.4;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .wl-row .wl-spark { line-height: 0; }
+  .wl-row .wl-price {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .wl-row .wl-ltp { font-size: 13px; font-weight: 600; color: var(--text); }
+  .wl-row .wl-chg { font-size: 11px; font-weight: 600; }
+  .wl-row .wl-chg.pos { color: var(--green); }
+  .wl-row .wl-chg.neg { color: var(--red); }
+  .wl-row .wl-chg.flat { color: var(--muted); }
+
+  /* Inline SVG sparkline */
+  .spark { vertical-align: middle; display: inline-block; }
+  .spark polyline {
+    fill: none; stroke-width: 1.4;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .spark.spark-up polyline { stroke: var(--green); }
+  .spark.spark-dn polyline { stroke: var(--red); }
+  .spark.spark-flat polyline { stroke: var(--muted); }
+
+  /* Expanded row body */
+  .wl-row-body {
+    grid-column: 1 / -1;
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid var(--border);
+    display: none;
+  }
+  .wl-row[aria-expanded="true"] .wl-row-body { display: block; }
+  .wl-row-body .wl-subscores {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 4px; margin-bottom: 12px;
+  }
+  .wl-row-body .wl-subscore {
+    background: var(--panel); padding: 5px 4px; border-radius: 4px;
+    text-align: center; min-width: 0;
+  }
+  .wl-row-body .wl-subscore .lbl {
+    font-size: 8px; color: var(--muted); text-transform: uppercase;
+  }
+  .wl-row-body .wl-subscore .val {
+    font-size: 12px; font-weight: 600;
+  }
+  .wl-row-body .wl-subscore.hi .val { color: var(--green); }
+  .wl-row-body .wl-subscore.mid .val { color: var(--yellow); }
+  .wl-row-body .wl-subscore.lo .val { color: var(--muted); }
+  .wl-row-body .wl-alerts {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; margin-bottom: 10px;
+  }
+  .wl-row-body .wl-alerts label {
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .wl-row-body .wl-alerts label span {
+    font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .wl-row-body .wl-alerts input {
+    padding: 7px 9px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wl-row-body .wl-actions {
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .wl-row-body .wl-actions .btn { padding: 7px 12px; font-size: 12px; min-height: 36px; }
+
+  /* Click-not-bubble guard for inputs/buttons inside expanded body */
+  .wl-row-body input, .wl-row-body button { cursor: default; }
+  .wl-row-body button { cursor: pointer; }
+
+  /* Empty state */
+  .wl-empty {
+    padding: 16px 12px; text-align: center;
+    color: var(--muted); font-size: 12px;
+    background: var(--panel-2); border: 1px dashed var(--border); border-radius: 8px;
+  }
+
+  /* Layout hook for PR-D — flips watchlistPanel into left-rail at ≥1024 */
+  /* Inactive in PR-C; PR-D adds .wl-rail-active class to enable */
+  .wl-rail-active #watchlistPanel { /* placeholder for PR-D */ }
+
+  /* iPhone — even denser grid */
+  @media (max-width: 480px) {
+    .wl-row { padding: 8px 10px; gap: 8px; }
+    .wl-row .wl-sym-name { font-size: 13px; }
+    .wl-row .wl-ltp { font-size: 12px; }
+    .wl-row .wl-thesis { display: none; }      /* save vertical space */
+    .wl-row-body .wl-subscores { grid-template-columns: repeat(4, 1fr); }
+  }
+  /* iPad and laptop — sparkline gets more horizontal room */
+  @media (min-width: 768px) {
+    .wl-row .wl-spark svg { width: 100px; height: 28px; }
+  }
+  @media (min-width: 1280px) {
+    .wl-row .wl-spark svg { width: 120px; height: 32px; }
+    .wl-row { padding: 12px 14px; }
+  }
 </style>
 </head>
 <body>
@@ -587,10 +732,16 @@
           <input id="wlThesis" type="text" placeholder="One-line thesis (optional)" style="flex:2;min-width:200px;padding:8px 10px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
           <button onclick="addToWatchlist()" class="btn primary" style="padding:8px 14px">+ Add</button>
         </div>
-        <h4 class="small" style="color:var(--muted);text-transform:uppercase;margin:10px 0 6px;letter-spacing:0.5px">Your watchlist</h4>
-        <div id="userWatchlist" class="small" style="color:var(--muted)">none yet</div>
-        <h4 class="small" style="color:var(--muted);text-transform:uppercase;margin:14px 0 6px;letter-spacing:0.5px">Engine top picks (auto)</h4>
-        <div id="enginePicks" class="small" style="color:var(--muted)">loading…</div>
+        <h4 class="wl-section-h" data-wl-section="user">
+          <span>🔭 My tracked</span>
+          <span class="count">—</span>
+        </h4>
+        <div id="userWatchlist"></div>
+        <h4 class="wl-section-h" data-wl-section="engine">
+          <span>🎯 Top picks (engine, score ≥ 70)</span>
+          <span class="count">—</span>
+        </h4>
+        <div id="enginePicks"></div>
       </div>
     </details>
     </div><!-- /.desktop-grid -->
@@ -2291,35 +2442,213 @@ async function populateSymbolAutocomplete() {
   } catch {}
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// PR-C — unified watchlist rail with inline SVG sparklines + tap-to-expand.
+// Each row: symbol · score/thesis · LTP · change% · 30-day sparkline.
+// Tap row → expand to show full sub-scores + alert price inputs + actions.
+// ═══════════════════════════════════════════════════════════════════
+const SPARK_CACHE = {};   // symbol → array<{d, c}>  (in-memory, refreshed on each watchlist load)
+
+// Render a polyline sparkline from an array of close prices.
+function svgSparkline(closes, opts) {
+  opts = opts || {};
+  if (!closes || closes.length < 2) {
+    return `<svg class="spark spark-flat" width="${opts.w||80}" height="${opts.h||24}"></svg>`;
+  }
+  const w = opts.w || 80, h = opts.h || 24;
+  let min = Infinity, max = -Infinity;
+  for (const c of closes) { if (c < min) min = c; if (c > max) max = c; }
+  const range = (max - min) || 1;
+  const last = closes.length - 1;
+  let pts = '';
+  for (let i = 0; i <= last; i++) {
+    const x = (i / last) * (w - 2) + 1;
+    const y = h - ((closes[i] - min) / range) * (h - 2) - 1;
+    pts += (i ? ' ' : '') + x.toFixed(1) + ',' + y.toFixed(1);
+  }
+  const trend = closes[last] >= closes[0] ? 'up' : 'dn';
+  return `<svg class="spark spark-${trend}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+    <polyline points="${pts}" />
+  </svg>`;
+}
+
 function renderWatchlist(j) {
   const userEl = document.getElementById('userWatchlist');
   const engineEl = document.getElementById('enginePicks');
   if (!userEl || !engineEl) return;
 
-  const renderItem = (s, isEngine = false) => {
+  const renderRow = (s, isEngine) => {
+    const id = isEngine ? `wl-eng-${s.symbol}` : `wl-usr-${s.id}`;
     const ltp = s.latest;
-    const chg = ltp && ltp.prev_close_paise > 0 ? ((ltp.close_paise - ltp.prev_close_paise) / ltp.prev_close_paise * 100).toFixed(2) : null;
-    const cls = chg && chg >= 0 ? 'pos' : 'neg';
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(42,54,86,0.3);font-size:13px">
-      <div style="flex:1;min-width:0">
-        <strong>${s.symbol}</strong>
-        ${s.thesis ? `<div class="small" style="color:var(--muted);font-size:11px;margin-top:2px">${s.thesis}</div>` : ''}
-        ${isEngine && s.composite_score ? `<span class="pill ok" style="font-size:9px;padding:1px 5px;margin-left:6px">${s.composite_score.toFixed(0)}</span>` : ''}
+    const chg = ltp && ltp.prev_close_paise > 0
+      ? ((ltp.close_paise - ltp.prev_close_paise) / ltp.prev_close_paise * 100)
+      : null;
+    const chgCls = chg == null ? 'flat' : chg > 0.01 ? 'pos' : chg < -0.01 ? 'neg' : 'flat';
+    const chgStr = chg == null ? '—' : (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+    const ltpStr = ltp ? '₹' + (ltp.close_paise / 100).toFixed(2) : '—';
+
+    // Score pill or thesis in subline
+    const scorePill = (isEngine && s.composite_score != null)
+      ? `<span class="wl-score-pill ${s.composite_score >= 75 ? '' : 'lo'}">${s.composite_score.toFixed(0)}</span>`
+      : '';
+    const subLine = isEngine
+      ? (s.cascade_match ? '<span class="wl-thesis">⚡ cascade firing</span>' : `<span class="wl-thesis">engine pick</span>`)
+      : (s.thesis ? `<span class="wl-thesis">${escapeHtml(s.thesis)}</span>` : '<span class="wl-thesis" style="opacity:0.5">no thesis</span>');
+
+    const cascadeCls = (isEngine && s.cascade_match) ? 'cascade' : '';
+    const subData = JSON.stringify({
+      symbol: s.symbol, isEngine, id: s.id,
+      sub_scores: isEngine ? {
+        Trend: s.trend_score, Flow: s.flow_score,
+        Catalyst: s.catalyst_score, Macro: s.macro_score,
+        Options: s.options_score, Sentiment: s.sentiment_score, Breadth: s.breadth_score,
+      } : null,
+      alert_above: s.alert_above, alert_below: s.alert_below,
+      thesis: s.thesis,
+    }).replace(/'/g, '&apos;');
+
+    return `<div class="wl-row ${cascadeCls}" id="${id}" role="button" aria-expanded="false"
+                 onclick="toggleWatchRow('${id}', '${subData}')">
+      <div class="wl-sym">
+        <div class="wl-sym-line">
+          <span class="wl-sym-name">${s.symbol}</span>
+          ${scorePill}
+        </div>
+        ${subLine}
       </div>
-      <div style="text-align:right;font-variant-numeric:tabular-nums;flex-shrink:0">
-        ${ltp ? `<div style="font-size:13px">₹${(ltp.close_paise/100).toFixed(2)}</div>` : '<span class="small" style="color:var(--muted)">no price</span>'}
-        ${chg ? `<div class="small ${cls}" style="font-size:11px">${chg >= 0 ? '+' : ''}${chg}%</div>` : ''}
+      <div class="wl-spark" data-spark-sym="${s.symbol}">
+        ${SPARK_CACHE[s.symbol] ? svgSparkline(SPARK_CACHE[s.symbol]) : svgSparkline(null)}
       </div>
-      ${!isEngine ? `<button onclick="removeFromWatchlist(${s.id})" class="btn" style="padding:3px 7px;font-size:11px;min-height:auto;margin-left:8px;background:rgba(231,76,60,0.18);color:var(--red);border:1px solid var(--red)">×</button>` : ''}
+      <div class="wl-price">
+        <div class="wl-ltp">${ltpStr}</div>
+        <div class="wl-chg ${chgCls}">${chgStr}</div>
+      </div>
+      <div class="wl-row-body" id="${id}-body" onclick="event.stopPropagation()"></div>
     </div>`;
   };
 
+  // — User watchlist —
   userEl.innerHTML = (j.user_watchlist?.length > 0)
-    ? j.user_watchlist.map(s => renderItem(s, false)).join('')
-    : '<span class="small" style="color:var(--muted)">No symbols added. Try RELIANCE, HDFCBANK, INFY.</span>';
+    ? j.user_watchlist.map(s => renderRow(s, false)).join('')
+    : `<div class="wl-empty">No symbols added. Try RELIANCE, HDFCBANK, INFY.</div>`;
+
+  // — Engine top picks —
   engineEl.innerHTML = (j.engine_picks?.length > 0)
-    ? j.engine_picks.map(s => renderItem(s, true)).join('')
-    : '<span class="small" style="color:var(--muted)">Engine top picks will populate when signal_scores has data above threshold.</span>';
+    ? j.engine_picks.map(s => renderRow(s, true)).join('')
+    : `<div class="wl-empty">Engine top picks will populate when signal_scores has data above threshold (≥70).</div>`;
+
+  // Update section headers with counts
+  const userH = document.querySelector('h4[data-wl-section="user"]');
+  if (userH) userH.querySelector('.count').textContent = (j.user_watchlist?.length || 0) + ' tracked';
+  const engH = document.querySelector('h4[data-wl-section="engine"]');
+  if (engH) engH.querySelector('.count').textContent = (j.engine_picks?.length || 0) + ' picks';
+
+  // Fire batched sparkline fetch — fills SPARK_CACHE then re-paints in place
+  const symbols = [
+    ...(j.user_watchlist || []).map(s => s.symbol),
+    ...(j.engine_picks || []).map(s => s.symbol),
+  ];
+  if (symbols.length > 0) loadSparklines([...new Set(symbols)]);
+}
+
+async function loadSparklines(symbols) {
+  // Skip ones we already have cached (cheap; no re-fetch on every loadWatchlist)
+  const need = symbols.filter(s => !SPARK_CACHE[s]);
+  if (need.length === 0) return;
+  try {
+    const url = '/api/trading?action=watchlist_sparklines&days=30&symbols=' +
+                encodeURIComponent(need.join(',')) +
+                '&key=' + encodeURIComponent(DASHBOARD_KEY);
+    const r = await fetch(url);
+    const j = await r.json();
+    if (!j.data) return;
+    for (const sym of Object.keys(j.data)) {
+      const closes = j.data[sym].map(p => p.c);
+      SPARK_CACHE[sym] = closes;
+      // Re-paint that row's sparkline cell in place (no full re-render)
+      document.querySelectorAll(`[data-spark-sym="${sym}"]`).forEach(el => {
+        el.innerHTML = svgSparkline(closes);
+      });
+    }
+  } catch (e) { /* sparklines are decorative; never block UI */ }
+}
+
+function toggleWatchRow(rowId, dataJson) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  const expanded = row.getAttribute('aria-expanded') === 'true';
+  // Collapse all others (single-expand to keep the rail clean)
+  document.querySelectorAll('.wl-row[aria-expanded="true"]').forEach(r => {
+    r.setAttribute('aria-expanded', 'false');
+  });
+  if (expanded) return;   // was open → just closed
+  row.setAttribute('aria-expanded', 'true');
+
+  const body = document.getElementById(rowId + '-body');
+  if (!body) return;
+  const data = JSON.parse(dataJson.replace(/&apos;/g, "'"));
+  body.innerHTML = renderWatchRowBody(data);
+}
+
+function renderWatchRowBody(d) {
+  const subScores = d.sub_scores || {};
+  const subHtml = Object.keys(subScores).length > 0
+    ? `<div class="wl-subscores">${
+        Object.entries(subScores).map(([k, v]) => {
+          if (v == null) return '';
+          const cls = v >= 75 ? 'hi' : v >= 60 ? 'mid' : 'lo';
+          return `<div class="wl-subscore ${cls}"><div class="lbl">${k.slice(0,4)}</div><div class="val">${Math.round(v)}</div></div>`;
+        }).join('')
+      }</div>`
+    : '';
+
+  const above = d.alert_above != null ? (d.alert_above / 100).toFixed(2) : '';
+  const below = d.alert_below != null ? (d.alert_below / 100).toFixed(2) : '';
+
+  const actionBtns = d.isEngine
+    ? `<button class="btn" onclick="addToWatchlistFromEngine('${d.symbol}')" style="background:rgba(124,92,255,0.18);color:var(--accent);border:1px solid var(--accent)">📌 Track</button>`
+    : `<button class="btn" onclick="saveWatchAlerts(${d.id}, '${d.symbol}')" style="background:rgba(46,204,113,0.18);color:var(--green);border:1px solid var(--green)">💾 Save alerts</button>
+       <button class="btn" onclick="removeFromWatchlist(${d.id})" style="background:rgba(231,76,60,0.18);color:var(--red);border:1px solid var(--red)">🚫 Remove</button>`;
+
+  return `
+    ${subHtml}
+    <div class="wl-alerts">
+      <label>
+        <span>Alert above</span>
+        <input type="number" step="0.05" id="wl-above-${d.symbol}" value="${above}" placeholder="₹ price">
+      </label>
+      <label>
+        <span>Alert below</span>
+        <input type="number" step="0.05" id="wl-below-${d.symbol}" value="${below}" placeholder="₹ price">
+      </label>
+    </div>
+    <div class="wl-actions">${actionBtns}</div>
+  `;
+}
+
+async function addToWatchlistFromEngine(sym) {
+  const above = document.getElementById('wl-above-' + sym)?.value;
+  const below = document.getElementById('wl-below-' + sym)?.value;
+  const params = new URLSearchParams({ symbol: sym, thesis: 'promoted from engine' });
+  if (above) params.set('alert_above', above);
+  if (below) params.set('alert_below', below);
+  await fetch('/api/trading?action=watchlist_add&key=' + encodeURIComponent(DASHBOARD_KEY) + '&' + params);
+  loadWatchlist();
+}
+
+async function saveWatchAlerts(id, sym) {
+  // Existing watchlist_add does INSERT OR REPLACE — re-add with same id to update alert prices.
+  const above = document.getElementById('wl-above-' + sym)?.value;
+  const below = document.getElementById('wl-below-' + sym)?.value;
+  const params = new URLSearchParams({ symbol: sym });
+  if (above) params.set('alert_above', above);
+  if (below) params.set('alert_below', below);
+  await fetch('/api/trading?action=watchlist_add&key=' + encodeURIComponent(DASHBOARD_KEY) + '&' + params);
+  loadWatchlist();
+}
+
+function escapeHtml(s) {
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 async function addToWatchlist() {
