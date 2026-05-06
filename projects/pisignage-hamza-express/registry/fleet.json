@@ -76,10 +76,10 @@
     "pisignage_group_id": "69f6013bedc3464da687f668",
     "pisignage_group_name": "Outdoor Facade",
     "orientation": "landscape",
-    "adb_ip": "192.168.31.103",
+    "adb_ip": "192.168.31.99",
     "adb_port": 5555,
     "wifi_mac": "EC:0D:E4:BA:D6:A0",
     "fire_tv_serial": "G4N1WC06438500LX",
-    "_note": "Registered 2026-05-04. No playlist assigned yet."
+    "_note": "Registered 2026-05-04. Shows 'system_notice' (no playlist assigned). IP corrected from .103 → .99 on 2026-05-06 (PiSignage API is truth-source for IPs; ADB ping to .103 confirmed dead)."
   }
 }

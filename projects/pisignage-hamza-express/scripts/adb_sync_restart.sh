@@ -1,23 +1,21 @@
 #!/usr/bin/env bash
-# adb_sync_restart.sh
-# Hard-sync all 6 PiSignage players to the SAME start point simultaneously.
+# adb_sync_restart.sh — EMERGENCY ONLY
 #
-# HOW IT WORKS:
-#   1. Force-stops com.pisignage.player2 on all 6 FireSticks in parallel
-#   2. Waits for all stops to complete (~200ms)
-#   3. Launches com.pisignage.player2/.MainActivity on all 6 in parallel
+# Daily fleet sync is now handled NATIVELY by PiSignage:
+#   - Every group has reboot.enable=true at 06:45 IST (set 2026-05-06)
+#   - Fire OS reboots → PiSignage app auto-starts → all 6 begin asset[0] in
+#     lockstep within seconds
+#   - No ADB / no laptop / no Hamza WiFi presence required for daily ops
 #
-#   All 6 apps start from asset[0] within the same ~100ms window.
-#   V1/V2/V3/V4 run psychology_v3_kathi (5 slots × 10s = 50s loop), so they stay
-#   in lockstep for the ENTIRE DAY with zero drift.
+# Run this script ONLY for:
+#   - Mid-day drift recovery (force re-sync without waiting for 06:45)
+#   - PiSignage native reboot escalation if a TV doesn't sync
 #
-# WHEN TO RUN:
-#   - Every morning when outlet opens
-#   - After any content update (once all TVs finish downloading new assets)
-#   - After any TV reboots
+# Force-stops com.pisignage.player2 on all 6 Fire Sticks in parallel, then
+# launches them in the same ~100ms window. V1/V2/V3/V4 share a 50s
+# psychology_v3_kathi loop and resume in lockstep.
 #
-# MUST BE ON HAMZA WIFI (192.168.31.x) for ADB to reach the TVs.
-# TV-H2 is on Hamza Ext — same subnet, still reachable.
+# Requires: laptop on Hamza WiFi (192.168.31.x).
 #
 # Usage: bash adb_sync_restart.sh
 
@@ -26,7 +24,7 @@ ACTIVITY="${PKG}/.MainActivity"
 
 # TV name:IP pairs — bash 3.2 compatible (no associative arrays)
 TV_NAMES=("TV-V1" "TV-V2" "TV-V3" "TV-V4" "TV-H1" "TV-H2")
-TV_IPS=("192.168.31.113" "192.168.31.81" "192.168.31.135" "192.168.31.164" "192.168.31.33" "192.168.31.103")
+TV_IPS=("192.168.31.113" "192.168.31.81" "192.168.31.135" "192.168.31.164" "192.168.31.33" "192.168.31.99")
 
 echo "=== HE Fleet Sync Restart ==="
 echo "Package: $PKG"
