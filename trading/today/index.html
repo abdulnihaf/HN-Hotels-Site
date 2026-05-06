@@ -277,7 +277,7 @@
       <div class="pick-card pick-${i + 1}">
         <div class="pick-head">
           <span class="pick-rank">#${i + 1}</span>
-          <span class="pick-symbol">${escapeHtml(p.symbol)}</span>
+          <span class="pick-symbol" data-stock-symbol="${escapeHtml(p.symbol)}">${escapeHtml(p.symbol)}</span>
           ${p.weight_pct ? `<span class="pick-weight">${p.weight_pct}% capital</span>` : ''}
           ${p.target_pct ? `<span style="font-size:10px;color:var(--green)">target +${p.target_pct}%</span>` : ''}
           ${p.stop_pct ? `<span style="font-size:10px;color:var(--red)">stop -${p.stop_pct}%</span>` : ''}
@@ -321,7 +321,7 @@
 
     const rows = pool.map((r, i) => {
       const inPicks = pickedSyms.has(r.symbol);
-      return `<div class="pool-row ${inPicks ? 'in-picks' : ''}">
+      return `<div class="pool-row ${inPicks ? 'in-picks' : ''}" data-stock-symbol="${escapeHtml(r.symbol)}">
         <span class="rank">#${i + 1}</span>
         <div>
           <div class="symbol">${escapeHtml(r.symbol)}${inPicks ? ' <span style="font-size:10px;color:var(--green)">✓ in picks</span>' : ''}</div>
@@ -394,7 +394,7 @@
     const computedRel = sc.computed_at ? fmtRelative(sc.computed_at) : null;
 
     const candidateRows = candidates.map((c, i) => `
-      <div class="pool-row">
+      <div class="pool-row" data-stock-symbol="${escapeHtml(c.symbol)}">
         <span class="rank">#${i + 1}</span>
         <div>
           <div class="symbol">${escapeHtml(c.symbol)}</div>
@@ -479,5 +479,6 @@
   });
 </script>
 <script src="/trading/_lib/spine.js" defer></script>
+<script src="/trading/_lib/stock-modal.js" defer></script>
 </body>
 </html>

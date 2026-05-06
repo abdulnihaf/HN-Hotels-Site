@@ -343,7 +343,7 @@
 
     return `<div class="${cardCls}">
       <div class="pos-head">
-        <span class="pos-symbol">${escapeHtml(p.symbol)}</span>
+        <span class="pos-symbol" data-stock-symbol="${escapeHtml(p.symbol)}">${escapeHtml(p.symbol)}</span>
         <span class="pos-ltp">${fmtPrice(p.ltp_paise)}</span>
         ${p.pnl_pct_now != null ? `<span style="font-size:11px;color:${p.pnl_pct_now > 0 ? 'var(--green)' : 'var(--red)'}">${fmtPct(p.pnl_pct_now)}</span>` : ''}
         <span class="pos-pnl ${pnlClass(p.pnl_paise)}">${fmtPnl(p.pnl_paise)}</span>
@@ -410,7 +410,7 @@
       const pnlPaise = p.pnl_net_paise != null ? p.pnl_net_paise : p.pnl_gross_paise;
       const exitPctVsEntry = p.exit_paise && p.entry_paise
         ? +(((p.exit_paise - p.entry_paise) / p.entry_paise) * 100).toFixed(2) : null;
-      return `<div class="exited-card">
+      return `<div class="exited-card" data-stock-symbol="${escapeHtml(p.symbol)}">
         <span class="symbol">${escapeHtml(p.symbol)}</span>
         <div>
           <span class="exit-reason ${cls}">${escapeHtml(p.exit_reason || '?')}</span>
@@ -547,5 +547,6 @@
   });
 </script>
 <script src="/trading/_lib/spine.js" defer></script>
+<script src="/trading/_lib/stock-modal.js" defer></script>
 </body>
 </html>
