@@ -10,9 +10,15 @@ crons = [
   "30 13 * * 1-5",
   # Pre-market 08:30 IST → UTC 03:00 — cascade refresh on overnight data
   "0 3 * * 1-5",
-  # Market hours 09:30-15:30 IST → UTC 04:00-09:00 hourly — live composite recompute
-  "0 4-9 * * 1-5",
-  # Market hours every 30 min — cascade re-scan
+  # Market hours 09:30-15:30 IST → UTC 04:00-10:00 hourly — live composite recompute
+  # TZ-6 fix May 6 2026: was "0 4-9 * * 1-5" (= 09:30-14:30 IST) — missed 15:30 IST close.
+  # Extended to "0 4-10" to add the closing-tick recompute. Signal engine is local
+  # compute (no LLM, no API), so 1 extra fire/day is essentially free.
+  "0 4-10 * * 1-5",
+  # Market hours every 30 min — cascade re-scan (09:30-15:00 IST)
+  # Note: only extends to 15:00 IST (UTC 09:30) because the closing tick is captured
+  # by the hourly recompute at 15:30 IST. Cascade re-scan at 15:30 IST would race
+  # with the hourly composite — keep them separate.
   "*/30 4-9 * * 1-5",
   # 18:05 IST → UTC 12:35 — REPEAT_BLOCK_BUYER detector after bulk/block refresh
   "35 12 * * 1-5",

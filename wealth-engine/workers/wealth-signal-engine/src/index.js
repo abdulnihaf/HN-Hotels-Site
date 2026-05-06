@@ -995,8 +995,10 @@ const CRON_DISPATCH = {
   // Pre-market 08:30 IST: refresh cascades on overnight US/Asia data
   '0 3 * * 1-5':    { name: 'cascade_premarket',       fn: detectCascades },
   // Hourly during market: live composite refresh on accumulating intraday data
-  '0 4-9 * * 1-5':  { name: 'compute_intraday_hourly', fn: computeAll },
-  // Every 30 min during market: cascade re-scan
+  // TZ-6 fix May 6 2026: extended from '0 4-9' (09:30-14:30 IST) to '0 4-10'
+  // (09:30-15:30 IST) so closing-tick recompute fires before autopsy runs.
+  '0 4-10 * * 1-5': { name: 'compute_intraday_hourly', fn: computeAll },
+  // Every 30 min during market: cascade re-scan (09:30-15:00 IST)
   '*/30 4-9 * * 1-5': { name: 'cascade_intraday',      fn: detectCascades },
   // 18:05 IST = UTC 12:35 — fires after bulk/block deals refresh (~17:30 IST)
   // so any same-day repeat-buyer accumulation is detected on the same evening.

@@ -16,10 +16,15 @@ crons = [
   # Trailing stop + halt + profit-lock checks at tight cadence.
   "*/3 5-9 * * 1-5",
 
-  # PRE-MARKET WARM-UP — UTC 03 = IST 08:30-09:29 (just before market opens)
+  # PRE-MARKET WARM-UP — UTC 03 every 15 min = IST 08:30 / 08:45 / 09:00 / 09:15
+  # TZ-10 comment fix May 6 2026: was claimed "08:30-09:29 IST" but */15 3 fires
+  # 4 times in hour 3 UTC; last fire at 09:15 IST (= market open tick).
   "*/15 3 * * 1-5",
 
-  # POST-MARKET TRANSITION — UTC 10 = IST 15:30-16:00 (final hard exit + cleanup)
+  # POST-MARKET TRANSITION — UTC 10 every 5 min = IST 15:30-16:25 (12 fires)
+  # TZ-11 comment fix May 6 2026: was claimed "15:30-16:00 IST" but */5 10 fires
+  # through 16:25 IST. Wider window kept intentionally — 25 min after close for
+  # cleanup (Sonnet safety, position state reconciliation, exit-reason logging).
   "*/5 10 * * 1-5",
 ]
 

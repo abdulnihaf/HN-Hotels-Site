@@ -16,9 +16,13 @@ crons = [
   "30 0 * * *",          # 06:00 IST  daily      board meetings (NSE)
   "0 1 * * *",           # 06:30 IST  daily      results calendar (derived)
   # ─── Bond yields — every 30 min during India market ─────────────
-  "0,30 3-10 * * 1-5",   # every 30 min,  09:00-15:30 IST  (India 10Y/5Y/1Y + US 10Y)
+  # TZ-4 comment fix May 6 2026: actual fires 08:30-16:00 IST (UTC 03:00-10:30 at
+  # min 0,30). Wider than market — captures 30 min pre/post — but bond yields are
+  # macro-only with no trading-data impact, so over-firing kept intentionally.
+  "0,30 3-10 * * 1-5",   # every 30 min,  08:30-16:00 IST  (India 10Y/5Y/1Y + US 10Y)
   # ─── USD/INR forwards — 15-min offset to avoid collisions ───────
-  "15,45 3-10 * * 1-5",  # every 30 min,  09:15-15:45 IST  (synthetic via IRP)
+  # TZ-5 comment fix May 6 2026: actual fires 08:45-16:15 IST.
+  "15,45 3-10 * * 1-5",  # every 30 min,  08:45-16:15 IST  (synthetic via IRP)
 ]
 
 [[d1_databases]]

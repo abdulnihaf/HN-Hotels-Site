@@ -4,11 +4,14 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
 
-# IST = UTC + 5:30
+# IST = UTC + 5:30 (India does NOT observe DST — fixed offset year-round)
 # Reference:
 #   IST 06:05  = UTC 00:35   IST 08:00  = UTC 02:30   IST 08:30  = UTC 03:00
 #   IST 09:15  = UTC 03:45   IST 15:30  = UTC 10:00   IST 16:00  = UTC 10:30
-#   IST 18:00  = UTC 12:30   IST Sat 02:00 = UTC Fri 20:30  IST Sun 18:00 = UTC Sun 12:30
+#   IST 18:00  = UTC 12:30   IST Sun 02:00 = UTC Sat 20:30   IST Sun 18:00 = UTC Sun 12:30
+# Day-of-week subtleties: late-evening IST (after 18:30 UTC) crosses into next UTC day.
+#   "30 20 * * 6" = Saturday 20:30 UTC = Sunday 02:00 IST (NOT Saturday).
+#   For Saturday 02:00 IST, you'd need "30 20 * * 5" (Friday 20:30 UTC).
 [triggers]
 crons = [
   # ─── Automation ─────────────────────────────────────────
@@ -28,7 +31,7 @@ crons = [
   # ─── Real-money readiness audit (added May 6 2026 evening) ──────────
   "55 2 * * 1-5",           # 11. Pre-market integrity check  08:25 IST — Layer 1 (intelligence) + Layer 2 (execution)
   "5 11 * * 1-5",            # 12. EOD readiness summary       16:35 IST — runs 5 min after audit_scanner_close so latest findings flow in
-  "30 20 * * 6",            # 9. DB vacuum         Sat 02:00 IST
+  "30 20 * * 6",            # 9. DB vacuum         Sun 02:00 IST (TZ-9 comment fix May 6 2026: was claimed "Sat 02:00 IST" but Sat 20:30 UTC = Sun 02:00 IST. Functionally fine — both weekend off-hours.)
   "30 12 * * 7",            # 10. Weekly digest    Sun 18:00 IST
 ]
 

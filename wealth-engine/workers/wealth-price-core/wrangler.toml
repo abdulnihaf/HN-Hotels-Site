@@ -40,7 +40,10 @@ crons = [
   "0 10 * * 1-5",       # Intraday quotes close   15:30 IST exact
   "7-52/15 3-10 * * 1-5", # Yahoo backup          every 15 min during market (offset)
   # ─── Cross-asset extended hours ─────────────────────────
-  "*/5 1-18 * * *",     # GIFT Nifty              every 5 min, 06:30-23:55 IST
+  # TZ-12 comment fix May 6 2026: actual fires every 5 min UTC 01:00-18:55 = IST 06:30-00:25 next day.
+  # Wider than originally claimed ("06:30-23:55 IST") — extra 30 min past midnight IST captures GIFT
+  # Nifty's late-Singapore-session prices. Kept intentionally for cross-asset coverage.
+  "*/5 1-18 * * *",     # GIFT Nifty              every 5 min, 06:30 IST through 00:25 IST next day
 ]
 
 [[d1_databases]]
