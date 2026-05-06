@@ -1,13 +1,31 @@
 #!/usr/bin/env bash
-# adb_no_sleep_all.sh
-# Connect to all 6 Hamza Express FireStick TVs via ADB over WiFi
-# and apply no-sleep + screensaver-disable + ADB-persistence settings.
+# adb_no_sleep_all.sh — ONE-TIME SETUP ONLY
 #
-# Hardware: Marq LED Smart TV 43" HD (display) + Amazon Fire TV Stick (player, model AFTSS)
-# All settings written to Android settings.db — survive reboots natively.
+# Run this ONCE per Fire TV Stick, when the device is first installed,
+# AFTER a Fire OS major upgrade, or AFTER a factory reset.
+# All values it writes live in Android's settings.db and persist across
+# reboots forever — re-running is only a verification, not a requirement.
 #
-# Run this ONCE after any reboot or power cycle. Also safe to run daily.
-# Must be on Hamza WiFi (192.168.31.x) for ADB to reach the TVs.
+# Hardware: Marq LED Smart TV 43" HD (display) + Amazon Fire TV Stick
+# (player, model AFTSS, Fire OS 9 / SDK 28).
+#
+# Settings applied:
+#   - screen_off_timeout = 2147483647       (effectively never)
+#   - stay_on_while_plugged_in = 3          (AC + USB)
+#   - screensaver_enabled = 0               (no Daydream)
+#   - wifi_sleep_policy = 2                 (WiFi never sleeps — keeps PiSignage downloading)
+#   - wifi_enhanced_auto_join = 0           (disable aggressive WiFi power-save)
+#   - development_settings_enabled = 1      (Developer Options stays on)
+#   - adb_enabled = 1                       (ADB-over-TCP survives reboots)
+#   - adaptive_sleep = 0                    (Fire OS 9 only)
+#
+# After this runs once, daily ops are 100% PiSignage-native:
+#   - Daily 06:45 IST reboot via PiSignage group config (all 6 groups, set 2026-05-06)
+#   - Health check: python3 pisignage_health_check.py
+#   - Content updates: PiSignage API / web UI
+#   - No ADB needed for routine operations.
+#
+# Requires: laptop on Hamza WiFi (192.168.31.x).
 #
 # Usage: bash adb_no_sleep_all.sh
 
@@ -17,7 +35,7 @@ declare -A TVS=(
   ["TV-V3"]="192.168.31.135"
   ["TV-V4"]="192.168.31.164"
   ["TV-H1"]="192.168.31.33"
-  ["TV-H2"]="192.168.31.103"
+  ["TV-H2"]="192.168.31.99"
 )
 
 apply_no_sleep() {
