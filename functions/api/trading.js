@@ -88,8 +88,6 @@ export async function onRequest(context) {
       case 'bond_direction':    return Response.json(await getBondDirection(db), { headers });
       // ── Watchlist ──
       case 'watchlist':         return Response.json(await getWatchlist(db, url), { headers });
-      // PR-C: 30-day EOD close arrays for sparklines, batched per symbol list
-      case 'watchlist_sparklines': return Response.json(await getWatchlistSparklines(db, url), { headers });
       case 'watchlist_add':     return Response.json(await addWatchlist(db, url), { headers });
       case 'watchlist_remove':  return Response.json(await removeWatchlist(db, url), { headers });
       case 'symbol_search':     return Response.json(await searchSymbols(db, url), { headers });
@@ -1803,44 +1801,6 @@ async function getWatchlist(db, url) {
     engine_picks: enginePicks.map(r => ({ ...r, latest: ltps[r.symbol] || null })),
     generated_at: Date.now(),
   };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PR-C: batched sparkline data for watchlist rows.
-// GET /api/trading?action=watchlist_sparklines&symbols=BAJFINANCE,TATAMOTORS&days=30
-// Returns last N EOD closes per symbol — small payload (~300 bytes/sym)
-// designed for inline SVG sparklines on the watchlist rail.
-// ═══════════════════════════════════════════════════════════════════════════
-async function getWatchlistSparklines(db, url) {
-  const raw = (url.searchParams.get('symbols') || '').trim();
-  if (!raw) return { data: {}, generated_at: Date.now() };
-  const symbols = raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 50);
-  const days = Math.min(parseInt(url.searchParams.get('days') || '30'), 180);
-  if (symbols.length === 0) return { data: {}, generated_at: Date.now() };
-
-  // Pull closes per symbol, ordered ASC so client can polyline left→right.
-  // Single query with IN clause + window function emulation by self-join.
-  const placeholders = symbols.map(() => '?').join(',');
-  const rows = (await db.prepare(`
-    SELECT symbol, trade_date, close_paise
-    FROM equity_eod
-    WHERE symbol IN (${placeholders})
-      AND trade_date >= date('now', ?)
-      AND exchange = 'NSE'
-    ORDER BY symbol, trade_date ASC
-  `).bind(...symbols, '-' + days + ' day').all()).results || [];
-
-  const data = {};
-  for (const r of rows) {
-    if (!data[r.symbol]) data[r.symbol] = [];
-    data[r.symbol].push({ d: r.trade_date, c: r.close_paise / 100 });
-  }
-  // Trim each to last `days` entries (in case the date filter overshoots)
-  for (const sym of Object.keys(data)) {
-    if (data[sym].length > days) data[sym] = data[sym].slice(-days);
-  }
-
-  return { data, days, symbols, generated_at: Date.now() };
 }
 
 async function addWatchlist(db, url) {
