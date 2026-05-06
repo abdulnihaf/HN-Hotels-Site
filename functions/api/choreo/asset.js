@@ -2,22 +2,21 @@
 //
 // Asset proxy for HE choreography synchronizer.
 // Fetches images/videos from PiSignage CDN with JWT authentication and
-// streams them back to the WebView. The JWT is cached in KV (4hr TTL)
-// and refreshed on demand using PiSignage email/password (Cloudflare secrets).
+// streams them back to the WebView. JWT refreshed in-memory per worker
+// isolate (no KV dependency) — first request per cold-start refreshes,
+// subsequent requests in the same isolate reuse the cached JWT.
 //
 // Required Cloudflare secrets:
 //   PISIGNAGE_EMAIL, PISIGNAGE_PASSWORD
-// Required KV binding:
-//   SESSIONS (already configured in wrangler.toml)
-//
-// JWT cache key: "pisignage:jwt"
 
 const PISIGNAGE_BASE = "https://hamzaexpress.pisignage.com";
-const KV_KEY = "pisignage:jwt";
 const JWT_REFRESH_MARGIN_MS = 5 * 60 * 1000; // refresh if <5min until expiry
 
-// Whitelist of allowed filenames — prevents arbitrary path access via the proxy.
-// Keep in sync with registry/assets.json.
+// In-memory JWT cache (per isolate)
+let cachedToken = null;
+let cachedExp = 0;
+
+// Whitelist of allowed filenames (prevents arbitrary path access)
 const ALLOWED = new Set([
   "Final_v3_TV-V1_C2_GheeRice_DalFry_Kabab.png",
   "Video_v3_TV-V1_C2_GheeRice_DalFry_Kabab.mp4",
@@ -45,9 +44,12 @@ const ALLOWED = new Set([
 function jwtExp(token) {
   try {
     const [, payload] = token.split(".");
-    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const decoded = JSON.parse(json);
     return decoded.exp ? decoded.exp * 1000 : 0;
-  } catch (_) { return 0; }
+  } catch (_) {
+    return 0;
+  }
 }
 
 async function refreshJwt(env) {
@@ -60,21 +62,19 @@ async function refreshJwt(env) {
       getToken: true,
     }),
   });
-  if (!r.ok) throw new Error("session refresh HTTP " + r.status);
+  if (!r.ok) throw new Error("session HTTP " + r.status);
   const j = await r.json();
   if (!j.token) throw new Error("no token in session response");
-  await env.SESSIONS.put(KV_KEY, j.token, { expirationTtl: 4 * 60 * 60 });
+  cachedToken = j.token;
+  cachedExp = jwtExp(j.token);
   return j.token;
 }
 
 async function getJwt(env) {
-  let token = await env.SESSIONS.get(KV_KEY);
-  if (token) {
-    const exp = jwtExp(token);
-    if (!exp || exp - Date.now() < JWT_REFRESH_MARGIN_MS) token = null;
+  if (cachedToken && cachedExp - Date.now() > JWT_REFRESH_MARGIN_MS) {
+    return cachedToken;
   }
-  if (!token) token = await refreshJwt(env);
-  return token;
+  return await refreshJwt(env);
 }
 
 export async function onRequest(context) {
@@ -83,24 +83,19 @@ export async function onRequest(context) {
     const url = new URL(request.url);
     const filename = url.searchParams.get("f");
 
-    if (!filename) {
-      return new Response("missing ?f=", { status: 400 });
-    }
-    if (!ALLOWED.has(filename)) {
+    if (!filename) return new Response("missing ?f=", { status: 400 });
+    if (!ALLOWED.has(filename))
       return new Response("filename not allowed: " + filename, { status: 403 });
-    }
-    if (!env.PISIGNAGE_EMAIL || !env.PISIGNAGE_PASSWORD) {
-      return new Response("server not configured (missing email/password secrets)", { status: 500 });
-    }
-    if (!env.SESSIONS) {
-      return new Response("SESSIONS KV binding missing", { status: 500 });
-    }
+    if (!env.PISIGNAGE_EMAIL || !env.PISIGNAGE_PASSWORD)
+      return new Response("server not configured (missing email/password)", { status: 500 });
 
     let token;
     try {
       token = await getJwt(env);
     } catch (e) {
-      return new Response("auth-step: " + (e && e.stack ? e.stack : String(e)), { status: 502 });
+      return new Response("auth-step: " + (e && e.message ? e.message : String(e)), {
+        status: 502,
+      });
     }
 
     const upstream = `${PISIGNAGE_BASE}/media/hamzaexpress/${encodeURIComponent(filename)}`;
@@ -108,20 +103,27 @@ export async function onRequest(context) {
     try {
       upstreamResp = await fetch(upstream, { headers: { "x-access-token": token } });
     } catch (e) {
-      return new Response("fetch-step: " + (e && e.stack ? e.stack : String(e)), { status: 502 });
+      return new Response("fetch-step: " + (e && e.message ? e.message : String(e)), {
+        status: 502,
+      });
     }
 
     if (upstreamResp.status === 401) {
+      // JWT may have been invalidated server-side — force-refresh once
       try {
         token = await refreshJwt(env);
         upstreamResp = await fetch(upstream, { headers: { "x-access-token": token } });
       } catch (e) {
-        return new Response("retry-step: " + (e && e.stack ? e.stack : String(e)), { status: 502 });
+        return new Response("retry-step: " + (e && e.message ? e.message : String(e)), {
+          status: 502,
+        });
       }
     }
     return passthrough(upstreamResp);
   } catch (e) {
-    return new Response("top-level: " + (e && e.stack ? e.stack : String(e)), { status: 500 });
+    return new Response("top-level: " + (e && e.message ? e.message : String(e)), {
+      status: 500,
+    });
   }
 }
 
