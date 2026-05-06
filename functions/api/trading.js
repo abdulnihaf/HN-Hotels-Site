@@ -120,6 +120,7 @@ export async function onRequest(context) {
       case 'intelligence_audit': return Response.json(await getIntelligenceAudit(db), { headers });
       case 'system_health':      return Response.json(await getSystemHealth(db), { headers });
       case 'eod_learning_audit': return Response.json(await getEodLearningAudit(db, env, url), { headers });
+      case 'readiness_report':   return Response.json(await getReadinessReport(db, url), { headers });
       case 'monthly_learning_trail': return Response.json(await getMonthlyLearningTrail(db, url), { headers });
       case 'weekly_review_latest': return Response.json(await getLatestWeeklyReview(db), { headers });
       case 'autopsy_latest':     return Response.json(await getLatestAutopsies(db, url), { headers });
@@ -3020,6 +3021,102 @@ async function getTodaysWatchlist(db, url) {
 //   gap      — missing intelligence (e.g., entry-timing strategy not surgical)
 //
 // At market close, owner reviews this list and fixes top-priority items.
+// ═══════════════════════════════════════════════════════════════════════════
+// REAL-MONEY READINESS REPORT
+// ═══════════════════════════════════════════════════════════════════════════
+// Returns the 2-layer readiness state for the dashboard at /trading/readiness/.
+// Reads `audit_findings` rows tagged with category IN ('pre_market_integrity','eod_readiness')
+// and groups by layer + trade_date. The doc this powers is at
+// /trading/_context/17-REAL-MONEY-READINESS-AUDIT.md
+async function getReadinessReport(db, url) {
+  const istNow = new Date(Date.now() + 5.5 * 3600000);
+  const today = url.searchParams.get('date') || istNow.toISOString().slice(0, 10);
+  const lookbackDays = parseInt(url.searchParams.get('days') || '7');
+
+  // Pull all readiness-tagged findings for the lookback window
+  const cutoffMs = Date.now() - lookbackDays * 86400000;
+  const findings = (await db.prepare(`
+    SELECT id, trade_date, category, severity, layer, signature, title, detail, proposed_fix, data_json,
+           datetime(detected_at/1000,'unixepoch','+5 hours','+30 minutes') AS detected_ist,
+           detected_at, resolved_at, resolved_by
+    FROM audit_findings
+    WHERE category IN ('pre_market_integrity','eod_readiness')
+      AND detected_at >= ?
+    ORDER BY detected_at DESC
+  `).bind(cutoffMs).all()).results || [];
+
+  // Group by trade_date + layer + category
+  const byDate = {};
+  for (const f of findings) {
+    const d = f.trade_date;
+    if (!byDate[d]) byDate[d] = { trade_date: d, intelligence: { pre_market: null, eod: null }, execution: { pre_market: null, eod: null } };
+    const layerSlot = byDate[d][f.layer];
+    if (!layerSlot) continue;
+    const slotKey = f.category === 'pre_market_integrity' ? 'pre_market' : 'eod';
+    // Keep the latest (highest detected_at) per slot
+    if (!layerSlot[slotKey] || layerSlot[slotKey].detected_at < f.detected_at) {
+      layerSlot[slotKey] = {
+        severity: f.severity,
+        title: f.title,
+        detail: f.detail,
+        proposed_fix: f.proposed_fix,
+        data: (() => { try { return JSON.parse(f.data_json || '{}'); } catch { return {}; } })(),
+        detected_ist: f.detected_ist,
+        detected_at: f.detected_at,
+        resolved: !!f.resolved_at,
+        resolved_by: f.resolved_by,
+      };
+    }
+  }
+
+  const days = Object.values(byDate).sort((a, b) => b.trade_date.localeCompare(a.trade_date));
+
+  // Compute today's combined rollup
+  const todayEntry = byDate[today];
+  let todayRollup = { layer1: 'unknown', layer2: 'unknown', combined: 'unknown', go_no_go: 'NO-DATA' };
+  if (todayEntry) {
+    const l1Worst = ['critical', 'warning', 'info', null].find(s =>
+      (todayEntry.intelligence.pre_market?.severity === s) || (todayEntry.intelligence.eod?.severity === s)
+    );
+    const l2Worst = ['critical', 'warning', 'info', null].find(s =>
+      (todayEntry.execution.pre_market?.severity === s) || (todayEntry.execution.eod?.severity === s)
+    );
+    todayRollup = {
+      layer1: l1Worst || 'info',
+      layer2: l2Worst || 'info',
+      combined: (l1Worst === 'critical' || l2Worst === 'critical') ? 'critical'
+              : (l1Worst === 'warning' || l2Worst === 'warning') ? 'warning' : 'info',
+      go_no_go: (l1Worst === 'critical' || l2Worst === 'critical') ? 'NO-GO'
+              : (l1Worst === 'warning' || l2Worst === 'warning') ? 'GO-WITH-WARNING' : 'GO',
+    };
+  }
+
+  // Summary counters across the window
+  const counts = {
+    days_with_data: days.length,
+    intelligence_critical_days: days.filter(d => d.intelligence.eod?.severity === 'critical').length,
+    execution_critical_days: days.filter(d => d.execution.eod?.severity === 'critical').length,
+    intelligence_pieces_missing_today: todayEntry?.intelligence?.eod?.data?.pieces_missing?.length || 0,
+    execution_pieces_missing_today: todayEntry?.execution?.eod?.data?.pieces_missing?.length || 0,
+  };
+
+  // Today's pick accuracy (if available from EOD finding)
+  const pickAccuracy = todayEntry?.intelligence?.eod?.data?.pick_accuracy || null;
+  const tradeSummary = todayEntry?.execution?.eod?.data?.trade_summary || null;
+
+  return {
+    today,
+    lookback_days: lookbackDays,
+    rollup: todayRollup,
+    counts,
+    pick_accuracy: pickAccuracy,
+    trade_summary: tradeSummary,
+    days,
+    real_money_target_date: '2026-05-11',
+    paper_trade_days_remaining: Math.max(0, Math.floor((new Date('2026-05-09T00:00:00').getTime() - Date.now()) / 86400000)),
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 async function getOpsAuditToday(db, url) {
   const istNow = new Date(Date.now() + 5.5 * 3600000);

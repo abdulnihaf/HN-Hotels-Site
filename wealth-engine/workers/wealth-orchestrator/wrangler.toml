@@ -25,6 +25,9 @@ crons = [
   "55 0 * * 1-5",           # 7. Kite reminder PRE  05:55 IST
   "0 1 * * 1-5",            # 7b Kite reminder POST 06:30 IST
   "30 10 * * 1-5",          # 8. EOD portfolio     16:00 IST M-F
+  # ─── Real-money readiness audit (added May 6 2026 evening) ──────────
+  "55 2 * * 1-5",           # 11. Pre-market integrity check  08:25 IST — Layer 1 (intelligence) + Layer 2 (execution)
+  "5 11 * * 1-5",            # 12. EOD readiness summary       16:35 IST — runs 5 min after audit_scanner_close so latest findings flow in
   "30 20 * * 6",            # 9. DB vacuum         Sat 02:00 IST
   "30 12 * * 7",            # 10. Weekly digest    Sun 18:00 IST
 ]

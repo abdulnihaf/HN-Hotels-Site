@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Wealth Engine — Real-Money Readiness</title>
+<link rel="manifest" href="/trading/manifest.json">
+<meta name="theme-color" content="#0a0f1c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="color-scheme" content="dark">
+<style>
+  :root {
+    --bg: #0a0f1c; --panel: #121a2e; --panel-2: #1a2540;
+    --border: #2a3656; --text: #e6ecff; --muted: #8a96b8;
+    --green: #2ecc71; --red: #e74c3c; --yellow: #f5b041; --blue: #4fa3ff;
+    --accent: #7c5cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh;
+    padding: 14px; padding-top: env(safe-area-inset-top, 14px);
+  }
+  header { margin-bottom: 14px; }
+  h1 { font-size: 17px; font-weight: 700; }
+  h1 .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 3px; }
+  .tab-nav { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .tab-nav a {
+    padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 500;
+    text-decoration: none; border: 1px solid var(--border); color: var(--muted);
+    background: var(--panel-2);
+  }
+  .tab-nav a.active { background: rgba(124,92,255,0.18); color: var(--accent); border-color: var(--accent); }
+
+  .pin-gate { max-width: 380px; margin: 80px auto; padding: 28px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+  .pin-gate input { width: 100%; padding: 12px; font-size: 16px; margin: 10px 0;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+  .pin-gate button { width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+    background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; min-height: 44px; }
+
+  .hero {
+    background: linear-gradient(135deg, var(--panel) 0%, var(--panel-2) 100%);
+    border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+    margin-bottom: 14px;
+  }
+  .hero .target { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .hero .countdown { font-size: 26px; font-weight: 700; margin-top: 2px; }
+  .hero .gono { display: inline-block; font-size: 16px; font-weight: 700; padding: 4px 12px; border-radius: 8px; margin-top: 8px; }
+  .hero .gono.GO { background: rgba(46,204,113,0.18); color: var(--green); }
+  .hero .gono.NO-GO { background: rgba(231,76,60,0.18); color: var(--red); }
+  .hero .gono.GO-WITH-WARNING { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .hero .gono.NO-DATA { background: rgba(138,150,184,0.18); color: var(--muted); }
+
+  .layers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  @media (max-width: 700px) { .layers-grid { grid-template-columns: 1fr; } }
+
+  .layer-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px; border-top: 4px solid var(--border);
+  }
+  .layer-card.critical { border-top-color: var(--red); }
+  .layer-card.warning { border-top-color: var(--yellow); }
+  .layer-card.info { border-top-color: var(--green); }
+  .layer-card .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .layer-card .name { font-size: 15px; font-weight: 700; margin-top: 2px; }
+  .layer-card .desc { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .layer-card .status { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 8px; margin-top: 8px; }
+  .layer-card .status.critical { background: rgba(231,76,60,0.18); color: var(--red); }
+  .layer-card .status.warning { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .layer-card .status.info { background: rgba(46,204,113,0.18); color: var(--green); }
+  .layer-card .status.unknown { background: rgba(138,150,184,0.18); color: var(--muted); }
+  .layer-card .checks { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .layer-card .check { display: flex; gap: 6px; padding: 4px 0; font-size: 11px; }
+  .layer-card .check .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .layer-card .check .dot.pass { background: var(--green); }
+  .layer-card .check .dot.warn { background: var(--yellow); }
+  .layer-card .check .dot.fail { background: var(--red); }
+  .layer-card .check .lbl { color: var(--text); font-weight: 500; flex: 1; }
+  .layer-card .check .det { color: var(--muted); font-size: 10px; margin-top: 1px; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .stat-cell { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+  .stat-cell .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .stat-cell .val { font-size: 18px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  .day-block { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+  .day-block h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .day-block .day-row { display: grid; grid-template-columns: 80px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .day-block .day-row:last-child { border-bottom: none; }
+  .day-block .date { font-size: 12px; font-weight: 700; }
+  .day-block .layer-info { font-size: 11px; color: var(--muted); }
+  .day-block .layer-info .li { display: inline-block; margin-right: 8px; }
+  .day-block .layer-info .li .sev { padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; margin-right: 3px; }
+  .day-block .layer-info .li .sev.critical { background: rgba(231,76,60,0.18); color: var(--red); }
+  .day-block .layer-info .li .sev.warning { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .day-block .layer-info .li .sev.info { background: rgba(46,204,113,0.18); color: var(--green); }
+
+  .pieces-block { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+  .pieces-block h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .pieces-block .row { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .pieces-block .row:last-child { border-bottom: none; }
+  .pieces-block .row .lbl { color: var(--muted); }
+  .pieces-block .row strong { color: var(--text); }
+  .pieces-block .pcs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .pieces-block .pcs .pc { padding: 3px 8px; border-radius: 6px; background: var(--panel-2); font-size: 10px; }
+  .pieces-block .pcs .pc.crit { background: rgba(231,76,60,0.15); color: var(--red); }
+  .pieces-block .pcs .pc.warn { background: rgba(245,176,65,0.15); color: var(--yellow); }
+
+  .doc-link { display: block; padding: 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; text-align: center; margin-bottom: 10px; color: var(--accent); text-decoration: none; font-size: 12px; }
+  .loading { text-align: center; padding: 40px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="content"></div>
+
+<script>
+  const STORE_KEY = 'wealth_dashboard_key';
+  let DASHBOARD_KEY = localStorage.getItem(STORE_KEY) || '';
+
+  function showPinGate(err) {
+    document.getElementById('content').innerHTML = `
+      <div class="pin-gate">
+        <h2 style="margin-bottom: 6px;">Real-Money Readiness</h2>
+        <p style="font-size: 12px; color: var(--muted); margin-bottom: 14px;">Enter dashboard key</p>
+        <input type="password" id="pin-input" placeholder="dashboard key" autofocus>
+        <button onclick="loginAndLoad()">Unlock</button>
+        ${err ? `<div style="color: var(--red); font-size: 11px; margin-top: 8px;">${err}</div>` : ''}
+      </div>`;
+    document.getElementById('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') loginAndLoad(); });
+  }
+
+  async function loginAndLoad() {
+    const v = document.getElementById('pin-input').value.trim();
+    if (!v) return;
+    DASHBOARD_KEY = v;
+    const ok = await load();
+    if (ok) localStorage.setItem(STORE_KEY, v);
+  }
+
+  async function load() {
+    if (!DASHBOARD_KEY) { showPinGate(); return false; }
+
+    try {
+      const res = await fetch('/api/trading?action=readiness_report&days=7&key=' + encodeURIComponent(DASHBOARD_KEY));
+      if (res.status === 401) { showPinGate('Wrong key'); return false; }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      render(data);
+      return true;
+    } catch (e) {
+      document.getElementById('content').innerHTML = `<div class="loading">Error: ${e.message}</div>`;
+      return false;
+    }
+  }
+
+  function sevTag(s) { return s ? `<span class="sev ${s}">${s.toUpperCase()}</span>` : ''; }
+
+  function checkRow(c) {
+    return `<div class="check">
+      <div class="dot ${c.status}"></div>
+      <div>
+        <div class="lbl">${c.check}</div>
+        <div class="det">${c.detail}</div>
+      </div>
+    </div>`;
+  }
+
+  function render(d) {
+    const today = d.today;
+    const todayDay = d.days.find(x => x.trade_date === today);
+    const l1Sev = d.rollup.layer1 || 'unknown';
+    const l2Sev = d.rollup.layer2 || 'unknown';
+
+    const targetDate = new Date(d.real_money_target_date);
+    const daysToGo = Math.ceil((targetDate.getTime() - Date.now()) / 86400000);
+
+    let l1Checks = '', l2Checks = '';
+    if (todayDay?.intelligence?.pre_market?.data?.checks) {
+      l1Checks = todayDay.intelligence.pre_market.data.checks.map(checkRow).join('');
+    }
+    if (todayDay?.execution?.pre_market?.data?.checks) {
+      l2Checks = todayDay.execution.pre_market.data.checks.map(checkRow).join('');
+    }
+
+    const l1Pieces = todayDay?.intelligence?.eod?.data?.pieces_missing || [];
+    const l2Pieces = todayDay?.execution?.eod?.data?.pieces_missing || [];
+
+    const pickAcc = d.pick_accuracy;
+    const tradeSum = d.trade_summary;
+
+    const dayRows = d.days.map(day => {
+      const l1pm = day.intelligence?.pre_market;
+      const l1eod = day.intelligence?.eod;
+      const l2pm = day.execution?.pre_market;
+      const l2eod = day.execution?.eod;
+      return `<div class="day-row">
+        <div class="date">${day.trade_date}</div>
+        <div class="layer-info">
+          <div class="li"><span class="sev ${l1pm?.severity||'info'}">L1•AM</span><span class="sev ${l1eod?.severity||'info'}">L1•PM</span> intelligence</div>
+          <div class="li"><span class="sev ${l2pm?.severity||'info'}">L2•AM</span><span class="sev ${l2eod?.severity||'info'}">L2•PM</span> execution</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('content').innerHTML = `
+      <header>
+        <h1>Real-Money Readiness
+          <span class="sub">Live state of the 2-layer audit before Mon ${d.real_money_target_date} go-live</span>
+        </h1>
+        <nav class="tab-nav">
+          <a href="/trading/">Today</a>
+          <a href="/trading/execute/">Execute</a>
+          <a href="/trading/audit/">Audit</a>
+          <a href="/trading/readiness/" class="active">Readiness</a>
+          <a href="/trading/roadmap/">Roadmap</a>
+        </nav>
+      </header>
+
+      <div class="hero">
+        <div class="target">Target real-money go-live</div>
+        <div class="countdown">${d.real_money_target_date} · ${daysToGo} days to go</div>
+        <div class="gono ${d.rollup.go_no_go}">${d.rollup.go_no_go}</div>
+      </div>
+
+      <div class="layers-grid">
+        <div class="layer-card ${l1Sev}">
+          <div class="label">Layer 1 — Intelligence</div>
+          <div class="name">Picking the right stock</div>
+          <div class="desc">Pre-market data, scoring, ranking, conviction, Opus pick selection</div>
+          <div class="status ${l1Sev}">${l1Sev.toUpperCase()}</div>
+          <div class="checks">${l1Checks || '<div class="det">No pre-market integrity check yet today</div>'}</div>
+        </div>
+
+        <div class="layer-card ${l2Sev}">
+          <div class="label">Layer 2 — Technical Execution</div>
+          <div class="name">Trading & exiting cleanly</div>
+          <div class="desc">Crons firing, Kite token, order placement, stop/target/trail/hard-exit, profit lock</div>
+          <div class="status ${l2Sev}">${l2Sev.toUpperCase()}</div>
+          <div class="checks">${l2Checks || '<div class="det">No pre-market integrity check yet today</div>'}</div>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-cell"><div class="lbl">Days logged</div><div class="val">${d.counts.days_with_data}</div></div>
+        <div class="stat-cell"><div class="lbl">L1 critical days</div><div class="val">${d.counts.intelligence_critical_days}</div></div>
+        <div class="stat-cell"><div class="lbl">L2 critical days</div><div class="val">${d.counts.execution_critical_days}</div></div>
+        <div class="stat-cell"><div class="lbl">L1 missing today</div><div class="val">${d.counts.intelligence_pieces_missing_today}</div></div>
+        <div class="stat-cell"><div class="lbl">L2 missing today</div><div class="val">${d.counts.execution_pieces_missing_today}</div></div>
+        ${pickAcc ? `<div class="stat-cell"><div class="lbl">Pick hit rate</div><div class="val">${(pickAcc.hit_rate*100).toFixed(0)}%</div></div>` : ''}
+        ${tradeSum ? `<div class="stat-cell"><div class="lbl">Today P&L (paper)</div><div class="val">₹${tradeSum.realized_pnl_net_rupees||0}</div></div>` : ''}
+      </div>
+
+      ${(l1Pieces.length || l2Pieces.length) ? `
+        <div class="pieces-block">
+          <h3>Pieces missing today</h3>
+          ${l1Pieces.length ? `<div class="row">
+            <div class="lbl">Layer 1 — Intelligence</div>
+            <div class="pcs">${l1Pieces.map(p => `<span class="pc ${(p.severity||'').slice(0,4)}">${p.title || p.signature || p}</span>`).join('')}</div>
+          </div>` : ''}
+          ${l2Pieces.length ? `<div class="row">
+            <div class="lbl">Layer 2 — Execution</div>
+            <div class="pcs">${l2Pieces.map(p => `<span class="pc ${(p.severity||'').slice(0,4)}">${p.title || p.signature || p}</span>`).join('')}</div>
+          </div>` : ''}
+        </div>` : ''}
+
+      <div class="day-block">
+        <h3>Daily log (last ${d.lookback_days} days)</h3>
+        ${dayRows || '<div class="loading">No daily entries yet — first appears Thu after pre-market integrity check at 08:25 IST.</div>'}
+      </div>
+
+      <a class="doc-link" href="https://github.com/abdulnihaf/HN-Hotels-Site/blob/main/trading/_context/17-REAL-MONEY-READINESS-AUDIT.md" target="_blank">📖 Read the master audit doc (17-REAL-MONEY-READINESS-AUDIT.md)</a>
+    `;
+  }
+
+  load();
+</script>
+</body>
+</html>
