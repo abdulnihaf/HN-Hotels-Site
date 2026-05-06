@@ -820,25 +820,20 @@
       <div id="readinessGates"></div>
     </div>
 
-    <!-- ── WATCHLIST ── -->
+    <!-- ── WATCHLIST — engine-driven, zero manual curation ── -->
     <details class="panel" id="watchlistPanel" data-modes="pre_market live" open style="margin-bottom:14px;padding:14px">
       <summary style="cursor:pointer;list-style:none;font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>👀 Watchlist</span>
-        <span class="small" style="color:var(--muted);font-weight:400">▼ stocks you're tracking + engine top picks</span>
+        <span class="small" style="color:var(--muted);font-weight:400">▼ engine's live ranking · score ≥ 70</span>
       </summary>
       <div style="margin-top:12px">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-          <input id="wlSymbol" type="text" placeholder="SYMBOL (e.g. RELIANCE)" style="flex:1;min-width:160px;padding:8px 10px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;text-transform:uppercase">
-          <input id="wlThesis" type="text" placeholder="One-line thesis (optional)" style="flex:2;min-width:200px;padding:8px 10px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
-          <button onclick="addToWatchlist()" class="btn primary" style="padding:8px 14px">+ Add</button>
-        </div>
-        <h4 class="wl-section-h" data-wl-section="user">
-          <span>🔭 My tracked</span>
-          <span class="count">—</span>
-        </h4>
-        <div id="userWatchlist"></div>
-        <h4 class="wl-section-h" data-wl-section="engine">
-          <span>🎯 Top picks (engine, score ≥ 70)</span>
+        <p class="small" style="color:var(--muted);margin-bottom:12px;line-height:1.5">
+          The engine scores every Nifty-500 stock on 7 dimensions and surfaces the top picks here.
+          You don't add anything — Opus picks, you set alert prices.
+          <strong style="color:var(--text)">Tap a row to set price alerts.</strong>
+        </p>
+        <h4 class="wl-section-h" data-wl-section="engine" style="margin-top:0">
+          <span>🎯 Live engine ranking</span>
           <span class="count">—</span>
         </h4>
         <div id="enginePicks"></div>
@@ -2699,11 +2694,20 @@ function svgSparkline(closes, opts) {
 }
 
 function renderWatchlist(j) {
-  const userEl = document.getElementById('userWatchlist');
+  // PR-D.1: engine-only watchlist — no user-curated list, no manual add.
+  // Alert prices are still user-set (in expanded row), but they piggyback
+  // the existing user_watchlist table as a hidden "alerts" store.
   const engineEl = document.getElementById('enginePicks');
-  if (!userEl || !engineEl) return;
+  if (!engineEl) return;
+  // Build a quick lookup of any alert prices the user has saved for engine
+  // picks (so the expanded row pre-fills above/below inputs).
+  const alertsBySym = {};
+  (j.user_watchlist || []).forEach(u => {
+    alertsBySym[u.symbol] = { alert_above: u.alert_above, alert_below: u.alert_below, id: u.id };
+  });
 
   const renderRow = (s, isEngine) => {
+    const alertRec = alertsBySym[s.symbol] || {};
     const id = isEngine ? `wl-eng-${s.symbol}` : `wl-usr-${s.id}`;
     const ltp = s.latest;
     const chg = ltp && ltp.prev_close_paise > 0
@@ -2722,14 +2726,18 @@ function renderWatchlist(j) {
       : (s.thesis ? `<span class="wl-thesis">${escapeHtml(s.thesis)}</span>` : '<span class="wl-thesis" style="opacity:0.5">no thesis</span>');
 
     const cascadeCls = (isEngine && s.cascade_match) ? 'cascade' : '';
+    // Pre-fill alerts from alertsBySym (engine picks pull saved alerts by symbol)
+    const aboveVal = isEngine ? alertRec.alert_above : s.alert_above;
+    const belowVal = isEngine ? alertRec.alert_below : s.alert_below;
+    const userAlertId = isEngine ? alertRec.id : s.id;
     const subData = JSON.stringify({
-      symbol: s.symbol, isEngine, id: s.id,
+      symbol: s.symbol, isEngine, id: userAlertId || null,
       sub_scores: isEngine ? {
         Trend: s.trend_score, Flow: s.flow_score,
         Catalyst: s.catalyst_score, Macro: s.macro_score,
         Options: s.options_score, Sentiment: s.sentiment_score, Breadth: s.breadth_score,
       } : null,
-      alert_above: s.alert_above, alert_below: s.alert_below,
+      alert_above: aboveVal, alert_below: belowVal,
       thesis: s.thesis,
     }).replace(/'/g, '&apos;');
 
@@ -2753,27 +2761,17 @@ function renderWatchlist(j) {
     </div>`;
   };
 
-  // — User watchlist —
-  userEl.innerHTML = (j.user_watchlist?.length > 0)
-    ? j.user_watchlist.map(s => renderRow(s, false)).join('')
-    : `<div class="wl-empty">No symbols added. Try RELIANCE, HDFCBANK, INFY.</div>`;
-
-  // — Engine top picks —
+  // — Engine picks (the only watchlist surface) —
   engineEl.innerHTML = (j.engine_picks?.length > 0)
     ? j.engine_picks.map(s => renderRow(s, true)).join('')
-    : `<div class="wl-empty">Engine top picks will populate when signal_scores has data above threshold (≥70).</div>`;
+    : `<div class="wl-empty">Engine ranking populates when signal_scores has stocks scoring ≥ 70 — usually after the next nightly recompute (19:00 IST) or hourly market update.</div>`;
 
-  // Update section headers with counts
-  const userH = document.querySelector('h4[data-wl-section="user"]');
-  if (userH) userH.querySelector('.count').textContent = (j.user_watchlist?.length || 0) + ' tracked';
+  // Update count
   const engH = document.querySelector('h4[data-wl-section="engine"]');
-  if (engH) engH.querySelector('.count').textContent = (j.engine_picks?.length || 0) + ' picks';
+  if (engH) engH.querySelector('.count').textContent = (j.engine_picks?.length || 0) + ' stocks';
 
-  // Fire batched sparkline fetch — fills SPARK_CACHE then re-paints in place
-  const symbols = [
-    ...(j.user_watchlist || []).map(s => s.symbol),
-    ...(j.engine_picks || []).map(s => s.symbol),
-  ];
+  // Fire batched sparkline fetch
+  const symbols = (j.engine_picks || []).map(s => s.symbol);
   if (symbols.length > 0) loadSparklines([...new Set(symbols)]);
 }
 
@@ -2831,10 +2829,18 @@ function renderWatchRowBody(d) {
   const above = d.alert_above != null ? (d.alert_above / 100).toFixed(2) : '';
   const below = d.alert_below != null ? (d.alert_below / 100).toFixed(2) : '';
 
-  const actionBtns = d.isEngine
-    ? `<button class="btn" onclick="addToWatchlistFromEngine('${d.symbol}')" style="background:rgba(124,92,255,0.18);color:var(--accent);border:1px solid var(--accent)">📌 Track</button>`
-    : `<button class="btn" onclick="saveWatchAlerts(${d.id}, '${d.symbol}')" style="background:rgba(46,204,113,0.18);color:var(--green);border:1px solid var(--green)">💾 Save alerts</button>
-       <button class="btn" onclick="removeFromWatchlist(${d.id})" style="background:rgba(231,76,60,0.18);color:var(--red);border:1px solid var(--red)">🚫 Remove</button>`;
+  // Every row is an engine pick — single action: save alert prices
+  const idArg = d.id != null ? d.id : 'null';
+  const clearBtn = d.id != null
+    ? `<button class="btn" onclick="clearWatchAlerts(${d.id})" style="background:rgba(138,150,184,0.18);color:var(--muted);border:1px solid var(--border)">⊘ Clear alerts</button>`
+    : '';
+  const actionBtns = `
+    <button class="btn" onclick="saveWatchAlerts(${idArg}, '${d.symbol}')"
+            style="background:rgba(46,204,113,0.18);color:var(--green);border:1px solid var(--green)">
+      💾 Save alerts
+    </button>
+    ${clearBtn}
+  `;
 
   return `
     ${subHtml}
@@ -2852,18 +2858,10 @@ function renderWatchRowBody(d) {
   `;
 }
 
-async function addToWatchlistFromEngine(sym) {
-  const above = document.getElementById('wl-above-' + sym)?.value;
-  const below = document.getElementById('wl-below-' + sym)?.value;
-  const params = new URLSearchParams({ symbol: sym, thesis: 'promoted from engine' });
-  if (above) params.set('alert_above', above);
-  if (below) params.set('alert_below', below);
-  await fetch('/api/trading?action=watchlist_add&key=' + encodeURIComponent(DASHBOARD_KEY) + '&' + params);
-  loadWatchlist();
-}
-
+// PR-D.1: alerts work via the existing watchlist_add (INSERT OR REPLACE).
+// user_watchlist is now an INVISIBLE alerts store — never rendered, only
+// powers price-cross notifications. The visible list is always engine picks.
 async function saveWatchAlerts(id, sym) {
-  // Existing watchlist_add does INSERT OR REPLACE — re-add with same id to update alert prices.
   const above = document.getElementById('wl-above-' + sym)?.value;
   const below = document.getElementById('wl-below-' + sym)?.value;
   const params = new URLSearchParams({ symbol: sym });
@@ -2873,25 +2871,18 @@ async function saveWatchAlerts(id, sym) {
   loadWatchlist();
 }
 
+async function clearWatchAlerts(id) {
+  if (!id) return;
+  await fetch('/api/trading?action=watchlist_remove&id=' + id + '&key=' + encodeURIComponent(DASHBOARD_KEY));
+  loadWatchlist();
+}
+
 function escapeHtml(s) {
   return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-async function addToWatchlist() {
-  const symbol = document.getElementById('wlSymbol').value.trim().toUpperCase();
-  const thesis = document.getElementById('wlThesis').value.trim();
-  if (!symbol) return;
-  const params = new URLSearchParams({ symbol, thesis });
-  await fetch('/api/trading?action=watchlist_add&key=' + encodeURIComponent(DASHBOARD_KEY) + '&' + params);
-  document.getElementById('wlSymbol').value = '';
-  document.getElementById('wlThesis').value = '';
-  loadWatchlist();
-}
-
-async function removeFromWatchlist(id) {
-  await fetch(`/api/trading?action=watchlist_remove&id=${id}&key=` + encodeURIComponent(DASHBOARD_KEY));
-  loadWatchlist();
-}
+// PR-D.1: legacy addToWatchlist / removeFromWatchlist removed. The watchlist
+// is now 100% engine-driven — see saveWatchAlerts / clearWatchAlerts above.
 
 // ───────────────────────────────────────────────────────────
 // READINESS GATE
