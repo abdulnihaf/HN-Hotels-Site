@@ -154,9 +154,25 @@ function slotPhaseSec() { return (masterNow() % SLOT_MS) / 1000; }
 // ============================================================
 const elements = [];
 
+// Asset URL — direct PiSignage CDN with JWT in query string.
+// JWT fetched once at boot from /api/choreo/jwt; refreshed periodically.
+let cdnToken = "";
+const CDN_BASE = "https://hamzaexpress.pisignage.com/media/hamzaexpress";
+
 function assetUrl(filename) {
-  // Proxy through our CF Pages Function (which holds the JWT for PiSignage CDN)
-  return "/api/choreo/asset?f=" + encodeURIComponent(filename);
+  return CDN_BASE + "/" + encodeURIComponent(filename) + "?token=" + cdnToken;
+}
+
+async function refreshCdnToken() {
+  try {
+    const r = await fetch("/api/choreo/jwt", { cache: "no-store" });
+    if (!r.ok) throw new Error("jwt HTTP " + r.status);
+    const j = await r.json();
+    if (!j.token) throw new Error("no token in /api/choreo/jwt response");
+    cdnToken = j.token;
+  } catch (e) {
+    console.error("[cdn-token] refresh failed:", e);
+  }
 }
 
 function buildStage() {
@@ -224,21 +240,32 @@ function tick() {
 //  Boot — sync clock, build stage, start ticker
 // ============================================================
 (async () => {
+  status.textContent = "Fetching CDN token…";
+  await refreshCdnToken();
   status.textContent = "Syncing master clock…";
   await syncTime();
   status.textContent = "Loading assets…";
   buildStage();
   // Wait briefly so first slot's asset has had time to start loading
-  await new Promise(r => setTimeout(r, 800));
+  await new Promise(r => setTimeout(r, 1200));
   status.classList.add("hidden");
   tick();
   setInterval(tick, TICK_MS);
   setInterval(syncTime, TIME_RESYNC_MS);
+  // Refresh CDN token every hour and rebuild stage so new <img>/<video> use fresh URL
+  setInterval(async () => {
+    await refreshCdnToken();
+    buildStage();
+    liveSlot = -1;  // force re-render on next tick
+  }, 60 * 60 * 1000);
 })();
 
-// Auto-recover from network blips: if document hidden and back, re-sync immediately
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) syncTime();
+// Auto-recover from network blips: re-sync time + token when tab visible again
+document.addEventListener("visibilitychange", async () => {
+  if (!document.hidden) {
+    await refreshCdnToken();
+    await syncTime();
+  }
 });
 </script>
 
