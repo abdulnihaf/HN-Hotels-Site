@@ -124,6 +124,7 @@ export async function onRequest(context) {
       case 'top_strip':          return Response.json(await getTopStrip(db), { headers });
       case 'today_consolidated': return Response.json(await getTodayConsolidated(db), { headers });
       case 'desk_view':          return Response.json(await getDeskView(db), { headers });
+      case 'stock_detail':       return Response.json(await getStockDetail(db, url), { headers });
       case 'monthly_learning_trail': return Response.json(await getMonthlyLearningTrail(db, url), { headers });
       case 'weekly_review_latest': return Response.json(await getLatestWeeklyReview(db), { headers });
       case 'autopsy_latest':     return Response.json(await getLatestAutopsies(db, url), { headers });
@@ -3860,6 +3861,365 @@ async function getDeskView(db) {
       unrealized_paise: unrealized_pnl_paise,
       total_paise: total_pnl_paise,
     },
+    generated_at: nowMs,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE D — STOCK DETAIL — single-call backing the per-stock deep-dive modal
+// per doc 19 §6.3. Triggered by tap-any-symbol-anywhere across all pages.
+//
+// Replaces TradingView + Screener + Tijori + Trendlyne for any single stock,
+// scoped strictly to data we have actually ingested. Honest about gaps:
+// segment_revenue, 10y_financials, broker_targets are explicitly marked n/a.
+//
+// Per doc 18 §3 (additive read-only). Reads only existing tables, no writes,
+// no external API calls.
+//
+// Sections returned:
+//   1. live           — LTP + day OHLC + prev close
+//   2. bars           — today's 5-min OHLC (for chart)
+//   3. position       — if symbol in active paper_trades, overlay markers
+//   4. engine_take    — composite_conviction + 90d priors + recent regime + cascade
+//   5. micro          — sector + 52W band + delivery% + circuit hits
+//   6. fundamental    — last results + concall + promoter + insider + bulk/block + events
+//   7. news_4h        — last 4h tagged news
+//   8. announcements  — last 30d corp_announcements
+//   9. options        — only if F&O (kite_instruments segment NFO)
+//   10. not_ingested  — explicit list of "n/a — we don't ingest this"
+// ═══════════════════════════════════════════════════════════════════════════
+async function getStockDetail(db, url) {
+  const symbol = (url.searchParams.get('symbol') || '').trim().toUpperCase();
+  if (!symbol) return { error: 'symbol required' };
+
+  const nowMs = Date.now();
+  const istNow = new Date(nowMs + 5.5 * 3600 * 1000);
+  const today = istNow.toISOString().slice(0, 10);
+
+  // ─── 1. LIVE PRICE ─────────────────────────────────────────────────────────
+  const ltpRow = await db.prepare(`
+    SELECT ltp_paise, ts FROM intraday_ticks
+    WHERE symbol=? ORDER BY ts DESC LIMIT 1
+  `).bind(symbol).first().catch(() => null);
+
+  const eodLatest = await db.prepare(`
+    SELECT trade_date, open_paise, high_paise, low_paise, close_paise, volume
+    FROM equity_eod
+    WHERE symbol=? AND exchange='NSE'
+    ORDER BY trade_date DESC LIMIT 2
+  `).bind(symbol).all().catch(() => ({ results: [] }));
+  const eodRows = eodLatest.results || [];
+  const todayEod = eodRows[0] || null;
+  const prevEod = eodRows[1] || null;
+
+  // Day OHLC from intraday_bars (more accurate during market) + fall back to equity_eod
+  const dayBars = (await db.prepare(`
+    SELECT ts, open_paise, high_paise, low_paise, close_paise, volume
+    FROM intraday_bars
+    WHERE symbol=? AND trade_date=? AND interval='5minute'
+    ORDER BY ts ASC
+  `).bind(symbol, today).all().catch(() => ({ results: [] }))).results || [];
+
+  const dayOpen = dayBars.length ? dayBars[0].open_paise : (todayEod?.open_paise || null);
+  const dayHigh = dayBars.length ? Math.max(...dayBars.map(b => b.high_paise)) : (todayEod?.high_paise || null);
+  const dayLow = dayBars.length ? Math.min(...dayBars.map(b => b.low_paise)) : (todayEod?.low_paise || null);
+  const dayClose = dayBars.length ? dayBars[dayBars.length - 1].close_paise : (todayEod?.close_paise || null);
+  const prevClose = prevEod?.close_paise || null;
+  const ltp = ltpRow?.ltp_paise || dayClose;
+  const pctChange = (ltp && prevClose) ? +(((ltp - prevClose) / prevClose) * 100).toFixed(2) : null;
+  const pctFromOpen = (ltp && dayOpen) ? +(((ltp - dayOpen) / dayOpen) * 100).toFixed(2) : null;
+
+  const live = {
+    ltp_paise: ltp,
+    ltp_ts: ltpRow?.ts,
+    day_open_paise: dayOpen,
+    day_high_paise: dayHigh,
+    day_low_paise: dayLow,
+    day_close_paise: dayClose,
+    prev_close_paise: prevClose,
+    pct_change_from_prev_close: pctChange,
+    pct_change_from_open: pctFromOpen,
+    last_eod_date: todayEod?.trade_date,
+  };
+
+  // ─── 2. POSITION OVERLAY (if symbol in active paper_trades today) ──────────
+  const activePos = await db.prepare(`
+    SELECT id, qty, entry_paise, stop_paise, target_paise, peak_price_paise,
+           trailing_stop_paise, target_locked, opus_extension_until, entry_at,
+           rationale, strategy_mode, trader_state
+    FROM paper_trades
+    WHERE symbol=? AND auto_managed=1 AND is_active=1
+      AND DATE(created_at/1000+19800,'unixepoch') = ?
+    ORDER BY entry_at DESC LIMIT 1
+  `).bind(symbol, today).first().catch(() => null);
+
+  // Or recently-exited
+  const exitedPos = !activePos ? await db.prepare(`
+    SELECT id, qty, entry_paise, exit_paise, stop_paise, target_paise,
+           exit_reason, pnl_net_paise, target_locked, exit_at
+    FROM paper_trades
+    WHERE symbol=? AND auto_managed=1 AND exit_at IS NOT NULL
+      AND DATE(created_at/1000+19800,'unixepoch') = ?
+    ORDER BY exit_at DESC LIMIT 1
+  `).bind(symbol, today).first().catch(() => null) : null;
+
+  const position = activePos ? {
+    state: 'ENTERED',
+    qty: activePos.qty,
+    entry_paise: activePos.entry_paise,
+    stop_paise: activePos.stop_paise,
+    target_paise: activePos.target_paise,
+    peak_price_paise: activePos.peak_price_paise,
+    trailing_stop_paise: activePos.trailing_stop_paise,
+    target_locked: activePos.target_locked === 1,
+    opus_extension_active: activePos.opus_extension_until && activePos.opus_extension_until > nowMs,
+    entry_at: activePos.entry_at,
+    rationale: activePos.rationale,
+    strategy_mode: activePos.strategy_mode,
+  } : exitedPos ? {
+    state: 'EXITED',
+    qty: exitedPos.qty,
+    entry_paise: exitedPos.entry_paise,
+    exit_paise: exitedPos.exit_paise,
+    stop_paise: exitedPos.stop_paise,
+    target_paise: exitedPos.target_paise,
+    exit_reason: exitedPos.exit_reason,
+    pnl_paise: exitedPos.pnl_net_paise,
+    target_locked: exitedPos.target_locked === 1,
+    exit_at: exitedPos.exit_at,
+  } : null;
+
+  // ─── 3. ENGINE TAKE — intraday_suitability + signal_scores + cascade ──────
+  const suit = await db.prepare(`
+    SELECT intraday_score, owner_score, loss_resistance_score,
+           hit_2pct_rate, hit_3pct_rate, hit_5pct_rate, hit_neg_2pct_rate,
+           avg_open_to_high_pct, avg_open_to_low_pct, green_close_rate,
+           avg_daily_range_pct,
+           hit_2pct_last_week, avg_up_last_week_pct, green_close_last_week,
+           sector
+    FROM intraday_suitability WHERE symbol=?
+  `).bind(symbol).first().catch(() => null);
+
+  const sigLatest = await db.prepare(`
+    SELECT MAX(computed_at) AS m FROM signal_scores
+  `).first().catch(() => null);
+  const sigScore = sigLatest?.m ? await db.prepare(`
+    SELECT composite_score, regime, trend_score, momentum_score, breakout_score
+    FROM signal_scores WHERE symbol=? AND computed_at=?
+  `).bind(symbol, sigLatest.m).first().catch(() => null) : null;
+
+  const cascade = await db.prepare(`
+    SELECT pattern_name, detected_at, expected_window_end, confidence
+    FROM cascade_triggers_active
+    WHERE status='active' AND affected_symbols LIKE ?
+    ORDER BY detected_at DESC LIMIT 1
+  `).bind(`%${symbol}%`).first().catch(() => null);
+
+  // F1 v2 composite_conviction approximation (read-only of formula inputs)
+  let conviction_components = null;
+  if (suit) {
+    const upside = Math.min(1, (suit.avg_open_to_high_pct || 0) / 5);
+    const downside_resistance = Math.min(1, (suit.loss_resistance_score || 0) / 60);
+    // recent_regime: ratio of last_week to 90d (1.0 = neutral, >1 = HOT)
+    const recent_regime = (suit.avg_up_last_week_pct && suit.avg_open_to_high_pct)
+      ? Math.min(1.2, (suit.avg_up_last_week_pct / suit.avg_open_to_high_pct))
+      : 1.0;
+    conviction_components = {
+      upside: +upside.toFixed(2),
+      downside_resistance: +downside_resistance.toFixed(2),
+      recent_regime: +recent_regime.toFixed(2),
+      composite: +(upside * downside_resistance * recent_regime).toFixed(2),
+    };
+  }
+
+  const engine_take = {
+    is_in_pool: !!suit,
+    suitability: suit,
+    composite_conviction: conviction_components,
+    composite_score: sigScore?.composite_score,
+    composite_score_regime: sigScore?.regime,
+    cascade_active: cascade,
+  };
+
+  // ─── 4. MARKET MICRO ───────────────────────────────────────────────────────
+  const w52 = await db.prepare(`
+    SELECT week52_high_paise, week52_low_paise, days_since_high, days_since_low
+    FROM weekly_extremes WHERE symbol=? ORDER BY trade_date DESC LIMIT 1
+  `).bind(symbol).first().catch(() => null);
+
+  const circuit = await db.prepare(`
+    SELECT direction, hit_at FROM circuit_hits
+    WHERE symbol=? AND DATE(hit_at/1000+19800,'unixepoch') = ?
+    ORDER BY hit_at DESC LIMIT 1
+  `).bind(symbol, today).first().catch(() => null);
+
+  // Sector index latest change_pct
+  const sectorIdx = suit?.sector ? await db.prepare(`
+    SELECT close_paise, prev_close_paise FROM sector_indices
+    WHERE index_name LIKE ?
+    ORDER BY trade_date DESC LIMIT 1
+  `).bind(`%${suit.sector}%`).first().catch(() => null) : null;
+  const sectorChange = sectorIdx && sectorIdx.prev_close_paise > 0
+    ? +(((sectorIdx.close_paise - sectorIdx.prev_close_paise) / sectorIdx.prev_close_paise) * 100).toFixed(2)
+    : null;
+
+  const micro = {
+    sector: suit?.sector,
+    sector_change_pct: sectorChange,
+    week_52_high_paise: w52?.week52_high_paise,
+    week_52_low_paise: w52?.week52_low_paise,
+    days_since_52w_high: w52?.days_since_high,
+    days_since_52w_low: w52?.days_since_low,
+    circuit_hit_today: circuit?.direction || null,
+  };
+
+  // ─── 5. FUNDAMENTAL CONTEXT ────────────────────────────────────────────────
+  const fund = await db.prepare(`
+    SELECT * FROM fundamentals_snapshot WHERE symbol=? ORDER BY snapshot_date DESC LIMIT 1
+  `).bind(symbol).first().catch(() => null);
+
+  const concall = await db.prepare(`
+    SELECT analysis_summary, sentiment_score, snapshot_date
+    FROM concall_analysis WHERE symbol=? ORDER BY snapshot_date DESC LIMIT 1
+  `).bind(symbol).first().catch(() => null);
+
+  const sharehold = await db.prepare(`
+    SELECT promoter_holding_pct, fii_holding_pct, dii_holding_pct, public_holding_pct, snapshot_date
+    FROM shareholding_pattern WHERE symbol=? ORDER BY snapshot_date DESC LIMIT 1
+  `).bind(symbol).first().catch(() => null);
+
+  const pledge = await db.prepare(`
+    SELECT pledge_pct, snapshot_date FROM promoter_pledge
+    WHERE symbol=? ORDER BY snapshot_date DESC LIMIT 1
+  `).bind(symbol).first().catch(() => null);
+
+  const insider30d = await db.prepare(`
+    SELECT
+      SUM(CASE WHEN transaction_type='buy' THEN 1 ELSE 0 END) AS buys,
+      SUM(CASE WHEN transaction_type='sell' THEN 1 ELSE 0 END) AS sells,
+      SUM(CASE WHEN transaction_type='buy' THEN value_paise ELSE 0 END) AS buy_value_paise,
+      SUM(CASE WHEN transaction_type='sell' THEN value_paise ELSE 0 END) AS sell_value_paise
+    FROM insider_trades
+    WHERE symbol=? AND transaction_at > ?
+  `).bind(symbol, nowMs - 30 * 86400000).first().catch(() => null);
+
+  const bulkBlock7d = await db.prepare(`
+    SELECT COUNT(*) AS n FROM bulk_block_deals
+    WHERE symbol=? AND trade_date >= date('now', '-7 day')
+  `).bind(symbol).first().catch(() => null);
+
+  // Upcoming events
+  const upcomingResults = (await db.prepare(`
+    SELECT result_date AS date, result_type AS type FROM results_calendar
+    WHERE symbol=? AND result_date >= date('now')
+    ORDER BY result_date ASC LIMIT 3
+  `).bind(symbol).all().catch(() => ({ results: [] }))).results || [];
+
+  const upcomingBoardMeetings = (await db.prepare(`
+    SELECT meeting_date AS date, purpose AS type FROM board_meetings
+    WHERE symbol=? AND meeting_date >= date('now')
+    ORDER BY meeting_date ASC LIMIT 3
+  `).bind(symbol).all().catch(() => ({ results: [] }))).results || [];
+
+  const upcomingCorpActions = (await db.prepare(`
+    SELECT ex_date AS date, action_type AS type, ratio_or_amount AS detail
+    FROM corp_actions
+    WHERE symbol=? AND ex_date >= date('now')
+    ORDER BY ex_date ASC LIMIT 3
+  `).bind(symbol).all().catch(() => ({ results: [] }))).results || [];
+
+  const upcoming_events = [
+    ...upcomingResults.map(r => ({ date: r.date, kind: 'results', type: r.type })),
+    ...upcomingBoardMeetings.map(b => ({ date: b.date, kind: 'board_meeting', type: b.type })),
+    ...upcomingCorpActions.map(c => ({ date: c.date, kind: 'corp_action', type: c.type, detail: c.detail })),
+  ].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  const fundamental = {
+    last_results: fund ? {
+      report_date: fund.report_date,
+      revenue_paise: fund.revenue_paise,
+      net_profit_paise: fund.net_profit_paise,
+      net_profit_yoy_pct: fund.net_profit_yoy_pct,
+    } : null,
+    concall_sentiment: concall ? {
+      score: concall.sentiment_score,
+      date: concall.snapshot_date,
+      summary_snippet: (concall.analysis_summary || '').slice(0, 200),
+    } : null,
+    shareholding: sharehold ? {
+      promoter_pct: sharehold.promoter_holding_pct,
+      fii_pct: sharehold.fii_holding_pct,
+      dii_pct: sharehold.dii_holding_pct,
+      public_pct: sharehold.public_holding_pct,
+      date: sharehold.snapshot_date,
+    } : null,
+    pledge: pledge ? { pct: pledge.pledge_pct, date: pledge.snapshot_date } : null,
+    insider_30d: insider30d || { buys: 0, sells: 0 },
+    bulk_block_7d: bulkBlock7d?.n || 0,
+    upcoming_events,
+  };
+
+  // ─── 6. NEWS (last 4h) ─────────────────────────────────────────────────────
+  const news_4h = (await db.prepare(`
+    SELECT headline, source, sentiment_score, importance_score, published_at, symbols_tagged
+    FROM news_items
+    WHERE published_at > ?
+      AND (headline LIKE ? OR symbols_tagged LIKE ?)
+    ORDER BY published_at DESC LIMIT 10
+  `).bind(nowMs - 4 * 3600000, `%${symbol}%`, `%${symbol}%`).all().catch(() => ({ results: [] }))).results || [];
+
+  // ─── 7. ANNOUNCEMENTS (last 30d) ───────────────────────────────────────────
+  const announcements_30d = (await db.prepare(`
+    SELECT subject, exchange, announced_at FROM corp_announcements
+    WHERE symbol=? AND announced_at > ?
+    ORDER BY announced_at DESC LIMIT 10
+  `).bind(symbol, nowMs - 30 * 86400000).all().catch(() => ({ results: [] }))).results || [];
+
+  // ─── 8. OPTIONS (only if F&O) ──────────────────────────────────────────────
+  const isFo = await db.prepare(`
+    SELECT 1 AS yes FROM kite_instruments
+    WHERE tradingsymbol=? AND segment IN ('NFO-OPT','NFO-FUT') LIMIT 1
+  `).bind(symbol).first().catch(() => null);
+
+  let options = null;
+  if (isFo) {
+    const optChain = await db.prepare(`
+      SELECT atm_strike, ce_premium, ce_iv, ce_delta, pe_premium, pe_iv, pe_delta, ts
+      FROM option_chain_snapshot
+      WHERE symbol=? ORDER BY ts DESC LIMIT 1
+    `).bind(symbol).first().catch(() => null);
+    if (optChain) {
+      options = {
+        atm_strike: optChain.atm_strike,
+        ce: { premium: optChain.ce_premium, iv: optChain.ce_iv, delta: optChain.ce_delta },
+        pe: { premium: optChain.pe_premium, iv: optChain.pe_iv, delta: optChain.pe_delta },
+        ts: optChain.ts,
+      };
+    }
+  }
+
+  // ─── 9. NOT-INGESTED (per doc 19 §10 honest-about-gaps) ────────────────────
+  const not_ingested = [
+    { gap: 'segment_revenue', note: 'Segment-wise revenue breakdown — Tijori-equivalent. Not ingested.' },
+    { gap: '10y_financials', note: '10-year quarterly P&L / balance-sheet — Screener-equivalent depth. Not ingested.' },
+    { gap: 'capacity_data', note: 'Production capacity / utilization — Tijori-equivalent. Not ingested.' },
+    { gap: 'broker_targets', note: 'Broker target prices + DVM scores — Trendlyne-equivalent. No source.' },
+  ];
+
+  return {
+    symbol,
+    is_in_pool: !!suit,
+    is_fo: !!isFo,
+    live,
+    bars: dayBars,
+    position,
+    engine_take,
+    micro,
+    fundamental,
+    news_4h,
+    announcements_30d,
+    options,
+    not_ingested,
     generated_at: nowMs,
   };
 }

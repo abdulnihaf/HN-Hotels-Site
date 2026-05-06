@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v38';  // v38: Phase C — DESK live trading view per doc 19 §6.2 (positions + chart + reasoning + market context)
+const CACHE_VERSION = 'wealth-v39';  // v39: Phase D — STOCK deep-dive modal per doc 19 §6.3 (tap-symbol-anywhere)
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -22,6 +22,7 @@ const PRECACHE_URLS = [
   '/trading/_lib/picker.js',
   '/trading/_lib/watchlist-component.js',
   '/trading/_lib/spine.js',
+  '/trading/_lib/stock-modal.js',
 ];
 
 // Install — pre-cache app shell
