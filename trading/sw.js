@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v34';  // v34: P1-P5 owner-calibrated 4-layer + audit_findings auto-resolve + UI shows resolution state
+const CACHE_VERSION = 'wealth-v35';  // v35: real-money readiness audit (2-layer) + /readiness/ page + F-DATA-1 + F-EXIT-1
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -13,6 +13,7 @@ const PRECACHE_URLS = [
   '/trading/compare/',
   '/trading/audit/',
   '/trading/roadmap/',
+  '/trading/readiness/',
   '/trading/manifest.json',
   '/trading/icons/icon-192.svg',
   '/trading/icons/icon-512.svg',

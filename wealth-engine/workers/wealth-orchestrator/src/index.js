@@ -1273,6 +1273,373 @@ async function runAuditScanner(env) {
   return { rows: inserted, scanned_categories: 9, total_findings_now: findings.length, auto_resolved: autoResolved };
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// REAL-MONEY READINESS AUDIT (May 6 2026 evening)
+//
+// Two crons that auto-populate `audit_findings` so that the doc at
+// /trading/_context/17-REAL-MONEY-READINESS-AUDIT.md has a single source
+// of truth for the Sunday-night GO/NO-GO call before Monday's first
+// real-money trading day.
+//
+// Architecture: 2 layers, audited independently.
+//   LAYER 1 — INTELLIGENCE: are we picking the right stock for the right reason?
+//   LAYER 2 — TECHNICAL EXECUTION: do we trade and exit cleanly + are crons fresh?
+//
+// Each cron writes per-layer findings tagged via `audit_findings.layer`
+// (column already exists). Severity reflects worst-gate status.
+// ════════════════════════════════════════════════════════════════════════
+
+// ─── PRE-MARKET INTEGRITY CHECK (08:25 IST weekday) ────────────────────
+// Runs 5 min before the verdict cron (which fires 08:30 IST in wealth-verdict).
+// If integrity check writes severity='critical' to audit_findings, the owner
+// will see RED on the readiness page before the day starts.
+async function preMarketIntegrityCheck(env) {
+  const db = env.DB;
+  const today = ymdHyphen(istNow());
+  const layer1 = []; // INTELLIGENCE checks
+  const layer2 = []; // EXECUTION checks
+  const nowMs = Date.now();
+  const nowIst = istNow();
+  const cutoff24h = nowMs - 24 * 3600 * 1000;
+  const cutoff7d = nowMs - 7 * 86400000;
+
+  // ─── LAYER 1.1 — Pre-market data feeds (recent_regime + suitability) ─
+  try {
+    const sf = await db.prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM intraday_suitability) AS pool_total,
+         (SELECT COUNT(*) FROM intraday_suitability WHERE avg_up_last_week_pct IS NOT NULL) AS aw_lw_pop,
+         (SELECT COUNT(*) FROM intraday_suitability WHERE owner_score IS NOT NULL) AS owner_pop,
+         (SELECT COUNT(*) FROM intraday_suitability WHERE intraday_score IS NOT NULL) AS intra_pop`
+    ).first();
+    const poolTotal = sf?.pool_total || 0;
+    const awRate = poolTotal ? sf.aw_lw_pop / poolTotal : 0;
+    const ownerRate = poolTotal ? sf.owner_pop / poolTotal : 0;
+    const intraRate = poolTotal ? sf.intra_pop / poolTotal : 0;
+    const status = awRate >= 0.8 && ownerRate >= 0.8 && intraRate >= 0.8 ? 'pass'
+                 : awRate >= 0.5 ? 'warn' : 'fail';
+    layer1.push({
+      check: 'L1.1_data_feeds',
+      status,
+      detail: `pool=${poolTotal}, aw_lw=${(awRate*100).toFixed(0)}%, owner_score=${(ownerRate*100).toFixed(0)}%, intraday_score=${(intraRate*100).toFixed(0)}%`,
+    });
+  } catch (e) {
+    layer1.push({ check: 'L1.1_data_feeds', status: 'fail', detail: `error: ${String(e).slice(0,200)}` });
+  }
+
+  // ─── LAYER 1.2 — Pool / universe coverage (bars) ─────────────────────
+  try {
+    const yest = ymdHyphen(new Date(nowIst.getTime() - 86400000));
+    const c = await db.prepare(
+      `SELECT
+         (SELECT COUNT(DISTINCT symbol) FROM intraday_bars WHERE trade_date=? AND interval='5minute') AS bars_yest,
+         (SELECT COUNT(*) FROM intraday_suitability) AS pool_total`
+    ).bind(yest).first();
+    const total = c?.pool_total || 0;
+    const cov = total ? c.bars_yest / total : 0;
+    const status = cov >= 0.9 ? 'pass' : cov >= 0.6 ? 'warn' : 'fail';
+    layer1.push({
+      check: 'L1.2_pool_bar_coverage',
+      status,
+      detail: `${c.bars_yest}/${total} pool stocks have bars for ${yest} = ${(cov*100).toFixed(0)}% (target ≥90%)`,
+    });
+  } catch (e) {
+    layer1.push({ check: 'L1.2_pool_bar_coverage', status: 'fail', detail: String(e).slice(0,200) });
+  }
+
+  // ─── LAYER 1.3 — Live cross-asset feeds ──────────────────────────────
+  try {
+    const feeds = await db.prepare(
+      `SELECT
+         (SELECT MAX(ts) FROM crossasset_ticks) AS xa_last,
+         (SELECT MAX(ts) FROM india_vix_ticks) AS vix_last,
+         (SELECT MAX(ts) FROM gift_nifty_ticks) AS gn_last`
+    ).first();
+    const xaAge = feeds?.xa_last ? (nowMs - feeds.xa_last) / 60000 : 99999;
+    const vixAge = feeds?.vix_last ? (nowMs - feeds.vix_last) / 60000 : 99999;
+    const gnAge = feeds?.gn_last ? (nowMs - feeds.gn_last) / 60000 : 99999;
+    // Pre-market (08:25 IST) data should be < 4h old (overnight feeds)
+    const status = xaAge < 240 && vixAge < 240 && gnAge < 240 ? 'pass'
+                 : xaAge < 720 && vixAge < 720 ? 'warn' : 'fail';
+    layer1.push({
+      check: 'L1.3_live_feeds_freshness',
+      status,
+      detail: `xa=${xaAge.toFixed(0)}min, vix=${vixAge.toFixed(0)}min, gift_nifty=${gnAge.toFixed(0)}min (pre-market target: each <240min)`,
+    });
+  } catch (e) {
+    layer1.push({ check: 'L1.3_live_feeds_freshness', status: 'fail', detail: String(e).slice(0,200) });
+  }
+
+  // ─── LAYER 1.4 — Owner profile freshness ─────────────────────────────
+  try {
+    const op = await db.prepare(`SELECT MAX(version) AS v, MAX(created_at) AS c FROM owner_profile WHERE is_active=1`).first().catch(() => null);
+    if (!op?.c) {
+      layer1.push({ check: 'L1.4_owner_profile', status: 'warn', detail: 'no owner_profile rows found' });
+    } else {
+      const ageDays = (nowMs - op.c) / 86400000;
+      const status = ageDays < 7 ? 'pass' : ageDays < 30 ? 'warn' : 'fail';
+      layer1.push({
+        check: 'L1.4_owner_profile',
+        status,
+        detail: `latest profile v${op.v} is ${ageDays.toFixed(1)}d old (target <7d)`,
+      });
+    }
+  } catch (e) {
+    layer1.push({ check: 'L1.4_owner_profile', status: 'warn', detail: String(e).slice(0,200) });
+  }
+
+  // ─── LAYER 2.1 — Cron firing health (last 24h) ──────────────────────
+  // Expected high-frequency crons: every cron in this orchestrator that ran
+  // in the last 24h. Silent skips would show as missing rows.
+  try {
+    const recent = (await db.prepare(
+      `SELECT cron_name, COUNT(*) AS n
+       FROM cron_run_log
+       WHERE started_at > ? AND status IN ('success','running')
+       GROUP BY cron_name`
+    ).bind(cutoff24h).all()).results || [];
+    const expectedCrons = [
+      'wealth-orchestrator:backfill_drain',
+      'wealth-orchestrator:watchdog',
+      'wealth-orchestrator:pre_market',
+      'wealth-orchestrator:portfolio_eod',
+    ];
+    const seenSet = new Set(recent.map(r => r.cron_name));
+    const missing = expectedCrons.filter(e => !seenSet.has(e));
+    const status = missing.length === 0 ? 'pass' : missing.length <= 1 ? 'warn' : 'fail';
+    layer2.push({
+      check: 'L2.1_cron_health_24h',
+      status,
+      detail: `${recent.length} distinct crons logged in 24h. Missing critical: ${missing.join(', ') || 'none'}`,
+    });
+  } catch (e) {
+    layer2.push({ check: 'L2.1_cron_health_24h', status: 'warn', detail: String(e).slice(0,200) });
+  }
+
+  // ─── LAYER 2.2 — Kite OAuth token health ─────────────────────────────
+  try {
+    const tk = await db.prepare(`SELECT created_at, access_token IS NOT NULL AS has_token FROM kite_tokens WHERE is_active=1 ORDER BY id DESC LIMIT 1`).first().catch(() => null);
+    if (!tk?.has_token) {
+      layer2.push({ check: 'L2.2_kite_token', status: 'fail', detail: 'NO ACTIVE KITE TOKEN — entire trading day will fail' });
+    } else {
+      const ageH = (nowMs - tk.created_at) / 3600000;
+      // Kite tokens issued at ~09:00 IST and expire ~06:00 IST next day.
+      // At 08:25 IST integrity check, fresh token (issued same morning) = age < 1h.
+      // Stale token (issued yesterday) = age > 23h.
+      const status = ageH < 8 ? 'pass' : ageH < 22 ? 'warn' : 'fail';
+      layer2.push({
+        check: 'L2.2_kite_token',
+        status,
+        detail: `active token issued ${ageH.toFixed(1)}h ago (Kite tokens expire daily ~06:00 IST; need fresh by 09:08 verdict)`,
+      });
+    }
+  } catch (e) {
+    layer2.push({ check: 'L2.2_kite_token', status: 'fail', detail: String(e).slice(0,200) });
+  }
+
+  // ─── LAYER 2.3 — Unresolved CRITICAL audit_findings ─────────────────
+  try {
+    const crit = await db.prepare(
+      `SELECT COUNT(*) AS n FROM audit_findings WHERE severity='critical' AND resolved_at IS NULL`
+    ).first();
+    const status = crit.n === 0 ? 'pass' : crit.n <= 2 ? 'warn' : 'fail';
+    layer2.push({
+      check: 'L2.3_unresolved_critical_findings',
+      status,
+      detail: `${crit.n} unresolved CRITICAL audit_findings (target: 0)`,
+    });
+  } catch (e) {
+    layer2.push({ check: 'L2.3_unresolved_critical_findings', status: 'warn', detail: String(e).slice(0,200) });
+  }
+
+  // ─── LAYER 2.4 — Last verdict freshness ─────────────────────────────
+  try {
+    const lv = await db.prepare(
+      `SELECT trade_date, decision, composed_at FROM daily_verdicts WHERE verdict_type='morning' ORDER BY id DESC LIMIT 1`
+    ).first().catch(() => null);
+    if (!lv) {
+      layer2.push({ check: 'L2.4_verdict_freshness', status: 'warn', detail: 'no morning verdicts found' });
+    } else {
+      const ageH = (nowMs - lv.composed_at) / 3600000;
+      const status = ageH < 36 ? 'pass' : 'warn';
+      layer2.push({
+        check: 'L2.4_verdict_freshness',
+        status,
+        detail: `last morning verdict: ${lv.trade_date} (${lv.decision}), ${ageH.toFixed(1)}h ago`,
+      });
+    }
+  } catch (e) {
+    layer2.push({ check: 'L2.4_verdict_freshness', status: 'warn', detail: String(e).slice(0,200) });
+  }
+
+  // ─── ROLL UP + WRITE FINDINGS ─────────────────────────────────────────
+  const layer1Status = layer1.some(c => c.status === 'fail') ? 'critical'
+                     : layer1.some(c => c.status === 'warn') ? 'warning' : 'info';
+  const layer2Status = layer2.some(c => c.status === 'fail') ? 'critical'
+                     : layer2.some(c => c.status === 'warn') ? 'warning' : 'info';
+
+  // Auto-resolve YESTERDAY's pre-market integrity findings (so historical noise doesn't accumulate)
+  await db.prepare(
+    `UPDATE audit_findings SET resolved_at=?, resolved_by='superseded_by_today_pre_market_check'
+     WHERE category='pre_market_integrity' AND trade_date < ? AND resolved_at IS NULL`
+  ).bind(nowMs, today).run();
+
+  // Insert one finding per layer for today
+  await db.prepare(
+    `INSERT INTO audit_findings (detected_at, trade_date, category, severity, layer, signature, title, detail, proposed_fix, data_json)
+     VALUES (?, ?, 'pre_market_integrity', ?, 'intelligence', ?, ?, ?, ?, ?)`
+  ).bind(
+    nowMs, today, layer1Status,
+    `pre_market_layer1_${today}`,
+    `Layer 1 (Intelligence) pre-market integrity: ${layer1Status.toUpperCase()}`,
+    layer1.map(c => `${c.check} [${c.status}]: ${c.detail}`).join(' | '),
+    layer1Status === 'critical' ? 'BLOCKING — fix before 09:08 verdict cron fires; today\'s picks will be unreliable' : layer1Status === 'warning' ? 'investigate before market open if possible' : 'no action',
+    JSON.stringify({ checks: layer1 }),
+  ).run();
+
+  await db.prepare(
+    `INSERT INTO audit_findings (detected_at, trade_date, category, severity, layer, signature, title, detail, proposed_fix, data_json)
+     VALUES (?, ?, 'pre_market_integrity', ?, 'execution', ?, ?, ?, ?, ?)`
+  ).bind(
+    nowMs, today, layer2Status,
+    `pre_market_layer2_${today}`,
+    `Layer 2 (Execution) pre-market integrity: ${layer2Status.toUpperCase()}`,
+    layer2.map(c => `${c.check} [${c.status}]: ${c.detail}`).join(' | '),
+    layer2Status === 'critical' ? 'BLOCKING — fix before market open OR halt trading for the day' : layer2Status === 'warning' ? 'monitor through the day, may auto-recover' : 'no action',
+    JSON.stringify({ checks: layer2 }),
+  ).run();
+
+  return {
+    rows: 2,
+    layer1_status: layer1Status,
+    layer2_status: layer2Status,
+    overall: layer1Status === 'critical' || layer2Status === 'critical' ? 'BLOCKING' : 'OK',
+  };
+}
+
+// ─── EOD READINESS SUMMARY (16:30 IST weekday) ─────────────────────────
+// Walks today's events and writes a per-layer summary capturing:
+//   - pieces_missing  (any audit_findings still unresolved)
+//   - shipped         (commits + cron successes today)
+//   - regressions     (compare today's behavior vs yesterday's expectation)
+//   - trade_outcome   (paper_trades summary)
+async function eodReadinessSummary(env) {
+  const db = env.DB;
+  const today = ymdHyphen(istNow());
+  const yest = ymdHyphen(new Date(istNow().getTime() - 86400000));
+  const nowMs = Date.now();
+
+  // ─── LAYER 1 — INTELLIGENCE ROLLUP ────────────────────────────────────
+  // Pieces missing (today's intelligence-layer findings still unresolved)
+  const layer1Missing = (await db.prepare(
+    `SELECT title, severity, signature FROM audit_findings
+     WHERE trade_date=? AND layer='intelligence' AND resolved_at IS NULL AND severity IN ('warning','critical')
+     ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, detected_at DESC`
+  ).bind(today).all().catch(() => ({ results: [] }))).results || [];
+
+  // Pick selection accuracy: did Opus's picks include any of today's top runners?
+  let pickAccuracy = null;
+  try {
+    const verdict = await db.prepare(
+      `SELECT picks_json FROM daily_verdicts WHERE trade_date=? AND verdict_type='morning' ORDER BY id DESC LIMIT 1`
+    ).bind(today).first().catch(() => null);
+    const opusSymbols = verdict?.picks_json
+      ? JSON.parse(verdict.picks_json).map(p => p.symbol).filter(Boolean)
+      : [];
+    if (opusSymbols.length > 0) {
+      const top5 = (await db.prepare(
+        `WITH bars_today AS (
+           SELECT b.symbol,
+                  (SELECT open_paise FROM intraday_bars b2 WHERE b2.symbol=b.symbol AND b2.trade_date=? AND b2.interval='5minute' ORDER BY ts ASC LIMIT 1) AS o,
+                  MAX(high_paise) AS h
+           FROM intraday_bars b WHERE trade_date=? AND interval='5minute' GROUP BY b.symbol
+         )
+         SELECT symbol, ROUND((h-o)*100.0/o,2) AS up_pct
+         FROM bars_today WHERE o>0 ORDER BY up_pct DESC LIMIT 5`
+      ).bind(today, today).all().catch(() => ({ results: [] }))).results || [];
+      const top5Symbols = top5.map(r => r.symbol);
+      const hits = opusSymbols.filter(s => top5Symbols.includes(s));
+      pickAccuracy = {
+        opus_picks: opusSymbols,
+        actual_top5: top5,
+        hits: hits,
+        hit_rate: opusSymbols.length ? hits.length / opusSymbols.length : 0,
+      };
+    }
+  } catch {}
+
+  // ─── LAYER 2 — EXECUTION ROLLUP ───────────────────────────────────────
+  // Pieces missing (today's execution-layer findings still unresolved)
+  const layer2Missing = (await db.prepare(
+    `SELECT title, severity, signature FROM audit_findings
+     WHERE trade_date=? AND layer='execution' AND resolved_at IS NULL AND severity IN ('warning','critical')
+     ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, detected_at DESC`
+  ).bind(today).all().catch(() => ({ results: [] }))).results || [];
+
+  // Trade outcome
+  const trades = (await db.prepare(
+    `SELECT symbol, qty, entry_paise, exit_paise, exit_reason, pnl_net_paise, pnl_gross_paise, target_locked, win_loss
+     FROM paper_trades
+     WHERE auto_managed=1 AND DATE(created_at/1000,'unixepoch')=?`
+  ).bind(today).all().catch(() => ({ results: [] }))).results || [];
+  const tradeSummary = {
+    n_trades: trades.length,
+    n_exited: trades.filter(t => t.exit_reason).length,
+    target_locked_count: trades.filter(t => t.target_locked === 1).length,
+    realized_pnl_net_rupees: Math.round(trades.reduce((s, t) => s + (t.pnl_net_paise || 0), 0) / 100),
+    exit_reason_distribution: trades.reduce((acc, t) => { if (t.exit_reason) acc[t.exit_reason] = (acc[t.exit_reason] || 0) + 1; return acc; }, {}),
+  };
+
+  // Cron health (today vs yesterday — silent skip detector)
+  const cronStats = (await db.prepare(
+    `SELECT cron_name, COUNT(*) AS n_today,
+            (SELECT COUNT(*) FROM cron_run_log c2 WHERE c2.cron_name=c1.cron_name AND DATE(c2.started_at/1000,'unixepoch')=?) AS n_yest
+     FROM cron_run_log c1
+     WHERE DATE(c1.started_at/1000,'unixepoch')=? AND status='success'
+     GROUP BY cron_name`
+  ).bind(yest, today).all().catch(() => ({ results: [] }))).results || [];
+  const cronDriftAlerts = cronStats.filter(c => c.n_yest > 0 && c.n_today < c.n_yest * 0.7).map(c => `${c.cron_name}: ${c.n_today} today vs ${c.n_yest} yesterday`);
+
+  // ─── WRITE PER-LAYER FINDINGS ─────────────────────────────────────────
+  const layer1Severity = layer1Missing.some(f => f.severity === 'critical') ? 'critical'
+                       : layer1Missing.length > 0 ? 'warning' : 'info';
+  const layer2Severity = layer2Missing.some(f => f.severity === 'critical') ? 'critical'
+                       : layer2Missing.length + cronDriftAlerts.length > 0 ? 'warning' : 'info';
+
+  await db.prepare(
+    `INSERT INTO audit_findings (detected_at, trade_date, category, severity, layer, signature, title, detail, proposed_fix, data_json)
+     VALUES (?, ?, 'eod_readiness', ?, 'intelligence', ?, ?, ?, ?, ?)`
+  ).bind(
+    nowMs, today, layer1Severity,
+    `eod_readiness_layer1_${today}`,
+    `Layer 1 EOD readiness ${today}: ${layer1Severity.toUpperCase()}, pick_hit_rate=${pickAccuracy ? (pickAccuracy.hit_rate*100).toFixed(0)+'%' : 'n/a'}`,
+    `Pieces missing: ${layer1Missing.length}. Pick accuracy: ${JSON.stringify(pickAccuracy)}.`,
+    layer1Severity === 'info' ? 'continue' : 'review pieces_missing list',
+    JSON.stringify({ pieces_missing: layer1Missing, pick_accuracy: pickAccuracy }),
+  ).run();
+
+  await db.prepare(
+    `INSERT INTO audit_findings (detected_at, trade_date, category, severity, layer, signature, title, detail, proposed_fix, data_json)
+     VALUES (?, ?, 'eod_readiness', ?, 'execution', ?, ?, ?, ?, ?)`
+  ).bind(
+    nowMs, today, layer2Severity,
+    `eod_readiness_layer2_${today}`,
+    `Layer 2 EOD readiness ${today}: ${layer2Severity.toUpperCase()}, n_trades=${tradeSummary.n_trades}, pnl=₹${tradeSummary.realized_pnl_net_rupees}`,
+    `Pieces missing: ${layer2Missing.length}. Cron drift: ${cronDriftAlerts.length} alerts. ${cronDriftAlerts.join('; ').slice(0,400)}`,
+    layer2Severity === 'info' ? 'continue' : 'review cron drift + pieces missing',
+    JSON.stringify({ pieces_missing: layer2Missing, trade_summary: tradeSummary, cron_drift: cronDriftAlerts }),
+  ).run();
+
+  return {
+    rows: 2,
+    layer1_severity: layer1Severity,
+    layer2_severity: layer2Severity,
+    n_trades: tradeSummary.n_trades,
+    pnl_rupees: tradeSummary.realized_pnl_net_rupees,
+    pick_hit_rate: pickAccuracy?.hit_rate,
+  };
+}
+
 // ────────────────────────────────────────────────────────────────────────
 // Cron dispatcher
 // ────────────────────────────────────────────────────────────────────────
@@ -1292,6 +1659,9 @@ const CRON_DISPATCH = {
   '55 0 * * 1-5':       { name: 'kite_reminder_pre', fn: kiteTokenReminder },       // 05:55 IST (PRE-expiry)
   '0 1 * * 1-5':        { name: 'kite_reminder_post',fn: kiteTokenReminder },       // 06:30 IST (POST-expiry final nudge)
   '30 10 * * 1-5':      { name: 'portfolio_eod',     fn: eodPortfolioSnapshot },    // 16:00 IST
+  // ─── Real-money readiness audit (added May 6 2026 evening) ──────
+  '55 2 * * 1-5':       { name: 'pre_market_integrity', fn: preMarketIntegrityCheck }, // 08:25 IST — Layer 1 + Layer 2 pre-market gate
+  '5 11 * * 1-5':       { name: 'eod_readiness_summary', fn: eodReadinessSummary },    // 16:35 IST — runs 5 min AFTER audit_scanner_close so latest findings flow in
   '30 20 * * 6':        { name: 'db_vacuum',         fn: databaseVacuum },          // Sat 02:00 IST
   '30 12 * * 7':        { name: 'weekly_digest',     fn: weeklyPerformanceDigest }, // Sun 18:00 IST
 };
