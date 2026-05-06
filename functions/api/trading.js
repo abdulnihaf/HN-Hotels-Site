@@ -123,6 +123,7 @@ export async function onRequest(context) {
       case 'readiness_report':   return Response.json(await getReadinessReport(db, url), { headers });
       case 'top_strip':          return Response.json(await getTopStrip(db), { headers });
       case 'today_consolidated': return Response.json(await getTodayConsolidated(db), { headers });
+      case 'desk_view':          return Response.json(await getDeskView(db), { headers });
       case 'monthly_learning_trail': return Response.json(await getMonthlyLearningTrail(db, url), { headers });
       case 'weekly_review_latest': return Response.json(await getLatestWeeklyReview(db), { headers });
       case 'autopsy_latest':     return Response.json(await getLatestAutopsies(db, url), { headers });
@@ -3598,6 +3599,267 @@ async function getTodayConsolidated(db) {
     pool_top10,
     pre_market_feed,
     swing_candidates,
+    generated_at: nowMs,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE C — DESK VIEW — single-call backing the new /trading/desk/ live trading
+// desk per doc 19 §6.2. THE most important view (80% of screen-time during
+// 09:15-15:30 IST every trading day).
+//
+// Per doc 18 §3 (additive read-only). Reads only existing tables, no writes,
+// no external API calls.
+//
+// Returns:
+//   1. positions[]               — active auto-managed paper trades w/ live LTP + bars
+//   2. exited_today[]            — closed paper trades for today
+//   3. market_context            — regime / VIX / breadth / sectors / cross-asset
+//   4. reasoning_timeline[]      — last 24h of trader_decisions (cron-level)
+//   5. profit_lock_proximity     — current P&L vs +₹30K threshold (F-L4-LOCK)
+// ═══════════════════════════════════════════════════════════════════════════
+async function getDeskView(db) {
+  const nowMs = Date.now();
+  const istNow = new Date(nowMs + 5.5 * 3600 * 1000);
+  const today = istNow.toISOString().slice(0, 10);
+  const istMins = istNow.getUTCHours() * 60 + istNow.getUTCMinutes();
+
+  // ─── 1. ACTIVE POSITIONS (today, auto-managed, ENTERED state) ──────────────
+  const activeRows = (await db.prepare(`
+    SELECT id, symbol, qty, entry_paise, stop_paise, target_paise,
+           rr_ratio, peak_price_paise, trailing_stop_paise,
+           trader_state, strategy_mode, entry_at, last_check_at,
+           target_locked, opus_extension_until, trader_notes,
+           or_high_paise, or_low_paise, rationale
+    FROM paper_trades
+    WHERE auto_managed=1 AND is_active=1 AND trader_state='ENTERED'
+      AND DATE(created_at/1000+19800,'unixepoch') = ?
+    ORDER BY entry_at ASC
+  `).bind(today).all().catch(() => ({ results: [] }))).results || [];
+
+  // For each active position: live LTP + last 2h of 5-min bars + recent news
+  const positions = [];
+  for (const p of activeRows) {
+    const ltpRow = await db.prepare(`
+      SELECT ltp_paise, ts FROM intraday_ticks
+      WHERE symbol=? ORDER BY ts DESC LIMIT 1
+    `).bind(p.symbol).first().catch(() => null);
+
+    const barsCutoff = nowMs - 2 * 3600 * 1000;
+    const bars = (await db.prepare(`
+      SELECT ts, open_paise, high_paise, low_paise, close_paise, volume
+      FROM intraday_bars
+      WHERE symbol=? AND trade_date=? AND interval='5minute' AND ts >= ?
+      ORDER BY ts ASC
+    `).bind(p.symbol, today, barsCutoff).all().catch(() => ({ results: [] }))).results || [];
+
+    const newsCount = await db.prepare(`
+      SELECT COUNT(*) AS n FROM news_items
+      WHERE published_at > ? AND (headline LIKE ? OR symbols_tagged LIKE ?)
+    `).bind(nowMs - 3600000, `%${p.symbol}%`, `%${p.symbol}%`).first().catch(() => null);
+
+    const ltp_paise = ltpRow?.ltp_paise || null;
+    const pnl_paise = (ltp_paise && p.entry_paise && p.qty)
+      ? (ltp_paise - p.entry_paise) * p.qty : null;
+    const pnl_pct_now = (ltp_paise && p.entry_paise)
+      ? +(((ltp_paise - p.entry_paise) / p.entry_paise) * 100).toFixed(2) : null;
+    const pnl_pct_at_peak = (p.peak_price_paise && p.entry_paise)
+      ? +(((p.peak_price_paise - p.entry_paise) / p.entry_paise) * 100).toFixed(2) : null;
+
+    // Trajectory classification (simplified from wealth-trader's logic)
+    let trajectory = 'STAIR_STEP';
+    if (bars.length >= 2) {
+      const dayLow = Math.min(...bars.map(b => b.low_paise));
+      const dayLowPct = (dayLow - p.entry_paise) / p.entry_paise * 100;
+      const giveBackPct = (p.peak_price_paise && pnl_pct_now != null)
+        ? (pnl_pct_at_peak - pnl_pct_now) / Math.max(0.1, pnl_pct_at_peak) : 0;
+      if (dayLowPct < -0.5 && pnl_pct_now > 0) trajectory = 'V_RECOVERY';
+      else if (dayLowPct > -0.3 && giveBackPct < 0.3) trajectory = 'LINEAR_UP';
+      else if (giveBackPct > 0.4) trajectory = 'FADING_FROM_PEAK';
+    }
+
+    positions.push({
+      id: p.id,
+      symbol: p.symbol,
+      qty: p.qty,
+      entry_paise: p.entry_paise,
+      stop_paise: p.stop_paise,
+      target_paise: p.target_paise,
+      target_locked: p.target_locked === 1,
+      peak_price_paise: p.peak_price_paise,
+      trailing_stop_paise: p.trailing_stop_paise,
+      strategy_mode: p.strategy_mode,
+      entry_at: p.entry_at,
+      ltp_paise,
+      ltp_ts: ltpRow?.ts || null,
+      pnl_paise,
+      pnl_pct_now,
+      pnl_pct_at_peak,
+      bars,
+      news_count_60min: newsCount?.n || 0,
+      trajectory,
+      trader_notes: p.trader_notes,
+      rationale: p.rationale,
+      opus_extension_active: p.opus_extension_until && p.opus_extension_until > nowMs,
+    });
+  }
+
+  // ─── 2. EXITED TODAY (closed paper trades for today) ───────────────────────
+  const exited_today = (await db.prepare(`
+    SELECT id, symbol, qty, entry_paise, exit_paise, stop_paise, target_paise,
+           exit_reason, pnl_net_paise, pnl_gross_paise,
+           entry_at, exit_at, win_loss, target_locked, trader_notes
+    FROM paper_trades
+    WHERE auto_managed=1
+      AND DATE(created_at/1000+19800,'unixepoch') = ?
+      AND exit_at IS NOT NULL
+    ORDER BY exit_at DESC
+  `).bind(today).all().catch(() => ({ results: [] }))).results || [];
+
+  // ─── 3. MARKET CONTEXT ─────────────────────────────────────────────────────
+  // 3a. Latest VIX
+  const vixLive = await db.prepare(
+    `SELECT vix, ts FROM india_vix_ticks ORDER BY ts DESC LIMIT 1`
+  ).first().catch(() => null);
+
+  // 3b. Today's morning verdict for morning-VIX + regime context
+  let morningContext = { regime: null, vix: null, nifty_pcr: null };
+  const morningV = await db.prepare(`
+    SELECT context_snapshot_json FROM daily_verdicts
+    WHERE trade_date=? AND verdict_type='morning' ORDER BY id DESC LIMIT 1
+  `).bind(today).first().catch(() => null);
+  if (morningV?.context_snapshot_json) {
+    try {
+      const ctx = JSON.parse(morningV.context_snapshot_json);
+      morningContext = {
+        regime: ctx?.regime || null,
+        vix: ctx?.india_vix || null,
+        nifty_pcr: ctx?.nifty_pcr || null,
+      };
+    } catch {}
+  }
+
+  // 3c. Live breadth
+  const breadth = await db.prepare(`
+    SELECT advances, declines, unchanged, ad_ratio, new_highs, new_lows, ts
+    FROM breadth_data ORDER BY ts DESC LIMIT 1
+  `).first().catch(() => null);
+
+  // 3d. Sector indices (latest)
+  const sectors = (await db.prepare(`
+    SELECT i1.index_name, i1.close_paise, i1.prev_close_paise, i1.trade_date
+    FROM sector_indices i1
+    JOIN (SELECT index_name, MAX(trade_date) AS d FROM sector_indices GROUP BY index_name) i2
+      ON i1.index_name = i2.index_name AND i1.trade_date = i2.d
+    LIMIT 12
+  `).all().catch(() => ({ results: [] }))).results || [];
+  const sector_list = sectors.map(s => {
+    const c = (s.close_paise || 0) / 100;
+    const p = (s.prev_close_paise || 0) / 100;
+    return {
+      name: s.index_name,
+      change_pct: p > 0 ? +(((c - p) / p) * 100).toFixed(2) : null,
+    };
+  }).filter(s => s.change_pct != null);
+
+  // 3e. Cross-asset latest (subset relevant for desk)
+  const xa = (await db.prepare(`
+    SELECT c1.asset_code, c1.value, c1.ts
+    FROM crossasset_ticks c1
+    JOIN (SELECT asset_code, MAX(ts) AS m FROM crossasset_ticks
+          WHERE asset_code IN ('USDINR','DXY','BRENT','US10Y') GROUP BY asset_code) c2
+      ON c1.asset_code = c2.asset_code AND c1.ts = c2.m
+  `).all().catch(() => ({ results: [] }))).results || [];
+  const crossasset = Object.fromEntries(xa.map(r => [r.asset_code, { value: r.value, ts: r.ts }]));
+
+  const market_context = {
+    regime_live: morningContext.regime,
+    morning_regime: morningContext.regime,
+    vix_now: vixLive?.vix,
+    vix_morning: morningContext.vix,
+    vix_delta: (vixLive?.vix && morningContext.vix)
+      ? +(vixLive.vix - morningContext.vix).toFixed(2) : null,
+    breadth: breadth ? {
+      advances: breadth.advances,
+      declines: breadth.declines,
+      unchanged: breadth.unchanged,
+      ad_ratio: breadth.ad_ratio,
+      new_highs: breadth.new_highs,
+      new_lows: breadth.new_lows,
+      ts: breadth.ts,
+    } : null,
+    sectors: sector_list,
+    crossasset,
+    nifty_pcr: morningContext.nifty_pcr,
+  };
+
+  // ─── 4. REASONING TIMELINE (last 24h trader_decisions) ─────────────────────
+  const reasoning_timeline = (await db.prepare(`
+    SELECT id, cron_phase, symbol, trade_id, decision, rationale,
+           ltp_paise, composed_by_model, state_before, state_after, created_at
+    FROM trader_decisions
+    WHERE created_at > ?
+    ORDER BY created_at DESC LIMIT 30
+  `).bind(nowMs - 24 * 3600 * 1000).all().catch(() => ({ results: [] }))).results || [];
+
+  // ─── 5. PROFIT-LOCK + LOSS-HALT PROXIMITY ──────────────────────────────────
+  let realized_pnl_paise = 0;
+  let unrealized_pnl_paise = 0;
+  for (const p of exited_today) realized_pnl_paise += (p.pnl_net_paise || 0);
+  for (const p of positions) unrealized_pnl_paise += (p.pnl_paise || 0);
+  const total_pnl_paise = realized_pnl_paise + unrealized_pnl_paise;
+  const PROFIT_LOCK_PAISE = 3000000;
+  const LOSS_HALT_PAISE = -3000000;
+
+  const profit_lock = {
+    threshold_paise: PROFIT_LOCK_PAISE,
+    current_paise: total_pnl_paise,
+    remaining_paise: Math.max(0, PROFIT_LOCK_PAISE - total_pnl_paise),
+    pct: total_pnl_paise > 0 ? +((total_pnl_paise / PROFIT_LOCK_PAISE) * 100).toFixed(1) : 0,
+    armed: total_pnl_paise >= PROFIT_LOCK_PAISE,
+  };
+
+  const loss_halt = {
+    threshold_paise: LOSS_HALT_PAISE,
+    current_paise: total_pnl_paise,
+    remaining_paise: Math.min(0, total_pnl_paise - LOSS_HALT_PAISE),
+    pct: total_pnl_paise < 0 ? +((Math.abs(total_pnl_paise) / Math.abs(LOSS_HALT_PAISE)) * 100).toFixed(1) : 0,
+    armed: total_pnl_paise <= LOSS_HALT_PAISE,
+  };
+
+  // ─── 6. PHASE ──────────────────────────────────────────────────────────────
+  let phaseLabel;
+  const dow = istNow.getUTCDay();
+  if (dow === 0 || dow === 6) phaseLabel = 'OFF_HOURS';
+  else if (istMins < 6 * 60) phaseLabel = 'OFF_HOURS';
+  else if (istMins < 9 * 60) phaseLabel = 'PRE_MARKET';
+  else if (istMins < 9 * 60 + 15) phaseLabel = 'PRE_OPEN';
+  else if (istMins < 15 * 60 + 30) phaseLabel = 'LIVE';
+  else if (istMins < 16 * 60) phaseLabel = 'CLOSE';
+  else if (istMins < 23 * 60) phaseLabel = 'POST_CLOSE';
+  else phaseLabel = 'OFF_HOURS';
+
+  // Hard-exit countdown (15:10 IST during LIVE phase)
+  const HARD_EXIT_MINS = 15 * 60 + 10;
+  const hard_exit_seconds = (phaseLabel === 'LIVE' && istMins < HARD_EXIT_MINS)
+    ? (HARD_EXIT_MINS - istMins) * 60 : null;
+
+  return {
+    trade_date: today,
+    phase: phaseLabel,
+    ist_now_minutes: istMins,
+    hard_exit_seconds,
+    positions,
+    exited_today,
+    market_context,
+    reasoning_timeline,
+    profit_lock,
+    loss_halt,
+    pnl_summary: {
+      realized_paise: realized_pnl_paise,
+      unrealized_paise: unrealized_pnl_paise,
+      total_paise: total_pnl_paise,
+    },
     generated_at: nowMs,
   };
 }
