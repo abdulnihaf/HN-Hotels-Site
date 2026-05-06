@@ -785,7 +785,41 @@ async function composeVerdict(env, opts = {}) {
     };
   });
 
-  const system = `You are a senior Indian-equity intraday trading strategist composing the morning portfolio verdict for an algorithmic system.
+  // ★ F-PERS (May 6 evening, P4) — wire owner_profile into the system prompt.
+  // Owner profile v2 has STRATEGIC_META_FRAME + RISK_PHILOSOPHY + 4 layer
+  // gaps + today's calibration lesson. composeVerdict must pick respecting
+  // owner's principles (avoid panic-sell setups, default ₹30K profit-lock,
+  // recency-aware override calibration, no-technical-jargon rationale).
+  let ownerCtxBlock = '';
+  try {
+    const profileRow = await env.DB.prepare(
+      `SELECT profile_json FROM owner_profile WHERE is_active=1 ORDER BY version DESC LIMIT 1`
+    ).first().catch(() => null);
+    if (profileRow?.profile_json) {
+      const ctx = JSON.parse(profileRow.profile_json);
+      // Compact summary — full profile is 7KB, only inject the actionable parts
+      const summary = {
+        objective: ctx.objective?.primary,
+        knowledge_level: ctx.knowledge_level?.self_assessment,
+        communication_in_picks: ctx.knowledge_level?.correct_pattern,
+        risk_principle_1: ctx.RISK_PHILOSOPHY?.principle_1_avoid_panic_sell_setups?.rule,
+        risk_principle_2: ctx.RISK_PHILOSOPHY?.principle_2_profit_locking?.rule,
+        anti_patterns: ctx.anti_patterns_to_avoid,
+        knowledge_gaps_to_address: ctx.knowledge_gaps_to_fill,
+        today_calibration: ctx.TODAY_CALIBRATION_LESSON?.calibration,
+      };
+      ownerCtxBlock = `\n═══ OWNER CONTEXT (v${profileRow.version || 'unknown'}) — calibrate picks accordingly ═══\n${JSON.stringify(summary, null, 2)}\n
+KEY DIRECTIVES:
+- Pick rationale must be 1-sentence BUSINESS LOGIC (no technical jargon — owner explicitly avoids candlestick/MACD/RSI lecture)
+- Favor stocks with LOW intraday-loss probability (downside_resistance dimension matters as much as upside)
+- Default exit at +₹30K — extension only with explicit data-supported case
+- Address pending knowledge gaps proactively in narrative (don't make owner ask "why?")\n`;
+    }
+  } catch (e) {
+    console.warn('owner_profile read failed:', e.message);
+  }
+
+  const system = `You are a senior Indian-equity intraday trading strategist composing the morning portfolio verdict for an algorithmic system.${ownerCtxBlock}
 
 STRATEGY MODE: INTRADAY DAILY-PROFIT (surgical).
 Goal: enter morning, capture intraday peak with trailing stops, exit ALL positions before 14:30 IST. NEVER hold overnight. Sleep flat. Tight stops, achievable targets.
@@ -847,12 +881,34 @@ PICK SELECTION (RISK-MINIMAL, SURGICAL):
 3. SECTOR CONCENTRATION CAP — HARD RULE: NO TWO PICKS in the same "sector" field. If your top 2 are both 'INFORMATION_TECHNOLOGY', drop the lower hybrid_score one and use a different sector. This prevents correlated drawdown when a sector rotates.
 4. Avoid 2 picks both with weak today's catalyst
 5. NEVER pick a candidate with reward_risk_history < 1.4 (insufficient edge for risk-minimal mode)
-6. CONVICTION-BASED WEIGHTING: Each pick gets a "weight_pct" you set based on your conviction:
-   - High conviction (regime HOT + reward_risk ≥ 1.8 + whale buys + strong sector): weight_pct = 35%
-   - Standard conviction (regime HOT + reward_risk ≥ 1.5): weight_pct = 30%
-   - Lower conviction (regime STABLE or marginal R:R): weight_pct = 25%
-   - Sum of all weights ≤ 95% (5% cash buffer minimum)
-   This means a HOT-regime + whale-backed pick gets MORE capital than a STABLE-regime fallback pick. Don't blindly equal-weight.
+6. CONVICTION-WEIGHTED CAPITAL ALLOCATION (May 6 2026 — F1 v2 owner-calibrated):
+
+   Owner explicit rule: "Pick a stock highly less probable to lose money on
+   intraday. On ₹10L deployment safely exit at ₹10,30,000."
+
+   Allocate by COMPOSITE CONVICTION = 3 dimensions multiplied:
+     A. UPSIDE_CONVICTION = hit_2pct_rate × avg_open_to_high_pct
+     B. DOWNSIDE_RESISTANCE = (100 - hit_neg_2pct_rate) × (1 / abs(avg_open_to_low_pct))
+        ← THIS IS THE NEW DIMENSION. Owner's panic-sell-avoidance principle.
+     C. RECENT_REGIME = hit_2pct_last_week × green_close_last_week
+        ← Today's calibration: HFCL won because last-week was 5.81% avg-up
+          even though 90d was 2.98%. RECENCY MATTERS.
+
+   Map composite_conviction to weight_pct:
+     - VERY HIGH (top quartile composite): weight_pct = 45-50%
+     - HIGH (2nd quartile):                weight_pct = 30-35%
+     - MEDIUM (3rd quartile):              weight_pct = 20-25%
+     - LOW (bottom quartile):              weight_pct = 15-20%
+   - Sum ≤ 95% (5% cash buffer)
+   - NEVER equal-split. Equal-split is a red flag of laziness.
+
+   In your output, include WEIGHT_RATIONALE field per pick explaining:
+     "HFCL 50%: HIGH composite — upside 45 (hit_2pct 55, avg_high 2.98)
+      × downside_resistance 8.7 (low hit_neg_2 18, shallow avg_low -1.71)
+      × recent_regime 5.8 (last-week 80, green-close 75) = composite 2,288
+      → top-quartile of pool → 50% allocation"
+
+   Lazy: "weight_pct=30 because conviction medium" → REJECTED, recompose.
 
 RECENCY (regime_trend field per candidate — THE single most important new signal):
 - "HOT" → last-week hit-rate ≥ 1.1× the 90-day average. Stock is currently in a high-volatility window. PRIORITIZE.
@@ -1249,12 +1305,17 @@ async function suitabilityRefresh(env) {
     // 16:30 IST cron fire DELETEd then INSERT failed silently → empty table →
     // composeVerdict had zero candidates → SIT_OUT. Caught morning of May 6.
     // Now: explicit column list, last-week columns left NULL for weekly enrich.
+    //
+    // F-L1 (May 6 evening, P3): also computes hit_neg_2pct_rate +
+    // loss_resistance_score + owner_score for owner's "low intraday-loss
+    // probability" principle.
     const r = await db.prepare(`
       INSERT INTO intraday_suitability
         (symbol, hit_2pct_rate, hit_3pct_rate, hit_5pct_rate,
          avg_open_to_high_pct, avg_open_to_low_pct, avg_daily_range_pct,
          green_close_rate, avg_turnover_cr, days_sampled,
-         intraday_score, computed_at)
+         intraday_score, computed_at,
+         hit_neg_2pct_rate, loss_resistance_score, owner_score)
       SELECT
         symbol,
         ROUND(AVG(CASE WHEN (high_paise - open_paise) * 100.0 / open_paise >= 2 THEN 1.0 ELSE 0.0 END) * 100, 1) AS hit_2pct_rate,
@@ -1274,7 +1335,30 @@ async function suitabilityRefresh(env) {
           (MIN(AVG(CAST(volume AS REAL) * close_paise / 1e9) / 5, 20) * 0.10),
           1
         ) AS intraday_score,
-        strftime('%s','now')*1000
+        strftime('%s','now')*1000 AS computed_at,
+        -- F-L1 (May 6 evening): downside-resistance dimensions
+        ROUND(AVG(CASE WHEN (open_paise - low_paise) * 100.0 / open_paise >= 2 THEN 1.0 ELSE 0.0 END) * 100, 1) AS hit_neg_2pct_rate,
+        ROUND(
+          (100.0 - (AVG(CASE WHEN (open_paise - low_paise) * 100.0 / open_paise >= 2 THEN 1.0 ELSE 0.0 END) * 100)) * 0.4 +
+          (100.0 / (1.0 + ABS(AVG((low_paise - open_paise) * 100.0 / open_paise)))) * 0.4 +
+          (AVG(CASE WHEN close_paise > open_paise THEN 1.0 ELSE 0.0 END) * 100 * 0.2),
+          1
+        ) AS loss_resistance_score,
+        ROUND(
+          0.6 * (
+            (AVG(CASE WHEN (high_paise - open_paise) * 100.0 / open_paise >= 2 THEN 1.0 ELSE 0.0 END) * 100 * 0.30) +
+            (AVG(CASE WHEN (high_paise - open_paise) * 100.0 / open_paise >= 3 THEN 1.0 ELSE 0.0 END) * 100 * 0.25) +
+            (AVG(CASE WHEN close_paise > open_paise THEN 1.0 ELSE 0.0 END) * 100 * 0.20) +
+            (MIN(AVG((high_paise - open_paise) * 100.0 / open_paise), 4) * 5 * 0.15) +
+            (MIN(AVG(CAST(volume AS REAL) * close_paise / 1e9) / 5, 20) * 0.10)
+          ) +
+          0.4 * (
+            (100.0 - (AVG(CASE WHEN (open_paise - low_paise) * 100.0 / open_paise >= 2 THEN 1.0 ELSE 0.0 END) * 100)) * 0.4 +
+            (100.0 / (1.0 + ABS(AVG((low_paise - open_paise) * 100.0 / open_paise)))) * 0.4 +
+            (AVG(CASE WHEN close_paise > open_paise THEN 1.0 ELSE 0.0 END) * 100 * 0.2)
+          ),
+          1
+        ) AS owner_score
       FROM equity_eod
       WHERE trade_date >= date('now', '-90 days')
         AND series = 'EQ'

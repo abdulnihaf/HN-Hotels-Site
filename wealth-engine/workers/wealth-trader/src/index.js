@@ -756,6 +756,46 @@ async function priceMonitor(env) {
     }
   }
 
+  // ★ F-L4-LOCK (May 6 2026, P1) — owner's explicit ₹30K profit-lock rule
+  // Owner principle: "On ₹10L deployment I want to safely exit at ₹10,30,000.
+  // Only hold past +₹30K when probability of going above +₹50K is extremely
+  // high (very sure)."
+  //
+  // Implementation: at portfolio +₹30K, FORCE EXIT default. Each pick exits
+  // unless it has explicit opus_extension_until > now (set by Opus position_mgmt
+  // EXTEND_PROFIT decision).
+  if (portfolioPnL >= PROFIT_LOCK_PAISE) {
+    const remaining = (await db.prepare(`
+      SELECT id, symbol, qty, entry_paise, opus_extension_until FROM paper_trades
+      WHERE auto_managed=1 AND is_active=1 AND trader_state='ENTERED'
+        AND DATE(created_at/1000, 'unixepoch') = ?
+    `).bind(today).all()).results || [];
+    let forceExited = 0;
+    let extended = 0;
+    const nowMs = Date.now();
+    for (const r of remaining) {
+      const q = ltp[r.symbol];
+      if (!q?.ltp_paise) continue;
+      const hasExtension = r.opus_extension_until && r.opus_extension_until > nowMs;
+      if (hasExtension) {
+        // Position has Opus extension flag — keep running (Opus will re-eval at next position_mgmt)
+        extended++;
+        continue;
+      }
+      await firePaperExit(db, r, q.ltp_paise, 'PROFIT_LOCK_FORCE_EXIT_30K');
+      exitsfired++;
+      forceExited++;
+    }
+    if (forceExited > 0 || extended > 0) {
+      await logDecision(db, {
+        cron_phase: 'price_monitor',
+        decision: 'PROFIT_LOCK_FORCE_EXIT_FIRED',
+        rationale: `Portfolio P&L +₹${Math.round(portfolioPnL/100)} ≥ ₹30K threshold. Force-exited ${forceExited} positions. ${extended} kept on Opus EXTEND_PROFIT flag. Owner's "safe ₹10,30,000 exit" rule honored.`,
+        composed_by_model: 'deterministic',
+      });
+    }
+  }
+
   // LOSS HALT rule: portfolio P&L ≤ -₹30K → exit all remaining + halt for the day.
   if (portfolioPnL <= -DAILY_LOSS_LIMIT_PAISE) {
     const remaining = (await db.prepare(`
@@ -777,21 +817,10 @@ async function priceMonitor(env) {
     });
   }
 
-  // PROFIT LOCK alert (informational — actual stop tightening happened above)
-  if (profitLockActive) {
-    const recentLockLog = await db.prepare(`
-      SELECT id FROM trader_decisions
-      WHERE trade_date=? AND decision='PROFIT_LOCK_ARMED' LIMIT 1
-    `).bind(today).first().catch(() => null);
-    if (!recentLockLog) {
-      await logDecision(db, {
-        cron_phase: 'price_monitor',
-        decision: 'PROFIT_LOCK_ARMED',
-        rationale: `Portfolio P&L +₹${Math.round(portfolioPnL/100)} ≥ ₹30K target. All trailing stops tightened to entry+1% — day's gains locked.`,
-        composed_by_model: 'deterministic',
-      });
-    }
-  }
+  // ★ F-L4-LOCK: legacy PROFIT_LOCK_ARMED replaced with FORCE EXIT above.
+  // The trail-tightening at line ~668 (lockFloor = entry × 1.01) still runs
+  // for positions that haven't yet reached portfolio +₹30K threshold but are
+  // building toward it. That's still useful for protecting incremental gains.
 
   return {
     rows: active.length,
@@ -1202,7 +1231,37 @@ PRINCIPLE: rule conflicts? Statistical rules (S1-S7) WIN over discretionary rule
 news_last_4h has a strong-positive catalyst (sentiment > +0.5, importance ≥ 4) explaining
 why TODAY is special. Document any override in rationale.
 
-Be DECISIVE. Most healthy positions = HOLD. Most exits = FULL_EXIT or trailing-stop-fired. HOLD_OVERNIGHT is the rare 1-in-20-days call.`;
+═══ EXTEND_PROFIT (rare exception — owner's ₹30K → ₹50K rule, May 6 2026) ═══
+
+Owner principle: at portfolio +₹30K, system DEFAULT is FORCE EXIT all positions.
+Only exception: if you (Opus) EXPLICITLY upgrade a position with EXTEND_PROFIT,
+the system keeps that position running for next 30 minutes.
+
+ONLY invoke EXTEND_PROFIT when ALL 5 gates pass:
+  1. portfolio_pnl >= ₹30000 (we're at the threshold)
+  2. THIS position's pct_of_typical_move_captured < 0.7
+     (room remaining within 90d avg — hasn't peaked yet)
+  3. stat_priors.avg_open_to_high_pct_90d > 4%
+     (stock historically reaches >4% on green days — extension worthwhile)
+  4. stat_priors.hit_3pct_rate_90d > 30%
+     (1 in 3 days hits +3% — odds of further extension supported)
+  5. trajectory in ['LINEAR_UP', 'V_RECOVERY']
+     (NOT 'FADING_FROM_PEAK' — momentum still building)
+  AND no negative news in last 30 min
+  AND ist_phase != 'pre_close_window' (no point extending in last 20 min)
+
+When EXTEND_PROFIT fires:
+  - System keeps that position running for next 30 min (re-evaluated next position_mgmt)
+  - Cumulative target: position contributing toward +₹50K stretch
+  - Owner's "very sure" gate is met — Opus is taking responsibility
+
+Output: { decisions: [{ trade_id, decision: "EXTEND_PROFIT", extend_minutes: 30,
+          rationale: "Citing all 5 gates with specific values", confidence: 0.9 }] }
+
+Default at +₹30K is FORCE EXIT. EXTEND_PROFIT is the 1-in-10 confident call,
+not the default. Be ruthless. ₹30K in hand > +₹50K hopium.
+
+Be DECISIVE. Most healthy positions = HOLD. Most exits = FULL_EXIT or trailing-stop-fired. HOLD_OVERNIGHT is the rare 1-in-20-days call. EXTEND_PROFIT is the rare 1-in-10-days call.`;
 
   const userPrompt = `Mid-day position review · ${istHHMM()} IST
 Portfolio P&L ₹${Math.round(portfolioPnL/100)}  ·  regime=${regimeNow.regime}  ·  VIX=${vixNow || '?'}
@@ -1257,6 +1316,23 @@ Compose decisions JSON. Use the LIVE context to detect:
 
     if (d.decision === 'FULL_EXIT' && q?.ltp_paise) {
       await firePaperExit(db, pos, q.ltp_paise, 'OPUS_FULL_EXIT');
+      actionCount++;
+    } else if (d.decision === 'EXTEND_PROFIT' && q?.ltp_paise) {
+      // Owner's ₹30K → ₹50K extension gate. Opus has taken responsibility.
+      // Set opus_extension_until = now + (extend_minutes || 30) min.
+      const extendMin = Math.min(60, Math.max(15, d.extend_minutes || 30));
+      const extendUntil = Date.now() + extendMin * 60000;
+      await db.prepare(`
+        UPDATE paper_trades
+        SET opus_extension_until = ?,
+            trader_notes = COALESCE(trader_notes, '') || ?,
+            last_check_at = ?
+        WHERE id = ?
+      `).bind(
+        extendUntil,
+        ` | EXTEND_PROFIT for ${extendMin}min by Opus: ${(d.rationale || '').slice(0, 200)}`,
+        Date.now(), pos.id,
+      ).run();
       actionCount++;
     } else if (d.decision === 'PARTIAL_EXIT_50' && q?.ltp_paise && pos.qty > 1) {
       // Realize half — split into two rows: one closed, one continued
