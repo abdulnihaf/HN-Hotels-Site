@@ -121,6 +121,7 @@ export async function onRequest(context) {
       case 'system_health':      return Response.json(await getSystemHealth(db), { headers });
       case 'eod_learning_audit': return Response.json(await getEodLearningAudit(db, env, url), { headers });
       case 'readiness_report':   return Response.json(await getReadinessReport(db, url), { headers });
+      case 'top_strip':          return Response.json(await getTopStrip(db), { headers });
       case 'monthly_learning_trail': return Response.json(await getMonthlyLearningTrail(db, url), { headers });
       case 'weekly_review_latest': return Response.json(await getLatestWeeklyReview(db), { headers });
       case 'autopsy_latest':     return Response.json(await getLatestAutopsies(db, url), { headers });
@@ -3114,6 +3115,254 @@ async function getReadinessReport(db, url) {
     days,
     real_money_target_date: '2026-05-11',
     paper_trade_days_remaining: Math.max(0, Math.floor((new Date('2026-05-09T00:00:00').getTime() - Date.now()) / 86400000)),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE A — THE SPINE — single API call powering the always-visible top strip
+// + bottom phase indicator on every /trading/* page.
+//
+// Per doc 19 §5 + doc 18 §3 (additive read-only). Reads only existing tables,
+// performs no writes, makes no external API calls.
+//
+// Tables read (all confirmed existing): indices_eod, crossasset_ticks,
+// gift_nifty_ticks, india_vix_ticks, paper_trades, audit_findings, user_config.
+// ═══════════════════════════════════════════════════════════════════════════
+async function getTopStrip(db) {
+  const nowMs = Date.now();
+  const istNow = new Date(nowMs + 5.5 * 3600 * 1000);
+  const today = istNow.toISOString().slice(0, 10);
+  const dow = istNow.getUTCDay();           // IST day-of-week
+  const istMins = istNow.getUTCHours() * 60 + istNow.getUTCMinutes();
+
+  // ─── 1. INDICES — NIFTY 50, NIFTY BANK, INDIA VIX from indices_eod (latest) ─
+  const idxRows = (await db.prepare(`
+    SELECT i1.index_name, i1.close_paise, i1.prev_close_paise, i1.trade_date
+    FROM indices_eod i1
+    JOIN (SELECT index_name, MAX(trade_date) AS d FROM indices_eod GROUP BY index_name) i2
+      ON i1.index_name = i2.index_name AND i1.trade_date = i2.d
+    WHERE i1.index_name IN ('NIFTY 50','NIFTY BANK','INDIA VIX')
+  `).all().catch(() => ({ results: [] }))).results || [];
+
+  const indices = idxRows.map(r => {
+    const cp = (r.close_paise || 0) / 100;
+    const pp = (r.prev_close_paise || 0) / 100;
+    const change_pct = pp > 0 ? ((cp - pp) / pp * 100) : null;
+    return {
+      name: r.index_name,
+      value: cp,
+      change_pct: change_pct == null ? null : +change_pct.toFixed(2),
+      trade_date: r.trade_date,
+    };
+  });
+
+  // ─── 2. INDIA VIX live override (more recent than EOD if available) ─────────
+  const vixLive = await db.prepare(
+    `SELECT vix, ts FROM india_vix_ticks ORDER BY ts DESC LIMIT 1`
+  ).first().catch(() => null);
+  if (vixLive?.vix) {
+    const vixIdx = indices.findIndex(i => i.name === 'INDIA VIX');
+    if (vixIdx >= 0) indices[vixIdx].value = vixLive.vix;
+    else indices.push({ name: 'INDIA VIX', value: vixLive.vix, change_pct: null });
+  }
+
+  // ─── 3. CROSS-ASSET — USDINR, DXY, BRENT, US10Y, GOLD from crossasset_ticks ─
+  const caLatest = (await db.prepare(`
+    SELECT c1.asset_code, c1.value, c1.ts
+    FROM crossasset_ticks c1
+    JOIN (SELECT asset_code, MAX(ts) AS m FROM crossasset_ticks
+          WHERE asset_code IN ('USDINR','DXY','BRENT','US10Y','GOLD','VIX_US') GROUP BY asset_code) c2
+      ON c1.asset_code = c2.asset_code AND c1.ts = c2.m
+  `).all().catch(() => ({ results: [] }))).results || [];
+
+  const dayAgo = nowMs - 26 * 3600 * 1000;
+  const caPrev = (await db.prepare(`
+    SELECT c1.asset_code, c1.value
+    FROM crossasset_ticks c1
+    JOIN (SELECT asset_code, MAX(ts) AS m FROM crossasset_ticks
+          WHERE asset_code IN ('USDINR','DXY','BRENT','US10Y','GOLD','VIX_US') AND ts < ?
+          GROUP BY asset_code) c2
+      ON c1.asset_code = c2.asset_code AND c1.ts = c2.m
+  `).bind(dayAgo).all().catch(() => ({ results: [] }))).results || [];
+
+  const prevByCode = Object.fromEntries(caPrev.map(r => [r.asset_code, r.value]));
+  const crossasset = {};
+  for (const r of caLatest) {
+    const prev = prevByCode[r.asset_code];
+    crossasset[r.asset_code] = {
+      value: r.value,
+      change_pct: prev ? +(((r.value - prev) / prev) * 100).toFixed(2) : null,
+      ts: r.ts,
+    };
+  }
+
+  // ─── 4. GIFT NIFTY — latest tick (Singapore market 21h) ──────────────────────
+  const giftLatest = await db.prepare(
+    `SELECT value, ts FROM gift_nifty_ticks ORDER BY ts DESC LIMIT 1`
+  ).first().catch(() => null);
+  if (giftLatest) {
+    crossasset.GIFT_NIFTY = { value: giftLatest.value, change_pct: null, ts: giftLatest.ts };
+  }
+
+  // ─── 5. CAPITAL — total from user_config + deployed/pnl from paper_trades ───
+  const cfgRows = (await db.prepare(
+    `SELECT config_key, config_value FROM user_config WHERE config_key='total_capital_paise'`
+  ).all().catch(() => ({ results: [] }))).results || [];
+  const total_capital_paise = cfgRows.length
+    ? parseInt(cfgRows[0].config_value || '100000000')
+    : 100000000;
+
+  const tradeAgg = await db.prepare(`
+    SELECT
+      COUNT(CASE WHEN is_active=1 AND auto_managed=1 THEN 1 END) AS active_count,
+      COALESCE(SUM(CASE WHEN is_active=1 AND auto_managed=1
+                        THEN qty * entry_paise ELSE 0 END), 0) AS deployed_paise,
+      COALESCE(SUM(CASE WHEN auto_managed=1 THEN COALESCE(pnl_net_paise, 0) ELSE 0 END), 0) AS today_pnl_paise
+    FROM paper_trades
+    WHERE DATE(created_at/1000+19800,'unixepoch') = ?
+  `).bind(today).first().catch(() => null) || { active_count: 0, deployed_paise: 0, today_pnl_paise: 0 };
+
+  // Live unrealized P&L on still-open positions (using last intraday_ticks LTP)
+  const openLive = (await db.prepare(`
+    SELECT pt.id, pt.symbol, pt.qty, pt.entry_paise,
+      (SELECT ltp_paise FROM intraday_ticks t
+       WHERE t.symbol=pt.symbol ORDER BY t.ts DESC LIMIT 1) AS ltp_paise
+    FROM paper_trades pt
+    WHERE pt.is_active=1 AND pt.auto_managed=1
+      AND DATE(pt.created_at/1000+19800,'unixepoch') = ?
+  `).bind(today).all().catch(() => ({ results: [] }))).results || [];
+
+  let unrealized_paise = 0;
+  for (const pos of openLive) {
+    if (pos.ltp_paise && pos.entry_paise && pos.qty) {
+      unrealized_paise += (pos.ltp_paise - pos.entry_paise) * pos.qty;
+    }
+  }
+
+  const total_pnl_paise = (tradeAgg.today_pnl_paise || 0) + unrealized_paise;
+  const PROFIT_LOCK_THRESHOLD_PAISE = 3000000;  // ₹30,000 (matches wealth-trader F-L4-LOCK)
+  const LOSS_HALT_THRESHOLD_PAISE = -3000000;   // ₹-30,000 (matches DAILY_HALT_LOSS_30K)
+
+  // ─── 6. PHASE — IST clock-derived state machine ─────────────────────────────
+  let phaseLabel, phaseColor, phaseStartIst, nextPhaseLabel, nextPhaseIst;
+  const isWeekend = (dow === 0 || dow === 6);
+
+  // Convert mins-since-midnight to "HH:MM" string
+  const fmtIst = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+  if (isWeekend) {
+    phaseLabel = 'OFF_HOURS';
+    phaseColor = 'gray';
+    phaseStartIst = '00:00';
+    nextPhaseLabel = 'PRE_MARKET';
+    nextPhaseIst = 'Mon 06:00';
+  } else if (istMins < 6 * 60) {                      // before 06:00 IST
+    phaseLabel = 'OFF_HOURS';
+    phaseColor = 'gray';
+    phaseStartIst = '23:00';
+    nextPhaseLabel = 'PRE_MARKET';
+    nextPhaseIst = '06:00';
+  } else if (istMins < 9 * 60) {                       // 06:00–09:00 IST
+    phaseLabel = 'PRE_MARKET';
+    phaseColor = 'yellow';
+    phaseStartIst = '06:00';
+    nextPhaseLabel = 'PRE_OPEN';
+    nextPhaseIst = '09:00';
+  } else if (istMins < 9 * 60 + 15) {                  // 09:00–09:14 IST
+    phaseLabel = 'PRE_OPEN';
+    phaseColor = 'blue';
+    phaseStartIst = '09:00';
+    nextPhaseLabel = 'LIVE';
+    nextPhaseIst = '09:15';
+  } else if (istMins < 15 * 60 + 30) {                 // 09:15–15:29 IST
+    phaseLabel = 'LIVE';
+    phaseColor = 'green';
+    phaseStartIst = '09:15';
+    nextPhaseLabel = 'CLOSE';
+    nextPhaseIst = '15:30';
+  } else if (istMins < 16 * 60) {                      // 15:30–15:59 IST
+    phaseLabel = 'CLOSE';
+    phaseColor = 'purple';
+    phaseStartIst = '15:30';
+    nextPhaseLabel = 'POST_CLOSE';
+    nextPhaseIst = '16:00';
+  } else if (istMins < 23 * 60) {                      // 16:00–22:59 IST
+    phaseLabel = 'POST_CLOSE';
+    phaseColor = 'brown';
+    phaseStartIst = '16:00';
+    nextPhaseLabel = 'OFF_HOURS';
+    nextPhaseIst = '23:00';
+  } else {                                              // 23:00+ IST
+    phaseLabel = 'OFF_HOURS';
+    phaseColor = 'gray';
+    phaseStartIst = '23:00';
+    nextPhaseLabel = 'PRE_MARKET';
+    nextPhaseIst = 'tomorrow 06:00';
+  }
+
+  // Hard exit countdown — until 15:10 IST during LIVE phase, else null
+  const hardExitMins = 15 * 60 + 10;
+  const hard_exit_seconds = (phaseLabel === 'LIVE' && istMins < hardExitMins)
+    ? (hardExitMins - istMins) * 60
+    : null;
+
+  // ─── 7. READINESS — latest pre_market_integrity + eod_readiness rollup ──────
+  const readinessFindings = (await db.prepare(`
+    SELECT category, severity, layer, signature
+    FROM audit_findings
+    WHERE category IN ('pre_market_integrity','eod_readiness') AND trade_date=?
+    ORDER BY detected_at DESC
+  `).bind(today).all().catch(() => ({ results: [] }))).results || [];
+
+  const sevRank = { critical: 3, warning: 2, info: 1 };
+  let layer1Worst = 'info', layer2Worst = 'info';
+  for (const f of readinessFindings) {
+    if (f.layer === 'intelligence' && (sevRank[f.severity] || 0) > (sevRank[layer1Worst] || 0)) layer1Worst = f.severity;
+    if (f.layer === 'execution' && (sevRank[f.severity] || 0) > (sevRank[layer2Worst] || 0)) layer2Worst = f.severity;
+  }
+  const overallWorst = (sevRank[layer1Worst] >= sevRank[layer2Worst]) ? layer1Worst : layer2Worst;
+  const go_no_go = overallWorst === 'critical' ? 'NO_GO'
+                 : overallWorst === 'warning' ? 'GO_WITH_WARNING' : 'GO';
+
+  // Days to real-money go-live (target Mon 11 May 2026)
+  const realMoneyTarget = new Date('2026-05-11T03:45:00Z'); // 09:15 IST
+  const days_to_real_money = Math.max(0, Math.ceil((realMoneyTarget.getTime() - nowMs) / 86400000));
+
+  return {
+    indices,
+    crossasset,
+    capital: {
+      total_paise: total_capital_paise,
+      deployed_paise: tradeAgg.deployed_paise || 0,
+      deployed_pct: total_capital_paise > 0
+        ? +((tradeAgg.deployed_paise / total_capital_paise) * 100).toFixed(1)
+        : 0,
+      position_count: tradeAgg.active_count || 0,
+      today_pnl_paise: total_pnl_paise,
+      profit_lock_threshold_paise: PROFIT_LOCK_THRESHOLD_PAISE,
+      profit_lock_remaining_paise: Math.max(0, PROFIT_LOCK_THRESHOLD_PAISE - total_pnl_paise),
+      profit_lock_pct: total_pnl_paise > 0
+        ? +((total_pnl_paise / PROFIT_LOCK_THRESHOLD_PAISE) * 100).toFixed(1) : 0,
+      loss_halt_threshold_paise: LOSS_HALT_THRESHOLD_PAISE,
+    },
+    phase: {
+      label: phaseLabel,
+      color: phaseColor,
+      started_ist: phaseStartIst,
+      next_phase_label: nextPhaseLabel,
+      next_phase_ist: nextPhaseIst,
+      hard_exit_seconds,
+      ist_now: fmtIst(istMins),
+      is_weekend: isWeekend,
+    },
+    readiness: {
+      layer1_severity: layer1Worst,
+      layer2_severity: layer2Worst,
+      overall_severity: overallWorst,
+      go_no_go,
+      days_to_real_money,
+    },
+    generated_at: nowMs,
   };
 }
 
