@@ -79,46 +79,50 @@ async function getJwt(env) {
 
 export async function onRequest(context) {
   const { request, env } = context;
-  const url = new URL(request.url);
-  const filename = url.searchParams.get("f");
-
-  if (!filename) {
-    return new Response("missing ?f=", { status: 400 });
-  }
-  if (!ALLOWED.has(filename)) {
-    return new Response("filename not allowed", { status: 403 });
-  }
-  if (!env.PISIGNAGE_EMAIL || !env.PISIGNAGE_PASSWORD) {
-    return new Response(
-      "server not configured: set PISIGNAGE_EMAIL + PISIGNAGE_PASSWORD secrets",
-      { status: 500 }
-    );
-  }
-
-  let token;
   try {
-    token = await getJwt(env);
-  } catch (e) {
-    return new Response("auth: " + e.message, { status: 502 });
-  }
+    const url = new URL(request.url);
+    const filename = url.searchParams.get("f");
 
-  const upstream = `${PISIGNAGE_BASE}/media/hamzaexpress/${encodeURIComponent(filename)}`;
-  const upstreamResp = await fetch(upstream, {
-    headers: { "x-access-token": token },
-    cf: { cacheTtl: 86400, cacheEverything: true },
-  });
-
-  if (upstreamResp.status === 401) {
-    // JWT may have been invalidated server-side — force refresh once
-    try {
-      token = await refreshJwt(env);
-      const retry = await fetch(upstream, { headers: { "x-access-token": token } });
-      return passthrough(retry);
-    } catch (e) {
-      return new Response("upstream auth retry failed: " + e.message, { status: 502 });
+    if (!filename) {
+      return new Response("missing ?f=", { status: 400 });
     }
+    if (!ALLOWED.has(filename)) {
+      return new Response("filename not allowed: " + filename, { status: 403 });
+    }
+    if (!env.PISIGNAGE_EMAIL || !env.PISIGNAGE_PASSWORD) {
+      return new Response("server not configured (missing email/password secrets)", { status: 500 });
+    }
+    if (!env.SESSIONS) {
+      return new Response("SESSIONS KV binding missing", { status: 500 });
+    }
+
+    let token;
+    try {
+      token = await getJwt(env);
+    } catch (e) {
+      return new Response("auth-step: " + (e && e.stack ? e.stack : String(e)), { status: 502 });
+    }
+
+    const upstream = `${PISIGNAGE_BASE}/media/hamzaexpress/${encodeURIComponent(filename)}`;
+    let upstreamResp;
+    try {
+      upstreamResp = await fetch(upstream, { headers: { "x-access-token": token } });
+    } catch (e) {
+      return new Response("fetch-step: " + (e && e.stack ? e.stack : String(e)), { status: 502 });
+    }
+
+    if (upstreamResp.status === 401) {
+      try {
+        token = await refreshJwt(env);
+        upstreamResp = await fetch(upstream, { headers: { "x-access-token": token } });
+      } catch (e) {
+        return new Response("retry-step: " + (e && e.stack ? e.stack : String(e)), { status: 502 });
+      }
+    }
+    return passthrough(upstreamResp);
+  } catch (e) {
+    return new Response("top-level: " + (e && e.stack ? e.stack : String(e)), { status: 500 });
   }
-  return passthrough(upstreamResp);
 }
 
 function passthrough(r) {
