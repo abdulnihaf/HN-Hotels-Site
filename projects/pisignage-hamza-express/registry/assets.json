@@ -1,0 +1,262 @@
+{
+  "_doc": "Asset registry. Maps logical asset_id to PiSignage filename + specs. Update this file whenever a new creative is uploaded to PiSignage library. The asset_id is used in scene files only — pisignage_filename is what actually gets sent to the API.",
+  "_naming_convention": "asset_id format: {combo_key}_{type}_v{n}  e.g. c1_ghee_dal_fry_static_v3",
+  "_orientation": "portrait = 1080x1920 MP4 / 2151x3855 PNG. landscape = 1920x1080 MP4 / 3840x2160 PNG.",
+  "_status_values": "live | pending_upload | deprecated",
+
+  "c1_ghee_dal_fry_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V2_C1_GheeRice_DalFry.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 8,
+    "combo": "C1",
+    "label": "Ghee Rice + Dal Fry",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo"]
+  },
+
+  "c1_ghee_dal_fry_video_v3": {
+    "pisignage_filename": "Video_v3_TV-V2_C1_GheeRice_DalFry.mp4",
+    "orientation": "portrait",
+    "type": "video",
+    "default_duration": 10,
+    "combo": "C1",
+    "label": "Ghee Rice + Dal Fry",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo", "cinemagraph"]
+  },
+
+  "c2_ghee_dal_kabab_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V1_C2_GheeRice_DalFry_Kabab.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 8,
+    "combo": "C2",
+    "label": "Ghee Rice + Dal Fry + Kabab",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo"]
+  },
+
+  "c2_ghee_dal_kabab_video_v3": {
+    "pisignage_filename": "Video_v3_TV-V1_C2_GheeRice_DalFry_Kabab.mp4",
+    "orientation": "portrait",
+    "type": "video",
+    "default_duration": 10,
+    "combo": "C2",
+    "label": "Ghee Rice + Dal Fry + Kabab",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo", "cinemagraph"]
+  },
+
+  "c3_ghee_butter_chx_kabab_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 8,
+    "combo": "C3",
+    "label": "Ghee Rice + Butter Chicken + Kabab",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo"]
+  },
+
+  "c3_ghee_butter_chx_kabab_video_v3": {
+    "pisignage_filename": "Video_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.mp4",
+    "orientation": "portrait",
+    "type": "video",
+    "default_duration": 10,
+    "combo": "C3",
+    "label": "Ghee Rice + Butter Chicken + Kabab",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo", "cinemagraph"]
+  },
+
+  "c4_ghee_mutton_chatpata_kabab_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 8,
+    "combo": "C4",
+    "label": "Ghee Rice + Mutton Chatpata + Kabab",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo"]
+  },
+
+  "c4_ghee_mutton_chatpata_kabab_video_v3": {
+    "pisignage_filename": "Video_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.mp4",
+    "orientation": "portrait",
+    "type": "video",
+    "default_duration": 10,
+    "combo": "C4",
+    "label": "Ghee Rice + Mutton Chatpata + Kabab",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo", "cinemagraph"]
+  },
+
+  "c5_chx_biryani_kabab_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V5_C5_ChickenBiryani_Kabab.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 8,
+    "combo": "C5",
+    "label": "Chicken Biryani + Kabab",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo"]
+  },
+
+  "c5_chx_biryani_kabab_video_v3": {
+    "pisignage_filename": "Video_v3_TV-V5_C5_ChickenBiryani_Kabab.mp4",
+    "orientation": "portrait",
+    "type": "video",
+    "default_duration": 10,
+    "combo": "C5",
+    "label": "Chicken Biryani + Kabab",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo", "cinemagraph"]
+  },
+
+  "c6_mutton_biryani_kabab_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V6_C6_MuttonBiryani_Kabab.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 8,
+    "combo": "C6",
+    "label": "Mutton Biryani + Kabab",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo"]
+  },
+
+  "c6_mutton_biryani_kabab_video_v3": {
+    "pisignage_filename": "Video_v3_TV-V6_C6_MuttonBiryani_Kabab.mp4",
+    "orientation": "portrait",
+    "type": "video",
+    "default_duration": 10,
+    "combo": "C6",
+    "label": "Mutton Biryani + Kabab",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "combo", "cinemagraph"]
+  },
+
+  "_section_multicombo_pairs": "── Multi-combo composition cards (added 2026-05-04 for psychology_v2 deployment) ──",
+
+  "gr_protein_pair_c3_c4_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V7_GR_ProteinPair_C3_C4.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combos": ["C3", "C4"],
+    "label": "Protein Ladder · C3 ₹249 vs C4 ₹289",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "multicombo", "comparison", "upsell"]
+  },
+
+  "gr_veg_pair_c1_c2_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V8_GR_VegPair_C1_C2.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combos": ["C1", "C2"],
+    "label": "Veg Ladder · C1 ₹149 vs C2 ₹199",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "multicombo", "comparison", "value"]
+  },
+
+  "biryani_pair_c5_c6_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V9_Biryani_Pair_C5_C6.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combos": ["C5", "C6"],
+    "label": "Biryani Ladder · C5 ₹229 vs C6 ₹309",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "multicombo", "comparison", "upsell"]
+  },
+
+  "gr_all_in_one_c1_c2_c3_c4_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V10_GR_AllInOne_C1_C2_C3_C4.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combos": ["C1", "C2", "C3", "C4"],
+    "label": "All Ghee Rice combos in one decision-matrix view",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "multicombo", "menu_overview"]
+  },
+
+  "_section_kathi": "── Kathi conveyance (added 2026-05-04, target TV-V2 LEFT in psychology_v3_kathi) ──",
+
+  "k1_chicken_kathi_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V11_K1_Chicken_Kathi.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combo": "K1",
+    "label": "Chicken Kathi · ₹90",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "kathi", "anchor"]
+  },
+
+  "k1_chicken_kathi_video_v3": {
+    "pisignage_filename": "Video_v3_TV-V11_K1_Chicken_Kathi_c.mp4",
+    "orientation": "portrait",
+    "type": "video",
+    "default_duration": 10,
+    "combo": "K1",
+    "label": "Chicken Kathi cinemagraph · steam wisps",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "kathi", "cinemagraph"]
+  },
+
+  "kt_chicken_tikka_kathi_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V12_KT_Chicken_Tikka_Kathi.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combo": "KT",
+    "label": "Chicken Tikka Kathi · premium",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "kathi", "premium"]
+  },
+
+  "kt_chicken_tikka_kathi_video_v3": {
+    "pisignage_filename": "Video_v3_TV-V12_KT_Chicken_Tikka_Kathi_c.mp4",
+    "orientation": "portrait",
+    "type": "video",
+    "default_duration": 10,
+    "combo": "KT",
+    "label": "Chicken Tikka Kathi cinemagraph · char glow",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "kathi", "cinemagraph", "premium"]
+  },
+
+  "kathi_pair_k1_kt_static_v3": {
+    "pisignage_filename": "Final_v3_TV-V13_Kathi_Pair_K1_KT.png",
+    "orientation": "portrait",
+    "type": "static",
+    "default_duration": 10,
+    "combos": ["K1", "KT"],
+    "label": "Kathi Ladder · K1 ₹90 vs KT premium",
+    "version": 3,
+    "status": "live",
+    "tags": ["vertical", "kathi", "multicombo", "comparison"]
+  }
+}

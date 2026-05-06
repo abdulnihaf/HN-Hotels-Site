@@ -55,7 +55,11 @@ async function listStaff(env) {
       hr.id, hr.name, hr.phone, hr.brand_label, hr.job_name,
       MAX(CASE WHEN co.channel = 'waba' THEN co.status END) AS waba_status,
       MAX(CASE WHEN co.channel = 'sms'  THEN co.status END) AS sms_status,
-      MAX(CASE WHEN co.channel = 'waba' THEN co.consented_at END) AS waba_consented_at
+      MAX(CASE WHEN co.channel = 'waba' THEN co.consented_at END) AS waba_consented_at,
+      (SELECT ob.status FROM comms_outbox ob
+       WHERE ob.recipient_phone = (CASE WHEN length(trim(hr.phone))=10 THEN '91'||trim(hr.phone) ELSE trim(hr.phone) END)
+         AND ob.channel = 'waba' AND ob.brand = 'sparksol'
+       ORDER BY ob.id DESC LIMIT 1) AS last_invite_status
     FROM hr_employees hr
     LEFT JOIN comms_optin co
       ON co.phone = (CASE WHEN length(trim(hr.phone))=10 THEN '91'||trim(hr.phone) ELSE trim(hr.phone) END)
@@ -74,6 +78,7 @@ async function listStaff(env) {
     waba_status: r.waba_status || 'not-tracked',
     sms_status: r.sms_status || 'not-tracked',
     waba_consented_at: r.waba_consented_at || null,
+    last_invite_status: r.last_invite_status || null,
   }));
 }
 
@@ -330,6 +335,77 @@ export async function onRequest(context) {
     });
 
     return json({ ok: result.ok, status, provider_msg_id: result.provider_msg_id, response: result.response, error: errText });
+  }
+
+  // Update the WhatsApp number on file for a pending staff member.
+  // Use when Meta delivery fails (phone has no WhatsApp) — admin enters the
+  // correct WA number and we re-seed the pending row.
+  if (action === 'waba-update-phone') {
+    const { employee_id, whatsapp_phone } = body;
+    if (!employee_id || !whatsapp_phone) return json({ error: 'employee_id + whatsapp_phone required' }, 400);
+    const digits = String(whatsapp_phone).replace(/\D/g, '');
+    const e164 = digits.length === 10 ? '91' + digits
+               : (digits.length === 12 && digits.startsWith('91')) ? digits : null;
+    if (!e164) return json({ error: 'Invalid phone — use 10-digit or 91XXXXXXXXXX' }, 400);
+
+    const emp = await env.DB.prepare(
+      'SELECT id, name, phone FROM hr_employees WHERE id = ? AND is_active = 1'
+    ).bind(employee_id).first();
+    if (!emp) return json({ error: 'Employee not found' }, 404);
+
+    // Check if new phone is already opted-in
+    const existing = await env.DB.prepare(
+      'SELECT id, status FROM comms_optin WHERE phone = ? AND brand = ? AND channel = ?'
+    ).bind(e164, 'sparksol', 'waba').first();
+    if (existing?.status === 'opted_in') {
+      return json({ success: true, message: 'Already opted in on this number', skipped: true });
+    }
+
+    // Archive old pending row for the old phone
+    const oldDigits = String(emp.phone || '').replace(/\D/g, '');
+    const oldE164 = oldDigits.length === 10 ? '91' + oldDigits : oldDigits;
+    if (oldE164 && oldE164 !== e164) {
+      await env.DB.prepare(
+        "UPDATE comms_optin SET status = 'wrong_number', consent_text = 'admin: wrong number, updated' WHERE phone = ? AND brand = 'sparksol' AND channel = 'waba' AND status = 'pending'"
+      ).bind(oldE164).run();
+    }
+
+    // Create or reset pending row with new phone
+    if (existing) {
+      await env.DB.prepare(
+        "UPDATE comms_optin SET status = 'pending', consented_at = NULL, consent_text = NULL, staff_name = ? WHERE id = ?"
+      ).bind(emp.name, existing.id).run();
+    } else {
+      await env.DB.prepare(
+        "INSERT INTO comms_optin (phone, brand, channel, staff_name, status, created_at) VALUES (?, 'sparksol', 'waba', ?, 'pending', datetime('now'))"
+      ).bind(e164, emp.name).run();
+    }
+    return json({ success: true, employee: emp.name, new_phone: e164, old_phone: oldE164 });
+  }
+
+  // Manually mark a staff member as opted-in (manager/admin verbal confirmation).
+  if (action === 'waba-mark-optin') {
+    const { employee_id } = body;
+    if (!employee_id) return json({ error: 'employee_id required' }, 400);
+
+    const emp = await env.DB.prepare(
+      'SELECT id, name, phone FROM hr_employees WHERE id = ? AND is_active = 1'
+    ).bind(employee_id).first();
+    if (!emp) return json({ error: 'Employee not found' }, 404);
+
+    const digits = String(emp.phone || '').replace(/\D/g, '');
+    const e164 = digits.length === 10 ? '91' + digits : digits;
+
+    const optin = await env.DB.prepare(
+      "SELECT id, status FROM comms_optin WHERE phone = ? AND brand = 'sparksol' AND channel = 'waba'"
+    ).bind(e164).first();
+    if (!optin) return json({ error: 'No optin row for this employee' }, 404);
+    if (optin.status === 'opted_in') return json({ success: true, message: 'Already opted in', skipped: true });
+
+    await env.DB.prepare(
+      "UPDATE comms_optin SET status = 'opted_in', consented_at = datetime('now'), consent_text = 'manual override by admin' WHERE id = ?"
+    ).bind(optin.id).run();
+    return json({ success: true, employee: emp.name });
   }
 
   return json({ error: 'unknown action: ' + action }, 400);

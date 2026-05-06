@@ -1566,11 +1566,23 @@ function renderMsgStaff(){
   const list = document.getElementById('msgStaffList');
   if (!filtered.length) { list.innerHTML = '<div class="text-xs text-white/40 p-3 text-center">No matches</div>'; return; }
   list.innerHTML = filtered.map(s => {
+    const noWa = s.waba_status !== 'opted_in' && s.last_invite_status === 'failed';
     const wabaPill = s.waba_status === 'opted_in'
       ? '<span class="badge badge-synced">WABA ✓</span>'
-      : '<span class="badge badge-pending">PEND</span>';
+      : noWa
+        ? '<span class="badge badge-error" title="Invite delivered failed — this number has no WhatsApp">No WA</span>'
+        : '<span class="badge badge-pending">PEND</span>';
     const brandPill = `<span class="badge badge-${(s.brand||'').toLowerCase()}">${s.brand||'?'}</span>`;
-    return `<label class="emp-row" style="padding:8px 10px; cursor:pointer;">
+    const pendingActions = s.waba_status !== 'opted_in' ? `
+      <div class="flex gap-1 mt-1 ml-6">
+        <button onclick="wabaFixPhone(event,${s.id},'${s.name.replace(/'/g,'')}')" class="btn btn-ghost btn-sm" style="font-size:10px;min-height:24px;padding:2px 8px;">
+          ${noWa ? 'Fix WA#' : 'Resend invite'}
+        </button>
+        <button onclick="wabaMarkOptin(event,${s.id},'${s.name.replace(/'/g,'')}')" class="btn btn-success btn-sm" style="font-size:10px;min-height:24px;padding:2px 8px;">
+          Mark opted-in
+        </button>
+      </div>` : '';
+    return `<div class="emp-row" style="padding:8px 10px;">
       <div class="flex items-center gap-2">
         <input type="checkbox" data-phone="${s.e164}" data-status="${s.waba_status||''}" onchange="updateMsgSelCount()" class="w-4 h-4">
         <div class="flex-1 min-w-0">
@@ -1580,8 +1592,49 @@ function renderMsgStaff(){
         ${brandPill}
         ${wabaPill}
       </div>
-    </label>`;
+      ${pendingActions}
+    </div>`;
   }).join('');
+}
+
+async function wabaFixPhone(e, empId, empName) {
+  e.stopPropagation();
+  const dk = document.getElementById('msgDk')?.value.trim();
+  if (!dk) { alert('Enter dashboard key first'); return; }
+  const newPhone = prompt(`Enter WhatsApp number for ${empName} (10-digit or 91XXXXXXXXXX):`);
+  if (!newPhone) return;
+  const r = await fetch('/api/messaging?action=waba-update-phone', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+    body: JSON.stringify({ employee_id: empId, whatsapp_phone: newPhone }),
+  }).then(r => r.json());
+  if (!r.success) { toast(r.error || 'Failed', 'error'); return; }
+  if (r.skipped) { toast(`${empName} already opted-in on that number`); }
+  else {
+    toast(`${empName}: WA number updated. Sending fresh invite...`);
+    // Auto-send invite to new number
+    await fetch('/api/messaging?action=send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({ channel: 'waba', brand: 'sparksol', phone: r.new_phone, template: 'staff_optin_v1', vars: [empName] }),
+    });
+    await loadMessagingTab();
+  }
+}
+
+async function wabaMarkOptin(e, empId, empName) {
+  e.stopPropagation();
+  const dk = document.getElementById('msgDk')?.value.trim();
+  if (!dk) { alert('Enter dashboard key first'); return; }
+  if (!confirm(`Mark ${empName} as WABA opted-in? (Use only after verbal confirmation)`)) return;
+  const r = await fetch('/api/messaging?action=waba-mark-optin', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+    body: JSON.stringify({ employee_id: empId }),
+  }).then(r => r.json());
+  if (!r.success) { toast(r.error || 'Failed', 'error'); return; }
+  toast(`${empName} marked as opted-in`);
+  await loadMessagingTab();
 }
 
 function msgSelectAll(){
