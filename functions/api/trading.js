@@ -112,7 +112,7 @@ export async function onRequest(context) {
       case 'briefing_v2':        return Response.json(await getBriefingV2(db, env), { headers });
       case 'analyze_concall':    return Response.json(await analyzeConcallPages(db, env, request), { headers });
       case 'verdict_today':      return Response.json(await getVerdictToday(db, env), { headers });
-      case 'trade_comparison':   return Response.json(await getTradeComparison(db, url), { headers });
+      case 'trade_comparison':   return Response.json(await getTradeComparison(db, env, url), { headers });
       case 'ops_audit_today':    return Response.json(await getOpsAuditToday(db, url), { headers });
       case 'todays_watchlist':   return Response.json(await getTodaysWatchlist(db, url), { headers });
       case 'auto_trader_state':  return Response.json(await getAutoTraderState(db), { headers });
@@ -3323,7 +3323,7 @@ async function getOpsAuditToday(db, url) {
 //                       hypothetical P&L if held to current LTP
 //   summary           — totals for both paths
 // ═══════════════════════════════════════════════════════════════════════════
-async function getTradeComparison(db, url) {
+async function getTradeComparison(db, env, url) {
   const istNow = new Date(Date.now() + 5.5 * 3600000);
   const date = url.searchParams.get('date') || istNow.toISOString().slice(0, 10);
 
@@ -3376,7 +3376,28 @@ async function getTradeComparison(db, url) {
       ON t1.symbol=t2.symbol AND t1.ts=t2.m
   `).bind(...allSymbols).all().catch(() => ({ results: [] }))).results || [];
   const ltpMap = {};
-  for (const t of liveTickRows) ltpMap[t.symbol] = { ltp: t.ltp_paise, ts: t.ts };
+  // Treat ticks older than 5 minutes as stale during market hours — force refetch
+  const FRESH_THRESHOLD_MS = 5 * 60 * 1000;
+  const nowMs = Date.now();
+  for (const t of liveTickRows) {
+    const isFresh = (nowMs - t.ts) < FRESH_THRESHOLD_MS;
+    if (isFresh) ltpMap[t.symbol] = { ltp: t.ltp_paise, ts: t.ts, source: 'intraday_ticks' };
+  }
+
+  // CLEANEST FIX (May 6 mid-trade): for any symbol missing fresh LTP — typically
+  // the Opus counterfactual picks (TDPOWERSYS, AEROFLEX) that aren't in the
+  // active watchlist and so wealth-price-core never polls them — fetch live LTP
+  // DIRECTLY from Kite. Guarantees the /compare/ page never has gaps regardless
+  // of which stocks are being compared.
+  const missingFromTicks = allSymbols.filter(s => !ltpMap[s]);
+  if (missingFromTicks.length > 0 && env) {
+    const kiteLtp = await fetchLiveLtp(db, env, missingFromTicks).catch(() => ({}));
+    for (const sym of Object.keys(kiteLtp)) {
+      if (kiteLtp[sym] != null) {
+        ltpMap[sym] = { ltp: kiteLtp[sym], ts: nowMs, source: 'kite_direct' };
+      }
+    }
+  }
 
   // ─── Post-exit max LTP for exited/SKIPPED rows (the "panic-exit" check) ─
   // For each actual pick that's no longer live: how high did the stock go AFTER
