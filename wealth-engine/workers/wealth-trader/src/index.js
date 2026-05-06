@@ -578,7 +578,7 @@ async function priceMonitor(env) {
   const active = (await db.prepare(`
     SELECT id, symbol, qty, entry_paise, stop_paise, target_paise,
            peak_price_paise, trailing_stop_paise, trader_state,
-           strategy_mode, rationale
+           strategy_mode, rationale, target_locked, trader_notes
     FROM paper_trades
     WHERE auto_managed=1 AND is_active=1 AND trader_state='ENTERED'
       AND DATE(created_at/1000, 'unixepoch') = ?
@@ -727,16 +727,56 @@ async function priceMonitor(env) {
       continue;
     }
 
-    // Check exit conditions
+    // ★ F-EXIT-1 (May 6 2026, evening): per-position target-lock instead of
+    //   immediate exit at target. Owner principle: "minimize loss, maximize
+    //   profit only when probability of increase is very high."
+    //
+    //   Reverse-engineering today's HFCL trade exposed the gap: target hit at
+    //   ₹137.13 (11:45 IST) → exited → stock continued to ₹142.95 (peak). The
+    //   FULL_TARGET_HIT exit treats target as ceiling, not floor.
+    //
+    //   F-EXIT-1 mechanics: on first target hit, RAISE stop to target (lock the
+    //   gain) and let normal trail logic continue. The next exit can ONLY be
+    //   either (a) trail breaks below target+trail margin, or (b) STOP_HIT at
+    //   target (= guaranteed minimum profit).
+    //
+    //   Asymmetric upside, zero new downside vs current behavior:
+    //   - If price reverses straight back to target: exit at target (= same as
+    //     current FULL_TARGET_HIT; stop_paise raised to target_paise)
+    //   - If price continues higher: trail rides up, exits on first reversal
+    //   - If price reverses below target then below original stop: impossible —
+    //     stop is now at target, which is above original stop
+    //
+    //   position_mgmt cron (every 30 min) reads target_locked=1 and can either
+    //   EXTEND_PROFIT (widen target via Opus 5-gate) or FULL_EXIT (book target
+    //   gain). Default in interim: trail-driven exit.
+    //
+    //   ★ One subtlety: if target_locked=1 and stop_paise was raised to target,
+    //   then q.ltp_paise <= a.stop_paise also fires the locked-floor exit.
+    //   Reason text is differentiated for audit clarity.
     if (q.ltp_paise <= a.stop_paise) {
       exitNow = true;
-      exitReason = 'STOP_HIT';
-    } else if (q.ltp_paise >= a.target_paise) {
-      exitNow = true;
-      exitReason = 'FULL_TARGET_HIT';
+      exitReason = a.target_locked ? 'TARGET_LOCKED_FLOOR_EXIT' : 'STOP_HIT';
+    } else if (!a.target_locked && q.ltp_paise >= a.target_paise) {
+      // F-EXIT-1: lock target as floor, let trail continue. Don't exit this cycle.
+      const newStopPaise = Math.max(a.stop_paise, a.target_paise);
+      const lockNote = ` | TARGET_LOCKED @ ₹${(q.ltp_paise/100).toFixed(2)} (target=₹${(a.target_paise/100).toFixed(2)}) — F-EXIT-1: stop raised to target, trail captures further upside`;
+      await db.prepare(`
+        UPDATE paper_trades
+        SET stop_paise=?, target_locked=1, peak_price_paise=?, trailing_stop_paise=?,
+            last_check_at=?, trader_notes = COALESCE(trader_notes, '') || ?
+        WHERE id=?
+      `).bind(newStopPaise, newPeak, trailingStop, Date.now(), lockNote, a.id).run();
+      await logDecision(db, {
+        cron_phase: 'price_monitor', symbol: a.symbol, trade_id: a.id,
+        state_before: 'ENTERED', decision: 'TARGET_LOCKED_F_EXIT_1',
+        state_after: 'ENTERED', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic',
+        rationale: `LTP ₹${q.ltp_paise/100} ≥ target ₹${a.target_paise/100}. F-EXIT-1: target locked as floor, stop raised from ₹${a.stop_paise/100} to ₹${newStopPaise/100}. Trail-driven exit only above this floor. position_mgmt will assess EXTEND_PROFIT vs FULL_EXIT next cycle.`,
+      });
+      continue; // Skip exit this cycle
     } else if (trailingStop && q.ltp_paise <= trailingStop) {
       exitNow = true;
-      exitReason = 'TRAILING_STOP_HIT';
+      exitReason = a.target_locked ? 'TARGET_LOCKED_TRAIL_EXIT' : 'TRAILING_STOP_HIT';
     }
 
     if (exitNow) {
@@ -849,7 +889,8 @@ async function positionManagement(env) {
 
   const positions = (await db.prepare(`
     SELECT id, symbol, qty, entry_paise, stop_paise, target_paise,
-           peak_price_paise, trailing_stop_paise, rationale, entry_at, last_check_at
+           peak_price_paise, trailing_stop_paise, rationale, entry_at, last_check_at,
+           target_locked, opus_extension_until
     FROM paper_trades
     WHERE auto_managed=1 AND is_active=1 AND trader_state='ENTERED'
       AND DATE(created_at/1000, 'unixepoch') = ?
@@ -1114,6 +1155,16 @@ async function positionManagement(env) {
         days_sampled: stats.days_sampled,
       } : null,
       pct_of_typical_move_captured: pctOfTypicalMoveCaptured,
+      // ★ F-EXIT-1 (May 6 2026): target_locked=1 means original target was hit
+      //   already; stop_paise was raised to target_paise (= guaranteed minimum
+      //   gain). Position is now in trail-only-above-target mode. Opus can
+      //   either: WIDEN_TARGET (extend horizon, set new higher target) or
+      //   FULL_EXIT (book the target gain now). Default = continue trailing.
+      target_locked: p.target_locked === 1,
+      // Whether Opus has already extended this position past the +₹30K force-exit
+      // threshold. If extension is active and now expired (<1ms), it's a no-op.
+      opus_extension_active_until: p.opus_extension_until && p.opus_extension_until > Date.now()
+        ? new Date(p.opus_extension_until).toISOString() : null,
       original_thesis: (p.rationale || '').slice(0, 200),
       news_last_4h: newsBySymbol[p.symbol] || [],
       sector: en.sector,
@@ -1127,9 +1178,9 @@ async function positionManagement(env) {
   const portfolioPnL = positionsContext.reduce((s, p) => s + (p.pnl_rupees || 0) * 100, 0);
 
   const system = `You are a senior position manager for an Indian-equity paper-trading system. Called every 30 min during market hours. For each ENTERED position, decide:
-  HOLD / TIGHTEN_TRAIL / PARTIAL_EXIT_50 / FULL_EXIT / HOLD_OVERNIGHT / PROMOTE_TO_SWING_CANDIDATE / PROMOTE_TO_SWING_CONFIRMED
+  HOLD / TIGHTEN_TRAIL / PARTIAL_EXIT_50 / FULL_EXIT / WIDEN_TARGET / EXTEND_PROFIT / HOLD_OVERNIGHT / PROMOTE_TO_SWING_CANDIDATE / PROMOTE_TO_SWING_CONFIRMED
 
-Output STRICT JSON: { "decisions": [ { "trade_id": N, "symbol": "X", "decision": "...", "rationale": "1 sentence", "new_trailing_stop_pct_below_peak": 0.8, "conviction": 0.0-1.0 } ] }
+Output STRICT JSON: { "decisions": [ { "trade_id": N, "symbol": "X", "decision": "...", "rationale": "1 sentence", "new_trailing_stop_pct_below_peak": 0.8, "new_target_price": 142.50, "conviction": 0.0-1.0 } ] }
 
 Decision logic (apply per position):
 - HOLD if: position trending toward target, no adverse news, sector/regime supportive
@@ -1192,6 +1243,45 @@ Key fields you'll see in each position object:
   time_since_peak_min                    ← stale peak = unlikely to revisit
   trajectory                             ← V_RECOVERY / LINEAR_UP / FADING_FROM_PEAK / STAIR_STEP
   ist_phase                              ← morning_breakout_window / midday_consolidation / afternoon_momentum_window / pre_close_window
+  target_locked                          ← TRUE if original target was hit; stop_paise was raised to target. Position is now in trail-only-above-target mode (guaranteed minimum gain).
+
+═══ TARGET_LOCKED POSITIONS — F-EXIT-1 (May 6 2026 evening) ═══
+
+When target_locked=TRUE, the position has already hit its original target. The
+deterministic system raised stop_paise to target_paise (= guaranteed minimum
+gain) and continues trailing. Owner principle: "minimize loss, maximize profit
+ONLY if probability of increase is very high."
+
+Your job for these positions: decide whether to EXTEND beyond target or BOOK NOW.
+
+WIDEN_TARGET (set new higher target) — fire when ALL true:
+  • trajectory in ['LINEAR_UP', 'V_RECOVERY']  (NOT 'FADING_FROM_PEAK')
+  • pct_of_typical_move_captured < 1.3  (haven't blown past 90d avg max yet)
+  • avg_up_last_week_pct > avg_open_to_high_pct_90d × 1.1  (recent regime ≥ 90d)
+  • breaking_5day_high OR sector_RS_today > 0.8
+  • ist_phase != 'pre_close_window'
+  • news_velocity_last_60min ≥ 1 OR vol_sustaining_pct > 60%
+  Output: { decision: "WIDEN_TARGET", new_target_price: <Rs X.XX higher than current>,
+            new_trailing_stop_pct_below_peak: 1.0,  // wider trail to let it run
+            rationale: "Citing all 6 gates with values" }
+
+FULL_EXIT (book the locked target gain now) — default for target_locked:
+  • Any of: pct_of_typical_move_captured ≥ 1.5  (already 50% above 90d avg)
+            give_back_from_peak_pct > 0.4 AND time_since_peak_min > 30
+            ist_phase = 'pre_close_window'
+            adverse news on the stock
+            sector reversed
+  Output: { decision: "FULL_EXIT", rationale: "Target locked, no extension justified by data" }
+
+HOLD (continue trailing) — when neither WIDEN nor FULL_EXIT clearly fires:
+  Position keeps running with current stop = target_paise (guaranteed min gain).
+  Trail above target captures further upside; reversal exits at target.
+
+PRINCIPLE for target_locked: WIDEN_TARGET requires HIGH confidence (5/6 gates).
+The default for an already-locked position is FULL_EXIT (book the gain). The
+floor is already guaranteed; only extend if the data shows a real, statistically
+supported continuation. Owner's "very sure" gate applies HARDER here — we already
+locked profit, additional risk-taking needs strong evidence.
 
 STATISTICAL EXIT RULES (apply BEFORE the discretionary thesis-based ones):
 
@@ -1317,6 +1407,43 @@ Compose decisions JSON. Use the LIVE context to detect:
     if (d.decision === 'FULL_EXIT' && q?.ltp_paise) {
       await firePaperExit(db, pos, q.ltp_paise, 'OPUS_FULL_EXIT');
       actionCount++;
+    } else if (d.decision === 'WIDEN_TARGET' && q?.ltp_paise && pos.target_locked === 1) {
+      // ★ F-EXIT-1 — Opus high-conviction extension on target_locked position.
+      // Per the prompt's 6-gate rule: only fires when LINEAR_UP/V_RECOVERY +
+      // statistical priors strong + breaking_5day_high or sector_RS_today > 0.8.
+      // Opus must specify new_target_price (must be > current ltp).
+      const newTargetRs = Number(d.new_target_price);
+      const newTrailPct = Math.min(2.0, Math.max(0.6, Number(d.new_trailing_stop_pct_below_peak) || 1.0));
+      if (Number.isFinite(newTargetRs) && newTargetRs * 100 > q.ltp_paise) {
+        const newTargetPaise = Math.round(newTargetRs * 100);
+        // Re-arm the target check by clearing target_locked AND raising target.
+        // The locked floor (stop_paise = old target_paise) is preserved as the new minimum.
+        const peak = pos.peak_price_paise || q.ltp_paise;
+        const newTrailingStop = Math.round(peak * (1 - newTrailPct/100));
+        await db.prepare(`
+          UPDATE paper_trades
+          SET target_paise = ?, target_locked = 0,
+              trailing_stop_paise = ?,
+              trader_notes = COALESCE(trader_notes, '') || ?,
+              last_check_at = ?
+          WHERE id = ?
+        `).bind(
+          newTargetPaise, newTrailingStop,
+          ` | WIDEN_TARGET to ₹${newTargetRs.toFixed(2)} (was ₹${(pos.target_paise/100).toFixed(2)}) by Opus, trail=${newTrailPct.toFixed(2)}%: ${(d.rationale || '').slice(0, 200)}`,
+          Date.now(), pos.id,
+        ).run();
+        await logDecision(db, {
+          cron_phase: 'position_mgmt', symbol: pos.symbol, trade_id: pos.id,
+          state_before: 'ENTERED', decision: 'OPUS_WIDEN_TARGET', state_after: 'ENTERED',
+          ltp_paise: q.ltp_paise, composed_by_model: 'opus',
+          rationale: `WIDEN_TARGET: ${pos.target_paise/100} → ${newTargetRs}, trail=${newTrailPct}%. ${d.rationale || ''}`,
+        });
+        actionCount++;
+      } else {
+        // Invalid new_target_price (≤ current ltp or non-numeric): default to FULL_EXIT
+        await firePaperExit(db, pos, q.ltp_paise, 'OPUS_WIDEN_TARGET_INVALID_FULL_EXIT');
+        actionCount++;
+      }
     } else if (d.decision === 'EXTEND_PROFIT' && q?.ltp_paise) {
       // Owner's ₹30K → ₹50K extension gate. Opus has taken responsibility.
       // Set opus_extension_until = now + (extend_minutes || 30) min.

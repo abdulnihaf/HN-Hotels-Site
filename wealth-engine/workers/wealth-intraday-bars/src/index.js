@@ -300,8 +300,17 @@ async function weeklyEnrich(env) {
 // ═══════════════════════════════════════════════════════════════════════════
 // CRON DISPATCH
 // ═══════════════════════════════════════════════════════════════════════════
+// F-DATA-1 fix (May 6 2026, evening):
+// The wrangler.toml has a cron entry "30 0 * * 1-5" (06:00 IST weekday) for
+// daily enrich, but the dispatch map below was missing that key — so the
+// scheduled handler silently returned and avg_up_last_week_pct was NULL for
+// all 73 pool stocks. Adding the dispatch entry fixes the silent skip.
+//
+// Note: '30 0 * * 1-5' overlaps with '30 0 * * 1' on Mondays — both fire.
+// Separate keys is fine; CF dispatches each cron expression independently.
 const CRON_DISPATCH = {
   '30 0 * * 1':    { name: 'refresh_instruments', fn: refreshInstruments },
+  '30 0 * * 1-5':  { name: 'daily_enrich',        fn: weeklyEnrich },
   '30 10 * * 1-5': { name: 'fetch_today',         fn: fetchToday },
   '30 1 * * 6':    { name: 'weekly_enrich',       fn: weeklyEnrich },
 };
