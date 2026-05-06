@@ -38,11 +38,19 @@
   header {
     padding: 10px 14px; background: rgba(18, 26, 46, 0.92);
     border-bottom: 1px solid var(--border);
-    display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: nowrap; gap: 10px;
-    /* Sticky on mobile so Kite status always visible */
+    /* PR-E fix: wrap is required so the full-width strips drop to their
+       own rows instead of getting squished into row 1 with the title.
+       Use flex-direction: column for the most predictable stacking. */
+    display: flex; flex-direction: column; gap: 8px;
     position: sticky; top: 0; z-index: 100;
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   }
+  /* Top row: title + nav + alerts/kite-status (horizontal on desktop, wraps on phone) */
+  .header-top {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+  }
+  .header-top > .left { flex: 1; min-width: 0; }
   header h1 { font-size: 17px; font-weight: 700; }
   /* Top tab nav — all 3 views always reachable */
   .tab-nav { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
@@ -726,9 +734,81 @@
   @media (min-width: 1600px) {
     main { grid-template-columns: 320px minmax(0, 1fr) 360px; }
   }
+
+  /* ═════════════════════════════════════════════════════════════════════
+   * PR-E: OBSERVER MODE
+   * The user studies the engine, doesn't act. Auto-trader executes every
+   * order via Kite Wealth API. UI hides all "do something" affordances and
+   * replaces with "what the engine is doing / would do" displays.
+   *
+   * Driven by <body data-role="observer"> (default).
+   * Switch to <body data-role="trader"> via localStorage to see action buttons.
+   * ═════════════════════════════════════════════════════════════════════ */
+  .observer-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(124,92,255,0.18); color: var(--accent);
+    padding: 2px 8px; border-radius: 10px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.4px;
+    margin-left: 8px; vertical-align: middle;
+    text-transform: uppercase;
+  }
+  /* Hidden when user explicitly switches to trader mode */
+  body[data-role="trader"] .observer-badge { display: none; }
+
+  /* In observer mode, hide all action buttons + manual-input forms */
+  body[data-role="observer"] [data-observer="hide"],
+  body[data-role="observer"] .trade-card .actions,
+  body[data-role="observer"] .trade-card .checklist,
+  body[data-role="observer"] #manualPickerStep1,
+  body[data-role="observer"] #manualForm,
+  body[data-role="observer"] #pickerOpen { display: none !important; }
+
+  /* Show observer-only displays only in observer role */
+  [data-observer="show"] { display: none; }
+  body[data-role="observer"] [data-observer="show"] { display: block; }
+
+  /* "Engine play" summary — replaces the act buttons in observer mode */
+  .engine-play {
+    margin-top: 14px; padding: 12px 14px;
+    background: rgba(124,92,255,0.08);
+    border: 1px solid rgba(124,92,255,0.35);
+    border-radius: 10px;
+    font-size: 13px; line-height: 1.55;
+  }
+  .engine-play .play-line {
+    color: var(--text); font-weight: 500;
+  }
+  .engine-play .play-line strong { color: var(--accent); }
+  .engine-play .play-meta {
+    color: var(--muted); font-size: 11px; margin-top: 6px;
+  }
+
+  /* "Why this matters" sub-line — short educational copy under each section */
+  .layer-explainer {
+    color: var(--muted); font-size: 11px; line-height: 1.55;
+    margin: 4px 0 10px;
+    padding: 6px 10px;
+    background: var(--panel-2); border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+  }
+  .layer-explainer strong { color: var(--text); }
+
+  /* Pre-launch banner restyle: smaller, less screaming */
+  body[data-role="observer"] #preLaunchBanner {
+    padding: 10px 14px;
+    background: rgba(245,176,65,0.08);
+    border: 1px solid rgba(245,176,65,0.35);
+  }
 </style>
 </head>
-<body>
+<body data-role="observer">
+<script>
+  // PR-E: read userRole override from localStorage before any render
+  try {
+    const r = localStorage.getItem('userRole_v1');
+    if (r === 'trader') document.body.setAttribute('data-role', 'trader');
+  } catch(e) {}
+</script>
 
 <div id="gate" class="pin-gate">
   <h2>Execute</h2>
@@ -739,16 +819,22 @@
 
 <div id="app" style="display:none">
   <header>
-    <div style="flex:1;min-width:0">
-      <h1 style="margin-bottom:6px">🎯 Execute</h1>
-      <nav class="tab-nav" aria-label="Views">
-        <a href="/trading/">🏠 Hub</a>
-        <a href="/trading/today/">📋 Today</a>
-        <a href="/trading/execute/" class="active">🎯 Execute</a>
-        <a href="/trading/ops/">⚙️ Ops</a>
-      </nav>
-      <div id="sysStatusBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px"></div>
-      <button id="alertsBell" onclick="toggleAlertsDrawer()" style="display:none;position:absolute;top:10px;right:90px;background:rgba(231,76,60,0.18);color:var(--red);border:1px solid var(--red);border-radius:14px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600">🔔 <span id="alertsCount">0</span></button>
+    <!-- PR-E: explicit top row that wraps cleanly on phone, stays on one line on desktop -->
+    <div class="header-top">
+      <div class="left">
+        <h1 style="margin-bottom:6px">🎯 Execute <span id="observerBadge" class="observer-badge" title="You are observing. The auto-trader runs every order. You learn from what happens.">👁 OBSERVING</span></h1>
+        <nav class="tab-nav" aria-label="Views">
+          <a href="/trading/">🏠 Hub</a>
+          <a href="/trading/today/">📋 Today</a>
+          <a href="/trading/execute/" class="active">🎯 Execute</a>
+          <a href="/trading/ops/">⚙️ Ops</a>
+        </nav>
+        <div id="sysStatusBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px"></div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <button id="alertsBell" onclick="toggleAlertsDrawer()" style="display:none;background:rgba(231,76,60,0.18);color:var(--red);border:1px solid var(--red);border-radius:14px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600;min-height:28px">🔔 <span id="alertsCount">0</span></button>
+        <div class="small" id="kiteStatus" style="text-align:right">Kite: …</div>
+      </div>
       <div id="alertsDrawer" style="display:none;position:fixed;top:60px;right:14px;background:var(--panel);border:1px solid var(--red);border-radius:10px;padding:12px;max-width:380px;width:90vw;max-height:60vh;overflow-y:auto;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <strong style="font-size:14px">🔔 Alerts</strong>
@@ -757,7 +843,6 @@
         <div id="alertsList"></div>
       </div>
     </div>
-    <div class="small" id="kiteStatus" style="text-align:right">Kite: …</div>
     <!-- ─── PR-B: mode switcher (auto-detects phase, manual override) ─── -->
     <div class="mode-switch" role="tablist" aria-label="Trading day phase" style="width:100%">
       <button class="mode-pill" data-mode="pre_market" role="tab" aria-selected="false" onclick="setMode('pre_market', 'manual')"><span class="mode-icon">☀️</span> Pre</button>
@@ -779,6 +864,46 @@
   <main>
     <!-- Pre-launch / shadow-run banner (visible only when block_real_orders=1) -->
     <div id="preLaunchBanner" style="display:none"></div>
+
+    <!-- PR-E: observer-mode intro — explains what you're looking at + every layer of intelligence -->
+    <details class="panel" id="observerIntro" data-observer="show" style="margin-bottom:14px;padding:14px;border-color:var(--accent);background:rgba(124,92,255,0.05)" open>
+      <summary style="cursor:pointer;list-style:none;font-size:15px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <span>👁 You're observing a 6-layer wealth engine</span>
+        <span class="small" style="color:var(--muted);font-weight:400">▼ what each layer does</span>
+      </summary>
+      <p class="small" style="margin-top:10px;line-height:1.6;color:var(--text)">
+        This dashboard shows what your <strong>auto-trader</strong> is doing — not what you should do.
+        Real orders fire via Kite Wealth API once shadow-run is unblocked. You watch, learn, and refine.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:12px;font-size:12px;line-height:1.5">
+        <div class="layer-explainer">
+          <strong>L1 · Data Foundation.</strong> 61 sources → 50 D1 tables. NSE bhav, RBI rates, FII/DII, options OI,
+          news/social, GIFT Nifty, DXY, Brent, US10Y. Refreshed 5min–nightly via 10 Cloudflare Workers.
+        </div>
+        <div class="layer-explainer">
+          <strong>L2 · Signal Engine.</strong> Composite score 0–100 on 7 dims (Trend · Flow · Catalyst · Macro · Options · Sentiment · Breadth) for every Nifty-500 stock. + 5 cascade pattern detectors.
+        </div>
+        <div class="layer-explainer">
+          <strong>L3 · Risk Engine.</strong> 2% daily-loss cap · R:R ≥ 2:1 · tranche position sizing · auto stop/target.
+          Cards that fail R:R math never reach the UI.
+        </div>
+        <div class="layer-explainer">
+          <strong>L4 · Execution Bridge.</strong> Kite Connect API places MARKET BUY → polls fill → attaches GTT OCO (stop + target).
+          Stop-loss watcher cron monitors every 2 min. Tags <code>HN_WE_*</code>.
+        </div>
+        <div class="layer-explainer">
+          <strong>L5 · Decision UI.</strong> This page — Pre-Market / Live / Close / Research modes auto-shift by IST clock.
+          Watchlist shows engine's top picks; you set alert prices.
+        </div>
+        <div class="layer-explainer">
+          <strong>L6 · Observability.</strong> Cron health, source freshness, circuit breakers. Status pills near the title.
+          Traffic light at <code>/trading/ops/</code>: GREEN ≥ 90 → trade · YELLOW 70–89 → degraded · RED &lt; 70 → don't trade.
+        </div>
+      </div>
+      <p class="small" style="margin-top:12px;color:var(--muted);font-style:italic">
+        Switch to trader mode (full action UI) by running this in console: <code>localStorage.setItem('userRole_v1','trader');location.reload()</code>
+      </p>
+    </details>
 
     <!-- ═══ TODAY'S WATCHLIST — same shared component as /trading/today/ ═══
          Single source of truth for the rich pick-card design. Frozen candidate
@@ -805,11 +930,16 @@
         <span>🌅 Morning Briefing</span>
         <span class="small" style="color:var(--muted);font-weight:400">▼ what changed since yesterday</span>
       </summary>
+      <div class="layer-explainer" style="margin-top:10px">
+        <strong>Layer 1 → 5 — Pre-market roll-up.</strong> What changed overnight (US close · DXY · US10Y · Brent · Asian markets),
+        what India macro shifted (RBI · CPI · GST), what cascade patterns fired, what FII/DII did yesterday,
+        and which sectors are tilting. Composed once at 08:30 IST by Opus before market open.
+      </div>
       <div id="briefingContent" style="margin-top:10px"><div class="loading">Loading briefing…</div></div>
     </details>
 
     <!-- ── READINESS GATE ── (only shown if not yet ready) -->
-    <div class="panel" id="readinessPanel" style="display:none;margin-bottom:14px;padding:14px;border-color:var(--yellow);background:rgba(245,176,65,0.08)">
+    <div class="panel" id="readinessPanel" data-observer="hide" style="display:none;margin-bottom:14px;padding:14px;border-color:var(--yellow);background:rgba(245,176,65,0.08)">
       <h2 style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:17px">
         <span>🚦 Readiness check</span>
         <span id="readinessProgress" class="small" style="color:var(--muted);font-weight:400"></span>
@@ -827,11 +957,18 @@
         <span class="small" style="color:var(--muted);font-weight:400">▼ engine's live ranking · score ≥ 70</span>
       </summary>
       <div style="margin-top:12px">
-        <p class="small" style="color:var(--muted);margin-bottom:12px;line-height:1.5">
-          The engine scores every Nifty-500 stock on 7 dimensions and surfaces the top picks here.
-          You don't add anything — Opus picks, you set alert prices.
-          <strong style="color:var(--text)">Tap a row to set price alerts.</strong>
-        </p>
+        <div class="layer-explainer">
+          <strong>Layer 2 — Signal Engine.</strong> Every stock in Nifty-500 is scored on 7 dimensions:
+          <strong>Trend</strong> (price vs DMAs · 20%) ·
+          <strong>Flow</strong> (institutional buying · 18%) ·
+          <strong>Catalyst</strong> (announcements · 15%) ·
+          <strong>Macro</strong> (sector tilt · 15%) ·
+          <strong>Options</strong> (OI/IV · 12%) ·
+          <strong>Sentiment</strong> (news+social · 10%) ·
+          <strong>Breadth</strong> (delivery % · 10%).
+          Recomputed nightly 19:00 IST + every hour during market.
+          Stocks scoring ≥ 70 surface here. Tap any row to set alert prices.
+        </div>
         <h4 class="wl-section-h" data-wl-section="engine" style="margin-top:0">
           <span>🎯 Live engine ranking</span>
           <span class="count">—</span>
@@ -842,7 +979,7 @@
     </div><!-- /.desktop-grid -->
 
     <!-- ── PAPER-TRADING TRACKER ── -->
-    <details class="panel" id="paperPanel" style="margin-bottom:14px;padding:14px;border-color:var(--blue)">
+    <details class="panel" id="paperPanel" data-observer="hide" style="margin-bottom:14px;padding:14px;border-color:var(--blue)">
       <summary style="cursor:pointer;list-style:none;font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>📝 Paper trades</span>
         <span class="small" id="paperSummaryLine" style="color:var(--muted);font-weight:400">▼ rehearse before going live</span>
@@ -919,7 +1056,7 @@
     </details>
 
     <!-- Capital banner — collapsible on mobile, summary line shown -->
-    <details id="capitalDetails" style="margin-bottom:14px">
+    <details id="capitalDetails" data-observer="hide" style="margin-bottom:14px">
       <summary id="capitalSummary" style="cursor:pointer;padding:12px 14px;background:var(--panel);border:1px solid var(--border);border-radius:12px;list-style:none;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
         <span><strong>💰 Capital</strong></span>
         <span id="capitalSummaryLine" class="small" style="color:var(--muted);font-weight:500;flex:1;text-align:right">loading…</span>
@@ -957,7 +1094,7 @@
     </div>
 
     <!-- ═════════ KITE TRADE DESK — full execution surface ═════════ -->
-    <details class="panel" id="tradeDeskPanel" data-modes="live close" style="margin-bottom:14px;padding:14px;border-color:var(--accent)">
+    <details class="panel" id="tradeDeskPanel" data-modes="live close" data-observer="hide" style="margin-bottom:14px;padding:14px;border-color:var(--accent)">
       <summary style="cursor:pointer;list-style:none;font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>🎛 Kite Trade Desk</span>
         <span class="small" id="tdSummary" style="color:var(--muted);font-weight:400">▼ orders · GTTs · funds · holdings</span>
@@ -1287,7 +1424,8 @@ function renderTopStrip(j) {
     if (vix) items.push(fmtIdx('VIX', vix.value, vix.change_pct, { fmt: 'vix', pri: 1 }));
     if (usd && usd.value) items.push(fmtIdx('USDINR', usd.value, usd.change_pct, { fmt: 'inr', pri: 2 }));
 
-    idxEl.innerHTML = items.join('') || '<div class="strip-skel">market data unavailable</div>';
+    idxEl.innerHTML = items.join('') ||
+      `<div class="strip-skel">market data warming up — engine cron seeds indices_eod after first run</div>`;
   }
 
   // ── Capital ribbon: total · deployed · positions · today's P&L ──
@@ -1741,24 +1879,44 @@ function renderCard(c) {
       <div class="cell"><div class="label">Max loss / gain</div><div class="value" style="font-size:13px"><span class="neg">-${fmt(c.max_loss_paise)}</span> / <span class="pos">+${fmt(c.max_gain_paise)}</span></div></div>
     </div>
 
-    <div class="checklist">
-      <h4>The 3-question test before you trade</h4>
-      <div class="item"><input type="checkbox" id="q1-${c.symbol}"> <label for="q1-${c.symbol}"><strong>Q1 Logic:</strong> Can I explain in one sentence why this should go up? <em>(${c.rationale.slice(0, 80)}...)</em></label></div>
-      <div class="item"><input type="checkbox" id="q2-${c.symbol}"> <label for="q2-${c.symbol}"><strong>Q2 Risk:</strong> If wrong, max loss is ${fmt(c.max_loss_paise)}. Can I sleep with that?</label></div>
-      <div class="item"><input type="checkbox" id="q3-${c.symbol}"> <label for="q3-${c.symbol}"><strong>Q3 Reward:</strong> Reward:risk is ${c.rr_ratio}:1. Math works.</label></div>
+    <!-- PR-E: observer-mode "Engine play" summary (replaces action buttons) -->
+    <div class="engine-play" data-observer="show">
+      <div class="play-line">
+        🤖 <strong>Engine play:</strong> would BUY <strong>${c.qty}</strong> <strong>${c.symbol}</strong>
+        at ${fmtP(c.entry_paise)} — stop ${fmtP(c.stop_paise)} (-${c.stop_pct}%),
+        target ${fmtP(c.target_paise)} (+${c.target_pct.toFixed(1)}%),
+        R:R <strong>${c.rr_ratio}:1</strong>.
+      </div>
+      <div class="play-meta">
+        Capital deployed ${fmt(c.capital_deployed_paise)} (${c.capital_deployed_pct}% of total).
+        Max loss <span class="neg">-${fmt(c.max_loss_paise)}</span> · max gain <span class="pos">+${fmt(c.max_gain_paise)}</span>.
+        ${c.cascade_match ? '<span class="pill warn" style="margin-left:6px">⚡ cascade-driven</span>' : ''}
+      </div>
+      <div class="play-meta" style="margin-top:8px;font-style:italic;color:var(--muted)">
+        Auto-trader handles execution via Kite Wealth API once real-orders are unblocked. You observe.
+      </div>
     </div>
 
-    <div class="actions">
-      <button id="confirm-${c.symbol}" disabled onclick='openConfirmModal(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="btn primary" data-needs-3q>
-        🚀 CONFIRM &amp; PLACE — ${c.qty} ${c.symbol}
-      </button>
-      <button onclick='openPaperFromCard(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="btn" style="background:rgba(79,163,255,0.18);color:var(--blue);border:1px solid var(--blue)">
-        📝 Paper trade
-      </button>
-      <button onclick="dismissCard('${c.symbol}')" class="btn">
-        🚫 Pass
-      </button>
-      <span class="small" style="margin-left:8px;color:var(--muted)">Tick all 3 boxes to enable Confirm. Paper-trade always available.</span>
+    <!-- Trader-mode UI (only shown when localStorage userRole_v1='trader') -->
+    <div data-observer="hide">
+      <div class="checklist">
+        <h4>The 3-question test before you trade</h4>
+        <div class="item"><input type="checkbox" id="q1-${c.symbol}"> <label for="q1-${c.symbol}"><strong>Q1 Logic:</strong> Can I explain in one sentence why this should go up? <em>(${c.rationale.slice(0, 80)}...)</em></label></div>
+        <div class="item"><input type="checkbox" id="q2-${c.symbol}"> <label for="q2-${c.symbol}"><strong>Q2 Risk:</strong> If wrong, max loss is ${fmt(c.max_loss_paise)}. Can I sleep with that?</label></div>
+        <div class="item"><input type="checkbox" id="q3-${c.symbol}"> <label for="q3-${c.symbol}"><strong>Q3 Reward:</strong> Reward:risk is ${c.rr_ratio}:1. Math works.</label></div>
+      </div>
+      <div class="actions">
+        <button id="confirm-${c.symbol}" disabled onclick='openConfirmModal(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="btn primary" data-needs-3q>
+          🚀 CONFIRM &amp; PLACE — ${c.qty} ${c.symbol}
+        </button>
+        <button onclick='openPaperFromCard(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="btn" style="background:rgba(79,163,255,0.18);color:var(--blue);border:1px solid var(--blue)">
+          📝 Paper trade
+        </button>
+        <button onclick="dismissCard('${c.symbol}')" class="btn">
+          🚫 Pass
+        </button>
+        <span class="small" style="margin-left:8px;color:var(--muted)">Tick all 3 boxes to enable Confirm. Paper-trade always available.</span>
+      </div>
     </div>
   </div>`;
 }

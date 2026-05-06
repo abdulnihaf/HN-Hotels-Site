@@ -199,20 +199,30 @@ async function getIndices(db) {
 // position count + today's P&L from portfolio_snapshots_daily.
 // ═══════════════════════════════════════════════════════════════════════════
 async function getTopStrip(db) {
-  // 1) Indices — pull only the three we need on the strip
-  const idxRows = (await db.prepare(`
-    SELECT i1.index_name, i1.close_paise, i1.prev_close_paise, i1.trade_date
-    FROM indices_eod i1
-    JOIN (SELECT index_name, MAX(trade_date) AS d FROM indices_eod GROUP BY index_name) i2
-      ON i1.index_name = i2.index_name AND i1.trade_date = i2.d
-    WHERE i1.index_name IN ('NIFTY 50', 'NIFTY BANK', 'INDIA VIX')
-  `).all()).results || [];
+  // PR-E: each query wrapped in try/catch so a single failing table never
+  // breaks the whole strip. Partial data is better than no data.
+  const errors = [];
+  const tryQuery = async (label, fn) => {
+    try { return await fn(); }
+    catch (e) { errors.push(label + ': ' + e.message); return null; }
+  };
+
+  // 1) Indices — NIFTY 50, NIFTY BANK, INDIA VIX
+  const idxRows = (await tryQuery('indices', async () => {
+    const r = await db.prepare(`
+      SELECT i1.index_name, i1.close_paise, i1.prev_close_paise, i1.trade_date
+      FROM indices_eod i1
+      JOIN (SELECT index_name, MAX(trade_date) AS d FROM indices_eod GROUP BY index_name) i2
+        ON i1.index_name = i2.index_name AND i1.trade_date = i2.d
+      WHERE i1.index_name IN ('NIFTY 50', 'NIFTY BANK', 'INDIA VIX')
+    `).all();
+    return r.results;
+  })) || [];
 
   const indices = idxRows.map(r => {
     const cp = (r.close_paise || 0) / 100;
     const pp = (r.prev_close_paise || 0) / 100;
     const change_pct = pp > 0 ? ((cp - pp) / pp * 100) : 0;
-    // VIX is reported as a number (e.g. 13.8); divide by 100 already gives that.
     return {
       name: r.index_name,
       value: cp,
@@ -223,24 +233,30 @@ async function getTopStrip(db) {
   });
 
   // 2) USDINR + DXY from crossasset_ticks — latest + ~24h-ago for change.
-  const caLatest = (await db.prepare(`
-    SELECT c1.asset_code, c1.value, c1.ts
-    FROM crossasset_ticks c1
-    JOIN (SELECT asset_code, MAX(ts) AS m FROM crossasset_ticks
-          WHERE asset_code IN ('USDINR','DXY') GROUP BY asset_code) c2
-      ON c1.asset_code = c2.asset_code AND c1.ts = c2.m
-  `).all()).results || [];
+  const caLatest = (await tryQuery('crossasset_latest', async () => {
+    const r = await db.prepare(`
+      SELECT c1.asset_code, c1.value, c1.ts
+      FROM crossasset_ticks c1
+      JOIN (SELECT asset_code, MAX(ts) AS m FROM crossasset_ticks
+            WHERE asset_code IN ('USDINR','DXY') GROUP BY asset_code) c2
+        ON c1.asset_code = c2.asset_code AND c1.ts = c2.m
+    `).all();
+    return r.results;
+  })) || [];
 
   const dayAgo = Date.now() - 26 * 3600 * 1000;
-  const caPrev = (await db.prepare(`
-    SELECT c1.asset_code, c1.value, c1.ts
-    FROM crossasset_ticks c1
-    JOIN (
-      SELECT asset_code, MAX(ts) AS m FROM crossasset_ticks
-      WHERE asset_code IN ('USDINR','DXY') AND ts < ?
-      GROUP BY asset_code
-    ) c2 ON c1.asset_code = c2.asset_code AND c1.ts = c2.m
-  `).bind(dayAgo).all()).results || [];
+  const caPrev = (await tryQuery('crossasset_prev', async () => {
+    const r = await db.prepare(`
+      SELECT c1.asset_code, c1.value, c1.ts
+      FROM crossasset_ticks c1
+      JOIN (
+        SELECT asset_code, MAX(ts) AS m FROM crossasset_ticks
+        WHERE asset_code IN ('USDINR','DXY') AND ts < ?
+        GROUP BY asset_code
+      ) c2 ON c1.asset_code = c2.asset_code AND c1.ts = c2.m
+    `).bind(dayAgo).all();
+    return r.results;
+  })) || [];
 
   const prevByCode = Object.fromEntries(caPrev.map(r => [r.asset_code, r.value]));
   const crossasset = {};
@@ -253,31 +269,37 @@ async function getTopStrip(db) {
     };
   }
 
-  // 3) Capital from engine_config singleton
-  const cfg = await db.prepare(`SELECT * FROM engine_config WHERE id=1`).first() || {};
+  // 3) Capital from engine_config (default to ₹10L if table/row missing)
+  const cfg = (await tryQuery('engine_config', async () =>
+    await db.prepare(`SELECT * FROM engine_config WHERE id=1`).first()
+  )) || {};
   const total_capital_paise = parseInt(cfg.total_capital_paise || '100000000');
   const block_real_orders = !!cfg.block_real_orders;
 
   // 4) Active positions — count + deployed capital
-  const posAgg = (await db.prepare(`
-    SELECT COUNT(*) AS n,
-           COALESCE(SUM(qty * entry_price_paise), 0) AS deployed
-    FROM position_watchlist WHERE is_active = 1
-  `).first()) || { n: 0, deployed: 0 };
+  const posAgg = (await tryQuery('position_watchlist', async () =>
+    await db.prepare(`
+      SELECT COUNT(*) AS n,
+             COALESCE(SUM(qty * entry_price_paise), 0) AS deployed
+      FROM position_watchlist WHERE is_active = 1
+    `).first()
+  )) || { n: 0, deployed: 0 };
 
-  // 5) Today's P&L — prefer latest portfolio_snapshots_daily; fallback to
-  //    sum across active positions using last EOD close as a proxy.
-  const latestSnap = await db.prepare(
-    `SELECT MAX(snapshot_date) AS d FROM portfolio_snapshots_daily`
-  ).first();
+  // 5) Today's P&L — from portfolio_snapshots_daily latest day
   let today_pnl_paise = 0;
-  if (latestSnap?.d) {
-    const sumRow = await db.prepare(
-      `SELECT COALESCE(SUM(pnl_paise), 0) AS p
-       FROM portfolio_snapshots_daily WHERE snapshot_date = ?`
-    ).bind(latestSnap.d).first();
-    today_pnl_paise = sumRow?.p || 0;
-  }
+  await tryQuery('portfolio_snapshots', async () => {
+    const latestSnap = await db.prepare(
+      `SELECT MAX(snapshot_date) AS d FROM portfolio_snapshots_daily`
+    ).first();
+    if (latestSnap?.d) {
+      const sumRow = await db.prepare(
+        `SELECT COALESCE(SUM(pnl_paise), 0) AS p
+         FROM portfolio_snapshots_daily WHERE snapshot_date = ?`
+      ).bind(latestSnap.d).first();
+      today_pnl_paise = sumRow?.p || 0;
+    }
+    return true;
+  });
 
   // 6) Phase from IST clock — used by PR-B mode switcher; harmless here.
   const nowMs = Date.now();
@@ -311,6 +333,8 @@ async function getTopStrip(db) {
     phase,
     now_ms: nowMs,
     generated_at: nowMs,
+    // Surface partial errors so client can show "engine still warming up" hint
+    errors: errors.length > 0 ? errors : undefined,
   };
 }
 
