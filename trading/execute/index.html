@@ -422,6 +422,65 @@
   @media (prefers-reduced-motion: reduce) {
     .idx-item .val, .cap-item .val { transition: none; }
   }
+
+  /* ═════════════════════════════════════════════════════════════════════
+   * PR-B: mode switcher (☀️ Pre-Market · 🟢 Live · 🌙 Close · 📚 Research)
+   * Auto-selects from server-returned `phase`; manual override persists in
+   * localStorage. Each existing block tagged with data-modes="..."; the
+   * .mode-hidden class hides blocks not in the current mode.
+   * ═════════════════════════════════════════════════════════════════════ */
+  .mode-switch {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+    margin-top: 6px; padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+  .mode-pill {
+    background: var(--panel-2); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 5px 11px; font-size: 11px; font-weight: 500;
+    cursor: pointer; min-height: 28px;
+    display: inline-flex; align-items: center; gap: 4px;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 150ms, border-color 150ms, color 150ms;
+  }
+  .mode-pill:hover { color: var(--text); border-color: var(--muted); }
+  .mode-pill[aria-selected="true"] {
+    background: rgba(124,92,255,0.18); color: var(--accent);
+    border-color: var(--accent); font-weight: 600;
+  }
+  .mode-pill[aria-selected="true"][data-source="manual"] {
+    background: var(--accent); color: #fff;
+  }
+  .mode-status {
+    margin-left: auto; font-size: 10px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .mode-status .reset-auto {
+    background: none; border: none; color: var(--blue);
+    cursor: pointer; padding: 2px 4px; font-size: 10px;
+    text-transform: none; letter-spacing: 0;
+  }
+  .mode-status .reset-auto:hover { text-decoration: underline; }
+  /* Mode-hidden — driven by JS applyMode(). !important beats inline display. */
+  .mode-hidden { display: none !important; }
+
+  /* iPhone — stack mode pills tightly */
+  @media (max-width: 480px) {
+    .mode-switch { gap: 3px; margin-top: 4px; padding-top: 4px; }
+    .mode-pill { padding: 4px 8px; font-size: 10.5px; min-height: 26px; }
+    .mode-status { font-size: 9px; }
+    /* On phone hide emoji to save width — initial letter is enough */
+    .mode-pill .mode-icon { display: none; }
+  }
+  /* iPad and laptop — comfortable */
+  @media (min-width: 768px) {
+    .mode-pill { padding: 6px 13px; font-size: 12px; min-height: 32px; }
+    .mode-status { font-size: 11px; }
+  }
+  @media (min-width: 1280px) {
+    .mode-pill { padding: 7px 16px; font-size: 13px; min-height: 36px; }
+  }
 </style>
 </head>
 <body>
@@ -454,6 +513,14 @@
       </div>
     </div>
     <div class="small" id="kiteStatus" style="text-align:right">Kite: …</div>
+    <!-- ─── PR-B: mode switcher (auto-detects phase, manual override) ─── -->
+    <div class="mode-switch" role="tablist" aria-label="Trading day phase" style="width:100%">
+      <button class="mode-pill" data-mode="pre_market" role="tab" aria-selected="false" onclick="setMode('pre_market', 'manual')"><span class="mode-icon">☀️</span> Pre</button>
+      <button class="mode-pill" data-mode="live"       role="tab" aria-selected="false" onclick="setMode('live', 'manual')"><span class="mode-icon">🟢</span> Live</button>
+      <button class="mode-pill" data-mode="close"      role="tab" aria-selected="false" onclick="setMode('close', 'manual')"><span class="mode-icon">🌙</span> Close</button>
+      <button class="mode-pill" data-mode="research"   role="tab" aria-selected="false" onclick="setMode('research', 'manual')"><span class="mode-icon">📚</span> Research</button>
+      <span class="mode-status" id="modeStatus">AUTO</span>
+    </div>
     <!-- ─── PR-A: persistent index strip ─── -->
     <div id="indexStrip" class="index-strip" aria-live="polite" style="width:100%">
       <div class="strip-skel">Loading market data…</div>
@@ -472,10 +539,10 @@
          Single source of truth for the rich pick-card design. Frozen candidate
          pool from Opus's 08:30 verdict + 3 ⭐ picks + full OHLC + ₹10L hypothetical
          per stock. Rendered by /trading/_lib/watchlist-component.js. ═══════════ -->
-    <div id="watchlistSection"></div>
+    <div id="watchlistSection" data-modes="pre_market live"></div>
 
     <!-- TODAY panel — briefing + market pulse + cascade chips + signal count -->
-    <div class="panel" id="todayPanel" style="display:none;padding:16px">
+    <div class="panel" id="todayPanel" data-modes="pre_market live" style="display:none;padding:16px">
       <h2 style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>📅 <span id="todayDate">Today</span></span>
         <span id="engineHealth" class="small" style="font-weight:400"></span>
@@ -488,7 +555,7 @@
     <!-- ── DESKTOP 2-COL GRID for context panels ── -->
     <div class="desktop-grid">
     <!-- ── PRE-MARKET BRIEFING ── (auto-collapsed during market hours, open pre-market) -->
-    <details class="panel" id="briefingPanel" open style="margin-bottom:14px;padding:14px">
+    <details class="panel" id="briefingPanel" data-modes="pre_market" open style="margin-bottom:14px;padding:14px">
       <summary style="cursor:pointer;list-style:none;font-size:18px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>🌅 Morning Briefing</span>
         <span class="small" style="color:var(--muted);font-weight:400">▼ what changed since yesterday</span>
@@ -509,7 +576,7 @@
     </div>
 
     <!-- ── WATCHLIST ── -->
-    <details class="panel" id="watchlistPanel" open style="margin-bottom:14px;padding:14px">
+    <details class="panel" id="watchlistPanel" data-modes="pre_market live" open style="margin-bottom:14px;padding:14px">
       <summary style="cursor:pointer;list-style:none;font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>👀 Watchlist</span>
         <span class="small" style="color:var(--muted);font-weight:400">▼ stocks you're tracking + engine top picks</span>
@@ -592,7 +659,7 @@
 
     <!-- MARKETS 101 — Learn Mode. Five lenses to understand today's market.
          Default-open while in shadow_run + learning_phase. -->
-    <details class="panel" id="markets101Panel" style="margin-bottom:14px">
+    <details class="panel" id="markets101Panel" data-modes="research" style="margin-bottom:14px">
       <summary style="cursor:pointer;list-style:none;font-size:18px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>📚 Markets 101 — Learn Mode</span>
         <span class="small" style="color:var(--muted);font-weight:400">▼ tap to collapse</span>
@@ -618,10 +685,10 @@
     <div id="blockers"></div>
 
     <!-- Trade cards (filtered for actionable 2:1 R:R math) -->
-    <div id="tradeCards"></div>
+    <div id="tradeCards" data-modes="live"></div>
 
     <!-- WATCH LIST — all signals ≥ 70 composite, even those skipped by R:R math (LEARNING VIEW) -->
-    <details class="panel" id="watchListDetails" style="margin-bottom:14px;display:none">
+    <details class="panel" id="watchListDetails" data-modes="research" style="margin-bottom:14px;display:none">
       <summary style="cursor:pointer;list-style:none;padding:0;margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
         <span><strong>🎓 Learning view — all signals</strong> <span id="watchListCount" class="small" style="color:var(--muted)"></span></span>
         <span class="small" style="color:var(--muted)">▼ what the engine sees + why some skip</span>
@@ -634,7 +701,7 @@
     </details>
 
     <!-- Active positions -->
-    <div class="panel" id="positionsPanel" style="display:none">
+    <div class="panel" id="positionsPanel" data-modes="live close" style="display:none">
       <h2>📍 Active Positions</h2>
       <div class="pos-row" style="font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px">
         <div>Tranche</div><div>Symbol</div><div class="num">Entry</div>
@@ -644,7 +711,7 @@
     </div>
 
     <!-- ═════════ KITE TRADE DESK — full execution surface ═════════ -->
-    <details class="panel" id="tradeDeskPanel" style="margin-bottom:14px;padding:14px;border-color:var(--accent)">
+    <details class="panel" id="tradeDeskPanel" data-modes="live close" style="margin-bottom:14px;padding:14px;border-color:var(--accent)">
       <summary style="cursor:pointer;list-style:none;font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span>🎛 Kite Trade Desk</span>
         <span class="small" id="tdSummary" style="color:var(--muted);font-weight:400">▼ orders · GTTs · funds · holdings</span>
@@ -665,14 +732,14 @@
     </details>
 
     <!-- Kite holdings (LEGACY — kept for backward compatibility, hidden) -->
-    <div class="panel" id="kiteHoldingsPanel" style="display:none">
+    <div class="panel" id="kiteHoldingsPanel" data-modes="live close" style="display:none">
       <h2>💼 Kite Holdings (live)</h2>
       <p class="small" style="margin-bottom:10px">Synced from Zerodha every 5 min during market. P&L is real-time.</p>
       <div id="kiteHoldingsTable"></div>
     </div>
 
     <!-- Recent Kite orders (today's activity log) -->
-    <div class="panel" id="kiteActivityPanel" style="display:none">
+    <div class="panel" id="kiteActivityPanel" data-modes="live close" style="display:none">
       <h2>📋 Today's Kite Activity</h2>
       <p class="small" style="margin-bottom:10px">Every order placed today (engine + manual). Tags filter engine-placed (HN_WE_*).</p>
       <div id="kiteActivityTable"></div>
@@ -729,6 +796,71 @@ async function loadAll() {
 // One round-trip every 30s while tab is visible. Single source of truth
 // at /api/trading?action=top_strip — keeps strip atomic, no race.
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// PR-B — mode switcher (☀️ Pre-Market · 🟢 Live · 🌙 Close · 📚 Research)
+// Default: AUTO — follows server-returned phase from /api/trading?action=top_strip.
+// User taps a pill → MANUAL — locked to that mode, persists in localStorage.
+// "AUTO" link in mode-status row clears manual override.
+// ═══════════════════════════════════════════════════════════════════
+const MODES = ['pre_market', 'live', 'close', 'research'];
+const MODE_STORE_KEY = 'tradeDeskMode_v1';
+let _currentMode = null;
+let _modeSource  = 'auto';   // 'auto' | 'manual'
+let _serverPhase = null;     // most recent phase reported by server
+
+function setMode(mode, source = 'auto') {
+  if (!MODES.includes(mode)) return;
+  _currentMode = mode;
+  _modeSource = source;
+  if (source === 'manual') {
+    try { localStorage.setItem(MODE_STORE_KEY, mode); } catch (e) {}
+  }
+  applyMode();
+}
+
+function clearManualMode() {
+  _modeSource = 'auto';
+  try { localStorage.removeItem(MODE_STORE_KEY); } catch (e) {}
+  if (_serverPhase) setMode(_serverPhase, 'auto');
+  else applyMode();
+}
+
+function applyMode() {
+  if (!_currentMode) return;
+  // 1) Hide/show every block tagged with data-modes
+  document.querySelectorAll('[data-modes]').forEach(el => {
+    const modes = (el.dataset.modes || '').trim().split(/\s+/);
+    const visible = modes.includes(_currentMode) || modes.includes('all');
+    el.classList.toggle('mode-hidden', !visible);
+  });
+  // 2) Update pill aria-selected + data-source
+  document.querySelectorAll('.mode-pill').forEach(p => {
+    const sel = p.dataset.mode === _currentMode;
+    p.setAttribute('aria-selected', sel ? 'true' : 'false');
+    if (sel) p.dataset.source = _modeSource;
+    else p.removeAttribute('data-source');
+  });
+  // 3) Update status indicator
+  const st = document.getElementById('modeStatus');
+  if (st) {
+    if (_modeSource === 'manual') {
+      st.innerHTML = `MANUAL <button class="reset-auto" onclick="clearManualMode()" aria-label="Reset to auto mode">↺ auto</button>`;
+    } else {
+      st.textContent = 'AUTO';
+    }
+  }
+}
+
+function bootMode() {
+  // Read manual override from localStorage if present
+  let stored = null;
+  try { stored = localStorage.getItem(MODE_STORE_KEY); } catch (e) {}
+  if (stored && MODES.includes(stored)) {
+    setMode(stored, 'manual');
+  }
+  // Otherwise wait for top_strip's first response to set auto-mode
+}
+
 let _stripLastUpdate = 0;
 async function loadTopStrip() {
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
@@ -753,6 +885,14 @@ function tickStripMeta() {
 }
 
 function renderTopStrip(j) {
+  // PR-B: capture server phase + apply auto-mode if user hasn't picked manually
+  if (j && j.phase) {
+    _serverPhase = j.phase;
+    if (_modeSource === 'auto' && _currentMode !== j.phase) {
+      setMode(j.phase, 'auto');
+    }
+  }
+
   // ── Index strip: NIFTY 50, BANK NIFTY, INDIA VIX, USDINR ──
   const idxEl = document.getElementById('indexStrip');
   if (idxEl) {
@@ -829,8 +969,9 @@ let _sharedWatchlistHandle = null;
 function showApp(j) {
   document.getElementById('gate').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  bootMode();                           // PR-B: pick up manual override before render
   render(j);
-  loadTopStrip();                       // PR-A: paint strip ASAP
+  loadTopStrip();                       // PR-A: paint strip + first auto-mode resolution
   refreshKiteStatus();
   loadMarkets101();
   loadMorningBriefing();
