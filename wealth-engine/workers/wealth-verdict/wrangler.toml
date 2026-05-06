@@ -25,8 +25,14 @@ crons = [
 
   # ─── MARKET HOURS ───────────────────────────────────────────────────────
   # Phase C — Verdict invalidator (Opus, only fires on material change).
-  # Every 15 min during market hours: 03:45 → 10:00 UTC = 09:15 → 15:30 IST.
-  "0,15,30,45 4-9 * * 1-5",
+  # 3-cron split (TZ-7 fix May 6 2026 evening) covers EXACTLY 09:15-15:30 IST.
+  # Was just "0,15,30,45 4-9 * * 1-5" which is 09:30-15:15 IST — missed first
+  # 15 min (market open) and last 15 min (market close).
+  # Note: invalidator is rate-limited to 4 fires/day in code (line 1183), so
+  # adding 09:15 + 15:30 entries doesn't materially increase Opus cost.
+  "45 3 * * 1-5",            # 09:15 IST  (market open tick)
+  "0,15,30,45 4-9 * * 1-5",  # 09:30-15:15 IST  (every 15 min mid-session)
+  "0 10 * * 1-5",            # 15:30 IST  (market close tick)
 
   # ─── POST-MARKET ────────────────────────────────────────────────────────
   # Phase D.1 — Paper trade autopsy (Sonnet). 16:00 IST = 10:30 UTC.

@@ -1656,7 +1656,11 @@ const CRON_DISPATCH = {
   '0 2 * * 1-5':              { name: 'pre_market', fn: composePreMarketBriefing },  // 07:30 IST
   '0 3 * * 1-5':              { name: 'compose',    fn: composeVerdict },        // 08:30 IST
   '*/5 * * * *':              { name: 'triage',     fn: triageAlerts },          // every 5 min
-  '0,15,30,45 4-9 * * 1-5':   { name: 'invalidate', fn: invalidateVerdict },     // every 15 min market hours
+  // TZ-7 fix May 6 2026 evening: invalidator now covers EXACTLY 09:15-15:30 IST.
+  // 3 dispatch entries → same handler. Was just '0,15,30,45 4-9' (09:30-15:15 IST).
+  '45 3 * * 1-5':             { name: 'invalidate', fn: invalidateVerdict },     // 09:15 IST market open
+  '0,15,30,45 4-9 * * 1-5':   { name: 'invalidate', fn: invalidateVerdict },     // 09:30-15:15 IST every 15 min
+  '0 10 * * 1-5':             { name: 'invalidate', fn: invalidateVerdict },     // 15:30 IST market close
   '30 10 * * 1-5':            { name: 'autopsy',    fn: autopsyTrades },         // 16:00 IST
   '0 11 * * 1-5':             { name: 'suit_refresh', fn: suitabilityRefresh },  // 16:30 IST
   '0 13 * * 1-5':             { name: 'eod_learning', fn: fireEodLearningAudit },// 18:30 IST — daily learning trail
