@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v37';  // v37: Phase B — TODAY consolidation per doc 19 §6.1 (5 sections + swing toggle)
+const CACHE_VERSION = 'wealth-v38';  // v38: Phase C — DESK live trading view per doc 19 §6.2 (positions + chart + reasoning + market context)
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -10,6 +10,7 @@ const PRECACHE_URLS = [
   '/trading/execute/',
   '/trading/ops/',
   '/trading/today/',
+  '/trading/desk/',
   '/trading/compare/',
   '/trading/audit/',
   '/trading/roadmap/',
