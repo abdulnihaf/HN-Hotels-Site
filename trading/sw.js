@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v33';  // v33: F3+F6 deployed (race condition + daily enrich), /roadmap/ live + ROADMAP.md source-of-truth
+const CACHE_VERSION = 'wealth-v34';  // v34: P1-P5 owner-calibrated 4-layer + audit_findings auto-resolve + UI shows resolution state
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [

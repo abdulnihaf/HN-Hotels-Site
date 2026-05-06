@@ -226,20 +226,31 @@ function render(j) {
     </div>
   `;
 
-  // Findings
-  const findingsHtml = j.architecture_findings.map(f => `
-    <div class="finding-card ${esc(f.severity)}">
+  // Findings — group by resolution status
+  const openFindings = j.architecture_findings.filter(f => !f.resolved);
+  const resolvedFindings = j.architecture_findings.filter(f => f.resolved);
+
+  const renderFinding = (f) => `
+    <div class="finding-card ${esc(f.severity)}" style="${f.resolved ? 'opacity:0.65;border-left-style:dashed' : ''}">
       <div class="head">
         <span class="sev ${esc(f.severity)}">${esc(f.severity)}</span>
         <span class="id-tag">${esc(f.id)}</span>
         <span class="layer-tag">${esc(f.layer)}</span>
+        ${f.resolved
+          ? '<span style="background:rgba(46,204,113,0.20);color:var(--green);padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;margin-left:auto">✅ RESOLVED</span>'
+          : '<span style="background:rgba(231,76,60,0.20);color:var(--red);padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;margin-left:auto">🔴 OPEN</span>'
+        }
       </div>
       <div class="title">${esc(f.title)} ${f.auto_detected ? '<span style="background:rgba(255,138,60,0.18);color:var(--orange);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;margin-left:6px">🔬 AUTO-DETECTED</span>' : ''}</div>
       <div class="observed"><strong>Observed:</strong> ${typeof f.observed === 'string' ? esc(f.observed) : '<code style="font-size:10px;color:var(--muted)">' + esc(JSON.stringify(f.observed)) + '</code>'}</div>
-      <div class="fix">★ Fix: ${esc(f.proposed_fix)}</div>
+      <div class="fix" style="${f.resolved ? 'opacity:0.7' : ''}">${f.resolved ? '✅ Fix shipped' : '★ Fix'}: ${esc(f.proposed_fix)}</div>
       <div class="effort">Effort: ${esc(f.effort_lines)}</div>
+      ${f.resolved && f.resolved_by ? `<div class="effort" style="color:var(--green);margin-top:4px">Resolved by: ${esc(f.resolved_by)}</div>` : ''}
     </div>
-  `).join('');
+  `;
+  const findingsHtml = openFindings.length === 0
+    ? `<div style="padding:14px;color:var(--green);font-size:13px;text-align:center">✅ ALL DETECTED ISSUES RESOLVED for this date</div>${resolvedFindings.length ? `<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border)"><h3 style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">✅ Recently resolved (${resolvedFindings.length})</h3>${resolvedFindings.map(renderFinding).join('')}</div>` : ''}`
+    : `${openFindings.map(renderFinding).join('')}${resolvedFindings.length ? `<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border)"><h3 style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">✅ Resolved today (${resolvedFindings.length})</h3>${resolvedFindings.map(renderFinding).join('')}</div>` : ''}`;
   document.getElementById('findings').innerHTML = `
     <div class="findings-block">
       <h2>🎯 Architecture findings (priority-ranked) — fix at market close

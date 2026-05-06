@@ -3242,20 +3242,24 @@ async function getOpsAuditToday(db, url) {
   // wealth-orchestrator runAuditScanner runs every 15min during market hours
   // and writes findings here. Append unresolved findings to the architecture
   // findings list so /audit/ UI surfaces them automatically.
+  // Read BOTH open + recently-resolved findings so UI can show ✅ status
   const persistedFindings = (await db.prepare(`
     SELECT id, detected_at, category, severity, layer, signature,
-           title, detail, proposed_fix, data_json
+           title, detail, proposed_fix, data_json,
+           resolved_at, resolved_by
     FROM audit_findings
-    WHERE trade_date=? AND resolved_at IS NULL
+    WHERE trade_date=?
     ORDER BY
+      CASE WHEN resolved_at IS NULL THEN 0 ELSE 1 END,
       CASE severity WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END,
       detected_at DESC
-    LIMIT 30
+    LIMIT 50
   `).bind(date).all().catch(() => ({ results: [] }))).results || [];
 
   const persistedAsFindings = persistedFindings.map(p => {
     let parsedData = {};
     try { parsedData = JSON.parse(p.data_json || '{}'); } catch {}
+    const isResolved = p.resolved_at != null;
     return {
       id: `cron:${p.id}`,
       severity: p.severity,
@@ -3263,9 +3267,13 @@ async function getOpsAuditToday(db, url) {
       title: p.title,
       observed: p.detail,
       proposed_fix: p.proposed_fix,
-      effort_lines: 'auto-detected at ' + new Date(p.detected_at + 5.5*3600000).toISOString().replace('T',' ').slice(11,19) + ' IST',
+      effort_lines: 'auto-detected ' + new Date(p.detected_at + 5.5*3600000).toISOString().replace('T',' ').slice(11,19) + ' IST'
+        + (isResolved ? ' · resolved ' + new Date(p.resolved_at + 5.5*3600000).toISOString().replace('T',' ').slice(11,19) + ' IST' : ''),
       category: p.category,
       auto_detected: true,
+      resolved: isResolved,
+      resolved_at: p.resolved_at,
+      resolved_by: p.resolved_by,
       data: parsedData,
     };
   });
