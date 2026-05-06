@@ -589,10 +589,17 @@ const CRON_MAP = {
   '0 14 * * 1-5':   { name: 'delivery',      fn: ingestDelivery },       // 19:30 IST
   '30 10 * * 1-5':  { name: '52w_extremes',  fn: ingest52w },            // 16:00 IST
   '31 10 * * 1-5':  { name: 'circuits',      fn: ingestCircuits },       // 16:01 IST (was colliding with 52w)
-  // Pre-open
-  '0-8 3 * * 1-5':  { name: 'preopen',       fn: ingestPreopen },        // 09:00-09:08 IST every minute
-  // Intraday — paid tier supports every-minute granularity
-  '*/1 3-10 * * 1-5': { name: 'intraday',    fn: ingestIntraday },       // every 1 min market hours
+  // Pre-open — TZ-1 fix May 6 2026 evening
+  // Was '0-8 3 * * 1-5' (= 08:30-08:38 IST, BEFORE NSE pre-open opens at 09:00).
+  // Now fires correctly during NSE pre-open session 09:00-09:08 IST.
+  '30-38 3 * * 1-5': { name: 'preopen',      fn: ingestPreopen },        // 09:00-09:08 IST
+  // Intraday quotes — TZ-2 fix May 6 2026 evening
+  // Was '*/1 3-10 * * 1-5' (= 08:30-16:29 IST, polluted intraday_ticks with
+  // 45 min pre-market + 59 min post-market data). Split into 3 ranges covering
+  // EXACTLY 09:15-15:30 IST. All three dispatch to the same ingestIntraday handler.
+  '45-59 3 * * 1-5': { name: 'intraday',     fn: ingestIntraday },       // 09:15-09:29 IST
+  '* 4-9 * * 1-5':   { name: 'intraday',     fn: ingestIntraday },       // 09:30-15:29 IST
+  '0 10 * * 1-5':    { name: 'intraday',     fn: ingestIntraday },       // 15:30 IST close
   // Yahoo backup — every 15 min, offset to avoid collision with intraday
   '7-52/15 3-10 * * 1-5': { name: 'yahoo_eod', fn: async (env) => {
     return ingestYahooEod(env, 'RELIANCE', Date.now() - 86400000 * 2, Date.now());

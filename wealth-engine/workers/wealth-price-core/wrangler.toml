@@ -25,10 +25,19 @@ crons = [
   "0 14 * * 1-5",       # NSE delivery%           19:30 IST
   "30 10 * * 1-5",      # 52w extremes            16:00 IST
   "31 10 * * 1-5",      # Circuit hits            16:01 IST (was colliding with 52w)
-  # ─── Pre-open snapshots ─────────────────────────────────
-  "0-8 3 * * 1-5",      # Pre-open every minute   09:00-09:08 IST
-  # ─── Intraday max freshness (paid tier) ─────────────────
-  "*/1 3-10 * * 1-5",   # Intraday quotes         every 1 min, 09:15-15:30 IST
+  # ─── Pre-open snapshots (TZ-1 fix May 6 2026 evening) ───
+  # Was "0-8 3 * * 1-5" which is 03:00-03:08 UTC = 08:30-08:38 IST — fired
+  # 30 MIN BEFORE NSE pre-open session opens at 09:00 IST, capturing zero
+  # pre-open price-discovery data.
+  "30-38 3 * * 1-5",    # Pre-open every minute   09:00-09:08 IST (NSE pre-open match)
+  # ─── Intraday max freshness (TZ-2 fix May 6 2026 evening) ───
+  # Was "*/1 3-10 * * 1-5" which is 03:00-10:59 UTC = 08:30-16:29 IST — fired
+  # 45 min PRE-market + 59 min POST-market, polluting intraday_ticks with stale
+  # prices (verified: 44 pre-market ticks/symbol/day across NIFTY 50 names today).
+  # Split into 3 cron expressions that cover EXACTLY 09:15-15:30 IST = 03:45-10:00 UTC.
+  "45-59 3 * * 1-5",    # Intraday quotes opening 09:15-09:29 IST every 1 min
+  "* 4-9 * * 1-5",      # Intraday quotes mid     09:30-15:29 IST every 1 min
+  "0 10 * * 1-5",       # Intraday quotes close   15:30 IST exact
   "7-52/15 3-10 * * 1-5", # Yahoo backup          every 15 min during market (offset)
   # ─── Cross-asset extended hours ─────────────────────────
   "*/5 1-18 * * *",     # GIFT Nifty              every 5 min, 06:30-23:55 IST
