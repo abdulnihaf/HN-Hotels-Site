@@ -3756,6 +3756,40 @@ async function getTodayConsolidated(db) {
     portfolio.pct_of_capital = portfolio.capital_total_paise > 0
       ? +((portfolio.total_paise / portfolio.capital_total_paise) * 100).toFixed(3) : 0;
 
+    // EFFECTIVE DENOMINATOR (May 7 2026 EOD fix) — phase-aware risk denominator.
+    //
+    // Bug surfaced by owner screenshot: after setting today_deployable_paise=₹10K
+    // for tomorrow, hero card showed today's "+₹19,316 = +193% of ₹10K" and
+    // "Capital used ₹3.99L of ₹10K" — both nonsensical because today's session
+    // deployed ₹3.99L from the ₹10L paper-mode capital, not the ₹10K future-day
+    // commitment.
+    //
+    // Fix: when current phase is POST_CLOSE/OFF_HOURS AND any exits exist today,
+    // use ACTUAL capital_deployed_paise as the denominator (= what the session
+    // actually risked). Otherwise use today_deployable_paise (forward-looking
+    // commitment for upcoming session).
+    //
+    // Phase computed inline — same logic as line 3917-3927 below. Need it here
+    // because portfolio is built before phaseLabel.
+    let _phaseHere;
+    if (dow === 0 || dow === 6) _phaseHere = 'OFF_HOURS';
+    else if (istMins < 6 * 60) _phaseHere = 'OFF_HOURS';
+    else if (istMins < 9 * 60) _phaseHere = 'PRE_MARKET';
+    else if (istMins < 9 * 60 + 15) _phaseHere = 'PRE_OPEN';
+    else if (istMins < 15 * 60 + 30) _phaseHere = 'LIVE';
+    else if (istMins < 16 * 60) _phaseHere = 'CLOSE';
+    else if (istMins < 23 * 60) _phaseHere = 'POST_CLOSE';
+    else _phaseHere = 'OFF_HOURS';
+    const isPostClose  = ['POST_CLOSE', 'CLOSE', 'OFF_HOURS'].includes(_phaseHere);
+    const hasClosed    = (portfolio.counts.exited_win || 0) + (portfolio.counts.exited_loss || 0) > 0;
+    const useActual    = isPostClose && hasClosed;
+    portfolio.effective_denominator_paise = useActual
+      ? (portfolio.capital_deployed_paise || portfolio.capital_deployable_paise)
+      : portfolio.capital_deployable_paise;
+    portfolio.effective_denominator_source = useActual ? 'actual_deployed' : 'today_deployable';
+    portfolio.pct_of_effective = portfolio.effective_denominator_paise > 0
+      ? +((portfolio.total_paise / portfolio.effective_denominator_paise) * 100).toFixed(3) : 0;
+
     if (overridePicks?.length) {
       // Augmented array IS overridePicks; sync back to override.new_picks
     }

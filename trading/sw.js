@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v48';  // v48: AUTO-BRIDGE — paper_trades.ENTERED auto-fires Kite place_bracket. UI shows real-order badge + 3-of-3 gate state in banner.
+const CACHE_VERSION = 'wealth-v49';  // v49: hero effective denominator (POST_CLOSE shows actual deployed, not future deployable) + ENTERED state shows explicit qty × entry = deployed with timestamp + Kite badge inline
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
