@@ -252,18 +252,45 @@ let liveSlot = -1;
 
 function tick() {
   const slot = currentSlot();
+  const phase = slotPhaseSec();
+  const nextSlot = (slot + 1) % NUM_SLOTS;
+
   if (slot !== liveSlot) {
-    // Cross-fade: only toggle visibility. Videos keep playing in background
-    // so the decode buffer never drains — eliminates the "frame queue empty"
-    // white-screen artifact when transitioning into a video slot.
+    // Slot changed: swap visibility. DON'T reset currentTime — the next
+    // video has already been pre-rolled below, so its decoder is warm.
     elements.forEach((el, i) => {
       if (i === slot) {
         el.classList.add("live");
+        if (el.tagName === "VIDEO") {
+          try { el.play(); } catch (_) {}
+        }
       } else {
         el.classList.remove("live");
       }
     });
     liveSlot = slot;
+  }
+
+  // Pre-roll: in the last 1.5s of each slot, start playing the NEXT slot's
+  // video so the H264 decoder is warm and frames are buffered before the
+  // visibility swap. Fire Stick AFTSS handles 2 simultaneous H264 streams
+  // comfortably; running 5+ caused crashes (V2 reverted to wizard).
+  if (phase > 8.5) {
+    const nextEl = elements[nextSlot];
+    if (nextEl && nextEl.tagName === "VIDEO" && nextEl.paused) {
+      try { nextEl.currentTime = 0; nextEl.play(); } catch (_) {}
+    }
+  }
+
+  // Pause any video element that's neither current nor pre-rolling — keeps
+  // simultaneous decode load at <=2 streams.
+  for (let i = 0; i < elements.length; i++) {
+    const el = elements[i];
+    if (el.tagName !== "VIDEO") continue;
+    const shouldPlay = (i === slot) || (i === nextSlot && phase > 8.5);
+    if (!shouldPlay && !el.paused) {
+      try { el.pause(); } catch (_) {}
+    }
   }
   debug.textContent =
     "tv=" + TV +
@@ -287,14 +314,12 @@ function tick() {
   // "video frame queue empty" → white-flash issue mid-loop.
   await waitForAllAssetsReady();
 
-  // Start ALL videos playing now and let them loop continuously in the
-  // background. They are hidden via opacity (only the "live" element shows),
-  // but the decoder keeps frames buffered. When a slot transition arrives,
-  // we just toggle opacity — no restart, no buffer drain, no white flash.
-  for (const el of elements) {
-    if (el.tagName === "VIDEO") {
-      try { await el.play(); } catch (_) {}
-    }
+  // Start the FIRST slot's video (if any) so initial render isn't blank.
+  // Other videos pre-roll in the last 1.5s of their preceding slot — see tick().
+  const initialSlot = currentSlot();
+  const initialEl = elements[initialSlot];
+  if (initialEl && initialEl.tagName === "VIDEO") {
+    try { await initialEl.play(); } catch (_) {}
   }
 
   status.classList.add("hidden");
