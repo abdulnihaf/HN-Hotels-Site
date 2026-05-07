@@ -275,6 +275,12 @@ async function getKiteLtp(env, symbols) {
 async function rangeCapture(env) {
   const db = env.DB;
   const today = istToday();
+  // Risk config — drives qty calculation per pick weight. Replaces previously
+  // hardcoded ₹10L constant at line 310 so flipping total_capital_paise to
+  // ₹10K (Fri 8 May test) ↔ ₹10L (Mon 11 May launch) auto-rescales position
+  // sizing. Without this, qty would always be sized for ₹10L regardless of
+  // capital config — silent over-allocation.
+  const risk = await getRiskConfig(db);
 
   // Find today's morning verdict picks
   const verdict = await db.prepare(`
@@ -307,7 +313,10 @@ async function rangeCapture(env) {
   // CRITICAL: picks_json contains Opus's percentages (stop_pct, target_pct, weight_pct)
   // but NOT computed paise values. Compute them HERE using live LTP at range_capture
   // time — entries will use the same baseline.
-  const PAPER_CAPITAL_PAISE = 100000000;  // ₹10L
+  //
+  // Capital comes from risk.capital_paise (read from user_config above) — was
+  // hardcoded 100000000 ₹10L. Now scales with config so ₹10K mode produces
+  // correctly-sized paper trades.
   for (const p of picks) {
     if (!p.symbol) continue;
     const q = ltp[p.symbol];
@@ -328,7 +337,7 @@ async function rangeCapture(env) {
     const weight = parseFloat(p.weight_pct) || 30;
     const stopPaise = Math.round(entryEstimate * (1 - stopPct/100));
     const targetPaise = Math.round(entryEstimate * (1 + targetPct/100));
-    const capitalDeployed = Math.round(PAPER_CAPITAL_PAISE * weight / 100);
+    const capitalDeployed = Math.round(risk.capital_paise * weight / 100);
     const qty = Math.max(1, Math.floor(capitalDeployed / entryEstimate));
     const rrRatio = +(targetPct / stopPct).toFixed(2);
 
@@ -676,9 +685,12 @@ async function priceMonitor(env) {
         // Recompute stop/target based on ACTUAL breakout entry price (not stale estimate)
         const newStop = Math.round(actualEntry * (1 - stopPctFromOriginal/100));
         const newTarget = Math.round(actualEntry * (1 + targetPctFromOriginal/100));
-        // Recompute qty based on actual entry (preserve weight)
-        const PAPER_CAPITAL_PAISE_LOCAL = 100000000;
-        const originalCapital = w.qty * w.entry_paise; // preserves intent
+        // Recompute qty based on actual entry (preserve original capital
+        // deployment from rangeCapture time). Note: w.qty was set in
+        // rangeCapture using risk.capital_paise × weight, so multiplying
+        // back by w.entry_paise reconstructs the deployed-paise we intended.
+        // This is implicitly capital-aware via paper_trades state.
+        const originalCapital = w.qty * w.entry_paise;
         const newQty = Math.max(1, Math.floor(originalCapital / actualEntry));
 
         await db.prepare(`
