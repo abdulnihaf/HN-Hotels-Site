@@ -18,10 +18,65 @@
 import { callOpus, callSonnet, callHaiku, parseJsonOutput } from '../../_shared/anthropic.js';
 
 const WORKER_NAME = 'wealth-trader';
-const PAPER_CAPITAL_PAISE = 100000000;        // ₹10,00,000
-const DAILY_LOSS_LIMIT_PAISE = 3000000;       // ₹30,000 (-3% halt — exit all + halt for the day)
-const PROFIT_LOCK_PAISE = 3000000;            // ₹30,000 daily target — tighten all trails to lock gains
-const DAILY_BEST_TARGET_PAISE = 5000000;      // ₹50,000 best-case stretch — informational
+
+// ─── RISK CONFIG (May 7 2026 — percentage-based, scales with capital) ──────
+// Owner principle: one SQL UPDATE to flip ₹10K (Fri 8 May test) ↔ ₹10L (Mon 11 launch).
+// Thresholds stored as ratios in user_config; absolute paise computed at runtime.
+//
+// Defaults if user_config missing the row:
+//   profit_lock_pct    0.05  (was 3%, raised to 5% per scenario backtest data)
+//   loss_halt_pct      0.03  (kept at 3% — asymmetric protection: losses cost more)
+//   best_target_pct    0.07  (was 5%, raised to 7% — informational only)
+//
+// All read inside priceMonitor() per cron invocation. ~3 D1 reads per cycle, trivial.
+const DEFAULT_PROFIT_LOCK_PCT = 0.05;
+const DEFAULT_LOSS_HALT_PCT   = 0.03;
+const DEFAULT_BEST_TARGET_PCT = 0.07;
+const DEFAULT_CAPITAL_PAISE   = 100000000;    // ₹10,00,000 fallback if user_config missing
+
+// Legacy constants kept for any code path still referencing them — preserve the
+// 3% values so this PR is purely additive at the schema level. Live code switches
+// to getRiskConfig() below.
+const PAPER_CAPITAL_PAISE = 100000000;        // ₹10,00,000 (legacy ref)
+const DAILY_LOSS_LIMIT_PAISE = 3000000;       // ₹30,000 (legacy ref)
+const PROFIT_LOCK_PAISE = 3000000;            // ₹30,000 (legacy ref)
+const DAILY_BEST_TARGET_PAISE = 5000000;      // ₹50,000 (legacy ref)
+
+/**
+ * getRiskConfig — read percentage-based thresholds from user_config and compute
+ * runtime absolute paise values relative to total_capital_paise.
+ *
+ * Returns:
+ *   {
+ *     capital_paise:        live total_capital_paise (₹10K or ₹10L per owner)
+ *     profit_lock_paise:    capital × profit_lock_pct
+ *     loss_halt_paise:      capital × loss_halt_pct
+ *     best_target_paise:    capital × best_target_pct
+ *     profit_lock_pct, loss_halt_pct, best_target_pct  (raw ratios for display)
+ *   }
+ *
+ * Single batched SQL read (4 keys) — fast.
+ */
+async function getRiskConfig(db) {
+  const rows = (await db.prepare(`
+    SELECT config_key, config_value FROM user_config
+    WHERE config_key IN ('total_capital_paise','profit_lock_pct','loss_halt_pct','best_target_pct')
+  `).all().catch(() => ({ results: [] }))).results || [];
+  const cfg = Object.fromEntries(rows.map(r => [r.config_key, r.config_value]));
+  const capitalPaise   = parseInt(cfg.total_capital_paise) || DEFAULT_CAPITAL_PAISE;
+  const profitLockPct  = parseFloat(cfg.profit_lock_pct) || DEFAULT_PROFIT_LOCK_PCT;
+  const lossHaltPct    = parseFloat(cfg.loss_halt_pct)   || DEFAULT_LOSS_HALT_PCT;
+  const bestTargetPct  = parseFloat(cfg.best_target_pct) || DEFAULT_BEST_TARGET_PCT;
+  return {
+    capital_paise:      capitalPaise,
+    profit_lock_paise:  Math.round(capitalPaise * profitLockPct),
+    loss_halt_paise:    Math.round(capitalPaise * lossHaltPct),
+    best_target_paise:  Math.round(capitalPaise * bestTargetPct),
+    profit_lock_pct:    profitLockPct,
+    loss_halt_pct:      lossHaltPct,
+    best_target_pct:    bestTargetPct,
+  };
+}
 
 // ─── Time helpers ──────────────────────────────────────────────────────────
 function istNow() { return new Date(Date.now() + 5.5 * 3600000); }
@@ -468,6 +523,9 @@ Be decisive. Most attempts should be ENTER_NOW (with vol confirmed + no negative
 async function priceMonitor(env) {
   const db = env.DB;
   const today = istToday();
+  // Risk config — percentage-based, scales with total_capital_paise.
+  // Single batched read; used for profit_lock and loss_halt thresholds below.
+  const risk = await getRiskConfig(db);
 
   // ─── PRECISION ENTRY TRIGGERS — process WATCHING setups first ─────────
   // Continuous deterministic check: if LTP > OR-high × 1.001 AND volume ≥ 1.2x
@@ -604,9 +662,10 @@ async function priceMonitor(env) {
       portfolioPnL += (q.ltp_paise - a.entry_paise) * a.qty;
     }
   }
-  // PROFIT LOCK: when portfolio P&L ≥ +₹30K, tighten trailing stops to
-  // max(entry+1%, current_trail). Winning day can't turn losing after this.
-  const profitLockActive = portfolioPnL >= PROFIT_LOCK_PAISE;
+  // PROFIT LOCK: when portfolio P&L ≥ profit_lock threshold, tighten trailing
+  // stops to max(entry+1%, current_trail). Winning day can't turn losing.
+  // Threshold is now percentage-based (default 5% of total_capital_paise).
+  const profitLockActive = portfolioPnL >= risk.profit_lock_paise;
 
   // ─── VOLATILITY REGIME GUARD ──────────────────────────────────────────
   // Read latest India VIX. If it spiked vs morning open → tighten ALL trails
@@ -796,15 +855,19 @@ async function priceMonitor(env) {
     }
   }
 
-  // ★ F-L4-LOCK (May 6 2026, P1) — owner's explicit ₹30K profit-lock rule
-  // Owner principle: "On ₹10L deployment I want to safely exit at ₹10,30,000.
-  // Only hold past +₹30K when probability of going above +₹50K is extremely
-  // high (very sure)."
+  // ★ F-L4-LOCK (May 7 2026 update — percentage-based) — owner's profit-lock rule.
+  // Originally hardcoded ₹30K (3%) for ₹10L. Now scales by `profit_lock_pct` from
+  // user_config (default 5% per scenario backtest of 7 May session).
+  // For ₹10L capital + 5% pct → threshold = ₹50K. For ₹10K capital + 5% → ₹500.
   //
-  // Implementation: at portfolio +₹30K, FORCE EXIT default. Each pick exits
-  // unless it has explicit opus_extension_until > now (set by Opus position_mgmt
-  // EXTEND_PROFIT decision).
-  if (portfolioPnL >= PROFIT_LOCK_PAISE) {
+  // Owner principle (raised from 3% to 5% in scenario backtest analysis):
+  //   "On ₹10L deployment I want to safely exit at ₹10,50,000. Only hold past
+  //    +₹50K when probability of going above +₹70K is extremely high."
+  //
+  // Implementation: at portfolio P&L ≥ risk.profit_lock_paise, FORCE EXIT default.
+  // Each pick exits unless it has opus_extension_until > now (set by Opus
+  // position_mgmt EXTEND_PROFIT decision).
+  if (portfolioPnL >= risk.profit_lock_paise) {
     const remaining = (await db.prepare(`
       SELECT id, symbol, qty, entry_paise, opus_extension_until FROM paper_trades
       WHERE auto_managed=1 AND is_active=1 AND trader_state='ENTERED'
@@ -813,16 +876,16 @@ async function priceMonitor(env) {
     let forceExited = 0;
     let extended = 0;
     const nowMs = Date.now();
+    const lockRupees = Math.round(risk.profit_lock_paise / 100);
     for (const r of remaining) {
       const q = ltp[r.symbol];
       if (!q?.ltp_paise) continue;
       const hasExtension = r.opus_extension_until && r.opus_extension_until > nowMs;
       if (hasExtension) {
-        // Position has Opus extension flag — keep running (Opus will re-eval at next position_mgmt)
         extended++;
         continue;
       }
-      await firePaperExit(db, r, q.ltp_paise, 'PROFIT_LOCK_FORCE_EXIT_30K');
+      await firePaperExit(db, r, q.ltp_paise, `PROFIT_LOCK_FORCE_EXIT_${lockRupees}`);
       exitsfired++;
       forceExited++;
     }
@@ -830,29 +893,31 @@ async function priceMonitor(env) {
       await logDecision(db, {
         cron_phase: 'price_monitor',
         decision: 'PROFIT_LOCK_FORCE_EXIT_FIRED',
-        rationale: `Portfolio P&L +₹${Math.round(portfolioPnL/100)} ≥ ₹30K threshold. Force-exited ${forceExited} positions. ${extended} kept on Opus EXTEND_PROFIT flag. Owner's "safe ₹10,30,000 exit" rule honored.`,
+        rationale: `Portfolio P&L +₹${Math.round(portfolioPnL/100)} ≥ ₹${lockRupees} threshold (${(risk.profit_lock_pct*100).toFixed(1)}% of ₹${Math.round(risk.capital_paise/100)} capital). Force-exited ${forceExited} positions. ${extended} kept on Opus EXTEND_PROFIT flag.`,
         composed_by_model: 'deterministic',
       });
     }
   }
 
-  // LOSS HALT rule: portfolio P&L ≤ -₹30K → exit all remaining + halt for the day.
-  if (portfolioPnL <= -DAILY_LOSS_LIMIT_PAISE) {
+  // LOSS HALT rule (kept asymmetric at 3% — losses cost more emotionally).
+  // Threshold is now percentage-based via risk.loss_halt_paise.
+  if (portfolioPnL <= -risk.loss_halt_paise) {
     const remaining = (await db.prepare(`
       SELECT id, symbol, qty, entry_paise FROM paper_trades
       WHERE auto_managed=1 AND is_active=1 AND trader_state='ENTERED'
         AND DATE(created_at/1000, 'unixepoch') = ?
     `).bind(today).all()).results || [];
+    const haltRupees = Math.round(risk.loss_halt_paise / 100);
     for (const r of remaining) {
       const q = ltp[r.symbol];
       if (!q?.ltp_paise) continue;
-      await firePaperExit(db, r, q.ltp_paise, 'DAILY_HALT_LOSS_30K');
+      await firePaperExit(db, r, q.ltp_paise, `DAILY_HALT_LOSS_${haltRupees}`);
       exitsfired++;
     }
     await logDecision(db, {
       cron_phase: 'price_monitor',
       decision: 'PORTFOLIO_LOSS_HALT_FIRED',
-      rationale: `Portfolio P&L -₹${Math.round(Math.abs(portfolioPnL)/100)} hit -₹30K halt rule. Exited ${remaining.length} positions. Halted for the day.`,
+      rationale: `Portfolio P&L -₹${Math.round(Math.abs(portfolioPnL)/100)} hit -₹${haltRupees} halt rule (${(risk.loss_halt_pct*100).toFixed(1)}% of ₹${Math.round(risk.capital_paise/100)} capital). Exited ${remaining.length} positions. Halted for the day.`,
       composed_by_model: 'deterministic',
     });
   }
