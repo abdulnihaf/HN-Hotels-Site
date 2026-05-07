@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v41';  // v41: live LTP + position state + inline SVG chart on Today verdict pick cards
+const CACHE_VERSION = 'wealth-v42';  // v42: 3 fixes — capital ₹10L correct, no phantom P&L on WATCHING, chart fallback to intraday_ticks during market
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
