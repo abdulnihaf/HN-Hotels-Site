@@ -636,25 +636,38 @@
     // Headline label varies by phase
     const headLabel = isPost ? "Today's final P&L" : (isLive ? "Today's P&L · LIVE" : "Today's P&L");
 
+    // TWO-LAYER capital display: today's deployable vs ceiling.
+    // capital_deployable_paise = today_deployable (₹10K, ₹1L, ₹10L per owner)
+    // capital_ceiling_paise = total_capital_paise (₹10L typical max)
+    // Backward compat: if older API still serves capital_total_paise only,
+    // fall back to that for both ceiling and deployable.
+    const deployable = p.capital_deployable_paise ?? p.capital_total_paise ?? 0;
+    const ceiling    = p.capital_ceiling_paise    ?? p.capital_total_paise ?? 0;
+    const isPartialDeploy = ceiling > 0 && deployable < ceiling;
+    // Compute pct against deployable (today's risk denominator), not ceiling
+    const pctOfDeployable = deployable > 0 ? (total / deployable) * 100 : 0;
+
     return `<div class="hero-pnl ${cardClass}">
       <div class="hero-pnl-label">${headLabel}</div>
       <div>
         <span class="hero-pnl-amount ${pnlClass}">${fmtPnlBig(total)}</span>
-        <span class="hero-pnl-pct">${(p.pct_of_capital >= 0 ? '+' : '')}${(p.pct_of_capital || 0).toFixed(3)}% of capital</span>
+        <span class="hero-pnl-pct">${(pctOfDeployable >= 0 ? '+' : '')}${pctOfDeployable.toFixed(2)}% of today's ${fmtRupeesShort(deployable)}</span>
       </div>
       <div class="hero-row">
         <div class="seg"><span class="k">Realized</span>
           <span class="v ${realized > 0 ? 'win' : (realized < 0 ? 'loss' : '')}">${fmtPnlBig(realized)}</span></div>
         <div class="seg"><span class="k">Unrealized</span>
           <span class="v ${unrealized > 0 ? 'win' : (unrealized < 0 ? 'loss' : '')}">${fmtPnlBig(unrealized)}</span></div>
-        <div class="seg"><span class="k">Capital deployed</span>
-          <span class="v">${fmtRupeesShort(p.capital_deployed_paise)} of ${fmtRupeesShort(p.capital_total_paise)}</span></div>
+        <div class="seg"><span class="k">Today committed</span>
+          <span class="v">${fmtRupeesShort(deployable)}${isPartialDeploy ? ` of ${fmtRupeesShort(ceiling)} ceiling` : ''}</span></div>
+        <div class="seg"><span class="k">Capital used</span>
+          <span class="v">${fmtRupeesShort(p.capital_deployed_paise)} of ${fmtRupeesShort(deployable)}</span></div>
         <div class="seg"><span class="k">Trades</span>
           <span class="v">${counts.entered || 0} open · ${(counts.exited_win || 0) + (counts.exited_loss || 0)} closed · ${counts.watching || 0} watching · ${counts.skipped || 0} skipped</span></div>
       </div>
       ${total > 0 && p.distance_to_lock_paise > 0 ? `
         <div class="hero-lock">
-          <span><strong>${fmtPnlBig(p.distance_to_lock_paise)}</strong> to F-L4-LOCK at +${fmtPnlBig(p.profit_lock_threshold_paise)}</span>
+          <span><strong>${fmtPnlBig(p.distance_to_lock_paise)}</strong> to F-L4-LOCK at +${fmtPnlBig(p.profit_lock_threshold_paise)} (${(p.profit_lock_pct*100).toFixed(1)}% of today's ${fmtRupeesShort(deployable)})</span>
           <div class="lock-bar-track"><div class="lock-bar-fill" style="width:${lockPct.toFixed(1)}%"></div></div>
         </div>` : ''}
     </div>`;

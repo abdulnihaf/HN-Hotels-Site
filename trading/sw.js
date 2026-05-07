@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v46';  // v46: risk config % — F-L4-LOCK 3%→5%, loss-halt kept 3% asymmetric, scales with capital via user_config
+const CACHE_VERSION = 'wealth-v47';  // v47: TWO-LAYER capital — ceiling (total_capital_paise) + today_deployable_paise. Daily commitment scales without code change. Hero card shows both layers.
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [

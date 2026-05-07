@@ -19,59 +19,109 @@ import { callOpus, callSonnet, callHaiku, parseJsonOutput } from '../../_shared/
 
 const WORKER_NAME = 'wealth-trader';
 
-// ─── RISK CONFIG (May 7 2026 — percentage-based, scales with capital) ──────
-// Owner principle: one SQL UPDATE to flip ₹10K (Fri 8 May test) ↔ ₹10L (Mon 11 launch).
-// Thresholds stored as ratios in user_config; absolute paise computed at runtime.
+// ─── RISK CONFIG (May 7 2026 — TWO-LAYER capital architecture) ────────────
 //
-// Defaults if user_config missing the row:
+// Owner architectural principle:
+//   "Total fund of ₹10L is the ceiling — that's a funding event that rarely
+//    changes. Daily commitment varies (₹10K Friday test, ₹1L next, ₹10L
+//    full deployment). The system must support both layers without code change."
+//
+// LAYER 1 — total_capital_paise (CEILING):
+//   Total funded amount available in the account. Changes only when funds
+//   are added/removed (HDFC transfer, etc.). Used by display contexts,
+//   verdict narratives, and as a hard upper bound.
+//
+// LAYER 2 — today_deployable_paise (DAILY COMMITMENT):
+//   What you're actually willing to risk TODAY. ≤ total_capital_paise.
+//   This drives:
+//     - position sizing (qty calc in rangeCapture and breakout-trigger)
+//     - profit lock threshold (5% of today_deployable_paise)
+//     - loss halt threshold (3% of today_deployable_paise)
+//     - best target informational (7% of today_deployable_paise)
+//
+// Owner flips today_deployable_paise daily via ONE SQL UPDATE. No code change.
+// Backwards-compat: if today_deployable_paise is missing in user_config, falls
+// back to total_capital_paise (preserves prior single-layer behavior).
+//
+// Defaults if user_config missing the rows:
 //   profit_lock_pct    0.05  (was 3%, raised to 5% per scenario backtest data)
 //   loss_halt_pct      0.03  (kept at 3% — asymmetric protection: losses cost more)
 //   best_target_pct    0.07  (was 5%, raised to 7% — informational only)
 //
-// All read inside priceMonitor() per cron invocation. ~3 D1 reads per cycle, trivial.
+// One batched D1 read per cron invocation (5 keys) — trivial cost.
 const DEFAULT_PROFIT_LOCK_PCT = 0.05;
 const DEFAULT_LOSS_HALT_PCT   = 0.03;
 const DEFAULT_BEST_TARGET_PCT = 0.07;
-const DEFAULT_CAPITAL_PAISE   = 100000000;    // ₹10,00,000 fallback if user_config missing
+const DEFAULT_CAPITAL_PAISE   = 100000000;    // ₹10L fallback if user_config missing
 
 // Legacy constants kept for any code path still referencing them — preserve the
 // 3% values so this PR is purely additive at the schema level. Live code switches
 // to getRiskConfig() below.
-const PAPER_CAPITAL_PAISE = 100000000;        // ₹10,00,000 (legacy ref)
-const DAILY_LOSS_LIMIT_PAISE = 3000000;       // ₹30,000 (legacy ref)
-const PROFIT_LOCK_PAISE = 3000000;            // ₹30,000 (legacy ref)
-const DAILY_BEST_TARGET_PAISE = 5000000;      // ₹50,000 (legacy ref)
+const PAPER_CAPITAL_PAISE = 100000000;        // legacy ref
+const DAILY_LOSS_LIMIT_PAISE = 3000000;       // legacy ref
+const PROFIT_LOCK_PAISE = 3000000;            // legacy ref
+const DAILY_BEST_TARGET_PAISE = 5000000;      // legacy ref
 
 /**
- * getRiskConfig — read percentage-based thresholds from user_config and compute
- * runtime absolute paise values relative to total_capital_paise.
+ * getRiskConfig — TWO-LAYER capital model.
  *
  * Returns:
  *   {
- *     capital_paise:        live total_capital_paise (₹10K or ₹10L per owner)
- *     profit_lock_paise:    capital × profit_lock_pct
- *     loss_halt_paise:      capital × loss_halt_pct
- *     best_target_paise:    capital × best_target_pct
- *     profit_lock_pct, loss_halt_pct, best_target_pct  (raw ratios for display)
+ *     // LAYER 1 — ceiling (rarely changes)
+ *     ceiling_paise:        total_capital_paise (₹10L typical)
+ *
+ *     // LAYER 2 — today's commitment (daily judgment)
+ *     deployable_paise:     today_deployable_paise (≤ ceiling)
+ *
+ *     // Aliased for backward compat: capital_paise = deployable_paise
+ *     // (existing code reads risk.capital_paise; that semantic is now
+ *     // explicitly "today's deployable" not "total ceiling")
+ *     capital_paise:        same as deployable_paise
+ *
+ *     // Risk thresholds — computed against deployable, not ceiling
+ *     profit_lock_paise:    deployable × profit_lock_pct
+ *     loss_halt_paise:      deployable × loss_halt_pct
+ *     best_target_paise:    deployable × best_target_pct
+ *
+ *     // Raw ratios for display
+ *     profit_lock_pct, loss_halt_pct, best_target_pct
  *   }
  *
- * Single batched SQL read (4 keys) — fast.
+ * Single batched SQL read of 5 user_config keys.
  */
 async function getRiskConfig(db) {
   const rows = (await db.prepare(`
     SELECT config_key, config_value FROM user_config
-    WHERE config_key IN ('total_capital_paise','profit_lock_pct','loss_halt_pct','best_target_pct')
+    WHERE config_key IN (
+      'total_capital_paise',
+      'today_deployable_paise',
+      'profit_lock_pct',
+      'loss_halt_pct',
+      'best_target_pct'
+    )
   `).all().catch(() => ({ results: [] }))).results || [];
   const cfg = Object.fromEntries(rows.map(r => [r.config_key, r.config_value]));
-  const capitalPaise   = parseInt(cfg.total_capital_paise) || DEFAULT_CAPITAL_PAISE;
+  const ceilingPaise   = parseInt(cfg.total_capital_paise) || DEFAULT_CAPITAL_PAISE;
+  // Today's deployable: explicit config wins; otherwise fall back to ceiling
+  // (this preserves single-layer behavior for any existing flows that haven't
+  // set today_deployable_paise).
+  const deployablePaise = parseInt(cfg.today_deployable_paise) || ceilingPaise;
+  // Guard: deployable cannot exceed ceiling (data correctness, not enforcement)
+  const safeDeployable = Math.min(deployablePaise, ceilingPaise);
   const profitLockPct  = parseFloat(cfg.profit_lock_pct) || DEFAULT_PROFIT_LOCK_PCT;
   const lossHaltPct    = parseFloat(cfg.loss_halt_pct)   || DEFAULT_LOSS_HALT_PCT;
   const bestTargetPct  = parseFloat(cfg.best_target_pct) || DEFAULT_BEST_TARGET_PCT;
   return {
-    capital_paise:      capitalPaise,
-    profit_lock_paise:  Math.round(capitalPaise * profitLockPct),
-    loss_halt_paise:    Math.round(capitalPaise * lossHaltPct),
-    best_target_paise:  Math.round(capitalPaise * bestTargetPct),
+    // Two-layer capital
+    ceiling_paise:      ceilingPaise,
+    deployable_paise:   safeDeployable,
+    // Backward-compat alias (existing code reads risk.capital_paise)
+    capital_paise:      safeDeployable,
+    // Risk thresholds — computed against deployable
+    profit_lock_paise:  Math.round(safeDeployable * profitLockPct),
+    loss_halt_paise:    Math.round(safeDeployable * lossHaltPct),
+    best_target_paise:  Math.round(safeDeployable * bestTargetPct),
+    // Raw ratios
     profit_lock_pct:    profitLockPct,
     loss_halt_pct:      lossHaltPct,
     best_target_pct:    bestTargetPct,
