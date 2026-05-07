@@ -154,26 +154,16 @@ function slotPhaseSec() { return (masterNow() % SLOT_MS) / 1000; }
 // ============================================================
 const elements = [];
 
-// Asset URL — direct PiSignage CDN with JWT in query string.
-// JWT fetched once at boot from /api/choreo/jwt; refreshed periodically.
-let cdnToken = "";
-const CDN_BASE = "https://hamzaexpress.pisignage.com/media/hamzaexpress";
-
+// Asset URL — proxied through hnhotels.in/api/choreo/asset.
+// We can't use direct PiSignage CDN URLs because the restaurant's WiFi
+// blocks pisignage.com (only hnhotels.in/Cloudflare is reachable from TVs).
+// The proxy handles JWT auth server-side via /api/choreo/jwt.
 function assetUrl(filename) {
-  return CDN_BASE + "/" + encodeURIComponent(filename) + "?token=" + cdnToken;
+  return "/api/choreo/asset?f=" + encodeURIComponent(filename);
 }
 
-async function refreshCdnToken() {
-  try {
-    const r = await fetch("/api/choreo/jwt", { cache: "no-store" });
-    if (!r.ok) throw new Error("jwt HTTP " + r.status);
-    const j = await r.json();
-    if (!j.token) throw new Error("no token in /api/choreo/jwt response");
-    cdnToken = j.token;
-  } catch (e) {
-    console.error("[cdn-token] refresh failed:", e);
-  }
-}
+// No-op for compatibility with old boot sequence
+async function refreshCdnToken() { return; }
 
 function buildStage() {
   stage.innerHTML = "";
