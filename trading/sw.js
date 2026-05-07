@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v39';  // v39: Phase D — STOCK deep-dive modal per doc 19 §6.3 (tap-symbol-anywhere)
+const CACHE_VERSION = 'wealth-v40';  // v40: live integrity overlay on Today (snapshot + live status diff per check)
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [

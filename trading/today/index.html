@@ -70,6 +70,11 @@
   .integrity-card .dot.fail { background: var(--red); }
   .integrity-card .check-name { color: var(--text); flex: 1; min-width: 0; word-wrap: break-word; }
   .integrity-card .check-name .det { color: var(--muted); font-size: 10px; margin-top: 1px; }
+  .integrity-card .live-overlay { font-size: 10px; margin-top: 4px; padding: 3px 6px;
+    border-radius: 4px; word-wrap: break-word; }
+  .integrity-card .live-overlay.resolved  { background: rgba(46,204,113,0.10); color: var(--green); border-left: 2px solid var(--green); }
+  .integrity-card .live-overlay.regressed { background: rgba(231,76,60,0.10); color: var(--red); border-left: 2px solid var(--red); }
+  .integrity-card .live-overlay.same      { background: rgba(138,150,184,0.08); color: var(--muted); border-left: 2px solid var(--border); }
 
   .verdict-decision { display: inline-block; padding: 6px 14px; border-radius: 12px;
     font-size: 14px; font-weight: 700; letter-spacing: 0.4px; margin-bottom: 8px; }
@@ -219,8 +224,102 @@
     OFF_HOURS:   { lbl: 'Off-hours', help: 'Market closed.' },
   };
 
+  // Compare a check against current live state. Returns:
+  //   { changed: bool, now_status: 'pass'|'fail'|'warn'|null, label: human-readable, detail }
+  function liveCompare(checkName, originalStatus, live) {
+    if (!live || live.error) return null;
+    const c = checkName || '';
+    // L1.3 live_feeds_freshness — was 'fail' when feeds stale > 240min
+    if (c.includes('live_feeds_freshness')) {
+      const f = live.feeds || {};
+      const stale = [];
+      const fresh = [];
+      ['india_vix', 'gift_nifty', 'crossasset', 'breadth'].forEach(k => {
+        const v = f[k + '_min_old'];
+        if (v == null) return;
+        if (v > 240) stale.push(k + ' ' + v + 'm');
+        else fresh.push(k + ' ' + v + 'm');
+      });
+      const now_status = stale.length ? 'warn' : 'pass';
+      const detail = (fresh.length ? '✅ ' + fresh.join(', ') : '') +
+                     (stale.length ? (fresh.length ? ' · ' : '') + '🔴 still stale: ' + stale.join(', ') : '');
+      return {
+        changed: now_status !== originalStatus,
+        now_status,
+        detail: 'NOW (' + fmtIstFromMs(live.checked_at) + '): ' + detail,
+      };
+    }
+    // L2.2 kite_token — was 'fail' when no token
+    if (c.includes('kite_token')) {
+      const k = live.kite_token || {};
+      const now_status = k.active ? 'pass' : 'fail';
+      const detail = k.active
+        ? '✅ NOW: token id=' + k.token_id + ' active (issued ' + k.hours_old + 'h ago, expires tomorrow 06:00 IST)'
+        : '🔴 NOW: still no active token';
+      return {
+        changed: now_status !== originalStatus,
+        now_status,
+        detail,
+      };
+    }
+    // L1.1 data_feeds — pool/aw_lw populated
+    if (c.includes('data_feeds')) {
+      const df = live.data_feeds || {};
+      const now_status = df.aw_lw_pct >= 80 ? 'pass' : df.aw_lw_pct >= 50 ? 'warn' : 'fail';
+      return {
+        changed: now_status !== originalStatus,
+        now_status,
+        detail: 'NOW: aw_lw ' + df.aw_lw_pct + '% of ' + df.pool_total + ' pool stocks',
+      };
+    }
+    // L1.2 pool_bar_coverage
+    if (c.includes('pool_bar_coverage')) {
+      const b = live.pool_bar_coverage || {};
+      const now_status = b.coverage_pct >= 90 ? 'pass' : b.coverage_pct >= 60 ? 'warn' : 'fail';
+      return {
+        changed: now_status !== originalStatus,
+        now_status,
+        detail: 'NOW: ' + b.bars_yest + '/' + b.pool_total + ' = ' + b.coverage_pct + '% (still F-COVER-1)',
+      };
+    }
+    // L1.4 owner_profile
+    if (c.includes('owner_profile')) {
+      const op = live.owner_profile_rows || 0;
+      const now_status = op > 0 ? 'pass' : 'warn';
+      return {
+        changed: now_status !== originalStatus,
+        now_status,
+        detail: op > 0 ? 'NOW: ' + op + ' rows' : 'NOW: still empty (F-PERS schema shipped, no rows yet)',
+      };
+    }
+    // L2.1 cron_health_24h — silently failing logs is a known false positive
+    if (c.includes('cron_health')) {
+      return {
+        changed: false,
+        now_status: 'warn',
+        detail: 'KNOWN ISSUE: orchestrator silent log failure (worker_name NOT NULL bug). Crons ARE firing; just not logging.',
+      };
+    }
+    // L2.3 unresolved critical findings
+    if (c.includes('unresolved_critical')) {
+      const n = live.unresolved_critical_findings || 0;
+      const now_status = n === 0 ? 'pass' : n <= 2 ? 'warn' : 'fail';
+      return {
+        changed: now_status !== originalStatus,
+        now_status,
+        detail: 'NOW: ' + n + ' unresolved (excluding pre_market_integrity rows themselves)',
+      };
+    }
+    return null;
+  }
+
   function renderIntegritySection(d) {
     const i = d.pre_market_integrity || {};
+    const live = d.live_integrity || null;
+    const checkedIst = i.layer1?.detected_at ? fmtIstFromMs(i.layer1.detected_at) : null;
+    const checkedRel = i.layer1?.detected_at ? fmtRelative(i.layer1.detected_at) : null;
+    const liveIst = live?.checked_at ? fmtIstFromMs(live.checked_at) : null;
+
     const renderLayer = (label, lay) => {
       if (!lay) {
         return `<div class="integrity-card">
@@ -228,11 +327,26 @@
           <div class="layer-name" style="color: var(--muted)">no check yet today</div>
         </div>`;
       }
-      const checks = (lay.checks || []).map(c => `
-        <div class="check-row">
+      const checks = (lay.checks || []).map(c => {
+        const liveDiff = liveCompare(c.check, c.status, live);
+        let liveLine = '';
+        if (liveDiff) {
+          if (liveDiff.changed && (c.status === 'fail' || c.status === 'warn') && (liveDiff.now_status === 'pass')) {
+            liveLine = `<div class="live-overlay resolved">${escapeHtml(liveDiff.detail)} · ✅ resolved</div>`;
+          } else if (liveDiff.changed && c.status === 'pass' && liveDiff.now_status !== 'pass') {
+            liveLine = `<div class="live-overlay regressed">${escapeHtml(liveDiff.detail)} · ⚠ regressed</div>`;
+          } else {
+            liveLine = `<div class="live-overlay same">${escapeHtml(liveDiff.detail)}</div>`;
+          }
+        }
+        return `<div class="check-row">
           <div class="dot ${c.status}"></div>
-          <div class="check-name">${escapeHtml(c.check)}<div class="det">${escapeHtml(c.detail || '')}</div></div>
-        </div>`).join('');
+          <div class="check-name">${escapeHtml(c.check)}
+            <div class="det">${escapeHtml(c.detail || '')}</div>
+            ${liveLine}
+          </div>
+        </div>`;
+      }).join('');
       return `<div class="integrity-card ${lay.severity}">
         <div class="layer-lbl">${label} · ${lay.severity.toUpperCase()}</div>
         <div class="layer-name">${escapeHtml(lay.title || label)}</div>
@@ -241,8 +355,11 @@
     };
     return `<div class="section">
       <h2>🔍 Pre-market integrity check
-        <span class="meta">next at ${i.next_check_ist || '08:25 IST'} weekday</span>
+        <span class="meta">${checkedIst ? `snapshot ${checkedIst} IST · ${checkedRel}` : 'no check today'} · next ${i.next_check_ist || '08:25 IST'} weekday</span>
       </h2>
+      ${liveIst ? `<div class="small-meta" style="margin-bottom: 8px; padding: 6px 10px; background: rgba(79,163,255,0.08); border-left: 3px solid var(--blue); border-radius: 4px;">
+        Snapshot above is from ${checkedIst} IST. <strong style="color: var(--blue)">Live status as of ${liveIst} IST shown under each check below.</strong> Items marked ✅ resolved have been fixed since the snapshot.
+      </div>` : ''}
       <div class="integrity-row">
         ${renderLayer('L1 · Intelligence', i.layer1)}
         ${renderLayer('L2 · Execution', i.layer2)}

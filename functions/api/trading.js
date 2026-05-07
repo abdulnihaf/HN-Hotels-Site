@@ -3425,6 +3425,81 @@ async function getTodayConsolidated(db) {
     next_check_ist: '08:25',
   };
 
+  // ─── 1.5 LIVE INTEGRITY (recomputed AT THIS REQUEST, not snapshot) ─────────
+  // Owner UX issue: the audit_findings snapshot above is point-in-time at
+  // 08:25 IST. By 08:35 IST it's already stale. This block recomputes the
+  // SAME checks RIGHT NOW so the page can show "still failing" vs "resolved
+  // since check" badges next to each finding.
+  let live_integrity = null;
+  try {
+    // Feed freshness right now
+    const liveFeeds = {
+      india_vix:        await db.prepare(`SELECT MAX(ts) AS m FROM india_vix_ticks`).first().catch(() => null),
+      gift_nifty:       await db.prepare(`SELECT MAX(ts) AS m FROM gift_nifty_ticks`).first().catch(() => null),
+      crossasset:       await db.prepare(`SELECT MAX(ts) AS m FROM crossasset_ticks`).first().catch(() => null),
+      breadth:          await db.prepare(`SELECT MAX(ts) AS m FROM breadth_data`).first().catch(() => null),
+    };
+    const minOld = (row) => row?.m ? Math.round((nowMs - row.m) / 60000) : null;
+
+    // Kite token right now
+    const kiteToken = await db.prepare(
+      `SELECT id, obtained_at, expires_at FROM kite_tokens WHERE is_active=1 ORDER BY id DESC LIMIT 1`
+    ).first().catch(() => null);
+    const kite_token_active = !!kiteToken && kiteToken.expires_at > nowMs;
+
+    // Suitability + bar coverage NOW
+    const sf = await db.prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM intraday_suitability) AS pool_total,
+         (SELECT COUNT(*) FROM intraday_suitability WHERE avg_up_last_week_pct IS NOT NULL) AS aw_lw_pop`
+    ).first().catch(() => null);
+    const yest = ymdHyphen(new Date(nowMs - 86400000));
+    const barCov = await db.prepare(
+      `SELECT
+         (SELECT COUNT(DISTINCT symbol) FROM intraday_bars WHERE trade_date=? AND interval='5minute') AS bars_yest,
+         (SELECT COUNT(*) FROM intraday_suitability) AS pool_total`
+    ).bind(yest).first().catch(() => null);
+
+    // Unresolved critical findings count NOW (excluding pre_market_integrity rows)
+    const critRow = await db.prepare(
+      `SELECT COUNT(*) AS n FROM audit_findings
+       WHERE severity='critical' AND resolved_at IS NULL AND category != 'pre_market_integrity'`
+    ).first().catch(() => null);
+
+    // Owner profile rows
+    const opRow = await db.prepare(`SELECT COUNT(*) AS n FROM owner_profile WHERE is_active=1`).first().catch(() => null);
+
+    live_integrity = {
+      checked_at: nowMs,
+      feeds: {
+        india_vix_min_old: minOld(liveFeeds.india_vix),
+        gift_nifty_min_old: minOld(liveFeeds.gift_nifty),
+        crossasset_min_old: minOld(liveFeeds.crossasset),
+        breadth_min_old: minOld(liveFeeds.breadth),
+      },
+      kite_token: kite_token_active ? {
+        active: true,
+        token_id: kiteToken.id,
+        obtained_at: kiteToken.obtained_at,
+        expires_at: kiteToken.expires_at,
+        hours_old: +((nowMs - kiteToken.obtained_at) / 3600000).toFixed(1),
+      } : { active: false },
+      data_feeds: sf ? {
+        pool_total: sf.pool_total,
+        aw_lw_pct: sf.pool_total ? +((sf.aw_lw_pop / sf.pool_total) * 100).toFixed(0) : 0,
+      } : null,
+      pool_bar_coverage: barCov ? {
+        pool_total: barCov.pool_total,
+        bars_yest: barCov.bars_yest,
+        coverage_pct: barCov.pool_total ? +((barCov.bars_yest / barCov.pool_total) * 100).toFixed(0) : 0,
+      } : null,
+      unresolved_critical_findings: critRow?.n || 0,
+      owner_profile_rows: opRow?.n || 0,
+    };
+  } catch (e) {
+    live_integrity = { error: String(e).slice(0, 200) };
+  }
+
   // ─── 2. TODAY'S VERDICT + OVERRIDE STATUS ───────────────────────────────────
   const verdictRow = await db.prepare(`
     SELECT id, verdict_type, decision, headline, narrative,
@@ -3596,6 +3671,7 @@ async function getTodayConsolidated(db) {
     ist_now_minutes: istMins,
     phase: phaseLabel,
     pre_market_integrity,
+    live_integrity,
     verdict,
     pool_top10,
     pre_market_feed,
