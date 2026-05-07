@@ -332,6 +332,27 @@
   .exec-peak { color: var(--green); font-weight: 600; font-variant-numeric: tabular-nums; }
   .exec-trail { color: var(--yellow); font-weight: 600; font-variant-numeric: tabular-nums; }
 
+  /* YESTERDAY RECAP banner — shown in PRE_MARKET / OFF_HOURS when today empty.
+     Hides automatically once today's verdict composes at 08:30 IST. */
+  .yesterday-recap { padding: 12px 14px; background: rgba(46,204,113,0.06);
+    border-left: 3px solid var(--green); border-radius: 8px; margin-bottom: 14px; }
+  .yesterday-recap .yr-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; font-size: 13px; }
+  .yesterday-recap .yr-label { font-weight: 700; color: var(--text); }
+  .yesterday-recap .yr-pnl { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .yesterday-recap .yr-pnl.win { color: var(--green); }
+  .yesterday-recap .yr-pnl.loss { color: var(--red); }
+  .yesterday-recap .yr-pnl.flat { color: var(--text); }
+  .yesterday-recap .yr-counts { color: var(--muted); font-size: 11px; }
+  .yesterday-recap .yr-summary { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; margin-top: 6px; }
+  .yesterday-recap .yr-pick { color: var(--text); font-variant-numeric: tabular-nums; }
+  .yesterday-recap .yr-pick.win { color: var(--green); }
+  .yesterday-recap .yr-pick.loss { color: var(--red); }
+  .yesterday-recap .yr-pick em { color: var(--muted); font-style: normal; font-size: 10px; }
+  .yesterday-recap .yr-link { display: inline-block; font-size: 11px; color: var(--accent);
+    margin-top: 8px; text-decoration: none; padding: 4px 10px; border-radius: 4px;
+    background: rgba(124,92,255,0.10); }
+  .yesterday-recap .yr-link:hover { background: rgba(124,92,255,0.20); }
+
   /* DATE PICKER strip — Today / Yesterday / Date input (May 7 EOD owner ask) */
   .date-picker-strip { padding: 10px 12px; background: var(--panel); border: 1px solid var(--border);
     border-radius: 8px; margin-bottom: 12px; }
@@ -431,6 +452,7 @@
   const STORE_KEY = 'wealth_dashboard_key';
   let DASHBOARD_KEY = localStorage.getItem(STORE_KEY) || '';
   let _data = null;
+  let _yesterdayRecap = null;  // mini-recap shown in PRE_MARKET / OFF_HOURS when today empty
 
   function showPinGate(err) {
     document.getElementById('content').innerHTML = `
@@ -466,6 +488,28 @@
     const d = new Date(Date.now() + 5.5 * 3600000 - 86400000);
     return d.toISOString().slice(0, 10);
   }
+  // Yesterday recap mini-banner — shown only on default (today) view when:
+  //   - phase is OFF_HOURS / PRE_MARKET / PRE_OPEN (no live data yet)
+  //   - AND today has no verdict (= before 08:30 IST)
+  //   - AND yesterday's snapshot exists in D1
+  // Hides automatically once today's verdict composes at 08:30.
+  // Fetches once on page load (not periodic), idempotent.
+  async function maybeFetchYesterdayRecap(d) {
+    if (getSelectedDate()) return null;  // not on snapshot view
+    if (!d) return null;
+    const phase = d.phase;
+    if (!['OFF_HOURS', 'PRE_MARKET', 'PRE_OPEN'].includes(phase)) return null;
+    if (d.verdict) return null;  // today already has a verdict — no need for recap
+    try {
+      const yStr = getYesterdayIstStr();
+      const res = await fetch('/api/trading?action=snapshot_get&date=' + yStr + '&key=' + encodeURIComponent(DASHBOARD_KEY));
+      if (!res.ok) return null;
+      const j = await res.json();
+      if (!j.ok || !j.snapshot) return null;
+      return j.snapshot;
+    } catch { return null; }
+  }
+
   function setSelectedDate(date) {
     if (!date || date === getTodayIstStr()) {
       // Clear hash for default = today
@@ -501,6 +545,8 @@
         data = { ...data.snapshot, _is_snapshot: true, _snapshot_saved_at: data.saved_at, _snapshot_source: data.snapshot_source };
       }
       _data = data;
+      // Yesterday recap fetch — only conditional on today being empty
+      _yesterdayRecap = await maybeFetchYesterdayRecap(_data);
       render(_data);
       return true;
     } catch (e) {
@@ -1713,6 +1759,47 @@
       </div>`;
   }
 
+  // YESTERDAY RECAP mini-banner — shown only when today is empty (pre-08:30).
+  // Surfaces yesterday's P&L + per-pick outcome inline, with click-through to
+  // full retrospective via date picker.
+  function renderYesterdayRecap(yData) {
+    if (!yData) return '';
+    const v = yData.verdict;
+    if (!v) return '';
+    const p = v.portfolio || {};
+    const total = p.total_paise || 0;
+    const cls = total > 50 ? 'win' : (total < -50 ? 'loss' : 'flat');
+    const counts = p.counts || {};
+    const closedCount = (counts.exited_win || 0) + (counts.exited_loss || 0);
+
+    // Per-pick outcome line
+    const picks = v.picks || [];
+    const summaryParts = picks.map(pick => {
+      const pos = pick.live?.position;
+      if (!pos) return null;
+      if (pos.exit_at) {
+        const pnl = pos.pnl_paise || 0;
+        const pCls = pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : '');
+        return `<span class="yr-pick ${pCls}"><strong>${pick.symbol}</strong> ${fmtPnlBig(pnl)}</span>`;
+      } else if (pos.state === 'WATCHING') {
+        return `<span class="yr-pick"><strong>${pick.symbol}</strong> <em>no entry</em></span>`;
+      } else if (pos.state === 'SKIPPED') {
+        return `<span class="yr-pick"><strong>${pick.symbol}</strong> <em>skipped</em></span>`;
+      }
+      return null;
+    }).filter(Boolean).join(' · ');
+
+    return `<div class="yesterday-recap">
+      <div class="yr-header">
+        <span class="yr-label">📊 Yesterday (${yData.trade_date})</span>
+        <span class="yr-pnl ${cls}">${fmtPnlBig(total)}</span>
+        <span class="yr-counts">${closedCount} closed · ${counts.watching || 0} no entry · ${counts.skipped || 0} skipped</span>
+      </div>
+      ${summaryParts ? `<div class="yr-summary">${summaryParts}</div>` : ''}
+      <a class="yr-link" href="#" onclick="setSelectedDate('${yData.trade_date}');return false">View full retrospective →</a>
+    </div>`;
+  }
+
   // Date picker tab strip — Today / Yesterday / [date input]. Snapshot view
   // when historical date selected; banner clarifies snapshot source.
   function renderDatePickerStrip(d) {
@@ -1757,6 +1844,7 @@
       </header>
 
       ${renderDatePickerStrip(d)}
+      ${renderYesterdayRecap(_yesterdayRecap)}
 
       ${renderHeroPnL(d)}
       ${renderPhaseBanner(d)}
