@@ -332,6 +332,26 @@
   .exec-peak { color: var(--green); font-weight: 600; font-variant-numeric: tabular-nums; }
   .exec-trail { color: var(--yellow); font-weight: 600; font-variant-numeric: tabular-nums; }
 
+  /* OUTCOME explicit rows — entry / partial / exit / total math (May 7 EOD)
+     Owner principle: "exactly mention as a win with the entry price, the
+     quantity, the total capital deployed, total capital exited, the delta
+     profit. now the timing at which entry was done, exit was done." */
+  .oc-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 8px;
+    padding: 10px 12px; background: var(--panel-2); border-radius: 6px; }
+  .oc-row { display: grid; grid-template-columns: 70px 110px 1fr; gap: 8px;
+    font-size: 11px; line-height: 1.5; align-items: baseline; font-variant-numeric: tabular-nums; }
+  .oc-row.partial { color: var(--green); }
+  .oc-row.total { padding-top: 6px; margin-top: 4px; border-top: 1px solid var(--border); font-weight: 600; }
+  .oc-label { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; color: var(--muted); }
+  .oc-row.partial .oc-label { color: var(--green); }
+  .oc-row.total .oc-label { color: var(--text); }
+  .oc-time { color: var(--muted); font-size: 10px; }
+  .oc-math { color: var(--text); font-size: 12px; }
+  .oc-math strong { color: var(--text); font-weight: 700; }
+  .oc-win { color: var(--green); font-size: 13px; }
+  .oc-loss { color: var(--red); font-size: 13px; }
+  .oc-flat { color: var(--text); font-size: 13px; }
+
   /* AUTO-BRIDGE badge — shows real-money order status on story-arc card */
   .auto-bridge { padding: 2px 8px; border-radius: 8px; font-size: 9px; font-weight: 700;
     letter-spacing: 0.3px; margin-left: 4px; cursor: help; }
@@ -899,7 +919,7 @@
   }
 
   // ────── main story-arc renderer ──────
-  function renderStoryCard(p, idx, phase) {
+  function renderStoryCard(p, idx, phase, portfolio) {
     const live = p.live || {};
     const pos = live.position;
     const ltpPaise = live.ltp_paise;
@@ -1028,20 +1048,87 @@
       </div>`;
     }
 
-    // 5. OUTCOME section — only EXITED
+    // 5. OUTCOME section — only EXITED — explicit entry math + exit math + delta
+    // Owner principle (May 7 EOD): "in today's realised profit in the card, you
+    // need to exactly mention as a win with the entry price, the quantity, the
+    // total capital deployed, total capital exited, the delta profit. now the
+    // timing at which entry was done, exit was done all these are good data."
+    //
+    // Layout per stage:
+    //   ENTRY      HH:MM:SS · Q shares × ₹E = ₹D deployed
+    //   PARTIAL    HH:MM:SS · q shares × ₹p = ₹r received (+₹n net)   [if applicable]
+    //   EXIT       HH:MM:SS · q shares × ₹x = ₹r received (+₹n net)
+    //   TOTAL      ₹R received vs ₹D deployed = +₹P net (+%)
+    //   HELD Xm · exit_reason
+    //
+    // Partial breakdown extracted from timeline (PARTIAL_EXIT_50_FIRST_TARGET event).
+    // Original qty parsed from BREAKOUT_ENTER rationale ("...qty 160...") with
+    // fallback to pos.qty (which is final-runner qty after partial booking).
     let outcomeSection = '';
     if (pos && pos.exit_at) {
       const pnl = pos.pnl_paise || 0;
       const win = pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'flat');
-      const pct = pos.entry_paise > 0 ? ((pos.exit_paise - pos.entry_paise) / pos.entry_paise * 100) : 0;
+      const winLabel = pnl > 0 ? '✅ WIN' : (pnl < 0 ? '❌ LOSS' : '⚪ FLAT');
+
+      // Detect partial booking by scanning timeline
+      const tl = live.timeline || [];
+      const entryEv  = tl.find(t => ['BREAKOUT_ENTER','ENTER_NOW'].includes(t.decision));
+      const partialEv = tl.find(t => t.decision === 'PARTIAL_EXIT_50_FIRST_TARGET');
+      const exitEv   = tl.find(t => t.state_after === 'EXITED');
+
+      // Extract original qty from entry rationale ("...qty 160..."). Fallback: pos.qty.
+      let origQty = pos.qty;
+      if (entryEv && entryEv.reason) {
+        const m = entryEv.reason.match(/qty (\d+)/i);
+        if (m) origQty = parseInt(m[1]);
+      }
+      const runnerQty = pos.qty;
+      const partialQty = partialEv ? Math.max(0, origQty - runnerQty) : 0;
+      const hasPartial = partialQty > 0 && partialEv;
+      const partialPrice = partialEv ? partialEv.ltp_paise : null;
+
+      // Math
+      const deployed_paise = (pos.entry_paise || 0) * origQty;
+      const partialReceived_paise = hasPartial ? partialPrice * partialQty : 0;
+      const runnerReceived_paise = (pos.exit_paise || 0) * runnerQty;
+      const totalReceived_paise = partialReceived_paise + runnerReceived_paise;
+      const grossDelta_paise = totalReceived_paise - deployed_paise;
+      const totalCost_paise = (pos.cost_paise || 0);  // not always in API; OK if 0
+      const pctOnDeployed = deployed_paise > 0 ? (pnl / deployed_paise * 100) : 0;
+
+      const entryRow = `<div class="oc-row">
+        <span class="oc-label">ENTRY</span>
+        <span class="oc-time">${fmtIstFromMs(pos.entry_at)} IST</span>
+        <span class="oc-math"><strong>${origQty}</strong> shares × ${fmtPriceRs(pos.entry_paise)} = <strong>${fmtRupeesFull(deployed_paise)}</strong> deployed</span>
+      </div>`;
+      const partialRow = hasPartial ? `<div class="oc-row partial">
+        <span class="oc-label">PARTIAL</span>
+        <span class="oc-time">${fmtIstFromMs(partialEv.ts)} IST</span>
+        <span class="oc-math"><strong>${partialQty}</strong> shares × ${fmtPriceRs(partialPrice)} = <strong>${fmtRupeesFull(partialReceived_paise)}</strong> received</span>
+      </div>` : '';
+      const exitRow = `<div class="oc-row">
+        <span class="oc-label">EXIT</span>
+        <span class="oc-time">${fmtIstFromMs(pos.exit_at)} IST</span>
+        <span class="oc-math"><strong>${runnerQty}</strong> shares × ${fmtPriceRs(pos.exit_paise)} = <strong>${fmtRupeesFull(runnerReceived_paise)}</strong> received</span>
+      </div>`;
+      const totalRow = `<div class="oc-row total">
+        <span class="oc-label">TOTAL</span>
+        <span class="oc-time">net</span>
+        <span class="oc-math">${fmtRupeesFull(totalReceived_paise)} received vs ${fmtRupeesFull(deployed_paise)} deployed = <strong class="oc-${win}">${fmtPnlBig(pnl)}</strong> net</span>
+      </div>`;
+
       outcomeSection = `<div class="story-sec">
         <div class="story-sec-label">💰 Final outcome</div>
-        <div class="outcome-amount ${win}">${fmtPnlBig(pnl)}<span class="outcome-pct">${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%</span></div>
-        <div class="outcome-stats">
-          <span><strong>Entry</strong> ${fmtPriceRs(pos.entry_paise)} @ ${fmtIstFromMs(pos.entry_at)} IST</span>
-          <span><strong>Exit</strong> ${fmtPriceRs(pos.exit_paise)} @ ${fmtIstFromMs(pos.exit_at)} IST</span>
+        <div class="outcome-amount ${win}">${winLabel} ${fmtPnlBig(pnl)}<span class="outcome-pct">${pctOnDeployed >= 0 ? '+' : ''}${pctOnDeployed.toFixed(2)}% on deployed</span></div>
+        <div class="oc-rows">
+          ${entryRow}
+          ${partialRow}
+          ${exitRow}
+          ${totalRow}
+        </div>
+        <div class="outcome-stats" style="margin-top:8px">
           <span><strong>Held</strong> ${fmtDuration(pos.holding_ms)}</span>
-          <span><strong>Reason</strong> ${escapeHtml(pos.exit_reason || '—')}</span>
+          <span><strong>Reason</strong> ${escapeHtml(pos.exit_reason || '—')}${hasPartial ? ' (after partial booking)' : ''}</span>
         </div>
       </div>`;
     }
@@ -1063,11 +1150,30 @@
       }
     }
 
+    // CARD WEIGHT PILL — number sync fix (May 7 EOD).
+    // Previous: `weight_pct × 1,000,000 paise` (= weight × ₹10L) — always
+    // ceiling-based, so showed "₹4.5L" even when today's session deployed
+    // ₹0 (HFCL never entered) — inconsistent with hero "₹4L deployed" total.
+    //
+    // New logic: prefer ACTUAL deployment if position has real qty + entry.
+    //   ENTERED / EXITED → qty × entry_paise (= what was committed)
+    //   WATCHING / SKIPPED with qty/entry from rangeCapture → that planned amount
+    //   No position yet (PRE_MARKET tomorrow) → weight × today_deployable
+    // This way card weight pill ALWAYS sums to the hero "deployed" number.
+    const todayDeployable = (portfolio && portfolio.capital_deployable_paise) || 100000000;
+    let weightAllocPaise = 0;
+    if (pos && pos.entry_paise && pos.qty) {
+      // Real position: actual deployment
+      weightAllocPaise = pos.entry_paise * pos.qty;
+    } else if (p.weight_pct) {
+      // No position yet — show planned allocation against today_deployable
+      weightAllocPaise = Math.round((todayDeployable * p.weight_pct) / 100);
+    }
     return `<div class="${cardClass}">
       <div class="story-head">
         <span class="story-rank">#${idx + 1}</span>
         <span class="story-symbol" data-stock-symbol="${escapeHtml(p.symbol)}">${escapeHtml(p.symbol)}</span>
-        <span class="story-weight">${p.weight_pct || 0}% · ${fmtRupeesShort((p.weight_pct || 0) * 1000000)}</span>
+        <span class="story-weight">${p.weight_pct || 0}% · ${fmtRupeesShort(weightAllocPaise)}</span>
         <span class="story-pill ${pillClass}">${pillLabel}</span>
         ${pos?.target_locked ? '<span class="lock-badge">🔒 LOCKED</span>' : ''}
         ${autoBridgeBadge}
@@ -1296,7 +1402,7 @@
 
     // STORY-ARC PICK CARDS (May 7 redesign) — replaced flat data dump with
     // narrative structure. Each pick reads as plan→timeline→live→outcome→lesson.
-    const pickCards = picksToShow.map((p, i) => renderStoryCard(p, i, d.phase)).join('');
+    const pickCards = picksToShow.map((p, i) => renderStoryCard(p, i, d.phase, v.portfolio)).join('');
 
     const overrideBanner = isOverridden ? `
       <div class="override-banner">

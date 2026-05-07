@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v49';  // v49: hero effective denominator (POST_CLOSE shows actual deployed, not future deployable) + ENTERED state shows explicit qty × entry = deployed with timestamp + Kite badge inline
+const CACHE_VERSION = 'wealth-v50';  // v50: number sync — card weight pill matches actual deployment + OUTCOME explicit entry/partial/exit/total math + delta profit display
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
