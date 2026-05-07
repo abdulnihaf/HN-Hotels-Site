@@ -188,7 +188,7 @@ function buildStage() {
       el = document.createElement("video");
       el.src = assetUrl(filename);
       el.muted = true;
-      el.autoplay = true;
+      el.autoplay = false;     // we control playback — no autoplay race
       el.loop = true;
       el.playsInline = true;
       el.preload = "auto";
@@ -202,6 +202,47 @@ function buildStage() {
     stage.appendChild(el);
     elements.push(el);
   }
+}
+
+// Wait for ALL assets to be fully buffered before starting playback.
+// Images: load event. Videos: canplaythrough event (= fully buffered).
+// This eliminates the "video frame queue empty" → white-screen issue.
+async function waitForAllAssetsReady() {
+  const promises = elements.map((el, i) => new Promise((resolve) => {
+    if (el.tagName === "VIDEO") {
+      if (el.readyState >= 4) return resolve();   // already buffered
+      const done = () => {
+        el.removeEventListener("canplaythrough", done);
+        el.removeEventListener("error", done);
+        resolve();
+      };
+      el.addEventListener("canplaythrough", done, { once: true });
+      el.addEventListener("error", done, { once: true });   // proceed even on error
+      // 30s safety timeout — if buffering takes longer, proceed anyway
+      setTimeout(done, 30000);
+      // Trigger buffering
+      try { el.load(); } catch (_) {}
+    } else {
+      if (el.complete && el.naturalWidth > 0) return resolve();
+      const done = () => {
+        el.removeEventListener("load", done);
+        el.removeEventListener("error", done);
+        resolve();
+      };
+      el.addEventListener("load", done, { once: true });
+      el.addEventListener("error", done, { once: true });
+      setTimeout(done, 30000);
+    }
+    // Show progress in status
+    if (status) {
+      const ready = elements.filter(e =>
+        (e.tagName === "VIDEO" && e.readyState >= 4) ||
+        (e.tagName === "IMG" && e.complete && e.naturalWidth > 0)
+      ).length;
+      status.textContent = `Buffering assets ${ready}/${elements.length}…`;
+    }
+  }));
+  await Promise.all(promises);
 }
 
 // ============================================================
@@ -242,23 +283,33 @@ function tick() {
 //  Boot — sync clock, build stage, start ticker
 // ============================================================
 (async () => {
-  status.textContent = "Fetching CDN token…";
-  await refreshCdnToken();
   status.textContent = "Syncing master clock…";
   await syncTime();
-  status.textContent = "Loading assets…";
+  status.textContent = "Loading assets (1/" + NUM_SLOTS + ")…";
   buildStage();
-  // Wait briefly so first slot's asset has had time to start loading
-  await new Promise(r => setTimeout(r, 1200));
+
+  // Block until every asset is fully buffered. Eliminates the
+  // "video frame queue empty" → white-flash issue mid-loop.
+  await waitForAllAssetsReady();
+
+  // Pre-warm video decoders by playing each video silently for 1 frame
+  // (some Chromium builds need a play() call to allocate the decoder).
+  for (const el of elements) {
+    if (el.tagName === "VIDEO") {
+      try { await el.play(); el.pause(); el.currentTime = 0; } catch (_) {}
+    }
+  }
+
   status.classList.add("hidden");
   tick();
   setInterval(tick, TICK_MS);
   setInterval(syncTime, TIME_RESYNC_MS);
-  // Refresh CDN token every hour and rebuild stage so new <img>/<video> use fresh URL
+
+  // Token refresh every hour: rebuild stage with fresh proxy URLs and re-buffer.
   setInterval(async () => {
-    await refreshCdnToken();
     buildStage();
-    liveSlot = -1;  // force re-render on next tick
+    await waitForAllAssetsReady();
+    liveSlot = -1;  // force re-render
   }, 60 * 60 * 1000);
 })();
 
