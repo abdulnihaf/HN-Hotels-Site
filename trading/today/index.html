@@ -308,6 +308,30 @@
     margin-top: 1px; flex-shrink: 0; }
   .tomorrow-list li .why { display: block; color: var(--muted); font-size: 10px; margin-top: 3px; }
 
+  /* EXECUTION block — ENTERED state, explicit qty/entry/deployed (May 7 2026 EOD)
+     Owner principle: "in a live scenario making it very clear whether entered,
+     if entered the total capital deployed the exact timing, how many stocks
+     and price at which entered" */
+  .exec-block { padding: 12px 14px; background: rgba(46,204,113,0.06);
+    border-left: 3px solid var(--green); border-radius: 6px; }
+  .exec-headline { font-size: 12px; color: var(--text); margin-bottom: 8px;
+    line-height: 1.5; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .exec-headline strong { color: var(--green); font-size: 13px; letter-spacing: 0.4px; }
+  .exec-held { color: var(--muted); font-size: 11px; }
+  .exec-math { font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text);
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; line-height: 1.5; }
+  .exec-qty { font-weight: 700; color: var(--text); }
+  .exec-mul, .exec-eq { color: var(--muted); font-size: 12px; padding: 0 2px; }
+  .exec-price { font-weight: 600; color: var(--text); }
+  .exec-deployed { font-weight: 800; color: var(--green); font-size: 14px; }
+  .exec-stops { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px;
+    padding-top: 8px; border-top: 1px dashed var(--border); font-size: 11px; }
+  .exec-stops .k { color: var(--muted); font-size: 10px; margin-right: 3px; }
+  .exec-stop { color: var(--red); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .exec-tgt  { color: var(--green); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .exec-peak { color: var(--green); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .exec-trail { color: var(--yellow); font-weight: 600; font-variant-numeric: tabular-nums; }
+
   /* AUTO-BRIDGE badge — shows real-money order status on story-arc card */
   .auto-bridge { padding: 2px 8px; border-radius: 8px; font-size: 9px; font-weight: 700;
     letter-spacing: 0.3px; margin-left: 4px; cursor: help; }
@@ -651,36 +675,45 @@
     // Headline label varies by phase
     const headLabel = isPost ? "Today's final P&L" : (isLive ? "Today's P&L · LIVE" : "Today's P&L");
 
-    // TWO-LAYER capital display: today's deployable vs ceiling.
-    // capital_deployable_paise = today_deployable (₹10K, ₹1L, ₹10L per owner)
-    // capital_ceiling_paise = total_capital_paise (₹10L typical max)
-    // Backward compat: if older API still serves capital_total_paise only,
-    // fall back to that for both ceiling and deployable.
+    // TWO-LAYER capital + EFFECTIVE DENOMINATOR (May 7 2026 EOD fix):
+    // - capital_deployable_paise: today's commitment (₹10K, ₹1L, ₹10L per owner)
+    // - capital_ceiling_paise: total ceiling (₹10L typical max)
+    // - effective_denominator_paise: phase-aware risk denominator
+    //   * POST_CLOSE/OFF_HOURS with closed positions → actual deployed (truth)
+    //   * Otherwise → today_deployable (forward-looking)
+    // - effective_denominator_source: 'actual_deployed' or 'today_deployable'
     const deployable = p.capital_deployable_paise ?? p.capital_total_paise ?? 0;
     const ceiling    = p.capital_ceiling_paise    ?? p.capital_total_paise ?? 0;
+    const effDenom   = p.effective_denominator_paise ?? deployable;
+    const effSource  = p.effective_denominator_source ?? 'today_deployable';
     const isPartialDeploy = ceiling > 0 && deployable < ceiling;
-    // Compute pct against deployable (today's risk denominator), not ceiling
-    const pctOfDeployable = deployable > 0 ? (total / deployable) * 100 : 0;
+    // Use effective denominator for the headline % — truthful for both
+    // forward-looking (PRE_MARKET / LIVE) and retrospective (POST_CLOSE) phases.
+    const pctOfEff = effDenom > 0 ? (total / effDenom) * 100 : 0;
+    const denomLabel = effSource === 'actual_deployed' ? 'deployed' : `today's ${fmtRupeesShort(deployable)}`;
 
     return `<div class="hero-pnl ${cardClass}">
       <div class="hero-pnl-label">${headLabel}</div>
       <div>
         <span class="hero-pnl-amount ${pnlClass}">${fmtPnlBig(total)}</span>
-        <span class="hero-pnl-pct">${(pctOfDeployable >= 0 ? '+' : '')}${pctOfDeployable.toFixed(2)}% of today's ${fmtRupeesShort(deployable)}</span>
+        <span class="hero-pnl-pct">${(pctOfEff >= 0 ? '+' : '')}${pctOfEff.toFixed(2)}% of ${effSource === 'actual_deployed' ? fmtRupeesShort(effDenom) + ' deployed' : denomLabel}</span>
       </div>
       <div class="hero-row">
         <div class="seg"><span class="k">Realized</span>
           <span class="v ${realized > 0 ? 'win' : (realized < 0 ? 'loss' : '')}">${fmtPnlBig(realized)}</span></div>
         <div class="seg"><span class="k">Unrealized</span>
           <span class="v ${unrealized > 0 ? 'win' : (unrealized < 0 ? 'loss' : '')}">${fmtPnlBig(unrealized)}</span></div>
-        <div class="seg"><span class="k">Today committed</span>
-          <span class="v">${fmtRupeesShort(deployable)}${isPartialDeploy ? ` of ${fmtRupeesShort(ceiling)} ceiling` : ''}</span></div>
-        <div class="seg"><span class="k">Capital used</span>
-          <span class="v">${fmtRupeesShort(p.capital_deployed_paise)} of ${fmtRupeesShort(deployable)}</span></div>
+        ${effSource === 'actual_deployed'
+          ? `<div class="seg"><span class="k">Deployed today</span>
+              <span class="v">${fmtRupeesShort(effDenom)} (${(effDenom / ceiling * 100).toFixed(1)}% of ceiling)</span></div>`
+          : `<div class="seg"><span class="k">Today committed</span>
+              <span class="v">${fmtRupeesShort(deployable)}${isPartialDeploy ? ` of ${fmtRupeesShort(ceiling)} ceiling` : ''}</span></div>
+            <div class="seg"><span class="k">Capital used</span>
+              <span class="v">${fmtRupeesShort(p.capital_deployed_paise)} of ${fmtRupeesShort(deployable)}</span></div>`}
         <div class="seg"><span class="k">Trades</span>
           <span class="v">${counts.entered || 0} open · ${(counts.exited_win || 0) + (counts.exited_loss || 0)} closed · ${counts.watching || 0} watching · ${counts.skipped || 0} skipped</span></div>
       </div>
-      ${total > 0 && p.distance_to_lock_paise > 0 ? `
+      ${total > 0 && p.distance_to_lock_paise > 0 && effSource !== 'actual_deployed' ? `
         <div class="hero-lock">
           <span><strong>${fmtPnlBig(p.distance_to_lock_paise)}</strong> to F-L4-LOCK at +${fmtPnlBig(p.profit_lock_threshold_paise)} (${(p.profit_lock_pct*100).toFixed(1)}% of today's ${fmtRupeesShort(deployable)})</span>
           <div class="lock-bar-track"><div class="lock-bar-fill" style="width:${lockPct.toFixed(1)}%"></div></div>
@@ -920,7 +953,44 @@
       ${renderTimeline(timeline)}
     </div>` : '';
 
-    // 3. LIVE STATUS strip — only WATCHING or ENTERED (and not exited)
+    // 3. EXECUTION SECTION — ENTERED state only — explicit qty, entry, deployed
+    // Owner principle (May 7 2026 EOD): "specifying the quantity and price of
+    // the entry is very important in a very clean way... in a live scenario
+    // making it very clear whether entered, if entered the total capital
+    // deployed the exact timing, how many stocks and price at which entered."
+    let executionSection = '';
+    if (pos && pos.state === 'ENTERED' && !pos.exit_at) {
+      const deployedPaise = (pos.entry_paise || 0) * (pos.qty || 0);
+      const realOrderBadge = pos.kite_bracket_id
+        ? `<span class="auto-bridge placed" style="margin-left:6px" title="Real Kite order placed">🟢 Kite #${pos.kite_bracket_id}</span>`
+        : ((pos.auto_bridge_status === 'failed')
+          ? `<span class="auto-bridge failed" style="margin-left:6px">🔴 auto failed</span>`
+          : '<span class="auto-bridge" style="margin-left:6px;background:rgba(138,150,184,0.18);color:var(--muted)">📝 paper only</span>');
+      executionSection = `<div class="story-sec"><div class="story-sec-label">✅ Execution</div>
+        <div class="exec-block">
+          <div class="exec-headline">
+            <strong>ENTERED</strong> ${fmtIstFromMs(pos.entry_at)} IST
+            <span class="exec-held">· held ${fmtDuration(pos.holding_ms)}</span>
+            ${realOrderBadge}
+          </div>
+          <div class="exec-math">
+            <span class="exec-qty">${pos.qty} shares</span>
+            <span class="exec-mul">×</span>
+            <span class="exec-price">${fmtPriceRs(pos.entry_paise)}</span>
+            <span class="exec-eq">=</span>
+            <span class="exec-deployed">${fmtRupeesFull(deployedPaise)} deployed</span>
+          </div>
+          <div class="exec-stops">
+            <span class="exec-stop"><span class="k">Stop</span> ${fmtPriceRs(pos.stop_paise)}</span>
+            <span class="exec-tgt"><span class="k">Target</span> ${fmtPriceRs(pos.target_paise)}</span>
+            ${pos.peak_price_paise ? `<span class="exec-peak"><span class="k">Peak</span> ${fmtPriceRs(pos.peak_price_paise)}</span>` : ''}
+            ${pos.trailing_stop_paise ? `<span class="exec-trail"><span class="k">Trail</span> ${fmtPriceRs(pos.trailing_stop_paise)}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // 4. LIVE STATUS strip — only WATCHING or ENTERED (and not exited)
     let liveStatusSection = '';
     if (pos && !pos.exit_at && (pos.state === 'WATCHING' || pos.state === 'ENTERED')) {
       const livePnl = pos.live_pnl_paise;
@@ -932,12 +1002,16 @@
         middleHtml = `<span style="font-size:11px;color:var(--muted)">${dist != null && dist > 0 ? `needs <strong style="color:var(--blue)">+${dist.toFixed(2)}%</strong> to fire entry @ ${fmtPriceRs(pos.or_high_paise)}` : 'breakout zone'}</span>`;
         nextHtml = `<div class="next">price_monitor every 5min</div>`;
       } else {
+        // ENTERED state — show explicit P&L math
         const cls = livePnl > 0 ? 'up' : (livePnl < 0 ? 'down' : '');
-        middleHtml = livePnl != null ? `<span class="live-delta-big ${cls}">${fmtPnlBig(livePnl)} (${livePnlPct >= 0 ? '+' : ''}${livePnlPct?.toFixed(2)}%)</span>` : '';
+        const pnlMath = livePnl != null
+          ? `<span class="live-delta-big ${cls}">${fmtPnlBig(livePnl)} (${livePnlPct >= 0 ? '+' : ''}${livePnlPct?.toFixed(2)}%)</span>`
+          : '<span style="font-size:11px;color:var(--muted)">computing P&L…</span>';
+        middleHtml = pnlMath;
         const nextCron = nextCronStr(phase);
-        nextHtml = `<div class="next">qty ${pos.qty} · held ${fmtDuration(pos.holding_ms)}<br>next: ${nextCron || '—'}</div>`;
+        nextHtml = `<div class="next">next: ${nextCron || '—'}</div>`;
       }
-      liveStatusSection = `<div class="story-sec"><div class="story-sec-label">📡 Live now ${ltpFresh ? '· fresh' : ltpAge ? `· ${Math.round(ltpAge / 60)}m stale` : ''}</div>
+      liveStatusSection = `<div class="story-sec"><div class="story-sec-label">📡 Live LTP ${ltpFresh ? '· fresh' : ltpAge ? `· ${Math.round(ltpAge / 60)}m stale` : ''}</div>
         <div class="live-status">
           <span class="ltp-big">${fmtPriceRs(ltpPaise)}</span>
           ${middleHtml}
@@ -999,6 +1073,7 @@
         ${autoBridgeBadge}
       </div>
       ${planSection}
+      ${executionSection}
       ${liveStatusSection}
       ${chartSection}
       ${timelineSection}
