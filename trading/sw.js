@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v54';  // v54: snapshot persistence — daily_snapshots table + save/get/list endpoints. Today's data captured before midnight; future cron will auto-save 16:30 IST (Sat work)
+const CACHE_VERSION = 'wealth-v55';  // v55: snapshot auto-save (POST_CLOSE) + date picker UI (Today/Yesterday/Date tabs) + snapshot_backfill endpoint for past dates
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
