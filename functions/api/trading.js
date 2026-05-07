@@ -3771,8 +3771,13 @@ async function getTodayConsolidated(db) {
     //
     // Phase computed inline — same logic as line 3917-3927 below. Need it here
     // because portfolio is built before phaseLabel.
+    // HOTFIX (May 7 2026 EOD): `dow` is NOT in scope inside getTodayConsolidated
+    // (only `istMins`, `istNow`, `today` are). Compute dow from istNow here.
+    // Original PR #97 used `dow` directly causing TDZ error: "Cannot access 'dow'
+    // before initialization" — broke ALL today_consolidated calls in production.
+    const _dowHere = istNow.getUTCDay();
     let _phaseHere;
-    if (dow === 0 || dow === 6) _phaseHere = 'OFF_HOURS';
+    if (_dowHere === 0 || _dowHere === 6) _phaseHere = 'OFF_HOURS';
     else if (istMins < 6 * 60) _phaseHere = 'OFF_HOURS';
     else if (istMins < 9 * 60) _phaseHere = 'PRE_MARKET';
     else if (istMins < 9 * 60 + 15) _phaseHere = 'PRE_OPEN';
