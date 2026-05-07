@@ -332,6 +332,38 @@
   .exec-peak { color: var(--green); font-weight: 600; font-variant-numeric: tabular-nums; }
   .exec-trail { color: var(--yellow); font-weight: 600; font-variant-numeric: tabular-nums; }
 
+  /* POOL TOP-10 EOD enrichment + UNIVERSE WINNERS MISSED (May 7 EOD owner ask) */
+  .pool-eod { margin-top: 6px; padding: 6px 8px; background: var(--panel-2); border-radius: 4px;
+    font-size: 10px; line-height: 1.5; }
+  .eod-prices { display: flex; flex-wrap: wrap; gap: 8px; font-variant-numeric: tabular-nums; }
+  .eod-prices .ep .k { color: var(--muted); margin-right: 2px; font-weight: 600; }
+  .eod-prices .ep.up { color: var(--green); }
+  .eod-prices .ep.down { color: var(--red); }
+  .eod-prices .ep.win { color: var(--green); font-weight: 700; }
+  .eod-prices .ep.loss { color: var(--red); font-weight: 700; }
+  .eod-prices .ep.flat { color: var(--text); }
+  .eod-pnl { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; align-items: baseline; }
+  .pnl-label { color: var(--muted); font-size: 10px; }
+  .pnl-val { font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums;
+    padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,0.04); }
+  .pnl-val.win { color: var(--green); background: rgba(46,204,113,0.10); }
+  .pnl-val.loss { color: var(--red); background: rgba(231,76,60,0.10); }
+  .pnl-val.flat { color: var(--text); }
+
+  .winners-list { display: flex; flex-direction: column; gap: 6px; }
+  .winner-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center;
+    padding: 8px 10px; background: var(--panel-2); border-radius: 6px; font-size: 11px;
+    border-left: 3px solid var(--green); }
+  .winner-row .rank { color: var(--muted); font-size: 10px; }
+  .winner-row .symbol { font-weight: 700; font-size: 12px; }
+  .winner-metrics { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  .winner-pct { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .winner-pct.win { background: rgba(46,204,113,0.18); color: var(--green); }
+  .winner-pct.medium { background: rgba(46,204,113,0.10); color: var(--green); }
+  .winner-pct.mild { background: rgba(245,176,65,0.12); color: var(--yellow); }
+  .winner-pct.dim { background: rgba(138,150,184,0.10); color: var(--muted); }
+  .winner-pnl { color: var(--green); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
   /* OUTCOME explicit rows — entry / partial / exit / total math (May 7 EOD)
      Owner principle: "exactly mention as a win with the entry price, the
      quantity, the total capital deployed, total capital exited, the delta
@@ -1444,8 +1476,36 @@
       </div>`;
     }
 
+    // POST_CLOSE EOD enrichment: each pool row may have .eod with day_open/high/low/close
+    // and hypothetical_10L_pnl_at_*. Show this for retrospective phases only.
+    const isRetro = ['POST_CLOSE','CLOSE','OFF_HOURS'].includes(d.phase);
+
     const rows = pool.map((r, i) => {
       const inPicks = pickedSyms.has(r.symbol);
+      const eod = r.eod;
+      // EOD performance row (POST_CLOSE only)
+      let eodHtml = '';
+      if (isRetro && eod) {
+        const closeCls = eod.pct_open_to_close > 0.5 ? 'win' : (eod.pct_open_to_close < -0.5 ? 'loss' : 'flat');
+        const peakCls = eod.pct_open_to_high > 0.5 ? 'win' : 'flat';
+        eodHtml = `<div class="pool-eod">
+          <div class="eod-prices">
+            <span class="ep"><span class="k">O</span> ${fmtPriceRs(eod.day_open_paise)}</span>
+            <span class="ep up"><span class="k">H</span> ${fmtPriceRs(eod.day_high_paise)}</span>
+            <span class="ep down"><span class="k">L</span> ${fmtPriceRs(eod.day_low_paise)}</span>
+            <span class="ep ${closeCls}"><span class="k">C</span> ${fmtPriceRs(eod.day_close_paise)}</span>
+            <span class="ep ${closeCls}"><span class="k">Δ</span> ${eod.pct_open_to_close >= 0 ? '+' : ''}${eod.pct_open_to_close}%</span>
+          </div>
+          <div class="eod-pnl">
+            <span class="pnl-label">If ₹10L at open:</span>
+            <span class="pnl-val ${closeCls}">${fmtPnlBig(eod.hypothetical_10L_pnl_at_close_paise)} at close</span>
+            <span class="pnl-val win">${fmtPnlBig(eod.hypothetical_10L_pnl_at_peak_paise)} at peak</span>
+            <span class="pnl-val loss">${fmtPnlBig(eod.hypothetical_10L_pnl_at_low_paise)} at low</span>
+          </div>
+        </div>`;
+      } else if (isRetro && !eod) {
+        eodHtml = `<div class="pool-eod"><div style="font-size:10px;color:var(--muted)">no intraday_bars data for today</div></div>`;
+      }
       return `<div class="pool-row ${inPicks ? 'in-picks' : ''}" data-stock-symbol="${escapeHtml(r.symbol)}">
         <span class="rank">#${i + 1}</span>
         <div>
@@ -1453,6 +1513,7 @@
           <div style="font-size:10px;color:var(--muted);margin-top:2px">
             ${r.sector ? escapeHtml(r.sector) + ' · ' : ''}aoh ${(r.avg_open_to_high_pct || 0).toFixed(1)}% · h2 ${Math.round(((r.hit_2pct_rate || 0) > 1 ? r.hit_2pct_rate / 100 : r.hit_2pct_rate) * 100)}% · gc ${Math.round(((r.green_close_rate || 0) > 1 ? r.green_close_rate / 100 : r.green_close_rate) * 100)}%
           </div>
+          ${eodHtml}
         </div>
         <div class="scores">
           <span class="score-pill ${scoreClass(r.owner_score, [50, 45])}">o ${r.owner_score}</span>
@@ -1464,12 +1525,56 @@
 
     return `<div class="section">
       <h2>📊 90-day pool · top 10 by owner_score
-        <span class="meta">refreshed daily 16:30 IST</span>
+        <span class="meta">refreshed daily 16:30 IST · ${isRetro ? 'with today\'s open/high/low/close + ₹10L hypothetical' : ''}</span>
       </h2>
       <div class="pool-list">${rows}</div>
       <div class="small-meta">
         owner_score = intraday_score × 0.6 + loss_resistance_score × 0.4 (per F-L1).
-        ✓ marker = stock is in today's verdict picks (composed or overridden).
+        ✓ marker = stock is in today's verdict picks.
+        ${isRetro ? '<br>Hypothetical ₹10L = entry at session open, exit at close/peak/low (gross of ~0.07% round-trip cost).' : ''}
+      </div>
+    </div>`;
+  }
+
+  // POST_CLOSE: stocks NOT in surfaced (picks + pool_top10) but with ≥2% gain today.
+  // The "missed winners" — what the system didn't surface but should have considered.
+  function renderUniverseWinnersMissed(d) {
+    const isRetro = ['POST_CLOSE','CLOSE','OFF_HOURS'].includes(d.phase);
+    if (!isRetro) return '';
+    const winners = d.universe_winners_missed || [];
+    if (!winners.length) {
+      return `<div class="section">
+        <h2>🎯 Universe winners NOT surfaced today</h2>
+        <div class="empty">No stocks with ≥2% gain outside the picks + top-10 pool today.</div>
+      </div>`;
+    }
+    const rows = winners.map((w, i) => {
+      const closeCls = w.pct_open_to_close >= 5 ? 'win' : (w.pct_open_to_close >= 3 ? 'medium' : 'mild');
+      return `<div class="winner-row" data-stock-symbol="${escapeHtml(w.symbol)}">
+        <span class="rank">#${i + 1}</span>
+        <div>
+          <div class="symbol">${escapeHtml(w.symbol)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">
+            O ${fmtPriceRs(w.day_open_paise)} · H ${fmtPriceRs(w.day_high_paise)} · C ${fmtPriceRs(w.day_close_paise)}
+          </div>
+        </div>
+        <div class="winner-metrics">
+          <span class="winner-pct ${closeCls}">${w.pct_open_to_close >= 0 ? '+' : ''}${w.pct_open_to_close}% close</span>
+          <span class="winner-pct dim">+${w.pct_open_to_high}% peak</span>
+          <span class="winner-pnl">${fmtPnlBig(w.hypothetical_10L_pnl_at_close_paise)} ₹10L close</span>
+          <span class="winner-pnl">${fmtPnlBig(w.hypothetical_10L_pnl_at_peak_paise)} ₹10L peak</span>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="section">
+      <h2>🎯 Universe winners NOT surfaced today
+        <span class="meta">${winners.length} stocks ≥2% gain not in picks/pool</span>
+      </h2>
+      <div class="winners-list">${rows}</div>
+      <div class="small-meta">
+        These stocks did well today but weren't in the verdict's 3 picks NOR in the 90-day pool top-10.<br>
+        Open question: was the surge backed by public data (= signal we missed), or pure luck?
+        Future PR will add Opus reasoning to classify each. For now, raw data only.
       </div>
     </div>`;
   }
@@ -1578,6 +1683,7 @@
       ${renderTomorrow(d)}
       ${renderIntegritySection(d)}
       ${renderPoolSection(d)}
+      ${renderUniverseWinnersMissed(d)}
       ${renderFeedSection(d)}
       ${renderSwingToggle(d)}
 

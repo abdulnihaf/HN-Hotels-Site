@@ -3870,6 +3870,93 @@ async function getTodayConsolidated(db) {
     LIMIT 10
   `).all().catch(() => ({ results: [] }))).results || [];
 
+  // ─── 3b. RETROSPECTIVE EOD ENRICHMENT (May 7 EOD owner ask) ──────────────
+  //
+  // For each pool_top10 candidate that is NOT in today's verdict picks, compute:
+  //   - day's open/high/low/close from intraday_bars
+  //   - hypothetical pnl if ₹10L deployed at open and exited at close / peak / low
+  //
+  // Plus surface UNIVERSE WINNERS not in pool_top10 nor picks — stocks that did
+  // well today that the system didn't surface. Owner can then ask "was this a
+  // signal we missed or pure luck?" (analysis layer is a follow-up PR).
+  //
+  // Computed only when intraday_bars has data for today (POST_CLOSE has all,
+  // LIVE has partial). Safe to compute always — rendering is phase-aware.
+  const TEN_LAKH = 100000000; // ₹10L in paise — fixed reference for "if invested" computations
+  const HYPOTHETICAL_COST_PCT = 0.0007; // 0.07% round-trip cost approximation (Zerodha realistic)
+
+  // Step 1: collect symbol set from picks + pool_top10 (already-surfaced)
+  const verdictPickSyms = new Set();
+  for (const p of (verdict?.picks || [])) if (p.symbol) verdictPickSyms.add(p.symbol);
+  const poolTopSyms = new Set(pool_top10.map(p => p.symbol));
+  const surfacedSyms = new Set([...verdictPickSyms, ...poolTopSyms]);
+
+  // Step 2: pull EOD bars for ALL symbols in intraday_bars today (universe-level)
+  const todayBars = (await db.prepare(`
+    SELECT
+      symbol,
+      MIN(CASE WHEN ts = (SELECT MIN(ts) FROM intraday_bars b2 WHERE b2.symbol=b1.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN open_paise END) AS day_open_paise,
+      MAX(high_paise) AS day_high_paise,
+      MIN(low_paise) AS day_low_paise,
+      MAX(CASE WHEN ts = (SELECT MAX(ts) FROM intraday_bars b2 WHERE b2.symbol=b1.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN close_paise END) AS day_close_paise,
+      SUM(volume) AS day_volume
+    FROM intraday_bars b1
+    WHERE trade_date=? AND interval='5minute'
+    GROUP BY symbol
+    HAVING day_open_paise IS NOT NULL AND day_close_paise IS NOT NULL
+  `).bind(today, today, today).all().catch(() => ({ results: [] }))).results || [];
+
+  // Build symbol → eod_data map for fast lookup
+  const eodMap = {};
+  for (const b of todayBars) {
+    const o = b.day_open_paise, h = b.day_high_paise, l = b.day_low_paise, c = b.day_close_paise;
+    if (!o || !h || !l || !c) continue;
+    const pctOpenToClose = +(((c - o) / o) * 100).toFixed(2);
+    const pctOpenToHigh  = +(((h - o) / o) * 100).toFixed(2);
+    const pctOpenToLow   = +(((l - o) / o) * 100).toFixed(2);
+    // Hypothetical ₹10L PnL (gross — net of approx 0.07% round-trip cost)
+    const grossClose = Math.round(TEN_LAKH * (c - o) / o);
+    const grossPeak  = Math.round(TEN_LAKH * (h - o) / o);
+    const grossLow   = Math.round(TEN_LAKH * (l - o) / o);
+    const costApprox = Math.round(TEN_LAKH * HYPOTHETICAL_COST_PCT);
+    eodMap[b.symbol] = {
+      day_open_paise: o, day_high_paise: h, day_low_paise: l, day_close_paise: c,
+      day_volume: b.day_volume,
+      pct_open_to_close: pctOpenToClose,
+      pct_open_to_high:  pctOpenToHigh,
+      pct_open_to_low:   pctOpenToLow,
+      hypothetical_10L_pnl_at_close_paise: grossClose - costApprox,
+      hypothetical_10L_pnl_at_peak_paise:  grossPeak  - costApprox,
+      hypothetical_10L_pnl_at_low_paise:   grossLow   - costApprox,  // worst case
+    };
+  }
+
+  // Step 3: enrich pool_top10 with EOD performance
+  for (const p of pool_top10) {
+    const eod = eodMap[p.symbol];
+    if (eod) {
+      p.eod = eod;
+      p.in_picks = verdictPickSyms.has(p.symbol);
+    } else {
+      p.eod = null;  // no intraday_bars → not enriched
+      p.in_picks = verdictPickSyms.has(p.symbol);
+    }
+  }
+
+  // Step 4: compute UNIVERSE WINNERS — symbols NOT in surfaced set AND with
+  // significant gain at close (≥ 2% open-to-close). Sorted by % desc. Top 10.
+  const universe_winners_missed = todayBars
+    .filter(b => !surfacedSyms.has(b.symbol))
+    .map(b => {
+      const eod = eodMap[b.symbol];
+      if (!eod) return null;
+      return { symbol: b.symbol, ...eod };
+    })
+    .filter(x => x && x.pct_open_to_close >= 2.0)
+    .sort((a, b) => (b.pct_open_to_close - a.pct_open_to_close))
+    .slice(0, 10);
+
+
   // ─── 4. LIVE PRE-MARKET FEED ────────────────────────────────────────────────
   // Mix of: latest crossasset moves, GIFT NIFTY ticks, breaking news (last 12h)
   const cutoff12h = nowMs - 12 * 3600 * 1000;
@@ -3972,7 +4059,8 @@ async function getTodayConsolidated(db) {
     pre_market_integrity,
     live_integrity,
     verdict,
-    pool_top10,
+    pool_top10,                  // already enriched with .eod + .in_picks
+    universe_winners_missed,     // NEW (May 7 EOD): stocks NOT in surfaced set, ≥2% gain
     pre_market_feed,
     swing_candidates,
     generated_at: nowMs,
