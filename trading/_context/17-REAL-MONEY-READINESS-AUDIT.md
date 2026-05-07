@@ -225,6 +225,61 @@ If PASS-WITH-WARNING (soft fails):
 
 ---
 
+## 4.5 INCIDENT LOG — Thu May 7, 2026 morning (1 paper-trade day after overnight ships)
+
+### What broke (root causes found + status)
+
+| # | Issue | Root cause | Status |
+|---|---|---|---|
+| **1** | 08:30 IST verdict returned SIT_OUT with misleading "LLM unavailable" narrative | All 3 LLMs (Opus + Sonnet + Haiku) hit `max_tokens: 1500` cap exactly → JSON truncated → parser failed on all 3 → fell through to engine_only_fallback. ₹30.70 of valid LLM responses discarded. | ✅ **FIXED** PR #84 `cbf18e7`. max_tokens 1500 → 4000. Verdict re-composed at 09:01 IST: `decision=TRADE`, picks=HFCL/AEROFLEX/TDPOWERSYS. |
+| **2** | Pre-market integrity check L1.4 falsely reports "no owner_profile rows" | Queries non-existent `created_at` column. Actual schema: `captured_at`. owner_profile v2 IS in DB (id=2, captured 2026-05-06 12:50 IST). | ✅ **FIXED** wealth-orchestrator deploy `02d8cbaf`. Tomorrow's 08:25 IST check will report correctly. |
+| **3** | F-COVER-1 — 24 of 73 pool stocks have no bars | `fetchToday` cron has default `top=50` but pool is 73. Bottom 24 by intraday_score don't get fetched. Plus ATLANTAELE missing from kite_instruments (refresh runs Mon 06:00 IST). | ✅ **PARTIALLY FIXED** wealth-intraday-bars deploy `a3eaa8e6`. Default `top` 50 → 200 covers full pool. Will populate at 16:00 IST today's fetchToday cron. ATLANTAELE will sync next Monday's instrument refresh OR can trigger now via HTTP. |
+| **4** | gift_nifty cron firing successfully every 5 min but data SOURCE returning yesterday's last tick (15:30 IST May 6). Same 12 rows being overwritten. | Source endpoint not returning current-day data outside Singapore market hours. Stale by source design, not cron failure. | ⚠ **DEFERRED** — non-blocking for today's trades. Was used pre-market (gap signal already consumed). Investigate source change before Mon. |
+| **5** | 6 of 9 dim_health below 10% (flow / options / macro / sentiment / retail_buzz / quality) | Underlying dimension workers not writing recent data. Engine using DEFAULT 50 for those dimensions. | ⚠ **KNOWN GAP** — F5 in roadmap. Multi-day, ~6h work. Defer to weekend. |
+
+### What worked perfectly today (validation)
+
+- ✅ **F-DATA-1** recent_regime data flowing — HFCL `aw_lw=8.42%` visible in scoring
+- ✅ **F1 v2 conviction formula** in active use — visible in Opus's weight_rationale (composite = upside × downside_resistance × recent_regime)
+- ✅ **F-PERS owner_profile v2 INJECTED into prompts** — verified in `wealth-verdict/src/index.js` line 798 (queries `is_active=1` correctly, not the bugged `created_at`)
+- ✅ **Sector cap rule active** — Opus skipped ACUTAAS to avoid 2× OTHER-sector concentration
+- ✅ **Sector diversification** — picks span TELECOM / AEROSPACE / ENERGY
+- ✅ **Pre-market integrity check** caught real issues at 08:25 IST + live overlay shows resolved-since-snapshot status (PR #83)
+- ✅ **wealth-trader** range_capture + B-1 safety net + entry windows + F-EXIT-1 + F-L4-LOCK all live
+
+### What's still blocking real-money launch (must-ship before Mon May 11)
+
+| Fix | What it solves | Why blocks May 11 |
+|---|---|---|
+| **F-DATA-2** (avg_time_to_high_minutes column) | Catches stocks that historically peak before our 09:30 entry window (e.g., yesterday's TDPOWERSYS gap-down) | Without it, owner_score recommends stocks like TDPOWERSYS that we cannot catch. Same risk today. |
+| **F-EXIT-2** (bar-close stops + 2-min confirmation) | Prevents wick-stop losses (e.g., yesterday's AEROFLEX at intra-bar 320.70) | Real-money slippage on wick stops compounds the loss. 2-min confirmation rule needed. |
+| **F-COVER-1 ATLANTAELE refresh** | Ensures full pool visibility | Single missing instrument is small but the pattern (waiting for Mon refresh) is fragile. Trigger refresh manually before Mon. |
+| **Recency-tilt audit** | Today's HFCL allocation 45% on a 5-day perfect streak. Need to verify the recent_regime multiplier isn't unbounded. | If HFCL mean-reverts today, lesson learned for May 11. If it wins, F1 v2 is validated. Either way, tonight's EOD audit measures it. |
+
+### Friday May 8 ship plan
+
+1. **Morning (before 08:25 IST integrity check)**:
+   - Trigger ATLANTAELE refresh: `wealth-intraday-bars/run/refresh_instruments`
+   - Verify pre-market integrity check shows owner_profile L1.4 = pass (column-name fix landed)
+   - Verify intraday_bars covers all 73 pool stocks (top=200 fix landed, fetchToday ran 16:00 IST today)
+
+2. **During market (parallel work, no live-trade-blocking deploys)**:
+   - Code F-DATA-2: add `avg_time_to_high_minutes`, `pct_days_high_after_0930` columns to intraday_suitability schema. Compute from 90d intraday_bars.
+   - Code F-EXIT-2: 2-min confirmation rule for stop_paise check in wealth-trader price_monitor.
+
+3. **Post-close (after 15:30 IST)**:
+   - Deploy F-DATA-2 to wealth-verdict + run suitabilityRefresh cron to populate columns.
+   - Deploy F-EXIT-2 to wealth-trader.
+   - Run full readiness audit. All 8 gates should be green.
+
+4. **Saturday/Sunday**: review, test, no new ships.
+
+5. **Sunday May 10 evening**: final readiness audit. GO/NO-GO call per §4 criteria.
+
+6. **Monday May 11**: real-money launch (if GO).
+
+---
+
 ## 5. WHAT GETS LOGGED EACH DAY (auto-populated)
 
 To make this doc trustworthy by Sunday, the following auto-runs daily on Thu + Fri:
