@@ -84,15 +84,45 @@
   .verdict-decision.PENDING  { background: rgba(138,150,184,0.18); color: var(--muted); }
   .verdict-headline { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
   .verdict-narrative { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; padding: 10px; background: var(--panel-2); border-radius: 8px; }
-  .pick-card { background: var(--panel-2); border-radius: 8px; padding: 12px; margin-bottom: 8px; border-left: 3px solid var(--border); }
+  .pick-card { background: var(--panel-2); border-radius: 8px; padding: 12px; margin-bottom: 10px; border-left: 3px solid var(--border); }
   .pick-card.pick-1 { border-left-color: var(--green); }
   .pick-card.pick-2 { border-left-color: var(--blue); }
   .pick-card.pick-3 { border-left-color: var(--purple); }
-  .pick-card .pick-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+  .pick-card .pick-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
   .pick-card .pick-rank { font-size: 10px; color: var(--muted); }
-  .pick-card .pick-symbol { font-size: 14px; font-weight: 700; }
+  .pick-card .pick-symbol { font-size: 16px; font-weight: 700; cursor: pointer; }
   .pick-card .pick-weight { padding: 1px 7px; border-radius: 8px; font-size: 9px; background: rgba(124,92,255,0.18); color: var(--accent); font-weight: 700; }
-  .pick-card .pick-rationale { font-size: 11px; color: var(--muted); line-height: 1.45; }
+  .pick-card .pick-rationale { font-size: 11px; color: var(--muted); line-height: 1.45; margin-top: 6px; }
+
+  /* Live block on each pick */
+  .pick-card .pick-live { margin: 8px 0; padding: 8px 10px; background: var(--bg); border-radius: 6px; border: 1px solid var(--border); }
+  .pick-card .live-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; }
+  .pick-card .live-ltp { font-size: 14px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+  .pick-card .live-delta { font-size: 11px; font-weight: 600; }
+  .pick-card .live-delta.up { color: var(--green); }
+  .pick-card .live-delta.down { color: var(--red); }
+  .pick-card .live-delta.flat { color: var(--muted); }
+  .pick-card .live-stale { font-size: 9px; color: var(--muted); }
+  .pick-card .pos-state-pill { padding: 2px 8px; border-radius: 8px; font-size: 9px; font-weight: 700; letter-spacing: 0.3px; }
+  .pick-card .pos-state-pill.WATCHING  { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .pick-card .pos-state-pill.ENTERED   { background: rgba(46,204,113,0.18); color: var(--green); }
+  .pick-card .pos-state-pill.EXITED    { background: rgba(138,150,184,0.18); color: var(--muted); }
+  .pick-card .pos-state-pill.PRE_OPEN  { background: rgba(79,163,255,0.18); color: var(--blue); }
+  .pick-card .pos-pnl { font-weight: 700; }
+  .pick-card .pos-pnl.positive { color: var(--green); }
+  .pick-card .pos-pnl.negative { color: var(--red); }
+  .pick-card .lock-badge { padding: 1px 7px; border-radius: 8px; font-size: 9px; font-weight: 700;
+    background: rgba(46,204,113,0.18); color: var(--green); }
+  .pick-card .extend-badge { padding: 1px 7px; border-radius: 8px; font-size: 9px; font-weight: 700;
+    background: rgba(124,92,255,0.18); color: var(--accent); }
+  .pick-card .pick-chart { margin-top: 8px; height: 90px; background: var(--panel-2); border-radius: 6px; overflow: hidden; }
+  .pick-card .pick-chart svg { display: block; width: 100%; height: 100%; }
+  .pick-card .pick-chart-empty { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 10px; color: var(--muted); }
+  .pick-card .pick-plan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 8px; margin-top: 6px; font-size: 10px; }
+  .pick-card .pick-plan .cell .lbl { color: var(--muted); display: block; }
+  .pick-card .pick-plan .cell .val { color: var(--text); font-weight: 600; }
+  .pick-card .pick-plan .cell .val.green { color: var(--green); }
+  .pick-card .pick-plan .cell .val.red { color: var(--red); }
 
   .override-banner { padding: 10px; background: rgba(245,176,65,0.12); border-left: 3px solid var(--yellow); border-radius: 6px; margin-top: 10px; font-size: 11px; }
   .override-banner strong { color: var(--yellow); }
@@ -370,6 +400,168 @@
     </div>`;
   }
 
+  // ─── Helpers for pick-card live block ──────────────────────────────────────
+  function fmtPriceRs(paise) {
+    if (paise == null) return '—';
+    return '₹' + (paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtRupeesShort(paise) {
+    if (paise == null) return '—';
+    const r = paise / 100;
+    if (Math.abs(r) >= 100000) return '₹' + (r / 100000).toFixed(2) + 'L';
+    if (Math.abs(r) >= 1000) return '₹' + (r / 1000).toFixed(1) + 'k';
+    return '₹' + Math.round(r).toLocaleString('en-IN');
+  }
+  function fmtPnlShort(paise) {
+    if (paise == null) return '—';
+    return (paise > 0 ? '+' : '') + fmtRupeesShort(paise);
+  }
+  function pnlClassFor(v) { if (v == null || v === 0) return 'flat'; return v > 0 ? 'positive' : 'negative'; }
+
+  // Inline SVG chart for a pick card — bars + entry/target/stop reference lines + LTP + peak
+  function renderPickChart(p) {
+    const live = p.live || {};
+    const bars = live.bars || [];
+    if (bars.length < 2) return '<div class="pick-chart-empty">no intraday bars yet — populates after market opens at 09:15 IST</div>';
+    const W = 320, H = 90;
+    const closes = bars.map(b => b.close_paise);
+    const lows = bars.map(b => b.low_paise);
+    const highs = bars.map(b => b.high_paise);
+
+    // Plan-derived prices for reference lines (using LTP as entry estimate if not yet entered)
+    const pos = live.position;
+    const entryRef = pos?.entry_paise || live.ltp_paise || closes[0];
+    const stopPlan = pos?.stop_paise || (entryRef && p.stop_pct ? Math.round(entryRef * (1 - p.stop_pct/100)) : null);
+    const targetPlan = pos?.target_paise || (entryRef && p.target_pct ? Math.round(entryRef * (1 + p.target_pct/100)) : null);
+    const peak = pos?.peak_price_paise;
+    const trail = pos?.trailing_stop_paise;
+
+    const refs = [entryRef, stopPlan, targetPlan, peak, trail, live.ltp_paise].filter(v => v != null);
+    const allVals = [...closes, ...lows, ...highs, ...refs];
+    const minV = Math.min(...allVals);
+    const maxV = Math.max(...allVals);
+    const range = Math.max(1, maxV - minV);
+    const pad = range * 0.08;
+    const yMin = minV - pad;
+    const yMax = maxV + pad;
+
+    const xStep = (W - 4) / Math.max(1, bars.length - 1);
+    const yScale = v => H - ((v - yMin) / (yMax - yMin)) * H;
+    const points = bars.map((b, i) => `${2 + i * xStep},${yScale(b.close_paise).toFixed(1)}`).join(' ');
+
+    const refLine = (val, color, dash, label) => {
+      if (val == null) return '';
+      const y = yScale(val);
+      return `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="${dash}" opacity="0.55"/>
+              <text x="${W - 4}" y="${y - 2}" text-anchor="end" font-size="9" fill="${color}">${label}</text>`;
+    };
+
+    const lastX = 2 + (bars.length - 1) * xStep;
+    const ltpY = live.ltp_paise != null ? yScale(live.ltp_paise) : yScale(closes[closes.length - 1]);
+
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      ${refLine(targetPlan, '#2ecc71', '4 2', 'TGT ' + fmtPriceRs(targetPlan))}
+      ${refLine(entryRef, '#7c5cff', '0', (pos ? 'ENTRY ' : 'plan ') + fmtPriceRs(entryRef))}
+      ${refLine(stopPlan, '#e74c3c', '4 2', 'STOP ' + fmtPriceRs(stopPlan))}
+      ${trail ? refLine(trail, '#f5b041', '2 2', 'trail ' + fmtPriceRs(trail)) : ''}
+      <polyline points="${points}" fill="none" stroke="#e6ecff" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${peak ? `<circle cx="${lastX}" cy="${yScale(peak)}" r="2.5" fill="#2ecc71"/>` : ''}
+      <circle cx="${lastX}" cy="${ltpY}" r="3" fill="#4fa3ff"/>
+    </svg>`;
+  }
+
+  // Render a single pick card with live state
+  function renderPickCard(p, idx, phase) {
+    const live = p.live || {};
+    const ltpPaise = live.ltp_paise;
+    const ltpAge = live.ltp_ts ? Math.round((Date.now() - live.ltp_ts) / 1000) : null;
+    const ltpFresh = ltpAge != null && ltpAge < 90;
+
+    // Compute live delta vs entry plan (or vs prev close pre-entry)
+    const pos = live.position;
+    const entryRef = pos?.entry_paise || (live.bars?.length ? live.bars[0].open_paise : null);
+    const livePctVsRef = (ltpPaise && entryRef)
+      ? +(((ltpPaise - entryRef) / entryRef) * 100).toFixed(2) : null;
+    const dCls = livePctVsRef == null ? 'flat' : livePctVsRef > 0.05 ? 'up' : livePctVsRef < -0.05 ? 'down' : 'flat';
+    const dArrow = livePctVsRef == null ? '·' : livePctVsRef > 0.05 ? '↑' : livePctVsRef < -0.05 ? '↓' : '·';
+
+    // Position state pill
+    let stateLabel = 'PRE_OPEN';
+    let stateClass = 'PRE_OPEN';
+    let stateNote = '';
+    if (pos) {
+      if (pos.exit_at) {
+        stateLabel = 'EXITED';
+        stateClass = 'EXITED';
+        stateNote = `${escapeHtml(pos.exit_reason || '?')} @ ${fmtPriceRs(pos.exit_paise)} · ${fmtPnlShort(pos.pnl_paise)}`;
+      } else if (pos.state === 'ENTERED') {
+        stateLabel = 'ENTERED';
+        stateClass = 'ENTERED';
+        stateNote = `${pos.qty}sh × ₹${(pos.entry_paise/100).toFixed(2)}`;
+      } else {
+        stateLabel = 'WATCHING';
+        stateClass = 'WATCHING';
+        stateNote = 'breakout entry pending';
+      }
+    } else if (phase === 'PRE_MARKET' || phase === 'PRE_OPEN') {
+      stateLabel = phase === 'PRE_OPEN' ? 'PRE-OPEN' : 'PRE-MARKET';
+      stateClass = 'PRE_OPEN';
+      stateNote = 'awaiting market open';
+    } else if (phase === 'LIVE') {
+      stateLabel = 'AWAITING ENTRY';
+      stateClass = 'WATCHING';
+      stateNote = 'range_capture at 09:30 IST creates WATCHING row';
+    } else {
+      stateLabel = 'NO POSITION';
+      stateClass = 'EXITED';
+      stateNote = phase === 'POST_CLOSE' ? 'market closed' : '';
+    }
+
+    // Live P&L for entered positions
+    const livePnl = pos?.live_pnl_paise;
+    const livePnlPct = pos?.live_pnl_pct;
+    const pnlPaiseClass = pnlClassFor(livePnl);
+
+    return `<div class="pick-card pick-${idx + 1}">
+      <div class="pick-head">
+        <span class="pick-rank">#${idx + 1}</span>
+        <span class="pick-symbol" data-stock-symbol="${escapeHtml(p.symbol)}">${escapeHtml(p.symbol)}</span>
+        ${p.weight_pct ? `<span class="pick-weight">${p.weight_pct}% capital</span>` : ''}
+        <span class="pos-state-pill ${stateClass}">${stateLabel}</span>
+        ${pos?.target_locked ? '<span class="lock-badge">🔒 TARGET LOCKED</span>' : ''}
+        ${pos?.opus_extension_active ? '<span class="extend-badge">OPUS EXTEND</span>' : ''}
+      </div>
+
+      <!-- LIVE BLOCK: LTP + delta + state-note + (P&L if entered) -->
+      <div class="pick-live">
+        <div class="live-row">
+          <span class="live-ltp">${fmtPriceRs(ltpPaise)}</span>
+          ${livePctVsRef != null ? `<span class="live-delta ${dCls}">${dArrow} ${(livePctVsRef > 0 ? '+' : '') + livePctVsRef.toFixed(2)}%</span>` : ''}
+          ${pos && !pos.exit_at && livePnl != null ? `<span class="pos-pnl ${pnlPaiseClass}">${fmtPnlShort(livePnl)} (${livePnlPct > 0 ? '+' : ''}${livePnlPct?.toFixed(2)}%)</span>` : ''}
+          <span class="live-stale" style="margin-left:auto">${
+            ltpAge == null ? 'no LTP yet'
+            : ltpFresh ? `LTP ${ltpAge}s ago`
+            : `LTP ${Math.round(ltpAge / 60)}m ago — stale`
+          }</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${escapeHtml(stateNote)}</div>
+      </div>
+
+      <!-- INLINE SVG CHART with reference lines -->
+      <div class="pick-chart">${renderPickChart(p)}</div>
+
+      <!-- PLAN GRID -->
+      <div class="pick-plan">
+        <div class="cell"><span class="lbl">Stop</span><span class="val red">${pos?.stop_paise ? fmtPriceRs(pos.stop_paise) : (p.stop_pct ? `-${p.stop_pct}%` : '—')}</span></div>
+        <div class="cell"><span class="lbl">Target</span><span class="val green">${pos?.target_paise ? fmtPriceRs(pos.target_paise) : (p.target_pct ? `+${p.target_pct}%` : '—')}</span></div>
+        <div class="cell"><span class="lbl">${pos ? 'Trail' : 'Trail @'}</span><span class="val">${pos?.trailing_stop_paise ? fmtPriceRs(pos.trailing_stop_paise) : (p.trail_after_pct ? `+${p.trail_after_pct}%` : '—')}</span></div>
+        ${p.entry_window ? `<div class="cell" style="grid-column:span 3"><span class="lbl">Entry window</span><span class="val">${escapeHtml(p.entry_window)}${p.hard_exit_ist ? ` · hard exit ${escapeHtml(p.hard_exit_ist)}` : ''}</span></div>` : ''}
+      </div>
+
+      ${p.rationale ? `<div class="pick-rationale">${escapeHtml(p.rationale)}</div>` : ''}
+    </div>`;
+  }
+
   function renderVerdictSection(d) {
     const v = d.verdict;
     if (!v) {
@@ -390,18 +582,7 @@
     const isOverridden = !!v.override;
     const picksToShow = isOverridden ? v.override.new_picks : (v.picks || []);
 
-    const pickCards = picksToShow.map((p, i) => `
-      <div class="pick-card pick-${i + 1}">
-        <div class="pick-head">
-          <span class="pick-rank">#${i + 1}</span>
-          <span class="pick-symbol" data-stock-symbol="${escapeHtml(p.symbol)}">${escapeHtml(p.symbol)}</span>
-          ${p.weight_pct ? `<span class="pick-weight">${p.weight_pct}% capital</span>` : ''}
-          ${p.target_pct ? `<span style="font-size:10px;color:var(--green)">target +${p.target_pct}%</span>` : ''}
-          ${p.stop_pct ? `<span style="font-size:10px;color:var(--red)">stop -${p.stop_pct}%</span>` : ''}
-        </div>
-        ${p.entry_window ? `<div style="font-size:10px;color:var(--muted);margin-bottom:4px">Entry: ${escapeHtml(p.entry_window)}${p.hard_exit_ist ? ` · Hard exit: ${escapeHtml(p.hard_exit_ist)}` : ''}</div>` : ''}
-        <div class="pick-rationale">${escapeHtml(p.rationale || '')}</div>
-      </div>`).join('');
+    const pickCards = picksToShow.map((p, i) => renderPickCard(p, i, d.phase)).join('');
 
     const overrideBanner = isOverridden ? `
       <div class="override-banner">
@@ -590,7 +771,14 @@
   }
 
   load();
-  setInterval(load, 60000);
+  // Faster refresh (15s) during LIVE so live LTP + position state + chart stay current.
+  // Slower (60s) outside market hours.
+  function autoRefresh() {
+    const phase = _data?.phase;
+    const intervalMs = phase === 'LIVE' || phase === 'PRE_OPEN' ? 15000 : 60000;
+    setTimeout(() => { load().then(autoRefresh); }, intervalMs);
+  }
+  autoRefresh();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') load();
   });

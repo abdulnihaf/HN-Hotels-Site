@@ -3526,6 +3526,70 @@ async function getTodayConsolidated(db) {
     try { alternatives = JSON.parse(verdictRow.alternatives_json || '[]'); } catch {}
     let context = {};
     try { context = JSON.parse(verdictRow.context_snapshot_json || '{}'); } catch {}
+
+    // ─── PER-PICK LIVE STATE — augments each pick with live LTP, bars, position
+    // status. Per user request: surface entry point + live chart inline on Today
+    // verdict cards (not just on Desk).
+    const overridePicks = overrideRow ? (() => { try { return JSON.parse(overrideRow.new_picks_json); } catch { return []; } })() : null;
+    const activePicks = overridePicks?.length ? overridePicks : picks;
+    for (const pick of activePicks) {
+      if (!pick.symbol) continue;
+      // Live LTP
+      const ltpRow = await db.prepare(
+        `SELECT ltp_paise, ts FROM intraday_ticks WHERE symbol=? ORDER BY ts DESC LIMIT 1`
+      ).bind(pick.symbol).first().catch(() => null);
+
+      // Last 1h of 5-min bars for mini chart
+      const barsCutoff = nowMs - 60 * 60 * 1000;
+      const bars = (await db.prepare(`
+        SELECT ts, open_paise, high_paise, low_paise, close_paise
+        FROM intraday_bars
+        WHERE symbol=? AND trade_date=? AND interval='5minute' AND ts >= ?
+        ORDER BY ts ASC LIMIT 12
+      `).bind(pick.symbol, today, barsCutoff).all().catch(() => ({ results: [] }))).results || [];
+
+      // Position match (paper_trades for today, auto_managed)
+      const pos = await db.prepare(`
+        SELECT id, qty, entry_paise, stop_paise, target_paise, peak_price_paise,
+               trailing_stop_paise, target_locked, opus_extension_until,
+               trader_state, exit_paise, exit_reason, pnl_net_paise, exit_at, entry_at
+        FROM paper_trades
+        WHERE symbol=? AND auto_managed=1
+          AND DATE(created_at/1000+19800,'unixepoch') = ?
+        ORDER BY id DESC LIMIT 1
+      `).bind(pick.symbol, today).first().catch(() => null);
+
+      pick.live = {
+        ltp_paise: ltpRow?.ltp_paise || null,
+        ltp_ts: ltpRow?.ts || null,
+        bars,
+        prev_close_paise: bars.length ? bars[0].open_paise : null,
+        position: pos ? {
+          state: pos.trader_state,
+          qty: pos.qty,
+          entry_paise: pos.entry_paise,
+          stop_paise: pos.stop_paise,
+          target_paise: pos.target_paise,
+          peak_price_paise: pos.peak_price_paise,
+          trailing_stop_paise: pos.trailing_stop_paise,
+          target_locked: pos.target_locked === 1,
+          opus_extension_active: pos.opus_extension_until && pos.opus_extension_until > nowMs,
+          entry_at: pos.entry_at,
+          exit_paise: pos.exit_paise,
+          exit_reason: pos.exit_reason,
+          pnl_paise: pos.pnl_net_paise,
+          exit_at: pos.exit_at,
+          live_pnl_paise: (ltpRow?.ltp_paise && pos.entry_paise && pos.qty && !pos.exit_at)
+            ? (ltpRow.ltp_paise - pos.entry_paise) * pos.qty : null,
+          live_pnl_pct: (ltpRow?.ltp_paise && pos.entry_paise && !pos.exit_at)
+            ? +(((ltpRow.ltp_paise - pos.entry_paise) / pos.entry_paise) * 100).toFixed(2) : null,
+        } : null,
+      };
+    }
+    if (overridePicks?.length) {
+      // Augmented array IS overridePicks; sync back to override.new_picks
+    }
+
     verdict = {
       id: verdictRow.id,
       type: verdictRow.verdict_type,
@@ -3545,7 +3609,7 @@ async function getTodayConsolidated(db) {
       override: overrideRow ? {
         overridden_at: overrideRow.overridden_at,
         original_picks: (() => { try { return JSON.parse(overrideRow.original_picks_json); } catch { return []; } })(),
-        new_picks: (() => { try { return JSON.parse(overrideRow.new_picks_json); } catch { return []; } })(),
+        new_picks: overridePicks || [],
         reason: overrideRow.override_reason,
         by: overrideRow.overridden_by,
       } : null,
