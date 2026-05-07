@@ -1,13 +1,20 @@
 # 20 · EXECUTION TRAIL — Thu 07 May 2026
 
-> **Purpose**: complete data trail of every micro-execution done in the trading
-> system on this date, segmented under three macro layers so the owner can
-> audit each layer's coherence vs its macro objective and spot drift.
+> **Purpose**: forensic data trail of every micro-execution done in the trading
+> system on this date. Every event has a **precise timestamp** (IST, second-level)
+> sourced from git, GitHub, or D1. Segmented under three macro layers so the
+> owner can audit each layer's coherence vs its macro objective.
 >
-> **This document is data only — no analysis.** Owner does the audit.
+> **This document is data only — no analysis.**
 >
-> Format per layer: **Macro Objective** → **Components** → **Today's Trail**
-> (every change time-ordered) → **Current State** (live / PR-pending / deferred).
+> **Timestamp sources:**
+> - **Git** = `git log --pretty=format:"%ai"` (commit author time)
+> - **GH-PR** = GitHub API `createdAt` / `mergedAt`
+> - **D1-TD** = `trader_decisions.ts` from D1 (UTC ms → IST)
+> - **D1-PT** = `paper_trades.entry_at / exit_at` from D1
+> - **CFP** = Cloudflare Pages auto-deploy (≈ 1 min after PR merge)
+> - **MAN** = manual owner D1 write (intervention)
+> - **HTTP** = manual HTTP trigger (force_phase=)
 
 ---
 
@@ -16,11 +23,11 @@
 | | |
 |---|---|
 | **Real-money launch target** | Mon 11 May 2026 (₹10,00,000 capital) |
-| **Days remaining** | 4 trading days (Fri 8, Sat closed, Mon 11) |
-| **Already-shipped intelligence layers** | F-DATA-1 (1670 ticks/day baseline), F-PERS (90d owner_score), F1 v2 (composite_conviction = upside × downside_resistance × recent_regime), F-EXIT-1 (target_locked + Opus WIDEN_TARGET 6-gate), F-L4-LOCK (₹30K profit-lock force-exit) |
-| **Already-pending intelligence work** | F-DATA-2 (avg time-to-high), F-EXIT-2 (bar-close stops + 2-min confirmation), F-COVER-1 (universe coverage), 6/9 dim_health workers below 10% |
-| **08:30 IST verdict** | TRADE · HFCL (45%) + AEROFLEX (30%) + TDPOWERSYS (20%) · composed by claude-opus-4-5 · cost ₹27.23 · headline "HOT regime HFCL+AEROFLEX lead, sector-diversified with TDPOWERSYS for stability" |
-| **Capital state in D1 user_config** | total_capital_paise = 100000000 (₹10L) — was bug at ₹1L earlier, fixed before this session |
+| **Days remaining** | 2 trading days (Fri 8 May, Mon 11) |
+| **Already-shipped intelligence layers (pre-this-chat)** | F-DATA-1, F-PERS, F1 v2 composite_conviction, F-EXIT-1 target_locked, F-L4-LOCK ₹30K profit-lock |
+| **Already-pending intelligence work** | F-DATA-2, F-EXIT-2, F-COVER-1 |
+| **08:30 IST verdict** | TRADE · HFCL (45%) + AEROFLEX (30%) + TDPOWERSYS (20%) · composed by claude-opus-4-5 · cost ₹27.23 |
+| **Capital state in D1 user_config** | total_capital_paise = 100000000 (₹10L) |
 
 ---
 
@@ -32,91 +39,94 @@
 > the most reliable signal, manage the position with the right exit rules so
 > winners run and losers cut fast, and learn from each day to improve tomorrow.
 
-### 1.2 Components
+### 1.2 Components & where they live
 
-| Component | Where it lives | What it produces |
+| Component | File | Trigger |
 |---|---|---|
-| **Pre-market verdict** | `wealth-verdict/src/index.js` (Opus 4.5 at 08:30 IST) | 3 picks with weight, entry/stop/target, rationale, headline |
-| **F-PERS personality scoring** | `wealth-orchestrator/src/index.js` (07:30 IST) | 90d owner_score per symbol from intraday_suitability table |
-| **F1 v2 composite conviction** | wealth-orchestrator (07:30) | upside × downside_resistance × recent_regime per pick |
-| **F-DATA-1 universe coverage** | wealth-intraday-bars (16:00 IST) | last-N intraday bar coverage for top-200 by owner_score |
-| **Range capture (OR-high/low)** | wealth-trader.rangeCapture (09:30 IST) | first-15-min OHLC per pick → opening_ranges + paper_trades.or_high/low |
-| **Entry intelligence: deterministic breakout** | wealth-trader.priceMonitor (every 5min from 09:50 IST) | LTP > or_high × 1.001 + vol_ratio ≥ 0.8 → ENTERED |
-| **Entry intelligence: Opus** | wealth-trader.entryDecision (09:45/10:00/10:15 IST) | ENTER_NOW / WAIT / ABANDON with vol + news context |
-| **Position management: Opus** | wealth-trader.positionManagement (every 30min 11:00–15:00) | HOLD / TIGHTEN_TRAIL / PARTIAL_EXIT_50 / FULL_EXIT |
-| **Position management: Sonnet safety** | wealth-trader.sonnetSafetyCheck (every 30min off-cycle) | URGENT_EXIT for late-cycle reversal patterns |
-| **F-EXIT-1 target lock** | wealth-trader.priceMonitor exit ladder | first target hit → raise stop to target, ride trail above |
-| **F-L4-LOCK profit lock** | wealth-trader.priceMonitor portfolio check | portfolio P&L ≥ +₹30K → force-exit all (unless Opus EXTEND_PROFIT) |
-| **Hard exit** | wealth-trader.hardExit (15:10 IST) | force-close all ENTERED positions 5 min before MIS auto-square |
+| Pre-market verdict | `wealth-engine/workers/wealth-verdict/src/index.js` | 08:30 IST cron, Opus 4.5 |
+| F-PERS personality scoring | `wealth-engine/workers/wealth-orchestrator/src/index.js` | 07:30 IST cron |
+| F1 v2 composite conviction | `wealth-engine/workers/wealth-orchestrator/src/index.js` | 07:30 IST cron |
+| F-DATA-1 universe coverage | `wealth-engine/workers/wealth-intraday-bars/src/index.js` | 16:00 IST cron |
+| Range capture (OR-high/low) | `wealth-engine/workers/wealth-trader/src/index.js` :: `rangeCapture()` | 09:30 IST |
+| Entry: deterministic breakout | `wealth-trader/src/index.js` :: `priceMonitor()` lines 477-571 | every 5min from 09:50 IST (currently — closes 09:30→09:50 dead zone with PR #89) |
+| Entry: Opus | `wealth-trader/src/index.js` :: `entryDecision()` | 09:45 / 10:00 / 10:15 IST |
+| Position management: Opus | `wealth-trader/src/index.js` :: `positionManagement()` | 11:00, 11:30, 12:00, 12:30, 13:00, 13:30, 14:00, 14:30, 15:00 IST |
+| Position management: Sonnet | `wealth-trader/src/index.js` :: `sonnetSafetyCheck()` | 11:15, 11:45, 12:15, 12:45, 13:15, 13:45, 14:15, 14:45 IST |
+| F-EXIT-1 target lock | `wealth-trader/src/index.js` :: `priceMonitor()` exit ladder lines 757-776 | inline in price_monitor |
+| F-L4-LOCK profit lock | `wealth-trader/src/index.js` :: `priceMonitor()` lines 807-837 | inline in price_monitor |
+| Hard exit | `wealth-trader/src/index.js` :: `hardExit()` | 15:10 IST |
 
-### 1.3 Today's trail — every intelligence change
+### 1.3 Today's intelligence-layer event trail (precise IST timestamps)
 
-Time-ordered. Items flagged 🟢 = shipped & live, 🟡 = PR pending deploy, ⚫ = D1 manual write.
+**Source legend:** D1-TD = trader_decisions row · D1-PT = paper_trades row · MAN = owner D1 write · HTTP = owner HTTP trigger · GH = GitHub API
 
-| Time IST | Event | Layer change |
-|---|---|---|
-| 07:30 | F-PERS cron ran | Populated 90d scoring (column-name bug from prior session was fixed pre-this-chat) |
-| 07:30 | F-DATA-1 enrichment cron | Top-200 universe data populated |
-| 08:25 | Integrity check cron | passed |
-| 08:30 | Verdict cron composed | HFCL/AEROFLEX/TDPOWERSYS picks with rationales (this was after the pre-this-chat fix to max_tokens 1500→4000 in PR #84) |
-| 09:30 | range_capture | OR-high/low captured: HFCL 140.21–146.40, AEROFLEX 351.45–378.00, TDPOWERSYS 1164.10–1235.70. All 3 → WATCHING |
-| 09:31 | range_capture_fallback | safety-net confirmed 3 setups in WATCHING |
-| 09:35–09:49 | **🔴 INTELLIGENCE GAP** | priceMonitor was scheduled to start only at 09:50 IST. TDPOWERSYS broke trigger ₹1235.70 at 09:40, sustained 5min above (peak ₹1241.90) — **invisible to all crons** |
-| 09:45 | entry_1 (Opus, all 3 picks) | All WAIT — LTP below trigger. HFCL ₹145.38, AEROFLEX ₹373.40, TDPOWERSYS ₹1227.90 |
-| 10:00 | entry_2 (Opus, all 3 picks) | HFCL WAIT, AEROFLEX **SKIP_GAPPED_BELOW_STOP** (LTP ₹371.25 ≤ stop ₹373.02 — single-tick wick), TDPOWERSYS **SKIP_GAPPED_BELOW_STOP** (LTP ₹1213.60 ≤ stop ₹1214.05 — 1-min wick, recovered immediately) |
-| 10:15 | entry_3 (Opus, HFCL only — others SKIPPED) | HFCL WAIT |
-| 11:00–11:15 | First position_mgmt windows | No ENTERED positions to manage (all WATCHING/SKIPPED) |
-| 11:28 | ⚫ **Owner-authorised manual revive: TDPOWERSYS** | D1 UPDATE paper_trades id=18 SET trader_state='WATCHING' (was SKIPPED). trader_decisions row inserted with cron_phase='manual_revive', decision='MANUAL_REVIVE_TO_WATCHING'. Stock had broken trigger again at 10:55 IST, sustained 30+ min above |
-| 11:29:53 | priceMonitor manually triggered via HTTP | BREAKOUT_TRIGGER fired ENTRY @ ₹1243.10, vol_ratio 2.61×, qty 160, stop ₹1228.18, target ₹1277.91 |
-| 11:31 | position_mgmt (Opus, TDPOWERSYS) | HOLD — "1min held, breaking 5-day high, breadth bullish, ENERGY sector rally" |
-| 12:01 | position_mgmt (Opus, TDPOWERSYS) | HOLD — "65% of typical 90d move, STAIR_STEP momentum building" |
-| 12:14:09 | ⚫ **Owner-authorised manual revive: AEROFLEX** | D1 UPDATE paper_trades id=17 SET trader_state='WATCHING'. Stock had broken trigger ₹378 at 11:43 IST, sustained 30+ min above (peak ₹397.50) |
-| 12:14:11 | priceMonitor manually triggered via HTTP | BREAKOUT_ENTER for AEROFLEX @ ₹394.70, vol_ratio 6.27×, qty 759, stop ₹389.96, target ₹408.24. Same trigger fired PARTIAL_EXIT_50_FIRST_TARGET on TDPOWERSYS @ ₹1275 (60% of full target reached) → booked +₹2,469 net on first 80 sh, runner trail tightened to entry+0.5% |
-| 12:15:48 | sonnet_safety (TDPOWERSYS) | URGENT_EXIT @ ₹1277.40 — "position dropped 2.76% from peak despite being in profit, locking gains before reversal accelerates" |
-| 12:18 | ⚫ **D1 P&L correction: TDPOWERSYS** | UPDATE paper_trades SET pnl_net_paise = pnl_net_paise + 246866, cost_paise = cost_paise + 8334. Compensated for **firePaperExit overwrite bug** discovered while auditing /trading/today/ accuracy (partial-50 booking was being erased by runner exit overwriting pnl_net_paise = ?) |
-| 13:00 | position_mgmt (Opus, AEROFLEX) | HOLD |
-| 13:31 | position_mgmt (Opus, AEROFLEX) | HOLD |
-| 14:00 | position_mgmt (Opus, AEROFLEX) | HOLD — through significant chop |
-| 14:31 | position_mgmt (Opus, AEROFLEX) | TIGHTEN_TRAIL — "76% of typical move captured" |
-| 15:00:57 | position_mgmt (Opus, AEROFLEX) | **FULL_EXIT @ ₹413.60** — "126% of 90d avg max move, pre-close phase, lock gain" |
-| 15:30 | Market close | All positions resolved. HFCL never entered. Realized total: ₹+19,316 |
-| Later | 🟡 **PR #89 commit b8ac986** (intelligence patches) | F-EXIT-2 confirmation + SKIPPED-resurrection + dead-zone fix authored, **NOT YET DEPLOYED** |
-| Later | 🟡 **PR #89 commit 33770bf** (intelligence patch) | firePaperExit accumulation fix authored, **NOT YET DEPLOYED** |
+| Time IST (HH:MM:SS) | Event | LTP | Source | Detail |
+|---|---|---|---|---|
+| 09:31:01 | paper_trades 3 rows created | — | D1-PT | HFCL id=16, AEROFLEX id=17, TDPOWERSYS id=18 (auto_managed=1) |
+| 09:31:02 | range_capture | — | D1-TD | "captured 3 ranges, 3 setups in WATCHING state" (deterministic). OR-high/low: HFCL 140.21–146.40, AEROFLEX 351.45–378.00, TDPOWERSYS 1164.10–1235.70 |
+| 09:31:02 | range_capture_fallback | — | D1-TD | safety-net fired: `{rows:3, picks_in_watching:3}` (deterministic) |
+| 09:35:00 → 09:49:59 | **🔴 INTELLIGENCE GAP** | — | absence | priceMonitor was NOT scheduled to run before 09:50 IST. TDPOWERSYS broke trigger ₹1235.70 between ~09:40–09:44 (peak ₹1241.90, 5 min above) — invisible to all crons. PR #89 fixes this. |
+| 09:45:47 | entry_1 HFCL | ₹145.38 | D1-TD | WAIT — "LTP 0.70% below 15-min high 146.40, vol_ratio 11.72×, waiting for LTP to clear 146.40" (claude-opus-4-5) |
+| 09:45:51 | entry_1 AEROFLEX | ₹373.40 | D1-TD | WAIT — "LTP 1.22% below OR-high 378, vol_ratio 27.5×, wait for breakout" (claude-opus-4-5) |
+| 09:45:54 | entry_1 TDPOWERSYS | ₹1227.90 | D1-TD | WAIT — "LTP 0.63% below 1235.7, vol_ratio 12.35×, wait" (claude-opus-4-5) |
+| 10:00:52 | entry_2 HFCL | ₹143.90 | D1-TD | WAIT — "LTP 1.71% below 146.4, vol_ratio 14.27×, need price clearance" (claude-opus-4-5) |
+| 10:00:53 | entry_2 AEROFLEX | ₹371.25 | D1-TD | **SKIP_GAPPED_BELOW_STOP** (deterministic) — 1-tick wick below stop ₹373.02. State → SKIPPED. |
+| 10:00:53 | entry_2 TDPOWERSYS | ₹1213.00 | D1-TD | **SKIP_GAPPED_BELOW_STOP** (deterministic) — 1-tick wick below stop ₹1214.05. State → SKIPPED. |
+| 10:15:45 | entry_3 HFCL | ₹145.24 | D1-TD | WAIT — "LTP 0.79% below 146.4, vol_ratio 16.4×, last attempt before window closes" (claude-opus-4-5) |
+| 11:28:00 | **MAN: manual_revive TDPOWERSYS** | ₹1243.10 | MAN + D1-TD | Owner D1 UPDATE: `paper_trades id=18 SET trader_state='WATCHING'`. Decision row inserted with composed_by_model='human_owner'. Rationale: "stock broke trigger again at 10:55 IST, sustained 30+ min above; 10:00 SKIP was a wick" |
+| 11:29:53 | **HTTP: priceMonitor manual fire** + BREAKOUT_ENTER TDPOWERSYS | ₹1243.10 | HTTP + D1-TD + D1-PT | Owner curl `?force_phase=price_monitor`. Worker fired BREAKOUT_TRIGGER. State → ENTERED, qty 160, vol_ratio 2.61×, recomputed stop ₹1228.18, target ₹1277.91. paper_trades.entry_at = 1778133593599 |
+| 11:31:22 | position_mgmt TDPOWERSYS | ₹1240.20 | D1-TD | **HOLD** — "1min held, breaking 5-day high (1243>1194), breadth 5:1 A/D, ENERGY rally" (claude-opus-4-5) |
+| 12:01:03 | position_mgmt TDPOWERSYS | ₹1266.90 | D1-TD | **HOLD** — "65% of typical 90d move, STAIR_STEP momentum" (claude-opus-4-5) |
+| 12:14:09 | **MAN: manual_revive AEROFLEX** | ₹394.70 | MAN | Owner D1 UPDATE: `paper_trades id=17 SET trader_state='WATCHING'`. Stock broke trigger ₹378 at 11:43 IST, sustained above (peak ₹397.50) |
+| 12:14:09 | BREAKOUT_ENTER AEROFLEX | ₹394.70 | D1-TD + D1-PT | Same HTTP trigger fired entry. State → ENTERED, qty 759, vol_ratio 6.27×, stop ₹389.96, target ₹408.24. paper_trades.entry_at = 1778136249422 |
+| 12:14:11 | PARTIAL_EXIT_50_FIRST_TARGET TDPOWERSYS | ₹1275.00 | D1-TD | Same trigger cycle: TDPOWERSYS hit first-target (60% of full target ₹1263.99). Booked 50% qty (80 sh) for net +₹2,469. Runner trail tightened to entry+0.5%. Remaining qty=80 |
+| 12:15:49 | sonnet_safety TDPOWERSYS | ₹1277.40 | D1-TD + D1-PT | **URGENT_EXIT** — "position dropped 2.76% from peak despite being in profit, locking gains" (claude-sonnet-4-5). State → EXITED. paper_trades.exit_at = 1778136348843 |
+| 12:18:02 | **MAN: P&L correction TDPOWERSYS** | — | MAN | Owner D1 UPDATE: `pnl_net_paise += 246866, pnl_gross_paise += 255200, cost_paise += 8334`. Compensates firePaperExit overwrite bug (partial booking erased on runner exit). Final pnl_net_paise = 512927 = ₹5,129.27 |
+| 12:31:30 | position_mgmt AEROFLEX | ₹400.95 | D1-TD | **HOLD** (claude-opus-4-5) |
+| 13:00:58 | position_mgmt AEROFLEX | ₹393.50 | D1-TD | **HOLD** — through chop (claude-opus-4-5) |
+| 13:31:15 | position_mgmt AEROFLEX | ₹402.40 | D1-TD | **HOLD** (claude-opus-4-5) |
+| 14:00:58 | position_mgmt AEROFLEX | ₹401.30 | D1-TD | **HOLD** (claude-opus-4-5) |
+| 14:31:32 | position_mgmt AEROFLEX | ₹406.05 | D1-TD | **TIGHTEN_TRAIL** — "76% of typical move captured" (claude-opus-4-5) |
+| 15:00:57 | position_mgmt AEROFLEX | ₹413.60 | D1-TD + D1-PT | **FULL_EXIT** — "126% of 90d avg max move, pre-close phase, lock gain" (claude-opus-4-5). State → EXITED. paper_trades.exit_at = 1778146257166 |
+| 15:30:00 | Market close | — | clock | All ENTERED positions resolved. Realized total: ₹+19,316.39 |
 
-### 1.4 Intelligence-layer files modified today
+### 1.4 Intelligence-layer code changes (every commit, every PR)
 
-| File | Commit | Status | What changed |
-|---|---|---|---|
-| `wealth-engine/workers/wealth-trader/src/index.js` | b8ac986 (PR #89) | 🟡 PR open, not deployed | (a) New helpers `confirmedSustainedBelow` / `confirmedSustainedAbove` query intraday_ticks last-2-min for sustain confirmation. (b) `entryDecision.SKIP_GAPPED_BELOW_STOP` now requires confirmation; single-tick wicks log `WICK_BELOW_STOP_HOLDING` and stay WATCHING. (c) `priceMonitor` query now includes SKIPPED rows; resurrection requires sustained 2-min above OR-trigger AND above stop. (d) `priceMonitor` STOP_HIT and TRAILING_STOP_HIT both gated by confirmation. (e) `routeByIstTime` market-hours window changed `(h===9 && m>=50)` → `(h===9 && m>=35)` — closes 09:30→09:50 dead zone |
-| `wealth-engine/workers/wealth-trader/src/index.js` | 33770bf (PR #89) | 🟡 PR open, not deployed | `firePaperExit` UPDATE statement changed `SET pnl_net_paise = ?, cost_paise = ?, pnl_gross_paise = ?` → `SET pnl_net_paise = COALESCE(pnl_net_paise, 0) + ?, cost_paise = COALESCE(cost_paise, 0) + ?, pnl_gross_paise = COALESCE(pnl_gross_paise, 0) + ?`. `win_loss` recomputed via CASE against accumulated pnl_net |
+| IST Time (commit) | Commit | PR | PR created → merged | Status | What changed |
+|---|---|---|---|---|---|
+| 08:43:34 | 814fa01 | #83 | 08:44:13 → 08:48:55 | 🟢 deployed | live integrity overlay on Today (snapshot vs live status diff) — UI/intelligence boundary |
+| 08:59:08 | cbf18e7 | #84 | 09:06:21 → 09:06:42 | 🟢 deployed | wealth-verdict max_tokens 1500 → 4000 — fixed 08:30 truncation (today's verdict was re-composed at 09:01 IST) |
+| 09:24:45 | 0f96da3 | #85 | 09:25:14 → 09:25:24 | 🟢 deployed | F-PERS column-fix (`captured_at` not `created_at`) + F-COVER-1 top default 50→200 |
+| 12:00:09 | b8ac986 | **#89** | 12:00:53 → **OPEN** | 🟡 **NOT DEPLOYED** | F-EXIT-2: `confirmedSustainedBelow`/`Above` helpers, entry-side SKIP guarded, exit-side STOP/TRAIL guarded, SKIPPED-resurrection in priceMonitor query, dispatcher window `m>=50` → `m>=35` |
+| 12:20:15 | 33770bf | **#89** | (added to open PR) | 🟡 **NOT DEPLOYED** | firePaperExit accumulation fix: SET `pnl_*=?` → SET `pnl_*=COALESCE(pnl_*,0)+?` |
 
 ### 1.5 D1 manual writes today (intelligence-layer state mutations)
 
-| Time IST | Table | Operation | Row |
+| IST Time | Table | Operation | Detail |
 |---|---|---|---|
-| 11:28 | paper_trades | UPDATE | id=18 (TDPOWERSYS) trader_state SKIPPED → WATCHING, trader_notes='MANUAL REVIVE 11:28 IST...' |
-| 11:28 | trader_decisions | INSERT | manual_revive event for TDPOWERSYS |
-| 12:14 | paper_trades | UPDATE | id=17 (AEROFLEX) trader_state SKIPPED → WATCHING, trader_notes='MANUAL REVIVE 12:14 IST...' |
-| 12:18 | paper_trades | UPDATE | id=18 pnl_net_paise += 246866, pnl_gross_paise += 255200, cost_paise += 8334 (compensate firePaperExit overwrite) |
+| 11:28:00 | paper_trades | UPDATE id=18 | trader_state SKIPPED → WATCHING; trader_notes='MANUAL REVIVE 11:28 IST...'; last_check_at=1778133480000 |
+| 11:28:00 | trader_decisions | INSERT | manual_revive event for TDPOWERSYS (composed_by_model='human_owner', LTP 1243.10) |
+| 12:14:00 | paper_trades | UPDATE id=17 | trader_state SKIPPED → WATCHING; trader_notes='MANUAL REVIVE 12:14 IST...'; last_check_at=1778135640000 |
+| 12:18:02 | paper_trades | UPDATE id=18 | pnl_net_paise += 246866, pnl_gross_paise += 255200, cost_paise += 8334; trader_notes appended with 'TRUE_NET_RECONSTRUCTED' marker |
 
 ### 1.6 Current intelligence-layer state
 
-**LIVE in production (Cloudflare Workers — wealth-trader worker version pre-PR #89):**
+**LIVE in production (wealth-trader Worker version pre-PR #89):**
 - Entry intelligence: BREAKOUT_TRIGGER (single-tick), Opus 3-attempt window (09:45/10:00/10:15), price_monitor 09:50–15:09 every 5min
-- Exit intelligence: F-EXIT-1 target_locked + 0.8% trail from peak + Sonnet safety + Opus mgmt + hard_exit 15:10 + F-L4-LOCK
-- **KNOWN BUGS still in production**: SKIP_GAPPED_BELOW_STOP fires on single tick → permanent SKIP for the day. priceMonitor query filters trader_state='WATCHING' only. 09:30–09:50 dead zone. firePaperExit overwrites accumulated pnl_net.
+- Exit intelligence: F-EXIT-1 + 0.8% trail + Sonnet safety + Opus mgmt + hard_exit 15:10 + F-L4-LOCK
+- **KNOWN BUGS still in production:** (1) SKIP_GAPPED_BELOW_STOP single-tick → permanent SKIP. (2) priceMonitor query filters `trader_state='WATCHING'` only. (3) 09:30–09:50 dead zone. (4) firePaperExit overwrites accumulated pnl_net.
 
-**PR pending owner deploy (PR #89):**
+**PR pending owner deploy (PR #89, 2 commits):**
 - F-EXIT-2 tick-confirmation (entry + exit sides)
 - SKIPPED-resurrection
 - 09:30→09:35 dead-zone fix
 - firePaperExit accumulation fix
 
 **Deferred (post-real-money launch):**
-- F-DATA-2 (avg time-to-high column on intraday_suitability)
+- F-DATA-2 (avg time-to-high column)
 - 6/9 dim_health workers improvement
 - Volume_ratio time-aware floor tuning
-- Conviction-weighted dynamic allocation (45/30/20 today is verdict-static)
+- Conviction-weighted dynamic allocation
 
 ---
 
@@ -128,68 +138,54 @@ Time-ordered. Items flagged 🟢 = shipped & live, 🟡 = PR pending deploy, ⚫
 > data loss. Kite API auth holds. The intelligence layer always sees the
 > data it needs in the schema shape it expects.
 
-### 2.2 Components
+### 2.2 Components & schedule
 
-| Component | Where | Schedule |
+| Component | File / Endpoint | Schedule (IST) |
 |---|---|---|
-| **wealth-trader cron multi-window** | `wealth-trader/wrangler.toml` | `* 4 * * 1-5` (every minute UTC 04:00–04:59 = IST 09:30–10:29) + `*/3 5-9 * * 1-5` (every 3min IST 10:30–15:29) + `*/15 3 * * 1-5` (IST 08:30/08:45/09:00/09:15) + `*/5 10 * * 1-5` (IST 15:30–16:25 cleanup) |
-| **Dispatcher** | wealth-trader.routeByIstTime | Maps IST hh:mm to phase: range_capture / entry_1/2/3 / position_mgmt / sonnet_safety / hard_exit / price_monitor |
-| **Kite LTP fetch** | wealth-trader.getKiteLtp | Reads kite_tokens (is_active=1) + calls https://api.kite.trade/quote, returns LTP+volume+OHLC |
-| **D1 reads** | All workers | paper_trades, intraday_ticks, intraday_bars, opening_ranges, trader_decisions, daily_verdicts, india_vix_ticks, news_items, intraday_suitability |
-| **D1 writes** | wealth-trader, wealth-orchestrator | paper_trades state transitions, trader_decisions audit log, opening_ranges, cron_run_log |
-| **HTTP entrypoints** | wealth-trader.fetch | `/state` (read-only), `?force_phase=...` (manual trigger, key-gated) |
-| **Pages Functions** | `functions/api/trading.js` | `today_consolidated`, `intraday`, `paper_trades`, `trader_timeline`, etc. — all read-only API for UI |
+| wealth-trader cron multi-window | `wealth-engine/workers/wealth-trader/wrangler.toml` | `* 4 * * 1-5` (every min 09:30–10:29) + `*/3 5-9 * * 1-5` (every 3min 10:30–15:29) + `*/15 3 * * 1-5` (08:30/45, 09:00/15) + `*/5 10 * * 1-5` (15:30–16:25) |
+| Dispatcher | `wealth-trader/src/index.js` :: `routeByIstTime()` | per-call IST-clock routing |
+| Kite LTP fetch | `wealth-trader/src/index.js` :: `getKiteLtp()` | called inline by phases |
+| D1 writes | wealth-trader, wealth-orchestrator | per-event |
+| HTTP entrypoints | `wealth-trader/src/index.js` :: `fetch()` | `/state` (read), `?force_phase=…` (manual, key-gated) |
+| Pages Functions API | `functions/api/trading.js` | per-request, read-only |
 
-### 2.3 Today's trail — every technical change
+### 2.3 Today's technical-layer event trail
 
-Items in this layer are mostly cron firings. We'll trail what was changed in the technical infrastructure today.
-
-| Time IST | Event | Technical change |
-|---|---|---|
-| Pre-this-chat | wealth-verdict deployed | (PR #84 from earlier this morning) max_tokens 1500 → 4000 — fixed verdict truncation |
-| Pre-this-chat | wealth-orchestrator + wealth-intraday-bars | (PR #85) F-PERS column-name fix (`captured_at` not `created_at`); F-COVER-1 top default 50 → 200 |
-| Throughout day | wealth-trader cron firings | All scheduled crons fired on time. ~90 cron invocations over the day |
-| 09:31 | rangeCapture | INSERT 3 rows into opening_ranges; UPDATE paper_trades 3 rows to WATCHING with or_high/or_low |
-| 11:29:53 | ⚫ **HTTP manual trigger** | curl https://wealth-trader.nihafwork.workers.dev/?key=…&force_phase=price_monitor → fired BREAKOUT_TRIGGER for TDPOWERSYS |
-| 12:14:11 | ⚫ **HTTP manual trigger** | Same curl → fired BREAKOUT_TRIGGER for AEROFLEX + PARTIAL_50 for TDPOWERSYS |
-| Throughout day | trader_decisions INSERTs | ~20 events logged across the 3 picks |
-| 15:30 | Market close cron | Last cron firings cleanup |
-| Later | 🟡 **PR #89** | Technical operations changes embedded in wealth-trader patch (see 1.4) — adds 2 helper functions, modifies 1 SQL query, modifies 2 conditional branches, modifies 1 dispatcher line, modifies 1 UPDATE statement |
-
-### 2.4 Technical-layer files modified today (excluding intelligence overlap from §1.4)
-
-| File | Commit | Status | What changed |
+| IST Time | Event | Source | Detail |
 |---|---|---|---|
-| `functions/api/trading.js` | 65a2913 (PR #86) | 🟢 deployed | Extended `today_consolidated` to inline pick.live = { ltp_paise, ltp_ts, bars, prev_close_paise, position }. Added intraday_ticks fallback when intraday_bars empty during market hours |
-| `functions/api/trading.js` | 8c9a875 (PR #87) | 🟢 deployed | (a) Phantom P&L fix: live_pnl_paise only when trader_state='ENTERED' AND !exit_at. (b) Capital ₹10L correctness verified. (c) intraday_ticks fallback simplified to raw 1-min ticks (each tick = 1-pt OHLC bar) |
-| `functions/api/trading.js` | 2bf74be (PR #88) | 🟢 deployed | SELECT or_high_paise + or_low_paise from paper_trades; expose breakout_distance_pct on position. Compute only when state=WATCHING |
-| `functions/api/trading.js` | d026604 (PR #90) | 🟢 deployed | (a) JOIN trader_decisions for each pick → expose `picks[].live.timeline[]`. (b) Compute portfolio roll-up: realized_paise, unrealized_paise, total_paise, capital_deployed_paise, distance_to_lock_paise, counts {watching, entered, exited_win, exited_loss, skipped}. (c) Add holding_ms field on position |
+| 09:30:07 (commit) | API extension PR #86 commit | Git | 65a2913 — `today_consolidated` adds pick.live = {ltp_paise, ltp_ts, bars, position} |
+| 09:30:46 → 09:36:19 | PR #86 created → merged | GH-PR | live LTP + position state + chart on Today verdict cards |
+| 09:37:00 ≈ | Cloudflare Pages deploy PR #86 | CFP | ~1 min after merge |
+| 09:50:10 (commit) | API fixes PR #87 commit | Git | 8c9a875 — capital ₹10L, no phantom P&L on WATCHING, intraday_ticks fallback |
+| 09:50:30 → 09:56:03 | PR #87 created → merged | GH-PR | 3 critical fixes |
+| 09:57:00 ≈ | CFP deploy PR #87 | CFP | |
+| 10:20:20 (commit) | UI fixes PR #88 commit | Git | 2bf74be — chart HTML overlay, breakout banner, 1-min ticks |
+| 10:20:53 → 10:21:18 | PR #88 created → merged | GH-PR | chart label HTML overlay |
+| 10:22:00 ≈ | CFP deploy PR #88 | CFP | |
+| 11:29:53 | **HTTP: force_phase=price_monitor** | HTTP | curl `https://wealth-trader.nihafwork.workers.dev/?key=…&force_phase=price_monitor`. Response: `{phase: price_monitor, rows: 1, exits_fired: 0}` — fired BREAKOUT_TRIGGER for TDPOWERSYS |
+| 12:00:09 (commit) | wealth-trader F-EXIT-2 commit | Git | b8ac986 — PR #89 (NOT DEPLOYED) |
+| 12:00:53 | PR #89 created | GH-PR | F-EXIT-2 emergency, currently OPEN |
+| 12:14:11 | **HTTP: force_phase=price_monitor** (2nd) | HTTP | Second curl. Response: `{phase: price_monitor, rows: 2, exits_fired: 0, portfolio_pnl_paise: 517990}` — fired BREAKOUT_ENTER for AEROFLEX + PARTIAL_50 for TDPOWERSYS |
+| 12:20:15 (commit) | firePaperExit fix commit added to PR #89 | Git | 33770bf — accumulation fix |
+| 12:36:43 (commit) | API + UI story-arc commit | Git | d026604 — adds `picks[].live.timeline[]` JOIN trader_decisions, `verdict.portfolio` roll-up |
+| 12:37:26 → 12:38:17 | PR #90 created → merged | GH-PR | story-arc redesign |
+| 12:39:00 ≈ | CFP deploy PR #90 | CFP | new fields verified live ~12:40 IST |
+| 13:00:07 (commit) | chart CSS hotfix commit | Git | 9226f91 — de-scoped chart CSS rules |
+| 13:00:11 → 13:01:22 | PR #91 created → merged | GH-PR | hotfix |
+| 13:02:00 ≈ | CFP deploy PR #91 | CFP | SW v45 |
+| 17:27:22 (commit) | trail doc commit | Git | cd5d08a |
+| 17:27:42 | PR #92 created | GH-PR | this document |
 
-### 2.5 Cloudflare Pages auto-deploys today (technical operations sub-layer)
+### 2.4 Worker deploys outstanding
 
-Each merged PR auto-triggered Pages build → CDN cache flush:
-- 09:31 IST area · PR #84 deploy (verdict max_tokens fix)
-- 09:50 IST area · PR #85 deploy (F-PERS + F-COVER-1)
-- 11:00 IST area · PR #86 deploy (live LTP on Today)
-- 11:30 IST area · PR #87 deploy (capital + phantom P&L + chart fallback)
-- 12:00 IST area · PR #88 deploy (chart label HTML overlay + breakout banner + 1-min ticks)
-- 12:30 IST area · PR #90 deploy (story-arc redesign API + UI + SW)
-- 13:00 IST area · PR #91 deploy (chart CSS hotfix)
+- **PR #89 (wealth-trader)**: requires `cd wealth-engine/workers/wealth-trader && wrangler deploy`. **No GitHub Actions configured for Workers. MUST DEPLOY before Fri 8 May 09:30 IST.**
 
-### 2.6 Worker deployments NOT yet done
+### 2.5 Current technical-layer state
 
-- **PR #89 (wealth-trader)**: requires `cd wealth-engine/workers/wealth-trader && wrangler deploy`. Owner must run manually — no GitHub Actions configured for Workers. **MUST DEPLOY before Fri 8 May 09:30 IST or tomorrow's wicks will repeat today's SKIP-lock issue.**
-
-### 2.7 Current technical-layer state
-
-**LIVE & VERIFIED:**
-- All scheduled cron firings on time
-- Kite API auth holding (no `KITE_DOWN` events today)
-- D1 writes atomic (no schema/constraint errors)
-- Pages Functions API serving today_consolidated correctly with all new fields (timeline, portfolio)
-
-**DEFERRED:**
-- GitHub Actions for Worker auto-deploy (currently manual `wrangler deploy`)
+- All scheduled cron firings on time today (verified via trader_decisions row appearance at expected IST times)
+- Kite API auth holding — no `KITE_DOWN` events logged
+- D1 writes atomic — no schema/constraint errors
+- Pages Functions serving all new fields correctly post PR #90 deploy
 
 ---
 
@@ -200,82 +196,89 @@ Each merged PR auto-triggered Pages build → CDN cache flush:
 > Owner sees the complete trading story — what was planned, what fired, why,
 > when, what's happening NOW, what happened, what we learned, what to do
 > tomorrow — with two distinct reading modes: **LIVE** during market hours
-> and **RETROSPECTIVE** after market close. Mobile-first, iPhone PWA primary.
+> and **RETROSPECTIVE** after market close.
 
 ### 3.2 Components
 
-| Component | Where | Renders |
+| Component | File | Surface |
 |---|---|---|
-| `/trading/today/` page | `trading/today/index.html` (single-page, vanilla JS) | The owner's primary daily surface |
-| `today_consolidated` API | `functions/api/trading.js` | Single endpoint feeding the entire page |
-| Service Worker | `trading/sw.js` | Caches static assets; never caches API |
-| Spine library | `trading/_lib/spine.js` | Top indices ribbon + bottom phase strip across all trading pages |
-| Stock modal library | `trading/_lib/stock-modal.js` | Click symbol → 90D deep-dive modal |
+| /trading/today/ page | `trading/today/index.html` (single-page vanilla JS) | Owner's primary daily surface |
+| today_consolidated API | `functions/api/trading.js` :: `getTodayConsolidated()` | Single endpoint feeding the page |
+| Service Worker | `trading/sw.js` | Cache + version bumps |
+| Spine library | `trading/_lib/spine.js` | Top indices + bottom phase strip |
+| Stock modal library | `trading/_lib/stock-modal.js` | 90D deep-dive |
 
-### 3.3 Today's trail — every UI/UX change
+### 3.3 Today's UI/UX event trail
 
-| Time IST | Event | UI/UX change |
-|---|---|---|
-| Earlier morning | 🟢 PR #86 deploy | Each pick card on /trading/today/ now shows live LTP + delta + position state pill + inline 320×90 SVG chart + plan grid. Replaces previous text-only verdict listing |
-| Earlier morning | 🟢 PR #87 deploy | Capital bug (₹1L → ₹10L) fixed in display, no phantom P&L on WATCHING rows, chart fallback to intraday_ticks |
-| 09:45 | 🔴 Owner screenshot | Capital math wrong (~948.8% bug already pre-fixed but still showing in cached SW), phantom P&L on WATCHING |
-| 09:55 area | 🟢 PR #88 deploy | (a) Chart text labels were stretched horribly because SVG used `preserveAspectRatio="none"`. Fix: SVG draws lines only; labels are HTML-overlay divs positioned absolutely with `top: ${yScalePct}%`. (b) Chart line was sparse (~6 dots from 5-min synthetic buckets). Fix: render raw 1-min `intraday_ticks` directly. (c) WATCHING state-note expanded — new banner "▲ Breakout trigger: ₹X.XX · LTP needs +Y.YY% to fire entry" + dashed blue TRIGGER line on chart |
-| 11:29 | First salvage | UI auto-updates: TDPOWERSYS card transitions WATCHING → ENTERED |
-| 12:14 | Second salvage | UI auto-updates: AEROFLEX card transitions WATCHING → ENTERED. TDPOWERSYS card transitions to show partial-50 fired |
-| 12:15 | Sonnet exit | UI auto-updates: TDPOWERSYS card transitions ENTERED → EXITED |
-| 12:25–12:30 area | Owner feedback "the entire workflow is broken" | UI was a flat data dump, not a story. Owner reads in two distinct modes (LIVE / RETROSPECTIVE). Required full redesign |
-| 12:30 area | 🟢 PR #90 commit + deploy | **STORY-ARC redesign**: (a) Hero P&L card at top (big rupee number + % capital + realized/unrealized/capital-deployed/counts + F-L4-LOCK distance bar). (b) Phase banner ("Market live · Xh Ym to close · next: HH:MM cron"). (c) Each pick = story-arc card with sections PLAN / TIMELINE / LIVE / CHART / OUTCOME / LESSON. (d) Timeline renders trader_decisions as vertical event stream with dots colour-coded by event type. (e) POST_CLOSE phase adds "Today's lessons" (auto-detected from timeline) + "Tomorrow's checklist" (6-item action list). New CSS classes ~150 lines. New JS render functions ~200 lines |
-| 12:30 area | API extension shipped | `picks[].live.timeline[]` (from trader_decisions), `verdict.portfolio` roll-up object, `position.holding_ms` |
-| 12:55 | Owner screenshot — chart overflowing | Story-arc card was rendering chart with `position:absolute;inset:0;` SVG escaping container because `.pick-card .pick-chart` CSS rules were scoped to old layout, didn't apply to new `.story-card .pick-chart` |
-| 13:05 area | 🟢 PR #91 deploy | **HOTFIX**: De-scoped chart CSS rules from `.pick-card` prefix. Class names (`.pick-chart`, `.chart-label`, `.chart-x-label`, `.breakout-trigger`) now apply globally. SW v44 → v45 |
-| Throughout afternoon | UI auto-refresh every 30s during LIVE | Owner saw AEROFLEX chart, P&L tick |
-| 15:00 | AEROFLEX exited | Hero P&L card updates to realized ₹+19,316. UI ready to transition to POST_CLOSE |
-| 15:30 | Market close | Phase: LIVE → POST_CLOSE. Page auto-renders lessons + tomorrow checklist sections |
-| 16:39 | Owner asked "is the day over" | API confirmed POST_CLOSE phase, all positions resolved, total +₹19,316 |
-
-### 3.4 UI/UX-layer files modified today
-
-| File | Commits | Status | What changed |
+| IST Time | Event | Source | Detail |
 |---|---|---|---|
-| `trading/today/index.html` | 65a2913, 8c9a875, 2bf74be, d026604, 2920f53/9226f91 | 🟢 all deployed | (a) Per-pick live block + chart + plan grid — 65a2913. (b) State pill semantics + capital fix — 8c9a875. (c) Chart HTML label overlay + breakout banner — 2bf74be. (d) Story-arc redesign: hero P&L card, story-arc renderer, phase banner, timeline renderer, lesson templater, tomorrow checklist — d026604. (e) Chart CSS de-scope hotfix — 2920f53/9226f91 |
-| `trading/sw.js` | All UI commits | 🟢 deployed | v42 → v43 → v44 → v45 — each bump flushes cached old layout |
-| `functions/api/trading.js` | 65a2913, 8c9a875, 2bf74be, d026604 | 🟢 deployed | Extends today_consolidated additively — see §2.4 |
+| 09:36:19 | PR #86 merged → page now shows live LTP per pick | GH-PR + CFP | each card: live LTP + delta + position state pill + 320×90 SVG chart + plan grid |
+| 09:45:00 ≈ | Owner screenshot — capital math wrong + phantom P&L | owner | flagged before this trail-tracking session |
+| 09:56:03 | PR #87 merged | GH-PR + CFP | capital ₹10L correctness, no phantom P&L on WATCHING, chart fallback to ticks |
+| 10:21:18 | PR #88 merged | GH-PR + CFP | chart HTML label overlay (fixes preserveAspectRatio text stretching), breakout-trigger banner, 1-min tick resolution |
+| 11:29:53 | UI auto-update | inferred | TDPOWERSYS card transitions WATCHING → ENTERED on next 30s refresh |
+| 12:14:09 | UI auto-update | inferred | AEROFLEX card transitions WATCHING → ENTERED |
+| 12:14:11 | UI auto-update | inferred | TDPOWERSYS card shows partial-50 booking |
+| 12:15:49 | UI auto-update | inferred | TDPOWERSYS card transitions ENTERED → EXITED |
+| 12:25 ≈ | Owner feedback "the entire workflow is broken" | owner | UI was data dump, not story. Required redesign. |
+| 12:36:43 (commit) | Story-arc redesign commit | Git | d026604 |
+| 12:37:26 → 12:38:17 | PR #90 created → merged | GH-PR | hero P&L + story-arc + phase banner + timeline + lessons + tomorrow |
+| 12:40:00 ≈ | CFP deploy PR #90 | CFP | new fields confirmed live; SW v44 |
+| 12:55:00 ≈ | Owner screenshot — chart escaping container | owner | story-card layout had no `position:relative`; SVG with `position:absolute` climbed to viewport |
+| 13:00:07 (commit) | hotfix commit | Git | 9226f91 |
+| 13:00:11 → 13:01:22 | PR #91 created → merged | GH-PR | de-scoped chart CSS rules |
+| 13:02:00 ≈ | CFP deploy PR #91 | CFP | SW v45 |
+| 15:00:57 | UI auto-update | inferred | AEROFLEX card transitions ENTERED → EXITED with ₹+14,187 |
+| 15:30:00 | Phase transition | inferred | LIVE → POST_CLOSE; lessons + tomorrow sections render |
+| 16:39:00 ≈ | Owner check-in | owner | confirmed all positions resolved, total ₹+19,316 |
+| 17:27:22 (commit) | trail doc | Git | cd5d08a |
 
-### 3.5 UI/UX state map
+### 3.4 UI/UX-layer commits today (precise IST)
 
-**Visible to owner right now at /trading/today/ (POST_CLOSE phase):**
-- Top: Indices spine + wallet ribbon (capital deployed, P&L, positions)
-- Hero P&L card: **+₹19,316 (+1.93% of capital)** · Realized ₹+19,316 · Unrealized ₹0 · 0 open · 2 closed · 1 watching · 0 skipped
+| Commit IST | Commit hash | PR | What changed |
+|---|---|---|---|
+| 09:30:07 | 65a2913 | #86 | Per-pick live block + chart + plan grid replaces text-only listing |
+| 09:50:10 | 8c9a875 | #87 | Phantom-P&L fix, capital correctness, chart fallback |
+| 10:20:20 | 2bf74be | #88 | Chart HTML overlay, breakout banner, 1-min ticks |
+| 12:36:43 | d026604 | #90 | STORY-ARC: hero P&L card, phase banner, story-arc renderer, timeline, lessons, tomorrow checklist |
+| 13:00:07 | 9226f91 | #91 | HOTFIX: chart CSS de-scoped from .pick-card prefix |
+
+### 3.5 SW version progression
+
+| IST Time | Version | Triggering PR | Purpose |
+|---|---|---|---|
+| (pre-this-chat) | v41 | — | baseline |
+| 09:36 | v42 | #86 | live LTP + chart |
+| 09:56 | v42 confirmed | #87 | capital + phantom P&L (no version bump — was already v42) |
+| 10:21 | v43 | #88 | chart HTML overlay |
+| 12:38 | v44 | #90 | story-arc redesign |
+| 13:01 | v45 | #91 | chart CSS hotfix |
+
+### 3.6 Current UI/UX state at /trading/today/
+
+- Top: spine (indices ribbon) + wallet ribbon (capital, P&L, positions)
+- Hero P&L card: **+₹19,316.39 (+1.93% of capital)** · Realized ₹+19,316.39 · Unrealized ₹0 · 0 open · 2 closed · 1 watching · 0 skipped
 - Phase banner: "Market closed · today is done · summary below"
-- Verdict block: composed by claude-opus-4-5 at 09:01 IST (though was 08:30 — there's a TBD on this) · TRADE · headline + narrative
-- 3 story-arc cards:
-  - **HFCL** WATCHING (no entry, capital saved)
-  - **AEROFLEX** EXITED · WIN · ₹+14,187 · 167min held · OPUS_FULL_EXIT @ ₹413.60
-  - **TDPOWERSYS** EXITED · WIN · ₹+5,129 · 46min held · SONNET_URGENT_EXIT @ ₹1,277.40 (with partial-50 booking visible in timeline)
-- Today's lessons section (auto-detected): manual revivals + sonnet urgent exits
-- Tomorrow's checklist (6 items): 08:30 verdict, 09:15 open, 09:30 range_capture, 09:35 first price_monitor, throughout F-EXIT-2 wick monitoring, 15:30 transition
-
-**KNOWN UI gaps deferred:**
-- Verdict timestamp shows "composed 09:01" — should be 08:30 (timestamp source TBD)
-- HFCL card lesson rendering not yet verified for "no entry" branch (templated text exists, needs visual confirmation in POST_CLOSE)
-- No drill-down view yet (clicking a story-card section to see Opus prompt + response — would help debug verdict quality)
+- Verdict block: composed by claude-opus-4-5 (08:30 cron with re-compose at 09:01 after PR #84) · TRADE · headline + narrative
+- 3 story-arc cards rendering full timelines (HFCL, AEROFLEX, TDPOWERSYS)
+- Today's lessons (auto-detected): manual revivals + Sonnet urgent exit
+- Tomorrow's checklist (6 items)
 
 ---
 
-## 4 · CROSS-LAYER DEPENDENCIES TODAY
+## 4 · CROSS-LAYER DEPENDENCY MATRIX
 
-This is where macro can be lost. Every change in one layer required confirmed coherence in others.
-
-| Change | Originated in | Required in | Required in |
-|---|---|---|---|
-| Phantom-P&L fix (PR #87) | UI feedback | API (`live_pnl_paise = null` when not ENTERED) | UI (don't render P&L pill on WATCHING) |
-| Capital ₹10L correctness | Pre-existing | D1 user_config seed | UI math (% of capital denominator) |
-| Live LTP on Today (PR #86) | UI/UX (owner request) | API (extend today_consolidated) | Intelligence (no change needed) |
-| Breakout-trigger banner (PR #88) | UI/UX (owner request) | API (expose or_high_paise) | Intelligence (or_high already captured by range_capture) |
-| F-EXIT-2 (PR #89) | Intelligence (owner principle "no paper-day-trade loss") | Technical (priceMonitor logic, dispatcher window, helper functions) | UI (timeline renders new WICK_*_HOLDING events) |
-| firePaperExit accumulation fix (PR #89) | Discovered during UI accuracy audit | Intelligence (correct P&L for F-L4-LOCK trigger) | UI (display correct totals) |
-| Story-arc UI (PR #90) | UI/UX (owner principle "story not data dump") | API (timeline + portfolio fields) | Intelligence (no change needed) |
-| Chart CSS hotfix (PR #91) | UI feedback (owner screenshot) | UI only | n/a |
+| PR | Originated in layer | Required in (intelligence) | Required in (technical) | Required in (UI/UX) |
+|---|---|---|---|---|
+| #84 max_tokens fix | Intelligence | ✓ (verdict cron change) | ✓ (Workers deploy was already done before this chat) | — |
+| #85 F-PERS + F-COVER-1 | Intelligence | ✓ | ✓ | — |
+| #86 live LTP on Today | UI/UX | — | ✓ (API extension) | ✓ |
+| #87 capital + phantom P&L | UI/UX (defect) | — | ✓ (API field gating) | ✓ |
+| #88 chart UX | UI/UX | — | ✓ (API expose or_high_paise) | ✓ |
+| #89 F-EXIT-2 + accumulation | Intelligence | ✓ | ✓ (Worker logic + dispatcher + UPDATE statement) | timeline renders new WICK_*_HOLDING events |
+| #90 story-arc UI | UI/UX | — | ✓ (API timeline + portfolio fields) | ✓ |
+| #91 chart CSS hotfix | UI/UX (defect) | — | — | ✓ |
+| #92 trail doc | Documentation | — | — | — |
 
 ---
 
@@ -285,142 +288,130 @@ This is where macro can be lost. Every change in one layer required confirmed co
 
 | Item | Layer | PR | Action |
 |---|---|---|---|
-| F-EXIT-2 + dead-zone + SKIPPED-resurrection | Intelligence + Technical | PR #89 | `cd wealth-engine/workers/wealth-trader && wrangler deploy` |
-| firePaperExit accumulation fix | Technical (P&L correctness) | PR #89 | (same deploy) |
+| F-EXIT-2 + dead-zone + SKIPPED-resurrection + firePaperExit accumulation | Intelligence + Technical | **PR #89** | `cd wealth-engine/workers/wealth-trader && wrangler deploy` |
 
-### 5.2 Recommended ship before Mon 11 May (from today's scenario backtest)
+### 5.2 Recommended ship before Mon 11 May (from scenario backtest)
 
 | Item | Layer | Status | Why |
 |---|---|---|---|
-| Afternoon-hold rule (13:30+ disable trail when +2% with vol) | Intelligence | not yet authored | Today's data: 0.8% trail kicked AEROFLEX out at ₹392 vs 15:10 close at ₹413.60 = ₹17K left on table |
-| Regime-aware partial-50 (only book in choppy regimes) | Intelligence | not yet authored | Today's data: AEROFLEX was trending; partial-50 cost ₹6K vs ride-to-target |
-| OR-range width filter (>5% range = downgrade conviction) | Intelligence | not yet authored | Today's data: AEROFLEX 7.55% + TDPOWERSYS 6.15% would have been flagged as fragile setups |
+| Afternoon-hold rule (13:30+ disable trail at +2% with vol) | Intelligence | not yet authored | 0.8% trail kicked AEROFLEX out at ₹392 vs 15:10 close ₹413.60 — backtest showed +₹17K left on table |
+| Regime-aware partial-50 booking | Intelligence | not yet authored | Today partial-50 cost ₹6K vs ride-to-target on AEROFLEX (trending regime) |
+| OR-range width filter (>5% = downgrade conviction) | Intelligence | not yet authored | AEROFLEX 7.55% + TDPOWERSYS 6.15% would have been pre-flagged as fragile |
 
 ### 5.3 Deferred (post-launch)
 
-- F-DATA-2 (avg time-to-high column on intraday_suitability)
+- F-DATA-2 (avg time-to-high column)
 - 6/9 dim_health workers improvement
-- gift_nifty data freshness fix (cron firing OK, source returning previous-day stale)
+- gift_nifty data freshness fix
 
 ---
 
-## 6 · DAY-LEVEL P&L TRUTH
+## 6 · DAY-LEVEL P&L TRUTH (precise from D1)
 
-| Position | Qty | Entry | Exit | Net P&L | Hold |
-|---|---|---|---|---|---|
-| HFCL | 0 | — | — | ₹0 | n/a (capital saved) |
-| AEROFLEX | 759 | ₹394.70 (12:14:09) | ₹413.60 (15:00:57) | **₹+14,187** | 167 min |
-| TDPOWERSYS partial | 80 | ₹1,243.10 (11:29:53) | ₹1,275.00 (12:14:11) | **₹+2,469** | 45 min |
-| TDPOWERSYS runner | 80 | ₹1,243.10 | ₹1,277.40 (12:15:48) | **₹+2,661** | 46 min |
-| **Total realized** | | | | **₹+19,316** | |
-| Capital deployed | | | | ~₹3.99L of ₹10L | |
-| Return on deployed | | | | **+4.84%** | |
-| Return on total capital | | | | **+1.93%** | |
+| Position | Qty | Entry IST | Entry ₹ | Exit IST | Exit ₹ | Net P&L | Hold | Source |
+|---|---|---|---|---|---|---|---|---|
+| HFCL (id=16) | 0 (n/a) | — | — | — | — | ₹0 | — | D1-PT trader_state=WATCHING |
+| AEROFLEX (id=17) | 759 | 12:14:09 | ₹394.70 | 15:00:57 | ₹413.60 | **₹+14,187.12** | 2h 46m 48s | D1-PT pnl_net_paise=1418712 |
+| TDPOWERSYS (id=18) partial | 80 | 11:29:53 | ₹1,243.10 | 12:14:11 | ₹1,275.00 | ₹+2,468.66 | 44m 18s | derived from trader_notes |
+| TDPOWERSYS (id=18) runner | 80 | 11:29:53 | ₹1,243.10 | 12:15:48 | ₹1,277.40 | ₹+2,660.61 | 45m 55s | D1-PT pnl_net_paise=512927 (after MAN correction) |
+| **Total realized** | | | | | | **₹+19,316.39** | | |
+| Capital deployed | | | | | | ~₹3.99L of ₹10L | | |
+| Return on deployed | | | | | | **+4.84%** | | |
+| Return on total capital | | | | | | **+1.93%** | | |
+
+### 6.1 P&L event-stream reconciliation
+
+```
+12:14:11  TDPOWERSYS partial booking added pnl_net_paise += 246866
+12:15:48  TDPOWERSYS runner exit OVERWROTE pnl_net_paise = 266061  (firePaperExit bug)
+12:18:02  MAN correction: pnl_net_paise += 246866 → 512927  (₹5,129.27)
+15:00:57  AEROFLEX runner exit (no partial — first run of AEROFLEX, accumulation = ₹14,187.12)
+```
+
+If PR #89's firePaperExit fix had been deployed, the 12:18:02 manual correction would not have been needed — pnl_net_paise would have accumulated automatically from 246866 (partial) + 266061 (runner) = 512927.
 
 ---
 
 ## 7 · THE THREE CONNECTED VIEWS
 
-### 7.1 Intelligence layer — final connected view to ship
+### 7.1 Intelligence layer (target state for Mon 11 May)
 
 ```
 PRE-MARKET (08:30 IST)
-  Verdict → 3 picks with weights, entry/stop/target, rationale
-            (depends on: F-PERS 90d scoring, F1 v2 conviction, 
-             intraday_suitability, news, sectors, regime)
+  Verdict cron → 3 picks (depends on F-PERS, F1 v2, intraday_suitability,
+                          news, sectors, regime)
 
 OPEN (09:15) → RANGE (09:30)
-  range_capture → opening_ranges + paper_trades.or_high/low/state=WATCHING
+  range_capture → opening_ranges + paper_trades.or_high/low → state=WATCHING
 
 ENTRY (09:35–14:00 with PR #89 deployed)
   priceMonitor.BREAKOUT_TRIGGER (every 5min, deterministic)
-    + entryDecision (Opus at 09:45/10:00/10:15)
-    + F-EXIT-2 confirmation (no single-tick SKIPs)
-    + SKIPPED-resurrection (if stock recovers)
+  + entryDecision (Opus at 09:45/10:00/10:15)
+  + F-EXIT-2 confirmation: no single-tick SKIPs
+  + SKIPPED-resurrection if stock recovers above trigger
 
 POSITION MGMT (11:00–15:00 every 30min)
   Opus: HOLD / TIGHTEN_TRAIL / PARTIAL_EXIT_50 / FULL_EXIT
   Sonnet safety: URGENT_EXIT off-cycle
   F-EXIT-1: target_locked → ride trail above
-  F-L4-LOCK: portfolio +₹30K → force-exit non-extended
+  F-L4-LOCK: portfolio +₹30K → force-exit
 
 EXIT
   Trail / target-lock / sonnet-urgent / Opus full-exit / hard 15:10
-
-LEARN (16:00 EOD)
-  EOD audit → learning_audits → tomorrow's verdict input
 ```
 
-### 7.2 Technical operations — final connected view to ship
+### 7.2 Technical operations (target state)
 
 ```
 CRON SCHEDULE (wealth-trader/wrangler.toml — currently optimal):
-  IST 08:30/45 09:00/15  warm-up + verdict input prep
-  IST 09:30→10:29        every 1min (entry-window precision)
+  IST 08:30/45 09:00/15  warm-up
+  IST 09:30→10:29        every 1min (entry-window)
   IST 10:30→15:29        every 3min (active trading)
-  IST 15:30→16:25        every 5min (cleanup + EOD)
+  IST 15:30→16:25        every 5min (cleanup)
 
-DISPATCHER (routeByIstTime — needs PR #89):
+DISPATCHER (with PR #89 deployed):
   09:30 → range_capture
-  09:35/40 → price_monitor (NEW with PR #89, was dead zone)
-  09:45 → entry_1 (Opus)
-  10:00 → entry_2 (Opus)
-  10:15 → entry_3 (Opus)
+  09:35/40 → price_monitor (NEW with PR #89)
+  09:45 → entry_1, 10:00 → entry_2, 10:15 → entry_3
   Other 5-min marks 09:35–15:09 → price_monitor
   11:00, 11:30, 12:00…15:00 → position_mgmt (Opus)
   11:15, 11:45, 12:15…14:45 → sonnet_safety
   15:10 → hard_exit
-
-KITE API: getKiteLtp via api.kite.trade/quote
-D1 SCHEMA: paper_trades, intraday_ticks, intraday_bars,
-           opening_ranges, trader_decisions, daily_verdicts,
-           india_vix_ticks, news_items, intraday_suitability
-LOGGING: trader_decisions row per state change
-HTTP: /state (read), ?force_phase=X (manual trigger, key-gated)
 ```
 
-### 7.3 UI / UX — final connected view to ship
+### 7.3 UI / UX (target state)
 
 ```
-PRE_MARKET phase (before 09:15 IST):
-  Hero: ₹0 P&L · "verdict composes at 08:30 IST"
-  Phase banner: "Pre-market · live opens 09:15"
-  Picks: PLAN section only (entry/stop/target/weight/rationale)
-  No timeline yet, no live status, no outcome, no lesson
+PRE_MARKET (before 09:15 IST):
+  Hero ₹0 · "verdict composes 08:30"
+  Picks: PLAN section only
 
-LIVE phase (09:15–15:30 IST):
-  Hero: live P&L (realized + unrealized) ticking
-  Phase banner: "Market live · Xh Ym to close · next cron at HH:MM"
-  Picks: PLAN + TIMELINE (events as they happen) +
-         LIVE STATUS (LTP + delta or breakout-distance) +
-         CHART (smooth 1-min ticks, HTML labels, breakout-trigger line) +
-         OUTCOME (when exited)
-  Auto-refresh every 30s
+LIVE (09:15–15:30 IST):
+  Hero: live P&L ticking
+  Phase banner: next cron HH:MM
+  Picks: PLAN + TIMELINE + LIVE STATUS + CHART + OUTCOME (when exited)
+  Auto-refresh 30s
 
-POST_CLOSE phase (15:30+ IST or before 09:15 next day):
-  Hero: final P&L (locked)
-  Phase banner: "Market closed · today is done · summary below"
-  Picks: full story arc + LESSON section (templated)
-  Today's lessons (auto-detected system findings)
-  Tomorrow's checklist (6-item action list)
-  Static (no auto-refresh)
-
-OWNER MENTAL MODEL:
-  Plan → Trigger → Execution → Life → Exit → P&L → Lesson
+POST_CLOSE (15:30+ IST):
+  Hero: final P&L locked
+  Picks: full arc + LESSON
+  Today's lessons (auto-detected)
+  Tomorrow's checklist
+  Static
 ```
 
 ---
 
-## 8 · THIS DOCUMENT IS FOR MANUAL AUDIT
+## 8 · READING INSTRUCTIONS
 
-Three reading lenses you can apply:
+1. **Layer-internal coherence (column-read)** — read §1, §2, §3 each as a column. Does every micro-change inside that layer serve the layer's macro objective?
 
-1. **Layer-internal coherence** — read §1, §2, §3 each as a column. Does every micro-change inside that layer serve the layer's macro objective?
+2. **Cross-layer coupling** — read §4. Did each cross-layer change get matching shipments?
 
-2. **Cross-layer coupling** — read §4. Did each cross-layer change get matching shipments in all required layers?
+3. **Ship-readiness for May 11** — read §5. Are §5.1 deploys done?
 
-3. **Ship-readiness for May 11** — read §5. Are §5.1 deploys done? Are §5.2 ships in flight?
+4. **P&L coherence** — read §6.1. Did the event-stream sum to the truth, or did a bug eat a partial booking?
 
-If audit reveals drift, the action is to update §7 (the connected views) and back-propagate fixes to the right layer.
+If audit finds drift → update §7 (connected views) → back-propagate fixes.
 
-End of execution trail — Thu 07 May 2026.
+End of trail — Thu 07 May 2026.
