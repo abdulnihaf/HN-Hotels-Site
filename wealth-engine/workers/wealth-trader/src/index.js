@@ -1863,6 +1863,19 @@ async function firePaperExit(db, trade, exitPaise, reason) {
   const pnlNetPaise = pnlGrossPaise - costPaise;
   const winLoss = pnlNetPaise > 0 ? 'win' : (pnlNetPaise < 0 ? 'loss' : 'breakeven');
 
+  // BUG FIX (May 7 2026, 12:18 IST): the partial-50 booking at first-target
+  // (line ~707) ACCUMULATES into pnl_net_paise / cost_paise / pnl_gross_paise
+  // via COALESCE(...,0) + ?, but firePaperExit was OVERWRITING with =?, which
+  // erased the partial booking on runner exit. Today TDPOWERSYS booked +₹2,469
+  // partial, then SONNET_URGENT_EXIT fired on the runner and overwrote the row
+  // with only the runner's ₹2,661 — losing ₹2,469 from the daily tally.
+  //
+  // Fix: ACCUMULATE here too. For trades with no prior partial, COALESCE(...,0)
+  // means the result equals the new value (same as old behavior). For trades
+  // with a partial, the partial's contribution is preserved.
+  //
+  // win_loss is recomputed against the FINAL accumulated pnl_net so the flag
+  // reflects whether the position-as-a-whole made money, not just the runner.
   await db.prepare(`
     UPDATE paper_trades
     SET is_active = 0,
@@ -1870,15 +1883,19 @@ async function firePaperExit(db, trade, exitPaise, reason) {
         exit_paise = ?,
         exit_at = ?,
         exit_reason = ?,
-        pnl_gross_paise = ?,
-        pnl_net_paise = ?,
-        cost_paise = ?,
-        win_loss = ?,
+        pnl_gross_paise = COALESCE(pnl_gross_paise, 0) + ?,
+        pnl_net_paise = COALESCE(pnl_net_paise, 0) + ?,
+        cost_paise = COALESCE(cost_paise, 0) + ?,
+        win_loss = CASE
+                     WHEN COALESCE(pnl_net_paise, 0) + ? > 0 THEN 'win'
+                     WHEN COALESCE(pnl_net_paise, 0) + ? < 0 THEN 'loss'
+                     ELSE 'breakeven' END,
         last_check_at = ?
     WHERE id = ?
   `).bind(
     exitPaise, Date.now(), reason,
-    pnlGrossPaise, pnlNetPaise, costPaise, winLoss,
+    pnlGrossPaise, pnlNetPaise, costPaise,
+    pnlNetPaise, pnlNetPaise,  // for the CASE comparison (sqlite re-binds positionally)
     Date.now(), trade.id,
   ).run();
 }
