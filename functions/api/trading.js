@@ -123,6 +123,9 @@ export async function onRequest(context) {
       case 'readiness_report':   return Response.json(await getReadinessReport(db, url), { headers });
       case 'top_strip':          return Response.json(await getTopStrip(db), { headers });
       case 'today_consolidated': return Response.json(await getTodayConsolidated(db, env), { headers });
+      case 'snapshot_save':      return Response.json(await saveSnapshot(db, env, url), { headers });
+      case 'snapshot_get':       return Response.json(await getSnapshot(db, url), { headers });
+      case 'snapshot_list':      return Response.json(await listSnapshots(db), { headers });
       case 'desk_view':          return Response.json(await getDeskView(db), { headers });
       case 'stock_detail':       return Response.json(await getStockDetail(db, url), { headers });
       case 'monthly_learning_trail': return Response.json(await getMonthlyLearningTrail(db, url), { headers });
@@ -3396,6 +3399,126 @@ async function getTopStrip(db) {
 //   4. pre_market_feed        (latest crossasset + GIFT NIFTY + breaking news)
 //   5. swing_candidates       (signal_scores composite >= 70, capped to 8)
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// SNAPSHOT PERSISTENCE (May 7 EOD owner ask)
+//
+// Owner principle: "this is only way to store the historical data for each day
+// in way it will help me to learn... please make sure the data and execution
+// we are doing is 100% accurate in data and not blind."
+//
+// Captures the full today_consolidated response into daily_snapshots table.
+// Each row = one trade_date with the JSON snapshot frozen at save time.
+// Use cases:
+//   - Manual save tonight via /api/trading?action=snapshot_save (preserves
+//     today's data before tomorrow's verdict overwrites the live computation)
+//   - Future: automated 16:30 IST cron will save daily (deferred Saturday)
+//   - Read past day via /api/trading?action=snapshot_get&date=YYYY-MM-DD
+//   - List available snapshots via snapshot_list
+//
+// Schema (already created in D1):
+//   CREATE TABLE daily_snapshots (
+//     trade_date TEXT PRIMARY KEY,
+//     snapshot_json TEXT NOT NULL,
+//     created_at INTEGER NOT NULL,
+//     snapshot_source TEXT DEFAULT 'live'
+//   )
+//
+// Storage size: today_consolidated response ~50KB → 50KB per day → 12.5MB/year.
+// Trivial for D1 (5GB limit).
+//
+// MACRO SAFETY: completely additive. New table, new endpoints. Zero impact
+// on wealth-trader, /api/kite, today_consolidated, or auto-bridge.
+
+async function saveSnapshot(db, env, url) {
+  const dateParam = url.searchParams.get('date');
+  // Default to today (compute IST date, not server UTC)
+  const istNow = new Date(Date.now() + 5.5 * 3600000);
+  const date = dateParam || istNow.toISOString().slice(0, 10);
+  // Validate date format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, error: 'date must be YYYY-MM-DD' };
+  }
+  // Compute today_consolidated on demand (uses current logic for accuracy)
+  // For past dates, we'd need a different approach (deferred — backfill PR).
+  const todayIstDate = istNow.toISOString().slice(0, 10);
+  if (date !== todayIstDate) {
+    return {
+      ok: false,
+      error: `snapshot_save only saves TODAY's data. For past dates, use snapshot_backfill (separate endpoint, deferred).`,
+      requested_date: date,
+      today_ist: todayIstDate,
+    };
+  }
+  let snapshot;
+  try {
+    snapshot = await getTodayConsolidated(db, env);
+  } catch (e) {
+    return { ok: false, error: `getTodayConsolidated failed: ${e.message}` };
+  }
+  const snapshotJson = JSON.stringify(snapshot);
+  const sizeBytes = snapshotJson.length;
+  try {
+    await db.prepare(`
+      INSERT OR REPLACE INTO daily_snapshots (trade_date, snapshot_json, created_at, snapshot_source)
+      VALUES (?, ?, ?, ?)
+    `).bind(date, snapshotJson, Date.now(), 'manual_save').run();
+  } catch (e) {
+    return { ok: false, error: `D1 INSERT failed: ${e.message}` };
+  }
+  return {
+    ok: true,
+    date,
+    size_bytes: sizeBytes,
+    phase_at_save: snapshot.phase,
+    picks_count: (snapshot.verdict?.picks || []).length,
+    pool_top10_count: (snapshot.pool_top10 || []).length,
+    universe_winners_missed_count: (snapshot.universe_winners_missed || []).length,
+    realized_paise: snapshot.verdict?.portfolio?.realized_paise || 0,
+  };
+}
+
+async function getSnapshot(db, url) {
+  const date = url.searchParams.get('date');
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, error: 'date param required (YYYY-MM-DD)' };
+  }
+  const row = await db.prepare(`
+    SELECT trade_date, snapshot_json, created_at, snapshot_source
+    FROM daily_snapshots WHERE trade_date=? LIMIT 1
+  `).bind(date).first().catch(() => null);
+  if (!row) return { ok: false, error: `no snapshot for ${date}`, not_found: true };
+  let parsed;
+  try { parsed = JSON.parse(row.snapshot_json); } catch (e) {
+    return { ok: false, error: `snapshot for ${date} corrupted: ${e.message}` };
+  }
+  return {
+    ok: true,
+    trade_date: row.trade_date,
+    saved_at: row.created_at,
+    saved_at_ist: new Date(row.created_at + 5.5 * 3600000).toISOString().replace('T', ' ').slice(0, 19),
+    snapshot_source: row.snapshot_source,
+    snapshot: parsed,
+  };
+}
+
+async function listSnapshots(db) {
+  const rows = (await db.prepare(`
+    SELECT trade_date, created_at, snapshot_source, LENGTH(snapshot_json) AS size_bytes
+    FROM daily_snapshots ORDER BY trade_date DESC LIMIT 100
+  `).all().catch(() => ({ results: [] }))).results || [];
+  return {
+    ok: true,
+    count: rows.length,
+    snapshots: rows.map(r => ({
+      trade_date: r.trade_date,
+      created_at: r.created_at,
+      created_ist: new Date(r.created_at + 5.5 * 3600000).toISOString().replace('T', ' ').slice(0, 19),
+      source: r.snapshot_source,
+      size_kb: Math.round(r.size_bytes / 1024 * 10) / 10,
+    })),
+  };
+}
+
 async function getTodayConsolidated(db, env) {
   const nowMs = Date.now();
   const istNow = new Date(nowMs + 5.5 * 3600 * 1000);
