@@ -3664,15 +3664,34 @@ async function getTodayConsolidated(db) {
 
     // PORTFOLIO ROLL-UP — hero P&L card needs single-glance numbers. Walk all
     // picks, sum realized (EXITED) and unrealized (ENTERED) P&L, deployed
-    // capital, distance-to-F-L4-LOCK threshold (+₹30K).
-    const PROFIT_LOCK_PAISE = 30_000 * 100;
+    // capital, distance-to-F-L4-LOCK threshold.
+    //
+    // RISK CONFIG (May 7 2026) — pulls live from user_config (percentage-based).
+    // Defaults: 5% profit lock / 3% loss halt / 7% best target. Scales with capital.
+    const riskRows = (await db.prepare(`
+      SELECT config_key, config_value FROM user_config
+      WHERE config_key IN ('total_capital_paise','profit_lock_pct','loss_halt_pct','best_target_pct')
+    `).all().catch(() => ({ results: [] }))).results || [];
+    const riskCfg = Object.fromEntries(riskRows.map(r => [r.config_key, r.config_value]));
+    const capitalLive  = parseInt(riskCfg.total_capital_paise) || (verdictRow?.portfolio_capital_paise || 100_000_000);
+    const profitLockPct = parseFloat(riskCfg.profit_lock_pct) || 0.05;
+    const lossHaltPct   = parseFloat(riskCfg.loss_halt_pct)   || 0.03;
+    const bestTargetPct = parseFloat(riskCfg.best_target_pct) || 0.07;
+    const PROFIT_LOCK_PAISE = Math.round(capitalLive * profitLockPct);
+    const LOSS_HALT_PAISE   = Math.round(capitalLive * lossHaltPct);
+    const BEST_TARGET_PAISE = Math.round(capitalLive * bestTargetPct);
     let portfolio = {
       realized_paise: 0,
       unrealized_paise: 0,
       total_paise: 0,
       capital_deployed_paise: 0,
-      capital_total_paise: verdictRow?.portfolio_capital_paise || 100_000_000,
+      capital_total_paise: capitalLive,
       profit_lock_threshold_paise: PROFIT_LOCK_PAISE,
+      profit_lock_pct: profitLockPct,
+      loss_halt_threshold_paise: LOSS_HALT_PAISE,
+      loss_halt_pct: lossHaltPct,
+      best_target_paise: BEST_TARGET_PAISE,
+      best_target_pct: bestTargetPct,
       distance_to_lock_paise: 0,
       counts: { watching: 0, entered: 0, exited_win: 0, exited_loss: 0, skipped: 0 },
     };
