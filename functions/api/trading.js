@@ -3604,12 +3604,32 @@ async function getTodayConsolidated(db) {
       const isEntered = pos && pos.trader_state === 'ENTERED' && !pos.exit_at;
       const isExited = pos && pos.exit_at;
 
+      // STORY-ARC TIMELINE — surface the per-pick decision history so the UI can
+      // show plan→trigger→execution→life→exit as a vertical narrative. Pulled from
+      // trader_decisions (which is the source of truth for every state change).
+      const timeline = (await db.prepare(`
+        SELECT ts, cron_phase, decision, state_after, ltp_paise,
+               composed_by_model, rationale
+        FROM trader_decisions
+        WHERE trade_date=? AND symbol=?
+        ORDER BY ts ASC LIMIT 30
+      `).bind(today, pick.symbol).all().catch(() => ({ results: [] }))).results || [];
+
       pick.live = {
         ltp_paise: ltpRow?.ltp_paise || null,
         ltp_ts: ltpRow?.ts || null,
         bars: chartBars,
         bars_source: bars.length ? 'intraday_bars' : (chartBars.length ? 'intraday_ticks_aggregated' : 'none'),
         prev_close_paise: chartBars.length ? chartBars[0].open_paise : null,
+        timeline: timeline.map(t => ({
+          ts: t.ts,
+          phase: t.cron_phase,
+          decision: t.decision,
+          state_after: t.state_after,
+          ltp_paise: t.ltp_paise,
+          model: t.composed_by_model,
+          reason: t.rationale,
+        })),
         position: pos ? {
           state: pos.trader_state,
           qty: pos.qty,
@@ -3625,6 +3645,8 @@ async function getTodayConsolidated(db) {
           exit_reason: pos.exit_reason,
           pnl_paise: pos.pnl_net_paise,
           exit_at: pos.exit_at,
+          // Holding duration in ms (entry_at → exit_at, or entry_at → now if still open)
+          holding_ms: pos.entry_at ? ((pos.exit_at || nowMs) - pos.entry_at) : null,
           // Breakout trigger info — when WATCHING, owner needs to know "LTP must exceed X to enter"
           or_high_paise: pos.or_high_paise,
           or_low_paise: pos.or_low_paise,
@@ -3639,6 +3661,44 @@ async function getTodayConsolidated(db) {
         } : null,
       };
     }
+
+    // PORTFOLIO ROLL-UP — hero P&L card needs single-glance numbers. Walk all
+    // picks, sum realized (EXITED) and unrealized (ENTERED) P&L, deployed
+    // capital, distance-to-F-L4-LOCK threshold (+₹30K).
+    const PROFIT_LOCK_PAISE = 30_000 * 100;
+    let portfolio = {
+      realized_paise: 0,
+      unrealized_paise: 0,
+      total_paise: 0,
+      capital_deployed_paise: 0,
+      capital_total_paise: verdictRow?.portfolio_capital_paise || 100_000_000,
+      profit_lock_threshold_paise: PROFIT_LOCK_PAISE,
+      distance_to_lock_paise: 0,
+      counts: { watching: 0, entered: 0, exited_win: 0, exited_loss: 0, skipped: 0 },
+    };
+    for (const pick of activePicks) {
+      const pos = pick.live?.position;
+      if (!pos) continue;
+      if (pos.exit_at) {
+        portfolio.realized_paise += pos.pnl_paise || 0;
+        portfolio.capital_deployed_paise += (pos.entry_paise || 0) * (pos.qty || 0);
+        if ((pos.pnl_paise || 0) > 0) portfolio.counts.exited_win++;
+        else if ((pos.pnl_paise || 0) < 0) portfolio.counts.exited_loss++;
+      } else if (pos.state === 'ENTERED') {
+        portfolio.unrealized_paise += pos.live_pnl_paise || 0;
+        portfolio.capital_deployed_paise += (pos.entry_paise || 0) * (pos.qty || 0);
+        portfolio.counts.entered++;
+      } else if (pos.state === 'WATCHING') {
+        portfolio.counts.watching++;
+      } else if (pos.state === 'SKIPPED') {
+        portfolio.counts.skipped++;
+      }
+    }
+    portfolio.total_paise = portfolio.realized_paise + portfolio.unrealized_paise;
+    portfolio.distance_to_lock_paise = Math.max(0, PROFIT_LOCK_PAISE - portfolio.total_paise);
+    portfolio.pct_of_capital = portfolio.capital_total_paise > 0
+      ? +((portfolio.total_paise / portfolio.capital_total_paise) * 100).toFixed(3) : 0;
+
     if (overridePicks?.length) {
       // Augmented array IS overridePicks; sync back to override.new_picks
     }
@@ -3659,6 +3719,7 @@ async function getTodayConsolidated(db) {
       portfolio_capital_paise: verdictRow.portfolio_capital_paise,
       strategy_mode: verdictRow.strategy_mode,
       entry_window: verdictRow.entry_window,
+      portfolio,  // hero P&L roll-up
       override: overrideRow ? {
         overridden_at: overrideRow.overridden_at,
         original_picks: (() => { try { return JSON.parse(overrideRow.original_picks_json); } catch { return []; } })(),
