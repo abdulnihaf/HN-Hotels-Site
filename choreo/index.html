@@ -126,23 +126,35 @@ let timeOffset = 0;       // ms to add to local Date.now() to get master time
 let lastSyncRtt = 0;
 let lastSyncOk = false;
 
+// Take 5 samples, pick the one with smallest RTT — eliminates high-jitter
+// false offsets. Reject samples with RTT >2s entirely (network too unreliable).
 async function syncTime() {
-  const t0 = Date.now();
-  try {
-    const r = await fetch("/api/choreo/time?_=" + t0, { cache: "no-store" });
-    const t1 = Date.now();
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const j = await r.json();
-    const rtt = t1 - t0;
-    // Server time was sampled mid-RTT (assume symmetric round-trip)
-    const localMid = t0 + rtt / 2;
-    timeOffset = j.now - localMid;
-    lastSyncRtt = rtt;
-    lastSyncOk = true;
-  } catch (e) {
-    lastSyncOk = false;
-    console.error("[time-sync] failed:", e);
+  const samples = [];
+  for (let i = 0; i < 5; i++) {
+    const t0 = Date.now();
+    try {
+      const r = await fetch("/api/choreo/time?_=" + t0 + "_" + i, { cache: "no-store" });
+      const t1 = Date.now();
+      if (!r.ok) continue;
+      const j = await r.json();
+      const rtt = t1 - t0;
+      if (rtt > 2000) continue; // reject high-jitter samples
+      const localMid = t0 + rtt / 2;
+      const offset = j.now - localMid;
+      samples.push({ rtt, offset });
+    } catch (_) { /* continue */ }
+    await new Promise(r => setTimeout(r, 100));
   }
+  if (samples.length === 0) {
+    // All samples failed/jittered — keep previous offset, mark sync failed
+    lastSyncOk = false;
+    return;
+  }
+  samples.sort((a, b) => a.rtt - b.rtt);
+  const best = samples[0];
+  timeOffset = best.offset;
+  lastSyncRtt = best.rtt;
+  lastSyncOk = true;
 }
 
 function masterNow() { return Date.now() + timeOffset; }
