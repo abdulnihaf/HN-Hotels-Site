@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v55';  // v55: snapshot auto-save (POST_CLOSE) + date picker UI (Today/Yesterday/Date tabs) + snapshot_backfill endpoint for past dates
+const CACHE_VERSION = 'wealth-v56';  // v56: yesterday recap mini-banner shown in PRE_MARKET / OFF_HOURS when today empty (00:00-08:30 IST gap fill). Auto-hides once today verdict composes.
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
