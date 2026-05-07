@@ -115,9 +115,27 @@
     background: rgba(46,204,113,0.18); color: var(--green); }
   .pick-card .extend-badge { padding: 1px 7px; border-radius: 8px; font-size: 9px; font-weight: 700;
     background: rgba(124,92,255,0.18); color: var(--accent); }
-  .pick-card .pick-chart { margin-top: 8px; height: 90px; background: var(--panel-2); border-radius: 6px; overflow: hidden; }
+  .pick-card .pick-chart { margin-top: 8px; height: 110px; background: var(--panel-2); border-radius: 6px; overflow: hidden; position: relative; }
   .pick-card .pick-chart svg { display: block; width: 100%; height: 100%; }
   .pick-card .pick-chart-empty { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 10px; color: var(--muted); }
+  /* HTML overlay for chart reference labels — avoids SVG text stretching when preserveAspectRatio="none" */
+  .pick-card .chart-label-layer { position: absolute; inset: 0; pointer-events: none; }
+  .pick-card .chart-label { position: absolute; right: 4px; transform: translateY(-50%);
+    font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px;
+    background: rgba(13,20,38,0.85); white-space: nowrap; line-height: 1.3; }
+  .pick-card .chart-label.entry { color: var(--accent); }
+  .pick-card .chart-label.target { color: var(--green); }
+  .pick-card .chart-label.stop { color: var(--red); }
+  .pick-card .chart-label.trail { color: var(--yellow); }
+  .pick-card .chart-label.breakout { color: var(--blue); }
+  .pick-card .chart-label.ltp { color: var(--blue); right: auto; left: auto; transform: translate(-50%, -50%); padding: 2px 7px; background: var(--blue); color: white; font-weight: 700; }
+  .pick-card .chart-x-label { position: absolute; bottom: 2px; font-size: 8px; color: var(--muted); }
+  .pick-card .chart-x-label.left { left: 4px; }
+  .pick-card .chart-x-label.right { right: 4px; }
+
+  .pick-card .breakout-trigger { padding: 6px 10px; background: rgba(79,163,255,0.10); border-left: 3px solid var(--blue);
+    border-radius: 4px; font-size: 11px; margin: 8px 0; }
+  .pick-card .breakout-trigger strong { color: var(--blue); }
   .pick-card .pick-plan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 8px; margin-top: 6px; font-size: 10px; }
   .pick-card .pick-plan .cell .lbl { color: var(--muted); display: block; }
   .pick-card .pick-plan .cell .val { color: var(--text); font-weight: 600; }
@@ -418,56 +436,80 @@
   }
   function pnlClassFor(v) { if (v == null || v === 0) return 'flat'; return v > 0 ? 'positive' : 'negative'; }
 
-  // Inline SVG chart for a pick card — bars + entry/target/stop reference lines + LTP + peak
+  // Inline SVG chart with HTML label overlay — fixes preserveAspectRatio text-stretching bug.
+  // SVG draws lines (which can stretch), HTML overlays draw text labels (which don't).
   function renderPickChart(p) {
     const live = p.live || {};
     const bars = live.bars || [];
-    if (bars.length < 2) return '<div class="pick-chart-empty">no intraday bars yet — populates after market opens at 09:15 IST</div>';
-    const W = 320, H = 90;
+    if (bars.length < 2) return '<div class="pick-chart-empty">no ticks yet — populates as market trades come in</div>';
+    const W = 600, H = 110;
     const closes = bars.map(b => b.close_paise);
     const lows = bars.map(b => b.low_paise);
     const highs = bars.map(b => b.high_paise);
 
-    // Plan-derived prices for reference lines (using LTP as entry estimate if not yet entered)
     const pos = live.position;
     const entryRef = pos?.entry_paise || live.ltp_paise || closes[0];
     const stopPlan = pos?.stop_paise || (entryRef && p.stop_pct ? Math.round(entryRef * (1 - p.stop_pct/100)) : null);
     const targetPlan = pos?.target_paise || (entryRef && p.target_pct ? Math.round(entryRef * (1 + p.target_pct/100)) : null);
     const peak = pos?.peak_price_paise;
     const trail = pos?.trailing_stop_paise;
+    const orHigh = pos?.or_high_paise;  // breakout trigger when WATCHING
 
-    const refs = [entryRef, stopPlan, targetPlan, peak, trail, live.ltp_paise].filter(v => v != null);
+    const refs = [entryRef, stopPlan, targetPlan, peak, trail, live.ltp_paise, orHigh].filter(v => v != null);
     const allVals = [...closes, ...lows, ...highs, ...refs];
     const minV = Math.min(...allVals);
     const maxV = Math.max(...allVals);
     const range = Math.max(1, maxV - minV);
-    const pad = range * 0.08;
+    const pad = range * 0.10;
     const yMin = minV - pad;
     const yMax = maxV + pad;
 
     const xStep = (W - 4) / Math.max(1, bars.length - 1);
     const yScale = v => H - ((v - yMin) / (yMax - yMin)) * H;
+    const yScalePct = v => 100 - ((v - yMin) / (yMax - yMin)) * 100;  // for HTML overlay (% of container height)
     const points = bars.map((b, i) => `${2 + i * xStep},${yScale(b.close_paise).toFixed(1)}`).join(' ');
 
-    const refLine = (val, color, dash, label) => {
+    const refLine = (val, color, dash) => {
       if (val == null) return '';
       const y = yScale(val);
-      return `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="${dash}" opacity="0.55"/>
-              <text x="${W - 4}" y="${y - 2}" text-anchor="end" font-size="9" fill="${color}">${label}</text>`;
+      return `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${color}" stroke-width="1.5" stroke-dasharray="${dash}" opacity="0.55"/>`;
     };
 
     const lastX = 2 + (bars.length - 1) * xStep;
+    const lastXPct = ((lastX) / W) * 100;
     const ltpY = live.ltp_paise != null ? yScale(live.ltp_paise) : yScale(closes[closes.length - 1]);
 
-    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      ${refLine(targetPlan, '#2ecc71', '4 2', 'TGT ' + fmtPriceRs(targetPlan))}
-      ${refLine(entryRef, '#7c5cff', '0', (pos ? 'ENTRY ' : 'plan ') + fmtPriceRs(entryRef))}
-      ${refLine(stopPlan, '#e74c3c', '4 2', 'STOP ' + fmtPriceRs(stopPlan))}
-      ${trail ? refLine(trail, '#f5b041', '2 2', 'trail ' + fmtPriceRs(trail)) : ''}
-      <polyline points="${points}" fill="none" stroke="#e6ecff" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
-      ${peak ? `<circle cx="${lastX}" cy="${yScale(peak)}" r="2.5" fill="#2ecc71"/>` : ''}
-      <circle cx="${lastX}" cy="${ltpY}" r="3" fill="#4fa3ff"/>
+    const isWatching = pos?.state === 'WATCHING' && !pos?.exit_at;
+    const stateEntry = pos?.state === 'ENTERED';
+
+    // SVG lines (no text)
+    const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="position:absolute;inset:0;">
+      ${refLine(targetPlan, '#2ecc71', '4 2')}
+      ${isWatching && orHigh ? refLine(orHigh, '#4fa3ff', '0') : ''}
+      ${refLine(entryRef, '#7c5cff', '0')}
+      ${refLine(stopPlan, '#e74c3c', '4 2')}
+      ${trail ? refLine(trail, '#f5b041', '2 2') : ''}
+      <polyline points="${points}" fill="none" stroke="#e6ecff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${peak ? `<circle cx="${lastX}" cy="${yScale(peak)}" r="3" fill="#2ecc71"/>` : ''}
+      <circle cx="${lastX}" cy="${ltpY}" r="3.5" fill="#4fa3ff"/>
     </svg>`;
+
+    // HTML labels (don't stretch)
+    const labels = `<div class="chart-label-layer">
+      ${targetPlan != null ? `<div class="chart-label target" style="top:${yScalePct(targetPlan).toFixed(1)}%">TGT ${fmtPriceRs(targetPlan)}</div>` : ''}
+      ${isWatching && orHigh ? `<div class="chart-label breakout" style="top:${yScalePct(orHigh).toFixed(1)}%">▲ TRIGGER ${fmtPriceRs(orHigh)}</div>` : ''}
+      ${entryRef != null ? `<div class="chart-label entry" style="top:${yScalePct(entryRef).toFixed(1)}%">${stateEntry ? 'ENTRY' : 'plan'} ${fmtPriceRs(entryRef)}</div>` : ''}
+      ${trail ? `<div class="chart-label trail" style="top:${yScalePct(trail).toFixed(1)}%">trail ${fmtPriceRs(trail)}</div>` : ''}
+      ${stopPlan != null ? `<div class="chart-label stop" style="top:${yScalePct(stopPlan).toFixed(1)}%">STOP ${fmtPriceRs(stopPlan)}</div>` : ''}
+    </div>`;
+
+    // X-axis time labels
+    const firstTs = bars[0].ts;
+    const lastTs = bars[bars.length - 1].ts;
+    const xAxis = `<span class="chart-x-label left">${fmtIstFromMs(firstTs)} IST</span>
+                   <span class="chart-x-label right">${fmtIstFromMs(lastTs)} IST</span>`;
+
+    return svg + labels + xAxis;
   }
 
   // Render a single pick card with live state
@@ -522,6 +564,28 @@
     const livePnlPct = pos?.live_pnl_pct;
     const pnlPaiseClass = pnlClassFor(livePnl);
 
+    // Breakout-trigger banner — only when WATCHING and we have the OR-high level
+    const showBreakout = pos && pos.state === 'WATCHING' && !pos.exit_at && pos.or_high_paise != null;
+    const bDist = pos?.breakout_distance_pct;  // % gap; positive = LTP below trigger, negative = above
+    let breakoutBanner = '';
+    if (showBreakout) {
+      const triggerPx = fmtPriceRs(pos.or_high_paise);
+      let distLabel = '';
+      if (bDist != null) {
+        if (bDist > 0) {
+          distLabel = `LTP needs <strong>+${bDist.toFixed(2)}%</strong> to fire entry`;
+        } else if (bDist < 0) {
+          distLabel = `LTP is <strong>${Math.abs(bDist).toFixed(2)}% above trigger</strong> — entry should fire next tick`;
+        } else {
+          distLabel = `LTP at trigger — entry imminent`;
+        }
+      }
+      breakoutBanner = `<div class="breakout-trigger">
+        ▲ <strong>Breakout trigger:</strong> ${triggerPx}
+        ${distLabel ? `· ${distLabel}` : ''}
+      </div>`;
+    }
+
     return `<div class="pick-card pick-${idx + 1}">
       <div class="pick-head">
         <span class="pick-rank">#${idx + 1}</span>
@@ -546,6 +610,8 @@
         </div>
         <div style="font-size:10px;color:var(--muted);margin-top:2px">${escapeHtml(stateNote)}</div>
       </div>
+
+      ${breakoutBanner}
 
       <!-- INLINE SVG CHART with reference lines -->
       <div class="pick-chart">${renderPickChart(p)}</div>
