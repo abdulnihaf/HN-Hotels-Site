@@ -253,19 +253,14 @@ let liveSlot = -1;
 function tick() {
   const slot = currentSlot();
   if (slot !== liveSlot) {
-    // Cross-fade: turn off everything, turn on the new one
+    // Cross-fade: only toggle visibility. Videos keep playing in background
+    // so the decode buffer never drains — eliminates the "frame queue empty"
+    // white-screen artifact when transitioning into a video slot.
     elements.forEach((el, i) => {
       if (i === slot) {
         el.classList.add("live");
-        if (el.tagName === "VIDEO") {
-          // Restart video at slot start so it loops cleanly
-          try { el.currentTime = 0; el.play(); } catch (_) {}
-        }
       } else {
         el.classList.remove("live");
-        if (el.tagName === "VIDEO") {
-          try { el.pause(); } catch (_) {}
-        }
       }
     });
     liveSlot = slot;
@@ -292,11 +287,13 @@ function tick() {
   // "video frame queue empty" → white-flash issue mid-loop.
   await waitForAllAssetsReady();
 
-  // Pre-warm video decoders by playing each video silently for 1 frame
-  // (some Chromium builds need a play() call to allocate the decoder).
+  // Start ALL videos playing now and let them loop continuously in the
+  // background. They are hidden via opacity (only the "live" element shows),
+  // but the decoder keeps frames buffered. When a slot transition arrives,
+  // we just toggle opacity — no restart, no buffer drain, no white flash.
   for (const el of elements) {
     if (el.tagName === "VIDEO") {
-      try { await el.play(); el.pause(); el.currentTime = 0; } catch (_) {}
+      try { await el.play(); } catch (_) {}
     }
   }
 
