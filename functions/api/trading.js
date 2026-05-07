@@ -122,7 +122,7 @@ export async function onRequest(context) {
       case 'eod_learning_audit': return Response.json(await getEodLearningAudit(db, env, url), { headers });
       case 'readiness_report':   return Response.json(await getReadinessReport(db, url), { headers });
       case 'top_strip':          return Response.json(await getTopStrip(db), { headers });
-      case 'today_consolidated': return Response.json(await getTodayConsolidated(db), { headers });
+      case 'today_consolidated': return Response.json(await getTodayConsolidated(db, env), { headers });
       case 'desk_view':          return Response.json(await getDeskView(db), { headers });
       case 'stock_detail':       return Response.json(await getStockDetail(db, url), { headers });
       case 'monthly_learning_trail': return Response.json(await getMonthlyLearningTrail(db, url), { headers });
@@ -3396,7 +3396,7 @@ async function getTopStrip(db) {
 //   4. pre_market_feed        (latest crossasset + GIFT NIFTY + breaking news)
 //   5. swing_candidates       (signal_scores composite >= 70, capped to 8)
 // ═══════════════════════════════════════════════════════════════════════════
-async function getTodayConsolidated(db) {
+async function getTodayConsolidated(db, env) {
   const nowMs = Date.now();
   const istNow = new Date(nowMs + 5.5 * 3600 * 1000);
   const today = istNow.toISOString().slice(0, 10);
@@ -3955,6 +3955,104 @@ async function getTodayConsolidated(db) {
     .filter(x => x && x.pct_open_to_close >= 2.0)
     .sort((a, b) => (b.pct_open_to_close - a.pct_open_to_close))
     .slice(0, 10);
+
+  // ─── 3c. POST_CLOSE EOD ACCURACY — override day_close from Kite quote ────
+  //
+  // Discovery (May 7 EOD): our intraday_bars MIN/MAX captures 5-min poll
+  // data, NOT NSE's official closing auction price. Result: day_close
+  // diverged from Kite's official close by ₹0.76 (HFCL) up to ₹21.45
+  // (APOLLOPIPE) — the latter inflated "+16.65% open→close" when truth was
+  // "+11.84%". Hypothetical ₹10L pnl numbers were wrong by ~₹40K.
+  //
+  // Fix: in POST_CLOSE phase, call Kite's /quote endpoint ONCE for all the
+  // surfaced symbols (3 picks + 10 pool + 10 winners ≈ 23 max). Override
+  // day_close_paise with Kite's last_price (= official EOD price). Recompute
+  // pct_open_to_close + hypothetical pnl.
+  //
+  // Skipped during LIVE (intraday_bars updates fine + page refreshes 30s).
+  // Skipped if Kite token expired (graceful fallback to intraday_bars).
+  // Single batched call (~1.5s) — only runs in POST_CLOSE so doesn't affect
+  // LIVE flow performance.
+  const isPostCloseForAccuracy = istMins >= 15 * 60 + 30;  // ≥ 15:30 IST
+  if (isPostCloseForAccuracy && env && (eodMap && Object.keys(eodMap).length > 0)) {
+    const symsToFix = new Set();
+    for (const p of pool_top10) if (p.eod) symsToFix.add(p.symbol);
+    for (const w of universe_winners_missed) symsToFix.add(w.symbol);
+    // Also include picks even though they don't have .eod (their cards use the
+    // bars array; but useful to verify pos.exit_paise vs Kite close downstream).
+    for (const p of (verdict?.picks || [])) if (p.symbol) symsToFix.add(p.symbol);
+
+    const symList = [...symsToFix];
+    if (symList.length > 0) {
+      try {
+        const tok = await db.prepare(
+          `SELECT access_token, expires_at, api_key FROM kite_tokens WHERE is_active=1 ORDER BY obtained_at DESC LIMIT 1`
+        ).first();
+        if (tok && tok.access_token && Date.now() < tok.expires_at) {
+          const apiKeyToUse = tok.api_key || env.KITE_API_KEY;
+          const params = symList.map(s => `i=NSE:${encodeURIComponent(s)}`).join('&');
+          const r = await fetch(`https://api.kite.trade/quote?${params}`, {
+            headers: {
+              'X-Kite-Version': '3',
+              'Authorization': `token ${apiKeyToUse}:${tok.access_token}`,
+            },
+            signal: AbortSignal.timeout(5000),
+          });
+          if (r.ok) {
+            const j = await r.json();
+            const kdata = j.data || {};
+            // For each pool/winner symbol, override day_close with Kite's last_price
+            // and recompute downstream metrics.
+            const recompute = (eod, kiteLast) => {
+              if (!eod || !kiteLast) return eod;
+              const c = Math.round(kiteLast * 100);  // rupees → paise
+              const o = eod.day_open_paise;
+              const h = Math.max(eod.day_high_paise, c);  // close > intra-high possible
+              const l = Math.min(eod.day_low_paise, c);
+              const pctOC = +(((c - o) / o) * 100).toFixed(2);
+              const pctOH = +(((h - o) / o) * 100).toFixed(2);
+              const pctOL = +(((l - o) / o) * 100).toFixed(2);
+              const grossClose = Math.round(TEN_LAKH * (c - o) / o);
+              const grossPeak  = Math.round(TEN_LAKH * (h - o) / o);
+              const grossLow   = Math.round(TEN_LAKH * (l - o) / o);
+              const costApprox = Math.round(TEN_LAKH * HYPOTHETICAL_COST_PCT);
+              return {
+                ...eod,
+                day_high_paise: h,
+                day_low_paise: l,
+                day_close_paise: c,
+                pct_open_to_close: pctOC,
+                pct_open_to_high: pctOH,
+                pct_open_to_low: pctOL,
+                hypothetical_10L_pnl_at_close_paise: grossClose - costApprox,
+                hypothetical_10L_pnl_at_peak_paise: grossPeak - costApprox,
+                hypothetical_10L_pnl_at_low_paise: grossLow - costApprox,
+                source: 'kite_official_close',
+              };
+            };
+            for (const p of pool_top10) {
+              if (!p.eod) continue;
+              const kiteQ = kdata['NSE:' + p.symbol];
+              if (kiteQ?.last_price) p.eod = recompute(p.eod, kiteQ.last_price);
+            }
+            for (let i = 0; i < universe_winners_missed.length; i++) {
+              const w = universe_winners_missed[i];
+              const kiteQ = kdata['NSE:' + w.symbol];
+              if (kiteQ?.last_price) {
+                const fixed = recompute(w, kiteQ.last_price);
+                universe_winners_missed[i] = { symbol: w.symbol, ...fixed };
+              }
+            }
+            // Re-sort universe_winners_missed by corrected pct (some may have
+            // moved out of ≥2% threshold after Kite truth).
+            universe_winners_missed.sort((a, b) => b.pct_open_to_close - a.pct_open_to_close);
+          }
+        }
+      } catch (_) {
+        // Silent fallback — keep intraday_bars-derived eod values
+      }
+    }
+  }
 
 
   // ─── 4. LIVE PRE-MARKET FEED ────────────────────────────────────────────────
