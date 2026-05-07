@@ -3564,11 +3564,13 @@ async function getTodayConsolidated(db) {
       // Position match (paper_trades for today, auto_managed)
       // or_high_paise + or_low_paise = first-15min OHLC range (the breakout level).
       // wealth-trader's price_monitor enters when LTP > or_high_paise.
+      // kite_bracket_id (May 7 2026): set by auto-bridge when real Kite order
+      // placed for this paper trade. NULL = paper-only (auto-bridge disabled or failed).
       const pos = await db.prepare(`
         SELECT id, qty, entry_paise, stop_paise, target_paise, peak_price_paise,
                trailing_stop_paise, target_locked, opus_extension_until,
                trader_state, exit_paise, exit_reason, pnl_net_paise, exit_at, entry_at,
-               or_high_paise, or_low_paise
+               or_high_paise, or_low_paise, kite_bracket_id, trader_notes
         FROM paper_trades
         WHERE symbol=? AND auto_managed=1
           AND DATE(created_at/1000+19800,'unixepoch') = ?
@@ -3652,6 +3654,14 @@ async function getTodayConsolidated(db) {
           or_low_paise: pos.or_low_paise,
           breakout_distance_pct: (pos.trader_state === 'WATCHING' && pos.or_high_paise && ltpRow?.ltp_paise)
             ? +(((pos.or_high_paise - ltpRow.ltp_paise) / ltpRow.ltp_paise) * 100).toFixed(2) : null,
+          // Auto-bridge state (May 7 2026)
+          kite_bracket_id: pos.kite_bracket_id,
+          auto_bridge_status: pos.kite_bracket_id
+            ? 'placed'
+            : ((pos.trader_notes || '').includes('AUTO_BRIDGE_FAILED')
+                ? 'failed'
+                : ((pos.trader_notes || '').includes('AUTO_BRIDGE_PLACED') ? 'placed' : null)),
+          auto_bridge_note: ((pos.trader_notes || '').match(/AUTO_BRIDGE_(?:PLACED|FAILED)[^|]*/) || [null])[0],
           // Only compute live_pnl for ENTERED positions (real trade fired).
           // WATCHING rows use range_capture's LTP-estimate as entry_paise; no actual entry.
           live_pnl_paise: isEntered && ltpRow?.ltp_paise
@@ -3675,7 +3685,8 @@ async function getTodayConsolidated(db) {
       SELECT config_key, config_value FROM user_config
       WHERE config_key IN (
         'total_capital_paise','today_deployable_paise',
-        'profit_lock_pct','loss_halt_pct','best_target_pct'
+        'profit_lock_pct','loss_halt_pct','best_target_pct',
+        'auto_real_trades_enabled','block_real_orders','engine_mode'
       )
     `).all().catch(() => ({ results: [] }))).results || [];
     const riskCfg = Object.fromEntries(riskRows.map(r => [r.config_key, r.config_value]));
@@ -3690,6 +3701,12 @@ async function getTodayConsolidated(db) {
     const PROFIT_LOCK_PAISE = Math.round(safeDeployable * profitLockPct);
     const LOSS_HALT_PAISE   = Math.round(safeDeployable * lossHaltPct);
     const BEST_TARGET_PAISE = Math.round(safeDeployable * bestTargetPct);
+    // Real-money execution gates (May 7 2026 EOD)
+    const autoRealEnabled    = riskCfg.auto_real_trades_enabled === '1';
+    const realOrdersBlocked  = riskCfg.block_real_orders === '1';
+    const engineMode         = riskCfg.engine_mode || 'shadow_run';
+    const autoBridgeArmed    = autoRealEnabled && !realOrdersBlocked && engineMode === 'live';
+
     let portfolio = {
       realized_paise: 0,
       unrealized_paise: 0,
@@ -3710,6 +3727,11 @@ async function getTodayConsolidated(db) {
       best_target_pct: bestTargetPct,
       distance_to_lock_paise: 0,
       counts: { watching: 0, entered: 0, exited_win: 0, exited_loss: 0, skipped: 0 },
+      // Real-money gating state — UI shows "armed" badge when 3-of-3 gates pass
+      auto_real_trades_enabled: autoRealEnabled,
+      block_real_orders:        realOrdersBlocked,
+      engine_mode:              engineMode,
+      auto_bridge_armed:        autoBridgeArmed,
     };
     for (const pick of activePicks) {
       const pos = pick.live?.position;

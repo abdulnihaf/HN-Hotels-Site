@@ -207,6 +207,121 @@ async function logDecision(db, fields) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// AUTO-BRIDGE — paper_trades.ENTERED → real Kite order (May 7 2026 EOD)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Owner principle: manual one-click from /trading/today/ → /trading/execute/
+// adds ~7 min latency between signal and filled position. On today's
+// TDPOWERSYS the breakout window was only 8 min, so manual flow loses momentum.
+//
+// Auto-bridge: when BREAKOUT_TRIGGER (priceMonitor) or Opus ENTER_NOW
+// (entryDecision) successfully transitions paper_trades to ENTERED, fire
+// /api/kite?action=place_bracket synchronously. Latency drops from 7min to ~5s.
+//
+// SAFETY GATES (3-of-3 must pass to fire real order):
+//   1. user_config.auto_real_trades_enabled = '1'  (owner master switch)
+//   2. user_config.block_real_orders        = '0'  (existing safety gate)
+//   3. user_config.engine_mode              = 'live' (existing mode gate)
+//
+// If any gate fails, returns silently (paper-only behavior, no error).
+// If all 3 pass, posts to https://hnhotels.in/api/kite?action=place_bracket.
+//
+// On SUCCESS: sets paper_trades.kite_bracket_id, appends trader_notes with
+// "AUTO_BRIDGE_PLACED: bracket=X fill=Y gtt=Z", logs decision row.
+//
+// On FAILURE (network / Kite reject / GTT fail): leaves kite_bracket_id NULL,
+// appends trader_notes with "AUTO_BRIDGE_FAILED: <reason>", logs decision.
+// Paper trade stays ENTERED so position_mgmt continues; owner sees failure
+// in /trading/today/ and can manually click /execute/ as fallback.
+//
+// IDEMPOTENCY: this is called from inside the BREAKOUT_TRIGGER / ENTER_NOW
+// transition, which only fires once per pick (state guard prevents re-fire).
+async function tryAutoBridge(env, db, trade, params) {
+  const { stop_paise, target_paise, qty, fill_paise } = params;
+  const cfgRows = (await db.prepare(`
+    SELECT config_key, config_value FROM user_config
+    WHERE config_key IN ('auto_real_trades_enabled','block_real_orders','engine_mode')
+  `).all().catch(() => ({ results: [] }))).results || [];
+  const cfg = Object.fromEntries(cfgRows.map(r => [r.config_key, r.config_value]));
+
+  // Three-gate check
+  if (cfg.auto_real_trades_enabled !== '1') return { fired: false, skip: 'auto_disabled' };
+  if (cfg.block_real_orders === '1') return { fired: false, skip: 'block_real_orders' };
+  if (cfg.engine_mode !== 'live') return { fired: false, skip: 'engine_not_live' };
+
+  const stopPriceRupees   = stop_paise / 100;
+  const targetPriceRupees = target_paise / 100;
+
+  let response, body;
+  try {
+    response = await fetch('https://hnhotels.in/api/kite?action=place_bracket', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': env.DASHBOARD_KEY || '',
+      },
+      body: JSON.stringify({
+        exchange: 'NSE',
+        tradingsymbol: trade.symbol,
+        quantity: qty,
+        stop_price: stopPriceRupees,
+        target_price: targetPriceRupees,
+        product: 'MIS',           // Intraday MIS — required (CNC won't work for intraday)
+        order_type: 'MARKET',
+        validity: 'DAY',
+        tag: 'HN_WE_AUTO',
+      }),
+      signal: AbortSignal.timeout(20000),  // 20s ceiling — place_bracket has 12s fill poll + 3 GTT retries
+    });
+    body = await response.json().catch(() => ({}));
+  } catch (e) {
+    const reason = `network_error: ${String(e.message || e).slice(0, 200)}`;
+    await db.prepare(`UPDATE paper_trades SET trader_notes = COALESCE(trader_notes, '') || ? WHERE id=?`)
+      .bind(` | AUTO_BRIDGE_FAILED: ${reason}`, trade.id).run().catch(() => {});
+    await logDecision(db, {
+      cron_phase: 'auto_bridge_real_order', symbol: trade.symbol, trade_id: trade.id,
+      state_before: 'ENTERED', decision: 'AUTO_BRIDGE_NETWORK_FAIL', state_after: 'ENTERED',
+      ltp_paise: fill_paise, composed_by_model: 'deterministic', rationale: reason,
+    });
+    return { fired: false, error: reason };
+  }
+
+  if (!response.ok || body.blocked || body.ok === false) {
+    const reason = body.blocked
+      ? `blocked: ${body.reason || 'shadow_run'}`
+      : (body.error || body.message || `HTTP ${response.status}`);
+    const stepsSummary = (body.steps || []).map(s => `${s.step}=${s.ok ? 'ok' : 'fail'}`).join(',');
+    await db.prepare(`UPDATE paper_trades SET trader_notes = COALESCE(trader_notes, '') || ? WHERE id=?`)
+      .bind(` | AUTO_BRIDGE_FAILED: ${reason}${stepsSummary ? ` (steps: ${stepsSummary})` : ''}`, trade.id).run().catch(() => {});
+    await logDecision(db, {
+      cron_phase: 'auto_bridge_real_order', symbol: trade.symbol, trade_id: trade.id,
+      state_before: 'ENTERED', decision: 'AUTO_BRIDGE_FAILED', state_after: 'ENTERED',
+      ltp_paise: fill_paise, composed_by_model: 'deterministic',
+      rationale: `${reason}${stepsSummary ? ` (steps: ${stepsSummary})` : ''}`,
+    });
+    return { fired: false, error: reason };
+  }
+
+  // SUCCESS path
+  const fillPriceRupees = body.fill_price;
+  const gttId = body.gtt_id;
+  const bracketId = body.bracket_id;
+  const fallbackUsed = body.fallback_used;
+  const note = ` | AUTO_BRIDGE_PLACED: bracket=${bracketId} fill=₹${fillPriceRupees} gtt=${gttId || 'fallback_sl'}${fallbackUsed ? ' (GTT failed, SL-M fallback)' : ''}`;
+  await db.prepare(`UPDATE paper_trades SET kite_bracket_id=?, trader_notes = COALESCE(trader_notes, '') || ? WHERE id=?`)
+    .bind(bracketId, note, trade.id).run().catch(() => {});
+  await logDecision(db, {
+    cron_phase: 'auto_bridge_real_order', symbol: trade.symbol, trade_id: trade.id,
+    state_before: 'ENTERED', decision: fallbackUsed ? 'AUTO_BRIDGE_PLACED_WITH_FALLBACK' : 'AUTO_BRIDGE_PLACED',
+    state_after: 'ENTERED',
+    ltp_paise: fillPriceRupees ? Math.round(fillPriceRupees * 100) : fill_paise,
+    composed_by_model: 'deterministic',
+    rationale: `bracket=${bracketId}, fill=₹${fillPriceRupees}, gtt=${gttId || 'sl_fallback'}, qty=${qty}, stop=₹${stopPriceRupees}, target=₹${targetPriceRupees}`,
+  });
+  return { fired: true, bracket_id: bracketId, fill_price: fillPriceRupees, gtt_id: gttId };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // F-EXIT-2 — TICK-CONFIRMATION HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 // May 7 2026 incident: TDPOWERSYS got SKIP_GAPPED_BELOW_STOP at 10:00 IST on a
@@ -593,7 +708,10 @@ Be decisive. Most attempts should be ENTER_NOW (with vol confirmed + no negative
     if (!parsed?.decision) continue;
 
     if (parsed.decision === 'ENTER_NOW') {
-      // Fire paper entry — update paper_trade row
+      // Fire paper entry — update paper_trade row.
+      // Note: stop_paise/target_paise/qty stay as set by rangeCapture (not
+      // recomputed here, unlike BREAKOUT_TRIGGER which recomputes on actual
+      // entry). Auto-bridge uses w.stop_paise/w.target_paise/w.qty as-is.
       await db.prepare(`
         UPDATE paper_trades
         SET trader_state='ENTERED', entry_paise=?, peak_price_paise=?,
@@ -605,6 +723,17 @@ Be decisive. Most attempts should be ENTER_NOW (with vol confirmed + no negative
         (parsed.rationale || '').slice(0, 300), w.id,
       ).run();
       entered++;
+
+      // AUTO-BRIDGE: same gating as BREAKOUT_TRIGGER path.
+      // Opus's stop/target weren't recomputed against the actual entry price,
+      // so they may differ from breakout-trigger sizing. That's intentional —
+      // Opus enters at LTP with the original plan, not a recomputed stop.
+      await tryAutoBridge(env, db, { id: w.id, symbol: w.symbol }, {
+        stop_paise: w.stop_paise,
+        target_paise: w.target_paise,
+        qty: w.qty,
+        fill_paise: q.ltp_paise,
+      });
     } else if (parsed.decision === 'ABANDON') {
       await db.prepare(`UPDATE paper_trades SET trader_state='ABANDONED', trader_notes=?, last_check_at=? WHERE id=?`)
         .bind((parsed.rationale || '').slice(0, 300), Date.now(), w.id).run();
@@ -766,6 +895,16 @@ async function priceMonitor(env) {
           rationale: `Auto-entered at breakout: LTP ₹${actualEntry/100} > OR-high ₹${w.or_high_paise/100}, vol_ratio ${volRatio?.toFixed(2) || '?'}, qty ${newQty}, stop ₹${newStop/100}, target ₹${newTarget/100}`,
         });
         entriesFired++;
+
+        // AUTO-BRIDGE: fire real Kite order if owner has flipped the gates
+        // (auto_real_trades_enabled='1' + block_real_orders='0' + engine_mode='live').
+        // Otherwise this returns {fired:false, skip:'<reason>'} silently.
+        await tryAutoBridge(env, db, { id: w.id, symbol: w.symbol }, {
+          stop_paise: newStop,
+          target_paise: newTarget,
+          qty: newQty,
+          fill_paise: actualEntry,
+        });
       }
     }
   }
