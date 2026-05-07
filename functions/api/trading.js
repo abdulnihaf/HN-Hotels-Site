@@ -3562,43 +3562,40 @@ async function getTodayConsolidated(db) {
       `).bind(pick.symbol, today, barsCutoff).all().catch(() => ({ results: [] }))).results || [];
 
       // Position match (paper_trades for today, auto_managed)
+      // or_high_paise + or_low_paise = first-15min OHLC range (the breakout level).
+      // wealth-trader's price_monitor enters when LTP > or_high_paise.
       const pos = await db.prepare(`
         SELECT id, qty, entry_paise, stop_paise, target_paise, peak_price_paise,
                trailing_stop_paise, target_locked, opus_extension_until,
-               trader_state, exit_paise, exit_reason, pnl_net_paise, exit_at, entry_at
+               trader_state, exit_paise, exit_reason, pnl_net_paise, exit_at, entry_at,
+               or_high_paise, or_low_paise
         FROM paper_trades
         WHERE symbol=? AND auto_managed=1
           AND DATE(created_at/1000+19800,'unixepoch') = ?
         ORDER BY id DESC LIMIT 1
       `).bind(pick.symbol, today).first().catch(() => null);
 
-      // BUG C FIX (May 7 2026): intraday_bars only fills at 16:00 IST cron, so charts
-      // are empty during market. Fallback: fetch last 1h of intraday_ticks (1-min Kite
-      // quotes) and bucket into 5-min synthetic OHLC bars on-the-fly.
+      // BUG C FIX + UX upgrade (May 7 2026 morning): chart populates from
+      // intraday_bars when present, otherwise from raw intraday_ticks (every 1 min)
+      // — much higher resolution than 5-min synthetic buckets. Use ticks DIRECTLY
+      // for the price line during market hours (typical 30-60 ticks/h = smooth line).
       let chartBars = bars;
       if (chartBars.length === 0) {
         const tickCutoff = nowMs - 60 * 60 * 1000;
         const ticks = (await db.prepare(`
           SELECT ts, ltp_paise FROM intraday_ticks
           WHERE symbol=? AND ts >= ?
-          ORDER BY ts ASC
+          ORDER BY ts ASC LIMIT 80
         `).bind(pick.symbol, tickCutoff).all().catch(() => ({ results: [] }))).results || [];
-        if (ticks.length) {
-          // Bucket into 5-min synthetic OHLC bars
-          const buckets = {};
-          for (const t of ticks) {
-            const bucketStart = Math.floor(t.ts / (5 * 60 * 1000)) * (5 * 60 * 1000);
-            if (!buckets[bucketStart]) {
-              buckets[bucketStart] = { ts: bucketStart, open_paise: t.ltp_paise, high_paise: t.ltp_paise, low_paise: t.ltp_paise, close_paise: t.ltp_paise };
-            } else {
-              const b = buckets[bucketStart];
-              b.high_paise = Math.max(b.high_paise, t.ltp_paise);
-              b.low_paise = Math.min(b.low_paise, t.ltp_paise);
-              b.close_paise = t.ltp_paise;
-            }
-          }
-          chartBars = Object.values(buckets).sort((a, b) => a.ts - b.ts);
-        }
+        // Render each tick as a 1-point bar (close = open = high = low = ltp)
+        // so chart renderer can plot smooth line.
+        chartBars = ticks.map(t => ({
+          ts: t.ts,
+          open_paise: t.ltp_paise,
+          high_paise: t.ltp_paise,
+          low_paise: t.ltp_paise,
+          close_paise: t.ltp_paise,
+        }));
       }
 
       // BUG B FIX: live_pnl is meaningful ONLY for ENTERED positions. For WATCHING
@@ -3628,6 +3625,11 @@ async function getTodayConsolidated(db) {
           exit_reason: pos.exit_reason,
           pnl_paise: pos.pnl_net_paise,
           exit_at: pos.exit_at,
+          // Breakout trigger info — when WATCHING, owner needs to know "LTP must exceed X to enter"
+          or_high_paise: pos.or_high_paise,
+          or_low_paise: pos.or_low_paise,
+          breakout_distance_pct: (pos.trader_state === 'WATCHING' && pos.or_high_paise && ltpRow?.ltp_paise)
+            ? +(((pos.or_high_paise - ltpRow.ltp_paise) / ltpRow.ltp_paise) * 100).toFixed(2) : null,
           // Only compute live_pnl for ENTERED positions (real trade fired).
           // WATCHING rows use range_capture's LTP-estimate as entry_paise; no actual entry.
           live_pnl_paise: isEntered && ltpRow?.ltp_paise
