@@ -414,4 +414,153 @@ POST_CLOSE (15:30+ IST):
 
 If audit finds drift → update §7 (connected views) → back-propagate fixes.
 
-End of trail — Thu 07 May 2026.
+---
+
+## 9 · END-OF-DAY HANDOFF — Thu 07 May 17:30 IST onwards
+
+This section was added at 17:30 IST after the day's session closed and before
+tomorrow's ₹10K real-money sanity test. Captures (a) the state of the system
+right now, (b) what's been merged but not deployed, (c) the operational
+checklist tomorrow morning needs.
+
+### 9.1 PRs landed today (final state)
+
+| PR | Title | State | Deploy mechanism |
+|---|---|---|---|
+| #84 | wealth-verdict max_tokens 1500→4000 | 🟢 merged + deployed | Pages auto |
+| #85 | F-PERS column-fix + F-COVER-1 | 🟢 merged + deployed | Pages auto |
+| #86 | live LTP + position state on Today | 🟢 merged + deployed | Pages auto |
+| #87 | capital ₹10L + phantom P&L + chart fallback | 🟢 merged + deployed | Pages auto |
+| #88 | chart HTML overlay + breakout banner + 1-min ticks | 🟢 merged + deployed | Pages auto |
+| #89 | **F-EXIT-2** + dead-zone + SKIPPED-resurrection + firePaperExit accumulation | 🟢 merged at ~13:00 IST | 🔴 **wealth-trader Worker NOT YET DEPLOYED** |
+| #90 | story-arc UI redesign | 🟢 merged + deployed | Pages auto |
+| #91 | chart CSS hotfix | 🟢 merged + deployed | Pages auto |
+| #92 | execution trail doc (this file) | 🟢 merged | Doc only |
+| #93 | **risk config %** — F-L4-LOCK 3%→5%, capital scales by 1 SQL UPDATE | 🟢 merged at 13:00:57 UTC | 🔴 **wealth-trader Worker NOT YET DEPLOYED** (Pages portion auto-deployed) |
+
+### 9.2 D1 mutations done after market close
+
+| IST Time | Operation | Detail |
+|---|---|---|
+| 17:55 IST | INSERT OR REPLACE into user_config (3 rows) | Added `profit_lock_pct=0.05`, `loss_halt_pct=0.03`, `best_target_pct=0.07`. Verified 3 changes / 6 rows written. |
+
+### 9.3 Production state at 17:30 IST today
+
+**Cloudflare Pages (auto-deployed)**:
+- `/trading/today/` story-arc redesign live, hero P&L card now reads % thresholds from user_config
+- `/api/trading?action=today_consolidated` exposes `verdict.portfolio.profit_lock_threshold_paise`, `loss_halt_threshold_paise`, `best_target_paise` + percentage versions
+- `/api/kite?action=*` real-money endpoints unchanged (no PR touched them today)
+
+**Cloudflare Workers (NOT auto-deployed — manual `wrangler deploy` required)**:
+- `wealth-trader` Worker is at PRE-PR-#89 state. Tomorrow's automatic logic still has:
+  - SKIP-lock bug (single-tick wick → permanent SKIP)
+  - 09:30→09:50 dead zone
+  - firePaperExit pnl_net_paise overwrite bug
+  - Hardcoded ₹30K profit lock (vs new ₹50K config)
+- Until owner runs `cd wealth-engine/workers/wealth-trader && wrangler deploy`, all 4 fixes are on `main` branch but NOT in production.
+
+**Real-money order placement gate**:
+- `block_real_orders='1'` in user_config — `/api/kite?action=place_bracket` will refuse with `{ blocked: true, reason: 'shadow_run' }` until this flips to `0`
+- `engine_mode='shadow_run'`
+- `funding_status='pending_cpv_hdfc_freeze'` — HDFC CPV not yet completed
+- `cpv_status='requested'`
+- `launch_status='pre_launch'`
+- Kite OAuth token: connected, `expires_at=2026-05-08 ~12:00 IST` (will need refresh tomorrow morning before 09:15 if owner wants intraday writes through afternoon)
+
+### 9.4 Tomorrow morning checklist (Fri 08 May 2026, before 09:15 IST)
+
+In order — DO NOT skip steps:
+
+**A. Deploy the Workers (5 min)**
+```bash
+cd /Users/nihaf/Documents/Tech/HN-Hotels-Site/wealth-engine/workers/wealth-trader
+wrangler deploy
+```
+This activates: F-EXIT-2, dead-zone fix, SKIPPED-resurrection, firePaperExit accumulation, percentage-based F-L4-LOCK.
+
+**B. Verify deploy (1 min)**
+```bash
+curl "https://wealth-trader.nihafwork.workers.dev/state?key=$DASHBOARD_KEY"
+# Expect: state endpoint returns today=2026-05-08, ist_time=09:XX, positions=[]
+```
+
+**C. Refresh Kite OAuth (2 min)**
+- Visit https://hnhotels.in/wealth/auth/login (or whichever OAuth flow we use)
+- Complete the flow, ensure new token written to `kite_tokens` with `is_active=1`
+
+**D. Decide capital mode + flip block flag (2 min)**
+
+For **₹10K REAL TEST** mode (recommended for tomorrow):
+```sql
+UPDATE user_config SET config_value='1000000' WHERE config_key='total_capital_paise';
+-- Now: profit_lock = ₹500, loss_halt = ₹300, best = ₹700
+
+-- Once HDFC funds are in Kite + CPV resolved:
+UPDATE user_config SET config_value='0' WHERE config_key='block_real_orders';
+UPDATE user_config SET config_value='live' WHERE config_key='engine_mode';
+```
+
+For **PAPER ONLY** (if HDFC CPV still pending):
+- Keep `block_real_orders='1'` and `engine_mode='shadow_run'`
+- Run paper-only at whatever capital you want (₹10K or ₹10L)
+- /execute/ buttons will refuse with "blocked: shadow_run" — that's correct behavior
+
+**E. At 08:30 IST — verify verdict cron fired**
+- Open /trading/today/ on iPhone
+- Hero card should show today's date + composed_at timestamp ~08:30 IST
+- 3 picks should appear with PLAN section populated
+- If nothing by 08:35 IST: `curl /api/trading?action=verdict_today` to check
+
+**F. At 09:15-09:30 IST — market open**
+- Page transitions to LIVE phase
+- range_capture fires at 09:30 → 3 cards become WATCHING
+- Verify OR-high/low captured per pick
+
+**G. At 09:35 IST — first price_monitor (post-PR #89)**
+- This is the dead-zone fix in action. Previously dormant; now active.
+- Verify trader_decisions has a row with cron_phase='price_monitor' and timestamp 09:35:XX
+
+**H. Owner picks ONE stock to commit ₹10K to (manual decision)**
+- Look at /trading/today/ pick cards
+- Decide which has the strongest LIVE signal (vol, breakout proximity, news)
+- Navigate to /trading/execute/ → click Confirm on that pick
+- /api/kite?action=place_bracket fires (atomic order + GTT stop+target)
+- Verify Kite app shows the order
+
+**I. Watch through to exit**
+- GTT will auto-fire stop or target
+- Or manual exit at 15:10 if neither hits
+- Check kite_api_log for the audit trail
+
+**J. After market close (15:30+ IST)**
+- /trading/today/ transitions to POST_CLOSE phase
+- Lessons + Tomorrow checklist auto-render
+- Reconcile: paper_trades P&L vs Kite actual fills
+- If diverge significantly → file finding for Sunday review
+
+### 9.5 If anything goes wrong tomorrow
+
+| Symptom | Quick check | Recovery |
+|---|---|---|
+| Verdict didn't compose | `curl /api/trading?action=verdict_today` | Check wealth-verdict logs in Cloudflare dashboard |
+| range_capture didn't fire | Look for trader_decisions row at 09:31 | Manually fire: `curl https://wealth-trader.nihafwork.workers.dev/?key=$KEY&force_phase=range_capture` |
+| Pick wicked below stop | trader_decisions for `WICK_BELOW_STOP_HOLDING` should appear | If F-EXIT-2 deployed correctly: position holds; if not deployed: SKIP fires (today's bug) |
+| /execute/ button greyed out | Check user_config block_real_orders | Flip to 0 only if HDFC funds confirmed |
+| Order rejected by Kite | kite_api_log has the error | Common: insufficient margin, symbol not in MIS list, market closed |
+| /trading/today/ shows wrong P&L | Force refresh on phone (pull-to-refresh PWA) | SW v46 should be active |
+
+### 9.6 Monday 11 May launch — readiness criteria (before 08:30 IST)
+
+| ☐ | Item |
+|---|---|
+| ☐ | PR #89 + #93 deployed via `wrangler deploy` (one-time, then stays deployed) |
+| ☐ | HDFC CPV completed, funds visible in Kite |
+| ☐ | `block_real_orders='0'` in user_config |
+| ☐ | `engine_mode='live'` in user_config |
+| ☐ | `total_capital_paise='100000000'` (₹10L mode) |
+| ☐ | Fresh Kite OAuth before 09:15 IST |
+| ☐ | Tomorrow's ₹10K test produced expected real fills + correct P&L reconciliation |
+| ☐ | Sunday May 10 spent reviewing Friday's session — any new bugs found get patched before Monday open |
+
+End of trail — Thu 07 May 2026, EOD handoff written 17:30 IST.
+
