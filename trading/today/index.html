@@ -186,6 +186,132 @@
   .loading { text-align: center; padding: 40px; color: var(--muted); }
   .empty { text-align: center; padding: 30px; color: var(--muted); font-size: 12px; }
   .small-meta { font-size: 10px; color: var(--muted); margin-top: 8px; }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     STORY-ARC LAYOUT (May 7 2026 PR — phase-aware narrative redesign)
+     Two reading modes: LIVE (what's happening now) + RETROSPECTIVE (what
+     happened, lessons, tomorrow). Same data, different framing.
+     ════════════════════════════════════════════════════════════════════ */
+
+  /* HERO P&L CARD — single-glance "did I make money today?" */
+  .hero-pnl { padding: 18px; background: linear-gradient(135deg, rgba(46,204,113,0.12) 0%, rgba(13,20,38,0.7) 100%);
+    border: 1px solid var(--border); border-radius: 12px; margin-bottom: 14px; }
+  .hero-pnl.loss { background: linear-gradient(135deg, rgba(231,76,60,0.12) 0%, rgba(13,20,38,0.7) 100%); }
+  .hero-pnl.flat { background: var(--panel); }
+  .hero-pnl-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.6px; text-transform: uppercase; }
+  .hero-pnl-amount { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+  .hero-pnl-amount.positive { color: var(--green); }
+  .hero-pnl-amount.negative { color: var(--red); }
+  .hero-pnl-amount.flat { color: var(--text); }
+  .hero-pnl-pct { font-size: 14px; color: var(--muted); margin-left: 6px; font-weight: 500; }
+  .hero-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 11px; color: var(--muted); }
+  .hero-row .seg { display: flex; flex-direction: column; gap: 2px; }
+  .hero-row .seg .k { font-size: 9px; letter-spacing: 0.4px; text-transform: uppercase; }
+  .hero-row .seg .v { font-size: 12px; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .hero-row .seg .v.win { color: var(--green); }
+  .hero-row .seg .v.loss { color: var(--red); }
+  .hero-lock { margin-top: 10px; padding: 8px 10px; background: rgba(124,92,255,0.10); border-radius: 6px;
+    font-size: 11px; display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .hero-lock .lock-bar-track { flex: 1; height: 4px; background: rgba(124,92,255,0.20); border-radius: 2px; overflow: hidden; min-width: 50px; max-width: 140px; }
+  .hero-lock .lock-bar-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+  .hero-lock strong { color: var(--accent); }
+
+  /* PHASE BANNER — context strip below hero */
+  .phase-banner { padding: 10px 14px; background: var(--panel-2); border-radius: 8px; margin-bottom: 14px;
+    font-size: 11px; display: flex; align-items: center; gap: 10px; line-height: 1.4; }
+  .phase-banner .pdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .phase-banner.LIVE .pdot { background: var(--red); animation: livepulse 2s infinite; }
+  .phase-banner.PRE_OPEN .pdot, .phase-banner.PRE_MARKET .pdot { background: var(--blue); }
+  .phase-banner.POST_CLOSE .pdot, .phase-banner.CLOSE .pdot { background: var(--yellow); }
+  .phase-banner.OFF_HOURS .pdot { background: var(--muted); }
+  .phase-banner .ptext strong { color: var(--text); }
+  @keyframes livepulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.3); } }
+
+  /* STORY-ARC PICK CARD — replaces flat data dump with narrative structure */
+  .story-card { margin: 12px 0; padding: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    border-left: 3px solid var(--border); }
+  .story-card.entered { border-left-color: var(--green); }
+  .story-card.exited.win { border-left-color: var(--green); background: linear-gradient(90deg, rgba(46,204,113,0.04) 0%, var(--panel) 50%); }
+  .story-card.exited.loss { border-left-color: var(--red); background: linear-gradient(90deg, rgba(231,76,60,0.04) 0%, var(--panel) 50%); }
+  .story-card.watching { border-left-color: var(--yellow); }
+  .story-card.skipped { border-left-color: var(--muted); opacity: 0.92; }
+
+  .story-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+  .story-rank { font-size: 12px; color: var(--muted); font-weight: 700; }
+  .story-symbol { font-size: 18px; font-weight: 800; cursor: pointer; letter-spacing: 0.3px; }
+  .story-weight { font-size: 11px; color: var(--muted); }
+  .story-pill { padding: 3px 10px; border-radius: 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.4px; margin-left: auto; }
+  .story-pill.WATCHING { background: rgba(245,176,65,0.18); color: var(--yellow); }
+  .story-pill.ENTERED  { background: rgba(46,204,113,0.18); color: var(--green); }
+  .story-pill.EXITED   { background: rgba(138,150,184,0.18); color: var(--muted); }
+  .story-pill.SKIPPED  { background: rgba(138,150,184,0.10); color: var(--muted); }
+
+  /* Story sections — PLAN / TIMELINE / LIVE / OUTCOME / LESSON */
+  .story-sec { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .story-sec:first-of-type { margin-top: 8px; padding-top: 0; border-top: none; }
+  .story-sec-label { font-size: 9px; letter-spacing: 0.7px; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+  .story-sec-row { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; line-height: 1.5; }
+  .story-sec-row .k { color: var(--muted); font-size: 10px; }
+  .story-sec-row .v { color: var(--text); font-weight: 600; }
+  .story-rationale { font-size: 11px; color: var(--text); line-height: 1.5; margin-top: 4px; padding: 6px 10px;
+    background: var(--panel-2); border-radius: 6px; }
+
+  /* OUTCOME (big P&L block for EXITED) */
+  .outcome-amount { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .outcome-amount.win { color: var(--green); }
+  .outcome-amount.loss { color: var(--red); }
+  .outcome-amount.flat { color: var(--text); }
+  .outcome-pct { font-size: 13px; font-weight: 600; color: var(--muted); margin-left: 4px; }
+  .outcome-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .outcome-stats strong { color: var(--text); }
+
+  /* TIMELINE — vertical event stream per pick */
+  .tl-list { display: flex; flex-direction: column; gap: 7px; }
+  .tl-row { display: grid; grid-template-columns: 56px 14px 1fr; gap: 8px; align-items: start; font-size: 11px; line-height: 1.4; }
+  .tl-time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 10px; padding-top: 1px; }
+  .tl-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; margin-left: 3px; background: var(--muted); }
+  .tl-dot.entry { background: var(--green); width: 10px; height: 10px; margin-left: 2px; margin-top: 4px; }
+  .tl-dot.partial { background: var(--green); border: 2px solid var(--panel); width: 10px; height: 10px; margin-left: 2px; margin-top: 4px; }
+  .tl-dot.exit  { background: var(--red); width: 10px; height: 10px; margin-left: 2px; margin-top: 4px; }
+  .tl-dot.skip  { background: var(--muted); }
+  .tl-dot.wait, .tl-dot.hold { background: var(--blue); }
+  .tl-dot.manual{ background: var(--accent); }
+  .tl-dot.range { background: var(--yellow); }
+  .tl-body { color: var(--text); }
+  .tl-body strong { color: var(--text); font-weight: 700; }
+  .tl-body .tl-reason { color: var(--muted); font-size: 10px; margin-top: 2px; line-height: 1.4; }
+
+  /* LIVE-STATUS strip (only WATCHING / ENTERED) */
+  .live-status { display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+    background: var(--panel-2); border-radius: 8px; font-size: 11px; margin-top: 4px; flex-wrap: wrap; }
+  .live-status .ltp-big { font-size: 16px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+  .live-status .live-delta-big { font-size: 12px; font-weight: 700; }
+  .live-status .live-delta-big.up { color: var(--green); }
+  .live-status .live-delta-big.down { color: var(--red); }
+  .live-status .next { margin-left: auto; color: var(--muted); font-size: 10px; text-align: right; }
+
+  /* LESSON (post-close only) */
+  .lesson { padding: 10px 12px; background: rgba(124,92,255,0.06); border-left: 3px solid var(--accent);
+    border-radius: 6px; margin-top: 12px; font-size: 12px; line-height: 1.5; }
+  .lesson strong { color: var(--accent); }
+
+  /* TOMORROW SECTION */
+  .tomorrow-section { padding: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-top: 14px; }
+  .tomorrow-section h3 { margin: 0 0 10px 0; font-size: 14px; font-weight: 700; }
+  .tomorrow-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .tomorrow-list li { padding: 10px 12px; background: var(--panel-2); border-radius: 6px;
+    font-size: 12px; display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; }
+  .tomorrow-list li .check { width: 14px; height: 14px; border: 1.5px solid var(--muted); border-radius: 3px;
+    margin-top: 1px; flex-shrink: 0; }
+  .tomorrow-list li .why { display: block; color: var(--muted); font-size: 10px; margin-top: 3px; }
+
+  /* LESSONS aggregator (system-level findings) */
+  .day-lessons { padding: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-top: 14px; }
+  .day-lessons h3 { margin: 0 0 10px 0; font-size: 14px; font-weight: 700; }
+  .day-lessons li { font-size: 12px; line-height: 1.5; padding: 8px 10px; background: var(--panel-2); border-radius: 6px; margin-bottom: 4px; list-style: none; }
+  .day-lessons li.bug { border-left: 3px solid var(--red); }
+  .day-lessons li.win { border-left: 3px solid var(--green); }
+  .day-lessons li.note { border-left: 3px solid var(--blue); }
 </style>
 </head>
 <body>
@@ -435,6 +561,376 @@
     return (paise > 0 ? '+' : '') + fmtRupeesShort(paise);
   }
   function pnlClassFor(v) { if (v == null || v === 0) return 'flat'; return v > 0 ? 'positive' : 'negative'; }
+  function fmtRupeesFull(paise) {
+    if (paise == null) return '—';
+    const r = paise / 100;
+    return '₹' + Math.abs(r).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  }
+  function fmtPnlBig(paise) {
+    if (paise == null) return '₹0';
+    const sign = paise > 0 ? '+' : (paise < 0 ? '−' : '');
+    return sign + fmtRupeesFull(Math.abs(paise));
+  }
+  function fmtDuration(ms) {
+    if (ms == null || ms <= 0) return '—';
+    const min = Math.floor(ms / 60000);
+    if (min < 60) return min + 'm';
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m === 0 ? h + 'h' : h + 'h ' + m + 'm';
+  }
+  // Compute "next cron action" for LIVE phase — what's about to happen
+  function nextCronStr(phase) {
+    if (phase !== 'LIVE') return null;
+    const now = new Date(Date.now() + 5.5 * 3600000);
+    const h = now.getUTCHours(), m = now.getUTCMinutes();
+    const hm = h * 60 + m;
+    // 09:30 range_capture, 09:45 entry_1, 10:00 entry_2, 10:15 entry_3
+    if (hm < 570) return '09:30 range_capture';
+    if (hm < 585) return '09:45 entry_1 (Opus)';
+    if (hm < 600) return '10:00 entry_2 (Opus)';
+    if (hm < 615) return '10:15 entry_3 (Opus)';
+    // 11:00, 11:30, ... 15:00 = Opus position_mgmt; 11:15, 11:45, ... 14:45 = Sonnet safety; every 5 min = price_monitor
+    const next30 = Math.ceil(hm / 30) * 30;
+    if (next30 <= 900) {
+      const nh = Math.floor(next30 / 60), nm = next30 % 60;
+      const isOpus = nm === 0 || nm === 30;
+      if (next30 >= 660 && next30 <= 900 && isOpus) {  // 11:00 - 15:00 Opus
+        return ('0'+nh).slice(-2)+':'+('0'+nm).slice(-2)+' position_mgmt (Opus)';
+      }
+    }
+    // Otherwise next 5-min mark = price_monitor
+    const next5 = Math.ceil(hm / 5) * 5;
+    if (next5 < 910) {
+      const nh = Math.floor(next5 / 60), nm = next5 % 60;
+      return ('0'+nh).slice(-2)+':'+('0'+nm).slice(-2)+' price_monitor';
+    }
+    return '15:10 hard_exit';
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // STORY-ARC RENDERERS (May 7 2026 phase-aware redesign)
+  // Hero P&L → Phase banner → Story cards → (post-close: lessons + tomorrow)
+  // ════════════════════════════════════════════════════════════════════
+
+  function renderHeroPnL(d) {
+    const v = d.verdict;
+    const p = v?.portfolio;
+    if (!p) return '';  // no verdict = no portfolio
+    const total = p.total_paise || 0;
+    const realized = p.realized_paise || 0;
+    const unrealized = p.unrealized_paise || 0;
+    const counts = p.counts || {};
+    const pnlClass = total > 50 ? 'positive' : (total < -50 ? 'negative' : 'flat');
+    const cardClass = total > 50 ? '' : (total < -50 ? 'loss' : 'flat');
+    const isLive = d.phase === 'LIVE' || d.phase === 'PRE_OPEN';
+    const isPost = d.phase === 'POST_CLOSE' || d.phase === 'OFF_HOURS' || d.phase === 'CLOSE';
+
+    // Lock progress (toward +₹30K threshold)
+    const lockPct = p.profit_lock_threshold_paise > 0
+      ? Math.min(100, Math.max(0, (total / p.profit_lock_threshold_paise) * 100)) : 0;
+
+    // Headline label varies by phase
+    const headLabel = isPost ? "Today's final P&L" : (isLive ? "Today's P&L · LIVE" : "Today's P&L");
+
+    return `<div class="hero-pnl ${cardClass}">
+      <div class="hero-pnl-label">${headLabel}</div>
+      <div>
+        <span class="hero-pnl-amount ${pnlClass}">${fmtPnlBig(total)}</span>
+        <span class="hero-pnl-pct">${(p.pct_of_capital >= 0 ? '+' : '')}${(p.pct_of_capital || 0).toFixed(3)}% of capital</span>
+      </div>
+      <div class="hero-row">
+        <div class="seg"><span class="k">Realized</span>
+          <span class="v ${realized > 0 ? 'win' : (realized < 0 ? 'loss' : '')}">${fmtPnlBig(realized)}</span></div>
+        <div class="seg"><span class="k">Unrealized</span>
+          <span class="v ${unrealized > 0 ? 'win' : (unrealized < 0 ? 'loss' : '')}">${fmtPnlBig(unrealized)}</span></div>
+        <div class="seg"><span class="k">Capital deployed</span>
+          <span class="v">${fmtRupeesShort(p.capital_deployed_paise)} of ${fmtRupeesShort(p.capital_total_paise)}</span></div>
+        <div class="seg"><span class="k">Trades</span>
+          <span class="v">${counts.entered || 0} open · ${(counts.exited_win || 0) + (counts.exited_loss || 0)} closed · ${counts.watching || 0} watching · ${counts.skipped || 0} skipped</span></div>
+      </div>
+      ${total > 0 && p.distance_to_lock_paise > 0 ? `
+        <div class="hero-lock">
+          <span><strong>${fmtPnlBig(p.distance_to_lock_paise)}</strong> to F-L4-LOCK at +${fmtPnlBig(p.profit_lock_threshold_paise)}</span>
+          <div class="lock-bar-track"><div class="lock-bar-fill" style="width:${lockPct.toFixed(1)}%"></div></div>
+        </div>` : ''}
+    </div>`;
+  }
+
+  function renderPhaseBanner(d) {
+    const phase = d.phase || 'OFF_HOURS';
+    let text = '';
+    if (phase === 'LIVE') {
+      const next = nextCronStr(phase);
+      const closeMinsLeft = (() => {
+        const now = new Date(Date.now() + 5.5 * 3600000);
+        const close = 15 * 60 + 30 - (now.getUTCHours() * 60 + now.getUTCMinutes());
+        return Math.max(0, close);
+      })();
+      text = `<strong>Market live</strong> · ${closeMinsLeft >= 60 ? Math.floor(closeMinsLeft/60) + 'h ' + (closeMinsLeft%60) + 'm' : closeMinsLeft + 'm'} to close · next: <strong>${next || 'price_monitor'}</strong>`;
+    } else if (phase === 'PRE_OPEN') {
+      text = `<strong>NSE pre-open</strong> · live trading from 09:15 IST · range_capture at 09:30`;
+    } else if (phase === 'PRE_MARKET') {
+      text = `<strong>Pre-market</strong> · verdict composes at 08:30 IST · market opens 09:15`;
+    } else if (phase === 'POST_CLOSE' || phase === 'CLOSE') {
+      text = `<strong>Market closed</strong> · today is done · summary below`;
+    } else {
+      text = `<strong>Off-hours</strong> · NSE next opens 09:15 IST tomorrow (Mon–Fri)`;
+    }
+    return `<div class="phase-banner ${phase}"><span class="pdot"></span><span class="ptext">${text}</span></div>`;
+  }
+
+  // ────── timeline event prettifier ──────
+  function tlDotClass(decision, state_after) {
+    const d = (decision || '').toUpperCase();
+    if (d === 'BREAKOUT_ENTER' || d === 'ENTER_NOW') return 'entry';
+    if (d === 'PARTIAL_EXIT_50_FIRST_TARGET') return 'partial';
+    if (d.startsWith('SKIP') && state_after === 'SKIPPED') return 'skip';
+    if (d === 'WAIT' || d === 'HOLD' || d.startsWith('WICK_')) return 'wait';
+    if (d === 'MANUAL_REVIVE_TO_WATCHING') return 'manual';
+    if (d.includes('TRAIL') && state_after === 'EXITED') return 'exit';
+    if (d.includes('STOP_HIT') || d === 'URGENT_EXIT' || d === 'HARD_EXIT_1510' || d === 'PROFIT_LOCK_FORCE_EXIT_30K' || state_after === 'EXITED') return 'exit';
+    if (d.startsWith('captured') || d.includes('range_capture')) return 'range';
+    return '';
+  }
+  function tlEventLabel(phase, decision) {
+    const p = (phase || '').toLowerCase();
+    const d = decision || '';
+    if (p === 'range_capture') return '15-min range captured';
+    if (p === 'range_capture_fallback') return 'safety-net OR-capture';
+    if (p === 'manual_revive') return 'Owner manual revive';
+    if (p.startsWith('entry_')) {
+      const n = p.split('_')[1];
+      if (d === 'WAIT') return `Opus entry attempt ${n} — WAIT`;
+      if (d.startsWith('SKIP_GAPPED_BELOW_STOP')) return `Opus entry ${n} — SKIPPED (LTP below stop)`;
+      if (d === 'ENTER_NOW') return `Opus entry ${n} — ENTERED`;
+      if (d === 'ABANDON') return `Opus entry ${n} — ABANDONED`;
+      return `Opus entry ${n} — ${d}`;
+    }
+    if (p === 'breakout_trigger' && d === 'BREAKOUT_ENTER') return 'Breakout fired — entered';
+    if (p === 'price_monitor') {
+      if (d === 'PARTIAL_EXIT_50_FIRST_TARGET') return 'First target hit — booked 50%';
+      if (d.startsWith('TARGET_LOCKED')) return 'Target locked';
+      if (d === 'STOP_HIT' || d === 'TRAILING_STOP_HIT') return 'Exit — trailing stop';
+      if (d === 'TARGET_LOCKED_TRAIL_EXIT') return 'Exit — locked target trail';
+      if (d.startsWith('WICK_')) return 'Wick (held position)';
+      return d;
+    }
+    if (p === 'sonnet_safety' && d === 'URGENT_EXIT') return 'Sonnet safety — urgent exit';
+    if (p === 'position_mgmt') {
+      if (d === 'HOLD') return 'Opus mgmt — HOLD';
+      if (d === 'TIGHTEN_TRAIL') return 'Opus mgmt — tighten trail';
+      if (d === 'PARTIAL_EXIT_50') return 'Opus mgmt — partial 50%';
+      if (d === 'FULL_EXIT') return 'Opus mgmt — full exit';
+      return 'Opus mgmt — ' + d;
+    }
+    if (p === 'hard_exit_1510') return 'Hard exit @ 15:10';
+    return d;
+  }
+  function renderTimeline(timeline) {
+    if (!timeline?.length) return '<div style="font-size:11px;color:var(--muted)">No events yet.</div>';
+    const rows = timeline.map(t => {
+      const dot = tlDotClass(t.decision, t.state_after);
+      const label = tlEventLabel(t.phase, t.decision);
+      const ltp = t.ltp_paise ? ` <span style="color:var(--muted)">@ ${fmtPriceRs(t.ltp_paise)}</span>` : '';
+      const reason = t.reason ? `<div class="tl-reason">${escapeHtml(t.reason).slice(0, 220)}${t.reason.length > 220 ? '…' : ''}</div>` : '';
+      return `<div class="tl-row">
+        <span class="tl-time">${fmtIstFromMs(t.ts)}</span>
+        <span class="tl-dot ${dot}"></span>
+        <div class="tl-body"><strong>${escapeHtml(label)}</strong>${ltp}${reason}</div>
+      </div>`;
+    }).join('');
+    return `<div class="tl-list">${rows}</div>`;
+  }
+
+  // Templated lesson per pick — only shown in POST_CLOSE phase
+  function renderLessonForPick(p, phase) {
+    if (phase !== 'POST_CLOSE' && phase !== 'OFF_HOURS' && phase !== 'CLOSE') return '';
+    const pos = p.live?.position;
+    if (!pos) return '';
+    if (pos.exit_at && pos.pnl_paise != null) {
+      const pnl = pos.pnl_paise;
+      const heldMin = Math.round((pos.exit_at - pos.entry_at) / 60000);
+      const reason = pos.exit_reason || 'unknown';
+      if (pnl > 0) {
+        const pct = pos.entry_paise > 0 ? ((pos.exit_paise - pos.entry_paise) / pos.entry_paise * 100) : 0;
+        return `<div class="lesson"><strong>Win.</strong> ${fmtPnlBig(pnl)} captured over ${heldMin}min hold (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}% move). Exit rule: <em>${reason}</em>. The pick selection + entry trigger logic worked as designed for this name.</div>`;
+      } else {
+        const pct = pos.entry_paise > 0 ? ((pos.exit_paise - pos.entry_paise) / pos.entry_paise * 100) : 0;
+        return `<div class="lesson"><strong>Loss.</strong> ${fmtPnlBig(pnl)} given back over ${heldMin}min hold (${pct.toFixed(2)}% move). Exit rule: <em>${reason}</em>. Worth checking whether this was a wick (F-EXIT-2 protection) or a real reversal — see timeline.</div>`;
+      }
+    }
+    if (pos.state === 'WATCHING') {
+      return `<div class="lesson"><strong>No entry.</strong> Trigger ${fmtPriceRs(pos.or_high_paise)} never confirmed. Capital saved from a forced bad entry. Was the verdict signal real? Cross-check tomorrow's verdict ranking.</div>`;
+    }
+    if (pos.state === 'SKIPPED') {
+      return `<div class="lesson"><strong>Skipped.</strong> LTP dipped below planned stop ${fmtPriceRs(pos.stop_paise)} before breakout fired. With F-EXIT-2 deployed (PR #89), wicks like this won't trigger permanent SKIP — required 2-min sustained breach.</div>`;
+    }
+    return '';
+  }
+
+  // System-level lessons — bugs found, big wins, anomalies (only POST_CLOSE)
+  function renderDayLessons(d) {
+    const phase = d.phase;
+    if (phase !== 'POST_CLOSE' && phase !== 'OFF_HOURS' && phase !== 'CLOSE') return '';
+    // Detect notable findings from timeline events across all picks
+    const items = [];
+    const picks = d.verdict?.picks || [];
+    for (const p of picks) {
+      const tl = p.live?.timeline || [];
+      const hasManual = tl.some(t => t.phase === 'manual_revive');
+      const hasWick = tl.some(t => (t.decision || '').startsWith('WICK_'));
+      const hasUrgent = tl.some(t => t.decision === 'URGENT_EXIT');
+      if (hasManual) items.push({ kind: 'note', text: `<strong>${p.symbol}</strong>: required owner manual revival from SKIPPED state. F-EXIT-2 (PR #89) automates this for tomorrow.` });
+      if (hasUrgent) items.push({ kind: 'note', text: `<strong>${p.symbol}</strong>: Sonnet safety fired URGENT_EXIT before scheduled position_mgmt. Net effect was profit lock.` });
+      if (hasWick) items.push({ kind: 'win', text: `<strong>${p.symbol}</strong>: F-EXIT-2 wick-confirmation prevented a single-tick stop-out.` });
+    }
+    if (!items.length) return '';
+    return `<div class="day-lessons"><h3>📚 Today's lessons</h3>
+      <ul style="padding:0;margin:0">${items.map(i => `<li class="${i.kind}">${i.text}</li>`).join('')}</ul></div>`;
+  }
+
+  // Tomorrow checklist (POST_CLOSE only) — what to verify before / at / during open
+  function renderTomorrow(d) {
+    const phase = d.phase;
+    if (phase !== 'POST_CLOSE' && phase !== 'OFF_HOURS' && phase !== 'CLOSE') return '';
+    return `<div class="tomorrow-section"><h3>🌅 Tomorrow's checklist</h3>
+      <ul class="tomorrow-list">
+        <li><span class="check"></span><div><strong>08:30 IST</strong> — verdict cron composes (Opus). Check /trading/today/ for the morning narrative.<span class="why">If absent by 08:35, check wealth-verdict logs.</span></div></li>
+        <li><span class="check"></span><div><strong>09:15 IST</strong> — market opens. /trading/today/ flips to LIVE phase automatically.<span class="why">Hero P&L card resets to ₹0 / phase banner shows live timer.</span></div></li>
+        <li><span class="check"></span><div><strong>09:30 IST</strong> — range_capture creates WATCHING rows.<span class="why">Verify all 3 picks captured. Check OR ranges on each pick card.</span></div></li>
+        <li><span class="check"></span><div><strong>09:35 IST</strong> — first price_monitor (post PR #89 deploy). Closes the dead zone.<span class="why">Watch timeline for early breakouts that previously would have been missed.</span></div></li>
+        <li><span class="check"></span><div><strong>Throughout day</strong> — F-EXIT-2 wick events should appear as "WICK_*" timeline entries instead of permanent SKIP.<span class="why">If you see WICK on a real intended-stop, F-EXIT-2 may be too lenient — review.</span></div></li>
+        <li><span class="check"></span><div><strong>15:30 IST</strong> — page transitions to POST_CLOSE.<span class="why">Hero shows final P&L. Lessons + tomorrow auto-generated.</span></div></li>
+      </ul></div>`;
+  }
+
+  // ────── main story-arc renderer ──────
+  function renderStoryCard(p, idx, phase) {
+    const live = p.live || {};
+    const pos = live.position;
+    const ltpPaise = live.ltp_paise;
+    const ltpAge = live.ltp_ts ? Math.round((Date.now() - live.ltp_ts) / 1000) : null;
+    const ltpFresh = ltpAge != null && ltpAge < 90;
+
+    // Card class derives from final state
+    let cardClass = 'story-card';
+    let pillClass = 'PRE_OPEN', pillLabel = 'PRE-OPEN';
+    if (pos) {
+      if (pos.exit_at) {
+        const win = (pos.pnl_paise || 0) > 0;
+        cardClass += ' exited ' + (win ? 'win' : 'loss');
+        pillClass = 'EXITED';
+        pillLabel = win ? 'EXITED · WIN' : 'EXITED · LOSS';
+      } else if (pos.state === 'ENTERED') {
+        cardClass += ' entered';
+        pillClass = 'ENTERED';
+        pillLabel = 'ENTERED · LIVE';
+      } else if (pos.state === 'WATCHING') {
+        cardClass += ' watching';
+        pillClass = 'WATCHING';
+        pillLabel = 'WATCHING';
+      } else if (pos.state === 'SKIPPED') {
+        cardClass += ' skipped';
+        pillClass = 'SKIPPED';
+        pillLabel = 'SKIPPED';
+      }
+    } else if (phase === 'LIVE') {
+      cardClass += ' watching';
+      pillClass = 'WATCHING';
+      pillLabel = 'AWAITING';
+    }
+
+    // 1. PLAN section (always)
+    const planSection = `<div class="story-sec">
+      <div class="story-sec-label">📋 The plan (08:30 IST verdict)</div>
+      <div class="story-sec-row">
+        <span><span class="k">Entry plan</span> <span class="v">${fmtPriceRs(p.entry_paise || pos?.entry_paise)}</span></span>
+        <span><span class="k">Stop</span> <span class="v" style="color:var(--red)">${pos?.stop_paise ? fmtPriceRs(pos.stop_paise) : (p.stop_pct ? '−' + p.stop_pct + '%' : '—')}</span></span>
+        <span><span class="k">Target</span> <span class="v" style="color:var(--green)">${pos?.target_paise ? fmtPriceRs(pos.target_paise) : (p.target_pct ? '+' + p.target_pct + '%' : '—')}</span></span>
+        <span><span class="k">Weight</span> <span class="v">${p.weight_pct || 0}%</span></span>
+      </div>
+      ${p.rationale ? `<div class="story-rationale">${escapeHtml(p.rationale)}</div>` : ''}
+    </div>`;
+
+    // 2. TIMELINE section (only if timeline has events)
+    const timeline = live.timeline || [];
+    const timelineSection = timeline.length ? `<div class="story-sec">
+      <div class="story-sec-label">⏱ What happened</div>
+      ${renderTimeline(timeline)}
+    </div>` : '';
+
+    // 3. LIVE STATUS strip — only WATCHING or ENTERED (and not exited)
+    let liveStatusSection = '';
+    if (pos && !pos.exit_at && (pos.state === 'WATCHING' || pos.state === 'ENTERED')) {
+      const livePnl = pos.live_pnl_paise;
+      const livePnlPct = pos.live_pnl_pct;
+      let middleHtml = '';
+      let nextHtml = '';
+      if (pos.state === 'WATCHING') {
+        const dist = pos.breakout_distance_pct;
+        middleHtml = `<span style="font-size:11px;color:var(--muted)">${dist != null && dist > 0 ? `needs <strong style="color:var(--blue)">+${dist.toFixed(2)}%</strong> to fire entry @ ${fmtPriceRs(pos.or_high_paise)}` : 'breakout zone'}</span>`;
+        nextHtml = `<div class="next">price_monitor every 5min</div>`;
+      } else {
+        const cls = livePnl > 0 ? 'up' : (livePnl < 0 ? 'down' : '');
+        middleHtml = livePnl != null ? `<span class="live-delta-big ${cls}">${fmtPnlBig(livePnl)} (${livePnlPct >= 0 ? '+' : ''}${livePnlPct?.toFixed(2)}%)</span>` : '';
+        const nextCron = nextCronStr(phase);
+        nextHtml = `<div class="next">qty ${pos.qty} · held ${fmtDuration(pos.holding_ms)}<br>next: ${nextCron || '—'}</div>`;
+      }
+      liveStatusSection = `<div class="story-sec"><div class="story-sec-label">📡 Live now ${ltpFresh ? '· fresh' : ltpAge ? `· ${Math.round(ltpAge / 60)}m stale` : ''}</div>
+        <div class="live-status">
+          <span class="ltp-big">${fmtPriceRs(ltpPaise)}</span>
+          ${middleHtml}
+          ${nextHtml}
+        </div>
+      </div>`;
+    }
+
+    // 4. CHART (always for ENTERED / WATCHING; smaller / optional for EXITED)
+    let chartSection = '';
+    if (pos && (pos.state === 'WATCHING' || pos.state === 'ENTERED' || pos.exit_at)) {
+      chartSection = `<div class="story-sec"><div class="story-sec-label">📈 Price action</div>
+        <div class="pick-chart">${renderPickChart(p)}</div>
+      </div>`;
+    }
+
+    // 5. OUTCOME section — only EXITED
+    let outcomeSection = '';
+    if (pos && pos.exit_at) {
+      const pnl = pos.pnl_paise || 0;
+      const win = pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'flat');
+      const pct = pos.entry_paise > 0 ? ((pos.exit_paise - pos.entry_paise) / pos.entry_paise * 100) : 0;
+      outcomeSection = `<div class="story-sec">
+        <div class="story-sec-label">💰 Final outcome</div>
+        <div class="outcome-amount ${win}">${fmtPnlBig(pnl)}<span class="outcome-pct">${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%</span></div>
+        <div class="outcome-stats">
+          <span><strong>Entry</strong> ${fmtPriceRs(pos.entry_paise)} @ ${fmtIstFromMs(pos.entry_at)} IST</span>
+          <span><strong>Exit</strong> ${fmtPriceRs(pos.exit_paise)} @ ${fmtIstFromMs(pos.exit_at)} IST</span>
+          <span><strong>Held</strong> ${fmtDuration(pos.holding_ms)}</span>
+          <span><strong>Reason</strong> ${escapeHtml(pos.exit_reason || '—')}</span>
+        </div>
+      </div>`;
+    }
+
+    // 6. LESSON (post-close only, generated from data)
+    const lessonSection = renderLessonForPick(p, phase);
+
+    return `<div class="${cardClass}">
+      <div class="story-head">
+        <span class="story-rank">#${idx + 1}</span>
+        <span class="story-symbol" data-stock-symbol="${escapeHtml(p.symbol)}">${escapeHtml(p.symbol)}</span>
+        <span class="story-weight">${p.weight_pct || 0}% · ${fmtRupeesShort((p.weight_pct || 0) * 1000000)}</span>
+        <span class="story-pill ${pillClass}">${pillLabel}</span>
+        ${pos?.target_locked ? '<span class="lock-badge">🔒 LOCKED</span>' : ''}
+      </div>
+      ${planSection}
+      ${liveStatusSection}
+      ${chartSection}
+      ${timelineSection}
+      ${outcomeSection}
+      ${lessonSection}
+    </div>`;
+  }
 
   // Inline SVG chart with HTML label overlay — fixes preserveAspectRatio text-stretching bug.
   // SVG draws lines (which can stretch), HTML overlays draw text labels (which don't).
@@ -648,7 +1144,9 @@
     const isOverridden = !!v.override;
     const picksToShow = isOverridden ? v.override.new_picks : (v.picks || []);
 
-    const pickCards = picksToShow.map((p, i) => renderPickCard(p, i, d.phase)).join('');
+    // STORY-ARC PICK CARDS (May 7 redesign) — replaced flat data dump with
+    // narrative structure. Each pick reads as plan→timeline→live→outcome→lesson.
+    const pickCards = picksToShow.map((p, i) => renderStoryCard(p, i, d.phase)).join('');
 
     const overrideBanner = isOverridden ? `
       <div class="override-banner">
@@ -808,12 +1306,12 @@
         </nav>
       </header>
 
-      <div class="phase-head ${phase}">
-        <span class="pill">${phaseDesc.lbl}</span>
-        <span style="color: var(--muted)">${phaseDesc.help}</span>
-      </div>
+      ${renderHeroPnL(d)}
+      ${renderPhaseBanner(d)}
 
       ${renderVerdictSection(d)}
+      ${renderDayLessons(d)}
+      ${renderTomorrow(d)}
       ${renderIntegritySection(d)}
       ${renderPoolSection(d)}
       ${renderFeedSection(d)}
