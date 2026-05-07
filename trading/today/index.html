@@ -1031,7 +1031,14 @@
         const nextCron = nextCronStr(phase);
         nextHtml = `<div class="next">next: ${nextCron || '—'}</div>`;
       }
-      liveStatusSection = `<div class="story-sec"><div class="story-sec-label">📡 Live LTP ${ltpFresh ? '· fresh' : ltpAge ? `· ${Math.round(ltpAge / 60)}m stale` : ''}</div>
+      // POST_CLOSE label fix: in retrospective phase the LTP IS the last
+      // session tick (not "live"). Rename to "Last LTP at close" + drop the
+      // staleness badge (it's session-end snapshot, not stale data).
+      const isRetro = ['POST_CLOSE', 'CLOSE', 'OFF_HOURS'].includes(phase);
+      const sectionLabel = isRetro
+        ? '📊 Last LTP at session close'
+        : `📡 Live LTP ${ltpFresh ? '· fresh' : ltpAge ? `· ${Math.round(ltpAge / 60)}m stale` : ''}`;
+      liveStatusSection = `<div class="story-sec"><div class="story-sec-label">${sectionLabel}</div>
         <div class="live-status">
           <span class="ltp-big">${fmtPriceRs(ltpPaise)}</span>
           ${middleHtml}

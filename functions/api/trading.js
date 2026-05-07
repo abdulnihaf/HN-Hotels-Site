@@ -3553,13 +3553,34 @@ async function getTodayConsolidated(db) {
       ).bind(pick.symbol).first().catch(() => null);
 
       // Last 1h of 5-min bars for mini chart
-      const barsCutoff = nowMs - 60 * 60 * 1000;
+      // CHART FETCH RANGE — phase-aware (May 7 EOD fix).
+      //
+      // During LIVE: last 60 min is appropriate (fresh price action context).
+      // During POST_CLOSE / OFF_HOURS: last 60 min would be AFTER market close
+      //   (= empty). For retrospective viewing we want the FULL session bars
+      //   (09:15-15:30 IST = ~6.25hrs = 75 5-min bars).
+      // PRE_MARKET / PRE_OPEN: pre-market window (no intraday data yet).
+      //
+      // Decision: if it's TODAY but post-close, fetch all of today's bars from
+      // 09:15 IST onwards. Otherwise stick with last-60-min window for LIVE.
+      const istNowH = istNow.getUTCHours();
+      const istNowM = istNow.getUTCMinutes();
+      const istMinsLocal = istNowH * 60 + istNowM;
+      const isPostMarket = istMinsLocal >= 15 * 60 + 30;  // ≥ 15:30 IST
+      const sessionOpenMs = (() => {
+        // 09:15 IST = 03:45 UTC of today. Compute today's open in epoch ms.
+        const istToday = new Date(nowMs + 5.5 * 3600000);
+        istToday.setUTCHours(3, 45, 0, 0);  // 09:15 IST = 03:45 UTC
+        return istToday.getTime();
+      })();
+      const barsCutoff = isPostMarket ? sessionOpenMs : (nowMs - 60 * 60 * 1000);
+      const barsLimit  = isPostMarket ? 80 : 12;  // full session vs last hour
       const bars = (await db.prepare(`
         SELECT ts, open_paise, high_paise, low_paise, close_paise
         FROM intraday_bars
         WHERE symbol=? AND trade_date=? AND interval='5minute' AND ts >= ?
-        ORDER BY ts ASC LIMIT 12
-      `).bind(pick.symbol, today, barsCutoff).all().catch(() => ({ results: [] }))).results || [];
+        ORDER BY ts ASC LIMIT ?
+      `).bind(pick.symbol, today, barsCutoff, barsLimit).all().catch(() => ({ results: [] }))).results || [];
 
       // Position match (paper_trades for today, auto_managed)
       // or_high_paise + or_low_paise = first-15min OHLC range (the breakout level).
@@ -3583,12 +3604,16 @@ async function getTodayConsolidated(db) {
       // for the price line during market hours (typical 30-60 ticks/h = smooth line).
       let chartBars = bars;
       if (chartBars.length === 0) {
-        const tickCutoff = nowMs - 60 * 60 * 1000;
+        // Same phase-aware range logic for the intraday_ticks fallback.
+        // POST_CLOSE: full session ticks (might be 200-400 over a 6.25h day).
+        // LIVE: last 60 min (~30-60 ticks).
+        const tickCutoff = isPostMarket ? sessionOpenMs : (nowMs - 60 * 60 * 1000);
+        const ticksLimit = isPostMarket ? 500 : 80;  // full session can have ~400
         const ticks = (await db.prepare(`
           SELECT ts, ltp_paise FROM intraday_ticks
           WHERE symbol=? AND ts >= ?
-          ORDER BY ts ASC LIMIT 80
-        `).bind(pick.symbol, tickCutoff).all().catch(() => ({ results: [] }))).results || [];
+          ORDER BY ts ASC LIMIT ?
+        `).bind(pick.symbol, tickCutoff, ticksLimit).all().catch(() => ({ results: [] }))).results || [];
         // Render each tick as a 1-point bar (close = open = high = low = ltp)
         // so chart renderer can plot smooth line.
         chartBars = ticks.map(t => ({

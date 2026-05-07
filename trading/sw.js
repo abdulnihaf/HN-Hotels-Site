@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v50';  // v50: number sync — card weight pill matches actual deployment + OUTCOME explicit entry/partial/exit/total math + delta profit display
+const CACHE_VERSION = 'wealth-v51';  // v51: POST_CLOSE chart fetch full session (was last 60min = empty post-market) + label "Live LTP" → "Last LTP at close" in retro phases
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
