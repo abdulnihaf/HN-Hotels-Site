@@ -126,6 +126,7 @@ export async function onRequest(context) {
       case 'snapshot_save':      return Response.json(await saveSnapshot(db, env, url), { headers });
       case 'snapshot_get':       return Response.json(await getSnapshot(db, url), { headers });
       case 'snapshot_list':      return Response.json(await listSnapshots(db), { headers });
+      case 'snapshot_backfill':  return Response.json(await backfillSnapshot(db, env, url), { headers });
       case 'desk_view':          return Response.json(await getDeskView(db), { headers });
       case 'stock_detail':       return Response.json(await getStockDetail(db, url), { headers });
       case 'monthly_learning_trail': return Response.json(await getMonthlyLearningTrail(db, url), { headers });
@@ -3501,6 +3502,237 @@ async function getSnapshot(db, url) {
   };
 }
 
+// snapshot_backfill — reconstruct a partial snapshot for a past date from
+// existing D1 data. Won't have everything (paper_trades may be empty for May
+// 4-6, intraday_suitability is current-only so pool_top10 = []), but captures
+// what's recoverable: verdict picks + universe_winners_missed from intraday_bars.
+//
+// Marked snapshot_source = 'backfill_partial' so owner knows it's not as rich
+// as live snapshots.
+async function backfillSnapshot(db, env, url) {
+  const date = url.searchParams.get('date');
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, error: 'date param required (YYYY-MM-DD)' };
+  }
+  const istNowDate = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+  if (date >= istNowDate) {
+    return { ok: false, error: 'backfill is for PAST dates only. Use snapshot_save for today.' };
+  }
+
+  // Check if already exists (don't overwrite better data)
+  const existing = await db.prepare(
+    `SELECT trade_date, snapshot_source FROM daily_snapshots WHERE trade_date=?`
+  ).bind(date).first().catch(() => null);
+  const force = url.searchParams.get('force') === '1';
+  if (existing && !force) {
+    return {
+      ok: false,
+      error: `snapshot already exists for ${date} (source=${existing.snapshot_source}). Pass force=1 to overwrite.`,
+    };
+  }
+
+  // === Pull historical data for that date ===
+
+  // 1. Latest verdict for the date (multiple rows possible; pick latest TRADE if any)
+  const verdictRow = await db.prepare(`
+    SELECT id, verdict_type, decision, recommended_symbol, headline, narrative,
+           picks_json, alternatives_json, context_snapshot_json,
+           composed_at, composed_by_model, cost_paise, portfolio_capital_paise,
+           strategy_mode, entry_window
+    FROM daily_verdicts
+    WHERE trade_date=? AND verdict_type='morning'
+    ORDER BY composed_at DESC LIMIT 1
+  `).bind(date).first().catch(() => null);
+
+  let picks = [];
+  let alternatives = [];
+  let context = {};
+  if (verdictRow) {
+    try { picks = JSON.parse(verdictRow.picks_json || '[]'); } catch {}
+    try { alternatives = JSON.parse(verdictRow.alternatives_json || '[]'); } catch {}
+    try { context = JSON.parse(verdictRow.context_snapshot_json || '{}'); } catch {}
+  }
+
+  // 2. paper_trades for that date (if any)
+  const paperTrades = (await db.prepare(`
+    SELECT * FROM paper_trades
+    WHERE auto_managed=1 AND DATE(created_at/1000+19800,'unixepoch')=?
+    ORDER BY id ASC
+  `).bind(date).all().catch(() => ({ results: [] }))).results || [];
+
+  // 3. trader_decisions for that date
+  const decisions = (await db.prepare(`
+    SELECT ts, cron_phase, symbol, decision, state_after, ltp_paise,
+           composed_by_model, rationale
+    FROM trader_decisions WHERE trade_date=? ORDER BY ts ASC LIMIT 200
+  `).bind(date).all().catch(() => ({ results: [] }))).results || [];
+
+  // 4. EOD performance for ALL symbols with intraday_bars on that date
+  const todayBars = (await db.prepare(`
+    SELECT
+      symbol,
+      MIN(CASE WHEN ts = (SELECT MIN(ts) FROM intraday_bars b2 WHERE b2.symbol=b1.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN open_paise END) AS day_open_paise,
+      MAX(high_paise) AS day_high_paise,
+      MIN(low_paise) AS day_low_paise,
+      MAX(CASE WHEN ts = (SELECT MAX(ts) FROM intraday_bars b2 WHERE b2.symbol=b1.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN close_paise END) AS day_close_paise,
+      SUM(volume) AS day_volume
+    FROM intraday_bars b1
+    WHERE trade_date=? AND interval='5minute'
+    GROUP BY symbol
+    HAVING day_open_paise IS NOT NULL AND day_close_paise IS NOT NULL
+  `).bind(date, date, date).all().catch(() => ({ results: [] }))).results || [];
+
+  const TEN_LAKH = 100000000;
+  const HYPOTHETICAL_COST_PCT = 0.0007;
+  const eodMap = {};
+  for (const b of todayBars) {
+    const o = b.day_open_paise, h = b.day_high_paise, l = b.day_low_paise, c = b.day_close_paise;
+    if (!o || !h || !l || !c) continue;
+    const pctOC = +(((c - o) / o) * 100).toFixed(2);
+    const pctOH = +(((h - o) / o) * 100).toFixed(2);
+    const pctOL = +(((l - o) / o) * 100).toFixed(2);
+    const grossClose = Math.round(TEN_LAKH * (c - o) / o);
+    const grossPeak  = Math.round(TEN_LAKH * (h - o) / o);
+    const grossLow   = Math.round(TEN_LAKH * (l - o) / o);
+    const costApprox = Math.round(TEN_LAKH * HYPOTHETICAL_COST_PCT);
+    eodMap[b.symbol] = {
+      day_open_paise: o, day_high_paise: h, day_low_paise: l, day_close_paise: c,
+      day_volume: b.day_volume,
+      pct_open_to_close: pctOC, pct_open_to_high: pctOH, pct_open_to_low: pctOL,
+      hypothetical_10L_pnl_at_close_paise: grossClose - costApprox,
+      hypothetical_10L_pnl_at_peak_paise:  grossPeak - costApprox,
+      hypothetical_10L_pnl_at_low_paise:   grossLow - costApprox,
+      source: 'intraday_bars',
+    };
+  }
+
+  // 5. Build per-pick live with timeline (from trader_decisions filtered by symbol)
+  const verdictPickSyms = new Set();
+  for (const p of picks) {
+    if (!p.symbol) continue;
+    verdictPickSyms.add(p.symbol);
+    const tl = decisions.filter(d => d.symbol === p.symbol);
+    const pos = paperTrades.find(pt => pt.symbol === p.symbol);
+    p.live = {
+      ltp_paise: null,
+      ltp_ts: null,
+      bars: [],  // could populate but skip for size
+      bars_source: 'none',
+      timeline: tl.map(t => ({
+        ts: t.ts, phase: t.cron_phase, decision: t.decision,
+        state_after: t.state_after, ltp_paise: t.ltp_paise,
+        model: t.composed_by_model, reason: t.rationale,
+      })),
+      position: pos ? {
+        state: pos.trader_state, qty: pos.qty,
+        entry_paise: pos.entry_paise, stop_paise: pos.stop_paise, target_paise: pos.target_paise,
+        peak_price_paise: pos.peak_price_paise, trailing_stop_paise: pos.trailing_stop_paise,
+        target_locked: pos.target_locked === 1,
+        entry_at: pos.entry_at, exit_paise: pos.exit_paise, exit_reason: pos.exit_reason,
+        pnl_paise: pos.pnl_net_paise, exit_at: pos.exit_at,
+        holding_ms: pos.entry_at ? ((pos.exit_at || Date.now()) - pos.entry_at) : null,
+        or_high_paise: pos.or_high_paise, or_low_paise: pos.or_low_paise,
+        kite_bracket_id: pos.kite_bracket_id,
+      } : null,
+    };
+  }
+
+  // 6. Compute portfolio rollup from paper_trades
+  let realized = 0, unrealized = 0, deployed = 0;
+  let counts = { watching: 0, entered: 0, exited_win: 0, exited_loss: 0, skipped: 0 };
+  for (const pt of paperTrades) {
+    if (pt.exit_at) {
+      realized += pt.pnl_net_paise || 0;
+      deployed += (pt.entry_paise || 0) * (pt.qty || 0);
+      if ((pt.pnl_net_paise || 0) > 0) counts.exited_win++;
+      else if ((pt.pnl_net_paise || 0) < 0) counts.exited_loss++;
+    } else if (pt.trader_state === 'ENTERED') {
+      deployed += (pt.entry_paise || 0) * (pt.qty || 0);
+      counts.entered++;
+    } else if (pt.trader_state === 'WATCHING') counts.watching++;
+    else if (pt.trader_state === 'SKIPPED') counts.skipped++;
+  }
+
+  // 7. universe_winners_missed (only universe stocks NOT in picks/pool. Pool empty for backfill.)
+  const universe_winners_missed = todayBars
+    .filter(b => !verdictPickSyms.has(b.symbol))
+    .map(b => {
+      const eod = eodMap[b.symbol];
+      if (!eod) return null;
+      return { symbol: b.symbol, ...eod };
+    })
+    .filter(x => x && x.pct_open_to_close >= 2.0)
+    .sort((a, b) => (b.pct_open_to_close - a.pct_open_to_close))
+    .slice(0, 10);
+
+  // 8. Assemble snapshot
+  const snapshot = {
+    trade_date: date,
+    phase: 'POST_CLOSE',
+    pre_market_integrity: { layer1: { severity: 'unknown', checks: [] }, layer2: { severity: 'unknown', checks: [] } },
+    live_integrity: null,
+    verdict: verdictRow ? {
+      id: verdictRow.id,
+      type: verdictRow.verdict_type,
+      decision: verdictRow.decision,
+      headline: verdictRow.headline,
+      narrative: verdictRow.narrative,
+      recommended_symbol: verdictRow.recommended_symbol,
+      picks,
+      alternatives,
+      context,
+      composed_at: verdictRow.composed_at,
+      composed_by_model: verdictRow.composed_by_model,
+      cost_paise: verdictRow.cost_paise,
+      portfolio_capital_paise: verdictRow.portfolio_capital_paise,
+      strategy_mode: verdictRow.strategy_mode,
+      entry_window: verdictRow.entry_window,
+      portfolio: {
+        realized_paise: realized,
+        unrealized_paise: 0,  // closed day, no live positions
+        total_paise: realized,
+        capital_deployed_paise: deployed,
+        capital_ceiling_paise: verdictRow.portfolio_capital_paise || 100000000,
+        capital_deployable_paise: deployed || (verdictRow.portfolio_capital_paise || 100000000),
+        capital_total_paise: deployed || (verdictRow.portfolio_capital_paise || 100000000),
+        effective_denominator_paise: deployed,
+        effective_denominator_source: 'actual_deployed',
+        pct_of_effective: deployed > 0 ? +((realized / deployed) * 100).toFixed(3) : 0,
+        counts,
+      },
+      override: null,
+    } : null,
+    pool_top10: [],  // intraday_suitability is current-only — not historical
+    universe_winners_missed,
+    pre_market_feed: [],  // not preserved historically
+    swing_candidates: { computed_at: null, candidates: [] },
+    generated_at: Date.now(),
+    backfill_meta: {
+      reconstructed_from: 'd1_historical',
+      paper_trades_count: paperTrades.length,
+      decisions_count: decisions.length,
+      universe_bars_symbols: todayBars.length,
+    },
+  };
+
+  await db.prepare(`
+    INSERT OR REPLACE INTO daily_snapshots (trade_date, snapshot_json, created_at, snapshot_source)
+    VALUES (?, ?, ?, ?)
+  `).bind(date, JSON.stringify(snapshot), Date.now(), 'backfill_partial').run().catch(() => {});
+
+  return {
+    ok: true,
+    date,
+    source: 'backfill_partial',
+    paper_trades_count: paperTrades.length,
+    decisions_count: decisions.length,
+    universe_bars_symbols: todayBars.length,
+    universe_winners_missed_count: universe_winners_missed.length,
+    realized_paise: realized,
+    note: 'pool_top10 empty (intraday_suitability current-only). pre_market_feed empty (not preserved historically).',
+  };
+}
+
 async function listSnapshots(db) {
   const rows = (await db.prepare(`
     SELECT trade_date, created_at, snapshot_source, LENGTH(snapshot_json) AS size_bytes
@@ -4273,7 +4505,7 @@ async function getTodayConsolidated(db, env) {
   else if (istMins < 23 * 60) phaseLabel = 'POST_CLOSE';
   else phaseLabel = 'OFF_HOURS';
 
-  return {
+  const response = {
     trade_date: today,
     ist_now_minutes: istMins,
     phase: phaseLabel,
@@ -4286,6 +4518,28 @@ async function getTodayConsolidated(db, env) {
     swing_candidates,
     generated_at: nowMs,
   };
+
+  // AUTO-SAVE SNAPSHOT (May 7 EOD owner ask) — fire-and-forget on first POST_CLOSE
+  // page load each day. Replaces the need for a separate 16:30 IST cron.
+  // Logic: if phase is POST_CLOSE/CLOSE AND no snapshot yet exists for today,
+  // INSERT one. Subsequent calls find the row and skip.
+  // Cost: 1 SELECT per call (cheap). 1 INSERT once per day.
+  // Safety: caught + swallowed, never blocks response.
+  if (phaseLabel === 'POST_CLOSE' || phaseLabel === 'CLOSE') {
+    try {
+      const exists = await db.prepare(
+        `SELECT 1 FROM daily_snapshots WHERE trade_date=? LIMIT 1`
+      ).bind(today).first().catch(() => null);
+      if (!exists) {
+        await db.prepare(`
+          INSERT OR REPLACE INTO daily_snapshots (trade_date, snapshot_json, created_at, snapshot_source)
+          VALUES (?, ?, ?, 'auto_save_post_close')
+        `).bind(today, JSON.stringify(response), Date.now(), 'auto_save_post_close').run().catch(() => {});
+      }
+    } catch (_) { /* swallow — auto-save must never break the response */ }
+  }
+
+  return response;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
