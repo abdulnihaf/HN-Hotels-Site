@@ -1,9 +1,52 @@
 // /api/comms — central comms hub
-// Routes WABA (Meta Cloud API direct) + SMS (Fast2SMS) per brand and tier.
+// Routes WABA (Meta Cloud API direct) + SMS (Fast2SMS DLT) per brand and tier.
 // Logs every send to comms_outbox.
 
 const META_GRAPH_VERSION = 'v24.0';
 const FAST2SMS_BASE = 'https://www.fast2sms.com/dev/bulkV2';
+
+// BSNL DLT sender IDs — registered under PE BL-1400079296 (HN Hotels Pvt Ltd)
+// sender_id maps to a 6-char TRAI-approved header.
+// fast2sms_tpl_env: CF secret name holding the Fast2SMS numeric template ID
+// (assigned by Fast2SMS when you add each template in their DLT panel).
+const DLT_TEMPLATES = {
+  cash_drift_v1: {
+    sender_id: 'HMZOPS',
+    fast2sms_tpl_env: 'F2S_TPL_CASH_DRIFT_V1',
+    var_count: 4,
+    // Alert: Cash drift at {#var#}. POS Rs {#var#} vs actual Rs {#var#}. Diff Rs {#var#}. Check immediately. - HN Hotels
+  },
+  rp_no_pos_v1: {
+    sender_id: 'HMZOPS',
+    fast2sms_tpl_env: 'F2S_TPL_RP_NO_POS_V1',
+    var_count: 4,
+    // Razorpay Rs {#var#} from {#var#} has no POS order at {#var#}. Txn: {#var#}. Investigate. - HN Hotels
+  },
+  inventory_short_v1: {
+    sender_id: 'HMZOPS',
+    fast2sms_tpl_env: 'F2S_TPL_INVENTORY_SHORT_V1',
+    var_count: 3,
+    // Low stock at {#var#}: {#var#} below reorder level. Remaining: {#var#}. Reorder now. - HN Hotels
+  },
+  no_show_v1: {
+    sender_id: 'NAWOPS',
+    fast2sms_tpl_env: 'F2S_TPL_NO_SHOW_V1',
+    var_count: 4,
+    // {#var#} not checked in at {#var#} as of {#var#}. Shift: {#var#}. Follow up. - HN Hotels
+  },
+  payment_pending_v1: {
+    sender_id: 'HMZOPS',
+    fast2sms_tpl_env: 'F2S_TPL_PAYMENT_PENDING_V1',
+    var_count: 5,
+    // Order #{#var#} at {#var#} Rs {#var#} unpaid {#var#} mins. Customer: {#var#}. Action needed. - HN Hotels
+  },
+  digest_v1: {
+    sender_id: 'HNHOPS',
+    fast2sms_tpl_env: 'F2S_TPL_DIGEST_V1',
+    var_count: 6,
+    // Digest {#var#}: HE Rs {#var#} ({#var#} orders) NCH Rs {#var#} ({#var#} orders) Total Rs {#var#}. - HN Hotels
+  },
+};
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -70,19 +113,39 @@ async function sendWaba(env, { brand, phone, template, vars = [], language = 'en
   };
 }
 
-async function sendSms(env, { phone, message, route = 'q' }) {
+async function sendSms(env, { phone, message, template, vars = [] }) {
   if (!env.FAST2SMS_API_KEY) {
     return { ok: false, status: 500, response: { error: 'FAST2SMS_API_KEY not set' } };
   }
   const to = normalizePhone(phone).replace(/^91/, '');
-  const url = new URL(FAST2SMS_BASE);
-  url.searchParams.set('authorization', env.FAST2SMS_API_KEY);
-  url.searchParams.set('route', route); // q = quick transactional, dlt = DLT-approved transactional
-  url.searchParams.set('numbers', to);
-  url.searchParams.set('message', message);
-  url.searchParams.set('flash', '0');
+  const params = new URL(FAST2SMS_BASE);
+  params.searchParams.set('authorization', env.FAST2SMS_API_KEY);
+  params.searchParams.set('numbers', to);
+  params.searchParams.set('flash', '0');
 
-  const res = await fetch(url.toString(), { method: 'GET' });
+  if (template) {
+    const tpl = DLT_TEMPLATES[template];
+    if (!tpl) return { ok: false, status: 400, response: { error: `unknown DLT template: ${template}` } };
+
+    const tplId = env[tpl.fast2sms_tpl_env];
+    if (!tplId) {
+      // Template ID not yet set — Fast2SMS DLT panel registration pending.
+      // Cannot send on DLT route without a numeric template ID.
+      return { ok: false, status: 503, response: { error: `Fast2SMS template ID not configured (${tpl.fast2sms_tpl_env}). Register template in Fast2SMS DLT panel first.` } };
+    }
+
+    params.searchParams.set('route', 'dlt');
+    params.searchParams.set('sender_id', tpl.sender_id);
+    params.searchParams.set('message_id', tplId);
+    // Fast2SMS expects pipe-separated values with a trailing pipe: val1|val2|val3|
+    params.searchParams.set('variables_values', vars.map(String).join('|') + '|');
+  } else {
+    if (!message) return { ok: false, status: 400, response: { error: 'message or template required' } };
+    params.searchParams.set('route', 'q');
+    params.searchParams.set('message', message);
+  }
+
+  const res = await fetch(params.toString(), { method: 'GET' });
   const text = await res.text();
   let respJson = null;
   try { respJson = JSON.parse(text); } catch {}
@@ -144,6 +207,9 @@ export async function onRequest(context) {
         waba_he_token: !!(env.WA_HE_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN),
         waba_nch_token: !!(env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN),
         fast2sms_key: !!env.FAST2SMS_API_KEY,
+        dlt_templates: Object.fromEntries(
+          Object.entries(DLT_TEMPLATES).map(([name, t]) => [name, !!env[t.fast2sms_tpl_env]])
+        ),
         d1_bound: !!env.DB,
       },
     });
@@ -180,8 +246,8 @@ export async function onRequest(context) {
         if (!template) return json({ error: 'template required for waba' }, 400);
         result = await sendWaba(env, { brand, phone: recipient, template, vars });
       } else if (channel === 'sms') {
-        if (!message) return json({ error: 'message required for sms' }, 400);
-        result = await sendSms(env, { phone: recipient, message });
+        if (!template && !message) return json({ error: 'template or message required for sms' }, 400);
+        result = await sendSms(env, { phone: recipient, message, template, vars });
       } else {
         return json({ error: `unsupported channel: ${channel}` }, 400);
       }
