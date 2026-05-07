@@ -61,6 +61,11 @@ function buildEngineOnlyVerdict(ctx, topPicks) {
   // Decision tree (mirrors the rules in the LLM prompt)
   let decision, headline, narrative, sym = null, entry_window = null, horizon = null, time_stop_days = null;
 
+  // Honest fallback narrative (May 7 2026 fix): old narrative said "LLM unavailable"
+  // but the actual common cause is LLM truncation (max_tokens hit). Fallback can fire
+  // for many reasons — be specific so owner can debug.
+  const fallbackReason = 'engine-only fallback (LLM tiers may have failed JSON validation, hit max_tokens cap, or returned errors — check anthropic_usage table for today)';
+
   if (regime === 'strong_trending_down' || maxScore < 65 || deadDims >= 5) {
     decision = 'SIT_OUT';
     const reasons = [];
@@ -68,23 +73,23 @@ function buildEngineOnlyVerdict(ctx, topPicks) {
     if (maxScore < 65) reasons.push(`max score ${maxScore.toFixed(1)} below 65`);
     if (deadDims >= 5) reasons.push(`${deadDims} of 9 dims data-blind`);
     headline = `Engine-fallback SIT_OUT: ${reasons.join(', ')}`;
-    narrative = `LLM tiers unavailable — engine-only deterministic verdict. ${reasons.join('. ')}. Wait for tomorrow.`;
+    narrative = `${fallbackReason}. ${reasons.join('. ')}. Owner should investigate root cause; today is a sit-out from the deterministic decision tree.`;
   } else if (regime === 'high_vol' && maxScore < 75) {
     decision = 'OBSERVE';
     headline = `High-vol regime, marginal score (${maxScore.toFixed(1)}) — observe, do not enter`;
-    narrative = `LLM unavailable — engine-only fallback. VIX-elevated regime + marginal score = chaos zone. Watch but don't enter.`;
+    narrative = `${fallbackReason}. VIX-elevated regime + marginal score = chaos zone. Watch but don't enter.`;
   } else if (topPick && maxScore >= 70 && topPick.mtf !== 'against_macro' && topPick.mtf !== 'aligned_down') {
     decision = 'TRADE';
     sym = topPick.symbol;
     headline = `Engine-fallback TRADE: ${sym} (score ${maxScore.toFixed(1)})`;
-    narrative = `LLM unavailable — engine-only fallback. ${sym} is the highest-scoring stock with clean MTF alignment. Trust the engine numbers, lean smaller size since no narrative validation.`;
+    narrative = `${fallbackReason}. ${sym} is the highest-scoring stock with clean MTF alignment. Trust the engine numbers, lean smaller size since no narrative validation.`;
     entry_window = '09:30–11:30 IST (morning trend window)';
     horizon = 'swing';
     time_stop_days = 5;
   } else {
     decision = 'SIT_OUT';
     headline = 'Engine-fallback SIT_OUT: no clean setup met thresholds';
-    narrative = 'LLM unavailable — engine-only fallback found no setup passing all gates (score≥70, MTF clean, regime favorable).';
+    narrative = `${fallbackReason}. No setup passed all gates (score≥70, MTF clean, regime favorable).`;
   }
 
   return {
@@ -951,9 +956,13 @@ Compose the verdict JSON. Pick 2-3 from candidates. Do not invent stops or targe
   const callOpts = {
     prompt: userPrompt,
     system,
-    // Portfolio mode = 2-3 picks × ~120 tokens each + summary + narrative ≈ 600-1000 tokens.
-    // Bumped to 1500 so Opus never truncates mid-portfolio (caused malformed_json fallthrough).
-    max_tokens: 1500,
+    // CRITICAL FIX (May 7 2026 morning): max_tokens 1500 was being HIT by all 3 tiers
+    // today (Opus + Sonnet + Haiku all returned exactly 1500 output tokens → JSON
+    // truncated → parseJsonOutput failed → fell through to engine_only_fallback with
+    // misleading "LLM unavailable" narrative. Bumped to 4000 to give the model headroom
+    // for: 3 picks × detailed rationale + narrative + alternatives + context refs.
+    // Opus 4.5 typical verdict response = ~1800-2400 tokens; 4000 is safe ceiling.
+    max_tokens: 4000,
     purpose: 'verdict_compose',
     worker: WORKER_NAME,
     cache_key: `verdict_morning_${today}_${regimeName}_${Math.floor((topPicksRows[0]?.composite_score || 0) / 5) * 5}`,
