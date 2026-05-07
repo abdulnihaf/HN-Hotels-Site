@@ -3215,23 +3215,32 @@ async function getTopStrip(db) {
     ? parseInt(cfgRows[0].config_value || '100000000')
     : 100000000;
 
+  // BUG B FIX (May 7 2026 morning): WATCHING rows have entry_paise set by
+  // range_capture but NO actual entry has fired. Computing P&L on those is
+  // misleading (showed -₹4.6k pre-entry on screen). Only count:
+  //   - ENTERED positions (real entry fired) for unrealized P&L
+  //   - Closed positions for realized P&L
+  // WATCHING rows contribute to "deployed_paise" (capital reserved for them) but
+  // not to P&L.
   const tradeAgg = await db.prepare(`
     SELECT
-      COUNT(CASE WHEN is_active=1 AND auto_managed=1 THEN 1 END) AS active_count,
-      COALESCE(SUM(CASE WHEN is_active=1 AND auto_managed=1
+      COUNT(CASE WHEN is_active=1 AND auto_managed=1 AND trader_state='ENTERED' THEN 1 END) AS active_count,
+      COUNT(CASE WHEN is_active=1 AND auto_managed=1 AND trader_state IN ('WATCHING','ENTERED') THEN 1 END) AS reserved_count,
+      COALESCE(SUM(CASE WHEN is_active=1 AND auto_managed=1 AND trader_state IN ('WATCHING','ENTERED')
                         THEN qty * entry_paise ELSE 0 END), 0) AS deployed_paise,
-      COALESCE(SUM(CASE WHEN auto_managed=1 THEN COALESCE(pnl_net_paise, 0) ELSE 0 END), 0) AS today_pnl_paise
+      COALESCE(SUM(CASE WHEN auto_managed=1 AND exit_at IS NOT NULL THEN COALESCE(pnl_net_paise, 0) ELSE 0 END), 0) AS realized_pnl_paise
     FROM paper_trades
     WHERE DATE(created_at/1000+19800,'unixepoch') = ?
-  `).bind(today).first().catch(() => null) || { active_count: 0, deployed_paise: 0, today_pnl_paise: 0 };
+  `).bind(today).first().catch(() => null) || { active_count: 0, reserved_count: 0, deployed_paise: 0, realized_pnl_paise: 0 };
 
-  // Live unrealized P&L on still-open positions (using last intraday_ticks LTP)
+  // Live unrealized P&L — ENTERED only (not WATCHING)
   const openLive = (await db.prepare(`
     SELECT pt.id, pt.symbol, pt.qty, pt.entry_paise,
       (SELECT ltp_paise FROM intraday_ticks t
        WHERE t.symbol=pt.symbol ORDER BY t.ts DESC LIMIT 1) AS ltp_paise
     FROM paper_trades pt
     WHERE pt.is_active=1 AND pt.auto_managed=1
+      AND pt.trader_state='ENTERED' AND pt.exit_at IS NULL
       AND DATE(pt.created_at/1000+19800,'unixepoch') = ?
   `).bind(today).all().catch(() => ({ results: [] }))).results || [];
 
@@ -3242,7 +3251,7 @@ async function getTopStrip(db) {
     }
   }
 
-  const total_pnl_paise = (tradeAgg.today_pnl_paise || 0) + unrealized_paise;
+  const total_pnl_paise = (tradeAgg.realized_pnl_paise || 0) + unrealized_paise;
   const PROFIT_LOCK_THRESHOLD_PAISE = 3000000;  // ₹30,000 (matches wealth-trader F-L4-LOCK)
   const LOSS_HALT_THRESHOLD_PAISE = -3000000;   // ₹-30,000 (matches DAILY_HALT_LOSS_30K)
 
@@ -3340,7 +3349,11 @@ async function getTopStrip(db) {
       deployed_pct: total_capital_paise > 0
         ? +((tradeAgg.deployed_paise / total_capital_paise) * 100).toFixed(1)
         : 0,
-      position_count: tradeAgg.active_count || 0,
+      // active_count = ENTERED only (real positions). reserved_count = WATCHING + ENTERED
+      // (capital allocated but maybe not yet entered). Spine shows reserved_count under
+      // "pos" since that matches what user expects (3 picks reserved even if 0 entered).
+      position_count: tradeAgg.reserved_count || 0,
+      entered_count: tradeAgg.active_count || 0,
       today_pnl_paise: total_pnl_paise,
       profit_lock_threshold_paise: PROFIT_LOCK_THRESHOLD_PAISE,
       profit_lock_remaining_paise: Math.max(0, PROFIT_LOCK_THRESHOLD_PAISE - total_pnl_paise),
@@ -3559,11 +3572,47 @@ async function getTodayConsolidated(db) {
         ORDER BY id DESC LIMIT 1
       `).bind(pick.symbol, today).first().catch(() => null);
 
+      // BUG C FIX (May 7 2026): intraday_bars only fills at 16:00 IST cron, so charts
+      // are empty during market. Fallback: fetch last 1h of intraday_ticks (1-min Kite
+      // quotes) and bucket into 5-min synthetic OHLC bars on-the-fly.
+      let chartBars = bars;
+      if (chartBars.length === 0) {
+        const tickCutoff = nowMs - 60 * 60 * 1000;
+        const ticks = (await db.prepare(`
+          SELECT ts, ltp_paise FROM intraday_ticks
+          WHERE symbol=? AND ts >= ?
+          ORDER BY ts ASC
+        `).bind(pick.symbol, tickCutoff).all().catch(() => ({ results: [] }))).results || [];
+        if (ticks.length) {
+          // Bucket into 5-min synthetic OHLC bars
+          const buckets = {};
+          for (const t of ticks) {
+            const bucketStart = Math.floor(t.ts / (5 * 60 * 1000)) * (5 * 60 * 1000);
+            if (!buckets[bucketStart]) {
+              buckets[bucketStart] = { ts: bucketStart, open_paise: t.ltp_paise, high_paise: t.ltp_paise, low_paise: t.ltp_paise, close_paise: t.ltp_paise };
+            } else {
+              const b = buckets[bucketStart];
+              b.high_paise = Math.max(b.high_paise, t.ltp_paise);
+              b.low_paise = Math.min(b.low_paise, t.ltp_paise);
+              b.close_paise = t.ltp_paise;
+            }
+          }
+          chartBars = Object.values(buckets).sort((a, b) => a.ts - b.ts);
+        }
+      }
+
+      // BUG B FIX: live_pnl is meaningful ONLY for ENTERED positions. For WATCHING
+      // rows, range_capture pre-stores entry_paise as an LTP estimate but no actual
+      // trade has fired — showing P&L there is misleading. Same for top_strip P&L.
+      const isEntered = pos && pos.trader_state === 'ENTERED' && !pos.exit_at;
+      const isExited = pos && pos.exit_at;
+
       pick.live = {
         ltp_paise: ltpRow?.ltp_paise || null,
         ltp_ts: ltpRow?.ts || null,
-        bars,
-        prev_close_paise: bars.length ? bars[0].open_paise : null,
+        bars: chartBars,
+        bars_source: bars.length ? 'intraday_bars' : (chartBars.length ? 'intraday_ticks_aggregated' : 'none'),
+        prev_close_paise: chartBars.length ? chartBars[0].open_paise : null,
         position: pos ? {
           state: pos.trader_state,
           qty: pos.qty,
@@ -3579,9 +3628,11 @@ async function getTodayConsolidated(db) {
           exit_reason: pos.exit_reason,
           pnl_paise: pos.pnl_net_paise,
           exit_at: pos.exit_at,
-          live_pnl_paise: (ltpRow?.ltp_paise && pos.entry_paise && pos.qty && !pos.exit_at)
+          // Only compute live_pnl for ENTERED positions (real trade fired).
+          // WATCHING rows use range_capture's LTP-estimate as entry_paise; no actual entry.
+          live_pnl_paise: isEntered && ltpRow?.ltp_paise
             ? (ltpRow.ltp_paise - pos.entry_paise) * pos.qty : null,
-          live_pnl_pct: (ltpRow?.ltp_paise && pos.entry_paise && !pos.exit_at)
+          live_pnl_pct: isEntered && ltpRow?.ltp_paise
             ? +(((ltpRow.ltp_paise - pos.entry_paise) / pos.entry_paise) * 100).toFixed(2) : null,
         } : null,
       };
