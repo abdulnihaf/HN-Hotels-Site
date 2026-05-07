@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v53';  // v53: EOD accuracy fix — POST_CLOSE day_close overridden from Kite official close (was 5min-poll inferred, off by up to ₹21)
+const CACHE_VERSION = 'wealth-v54';  // v54: snapshot persistence — daily_snapshots table + save/get/list endpoints. Today's data captured before midnight; future cron will auto-save 16:30 IST (Sat work)
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
