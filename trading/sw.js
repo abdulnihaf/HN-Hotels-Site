@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v47';  // v47: TWO-LAYER capital — ceiling (total_capital_paise) + today_deployable_paise. Daily commitment scales without code change. Hero card shows both layers.
+const CACHE_VERSION = 'wealth-v48';  // v48: AUTO-BRIDGE — paper_trades.ENTERED auto-fires Kite place_bracket. UI shows real-order badge + 3-of-3 gate state in banner.
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [

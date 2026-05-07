@@ -308,6 +308,21 @@
     margin-top: 1px; flex-shrink: 0; }
   .tomorrow-list li .why { display: block; color: var(--muted); font-size: 10px; margin-top: 3px; }
 
+  /* AUTO-BRIDGE badge — shows real-money order status on story-arc card */
+  .auto-bridge { padding: 2px 8px; border-radius: 8px; font-size: 9px; font-weight: 700;
+    letter-spacing: 0.3px; margin-left: 4px; cursor: help; }
+  .auto-bridge.placed { background: rgba(46,204,113,0.18); color: var(--green); }
+  .auto-bridge.failed { background: rgba(231,76,60,0.18); color: var(--red); }
+  .auto-bridge.armed  { background: rgba(124,92,255,0.18); color: var(--accent); }
+
+  /* AUTO-BRIDGE banner in phase strip — owner state-of-real-trading at a glance */
+  .auto-banner { padding: 8px 12px; margin-bottom: 14px; border-radius: 8px;
+    font-size: 11px; line-height: 1.4; }
+  .auto-banner.armed   { background: rgba(46,204,113,0.10); border-left: 3px solid var(--green); color: var(--text); }
+  .auto-banner.shadow  { background: rgba(245,176,65,0.10); border-left: 3px solid var(--yellow); color: var(--text); }
+  .auto-banner.blocked { background: rgba(138,150,184,0.10); border-left: 3px solid var(--muted); color: var(--text); }
+  .auto-banner strong { color: var(--text); }
+
   /* LESSONS aggregator (system-level findings) */
   .day-lessons { padding: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-top: 14px; }
   .day-lessons h3 { margin: 0 0 10px 0; font-size: 14px; font-weight: 700; }
@@ -696,6 +711,35 @@
     return `<div class="phase-banner ${phase}"><span class="pdot"></span><span class="ptext">${text}</span></div>`;
   }
 
+  // AUTO-BRIDGE state banner — visible only when real-money state matters.
+  // Tells owner at-a-glance whether system will auto-fire real Kite orders
+  // OR is in shadow mode OR has block flag set.
+  function renderAutoBridgeBanner(d) {
+    const p = d.verdict?.portfolio;
+    if (!p) return '';
+    if (p.auto_bridge_armed) {
+      return `<div class="auto-banner armed">
+        🟢 <strong>AUTO-BRIDGE ARMED</strong> — real Kite orders will fire automatically when verdict picks transition to ENTERED. Owner intervention needed only if a card shows "🔴 AUTO-BRIDGE FAILED".
+      </div>`;
+    }
+    if (p.auto_real_trades_enabled && p.block_real_orders) {
+      return `<div class="auto-banner blocked">
+        ⚪ <strong>AUTO-BRIDGE GATED</strong> — flag enabled but block_real_orders=1. Run: <code>UPDATE user_config SET config_value='0' WHERE config_key='block_real_orders';</code> after Kite funds verified.
+      </div>`;
+    }
+    if (p.auto_real_trades_enabled && p.engine_mode !== 'live') {
+      return `<div class="auto-banner blocked">
+        ⚪ <strong>AUTO-BRIDGE GATED</strong> — flag enabled but engine_mode='${p.engine_mode}'. Run: <code>UPDATE user_config SET config_value='live' WHERE config_key='engine_mode';</code>
+      </div>`;
+    }
+    if (!p.auto_real_trades_enabled) {
+      return `<div class="auto-banner shadow">
+        ⚪ <strong>PAPER ONLY</strong> — auto-bridge disabled. Verdict picks run as paper trades; no real Kite orders. Flip via: <code>UPDATE user_config SET config_value='1' WHERE config_key='auto_real_trades_enabled';</code>
+      </div>`;
+    }
+    return '';
+  }
+
   // ────── timeline event prettifier ──────
   function tlDotClass(decision, state_after) {
     const d = (decision || '').toUpperCase();
@@ -931,6 +975,20 @@
     // 6. LESSON (post-close only, generated from data)
     const lessonSection = renderLessonForPick(p, phase);
 
+    // AUTO-BRIDGE STATUS badge (May 7 2026 PR #96)
+    // Shows real-money order state when auto-bridge is armed.
+    let autoBridgeBadge = '';
+    if (pos) {
+      const status = pos.auto_bridge_status;
+      const note   = pos.auto_bridge_note || '';
+      const kbId   = pos.kite_bracket_id;
+      if (status === 'placed' && kbId) {
+        autoBridgeBadge = `<span class="auto-bridge placed" title="${escapeHtml(note)}">🟢 REAL ORDER · Kite #${kbId}</span>`;
+      } else if (status === 'failed') {
+        autoBridgeBadge = `<span class="auto-bridge failed" title="${escapeHtml(note)}">🔴 AUTO-BRIDGE FAILED · click /execute/ manually</span>`;
+      }
+    }
+
     return `<div class="${cardClass}">
       <div class="story-head">
         <span class="story-rank">#${idx + 1}</span>
@@ -938,6 +996,7 @@
         <span class="story-weight">${p.weight_pct || 0}% · ${fmtRupeesShort((p.weight_pct || 0) * 1000000)}</span>
         <span class="story-pill ${pillClass}">${pillLabel}</span>
         ${pos?.target_locked ? '<span class="lock-badge">🔒 LOCKED</span>' : ''}
+        ${autoBridgeBadge}
       </div>
       ${planSection}
       ${liveStatusSection}
@@ -1324,6 +1383,7 @@
 
       ${renderHeroPnL(d)}
       ${renderPhaseBanner(d)}
+      ${renderAutoBridgeBanner(d)}
 
       ${renderVerdictSection(d)}
       ${renderDayLessons(d)}
