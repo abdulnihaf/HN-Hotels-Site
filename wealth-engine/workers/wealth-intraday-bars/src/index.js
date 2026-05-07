@@ -211,8 +211,13 @@ async function fetchHistoricalBars(env, symbols, interval, fromDate, toDate) {
 // PHASE 3 — fetchToday (cron at 16:00 IST)
 // Fetch today's 5-min bars for top-50 intraday-suitable stocks.
 // ═══════════════════════════════════════════════════════════════════════════
+// F-COVER-1 fix (May 7 2026 morning): default top 50 → 200 so the fetchToday
+// cron covers the FULL intraday_suitability pool (currently 73 stocks).
+// Previously bottom 24 stocks (ranked 50-73 by intraday_score) had no bars,
+// invalidating their pool ranking + breaking pre-market integrity L1.2.
+// 200 is a safe over-cap since pool is bounded by F38 universe filter.
 async function fetchToday(env, opts = {}) {
-  const top = parseInt(opts.top || 50);
+  const top = parseInt(opts.top || 200);
   const symbols = (await env.DB.prepare(`
     SELECT symbol FROM intraday_suitability ORDER BY intraday_score DESC LIMIT ?
   `).bind(top).all()).results.map(r => r.symbol);
@@ -228,7 +233,7 @@ async function fetchToday(env, opts = {}) {
 // ═══════════════════════════════════════════════════════════════════════════
 async function backfill(env, opts = {}) {
   const days = parseInt(opts.days || 30);
-  const top = parseInt(opts.top || 50);
+  const top = parseInt(opts.top || 200);  // F-COVER-1: matches fetchToday — full pool
   const symbols = (await env.DB.prepare(`
     SELECT symbol FROM intraday_suitability ORDER BY intraday_score DESC LIMIT ?
   `).bind(top).all()).results.map(r => r.symbol);

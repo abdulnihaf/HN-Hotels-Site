@@ -1371,8 +1371,13 @@ async function preMarketIntegrityCheck(env) {
   }
 
   // ─── LAYER 1.4 — Owner profile freshness ─────────────────────────────
+  // BUG FIX (May 7 2026 morning): was querying `created_at` column which doesn't
+  // exist on owner_profile schema (actual column is `captured_at`). This caused
+  // L1.4 to falsely report "no rows found" even though F-PERS owner_profile v2
+  // existed in DB and was being correctly injected into Opus prompts by
+  // wealth-verdict's composeVerdict (which queries `is_active=1` correctly).
   try {
-    const op = await db.prepare(`SELECT MAX(version) AS v, MAX(created_at) AS c FROM owner_profile WHERE is_active=1`).first().catch(() => null);
+    const op = await db.prepare(`SELECT MAX(version) AS v, MAX(captured_at) AS c FROM owner_profile WHERE is_active=1`).first().catch(() => null);
     if (!op?.c) {
       layer1.push({ check: 'L1.4_owner_profile', status: 'warn', detail: 'no owner_profile rows found' });
     } else {
