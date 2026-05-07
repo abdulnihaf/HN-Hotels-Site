@@ -102,6 +102,52 @@ async function logDecision(db, fields) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// F-EXIT-2 — TICK-CONFIRMATION HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+// May 7 2026 incident: TDPOWERSYS got SKIP_GAPPED_BELOW_STOP at 10:00 IST on a
+// SINGLE-TICK wick to ₹1213.60 (stop ₹1214.05). Stock immediately recovered,
+// broke trigger ₹1235.70 again at 10:55 IST, sustained for 30+ min. But because
+// SKIP set state permanently, priceMonitor never re-considered it. Owner had to
+// manually revive at 11:28 IST.
+//
+// Lesson: deterministic single-tick guardrails are too brittle. Real-money
+// wick-stops on equivalent moves would be devastating. Both ENTRY-side
+// SKIP_GAPPED_BELOW_STOP and EXIT-side STOP_HIT / TRAILING_STOP_HIT must require
+// SUSTAINED breach across at least 2 ticks within last 2 minutes — confirmed
+// move, not wick.
+//
+// confirmedSustainedBelow: returns true ONLY if last 2 min of intraday_ticks
+// has ≥ 2 ticks AND ALL of them are ≤ threshold. Used to confirm REAL stop
+// breach before SKIP/EXIT. Falls open (returns false) on missing data — better
+// to hold the position than exit on bad data.
+//
+// confirmedSustainedAbove: mirror — returns true if ≥ 2 ticks in last 2 min
+// AND ALL > threshold. Used to confirm SKIPPED-row resurrection.
+async function confirmedSustainedBelow(db, symbol, thresholdPaise, today) {
+  const cutoff = Date.now() - 2 * 60 * 1000;
+  const ticks = (await db.prepare(`
+    SELECT ts, ltp_paise FROM intraday_ticks
+    WHERE symbol=? AND ts >= ?
+      AND DATE(ts/1000, 'unixepoch') = ?
+    ORDER BY ts DESC LIMIT 10
+  `).bind(symbol, cutoff, today).all().catch(() => ({ results: [] }))).results || [];
+  if (ticks.length < 2) return false;
+  return ticks.every(t => t.ltp_paise <= thresholdPaise);
+}
+
+async function confirmedSustainedAbove(db, symbol, thresholdPaise, today) {
+  const cutoff = Date.now() - 2 * 60 * 1000;
+  const ticks = (await db.prepare(`
+    SELECT ts, ltp_paise FROM intraday_ticks
+    WHERE symbol=? AND ts >= ?
+      AND DATE(ts/1000, 'unixepoch') = ?
+    ORDER BY ts DESC LIMIT 10
+  `).bind(symbol, cutoff, today).all().catch(() => ({ results: [] }))).results || [];
+  if (ticks.length < 2) return false;
+  return ticks.every(t => t.ltp_paise > thresholdPaise);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // KITE LIVE PRICE — fetch LTP for symbols via Kite Connect REST API.
 // Kite endpoint: https://api.kite.trade/quote?i=NSE:SYMBOL&i=NSE:SYMBOL2
 // Auth header: "token <api_key>:<access_token>"
@@ -319,9 +365,20 @@ async function entryDecision(env, attemptNum) {
       continue;
     }
     if (w.stop_paise && q.ltp_paise <= w.stop_paise) {
-      await db.prepare(`UPDATE paper_trades SET trader_state='SKIPPED', trader_notes='gap below stop', last_check_at=? WHERE id=?`).bind(Date.now(), w.id).run();
-      await logDecision(db, { cron_phase: `entry_${attemptNum}`, symbol: w.symbol, trade_id: w.id, state_before: 'WATCHING', decision: 'SKIP_GAPPED_BELOW_STOP', state_after: 'SKIPPED', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic' });
-      continue;
+      // F-EXIT-2 (May 7 2026): require sustained 2-min breach, not single tick.
+      // TDPOWERSYS got SKIPPED on 1-tick wick at 10:00, then broke out at 10:55
+      // and ran. Single-tick SKIP is too brittle.
+      const confirmed = await confirmedSustainedBelow(db, w.symbol, w.stop_paise, today);
+      if (confirmed) {
+        await db.prepare(`UPDATE paper_trades SET trader_state='SKIPPED', trader_notes='gap below stop (confirmed 2-min)', last_check_at=? WHERE id=?`).bind(Date.now(), w.id).run();
+        await logDecision(db, { cron_phase: `entry_${attemptNum}`, symbol: w.symbol, trade_id: w.id, state_before: 'WATCHING', decision: 'SKIP_GAPPED_BELOW_STOP', state_after: 'SKIPPED', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic', rationale: 'F-EXIT-2 confirmed: ≥2 ticks in last 2min all ≤ stop. Real gap-down, not wick.' });
+        continue;
+      } else {
+        // Single-tick wick — log but DO NOT SKIP. Stay WATCHING for next cycle.
+        await db.prepare(`UPDATE paper_trades SET last_check_at=?, trader_notes=? WHERE id=?`).bind(Date.now(), `wick below stop @ ₹${q.ltp_paise/100} (stop ₹${w.stop_paise/100}) — F-EXIT-2 not confirmed, holding WATCHING`, w.id).run();
+        await logDecision(db, { cron_phase: `entry_${attemptNum}`, symbol: w.symbol, trade_id: w.id, state_before: 'WATCHING', decision: 'WICK_BELOW_STOP_HOLDING', state_after: 'WATCHING', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic', rationale: 'F-EXIT-2: LTP touched stop but only single tick — last 2min not all below. Holding for next cycle.' });
+        continue;
+      }
     }
 
     // VOLUME CONFIRMATION: pull last 10-day avg volume per 5-min bar to compare with
@@ -469,17 +526,23 @@ async function priceMonitor(env) {
   const db = env.DB;
   const today = istToday();
 
-  // ─── PRECISION ENTRY TRIGGERS — process WATCHING setups first ─────────
-  // Continuous deterministic check: if LTP > OR-high × 1.001 AND volume ≥ 1.2x
-  // historical avg → fire ENTER. Catches breakouts within 60s vs every-15-min
-  // Opus decisions. Today's lesson: missed 10:07 HFCL breakout because Opus
-  // crons only fire at 09:45/10:00/10:15.
+  // ─── PRECISION ENTRY TRIGGERS — process WATCHING + SKIPPED setups ──────
+  // Continuous deterministic check: if LTP > OR-high × 1.001 AND volume ≥ 0.8x
+  // expected pace → fire ENTER. Catches breakouts within 60s vs every-15-min
+  // Opus decisions.
+  //
+  // F-EXIT-2 RESURRECTION (May 7 2026): SKIPPED rows are now eligible for entry
+  // IF stock has sustained 2-min above OR-high × 1.001 AND above stop. Today's
+  // TDPOWERSYS broke trigger at 09:40 (5 min above), got SKIPPED at 10:00 on
+  // wick, broke trigger again at 10:55 — production missed both because of
+  // permanent SKIP-lock + 09:30-09:50 dead zone.
   const watching = (await db.prepare(`
     SELECT id, symbol, qty, entry_paise, stop_paise, target_paise,
-           or_high_paise, or_low_paise, rationale,
+           or_high_paise, or_low_paise, rationale, trader_state,
            DATE(created_at/1000, 'unixepoch') AS opened_date
     FROM paper_trades
-    WHERE auto_managed=1 AND is_active=1 AND trader_state='WATCHING'
+    WHERE auto_managed=1 AND is_active=1
+      AND trader_state IN ('WATCHING', 'SKIPPED')
       AND DATE(created_at/1000, 'unixepoch') = ?
   `).bind(today).all()).results || [];
 
@@ -495,6 +558,23 @@ async function priceMonitor(env) {
         // BREAKOUT TRIGGER: LTP must clear OR-high by 0.1% (filters wick noise)
         const breakoutThreshold = Math.round(w.or_high_paise * 1.001);
         if (q.ltp_paise <= breakoutThreshold) continue;
+
+        // F-EXIT-2 RESURRECTION GUARD (May 7 2026): SKIPPED rows need stricter
+        // confirmation than WATCHING rows. A stock that wicked below stop earlier
+        // must now be sustainedly above trigger AND above original stop for ≥ 2 min
+        // before we re-enter. WATCHING rows entering for the first time keep the
+        // simpler ≥1 tick above trigger rule (volume confirmation downstream).
+        if (w.trader_state === 'SKIPPED') {
+          const aboveTrigger = await confirmedSustainedAbove(db, w.symbol, breakoutThreshold, today);
+          const aboveStop    = await confirmedSustainedAbove(db, w.symbol, w.stop_paise, today);
+          if (!aboveTrigger || !aboveStop) continue;
+          await logDecision(db, {
+            cron_phase: 'price_monitor', symbol: w.symbol, trade_id: w.id,
+            state_before: 'SKIPPED', decision: 'SKIPPED_RESURRECTION_QUALIFIED',
+            ltp_paise: q.ltp_paise, composed_by_model: 'deterministic',
+            rationale: `F-EXIT-2: stock recovered. LTP ₹${q.ltp_paise/100} sustained 2-min above trigger ₹${breakoutThreshold/100} AND above stop ₹${w.stop_paise/100}. Eligible for fresh entry.`,
+          });
+        }
 
         // VOLUME CONFIRMATION: pull 14-day avg vol/5min for this symbol
         const volRow = await db.prepare(`
@@ -755,8 +835,25 @@ async function priceMonitor(env) {
     //   then q.ltp_paise <= a.stop_paise also fires the locked-floor exit.
     //   Reason text is differentiated for audit clarity.
     if (q.ltp_paise <= a.stop_paise) {
-      exitNow = true;
-      exitReason = a.target_locked ? 'TARGET_LOCKED_FLOOR_EXIT' : 'STOP_HIT';
+      // F-EXIT-2 (May 7 2026): require 2-min sustained breach, not single tick.
+      // Wick-stop on a single tick costs us a real position when the stock
+      // recovers within seconds. Real gap-down stays below for at least 2 min.
+      const confirmed = await confirmedSustainedBelow(db, a.symbol, a.stop_paise, today);
+      if (confirmed) {
+        exitNow = true;
+        exitReason = a.target_locked ? 'TARGET_LOCKED_FLOOR_EXIT' : 'STOP_HIT';
+      } else {
+        // Wick — log + skip exit this cycle, let next price_monitor reassess
+        await logDecision(db, {
+          cron_phase: 'price_monitor', symbol: a.symbol, trade_id: a.id,
+          state_before: 'ENTERED', decision: 'WICK_BELOW_STOP_HOLDING',
+          state_after: 'ENTERED', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic',
+          rationale: `F-EXIT-2: LTP ₹${q.ltp_paise/100} ≤ stop ₹${a.stop_paise/100} but last 2min not all below. Single-tick wick — holding position.`,
+        });
+        // Update peak/trail still — stop check will re-fire next cycle if real
+        await db.prepare(`UPDATE paper_trades SET peak_price_paise=?, trailing_stop_paise=?, last_check_at=? WHERE id=?`).bind(newPeak, trailingStop, Date.now(), a.id).run();
+        continue;
+      }
     } else if (!a.target_locked && q.ltp_paise >= a.target_paise) {
       // F-EXIT-1: lock target as floor, let trail continue. Don't exit this cycle.
       const newStopPaise = Math.max(a.stop_paise, a.target_paise);
@@ -775,8 +872,21 @@ async function priceMonitor(env) {
       });
       continue; // Skip exit this cycle
     } else if (trailingStop && q.ltp_paise <= trailingStop) {
-      exitNow = true;
-      exitReason = a.target_locked ? 'TARGET_LOCKED_TRAIL_EXIT' : 'TRAILING_STOP_HIT';
+      // F-EXIT-2: also confirm trailing-stop breach with 2-min rule
+      const confirmedTrail = await confirmedSustainedBelow(db, a.symbol, trailingStop, today);
+      if (confirmedTrail) {
+        exitNow = true;
+        exitReason = a.target_locked ? 'TARGET_LOCKED_TRAIL_EXIT' : 'TRAILING_STOP_HIT';
+      } else {
+        await logDecision(db, {
+          cron_phase: 'price_monitor', symbol: a.symbol, trade_id: a.id,
+          state_before: 'ENTERED', decision: 'WICK_BELOW_TRAIL_HOLDING',
+          state_after: 'ENTERED', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic',
+          rationale: `F-EXIT-2: LTP ₹${q.ltp_paise/100} ≤ trail ₹${trailingStop/100} but last 2min not all below. Single-tick wick — holding.`,
+        });
+        await db.prepare(`UPDATE paper_trades SET peak_price_paise=?, trailing_stop_paise=?, last_check_at=? WHERE id=?`).bind(newPeak, trailingStop, Date.now(), a.id).run();
+        continue;
+      }
     }
 
     if (exitNow) {
@@ -1867,10 +1977,18 @@ function routeByIstTime(hhmm) {
   }
 
   // All other 5-min marks during market hours → deterministic price monitor.
-  // Extended through 15:09 so trailing stops + halt rules + profit lock keep firing
-  // until the hard_exit at 15:10.
+  //
+  // F-EXIT-2 DEAD ZONE FIX (May 7 2026): was `m >= 50`, which gave a 09:30-09:49
+  // dead zone where breakout-trigger never ran. TDPOWERSYS broke its trigger
+  // ₹1235.70 at 09:40 IST and stayed above for 5 min — production missed it
+  // entirely. Now starts at m >= 35: range_capture runs at 09:30, OR is in DB
+  // by 09:31, first price_monitor at 09:35. (09:45 returns 'entry_1' first so
+  // no double-fire.)
+  //
+  // Extended through 15:09 so trailing stops + halt rules + profit lock keep
+  // firing until the hard_exit at 15:10.
   const [h, m] = hhmm.split(':').map(Number);
-  const isMarketHr = (h >= 10 && h < 15) || (h === 15 && m < 10) || (h === 9 && m >= 50);
+  const isMarketHr = (h >= 10 && h < 15) || (h === 15 && m < 10) || (h === 9 && m >= 35);
   if (isMarketHr && m % 5 === 0) return 'price_monitor';
   return null;
 }
