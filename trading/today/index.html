@@ -115,27 +115,30 @@
     background: rgba(46,204,113,0.18); color: var(--green); }
   .pick-card .extend-badge { padding: 1px 7px; border-radius: 8px; font-size: 9px; font-weight: 700;
     background: rgba(124,92,255,0.18); color: var(--accent); }
-  .pick-card .pick-chart { margin-top: 8px; height: 110px; background: var(--panel-2); border-radius: 6px; overflow: hidden; position: relative; }
-  .pick-card .pick-chart svg { display: block; width: 100%; height: 100%; }
-  .pick-card .pick-chart-empty { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 10px; color: var(--muted); }
-  /* HTML overlay for chart reference labels — avoids SVG text stretching when preserveAspectRatio="none" */
-  .pick-card .chart-label-layer { position: absolute; inset: 0; pointer-events: none; }
-  .pick-card .chart-label { position: absolute; right: 4px; transform: translateY(-50%);
+  /* Chart classes — de-scoped from .pick-card prefix so they apply inside both
+     .pick-card (legacy) and .story-card (new). Without position:relative on the
+     container, the SVG's position:absolute escapes to viewport — confirmed bug
+     from owner's screenshot at 12:58 IST May 7 2026. */
+  .pick-chart { margin-top: 8px; height: 110px; background: var(--panel-2); border-radius: 6px; overflow: hidden; position: relative; }
+  .pick-chart svg { display: block; width: 100%; height: 100%; }
+  .pick-chart-empty { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 10px; color: var(--muted); }
+  .chart-label-layer { position: absolute; inset: 0; pointer-events: none; }
+  .chart-label { position: absolute; right: 4px; transform: translateY(-50%);
     font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px;
     background: rgba(13,20,38,0.85); white-space: nowrap; line-height: 1.3; }
-  .pick-card .chart-label.entry { color: var(--accent); }
-  .pick-card .chart-label.target { color: var(--green); }
-  .pick-card .chart-label.stop { color: var(--red); }
-  .pick-card .chart-label.trail { color: var(--yellow); }
-  .pick-card .chart-label.breakout { color: var(--blue); }
-  .pick-card .chart-label.ltp { color: var(--blue); right: auto; left: auto; transform: translate(-50%, -50%); padding: 2px 7px; background: var(--blue); color: white; font-weight: 700; }
-  .pick-card .chart-x-label { position: absolute; bottom: 2px; font-size: 8px; color: var(--muted); }
-  .pick-card .chart-x-label.left { left: 4px; }
-  .pick-card .chart-x-label.right { right: 4px; }
+  .chart-label.entry { color: var(--accent); }
+  .chart-label.target { color: var(--green); }
+  .chart-label.stop { color: var(--red); }
+  .chart-label.trail { color: var(--yellow); }
+  .chart-label.breakout { color: var(--blue); }
+  .chart-label.ltp { color: var(--blue); right: auto; left: auto; transform: translate(-50%, -50%); padding: 2px 7px; background: var(--blue); color: white; font-weight: 700; }
+  .chart-x-label { position: absolute; bottom: 2px; font-size: 8px; color: var(--muted); }
+  .chart-x-label.left { left: 4px; }
+  .chart-x-label.right { right: 4px; }
 
-  .pick-card .breakout-trigger { padding: 6px 10px; background: rgba(79,163,255,0.10); border-left: 3px solid var(--blue);
+  .breakout-trigger { padding: 6px 10px; background: rgba(79,163,255,0.10); border-left: 3px solid var(--blue);
     border-radius: 4px; font-size: 11px; margin: 8px 0; }
-  .pick-card .breakout-trigger strong { color: var(--blue); }
+  .breakout-trigger strong { color: var(--blue); }
   .pick-card .pick-plan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 8px; margin-top: 6px; font-size: 10px; }
   .pick-card .pick-plan .cell .lbl { color: var(--muted); display: block; }
   .pick-card .pick-plan .cell .val { color: var(--text); font-weight: 600; }
