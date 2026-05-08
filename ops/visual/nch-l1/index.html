@@ -97,6 +97,37 @@
   .edge-label { fill: #94a3b8; font-family: 'JetBrains Mono', monospace; font-size: 9px; }
   .lane-label { fill: #94a3b8; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
   .lane-bg { fill: rgba(255,255,255,0.015); rx: 8; }
+
+  /* Print */
+  @page { size: A4 landscape; margin: 12mm; }
+  @media print {
+    body { background: #fff !important; color: #111 !important; font-family: system-ui, -apple-system, 'Inter', sans-serif !important; }
+    .glass { background: #fff !important; border: 1px solid #d4d4d4 !important; box-shadow: none !important; backdrop-filter: none !important; page-break-inside: avoid; }
+    .grad-fade { background: #fff !important; }
+    p, li { color: #1f1f1f !important; }
+    h1, h2, h3 { color: #111 !important; }
+    .no-print, header .flex.items-center.gap-3.text-xs { display: none !important; }
+    header { border-bottom: 1px solid #d4d4d4 !important; padding: 6mm 0 !important; }
+    .pill-pos { background: #fff3e0 !important; color: #b86c00 !important; }
+    .pill-pm { background: #f3eaff !important; color: #6b3ab1 !important; }
+    .pill-rnr { background: #e6f0ff !important; color: #1f5cbf !important; }
+    .pill-rpqr { background: #e8f8ee !important; color: #0e7a3f !important; }
+    .pill-d1 { background: #fff8d6 !important; color: #8a6d00 !important; }
+    .pill-d2 { background: #e6f0ff !important; color: #1f5cbf !important; }
+    .pill-d3 { background: #ffe6e6 !important; color: #b81818 !important; }
+    .pill-eq { background: #f3eaff !important; color: #6b3ab1 !important; }
+    .pill-dep { background: #f0f0f0 !important; color: #666 !important; }
+    .pill-future { background: #ffe6e6 !important; color: #b81818 !important; border: 1px dashed #b81818 !important; }
+    section { page-break-inside: avoid; }
+    a { color: #1f5cbf !important; text-decoration: none; }
+    .node-text { fill: #111 !important; }
+    .node-text.dim { fill: #666 !important; }
+    .lane-label { fill: #555 !important; }
+    .edge-label { fill: #666 !important; }
+    .lane-bg { fill: #fafafa !important; }
+    .arrow { stroke: rgba(50,50,50,0.55) !important; }
+    *, *:hover { transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -112,7 +143,8 @@
       </div>
       <p class="text-sm text-white/60">The closed circle: where every NCH rupee originates, transits, and lands. Locked May-1 baseline; live agent state plugs in here.</p>
     </div>
-    <div class="flex items-center gap-3 text-xs">
+    <div class="flex items-center gap-3 text-xs no-print">
+      <a href="/docs/NCH-L1-Inflow.pdf" class="px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-400 hover:bg-amber-500/25 transition" title="Download static PDF snapshot">⬇ PDF</a>
       <a href="https://www.figma.com/board/I2eJy40OlqvQphzQPRLN4c" target="_blank"
          class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">↗ FigJam source</a>
       <a href="/ops/messaging/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">/ops/messaging</a>
