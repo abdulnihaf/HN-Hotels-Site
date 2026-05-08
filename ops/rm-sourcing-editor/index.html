@@ -198,7 +198,7 @@
 <!-- PIN gate -->
 <div id="gate" class="glass gate" style="display:none;">
   <h2>RM Sourcing Editor</h2>
-  <p>Enter your PIN to load the 31 NCH raw-material sourcing profiles.</p>
+  <p>Enter your PIN to load the 30 NCH raw-material sourcing profiles.</p>
   <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="PIN" autocomplete="off">
   <button id="pin-submit">Unlock</button>
   <div class="err" id="pin-err"></div>
@@ -239,9 +239,9 @@
         <option value="">All profiles</option>
         <option value="L">L only</option>
         <option value="B">B only</option>
-        <option value="I">I only</option>
         <option value="Lb">Lb</option>
         <option value="Bl">Bl</option>
+        <option value="Li">Li</option>
         <option value="Lbi">Lbi</option>
       </select>
       <select id="filter-status">
@@ -340,17 +340,28 @@
     return p + alts.map(a => a.toLowerCase()).join('');
   }
 
+  function isIOnlyProfile(parts) {
+    const slot = deriveSourcingSlot(parts.sourcing, parts.primary);
+    return slot === 'I';
+  }
+
   function deriveCode(parts) {
     const { brand, approximation, useScope, itemAbbr, sourcing, primary } = parts;
     if (!brand || !approximation || !useScope || !itemAbbr || !sourcing || sourcing.length === 0) return null;
     if (!/^[A-Z0-9]{2,4}$/.test(itemAbbr)) return null;
     const slot = deriveSourcingSlot(sourcing, primary);
     if (!slot) return null;
+    // I-only profile is invalid (RM must be purchasable)
+    if (slot === 'I') return null;
     return `${brand}-${approximation}${useScope}-${slot}-${itemAbbr}`;
   }
 
   function renderCodeHTML(parts) {
     const { brand, approximation, useScope, itemAbbr, sourcing, primary } = parts;
+    // I-only profile renders as INVALID (red)
+    if (isIOnlyProfile(parts)) {
+      return '<span style="color:var(--bad);font-weight:700;">INVALID</span>';
+    }
     const code = deriveCode(parts);
     if (!code) return '<span class="incomplete">?</span>';
     const slot = deriveSourcingSlot(sourcing, primary);
@@ -547,7 +558,7 @@
   };
 
   $('#seed-btn').onclick = async () => {
-    if (!confirm('Seed 31 RMs? (Only inserts if table is empty.)')) return;
+    if (!confirm('Seed 30 RMs? (Only inserts if table is empty.)')) return;
     try {
       const r = await api('?action=seed', { method: 'POST' });
       if (r.skipped) toast('Already seeded (' + r.existing_count + ' rows). Skipped.');
@@ -704,11 +715,17 @@
     }
 
     // ---- Computed code panel ----
+    const iOnly = isIOnlyProfile(idn);
     const codeOk = deriveCode(idn) !== null;
     const codeHtml = renderCodeHTML(idn);
-    const badge = codeOk
-      ? '<span class="badge ok">&#10003; Canonical code complete</span>'
-      : '<span class="badge warn">&#9888; Code incomplete &mdash; fill missing fields</span>';
+    let badge;
+    if (iOnly) {
+      badge = '<span class="badge" style="background:rgba(248,113,113,0.12);color:var(--bad);border:1px solid rgba(248,113,113,0.3);">&#9888; I-only profile is invalid. RMs must be purchasable.</span>';
+    } else if (codeOk) {
+      badge = '<span class="badge ok">&#10003; Canonical code complete</span>';
+    } else {
+      badge = '<span class="badge warn">&#9888; Code incomplete &mdash; fill missing fields</span>';
+    }
 
     let html = `
       <div class="id-form">
@@ -742,6 +759,7 @@
           <label class="grp-label">Sourcing possibilities</label>
           <div class="chip-row">${sourcingChips}</div>
           <div class="help">Tick every channel this RM could come from. At least one required.</div>
+          <div class="help" style="margin-top:6px;color:var(--warn);"><strong>Note:</strong> an RM must be purchasable. If only "In-house produced" applies, this is a state of production (e.g., decoction, malai) &mdash; not an RM. Add L or B as well, or move to the States layer.</div>
         </div>
         ${primaryHtml}
       </div>
@@ -763,6 +781,29 @@
 
     $('#editor-body').innerHTML = html;
     bindEditor();
+    updateSaveButtonState();
+  }
+
+  function updateSaveButtonState() {
+    const idn = State.identity;
+    const saveBtn = $('#ed-save');
+    if (!saveBtn || !idn) return;
+    // Disable Save if I-only (invalid) or code incomplete
+    const iOnly = isIOnlyProfile(idn);
+    const codeOk = deriveCode(idn) !== null;
+    if (iOnly || !codeOk) {
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = '0.45';
+      saveBtn.style.cursor = 'not-allowed';
+      saveBtn.title = iOnly
+        ? 'Cannot save — I-only profile is invalid (RMs must be purchasable)'
+        : 'Cannot save — canonical code is incomplete';
+    } else {
+      saveBtn.disabled = false;
+      saveBtn.style.opacity = '';
+      saveBtn.style.cursor = '';
+      saveBtn.title = '';
+    }
   }
 
   function vshapeOpts(selected) {
@@ -978,14 +1019,20 @@
     const display = document.querySelector('.code-display .computed');
     const badge = document.querySelector('.code-display .badge');
     if (!display || !idn) return;
+    const iOnly = isIOnlyProfile(idn);
     const codeOk = deriveCode(idn) !== null;
     display.innerHTML = renderCodeHTML(idn);
-    display.classList.toggle('incomplete', !codeOk);
+    display.classList.toggle('incomplete', !codeOk && !iOnly);
     if (badge) {
-      badge.outerHTML = codeOk
-        ? '<span class="badge ok">&#10003; Canonical code complete</span>'
-        : '<span class="badge warn">&#9888; Code incomplete &mdash; fill missing fields</span>';
+      if (iOnly) {
+        badge.outerHTML = '<span class="badge" style="background:rgba(248,113,113,0.12);color:var(--bad);border:1px solid rgba(248,113,113,0.3);">&#9888; I-only profile is invalid. RMs must be purchasable.</span>';
+      } else if (codeOk) {
+        badge.outerHTML = '<span class="badge ok">&#10003; Canonical code complete</span>';
+      } else {
+        badge.outerHTML = '<span class="badge warn">&#9888; Code incomplete &mdash; fill missing fields</span>';
+      }
     }
+    updateSaveButtonState();
   }
 
   function autoUpper(name) {
@@ -1172,6 +1219,10 @@
   $('#ed-save').onclick = async () => {
     if (!State.open || !State.identity) return;
     const idn = State.identity;
+    if (isIOnlyProfile(idn)) {
+      toast('Cannot save — I-only profile is invalid. RMs must be purchasable.', 'error');
+      return;
+    }
     const newCode = deriveCode(idn);
     if (!newCode) {
       toast('Cannot save — canonical code is incomplete', 'error');
