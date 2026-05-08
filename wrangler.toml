@@ -17,7 +17,7 @@ compatibility_flags = ["nodejs_compat"]
 # EXOTEL_SID             — Exotel account SID (hnhotels1) ✅ set 2026-05-05
 # EXOTEL_API_KEY         — Exotel API key (username) ✅ set 2026-05-05
 # EXOTEL_API_TOKEN       — Exotel API token (password) ✅ set 2026-05-05
-# EXOTEL_CALLER_ID       — Exotel virtual ExoPhone number (set after KYC + recharge + ExoPhone assignment)
+# EXOTEL_CALLER_ID       — 09513886363 (existing India mobile on account) ✅ set 2026-05-05
 
 [[d1_databases]]
 binding = "DB"
