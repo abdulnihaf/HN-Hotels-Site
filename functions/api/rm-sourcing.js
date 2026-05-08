@@ -317,9 +317,11 @@ async function putOne(DB, rmCode, request, user) {
   const now = Date.now();
 
   // Determine target structured parts: prefer body fields, fall back to existing row.
+  // For usage_profile we distinguish "not provided" (undefined → fall back) from
+  // "explicitly empty string" (validation will reject below).
   const brand_prefix     = body.brand_prefix     || existing.brand_prefix;
   const rm_type          = body.rm_type          || existing.rm_type;
-  const usage_profile    = body.usage_profile    || existing.usage_profile;
+  const usage_profile    = (body.usage_profile !== undefined) ? body.usage_profile : existing.usage_profile;
   const sourcing_profile = body.sourcing_profile || existing.sourcing_profile;
   const item_abbr        = (body.item_abbr || existing.item_abbr || '').toUpperCase();
   const rm_name          = body.rm_name          || existing.rm_name;
