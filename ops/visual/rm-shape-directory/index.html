@@ -123,6 +123,47 @@
 
   /* Loading */
   .loading { font-size: 12px; color: var(--ink-dim); font-style: italic; }
+
+  /* Print */
+  @page { size: A4; margin: 15mm; }
+  @media print {
+    body { background: #fff !important; color: #111 !important; font-family: system-ui, -apple-system, 'Inter', sans-serif !important; }
+    .glass { background: #fff !important; border: 1px solid #d4d4d4 !important; box-shadow: none !important; backdrop-filter: none !important; page-break-inside: avoid; }
+    .panel-h { color: #b86c00 !important; }
+    .stat-card, .layer-card, .seg-card, .ok-card, .failure-card { background: #fafafa !important; border-color: #d4d4d4 !important; }
+    .seg-card .seg-name { color: #111 !important; }
+    .code-block, .walk-block { background: #f4f4f4 !important; color: #111 !important; border-color: #d0d0d0 !important; }
+    .code-inline { background: #f0f0f0 !important; color: #b86c00 !important; }
+    .quote, .walk-reads { background: #fff8ec !important; border-left-color: #b86c00 !important; color: #111 !important; }
+    .grad-fade { background: #fff !important; }
+    p, li, .prose p, .prose li { color: #1f1f1f !important; }
+    h2, h3 { color: #111 !important; }
+    .btn, .no-print, header .flex.items-center.gap-2 { display: none !important; }
+    header { border-bottom: 1px solid #d4d4d4 !important; padding: 8mm 0 !important; }
+    .pill-rm { background: #fff3e0 !important; color: #b86c00 !important; }
+    .pill-info { background: #e6f0ff !important; color: #1f5cbf !important; }
+    .pill-good { background: #e8f8ee !important; color: #0e7a3f !important; }
+    .pill-purple { background: #f3eaff !important; color: #6b3ab1 !important; }
+    .pill-teal { background: #e6f8f5 !important; color: #0a7062 !important; }
+    .pill-bad { background: #ffe6e6 !important; color: #b81818 !important; }
+    .pill-warn { background: #fff8d6 !important; color: #8a6d00 !important; }
+    .pill-ghost { background: #f0f0f0 !important; color: #666 !important; }
+    section { page-break-inside: avoid; }
+    section.glass { page-break-after: auto; }
+    a { color: #1f5cbf !important; text-decoration: none; }
+    .dir-table th { background: #f0f0f0 !important; color: #555 !important; }
+    .dir-table td.code-cell, .dir-table .code-brand, .dir-table .code-type, .dir-table .code-usage, .dir-table .code-src, .dir-table .code-item { color: #111 !important; }
+    .dir-table .code-mute { color: #888 !important; }
+    .anatomy-row .seg-brand, .anatomy-row .seg-type, .anatomy-row .seg-usage, .anatomy-row .seg-src, .anatomy-row .seg-item { color: #111 !important; }
+    .anatomy-row .dash { color: #888 !important; }
+    .seg-card.brand .seg-name, .seg-card.type .seg-name, .seg-card.usage .seg-name, .seg-card.src .seg-name, .seg-card.item .seg-name { color: #111 !important; }
+    .census-head { color: #b86c00 !important; }
+    .census-sub { color: #1f5cbf !important; }
+    .census-list li, .census-list li a { color: #111 !important; }
+    .census-list li .rm-name { color: #555 !important; }
+    .walk-block .lbl, .walk-block .b, .walk-block .t, .walk-block .u, .walk-block .s, .walk-block .i { color: #111 !important; }
+    *, *:hover { transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -137,8 +178,9 @@
       </div>
       <p class="text-sm text-white/60 max-w-3xl">Every dimension · every value · every combination — with real examples drawn from the live editor.</p>
     </div>
-    <div class="flex items-center gap-2 text-xs">
-      <a href="/ops/rm-sourcing-editor/" class="btn btn-accent">↗ Editor</a>
+    <div class="flex items-center gap-2 text-xs no-print">
+      <a href="/docs/RM-Shape-Directory.pdf" class="btn btn-accent" title="Download static PDF snapshot">⬇ PDF</a>
+      <a href="/ops/rm-sourcing-editor/" class="btn">↗ Editor</a>
       <a href="/ops/visual/coa-doctrine/" class="btn">↗ COA Doctrine</a>
       <a href="/ops/visual/nch-l2-canonical/" class="btn">↗ NCH L2</a>
     </div>

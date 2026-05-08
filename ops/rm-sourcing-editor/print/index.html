@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RM Sourcing Snapshot · NCH</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #111;
+    --ink-dim: #555;
+    --ink-faint: #888;
+    --accent: #b86c00;
+    --good: #0e7a3f;
+    --info: #1f5cbf;
+    --purple: #6b3ab1;
+    --teal: #0a7062;
+    --pink: #b8186e;
+    --warn: #8a6d00;
+    --bad: #b81818;
+    --border: #d4d4d4;
+    --paper: #ffffff;
+    --soft: #fafafa;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #f0f0f0;
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.5;
+    font-size: 12px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .page {
+    background: var(--paper);
+    max-width: 900px;
+    margin: 24px auto;
+    padding: 28px 32px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  h1 { font-size: 22px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 14px; font-weight: 700; margin: 18px 0 4px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+  h3 { font-size: 13px; font-weight: 700; margin: 10px 0 4px; color: var(--ink); }
+  p { margin: 4px 0 8px; color: var(--ink); }
+  .header-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 2px solid var(--border); padding-bottom: 14px; margin-bottom: 16px; }
+  .meta-line { font-size: 11px; color: var(--ink-dim); }
+  .stamp { font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono', monospace; }
+  .toolbar { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    padding: 8px 14px; background: var(--accent); color: #fff; border: 0;
+    border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+    text-decoration: none; display: inline-block; font-family: inherit;
+  }
+  .btn:hover { background: #9a5b00; }
+  .btn.secondary { background: #f0f0f0; color: var(--ink); border: 1px solid var(--border); }
+  .btn.secondary:hover { background: #e5e5e5; }
+
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 12px 0 18px; }
+  .stat {
+    background: var(--soft); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  }
+  .stat .label { font-size: 9.5px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat .value { font-size: 18px; font-weight: 700; margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+  .stat .meta { font-size: 10px; color: var(--ink-faint); margin-top: 2px; }
+
+  .group-head {
+    display: flex; align-items: baseline; gap: 8px; margin: 18px 0 6px;
+    border-bottom: 1px solid var(--border); padding-bottom: 4px;
+  }
+  .group-head .name { font-size: 14px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+  .group-head .count { font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono', monospace; }
+
+  .rm-card {
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 8px 0;
+    page-break-inside: avoid; break-inside: avoid;
+    background: var(--paper);
+  }
+  .rm-head { display: grid; grid-template-columns: minmax(180px,auto) 1fr auto; gap: 12px; align-items: baseline; }
+  .rm-code { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--accent); font-size: 12px; }
+  .rm-name { font-weight: 600; color: var(--ink); font-size: 13px; }
+  .rm-pills { display: flex; gap: 4px; flex-wrap: wrap; }
+  .pill {
+    display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 9.5px; font-weight: 600;
+    letter-spacing: 0.04em; background: #f0f0f0; color: #333;
+  }
+  .pill-l { background: #e6f0ff; color: var(--info); }
+  .pill-b { background: #f3eaff; color: var(--purple); }
+  .pill-i { background: #e6f8f5; color: var(--teal); }
+  .pill-p { background: #e8f8ee; color: var(--good); }
+  .pill-r { background: #ffe6f4; color: var(--pink); }
+  .pill-o { background: #fff8d6; color: var(--warn); }
+  .pill-rm { background: #fff3e0; color: var(--accent); }
+  .pill-empty { background: #f5f5f5; color: var(--ink-faint); border: 1px dashed var(--border); }
+
+  .rm-body { margin-top: 8px; font-size: 11.5px; }
+  .rm-body .empty { color: var(--ink-faint); font-style: italic; padding: 4px 0; font-size: 11px; }
+
+  .src-block { margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: var(--soft); border-left: 3px solid var(--border); }
+  .src-block.l { border-left-color: var(--info); }
+  .src-block.b { border-left-color: var(--purple); }
+  .src-block.i { border-left-color: var(--teal); }
+  .src-block .h { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: var(--ink-dim); margin-bottom: 4px; }
+
+  .vendor-list, .recipe-list { list-style: none; padding: 0; margin: 0; }
+  .vendor-list li, .recipe-list li {
+    padding: 3px 0; border-bottom: 1px dotted #eee; font-size: 11.5px; line-height: 1.5;
+  }
+  .vendor-list li:last-child, .recipe-list li:last-child { border-bottom: 0; }
+  .vendor-list .name { font-weight: 600; color: var(--ink); }
+  .vendor-list .meta, .recipe-list .meta { color: var(--ink-faint); font-size: 10.5px; margin-left: 6px; font-family: 'JetBrains Mono', monospace; }
+  .vendor-list .price { color: var(--good); font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  .vendor-list .primary-flag { background: #fff3e0; color: var(--accent); padding: 0 5px; border-radius: 4px; font-size: 9.5px; font-weight: 700; margin-left: 4px; }
+
+  .brand-box { margin-top: 4px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fdfcfe; }
+  .brand-box .b-name { font-weight: 700; color: var(--purple); font-size: 12px; }
+  .sku-list { list-style: none; padding: 0; margin: 4px 0 0; }
+  .sku-list > li { padding: 4px 0 4px 14px; border-left: 2px solid #eee; margin-left: 4px; margin-top: 4px; font-size: 11px; }
+  .sku-list .sku-name { font-weight: 600; color: var(--ink); }
+  .sku-list .sku-meta { color: var(--ink-faint); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .supplier-list { list-style: none; padding: 0 0 0 12px; margin: 4px 0 0; font-size: 10.5px; color: var(--ink-dim); }
+  .supplier-list li { padding: 2px 0; }
+  .supplier-list .s-name { color: var(--ink); font-weight: 500; }
+
+  .gate {
+    background: var(--paper); padding: 32px;
+    max-width: 380px; margin: 80px auto;
+    border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    text-align: center;
+  }
+  .gate h2 { font-size: 18px; margin: 0 0 6px; color: var(--ink); text-transform: none; letter-spacing: 0; }
+  .gate p { color: var(--ink-dim); font-size: 13px; margin: 0 0 16px; }
+  .gate input {
+    width: 100%; padding: 12px; font-size: 16px; background: #fafafa; color: var(--ink);
+    border: 1px solid var(--border); border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.3em; text-align: center;
+  }
+  .gate button {
+    width: 100%; padding: 11px; margin-top: 10px; background: var(--accent); color: #fff;
+    font-weight: 700; border: 0; border-radius: 6px; font-size: 14px; cursor: pointer;
+  }
+  .gate .err { color: var(--bad); font-size: 12px; margin-top: 6px; min-height: 16px; }
+
+  .loading { padding: 80px 20px; text-align: center; color: var(--ink-dim); font-size: 14px; }
+  .loading .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .footer { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--ink-faint); text-align: center; }
+
+  /* Print styles */
+  @page { size: A4; margin: 12mm; }
+  @media print {
+    body { background: #fff !important; }
+    .page { box-shadow: none !important; max-width: none; margin: 0; padding: 0; }
+    .toolbar, .no-print { display: none !important; }
+    .header-row { border-bottom: 1.5px solid #888; }
+    .rm-card { page-break-inside: avoid; break-inside: avoid; }
+    .group-head { page-break-after: avoid; break-after: avoid; }
+    h2 { page-break-after: avoid; break-after: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- PIN gate -->
+<div id="gate" class="gate" style="display:none;">
+  <h2>RM Sourcing — Print Snapshot</h2>
+  <p>Enter your PIN to load the live data.</p>
+  <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="PIN" autocomplete="off">
+  <button id="pin-submit">Unlock</button>
+  <div class="err" id="pin-err"></div>
+</div>
+
+<!-- Loading -->
+<div id="loading" class="loading" style="display:none;">
+  <span class="spinner"></span> Loading 55 RMs from <code>/api/rm-sourcing</code>…
+</div>
+
+<!-- Error / retry -->
+<div id="error" class="loading" style="display:none;color:#b81818;">
+  <strong>Failed to load.</strong>
+  <div id="error-msg" style="margin-top:6px;font-size:12px;color:#666;"></div>
+  <button class="btn" id="retry-btn" style="margin-top:14px;">Retry</button>
+</div>
+
+<!-- Content -->
+<div id="content" class="page" style="display:none;">
+  <div class="header-row">
+    <div>
+      <h1>RM Sourcing — Live Snapshot</h1>
+      <div class="meta-line">Canonical raw materials · vendors · brand-SKUs · in-house recipes · for NCH (Nawabi Chai House)</div>
+      <div class="stamp" id="stamp"></div>
+    </div>
+    <div class="toolbar no-print">
+      <button class="btn" id="print-now">⬇ Print to PDF</button>
+      <a class="btn secondary" href="/ops/rm-sourcing-editor/">← Back to editor</a>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div id="groups"></div>
+
+  <div class="footer">
+    Generated <span id="gen-stamp"></span> · Source of truth: <span class="mono">/api/rm-sourcing</span> · D1 table <span class="mono">rm_sourcing_profiles</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const API = '/api/rm-sourcing';
+  const STORAGE_KEY = 'rm_sourcing_pin';
+  const State = {
+    pin: localStorage.getItem(STORAGE_KEY) || '',
+    rms: [],          // light list
+    full: {},         // rm_code -> full record (incl. data)
+  };
+
+  const $ = sel => document.querySelector(sel);
+  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const fmtDate = d => d.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: '2-digit' });
+  const fmtDateTime = d => d.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' });
+
+  function show(id) {
+    ['gate', 'loading', 'error', 'content'].forEach(k => {
+      const el = document.getElementById(k);
+      if (el) el.style.display = (k === id) ? (k === 'content' ? 'block' : 'block') : 'none';
+    });
+  }
+
+  async function tryAuth(pin) {
+    const url = new URL(window.location.origin + API);
+    url.searchParams.set('pin', pin);
+    const r = await fetch(url.toString());
+    const data = await r.json();
+    if (r.status === 401) throw new Error('Invalid PIN');
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    return data;
+  }
+
+  async function fetchOne(pin, rmCode) {
+    const url = new URL(window.location.origin + API);
+    url.searchParams.set('pin', pin);
+    url.searchParams.set('rm_code', rmCode);
+    const r = await fetch(url.toString());
+    if (!r.ok) throw new Error('Failed loading ' + rmCode + ': HTTP ' + r.status);
+    return r.json();
+  }
+
+  async function loadAll() {
+    show('loading');
+    try {
+      const list = await tryAuth(State.pin);
+      State.rms = list.rms || [];
+      // Fetch full data for every RM in parallel batches (avoid overwhelming the worker)
+      const batchSize = 6;
+      for (let i = 0; i < State.rms.length; i += batchSize) {
+        const slice = State.rms.slice(i, i + batchSize);
+        const results = await Promise.all(slice.map(r => fetchOne(State.pin, r.rm_code).catch(e => ({ __error: e.message, rm_code: r.rm_code }))));
+        results.forEach(rec => {
+          if (rec && rec.rm_code) State.full[rec.rm_code] = rec;
+        });
+      }
+      render();
+      show('content');
+      // Auto-trigger print after layout settles
+      setTimeout(() => {
+        try { window.print(); } catch (_) { /* ignore */ }
+      }, 1500);
+    } catch (e) {
+      $('#error-msg').textContent = e.message;
+      show('error');
+    }
+  }
+
+  function render() {
+    const now = new Date();
+    document.title = 'RM Sourcing Snapshot — ' + fmtDate(now);
+    $('#stamp').textContent = 'Snapshot: ' + fmtDateTime(now);
+    $('#gen-stamp').textContent = fmtDateTime(now);
+
+    // Stats
+    const total = State.rms.length;
+    const filled = State.rms.filter(r => {
+      const c = r.counts || {};
+      return (c.vendors + c.brands + c.skus + c.recipes) > 0;
+    }).length;
+    const totalVendors = State.rms.reduce((s, r) => s + (r.counts?.vendors || 0), 0);
+    const totalBrands = State.rms.reduce((s, r) => s + (r.counts?.brands || 0), 0);
+    const totalSkus = State.rms.reduce((s, r) => s + (r.counts?.skus || 0), 0);
+    $('#stats').innerHTML = `
+      <div class="stat"><div class="label">RMs</div><div class="value">${total}</div><div class="meta">canonical seed</div></div>
+      <div class="stat"><div class="label">Filled</div><div class="value">${filled}</div><div class="meta">${total ? Math.round(filled/total*100) : 0}% complete</div></div>
+      <div class="stat"><div class="label">Empty</div><div class="value">${total - filled}</div><div class="meta">awaiting input</div></div>
+      <div class="stat"><div class="label">Vendors (L)</div><div class="value">${totalVendors}</div><div class="meta">across all RMs</div></div>
+      <div class="stat"><div class="label">Brands · SKUs</div><div class="value">${totalBrands} · ${totalSkus}</div><div class="meta">branded universe</div></div>
+    `;
+
+    // Group by USAGE primary letter
+    const groups = {};
+    State.rms.forEach(r => {
+      const u = (r.usage_profile || '').toUpperCase();
+      const primary = u[0] || '?';
+      const key = primary === 'P' ? 'PRODUCTION' : primary === 'R' ? 'RETAIL' : primary === 'O' ? 'OPERATIONAL' : 'OTHER';
+      (groups[key] = groups[key] || []).push(r);
+    });
+
+    const order = ['PRODUCTION', 'RETAIL', 'OPERATIONAL', 'OTHER'];
+    let html = '';
+    order.forEach(g => {
+      const list = groups[g] || [];
+      if (list.length === 0) return;
+      html += `<div class="group-head"><span class="name">${g}</span><span class="count">${list.length} RMs</span></div>`;
+      list.forEach(r => {
+        html += renderRM(r);
+      });
+    });
+    $('#groups').innerHTML = html;
+  }
+
+  function profilePills(profile) {
+    const lower = (profile || '').toLowerCase();
+    const out = [];
+    if (lower.includes('l')) out.push('<span class="pill pill-l">L</span>');
+    if (lower.includes('b')) out.push('<span class="pill pill-b">B</span>');
+    if (lower.includes('i')) out.push('<span class="pill pill-i">I</span>');
+    return out.join(' ');
+  }
+  function usagePills(usage) {
+    const u = (usage || '').toUpperCase();
+    if (!u) return '';
+    const out = [];
+    if (u.includes('P')) out.push('<span class="pill pill-p">P</span>');
+    if (u.includes('R')) out.push('<span class="pill pill-r">R</span>');
+    if (u.includes('O')) out.push('<span class="pill pill-o">O</span>');
+    return out.join(' ');
+  }
+
+  function renderRM(rm) {
+    const full = State.full[rm.rm_code] || {};
+    const data = full.data || {};
+    const counts = rm.counts || {};
+    const isEmpty = (counts.vendors + counts.brands + counts.skus + counts.recipes) === 0;
+    const hasErr = full.__error;
+
+    let body = '';
+    if (isEmpty && !hasErr) {
+      body = '<div class="empty">— no vendors / brands / recipes recorded yet —</div>';
+    } else if (hasErr) {
+      body = '<div class="empty" style="color:#b81818">Error: ' + escapeHtml(hasErr) + '</div>';
+    } else {
+      // Loose vendors
+      const vendors = (data.loose && data.loose.vendors) || [];
+      if (vendors.length > 0) {
+        body += `<div class="src-block l"><div class="h">Loose-purchased · ${vendors.length} vendor${vendors.length>1?'s':''}</div>`;
+        body += '<ul class="vendor-list">';
+        vendors.forEach(v => {
+          const price = v.price_per_unit ? `<span class="price">₹${v.price_per_unit}/${escapeHtml(v.unit||'')}</span>` : '';
+          const loc = v.location ? `<span class="meta">@ ${escapeHtml(v.location)}</span>` : '';
+          const primaryFlag = v.is_primary ? '<span class="primary-flag">PRIMARY</span>' : '';
+          const note = v.notes ? `<div style="font-size:10.5px;color:#777;margin-top:2px;padding-left:8px;">↳ ${escapeHtml(v.notes)}</div>` : '';
+          body += `<li><span class="name">${escapeHtml(v.name || '(unnamed)')}</span> ${primaryFlag} ${price} ${loc}${note}</li>`;
+        });
+        body += '</ul></div>';
+      }
+
+      // Branded brands → SKUs → suppliers
+      const brands = (data.branded && data.branded.brands) || [];
+      if (brands.length > 0) {
+        body += `<div class="src-block b"><div class="h">Branded · ${brands.length} brand${brands.length>1?'s':''}</div>`;
+        brands.forEach(b => {
+          body += '<div class="brand-box">';
+          body += `<div class="b-name">${escapeHtml(b.name || '(unnamed)')}${b.is_primary ? ' <span class="primary-flag">PRIMARY</span>' : ''}</div>`;
+          const skus = b.skus || [];
+          if (skus.length > 0) {
+            body += '<ul class="sku-list">';
+            skus.forEach(sk => {
+              const sz = sk.size ? `<span class="sku-meta">${escapeHtml(sk.size)} ${escapeHtml(sk.unit || '')}</span>` : '';
+              const mrp = sk.mrp ? `<span class="sku-meta">MRP ₹${sk.mrp}</span>` : '';
+              body += `<li><span class="sku-name">${escapeHtml(sk.name || sk.sku_code || '(SKU)')}</span> ${sz} ${mrp}`;
+              const suppliers = sk.suppliers || [];
+              if (suppliers.length > 0) {
+                body += '<ul class="supplier-list">';
+                suppliers.forEach(s => {
+                  const price = s.price_per_unit ? ` · ₹${s.price_per_unit}` : '';
+                  body += `<li><span class="s-name">${escapeHtml(s.name || '(supplier)')}</span>${price}${s.location ? ' · ' + escapeHtml(s.location) : ''}</li>`;
+                });
+                body += '</ul>';
+              }
+              body += '</li>';
+            });
+            body += '</ul>';
+          }
+          body += '</div>';
+        });
+        body += '</div>';
+      }
+
+      // In-house recipes
+      const recipes = (data.in_house && data.in_house.recipes) || [];
+      if (recipes.length > 0) {
+        body += `<div class="src-block i"><div class="h">In-house · ${recipes.length} recipe${recipes.length>1?'s':''}</div>`;
+        body += '<ul class="recipe-list">';
+        recipes.forEach(rec => {
+          const yld = rec.yield_qty ? `<span class="meta">yields ${escapeHtml(rec.yield_qty)} ${escapeHtml(rec.yield_unit||'')}</span>` : '';
+          body += `<li><strong>${escapeHtml(rec.name || '(recipe)')}</strong> ${yld}`;
+          if (rec.notes) body += `<div style="font-size:10.5px;color:#777;margin-top:2px;">${escapeHtml(rec.notes)}</div>`;
+          body += '</li>';
+        });
+        body += '</ul></div>';
+      }
+    }
+
+    return `
+      <div class="rm-card">
+        <div class="rm-head">
+          <div class="rm-code">${escapeHtml(rm.rm_code)}</div>
+          <div class="rm-name">${escapeHtml(rm.rm_name)}</div>
+          <div class="rm-pills">
+            ${usagePills(rm.usage_profile)}
+            <span class="pill" style="opacity:0.4">/</span>
+            ${profilePills(rm.sourcing_profile)}
+            ${isEmpty ? '<span class="pill pill-empty">empty</span>' : ''}
+          </div>
+        </div>
+        <div class="rm-body">${body}</div>
+      </div>
+    `;
+  }
+
+  // ---------- PIN gate ----------
+  $('#pin-submit').onclick = async () => {
+    const pin = $('#pin-input').value.trim();
+    if (!pin) return;
+    $('#pin-err').textContent = '';
+    State.pin = pin;
+    try {
+      // Verify PIN by listing
+      await tryAuth(pin);
+      localStorage.setItem(STORAGE_KEY, pin);
+      loadAll();
+    } catch (e) {
+      $('#pin-err').textContent = e.message;
+      State.pin = '';
+    }
+  };
+  $('#pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pin-submit').click(); });
+
+  $('#print-now').onclick = () => window.print();
+  $('#retry-btn').onclick = loadAll;
+
+  // Bootstrap
+  if (State.pin) {
+    loadAll();
+  } else {
+    show('gate');
+    setTimeout(() => $('#pin-input').focus(), 100);
+  }
+})();
+</script>
+</body>
+</html>
