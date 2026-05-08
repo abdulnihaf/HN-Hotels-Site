@@ -99,7 +99,7 @@
     <div class="stat-card"><div class="label">RM count</div><div class="value">37</div><div class="meta">canonical NCH raw materials</div></div>
     <div class="stat-card"><div class="label">POS products</div><div class="value">33</div><div class="meta">selling SKUs</div></div>
     <div class="stat-card"><div class="label">Sourcing layers</div><div class="value">3</div><div class="meta">L · B · I</div></div>
-    <div class="stat-card"><div class="label">V-shapes</div><div class="value">5</div><div class="meta">V1–V5 payment behaviours</div></div>
+    <div class="stat-card"><div class="label">V-shapes</div><div class="value">5+1</div><div class="meta">V1a/V1b · V2 · V3 · V4 · V5</div></div>
     <div class="stat-card"><div class="label">Action codes</div><div class="value">∞</div><div class="meta">composable, no schema change</div></div>
     <div class="stat-card"><div class="label">Anomaly guards</div><div class="value">4</div><div class="meta">impossible combos blocked</div></div>
   </section>
@@ -208,6 +208,137 @@
         </div>
       </div>
 
+    </div>
+  </section>
+
+  <!-- POS PRODUCT CATALOG -->
+  <section class="glass p-5">
+    <h2 class="panel-h">POS Product Catalog · The Locked Defined Layer (L4 reads these)</h2>
+    <p class="text-sm text-white/70 mb-4 max-w-3xl">All 33 NCH POS items, each with its canonical code, shape, price and the upstream RMs it consumes (per the live <span class="mono">rm_recipes</span> table). Click any row to expand the per-RM quantities.</p>
+    <div class="scroll-x">
+      <table class="codes" id="posCatalog" style="font-size:12px">
+        <thead>
+          <tr><th style="width:140px">Canonical Code</th><th>Item</th><th style="width:55px">Shape</th><th style="width:70px">Cat</th><th style="width:60px">Price</th><th>Recipe RMs</th></tr>
+        </thead>
+        <tbody id="posCatalogBody"></tbody>
+      </table>
+    </div>
+    <div class="mt-3 text-xs text-white/50">Recipe source: D1 <span class="mono">hn-hiring.rm_recipes</span> (32 products mapped, 1 placeholder). Canonical codes: foundation sheet · POS Products tab.</div>
+  </section>
+
+  <!-- RAW MATERIAL CATALOG -->
+  <section class="glass p-5">
+    <h2 class="panel-h">Raw Material Catalog · The Locked Defined Layer (every action references these)</h2>
+    <p class="text-sm text-white/70 mb-4 max-w-3xl">All 37 NCH-touching RMs with their canonical code and the POS products that consume them. Color-coded by Type (A/D) × Multi/Single (M/S).</p>
+    <div class="scroll-x">
+      <table class="codes" id="rmCatalog" style="font-size:12px">
+        <thead>
+          <tr><th style="width:140px">Canonical Code</th><th>Raw Material</th><th style="width:65px">Type</th><th style="width:120px">Category</th><th>Used in (POS)</th></tr>
+        </thead>
+        <tbody id="rmCatalogBody"></tbody>
+      </table>
+    </div>
+    <div class="mt-3 text-xs text-white/50">
+      <span class="pill pill-rm">A · Active</span> — consumed in current production ·
+      <span class="pill" style="background:rgba(244,114,182,0.15);color:#f472b6">D · Direct-resale</span> — sold as-is ·
+      <span class="pill" style="background:rgba(96,165,250,0.15);color:var(--info)">M · Multi-use</span> ·
+      <span class="pill" style="background:rgba(192,132,252,0.15);color:var(--purple)">S · Single-use</span>
+    </div>
+  </section>
+
+  <!-- ACTION CODE COMPOSER -->
+  <section class="glass p-5" id="composerSection">
+    <h2 class="panel-h">Action Code Composer · Compose Any Variation Live</h2>
+    <p class="text-sm text-white/70 mb-4 max-w-3xl">Pick the RM, pick the sourcing layer, pick the vendor + payment sequence. The canonical action code generates live, alongside what each downstream agent (L3 / L4 / Price-Intel) will do.</p>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+      <!-- LEFT: form -->
+      <div class="space-y-4">
+
+        <div class="stat-card">
+          <div class="label" style="color:var(--accent)">Step 1 · Pick the RM</div>
+          <select id="cmpRm" class="w-full mt-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 mono">
+            <option value="">— Select Raw Material —</option>
+          </select>
+        </div>
+
+        <div class="stat-card" id="cmpStep2Wrap" style="opacity:0.4;pointer-events:none">
+          <div class="label" style="color:var(--info)">Step 2 · Sourcing Layer</div>
+          <div class="flex gap-2 mt-2 flex-wrap">
+            <button data-layer="L" class="cmp-layer px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-sm hover:bg-white/10 transition"><span class="pill pill-l">L</span> Loose</button>
+            <button data-layer="B" class="cmp-layer px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-sm hover:bg-white/10 transition"><span class="pill pill-b">B</span> Branded</button>
+            <button data-layer="I" class="cmp-layer px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-sm hover:bg-white/10 transition"><span class="pill pill-i">I</span> In-house</button>
+          </div>
+        </div>
+
+        <div class="stat-card" id="cmpStep3Wrap" style="opacity:0.4;pointer-events:none">
+          <div class="label" style="color:var(--purple)">Step 3 · Brand + SKU <span class="text-white/30 normal-case">(only if Branded)</span></div>
+          <div class="grid grid-cols-2 gap-2 mt-2">
+            <input id="cmpBrand" type="text" placeholder="Brand (AMUL, TATA…)" class="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 mono uppercase" />
+            <input id="cmpSku" type="text" placeholder="Pack (5L, 1KG, 500G)" class="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 mono uppercase" />
+          </div>
+        </div>
+
+        <div class="stat-card" id="cmpStep4Wrap" style="opacity:0.4;pointer-events:none">
+          <div class="label" style="color:#f472b6">Step 4 · Vendor / Channel</div>
+          <input id="cmpVendor" type="text" placeholder="PRABHU · SHARIFF · ZEPTO · HYPERPURE…" class="w-full mt-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 mono uppercase" />
+          <div class="text-xs text-white/40 mt-2" id="cmpVendorHint">Vendor abbreviation, uppercased.</div>
+        </div>
+
+        <div class="stat-card" id="cmpStep5Wrap" style="opacity:0.4;pointer-events:none">
+          <div class="label" style="color:var(--good)">Step 5 · V-shape (payment sequence)</div>
+          <div class="space-y-2 mt-3 text-xs" id="cmpVList">
+            <label class="flex items-start gap-2 cursor-pointer hover:bg-white/5 rounded p-1.5"><input type="radio" name="cmpV" value="V1a" class="mt-0.5"/><div><span class="pill pill-v1">V1a</span> <strong>DAILY_CASH_POSTPAID</strong> <div class="text-white/50 mt-0.5">Order → Receive → Pay same day · Buffalo Milk pattern</div></div></label>
+            <label class="flex items-start gap-2 cursor-pointer hover:bg-white/5 rounded p-1.5"><input type="radio" name="cmpV" value="V1b" class="mt-0.5"/><div><span class="pill pill-v1">V1b</span> <strong>DAILY_CASH_PREPAID</strong> <span class="pill pill-bad" style="font-size:9px">NEW</span> <div class="text-white/50 mt-0.5">Order → Vendor invoice → Pay → Receive · Tea Powder pattern</div></div></label>
+            <label class="flex items-start gap-2 cursor-pointer hover:bg-white/5 rounded p-1.5"><input type="radio" name="cmpV" value="V2" class="mt-0.5"/><div><span class="pill pill-v2">V2</span> <strong>ORDERED_CREDIT</strong> <div class="text-white/50 mt-0.5">PO → Receive → Bill → Pay-on-due · Sangeetha bakery</div></div></label>
+            <label class="flex items-start gap-2 cursor-pointer hover:bg-white/5 rounded p-1.5"><input type="radio" name="cmpV" value="V3" class="mt-0.5"/><div><span class="pill pill-v3">V3</span> <strong>APP_PREPAID</strong> <div class="text-white/50 mt-0.5">Pay first → Receive → PO logged retro · Zepto / Blinkit / Hyperpure</div></div></label>
+            <label class="flex items-start gap-2 cursor-pointer hover:bg-white/5 rounded p-1.5"><input type="radio" name="cmpV" value="V4" class="mt-0.5"/><div><span class="pill pill-v4">V4</span> <strong>WALK_IN_CASH</strong> <div class="text-white/50 mt-0.5">One-off walk-in · Pay at receive · No recurring clock</div></div></label>
+            <label class="flex items-start gap-2 cursor-pointer hover:bg-white/5 rounded p-1.5"><input type="radio" name="cmpV" value="V5" class="mt-0.5"/><div><span class="pill pill-v5">V5</span> <strong>STANDING_INVOICE</strong> <div class="text-white/50 mt-0.5">No PO · Monthly bill arrives · Pay-on-due · Water dispenser</div></div></label>
+          </div>
+          <div class="text-xs text-white/40 mt-2" id="cmpVHint"></div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: live output -->
+      <div class="space-y-4">
+
+        <div>
+          <div class="text-xs text-white/50 mb-2 uppercase tracking-wider font-semibold">Generated Canonical Code</div>
+          <div class="code-block text-base" id="cmpOutput" style="min-height:60px;display:flex;align-items:center;justify-content:center">
+            <span class="text-white/30 mono">— compose to see code —</span>
+          </div>
+          <div id="cmpError" class="impossible mt-2" style="display:none"></div>
+          <div class="flex gap-2 mt-3">
+            <button id="cmpCopy" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs border border-white/10">Copy code</button>
+            <button id="cmpReset" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs border border-white/10">Reset</button>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="label" style="color:var(--good)">L3 read · payment timing</div>
+          <div class="text-xs text-white/70 mt-2" id="cmpL3">—</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="label" style="color:var(--accent)">L4 read · stock change</div>
+          <div class="text-xs text-white/70 mt-2" id="cmpL4">—</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="label" style="color:var(--purple)">Price-Intel read · research stack</div>
+          <div class="text-xs text-white/70 mt-2" id="cmpPi">—</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="mt-5 p-4 rounded-lg" style="background:rgba(248,113,113,0.04); border:1px solid rgba(248,113,113,0.20);">
+      <div class="text-xs font-bold mb-2" style="color:var(--bad)">⚠ NEW ARCHITECTURAL FINDING · V1 splits into V1a / V1b</div>
+      <div class="text-xs text-white/70 leading-relaxed">
+        Surfaced in this session: V1 has two payment sequences in the wild. <strong>V1a (postpaid)</strong> is the Buffalo Milk pattern — order, receive, pay same day. <strong>V1b (prepaid)</strong> is the Tea Powder pattern — order, vendor sends invoice, we pay, vendor dispatches. Both are loose, both are daily/weekly cash, but L3 fires payment at opposite ends of the sequence. This subshape is <strong>not yet locked in Section 10</strong> of the foundation sheet. Once owner confirms it's a recurring pattern (≥2 vendors), promote V1b to a first-class V-shape in the formal grammar.
+      </div>
     </div>
   </section>
 
@@ -502,6 +633,377 @@
 <footer class="border-t border-white/5 px-6 py-4 text-xs text-white/40 text-center">
   NCH L2 Canonical Code Architecture · foundation visual · companion to <a href="/ops/visual/nch-l1/" class="text-white/60 hover:text-white">NCH-L1</a> and the <a href="https://docs.google.com/spreadsheets/d/1Xsr8BgjDRBV5-RYdL3j7LMAF-dzSXHwAuilNAQCuzzk/edit" target="_blank" class="text-white/60 hover:text-white">Foundation Sheet</a>
 </footer>
+
+<script>
+// ============== STATIC DATA (mirrored from foundation sheet + D1 rm_recipes 2026-05-08) ==============
+
+// 33 POS products — sheet "POS Products" rows 2-34
+const POS_PRODUCTS = [
+  { canon:'NCH-S5-IRC', odooId:1028, name:'Irani Chai',                shape:'S5', cat:'Chai',   price:20, oldCode:'NCH-IC' },
+  { canon:'NCH-S5-KDK', odooId:1632, name:'Kadak Chai',                shape:'S5', cat:'Chai',   price:20, oldCode:'NCH-KC' },
+  { canon:'NCH-S5-IBT', odooId:1635, name:'Irani Black Tea',           shape:'S5', cat:'Chai',   price:20, oldCode:'NCH-IBT' },
+  { canon:'NCH-S5-IGT', odooId:1634, name:'Irani Ginger Tea',          shape:'S5', cat:'Chai',   price:20, oldCode:'NCH-IGT' },
+  { canon:'NCH-S5-LMT', odooId:1085, name:'Lemon Tea',                 shape:'S5', cat:'Chai',   price:20, oldCode:'(missing in Odoo)' },
+  { canon:'NCH-S5-LMH', odooId:null, name:'Lemon Tea with Honey',      shape:'S5', cat:'Chai',   price:20, oldCode:'(NEW)' },
+  { canon:'NCH-S5-ZCH', odooId:1633, name:'Zafrani Chai',              shape:'S5', cat:'Chai',   price:50, oldCode:'NCH-ZC' },
+  { canon:'NCH-S5-ICT', odooId:1636, name:'Irani Chocolate Tea',       shape:'S5', cat:'Chai',   price:30, oldCode:'NCH-ICT' },
+  { canon:'NCH-S5-IRM', odooId:1641, name:'Irani Milk',                shape:'S5', cat:'Chai',   price:20, oldCode:'NCH-IM' },
+  { canon:'NCH-S5-ICM', odooId:null, name:'Irani Chocolate Milk',      shape:'S5', cat:'Chai',   price:30, oldCode:'(NEW)' },
+  { canon:'NCH-S5-IBM', odooId:1640, name:'Irani Badam Milk',          shape:'S5', cat:'Chai',   price:30, oldCode:'NCH-IBM' },
+  { canon:'NCH-S5-IRH', odooId:1637, name:'Irani Horlicks',            shape:'S5', cat:'Chai',   price:30, oldCode:'NCH-IH' },
+  { canon:'NCH-S5-IRB', odooId:1638, name:'Irani Boost',               shape:'S5', cat:'Chai',   price:30, oldCode:'NCH-IB' },
+  { canon:'NCH-S5-NSC', odooId:1084, name:'Nawabi Special Coffee',     shape:'S5', cat:'Chai',   price:30, oldCode:'NCH-NSC' },
+  { canon:'NCH-S5-ZCF', odooId:1642, name:'Zafrani Coffee',            shape:'S5', cat:'Chai',   price:60, oldCode:'NCH-ZCF' },
+  { canon:'NCH-S4-BLC', odooId:1639, name:'Black Coffee',              shape:'S4', cat:'Chai',   price:30, oldCode:'NCH-BC' },
+  { canon:'NCH-S7-BMS', odooId:1029, name:'Bun Maska',                 shape:'S7', cat:'Snacks', price:40, oldCode:'NCH-BM' },
+  { canon:'NCH-S7-BMJ', odooId:1644, name:'Bun Maska Jam',             shape:'S7', cat:'Snacks', price:50, oldCode:'NCH-BMJ' },
+  { canon:'NCH-S7-MLB', odooId:1100, name:'Malai Bun',                 shape:'S7', cat:'Snacks', price:30, oldCode:'NCH-BM (collision)' },
+  { canon:'NCH-S7-NTB', odooId:1643, name:'Nutella Bun',               shape:'S7', cat:'Snacks', price:60, oldCode:'NCH-NB' },
+  { canon:'NCH-S1-KHJ', odooId:1435, name:'Khajor',                    shape:'S1', cat:'Snacks', price:25, oldCode:'NCH-KH' },
+  { canon:'NCH-S1-OSB', odooId:1030, name:'Osmania Biscuit',           shape:'S1', cat:'Snacks', price:8,  oldCode:'NCH-OB' },
+  { canon:'NCH-S2-OB3', odooId:1033, name:'Osmania Biscuit · Pack of 3', shape:'S2', cat:'Snacks', price:20, oldCode:'NCH-OB3' },
+  { canon:'NCH-S1-NDC', odooId:1383, name:'Niloufer DCC 75g',          shape:'S1', cat:'Snacks', price:120, oldCode:'HN-RM-221 (mis-coded)' },
+  { canon:'NCH-S1-NF1', odooId:1384, name:'Niloufer Fruit 100g',       shape:'S1', cat:'Snacks', price:70,  oldCode:'HN-RM-222 (mis-coded)' },
+  { canon:'NCH-S1-NF2', odooId:1385, name:'Niloufer Fruit 200g',       shape:'S1', cat:'Snacks', price:150, oldCode:'HN-RM-223 (mis-coded)' },
+  { canon:'NCH-S1-NO1', odooId:1405, name:'Niloufer Osmania 100g',     shape:'S1', cat:'Snacks', price:60,  oldCode:'(missing)' },
+  { canon:'NCH-S1-NO5', odooId:1093, name:'Niloufer Osmania 500g',     shape:'S1', cat:'Snacks', price:250, oldCode:'NCH-OBBOX' },
+  { canon:'NCH-S1-CHB', odooId:1099, name:'Cheese Balls',              shape:'S1', cat:'Snacks', price:50,  oldCode:'NCH-CB' },
+  { canon:'NCH-S1-CCT', odooId:1031, name:'Chicken Cutlet',            shape:'S1', cat:'Snacks', price:25,  oldCode:'NCH-CC' },
+  { canon:'NCH-S1-PYS', odooId:1097, name:'Pyaaz Samosa',              shape:'S1', cat:'Snacks', price:15,  oldCode:'NCH-PS' },
+  { canon:'NCH-S1-CHR', odooId:1374, name:'Chicken Roll (with mayo)',  shape:'S1', cat:'Snacks', price:50,  oldCode:'NCH-CMR' },
+  { canon:'NCH-S1-WTR', odooId:1076, name:'Water',                     shape:'S1', cat:'Snacks', price:10,  oldCode:'NCH-WTR' }
+];
+
+// 37 RMs — sheet "Raw Materials" rows 2-38
+const RAW_MATERIALS = [
+  { canon:'NCH-AM-BMK', oldCode:'HN-RM-200', name:'Buffalo Milk',                 brand:'NCH', type:'A', multi:'M', cat:'Dairy' },
+  { canon:'NCH-AM-SMP', oldCode:'HN-RM-201', name:'Skimmed Milk Powder',          brand:'NCH', type:'A', multi:'M', cat:'Dairy' },
+  { canon:'NCH-AM-CMK', oldCode:'HN-RM-209', name:'Condensed Milk (Milkmaid)',    brand:'NCH', type:'A', multi:'M', cat:'Dairy' },
+  { canon:'NCH-AM-TEA', oldCode:'HN-RM-202', name:'Tea Powder',                   brand:'NCH', type:'A', multi:'M', cat:'Beverage Core' },
+  { canon:'NCH-AM-FWT', oldCode:'HN-RM-203', name:'Filter Water',                 brand:'NCH', type:'A', multi:'M', cat:'Water' },
+  { canon:'HN-AM-SUG',  oldCode:'HN-RM-029', name:'Sugar',                        brand:'HN',  type:'A', multi:'M', cat:'Sweetener' },
+  { canon:'HN-AM-CHL',  oldCode:'HN-RM-095', name:'Charcoal',                     brand:'HN',  type:'A', multi:'M', cat:'Fuel' },
+  { canon:'HN-AM-LPG',  oldCode:'HN-RM-225', name:'LPG Gas Cylinder',             brand:'HN',  type:'A', multi:'M', cat:'Fuel' },
+  { canon:'HN-AM-MDA',  oldCode:'HN-RM-033', name:'Maida (All-Purpose Flour)',    brand:'HN',  type:'A', multi:'M', cat:'Dry Goods' },
+  { canon:'NCH-AS-SOJ', oldCode:'HN-RM-099', name:'Sooji (Semolina)',             brand:'NCH', type:'A', multi:'S', cat:'Dry Goods' },
+  { canon:'NCH-AS-CST', oldCode:'HN-RM-110', name:'Custard Powder',               brand:'NCH', type:'A', multi:'S', cat:'Dry Goods' },
+  { canon:'HN-AM-SUF',  oldCode:'HN-RM-009', name:'Saunf (Fennel Seeds)',         brand:'HN',  type:'A', multi:'M', cat:'Spices' },
+  { canon:'HN-AM-OIL',  oldCode:'HN-RM-211', name:'Oil (Frying)',                 brand:'HN',  type:'A', multi:'M', cat:'Oils & Fats' },
+  { canon:'HN-AM-KAJ',  oldCode:'HN-RM-036', name:'Kaju (Cashew Nuts)',           brand:'HN',  type:'A', multi:'M', cat:'Dry Fruits' },
+  { canon:'NCH-AS-PMK', oldCode:'(new)',     name:'Pumpkin Seeds',                brand:'NCH', type:'A', multi:'S', cat:'Seeds' },
+  { canon:'HN-AM-SDA',  oldCode:'HN-RM-107', name:'Baking Soda',                  brand:'HN',  type:'A', multi:'M', cat:'Dry Goods' },
+  { canon:'HN-AM-ELC',  oldCode:'HN-RM-001', name:'Green Cardamom (Elaichi)',     brand:'HN',  type:'A', multi:'M', cat:'Spices' },
+  { canon:'HN-AM-GIN',  oldCode:'HN-RM-059', name:'Ginger',                       brand:'HN',  type:'A', multi:'M', cat:'Fresh Veg' },
+  { canon:'NCH-AM-SAF', oldCode:'HN-RM-084', name:'Saffron (Kesar)',              brand:'NCH', type:'A', multi:'M', cat:'Spices — Dried' },
+  { canon:'HN-AM-LMN',  oldCode:'HN-RM-065', name:'Lemon (Nimbu)',                brand:'HN',  type:'A', multi:'M', cat:'Fresh Veg' },
+  { canon:'NCH-AM-SBJ', oldCode:'HN-RM-114', name:'Sabja Seeds (Basil)',          brand:'NCH', type:'A', multi:'M', cat:'Seeds' },
+  { canon:'HN-AM-ALM',  oldCode:'HN-RM-112', name:'Almonds (Badam)',              brand:'HN',  type:'A', multi:'M', cat:'Dry Fruits' },
+  { canon:'NCH-AM-CFP', oldCode:'HN-RM-214', name:'Coffee Powder',                brand:'NCH', type:'A', multi:'M', cat:'Beverage Core' },
+  { canon:'NCH-AM-CHC', oldCode:'(new)',     name:'Chocolate Powder',             brand:'NCH', type:'A', multi:'M', cat:'Beverage Core' },
+  { canon:'NCH-AS-HRK', oldCode:'(new)',     name:'Horlicks',                     brand:'NCH', type:'A', multi:'S', cat:'Beverage Core' },
+  { canon:'NCH-AS-BST', oldCode:'(new)',     name:'Boost',                        brand:'NCH', type:'A', multi:'S', cat:'Beverage Core' },
+  { canon:'NCH-AS-HNY', oldCode:'(new)',     name:'Honey',                        brand:'NCH', type:'A', multi:'S', cat:'Sweetener' },
+  { canon:'NCH-DM-BUN', oldCode:'HN-RM-204', name:'Buns (Plain)',                 brand:'NCH', type:'D', multi:'M', cat:'Bakery' },
+  { canon:'HN-AM-BTR',  oldCode:'HN-RM-046', name:'Butter (Amul)',                brand:'HN',  type:'A', multi:'M', cat:'Oils & Fats' },
+  { canon:'NCH-AS-JAM', oldCode:'(new)',     name:'Jam',                          brand:'NCH', type:'A', multi:'S', cat:'Bakery Spreads' },
+  { canon:'NCH-AS-NUT', oldCode:'(new)',     name:'Nutella',                      brand:'NCH', type:'A', multi:'S', cat:'Bakery Spreads' },
+  { canon:'NCH-AS-MAL', oldCode:'(byproduct)', name:'Malai (clotted cream)',      brand:'NCH', type:'A', multi:'S', cat:'Dairy' },
+  { canon:'NCH-DS-CHB', oldCode:'HN-RM-212', name:'Cheese Balls Raw',             brand:'NCH', type:'D', multi:'S', cat:'Frozen Snacks' },
+  { canon:'NCH-DS-CCT', oldCode:'HN-RM-206', name:'Chicken Cutlet (Unfried)',     brand:'NCH', type:'D', multi:'S', cat:'Frozen Snacks' },
+  { canon:'NCH-DS-SMR', oldCode:'HN-RM-210', name:'Samosa Raw',                   brand:'NCH', type:'D', multi:'S', cat:'Frozen Snacks' },
+  { canon:'NCH-DS-CHR', oldCode:'HN-RM-216', name:'Chicken Roll Raw',             brand:'NCH', type:'D', multi:'S', cat:'Frozen Snacks' },
+  { canon:'NCH-DM-OSB', oldCode:'HN-RM-205', name:'Osmania Biscuit (Loose)',      brand:'NCH', type:'D', multi:'M', cat:'Bakery' }
+];
+
+// recipe map: pos canonical code -> list of {rm_canon, qty, unit}
+// Built from D1 rm_recipes (32 mapped products) + Niloufer 5-product passthrough rule.
+// Mappings: HN-RM-XXX (old) -> canonical (new)
+const OLD_TO_CANON = Object.fromEntries(RAW_MATERIALS.map(rm => [rm.oldCode, rm.canon]));
+
+const RECIPE_RAW = {
+  'NCH-S4-BLC': [['HN-RM-242',0.005,'kg'],['HN-RM-203',0.06,'L']], // Black Coffee — HN-RM-242 = Coffee Powder NCH-AM-CFP
+  'NCH-S7-BMS': [['HN-RM-204',1,'pc'],['HN-RM-213',0.015,'kg']],   // Bun Maska — HN-RM-213 = Butter alt code
+  'NCH-S7-BMJ': [['HN-RM-204',1,'pc'],['HN-RM-231',0.02,'kg']],
+  'NCH-S1-CHB': [['HN-RM-212',0.05,'kg'],['HN-RM-211',0.005,'L']],
+  'NCH-S1-CCT': [['HN-RM-206',1,'pc'],['HN-RM-211',0.005,'L']],
+  'NCH-S1-CHR': [['HN-RM-216',1,'pc']],
+  'NCH-S5-IBM': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-029',0.0089,'kg'],['HN-RM-227',0.005,'kg']],
+  'NCH-S5-IBT': [['HN-RM-202',0.0044,'kg'],['HN-RM-029',0.0089,'kg'],['HN-RM-203',0.06,'L']],
+  'NCH-S5-IRB': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-029',0.0089,'kg'],['HN-RM-229',0.008,'kg']],
+  'NCH-S5-IRC': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-202',0.0044,'kg'],['HN-RM-029',0.0089,'kg'],['HN-RM-203',0.04,'L']],
+  'NCH-S5-ICT': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-202',0.0044,'kg'],['HN-RM-029',0.0089,'kg'],['HN-RM-203',0.04,'L'],['HN-RM-226',0.008,'kg']],
+  'NCH-S5-IGT': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-202',0.0044,'kg'],['HN-RM-029',0.0089,'kg'],['HN-RM-203',0.04,'L'],['HN-RM-059',0.003,'kg']],
+  'NCH-S5-IRH': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-029',0.0089,'kg'],['HN-RM-228',0.008,'kg']],
+  'NCH-S5-IRM': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-029',0.0089,'kg']],
+  'NCH-S5-KDK': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-202',0.0044,'kg'],['HN-RM-029',0.0089,'kg'],['HN-RM-203',0.04,'L']],
+  'NCH-S1-KHJ': [['HN-RM-033',0.04,'kg'],['HN-RM-099',0.02,'kg'],['HN-RM-110',0.005,'kg'],['HN-RM-009',0.001,'kg'],['HN-RM-211',0.01,'L'],['HN-RM-036',0.005,'kg'],['HN-RM-240',0.005,'kg'],['HN-RM-107',0.001,'kg'],['HN-RM-001',0.0005,'kg']],
+  'NCH-S5-LMT': [['HN-RM-202',0.0044,'kg'],['HN-RM-029',0.0089,'kg'],['HN-RM-203',0.06,'L'],['HN-RM-114',0.001,'kg'],['HN-RM-059',0.002,'kg'],['HN-RM-065',0.5,'pc']],
+  'NCH-S7-MLB': [['HN-RM-204',1,'pc']],
+  'NCH-S5-NSC': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-242',0.005,'kg']],
+  'NCH-S1-NDC': [['HN-RM-221',1,'box']],
+  'NCH-S1-NF1': [['HN-RM-222',1,'box']],
+  'NCH-S1-NF2': [['HN-RM-223',1,'box']],
+  'NCH-S1-NO1': [['HN-RM-224',1,'box']],
+  'NCH-S1-NO5': [['HN-RM-208',1,'box']],
+  'NCH-S7-NTB': [['HN-RM-204',1,'pc'],['HN-RM-230',0.02,'kg']],
+  'NCH-S1-OSB': [['HN-RM-205',1,'pc']],
+  'NCH-S2-OB3': [['HN-RM-205',3,'pc']],
+  'NCH-S1-PYS': [['HN-RM-210',1,'pc'],['HN-RM-211',0.005,'L']],
+  'NCH-S1-WTR': [['HN-RM-207',1,'btl']],
+  'NCH-S5-ZCH': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-202',0.0044,'kg'],['HN-RM-029',0.0089,'kg'],['HN-RM-203',0.04,'L'],['HN-RM-084',0.0005,'g']],
+  'NCH-S5-ZCF': [['HN-RM-200',0.0574,'L'],['HN-RM-201',0.0014,'kg'],['HN-RM-209',0.0011,'kg'],['HN-RM-242',0.005,'kg'],['HN-RM-084',0.0005,'g']],
+  'NCH-S1-CHB': [['HN-RM-212',0.05,'kg'],['HN-RM-211',0.005,'L']],
+  // Lemon Tea with Honey + Irani Chocolate Milk are NEW POS — recipe TBD
+  'NCH-S5-LMH': [],
+  'NCH-S5-ICM': []
+};
+
+// resolve recipe RM codes to canonical (some old codes don't exist in new RM list — keep as-is with marker)
+function recipeFor(canon){
+  const raw = RECIPE_RAW[canon] || [];
+  return raw.map(([oldRm, qty, unit]) => ({
+    rm: OLD_TO_CANON[oldRm] || oldRm,  // fallback to old code if not yet canonicalized
+    qty, unit
+  }));
+}
+
+// invert: rm canonical -> POS canonicals consuming it
+function posUsing(rmCanon){
+  const out = [];
+  POS_PRODUCTS.forEach(p => {
+    const r = recipeFor(p.canon);
+    if (r.some(x => x.rm === rmCanon)) out.push(p.canon);
+  });
+  return out;
+}
+
+// ============== RENDER POS CATALOG ==============
+(function renderPos(){
+  const tbody = document.getElementById('posCatalogBody');
+  if (!tbody) return;
+  POS_PRODUCTS.slice().sort((a,b) => a.canon.localeCompare(b.canon)).forEach(p => {
+    const recipe = recipeFor(p.canon);
+    const rmList = recipe.length
+      ? recipe.map(r => `<span class="mono code-rm">${r.rm}</span>`).join(', ')
+      : '<span class="text-white/30">—</span>';
+    const detail = recipe.length
+      ? recipe.map(r => `<div class="text-xs text-white/60 mono">  ${r.rm} · ${r.qty} ${r.unit}</div>`).join('')
+      : '<div class="text-xs text-white/30">no recipe yet (new POS — pending)</div>';
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr class="hover:bg-white/[0.03]">
+        <td class="mono code-rm">${p.canon}</td>
+        <td>${p.name}</td>
+        <td><span class="pill" style="background:rgba(232,147,12,0.10);color:var(--accent)">${p.shape}</span></td>
+        <td class="text-white/60">${p.cat}</td>
+        <td class="mono text-white/70">₹${p.price}</td>
+        <td>
+          <details>
+            <summary>${rmList}</summary>
+            <div class="mt-2 pl-3 border-l border-white/10">${detail}</div>
+          </details>
+        </td>
+      </tr>
+    `);
+  });
+})();
+
+// ============== RENDER RM CATALOG ==============
+(function renderRm(){
+  const tbody = document.getElementById('rmCatalogBody');
+  if (!tbody) return;
+  RAW_MATERIALS.slice().sort((a,b) => a.canon.localeCompare(b.canon)).forEach(rm => {
+    const usedIn = posUsing(rm.canon);
+    const usedHtml = usedIn.length
+      ? usedIn.map(c => `<span class="mono code-rm" style="font-size:11px">${c}</span>`).join(' ')
+      : '<span class="text-white/30">—</span>';
+    const typeColor = rm.type === 'A' ? 'pill-rm' : '';
+    const typeBg = rm.type === 'D' ? 'background:rgba(244,114,182,0.15);color:#f472b6' : '';
+    const multiBg = rm.multi === 'M' ? 'background:rgba(96,165,250,0.15);color:var(--info)' : 'background:rgba(192,132,252,0.15);color:var(--purple)';
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr class="hover:bg-white/[0.03]">
+        <td class="mono code-rm">${rm.canon}</td>
+        <td><div class="text-white/90">${rm.name}</div><div class="text-[10px] text-white/40 mono">${rm.oldCode}</div></td>
+        <td><span class="pill ${typeColor}" style="${typeBg}">${rm.type}</span> <span class="pill" style="${multiBg}">${rm.multi}</span></td>
+        <td class="text-white/60">${rm.cat}</td>
+        <td>${usedHtml}</td>
+      </tr>
+    `);
+  });
+})();
+
+// ============== COMPOSER ==============
+const cmp = {
+  rm: '', layer: '', brand: '', sku: '', vendor: '', vshape: ''
+};
+
+// populate RM dropdown
+(function fillRmSelect(){
+  const sel = document.getElementById('cmpRm');
+  RAW_MATERIALS.slice().sort((a,b) => a.canon.localeCompare(b.canon)).forEach(rm => {
+    const opt = document.createElement('option');
+    opt.value = rm.canon;
+    opt.textContent = `${rm.canon} · ${rm.name}`;
+    sel.appendChild(opt);
+  });
+})();
+
+// step 1: RM
+document.getElementById('cmpRm').addEventListener('change', e => {
+  cmp.rm = e.target.value;
+  const wrap = document.getElementById('cmpStep2Wrap');
+  if (cmp.rm) { wrap.style.opacity = 1; wrap.style.pointerEvents = 'auto'; }
+  else        { wrap.style.opacity = 0.4; wrap.style.pointerEvents = 'none'; }
+  render();
+});
+
+// step 2: layer
+document.querySelectorAll('.cmp-layer').forEach(btn => {
+  btn.addEventListener('click', () => {
+    cmp.layer = btn.dataset.layer;
+    document.querySelectorAll('.cmp-layer').forEach(b => b.style.outline = '');
+    btn.style.outline = '2px solid var(--accent)';
+
+    const s3 = document.getElementById('cmpStep3Wrap');
+    const s4 = document.getElementById('cmpStep4Wrap');
+    const s5 = document.getElementById('cmpStep5Wrap');
+    const vendorHint = document.getElementById('cmpVendorHint');
+
+    if (cmp.layer === 'B') {
+      s3.style.opacity = 1; s3.style.pointerEvents = 'auto';
+      s4.style.opacity = 1; s4.style.pointerEvents = 'auto';
+      s5.style.opacity = 1; s5.style.pointerEvents = 'auto';
+      vendorHint.textContent = 'Vendor abbr OR quick-commerce platform (ZEPTO, BLINKIT, HYPERPURE, BIGBASKET).';
+    } else if (cmp.layer === 'L') {
+      s3.style.opacity = 0.3; s3.style.pointerEvents = 'none';
+      cmp.brand = ''; cmp.sku = '';
+      document.getElementById('cmpBrand').value = '';
+      document.getElementById('cmpSku').value = '';
+      s4.style.opacity = 1; s4.style.pointerEvents = 'auto';
+      s5.style.opacity = 1; s5.style.pointerEvents = 'auto';
+      vendorHint.textContent = 'Loose vendor abbr (PRABHU, SHARIFF, AFEEFA, NISARCHA, GOLDENRAJESH…).';
+    } else if (cmp.layer === 'I') {
+      s3.style.opacity = 0.3; s3.style.pointerEvents = 'none';
+      s4.style.opacity = 1;   s4.style.pointerEvents = 'auto';
+      s5.style.opacity = 0.3; s5.style.pointerEvents = 'none';
+      cmp.vshape = '';
+      document.querySelectorAll('input[name=cmpV]').forEach(r => r.checked = false);
+      vendorHint.textContent = 'In-house: enter recipe identifier (e.g., R-MDA+YST+BTR+SGR). No vendor.';
+    }
+    render();
+  });
+});
+
+// step 3
+document.getElementById('cmpBrand').addEventListener('input', e => { cmp.brand = e.target.value.toUpperCase().trim(); render(); });
+document.getElementById('cmpSku').addEventListener('input',   e => { cmp.sku   = e.target.value.toUpperCase().trim(); render(); });
+
+// step 4
+document.getElementById('cmpVendor').addEventListener('input', e => { cmp.vendor = e.target.value.toUpperCase().trim(); render(); });
+
+// step 5
+document.querySelectorAll('input[name=cmpV]').forEach(r => {
+  r.addEventListener('change', () => { cmp.vshape = r.value; render(); });
+});
+
+// reset
+document.getElementById('cmpReset').addEventListener('click', () => {
+  cmp.rm = cmp.layer = cmp.brand = cmp.sku = cmp.vendor = cmp.vshape = '';
+  document.getElementById('cmpRm').value = '';
+  document.getElementById('cmpBrand').value = '';
+  document.getElementById('cmpSku').value = '';
+  document.getElementById('cmpVendor').value = '';
+  document.querySelectorAll('input[name=cmpV]').forEach(r => r.checked = false);
+  document.querySelectorAll('.cmp-layer').forEach(b => b.style.outline = '');
+  ['cmpStep2Wrap','cmpStep3Wrap','cmpStep4Wrap','cmpStep5Wrap'].forEach(id => {
+    const e = document.getElementById(id); e.style.opacity = 0.4; e.style.pointerEvents = 'none';
+  });
+  render();
+});
+
+// copy
+document.getElementById('cmpCopy').addEventListener('click', async () => {
+  const t = document.getElementById('cmpOutput').innerText;
+  try { await navigator.clipboard.writeText(t); document.getElementById('cmpCopy').textContent = 'Copied!'; setTimeout(()=>document.getElementById('cmpCopy').textContent='Copy code',1200);}
+  catch(_){}
+});
+
+function render() {
+  const out  = document.getElementById('cmpOutput');
+  const err  = document.getElementById('cmpError');
+  const l3   = document.getElementById('cmpL3');
+  const l4   = document.getElementById('cmpL4');
+  const pi   = document.getElementById('cmpPi');
+
+  err.style.display = 'none';
+
+  if (!cmp.rm) {
+    out.innerHTML = '<span class="text-white/30 mono">— pick an RM to start —</span>';
+    l3.textContent = '—'; l4.textContent = '—'; pi.textContent = '—';
+    return;
+  }
+
+  // I-layer
+  if (cmp.layer === 'I') {
+    const rcp = cmp.vendor || 'R-???';
+    out.innerHTML = `<span class="code-rm">${cmp.rm}</span> <span class="arrow">/</span> <span class="code-i">I</span> <span class="arrow">/</span> <span class="code-recipe">${rcp}</span>`;
+    l3.innerHTML = '<span class="text-white/40">No payment fires for in-house production. L3 untouched.</span>';
+    l4.innerHTML = `Consume upstream RMs per recipe <span class="mono code-recipe">${rcp}</span>; produce 1 unit of <span class="mono code-rm">${cmp.rm}</span> stock.`;
+    pi.innerHTML = '<span class="text-white/40">No external research. Recipe cost = sum of upstream RM costs × ratios.</span>';
+    return;
+  }
+
+  // L+V3 anomaly
+  if (cmp.layer === 'L' && cmp.vshape === 'V3') {
+    err.style.display = 'block';
+    err.innerHTML = `<div class="text-xs font-bold mb-1" style="color:var(--bad)">⚠ Impossible: L + V3</div><div class="text-xs text-white/70">Quick-commerce only sells defined SKUs. Switch the layer to <strong>B (Branded)</strong>.</div>`;
+  }
+
+  if (cmp.layer === 'B' && (!cmp.brand || !cmp.sku)) {
+    out.innerHTML = `<span class="code-rm">${cmp.rm}</span> <span class="arrow">/</span> <span class="code-b">B</span> <span class="text-white/30 mono">… brand + pack required</span>`;
+    l3.textContent = '—'; l4.textContent = '—'; pi.textContent = '—';
+    return;
+  }
+
+  if (!cmp.layer) {
+    out.innerHTML = `<span class="code-rm">${cmp.rm}</span> <span class="arrow">/</span> <span class="text-white/30 mono">… pick layer</span>`;
+    return;
+  }
+  if (!cmp.vshape) {
+    let preview = `<span class="code-rm">${cmp.rm}</span> <span class="arrow">/</span> <span class="${cmp.layer==='L'?'code-l':'code-b'}">${cmp.layer}</span> <span class="arrow">/</span> <span class="text-white/30 mono">… pick V-shape</span>`;
+    out.innerHTML = preview;
+    return;
+  }
+
+  const vClass = ({V1a:'code-v',V1b:'code-v',V2:'code-v',V3:'code-v',V4:'code-v',V5:'code-v'})[cmp.vshape];
+  const layerClass = cmp.layer === 'L' ? 'code-l' : 'code-b';
+  const vendor = cmp.vendor || '???';
+  const skuTail = (cmp.layer === 'B' && cmp.brand && cmp.sku) ? `<span class="arrow">-</span><span class="code-sku">${cmp.brand}-${cmp.sku}</span>` : '';
+
+  out.innerHTML = `<span class="code-rm">${cmp.rm}</span> <span class="arrow">/</span> <span class="${layerClass}">${cmp.layer}</span> <span class="arrow">/</span> <span class="${vClass}">${cmp.vshape}</span><span class="arrow">-</span><span class="code-vendor">${vendor}</span>${skuTail}`;
+
+  // L3 narrative per V-shape
+  const L3_MAP = {
+    V1a: 'Order placed → <strong>Receive → Pay</strong> same day, cash. No credit clock. <em>Buffalo Milk pattern.</em>',
+    V1b: 'Order placed → <strong>Vendor invoice → Pay → Receive</strong>. Money fires before goods arrive. <em>Tea Powder pattern (NEW subshape, 2026-05-08).</em>',
+    V2:  'PO logged → Receive → Bill arrives → <strong>Pay on due-date</strong> per vendor terms. Credit clock active.',
+    V3:  '<strong>Pay first</strong> via app → Receive validates qty → PO logged retro. Money already fired.',
+    V4:  'One-off: Receive → <strong>Pay at receive</strong>, cash. No recurring relationship.',
+    V5:  'No PO. Bill arrives monthly → <strong>Pay-on-due</strong>. Standing arrangement.'
+  };
+  l3.innerHTML = L3_MAP[cmp.vshape] || '—';
+
+  // L4
+  l4.innerHTML = `Stock of <span class="mono code-rm">${cmp.rm}</span> increases by qty × unit-conversion. Vendor master + bill row updated against <span class="mono code-vendor">${vendor}</span>.`;
+
+  // Price-Intel
+  if (cmp.layer === 'L') {
+    pi.innerHTML = '<span style="color:var(--info)">B2B research stack</span>: IndiaMart, mandi rates, wholesale catalogs. No SKU lookup — track by RM × geography.';
+  } else if (cmp.layer === 'B') {
+    pi.innerHTML = `<span style="color:var(--purple)">D2C / Quick-Commerce stack</span>: scrape <span class="mono code-sku">${cmp.brand}-${cmp.sku}</span> on Hyperpure, Blinkit, Zepto, BigBasket. Compare vs paid price.`;
+  }
+}
+render();
+</script>
 
 </body>
 </html>
