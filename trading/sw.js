@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v56';  // v56: yesterday recap mini-banner shown in PRE_MARKET / OFF_HOURS when today empty (00:00-08:30 IST gap fill). Auto-hides once today verdict composes.
+const CACHE_VERSION = 'wealth-v57';  // v57: incident-day cache bust — May 8 wealth-verdict scheduled crons silently died after May 7 deploy; manual /run/compose recovered today's verdict at 08:47 IST + redeploy re-registered all 10 cron triggers. Bump forces fresh /trading/today/ load with 3-pick verdict (HFCL/AEROFLEX/TDPOWERSYS).
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
