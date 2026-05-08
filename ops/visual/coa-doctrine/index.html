@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coordinate Operations Architecture (COA) · Doctrine</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c14;
+    --panel: rgba(22,22,31,0.7);
+    --border: rgba(255,255,255,0.08);
+    --ink: #e4e4ed;
+    --ink-dim: #94a3b8;
+    --accent: #e8930c;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --info: #60a5fa;
+    --purple: #c084fc;
+    --teal: #2dd4bf;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.65; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .glass { background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(20px); border-radius: 14px; }
+  .panel-h { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
+  .section-num { font-size: 11px; font-weight: 700; color: var(--ink-dim); letter-spacing: 0.12em; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .pill-rm { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-good { background: rgba(52,211,153,0.15); color: var(--good); }
+  .pill-info { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-purple { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .pill-teal { background: rgba(45,212,191,0.15); color: var(--teal); }
+  .pill-bad { background: rgba(248,113,113,0.15); color: var(--bad); }
+  .grad-fade { background: linear-gradient(180deg, rgba(15,15,26,0.85) 0%, rgba(12,12,20,1) 100%); }
+  .stat-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat-card .label { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .stat-card .meta { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .code-block { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.7; overflow-x: auto; white-space: pre; color: var(--ink); }
+  .code-inline { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.35); padding: 2px 6px; border-radius: 4px; font-size: 0.92em; color: var(--accent); }
+  .ring-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+  .ring-card.r1 { border-left: 3px solid var(--info); }
+  .ring-card.r2 { border-left: 3px solid var(--purple); }
+  .ring-card.r3 { border-left: 3px solid var(--teal); }
+  .layer-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; height: 100%; }
+  .guarantee-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 18px; height: 100%; border-top: 3px solid var(--good); }
+  .role-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 18px; height: 100%; }
+  .role-card.staff { border-top: 3px solid var(--info); }
+  .role-card.agent { border-top: 3px solid var(--purple); }
+  .role-card.owner { border-top: 3px solid var(--accent); }
+  .failure-card { background: rgba(248,113,113,0.04); border: 1px solid rgba(248,113,113,0.25); border-left: 3px solid var(--bad); padding: 12px 14px; border-radius: 8px; }
+  .step-list { counter-reset: step; }
+  .step-list li { counter-increment: step; list-style: none; position: relative; padding-left: 36px; margin-bottom: 10px; line-height: 1.55; }
+  .step-list li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%; background: rgba(232,147,12,0.12); color: var(--accent); font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; }
+  .quote { border-left: 3px solid var(--accent); padding: 14px 18px; background: rgba(232,147,12,0.04); border-radius: 0 8px 8px 0; font-size: 16px; line-height: 1.6; font-weight: 500; color: var(--ink); }
+  .btn { padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; transition: all 0.15s; cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.04); color: var(--ink); }
+  .btn:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.18); }
+  .btn-accent { background: rgba(232,147,12,0.15); border-color: rgba(232,147,12,0.35); color: var(--accent); }
+  .btn-accent:hover { background: rgba(232,147,12,0.25); border-color: rgba(232,147,12,0.55); }
+  .copied-toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--good); color: #062a18; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 100; }
+  .copied-toast.show { opacity: 1; }
+  .nav-toc { position: sticky; top: 16px; }
+  .toc-link { display: block; font-size: 12px; color: var(--ink-dim); padding: 4px 8px; border-radius: 4px; text-decoration: none; transition: all 0.1s; }
+  .toc-link:hover { color: var(--ink); background: rgba(255,255,255,0.04); }
+  details > summary { cursor: pointer; user-select: none; list-style: none; padding: 8px 0; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: '▸'; display: inline-block; margin-right: 8px; transition: transform 0.15s; color: var(--ink-dim); }
+  details[open] > summary::before { transform: rotate(90deg); }
+  h2 { font-size: 22px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; margin-bottom: 8px; }
+  h3 { font-size: 16px; font-weight: 700; color: var(--ink); margin: 20px 0 8px; letter-spacing: -0.005em; }
+  p { color: rgba(228,228,237,0.85); }
+  .prose p { margin-bottom: 12px; }
+  .prose ul { margin: 8px 0 14px 0; padding-left: 22px; color: rgba(228,228,237,0.85); }
+  .prose ul li { margin-bottom: 6px; line-height: 1.55; }
+  .prose strong { color: var(--ink); font-weight: 600; }
+
+  /* Print */
+  @media print {
+    body { background: #fff !important; color: #111 !important; }
+    .glass { background: #fff !important; border: 1px solid #d4d4d4 !important; box-shadow: none !important; backdrop-filter: none !important; page-break-inside: avoid; }
+    .panel-h { color: #b86c00 !important; }
+    .stat-card, .ring-card, .layer-card, .guarantee-card, .role-card, .failure-card { background: #fafafa !important; border-color: #d4d4d4 !important; }
+    .code-block { background: #f4f4f4 !important; color: #111 !important; border-color: #d0d0d0 !important; }
+    .code-inline { background: #f0f0f0 !important; color: #b86c00 !important; }
+    .quote { background: #fff8ec !important; border-left-color: #b86c00 !important; color: #111 !important; }
+    .grad-fade { background: #fff !important; }
+    p, li, .prose p, .prose li { color: #1f1f1f !important; }
+    h2, h3 { color: #111 !important; }
+    .btn, .copied-toast, .nav-toc, .no-print { display: none !important; }
+    header { border-bottom: 1px solid #d4d4d4 !important; }
+    footer { border-top: 1px solid #d4d4d4 !important; color: #555 !important; }
+    .pill-rm { background: #fff3e0 !important; color: #b86c00 !important; }
+    .pill-info { background: #e6f0ff !important; color: #1f5cbf !important; }
+    .pill-good { background: #e8f8ee !important; color: #0e7a3f !important; }
+    .pill-purple { background: #f3eaff !important; color: #6b3ab1 !important; }
+    .pill-teal { background: #e6f8f5 !important; color: #0a7062 !important; }
+    .pill-bad { background: #ffe6e6 !important; color: #b81818 !important; }
+    section { page-break-inside: avoid; }
+    a { color: #1f5cbf !important; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="border-b border-white/5 px-6 py-5 grad-fade">
+  <div class="max-w-[1200px] mx-auto flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <div class="flex items-center gap-3 mb-1">
+        <span class="text-2xl">⚙</span>
+        <h1 class="text-xl font-bold tracking-tight">Coordinate Operations Architecture (COA)</h1>
+        <span class="pill pill-rm">Doctrine · v1.0 · May 2026</span>
+      </div>
+      <p class="text-sm text-white/60 max-w-3xl"><em>A doctrine for building dumb-proof, agent-directed business operations.</em> Distilled from the NCH L2 canonical-coding work — transferable to any operational domain.</p>
+    </div>
+    <div class="flex items-center gap-2 text-xs no-print">
+      <a href="/docs/COA-Doctrine.pdf" class="btn btn-accent">↓ Download PDF</a>
+      <a href="/ops/visual/nch-l2-canonical/" class="btn">↗ NCH L2 (Reference)</a>
+      <a href="/ops/visual/nch-l1/" class="btn">↗ NCH L1</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1200px] mx-auto px-6 py-8 space-y-6">
+
+  <!-- TOP BANNER STATS -->
+  <section class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div class="stat-card"><div class="label">Doctrine sections</div><div class="value">11</div><div class="meta">thesis → discipline</div></div>
+    <div class="stat-card"><div class="label">Architectural rings</div><div class="value">3</div><div class="meta">Entity · Action · Event</div></div>
+    <div class="stat-card"><div class="label">Build stack layers</div><div class="value">7</div><div class="meta">codes → deployment</div></div>
+    <div class="stat-card"><div class="label">Guarantees</div><div class="value">4</div><div class="meta">no missed · no wrong · no interp · auto-future</div></div>
+    <div class="stat-card"><div class="label">Build-discipline steps</div><div class="value">12</div><div class="meta">strict order, no skips</div></div>
+  </section>
+
+  <!-- SECTION 1 — THESIS -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 1</div>
+    <h2>The Thesis</h2>
+    <h3 class="panel-h" style="margin-top:12px">Operations as Coordinates</h3>
+    <div class="prose">
+      <p>Every operation in a business is a POINT in a finite mathematical space. The canonical code for an operation is not a <em>description</em> of the operation — it IS the operation, expressed in coordinates. The business itself, viewed through this lens, is the bounded set of all possible coordinates plus a constraint set that prunes impossibilities.</p>
+      <p>When this is true, the entire stack above — data storage, validation, agents, automation, communications, UI — collapses into a single deterministic flow with mathematical guarantees instead of human heuristics. There is no interpretation step between data and action. There is no garbage. There is no missed event.</p>
+      <p>The traditional way to operate a small business is to hire judgement: a manager who <em>interprets</em> a situation ("this vendor is unreliable, route around them"; "this customer wants extra rice, charge ₹20 more") and emits an action. Judgement is expensive, inconsistent across people, and impossible to audit. COA replaces judgement with coordinates. Coordinates are cheap, consistent, and trivially auditable. The cost of installing the coordinate system is paid once; the cost of judgement is paid forever.</p>
+      <p>The doctrine below is what it took for a single operator to design and ship that coordinate system across a multi-brand restaurant business in two weeks.</p>
+    </div>
+  </section>
+
+  <!-- SECTION 2 — OPERATION SPACE -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 2</div>
+    <h2>The Operation Space</h2>
+    <p class="text-sm text-white/70 mb-4">Define the operation space <strong class="text-white">O</strong> as the Cartesian product of a small number of fully-enumerated dimensions:</p>
+
+    <div class="code-block text-base text-center mb-4">O = ENTITY × LAYER × CHANNEL × V_SHAPE × IDENTITY_REF × ...</div>
+
+    <div class="prose">
+      <p>Each dimension is a closed set with finite cardinality. <em>Closed</em> means: every possible value is enumerated up front, and every observed value either belongs to the set or triggers a structured failure. <em>Finite</em> means: you can count the elements. If a dimension is open-ended (free-text vendor names, free-text customer requests), it is not yet a dimension — it is a confession that the dimension has not been discovered.</p>
+    </div>
+
+    <h3 class="panel-h" style="margin-top:18px">Examples from the NCH foundation</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <div class="layer-card"><strong>ENTITY</strong> ∈ {POS Product, Raw Material, Vendor, State}</div>
+      <div class="layer-card"><strong>LAYER</strong> ∈ {L (Loose vendor), B (Branded SKU), I (In-house produced)}</div>
+      <div class="layer-card"><strong>V_SHAPE</strong> ∈ {V1a, V1b, V2, V3, V4, V5} — payment behaviour profiles</div>
+      <div class="layer-card"><strong>CHANNEL</strong> implied by LAYER + V_SHAPE (e.g. L+V1 = cash to vendor; B+V3 = quick-commerce)</div>
+      <div class="layer-card md:col-span-2"><strong>IDENTITY_REF</strong> is free-form within its slot (vendor abbreviation, brand-SKU, recipe reference) — but the <em>shape</em> of the slot is fixed</div>
+    </div>
+
+    <h3 class="panel-h" style="margin-top:18px">The Constraint Set C — Impossibilities Pruned</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <div class="failure-card"><strong>L + V3</strong> — invalid (quick-commerce only sells defined SKUs)</div>
+      <div class="failure-card"><strong>B without BRAND-SKU</strong> — invalid (branded must carry a SKU)</div>
+      <div class="failure-card"><strong>I-only as RM</strong> — invalid (production state, not a raw material)</div>
+      <div class="failure-card"><strong>Swiggy + Cash</strong> — invalid (aggregator pays via settlement, not counter)</div>
+    </div>
+
+    <p class="text-sm text-white/70 mt-4">A valid operation is a point in <span class="code-inline">O ∩ C</span>. Validation is <em>constructive</em>, not corrective: the system literally cannot represent an invalid operation, so there is nothing to "clean up" later.</p>
+  </section>
+
+  <!-- SECTION 3 — FOUR GUARANTEES -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 3</div>
+    <h2>The Four Guarantees</h2>
+    <p class="text-sm text-white/70 mb-5">Once O is defined and C is enforced, four guarantees emerge for free:</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="guarantee-card">
+        <div class="text-xs text-white/40 mono mb-1">G1</div>
+        <h3 style="margin-top:0">No Data Missed</h3>
+        <p class="text-sm text-white/75">Every real-world operation MUST produce a code. If a real operation cannot be expressed as a code, the space is incomplete — and we know exactly which dimension is missing. Incompleteness is <em>detectable</em>, not silent. The system surfaces "I cannot encode this" rather than swallowing the operation into a free-text bucket.</p>
+      </div>
+      <div class="guarantee-card">
+        <div class="text-xs text-white/40 mono mb-1">G2</div>
+        <h3 style="margin-top:0">No Data Wrong</h3>
+        <p class="text-sm text-white/75">Codes outside <span class="code-inline">O ∩ C</span> are rejected at creation. Garbage data is impossible by construction. The system cannot lie even if a human enters wrong inputs — validation sits in the math itself, not in afterthought rules. Staff trying to record a B-layer purchase without a SKU sees the form refuse to submit.</p>
+      </div>
+      <div class="guarantee-card">
+        <div class="text-xs text-white/40 mono mb-1">G3</div>
+        <h3 style="margin-top:0">No Data Interpreted</h3>
+        <p class="text-sm text-white/75">The code IS the meaning. Downstream agents read coordinates, never natural language. There is no interpretation step where humans translate intent. <span class="code-inline">NCH-AM-MLK / L / V1-PRABHU</span> means exactly one thing — buffalo milk, loose, paid at delivery, vendor Prabhu — and every subsystem reads exactly that one thing.</p>
+      </div>
+      <div class="guarantee-card">
+        <div class="text-xs text-white/40 mono mb-1">G4</div>
+        <h3 style="margin-top:0">Future Coverage Automatic</h3>
+        <p class="text-sm text-white/75">Tomorrow's new vendor, new brand, new in-house production, new outlet — none of these are "new features." They are new points in the existing operation space. No schema migration. No code rewrite. The system absorbs new reality without architectural change.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4 — THREE NESTED RINGS -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 4</div>
+    <h2>The Architecture · Three Nested Rings</h2>
+    <p class="text-sm text-white/70 mb-5">The operation space is built in three nested rings, each one fully closing before the next opens.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="ring-card r1">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-info">RING 1</span>
+          <span class="text-xs text-white/40">atomic units</span>
+        </div>
+        <h3 style="margin-top:6px">Entity</h3>
+        <p class="text-sm text-white/75 mb-3">Each entity type has its own dimensional space.</p>
+        <ul class="text-xs text-white/70 space-y-1.5 list-disc pl-4">
+          <li><strong>POS Product</strong> ∈ (Brand × Shape × Item)</li>
+          <li><strong>Raw Material</strong> ∈ (Brand × Type × Sourcing-profile × Item)</li>
+          <li><strong>Vendor</strong> ∈ (V-Shape × Channel × What × Comm × Identity)</li>
+          <li><strong>State</strong> ∈ (Brand × Type × Recipe-ref × Item)</li>
+        </ul>
+        <p class="text-xs text-white/55 mt-3 pt-3 border-t border-white/10">Foundation. Every higher ring references entities by canonical code.</p>
+      </div>
+
+      <div class="ring-card r2">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-purple">RING 2</span>
+          <span class="text-xs text-white/40">entity sequences</span>
+        </div>
+        <h3 style="margin-top:6px">Action</h3>
+        <p class="text-sm text-white/75 mb-3">A sequence of entity points — a trajectory crossing multiple entity spaces.</p>
+        <div class="code-block mb-2" style="font-size:11.5px">RM_CODE / LAYER / V_SHAPE-SUPPLIER[-BRAND-SKU]</div>
+        <div class="code-block" style="font-size:11.5px">POS_CODE / CHANNEL / PAYMENT_METHOD / TICKET_REF</div>
+        <p class="text-xs text-white/55 mt-3 pt-3 border-t border-white/10">Tuples in the product space, validated at construction.</p>
+      </div>
+
+      <div class="ring-card r3">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-teal">RING 3</span>
+          <span class="text-xs text-white/40">action compositions</span>
+        </div>
+        <h3 style="margin-top:6px">Event</h3>
+        <p class="text-sm text-white/75 mb-3">A composition of actions. User-visible business activities.</p>
+        <ul class="text-xs text-white/70 space-y-1.5 list-disc pl-4">
+          <li>Sale event = consumption action + cash-flow action</li>
+          <li>Purchase event = inventory-increment + payment-trigger</li>
+          <li>Payment timing depends on V-shape coordinate</li>
+        </ul>
+        <p class="text-xs text-white/55 mt-3 pt-3 border-t border-white/10">Events are composed; actions are atomic.</p>
+      </div>
+    </div>
+
+    <div class="failure-card mt-4 text-sm">
+      <strong>The build order is non-negotiable.</strong> Entity must be locked before Action can be defined. Action must be locked before Event can be enumerated. Most failed implementations fail by trying to define events first and then back-filling entities — at which point the entity ring is shaped by event convenience and stops being a proper basis.
+    </div>
+  </section>
+
+  <!-- SECTION 5 — BUILD STACK -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 5</div>
+    <h2>The Build Stack · Seven Layers</h2>
+    <p class="text-sm text-white/70 mb-5">The doctrine is realized through this technology stack:</p>
+
+    <div class="space-y-3">
+      <div class="layer-card">
+        <div class="flex items-baseline gap-3 mb-1"><span class="pill pill-rm">L1</span><h3 style="margin:0">Foundation · Canonical Codes</h3></div>
+        <ul class="text-sm text-white/75 list-disc pl-5 space-y-1">
+          <li>Codes auto-derived from structured input (radio buttons, dropdowns, toggles)</li>
+          <li>Codes are read-only displays — never typed</li>
+          <li>Stored in normalized tables with tight constraint validation</li>
+          <li>Code generation is bijective: same inputs → same code, always</li>
+        </ul>
+      </div>
+      <div class="layer-card">
+        <div class="flex items-baseline gap-3 mb-1"><span class="pill pill-rm">L2</span><h3 style="margin:0">Data · Structured Storage</h3></div>
+        <ul class="text-sm text-white/75 list-disc pl-5 space-y-1">
+          <li>D1 / Postgres / SQLite as canonical store</li>
+          <li>Schema mirrors the dimensional structure</li>
+          <li>No free-text columns where structured columns suffice</li>
+          <li>Audit trails on every write</li>
+        </ul>
+      </div>
+      <div class="layer-card">
+        <div class="flex items-baseline gap-3 mb-1"><span class="pill pill-rm">L3</span><h3 style="margin:0">Agents · Claude API</h3></div>
+        <ul class="text-sm text-white/75 list-disc pl-5 space-y-1">
+          <li>Claude API agents read coordinates and emit decisions</li>
+          <li>Agents do NOT interpret reality; they reason over the structured space</li>
+          <li>Agent outputs are themselves canonical codes (recommendation = proposed action code)</li>
+          <li>Agent prompts include the operation space definition so the agent self-validates</li>
+        </ul>
+      </div>
+      <div class="layer-card">
+        <div class="flex items-baseline gap-3 mb-1"><span class="pill pill-rm">L4</span><h3 style="margin:0">Triggers · Crons</h3></div>
+        <ul class="text-sm text-white/75 list-disc pl-5 space-y-1">
+          <li>Cloudflare Worker crons fire periodic checks</li>
+          <li>Each cron is a coordinate query: "find all RMs where stock &lt; threshold AND last replenishment &gt; X days"</li>
+          <li>Cron output → agent input → action emission</li>
+        </ul>
+      </div>
+      <div class="layer-card">
+        <div class="flex items-baseline gap-3 mb-1"><span class="pill pill-rm">L5</span><h3 style="margin:0">Communications</h3></div>
+        <ul class="text-sm text-white/75 list-disc pl-5 space-y-1">
+          <li>WABA (WhatsApp Business API) for opt-in customer + staff messaging</li>
+          <li>Exotel for SMS + voice</li>
+          <li>Email for owner-level escalations</li>
+          <li>Templates per event type, with constrained response options</li>
+        </ul>
+      </div>
+      <div class="layer-card">
+        <div class="flex items-baseline gap-3 mb-1"><span class="pill pill-rm">L6</span><h3 style="margin:0">UI</h3></div>
+        <ul class="text-sm text-white/75 list-disc pl-5 space-y-1">
+          <li>Dumb-proof staff interfaces: scan → prompt → tap</li>
+          <li>No free-text input where structured input works</li>
+          <li>All decisions made by agents; UI only displays the agent's instruction</li>
+          <li>Owner sees a different UI: exception dashboards, not operation entry</li>
+        </ul>
+      </div>
+      <div class="layer-card">
+        <div class="flex items-baseline gap-3 mb-1"><span class="pill pill-rm">L7</span><h3 style="margin:0">Custom Deployment</h3></div>
+        <ul class="text-sm text-white/75 list-disc pl-5 space-y-1">
+          <li>Cloudflare Pages for static UIs</li>
+          <li>Cloudflare Workers for APIs and crons</li>
+          <li>Composio for cross-platform tool access</li>
+          <li>Claude Code as the operator's interface to the system itself</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6 — OPERATING MODEL -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 6</div>
+    <h2>The Operating Model · Three Roles</h2>
+    <p class="text-sm text-white/70 mb-5">Three roles, sharply separated. Discretion = inconsistency = system fragility.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="role-card staff">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-info">STAFF</span>
+          <span class="text-xs text-white/40">dumb executors</span>
+        </div>
+        <h3 style="margin-top:4px">Operations Layer</h3>
+        <ul class="text-xs text-white/75 space-y-1.5 list-disc pl-4 mt-2">
+          <li><strong>Tasks:</strong> scan codes, tap buttons, confirm prompts, escalate exceptions</li>
+          <li><strong>Cannot:</strong> type free-form, make routing decisions, override agents</li>
+          <li><strong>Authority:</strong> zero discretionary authority over operations</li>
+          <li><strong>Why:</strong> discretion = inconsistency = fragility</li>
+        </ul>
+      </div>
+      <div class="role-card agent">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-purple">AGENT</span>
+          <span class="text-xs text-white/40">intelligence layer</span>
+        </div>
+        <h3 style="margin-top:4px">Decision Layer</h3>
+        <ul class="text-xs text-white/75 space-y-1.5 list-disc pl-4 mt-2">
+          <li><strong>Tasks:</strong> read coordinates, decide actions, route alerts, emit instructions</li>
+          <li><strong>Cannot:</strong> write free-text, execute irreversible actions without escalation</li>
+          <li><strong>Authority:</strong> full operational discretion within C; escalates outside</li>
+        </ul>
+      </div>
+      <div class="role-card owner">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-rm">OWNER</span>
+          <span class="text-xs text-white/40">architect + escalation</span>
+        </div>
+        <h3 style="margin-top:4px">System Layer</h3>
+        <ul class="text-xs text-white/75 space-y-1.5 list-disc pl-4 mt-2">
+          <li><strong>Tasks:</strong> handle agent-flagged exceptions, evolve O, audit</li>
+          <li><strong>Visibility:</strong> dashboards filtered to flagged-and-unhandled + system metrics</li>
+          <li><strong>Authority:</strong> full system authority; sole modifier of O</li>
+          <li><strong>Interface:</strong> Claude Code chat for evolution; mobile dashboards for exceptions</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="panel-h" style="margin-top:24px">Escalation Chain</h3>
+    <div class="grid grid-cols-1 md:grid-cols-6 gap-2 text-xs">
+      <div class="layer-card text-center"><div class="text-white/50 mono mb-1">1</div>Action attempted</div>
+      <div class="layer-card text-center"><div class="text-white/50 mono mb-1">2</div>Validation passes → silent log</div>
+      <div class="layer-card text-center"><div class="text-white/50 mono mb-1">3</div>Validation fails → agent retries</div>
+      <div class="layer-card text-center"><div class="text-white/50 mono mb-1">4</div>Retry fails → WABA to staff</div>
+      <div class="layer-card text-center"><div class="text-white/50 mono mb-1">5</div>SLA missed → SMS / email to owner</div>
+      <div class="layer-card text-center"><div class="text-white/50 mono mb-1">6</div>Owner sees only step 5 outcomes</div>
+    </div>
+    <p class="text-sm text-white/65 mt-4 italic">The owner's bandwidth scales as the system absorbs more reality, not as volume grows.</p>
+  </section>
+
+  <!-- SECTION 7 — BUILD DISCIPLINE -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 7</div>
+    <h2>The Build Discipline · 12 Steps in Strict Order</h2>
+    <p class="text-sm text-white/70 mb-5">When applying COA to a new business workflow, the build follows these steps in strict order:</p>
+
+    <ol class="step-list text-sm text-white/80">
+      <li><strong>Name the entities</strong> — every kind of "thing" in the domain</li>
+      <li><strong>Define dimensions per entity</strong> — closed sets with finite cardinality</li>
+      <li><strong>Codify entities as canonical codes</strong> — auto-derived from structured input</li>
+      <li><strong>Define actions</strong> — enumerate action types and their dimensional traversals</li>
+      <li><strong>Define events</strong> — enumerate event types and the actions composing them</li>
+      <li><strong>Build the constraint set C</strong> — list every impossible combination</li>
+      <li><strong>Compute |O ∩ C|</strong> — confirm bounded and tractable cardinality</li>
+      <li><strong>Build agents to read coordinates</strong> — bounded by the operation space</li>
+      <li><strong>Build crons to trigger agents</strong> — coordinate queries on schedule</li>
+      <li><strong>Build comms for escalation</strong> — templates per event type</li>
+      <li><strong>Build dumb-proof staff UI</strong> — computed from canonical codes</li>
+      <li><strong>Iterate by widening the space, not adding rules</strong> — new reality = new dimensions or new entity types</li>
+    </ol>
+
+    <p class="text-sm text-white/65 mt-5">The discipline of step 12 is what separates COA from typical "let's add a flag" software evolution. When new reality appears, the question is never "should we add a special case?" — it is always "what dimension or entity type does this reveal?"</p>
+  </section>
+
+  <!-- SECTION 8 — FAILURE MODES -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 8</div>
+    <h2>The Failure Modes</h2>
+    <p class="text-sm text-white/70 mb-5">What happens when COA discipline is violated:</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <div class="failure-card"><strong>Skipping the Entity ring</strong> → actions reference free-text instead of coordinates → agents can't reason → reports are garbage</div>
+      <div class="failure-card"><strong>Skipping the Constraint Set</strong> → invalid combinations slip through → physics breaks → downstream queries return incoherent results</div>
+      <div class="failure-card"><strong>Skipping the Completeness Check</strong> → real operations get recorded as "miscellaneous" → hidden dimension missing → gaps compound silently</div>
+      <div class="failure-card"><strong>Skipping Coordinate-as-Data Discipline</strong> → free-text creeps in → human interpretation returns → agents become useless → staff dependency returns</div>
+      <div class="failure-card md:col-span-2"><strong>Skipping the Build Order</strong> → agents make decisions on incomplete data → UIs need rewrite when the space evolves</div>
+    </div>
+
+    <p class="text-sm text-white/65 mt-4">Each failure mode is recoverable but expensive. The cheapest fix is always to retreat to the last fully-closed ring and re-build forward.</p>
+  </section>
+
+  <!-- SECTION 9 — TRANSFER PACK -->
+  <section class="glass p-6">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <div class="section-num">SECTION 9</div>
+        <h2>The Transfer Pack</h2>
+        <p class="text-sm text-white/70">Paste this block into any new conversation to transfer the doctrine into that context.</p>
+      </div>
+      <button id="copyPackBtn" class="btn btn-accent no-print">⎘ Copy Personalization Pack</button>
+    </div>
+
+    <pre id="coaPack" class="code-block mt-4" style="font-size:12px; line-height:1.65">=== COORDINATE OPERATIONS ARCHITECTURE (COA) ===
+
+I operate by a doctrine called Coordinate Operations Architecture.
+The premise: every operation in my business is a POINT in a finite
+mathematical space. The canonical code for an operation IS the
+operation, expressed in coordinates.
+
+Define the operation space O = ENTITY × LAYER × CHANNEL × V_SHAPE
+× IDENTITY_REF × ... — each dimension a closed set with finite
+cardinality. Define a constraint set C that prunes impossible
+combinations. A valid operation is a point in O ∩ C.
+
+Architecture has three nested rings:
+  Ring 1 — Entity (atomic units, each with its own dimensional space)
+  Ring 2 — Action (sequences of entity points — trajectories)
+  Ring 3 — Event (compositions of actions)
+
+Build order is non-negotiable: Entity → Action → Event.
+
+Stack: Canonical Codes → Structured Storage (D1/Postgres) →
+Claude API agents (read coordinates, emit codes) → Cron triggers
+(coordinate queries) → WABA/Exotel/Email comms → Dumb-proof UI
+(scan/tap, no free-text) → Cloudflare Pages + Workers deployment.
+
+Operating model:
+  Staff = dumb executors (scan, tap, confirm — no discretion)
+  Agents = intelligence layer (read coordinates, decide actions)
+  Owner = exception handler + system architect (sole modifier of O)
+
+Four guarantees emerge for free:
+  1. No Data Missed (incompleteness detectable)
+  2. No Data Wrong (invalid codes rejected at creation)
+  3. No Data Interpreted (code IS meaning, no translation step)
+  4. Future Coverage Automatic (new reality = new point in same space)
+
+When applying COA to a new workflow, follow this strict order:
+  1. Name the entities
+  2. Define dimensions per entity (closed, finite)
+  3. Codify entities as canonical codes (auto-derived from structured input)
+  4. Define actions (dimensional traversals)
+  5. Define events (compositions of actions)
+  6. Build constraint set C
+  7. Compute |O ∩ C|
+  8. Build agents bounded by the space
+  9. Build crons as coordinate queries
+  10. Build comms templates per event type
+  11. Build dumb-proof staff UI computed from codes
+  12. Iterate by widening the space, not adding special-case rules
+
+The closing test: every time you are about to add a free-text
+field, stop and ask "is this a coordinate I haven't dimensioned
+yet?" If yes, dimension it. If no, you don't actually need the field.
+
+=== END COA CONTEXT ===</pre>
+  </section>
+
+  <!-- SECTION 10 — WHY POSSIBLE NOW -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 10</div>
+    <h2>Why This Is Possible Now</h2>
+    <p class="text-sm text-white/70 mb-4">This architecture has historically been impractical for a single operator because:</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-5">
+      <div class="failure-card"><strong>Custom UI per entity</strong> — expensive to design and maintain</div>
+      <div class="failure-card"><strong>Custom validation code</strong> — brittle, scattered across the codebase</div>
+      <div class="failure-card"><strong>Cross-domain reasoning</strong> — required ML or rule engines</div>
+    </div>
+
+    <p class="text-sm text-white/70 mb-4">Three recent developments make COA tractable for one person:</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+      <div class="layer-card" style="border-top:3px solid var(--accent)">
+        <h3 style="margin-top:0">1. Claude Code</h3>
+        <p class="text-sm text-white/75 mt-1">The operator builds, modifies, and deploys the system through natural-language conversation. The build itself becomes a coordinate operation.</p>
+      </div>
+      <div class="layer-card" style="border-top:3px solid var(--info)">
+        <h3 style="margin-top:0">2. Cloudflare Workers + Pages + D1</h3>
+        <p class="text-sm text-white/75 mt-1">Zero-infra deployment on free tier, sufficient for small-to-medium business scale.</p>
+      </div>
+      <div class="layer-card" style="border-top:3px solid var(--purple)">
+        <h3 style="margin-top:0">3. Claude API + structured outputs</h3>
+        <p class="text-sm text-white/75 mt-1">Agents that emit canonical codes natively, with built-in coordinate validation.</p>
+      </div>
+    </div>
+
+    <p class="text-sm text-white/65 mt-5">The combination collapses what used to be a 6-month engineering effort into a 2-week solo build. The cost of the doctrine is now paid in days of disciplined thinking, not months of engineering payroll.</p>
+  </section>
+
+  <!-- SECTION 11 — CLOSING DISCIPLINE -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 11</div>
+    <h2>The Closing Discipline</h2>
+    <p class="text-sm text-white/70 mb-4">COA is not a tool. It is a doctrine. Every decision in the build asks one question:</p>
+
+    <div class="quote my-5">
+      <strong>"Is this operation a coordinate in my space, or am I about to add a free-text field?"</strong>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <div class="layer-card" style="border-top:3px solid var(--good)">
+        <strong class="text-white">If it's a coordinate</strong> — proceed.
+      </div>
+      <div class="layer-card" style="border-top:3px solid var(--warn)">
+        <strong class="text-white">If it's a free-text field</strong> — stop, dimension it, then proceed.
+      </div>
+    </div>
+
+    <p class="text-sm text-white/70 mt-5 leading-relaxed">The discipline is what makes the math hold. The math is what makes the system dumb-proof. The dumb-proofness is what minimizes the operator's dependency on others — and ultimately is what scales a business beyond the operator's personal bandwidth.</p>
+  </section>
+
+</main>
+
+<footer class="border-t border-white/5 px-6 py-5 text-xs text-white/40 text-center">
+  Coordinate Operations Architecture (COA) · Doctrine v1.0 · Distilled from the
+  <a href="/ops/visual/nch-l2-canonical/" class="text-white/60 hover:text-white">NCH L2 canonical-code work</a> ·
+  <a href="/docs/COA-Doctrine.pdf" class="text-white/60 hover:text-white">PDF</a> ·
+  HN Hotels Pvt Ltd · May 2026
+</footer>
+
+<div id="copiedToast" class="copied-toast">Personalization pack copied to clipboard</div>
+
+<script>
+  document.getElementById('copyPackBtn')?.addEventListener('click', () => {
+    const text = document.getElementById('coaPack').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      const toast = document.getElementById('copiedToast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1800);
+    }).catch(err => {
+      console.error('copy failed', err);
+      // fallback: select the pre
+      const range = document.createRange();
+      range.selectNode(document.getElementById('coaPack'));
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+    });
+  });
+</script>
+
+</body>
+</html>
