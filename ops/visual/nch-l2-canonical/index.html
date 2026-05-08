@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NCH L2 · Canonical Code Architecture</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c14;
+    --panel: rgba(22,22,31,0.7);
+    --border: rgba(255,255,255,0.08);
+    --ink: #e4e4ed;
+    --ink-dim: #94a3b8;
+    --accent: #e8930c;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --info: #60a5fa;
+    --purple: #c084fc;
+    --teal: #2dd4bf;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.55; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .glass { background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(20px); border-radius: 14px; }
+  .panel-h { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .pill-l { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-b { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .pill-i { background: rgba(45,212,191,0.15); color: var(--teal); }
+  .pill-rm { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-pos { background: rgba(232,147,12,0.20); color: var(--accent); }
+  .pill-v1 { background: rgba(52,211,153,0.15); color: var(--good); }
+  .pill-v2 { background: rgba(251,191,36,0.15); color: var(--warn); }
+  .pill-v3 { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .pill-v4 { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-v5 { background: rgba(244,114,182,0.15); color: #f472b6; }
+  .pill-bad { background: rgba(248,113,113,0.15); color: var(--bad); }
+  .grad-fade { background: linear-gradient(180deg, rgba(15,15,26,0.85) 0%, rgba(12,12,20,1) 100%); }
+  .stat-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat-card .label { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .stat-card .meta { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .code-block { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.7; }
+  .code-rm { color: var(--accent); font-weight: 600; }
+  .code-l { color: var(--info); font-weight: 700; }
+  .code-b { color: var(--purple); font-weight: 700; }
+  .code-i { color: var(--teal); font-weight: 700; }
+  .code-v { color: var(--good); font-weight: 600; }
+  .code-vendor { color: #f472b6; font-weight: 500; }
+  .code-sku { color: var(--warn); font-weight: 500; }
+  .code-recipe { color: var(--teal); font-weight: 500; }
+  .scenario-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .scenario-card.l { border-left: 3px solid var(--info); }
+  .scenario-card.b { border-left: 3px solid var(--purple); }
+  .scenario-card.i { border-left: 3px solid var(--teal); }
+  .layer-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .layer-card.l { border-top: 3px solid var(--info); }
+  .layer-card.b { border-top: 3px solid var(--purple); }
+  .layer-card.i { border-top: 3px solid var(--teal); }
+  .arrow { color: var(--ink-dim); font-weight: 600; }
+  .impossible { background: rgba(248,113,113,0.04); border: 1px solid rgba(248,113,113,0.25); border-left: 3px solid var(--bad); padding: 10px 12px; border-radius: 8px; }
+  table.codes { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.codes th, table.codes td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.codes th { color: var(--ink-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  .scroll-x { overflow-x: auto; }
+  details > summary { cursor: pointer; user-select: none; list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: '▸'; display: inline-block; margin-right: 8px; transition: transform 0.15s; color: var(--ink-dim); }
+  details[open] > summary::before { transform: rotate(90deg); }
+</style>
+</head>
+<body>
+
+<header class="border-b border-white/5 px-6 py-5 grad-fade">
+  <div class="max-w-[1400px] mx-auto flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <div class="flex items-center gap-3 mb-1">
+        <span class="text-2xl">⚙</span>
+        <h1 class="text-xl font-bold tracking-tight">NCH L2 · Canonical Code Architecture</h1>
+        <span class="pill pill-rm">Foundation · 37 RMs · 33 POS · 5 V-shapes · 3 Layers</span>
+      </div>
+      <p class="text-sm text-white/60 max-w-3xl">Every operational reality at NCH reduces to one canonical action code. The code self-describes the operation — agents read codes, not reality. Tomorrow's scenarios slot into the same architecture without any rebuild.</p>
+    </div>
+    <div class="flex items-center gap-3 text-xs">
+      <a href="/ops/visual/nch-l1/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">↗ NCH-L1 (Inflow)</a>
+      <a href="/ops/visual/nch-rm-map/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">↗ RM Mindmap</a>
+      <a href="https://docs.google.com/spreadsheets/d/1Xsr8BgjDRBV5-RYdL3j7LMAF-dzSXHwAuilNAQCuzzk/edit" target="_blank" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">↗ Foundation Sheet</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
+
+  <!-- TOP STATS -->
+  <section class="grid grid-cols-2 md:grid-cols-6 gap-3">
+    <div class="stat-card"><div class="label">RM count</div><div class="value">37</div><div class="meta">canonical NCH raw materials</div></div>
+    <div class="stat-card"><div class="label">POS products</div><div class="value">33</div><div class="meta">selling SKUs</div></div>
+    <div class="stat-card"><div class="label">Sourcing layers</div><div class="value">3</div><div class="meta">L · B · I</div></div>
+    <div class="stat-card"><div class="label">V-shapes</div><div class="value">5</div><div class="meta">V1–V5 payment behaviours</div></div>
+    <div class="stat-card"><div class="label">Action codes</div><div class="value">∞</div><div class="meta">composable, no schema change</div></div>
+    <div class="stat-card"><div class="label">Anomaly guards</div><div class="value">4</div><div class="meta">impossible combos blocked</div></div>
+  </section>
+
+  <!-- THE GRAMMAR -->
+  <section class="glass p-5">
+    <h2 class="panel-h">The L2 Action Code Grammar</h2>
+    <p class="text-sm text-white/70 mb-4 max-w-3xl">A single grammar that captures every purchase or production event. The code itself encodes the intelligence — agents downstream (L3 payment, L4 inventory, Price-Intel) read the code, never reality.</p>
+    <div class="code-block text-center text-base mb-4">
+      <span class="code-rm">{RM_CODE}</span> <span class="arrow">/</span> <span class="code-l">{LAYER}</span> <span class="arrow">/</span> <span class="code-v">{V_SHAPE}</span><span class="arrow">-</span><span class="code-vendor">{SUPPLIER}</span><span class="text-white/40">[</span><span class="arrow">-</span><span class="code-sku">{BRAND-SKU}</span><span class="text-white/40">]</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+      <div class="stat-card">
+        <div class="label" style="color:var(--accent)">RM_CODE</div>
+        <div class="mono mt-1" style="font-size:13px">NCH-AM-MLK</div>
+        <div class="meta mt-2">Identity of what's being sourced. Already locked in Section 2 of foundation. Read by L4 inventory.</div>
+      </div>
+      <div class="stat-card">
+        <div class="label" style="color:var(--info)">LAYER</div>
+        <div class="mono mt-1" style="font-size:13px">L · B · I</div>
+        <div class="meta mt-2">L = Loose vendor. B = Branded SKU. I = In-house produced. Read by Price-Intel for research stack.</div>
+      </div>
+      <div class="stat-card">
+        <div class="label" style="color:var(--good)">V_SHAPE</div>
+        <div class="mono mt-1" style="font-size:13px">V1 · V2 · V3 · V4 · V5</div>
+        <div class="meta mt-2">Payment behaviour. Already locked in Section 4. Read by L3 to fire payment at the right moment.</div>
+      </div>
+      <div class="stat-card">
+        <div class="label" style="color:#f472b6">SUPPLIER</div>
+        <div class="mono mt-1" style="font-size:13px">PRABHU · ZEPTO · …</div>
+        <div class="meta mt-2">Vendor abbreviation. Cleaned, uppercased. For I-layer this slot becomes the recipe identifier.</div>
+      </div>
+      <div class="stat-card">
+        <div class="label" style="color:var(--warn)">BRAND-SKU</div>
+        <div class="mono mt-1" style="font-size:13px">AMUL-5L · TATA-1KG</div>
+        <div class="meta mt-2">Only present when LAYER=B. Brand abbreviation + pack size. Lets Price-Intel scrape exact SKU on Hyperpure / Blinkit / Zepto.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE 3 LAYERS -->
+  <section class="glass p-5">
+    <h2 class="panel-h">The Three Sourcing Layers · L · B · I</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+      <div class="layer-card l">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-l">L · LOOSE</span>
+          <span class="text-xs text-white/40">vendor-direct</span>
+        </div>
+        <div class="text-sm text-white/80 mb-3">Bought from a vendor in unbranded form. No SKU. Quantity in standard units (kg, L, pcs).</div>
+        <div class="code-block mb-3" style="font-size:12px">
+          <span class="code-rm">NCH-AM-MLK</span> / <span class="code-l">L</span> / <span class="code-v">V1</span>-<span class="code-vendor">PRABHU</span>
+        </div>
+        <div class="text-xs text-white/60 mb-2"><strong class="text-white/80">Examples:</strong></div>
+        <ul class="text-xs text-white/60 space-y-1 list-disc pl-4">
+          <li>Buffalo Milk from Prabhu (₹55/L)</li>
+          <li>Loose tea powder from Afeefa</li>
+          <li>Buns from Sangeetha bakery (V2 credit)</li>
+          <li>Samosa raw from Sameer Hamza</li>
+        </ul>
+        <div class="text-xs mt-3 pt-3 border-t border-white/10">
+          <span class="text-white/40">Price-Intel research:</span> <span class="text-info" style="color:var(--info)">B2B portals</span> (IndiaMart, mandi rates, wholesale catalogs)
+        </div>
+      </div>
+
+      <div class="layer-card b">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-b">B · BRANDED</span>
+          <span class="text-xs text-white/40">defined SKU</span>
+        </div>
+        <div class="text-sm text-white/80 mb-3">A specific brand × specific pack-size SKU. Bought from either a vendor who stocks it, or quick-commerce platform.</div>
+        <div class="code-block mb-3" style="font-size:12px">
+          <span class="code-rm">NCH-AM-MLK</span> / <span class="code-b">B</span> / <span class="code-v">V3</span>-<span class="code-vendor">ZEPTO</span>-<span class="code-sku">AMUL-1L</span>
+        </div>
+        <div class="text-xs text-white/60 mb-2"><strong class="text-white/80">Examples:</strong></div>
+        <ul class="text-xs text-white/60 space-y-1 list-disc pl-4">
+          <li>Amul Butter 500g from Zepto</li>
+          <li>Tata Tea Premium 1kg from Hyperpure</li>
+          <li>Bisleri 500ml × case from BigBasket</li>
+          <li>Same SKU, different supplier = different code</li>
+        </ul>
+        <div class="text-xs mt-3 pt-3 border-t border-white/10">
+          <span class="text-white/40">Price-Intel research:</span> <span style="color:var(--purple)">D2C / Quick-Commerce</span> (Hyperpure, Blinkit, Zepto, BigBasket)
+        </div>
+      </div>
+
+      <div class="layer-card i">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-i">I · IN-HOUSE</span>
+          <span class="text-xs text-white/40">recipe-produced</span>
+        </div>
+        <div class="text-sm text-white/80 mb-3">Produced internally from upstream RMs through a recipe. No vendor — the kitchen itself is the source.</div>
+        <div class="code-block mb-3" style="font-size:12px">
+          <span class="code-rm">NCH-AS-BUN</span> / <span class="code-i">I</span> / <span class="code-recipe">R-MDA+YST+BTR+SGR</span>
+        </div>
+        <div class="text-xs text-white/60 mb-2"><strong class="text-white/80">Examples (current + future):</strong></div>
+        <ul class="text-xs text-white/60 space-y-1 list-disc pl-4">
+          <li>Milk batch (80L raw → 75L boiled chai-base) — already live</li>
+          <li>Decoction (tea + spices → 9L) — already live</li>
+          <li>Bun bake (future): maida + yeast + butter + sugar</li>
+          <li>Biscuit bake (future): maida + ghee + sugar + spice</li>
+        </ul>
+        <div class="text-xs mt-3 pt-3 border-t border-white/10">
+          <span class="text-white/40">L4 effect:</span> <span style="color:var(--teal)">consumes upstream RMs</span>, <span style="color:var(--good)">produces output RM</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SCENARIO WALKTHROUGHS -->
+  <section class="glass p-5">
+    <h2 class="panel-h">Scenario Walkthroughs · Same RM, Different Operational Realities → Different Action Codes</h2>
+    <p class="text-sm text-white/70 mb-4 max-w-3xl">Each scenario below is a real or hypothetical NCH operational reality. The architecture stays identical — only the code changes.</p>
+
+    <!-- SCENARIO 1: BUFFALO MILK -->
+    <details open class="mb-4">
+      <summary class="text-sm font-semibold text-white/90 mb-2">Scenario 1 · Buffalo Milk has 4 sourcing realities (one RM, four codes)</summary>
+      <div class="ml-6 mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="scenario-card l">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-l">L</span><span class="pill pill-v1">V1</span><span class="text-xs text-white/40">today's primary</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-AM-MLK</span> / <span class="code-l">L</span> / <span class="code-v">V1</span>-<span class="code-vendor">PRABHU</span></div>
+          <div class="text-xs text-white/60 mt-2">Daily route delivery from Prabhu. ₹55/L. Cash settles same day. 51 POs in 180 days.</div>
+        </div>
+        <div class="scenario-card l">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-l">L</span><span class="pill pill-v4">V4</span><span class="text-xs text-white/40">emergency backup</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-AM-MLK</span> / <span class="code-l">L</span> / <span class="code-v">V4</span>-<span class="code-vendor">RPRASAD</span></div>
+          <div class="text-xs text-white/60 mt-2">Walk-in cash from R Prasad when Prabhu can't supply. ₹80/L (premium). 1 PO observed.</div>
+        </div>
+        <div class="scenario-card b">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-b">B</span><span class="pill pill-v3">V3</span><span class="text-xs text-white/40">future · quick commerce</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-AM-MLK</span> / <span class="code-b">B</span> / <span class="code-v">V3</span>-<span class="code-vendor">ZEPTO</span>-<span class="code-sku">AMUL-1L</span></div>
+          <div class="text-xs text-white/60 mt-2">Amul 1L pouch ordered on Zepto. Payment fires before delivery. Different sequence to L1/V4.</div>
+        </div>
+        <div class="scenario-card b">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-b">B</span><span class="pill pill-v1">V1</span><span class="text-xs text-white/40">future · vendor SKU</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-AM-MLK</span> / <span class="code-b">B</span> / <span class="code-v">V1</span>-<span class="code-vendor">SHARIFF</span>-<span class="code-sku">AMUL-5L</span></div>
+          <div class="text-xs text-white/60 mt-2">Same Amul, different SKU + different supplier. Sharief stocks both loose milk and branded pouches.</div>
+        </div>
+      </div>
+      <div class="ml-6 mt-3 text-xs text-white/50"><span class="text-white/70">⇢ One RM. Four codes. Four different L3 payment flows. Two different price-intel research stacks.</span></div>
+    </details>
+
+    <!-- SCENARIO 2: BUN -->
+    <details open class="mb-4">
+      <summary class="text-sm font-semibold text-white/90 mb-2">Scenario 2 · Buy a bun vs bake a bun (the in-house question)</summary>
+      <div class="ml-6 mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="scenario-card l">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-l">L</span><span class="pill pill-v2">V2</span><span class="text-xs text-white/40">today · direct buy on credit</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-AS-BUN</span> / <span class="code-l">L</span> / <span class="code-v">V2</span>-<span class="code-vendor">SANGEETHA</span></div>
+          <div class="text-xs text-white/60 mt-2">Buns delivered daily by Sangeetha bakery. Bills monthly. Pay-on-due. PO → Receive → Pay sequence.</div>
+        </div>
+        <div class="scenario-card i">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-i">I</span><span class="text-xs text-white/40">future · in-house bake</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-AS-BUN</span> / <span class="code-i">I</span> / <span class="code-recipe">R-MDA+YST+BTR+SGR</span></div>
+          <div class="text-xs text-white/60 mt-2">Recipe consumes maida + yeast + butter + sugar from stock. No vendor, no V-shape. L3 untouched. L4 sees both consumption (upstream) and production (output).</div>
+        </div>
+      </div>
+      <div class="ml-6 mt-3 p-3 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-white/60">
+        <strong class="text-white/80">Architectural insight:</strong> The same RM (<span class="mono code-rm">NCH-AS-BUN</span>) can have its STOCK created by either a purchase (L/B-layer) or a production event (I-layer). Both events end with bun in inventory. L3 fires only for purchases. L4 reconciles both.
+      </div>
+    </details>
+
+    <!-- SCENARIO 3: BISCUIT -->
+    <details class="mb-4">
+      <summary class="text-sm font-semibold text-white/90 mb-2">Scenario 3 · Buy biscuits vs bake biscuits</summary>
+      <div class="ml-6 mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="scenario-card l">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-l">L</span><span class="pill pill-v1">V1</span><span class="text-xs text-white/40">today · loose buy</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-DM-OSB</span> / <span class="code-l">L</span> / <span class="code-v">V1</span>-<span class="code-vendor">NISARCHA</span></div>
+          <div class="text-xs text-white/60 mt-2">Osmania biscuits loose from Nisarcha (Krispy Eats). Daily route.</div>
+        </div>
+        <div class="scenario-card b">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-b">B</span><span class="pill pill-v1">V1</span><span class="text-xs text-white/40">today · branded box</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-DM-OSB</span> / <span class="code-b">B</span> / <span class="code-v">V1</span>-<span class="code-vendor">NILOUFER</span>-<span class="code-sku">BOX-100G</span></div>
+          <div class="text-xs text-white/60 mt-2">Niloufer-branded 100g box for retail resale. Same RM, different SKU presentation.</div>
+        </div>
+        <div class="scenario-card i">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-i">I</span><span class="text-xs text-white/40">future · in-house bake</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-DM-OSB</span> / <span class="code-i">I</span> / <span class="code-recipe">R-MDA+GHE+SGR+SPC</span></div>
+          <div class="text-xs text-white/60 mt-2">Bake in-house from maida + ghee + sugar + spice. Still feeds same RM stock.</div>
+        </div>
+      </div>
+    </details>
+
+    <!-- SCENARIO 4: BUTTER FOR BUN MASKA -->
+    <details class="mb-4">
+      <summary class="text-sm font-semibold text-white/90 mb-2">Scenario 4 · Branded butter for Bun Maska — POS product chains back to RM action code</summary>
+      <div class="ml-6 mt-3 space-y-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="scenario-card b">
+            <div class="flex items-center gap-2 mb-2"><span class="pill pill-pos">POS</span><span class="text-xs text-white/40">end product</span></div>
+            <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-S5-BMK</span></div>
+            <div class="text-xs text-white/60 mt-2">Bun Maska sold over counter, ₹50. POS code already locked in foundation.</div>
+          </div>
+          <div class="scenario-card b">
+            <div class="flex items-center gap-2 mb-2"><span class="pill pill-b">B</span><span class="pill pill-v3">V3</span><span class="text-xs text-white/40">RM action code</span></div>
+            <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-AM-BTR</span> / <span class="code-b">B</span> / <span class="code-v">V3</span>-<span class="code-vendor">ZEPTO</span>-<span class="code-sku">AMUL-500G</span></div>
+            <div class="text-xs text-white/60 mt-2">Amul Butter 500g via Zepto. Payment fires before receive. Stocks RM <span class="mono code-rm">NCH-AM-BTR</span>.</div>
+          </div>
+        </div>
+        <div class="text-xs text-white/60 ml-1">
+          When a Bun Maska is sold, L4 reduces stock of <span class="mono code-rm">NCH-AS-BUN</span> by 1 piece + <span class="mono code-rm">NCH-AM-BTR</span> by ~15g (per recipe in <span class="mono">rm_recipes</span>). Replenishment of butter happens via the action code on the right.
+        </div>
+      </div>
+    </details>
+
+    <!-- SCENARIO 5: WATER -->
+    <details class="mb-4">
+      <summary class="text-sm font-semibold text-white/90 mb-2">Scenario 5 · Water has 3 totally different operational realities</summary>
+      <div class="ml-6 mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="scenario-card l">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-l">L</span><span class="pill pill-v5">V5</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-AM-WTR</span> / <span class="code-l">L</span> / <span class="code-v">V5</span>-<span class="code-vendor">GOLDENRAJESH</span></div>
+          <div class="text-xs text-white/60 mt-2">Water dispenser standing arrangement. Bill arrives, no PO. Pay-on-due. The only V5 in NCH today.</div>
+        </div>
+        <div class="scenario-card b">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-b">B</span><span class="pill pill-v3">V3</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-AM-WTR</span> / <span class="code-b">B</span> / <span class="code-v">V3</span>-<span class="code-vendor">BLINKIT</span>-<span class="code-sku">BISLERI-500ML-CASE</span></div>
+          <div class="text-xs text-white/60 mt-2">Bottled water case via Blinkit. For customer service.</div>
+        </div>
+        <div class="scenario-card l">
+          <div class="flex items-center gap-2 mb-2"><span class="pill pill-l">L</span><span class="pill pill-v1">V1</span></div>
+          <div class="code-block" style="font-size:13px"><span class="code-rm">NCH-AM-WTR</span> / <span class="code-l">L</span> / <span class="code-v">V1</span>-<span class="code-vendor">FILTERWATER</span></div>
+          <div class="text-xs text-white/60 mt-2">Filter Water Supplier daily route. Same V-shape as Prabhu (V1) but for water.</div>
+        </div>
+      </div>
+    </details>
+
+  </section>
+
+  <!-- THE FLEXIBILITY PROMISE -->
+  <section class="glass p-5">
+    <h2 class="panel-h">The Flexibility Promise · Tomorrow's Scenarios Already Handled</h2>
+    <p class="text-sm text-white/70 mb-4 max-w-3xl">No new schema. No new tables. Each scenario is just a new instance of the existing grammar.</p>
+    <div class="scroll-x">
+      <table class="codes" style="font-size:12.5px">
+        <thead>
+          <tr><th>Future scenario</th><th>Canonical code (proposed)</th><th>What changes</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Hyperpure becomes primary milk supplier during monsoon</td>
+            <td class="mono"><span class="code-rm">NCH-AM-MLK</span> / <span class="code-b">B</span> / <span class="code-v">V3</span>-<span class="code-vendor">HYPERPURE</span>-<span class="code-sku">AMUL-1L</span></td>
+            <td>Just a primary/backup flag flip. Code-grammar untouched.</td>
+          </tr>
+          <tr>
+            <td>NCH starts baking its own buns + biscuits</td>
+            <td class="mono"><span class="code-rm">NCH-AS-BUN</span> / <span class="code-i">I</span> / <span class="code-recipe">R-…</span></td>
+            <td>I-layer activates. Sangeetha row stays as backup.</td>
+          </tr>
+          <tr>
+            <td>Cardamom becomes a credit vendor (Sangeetha-style)</td>
+            <td class="mono"><span class="code-rm">HN-AM-CRD</span> / <span class="code-l">L</span> / <span class="code-v">V2</span>-<span class="code-vendor">NEWVENDOR</span></td>
+            <td>V2 V-shape activates. Bill + payment flow auto-applies.</td>
+          </tr>
+          <tr>
+            <td>NCH adds packaged Iyengar bakery branded biscuits</td>
+            <td class="mono"><span class="code-rm">NCH-DM-OSB</span> / <span class="code-b">B</span> / <span class="code-v">V1</span>-<span class="code-vendor">IYENGAR</span>-<span class="code-sku">BOX-200G</span></td>
+            <td>New SKU under existing RM. Same code-grammar.</td>
+          </tr>
+          <tr>
+            <td>Open second NCH outlet — same RM list, different vendors</td>
+            <td class="mono"><span class="code-rm">NCH2-AM-MLK</span> / <span class="code-l">L</span> / <span class="code-v">V1</span>-<span class="code-vendor">NEWPRABHU</span></td>
+            <td>Brand prefix shifts (NCH2). Everything else mirrors.</td>
+          </tr>
+          <tr>
+            <td>Switch from Zepto to Blinkit for the same Amul SKU</td>
+            <td class="mono"><span class="code-rm">NCH-AM-MLK</span> / <span class="code-b">B</span> / <span class="code-v">V3</span>-<span class="code-vendor">BLINKIT</span>-<span class="code-sku">AMUL-1L</span></td>
+            <td>Supplier slot changes. SKU + V-shape unchanged.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ANOMALY GUARDS -->
+  <section class="glass p-5">
+    <h2 class="panel-h">Anomaly Guards · Impossible Combinations the System Catches</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="impossible">
+        <div class="text-xs font-bold mb-1" style="color:var(--bad)">L + V3 = ERROR</div>
+        <div class="mono text-xs mb-2"><span class="code-rm">NCH-AM-MLK</span> / <span class="code-l">L</span> / <span class="code-v">V3</span>-<span class="code-vendor">ZEPTO</span></div>
+        <div class="text-xs text-white/60">Quick-commerce only sells defined SKUs. There is no "loose" on Zepto. Code = error, must be B.</div>
+      </div>
+      <div class="impossible">
+        <div class="text-xs font-bold mb-1" style="color:var(--bad)">B without BRAND-SKU</div>
+        <div class="mono text-xs mb-2"><span class="code-rm">NCH-AM-MLK</span> / <span class="code-b">B</span> / <span class="code-v">V3</span>-<span class="code-vendor">ZEPTO</span></div>
+        <div class="text-xs text-white/60">Branded purchases must carry the SKU identifier. Missing SKU = malformed code.</div>
+      </div>
+      <div class="impossible">
+        <div class="text-xs font-bold mb-1" style="color:var(--bad)">L with BRAND-SKU</div>
+        <div class="mono text-xs mb-2"><span class="code-rm">NCH-AM-MLK</span> / <span class="code-l">L</span> / <span class="code-v">V1</span>-<span class="code-vendor">PRABHU</span>-<span class="code-sku">AMUL-1L</span></div>
+        <div class="text-xs text-white/60">Loose has no SKU by definition. SKU present means the layer is wrong — should be B.</div>
+      </div>
+      <div class="impossible">
+        <div class="text-xs font-bold mb-1" style="color:var(--bad)">I without recipe</div>
+        <div class="mono text-xs mb-2"><span class="code-rm">NCH-AS-BUN</span> / <span class="code-i">I</span> / —</div>
+        <div class="text-xs text-white/60">In-house must reference a recipe (R-…). Missing = system can't compute upstream consumption.</div>
+      </div>
+      <div class="impossible">
+        <div class="text-xs font-bold mb-1" style="color:var(--bad)">V5 with PO record</div>
+        <div class="mono text-xs mb-2"><span class="code-rm">NCH-AM-WTR</span> / <span class="code-l">L</span> / <span class="code-v">V5</span>-<span class="code-vendor">GOLDENRAJESH</span> + PO</div>
+        <div class="text-xs text-white/60">Standing invoices have no PO step. PO present means it should be V2 instead.</div>
+      </div>
+      <div class="impossible">
+        <div class="text-xs font-bold mb-1" style="color:var(--bad)">RM_CODE not in registry</div>
+        <div class="mono text-xs mb-2"><span class="code-rm">NCH-XX-???</span> / <span class="code-l">L</span> / <span class="code-v">V1</span>-<span class="code-vendor">PRABHU</span></div>
+        <div class="text-xs text-white/60">RM must exist in the 37 canonical RM list. New RM = registry update first, then action code.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONNECTIONS -->
+  <section class="glass p-5">
+    <h2 class="panel-h">What Each Code Piece Does Downstream</h2>
+    <div class="scroll-x">
+      <table class="codes">
+        <thead>
+          <tr><th>Code piece</th><th>Read by</th><th>Decision driven</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono code-rm">RM_CODE</td>
+            <td>L4 Inventory Settlement</td>
+            <td>What stock changed; multiplied by qty × unit conversion</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="code-l">L</span> / <span class="code-b">B</span> / <span class="code-i">I</span> (LAYER)</td>
+            <td>Price-Intel agent</td>
+            <td>Which research stack: B2B (loose) vs D2C (branded) vs none (in-house)</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="code-v">V1</span></td>
+            <td>L3 Cash/Bank-Out</td>
+            <td>Pay same day · cash · no credit clock · no upfront</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="code-v">V2</span></td>
+            <td>L3 Cash/Bank-Out</td>
+            <td>Hold credit clock · pay on due-date from terms</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="code-v">V3</span></td>
+            <td>L3 Cash/Bank-Out</td>
+            <td>Payment already fired (pre-pay) · receive validates qty</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="code-v">V4</span></td>
+            <td>L3 Cash/Bank-Out</td>
+            <td>One-off · pay at receive · no recurring relationship</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="code-v">V5</span></td>
+            <td>L3 Cash/Bank-Out</td>
+            <td>No PO · bill arrives monthly · pay-on-due</td>
+          </tr>
+          <tr>
+            <td class="mono code-vendor">SUPPLIER</td>
+            <td>Vendor master · L3 reconciliation</td>
+            <td>Who to pay · which contact · which payment terms apply</td>
+          </tr>
+          <tr>
+            <td class="mono code-sku">BRAND-SKU</td>
+            <td>Price-Intel agent</td>
+            <td>Exact SKU to scrape on Hyperpure / Blinkit / Zepto for live price</td>
+          </tr>
+          <tr>
+            <td class="mono code-recipe">RECIPE (I-layer only)</td>
+            <td>L4 Inventory Settlement</td>
+            <td>Upstream RMs to consume + ratios; output RM to produce</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CLOSING -->
+  <section class="glass p-5">
+    <h2 class="panel-h">Why This Architecture Holds</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-white/70">
+      <div>
+        <div class="font-semibold text-white/90 mb-2">No reality interpretation needed.</div>
+        <div class="text-white/60 text-xs">Agents read codes. Codes carry intelligence. The system never has to "look at" the real-world operation — the code already encodes it.</div>
+      </div>
+      <div>
+        <div class="font-semibold text-white/90 mb-2">Tomorrow's scenarios = today's grammar.</div>
+        <div class="text-white/60 text-xs">Adding Hyperpure, in-house bakery, second outlet, new credit vendor, new branded SKU — none change the architecture. Just new instances of the same grammar.</div>
+      </div>
+      <div>
+        <div class="font-semibold text-white/90 mb-2">Errors visible at the code layer.</div>
+        <div class="text-white/60 text-xs">Impossible combinations (L+V3, B without SKU, I without recipe) fail validation at code-creation, before they pollute downstream agents.</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="border-t border-white/5 px-6 py-4 text-xs text-white/40 text-center">
+  NCH L2 Canonical Code Architecture · foundation visual · companion to <a href="/ops/visual/nch-l1/" class="text-white/60 hover:text-white">NCH-L1</a> and the <a href="https://docs.google.com/spreadsheets/d/1Xsr8BgjDRBV5-RYdL3j7LMAF-dzSXHwAuilNAQCuzzk/edit" target="_blank" class="text-white/60 hover:text-white">Foundation Sheet</a>
+</footer>
+
+</body>
+</html>
