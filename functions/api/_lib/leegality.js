@@ -95,12 +95,13 @@ export async function leegalityCreateDocument(env, opts) {
   if (!signers || !signers.length) return { ok: false, error: 'signers[] required' };
 
   const wfId = workflowId || env.LEEGALITY_WORKFLOW_ID;
-  if (!wfId) return { ok: false, error: 'LEEGALITY_WORKFLOW_ID not configured (set workflow ID from Leegality dashboard)' };
+  // workflowId is OPTIONAL — Leegality supports direct-upload mode where signers
+  // are passed inline. If user has set up a workflow, we use that; otherwise
+  // direct mode lets us send any PDF without pre-configuration.
 
   const cb = callbackUrl || `${env.PUBLIC_BASE_URL || 'https://hnhotels.in'}/api/leegality-webhook`;
 
   const body = {
-    workflowId: wfId,
     referenceId: referenceId || null,
     callbackUrl: cb,
     file: {
@@ -116,11 +117,22 @@ export async function leegalityCreateDocument(env, opts) {
       label: s.label || (i === 0 ? 'employee' : 'signer'),
     })),
   };
+  if (wfId) body.workflowId = wfId;
 
-  // POST /api/v3/document/upload  (most common Leegality endpoint)
-  // If your account uses a different path, override via env.LEEGALITY_UPLOAD_PATH
-  const path = env.LEEGALITY_UPLOAD_PATH || '/api/v3/document/upload';
-  const res = await leegalityRequest(env, { path, body });
+  // Try the configured upload path first; if 404, fall back to alternate path.
+  // Leegality's actual endpoint varies by tier — common paths:
+  //   /api/v3/document/upload (workflow mode)
+  //   /api/v3/document        (direct mode)
+  //   /api/v1/createDocument  (legacy)
+  const path = env.LEEGALITY_UPLOAD_PATH || (wfId ? '/api/v3/document/upload' : '/api/v3/document');
+  let res = await leegalityRequest(env, { path, body });
+
+  // Auto-fallback on 404 (path mismatch) — try the other common path
+  if (res.status === 404) {
+    const altPath = wfId ? '/api/v3/document' : '/api/v3/document/upload';
+    const altRes = await leegalityRequest(env, { path: altPath, body });
+    if (altRes.ok || altRes.status !== 404) res = altRes;
+  }
   if (!res.ok) {
     return {
       ok: false,
