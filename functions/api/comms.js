@@ -82,7 +82,9 @@ async function sendVoice(env, { phone, message_text, alert_id }) {
   // Exotel expects 10-digit local or 0XXXXXXXXXX format for India
   const toFormatted = digits.startsWith('91') ? '0' + digits.slice(2) : digits;
   const base = env.PUBLIC_BASE_URL || 'https://hnhotels.in';
-  const apiUrl = `https://${env.EXOTEL_API_KEY}:${env.EXOTEL_API_TOKEN}@api.exotel.com/v1/Accounts/${env.EXOTEL_SID}/Calls/connect.json`;
+  // CF Workers strips credentials from URL — use explicit Authorization header instead
+  const apiUrl = `https://api.exotel.com/v1/Accounts/${env.EXOTEL_SID}/Calls/connect.json`;
+  const basicAuth = 'Basic ' + btoa(`${env.EXOTEL_API_KEY}:${env.EXOTEL_API_TOKEN}`);
 
   const params = new URLSearchParams({
     From: env.EXOTEL_CALLER_ID,
@@ -98,7 +100,10 @@ async function sendVoice(env, { phone, message_text, alert_id }) {
 
   const res = await fetch(apiUrl, {
     method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      'Authorization': basicAuth,
+    },
     body: params.toString(),
   });
   const respText = await res.text();
