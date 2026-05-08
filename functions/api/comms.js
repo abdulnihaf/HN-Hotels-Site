@@ -1,172 +1,22 @@
 // /api/comms — central comms hub
-// Routes WABA (Meta Cloud API direct) + SMS (Fast2SMS) + Voice (Exotel) per brand and tier.
-// Logs every send to comms_outbox.
+// Thin route layer over functions/api/_lib/comms-core.js.
+// Channels: waba (Meta Cloud API) | sms (Fast2SMS) | voice (Exotel).
+// Logs every send to comms_outbox via the core module.
 
-const META_GRAPH_VERSION = 'v24.0';
-const FAST2SMS_BASE = 'https://www.fast2sms.com/dev/bulkV2';
+import {
+  normalizePhone,
+  sendWaba,
+  sendAndLog,
+  sendWithFallback,
+  runEscalation,
+  logOutbox,
+} from './_lib/comms-core.js';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
     headers: { 'content-type': 'application/json' },
   });
-
-function normalizePhone(raw) {
-  const digits = String(raw || '').replace(/\D/g, '');
-  if (digits.length === 10) return '91' + digits;
-  if (digits.length === 12 && digits.startsWith('91')) return digits;
-  if (digits.length === 13 && digits.startsWith('091')) return digits.slice(1);
-  return digits;
-}
-
-async function sendWaba(env, { brand, phone, template, vars = [], language = 'en' }) {
-  // Sparksol is the dedicated comms WABA for staff alerts (no customer flow on it).
-  // HE / NCH WABAs are reserved for customer order flows and untouched.
-  // Default brand for comms = sparksol.
-  const b = brand || 'sparksol';
-  const phoneId =
-    b === 'sparksol' ? env.WA_SPARKSOL_PHONE_ID :
-    b === 'nch'      ? env.WA_NCH_PHONE_ID :
-    b === 'he'       ? env.WA_HE_PHONE_ID  :
-    env.WA_SPARKSOL_PHONE_ID;
-  const token =
-    b === 'sparksol' ? (env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN) :
-    b === 'nch'      ? (env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN) :
-    b === 'he'       ? (env.WA_HE_TOKEN  || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN) :
-    (env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN);
-  if (!phoneId || !token) {
-    return { ok: false, status: 500, response: { error: 'WABA not configured for brand: ' + b } };
-  }
-
-  const to = normalizePhone(phone);
-  const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneId}/messages`;
-  const components = vars.length > 0
-    ? [{ type: 'body', parameters: vars.map(v => ({ type: 'text', text: String(v) })) }]
-    : [];
-  const body = {
-    messaging_product: 'whatsapp',
-    to,
-    type: 'template',
-    template: {
-      name: template,
-      language: { code: language },
-      components,
-    },
-  };
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  let respJson = null;
-  try { respJson = JSON.parse(text); } catch {}
-  return {
-    ok: res.ok,
-    status: res.status,
-    provider_msg_id: respJson?.messages?.[0]?.id || null,
-    response: respJson || text,
-  };
-}
-
-async function sendVoice(env, { phone, message_text, alert_id }) {
-  if (!env.EXOTEL_SID || !env.EXOTEL_API_KEY || !env.EXOTEL_API_TOKEN) {
-    return { ok: false, status: 500, response: { error: 'Exotel not configured' } };
-  }
-  if (!env.EXOTEL_CALLER_ID) {
-    return { ok: false, status: 500, response: { error: 'EXOTEL_CALLER_ID not set — assign ExoPhone first' } };
-  }
-
-  const digits = normalizePhone(phone);
-  // Exotel expects 10-digit local or 0XXXXXXXXXX format for India
-  const toFormatted = digits.startsWith('91') ? '0' + digits.slice(2) : digits;
-  const base = env.PUBLIC_BASE_URL || 'https://hnhotels.in';
-  // CF Workers strips credentials from URL — use explicit Authorization header instead
-  const apiUrl = `https://api.exotel.com/v1/Accounts/${env.EXOTEL_SID}/Calls/connect.json`;
-  const basicAuth = 'Basic ' + btoa(`${env.EXOTEL_API_KEY}:${env.EXOTEL_API_TOKEN}`);
-
-  const params = new URLSearchParams({
-    From: env.EXOTEL_CALLER_ID,
-    To: toFormatted,
-    CallerId: env.EXOTEL_CALLER_ID,
-    TimeLimit: '120',
-    Record: 'false',
-    StatusCallback: `${base}/api/comms-webhook?action=exotel-status`,
-    CustomField: alert_id ? String(alert_id) : '',
-    // Exotel fetches this URL when the call connects to get the ExoML call flow
-    Url: `${base}/api/comms-webhook?action=exotel-tts&text=${encodeURIComponent((message_text || 'HN Hotels alert').slice(0, 500))}&alert_id=${encodeURIComponent(alert_id || '')}`,
-  });
-
-  const res = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      'Authorization': basicAuth,
-    },
-    body: params.toString(),
-  });
-  const respText = await res.text();
-  let respJson = null;
-  try { respJson = JSON.parse(respText); } catch {}
-  return {
-    ok: res.ok,
-    status: res.status,
-    provider_msg_id: respJson?.Call?.Sid || null,
-    response: respJson || respText,
-  };
-}
-
-async function sendSms(env, { phone, message, route = 'q' }) {
-  if (!env.FAST2SMS_API_KEY) {
-    return { ok: false, status: 500, response: { error: 'FAST2SMS_API_KEY not set' } };
-  }
-  const to = normalizePhone(phone).replace(/^91/, '');
-  const url = new URL(FAST2SMS_BASE);
-  url.searchParams.set('authorization', env.FAST2SMS_API_KEY);
-  url.searchParams.set('route', route); // q = quick transactional, dlt = DLT-approved transactional
-  url.searchParams.set('numbers', to);
-  url.searchParams.set('message', message);
-  url.searchParams.set('flash', '0');
-
-  const res = await fetch(url.toString(), { method: 'GET' });
-  const text = await res.text();
-  let respJson = null;
-  try { respJson = JSON.parse(text); } catch {}
-  return {
-    ok: res.ok && (respJson?.return === true),
-    status: res.status,
-    provider_msg_id: respJson?.request_id ? String(respJson.request_id) : null,
-    response: respJson || text,
-  };
-}
-
-async function logOutbox(env, row) {
-  try {
-    await env.DB.prepare(`
-      INSERT INTO comms_outbox
-        (alert_id, tier, brand, channel, recipient_phone, template_name, template_vars,
-         body_text, status, provider_msg_id, provider_response, error_text, sent_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      row.alert_id || null,
-      row.tier || 'info',
-      row.brand || 'hq',
-      row.channel,
-      row.recipient_phone,
-      row.template_name || null,
-      row.template_vars ? JSON.stringify(row.template_vars) : null,
-      row.body_text || null,
-      row.status,
-      row.provider_msg_id || null,
-      row.provider_response ? JSON.stringify(row.provider_response) : null,
-      row.error_text || null,
-      row.sent_at || new Date().toISOString(),
-    ).run();
-  } catch (e) {
-    console.error('logOutbox failed:', e?.message || e);
-  }
-}
 
 function authOk(request, env, body) {
   const key = request.headers.get('x-dashboard-key') || body?.dashboard_key;
@@ -200,6 +50,15 @@ export async function onRequest(context) {
     });
   }
 
+  // ─── Cron-only escalation runner (different auth: CRON_TOKEN, not DASHBOARD_KEY) ─
+  if (action === 'cron-escalate' && request.method === 'POST') {
+    if (request.headers.get('x-cron-token') !== env.CRON_TOKEN) {
+      return json({ error: 'unauthorized' }, 401);
+    }
+    const r = await runEscalation(env);
+    return json({ ok: true, ...r });
+  }
+
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
 
   let body = {};
@@ -210,67 +69,93 @@ export async function onRequest(context) {
   if (action === 'send') {
     const {
       tier = 'info',
-      brand = 'hq',
+      brand = 'sparksol',
       channel,
       phone,
+      // waba
       template,
       vars = [],
+      language = 'en',
+      buttons = [],
+      // sms
       message,
+      route = 'q',
+      // voice
       message_text,
       alert_id,
     } = body;
 
     if (!channel || !phone) return json({ error: 'channel and phone required' }, 400);
-    const recipient = normalizePhone(phone);
 
-    let result;
-    let status = 'pending';
-    let errText = null;
-
-    try {
-      if (channel === 'waba') {
-        if (!template) return json({ error: 'template required for waba' }, 400);
-        result = await sendWaba(env, { brand, phone: recipient, template, vars });
-      } else if (channel === 'sms') {
-        if (!message) return json({ error: 'message required for sms' }, 400);
-        result = await sendSms(env, { phone: recipient, message });
-      } else if (channel === 'voice') {
-        if (!message_text) return json({ error: 'message_text required for voice' }, 400);
-        result = await sendVoice(env, { phone: recipient, message_text, alert_id });
-      } else {
-        return json({ error: `unsupported channel: ${channel}` }, 400);
-      }
-
-      status = result.ok ? 'sent' : 'failed';
-      if (!result.ok) {
-        errText = typeof result.response === 'string'
-          ? result.response
-          : JSON.stringify(result.response);
-      }
-    } catch (err) {
-      status = 'failed';
-      errText = err?.message || String(err);
-      result = { ok: false, status: 500, response: { error: errText } };
-    }
-
-    await logOutbox(env, {
-      alert_id, tier, brand, channel,
-      recipient_phone: recipient,
-      template_name: template,
-      template_vars: vars,
-      body_text: message,
-      status,
-      provider_msg_id: result.provider_msg_id,
-      provider_response: result.response,
-      error_text: errText,
+    const result = await sendAndLog(env, {
+      channel, phone, alert_id, tier, brand,
+      template, vars, language, buttons,
+      message, route,
+      message_text,
     });
+
+    if (result.error) return json({ error: result.error }, 400);
 
     return json({
       ok: result.ok,
-      status,
+      status: result.status,
       provider_msg_id: result.provider_msg_id,
+      outbox_id: result.outbox_id,
       response: result.response,
-    }, result.ok ? 200 : (result.status || 500));
+    }, result.ok ? 200 : 500);
+  }
+
+  // Send with multi-channel fallback (WABA → SMS → optionally Voice).
+  // Cron polls /api/comms?action=cron-escalate to fire next channel when ack window expires.
+  if (action === 'send-with-fallback') {
+    const {
+      tier = 'warn',
+      brand = 'sparksol',
+      phone,
+      alert_id,
+      // primary channel (always waba in current usage)
+      template, vars = [], language = 'en', buttons = [],
+      message_text,
+      // chain config
+      chain,                  // ['waba','sms','voice']
+      gap_minutes,            // { waba: 30, sms: 60 }
+      fallback_message_text,  // voice text (fallback)
+    } = body;
+    if (!phone) return json({ error: 'phone required' }, 400);
+    const r = await sendWithFallback(env, {
+      tier, brand, phone, alert_id,
+      template, vars, language, buttons,
+      message_text, chain, gap_minutes, fallback_message_text,
+      channel: (chain && chain[0]) || 'waba',
+    });
+    if (r.error) return json({ error: r.error }, 400);
+    return json(r, r.ok ? 200 : 500);
+  }
+
+  // Admin: update a DLT template's BSNL-assigned ID + status as approvals come in.
+  if (action === 'update-dlt-template') {
+    const { template_name, dlt_template_id, status = 'approved', body_template, header } = body;
+    if (!template_name || !dlt_template_id) {
+      return json({ error: 'template_name and dlt_template_id required' }, 400);
+    }
+    const sets = ['dlt_template_id = ?', 'status = ?', 'approved_at = datetime(\'now\')'];
+    const binds = [dlt_template_id, status];
+    if (body_template) { sets.push('body_template = ?'); binds.push(body_template); }
+    if (header)        { sets.push('header = ?');         binds.push(header); }
+    binds.push(template_name);
+    const r = await env.DB.prepare(
+      `UPDATE dlt_templates SET ${sets.join(', ')} WHERE template_name = ?`
+    ).bind(...binds).run();
+    return json({ ok: true, changes: r.meta?.changes || 0 });
+  }
+
+  // Admin: list DLT templates + approval status (for the Compliance/Ops tab)
+  if (action === 'list-dlt-templates') {
+    const rs = await env.DB.prepare(
+      `SELECT template_name, dlt_template_id, header, status, category, variable_count, notes
+         FROM dlt_templates ORDER BY status, template_name`
+    ).all();
+    return json(rs.results || []);
   }
 
   if (action === 'optin-send') {
@@ -336,8 +221,8 @@ export async function onRequest(context) {
   if (action === 'list-outbox') {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
     const rs = await env.DB.prepare(`
-      SELECT id, tier, brand, channel, recipient_phone, template_name, status,
-             provider_msg_id, sent_at, created_at, error_text
+      SELECT id, alert_id, tier, brand, channel, recipient_phone, template_name, status,
+             provider_msg_id, sent_at, delivered_at, acked_at, ack_action, created_at, error_text
       FROM comms_outbox ORDER BY id DESC LIMIT ?
     `).bind(limit).all();
     return json(rs.results || []);
