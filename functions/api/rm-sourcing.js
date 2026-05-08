@@ -51,12 +51,15 @@ function authPin(url) {
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * NCH/HN RM seed list — canonical codes (5-segment grammar with USAGE)
  *   {BRAND}-{TYPE}-{USAGE}-{SOURCING}-{ITEM}
- * USAGE: P (production only), R (retail only), Pr (prod primary, retail alt),
- *        Rp (retail primary, prod alt). At least one of P / R required.
+ * USAGE: P (production), R (retail), O (operational consumable).
+ *        Each letter appears at most once. Uppercase = primary, lowercase = alt.
+ *        Single (P/R/O), pair (Pr/Po/Rp/Ro/Op/Or), or triple (Pro/Por/Rpo/Rop/Opr/Orp).
+ *        At least one of P / R / O required.
  * Malai removed (state of production, not RM).
  * 3 raw items moved to Li (bought ready today, in-house possible tomorrow).
  * Tea Powder + Osmania Biscuit are dual-USAGE (Pr) — used in our service AND
  * resold as Niloufer-style retail packs.
+ * LPG is O (operational fuel — neither recipe-consumed nor sold).
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 const SEED_RMS = [
   // HN- cross-brand (12)
@@ -69,7 +72,7 @@ const SEED_RMS = [
   { rm_code: 'HN-AM-P-Lb-ALM', rm_name: 'Almonds' },
   { rm_code: 'HN-AM-P-Bl-BTR', rm_name: 'Butter' },
   { rm_code: 'HN-AM-P-B-SOD',  rm_name: 'Soda' },
-  { rm_code: 'HN-AM-P-B-LPG',  rm_name: 'LPG' },
+  { rm_code: 'HN-AM-O-B-LPG',  rm_name: 'LPG' },
   { rm_code: 'HN-AM-P-L-CHL',  rm_name: 'Charcoal' },
   { rm_code: 'HN-AM-P-L-GIN',  rm_name: 'Ginger' },
   // NCH- only
@@ -105,7 +108,7 @@ function parseRmCode(code) {
 }
 
 /* Compose canonical rm_code from structured parts.
- * USAGE: P, R, Pr, or Rp (case = primacy).
+ * USAGE: 1 uppercase primary {P,R,O} + 0-2 lowercase alts {p,r,o} (each letter at most once).
  * SOURCING: primary uppercase first, alternates lowercase sorted. */
 function composeRmCode({ brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr }) {
   if (!brand_prefix || !rm_type || !usage_profile || !sourcing_profile || !item_abbr) {
@@ -118,8 +121,10 @@ function composeRmCode({ brand_prefix, rm_type, usage_profile, sourcing_profile,
   if (!/^[ADP][MS]$/.test(rm_type)) {
     throw new Error(`Bad rm_type: ${rm_type} (expected e.g. AM/AS/DM/DS)`);
   }
-  if (!/^[PR][pr]?$/.test(usage_profile)) {
-    throw new Error(`Bad usage_profile: ${usage_profile} (expected P, R, Pr, or Rp)`);
+  // USAGE validation delegated to validateUsageProfile (handles P/R/O singletons, pairs, triples)
+  const usageErr = validateUsageProfile(usage_profile);
+  if (usageErr) {
+    throw new Error(`Bad usage_profile: ${usage_profile} — ${usageErr}`);
   }
   if (!/^[LBI][lbi]*$/.test(sourcing_profile)) {
     throw new Error(`Bad sourcing_profile: ${sourcing_profile}`);
@@ -131,23 +136,30 @@ function composeRmCode({ brand_prefix, rm_type, usage_profile, sourcing_profile,
 }
 
 /* Validate usage_profile.
- * Valid: P, R, Pr, Rp. Invalid: empty, PR, RP, pp, etc.
+ * Letter-set: {P, R, O} where each letter appears at most once.
+ * Format: 1 uppercase primary + 0-2 lowercase alternates.
+ * Valid: P, R, O, Pr, Po, Rp, Ro, Op, Or, Pro, Por, Rpo, Rop, Opr, Orp.
+ * Invalid: empty, PR, RP, pp, oP, Prr, Prro, X.
  * Returns null if valid, or a string error message if not. */
 function validateUsageProfile(usage) {
   if (!usage || typeof usage !== 'string') {
-    return 'USAGE profile is required. An RM must be at least one of P (production) or R (retail).';
+    return 'USAGE profile is required. An RM must be at least one of P (production), R (retail), or O (operational).';
   }
-  if (!/^[PR][pr]?$/.test(usage)) {
-    return 'Invalid USAGE profile. Must be P, R, Pr, or Rp.';
+  // First char must be uppercase P/R/O (the primary)
+  if (!/^[PRO]/.test(usage)) {
+    return 'USAGE profile must start with uppercase P, R, or O (the primary).';
   }
-  // Defensive: prevent same letter twice (e.g. Pp / Rr) — regex above already excludes these
-  // because the alternate is restricted to lowercase r|p (no uppercase) and primary excludes lowercase.
-  if (usage.length === 2) {
-    const primary = usage[0]; // P or R
-    const alt = usage[1].toUpperCase(); // P or R
-    if (primary === alt) {
-      return 'Invalid USAGE profile: primary letter cannot also appear as alternate.';
+  // Overall shape: 1 uppercase primary + 0-2 lowercase alts from {p,r,o}
+  if (!/^[PRO][pro]{0,2}$/.test(usage)) {
+    return 'Invalid USAGE profile. Format: 1 uppercase primary letter (P/R/O), optionally followed by 1-2 lowercase alternates.';
+  }
+  // No duplicates: each letter (case-insensitive) appears at most once
+  const seen = new Set();
+  for (const ch of usage.toUpperCase()) {
+    if (seen.has(ch)) {
+      return `USAGE profile contains duplicate letter '${ch}'. Each letter (P, R, O) appears at most once.`;
     }
+    seen.add(ch);
   }
   return null;
 }
