@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RM Canonical Shape Directory · HN Hotels</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c14;
+    --panel: rgba(22,22,31,0.7);
+    --border: rgba(255,255,255,0.08);
+    --ink: #e4e4ed;
+    --ink-dim: #94a3b8;
+    --accent: #e8930c;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --info: #60a5fa;
+    --purple: #c084fc;
+    --teal: #2dd4bf;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.65; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .glass { background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(20px); border-radius: 14px; }
+  .panel-h { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
+  .section-num { font-size: 11px; font-weight: 700; color: var(--ink-dim); letter-spacing: 0.12em; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .pill-rm { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-good { background: rgba(52,211,153,0.15); color: var(--good); }
+  .pill-info { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-purple { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .pill-teal { background: rgba(45,212,191,0.15); color: var(--teal); }
+  .pill-bad { background: rgba(248,113,113,0.15); color: var(--bad); }
+  .pill-warn { background: rgba(251,191,36,0.15); color: var(--warn); }
+  .pill-ghost { background: rgba(255,255,255,0.04); color: var(--ink-dim); }
+  .grad-fade { background: linear-gradient(180deg, rgba(15,15,26,0.85) 0%, rgba(12,12,20,1) 100%); }
+  .stat-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat-card .label { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .stat-card .meta { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .code-block { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.7; overflow-x: auto; white-space: pre; color: var(--ink); }
+  .code-inline { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.35); padding: 2px 6px; border-radius: 4px; font-size: 0.92em; color: var(--accent); }
+  .layer-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; height: 100%; }
+  .failure-card { background: rgba(248,113,113,0.04); border: 1px solid rgba(248,113,113,0.25); border-left: 3px solid var(--bad); padding: 12px 14px; border-radius: 8px; }
+  .ok-card { background: rgba(52,211,153,0.04); border: 1px solid rgba(52,211,153,0.25); border-left: 3px solid var(--good); padding: 12px 14px; border-radius: 8px; }
+  .quote { border-left: 3px solid var(--accent); padding: 14px 18px; background: rgba(232,147,12,0.04); border-radius: 0 8px 8px 0; font-size: 16px; line-height: 1.6; font-weight: 500; color: var(--ink); }
+  .btn { padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; transition: all 0.15s; cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.04); color: var(--ink); text-decoration: none; display: inline-block; }
+  .btn:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.18); }
+  .btn-accent { background: rgba(232,147,12,0.15); border-color: rgba(232,147,12,0.35); color: var(--accent); }
+  .btn-accent:hover { background: rgba(232,147,12,0.25); border-color: rgba(232,147,12,0.55); }
+  h2 { font-size: 22px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; margin-bottom: 8px; }
+  h3 { font-size: 16px; font-weight: 700; color: var(--ink); margin: 20px 0 8px; letter-spacing: -0.005em; }
+  p { color: rgba(228,228,237,0.85); }
+  .prose p { margin-bottom: 12px; }
+  .prose ul { margin: 8px 0 14px 0; padding-left: 22px; color: rgba(228,228,237,0.85); }
+  .prose ul li { margin-bottom: 6px; line-height: 1.55; }
+  .prose strong { color: var(--ink); font-weight: 600; }
+
+  /* Tables */
+  .dir-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .dir-table th, .dir-table td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .dir-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); font-weight: 600; background: rgba(255,255,255,0.02); }
+  .dir-table td.code-cell { font-family: 'JetBrains Mono', monospace; font-weight: 600; white-space: nowrap; }
+  .dir-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .dir-table .code-brand { color: var(--accent); }
+  .dir-table .code-type { color: var(--info); }
+  .dir-table .code-usage { color: var(--good); }
+  .dir-table .code-src { color: var(--purple); }
+  .dir-table .code-item { color: var(--ink); }
+  .dir-table .code-mute { color: var(--ink-dim); }
+
+  /* Anatomy */
+  .anatomy-row { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 600; text-align: center; padding: 18px 0; letter-spacing: 0.04em; }
+  .anatomy-row .seg-brand { color: var(--accent); }
+  .anatomy-row .seg-type { color: var(--info); }
+  .anatomy-row .seg-usage { color: var(--good); }
+  .anatomy-row .seg-src { color: var(--purple); }
+  .anatomy-row .seg-item { color: var(--ink); }
+  .anatomy-row .dash { color: var(--ink-dim); }
+  .seg-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px; height: 100%; }
+  .seg-card.brand { border-top: 3px solid var(--accent); }
+  .seg-card.type { border-top: 3px solid var(--info); }
+  .seg-card.usage { border-top: 3px solid var(--good); }
+  .seg-card.src { border-top: 3px solid var(--purple); }
+  .seg-card.item { border-top: 3px solid var(--ink); }
+  .seg-card .seg-name { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; }
+  .seg-card.brand .seg-name { color: var(--accent); }
+  .seg-card.type .seg-name { color: var(--info); }
+  .seg-card.usage .seg-name { color: var(--good); }
+  .seg-card.src .seg-name { color: var(--purple); }
+  .seg-card.item .seg-name { color: var(--ink); }
+  .seg-card .seg-pos { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .seg-card .seg-desc { font-size: 12px; color: rgba(228,228,237,0.78); margin-top: 8px; line-height: 1.5; }
+  .seg-card .seg-ex { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim); margin-top: 8px; }
+
+  /* Census tree */
+  .census-group { margin-bottom: 18px; }
+  .census-head { font-size: 13px; font-weight: 700; color: var(--accent); display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .census-head .count { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-dim); font-weight: 500; }
+  .census-sub { font-size: 12px; font-weight: 600; color: var(--info); margin: 8px 0 4px 16px; font-family: 'JetBrains Mono', monospace; }
+  .census-list { padding-left: 32px; margin: 0 0 8px; list-style: none; }
+  .census-list li { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 2px 0; line-height: 1.5; }
+  .census-list li a { color: var(--ink); text-decoration: none; }
+  .census-list li a:hover { color: var(--accent); }
+  .census-list li .rm-name { color: var(--ink-dim); margin-left: 6px; font-family: 'Inter', sans-serif; font-size: 12px; }
+
+  /* Walk-through */
+  .walk-block { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-size: 12px; line-height: 1.65; overflow-x: auto; }
+  .walk-block .lbl { color: var(--ink-dim); }
+  .walk-block .b { color: var(--accent); }
+  .walk-block .t { color: var(--info); }
+  .walk-block .u { color: var(--good); }
+  .walk-block .s { color: var(--purple); }
+  .walk-block .i { color: var(--ink); font-weight: 700; }
+  .walk-reads { font-family: 'Inter', sans-serif; font-size: 13px; color: rgba(228,228,237,0.85); padding: 10px 14px; background: rgba(232,147,12,0.04); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; margin-top: 10px; }
+
+  /* Quick links bar */
+  .qbar a { font-size: 12px; color: var(--ink-dim); padding: 6px 10px; border-radius: 6px; text-decoration: none; }
+  .qbar a:hover { color: var(--ink); background: rgba(255,255,255,0.04); }
+
+  /* Loading */
+  .loading { font-size: 12px; color: var(--ink-dim); font-style: italic; }
+</style>
+</head>
+<body>
+
+<header class="border-b border-white/5 px-6 py-5 grad-fade">
+  <div class="max-w-[1200px] mx-auto flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <div class="flex items-center gap-3 mb-1">
+        <span class="text-2xl">📚</span>
+        <h1 class="text-xl font-bold tracking-tight">Raw Material · Canonical Shape Directory</h1>
+        <span class="pill pill-rm">Reference · v1.0</span>
+      </div>
+      <p class="text-sm text-white/60 max-w-3xl">Every dimension · every value · every combination — with real examples drawn from the live editor.</p>
+    </div>
+    <div class="flex items-center gap-2 text-xs">
+      <a href="/ops/rm-sourcing-editor/" class="btn btn-accent">↗ Editor</a>
+      <a href="/ops/visual/coa-doctrine/" class="btn">↗ COA Doctrine</a>
+      <a href="/ops/visual/nch-l2-canonical/" class="btn">↗ NCH L2</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1200px] mx-auto px-6 py-8 space-y-6">
+
+  <!-- SECTION 1 — INTRO + STATS -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 1</div>
+    <h2>Source-of-truth catalog</h2>
+    <div class="prose mt-2">
+      <p>This is the source-of-truth catalog of every canonical code shape used by the RM entity ring. Read top-down to understand any code; reference any segment when in doubt. Live RMs are listed in <a href="#section-9" class="text-white underline decoration-white/30 hover:decoration-white">Section 9</a>; the editor at <a href="/ops/rm-sourcing-editor/" class="text-white underline decoration-white/30 hover:decoration-white">/ops/rm-sourcing-editor/</a> is where mutations happen.</p>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-5">
+      <div class="stat-card"><div class="label">Total RMs</div><div class="value" id="stat-total">55</div><div class="meta">live in editor</div></div>
+      <div class="stat-card"><div class="label">By BRAND</div><div class="value mono" id="stat-brand" style="font-size:14px">NCH 41 · HN 14</div><div class="meta">cross-brand vs outlet-specific</div></div>
+      <div class="stat-card"><div class="label">By TYPE</div><div class="value mono" id="stat-type" style="font-size:14px">AM 23 · DM 11 · DS 11 · AS 10</div><div class="meta">approx/definitive × multi/single</div></div>
+      <div class="stat-card"><div class="label">By USAGE</div><div class="value mono" id="stat-usage" style="font-size:14px">P 32 · R 20 · Pr 2 · O 1</div><div class="meta">production / retail / operational</div></div>
+      <div class="stat-card"><div class="label">By SOURCING</div><div class="value mono" id="stat-src" style="font-size:14px">B 30 · Lb 14 · Bl 4 · L 3 · Li 3 · Lbi 1</div><div class="meta">loose / branded / in-house</div></div>
+    </div>
+
+    <div class="qbar mt-5 flex flex-wrap gap-2">
+      <a href="https://docs.google.com/spreadsheets/d/1MzyUInF1XIoVMDDpMP3uEqe2BqQyOKuBpEf_C_yyf38/edit" target="_blank" rel="noopener">↗ Foundation Sheet</a>
+      <a href="/ops/rm-sourcing-editor/">↗ RM Editor</a>
+      <a href="/ops/visual/coa-doctrine/">↗ COA Doctrine</a>
+      <a href="#section-9">↓ Live Census</a>
+    </div>
+  </section>
+
+  <!-- SECTION 2 — CODE ANATOMY -->
+  <section class="glass p-6" id="section-2">
+    <div class="section-num">SECTION 2</div>
+    <h2>Code Anatomy — 5 segments, left to right</h2>
+
+    <div class="anatomy-row mt-2">
+      <span class="seg-brand">{BRAND}</span><span class="dash"> - </span><span class="seg-type">{TYPE}</span><span class="dash"> - </span><span class="seg-usage">{USAGE}</span><span class="dash"> - </span><span class="seg-src">{SOURCING}</span><span class="dash"> - </span><span class="seg-item">{ITEM}</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mt-3">
+      <div class="seg-card brand">
+        <div class="seg-name">BRAND</div>
+        <div class="seg-pos">Position 1 · 2-3 chars</div>
+        <div class="seg-desc">Which outlet this RM belongs to, or whether it crosses brands under the HN parent.</div>
+        <div class="seg-ex">3 values · NCH · HE · HN</div>
+      </div>
+      <div class="seg-card type">
+        <div class="seg-name">TYPE</div>
+        <div class="seg-pos">Position 2 · 2 chars</div>
+        <div class="seg-desc">Approximation × Use-scope. How the item is measured, and how many products consume it.</div>
+        <div class="seg-ex">4 values · AM · AS · DM · DS</div>
+      </div>
+      <div class="seg-card usage">
+        <div class="seg-name">USAGE</div>
+        <div class="seg-pos">Position 3 · 1-3 chars</div>
+        <div class="seg-desc">Where this RM gets consumed — production recipes, retail resale, or operational fuel.</div>
+        <div class="seg-ex">15 valid profiles · primary uppercase</div>
+      </div>
+      <div class="seg-card src">
+        <div class="seg-name">SOURCING</div>
+        <div class="seg-pos">Position 4 · 1-3 chars</div>
+        <div class="seg-desc">How the RM enters the outlet — loose vendor, branded SKU, or in-house production.</div>
+        <div class="seg-ex">15 valid profiles · primary uppercase</div>
+      </div>
+      <div class="seg-card item">
+        <div class="seg-name">ITEM</div>
+        <div class="seg-pos">Position 5 · exactly 3 chars</div>
+        <div class="seg-desc">3-letter abbreviation derived from the RM name. Owner-overridable. Unique within (BRAND, TYPE).</div>
+        <div class="seg-ex">e.g. SUG · MLK · LPG · OSB</div>
+      </div>
+    </div>
+
+    <div class="quote mt-5 text-sm">
+      <strong>Reading order:</strong> Brand owns the outlet. Type owns the math. Usage owns the consumption flow. Sourcing owns the supply flow. Item owns identity. Every code is a coordinate, never a description.
+    </div>
+  </section>
+
+  <!-- SECTION 3 — BRAND -->
+  <section class="glass p-6" id="section-3">
+    <div class="section-num">SECTION 3</div>
+    <h2>BRAND prefix directory <span class="pill pill-rm" style="font-size:10px">Position 1</span></h2>
+    <p class="text-sm text-white/70 mt-1">Which entity owns this raw material — an operating outlet, or the HN parent declaring cross-brand ownership.</p>
+
+    <div class="overflow-x-auto mt-4">
+      <table class="dir-table">
+        <thead><tr><th>Code</th><th>Meaning</th><th>Real example</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="code-cell"><span class="code-brand">NCH</span></td>
+            <td>Nawabi Chai House — outlet-specific RM, only consumed at NCH.</td>
+            <td><span class="mono"><span class="code-brand">NCH</span>-<span class="code-type">AM</span>-<span class="code-usage">P</span>-<span class="code-src">Lb</span>-<span class="code-item">MLK</span></span> Buffalo Milk</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-brand">HE</span></td>
+            <td>Hamza Express — outlet-specific RM, only consumed at HE.</td>
+            <td class="code-mute">(none in editor yet — reserved for HE rollout)</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-brand">HN</span></td>
+            <td>Cross-brand — used at both NCH AND HE under the HN parent umbrella.</td>
+            <td><span class="mono"><span class="code-brand">HN</span>-<span class="code-type">AM</span>-<span class="code-usage">P</span>-<span class="code-src">Lb</span>-<span class="code-item">SUG</span></span> Sugar</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="layer-card mt-4 text-sm text-white/75">
+      <strong class="text-white">Important:</strong> HN itself has no consumption — it's the parent declaring "this RM is shared across the operating brands beneath it." A purchase booked under <span class="code-inline">HN-…</span> is allocated to NCH and HE at the action layer.
+    </div>
+  </section>
+
+  <!-- SECTION 4 — TYPE -->
+  <section class="glass p-6" id="section-4">
+    <div class="section-num">SECTION 4</div>
+    <h2>TYPE directory <span class="pill pill-info" style="font-size:10px">Position 2 · 2 chars</span></h2>
+    <p class="text-sm text-white/70 mt-1">A 2-character code: <span class="code-inline">{Approximation}{Use-scope}</span>. Tells the system how the item is measured AND how many products consume it.</p>
+
+    <h3>1st char — Approximation</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Letter</th><th>Meaning</th><th>Use when</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell"><span class="code-type">A</span></td><td><strong class="text-white">Approximate</strong> — portioned by weight/volume, not 1=1.</td><td>Items measured in g, kg, ml, L (sugar, milk, oil, tea powder).</td></tr>
+          <tr><td class="code-cell"><span class="code-type">D</span></td><td><strong class="text-white">Definitive</strong> — counted exactly, 1 unit = 1 unit.</td><td>Items in discrete pieces, packets, cylinders (biscuit pack, LPG cylinder, coffee pouch).</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>2nd char — Use scope</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Letter</th><th>Meaning</th><th>Use when</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell"><span class="code-type">M</span></td><td><strong class="text-white">Multi-use</strong> — consumed by 2+ POS products.</td><td>Most ingredients (sugar, milk, butter, biscuit consumed across many recipes).</td></tr>
+          <tr><td class="code-cell"><span class="code-type">S</span></td><td><strong class="text-white">Single-use</strong> — consumed by exactly 1 POS product.</td><td>Specific patties, single-recipe items (chicken cutlet raw → chicken cutlet only).</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Combined permutations (4 total)</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Code</th><th>Reading</th><th>Real RMs</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="code-cell"><span class="code-type">AM</span></td>
+            <td>Approximate Multi-use</td>
+            <td class="mono text-xs">NCH-AM-P-Lb-MLK Buffalo Milk · HN-AM-P-Lb-SUG Sugar · NCH-AM-Pr-Bl-TEA Tea Powder</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-type">AS</span></td>
+            <td>Approximate Single-use</td>
+            <td class="mono text-xs">NCH-AS-P-Li-CCT Chicken Cutlet Raw · NCH-AS-P-Li-SMS Samosa Raw</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-type">DM</span></td>
+            <td>Definitive Multi-use</td>
+            <td class="mono text-xs">NCH-DM-Pr-Bl-OSB Osmania Biscuit · NCH-DM-R-B-FRB Niloufer Fruit Biscuit</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-type">DS</span></td>
+            <td>Definitive Single-use</td>
+            <td class="mono text-xs">NCH-DS-R-B-CHK Cherry Khopra · NCH-DS-P-B-CPP Coffee Pouch · NCH-DS-R-B-AST Almond Sticks</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SECTION 5 — USAGE -->
+  <section class="glass p-6" id="section-5">
+    <div class="section-num">SECTION 5</div>
+    <h2>USAGE directory <span class="pill pill-good" style="font-size:10px">Position 3 · 1-3 chars</span></h2>
+    <p class="text-sm text-white/70 mt-1">Where this RM gets consumed. Letters: <span class="code-inline">P</span> Production · <span class="code-inline">R</span> Retail · <span class="code-inline">O</span> Operational.</p>
+
+    <h3>Letters</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Letter</th><th>Meaning</th><th>Use when</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell"><span class="code-usage">P</span></td><td><strong class="text-white">Production only</strong> — consumed by our recipes/service.</td><td>Buffalo Milk, raw cutlet, Sugar, Tea Powder, Coffee Pouch.</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">R</span></td><td><strong class="text-white">Retail only</strong> — purchased to resell to customers.</td><td>Niloufer Fruit Biscuit, Cookies, Almond Sticks, gift packs.</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">O</span></td><td><strong class="text-white">Operational consumable</strong> — neither recipe-consumed nor sold; consumed by operations themselves.</td><td>LPG (cooking fuel), paper cups (future), soap (future).</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="layer-card mt-4 text-sm">
+      <strong class="text-white">Case convention:</strong> <span class="text-white/80">UPPERCASE = currently primary; lowercase = alternate possible; absent = forbidden.</span> Exactly one uppercase letter, in position 1.
+    </div>
+
+    <h3>Single-letter profiles (3)</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Profile</th><th>Reads as</th><th>Real example</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell"><span class="code-usage">P</span></td><td>Production only — no retail or operational alt</td><td class="mono text-xs">NCH-AM-P-Lb-MLK Buffalo Milk</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">R</span></td><td>Retail only — no production or operational alt</td><td class="mono text-xs">NCH-DM-R-B-FRB Niloufer Fruit Biscuit</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">O</span></td><td>Operational only — no production or retail alt</td><td class="mono text-xs">HN-AM-O-B-LPG LPG</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Two-letter profiles (6) — primary uppercase + alternate lowercase</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Profile</th><th>Reads as</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell"><span class="code-usage">Pr</span></td><td>Production primary, retail alternate</td><td class="mono text-xs">NCH-DM-Pr-Bl-OSB Osmania Biscuit · NCH-AM-Pr-Bl-TEA Tea Powder</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">Po</span></td><td>Production primary, operational alternate</td><td class="text-white/50">rare edge case</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">Rp</span></td><td>Retail primary, production alternate</td><td class="text-white/50">(Tea Powder if retail volume exceeds production)</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">Ro</span></td><td>Retail primary, operational alternate</td><td class="text-white/50">rare</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">Op</span></td><td>Operational primary, production alternate</td><td class="text-white/50">rare</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">Or</span></td><td>Operational primary, retail alternate</td><td class="text-white/50">rare</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Three-letter profiles (6) — primary uppercase + 2 alternates lowercase</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Profile</th><th>Reads as</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell"><span class="code-usage">Pro</span></td><td>Production primary; retail + operational alts</td><td class="text-white/50">reserved</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">Por</span></td><td>Production primary; operational + retail alts</td><td class="text-white/50">reserved</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">Rpo</span></td><td>Retail primary; production + operational alts</td><td class="text-white/50">reserved</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">Rop</span></td><td>Retail primary; operational + production alts</td><td class="text-white/50">reserved</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">Opr</span></td><td>Operational primary; production + retail alts</td><td class="text-white/50">reserved</td></tr>
+          <tr><td class="code-cell"><span class="code-usage">Orp</span></td><td>Operational primary; retail + production alts</td><td class="text-white/50">reserved</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="text-sm text-white/60 mt-2">No real examples today — reserved for future flexibility when an RM sees all three flows simultaneously.</p>
+
+    <h3>Forbidden USAGE shapes</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+      <div class="failure-card text-sm"><strong>Empty</strong> — at least one of P/R/O required</div>
+      <div class="failure-card text-sm"><strong>Multiple uppercase</strong> — <span class="code-inline">PR</span>, <span class="code-inline">RP</span>, <span class="code-inline">PRO</span> rejected (use <span class="code-inline">Pr</span> etc.)</div>
+      <div class="failure-card text-sm"><strong>Duplicate letters</strong> — <span class="code-inline">Pp</span>, <span class="code-inline">Rr</span>, <span class="code-inline">Oo</span> rejected</div>
+      <div class="failure-card text-sm"><strong>Lowercase-first</strong> — <span class="code-inline">pR</span>, <span class="code-inline">oP</span> rejected</div>
+    </div>
+  </section>
+
+  <!-- SECTION 6 — SOURCING -->
+  <section class="glass p-6" id="section-6">
+    <div class="section-num">SECTION 6</div>
+    <h2>SOURCING directory <span class="pill pill-purple" style="font-size:10px">Position 4 · 1-3 chars</span></h2>
+    <p class="text-sm text-white/70 mt-1">How the RM enters the outlet. Letters: <span class="code-inline">L</span> Loose · <span class="code-inline">B</span> Branded · <span class="code-inline">I</span> In-house.</p>
+
+    <h3>Letters</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Letter</th><th>Meaning</th><th>Use when</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell"><span class="code-src">L</span></td><td><strong class="text-white">Loose</strong> — vendor-direct purchase, no defined SKU.</td><td>Buffalo milk from Prabhu, loose tea, loose sugar, charcoal, ginger.</td></tr>
+          <tr><td class="code-cell"><span class="code-src">B</span></td><td><strong class="text-white">Branded</strong> — defined SKU, brand × pack-size.</td><td>Amul 500g butter, Niloufer 100g biscuit, Milkmaid tin, Coffee Pouch.</td></tr>
+          <tr><td class="code-cell"><span class="code-src">I</span></td><td><strong class="text-white">In-house</strong> — produced internally from upstream RMs.</td><td>Bun if baked in-house. <em>Always alternate, never primary alone.</em></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="layer-card mt-4 text-sm">
+      <strong class="text-white">Case convention:</strong> Same as USAGE — UPPERCASE = primary, lowercase = alternate, absent = forbidden. <span class="text-white/70">Exactly one uppercase letter; <span class="code-inline">I</span> can never be the primary.</span>
+    </div>
+
+    <h3>Valid combinations</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Profile</th><th>Reads as</th><th>Real example</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell"><span class="code-src">L</span></td><td>Loose only</td><td class="mono text-xs">HN-AM-P-L-CHL Charcoal · HN-AM-P-L-GIN Ginger</td></tr>
+          <tr><td class="code-cell"><span class="code-src">B</span></td><td>Branded only</td><td class="mono text-xs">HN-AM-O-B-LPG LPG · NCH-AM-P-B-MMD Milkmaid</td></tr>
+          <tr><td class="code-cell"><span class="code-src">Lb</span></td><td>Loose primary, branded alternate</td><td class="mono text-xs">HN-AM-P-Lb-SUG Sugar · NCH-AM-P-Lb-MLK Buffalo Milk</td></tr>
+          <tr><td class="code-cell"><span class="code-src">Bl</span></td><td>Branded primary, loose alternate</td><td class="mono text-xs">HN-AM-P-Bl-BTR Butter · NCH-AM-Pr-Bl-TEA Tea Powder</td></tr>
+          <tr><td class="code-cell"><span class="code-src">Li</span></td><td>Loose primary, in-house alternate</td><td class="mono text-xs">NCH-AS-P-Li-CCT Chicken Cutlet Raw · NCH-AS-P-Li-SMS Samosa Raw</td></tr>
+          <tr><td class="code-cell"><span class="code-src">Lbi</span></td><td>Loose primary, branded + in-house alts</td><td class="mono text-xs">NCH-AS-P-Lbi-BUN Bun</td></tr>
+          <tr><td class="code-cell"><span class="code-src">Bi</span></td><td>Branded primary, in-house alternate</td><td class="text-white/50">rare</td></tr>
+          <tr><td class="code-cell"><span class="code-src">Bli</span></td><td>Branded primary, loose + in-house alts</td><td class="text-white/50">rare</td></tr>
+          <tr><td class="code-cell"><span class="code-src">Ib</span></td><td>In-house primary, branded alternate</td><td class="text-white/50">rare today</td></tr>
+          <tr><td class="code-cell"><span class="code-src">Il</span></td><td>In-house primary, loose alternate</td><td class="text-white/50">rare today (decoction-style — but that's a State, not an RM)</td></tr>
+          <tr><td class="code-cell"><span class="code-src">Ilb</span></td><td>In-house primary, loose + branded alts</td><td class="text-white/50">rare today</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Forbidden SOURCING shapes</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+      <div class="failure-card text-sm"><strong><span class="code-inline">I</span> alone</strong> — that's a state of production, not an RM</div>
+      <div class="failure-card text-sm"><strong>Empty</strong> — at least one of L/B/I required</div>
+      <div class="failure-card text-sm"><strong>Duplicate letters</strong> — <span class="code-inline">Ll</span>, <span class="code-inline">Bb</span>, <span class="code-inline">Ii</span> rejected</div>
+      <div class="failure-card text-sm"><strong>Lowercase-first</strong> — <span class="code-inline">lB</span>, <span class="code-inline">bL</span> rejected</div>
+    </div>
+  </section>
+
+  <!-- SECTION 7 — ITEM -->
+  <section class="glass p-6" id="section-7">
+    <div class="section-num">SECTION 7</div>
+    <h2>ITEM abbreviation directory <span class="pill" style="font-size:10px;background:rgba(228,228,237,0.08);color:var(--ink)">Position 5 · exactly 3 chars</span></h2>
+    <p class="text-sm text-white/70 mt-1">A 3-letter, all-uppercase abbreviation that gives the RM its identity within the (BRAND, TYPE) tuple.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+      <div class="layer-card">
+        <strong class="text-white">Length</strong>
+        <p class="text-sm text-white/75 mt-1">Exactly 3 characters, uppercase A-Z. Always 3 — never 2, never 4.</p>
+      </div>
+      <div class="layer-card">
+        <strong class="text-white">Source</strong>
+        <p class="text-sm text-white/75 mt-1">Auto-derived from RM name (first 3 unique consonants, vowels as fallback). Owner override allowed in editor.</p>
+      </div>
+      <div class="layer-card">
+        <strong class="text-white">Uniqueness</strong>
+        <p class="text-sm text-white/75 mt-1">Must be unique within (BRAND, TYPE) tuple. Two NCH-AM RMs cannot both be <span class="code-inline">MLK</span>; one across NCH-AM and HN-AM is allowed.</p>
+      </div>
+      <div class="layer-card">
+        <strong class="text-white">Case</strong>
+        <p class="text-sm text-white/75 mt-1">Always uppercase. The editor normalises lowercase to uppercase on save.</p>
+      </div>
+    </div>
+
+    <h3>Sample derivations</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>RM Name</th><th>Auto-derived ITEM</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Sugar</td><td class="code-cell"><span class="code-item">SUG</span></td><td>S-U-G (3 unique chars)</td></tr>
+          <tr><td>Milkmaid</td><td class="code-cell"><span class="code-item">MMD</span></td><td>M-M-D (consonants of "Milkmaid")</td></tr>
+          <tr><td>Almonds</td><td class="code-cell"><span class="code-item">LMN</span> or <span class="code-item">ALM</span></td><td>Owner override possible — both used in real data</td></tr>
+          <tr><td>Coffee Pouch</td><td class="code-cell"><span class="code-item">CPP</span></td><td>C-P-P (Coffee Pouch Pack)</td></tr>
+          <tr><td>Cherry Khopra</td><td class="code-cell"><span class="code-item">CHK</span></td><td>C-H-K (consonants)</td></tr>
+          <tr><td>Buffalo Milk</td><td class="code-cell"><span class="code-item">MLK</span></td><td>M-L-K (Milk dominates the name)</td></tr>
+          <tr><td>Skimmed Milk Powder</td><td class="code-cell"><span class="code-item">SMP</span></td><td>S-M-P (initials of each word)</td></tr>
+          <tr><td>Chicken Cutlet Raw</td><td class="code-cell"><span class="code-item">CCT</span></td><td>C-C-T (Chicken-Cutlet)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SECTION 8 — FORBIDDEN COMBINATIONS -->
+  <section class="glass p-6" id="section-8">
+    <div class="section-num">SECTION 8</div>
+    <h2>Forbidden Combinations · Master Reference</h2>
+    <p class="text-sm text-white/70 mt-1">Every anomaly the system rejects, in one place. The math literally cannot represent these.</p>
+
+    <div class="overflow-x-auto mt-4">
+      <table class="dir-table">
+        <thead><tr><th>Forbidden</th><th>Why caught</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell"><span class="code-src">I</span> alone</td><td>State of production, not an RM. <span class="code-inline">I</span> can only be an alternate.</td><td class="text-white/70">Editor refuses save · 400</td></tr>
+          <tr><td class="code-cell">SOURCING empty</td><td>At least one of L/B/I required.</td><td class="text-white/70">Editor refuses save · 400</td></tr>
+          <tr><td class="code-cell">USAGE empty</td><td>At least one of P/R/O required.</td><td class="text-white/70">Editor refuses save · 400</td></tr>
+          <tr><td class="code-cell">USAGE multi-uppercase (<span class="code-usage">PR</span>)</td><td>Only one primary allowed.</td><td class="text-white/70">Rejected — use <span class="code-inline">Pr</span></td></tr>
+          <tr><td class="code-cell">SOURCING multi-uppercase (<span class="code-src">LB</span>)</td><td>Only one primary allowed.</td><td class="text-white/70">Rejected — use <span class="code-inline">Lb</span></td></tr>
+          <tr><td class="code-cell">Duplicate letters (<span class="code-usage">Pp</span>, <span class="code-src">Bb</span>)</td><td>Each letter at most once.</td><td class="text-white/70">Rejected · 400</td></tr>
+          <tr><td class="code-cell">Lowercase-first (<span class="code-usage">pR</span>)</td><td>Position 1 must be uppercase (the primary).</td><td class="text-white/70">Rejected · 400</td></tr>
+          <tr><td class="code-cell">TYPE not 2 chars</td><td>Must be exactly A/D + M/S.</td><td class="text-white/70">Rejected · 400</td></tr>
+          <tr><td class="code-cell">ITEM not 3 chars</td><td>Always 3 chars.</td><td class="text-white/70">Rejected · 400</td></tr>
+          <tr><td class="code-cell">Code collision</td><td>Two RMs cannot share rm_code in the same tuple.</td><td class="text-white/70">409 conflict</td></tr>
+          <tr><td class="code-cell">L + V3 (action layer)</td><td>Quick-commerce only sells defined SKUs — Loose can't ride V3.</td><td class="text-white/70">Caught at action creation</td></tr>
+          <tr><td class="code-cell">B without BRAND-SKU (action layer)</td><td>Branded purchases must carry SKU.</td><td class="text-white/70">Caught at action creation</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SECTION 9 — LIVE CENSUS -->
+  <section class="glass p-6" id="section-9">
+    <div class="section-num">SECTION 9</div>
+    <h2>Live RM Census — All RMs Today</h2>
+    <p class="text-sm text-white/70 mt-1">Fetched live from <span class="code-inline">/api/rm-sourcing</span>. Click any code to open the editor and search for it.</p>
+
+    <div id="census-mount" class="mt-5">
+      <div class="loading">Loading live RMs…</div>
+    </div>
+  </section>
+
+  <!-- SECTION 10 — WORKED EXAMPLES -->
+  <section class="glass p-6" id="section-10">
+    <div class="section-num">SECTION 10</div>
+    <h2>Worked Examples — Reading codes left to right</h2>
+    <p class="text-sm text-white/70 mt-1">Six real codes, walked through one segment at a time.</p>
+
+    <!-- 1 -->
+    <h3 class="mt-4">1 · <span class="mono">HN-AM-P-Lb-SUG</span> Sugar</h3>
+    <div class="walk-block">
+<span class="b">HN</span>-<span class="t">AM</span>-<span class="u">P</span>-<span class="s">Lb</span>-<span class="i">SUG</span>
+ <span class="lbl">│   │   │   │   └─</span> <span class="i">Sugar</span> (item identity)
+ <span class="lbl">│   │   │   └────</span>── <span class="s">Loose primary, branded alternate</span> (loose sugar dominant; Madhur 1kg also stocked)
+ <span class="lbl">│   │   └────────</span>── <span class="u">Production only</span> (consumed by recipes; not sold as retail)
+ <span class="lbl">│   └────────────</span>── <span class="t">Approximate Multi-use</span> (weighed in kg; used by tea, snacks, biscuits)
+ <span class="lbl">└────────────────</span>── <span class="b">HN</span> — cross-brand, used at both NCH AND HE
+    </div>
+    <div class="walk-reads">Reads as: "An HN-shared Sugar RM, approximate-multi-use, production-only, primarily sourced loose with a branded alternate available."</div>
+
+    <!-- 2 -->
+    <h3 class="mt-5">2 · <span class="mono">NCH-AM-Pr-Bl-TEA</span> Tea Powder</h3>
+    <div class="walk-block">
+<span class="b">NCH</span>-<span class="t">AM</span>-<span class="u">Pr</span>-<span class="s">Bl</span>-<span class="i">TEA</span>
+ <span class="lbl">│   │   │   │   └─</span> <span class="i">Tea Powder</span> (item identity)
+ <span class="lbl">│   │   │   └────</span>── <span class="s">Branded primary, loose alternate</span> (Wagh Bakri / Society as primary; loose tea fallback)
+ <span class="lbl">│   │   └────────</span>── <span class="u">Production primary, retail alternate</span> (mostly brewed; occasionally sold as packs)
+ <span class="lbl">│   └────────────</span>── <span class="t">Approximate Multi-use</span> (weighed; used across all chai variants)
+ <span class="lbl">└────────────────</span>── <span class="b">NCH</span> — Nawabi Chai House outlet only
+    </div>
+    <div class="walk-reads">Reads as: "An NCH Tea Powder RM, approximate-multi-use, primarily a production input but with a retail-resale path, primarily branded with loose as fallback. The single most consumed AM-RM at NCH."</div>
+
+    <!-- 3 -->
+    <h3 class="mt-5">3 · <span class="mono">HN-AM-O-B-LPG</span> LPG</h3>
+    <div class="walk-block">
+<span class="b">HN</span>-<span class="t">AM</span>-<span class="u">O</span>-<span class="s">B</span>-<span class="i">LPG</span>
+ <span class="lbl">│   │   │   │   └─</span> <span class="i">LPG</span> (item identity — cooking gas)
+ <span class="lbl">│   │   │   └────</span>── <span class="s">Branded only</span> (Indane / HP cylinder, no loose sourcing path)
+ <span class="lbl">│   │   └────────</span>── <span class="u">Operational only</span> (fuels the kitchen — not in any recipe, not sold)
+ <span class="lbl">│   └────────────</span>── <span class="t">Approximate Multi-use</span> (consumed by every burner, measured by cylinder weight)
+ <span class="lbl">└────────────────</span>── <span class="b">HN</span> — cross-brand, both outlets cook on LPG
+    </div>
+    <div class="walk-reads">Reads as: "A cross-brand LPG RM, approximate-multi-use, operational consumable (no recipe, no resale), branded-only sourcing — the canonical example of the USAGE=O profile."</div>
+
+    <!-- 4 -->
+    <h3 class="mt-5">4 · <span class="mono">NCH-DM-R-B-FRB</span> Fruit Biscuit (Niloufer)</h3>
+    <div class="walk-block">
+<span class="b">NCH</span>-<span class="t">DM</span>-<span class="u">R</span>-<span class="s">B</span>-<span class="i">FRB</span>
+ <span class="lbl">│   │   │   │   └─</span> <span class="i">Fruit Biscuit</span> (item identity — Niloufer brand)
+ <span class="lbl">│   │   │   └────</span>── <span class="s">Branded only</span> (Niloufer SKU pack — no loose path, no in-house production)
+ <span class="lbl">│   │   └────────</span>── <span class="u">Retail only</span> (sold as-is to customers; not used in any NCH recipe)
+ <span class="lbl">│   └────────────</span>── <span class="t">Definitive Multi-use</span> (counted in packs; multiple SKU sizes 100g/250g/500g/1kg)
+ <span class="lbl">└────────────────</span>── <span class="b">NCH</span> — sold only at NCH counter
+    </div>
+    <div class="walk-reads">Reads as: "An NCH Fruit Biscuit RM, definitive-multi-use, retail only, branded only — a pure resale SKU. Multiple pack-sizes give it the M (multi-use) attribute via SKU multiplicity, not recipe multiplicity."</div>
+
+    <!-- 5 -->
+    <h3 class="mt-5">5 · <span class="mono">NCH-AS-P-Li-CCT</span> Chicken Cutlet Raw</h3>
+    <div class="walk-block">
+<span class="b">NCH</span>-<span class="t">AS</span>-<span class="u">P</span>-<span class="s">Li</span>-<span class="i">CCT</span>
+ <span class="lbl">│   │   │   │   └─</span> <span class="i">Chicken Cutlet Raw</span> (item identity)
+ <span class="lbl">│   │   │   └────</span>── <span class="s">Loose primary, in-house alternate</span> (vendor-supplied raw cutlet primary; in-house batch fallback)
+ <span class="lbl">│   │   └────────</span>── <span class="u">Production only</span> (only goes into Chicken Cutlet POS item)
+ <span class="lbl">│   └────────────</span>── <span class="t">Approximate Single-use</span> (weighed; consumed by exactly 1 POS product)
+ <span class="lbl">└────────────────</span>── <span class="b">NCH</span> — NCH outlet only
+    </div>
+    <div class="walk-reads">Reads as: "An NCH Chicken Cutlet Raw RM, approximate-single-use, production-only, primarily loose-sourced with an in-house production fallback. The textbook example of an Li sourcing profile."</div>
+
+    <!-- 6 -->
+    <h3 class="mt-5">6 · <span class="mono">NCH-DS-P-B-CPP</span> Coffee Pouch</h3>
+    <div class="walk-block">
+<span class="b">NCH</span>-<span class="t">DS</span>-<span class="u">P</span>-<span class="s">B</span>-<span class="i">CPP</span>
+ <span class="lbl">│   │   │   │   └─</span> <span class="i">Coffee Pouch</span> (item identity — single-serve sachet)
+ <span class="lbl">│   │   │   └────</span>── <span class="s">Branded only</span> (Bru / Nescafe pouch SKU)
+ <span class="lbl">│   │   └────────</span>── <span class="u">Production only</span> (goes into Nawabi Coffee preparation)
+ <span class="lbl">│   └────────────</span>── <span class="t">Definitive Single-use</span> (counted in pouches; consumed by exactly 1 POS product)
+ <span class="lbl">└────────────────</span>── <span class="b">NCH</span> — NCH outlet only
+    </div>
+    <div class="walk-reads">Reads as: "An NCH Coffee Pouch RM, definitive-single-use, production only, branded only — 1 pouch = 1 cup of Nawabi Coffee, no other use."</div>
+  </section>
+
+  <!-- SECTION 11 — CONNECTION -->
+  <section class="glass p-6" id="section-11">
+    <div class="section-num">SECTION 11</div>
+    <h2>Connection to other layers</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+      <div class="layer-card" style="border-top: 3px solid var(--info)">
+        <strong class="text-white">Action layer</strong>
+        <p class="text-sm text-white/75 mt-1">Purchases, productions, transfers — built on top of these RM codes, adding V-shape (payment behaviour) and supplier dimensions.</p>
+      </div>
+      <div class="layer-card" style="border-top: 3px solid var(--purple)">
+        <strong class="text-white">Event layer</strong>
+        <p class="text-sm text-white/75 mt-1">Reads RM codes + Actions to compose business events (sales, COGS, expenses) deterministically.</p>
+      </div>
+      <div class="layer-card" style="border-top: 3px solid var(--good)">
+        <strong class="text-white">Doctrine</strong>
+        <p class="text-sm text-white/75 mt-1">All three rings — Entity (this page), Action, Event — are formalised at <a href="/ops/visual/coa-doctrine/" class="text-white underline decoration-white/30 hover:decoration-white">/ops/visual/coa-doctrine/</a>.</p>
+      </div>
+    </div>
+
+    <div class="quote mt-5 text-sm">
+      <strong>The RM canonical code is the foundation.</strong> Every Action references one RM. Every Event aggregates Actions. Get the shape right here, and the rest of the system is dumb-proof.
+    </div>
+  </section>
+
+</main>
+
+<footer class="border-t border-white/5 px-6 py-5 text-xs text-white/40 text-center">
+  RM Canonical Shape Directory · v1.0 · May 2026 ·
+  <a href="/ops/rm-sourcing-editor/" class="text-white/60 hover:text-white">Editor</a> ·
+  <a href="/ops/visual/coa-doctrine/" class="text-white/60 hover:text-white">COA Doctrine</a> ·
+  HN Hotels Pvt Ltd
+</footer>
+
+<script>
+(async function loadCensus() {
+  const mount = document.getElementById('census-mount');
+  const usageLabels = {
+    'P':  { name: 'Production only',                                   color: 'var(--good)' },
+    'Pr': { name: 'Production primary, retail alternate',              color: 'var(--good)' },
+    'Po': { name: 'Production primary, operational alternate',         color: 'var(--good)' },
+    'R':  { name: 'Retail only',                                       color: 'var(--info)' },
+    'Rp': { name: 'Retail primary, production alternate',              color: 'var(--info)' },
+    'Ro': { name: 'Retail primary, operational alternate',             color: 'var(--info)' },
+    'O':  { name: 'Operational consumable',                            color: 'var(--warn)' },
+    'Op': { name: 'Operational primary, production alternate',         color: 'var(--warn)' },
+    'Or': { name: 'Operational primary, retail alternate',             color: 'var(--warn)' }
+  };
+  const typeLabels = {
+    'AM': 'Approximate Multi-use',
+    'AS': 'Approximate Single-use',
+    'DM': 'Definitive Multi-use',
+    'DS': 'Definitive Single-use'
+  };
+  // Order: P, Pr, R, O, then anything else
+  const usageOrder = ['P','Pr','Po','R','Rp','Ro','O','Op','Or'];
+
+  try {
+    const res = await fetch('/api/rm-sourcing?pin=0305', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const rms = data.rms || [];
+    const total = rms.length;
+
+    // Update top stats live
+    document.getElementById('stat-total').textContent = total;
+    const tally = (k) => {
+      const m = {};
+      rms.forEach(r => { m[r[k]] = (m[r[k]] || 0) + 1; });
+      return Object.entries(m).sort((a,b) => b[1]-a[1]).map(([k,v]) => `${k} ${v}`).join(' · ');
+    };
+    document.getElementById('stat-brand').textContent = tally('brand_prefix');
+    document.getElementById('stat-type').textContent = tally('rm_type');
+    document.getElementById('stat-usage').textContent = tally('usage_profile');
+    document.getElementById('stat-src').textContent = tally('sourcing_profile');
+
+    // Group by USAGE → TYPE
+    const byUsage = {};
+    rms.forEach(r => {
+      const u = r.usage_profile || '?';
+      const t = r.rm_type || '?';
+      if (!byUsage[u]) byUsage[u] = {};
+      if (!byUsage[u][t]) byUsage[u][t] = [];
+      byUsage[u][t].push(r);
+    });
+
+    // Build HTML
+    const sortedUsages = Object.keys(byUsage).sort((a, b) => {
+      const ai = usageOrder.indexOf(a); const bi = usageOrder.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+
+    const editorHref = (rmCode) => `/ops/rm-sourcing-editor/?q=${encodeURIComponent(rmCode)}`;
+
+    let html = '';
+    sortedUsages.forEach(u => {
+      const meta = usageLabels[u] || { name: u, color: 'var(--ink)' };
+      const groupCount = Object.values(byUsage[u]).reduce((s, l) => s + l.length, 0);
+      html += `<div class="census-group">`;
+      html += `<div class="census-head"><span style="color:${meta.color}">USAGE: ${u}</span> <span class="text-white/70">${meta.name}</span> <span class="count">— ${groupCount} RM${groupCount===1?'':'s'}</span></div>`;
+      Object.keys(byUsage[u]).sort().forEach(t => {
+        html += `<div class="census-sub">${t} (${typeLabels[t] || t}) — ${byUsage[u][t].length} RM${byUsage[u][t].length===1?'':'s'}</div>`;
+        html += `<ul class="census-list">`;
+        byUsage[u][t].sort((a,b) => a.rm_code.localeCompare(b.rm_code)).forEach(r => {
+          html += `<li><a href="${editorHref(r.rm_code)}">${r.rm_code}</a> <span class="rm-name">· ${escapeHtml(r.rm_name)}</span></li>`;
+        });
+        html += `</ul>`;
+      });
+      html += `</div>`;
+    });
+
+    mount.innerHTML = html;
+  } catch (err) {
+    mount.innerHTML = `<div class="failure-card text-sm">Could not load live census from /api/rm-sourcing — <span class="mono">${escapeHtml(err.message || String(err))}</span>. Falling back to static stats above.</div>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+})();
+</script>
+
+</body>
+</html>
