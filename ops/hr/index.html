@@ -723,6 +723,7 @@ function renderRoster() {
             ${e.aadhar_back_drive_id ? docBadge('Back', e.aadhar_back_drive_id) : ''}
             ${docBadge('PAN', e.pan_drive_id, true)}
             ${docBadge('Barcode', e.barcode_drive_id, true)}
+            ${contractBadge(e.contract_drive_id, e.contract_status, e.id, e.contract_dirty, e.contract_version)}
           </div>
         </div>
         <div class="text-right flex flex-col items-end gap-1.5">
@@ -770,6 +771,32 @@ function docBadge(label, fileId, optionalIfMissing = false) {
   }
   if (optionalIfMissing) return `<span class="badge" style="background:rgba(100,100,120,0.12);color:#9ca3af">— ${label}</span>`;
   return `<span class="badge" style="background:rgba(245,158,11,0.15);color:#fbbf24">⬆ ${label} missing</span>`;
+}
+
+function contractBadge(driveId, status, employeeId, dirty, version) {
+  // Always render a "Manage" trigger that opens the contract review/edit/send modal.
+  // Drive link still works (clickable badge area).
+  const colors = {
+    pending_review: { bg: 'rgba(59,130,246,0.15)', fg: '#60a5fa', label: 'Review' },
+    approved:       { bg: 'rgba(16,185,129,0.15)', fg: '#34d399', label: 'Approved' },
+    sent_leegality: { bg: 'rgba(168,85,247,0.15)', fg: '#c084fc', label: 'eSign sent' },
+    signed:         { bg: 'rgba(16,185,129,0.20)', fg: '#10b981', label: 'Signed ✓' },
+    pending:        { bg: 'rgba(245,158,11,0.15)', fg: '#fbbf24', label: 'pending' },
+  };
+  const stKey = driveId ? (status || 'pending_review') : 'pending';
+  const c = colors[stKey] || colors.pending_review;
+  const vTag = version && version > 1 ? ` v${version}` : '';
+  const dirtyTag = dirty ? ' ⚠️' : '';
+
+  const badgeHtml = driveId
+    ? `<a href="https://drive.google.com/file/d/${driveId}/view" target="_blank" onclick="event.stopPropagation()" class="badge" style="background:${c.bg};color:${c.fg};text-decoration:none">📄 Contract ${c.label}${vTag}${dirtyTag}</a>`
+    : `<span class="badge" style="background:${c.bg};color:${c.fg}">📄 Contract pending</span>`;
+
+  const manageBtn = employeeId
+    ? `<button onclick="event.stopPropagation();openContractModal(${employeeId})" class="badge" style="background:rgba(255,255,255,0.06);color:#cbd5e1;border:none;cursor:pointer;padding:2px 6px" title="Manage contract — edit, send, history">⚙</button>`
+    : '';
+
+  return badgeHtml + manageBtn;
 }
 
 function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -1705,6 +1732,282 @@ function renderMsgOutbox(rows){
     </div>`;
   }).join('');
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* Contract Manage modal: preview + edit + send via Leegality + audit history */
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+const contractState = { employeeId: null, data: null, editMode: false };
+
+async function openContractModal(employeeId) {
+  contractState.employeeId = employeeId;
+  contractState.editMode = false;
+  document.getElementById('contractModal').classList.remove('hidden');
+  document.getElementById('contractModalBody').innerHTML = '<div class="text-white/60 text-sm">Loading…</div>';
+  try {
+    const r = await fetch(`/api/hr-contracts?action=get-contract-data&employee_id=${employeeId}`, {
+      headers: { 'x-dashboard-key': state.apiKey }
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'failed to load');
+    contractState.data = data;
+    renderContractModal();
+  } catch (e) {
+    document.getElementById('contractModalBody').innerHTML =
+      `<div class="text-rose-400 text-sm">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function closeContractModal() {
+  document.getElementById('contractModal').classList.add('hidden');
+  contractState.employeeId = null;
+  contractState.data = null;
+  contractState.editMode = false;
+}
+
+function renderContractModal() {
+  const d = contractState.data;
+  if (!d) return;
+  const e = d.employee;
+  const versions = d.versions || [];
+  const edits = d.recent_edits || [];
+  const canSend = d.can_send_leegality;
+  const blockers = d.blockers || [];
+
+  const statusBadge = (s) => {
+    const map = {
+      pending_review: ['rgba(59,130,246,0.18)', '#60a5fa'],
+      approved:       ['rgba(16,185,129,0.18)', '#34d399'],
+      sent_leegality: ['rgba(168,85,247,0.18)', '#c084fc'],
+      signed:         ['rgba(16,185,129,0.25)', '#10b981'],
+      not_uploaded:   ['rgba(245,158,11,0.18)', '#fbbf24'],
+    };
+    const [bg, fg] = map[s] || map.pending_review;
+    return `<span class="badge" style="background:${bg};color:${fg}">${s || 'unknown'}</span>`;
+  };
+
+  const versionsHtml = versions.length ? versions.map(v => `
+    <div class="flex items-center justify-between gap-2 text-[11px] py-1 border-b border-white/5">
+      <span class="font-mono">v${v.version_no}</span>
+      <span class="text-white/50 truncate flex-1">${v.drive_file_name || (v.drive_file_id || '').slice(0,12)}</span>
+      <span class="text-white/40">${(v.generated_at || '').slice(0,10)}</span>
+      <span class="${v.superseded_at ? 'text-white/30' : 'text-emerald-400'}">${v.superseded_at ? 'old' : 'current'}</span>
+      ${v.drive_file_id ? `<a href="https://drive.google.com/file/d/${v.drive_file_id}/view" target="_blank" class="text-blue-400 hover:underline">view</a>` : ''}
+    </div>
+  `).join('') : '<div class="text-white/40 text-[11px]">No versions yet.</div>';
+
+  const editsHtml = edits.length ? edits.map(ed => `
+    <div class="text-[11px] py-1 border-b border-white/5">
+      <span class="text-white/40">${(ed.edited_at || '').slice(0,16)}</span>
+      <span class="text-white/60 mx-1">${escapeHtml(ed.field_name)}</span>:
+      <span class="text-white/40">${escapeHtml((ed.old_value || '').slice(0, 30))}</span>
+      <span class="text-white/60">→</span>
+      <span class="text-emerald-400">${escapeHtml((ed.new_value || '').slice(0, 30))}</span>
+      ${ed.applied_at ? '<span class="text-emerald-500 ml-1">✓</span>' : '<span class="text-amber-400 ml-1">pending</span>'}
+    </div>
+  `).join('') : '<div class="text-white/40 text-[11px]">No edits yet.</div>';
+
+  const previewHtml = e.contract_drive_id
+    ? `<iframe src="https://drive.google.com/file/d/${e.contract_drive_id}/preview"
+                class="w-full h-72 rounded-lg border border-white/10 bg-black"
+                allow="autoplay"></iframe>
+       <a href="https://drive.google.com/file/d/${e.contract_drive_id}/view" target="_blank"
+          class="text-blue-400 text-[11px] hover:underline">↗ open in Drive</a>`
+    : '<div class="text-amber-400 text-sm py-4 text-center bg-amber-500/5 rounded-lg">No contract uploaded yet.</div>';
+
+  const editForm = contractState.editMode ? renderContractEditForm(e) : '';
+
+  const sendButtonHtml = canSend
+    ? `<button onclick="confirmSendLeegality(${e.id})"
+               class="bg-violet-600 hover:bg-violet-500 px-4 py-2 rounded-lg text-sm font-semibold flex-1">
+         📨 Send via Leegality (v${e.contract_version})
+       </button>`
+    : `<button disabled
+               class="bg-white/5 px-4 py-2 rounded-lg text-sm text-white/40 flex-1 cursor-not-allowed"
+               title="${blockers.join(' · ')}">
+         🚫 Cannot send${blockers.length ? ' — ' + blockers[0] : ''}
+       </button>`;
+
+  document.getElementById('contractModalTitle').textContent =
+    `${e.known_as || e.name} — Contract ${e.contract_version ? 'v' + e.contract_version : ''}`;
+
+  document.getElementById('contractModalBody').innerHTML = `
+    <div class="space-y-3">
+      <div class="flex items-center justify-between gap-2">
+        <div>${statusBadge(e.contract_status)}
+             ${e.contract_dirty ? '<span class="badge ml-1" style="background:rgba(245,158,11,0.15);color:#fbbf24">⚠ unapplied edits</span>' : ''}
+             ${e.leegality_doc_id ? `<span class="badge ml-1" style="background:rgba(168,85,247,0.15);color:#c084fc">Leegality ${e.leegality_doc_id.slice(0,8)}…</span>` : ''}</div>
+        <div class="text-[11px] text-white/40">${e.contract_pdf_sha256 ? '🔒 ' + e.contract_pdf_sha256.slice(0,12) : 'no hash'}</div>
+      </div>
+
+      ${previewHtml}
+
+      <div class="flex gap-2 pt-1">
+        ${contractState.editMode
+          ? `<button onclick="saveContractEdits()" class="bg-emerald-600 hover:bg-emerald-500 px-3 py-2 rounded-lg text-sm font-semibold flex-1">💾 Save edits</button>
+             <button onclick="contractState.editMode=false;renderContractModal()" class="bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg text-sm">Cancel</button>`
+          : `<button onclick="contractState.editMode=true;renderContractModal()" class="bg-blue-600 hover:bg-blue-500 px-3 py-2 rounded-lg text-sm font-semibold flex-1">✏️ Edit fields</button>
+             ${sendButtonHtml}`}
+      </div>
+
+      ${editForm}
+
+      <details class="bg-white/5 rounded-lg p-2">
+        <summary class="text-[11px] text-white/60 cursor-pointer">📜 Versions (${versions.length})</summary>
+        <div class="mt-2">${versionsHtml}</div>
+      </details>
+
+      <details class="bg-white/5 rounded-lg p-2">
+        <summary class="text-[11px] text-white/60 cursor-pointer">📝 Recent edits (${edits.length})</summary>
+        <div class="mt-2">${editsHtml}</div>
+      </details>
+
+      ${blockers.length ? `<div class="text-[11px] text-amber-400 bg-amber-500/5 rounded-lg p-2">⚠ ${blockers.map(escapeHtml).join(' · ')}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderContractEditForm(e) {
+  const fields = [
+    { key: 'name', label: 'Legal name', type: 'text' },
+    { key: 'known_as', label: 'Known as / nickname', type: 'text' },
+    { key: 'job_name', label: 'Role / designation', type: 'text' },
+    { key: 'brand_label', label: 'Brand', type: 'select', options: ['HE', 'NCH', 'HQ'] },
+    { key: 'pay_type', label: 'Pay type', type: 'select', options: ['Monthly', 'Contract', 'TBD'] },
+    { key: 'monthly_salary', label: 'Monthly salary (₹)', type: 'number' },
+    { key: 'daily_rate', label: 'Daily rate (₹)', type: 'number' },
+    { key: 'start_date', label: 'Joining date', type: 'date' },
+    { key: 'contract_effective_date', label: 'Contract effective from', type: 'date' },
+    { key: 'aadhaar_last4', label: 'Aadhaar last 4', type: 'text' },
+    { key: 'phone', label: 'Phone', type: 'text' },
+    { key: 'contract_special_clauses', label: 'Special clauses (per-employee, free text)', type: 'textarea' },
+  ];
+  return `
+    <div class="bg-white/5 rounded-lg p-3 space-y-2">
+      <div class="text-[11px] text-white/60 mb-1">Editable fields. Service Rules / Form 11 / boilerplate stay locked.</div>
+      ${fields.map(f => {
+        const v = e[f.key] ?? '';
+        if (f.type === 'select') {
+          return `
+            <label class="block">
+              <span class="text-[11px] text-white/60">${f.label}</span>
+              <select id="cf_${f.key}" class="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm">
+                ${f.options.map(o => `<option value="${o}" ${o===v?'selected':''}>${o}</option>`).join('')}
+              </select>
+            </label>`;
+        }
+        if (f.type === 'textarea') {
+          return `
+            <label class="block">
+              <span class="text-[11px] text-white/60">${f.label}</span>
+              <textarea id="cf_${f.key}" rows="3"
+                class="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm font-mono">${escapeHtml(v)}</textarea>
+            </label>`;
+        }
+        return `
+          <label class="block">
+            <span class="text-[11px] text-white/60">${f.label}</span>
+            <input id="cf_${f.key}" type="${f.type}" value="${escapeHtml(v)}"
+              class="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm">
+          </label>`;
+      }).join('')}
+    </div>`;
+}
+
+async function saveContractEdits() {
+  const empId = contractState.employeeId;
+  if (!empId) return;
+  const fieldKeys = ['name','known_as','job_name','brand_label','pay_type','monthly_salary',
+                     'daily_rate','start_date','contract_effective_date','aadhaar_last4','phone',
+                     'contract_special_clauses'];
+  const fields = {};
+  for (const k of fieldKeys) {
+    const el = document.getElementById('cf_' + k);
+    if (!el) continue;
+    let v = el.value;
+    if ((k === 'monthly_salary' || k === 'daily_rate') && v !== '') v = Number(v);
+    fields[k] = v;
+  }
+
+  try {
+    const r = await fetch('/api/hr-contracts?action=update-contract-data', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': state.apiKey },
+      body: JSON.stringify({ employee_id: empId, fields, edited_by: 'owner' }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'save failed');
+
+    if (data.no_changes) {
+      alert('No changes detected.');
+    } else {
+      alert(`✓ ${data.changes} field(s) saved. Contract is now marked dirty (v${data.next_version} pending). Run regen script locally, then refresh.`);
+    }
+    contractState.editMode = false;
+    await openContractModal(empId);  // re-fetch to show updated state
+    await loadEmployees();           // refresh roster badges
+  } catch (e) {
+    alert('Save failed: ' + e.message);
+  }
+}
+
+async function confirmSendLeegality(empId) {
+  const d = contractState.data;
+  if (!d || !d.employee || !d.employee.contract_drive_id) {
+    alert('No contract on file.');
+    return;
+  }
+  const e = d.employee;
+  const ok = confirm(
+    `Send v${e.contract_version} of ${e.known_as || e.name}'s contract to Leegality?\n\n` +
+    `Status: ${e.contract_status}\n` +
+    `Hash: ${(e.contract_pdf_sha256 || '').slice(0, 16)}…\n` +
+    `Last regenerated: ${e.contract_last_regenerated_at || '?'}\n\n` +
+    `This will trigger Aadhaar OTP eSign on the employee's phone.`
+  );
+  if (!ok) return;
+
+  // The actual Leegality API call is made by the server-side wrapper (or a local
+  // helper script for v1). For now, we POST a "send-leegality" intent which the
+  // server uses to record the result once the wrapper returns the doc_id.
+  alert('Send-Leegality wrapper not yet wired in v1. Run the local sender:\n\n' +
+        `  node scripts/send-via-leegality.js ${empId}\n\n` +
+        'It will call Leegality, capture the doc_id, and POST back to /api/hr-contracts?action=send-leegality.');
+}
+
+/* ━━━ Leegality cleanup admin ━━━ */
+async function loadLeegalityOrphans() {
+  const r = await fetch('/api/hr-contracts?action=leegality-orphans', {
+    headers: { 'x-dashboard-key': state.apiKey }
+  });
+  const data = await r.json();
+  if (!r.ok) { alert('Load failed: ' + (data.error || '')); return; }
+  return data.orphans || [];
+}
+
+async function wipeLeegalityOrphans(ids) {
+  if (!ids.length) return;
+  if (!confirm(`Wipe ${ids.length} orphan Leegality docs? This is irreversible.`)) return;
+  const r = await fetch('/api/hr-contracts?action=leegality-mark-action', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-dashboard-key': state.apiKey },
+    body: JSON.stringify({ ids, action: 'wiped' }),
+  });
+  const data = await r.json();
+  alert(r.ok ? `Marked ${data.updated} as wiped. Run local cleanup script to delete from Leegality.` : 'Failed: ' + (data.error || ''));
+}
 </script>
+
+<!-- Contract management modal -->
+<div id="contractModal" class="modal-overlay hidden" onclick="if(event.target===this)closeContractModal()">
+  <div class="modal-card" style="max-width:640px">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-bold" id="contractModalTitle">Contract</h2>
+      <button onclick="closeContractModal()" class="text-white/60 hover:text-white text-2xl leading-none">×</button>
+    </div>
+    <div id="contractModalBody"></div>
+  </div>
+</div>
+
 </body>
 </html>
