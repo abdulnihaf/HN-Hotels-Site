@@ -133,7 +133,8 @@ export async function onRequest(context) {
     }
 
     if (rmCodeParam) {
-      const rmCode = rmCodeParam.toUpperCase();
+      // Codes are mixed-case (e.g. HN-AM-Bl-BTR) — preserve as-is.
+      const rmCode = rmCodeParam;
       if (method === 'GET') return await getOne(DB, rmCode);
       if (method === 'PUT') return await putOne(DB, rmCode, context.request, user);
       return json({ error: 'Method not allowed' }, 405);
