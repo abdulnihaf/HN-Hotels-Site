@@ -109,16 +109,23 @@
           <input type="number" id="ob_daily_rate" placeholder="e.g., 600">
         </div>
         <div class="input-row">
-          <label>Aadhaar (12 digits, optional now)</label>
+          <label>Aadhaar Number (12 digits, optional)</label>
           <input type="text" id="ob_aadhaar" pattern="[0-9 ]{12,14}" placeholder="Can collect later">
+        </div>
+        <div class="input-row">
+          <label>Aadhaar Card Photo (optional, can collect later)</label>
+          <input type="file" id="ob_aadhaar_file" accept="image/*,application/pdf"
+                 style="padding:0.5rem;background:rgba(0,0,0,0.3);border:1px dashed rgba(255,255,255,0.2);border-radius:0.5rem;color:white;width:100%">
+          <p class="meta" style="margin-top:0.25rem;font-size:0.75rem">Front side of Aadhaar. JPG/PNG/PDF.</p>
         </div>
         <div class="input-row">
           <label>Date of Birth (optional)</label>
           <input type="date" id="ob_dob">
         </div>
         <div class="input-row">
-          <label>Start Date *</label>
-          <input type="date" id="ob_start_date" required>
+          <label>Start Date <span class="meta" style="font-size:0.75rem;color:#34d399">(auto-set from CAMS first punch — locked)</span></label>
+          <input type="date" id="ob_start_date" required readonly
+                 style="background:rgba(52,211,153,0.1);border-color:rgba(52,211,153,0.3);cursor:not-allowed">
         </div>
         <div class="input-row">
           <label>Notes (optional)</label>
@@ -157,7 +164,11 @@
 <script>
 const params = new URLSearchParams(window.location.search);
 const token = params.get('t') || params.get('token');
-const flow = window.location.pathname.includes('/ghost') ? 'ghost' : 'absence';
+// Routing via ?type=ghost|absence (query-param so /hr/respond/ resolves to index.html cleanly)
+const flow = params.get('type') === 'ghost' ? 'ghost'
+           : params.get('type') === 'absence' ? 'absence'
+           : window.location.pathname.includes('/ghost') ? 'ghost'
+           : 'absence';
 
 let context = null;
 
@@ -186,7 +197,9 @@ async function init() {
       document.getElementById('ghostPunches').textContent = data.total_punches;
       document.getElementById('ghostDays').textContent = data.total_days;
       document.getElementById('ghostLastSeen').textContent = data.last_seen_at?.slice(0, 10) || '—';
-      document.getElementById('ob_start_date').value = new Date().toISOString().slice(0, 10);
+      // Start date = CAMS first-punch date — LOCKED (cannot be edited)
+      document.getElementById('ob_start_date').value =
+        data.first_punch_date || new Date().toISOString().slice(0, 10);
       document.getElementById('ghostFlow').classList.remove('hidden');
       document.getElementById('loadingScreen').classList.add('hidden');
     } catch (e) {
@@ -231,7 +244,11 @@ async function submitOnboarding(event) {
   const form = document.getElementById('onboardForm');
   form.classList.add('loading');
 
-  const data = {
+  // Multipart so Aadhaar file rides along
+  const fileEl = document.getElementById('ob_aadhaar_file');
+  const aadhaarFile = fileEl.files && fileEl.files[0];
+
+  const fields = {
     token,
     name: document.getElementById('ob_name').value,
     known_as: document.getElementById('ob_known_as').value,
@@ -247,11 +264,23 @@ async function submitOnboarding(event) {
     notes: document.getElementById('ob_notes').value || null,
   };
 
+  let body, headers;
+  if (aadhaarFile) {
+    const fd = new FormData();
+    fd.append('payload', JSON.stringify(fields));
+    fd.append('aadhaar_file', aadhaarFile);
+    body = fd;
+    headers = {}; // browser sets multipart boundary
+  } else {
+    body = JSON.stringify(fields);
+    headers = { 'content-type': 'application/json' };
+  }
+
   try {
     const r = await fetch('/api/hr-automation?action=hr-ghost-onboard-submit', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(data),
+      headers,
+      body,
     });
     const result = await r.json();
     if (result.error) {
@@ -259,7 +288,10 @@ async function submitOnboarding(event) {
       form.classList.remove('loading');
       return;
     }
-    showSuccess(`${data.name} added to roster (Employee ID #${result.employee_id}). Contract generation will be triggered.`);
+    const aadhaarMsg = result.aadhaar_drive_id
+      ? ` Aadhaar saved to Drive.`
+      : (aadhaarFile ? ' (⚠ Aadhaar upload deferred — owner will upload manually.)' : '');
+    showSuccess(`${fields.name} added to roster (Employee ID #${result.employee_id}).${aadhaarMsg} Contract generation queued.`);
   } catch (e) {
     showError(e.message);
     form.classList.remove('loading');

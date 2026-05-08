@@ -79,8 +79,18 @@ export async function onRequest({ request, env }) {
   }
 
   if (action === 'hr-ghost-onboard-submit' && method === 'POST') {
-    const body = await request.json();
-    return await ghostOnboardSubmit(env, body);
+    // Two formats: multipart (Aadhaar file attached) or JSON
+    const ctype = request.headers.get('content-type') || '';
+    let body, aadhaarFile = null;
+    if (ctype.includes('multipart/form-data')) {
+      const form = await request.formData();
+      const payload = form.get('payload');
+      try { body = JSON.parse(payload); } catch { return json({ error: 'invalid payload JSON' }, 400); }
+      aadhaarFile = form.get('aadhaar_file');
+    } else {
+      body = await request.json();
+    }
+    return await ghostOnboardSubmit(env, body, aadhaarFile);
   }
 
   return json({ error: 'Unknown action', valid: [
@@ -183,33 +193,26 @@ async function detectAbsences(env) {
 }
 
 async function sendAbsenceWaba(env, manager, alert) {
-  // Multi-channel: WABA primary, DLT SMS fallback if no ack within 30 min.
-  // Voice excluded — managers aren't on-call for absence.
-  // Logs to comms_outbox with alert_id='hr_absence:<token>'; cron-escalate handles fallback.
+  // Uses the approved Sparksol template `ops_alert_v1` (4 vars):
+  //   "Heads up — {{1}} at {{2}}: {{3}}. Tap to resolve: {{4}}. Reply DONE when fixed."
+  // Manager taps the URL and lands on the absence-respond mini-page where they
+  // pick On Leave / Sick / Left / Bio Issue.
   const empName = alert.known_as || alert.name;
   const role = alert.job_name || '—';
-  // Same 6 vars work for both WABA template and DLT SMS template (SMS has only 5 — ok, extra ignored)
-  const vars = [
-    manager.name,
-    empName,
-    role,
-    String(alert.pin || '—'),
-    String(alert.days_absent),
-    alert.last_working_date || 'unknown',
-  ];
+  const respondUrl = `https://hnhotels.in/hr/respond/?t=${alert.alert_token}&type=absence`;
+
   const result = await sendWithFallback(env, {
     brand: 'sparksol',
     tier: 'warn',
     alert_id: `hr_absence:${alert.alert_token}`,
     phone: manager.phone,
-    template: 'hr_absence_inquiry_v1', // matches dlt_templates.template_name for SMS fallback
+    template: 'ops_alert_v1',
     language: 'en',
-    vars,
-    buttons: [
-      { sub_type: 'quick_reply', index: 0, payload: `absence_resp|${alert.alert_token}|on_leave` },
-      { sub_type: 'quick_reply', index: 1, payload: `absence_resp|${alert.alert_token}|sick` },
-      { sub_type: 'quick_reply', index: 2, payload: `absence_resp|${alert.alert_token}|left` },
-      { sub_type: 'quick_reply', index: 3, payload: `absence_resp|${alert.alert_token}|bio_issue` },
+    vars: [
+      `${empName} absent ${alert.days_absent}d`,                              // {{1}}
+      `${alert.brand_label || ''} (PIN ${alert.pin || '—'}) ${role}`.trim(),  // {{2}}
+      `Last punch ${alert.last_working_date || 'unknown'}. Confirm reason`,   // {{3}}
+      respondUrl,                                                             // {{4}}
     ],
     chain: ['waba', 'sms'],
     gap_minutes: { waba: 30, sms: 60 },
@@ -307,23 +310,22 @@ async function detectGhosts(env) {
 }
 
 async function sendGhostPinWaba(env, manager, ghost) {
-  // WABA primary, DLT SMS fallback. SMS template is hr_ghost_pin_v1 (URL embeds onboarding token).
+  // Uses the approved Sparksol template `ops_alert_v1` (4 vars):
+  //   "Heads up — {{1}} at {{2}}: {{3}}. Tap to resolve: {{4}}. Reply DONE when fixed."
+  // Var 4 is a URL — WhatsApp auto-links it. Manager taps → opens /hr/respond/ghost mini-UI.
+  const onboardingUrl = `https://hnhotels.in/hr/respond/?t=${ghost.onboarding_token}&type=ghost`;
   const result = await sendWithFallback(env, {
     brand: 'sparksol',
     tier: 'warn',
     alert_id: `hr_ghost:${ghost.pin}`,
     phone: manager.phone,
-    template: 'hr_ghost_pin_inquiry_v1', // WABA name (templates pre-seeded under hr_ghost_pin_v1 in DLT — see lookup remap below)
+    template: 'ops_alert_v1',
     language: 'en',
     vars: [
-      manager.name,
-      ghost.pin,
-      String(ghost.total_punches),
-      String(ghost.total_days),
-      ghost.onboarding_token, // 5th var for the URL slot in DLT body
-    ],
-    buttons: [
-      { sub_type: 'url', index: 0, url_token: ghost.onboarding_token },
+      `Ghost CAMS PIN ${ghost.pin}`,                                          // {{1}} — what
+      ghost.total_days >= 5 ? 'CAMS' : 'CAMS (recent)',                       // {{2}} — where/when
+      `${ghost.total_punches} punches across ${ghost.total_days} day(s) — not in /ops/hr roster`, // {{3}} — details
+      onboardingUrl,                                                          // {{4}} — actionable URL
     ],
     chain: ['waba', 'sms'],
     gap_minutes: { waba: 30, sms: 60 },
@@ -443,11 +445,19 @@ async function ghostOnboardStart(env, params) {
       .bind(ghost.id).run();
   }
 
+  // Look up first/last CAMS punch date for this PIN — first punch IS the start date
+  const punchSpan = await env.DB.prepare(`
+    SELECT MIN(date(punch_time)) AS first_punch, MAX(date(punch_time)) AS last_punch
+      FROM hr_cams_punches WHERE pin = ?
+  `).bind(ghost.pin).first();
+
   return json({
     pin: ghost.pin,
     total_punches: ghost.total_punches,
     total_days: ghost.total_days,
     last_seen_at: ghost.last_seen_at,
+    first_punch_date: punchSpan?.first_punch || null,
+    last_punch_date: punchSpan?.last_punch || null,
     options: {
       brands: ['HE', 'NCH', 'HQ'],
       pay_types: ['Monthly', 'Contract'],
@@ -457,7 +467,7 @@ async function ghostOnboardStart(env, params) {
   });
 }
 
-async function ghostOnboardSubmit(env, body) {
+async function ghostOnboardSubmit(env, body, aadhaarFile = null) {
   const { token, name, known_as, phone, role, brand, pay_type, monthly_salary, daily_rate, aadhaar, dob, start_date, notes } = body;
 
   if (!token) return json({ error: 'token required' }, 400);
@@ -504,15 +514,40 @@ async function ghostOnboardSubmit(env, body) {
     ghost.id
   ).run();
 
+  // ─── Aadhaar file: stash in KV for owner to move into Drive ─────────────
+  // (Server-side Drive upload from CF Pages requires OAuth refresh token wired
+  // as a CF secret — see follow-up. For now, we save the bytes + metadata to
+  // KV so nothing is lost; owner sees a flag in /ops/hr to move it.)
+  let aadhaar_drive_id = null;
+  let aadhaar_pending = false;
+  if (aadhaarFile && aadhaarFile.size > 0) {
+    aadhaar_pending = true;
+    try {
+      if (env.HR_KV) {
+        const buf = await aadhaarFile.arrayBuffer();
+        const filename = aadhaarFile.name || `aadhaar_${empResult.id}.bin`;
+        await env.HR_KV.put(
+          `aadhaar_pending:${empResult.id}`,
+          buf,
+          { metadata: { filename, mimeType: aadhaarFile.type, employee_id: empResult.id, size: buf.byteLength } }
+        );
+      }
+    } catch (e) {
+      console.error('aadhaar stash failed:', e?.message || e);
+    }
+  }
+
   return json({
     success: true,
     employee_id: empResult.id,
     template,
+    aadhaar_pending,
+    aadhaar_drive_id,
     message: 'Employee added. Contract generation will be triggered separately.',
     next_steps: [
       'Generate contract via /api/hr-admin?action=generate-contract&employee_id=' + empResult.id,
-      'Upload to Drive folder',
+      aadhaar_pending ? 'Move Aadhaar file from KV to Drive folder (owner action)' : null,
       'Send to Leegality for eSign',
-    ],
+    ].filter(Boolean),
   });
 }
