@@ -1,0 +1,26 @@
+name = "wealth-options"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+[triggers]
+crons = [
+  # 09:15-15:30 IST → UTC 03:45-10:00
+  # Paid tier: max freshness on options chain — every minute for indices
+  "*/1 3-10 * * 1-5",     # Nifty option chain    every 1 min
+  "*/2 3-10 * * 1-5",     # BankNifty             every 2 min
+  "*/3 3-10 * * 1-5",     # India VIX             every 3 min (was disabled by cron-key bug)
+  "*/5 3-10 * * 1-5",     # FinNifty              every 5 min
+  "*/10 3-10 * * 1-5",    # Stock options rotation every 10 min
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"
+
+[vars]
+STOCK_OPTIONS_TOP = "RELIANCE,HDFCBANK,ICICIBANK,INFY,TCS,SBIN,BAJFINANCE,LT,ITC,HINDUNILVR,KOTAKBANK,AXISBANK,MARUTI,TATAMOTORS,SUNPHARMA"
+# KITE_API_KEY moved to wrangler secret (was hardcoded — security leak fixed).
+# Set via: wrangler secret put KITE_API_KEY --name wealth-options

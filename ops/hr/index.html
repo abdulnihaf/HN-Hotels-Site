@@ -150,6 +150,7 @@
     <button onclick="setTab('deductions')"  data-tab="deductions"  class="tab-btn flex-shrink-0">Deductions</button>
     <button onclick="setTab('cams')"        data-tab="cams"        class="tab-btn flex-shrink-0">CAMS</button>
     <button onclick="setTab('sync')"        data-tab="sync"        class="tab-btn flex-shrink-0">Sync</button>
+    <button onclick="setTab('messaging')"   data-tab="messaging"   class="tab-btn flex-shrink-0">Messaging</button>
   </div>
 
   <!-- ═══ ROSTER TAB ═══ -->
@@ -346,6 +347,66 @@
     <div class="card">
       <h3 class="text-sm font-bold mb-2">Recent sync log</h3>
       <div id="syncLog" class="text-xs space-y-1.5 max-h-96 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- ═══ MESSAGING TAB ═══ -->
+  <div id="tab-messaging" class="tab-content hidden px-4 py-4">
+    <div class="grid grid-cols-3 gap-2 mb-3" id="msgStats">
+      <div class="card text-center"><div class="text-xs text-white/40 uppercase tracking-wider">WABA opted-in</div><div class="text-2xl font-bold text-emerald-400" id="msgStatIn">—</div></div>
+      <div class="card text-center"><div class="text-xs text-white/40 uppercase tracking-wider">WABA pending</div><div class="text-2xl font-bold text-amber-400" id="msgStatPe">—</div></div>
+      <div class="card text-center"><div class="text-xs text-white/40 uppercase tracking-wider">Total staff</div><div class="text-2xl font-bold" id="msgStatTotal">—</div></div>
+    </div>
+
+    <div class="card mb-3">
+      <h3 class="text-sm font-bold mb-2">Staff opt-in state · click to select</h3>
+      <div class="flex items-center gap-2 mb-2">
+        <input id="msgFilter" placeholder="Search name or role" oninput="renderMsgStaff()" class="flex-1 text-xs">
+        <select id="msgBrandFilter" onchange="renderMsgStaff()" class="text-xs">
+          <option value="">All brands</option>
+          <option value="HQ">HQ</option>
+          <option value="HE">HE</option>
+          <option value="NCH">NCH</option>
+        </select>
+        <select id="msgOptinFilter" onchange="renderMsgStaff()" class="text-xs">
+          <option value="">All</option>
+          <option value="opted_in">Opted in</option>
+          <option value="pending">Pending</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-2 mb-2">
+        <button onclick="msgSelectAll()" class="btn btn-ghost btn-sm">Select all visible</button>
+        <button onclick="msgSelectOptedIn()" class="btn btn-ghost btn-sm">Select opted-in only</button>
+        <button onclick="msgSelectNone()" class="btn btn-ghost btn-sm">Clear</button>
+        <span id="msgSelCount" class="text-xs text-white/40 ml-auto">0 selected</span>
+      </div>
+      <div id="msgStaffList" class="space-y-1 max-h-80 overflow-y-auto">Loading…</div>
+    </div>
+
+    <div class="card">
+      <h3 class="text-sm font-bold mb-2">Send WABA template</h3>
+      <div class="text-xs text-white/40 mb-2">Only sends to <strong>opted-in</strong> staff in your selection. Pending staff are skipped automatically.</div>
+
+      <label class="row-label">Template</label>
+      <select id="msgTemplate" onchange="onMsgTemplateChange()" class="w-full text-sm">
+        <option value="">Loading templates…</option>
+      </select>
+
+      <div id="msgVarsContainer" class="space-y-2 mt-2"></div>
+
+      <label class="row-label mt-3">Preview</label>
+      <pre id="msgPreview" class="text-xs p-2 rounded bg-black/30 max-h-32 overflow-y-auto whitespace-pre-wrap">Pick a template…</pre>
+
+      <div class="flex items-center gap-2 mt-3">
+        <input id="msgDk" placeholder="x-dashboard-key" class="flex-1 text-xs" style="font-family: ui-monospace, monospace;">
+        <button onclick="msgSend()" class="btn btn-primary">Send</button>
+      </div>
+      <div id="msgResult" class="mt-3 text-xs"></div>
+    </div>
+
+    <div class="card mt-3">
+      <h3 class="text-sm font-bold mb-2">Recent outbox · last 15</h3>
+      <div id="msgOutbox" class="text-xs space-y-1.5 max-h-64 overflow-y-auto">—</div>
     </div>
   </div>
 
@@ -1438,6 +1499,212 @@ async function syncAllEmployees(ev) {
 document.getElementById('pinInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') verifyPin();
 });
+
+/* ━━━ Messaging tab ━━━ */
+let msgStaff = [];
+let msgTemplates = [];
+let msgSelectedTemplate = null;
+let msgLoaded = false;
+
+(function hookMessagingTab(){
+  const _setTab = window.setTab;
+  window.setTab = function(t){
+    _setTab(t);
+    if (t === 'messaging' && !msgLoaded) {
+      msgLoaded = true;
+      loadMessagingTab();
+    } else if (t === 'messaging') {
+      loadMessagingTab();
+    }
+  };
+})();
+
+async function loadMessagingTab(){
+  // Load saved dashboard key
+  const savedDk = localStorage.getItem('hn_msg_dk');
+  if (savedDk) document.getElementById('msgDk').value = savedDk;
+  document.getElementById('msgDk').addEventListener('change', e => localStorage.setItem('hn_msg_dk', e.target.value));
+
+  try {
+    const [overview, staff, templates, outbox] = await Promise.all([
+      fetch('/api/messaging?action=overview').then(r=>r.json()),
+      fetch('/api/messaging?action=staff').then(r=>r.json()),
+      fetch('/api/messaging?action=templates').then(r=>r.json()),
+      fetch('/api/messaging?action=outbox&limit=15').then(r=>r.json()),
+    ]);
+    const optin = overview.counts?.optin || [];
+    const wabaIn = optin.find(x=>x.channel==='waba'&&x.status==='opted_in')?.cnt || 0;
+    const wabaPe = optin.find(x=>x.channel==='waba'&&x.status==='pending')?.cnt || 0;
+    document.getElementById('msgStatIn').textContent = wabaIn;
+    document.getElementById('msgStatPe').textContent = wabaPe;
+    document.getElementById('msgStatTotal').textContent = wabaIn + wabaPe;
+
+    msgStaff = staff.staff || [];
+    msgTemplates = templates.templates || [];
+
+    const sel = document.getElementById('msgTemplate');
+    sel.innerHTML = '<option value="">— pick a template —</option>' +
+      msgTemplates.map(t=>`<option value="${t.name}">${t.name} (${t.var_count} vars · ${t.category})</option>`).join('');
+
+    renderMsgStaff();
+    renderMsgOutbox(outbox.outbox || []);
+  } catch(e){
+    document.getElementById('msgStaffList').innerHTML = `<div class="text-red-400 text-xs p-2">Error loading: ${e.message}</div>`;
+  }
+}
+
+function renderMsgStaff(){
+  const f = (document.getElementById('msgFilter')?.value || '').toLowerCase();
+  const bf = document.getElementById('msgBrandFilter')?.value || '';
+  const of = document.getElementById('msgOptinFilter')?.value || '';
+  const filtered = msgStaff.filter(s => {
+    if (f && !s.name.toLowerCase().includes(f) && !((s.role||'').toLowerCase().includes(f))) return false;
+    if (bf && s.brand !== bf) return false;
+    if (of && s.waba_status !== of) return false;
+    return true;
+  });
+  const list = document.getElementById('msgStaffList');
+  if (!filtered.length) { list.innerHTML = '<div class="text-xs text-white/40 p-3 text-center">No matches</div>'; return; }
+  list.innerHTML = filtered.map(s => {
+    const wabaPill = s.waba_status === 'opted_in'
+      ? '<span class="badge badge-synced">WABA ✓</span>'
+      : '<span class="badge badge-pending">PEND</span>';
+    const brandPill = `<span class="badge badge-${(s.brand||'').toLowerCase()}">${s.brand||'?'}</span>`;
+    return `<label class="emp-row" style="padding:8px 10px; cursor:pointer;">
+      <div class="flex items-center gap-2">
+        <input type="checkbox" data-phone="${s.e164}" data-status="${s.waba_status||''}" onchange="updateMsgSelCount()" class="w-4 h-4">
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-sm truncate">${s.name}</div>
+          <div class="text-xs text-white/40 truncate">${s.role || '—'} · ${s.phone}</div>
+        </div>
+        ${brandPill}
+        ${wabaPill}
+      </div>
+    </label>`;
+  }).join('');
+}
+
+function msgSelectAll(){
+  document.querySelectorAll('#msgStaffList input[type=checkbox]').forEach(cb => cb.checked = true);
+  updateMsgSelCount();
+}
+function msgSelectOptedIn(){
+  document.querySelectorAll('#msgStaffList input[type=checkbox]').forEach(cb => {
+    cb.checked = (cb.dataset.status === 'opted_in');
+  });
+  updateMsgSelCount();
+}
+function msgSelectNone(){
+  document.querySelectorAll('#msgStaffList input[type=checkbox]').forEach(cb => cb.checked = false);
+  updateMsgSelCount();
+}
+function updateMsgSelCount(){
+  const all = Array.from(document.querySelectorAll('#msgStaffList input[type=checkbox]:checked'));
+  const opted = all.filter(cb => cb.dataset.status === 'opted_in').length;
+  const pending = all.length - opted;
+  document.getElementById('msgSelCount').innerHTML =
+    `<strong class="text-emerald-400">${opted}</strong> opted-in selected` +
+    (pending > 0 ? ` · <span class="text-amber-400">${pending} pending will be skipped</span>` : '');
+}
+
+function onMsgTemplateChange(){
+  const name = document.getElementById('msgTemplate').value;
+  msgSelectedTemplate = msgTemplates.find(t => t.name === name);
+  const c = document.getElementById('msgVarsContainer');
+  if (!msgSelectedTemplate){
+    c.innerHTML = '';
+    document.getElementById('msgPreview').textContent = 'Pick a template…';
+    return;
+  }
+  c.innerHTML = '';
+  for (let i = 1; i <= msgSelectedTemplate.var_count; i++){
+    const lbl = document.createElement('label');
+    lbl.className = 'row-label';
+    lbl.textContent = 'var {{'+i+'}}';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'w-full text-sm';
+    inp.dataset.varIdx = i;
+    inp.addEventListener('input', renderMsgPreview);
+    c.appendChild(lbl);
+    c.appendChild(inp);
+  }
+  renderMsgPreview();
+}
+
+function renderMsgPreview(){
+  if (!msgSelectedTemplate) return;
+  let txt = msgSelectedTemplate.body_text;
+  document.querySelectorAll('#msgVarsContainer input').forEach(inp => {
+    txt = txt.replace(new RegExp('\\{\\{' + inp.dataset.varIdx + '\\}\\}', 'g'), inp.value || '{{' + inp.dataset.varIdx + '}}');
+  });
+  document.getElementById('msgPreview').textContent = txt;
+}
+
+async function msgSend(){
+  const dk = document.getElementById('msgDk').value.trim();
+  if (!dk){ alert('Dashboard key required'); return; }
+  if (!msgSelectedTemplate){ alert('Pick a template'); return; }
+
+  // Only opted-in recipients
+  const recipients = Array.from(document.querySelectorAll('#msgStaffList input[type=checkbox]:checked'))
+    .filter(cb => cb.dataset.status === 'opted_in')
+    .map(cb => cb.dataset.phone);
+  if (!recipients.length){ alert('No opted-in recipients selected'); return; }
+
+  const vars = Array.from(document.querySelectorAll('#msgVarsContainer input')).map(i => i.value);
+
+  if (recipients.length > 5 && !confirm('Send to ' + recipients.length + ' staff via WABA?')) return;
+
+  document.getElementById('msgResult').innerHTML = '<span class="text-amber-400">Sending ' + recipients.length + '…</span>';
+  document.querySelector('button[onclick="msgSend()"]').disabled = true;
+
+  try {
+    const action = recipients.length === 1 ? 'send' : 'send-bulk';
+    const body = recipients.length === 1
+      ? { channel:'waba', brand:'sparksol', phone:recipients[0], template:msgSelectedTemplate.name, vars }
+      : { channel:'waba', brand:'sparksol', recipients, template:msgSelectedTemplate.name, vars };
+    const res = await fetch('/api/messaging?action=' + action, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (action === 'send-bulk'){
+      document.getElementById('msgResult').innerHTML =
+        `<span class="text-emerald-400">✓ ${data.ok}/${data.total} sent</span>` +
+        (data.failed ? ` · <span class="text-red-400">${data.failed} failed</span>` : '');
+    } else {
+      document.getElementById('msgResult').innerHTML = data.ok
+        ? `<span class="text-emerald-400">✓ wamid: ${data.provider_msg_id}</span>`
+        : `<span class="text-red-400">${data.error || 'failed'}</span>`;
+    }
+    setTimeout(() => loadMessagingTab(), 1500);
+  } catch(e){
+    document.getElementById('msgResult').innerHTML = '<span class="text-red-400">' + e.message + '</span>';
+  } finally {
+    document.querySelector('button[onclick="msgSend()"]').disabled = false;
+  }
+}
+
+function renderMsgOutbox(rows){
+  const el = document.getElementById('msgOutbox');
+  if (!rows.length){ el.innerHTML = '<div class="text-white/40">No sends yet.</div>'; return; }
+  el.innerHTML = rows.map(r => {
+    const ts = (r.sent_at || '').slice(11, 19);
+    const ch = r.channel === 'waba' ? '🟢' : '📱';
+    const stCls = r.status === 'sent' ? 'text-emerald-400' : (r.status === 'failed' ? 'text-red-400' : 'text-white/60');
+    const delivered = r.delivered_at ? ' · ✓ delivered' : '';
+    const read = r.read_at ? ' · 👁 read' : '';
+    const ack = r.ack_action ? ' · ACK ' + r.ack_action : '';
+    return `<div class="flex items-center gap-2">
+      <span>${ch}</span>
+      <span class="text-white/40 font-mono">${ts}</span>
+      <span class="flex-1 truncate">${r.recipient_phone} · ${r.template_name || (r.body_text||'').slice(0,30)}</span>
+      <span class="${stCls}">${r.status}${delivered}${read}${ack}</span>
+    </div>`;
+  }).join('');
+}
 </script>
 </body>
 </html>

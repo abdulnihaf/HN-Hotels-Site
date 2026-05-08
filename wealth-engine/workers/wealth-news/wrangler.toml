@@ -1,0 +1,27 @@
+name = "wealth-news"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+[triggers]
+crons = [
+  # ─── News + sentiment max freshness (paid tier) ──────────
+  "*/5 * * * *",          # RSS aggregator    every 5 min  (7 RSS feeds)
+  "2-57/5 * * * *",       # GDELT             every 5 min offset 2 (was disabled)
+  "*/10 * * * *",         # Reddit            every 10 min
+  "4-54/10 * * * *",      # Nitter Twitter    every 10 min offset 4 (was disabled)
+  "*/10 3-10 * * 1-5",    # StockTwits        every 10 min market hours
+  "15 * * * *",           # LLM news tagger   hourly at :15 (Haiku, cost-capped)
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"
+
+[vars]
+SYMBOLS_HINT = "RELIANCE,HDFCBANK,ICICIBANK,INFY,TCS,SBIN,BAJFINANCE,LT,ITC,HINDUNILVR,KOTAKBANK,AXISBANK,MARUTI,TATAMOTORS,SUNPHARMA,WIPRO,NTPC,BHARTIARTL,ASIANPAINT,M&M,ADANIENT,ADANIPORTS,POWERGRID,ONGC,COALINDIA,HCLTECH,TECHM,TITAN,NESTLEIND,ULTRACEMCO,JSWSTEEL,GRASIM,DRREDDY,CIPLA,HEROMOTOCO,EICHERMOT,DIVISLAB,HINDALCO,BPCL,IOC,TATASTEEL,VEDL,UPL,APOLLOHOSP,BAJAJFINSV,BAJAJ-AUTO,BRITANNIA,DABUR,GODREJCP,LICI,SBILIFE,HDFCLIFE,ICICIPRULI,SHRIRAMFIN"
+NITTER_INSTANCES = "nitter.poast.org,nitter.privacydev.net,nitter.tiekoetter.com"
+CASHTAGS = "NIFTY,BANKNIFTY,SENSEX,FINNIFTY,RELIANCE,HDFCBANK,ICICIBANK,INFY,TCS,SBIN"
+STOCKTWITS_SYMBOLS = "NIFTY,RELIANCE,HDFCBANK,INFY,TCS,ICICIBANK,SBIN,BAJFINANCE,LT,ITC"

@@ -1,0 +1,66 @@
+{
+  "name": "Wealth Engine — Trading",
+  "short_name": "Wealth",
+  "description": "Algorithmic trading platform with live Kite Connect execution. Surgical investing for Indian equity short-day + swing.",
+  "start_url": "/trading/today/",
+  "scope": "/trading/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0a0f1c",
+  "theme_color": "#0a0f1c",
+  "icons": [
+    {
+      "src": "/trading/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/trading/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/trading/icons/icon-maskable-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Today (Guided)",
+      "short_name": "Today",
+      "description": "Step-by-step guided execution for today's trading",
+      "url": "/trading/today/",
+      "icons": [{ "src": "/trading/icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Execute (Power)",
+      "short_name": "Execute",
+      "description": "Full execution dashboard with all signals and trade desk",
+      "url": "/trading/execute/",
+      "icons": [{ "src": "/trading/icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Hub (Data)",
+      "short_name": "Hub",
+      "description": "Market data overview with all tabs",
+      "url": "/trading/",
+      "icons": [{ "src": "/trading/icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Ops (Health)",
+      "short_name": "Ops",
+      "description": "Engine health monitor + backtest runner",
+      "url": "/trading/ops/",
+      "icons": [{ "src": "/trading/icons/icon-192.svg", "sizes": "192x192" }]
+    }
+  ],
+  "categories": ["finance", "productivity", "business"],
+  "lang": "en-IN",
+  "dir": "ltr",
+  "prefer_related_applications": false
+}

@@ -47,6 +47,43 @@ const MAX_BODY_BYTES = 512 * 1024;      // 512 KB cap on ingested email size
 const MAX_DRY_RUN_BYTES = 256 * 1024;   // 256 KB cap on dry-run POST
 
 export default {
+  // Cron: every 4h — re-parse partial/quarantined rows in-process.
+  // Catches rows that failed due to email format changes or body encoding
+  // issues. Promotes them to parse_status='parsed' automatically.
+  async scheduled(_event, env, _ctx) {
+    const rows = await env.DB.prepare(`
+      SELECT id, raw_subject, raw_body FROM money_events
+      WHERE source=? AND parse_status IN ('partial','quarantined','failed')
+      ORDER BY id DESC LIMIT 500
+    `).bind(SOURCE).all();
+    let fixed = 0;
+    for (const r of rows.results || []) {
+      const p = parseHdfcAlert({ subject: r.raw_subject || '', body: r.raw_body || '' });
+      if (p.parse_status === 'parsed') {
+        await env.DB.prepare(`
+          UPDATE money_events
+          SET direction           = COALESCE(?, direction),
+              amount_paise        = COALESCE(?, amount_paise),
+              balance_paise_after = COALESCE(?, balance_paise_after),
+              channel             = COALESCE(?, channel),
+              counterparty        = COALESCE(?, counterparty),
+              counterparty_ref    = COALESCE(?, counterparty_ref),
+              source_ref          = COALESCE(?, source_ref),
+              txn_at              = COALESCE(?, txn_at),
+              narration           = COALESCE(?, narration),
+              parse_status        = 'parsed'
+          WHERE id=?
+        `).bind(
+          p.direction, p.amount_paise, p.balance_paise_after, p.channel,
+          p.counterparty, p.counterparty_ref, p.source_ref,
+          p.txn_at, p.narration, r.id,
+        ).run();
+        fixed++;
+      }
+    }
+    console.log(`cron reparse: scanned=${rows.results?.length ?? 0} fixed=${fixed}`);
+  },
+
   async email(message, env, ctx) {
     const received_at = nowIso();
     let raw;
@@ -265,7 +302,12 @@ export function parseHdfcAlert({ subject, body }) {
 
   // Amount — anchor on debit/credit proximity to avoid picking up amounts
   // from marketing footers. Capped repetition avoids catastrophic backtrack.
-  const amountRe1 = /(?:rs|inr|₹)\.?\s*([\d,]{1,15}(?:\.\d{1,2})?)\s+(?:has\s+been\s+)?(?:debited|credited|withdrawn|sent|paid|received|credit|debit)/i;
+  //
+  // HDFC switched InstaAlert UPI format mid-2026:
+  //   old: "Rs. 50000.00 has been credited to your account …"
+  //   new: "Rs. 50000.00 is successfully credited to your account …"
+  // amountRe1 handles both via (?:has\s+been|is(?:\s+\w+){0,2}).
+  const amountRe1 = /(?:rs|inr|₹)\.?\s*([\d,]{1,15}(?:\.\d{1,2})?)\s+(?:(?:has\s+been|is(?:\s+\w+){0,2})\s+)?(?:debited|credited|withdrawn|sent|paid|received|credit|debit)/i;
   const amountRe2 = /(?:debited|credited|withdrawn|sent|paid|received)[^.]{0,40}?(?:rs|inr|₹)\.?\s*([\d,]{1,15}(?:\.\d{1,2})?)/i;
   const amtMatch = text.match(amountRe1) || text.match(amountRe2);
   const amountRupees = amtMatch ? Number(amtMatch[1].replace(/,/g, '')) : null;
@@ -303,7 +345,10 @@ export function parseHdfcAlert({ subject, body }) {
     const m = text.match(/(?:paid\s+to|to)\s+([A-Z][A-Za-z0-9 &._\-]{1,59}?)\s+(?:vpa\b|on\b|,|\.|\/|ref\b|rs\b|inr\b|upi\b|imps\b|neft\b)/i);
     if (m) counterparty = m[1].trim();
   } else if (direction === 'credit') {
-    const m = text.match(/(?:received\s+from|from)\s+([A-Z][A-Za-z0-9 &._\-]{1,59}?)\s+(?:vpa\b|on\b|,|\.|\/|ref\b|rs\b|inr\b|upi\b|imps\b|neft\b)/i);
+    // Old format: "received from K M HANEEF VPA …"
+    // New format: "credited … by VPA haneefkm.pace-1@okhdfcbank K M HANEEF on …"
+    const m = text.match(/(?:received\s+from|from)\s+([A-Z][A-Za-z0-9 &._\-]{1,59}?)\s+(?:vpa\b|on\b|,|\.|\/|ref\b|rs\b|inr\b|upi\b|imps\b|neft\b)/i)
+      || text.match(/\bby\s+VPA\s+\S+\s+([A-Za-z][A-Za-z0-9 &._\-]{1,59}?)\s+on\b/i);
     if (m) counterparty = m[1].trim();
   }
   const vpaMatch = text.match(/\b([a-z0-9._\-]{2,40}@[a-z]{2,20})\b/i);

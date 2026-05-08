@@ -1212,7 +1212,7 @@ async function addPOLine(body, user, creds, cfg, brand, DB, env) {
   // Fetch product meta for name (required by Odoo)
   const prod = await odooCall(sysCreds.uid, sysCreds.key,
     'product.product', 'read', [[parseInt(product_id, 10)]],
-    { fields: ['id', 'name', 'uom_po_id', 'product_tmpl_id'] });
+    { fields: ['id', 'name', 'uom_id'] });
   if (!prod || !prod.length) return json({ error: 'Product not found' }, 404);
 
   const lineVals = {
@@ -1221,7 +1221,8 @@ async function addPOLine(body, user, creds, cfg, brand, DB, env) {
     product_qty: qty,
     price_unit: priceU,
   };
-  if (prod[0].uom_po_id?.[0]) lineVals.product_uom = prod[0].uom_po_id[0];
+  // uom_id (sale UoM) exists on product.product in Odoo 19; uom_po_id was removed
+  if (prod[0].uom_id?.[0]) lineVals.product_uom = prod[0].uom_id[0];
 
   // Confirmed POs need cancel→draft→write→confirm cycle (same as delete-po-line)
   const state = check.po.state;

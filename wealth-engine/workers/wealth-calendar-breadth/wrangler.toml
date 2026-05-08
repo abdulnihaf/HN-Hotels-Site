@@ -1,0 +1,24 @@
+name = "wealth-calendar-breadth"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+[triggers]
+crons = [
+  # ─── Daily one-shot ──────────────────────────────────────
+  "30 0 * * *",            # Econ calendar               06:00 IST
+  "5 12 * * 1-5",          # Sector indices EOD          17:35 IST
+  "30 12 * * 1-5",         # Earnings calendar           18:00 IST
+  "0 16 * * *",            # Yahoo 60-day sector refresh 21:30 IST (rolling window)
+  "10 16 * * *",           # Bond direction analytic     21:40 IST (after GSec index settles)
+  # ─── Live market activity (paid tier max freshness) ──────
+  "*/5 3-10 * * 1-5",      # Most-active        every 5 min  (was 30)
+  "2-57/5 3-10 * * 1-5",   # Advance/decline    every 5 min  (was disabled)
+  "*/15 3-10 * * 1-5",     # Sector indices live every 15 min (NEW)
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wealth-engine"
+database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"

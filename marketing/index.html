@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HN Hotels · Marketing</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0f1a;color:#f1f5f9;font-family:'Plus Jakarta Sans',system-ui,sans-serif;min-height:100vh;padding:24px;line-height:1.5}
+.wrap{max-width:780px;margin:0 auto}
+h1{font-size:22px;font-weight:800;margin-bottom:4px}
+.sub{color:#94a3b8;font-size:13px;margin-bottom:24px}
+.brand{background:#161f33;border:1px solid #2d3a4f;border-radius:12px;padding:18px;margin-bottom:14px}
+.brand h2{font-size:16px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.brand .pin{font-size:14px}
+.brand .meta{color:#94a3b8;font-size:12px;margin-bottom:14px}
+.brand .grid{display:grid;grid-template-columns:1fr;gap:8px}
+@media(min-width:640px){.brand .grid{grid-template-columns:repeat(2,1fr)}}
+.tile{background:#0a0f1a;border:1px solid #2d3a4f;border-radius:8px;padding:12px;text-decoration:none;color:#f1f5f9;display:block;transition:border-color .15s}
+.tile:hover{border-color:var(--c)}
+.tile.he{--c:#f97316}
+.tile.nch{--c:#D4A44C}
+.tile .lbl{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:4px}
+.tile .ttl{font-size:13px;font-weight:700}
+.tile .desc{font-size:11px;color:#cbd5e1;margin-top:4px}
+.tile.coming{opacity:.5;cursor:not-allowed}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Marketing</h1>
+  <div class="sub">Brand cockpits for HN Hotels</div>
+
+  <div class="brand">
+    <h2><span class="pin">📍</span> Hamza Express</h2>
+    <div class="meta">QSR · Biryani &amp; Kabab · Shivajinagar · 1918 heritage</div>
+    <div class="grid">
+      <a href="/marketing/he/gbp/" class="tile he">
+        <div class="lbl">Live</div>
+        <div class="ttl">Google Business Profile →</div>
+        <div class="desc">Maps + Search impressions, customer actions, keywords, reviews, profile health</div>
+      </a>
+      <a href="https://hamzaexpress.in/ops/google-cockpit/" target="_blank" class="tile he">
+        <div class="lbl">External</div>
+        <div class="ttl">Google Ads cockpit ↗</div>
+        <div class="desc">Paid campaigns, keyword bids, search-term blocking</div>
+      </a>
+      <a href="https://hamzaexpress.in/ops/ctwa-cockpit/" target="_blank" class="tile he">
+        <div class="lbl">External</div>
+        <div class="ttl">Meta CTWA cockpit ↗</div>
+        <div class="desc">Click-to-WhatsApp campaigns and conversion funnel</div>
+      </a>
+      <a href="https://hamzaexpress.in/ops/leads/" target="_blank" class="tile he">
+        <div class="lbl">External</div>
+        <div class="ttl">WABA leads CRM ↗</div>
+        <div class="desc">WhatsApp lead pipeline + segments</div>
+      </a>
+    </div>
+  </div>
+
+  <div class="brand">
+    <h2><span class="pin">📍</span> Nawabi Chai House</h2>
+    <div class="meta">Cafe · Irani chai &amp; haleem · Shivajinagar · 1918 heritage</div>
+    <div class="grid">
+      <a href="/marketing/nch/gbp/" class="tile nch">
+        <div class="lbl">Live</div>
+        <div class="ttl">Google Business Profile →</div>
+        <div class="desc">Maps + Search impressions, customer actions, keywords, reviews, profile health</div>
+      </a>
+      <a href="https://nawabichaihouse.com/ops/marketing/organic/" target="_blank" class="tile nch">
+        <div class="lbl">Legacy</div>
+        <div class="ttl">Old organic page ↗</div>
+        <div class="desc">Places-API based — superseded by GBP cockpit above</div>
+      </a>
+    </div>
+  </div>
+</div>
+</body>
+</html>
