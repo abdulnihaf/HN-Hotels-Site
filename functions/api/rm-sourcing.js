@@ -98,6 +98,42 @@ function parseRmCode(code) {
   return { brand_prefix, rm_type, sourcing_profile, item_abbr };
 }
 
+/* Compose canonical rm_code from structured parts.
+ * sourcing_profile rule: primary uppercase first, alternates lowercase sorted. */
+function composeRmCode({ brand_prefix, rm_type, sourcing_profile, item_abbr }) {
+  if (!brand_prefix || !rm_type || !sourcing_profile || !item_abbr) {
+    throw new Error('Missing required parts to compose rm_code');
+  }
+  const allowedBrands = new Set(['HN', 'NCH', 'HE']);
+  if (!allowedBrands.has(brand_prefix)) {
+    throw new Error(`Bad brand_prefix: ${brand_prefix}`);
+  }
+  if (!/^[ADP][MS]$/.test(rm_type)) {
+    throw new Error(`Bad rm_type: ${rm_type} (expected e.g. AM/AS/DM/DS)`);
+  }
+  if (!/^[LBI][lbi]*$/.test(sourcing_profile)) {
+    throw new Error(`Bad sourcing_profile: ${sourcing_profile}`);
+  }
+  if (!/^[A-Z0-9]{2,4}$/.test(item_abbr)) {
+    throw new Error(`Bad item_abbr: ${item_abbr}`);
+  }
+  return `${brand_prefix}-${rm_type}-${sourcing_profile}-${item_abbr}`;
+}
+
+/* Normalize sourcing profile: ensure first char is the primary uppercase, rest lowercase sorted alpha. */
+function normalizeSourcingProfile(letters, primary) {
+  // letters: array like ['L','B'] or string 'LB' / 'Lb'
+  const arr = (Array.isArray(letters) ? letters : letters.split(''))
+    .map(s => s.toUpperCase())
+    .filter(s => s === 'L' || s === 'B' || s === 'I');
+  if (arr.length === 0) throw new Error('At least one sourcing letter required');
+  const set = Array.from(new Set(arr));
+  const p = (primary || set[0]).toUpperCase();
+  if (!set.includes(p)) throw new Error('primary not in sourcing letters');
+  const alts = set.filter(s => s !== p).sort();
+  return p + alts.map(s => s.toLowerCase()).join('');
+}
+
 /* Build empty data_json shaped to the sourcing profile letters.
  * Profile letters: L=loose, B=branded, I=in-house. */
 function emptyDataForProfile(profile) {
@@ -132,11 +168,16 @@ export async function onRequest(context) {
       return await seedAll(DB, user);
     }
 
+    if (action === 'create' && method === 'POST') {
+      return await createOne(DB, context.request, user);
+    }
+
     if (rmCodeParam) {
       // Codes are mixed-case (e.g. HN-AM-Bl-BTR) — preserve as-is.
       const rmCode = rmCodeParam;
       if (method === 'GET') return await getOne(DB, rmCode);
       if (method === 'PUT') return await putOne(DB, rmCode, context.request, user);
+      if (method === 'DELETE') return await deleteOne(DB, rmCode, user);
       return json({ error: 'Method not allowed' }, 405);
     }
 
@@ -209,33 +250,126 @@ async function getOne(DB, rmCode) {
 
 async function putOne(DB, rmCode, request, user) {
   const body = await request.json();
+  const existing = await DB.prepare(
+    `SELECT * FROM rm_sourcing_profiles WHERE rm_code = ?`
+  ).bind(rmCode).first();
+  if (!existing) return json({ error: 'RM not found' }, 404);
+
+  const data = body.data ?? body.data_json;
+  if (data === undefined || data === null) return json({ error: 'data missing' }, 400);
+  const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
+  const now = Date.now();
+
+  // Determine target structured parts: prefer body fields, fall back to existing row.
+  const brand_prefix     = body.brand_prefix     || existing.brand_prefix;
+  const rm_type          = body.rm_type          || existing.rm_type;
+  const sourcing_profile = body.sourcing_profile || existing.sourcing_profile;
+  const item_abbr        = (body.item_abbr || existing.item_abbr || '').toUpperCase();
+  const rm_name          = body.rm_name          || existing.rm_name;
+
+  // Compose new code if any structured part was provided.
+  let newRmCode = rmCode;
+  const structuredChanged =
+    body.brand_prefix !== undefined ||
+    body.rm_type !== undefined ||
+    body.sourcing_profile !== undefined ||
+    body.item_abbr !== undefined;
+
+  if (structuredChanged) {
+    try {
+      newRmCode = composeRmCode({ brand_prefix, rm_type, sourcing_profile, item_abbr });
+    } catch (e) {
+      return json({ error: e.message }, 400);
+    }
+  }
+
+  if (newRmCode !== rmCode) {
+    // Migration path: ensure new code is unique, INSERT new row, DELETE old.
+    const collide = await DB.prepare(
+      `SELECT rm_code FROM rm_sourcing_profiles WHERE rm_code = ?`
+    ).bind(newRmCode).first();
+    if (collide) {
+      return json({ error: `rm_code ${newRmCode} already exists. Pick a different abbreviation.` }, 409);
+    }
+
+    // D1 batch is atomic — wrap insert+delete together.
+    await DB.batch([
+      DB.prepare(
+        `INSERT INTO rm_sourcing_profiles
+           (rm_code, brand_prefix, rm_type, sourcing_profile, item_abbr,
+            rm_name, data_json, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(newRmCode, brand_prefix, rm_type, sourcing_profile, item_abbr,
+             rm_name, dataStr, now, user.name),
+      DB.prepare(`DELETE FROM rm_sourcing_profiles WHERE rm_code = ?`).bind(rmCode),
+    ]);
+    return json({
+      success: true,
+      rm_code: newRmCode,
+      migrated_from: rmCode,
+      updated_at: now,
+      updated_by: user.name,
+    });
+  }
+
+  // In-place update.
+  await DB.prepare(
+    `UPDATE rm_sourcing_profiles
+        SET brand_prefix = ?, rm_type = ?, sourcing_profile = ?, item_abbr = ?,
+            rm_name = ?, data_json = ?, updated_at = ?, updated_by = ?
+      WHERE rm_code = ?`
+  ).bind(brand_prefix, rm_type, sourcing_profile, item_abbr,
+         rm_name, dataStr, now, user.name, rmCode).run();
+
+  return json({ success: true, rm_code: rmCode, updated_at: now, updated_by: user.name });
+}
+
+async function createOne(DB, request, user) {
+  const body = await request.json();
+  const brand_prefix     = body.brand_prefix;
+  const rm_type          = body.rm_type;
+  const sourcing_profile = body.sourcing_profile;
+  const item_abbr        = (body.item_abbr || '').toUpperCase();
+  const rm_name          = body.rm_name;
+
+  if (!rm_name) return json({ error: 'rm_name required' }, 400);
+
+  let rm_code;
+  try {
+    rm_code = composeRmCode({ brand_prefix, rm_type, sourcing_profile, item_abbr });
+  } catch (e) {
+    return json({ error: e.message }, 400);
+  }
+
+  const collide = await DB.prepare(
+    `SELECT rm_code FROM rm_sourcing_profiles WHERE rm_code = ?`
+  ).bind(rm_code).first();
+  if (collide) {
+    return json({ error: `RM with code ${rm_code} already exists. Pick a different abbreviation.` }, 409);
+  }
+
+  const data = body.data ?? body.data_json ?? emptyDataForProfile(sourcing_profile);
+  const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
+  const now = Date.now();
+
+  await DB.prepare(
+    `INSERT INTO rm_sourcing_profiles
+       (rm_code, brand_prefix, rm_type, sourcing_profile, item_abbr,
+        rm_name, data_json, updated_at, updated_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(rm_code, brand_prefix, rm_type, sourcing_profile, item_abbr,
+         rm_name, dataStr, now, user.name).run();
+
+  return json({ success: true, rm_code, updated_at: now, updated_by: user.name }, 201);
+}
+
+async function deleteOne(DB, rmCode, user) {
   const exists = await DB.prepare(
     `SELECT rm_code FROM rm_sourcing_profiles WHERE rm_code = ?`
   ).bind(rmCode).first();
   if (!exists) return json({ error: 'RM not found' }, 404);
-
-  const data = body.data ?? body.data_json;
-  if (!data) return json({ error: 'data missing' }, 400);
-
-  const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
-  const now = Date.now();
-
-  // Optionally update sourcing_profile if provided
-  if (body.sourcing_profile) {
-    await DB.prepare(
-      `UPDATE rm_sourcing_profiles
-          SET sourcing_profile = ?, data_json = ?, updated_at = ?, updated_by = ?
-        WHERE rm_code = ?`
-    ).bind(body.sourcing_profile, dataStr, now, user.name, rmCode).run();
-  } else {
-    await DB.prepare(
-      `UPDATE rm_sourcing_profiles
-          SET data_json = ?, updated_at = ?, updated_by = ?
-        WHERE rm_code = ?`
-    ).bind(dataStr, now, user.name, rmCode).run();
-  }
-
-  return json({ success: true, rm_code: rmCode, updated_at: now, updated_by: user.name });
+  await DB.prepare(`DELETE FROM rm_sourcing_profiles WHERE rm_code = ?`).bind(rmCode).run();
+  return json({ success: true, rm_code: rmCode, deleted_by: user.name });
 }
 
 async function seedAll(DB, user) {
