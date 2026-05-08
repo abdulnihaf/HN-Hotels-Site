@@ -1,0 +1,33 @@
+Brand,PIN,OdooID,Known_As,Legal_Name,Role,Old_Gross,New_Gross,New_Basic,New_HRA,New_Other,Employer_ESI,Employee_ESI,Take_Home,Total_Company_CTC,CTC_Delta_Old,Loss_Per_Mo_Employee,Aadhaar,DOB,Phone,Bio_Enrolled,Category,Action_Required
+HE,12,2,Azeem,Azeem,Head Chef,36000,36000,15001,10500,10499,0,0,36000,36000,0,0,,,8249609448,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+HE,23,3,Rahim,Mahammad Rahim,Tandoor Cook Lead,33000,33000,15001,9000,8999,0,0,33000,33000,0,0,8139 4095 8362,1994-02-15,7978290335,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+HE,41,4,Ramjan,Ramjan,Tandoor Assistant,27000,27000,15001,6000,5999,0,0,27000,27000,0,0,,,9861611272,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+HE,17,5,Nizam,Sk Khatib Uddin,Indian Assistant Cook,27000,27000,15001,6000,5999,0,0,27000,27000,0,0,3878 4800 2715,1992-04-14,9886455393,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+HE,13,6,Bikash,Bikash Keut,Chinese Assistant Cook,27000,27000,15001,6000,5999,0,0,27000,27000,0,0,3755 9894 3897,2002-01-15,7608064802,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+HE,7,11,SK Muntaz,SK Muntaz,Captain,25000,25000,15001,5000,4999,0,0,25000,25000,0,0,,,9114115059,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+HE,15,12,Noor Ahmed,Shaik Noor Ahmed,Cashier,25000,25000,15001,5000,4999,0,0,25000,25000,0,0,8920 7609 9830,1982-06-16,6362427127,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+HE,39,9,Paresh,Paresh,Porotta Maker,24000,24000,15001,4500,4499,0,0,24000,24000,0,0,,,6003879945,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+HE,40,7,Laden,Laden Khan,Indian Helper,21000,21500,15001,3250,3249,0,0,21500,21500,500,-500,7107 0673 7833,2007-07-11,9124930562,Y,"AT ceiling — recommend bump to ₹21,500 (push out of ESI)",Bump +₹500/mo (exits ESI); Form 11 EPF
+HE,37,8,Yahabu Khan,Yahabu Khan,Chinese Helper,21000,21500,15001,3250,3249,0,0,21500,21500,500,-500,2694 1048 5868,2003-05-18,6379038335,Y,"AT ceiling — recommend bump to ₹21,500 (push out of ESI)",Bump +₹500/mo (exits ESI); Form 11 EPF
+HE,38,10,Anthony,Anthoni Dhan,Washer / Dishwasher,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,7887 4918 0777,1997-12-21,8688591863,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+HE,4,13,Faizan,Faizan Hussain,Waiter / Steward,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,4375 8772 3617,2004-12-10,7088155640,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+HE,8,14,Faisal Ali,Faisal Ali,Cleaner,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,,,9955692916,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+HE,3,15,Hardev Prasad,Hardev Prasad Singh,Waiter / Steward,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,9155 7398 1328,1996-10-04,9771495736,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+HE,36,16,Dhiraj Kumar,Dhiraj Kumar,Cleaner,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,6510 8443 0755,2004-03-14,9399906842,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+HE,44,,Badol,Badol,Porotta Maker,0,0,0,0,0,0,0,0,0,0,0,,,,N,Zero-salary (Badol — needs cleanup),EXCLUDE — clean up record first
+HQ,1,17,Abdul Khader Nihaf,Abdul Khader Nihaf,Managing Director,30000,30000,15001,7500,7499,0,0,30000,30000,0,0,,,7010426808,Y,HQ — ESI not applicable (4 staff < 10),Form 11 only (EPF excluded employee)
+HQ,2,18,B Naveen Kumar,B Naveen Kumar,CFO,30000,30000,15001,7500,7499,0,0,30000,30000,0,0,,,8073476051,Y,HQ — ESI not applicable (4 staff < 10),Form 11 only (EPF excluded employee)
+HQ,9,21,Tanveer Ahmed,Tanveer Ahmed,General Manager,30000,30000,15001,7500,7499,0,0,30000,30000,0,0,5636 8872 6020,1982-07-05,9916399474,Y,HQ — ESI not applicable (4 staff < 10),Form 11 only (EPF excluded employee)
+HQ,35,19,Zoya Ahmed,Zoya Ahmed,Office Executive,20000,20000,15001,2500,2499,0,0,20000,20000,0,0,,,8147120714,Y,HQ — ESI not applicable (4 staff < 10),Form 11 only (EPF excluded employee)
+NCH,10,24,Mujib,Mujib,Irani Chai Master,45000,45000,15001,15000,14999,0,0,45000,45000,0,0,7603 0109 1500,1986-01-01,9591170162,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+NCH,5,25,Moin,Mainuddin,Irani Chai Master,45000,45000,15001,15000,14999,0,0,45000,45000,0,0,7808 0697 8375,2000-10-12,8291107097,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+NCH,43,27,Nafees Ahmed,Nafees Ahmed,Cashier,25000,25000,15001,5000,4999,0,0,25000,25000,0,0,,,9019627929,Y,Above ESI ceiling — already excluded,Form 11 only (EPF excluded employee)
+NCH,14,26,MD Kesmat,Md Kesmat Sk,Cashier,19000,18402,15001,1700,1701,598,138,18264,19000,0,736,3244 9506 9098,1998-04-12,8637895699,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+NCH,25,28,B Aadil Ahmed,B Aadil Ahmed,Kitchen Helper,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,7449 7545 0245,1992-08-24,9994885263,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+NCH,29,29,MD Aktar,Md Aktar,Washer / Dishwasher,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,4606 2896 3828,1998-07-07,8787894755,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+NCH,24,30,Sabir Ahmed,Sabir Ahmed,Runner,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,,,9100533428,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+NCH,26,31,MD Reyaj Ali,MD Reyaj Ali,Cleaner,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,,,7870510936,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+NCH,27,32,Dhananjay Singh,Dhananjai Singh,Cleaner,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,4600 8988 6106,1994-09-05,8874730537,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+NCH,33,33,Noim Uddin,Noim Uddin,Cleaner,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,3567 3085 8131,2006-04-02,8729813746,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+NCH,30,34,MD Maqbool,MD Maqbool,Cleaner,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,,,9366412521,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11
+NCH,34,35,Ameer Khan,Ameer Khan,Washer / Dishwasher,18000,17433,15001,1216,1216,567,131,17302,18000,0,698,,,7005607097,Y,ESI zone — Full pass-through restructure,CTC amendment + ESI enrol + Form 11

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>HN HR — Manager Response</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); color: white; margin: 0; min-height: 100vh; padding: 1rem; }
+    .container { max-width: 480px; margin: 0 auto; }
+    .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 1rem; padding: 1.5rem; margin-bottom: 1rem; }
+    h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 0.5rem 0; color: #fbbf24; }
+    h2 { font-size: 1.1rem; font-weight: 600; margin: 0.5rem 0; }
+    p { margin: 0.5rem 0; color: rgba(255,255,255,0.8); }
+    .meta { font-size: 0.875rem; color: rgba(255,255,255,0.5); }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem; }
+    .btn { padding: 1rem; border-radius: 0.75rem; border: none; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 56px; transition: transform 0.1s; }
+    .btn:active { transform: scale(0.97); }
+    .btn-leave { background: #3b82f6; color: white; }
+    .btn-sick { background: #f97316; color: white; }
+    .btn-left { background: #ef4444; color: white; }
+    .btn-bio { background: #6366f1; color: white; }
+    .btn-primary { background: #10b981; color: white; }
+    .input-row { margin-bottom: 0.75rem; }
+    .input-row label { display: block; font-size: 0.875rem; color: rgba(255,255,255,0.7); margin-bottom: 0.25rem; }
+    .input-row input, .input-row select { width: 100%; padding: 0.875rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: white; font-size: 1rem; }
+    .input-row input:focus, .input-row select:focus { outline: 2px solid #fbbf24; }
+    .badge { background: #fbbf24; color: #1e293b; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; }
+    .success { color: #34d399; font-size: 1.5rem; text-align: center; padding: 2rem; }
+    .error { color: #f87171; padding: 0.75rem; background: rgba(239,68,68,0.1); border-radius: 0.5rem; margin: 0.5rem 0; }
+    .hidden { display: none !important; }
+    .loading { opacity: 0.6; pointer-events: none; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <div id="absenceFlow" class="hidden">
+    <div class="card">
+      <h1>📋 Manager Response</h1>
+      <p>Confirm employee status</p>
+      <h2 id="empName">—</h2>
+      <p class="meta">PIN <span id="empPin">—</span> · <span id="empRole">—</span></p>
+      <p>Last working: <span id="lastDay" class="badge">—</span></p>
+      <p>Days absent: <span id="daysAbsent" class="badge">—</span></p>
+    </div>
+
+    <div class="card">
+      <h2>What's their status?</h2>
+      <div class="btn-row">
+        <button class="btn btn-leave" onclick="respondAbsence('on_leave')">On Leave</button>
+        <button class="btn btn-sick" onclick="respondAbsence('sick')">Sick</button>
+        <button class="btn btn-left" onclick="respondAbsence('left')">Left Job</button>
+        <button class="btn btn-bio" onclick="respondAbsence('bio_issue')">Bio Issue</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ghostFlow" class="hidden">
+    <div class="card">
+      <h1>👤 New Worker Onboarding</h1>
+      <p>Biometric PIN <span id="ghostPin" class="badge">—</span> has been punching but isn't in the roster.</p>
+      <p class="meta"><span id="ghostPunches">—</span> punches over <span id="ghostDays">—</span> days. Last seen: <span id="ghostLastSeen">—</span></p>
+      <p>Please add this employee:</p>
+    </div>
+
+    <div class="card">
+      <form id="onboardForm" onsubmit="submitOnboarding(event)">
+        <div class="input-row">
+          <label>Full Name (as per Aadhaar) *</label>
+          <input type="text" id="ob_name" required>
+        </div>
+        <div class="input-row">
+          <label>Known As / Nickname</label>
+          <input type="text" id="ob_known_as">
+        </div>
+        <div class="input-row">
+          <label>Mobile Phone *</label>
+          <input type="tel" id="ob_phone" pattern="[0-9]{10}" placeholder="10 digits" required>
+        </div>
+        <div class="input-row">
+          <label>Brand / Outlet *</label>
+          <select id="ob_brand" required>
+            <option value="">Select...</option>
+            <option value="HE">Hamza Express (HE)</option>
+            <option value="NCH">Nawabi Chai House (NCH)</option>
+          </select>
+        </div>
+        <div class="input-row">
+          <label>Role *</label>
+          <input type="text" id="ob_role" placeholder="e.g., Tea Master, Cleaner, Cook" required>
+        </div>
+        <div class="input-row">
+          <label>Pay Type *</label>
+          <select id="ob_pay_type" required onchange="togglePayFields()">
+            <option value="">Select...</option>
+            <option value="Monthly">Monthly Salary</option>
+            <option value="Contract">Contract / Daily Wage</option>
+          </select>
+        </div>
+        <div class="input-row" id="monthlyField">
+          <label>Monthly Salary (₹)</label>
+          <input type="number" id="ob_monthly_salary" placeholder="e.g., 18000">
+        </div>
+        <div class="input-row hidden" id="dailyField">
+          <label>Daily Rate (₹/day)</label>
+          <input type="number" id="ob_daily_rate" placeholder="e.g., 600">
+        </div>
+        <div class="input-row">
+          <label>Aadhaar (12 digits, optional now)</label>
+          <input type="text" id="ob_aadhaar" pattern="[0-9 ]{12,14}" placeholder="Can collect later">
+        </div>
+        <div class="input-row">
+          <label>Date of Birth (optional)</label>
+          <input type="date" id="ob_dob">
+        </div>
+        <div class="input-row">
+          <label>Start Date *</label>
+          <input type="date" id="ob_start_date" required>
+        </div>
+        <div class="input-row">
+          <label>Notes (optional)</label>
+          <input type="text" id="ob_notes" placeholder="Any additional info">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem;font-size:1.1rem;">
+          Save & Generate Contract
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="successScreen" class="hidden">
+    <div class="card">
+      <div class="success">✓</div>
+      <h1 style="text-align:center">Recorded</h1>
+      <p id="successMsg" style="text-align:center"></p>
+    </div>
+  </div>
+
+  <div id="errorScreen" class="hidden">
+    <div class="card">
+      <h1 style="color:#f87171">⚠ Error</h1>
+      <p id="errorMsg"></p>
+    </div>
+  </div>
+
+  <div id="loadingScreen">
+    <div class="card">
+      <p style="text-align:center">Loading...</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const token = params.get('t') || params.get('token');
+const flow = window.location.pathname.includes('/ghost') ? 'ghost' : 'absence';
+
+let context = null;
+
+async function init() {
+  if (!token) {
+    showError('No token in URL');
+    return;
+  }
+
+  if (flow === 'absence') {
+    document.getElementById('absenceFlow').classList.remove('hidden');
+    document.getElementById('loadingScreen').classList.add('hidden');
+    // No initial fetch needed; data comes via URL or rely on respondAbsence
+    // For better UX could fetch alert details here; skipping for v1
+  } else {
+    // Ghost onboarding
+    try {
+      const r = await fetch(`/api/hr-automation?action=hr-ghost-onboard-start&t=${token}`);
+      const data = await r.json();
+      if (data.error) {
+        showError(data.error);
+        return;
+      }
+      context = data;
+      document.getElementById('ghostPin').textContent = data.pin;
+      document.getElementById('ghostPunches').textContent = data.total_punches;
+      document.getElementById('ghostDays').textContent = data.total_days;
+      document.getElementById('ghostLastSeen').textContent = data.last_seen_at?.slice(0, 10) || '—';
+      document.getElementById('ob_start_date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('ghostFlow').classList.remove('hidden');
+      document.getElementById('loadingScreen').classList.add('hidden');
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+}
+
+function togglePayFields() {
+  const pt = document.getElementById('ob_pay_type').value;
+  document.getElementById('monthlyField').classList.toggle('hidden', pt !== 'Monthly');
+  document.getElementById('dailyField').classList.toggle('hidden', pt !== 'Contract');
+}
+
+async function respondAbsence(status) {
+  document.getElementById('absenceFlow').classList.add('loading');
+
+  // For "left" — confirm
+  if (status === 'left') {
+    if (!confirm('This will mark the employee as LEFT and trigger F&F. Are you sure?')) {
+      document.getElementById('absenceFlow').classList.remove('loading');
+      return;
+    }
+  }
+
+  try {
+    const url = `/api/hr-automation?action=hr-absence-respond&t=${token}&status=${status}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      showError(err.error || 'Failed to record response');
+      return;
+    }
+    showSuccess(`Status set to: ${status.replace('_', ' ')}`);
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+async function submitOnboarding(event) {
+  event.preventDefault();
+  const form = document.getElementById('onboardForm');
+  form.classList.add('loading');
+
+  const data = {
+    token,
+    name: document.getElementById('ob_name').value,
+    known_as: document.getElementById('ob_known_as').value,
+    phone: document.getElementById('ob_phone').value,
+    role: document.getElementById('ob_role').value,
+    brand: document.getElementById('ob_brand').value,
+    pay_type: document.getElementById('ob_pay_type').value,
+    monthly_salary: document.getElementById('ob_monthly_salary').value || null,
+    daily_rate: document.getElementById('ob_daily_rate').value || null,
+    aadhaar: document.getElementById('ob_aadhaar').value || null,
+    dob: document.getElementById('ob_dob').value || null,
+    start_date: document.getElementById('ob_start_date').value,
+    notes: document.getElementById('ob_notes').value || null,
+  };
+
+  try {
+    const r = await fetch('/api/hr-automation?action=hr-ghost-onboard-submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await r.json();
+    if (result.error) {
+      showError(result.error);
+      form.classList.remove('loading');
+      return;
+    }
+    showSuccess(`${data.name} added to roster (Employee ID #${result.employee_id}). Contract generation will be triggered.`);
+  } catch (e) {
+    showError(e.message);
+    form.classList.remove('loading');
+  }
+}
+
+function showSuccess(msg) {
+  document.querySelectorAll('.container > div').forEach(d => d.classList.add('hidden'));
+  document.getElementById('successScreen').classList.remove('hidden');
+  document.getElementById('successMsg').textContent = msg;
+}
+
+function showError(msg) {
+  document.querySelectorAll('.container > div').forEach(d => d.classList.add('hidden'));
+  document.getElementById('errorScreen').classList.remove('hidden');
+  document.getElementById('errorMsg').textContent = msg;
+}
+
+init();
+</script>
+</body>
+</html>

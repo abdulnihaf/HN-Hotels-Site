@@ -1,0 +1,23 @@
+name = "hn-hr-cron"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# Cron schedule (UTC). IST = UTC + 5:30
+# 21:30 UTC = 03:00 IST  (early morning absence check, before shift starts)
+# 05:30 UTC = 11:00 IST  (mid-morning, catches no-shows)
+# 13:30 UTC = 19:00 IST  (evening, end of shift)
+# 02:30 UTC = 08:00 IST  (ghost PIN scan)
+# 16:30 UTC = 22:00 IST  (daily summary to owner)
+# */15 * * * * = every 15 min (multi-channel escalation runner: WABA→SMS→Voice fallback)
+[triggers]
+crons = [
+  "30 21 * * *",
+  "30 5 * * *",
+  "30 13 * * *",
+  "30 2 * * *",
+  "30 16 * * *",
+  "*/15 * * * *"
+]
+
+# Secret: CRON_TOKEN — must match Pages env CRON_TOKEN
+# Set via: wrangler secret put CRON_TOKEN
