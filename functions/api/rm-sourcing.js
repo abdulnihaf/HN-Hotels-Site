@@ -49,60 +49,66 @@ function authPin(url) {
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * 30 NCH RM seed list — canonical codes
+ * NCH/HN RM seed list — canonical codes (5-segment grammar with USAGE)
+ *   {BRAND}-{TYPE}-{USAGE}-{SOURCING}-{ITEM}
+ * USAGE: P (production only), R (retail only), Pr (prod primary, retail alt),
+ *        Rp (retail primary, prod alt). At least one of P / R required.
  * Malai removed (state of production, not RM).
  * 3 raw items moved to Li (bought ready today, in-house possible tomorrow).
+ * Tea Powder + Osmania Biscuit are dual-USAGE (Pr) — used in our service AND
+ * resold as Niloufer-style retail packs.
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 const SEED_RMS = [
   // HN- cross-brand (12)
-  { rm_code: 'HN-AM-Lb-SUG', rm_name: 'Sugar' },
-  { rm_code: 'HN-AM-Lb-MDA', rm_name: 'Maida' },
-  { rm_code: 'HN-AM-Lb-SAU', rm_name: 'Saunf' },
-  { rm_code: 'HN-AM-Lb-KAJ', rm_name: 'Kaju' },
-  { rm_code: 'HN-AM-Lb-CAR', rm_name: 'Cardamom' },
-  { rm_code: 'HN-AM-Lb-OIL', rm_name: 'Oil' },
-  { rm_code: 'HN-AM-Lb-ALM', rm_name: 'Almonds' },
-  { rm_code: 'HN-AM-Bl-BTR', rm_name: 'Butter' },
-  { rm_code: 'HN-AM-B-SOD',  rm_name: 'Soda' },
-  { rm_code: 'HN-AM-B-LPG',  rm_name: 'LPG' },
-  { rm_code: 'HN-AM-L-CHL',  rm_name: 'Charcoal' },
-  { rm_code: 'HN-AM-L-GIN',  rm_name: 'Ginger' },
-  // NCH- only (18)
-  { rm_code: 'NCH-AM-Lb-MLK', rm_name: 'Buffalo Milk' },
-  { rm_code: 'NCH-AM-Bl-TEA', rm_name: 'Tea Powder' },
-  { rm_code: 'NCH-AM-Bl-SMP', rm_name: 'Skimmed Milk Powder' },
-  { rm_code: 'NCH-AM-Lb-SAF', rm_name: 'Saffron' },
-  { rm_code: 'NCH-AM-B-WTR',  rm_name: 'Bottled Water' },
-  { rm_code: 'NCH-AM-L-SBJ',  rm_name: 'Sabja' },
-  { rm_code: 'NCH-AM-B-CHC',  rm_name: 'Chocolate Powder' },
-  { rm_code: 'NCH-AS-Li-CCT', rm_name: 'Chicken Cutlet Raw' },
-  { rm_code: 'NCH-AS-Li-CHB', rm_name: 'Chicken Bites Raw' },
-  { rm_code: 'NCH-AS-Li-SMS', rm_name: 'Samosa Raw' },
-  { rm_code: 'NCH-AS-Lbi-BUN',rm_name: 'Bun' },
-  { rm_code: 'NCH-AS-Lb-PMK', rm_name: 'Pumpkin Seeds' },
-  { rm_code: 'NCH-AS-Lb-HNY', rm_name: 'Honey' },
-  { rm_code: 'NCH-AS-B-HRK',  rm_name: 'Horlicks' },
-  { rm_code: 'NCH-AS-B-BST',  rm_name: 'Boost' },
-  { rm_code: 'NCH-AS-B-JAM',  rm_name: 'Jam' },
-  { rm_code: 'NCH-AS-B-NUT',  rm_name: 'Nutella' },
-  { rm_code: 'NCH-DM-Bl-OSB', rm_name: 'Osmania Biscuit' },
+  { rm_code: 'HN-AM-P-Lb-SUG', rm_name: 'Sugar' },
+  { rm_code: 'HN-AM-P-Lb-MDA', rm_name: 'Maida' },
+  { rm_code: 'HN-AM-P-Lb-SAU', rm_name: 'Saunf' },
+  { rm_code: 'HN-AM-P-Lb-KAJ', rm_name: 'Kaju' },
+  { rm_code: 'HN-AM-P-Lb-CAR', rm_name: 'Cardamom' },
+  { rm_code: 'HN-AM-P-Lb-OIL', rm_name: 'Oil' },
+  { rm_code: 'HN-AM-P-Lb-ALM', rm_name: 'Almonds' },
+  { rm_code: 'HN-AM-P-Bl-BTR', rm_name: 'Butter' },
+  { rm_code: 'HN-AM-P-B-SOD',  rm_name: 'Soda' },
+  { rm_code: 'HN-AM-P-B-LPG',  rm_name: 'LPG' },
+  { rm_code: 'HN-AM-P-L-CHL',  rm_name: 'Charcoal' },
+  { rm_code: 'HN-AM-P-L-GIN',  rm_name: 'Ginger' },
+  // NCH- only
+  { rm_code: 'NCH-AM-P-Lb-MLK',  rm_name: 'Buffalo Milk' },
+  { rm_code: 'NCH-AM-Pr-Bl-TEA', rm_name: 'Tea Powder' },           // Pr = used by us + resold
+  { rm_code: 'NCH-AM-P-Bl-SMP',  rm_name: 'Skimmed Milk Powder' },
+  { rm_code: 'NCH-AM-P-Lb-SAF',  rm_name: 'Saffron' },
+  { rm_code: 'NCH-AM-P-B-WTR',   rm_name: 'Bottled Water' },
+  { rm_code: 'NCH-AM-P-L-SBJ',   rm_name: 'Sabja' },
+  { rm_code: 'NCH-AM-P-B-CHC',   rm_name: 'Chocolate Powder' },
+  { rm_code: 'NCH-AS-P-Li-CCT',  rm_name: 'Chicken Cutlet Raw' },
+  { rm_code: 'NCH-AS-P-Li-CHB',  rm_name: 'Chicken Bites Raw' },
+  { rm_code: 'NCH-AS-P-Li-SMS',  rm_name: 'Samosa Raw' },
+  { rm_code: 'NCH-AS-P-Lbi-BUN', rm_name: 'Bun' },
+  { rm_code: 'NCH-AS-P-Lb-PMK',  rm_name: 'Pumpkin Seeds' },
+  { rm_code: 'NCH-AS-P-Lb-HNY',  rm_name: 'Honey' },
+  { rm_code: 'NCH-AS-P-B-HRK',   rm_name: 'Horlicks' },
+  { rm_code: 'NCH-AS-P-B-BST',   rm_name: 'Boost' },
+  { rm_code: 'NCH-AS-P-B-JAM',   rm_name: 'Jam' },
+  { rm_code: 'NCH-AS-P-B-NUT',   rm_name: 'Nutella' },
+  { rm_code: 'NCH-DM-Pr-Bl-OSB', rm_name: 'Osmania Biscuit' },      // Pr = service + Niloufer packs
 ];
 
-/* parse rm_code → { brand_prefix, rm_type, sourcing_profile, item_abbr } */
+/* parse rm_code → { brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr }
+ * 5-segment grammar: PREFIX-TYPE-USAGE-SOURCING-ITEM */
 function parseRmCode(code) {
-  // shape: PREFIX-TYPE-PROFILE-ITEM   (PREFIX may have 2-3 chars; ITEM 3)
   const parts = code.split('-');
-  if (parts.length !== 4) {
-    throw new Error(`Bad rm_code shape: ${code}`);
+  if (parts.length !== 5) {
+    throw new Error(`Bad rm_code shape: ${code} (expected 5 segments)`);
   }
-  const [brand_prefix, rm_type, sourcing_profile, item_abbr] = parts;
-  return { brand_prefix, rm_type, sourcing_profile, item_abbr };
+  const [brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr] = parts;
+  return { brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr };
 }
 
 /* Compose canonical rm_code from structured parts.
- * sourcing_profile rule: primary uppercase first, alternates lowercase sorted. */
-function composeRmCode({ brand_prefix, rm_type, sourcing_profile, item_abbr }) {
-  if (!brand_prefix || !rm_type || !sourcing_profile || !item_abbr) {
+ * USAGE: P, R, Pr, or Rp (case = primacy).
+ * SOURCING: primary uppercase first, alternates lowercase sorted. */
+function composeRmCode({ brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr }) {
+  if (!brand_prefix || !rm_type || !usage_profile || !sourcing_profile || !item_abbr) {
     throw new Error('Missing required parts to compose rm_code');
   }
   const allowedBrands = new Set(['HN', 'NCH', 'HE']);
@@ -112,13 +118,38 @@ function composeRmCode({ brand_prefix, rm_type, sourcing_profile, item_abbr }) {
   if (!/^[ADP][MS]$/.test(rm_type)) {
     throw new Error(`Bad rm_type: ${rm_type} (expected e.g. AM/AS/DM/DS)`);
   }
+  if (!/^[PR][pr]?$/.test(usage_profile)) {
+    throw new Error(`Bad usage_profile: ${usage_profile} (expected P, R, Pr, or Rp)`);
+  }
   if (!/^[LBI][lbi]*$/.test(sourcing_profile)) {
     throw new Error(`Bad sourcing_profile: ${sourcing_profile}`);
   }
   if (!/^[A-Z0-9]{2,4}$/.test(item_abbr)) {
     throw new Error(`Bad item_abbr: ${item_abbr}`);
   }
-  return `${brand_prefix}-${rm_type}-${sourcing_profile}-${item_abbr}`;
+  return `${brand_prefix}-${rm_type}-${usage_profile}-${sourcing_profile}-${item_abbr}`;
+}
+
+/* Validate usage_profile.
+ * Valid: P, R, Pr, Rp. Invalid: empty, PR, RP, pp, etc.
+ * Returns null if valid, or a string error message if not. */
+function validateUsageProfile(usage) {
+  if (!usage || typeof usage !== 'string') {
+    return 'USAGE profile is required. An RM must be at least one of P (production) or R (retail).';
+  }
+  if (!/^[PR][pr]?$/.test(usage)) {
+    return 'Invalid USAGE profile. Must be P, R, Pr, or Rp.';
+  }
+  // Defensive: prevent same letter twice (e.g. Pp / Rr) — regex above already excludes these
+  // because the alternate is restricted to lowercase r|p (no uppercase) and primary excludes lowercase.
+  if (usage.length === 2) {
+    const primary = usage[0]; // P or R
+    const alt = usage[1].toUpperCase(); // P or R
+    if (primary === alt) {
+      return 'Invalid USAGE profile: primary letter cannot also appear as alternate.';
+    }
+  }
+  return null;
 }
 
 /* Validate sourcing_profile per the "RM must be purchasable" rule.
@@ -218,7 +249,7 @@ export async function onRequest(context) {
 
 async function listAll(DB) {
   const rs = await DB.prepare(
-    `SELECT rm_code, brand_prefix, rm_type, sourcing_profile, item_abbr,
+    `SELECT rm_code, brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr,
             rm_name, data_json, updated_at, updated_by
        FROM rm_sourcing_profiles
        ORDER BY brand_prefix, rm_type, rm_code`
@@ -240,6 +271,7 @@ async function listAll(DB) {
       rm_code: r.rm_code,
       brand_prefix: r.brand_prefix,
       rm_type: r.rm_type,
+      usage_profile: r.usage_profile,
       sourcing_profile: r.sourcing_profile,
       item_abbr: r.item_abbr,
       rm_name: r.rm_name,
@@ -262,6 +294,7 @@ async function getOne(DB, rmCode) {
     rm_code: rs.rm_code,
     brand_prefix: rs.brand_prefix,
     rm_type: rs.rm_type,
+    usage_profile: rs.usage_profile,
     sourcing_profile: rs.sourcing_profile,
     item_abbr: rs.item_abbr,
     rm_name: rs.rm_name,
@@ -286,9 +319,14 @@ async function putOne(DB, rmCode, request, user) {
   // Determine target structured parts: prefer body fields, fall back to existing row.
   const brand_prefix     = body.brand_prefix     || existing.brand_prefix;
   const rm_type          = body.rm_type          || existing.rm_type;
+  const usage_profile    = body.usage_profile    || existing.usage_profile;
   const sourcing_profile = body.sourcing_profile || existing.sourcing_profile;
   const item_abbr        = (body.item_abbr || existing.item_abbr || '').toUpperCase();
   const rm_name          = body.rm_name          || existing.rm_name;
+
+  // Validate usage_profile (must be P/R/Pr/Rp, never empty)
+  const usageErr = validateUsageProfile(usage_profile);
+  if (usageErr) return json({ error: usageErr }, 400);
 
   // Validate sourcing_profile (RM must be purchasable)
   const profileErr = validateSourcingProfile(sourcing_profile);
@@ -299,12 +337,13 @@ async function putOne(DB, rmCode, request, user) {
   const structuredChanged =
     body.brand_prefix !== undefined ||
     body.rm_type !== undefined ||
+    body.usage_profile !== undefined ||
     body.sourcing_profile !== undefined ||
     body.item_abbr !== undefined;
 
   if (structuredChanged) {
     try {
-      newRmCode = composeRmCode({ brand_prefix, rm_type, sourcing_profile, item_abbr });
+      newRmCode = composeRmCode({ brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr });
     } catch (e) {
       return json({ error: e.message }, 400);
     }
@@ -323,10 +362,10 @@ async function putOne(DB, rmCode, request, user) {
     await DB.batch([
       DB.prepare(
         `INSERT INTO rm_sourcing_profiles
-           (rm_code, brand_prefix, rm_type, sourcing_profile, item_abbr,
+           (rm_code, brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr,
             rm_name, data_json, updated_at, updated_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(newRmCode, brand_prefix, rm_type, sourcing_profile, item_abbr,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(newRmCode, brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr,
              rm_name, dataStr, now, user.name),
       DB.prepare(`DELETE FROM rm_sourcing_profiles WHERE rm_code = ?`).bind(rmCode),
     ]);
@@ -342,10 +381,10 @@ async function putOne(DB, rmCode, request, user) {
   // In-place update.
   await DB.prepare(
     `UPDATE rm_sourcing_profiles
-        SET brand_prefix = ?, rm_type = ?, sourcing_profile = ?, item_abbr = ?,
+        SET brand_prefix = ?, rm_type = ?, usage_profile = ?, sourcing_profile = ?, item_abbr = ?,
             rm_name = ?, data_json = ?, updated_at = ?, updated_by = ?
       WHERE rm_code = ?`
-  ).bind(brand_prefix, rm_type, sourcing_profile, item_abbr,
+  ).bind(brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr,
          rm_name, dataStr, now, user.name, rmCode).run();
 
   return json({ success: true, rm_code: rmCode, updated_at: now, updated_by: user.name });
@@ -355,11 +394,16 @@ async function createOne(DB, request, user) {
   const body = await request.json();
   const brand_prefix     = body.brand_prefix;
   const rm_type          = body.rm_type;
+  const usage_profile    = body.usage_profile;
   const sourcing_profile = body.sourcing_profile;
   const item_abbr        = (body.item_abbr || '').toUpperCase();
   const rm_name          = body.rm_name;
 
   if (!rm_name) return json({ error: 'rm_name required' }, 400);
+
+  // Validate usage_profile (must be P/R/Pr/Rp)
+  const usageErr = validateUsageProfile(usage_profile);
+  if (usageErr) return json({ error: usageErr }, 400);
 
   // Validate sourcing_profile (RM must be purchasable)
   const profileErr = validateSourcingProfile(sourcing_profile);
@@ -367,7 +411,7 @@ async function createOne(DB, request, user) {
 
   let rm_code;
   try {
-    rm_code = composeRmCode({ brand_prefix, rm_type, sourcing_profile, item_abbr });
+    rm_code = composeRmCode({ brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr });
   } catch (e) {
     return json({ error: e.message }, 400);
   }
@@ -385,10 +429,10 @@ async function createOne(DB, request, user) {
 
   await DB.prepare(
     `INSERT INTO rm_sourcing_profiles
-       (rm_code, brand_prefix, rm_type, sourcing_profile, item_abbr,
+       (rm_code, brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr,
         rm_name, data_json, updated_at, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(rm_code, brand_prefix, rm_type, sourcing_profile, item_abbr,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(rm_code, brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr,
          rm_name, dataStr, now, user.name).run();
 
   return json({ success: true, rm_code, updated_at: now, updated_by: user.name }, 201);
@@ -416,13 +460,14 @@ async function seedAll(DB, user) {
     const empty = emptyDataForProfile(parts.sourcing_profile);
     return DB.prepare(
       `INSERT INTO rm_sourcing_profiles
-         (rm_code, brand_prefix, rm_type, sourcing_profile, item_abbr,
+         (rm_code, brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr,
           rm_name, data_json, updated_at, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       seed.rm_code,
       parts.brand_prefix,
       parts.rm_type,
+      parts.usage_profile,
       parts.sourcing_profile,
       parts.item_abbr,
       seed.rm_name,
