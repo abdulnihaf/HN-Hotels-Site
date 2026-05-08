@@ -1,5 +1,5 @@
 // /api/comms — central comms hub
-// Routes WABA (Meta Cloud API direct) + SMS (Fast2SMS) per brand and tier.
+// Routes WABA (Meta Cloud API direct) + SMS (Fast2SMS) + Voice (Exotel) per brand and tier.
 // Logs every send to comms_outbox.
 
 const META_GRAPH_VERSION = 'v24.0';
@@ -67,6 +67,48 @@ async function sendWaba(env, { brand, phone, template, vars = [], language = 'en
     status: res.status,
     provider_msg_id: respJson?.messages?.[0]?.id || null,
     response: respJson || text,
+  };
+}
+
+async function sendVoice(env, { phone, message_text, alert_id }) {
+  if (!env.EXOTEL_SID || !env.EXOTEL_API_KEY || !env.EXOTEL_API_TOKEN) {
+    return { ok: false, status: 500, response: { error: 'Exotel not configured' } };
+  }
+  if (!env.EXOTEL_CALLER_ID) {
+    return { ok: false, status: 500, response: { error: 'EXOTEL_CALLER_ID not set — assign ExoPhone first' } };
+  }
+
+  const digits = normalizePhone(phone);
+  // Exotel expects 10-digit local or 0XXXXXXXXXX format for India
+  const toFormatted = digits.startsWith('91') ? '0' + digits.slice(2) : digits;
+  const base = env.PUBLIC_BASE_URL || 'https://hnhotels.in';
+  const apiUrl = `https://${env.EXOTEL_API_KEY}:${env.EXOTEL_API_TOKEN}@api.exotel.com/v1/Accounts/${env.EXOTEL_SID}/Calls/connect.json`;
+
+  const params = new URLSearchParams({
+    From: env.EXOTEL_CALLER_ID,
+    To: toFormatted,
+    CallerId: env.EXOTEL_CALLER_ID,
+    TimeLimit: '120',
+    Record: 'false',
+    StatusCallback: `${base}/api/comms-webhook?action=exotel-status`,
+    CustomField: alert_id ? String(alert_id) : '',
+    // Exotel fetches this URL when the call connects to get the ExoML call flow
+    Url: `${base}/api/comms-webhook?action=exotel-tts&text=${encodeURIComponent((message_text || 'HN Hotels alert').slice(0, 500))}&alert_id=${encodeURIComponent(alert_id || '')}`,
+  });
+
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
+  const respText = await res.text();
+  let respJson = null;
+  try { respJson = JSON.parse(respText); } catch {}
+  return {
+    ok: res.ok,
+    status: res.status,
+    provider_msg_id: respJson?.Call?.Sid || null,
+    response: respJson || respText,
   };
 }
 
@@ -144,6 +186,10 @@ export async function onRequest(context) {
         waba_he_token: !!(env.WA_HE_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN),
         waba_nch_token: !!(env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN),
         fast2sms_key: !!env.FAST2SMS_API_KEY,
+        exotel_sid: !!env.EXOTEL_SID,
+        exotel_api_key: !!env.EXOTEL_API_KEY,
+        exotel_api_token: !!env.EXOTEL_API_TOKEN,
+        exotel_caller_id: !!env.EXOTEL_CALLER_ID,
         d1_bound: !!env.DB,
       },
     });
@@ -165,6 +211,7 @@ export async function onRequest(context) {
       template,
       vars = [],
       message,
+      message_text,
       alert_id,
     } = body;
 
@@ -182,6 +229,9 @@ export async function onRequest(context) {
       } else if (channel === 'sms') {
         if (!message) return json({ error: 'message required for sms' }, 400);
         result = await sendSms(env, { phone: recipient, message });
+      } else if (channel === 'voice') {
+        if (!message_text) return json({ error: 'message_text required for voice' }, 400);
+        result = await sendVoice(env, { phone: recipient, message_text, alert_id });
       } else {
         return json({ error: `unsupported channel: ${channel}` }, 400);
       }
