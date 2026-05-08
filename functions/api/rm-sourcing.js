@@ -6,7 +6,7 @@
  * GET    /api/rm-sourcing?pin=<pin>                   → list all RMs (lightweight)
  * GET    /api/rm-sourcing?pin=<pin>&rm_code=<code>    → single RM with data_json
  * PUT    /api/rm-sourcing?pin=<pin>&rm_code=<code>    → update data_json (+ optional sourcing_profile)
- * POST   /api/rm-sourcing?pin=<pin>&action=seed       → idempotent seed of 31 RMs
+ * POST   /api/rm-sourcing?pin=<pin>&action=seed       → idempotent seed of 30 RMs
  *
  * Auth: ?pin=<pin> (same USERS table as rm-ops.js)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
@@ -49,7 +49,9 @@ function authPin(url) {
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * 31 NCH RM seed list — canonical codes
+ * 30 NCH RM seed list — canonical codes
+ * Malai removed (state of production, not RM).
+ * 3 raw items moved to Li (bought ready today, in-house possible tomorrow).
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 const SEED_RMS = [
   // HN- cross-brand (12)
@@ -65,7 +67,7 @@ const SEED_RMS = [
   { rm_code: 'HN-AM-B-LPG',  rm_name: 'LPG' },
   { rm_code: 'HN-AM-L-CHL',  rm_name: 'Charcoal' },
   { rm_code: 'HN-AM-L-GIN',  rm_name: 'Ginger' },
-  // NCH- only (19)
+  // NCH- only (18)
   { rm_code: 'NCH-AM-Lb-MLK', rm_name: 'Buffalo Milk' },
   { rm_code: 'NCH-AM-Bl-TEA', rm_name: 'Tea Powder' },
   { rm_code: 'NCH-AM-Bl-SMP', rm_name: 'Skimmed Milk Powder' },
@@ -73,13 +75,12 @@ const SEED_RMS = [
   { rm_code: 'NCH-AM-B-WTR',  rm_name: 'Bottled Water' },
   { rm_code: 'NCH-AM-L-SBJ',  rm_name: 'Sabja' },
   { rm_code: 'NCH-AM-B-CHC',  rm_name: 'Chocolate Powder' },
-  { rm_code: 'NCH-AS-L-CCT',  rm_name: 'Chicken Cutlet Raw' },
-  { rm_code: 'NCH-AS-L-CHB',  rm_name: 'Chicken Bites Raw' },
-  { rm_code: 'NCH-AS-L-SMS',  rm_name: 'Samosa Raw' },
+  { rm_code: 'NCH-AS-Li-CCT', rm_name: 'Chicken Cutlet Raw' },
+  { rm_code: 'NCH-AS-Li-CHB', rm_name: 'Chicken Bites Raw' },
+  { rm_code: 'NCH-AS-Li-SMS', rm_name: 'Samosa Raw' },
   { rm_code: 'NCH-AS-Lbi-BUN',rm_name: 'Bun' },
   { rm_code: 'NCH-AS-Lb-PMK', rm_name: 'Pumpkin Seeds' },
   { rm_code: 'NCH-AS-Lb-HNY', rm_name: 'Honey' },
-  { rm_code: 'NCH-AS-I-MAL',  rm_name: 'Malai' },
   { rm_code: 'NCH-AS-B-HRK',  rm_name: 'Horlicks' },
   { rm_code: 'NCH-AS-B-BST',  rm_name: 'Boost' },
   { rm_code: 'NCH-AS-B-JAM',  rm_name: 'Jam' },
@@ -118,6 +119,28 @@ function composeRmCode({ brand_prefix, rm_type, sourcing_profile, item_abbr }) {
     throw new Error(`Bad item_abbr: ${item_abbr}`);
   }
   return `${brand_prefix}-${rm_type}-${sourcing_profile}-${item_abbr}`;
+}
+
+/* Validate sourcing_profile per the "RM must be purchasable" rule.
+ * Returns null if valid, or a string error message if not. */
+function validateSourcingProfile(profile) {
+  if (!profile || typeof profile !== 'string') {
+    return 'Sourcing profile is required';
+  }
+  if (profile === 'I') {
+    return 'An RM must be purchasable. Items only producible in-house are states of production, not RMs. Either add L or B as another sourcing mode, or move this item to the States layer.';
+  }
+  if (!/^[LBI][lbi]*$/.test(profile)) {
+    return 'Invalid sourcing profile. Must contain only L, B, I letters with primary uppercase.';
+  }
+  // First letter is primary; rest are alternates
+  const primary = profile[0];
+  const alternates = profile.slice(1);
+  // Check no duplicates: primary letter shouldn't appear lowercase in alternates
+  if (alternates.toUpperCase().includes(primary)) {
+    return 'Sourcing profile is malformed: primary letter cannot also appear as alternate.';
+  }
+  return null; // valid
 }
 
 /* Normalize sourcing profile: ensure first char is the primary uppercase, rest lowercase sorted alpha. */
@@ -267,6 +290,10 @@ async function putOne(DB, rmCode, request, user) {
   const item_abbr        = (body.item_abbr || existing.item_abbr || '').toUpperCase();
   const rm_name          = body.rm_name          || existing.rm_name;
 
+  // Validate sourcing_profile (RM must be purchasable)
+  const profileErr = validateSourcingProfile(sourcing_profile);
+  if (profileErr) return json({ error: profileErr }, 400);
+
   // Compose new code if any structured part was provided.
   let newRmCode = rmCode;
   const structuredChanged =
@@ -333,6 +360,10 @@ async function createOne(DB, request, user) {
   const rm_name          = body.rm_name;
 
   if (!rm_name) return json({ error: 'rm_name required' }, 400);
+
+  // Validate sourcing_profile (RM must be purchasable)
+  const profileErr = validateSourcingProfile(sourcing_profile);
+  if (profileErr) return json({ error: profileErr }, 400);
 
   let rm_code;
   try {
