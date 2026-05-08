@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vendor Editor · HN Hotels</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c14;
+    --panel: rgba(22,22,31,0.7);
+    --panel-solid: #16161f;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.16);
+    --ink: #e4e4ed;
+    --ink-dim: #94a3b8;
+    --ink-faint: #64748b;
+    --accent: #e8930c;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --info: #60a5fa;
+    --purple: #c084fc;
+    --teal: #2dd4bf;
+    --pink: #f472b6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif; line-height: 1.55;
+    -webkit-font-smoothing: antialiased; min-height: 100vh;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .glass { background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(20px); border-radius: 14px; }
+  a { color: inherit; text-decoration: none; }
+
+  header.app-header { border-bottom: 1px solid var(--border); padding: 16px 20px; position: sticky; top: 0; z-index: 30; background: rgba(12,12,20,0.92); backdrop-filter: blur(14px); }
+  main { max-width: 1400px; margin: 0 auto; padding: 18px 20px 120px; }
+
+  /* PIN gate */
+  .gate { max-width: 380px; margin: 80px auto; padding: 32px; }
+  .gate h2 { margin: 0 0 8px; font-size: 22px; }
+  .gate p { color: var(--ink-dim); font-size: 13px; margin: 0 0 18px; }
+  .gate input { width: 100%; padding: 14px; font-size: 18px; background: rgba(0,0,0,0.4); color: var(--ink); border: 1px solid var(--border-strong); border-radius: 10px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.3em; text-align: center; }
+  .gate button { width: 100%; padding: 12px; margin-top: 12px; background: var(--accent); color: #0c0c14; font-weight: 700; border: 0; border-radius: 10px; font-size: 15px; cursor: pointer; }
+  .gate .err { color: var(--bad); font-size: 13px; margin-top: 8px; min-height: 18px; }
+
+  /* Stats strip */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .stat-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+  .stat-card .label { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 22px; font-weight: 700; margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+  .stat-card .meta { font-size: 11px; color: var(--ink-faint); }
+
+  /* Filter bar */
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .filters input, .filters select {
+    padding: 9px 12px; background: rgba(0,0,0,0.4); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 9px; font-size: 13px;
+    font-family: inherit; min-height: 44px;
+  }
+  .filters input { flex: 1; min-width: 180px; }
+  .btn { padding: 9px 14px; background: rgba(255,255,255,0.06); color: var(--ink); border: 1px solid var(--border); border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 44px; }
+  .btn:hover { background: rgba(255,255,255,0.10); }
+  .btn-primary { background: var(--accent); color: #0c0c14; border-color: var(--accent); }
+  .btn-primary:hover { background: #ffa928; }
+  .btn-danger { background: rgba(248,113,113,0.10); color: var(--bad); border-color: rgba(248,113,113,0.3); }
+  .btn-danger:hover { background: rgba(248,113,113,0.18); }
+  .btn-sm { padding: 6px 10px; font-size: 12px; min-height: 32px; }
+
+  /* Vendor list */
+  .v-grid { display: grid; gap: 8px; }
+  .v-row {
+    background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; cursor: pointer;
+    display: grid; grid-template-columns: 220px 1fr auto auto auto auto;
+    gap: 14px; align-items: center; transition: all 0.12s;
+  }
+  .v-row:hover { background: rgba(255,255,255,0.04); border-color: var(--border-strong); }
+  .v-row.pf { border-left: 3px solid var(--info); }
+  .v-row.rf { border-left: 3px solid var(--good); }
+  .v-row .code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .v-row .name { font-size: 14px; font-weight: 500; }
+  .v-row .stat { font-size: 11px; color: var(--ink-dim); text-align: center; }
+  .v-row .stat .n { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--ink); display: block; font-size: 14px; }
+  .v-row .updated { font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .pill-pf { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-rf { background: rgba(52,211,153,0.15); color: var(--good); }
+  .pill-l  { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-b  { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .pill-i  { background: rgba(45,212,191,0.15); color: var(--teal); }
+  .pill-nch { background: rgba(244,114,182,0.15); color: var(--pink); }
+  .pill-he  { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-hn  { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .pill-vendor { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-unsaved { background: rgba(251,191,36,0.20); color: var(--warn); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.55 } }
+
+  /* Editor side panel */
+  .editor-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 40; display: none; }
+  .editor-overlay.open { display: block; }
+  .editor-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(820px, 100vw); background: var(--panel-solid); z-index: 41; transform: translateX(100%); transition: transform 0.22s ease; box-shadow: -10px 0 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
+  .editor-panel.open { transform: translateX(0); }
+  .editor-head { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .editor-head h2 { margin: 0; font-size: 16px; font-weight: 700; }
+  .editor-head .sub { font-size: 12px; color: var(--ink-dim); }
+  .editor-body { flex: 1; overflow-y: auto; padding: 18px 20px 20px; }
+  .editor-foot { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; align-items: center; background: rgba(0,0,0,0.3); }
+
+  .field-row { margin-bottom: 14px; }
+  .field-row > label { display: block; font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; font-weight: 600; }
+  input.txt, select.txt, textarea.txt {
+    width: 100%; padding: 9px 11px; background: rgba(0,0,0,0.45); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit;
+    min-height: 38px;
+  }
+  input.txt.mono, select.txt.mono { font-family: 'JetBrains Mono', monospace; }
+  textarea.txt { min-height: 60px; resize: vertical; }
+  input.txt:focus, select.txt:focus, textarea.txt:focus { outline: none; border-color: var(--accent); }
+
+  .section { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 14px; background: rgba(255,255,255,0.015); }
+  .section.identity { border-top: 3px solid var(--accent); }
+  .section.computed { border-top: 3px solid var(--good); }
+  .section.comm     { border-top: 3px solid var(--info); }
+  .section.loc      { border-top: 3px solid var(--purple); }
+  .section.pay      { border-top: 3px solid var(--warn); }
+  .section.gst      { border-top: 3px solid var(--teal); }
+  .section h3 { margin: 0 0 10px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 8px; }
+
+  /* Identity / structured input */
+  .id-form .grp { margin-bottom: 12px; }
+  .id-form .grp:last-child { margin-bottom: 0; }
+  .grp-label { font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 6px; display: block; }
+  .help { font-size: 11px; color: var(--ink-faint); margin-top: 4px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 8px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; cursor: pointer; user-select: none; min-height: 38px; font-weight: 500; }
+  .chip input { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+  .chip:hover { background: rgba(255,255,255,0.07); border-color: var(--border-strong); }
+  .chip.checked { background: rgba(232,147,12,0.12); border-color: var(--accent); color: var(--accent); }
+  .chip.checked.pf { background: rgba(96,165,250,0.12); border-color: var(--info); color: var(--info); }
+  .chip.checked.rf { background: rgba(52,211,153,0.12); border-color: var(--good); color: var(--good); }
+  .id-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* Computed-code display */
+  .code-display { background: linear-gradient(135deg, rgba(232,147,12,0.06), rgba(96,165,250,0.04)); border: 1px solid var(--border-strong); border-radius: 12px; padding: 16px; margin-bottom: 14px; text-align: center; }
+  .code-display .computed { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.3; word-break: break-all; }
+  .code-display .computed .seg-payseq-pf { color: var(--info); }
+  .code-display .computed .seg-payseq-rf { color: var(--good); }
+  .code-display .computed .seg-id { color: var(--accent); }
+  .code-display .computed .dash { color: var(--ink-faint); }
+  .code-display .computed.incomplete { color: var(--ink-faint); }
+  .code-display .badge { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 12px; padding: 4px 10px; border-radius: 999px; font-weight: 600; }
+  .code-display .badge.ok { background: rgba(52,211,153,0.12); color: var(--good); border: 1px solid rgba(52,211,153,0.3); }
+  .code-display .badge.warn { background: rgba(251,191,36,0.12); color: var(--warn); border: 1px solid rgba(251,191,36,0.3); }
+  .code-display .label-tiny { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+
+  /* Computed Views section */
+  .computed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .computed-card { background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .computed-card .lbl { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .computed-card .val { font-size: 13px; font-weight: 600; }
+  .rms-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  .rms-table th, .rms-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  .rms-table th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-dim); font-weight: 600; }
+  .rms-table tr:last-child td { border-bottom: 0; }
+  .rms-table .rm-link { font-family: 'JetBrains Mono', monospace; color: var(--accent); }
+  .rms-table .rm-link:hover { text-decoration: underline; }
+
+  .ed-foot-extra { margin-right: auto; }
+
+  /* Toasts */
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel-solid); border: 1px solid var(--border-strong); padding: 10px 18px; border-radius: 10px; font-size: 13px; z-index: 60; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+  .toast.success { border-color: var(--good); color: var(--good); }
+  .toast.error { border-color: var(--bad); color: var(--bad); }
+
+  @media (max-width: 720px) {
+    .v-row { grid-template-columns: 1fr auto; }
+    .v-row .stat, .v-row .updated { display: none; }
+    .id-grid { grid-template-columns: 1fr; }
+    .computed-grid { grid-template-columns: 1fr; }
+    .editor-panel { width: 100vw; }
+  }
+
+  /* Help button */
+  .help-btn {
+    width: 32px; height: 32px; min-height: 32px; padding: 0;
+    border-radius: 50%; background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border-strong); color: var(--ink);
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: 'Inter', sans-serif;
+  }
+  .help-btn:hover { background: rgba(232,147,12,0.12); color: var(--accent); border-color: var(--accent); }
+
+  /* Legend modal */
+  .legend-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 50; display: none; backdrop-filter: blur(4px); }
+  .legend-overlay.open { display: block; }
+  .legend-modal {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(900px, 100vw);
+    background: var(--panel-solid); z-index: 51; transform: translateX(100%);
+    transition: transform 0.22s ease; box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+    display: flex; flex-direction: column;
+  }
+  .legend-modal.open { transform: translateX(0); }
+  .legend-head { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); }
+  .legend-head h2 { margin: 0; font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .legend-head .sub { font-size: 12px; color: var(--ink-dim); margin-top: 2px; }
+  .legend-body { flex: 1; overflow-y: auto; padding: 18px 20px 40px; }
+  .legend-section { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .legend-section h3 { margin: 0 0 10px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
+  .legend-section h4 { margin: 14px 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-dim); }
+  .legend-section p { font-size: 13px; color: var(--ink); margin: 0 0 10px; line-height: 1.6; }
+  .legend-section p.note { color: var(--ink-dim); font-size: 12px; font-style: italic; }
+  .legend-section ul { padding-left: 20px; margin: 6px 0 10px; font-size: 13px; color: var(--ink); }
+  .legend-section ul li { margin-bottom: 4px; }
+  .legend-section code { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 1px 6px; background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 5px; color: var(--accent); }
+  .anatomy { background: linear-gradient(135deg, rgba(232,147,12,0.06), rgba(96,165,250,0.04)); border: 1px solid var(--border-strong); border-radius: 12px; padding: 18px 14px; text-align: center; margin: 6px 0 14px; }
+  .anatomy .pattern { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.4; word-break: break-word; }
+  .anatomy .pattern .seg-pf { color: var(--info); }
+  .anatomy .pattern .seg-rf { color: var(--good); }
+  .anatomy .pattern .seg-id { color: var(--accent); }
+  .anatomy .pattern .dash { color: var(--ink-faint); margin: 0 4px; }
+  .anatomy .legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .anatomy .legend-grid > div { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 11px; color: var(--ink-dim); text-align: left; }
+  .anatomy .legend-grid .seg-name { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; display: block; margin-bottom: 3px; }
+  .legend-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .legend-table th, .legend-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .legend-table th { background: rgba(255,255,255,0.04); color: var(--ink-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; }
+  .legend-table tr:last-child td { border-bottom: none; }
+  .legend-table td.code-cell { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--accent); white-space: nowrap; }
+  @media (max-width: 720px) {
+    .legend-modal { width: 100vw; }
+    .anatomy .pattern { font-size: 16px; }
+    .anatomy .legend-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- PIN gate -->
+<div id="gate" class="glass gate" style="display:none;">
+  <h2>Vendor Editor</h2>
+  <p>Enter your PIN to load the canonical vendor profiles.</p>
+  <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="PIN" autocomplete="off">
+  <button id="pin-submit">Unlock</button>
+  <div class="err" id="pin-err"></div>
+</div>
+
+<!-- App -->
+<div id="app" style="display:none;">
+  <header class="app-header">
+    <div style="max-width:1400px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;">🏪</span>
+          <h1 style="margin:0;font-size:18px;font-weight:700;">Vendor Editor</h1>
+          <button class="help-btn" id="help-btn" title="Code Legend / Source of Truth" aria-label="Open Code Legend">?</button>
+          <span class="pill pill-vendor" id="user-pill">user</span>
+        </div>
+        <p style="margin:2px 0 0;font-size:12px;color:var(--ink-dim);">Canonical vendor identities — Pf/Rf payment sequence × IDENTITY abbreviation. Brand scope and sells categories are computed from RM relationships, not stored statically.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="/ops/vendor-editor/print/" target="_blank" rel="noopener" class="btn" title="Open printable snapshot in a new tab">⬇ PDF</a>
+        <a href="/ops/visual/vendor-shape-directory/" class="btn">📖 Shape Directory</a>
+        <a href="/ops/rm-sourcing-editor/" class="btn">↗ RM Editor</a>
+        <button class="btn btn-danger" id="logout-btn" style="display:none;">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="stats" id="stats"></section>
+
+    <section class="filters">
+      <input type="text" id="filter-q" placeholder="Search vendor code or name…">
+      <select id="filter-payseq">
+        <option value="">All PAY_SEQ</option>
+        <option value="Pf">Pf · Pay-first</option>
+        <option value="Rf">Rf · Receive-first</option>
+      </select>
+      <button class="btn btn-primary" id="add-btn">+ Add New Vendor</button>
+      <button class="btn" id="reload-btn">Reload</button>
+    </section>
+
+    <section class="v-grid" id="v-list"></section>
+  </main>
+</div>
+
+<!-- Code Legend modal -->
+<div class="legend-overlay" id="legend-overlay"></div>
+<aside class="legend-modal" id="legend-modal" aria-hidden="true">
+  <div class="legend-head">
+    <div>
+      <h2><span style="font-size:18px;">📖</span> Vendor Code Legend</h2>
+      <div class="sub">Decode any vendor code on this page without leaving.</div>
+    </div>
+    <button class="btn btn-sm" id="legend-close">Close</button>
+  </div>
+  <div class="legend-body">
+
+    <div class="legend-section">
+      <h3>Code Anatomy</h3>
+      <div class="anatomy">
+        <div class="pattern">
+          <span class="seg-pf">{PAY_SEQ}</span><span class="dash">-</span><span class="seg-id">{IDENTITY}</span>
+        </div>
+        <div class="legend-grid">
+          <div><span class="seg-name" style="color:var(--info)">PAY_SEQ</span>Pf (Pay-first) or Rf (Receive-first) — the architectural binary</div>
+          <div><span class="seg-name" style="color:var(--accent)">IDENTITY</span>3-10 char uppercase abbreviation, unique across all vendors</div>
+        </div>
+      </div>
+
+      <h4>Example walkthrough — <code>Rf-PRABHU</code></h4>
+      <p><code>Rf</code> = Receive-first (we receive milk daily, pay later). <code>PRABHU</code> = the loose milk vendor's identity.</p>
+    </div>
+
+    <div class="legend-section">
+      <h3>PAY_SEQ values · the architectural binary</h3>
+      <table class="legend-table">
+        <thead><tr><th>Code</th><th>Meaning</th><th>Real example</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="code-cell" style="color:var(--info)">Pf</td>
+            <td><strong>Pay-first.</strong> Money leaves our account before goods/service arrives. Quick commerce, prepaid subscriptions, advance-rent, prepaid utilities.</td>
+            <td><code>Pf-ZEPTO</code>, <code>Pf-RENT</code>, <code>Pf-INTERNET</code></td>
+          </tr>
+          <tr>
+            <td class="code-cell" style="color:var(--good)">Rf</td>
+            <td><strong>Receive-first.</strong> Goods/service arrive before money goes out. Daily milk, departmental stores with credit terms, post-paid utilities.</td>
+            <td><code>Rf-PRABHU</code>, <code>Rf-SHARIFF</code>, <code>Rf-ELECTRICITY</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">Why a binary, not a 6-letter V-shape? PAY_SEQ at the vendor level captures the cash-flow direction. The richer V-shape (V1a / V1b / V2 / V3 / V4 / V5) lives at the action layer and modulates per-purchase, per-supplier within a single vendor record.</p>
+    </div>
+
+    <div class="legend-section">
+      <h3>IDENTITY rules</h3>
+      <table class="legend-table">
+        <thead><tr><th>Rule</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Length</td><td>3-10 characters, uppercase A-Z and 0-9 only</td></tr>
+          <tr><td>Source</td><td>Auto-derived from vendor name (consonants stripped of vowels), owner-overridable</td></tr>
+          <tr><td>Uniqueness</td><td>Globally unique across ALL vendors regardless of PAY_SEQ. <code>Rf-PRABHU</code> blocks <code>Pf-PRABHU</code>.</td></tr>
+          <tr><td>Case</td><td>Always uppercase. Editor normalises lowercase on save.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="legend-section">
+      <h3>Why minimal · the doctrine</h3>
+      <p>The vendor canonical code carries only what's mathematically necessary: the cash-flow direction (Pf/Rf) and the unique identity. Everything else — which BRAND scope (NCH/HE/HN), what they SELL (loose/branded/services/consumables) — is a <strong>computed view</strong> derived from the RM ring at query time.</p>
+      <p>This obeys the COA Doctrine: properties that can be derived from upstream entity rings are never duplicated as static fields. If a vendor stops supplying NCH, the scope shrinks automatically — no manual sync required.</p>
+    </div>
+
+    <div class="legend-section">
+      <h3>Computed views explained</h3>
+      <table class="legend-table">
+        <thead><tr><th>View</th><th>Computed how</th></tr></thead>
+        <tbody>
+          <tr><td><strong>scope</strong></td><td>Set of brand prefixes (NCH / HE / HN) drawn from every RM that lists this vendor as a supplier</td></tr>
+          <tr><td><strong>sells</strong></td><td>Set of layer letters {L, B, I} indicating whether the vendor appears under Loose / Branded / In-house in any RM</td></tr>
+          <tr><td><strong>rms_supplied</strong></td><td>Full list of RMs supplied — array of {rm_code, layer, brand, sku, notes} tuples</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Endpoint: <code>GET /api/vendors?vendor_code=…&include=relationships</code></p>
+    </div>
+
+    <div class="legend-section">
+      <h3>Forbidden combinations</h3>
+      <table class="legend-table">
+        <thead><tr><th>Forbidden</th><th>Why caught</th></tr></thead>
+        <tbody>
+          <tr><td>PAY_SEQ outside {Pf, Rf}</td><td>Architectural binary — extending it requires doctrine change</td></tr>
+          <tr><td>IDENTITY empty</td><td>Identity required, ≥3 chars</td></tr>
+          <tr><td>IDENTITY too long (&gt;10)</td><td>Codes need to stay scannable</td></tr>
+          <tr><td>IDENTITY collision</td><td>Globally unique — any case-insensitive duplicate is rejected with 409</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="legend-section">
+      <h3>Connection to RM action layer</h3>
+      <p>Vendor codes combine with RM action codes downstream. A purchase is encoded as <code>{ACTION}-{RM_CODE}-{VENDOR_CODE}-…</code>. The RM ring tells us what was bought; the vendor ring tells us who supplied and how cash flowed.</p>
+      <p>See the <a href="/ops/visual/coa-doctrine/" style="color:var(--accent)">COA Doctrine</a> for the full ring composition.</p>
+    </div>
+
+  </div>
+</aside>
+
+<!-- Editor side panel -->
+<div class="editor-overlay" id="editor-overlay"></div>
+<div class="editor-panel" id="editor-panel">
+  <div class="editor-head">
+    <div style="flex:1;min-width:200px;">
+      <h2 id="ed-title">Vendor</h2>
+      <div class="sub" id="ed-sub"></div>
+    </div>
+    <span class="pill pill-unsaved" id="ed-unsaved" style="display:none;">unsaved</span>
+    <button class="btn btn-sm" id="ed-close">Close</button>
+  </div>
+  <div class="editor-body" id="editor-body"></div>
+  <div class="editor-foot">
+    <span class="sub ed-foot-extra" id="ed-foot-status"></span>
+    <button class="btn btn-sm btn-danger" id="ed-delete" style="display:none;">Delete</button>
+    <button class="btn btn-sm" id="ed-revert">Revert</button>
+    <button class="btn btn-sm btn-primary" id="ed-save">Save</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const State = {
+    pin: localStorage.getItem('vendor_editor_pin') || '',
+    user: null,
+    vendors: [],
+    open: null,
+    openOriginal: null,
+    identity: null,
+    isNew: false,
+    dirty: false,
+    filter: { q: '', pay_seq: '' },
+  };
+
+  const API = '/api/vendors';
+  const PAY_SEQS = [
+    { value: 'Pf', label: 'Pay-first (Pf)',     cls: 'pf' },
+    { value: 'Rf', label: 'Receive-first (Rf)', cls: 'rf' },
+  ];
+  const PRIMARY_MODES = [
+    'WhatsApp', 'Phone', 'App', 'Walk-in', 'Scheduled Route', 'Standing Bill', 'Email',
+  ];
+  const PAY_METHODS = ['Cash', 'UPI', 'Card', 'NEFT', 'Cheque'];
+  const GST_TYPES   = ['regular', 'composition', 'unregistered'];
+  const CHANNEL_HINTS = [
+    { value: '',    label: '— none —' },
+    { value: 'VD',  label: 'VD · Vendor-direct' },
+    { value: 'QC',  label: 'QC · Quick commerce' },
+    { value: 'B2B', label: 'B2B · Wholesale' },
+    { value: 'SU',  label: 'SU · Subscription / utility' },
+    { value: 'WI',  label: 'WI · Walk-in' },
+  ];
+
+  const $  = s => document.querySelector(s);
+  const $$ = s => Array.from(document.querySelectorAll(s));
+  const fmtTime = ts => ts ? new Date(ts).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+  function toast(msg, kind = '') {
+    const el = document.createElement('div');
+    el.className = 'toast ' + kind;
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2400);
+  }
+
+  function autoIdentity(name) {
+    const clean = (name || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '');
+    if (!clean) return '';
+    const compact = clean.replace(/\s+/g, '');
+    if (compact.length <= 6) return compact.slice(0, 10);
+    const consonants = compact.replace(/[AEIOU]/g, '');
+    const dedup = consonants.replace(/(.)\1+/g, '$1');
+    if (dedup.length >= 6) return dedup.slice(0, 8);
+    if (consonants.length >= 6) return consonants.slice(0, 8);
+    return compact.slice(0, 8);
+  }
+
+  function deriveCode(idn) {
+    if (!idn) return null;
+    if (!idn.pay_seq || (idn.pay_seq !== 'Pf' && idn.pay_seq !== 'Rf')) return null;
+    const id = (idn.identity_abbr || '').trim().toUpperCase();
+    if (id.length < 3 || id.length > 10) return null;
+    if (!/^[A-Z0-9]+$/.test(id)) return null;
+    return idn.pay_seq + '-' + id;
+  }
+
+  function renderCodeHTML(idn) {
+    if (!idn) return '<span class="incomplete">?</span>';
+    const code = deriveCode(idn);
+    if (!code) {
+      const p = idn.pay_seq || '?';
+      const i = idn.identity_abbr || '?';
+      const cls = p === 'Pf' ? 'seg-payseq-pf' : p === 'Rf' ? 'seg-payseq-rf' : '';
+      return `<span class="${cls}">${escapeHtml(p)}</span><span class="dash">-</span><span class="seg-id">${escapeHtml(i)}</span>`;
+    }
+    const cls = idn.pay_seq === 'Pf' ? 'seg-payseq-pf' : 'seg-payseq-rf';
+    return `<span class="${cls}">${escapeHtml(idn.pay_seq)}</span><span class="dash">-</span><span class="seg-id">${escapeHtml(idn.identity_abbr)}</span>`;
+  }
+
+  async function api(path, opts = {}) {
+    const url = new URL(window.location.origin + API + path);
+    url.searchParams.set('pin', State.pin);
+    const r = await fetch(url.toString(), {
+      method: opts.method || 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    const txt = await r.text();
+    let data; try { data = JSON.parse(txt); } catch { data = { error: 'Bad JSON: ' + txt.slice(0, 200) }; }
+    if (!r.ok) {
+      const err = new Error(data.error || ('HTTP ' + r.status));
+      err.status = r.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  }
+
+  /* ---------- PIN gate ---------- */
+  async function tryAuth(pin) {
+    const url = new URL(window.location.origin + API);
+    url.searchParams.set('pin', pin);
+    const r = await fetch(url.toString());
+    const data = await r.json();
+    if (r.status === 401) throw new Error('Invalid PIN');
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    return data;
+  }
+
+  function showApp() {
+    $('#gate').style.display = 'none';
+    $('#app').style.display = 'block';
+    $('#logout-btn').style.display = 'inline-block';
+  }
+  function showGate() {
+    $('#gate').style.display = 'block';
+    $('#app').style.display = 'none';
+  }
+
+  $('#pin-submit').onclick = async () => {
+    const pin = $('#pin-input').value.trim();
+    if (!pin) return;
+    $('#pin-err').textContent = '';
+    try {
+      State.pin = pin;
+      const data = await tryAuth(pin);
+      localStorage.setItem('vendor_editor_pin', pin);
+      State.vendors = data.vendors || [];
+      $('#user-pill').textContent = 'pin: ' + pin;
+      showApp();
+      render();
+    } catch (e) {
+      $('#pin-err').textContent = e.message;
+      State.pin = '';
+    }
+  };
+  $('#pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pin-submit').click(); });
+  $('#logout-btn').onclick = () => {
+    localStorage.removeItem('vendor_editor_pin');
+    State.pin = '';
+    State.vendors = [];
+    $('#pin-input').value = '';
+    showGate();
+  };
+
+  /* ---------- Code Legend modal ---------- */
+  function openLegend() {
+    $('#legend-overlay').classList.add('open');
+    $('#legend-modal').classList.add('open');
+    $('#legend-modal').setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeLegend() {
+    $('#legend-overlay').classList.remove('open');
+    $('#legend-modal').classList.remove('open');
+    $('#legend-modal').setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+  $('#help-btn').onclick = openLegend;
+  $('#legend-close').onclick = closeLegend;
+  $('#legend-overlay').onclick = closeLegend;
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && $('#legend-modal').classList.contains('open')) closeLegend();
+  });
+
+  /* ---------- List render ---------- */
+  function scopePills(scope) {
+    if (!scope || scope.length === 0) return '<span class="pill" style="color:var(--ink-faint);background:rgba(255,255,255,0.04)">no scope</span>';
+    return scope.map(b => {
+      const cls = b === 'NCH' ? 'pill-nch' : b === 'HE' ? 'pill-he' : 'pill-hn';
+      return `<span class="pill ${cls}">${escapeHtml(b)}</span>`;
+    }).join(' ');
+  }
+  function sellsPills(sells) {
+    if (!sells || sells.length === 0) return '';
+    return sells.map(s => {
+      const cls = s === 'L' ? 'pill-l' : s === 'B' ? 'pill-b' : 'pill-i';
+      return `<span class="pill ${cls}">${escapeHtml(s)}</span>`;
+    }).join(' ');
+  }
+
+  function renderStats() {
+    const total = State.vendors.length;
+    const pf = State.vendors.filter(v => v.pay_seq === 'Pf').length;
+    const rf = State.vendors.filter(v => v.pay_seq === 'Rf').length;
+    const linked = State.vendors.filter(v => v.computed && v.computed.rm_count > 0).length;
+    const orphan = total - linked;
+    $('#stats').innerHTML = `
+      <div class="stat-card"><div class="label">Vendors</div><div class="value">${total}</div><div class="meta">canonical</div></div>
+      <div class="stat-card"><div class="label">Pay-first (Pf)</div><div class="value" style="color:var(--info)">${pf}</div><div class="meta">cash leaves first</div></div>
+      <div class="stat-card"><div class="label">Receive-first (Rf)</div><div class="value" style="color:var(--good)">${rf}</div><div class="meta">goods arrive first</div></div>
+      <div class="stat-card"><div class="label">Linked to RMs</div><div class="value" style="color:var(--accent)">${linked}</div><div class="meta">${orphan} orphan${orphan === 1 ? '' : 's'}</div></div>
+    `;
+  }
+
+  function renderList() {
+    const f = State.filter;
+    const q = (f.q || '').toLowerCase();
+    const rows = State.vendors.filter(v => {
+      if (f.pay_seq && v.pay_seq !== f.pay_seq) return false;
+      if (q && !(v.vendor_code.toLowerCase().includes(q) || v.vendor_name.toLowerCase().includes(q))) return false;
+      return true;
+    });
+    if (rows.length === 0) {
+      $('#v-list').innerHTML = `<div style="padding:30px;text-align:center;color:var(--ink-dim);">No vendors match. ${State.vendors.length === 0 ? 'Click <strong>+ Add New Vendor</strong> to begin.' : ''}</div>`;
+      return;
+    }
+    $('#v-list').innerHTML = rows.map(v => {
+      const cls = v.pay_seq === 'Pf' ? 'pf' : 'rf';
+      const c = v.computed || {};
+      return `
+        <div class="v-row ${cls}" data-code="${escapeHtml(v.vendor_code)}">
+          <div class="code">${escapeHtml(v.vendor_code)}</div>
+          <div class="name">${escapeHtml(v.vendor_name)}</div>
+          <div title="Brand scope">${scopePills(c.scope)}</div>
+          <div title="Sells">${sellsPills(c.sells)}</div>
+          <div class="stat" title="RMs supplied"><span class="n">${c.rm_count || 0}</span>RMs</div>
+          <div class="updated">${fmtTime(v.updated_at)}<br><span style="color:var(--ink-faint)">${escapeHtml(v.updated_by || '')}</span></div>
+        </div>`;
+    }).join('');
+    $$('.v-row').forEach(el => {
+      el.onclick = () => openEditor(el.dataset.code);
+    });
+  }
+
+  function render() {
+    renderStats();
+    renderList();
+  }
+
+  $('#filter-q').oninput = e => { State.filter.q = e.target.value; renderList(); };
+  $('#filter-payseq').onchange = e => { State.filter.pay_seq = e.target.value; renderList(); };
+  $('#reload-btn').onclick = async () => {
+    try {
+      const data = await api('');
+      State.vendors = data.vendors || [];
+      render();
+      toast('Reloaded ' + State.vendors.length + ' vendors');
+    } catch (e) { toast(e.message, 'error'); }
+  };
+
+  /* ---------- Editor ---------- */
+  async function openEditor(vendorCode) {
+    if (State.dirty && !confirm('Discard unsaved changes?')) return;
+    try {
+      const data = await api('?vendor_code=' + encodeURIComponent(vendorCode) + '&include=relationships');
+      State.open = data;
+      State.open.data = data.data || {};
+      State.identity = {
+        pay_seq: data.pay_seq,
+        identity_abbr: data.identity_abbr,
+        vendor_name: data.vendor_name,
+        idTouched: true,
+      };
+      State.isNew = false;
+      State.openOriginal = JSON.parse(JSON.stringify({ open: State.open, identity: State.identity }));
+      State.dirty = false;
+      $('#ed-unsaved').style.display = 'none';
+      $('#ed-title').textContent = data.vendor_name;
+      $('#ed-sub').innerHTML = `<span class="mono" style="color:var(--accent)">${escapeHtml(data.vendor_code)}</span>`;
+      $('#ed-foot-status').textContent = 'Last saved: ' + fmtTime(data.updated_at) + (data.updated_by ? ' by ' + data.updated_by : '');
+      $('#ed-delete').style.display = 'inline-block';
+      renderEditor();
+      $('#editor-overlay').classList.add('open');
+      $('#editor-panel').classList.add('open');
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  function openNewEditor() {
+    if (State.dirty && !confirm('Discard unsaved changes?')) return;
+    State.open = {
+      vendor_code: '',
+      pay_seq: '',
+      identity_abbr: '',
+      vendor_name: '',
+      data: {
+        communication: {},
+        location: {},
+        payment: {},
+        gst: {},
+        channel_hint: '',
+        notes: '',
+      },
+      computed: { scope: [], sells: [], rms_supplied: [] },
+      updated_at: null,
+      updated_by: null,
+    };
+    State.identity = { pay_seq: '', identity_abbr: '', vendor_name: '', idTouched: false };
+    State.isNew = true;
+    State.openOriginal = JSON.parse(JSON.stringify({ open: State.open, identity: State.identity }));
+    State.dirty = false;
+    $('#ed-unsaved').style.display = 'none';
+    $('#ed-title').textContent = 'New Vendor';
+    $('#ed-sub').innerHTML = '<span class="mono" style="color:var(--ink-faint)">code derives from inputs below</span>';
+    $('#ed-foot-status').textContent = 'New record — fill identity fields, then Save';
+    $('#ed-delete').style.display = 'none';
+    renderEditor();
+    $('#editor-overlay').classList.add('open');
+    $('#editor-panel').classList.add('open');
+  }
+
+  function closeEditor() {
+    if (State.dirty && !confirm('Discard unsaved changes?')) return;
+    $('#editor-overlay').classList.remove('open');
+    $('#editor-panel').classList.remove('open');
+    State.open = null;
+    State.openOriginal = null;
+    State.identity = null;
+    State.isNew = false;
+    State.dirty = false;
+  }
+  $('#ed-close').onclick = closeEditor;
+  $('#editor-overlay').onclick = closeEditor;
+  $('#add-btn').onclick = openNewEditor;
+
+  function markDirty() {
+    State.dirty = true;
+    $('#ed-unsaved').style.display = 'inline-block';
+  }
+
+  function renderEditor() {
+    const o = State.open;
+    const idn = State.identity;
+    if (!o || !idn) return;
+
+    if (!o.data.communication) o.data.communication = {};
+    if (!o.data.location)      o.data.location = {};
+    if (!o.data.payment)       o.data.payment = {};
+    if (!o.data.gst)           o.data.gst = {};
+
+    const paySeqChips = PAY_SEQS.map(p =>
+      `<label class="chip ${p.cls} ${idn.pay_seq === p.value ? 'checked' : ''}">
+        <input type="radio" name="id-payseq" value="${p.value}" ${idn.pay_seq === p.value ? 'checked' : ''}>
+        ${escapeHtml(p.label)}
+      </label>`
+    ).join('');
+
+    const codeOk = deriveCode(idn) !== null;
+    const codeHtml = renderCodeHTML(idn);
+    let badge;
+    if (!idn.pay_seq) {
+      badge = '<span class="badge warn">&#9888; Pick PAY_SEQ</span>';
+    } else if (!idn.identity_abbr || idn.identity_abbr.length < 3) {
+      badge = '<span class="badge warn">&#9888; IDENTITY needs ≥3 chars</span>';
+    } else if (codeOk) {
+      badge = '<span class="badge ok">&#10003; Canonical code complete</span>';
+    } else {
+      badge = '<span class="badge warn">&#9888; Code incomplete</span>';
+    }
+
+    // Identity section
+    let html = `
+      <div class="section identity id-form">
+        <h3><span class="pill pill-vendor">ID</span> Identity (canonical code)</h3>
+        <div class="grp">
+          <label class="grp-label">PAY_SEQ — the architectural binary</label>
+          <div class="chip-row">${paySeqChips}</div>
+          <div class="help">Pf = pay before receive (Zepto, rent, prepaid). Rf = receive before pay (daily milk, post-paid).</div>
+        </div>
+        <div class="grp">
+          <label class="grp-label">Vendor name</label>
+          <input class="txt" id="id-vname" value="${escapeHtml(idn.vendor_name || '')}" placeholder="e.g. Prabhu Buffalo Milk Vendor">
+        </div>
+        <div class="grp">
+          <label class="grp-label">Identity abbreviation (3-10 chars)</label>
+          <input class="txt mono" id="id-idabbr" value="${escapeHtml(idn.identity_abbr || '')}" maxlength="10" placeholder="auto" style="text-transform:uppercase;max-width:200px;">
+          <div class="help">Auto-derived from name (consonants, vowel-stripped). Override anytime. Must be unique across all vendors.</div>
+        </div>
+      </div>
+
+      <div class="code-display">
+        <div class="label-tiny">Auto-derived canonical code</div>
+        <div class="computed ${codeOk ? '' : 'incomplete'}">${codeHtml}</div>
+        ${badge}
+      </div>
+    `;
+
+    // Computed views (read-only)
+    const c = o.computed || { scope: [], sells: [], rms_supplied: [] };
+    const scopeStr = (c.scope && c.scope.length) ? c.scope.join(' · ') : 'none — orphan vendor';
+    const sellsStr = (c.sells && c.sells.length)
+      ? c.sells.map(s => s === 'L' ? 'Loose' : s === 'B' ? 'Branded' : s === 'I' ? 'In-house' : s).join(' · ')
+      : 'no RM links yet';
+
+    let rmsHtml = '';
+    if (c.rms_supplied && c.rms_supplied.length > 0) {
+      rmsHtml = `
+        <table class="rms-table">
+          <thead><tr><th>RM Code</th><th>Layer</th><th>Brand</th><th>SKU / detail</th></tr></thead>
+          <tbody>
+            ${c.rms_supplied.map(r => {
+              const layerCls = r.layer === 'L' ? 'pill-l' : r.layer === 'B' ? 'pill-b' : 'pill-i';
+              return `<tr>
+                <td><a class="rm-link" href="/ops/rm-sourcing-editor/?q=${encodeURIComponent(r.rm_code)}" target="_blank" rel="noopener">${escapeHtml(r.rm_code)}</a></td>
+                <td><span class="pill ${layerCls}">${escapeHtml(r.layer)}</span></td>
+                <td>${escapeHtml(r.brand || '')}</td>
+                <td>${escapeHtml(r.sku || '—')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>`;
+    } else {
+      rmsHtml = '<div style="color:var(--ink-faint);font-size:12px;font-style:italic;padding:6px 0;">No RM references yet — vendor is unlinked.</div>';
+    }
+
+    html += `
+      <div class="section computed">
+        <h3><span class="pill pill-rf">VIEW</span> Computed views (live from RM ring)</h3>
+        <div class="computed-grid">
+          <div class="computed-card">
+            <div class="lbl">Brand scope</div>
+            <div class="val">${escapeHtml(scopeStr)}</div>
+          </div>
+          <div class="computed-card">
+            <div class="lbl">Sells categories</div>
+            <div class="val">${escapeHtml(sellsStr)}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <div class="lbl" style="font-size:10px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:4px;">RMs supplied (${c.rms_supplied?.length || 0})</div>
+          ${rmsHtml}
+        </div>
+        <div class="help" style="margin-top:8px;">These are not editable here — they're derived live from the RM Sourcing Editor. To change scope or sells, edit the relevant RM.</div>
+      </div>
+    `;
+
+    // Communication section
+    const comm = o.data.communication;
+    const modeOpts = ['', ...PRIMARY_MODES].map(m =>
+      `<option value="${escapeHtml(m)}" ${comm.primary_mode === m ? 'selected' : ''}>${m || '— pick —'}</option>`
+    ).join('');
+
+    html += `
+      <div class="section comm">
+        <h3><span class="pill pill-l">COMM</span> Communication</h3>
+        <div class="field-row">
+          <label>Primary mode</label>
+          <select class="txt" data-section="communication" data-field="primary_mode">${modeOpts}</select>
+        </div>
+        <div class="id-grid">
+          <div class="field-row">
+            <label>Phone</label>
+            <input class="txt" data-section="communication" data-field="phone" value="${escapeHtml(comm.phone || '')}" placeholder="+91...">
+          </div>
+          <div class="field-row">
+            <label>WhatsApp</label>
+            <input class="txt" data-section="communication" data-field="whatsapp" value="${escapeHtml(comm.whatsapp || '')}" placeholder="+91...">
+          </div>
+        </div>
+        <div class="id-grid">
+          <div class="field-row">
+            <label>Email</label>
+            <input class="txt" data-section="communication" data-field="email" value="${escapeHtml(comm.email || '')}" placeholder="...@...">
+          </div>
+          <div class="field-row">
+            <label>App handle (Zepto/Blinkit/etc.)</label>
+            <input class="txt" data-section="communication" data-field="app_handle" value="${escapeHtml(comm.app_handle || '')}" placeholder="store handle">
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Location section
+    const loc = o.data.location;
+    html += `
+      <div class="section loc">
+        <h3><span class="pill pill-b">LOC</span> Location</h3>
+        <div class="field-row">
+          <label>Address</label>
+          <textarea class="txt" data-section="location" data-field="address" placeholder="Shop / building / street">${escapeHtml(loc.address || '')}</textarea>
+        </div>
+        <div class="id-grid">
+          <div class="field-row">
+            <label>Area</label>
+            <input class="txt" data-section="location" data-field="area" value="${escapeHtml(loc.area || '')}" placeholder="Shivajinagar">
+          </div>
+          <div class="field-row">
+            <label>City</label>
+            <input class="txt" data-section="location" data-field="city" value="${escapeHtml(loc.city || 'Bangalore')}">
+          </div>
+        </div>
+        <div class="field-row">
+          <label>Pincode</label>
+          <input class="txt mono" data-section="location" data-field="pincode" value="${escapeHtml(loc.pincode || '')}" placeholder="560051" maxlength="6" style="max-width:140px;">
+        </div>
+      </div>
+    `;
+
+    // Payment section
+    const pay = o.data.payment;
+    const methodOpts = ['', ...PAY_METHODS].map(m =>
+      `<option value="${escapeHtml(m)}" ${pay.preferred_method === m ? 'selected' : ''}>${m || '— pick —'}</option>`
+    ).join('');
+    html += `
+      <div class="section pay">
+        <h3><span class="pill" style="color:var(--warn);background:rgba(251,191,36,0.15);">PAY</span> Payment details</h3>
+        <div class="id-grid">
+          <div class="field-row">
+            <label>Preferred method</label>
+            <select class="txt" data-section="payment" data-field="preferred_method">${methodOpts}</select>
+          </div>
+          <div class="field-row">
+            <label>UPI ID</label>
+            <input class="txt mono" data-section="payment" data-field="upi_id" value="${escapeHtml(pay.upi_id || '')}" placeholder="vendor@upi">
+          </div>
+        </div>
+        <div class="field-row">
+          <label>Account holder name</label>
+          <input class="txt" data-section="payment" data-field="account_holder" value="${escapeHtml(pay.account_holder || '')}" placeholder="Legal name on bank account">
+        </div>
+        <div class="help">Sensitive fields like full account numbers are intentionally not stored — UPI handle + holder name only.</div>
+      </div>
+    `;
+
+    // GST section
+    const gst = o.data.gst;
+    const gstTypeOpts = ['', ...GST_TYPES].map(t =>
+      `<option value="${escapeHtml(t)}" ${gst.type === t ? 'selected' : ''}>${t || '— pick —'}</option>`
+    ).join('');
+    html += `
+      <div class="section gst">
+        <h3><span class="pill pill-i">GST</span> GST registration</h3>
+        <div class="field-row">
+          <label><input type="checkbox" data-section="gst" data-field="registered" ${gst.registered ? 'checked' : ''} style="margin-right:6px;"> Registered for GST</label>
+        </div>
+        <div class="id-grid">
+          <div class="field-row">
+            <label>GSTIN</label>
+            <input class="txt mono" data-section="gst" data-field="gstin" value="${escapeHtml(gst.gstin || '')}" placeholder="29ABCDE1234F1Z5" maxlength="15" style="text-transform:uppercase;" ${gst.registered ? '' : 'disabled'}>
+          </div>
+          <div class="field-row">
+            <label>Type</label>
+            <select class="txt" data-section="gst" data-field="type" ${gst.registered ? '' : 'disabled'}>${gstTypeOpts}</select>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Channel hint + notes
+    const channelOpts = CHANNEL_HINTS.map(c =>
+      `<option value="${escapeHtml(c.value)}" ${o.data.channel_hint === c.value ? 'selected' : ''}>${escapeHtml(c.label)}</option>`
+    ).join('');
+    html += `
+      <div class="section">
+        <h3>Metadata</h3>
+        <div class="field-row">
+          <label>Channel hint (optional)</label>
+          <select class="txt" data-section="root" data-field="channel_hint">${channelOpts}</select>
+          <div class="help">Indicates the broad sourcing channel this vendor sits in. Drives reports / segmentation.</div>
+        </div>
+        <div class="field-row">
+          <label>Notes</label>
+          <textarea class="txt" data-section="root" data-field="notes" placeholder="Free-form notes — credit limit, history, quirks">${escapeHtml(o.data.notes || '')}</textarea>
+        </div>
+      </div>
+    `;
+
+    $('#editor-body').innerHTML = html;
+    bindEditor();
+    updateSaveButtonState();
+  }
+
+  function updateSaveButtonState() {
+    const idn = State.identity;
+    const saveBtn = $('#ed-save');
+    if (!saveBtn || !idn) return;
+    const codeOk = deriveCode(idn) !== null;
+    const nameOk = idn.vendor_name && idn.vendor_name.trim().length > 0;
+    if (!codeOk || !nameOk) {
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = '0.45';
+      saveBtn.style.cursor = 'not-allowed';
+      saveBtn.title = !nameOk
+        ? 'Cannot save — vendor name required'
+        : 'Cannot save — canonical code is incomplete';
+    } else {
+      saveBtn.disabled = false;
+      saveBtn.style.opacity = '';
+      saveBtn.style.cursor = '';
+      saveBtn.title = '';
+    }
+  }
+
+  function updateComputedCode() {
+    const idn = State.identity;
+    const display = document.querySelector('.code-display .computed');
+    const badge = document.querySelector('.code-display .badge');
+    if (!display || !idn) return;
+    const codeOk = deriveCode(idn) !== null;
+    display.innerHTML = renderCodeHTML(idn);
+    display.classList.toggle('incomplete', !codeOk);
+    if (badge) {
+      let html;
+      if (!idn.pay_seq) html = '<span class="badge warn">&#9888; Pick PAY_SEQ</span>';
+      else if (!idn.identity_abbr || idn.identity_abbr.length < 3) html = '<span class="badge warn">&#9888; IDENTITY needs ≥3 chars</span>';
+      else if (codeOk) html = '<span class="badge ok">&#10003; Canonical code complete</span>';
+      else html = '<span class="badge warn">&#9888; Code incomplete</span>';
+      badge.outerHTML = html;
+    }
+    updateSaveButtonState();
+  }
+
+  function bindEditor() {
+    const body = $('#editor-body');
+    const idn = State.identity;
+    const o = State.open;
+
+    // PAY_SEQ radios
+    body.querySelectorAll('input[name="id-payseq"]').forEach(el => {
+      el.onchange = () => {
+        idn.pay_seq = el.value;
+        // Update only chip styling and computed code, no full re-render
+        body.querySelectorAll('input[name="id-payseq"]').forEach(r => {
+          r.parentElement.classList.toggle('checked', r.checked);
+        });
+        updateComputedCode();
+        markDirty();
+      };
+    });
+
+    // Vendor name
+    const nameEl = $('#id-vname');
+    if (nameEl) {
+      nameEl.oninput = () => {
+        idn.vendor_name = nameEl.value;
+        if (!idn.idTouched) {
+          idn.identity_abbr = autoIdentity(nameEl.value);
+          const aEl = $('#id-idabbr');
+          if (aEl) aEl.value = idn.identity_abbr;
+        }
+        $('#ed-title').textContent = nameEl.value || 'New Vendor';
+        updateComputedCode();
+        markDirty();
+      };
+    }
+
+    const idEl = $('#id-idabbr');
+    if (idEl) {
+      idEl.oninput = () => {
+        idn.identity_abbr = idEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+        idEl.value = idn.identity_abbr;
+        idn.idTouched = true;
+        updateComputedCode();
+        markDirty();
+      };
+    }
+
+    // data_json field bindings
+    body.querySelectorAll('[data-section][data-field]').forEach(el => {
+      const handler = () => {
+        const section = el.dataset.section;
+        const field = el.dataset.field;
+        let val;
+        if (el.type === 'checkbox') val = el.checked;
+        else val = el.value;
+
+        if (section === 'root') {
+          o.data[field] = val;
+        } else {
+          if (!o.data[section]) o.data[section] = {};
+          o.data[section][field] = val;
+        }
+
+        // Toggle GST sub-fields enabled state
+        if (section === 'gst' && field === 'registered') {
+          body.querySelectorAll('[data-section="gst"][data-field="gstin"], [data-section="gst"][data-field="type"]').forEach(s => {
+            s.disabled = !val;
+          });
+        }
+
+        markDirty();
+      };
+      el.oninput = handler;
+      el.onchange = handler;
+    });
+  }
+
+  $('#ed-revert').onclick = () => {
+    if (!State.open) return;
+    if (!confirm('Revert all unsaved changes?')) return;
+    const snap = JSON.parse(JSON.stringify(State.openOriginal));
+    State.open = snap.open;
+    State.identity = snap.identity;
+    State.dirty = false;
+    $('#ed-unsaved').style.display = 'none';
+    renderEditor();
+  };
+
+  $('#ed-delete').onclick = async () => {
+    if (!State.open || State.isNew) return;
+    const code = State.open.vendor_code;
+    if (!confirm(`Delete ${code} permanently? This cannot be undone.`)) return;
+    try {
+      await api('?vendor_code=' + encodeURIComponent(code), { method: 'DELETE' });
+      toast('Deleted ' + code, 'success');
+      $('#editor-overlay').classList.remove('open');
+      $('#editor-panel').classList.remove('open');
+      State.open = null; State.identity = null; State.dirty = false;
+      const list = await api('');
+      State.vendors = list.vendors || [];
+      render();
+    } catch (e) {
+      if (e.status === 409) {
+        toast('Vendor referenced in ' + (e.data?.rms_supplied?.length || '?') + ' RMs — remove from RM tree first', 'error');
+      } else {
+        toast(e.message, 'error');
+      }
+    }
+  };
+
+  $('#ed-save').onclick = async () => {
+    if (!State.open || !State.identity) return;
+    const idn = State.identity;
+    const newCode = deriveCode(idn);
+    if (!newCode) {
+      toast('Cannot save — canonical code is incomplete', 'error');
+      return;
+    }
+    if (!idn.vendor_name || !idn.vendor_name.trim()) {
+      toast('Vendor name is required', 'error');
+      return;
+    }
+    const payload = {
+      pay_seq: idn.pay_seq,
+      identity_abbr: idn.identity_abbr,
+      vendor_name: idn.vendor_name.trim(),
+      data: State.open.data,
+    };
+    try {
+      let r;
+      if (State.isNew) {
+        r = await api('?action=create', { method: 'POST', body: payload });
+      } else {
+        const oldCode = State.open.vendor_code;
+        r = await api('?vendor_code=' + encodeURIComponent(oldCode), { method: 'PUT', body: payload });
+      }
+      State.open.vendor_code = r.vendor_code;
+      State.open.pay_seq = r.pay_seq;
+      State.open.identity_abbr = r.identity_abbr;
+      State.open.vendor_name = r.vendor_name;
+      State.isNew = false;
+      State.dirty = false;
+      State.openOriginal = JSON.parse(JSON.stringify({ open: State.open, identity: State.identity }));
+      $('#ed-unsaved').style.display = 'none';
+      $('#ed-foot-status').textContent = 'Saved · ' + fmtTime(r.updated_at) + ' by ' + r.updated_by;
+      $('#ed-sub').innerHTML = `<span class="mono" style="color:var(--accent)">${escapeHtml(r.vendor_code)}</span>`;
+      $('#ed-delete').style.display = 'inline-block';
+      const verb = r.migrated_from ? `Migrated ${r.migrated_from} → ${r.vendor_code}` : 'Saved ' + r.vendor_code;
+      toast(verb, 'success');
+      const list = await api('');
+      State.vendors = list.vendors || [];
+      render();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  /* ---------- Bootstrap ---------- */
+  async function bootstrap() {
+    if (State.pin) {
+      try {
+        const data = await tryAuth(State.pin);
+        State.vendors = data.vendors || [];
+        $('#user-pill').textContent = 'pin: ' + State.pin;
+        showApp();
+        render();
+        return;
+      } catch (e) {
+        localStorage.removeItem('vendor_editor_pin');
+        State.pin = '';
+      }
+    }
+    showGate();
+    setTimeout(() => $('#pin-input').focus(), 100);
+  }
+  bootstrap();
+})();
+</script>
+</body>
+</html>

@@ -69,6 +69,29 @@
   .arrow.observe { stroke: rgba(52,211,153,0.40); stroke-dasharray: 3 3; }
   .lane-label { fill: #94a3b8; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
   .lane-bg { fill: rgba(255,255,255,0.015); rx: 8; }
+
+  /* Print */
+  @page { size: A4 landscape; margin: 12mm; }
+  @media print {
+    body { background: #fff !important; color: #111 !important; font-family: system-ui, -apple-system, 'Inter', sans-serif !important; }
+    .glass { background: #fff !important; border: 1px solid #d4d4d4 !important; box-shadow: none !important; backdrop-filter: none !important; page-break-inside: avoid; }
+    .grad-fade { background: #fff !important; }
+    p, li { color: #1f1f1f !important; }
+    h1, h2, h3 { color: #111 !important; }
+    .no-print, header .flex.items-center.gap-3.text-xs { display: none !important; }
+    header { border-bottom: 1px solid #d4d4d4 !important; padding: 6mm 0 !important; }
+    [class*="pill"] { background: #f0f0f0 !important; color: #333 !important; }
+    .pill-pos { background: #fff3e0 !important; color: #b86c00 !important; }
+    section { page-break-inside: avoid; }
+    a { color: #1f5cbf !important; text-decoration: none; }
+    .node-text { fill: #111 !important; }
+    .node-text.dim { fill: #666 !important; }
+    .lane-label { fill: #555 !important; }
+    .edge-label { fill: #666 !important; }
+    .lane-bg { fill: #fafafa !important; }
+    .arrow { stroke: rgba(50,50,50,0.55) !important; }
+    *, *:hover { transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -83,7 +106,8 @@
       </div>
       <p class="text-sm text-white/60">Closed circle for Hamza Express. Identity is POS-user-PIN (flexible, any logged-in employee owns the cash). UPI flows direct to bank — no per-captain promise pile.</p>
     </div>
-    <div class="flex items-center gap-3 text-xs">
+    <div class="flex items-center gap-3 text-xs no-print">
+      <a href="/docs/HE-L1-Inflow.pdf" class="px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-400 hover:bg-amber-500/25 transition" title="Download static PDF snapshot">⬇ PDF</a>
       <a href="/ops/visual/nch-l1/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">↗ NCH-L1</a>
       <a href="https://hamzaexpress.in/ops/v2/" target="_blank" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">/ops/v2</a>
       <a href="/ops/messaging/" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition border border-white/10">/ops/messaging</a>
