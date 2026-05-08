@@ -93,6 +93,8 @@
   .pill-l { background: rgba(96,165,250,0.15); color: var(--info); }
   .pill-b { background: rgba(192,132,252,0.15); color: var(--purple); }
   .pill-i { background: rgba(45,212,191,0.15); color: var(--teal); }
+  .pill-p { background: rgba(52,211,153,0.15); color: var(--good); }
+  .pill-r { background: rgba(244,114,182,0.15); color: var(--pink); }
   .pill-rm { background: rgba(232,147,12,0.15); color: var(--accent); }
   .pill-mixed { background: rgba(255,255,255,0.08); color: var(--ink); }
   .pill-unsaved { background: rgba(251,191,36,0.20); color: var(--warn); animation: pulse 1.6s ease-in-out infinite; }
@@ -158,6 +160,8 @@
   .chip.checked.l { background: rgba(96,165,250,0.12); border-color: var(--info); color: var(--info); }
   .chip.checked.b { background: rgba(192,132,252,0.12); border-color: var(--purple); color: var(--purple); }
   .chip.checked.i { background: rgba(45,212,191,0.12); border-color: var(--teal); color: var(--teal); }
+  .chip.checked.p { background: rgba(52,211,153,0.12); border-color: var(--good); color: var(--good); }
+  .chip.checked.r { background: rgba(244,114,182,0.12); border-color: var(--pink); color: var(--pink); }
   .id-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .id-grid > div { min-width: 0; }
 
@@ -166,6 +170,7 @@
   .code-display .computed { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.3; word-break: break-all; }
   .code-display .computed .seg-brand { color: var(--accent); }
   .code-display .computed .seg-type { color: var(--info); }
+  .code-display .computed .seg-usage { color: var(--good); }
   .code-display .computed .seg-src-l { color: var(--info); }
   .code-display .computed .seg-src-b { color: var(--purple); }
   .code-display .computed .seg-src-i { color: var(--teal); }
@@ -257,11 +262,12 @@
   }
   .anatomy .pattern .seg-brand { color: var(--accent); }
   .anatomy .pattern .seg-type { color: var(--info); }
+  .anatomy .pattern .seg-usage { color: var(--good); }
   .anatomy .pattern .seg-src { color: var(--purple); }
   .anatomy .pattern .seg-item { color: var(--ink); }
   .anatomy .pattern .dash { color: var(--ink-faint); margin: 0 4px; }
   .anatomy .legend-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 14px;
   }
   .anatomy .legend-grid > div {
     background: rgba(0,0,0,0.3); border: 1px solid var(--border);
@@ -274,6 +280,7 @@
   }
   .anatomy .legend-grid .n-brand { color: var(--accent); }
   .anatomy .legend-grid .n-type { color: var(--info); }
+  .anatomy .legend-grid .n-usage { color: var(--good); }
   .anatomy .legend-grid .n-src { color: var(--purple); }
   .anatomy .legend-grid .n-item { color: var(--ink); }
 
@@ -289,6 +296,7 @@
   }
   .walkthrough .ex-code .seg-brand { color: var(--accent); }
   .walkthrough .ex-code .seg-type { color: var(--info); }
+  .walkthrough .ex-code .seg-usage { color: var(--good); }
   .walkthrough .ex-code .seg-src { color: var(--purple); }
   .walkthrough .ex-code .seg-item { color: var(--ink); }
   .walkthrough .ex-code .dash { color: var(--ink-faint); }
@@ -318,6 +326,8 @@
   .legend-table td.code-cell.code-info { color: var(--info); }
   .legend-table td.code-cell.code-purple { color: var(--purple); }
   .legend-table td.code-cell.code-teal { color: var(--teal); }
+  .legend-table td.code-cell.code-good { color: var(--good); }
+  .legend-table td.code-cell.code-pink { color: var(--pink); }
   .legend-table td.code-cell.code-warn { color: var(--warn); }
   .legend-table td.code-cell.code-bad { color: var(--bad); }
 
@@ -357,7 +367,7 @@
 <!-- PIN gate -->
 <div id="gate" class="glass gate" style="display:none;">
   <h2>RM Sourcing Editor</h2>
-  <p>Enter your PIN to load the 30 NCH raw-material sourcing profiles.</p>
+  <p>Enter your PIN to load the canonical raw-material sourcing profiles.</p>
   <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="PIN" autocomplete="off">
   <button id="pin-submit">Unlock</button>
   <div class="err" id="pin-err"></div>
@@ -395,8 +405,15 @@
         <option value="NCH">NCH only</option>
         <option value="HE">HE only</option>
       </select>
+      <select id="filter-usage">
+        <option value="">All USAGE</option>
+        <option value="P">P (Production only)</option>
+        <option value="R">R (Retail only)</option>
+        <option value="Pr">Pr (Prod primary, retail alt)</option>
+        <option value="Rp">Rp (Retail primary, prod alt)</option>
+      </select>
       <select id="filter-profile">
-        <option value="">All profiles</option>
+        <option value="">All sourcing</option>
         <option value="L">L only</option>
         <option value="B">B only</option>
         <option value="Lb">Lb</option>
@@ -435,11 +452,12 @@
       <h3>Code Anatomy</h3>
       <div class="anatomy">
         <div class="pattern">
-          <span class="seg-brand">{BRAND}</span><span class="dash">-</span><span class="seg-type">{TYPE}</span><span class="dash">-</span><span class="seg-src">{SOURCING}</span><span class="dash">-</span><span class="seg-item">{ITEM}</span>
+          <span class="seg-brand">{BRAND}</span><span class="dash">-</span><span class="seg-type">{TYPE}</span><span class="dash">-</span><span class="seg-usage">{USAGE}</span><span class="dash">-</span><span class="seg-src">{SOURCING}</span><span class="dash">-</span><span class="seg-item">{ITEM}</span>
         </div>
         <div class="legend-grid">
           <div><span class="seg-name n-brand">BRAND</span>HN / NCH / HE — outlet scope</div>
           <div><span class="seg-name n-type">TYPE</span>2 chars: A/D + M/S</div>
+          <div><span class="seg-name n-usage">USAGE</span>P / R / Pr / Rp — production vs retail</div>
           <div><span class="seg-name n-src">SOURCING</span>1-3 letters: L/B/I, case = primacy</div>
           <div><span class="seg-name n-item">ITEM</span>3 chars, uppercase abbreviation</div>
         </div>
@@ -447,10 +465,11 @@
 
       <h4>Example walkthrough</h4>
       <div class="walkthrough">
-        <span class="ex-code"><span class="seg-brand">HN</span><span class="dash">-</span><span class="seg-type">AM</span><span class="dash">-</span><span class="seg-src">Lb</span><span class="dash">-</span><span class="seg-item">SUG</span></span>
+        <span class="ex-code"><span class="seg-brand">HN</span><span class="dash">-</span><span class="seg-type">AM</span><span class="dash">-</span><span class="seg-usage">P</span><span class="dash">-</span><span class="seg-src">Lb</span><span class="dash">-</span><span class="seg-item">SUG</span></span>
         <ul>
           <li><code>HN</code> — cross-brand RM (used at both NCH and HE)</li>
           <li><code>AM</code> — approximate, multi-use</li>
+          <li><code>P</code> — production only (consumed by our recipes, never resold)</li>
           <li><code>Lb</code> — primary loose, branded SKU also possible (in-house impossible — <code>i</code> absent)</li>
           <li><code>SUG</code> — Sugar</li>
         </ul>
@@ -507,9 +526,36 @@
       </table>
     </div>
 
+    <!-- USAGE -->
+    <div class="legend-section">
+      <h3>USAGE Profile &middot; Position 3 &middot; 1 to 2 characters</h3>
+
+      <h4>The two letters that can appear</h4>
+      <table class="legend-table">
+        <thead><tr><th>Letter</th><th>Meaning</th><th>When to use</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell code-good">P</td><td><strong>Production only</strong> &mdash; consumed by our recipes / service, never sold directly</td><td>Buffalo Milk, raw cutlet, sugar, oil</td></tr>
+          <tr><td class="code-cell code-pink">R</td><td><strong>Retail only</strong> &mdash; purchased to resell to customer, never in our recipes</td><td>Niloufer Fruit Biscuits, Cookies, Cherry Khopra</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Combined with case convention</h4>
+      <table class="legend-table">
+        <thead><tr><th>Profile</th><th>Reads as</th><th>Real example</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell code-good">P</td><td>Production only</td><td><code>NCH-AM-P-Lb-MLK</code> Buffalo Milk</td></tr>
+          <tr><td class="code-cell code-pink">R</td><td>Retail only</td><td><code>NCH-DM-R-B-FRB</code> Fruit Biscuit</td></tr>
+          <tr><td class="code-cell code-good">Pr</td><td>Primary production, retail alternate</td><td><code>NCH-DM-Pr-Bl-OSB</code> Osmania (used by us + sold as Niloufer packs)</td></tr>
+          <tr><td class="code-cell code-pink">Rp</td><td>Primary retail, production alternate</td><td>(none yet)</td></tr>
+        </tbody>
+      </table>
+
+      <p class="note">Forbidden: empty USAGE. An RM that's neither used nor sold has no operational reason to exist.</p>
+    </div>
+
     <!-- SOURCING -->
     <div class="legend-section">
-      <h3>SOURCING Profile &middot; Position 3 &middot; 1 to 3 characters</h3>
+      <h3>SOURCING Profile &middot; Position 4 &middot; 1 to 3 characters</h3>
 
       <h4>The three letters that can appear</h4>
       <table class="legend-table">
@@ -532,13 +578,13 @@
       <table class="legend-table">
         <thead><tr><th>Profile</th><th>Reads as</th><th>Real RM</th></tr></thead>
         <tbody>
-          <tr><td class="code-cell">L</td><td>Only loose, no other option</td><td><code>HN-AM-L-CHL</code> Charcoal</td></tr>
-          <tr><td class="code-cell">B</td><td>Only branded, no other option</td><td><code>HN-AM-B-LPG</code> LPG, <code>HN-AM-B-SOD</code> Soda</td></tr>
+          <tr><td class="code-cell">L</td><td>Only loose, no other option</td><td><code>HN-AM-P-L-CHL</code> Charcoal</td></tr>
+          <tr><td class="code-cell">B</td><td>Only branded, no other option</td><td><code>HN-AM-P-B-LPG</code> LPG, <code>HN-AM-P-B-SOD</code> Soda</td></tr>
           <tr><td class="code-cell code-bad">I</td><td><strong>INVALID</strong> — RMs cannot be I-only (state of production, not an RM)</td><td>—</td></tr>
-          <tr><td class="code-cell">Lb</td><td>Primary loose; branded SKU also possible</td><td><code>HN-AM-Lb-SUG</code> Sugar</td></tr>
-          <tr><td class="code-cell">Bl</td><td>Primary branded; loose also possible</td><td><code>HN-AM-Bl-BTR</code> Butter, <code>NCH-AM-Bl-TEA</code> Tea Powder</td></tr>
-          <tr><td class="code-cell">Li</td><td>Primary loose; in-house production also possible</td><td><code>NCH-AS-Li-CCT</code> Chicken Cutlet Raw</td></tr>
-          <tr><td class="code-cell">Lbi</td><td>Primary loose; both branded AND in-house possible</td><td><code>NCH-AS-Lbi-BUN</code> Bun</td></tr>
+          <tr><td class="code-cell">Lb</td><td>Primary loose; branded SKU also possible</td><td><code>HN-AM-P-Lb-SUG</code> Sugar</td></tr>
+          <tr><td class="code-cell">Bl</td><td>Primary branded; loose also possible</td><td><code>HN-AM-P-Bl-BTR</code> Butter, <code>NCH-AM-Pr-Bl-TEA</code> Tea Powder</td></tr>
+          <tr><td class="code-cell">Li</td><td>Primary loose; in-house production also possible</td><td><code>NCH-AS-P-Li-CCT</code> Chicken Cutlet Raw</td></tr>
+          <tr><td class="code-cell">Lbi</td><td>Primary loose; both branded AND in-house possible</td><td><code>NCH-AS-P-Lbi-BUN</code> Bun</td></tr>
           <tr><td class="code-cell">Bi</td><td>Primary branded; in-house possible (theoretical)</td><td>rare</td></tr>
           <tr><td class="code-cell">Bli</td><td>Primary branded; loose AND in-house possible</td><td>rare</td></tr>
         </tbody>
@@ -547,16 +593,16 @@
       <h4>Why absent letters mean "forbidden"</h4>
       <p>The system reads the sourcing slot to know which actions are valid for this RM.</p>
       <ul>
-        <li><code>HN-AM-Lb-SUG / I / R-…</code> → <span style="color:var(--bad);font-weight:700;">REJECTED</span> (I not in <code>Lb</code>, no in-house possible for sugar)</li>
-        <li><code>HN-AM-L-CHL / B / …</code> → <span style="color:var(--bad);font-weight:700;">REJECTED</span> (B not in <code>L</code>, no branded charcoal SKU)</li>
-        <li><code>HN-AM-B-LPG / L / …</code> → <span style="color:var(--bad);font-weight:700;">REJECTED</span> (L not in <code>B</code>, no loose LPG)</li>
+        <li><code>HN-AM-P-Lb-SUG / I / R-…</code> → <span style="color:var(--bad);font-weight:700;">REJECTED</span> (I not in <code>Lb</code>, no in-house possible for sugar)</li>
+        <li><code>HN-AM-P-L-CHL / B / …</code> → <span style="color:var(--bad);font-weight:700;">REJECTED</span> (B not in <code>L</code>, no branded charcoal SKU)</li>
+        <li><code>HN-AM-P-B-LPG / L / …</code> → <span style="color:var(--bad);font-weight:700;">REJECTED</span> (L not in <code>B</code>, no loose LPG)</li>
       </ul>
       <p class="note">Enforced automatically — the editor validates at save time, the API rejects invalid combinations with 400 errors.</p>
     </div>
 
     <!-- ITEM -->
     <div class="legend-section">
-      <h3>ITEM Abbreviation &middot; Position 4 &middot; 3 characters</h3>
+      <h3>ITEM Abbreviation &middot; Position 5 &middot; 3 characters</h3>
       <table class="legend-table">
         <thead><tr><th>Rule</th><th>Description</th></tr></thead>
         <tbody>
@@ -583,6 +629,8 @@
       <table class="legend-table">
         <thead><tr><th>Forbidden combo</th><th>Why it's caught</th></tr></thead>
         <tbody>
+          <tr><td class="code-cell code-bad">USAGE empty</td><td>An RM must be at least one of P (production) or R (retail). Neither = no operational reason to exist.</td></tr>
+          <tr><td class="code-cell code-bad">USAGE malformed</td><td>Only <code>P</code>, <code>R</code>, <code>Pr</code>, <code>Rp</code> accepted. <code>PR</code>, <code>pp</code>, etc. rejected.</td></tr>
           <tr><td class="code-cell code-bad">Sourcing = I alone</td><td>An RM must be purchasable. I-only items are <em>states of production</em> (decoction, malai), not RMs.</td></tr>
           <tr><td class="code-cell code-bad">Sourcing slot empty</td><td>At least one of L, B, I must be selected.</td></tr>
           <tr><td class="code-cell code-bad">Repeated letter</td><td><code>LL</code> or <code>lL</code> makes no sense — each letter appears at most once.</td></tr>
@@ -596,7 +644,7 @@
     <div class="legend-section">
       <h3>Branded Layer Sub-Structure</h3>
       <p>When an RM has Branded sourcing, the data tree under it has 3 levels:</p>
-      <pre class="branded-tree"><span class="lvl-rm">RM (e.g., HN-AM-Bl-BTR)</span>
+      <pre class="branded-tree"><span class="lvl-rm">RM (e.g., HN-AM-P-Bl-BTR)</span>
 └── <span class="lvl-brand">Branded layer</span>
     ├── <span class="lvl-brand">Brand 1 (e.g., Amul)</span>
     │   ├── <span class="lvl-sku">SKU 1.1 (e.g., 500G)</span>
@@ -662,7 +710,7 @@
     identity: null,   // structured identity for the open RM (brand/approximation/useScope/itemAbbr/sourcing/primary/rm_name)
     isNew: false,     // true when open RM is unsaved (Add New flow)
     dirty: false,
-    filter: { q: '', brand: '', profile: '', status: '' },
+    filter: { q: '', brand: '', usage: '', profile: '', status: '' },
   };
 
   const API = '/api/rm-sourcing';
@@ -685,6 +733,10 @@
     { value: 'L', label: 'Loose-purchased (L)', cls: 'l' },
     { value: 'B', label: 'Branded SKU (B)',     cls: 'b' },
     { value: 'I', label: 'In-house produced (I)', cls: 'i' },
+  ];
+  const USAGE_LETTERS = [
+    { value: 'P', label: 'Production (P)', cls: 'p', desc: 'Consumed by our recipes / service' },
+    { value: 'R', label: 'Retail (R)',     cls: 'r', desc: 'Purchased to resell to customers' },
   ];
 
   // ---------- Canonical-code derivation ----------
@@ -710,31 +762,54 @@
     return p + alts.map(a => a.toLowerCase()).join('');
   }
 
+  /* Compose USAGE slot from selected letters + primary.
+   * Letters: subset of ['P','R']. Primary: 'P' or 'R'.
+   * Returns: 'P' | 'R' | 'Pr' | 'Rp', or null if empty/invalid. */
+  function deriveUsageSlot(letters, primary) {
+    if (!letters || letters.length === 0) return null;
+    const set = Array.from(new Set(letters)).filter(l => 'PR'.includes(l));
+    if (set.length === 0) return null;
+    const p = (primary && set.includes(primary)) ? primary : set[0];
+    const alts = set.filter(l => l !== p);
+    return p + alts.map(a => a.toLowerCase()).join('');
+  }
+
   function isIOnlyProfile(parts) {
     const slot = deriveSourcingSlot(parts.sourcing, parts.primary);
     return slot === 'I';
   }
 
+  function isEmptyUsage(parts) {
+    return !parts.usage || parts.usage.length === 0;
+  }
+
   function deriveCode(parts) {
-    const { brand, approximation, useScope, itemAbbr, sourcing, primary } = parts;
+    const { brand, approximation, useScope, itemAbbr, sourcing, primary, usage, usagePrimary } = parts;
     if (!brand || !approximation || !useScope || !itemAbbr || !sourcing || sourcing.length === 0) return null;
+    if (!usage || usage.length === 0) return null;
     if (!/^[A-Z0-9]{2,4}$/.test(itemAbbr)) return null;
     const slot = deriveSourcingSlot(sourcing, primary);
     if (!slot) return null;
     // I-only profile is invalid (RM must be purchasable)
     if (slot === 'I') return null;
-    return `${brand}-${approximation}${useScope}-${slot}-${itemAbbr}`;
+    const usageSlot = deriveUsageSlot(usage, usagePrimary);
+    if (!usageSlot) return null;
+    return `${brand}-${approximation}${useScope}-${usageSlot}-${slot}-${itemAbbr}`;
   }
 
   function renderCodeHTML(parts) {
-    const { brand, approximation, useScope, itemAbbr, sourcing, primary } = parts;
+    const { brand, approximation, useScope, itemAbbr, sourcing, primary, usage, usagePrimary } = parts;
     // I-only profile renders as INVALID (red)
     if (isIOnlyProfile(parts)) {
       return '<span style="color:var(--bad);font-weight:700;">INVALID</span>';
     }
+    if (isEmptyUsage(parts)) {
+      return '<span style="color:var(--bad);font-weight:700;">USAGE REQUIRED</span>';
+    }
     const code = deriveCode(parts);
     if (!code) return '<span class="incomplete">?</span>';
     const slot = deriveSourcingSlot(sourcing, primary);
+    const usageSlot = deriveUsageSlot(usage, usagePrimary);
     // Color the sourcing slot per primary letter
     let srcHtml = '';
     if (slot) {
@@ -742,17 +817,20 @@
       const cls = prim === 'L' ? 'seg-src-l' : prim === 'B' ? 'seg-src-b' : 'seg-src-i';
       srcHtml = `<span class="${cls}">${slot}</span>`;
     }
+    let usageHtml = `<span class="seg-usage">${usageSlot}</span>`;
     return `<span class="seg-brand">${brand}</span><span class="dash">-</span>` +
            `<span class="seg-type">${approximation}${useScope}</span><span class="dash">-</span>` +
+           `${usageHtml}<span class="dash">-</span>` +
            `${srcHtml}<span class="dash">-</span>` +
            `<span class="seg-item">${itemAbbr}</span>`;
   }
 
-  /* Parse an existing rm_code into structured identity parts. */
+  /* Parse an existing rm_code into structured identity parts.
+   * 5-segment grammar: BRAND-TYPE-USAGE-SOURCING-ITEM */
   function parseCodeToIdentity(code) {
     const parts = (code || '').split('-');
-    if (parts.length !== 4) return null;
-    const [brand, type, slot, item] = parts;
+    if (parts.length !== 5) return null;
+    const [brand, type, usageSlot, slot, item] = parts;
     if (!/^[A-Z]{2,3}$/.test(brand) || type.length !== 2) return null;
     const approximation = type[0];
     const useScope = type[1];
@@ -760,11 +838,17 @@
     const primary = slot[0];
     const alts = slot.slice(1).toUpperCase().split('').filter(c => 'LBI'.includes(c));
     const sourcing = [primary, ...alts];
+    // Parse usage slot: first char primary uppercase, rest lowercase alts
+    const usagePrimary = usageSlot[0];
+    const usageAlts = usageSlot.slice(1).toUpperCase().split('').filter(c => 'PR'.includes(c));
+    const usage = [usagePrimary, ...usageAlts];
     return {
       brand, approximation, useScope,
       itemAbbr: item,
       sourcing,
       primary,
+      usage,
+      usagePrimary,
       itemAbbrTouched: true, // existing code → preserve abbr unless user changes it
     };
   }
@@ -878,6 +962,14 @@
     if (lower.includes('i')) pills.push('<span class="pill pill-i">I</span>');
     return pills.join(' ');
   }
+  function usagePills(usage) {
+    const u = (usage || '').toUpperCase();
+    if (!u) return '';
+    const pills = [];
+    if (u.includes('P')) pills.push('<span class="pill pill-p">P</span>');
+    if (u.includes('R')) pills.push('<span class="pill pill-r">R</span>');
+    return pills.join(' ');
+  }
 
   function renderStats() {
     const total = State.rms.length;
@@ -900,13 +992,14 @@
     const q = (f.q || '').toLowerCase();
     const rows = State.rms.filter(r => {
       if (f.brand && r.brand_prefix !== f.brand) return false;
+      if (f.usage && r.usage_profile !== f.usage) return false;
       if (f.profile && r.sourcing_profile !== f.profile) return false;
       if (f.status && statusOf(r) !== f.status) return false;
       if (q && !(r.rm_code.toLowerCase().includes(q) || r.rm_name.toLowerCase().includes(q))) return false;
       return true;
     });
     if (rows.length === 0) {
-      $('#rm-list').innerHTML = `<div style="padding:30px;text-align:center;color:var(--ink-dim);">No RMs match. ${State.rms.length === 0 ? 'Click <strong>Seed</strong> to populate the 31 NCH RMs.' : ''}</div>`;
+      $('#rm-list').innerHTML = `<div style="padding:30px;text-align:center;color:var(--ink-dim);">No RMs match. ${State.rms.length === 0 ? 'Click <strong>Seed</strong> to populate the canonical RMs.' : ''}</div>`;
       return;
     }
     $('#rm-list').innerHTML = rows.map(r => {
@@ -916,7 +1009,7 @@
         <div class="rm-row ${stat === 'filled' ? 'has-data' : 'empty'}" data-code="${r.rm_code}">
           <div class="code">${escapeHtml(r.rm_code)}</div>
           <div class="name">${escapeHtml(r.rm_name)}</div>
-          <div class="profile">${profilePills(r.sourcing_profile)}</div>
+          <div class="profile" title="USAGE / SOURCING">${usagePills(r.usage_profile)} <span style="color:var(--ink-faint);">/</span> ${profilePills(r.sourcing_profile)}</div>
           <div class="stat" title="Loose vendors"><span class="n" style="color:var(--info)">${c.vendors || 0}</span>L</div>
           <div class="stat" title="Brands · SKUs · Suppliers"><span class="n" style="color:var(--purple)">${c.brands || 0}·${c.skus || 0}·${c.suppliers || 0}</span>B</div>
           <div class="stat" title="In-house recipes"><span class="n" style="color:var(--teal)">${c.recipes || 0}</span>I</div>
@@ -935,6 +1028,7 @@
 
   $('#filter-q').oninput = e => { State.filter.q = e.target.value; renderList(); };
   $('#filter-brand').onchange = e => { State.filter.brand = e.target.value; renderList(); };
+  $('#filter-usage').onchange = e => { State.filter.usage = e.target.value; renderList(); };
   $('#filter-profile').onchange = e => { State.filter.profile = e.target.value; renderList(); };
   $('#filter-status').onchange = e => { State.filter.status = e.target.value; renderList(); };
 
@@ -948,7 +1042,7 @@
   };
 
   $('#seed-btn').onclick = async () => {
-    if (!confirm('Seed 30 RMs? (Only inserts if table is empty.)')) return;
+    if (!confirm('Seed RMs? (Only inserts if table is empty.)')) return;
     try {
       const r = await api('?action=seed', { method: 'POST' });
       if (r.skipped) toast('Already seeded (' + r.existing_count + ' rows). Skipped.');
@@ -969,7 +1063,9 @@
       State.open.data = data.data || {};
       const idn = parseCodeToIdentity(data.rm_code) || {
         brand: data.brand_prefix, approximation: 'A', useScope: 'M',
-        itemAbbr: data.item_abbr || '', sourcing: ['L'], primary: 'L', itemAbbrTouched: true,
+        itemAbbr: data.item_abbr || '', sourcing: ['L'], primary: 'L',
+        usage: ['P'], usagePrimary: 'P',
+        itemAbbrTouched: true,
       };
       idn.rm_name = data.rm_name || '';
       State.identity = idn;
@@ -1003,6 +1099,7 @@
     State.identity = {
       brand: '', approximation: '', useScope: '',
       itemAbbr: '', sourcing: [], primary: '',
+      usage: ['P'], usagePrimary: 'P',
       rm_name: '', itemAbbrTouched: false,
     };
     State.isNew = true;
@@ -1079,6 +1176,31 @@
       </label>`
     ).join('');
 
+    const usageChips = USAGE_LETTERS.map(u => {
+      const checked = (idn.usage || []).includes(u.value);
+      return `<label class="chip ${u.cls} ${checked ? 'checked' : ''}">
+        <input type="checkbox" name="id-usage" value="${u.value}" ${checked ? 'checked' : ''}>
+        ${escapeHtml(u.label)}
+      </label>`;
+    }).join('');
+
+    let usagePrimaryHtml = '';
+    if ((idn.usage || []).length >= 2) {
+      usagePrimaryHtml = `<div class="grp">
+        <label class="grp-label">Currently primary (USAGE)</label>
+        <div class="chip-row">
+          ${idn.usage.map(letter => {
+            const meta = USAGE_LETTERS.find(u => u.value === letter);
+            return `<label class="chip ${meta.cls} ${idn.usagePrimary === letter ? 'checked' : ''}">
+              <input type="radio" name="id-usage-primary" value="${letter}" ${idn.usagePrimary === letter ? 'checked' : ''}>
+              ${escapeHtml(meta.label.split(' (')[0])}
+            </label>`;
+          }).join('')}
+        </div>
+        <div class="help">Sets the uppercase letter in the USAGE slot. Alternate falls to lowercase.</div>
+      </div>`;
+    }
+
     const sourcingChips = SOURCING_LETTERS.map(s => {
       const checked = (idn.sourcing || []).includes(s.value);
       return `<label class="chip ${s.cls} ${checked ? 'checked' : ''}">
@@ -1106,11 +1228,14 @@
 
     // ---- Computed code panel ----
     const iOnly = isIOnlyProfile(idn);
+    const usageEmpty = isEmptyUsage(idn);
     const codeOk = deriveCode(idn) !== null;
     const codeHtml = renderCodeHTML(idn);
     let badge;
     if (iOnly) {
       badge = '<span class="badge" style="background:rgba(248,113,113,0.12);color:var(--bad);border:1px solid rgba(248,113,113,0.3);">&#9888; I-only profile is invalid. RMs must be purchasable.</span>';
+    } else if (usageEmpty) {
+      badge = '<span class="badge" style="background:rgba(248,113,113,0.12);color:var(--bad);border:1px solid rgba(248,113,113,0.3);">&#9888; USAGE empty. RM must be at least one of P (production) or R (retail).</span>';
     } else if (codeOk) {
       badge = '<span class="badge ok">&#10003; Canonical code complete</span>';
     } else {
@@ -1146,6 +1271,13 @@
           <div class="help">Auto-derived from name (consonants, vowel-stripped). Override anytime.</div>
         </div>
         <div class="grp">
+          <label class="grp-label">Usage classification</label>
+          <div class="chip-row">${usageChips}</div>
+          <div class="help">Production (P) = consumed by our recipes / service. Retail (R) = purchased to resell.</div>
+          <div class="help" style="margin-top:6px;color:var(--warn);"><strong>Required:</strong> at least one of P or R. An RM that's neither used nor sold has no operational reason to exist.</div>
+        </div>
+        ${usagePrimaryHtml}
+        <div class="grp">
           <label class="grp-label">Sourcing possibilities</label>
           <div class="chip-row">${sourcingChips}</div>
           <div class="help">Tick every channel this RM could come from. At least one required.</div>
@@ -1178,16 +1310,19 @@
     const idn = State.identity;
     const saveBtn = $('#ed-save');
     if (!saveBtn || !idn) return;
-    // Disable Save if I-only (invalid) or code incomplete
+    // Disable Save if I-only (invalid) or USAGE empty or code incomplete
     const iOnly = isIOnlyProfile(idn);
+    const usageEmpty = isEmptyUsage(idn);
     const codeOk = deriveCode(idn) !== null;
-    if (iOnly || !codeOk) {
+    if (iOnly || usageEmpty || !codeOk) {
       saveBtn.disabled = true;
       saveBtn.style.opacity = '0.45';
       saveBtn.style.cursor = 'not-allowed';
       saveBtn.title = iOnly
         ? 'Cannot save — I-only profile is invalid (RMs must be purchasable)'
-        : 'Cannot save — canonical code is incomplete';
+        : usageEmpty
+          ? 'Cannot save — USAGE is empty (must be at least one of P or R)'
+          : 'Cannot save — canonical code is incomplete';
     } else {
       saveBtn.disabled = false;
       saveBtn.style.opacity = '';
@@ -1334,6 +1469,29 @@
     body.querySelectorAll('input[name="id-use"]').forEach(el => {
       el.onchange = () => { idn.useScope = el.value; markDirty(); renderEditor(); };
     });
+    body.querySelectorAll('input[name="id-usage"]').forEach(el => {
+      el.onchange = () => {
+        const val = el.value;
+        const set = new Set(idn.usage || []);
+        if (el.checked) {
+          set.add(val);
+        } else {
+          if (set.size <= 1) {
+            // Refuse to uncheck the last USAGE letter — empty USAGE is forbidden.
+            el.checked = true;
+            toast('At least one of P or R is required.', 'error');
+            return;
+          }
+          set.delete(val);
+        }
+        idn.usage = Array.from(set).filter(l => 'PR'.includes(l));
+        if (!idn.usage.includes(idn.usagePrimary)) idn.usagePrimary = idn.usage[0] || '';
+        markDirty(); renderEditor();
+      };
+    });
+    body.querySelectorAll('input[name="id-usage-primary"]').forEach(el => {
+      el.onchange = () => { idn.usagePrimary = el.value; markDirty(); renderEditor(); };
+    });
     body.querySelectorAll('input[name="id-src"]').forEach(el => {
       el.onchange = () => {
         const val = el.value;
@@ -1410,12 +1568,15 @@
     const badge = document.querySelector('.code-display .badge');
     if (!display || !idn) return;
     const iOnly = isIOnlyProfile(idn);
+    const usageEmpty = isEmptyUsage(idn);
     const codeOk = deriveCode(idn) !== null;
     display.innerHTML = renderCodeHTML(idn);
-    display.classList.toggle('incomplete', !codeOk && !iOnly);
+    display.classList.toggle('incomplete', !codeOk && !iOnly && !usageEmpty);
     if (badge) {
       if (iOnly) {
         badge.outerHTML = '<span class="badge" style="background:rgba(248,113,113,0.12);color:var(--bad);border:1px solid rgba(248,113,113,0.3);">&#9888; I-only profile is invalid. RMs must be purchasable.</span>';
+      } else if (usageEmpty) {
+        badge.outerHTML = '<span class="badge" style="background:rgba(248,113,113,0.12);color:var(--bad);border:1px solid rgba(248,113,113,0.3);">&#9888; USAGE empty. RM must be at least one of P (production) or R (retail).</span>';
       } else if (codeOk) {
         badge.outerHTML = '<span class="badge ok">&#10003; Canonical code complete</span>';
       } else {
@@ -1613,6 +1774,10 @@
       toast('Cannot save — I-only profile is invalid. RMs must be purchasable.', 'error');
       return;
     }
+    if (isEmptyUsage(idn)) {
+      toast('Cannot save — USAGE is empty. Pick P (production) and/or R (retail).', 'error');
+      return;
+    }
     const newCode = deriveCode(idn);
     if (!newCode) {
       toast('Cannot save — canonical code is incomplete', 'error');
@@ -1624,10 +1789,12 @@
     }
 
     const sourcing_profile = deriveSourcingSlot(idn.sourcing, idn.primary);
+    const usage_profile = deriveUsageSlot(idn.usage, idn.usagePrimary);
     const rm_type = idn.approximation + idn.useScope;
     const payload = {
       brand_prefix: idn.brand,
       rm_type,
+      usage_profile,
       sourcing_profile,
       item_abbr: idn.itemAbbr,
       rm_name: idn.rm_name.trim(),
@@ -1649,6 +1816,7 @@
       State.open.rm_code = r.rm_code;
       State.open.brand_prefix = idn.brand;
       State.open.rm_type = rm_type;
+      State.open.usage_profile = usage_profile;
       State.open.sourcing_profile = sourcing_profile;
       State.open.item_abbr = idn.itemAbbr;
       State.open.rm_name = idn.rm_name.trim();
