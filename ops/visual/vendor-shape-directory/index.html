@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vendor Canonical Shape Directory · HN Hotels</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c14;
+    --panel: rgba(22,22,31,0.7);
+    --border: rgba(255,255,255,0.08);
+    --ink: #e4e4ed;
+    --ink-dim: #94a3b8;
+    --accent: #e8930c;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --info: #60a5fa;
+    --purple: #c084fc;
+    --teal: #2dd4bf;
+    --pink: #f472b6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.65; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .glass { background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(20px); border-radius: 14px; }
+  .panel-h { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
+  .section-num { font-size: 11px; font-weight: 700; color: var(--ink-dim); letter-spacing: 0.12em; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .pill-vendor { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-pf   { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-rf   { background: rgba(52,211,153,0.15); color: var(--good); }
+  .pill-info { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-good { background: rgba(52,211,153,0.15); color: var(--good); }
+  .pill-purple { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .pill-teal  { background: rgba(45,212,191,0.15); color: var(--teal); }
+  .pill-bad   { background: rgba(248,113,113,0.15); color: var(--bad); }
+  .pill-warn  { background: rgba(251,191,36,0.15); color: var(--warn); }
+  .pill-nch  { background: rgba(244,114,182,0.15); color: var(--pink); }
+  .pill-he   { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-hn   { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .grad-fade { background: linear-gradient(180deg, rgba(15,15,26,0.85) 0%, rgba(12,12,20,1) 100%); }
+  .stat-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat-card .label { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .stat-card .meta { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .code-block { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.7; overflow-x: auto; white-space: pre; color: var(--ink); }
+  .code-inline { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.35); padding: 2px 6px; border-radius: 4px; font-size: 0.92em; color: var(--accent); }
+  .layer-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; height: 100%; }
+  .failure-card { background: rgba(248,113,113,0.04); border: 1px solid rgba(248,113,113,0.25); border-left: 3px solid var(--bad); padding: 12px 14px; border-radius: 8px; }
+  .ok-card { background: rgba(52,211,153,0.04); border: 1px solid rgba(52,211,153,0.25); border-left: 3px solid var(--good); padding: 12px 14px; border-radius: 8px; }
+  .quote { border-left: 3px solid var(--accent); padding: 14px 18px; background: rgba(232,147,12,0.04); border-radius: 0 8px 8px 0; font-size: 16px; line-height: 1.6; font-weight: 500; color: var(--ink); }
+  .btn { padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; transition: all 0.15s; cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.04); color: var(--ink); text-decoration: none; display: inline-block; }
+  .btn:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.18); }
+  .btn-accent { background: rgba(232,147,12,0.15); border-color: rgba(232,147,12,0.35); color: var(--accent); }
+  .btn-accent:hover { background: rgba(232,147,12,0.25); border-color: rgba(232,147,12,0.55); }
+  h2 { font-size: 22px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; margin-bottom: 8px; }
+  h3 { font-size: 16px; font-weight: 700; color: var(--ink); margin: 20px 0 8px; letter-spacing: -0.005em; }
+  p { color: rgba(228,228,237,0.85); }
+  .prose p { margin-bottom: 12px; }
+  .prose ul { margin: 8px 0 14px 0; padding-left: 22px; color: rgba(228,228,237,0.85); }
+  .prose ul li { margin-bottom: 6px; line-height: 1.55; }
+  .prose strong { color: var(--ink); font-weight: 600; }
+
+  .dir-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .dir-table th, .dir-table td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .dir-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); font-weight: 600; background: rgba(255,255,255,0.02); }
+  .dir-table td.code-cell { font-family: 'JetBrains Mono', monospace; font-weight: 600; white-space: nowrap; }
+  .dir-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .dir-table .code-pf { color: var(--info); }
+  .dir-table .code-rf { color: var(--good); }
+  .dir-table .code-id { color: var(--accent); }
+  .dir-table .code-mute { color: var(--ink-dim); }
+
+  .anatomy-row { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 600; text-align: center; padding: 22px 0; letter-spacing: 0.04em; }
+  .anatomy-row .seg-payseq { color: var(--info); }
+  .anatomy-row .seg-id { color: var(--accent); }
+  .anatomy-row .dash { color: var(--ink-dim); }
+  .seg-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px; height: 100%; }
+  .seg-card.payseq { border-top: 3px solid var(--info); }
+  .seg-card.id { border-top: 3px solid var(--accent); }
+  .seg-card .seg-name { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; }
+  .seg-card.payseq .seg-name { color: var(--info); }
+  .seg-card.id .seg-name { color: var(--accent); }
+  .seg-card .seg-pos { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .seg-card .seg-desc { font-size: 12px; color: rgba(228,228,237,0.78); margin-top: 8px; line-height: 1.5; }
+  .seg-card .seg-ex { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim); margin-top: 8px; }
+
+  .census-group { margin-bottom: 18px; }
+  .census-head { font-size: 13px; font-weight: 700; color: var(--accent); display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .census-head .count { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-dim); font-weight: 500; }
+  .census-list { padding-left: 12px; margin: 0 0 8px; list-style: none; }
+  .census-list li { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 3px 0; line-height: 1.5; }
+  .census-list li a { color: var(--ink); text-decoration: none; }
+  .census-list li a:hover { color: var(--accent); }
+  .census-list li .v-name { color: var(--ink-dim); margin-left: 6px; font-family: 'Inter', sans-serif; font-size: 12px; }
+  .census-list li .v-meta { color: var(--ink-faint); margin-left: 6px; font-family: 'Inter', sans-serif; font-size: 11px; }
+  .census-list li .pill { margin-left: 6px; }
+
+  .walk-block { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-size: 12px; line-height: 1.65; overflow-x: auto; }
+  .walk-block .lbl { color: var(--ink-dim); }
+  .walk-block .p   { color: var(--info); }
+  .walk-block .r   { color: var(--good); }
+  .walk-block .i   { color: var(--accent); font-weight: 700; }
+  .walk-reads { font-family: 'Inter', sans-serif; font-size: 13px; color: rgba(228,228,237,0.85); padding: 10px 14px; background: rgba(232,147,12,0.04); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; margin-top: 10px; }
+
+  .qbar a { font-size: 12px; color: var(--ink-dim); padding: 6px 10px; border-radius: 6px; text-decoration: none; }
+  .qbar a:hover { color: var(--ink); background: rgba(255,255,255,0.04); }
+
+  .loading { font-size: 12px; color: var(--ink-dim); font-style: italic; }
+
+  @page { size: A4; margin: 15mm; }
+  @media print {
+    body { background: #fff !important; color: #111 !important; font-family: system-ui, -apple-system, 'Inter', sans-serif !important; }
+    .glass { background: #fff !important; border: 1px solid #d4d4d4 !important; box-shadow: none !important; backdrop-filter: none !important; page-break-inside: avoid; }
+    .panel-h { color: #b86c00 !important; }
+    .stat-card, .layer-card, .seg-card, .ok-card, .failure-card { background: #fafafa !important; border-color: #d4d4d4 !important; }
+    .seg-card .seg-name { color: #111 !important; }
+    .code-block, .walk-block { background: #f4f4f4 !important; color: #111 !important; border-color: #d0d0d0 !important; }
+    .code-inline { background: #f0f0f0 !important; color: #b86c00 !important; }
+    .quote, .walk-reads { background: #fff8ec !important; border-left-color: #b86c00 !important; color: #111 !important; }
+    .grad-fade { background: #fff !important; }
+    p, li, .prose p, .prose li { color: #1f1f1f !important; }
+    h2, h3 { color: #111 !important; }
+    .btn, .no-print, header .flex.items-center.gap-2 { display: none !important; }
+    header { border-bottom: 1px solid #d4d4d4 !important; padding: 8mm 0 !important; }
+    .pill-vendor { background: #fff3e0 !important; color: #b86c00 !important; }
+    .pill-pf { background: #e6f0ff !important; color: #1f5cbf !important; }
+    .pill-rf { background: #e8f8ee !important; color: #0e7a3f !important; }
+    .pill-info { background: #e6f0ff !important; color: #1f5cbf !important; }
+    .pill-good { background: #e8f8ee !important; color: #0e7a3f !important; }
+    .pill-purple { background: #f3eaff !important; color: #6b3ab1 !important; }
+    .pill-teal { background: #e6f8f5 !important; color: #0a7062 !important; }
+    .pill-bad { background: #ffe6e6 !important; color: #b81818 !important; }
+    .pill-warn { background: #fff8d6 !important; color: #8a6d00 !important; }
+    .pill-nch { background: #ffe6f4 !important; color: #b8186e !important; }
+    .pill-he { background: #fff3e0 !important; color: #b86c00 !important; }
+    .pill-hn { background: #f3eaff !important; color: #6b3ab1 !important; }
+    section { page-break-inside: avoid; }
+    a { color: #1f5cbf !important; text-decoration: none; }
+    .dir-table th { background: #f0f0f0 !important; color: #555 !important; }
+    .dir-table td.code-cell, .dir-table .code-pf, .dir-table .code-rf, .dir-table .code-id { color: #111 !important; }
+    .dir-table .code-mute { color: #888 !important; }
+    .anatomy-row .seg-payseq, .anatomy-row .seg-id { color: #111 !important; }
+    .anatomy-row .dash { color: #888 !important; }
+    .seg-card.payseq .seg-name, .seg-card.id .seg-name { color: #111 !important; }
+    .census-head { color: #b86c00 !important; }
+    .census-list li, .census-list li a { color: #111 !important; }
+    .census-list li .v-name, .census-list li .v-meta { color: #555 !important; }
+    .walk-block .lbl, .walk-block .p, .walk-block .r, .walk-block .i { color: #111 !important; }
+    *, *:hover { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="border-b border-white/5 px-6 py-5 grad-fade">
+  <div class="max-w-[1200px] mx-auto flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <div class="flex items-center gap-3 mb-1">
+        <span class="text-2xl">🏪</span>
+        <h1 class="text-xl font-bold tracking-tight">Vendor · Canonical Shape Directory</h1>
+        <span class="pill pill-vendor">Reference · v1.0</span>
+      </div>
+      <p class="text-sm text-white/60 max-w-3xl">The 2-segment vendor identity — minimal by doctrine. PAY_SEQ × IDENTITY. Brand scope and sells categories are computed from the RM ring at query time.</p>
+    </div>
+    <div class="flex items-center gap-2 text-xs no-print">
+      <a href="/docs/Vendor-Shape-Directory.pdf" class="btn btn-accent" title="Download static PDF snapshot">⬇ PDF</a>
+      <a href="/ops/vendor-editor/" class="btn">↗ Vendor Editor</a>
+      <a href="/ops/visual/rm-shape-directory/" class="btn">↗ RM Shape Directory</a>
+      <a href="/ops/visual/coa-doctrine/" class="btn">↗ COA Doctrine</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1200px] mx-auto px-6 py-8 space-y-6">
+
+  <!-- SECTION 1 — INTRO -->
+  <section class="glass p-6">
+    <div class="section-num">SECTION 1</div>
+    <h2>The minimal vendor identity</h2>
+    <div class="prose mt-2">
+      <p>The vendor canonical code carries only what's mathematically necessary: <strong>PAY_SEQ</strong> (the architectural cash-flow binary) and <strong>IDENTITY</strong> (the unique abbreviation). Everything else — which BRANDs they supply, what they SELL — is a <strong>computed view</strong> derived from the RM ring at query time.</p>
+      <p>This obeys the COA Doctrine: properties that can be derived from upstream entity rings are never duplicated as static fields. A vendor that stops supplying NCH automatically loses its NCH scope; no manual sync required.</p>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+      <div class="stat-card"><div class="label">Total vendors</div><div class="value" id="stat-total">—</div><div class="meta">live in editor</div></div>
+      <div class="stat-card"><div class="label">Pay-first (Pf)</div><div class="value mono" id="stat-pf" style="font-size:18px">—</div><div class="meta">cash leaves first</div></div>
+      <div class="stat-card"><div class="label">Receive-first (Rf)</div><div class="value mono" id="stat-rf" style="font-size:18px">—</div><div class="meta">goods arrive first</div></div>
+      <div class="stat-card"><div class="label">Linked vs orphan</div><div class="value mono" id="stat-linked" style="font-size:14px">—</div><div class="meta">RM-referenced vendors</div></div>
+    </div>
+
+    <div class="qbar mt-5 flex flex-wrap gap-2">
+      <a href="/ops/vendor-editor/">↗ Vendor Editor</a>
+      <a href="/ops/rm-sourcing-editor/">↗ RM Editor</a>
+      <a href="/ops/visual/rm-shape-directory/">↗ RM Shape Directory</a>
+      <a href="/ops/visual/coa-doctrine/">↗ COA Doctrine</a>
+      <a href="#section-6">↓ Live Census</a>
+    </div>
+  </section>
+
+  <!-- SECTION 2 — CODE ANATOMY -->
+  <section class="glass p-6" id="section-2">
+    <div class="section-num">SECTION 2</div>
+    <h2>Code Anatomy — 2 segments, left to right</h2>
+
+    <div class="anatomy-row mt-2">
+      <span class="seg-payseq">{PAY_SEQ}</span><span class="dash"> - </span><span class="seg-id">{IDENTITY}</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+      <div class="seg-card payseq">
+        <div class="seg-name">PAY_SEQ</div>
+        <div class="seg-pos">Position 1 · 2 chars · the architectural binary</div>
+        <div class="seg-desc"><span class="mono" style="color:var(--info)">Pf</span> = pay-first (cash leaves before goods arrive) · <span class="mono" style="color:var(--good)">Rf</span> = receive-first (goods arrive before money goes out).</div>
+        <div class="seg-ex">2 values · Pf · Rf</div>
+      </div>
+      <div class="seg-card id">
+        <div class="seg-name">IDENTITY</div>
+        <div class="seg-pos">Position 2 · 3-10 chars uppercase</div>
+        <div class="seg-desc">Unique abbreviation drawn from the vendor name. Auto-derived (consonants vowel-stripped); owner-overridable. Globally unique across all vendors.</div>
+        <div class="seg-ex">PRABHU · ZEPTO · SHARIFF · RENT · INTERNET</div>
+      </div>
+    </div>
+
+    <div class="quote mt-5 text-sm">
+      <strong>Reading order:</strong> PAY_SEQ tells the system the cash-flow direction. IDENTITY tells the system who the vendor is. That's it. Brand scope, sells categories, RMs supplied — all computed from the upstream RM ring.
+    </div>
+  </section>
+
+  <!-- SECTION 3 — PAY_SEQ -->
+  <section class="glass p-6" id="section-3">
+    <div class="section-num">SECTION 3</div>
+    <h2>PAY_SEQ directory <span class="pill pill-info" style="font-size:10px">Position 1 · 2 chars</span></h2>
+    <p class="text-sm text-white/70 mt-1">The architectural binary that classifies every vendor by cash-flow direction.</p>
+
+    <div class="overflow-x-auto mt-4">
+      <table class="dir-table">
+        <thead><tr><th>Code</th><th>Meaning</th><th>Real examples</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="code-cell"><span class="code-pf">Pf</span></td>
+            <td><strong>Pay-first.</strong> Money leaves our account before goods/service arrives. Quick commerce apps, prepaid subscriptions, advance rent, prepaid utilities.</td>
+            <td><span class="mono"><span class="code-pf">Pf</span>-<span class="code-id">ZEPTO</span></span> · <span class="mono"><span class="code-pf">Pf</span>-<span class="code-id">RENT</span></span> · <span class="mono"><span class="code-pf">Pf</span>-<span class="code-id">INTERNET</span></span></td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-rf">Rf</span></td>
+            <td><strong>Receive-first.</strong> Goods/service arrives before money goes out. Daily milk, departmental stores with credit terms, post-paid utilities, monthly bills.</td>
+            <td><span class="mono"><span class="code-rf">Rf</span>-<span class="code-id">PRABHU</span></span> · <span class="mono"><span class="code-rf">Rf</span>-<span class="code-id">SHARIFF</span></span> · <span class="mono"><span class="code-rf">Rf</span>-<span class="code-id">ELECTRICITY</span></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="layer-card mt-4 text-sm text-white/75">
+      <strong class="text-white">Why a binary, not a 6-letter V-shape?</strong>
+      <p class="mt-1">The richer V-shapes (V1a / V1b / V2 / V3 / V4 / V5) capture the precise cash-flow choreography of a single purchase event. Those live at the <em>action layer</em> and modulate per-purchase, per-supplier within a single vendor record. PAY_SEQ at the vendor level only captures the dominant direction — that's enough for the entity ring; the action ring fills in the granularity.</p>
+    </div>
+  </section>
+
+  <!-- SECTION 4 — IDENTITY -->
+  <section class="glass p-6" id="section-4">
+    <div class="section-num">SECTION 4</div>
+    <h2>IDENTITY directory <span class="pill pill-vendor" style="font-size:10px">Position 2 · 3-10 chars</span></h2>
+    <p class="text-sm text-white/70 mt-1">A 3-10 character uppercase abbreviation that gives the vendor its identity within the global vendor namespace.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+      <div class="layer-card">
+        <strong class="text-white">Length</strong>
+        <p class="text-sm text-white/75 mt-1">3 to 10 characters, uppercase A-Z and 0-9 only. Codes need to stay scannable.</p>
+      </div>
+      <div class="layer-card">
+        <strong class="text-white">Source</strong>
+        <p class="text-sm text-white/75 mt-1">Auto-derived from vendor name (consonants, vowels stripped, deduplicated). Owner override allowed.</p>
+      </div>
+      <div class="layer-card">
+        <strong class="text-white">Uniqueness</strong>
+        <p class="text-sm text-white/75 mt-1"><strong>Globally unique</strong> across ALL vendors regardless of PAY_SEQ. <span class="code-inline">Rf-PRABHU</span> blocks <span class="code-inline">Pf-PRABHU</span>.</p>
+      </div>
+      <div class="layer-card">
+        <strong class="text-white">Case</strong>
+        <p class="text-sm text-white/75 mt-1">Always uppercase. Editor and API normalise lowercase on save.</p>
+      </div>
+    </div>
+
+    <h3>Sample derivations</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Vendor name</th><th>Auto-derived IDENTITY</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Prabhu Buffalo Milk Vendor</td><td class="code-cell"><span class="code-id">PRABHU</span></td><td>Lead noun retained</td></tr>
+          <tr><td>Zepto</td><td class="code-cell"><span class="code-id">ZEPTO</span></td><td>Brand name as-is</td></tr>
+          <tr><td>Shariff Departmental Store</td><td class="code-cell"><span class="code-id">SHARIFF</span></td><td>Lead noun</td></tr>
+          <tr><td>Rent — Hamza HKP</td><td class="code-cell"><span class="code-id">RENT</span></td><td>Functional handle</td></tr>
+          <tr><td>BESCOM (Electricity)</td><td class="code-cell"><span class="code-id">ELECTRICITY</span></td><td>Function over brand</td></tr>
+          <tr><td>BSNL Internet</td><td class="code-cell"><span class="code-id">INTERNET</span></td><td>Function over brand</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="text-sm text-white/60 mt-2">When two vendors play the same operational role (e.g. two electricity providers across outlets), use a discriminator suffix — <code>Rf-ELECTRICITYNCH</code>, <code>Rf-ELECTRICITYHE</code>.</p>
+  </section>
+
+  <!-- SECTION 5 — FORBIDDEN -->
+  <section class="glass p-6" id="section-5">
+    <div class="section-num">SECTION 5</div>
+    <h2>Forbidden Combinations</h2>
+    <p class="text-sm text-white/70 mt-1">Every anomaly the system rejects, in one place. The math literally cannot represent these.</p>
+
+    <div class="overflow-x-auto mt-4">
+      <table class="dir-table">
+        <thead><tr><th>Forbidden</th><th>Why caught</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell"><span class="code-pf">PAY_SEQ</span> outside {Pf, Rf}</td><td>The architectural binary is exhaustive — any third value would require a doctrine change.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-id">IDENTITY</span> empty</td><td>Identity required.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-id">IDENTITY</span> &lt; 3 chars</td><td>Codes need to stay readable.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-id">IDENTITY</span> &gt; 10 chars</td><td>Codes need to stay scannable.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-id">IDENTITY</span> collision</td><td>Two vendors cannot share the same identity, even across PAY_SEQ tiers.</td><td class="text-white/70">409 conflict</td></tr>
+          <tr><td class="code-cell">Lowercase / non-alphanumeric</td><td>IDENTITY is uppercase A-Z and 0-9 only.</td><td class="text-white/70">400 reject (auto-uppercased on input)</td></tr>
+          <tr><td class="code-cell">DELETE while RM-referenced</td><td>Cannot orphan an RM's supplier link silently — caller must remove from RM tree first.</td><td class="text-white/70">409 conflict</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SECTION 6 — LIVE CENSUS -->
+  <section class="glass p-6" id="section-6">
+    <div class="section-num">SECTION 6</div>
+    <h2>Live Vendor Census — All Vendors Today</h2>
+    <p class="text-sm text-white/70 mt-1">Fetched live from <span class="code-inline">/api/vendors</span>. Each vendor shows its computed scope (BRAND set) and sells categories (L=Loose / B=Branded / I=In-house). Click any code to open the editor.</p>
+
+    <div id="census-mount" class="mt-5">
+      <div class="loading">Loading live vendors…</div>
+    </div>
+  </section>
+
+  <!-- SECTION 7 — WORKED EXAMPLES -->
+  <section class="glass p-6" id="section-7">
+    <div class="section-num">SECTION 7</div>
+    <h2>Worked Examples — Reading codes left to right</h2>
+    <p class="text-sm text-white/70 mt-1">Six real codes, each walked through one segment at a time.</p>
+
+    <h3 class="mt-4">1 · <span class="mono">Rf-PRABHU</span> — Loose milk vendor</h3>
+    <div class="walk-block">
+<span class="r">Rf</span>-<span class="i">PRABHU</span>
+ <span class="lbl">│   └─</span> <span class="i">PRABHU</span> — identity (loose buffalo milk vendor in Shivajinagar)
+ <span class="lbl">└─────</span> <span class="r">Rf</span> — Receive-first (delivers milk daily; settled weekly/monthly)
+    </div>
+    <div class="walk-reads">Reads as: "A receive-first vendor named PRABHU." The computed view fills in: scope = NCH (only NCH consumes buffalo milk), sells = L (loose layer of <span class="mono">NCH-AM-P-Lb-MLK</span>).</div>
+
+    <h3 class="mt-5">2 · <span class="mono">Pf-ZEPTO</span> — Quick commerce app</h3>
+    <div class="walk-block">
+<span class="p">Pf</span>-<span class="i">ZEPTO</span>
+ <span class="lbl">│   └─</span> <span class="i">ZEPTO</span> — identity (the quick commerce platform)
+ <span class="lbl">└─────</span> <span class="p">Pf</span> — Pay-first (you pay in app, then goods arrive in 10 minutes)
+    </div>
+    <div class="walk-reads">Reads as: "A pay-first vendor named ZEPTO." Computed: scope = HN (cross-brand — both NCH and HE order from Zepto); sells = B (branded SKUs only — Zepto doesn't deal in loose).</div>
+
+    <h3 class="mt-5">3 · <span class="mono">Rf-SHARIFF</span> — Departmental store with credit terms</h3>
+    <div class="walk-block">
+<span class="r">Rf</span>-<span class="i">SHARIFF</span>
+ <span class="lbl">│   └─</span> <span class="i">SHARIFF</span> — identity (Shivajinagar departmental store)
+ <span class="lbl">└─────</span> <span class="r">Rf</span> — Receive-first (we collect goods, settle monthly bill)
+    </div>
+    <div class="walk-reads">Reads as: "A receive-first vendor named SHARIFF." Computed: scope = HN (cross-brand); sells = L + B (loose AND branded — they stock both formats).</div>
+
+    <h3 class="mt-5">4 · <span class="mono">Pf-RENT</span> — Landlord, advance rent</h3>
+    <div class="walk-block">
+<span class="p">Pf</span>-<span class="i">RENT</span>
+ <span class="lbl">│   └─</span> <span class="i">RENT</span> — identity (landlord — functional handle, not personal name)
+ <span class="lbl">└─────</span> <span class="p">Pf</span> — Pay-first (rent paid 1st of every month, in advance for that month)
+    </div>
+    <div class="walk-reads">Reads as: "A pay-first vendor named RENT." Computed: scope is empty for now (rent isn't an RM purchase — it's an opex line). The RM ring won't list this vendor; that's fine — orphan vendors are valid for non-RM expense relationships.</div>
+
+    <h3 class="mt-5">5 · <span class="mono">Rf-ELECTRICITY</span> — Post-consumption utility</h3>
+    <div class="walk-block">
+<span class="r">Rf</span>-<span class="i">ELECTRICITY</span>
+ <span class="lbl">│   └─</span> <span class="i">ELECTRICITY</span> — identity (BESCOM, the Bangalore electricity board)
+ <span class="lbl">└─────</span> <span class="r">Rf</span> — Receive-first (you consume electricity, then get the monthly bill)
+    </div>
+    <div class="walk-reads">Reads as: "A receive-first vendor named ELECTRICITY." Like rent — orphan in the RM sense, but real for opex tracking. PAY_SEQ correctly classifies it as receive-first (post-consumption billing).</div>
+
+    <h3 class="mt-5">6 · <span class="mono">Pf-INTERNET</span> — Subscription, advance payment</h3>
+    <div class="walk-block">
+<span class="p">Pf</span>-<span class="i">INTERNET</span>
+ <span class="lbl">│   └─</span> <span class="i">INTERNET</span> — identity (BSNL or whichever ISP)
+ <span class="lbl">└─────</span> <span class="p">Pf</span> — Pay-first (monthly fee paid in advance for the next billing period)
+    </div>
+    <div class="walk-reads">Reads as: "A pay-first vendor named INTERNET." Distinguishes itself from <span class="mono">Rf-ELECTRICITY</span> precisely because subscriptions reverse the cash-flow direction — that's the value PAY_SEQ adds.</div>
+  </section>
+
+  <!-- SECTION 8 — WHY MINIMAL -->
+  <section class="glass p-6" id="section-8">
+    <div class="section-num">SECTION 8</div>
+    <h2>Why minimal · the doctrine</h2>
+
+    <div class="prose mt-2">
+      <p>An obvious instinct would be to encode BRAND scope (NCH/HE/HN) directly in the vendor code: <span class="code-inline">Rf-NCH-PRABHU</span>. We deliberately don't, because:</p>
+      <ul>
+        <li><strong>BRAND is a relationship, not an identity.</strong> It changes when the RM ring changes — without any vendor mutation. Encoding it statically would create sync drift the day NCH stops using PRABHU.</li>
+        <li><strong>SELLS is even more derived.</strong> Whether a vendor sells Loose or Branded depends on which RM layer their record sits in. That answer comes from the RM ring, not the vendor row.</li>
+        <li><strong>PAY_SEQ is the only static fact.</strong> Whether you pay before or after receiving is a property of the vendor's commercial structure — it doesn't change based on which RM you bought.</li>
+      </ul>
+      <p>So the canonical code carries only PAY_SEQ + IDENTITY. The richer view — what scope, what sells, which RMs — is computed at query time via <code>?include=relationships</code>, by walking <code>rm_sourcing_profiles.data_json</code> for vendor refs. Ledger-style: the entity is the immutable kernel; properties bloom from the relationships.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+      <div class="ok-card text-sm">
+        <strong class="text-white">In the static row</strong>
+        <ul class="mt-1 ml-4 list-disc text-white/85">
+          <li>vendor_code (Pf/Rf-IDENTITY)</li>
+          <li>pay_seq, identity_abbr, vendor_name</li>
+          <li>communication / location / payment / GST in data_json</li>
+        </ul>
+      </div>
+      <div class="failure-card text-sm">
+        <strong class="text-white">Never in the static row</strong>
+        <ul class="mt-1 ml-4 list-disc text-white/85">
+          <li>BRAND scope</li>
+          <li>SELLS categories</li>
+          <li>RMs supplied</li>
+          <li>V-shape (lives at action layer)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 9 — CONNECTION TO RM -->
+  <section class="glass p-6" id="section-9">
+    <div class="section-num">SECTION 9</div>
+    <h2>Connection to the RM ring + Action layer</h2>
+
+    <div class="prose mt-2">
+      <p>The vendor ring is the <strong>second entity ring</strong>, sitting alongside the RM ring. Both feed downstream into the Action ring (purchases, productions, transfers).</p>
+    </div>
+
+    <div class="layer-card mt-4">
+      <strong class="text-white">Composition of an Action code (sketch)</strong>
+      <pre class="code-block mt-2"><span style="color:var(--accent)">{ACTION}</span>-<span style="color:var(--info)">{RM_CODE}</span>-<span style="color:var(--good)">{VENDOR_CODE}</span>-<span style="color:var(--purple)">{V_SHAPE}</span>-<span style="color:var(--ink)">{TXN_ID}</span>
+
+Examples:
+  PUR-NCH-AM-P-Lb-MLK-Rf-PRABHU-V1a-2026050801   ← daily milk receipt
+  PUR-HN-AM-P-Bl-BTR-Pf-ZEPTO-V3-2026050802     ← Amul butter via Zepto
+  EXP-OPEX-Pf-RENT-V5-2026050801                ← monthly rent payment</pre>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+      <div class="layer-card" style="border-top: 3px solid var(--info)">
+        <strong class="text-white">RM ring</strong>
+        <p class="text-sm text-white/75 mt-1">Five segments — what was bought. Vendor refs live inside <code>data_json</code> at the L / B / I layers.</p>
+      </div>
+      <div class="layer-card" style="border-top: 3px solid var(--good)">
+        <strong class="text-white">Vendor ring (this page)</strong>
+        <p class="text-sm text-white/75 mt-1">Two segments — who supplied + cash-flow direction. Computed views fill in scope/sells via the RM ring.</p>
+      </div>
+      <div class="layer-card" style="border-top: 3px solid var(--purple)">
+        <strong class="text-white">Action ring</strong>
+        <p class="text-sm text-white/75 mt-1">Composes RM + Vendor + V-shape into a transactional code that an Event can aggregate. Defined in COA Doctrine.</p>
+      </div>
+    </div>
+
+    <div class="quote mt-5 text-sm">
+      <strong>Two entity rings, one action ring, one event ring.</strong> Every action code is a coordinate; every event aggregates actions. The vendor ring stays minimal so the action ring stays composable.
+    </div>
+  </section>
+
+</main>
+
+<footer class="border-t border-white/5 px-6 py-5 text-xs text-white/40 text-center">
+  Vendor Canonical Shape Directory · v1.0 · May 2026 ·
+  <a href="/ops/vendor-editor/" class="text-white/60 hover:text-white">Vendor Editor</a> ·
+  <a href="/ops/visual/rm-shape-directory/" class="text-white/60 hover:text-white">RM Shape Directory</a> ·
+  <a href="/ops/visual/coa-doctrine/" class="text-white/60 hover:text-white">COA Doctrine</a> ·
+  HN Hotels Pvt Ltd
+</footer>
+
+<script>
+(async function loadCensus() {
+  const mount = document.getElementById('census-mount');
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function scopePills(scope) {
+    if (!scope || scope.length === 0) return '<span class="pill" style="color:var(--ink-faint);background:rgba(255,255,255,0.04);font-size:10px">orphan</span>';
+    return scope.map(b => {
+      const cls = b === 'NCH' ? 'pill-nch' : b === 'HE' ? 'pill-he' : 'pill-hn';
+      return `<span class="pill ${cls}" style="font-size:10px">${escapeHtml(b)}</span>`;
+    }).join(' ');
+  }
+  function sellsPills(sells) {
+    if (!sells || sells.length === 0) return '';
+    return sells.map(s => {
+      const cls = s === 'L' ? 'pill-info' : s === 'B' ? 'pill-purple' : 'pill-teal';
+      return `<span class="pill ${cls}" style="font-size:10px">${escapeHtml(s)}</span>`;
+    }).join(' ');
+  }
+
+  try {
+    const res = await fetch('/api/vendors?pin=0305', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const vendors = data.vendors || [];
+    const total = vendors.length;
+    const pf = vendors.filter(v => v.pay_seq === 'Pf').length;
+    const rf = vendors.filter(v => v.pay_seq === 'Rf').length;
+    const linked = vendors.filter(v => v.computed && v.computed.rm_count > 0).length;
+
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-pf').textContent = pf;
+    document.getElementById('stat-rf').textContent = rf;
+    document.getElementById('stat-linked').textContent = linked + ' linked · ' + (total - linked) + ' orphan';
+
+    const editorHref = (code) => '/ops/vendor-editor/?q=' + encodeURIComponent(code);
+
+    const groups = { Pf: [], Rf: [] };
+    vendors.forEach(v => { if (groups[v.pay_seq]) groups[v.pay_seq].push(v); });
+
+    let html = '';
+    if (total === 0) {
+      html = '<div class="failure-card text-sm">No vendors yet. Open the <a href="/ops/vendor-editor/" class="underline">Vendor Editor</a> and click + Add New Vendor to begin populating the ring.</div>';
+    } else {
+      [['Pf', 'Pay-first · cash leaves first', 'var(--info)'],
+       ['Rf', 'Receive-first · goods arrive first', 'var(--good)']].forEach(([key, label, color]) => {
+        const list = groups[key] || [];
+        if (list.length === 0) return;
+        html += '<div class="census-group">';
+        html += `<div class="census-head"><span style="color:${color}">PAY_SEQ: ${key}</span> <span class="text-white/70">${label}</span> <span class="count">— ${list.length} vendor${list.length===1?'':'s'}</span></div>`;
+        html += '<ul class="census-list">';
+        list.sort((a,b) => a.identity_abbr.localeCompare(b.identity_abbr)).forEach(v => {
+          const c = v.computed || {};
+          const meta = (c.rm_count > 0)
+            ? `<span class="v-meta">${c.rm_count} RM${c.rm_count===1?'':'s'}</span>`
+            : '<span class="v-meta">no RM links</span>';
+          html += `<li><a href="${editorHref(v.vendor_code)}">${escapeHtml(v.vendor_code)}</a><span class="v-name">· ${escapeHtml(v.vendor_name)}</span> ${scopePills(c.scope)} ${sellsPills(c.sells)} ${meta}</li>`;
+        });
+        html += '</ul></div>';
+      });
+    }
+    mount.innerHTML = html;
+  } catch (err) {
+    mount.innerHTML = `<div class="failure-card text-sm">Could not load live census from /api/vendors — <span class="mono">${escapeHtml(err.message || String(err))}</span>. The endpoint may need a valid PIN; this directory shares the editor's auth.</div>`;
+  }
+})();
+</script>
+
+</body>
+</html>
