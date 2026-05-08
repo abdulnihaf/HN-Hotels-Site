@@ -49,6 +49,9 @@
 
 'use strict';
 
+import { driveDownload, driveGetMetadata, sha256Hex } from './_lib/drive-server.js';
+import { leegalityCreateDocument, leegalityListDocuments, leegalityDeleteDocument } from './_lib/leegality.js';
+
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
@@ -340,46 +343,111 @@ export async function onRequest({ request, env }) {
     });
   }
 
-  // ─── Send via Leegality (records result) ───────────────────────────────
+  // ─── Send via Leegality (REAL server-side flow) ────────────────────────
+  // Pulls PDF from Drive → integrity-checks hash → posts to Leegality →
+  // captures docId + signing URL → updates D1.
   if (action === 'send-leegality' && method === 'POST') {
-    const { employee_id, live_sha256, leegality_doc_id, leegality_url = null, sent_by = null } = body;
-    if (!employee_id || !leegality_doc_id) {
-      return json({ error: 'employee_id + leegality_doc_id required' }, 400);
-    }
+    const { employee_id, sent_by = null, dry_run = false } = body;
+    if (!employee_id) return json({ error: 'employee_id required' }, 400);
+
     const emp = await db.prepare(`SELECT * FROM hr_employees WHERE id = ?`).bind(employee_id).first();
     if (!emp) return json({ error: 'employee not found' }, 404);
     if (emp.contract_dirty) return json({ error: 'contract has unapplied edits — regenerate first' }, 409);
-    if (!emp.contract_drive_id || !emp.contract_pdf_sha256) {
-      return json({ error: 'no current contract on file' }, 409);
+    if (!emp.contract_drive_id) return json({ error: 'no contract Drive file on record' }, 409);
+    if (emp.leegality_doc_id) return json({ error: `already sent (Leegality doc ${emp.leegality_doc_id})` }, 409);
+    if (!emp.phone) return json({ error: 'employee phone required for Aadhaar OTP eSign' }, 409);
+
+    // 1. Download PDF from Drive
+    const dl = await driveDownload(env, emp.contract_drive_id);
+    if (!dl.ok) return json({ error: 'Drive download failed', detail: dl }, 502);
+
+    // 2. Verify hash matches D1
+    const liveHash = await sha256Hex(dl.bytes);
+    if (emp.contract_pdf_sha256 && liveHash.toLowerCase() !== emp.contract_pdf_sha256.toLowerCase()) {
+      return json({
+        error: 'integrity drift — Drive PDF hash differs from D1; refusing to send',
+        stored_sha256: emp.contract_pdf_sha256,
+        live_sha256: liveHash,
+      }, 409);
     }
-    if (live_sha256 && (emp.contract_pdf_sha256 || '').toLowerCase() !== String(live_sha256).toLowerCase()) {
-      return json({ error: 'integrity drift — live PDF hash does not match D1', stored: emp.contract_pdf_sha256, live: live_sha256 }, 409);
+
+    if (dry_run) {
+      return json({
+        ok: true,
+        dry_run: true,
+        would_send: {
+          employee_id,
+          name: emp.name,
+          phone: emp.phone,
+          drive_file_id: emp.contract_drive_id,
+          live_sha256: liveHash,
+          size_bytes: dl.size,
+        },
+      });
+    }
+
+    // 3. Build signers (currently single-sign: employee with Aadhaar OTP).
+    //    MD signature image is pre-embedded on the PDF (when regenerator runs).
+    const documentName = `${(emp.known_as || emp.name).replace(/[^A-Za-z0-9]/g, '_')}_contract_v${emp.contract_version || 1}.pdf`;
+    const signers = [
+      {
+        name: emp.name,
+        mobile: emp.phone,
+        email: emp.email || null,
+        signType: 'AADHAAR_OTP',
+        order: 1,
+        label: 'employee',
+      },
+    ];
+
+    // 4. POST to Leegality
+    const lg = await leegalityCreateDocument(env, {
+      pdfBytes: dl.bytes,
+      documentName,
+      signers,
+      referenceId: `hr_contract:${employee_id}:v${emp.contract_version || 1}`,
+    });
+
+    if (!lg.ok) {
+      // Surface the full error so we can iterate on the API shape
+      return json({
+        error: 'Leegality send failed',
+        detail: lg.error,
+        status: lg.status,
+        response: lg.response,
+        hint: 'Check LEEGALITY_WORKFLOW_ID is set + workflowId field name + LEEGALITY_USE_HMAC',
+      }, 502);
     }
 
     const now = new Date().toISOString();
-
     await db.prepare(`
       UPDATE hr_employees
          SET leegality_doc_id = ?,
              leegality_sent_at = ?,
              contract_status = 'sent_leegality'
        WHERE id = ?
-    `).bind(leegality_doc_id, now, employee_id).run();
+    `).bind(lg.documentId, now, employee_id).run();
 
-    // Mark the current version row
     await db.prepare(`
       UPDATE hr_contract_versions
          SET status = 'sent_leegality'
        WHERE employee_id = ? AND drive_file_id = ?
     `).bind(employee_id, emp.contract_drive_id).run();
 
-    // Upsert into leegality_doc_inventory so it's known when cleanup runs
     await db.prepare(`
       INSERT INTO leegality_doc_inventory (leegality_doc_id, matched_employee_id, action_taken, action_at)
       VALUES (?, ?, 'kept', ?)
-    `).bind(leegality_doc_id, employee_id, now).run().catch(() => {});
+    `).bind(lg.documentId, employee_id, now).run().catch(() => {});
 
-    return json({ ok: true, employee_id, leegality_doc_id, leegality_url, sent_at: now });
+    return json({
+      ok: true,
+      employee_id,
+      leegality_doc_id: lg.documentId,
+      signing_url: lg.signingUrl,
+      sent_at: now,
+      live_sha256: liveHash,
+      raw_response: lg.response,
+    });
   }
 
   // ─── Leegality inventory snapshot (called by cleanup script) ───────────

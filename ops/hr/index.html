@@ -1961,18 +1961,52 @@ async function confirmSendLeegality(empId) {
   const ok = confirm(
     `Send v${e.contract_version} of ${e.known_as || e.name}'s contract to Leegality?\n\n` +
     `Status: ${e.contract_status}\n` +
+    `Phone (will receive Aadhaar OTP): ${e.phone || '⚠ MISSING — abort'}\n` +
     `Hash: ${(e.contract_pdf_sha256 || '').slice(0, 16)}…\n` +
     `Last regenerated: ${e.contract_last_regenerated_at || '?'}\n\n` +
-    `This will trigger Aadhaar OTP eSign on the employee's phone.`
+    `Server will:\n` +
+    `1. Download PDF from Drive\n` +
+    `2. Verify hash matches D1 (refuse if drifted)\n` +
+    `3. POST to Leegality, capture doc ID + signing URL\n` +
+    `4. Update /ops/hr badge to "eSign sent"\n\n` +
+    `Continue?`
   );
   if (!ok) return;
 
-  // The actual Leegality API call is made by the server-side wrapper (or a local
-  // helper script for v1). For now, we POST a "send-leegality" intent which the
-  // server uses to record the result once the wrapper returns the doc_id.
-  alert('Send-Leegality wrapper not yet wired in v1. Run the local sender:\n\n' +
-        `  node scripts/send-via-leegality.js ${empId}\n\n` +
-        'It will call Leegality, capture the doc_id, and POST back to /api/hr-contracts?action=send-leegality.');
+  // Disable buttons during in-flight call
+  const sendBtn = document.querySelector(`button[onclick*="confirmSendLeegality(${empId})"]`);
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳ Sending…'; }
+
+  try {
+    const r = await fetch('/api/hr-contracts?action=send-leegality', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': state.apiKey },
+      body: JSON.stringify({ employee_id: empId, sent_by: 'owner' }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      const msg = `Leegality send failed (HTTP ${r.status}):\n\n` +
+                  `${data.error || 'unknown error'}\n\n` +
+                  (data.detail ? `Detail: ${typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail).slice(0,500)}\n\n` : '') +
+                  (data.hint ? `Hint: ${data.hint}` : '');
+      alert(msg);
+      return;
+    }
+    alert(
+      `✓ Sent successfully.\n\n` +
+      `Leegality Doc ID: ${data.leegality_doc_id}\n` +
+      (data.signing_url ? `Signing URL: ${data.signing_url}\n\n` : '\n') +
+      `${e.known_as || e.name} will receive an Aadhaar OTP prompt on ${e.phone}.\n` +
+      `Once signed, the badge will flip to "Signed ✓" automatically.`
+    );
+    // Refresh modal + roster
+    await openContractModal(empId);
+    await loadEmployees();
+  } catch (err) {
+    alert(`Network error: ${err.message}`);
+  } finally {
+    if (sendBtn) { sendBtn.disabled = false; }
+  }
 }
 
 /* ━━━ Leegality cleanup admin ━━━ */
