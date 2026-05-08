@@ -119,20 +119,12 @@ export async function leegalityCreateDocument(env, opts) {
   };
   if (wfId) body.workflowId = wfId;
 
-  // Try the configured upload path first; if 404, fall back to alternate path.
-  // Leegality's actual endpoint varies by tier — common paths:
-  //   /api/v3/document/upload (workflow mode)
-  //   /api/v3/document        (direct mode)
-  //   /api/v1/createDocument  (legacy)
-  const path = env.LEEGALITY_UPLOAD_PATH || (wfId ? '/api/v3/document/upload' : '/api/v3/document');
-  let res = await leegalityRequest(env, { path, body });
-
-  // Auto-fallback on 404 (path mismatch) — try the other common path
-  if (res.status === 404) {
-    const altPath = wfId ? '/api/v3/document' : '/api/v3/document/upload';
-    const altRes = await leegalityRequest(env, { path: altPath, body });
-    if (altRes.ok || altRes.status !== 404) res = altRes;
-  }
+  // Verified via direct probes against app.leegality.com (2026-05-08):
+  // /api/document/upload exists (returned 500 on empty body). All /api/v3/*
+  // paths return "Resource not found". Override via env.LEEGALITY_UPLOAD_PATH
+  // if your account tier uses a different route.
+  const path = env.LEEGALITY_UPLOAD_PATH || '/api/document/upload';
+  const res = await leegalityRequest(env, { path, body });
   if (!res.ok) {
     return {
       ok: false,
