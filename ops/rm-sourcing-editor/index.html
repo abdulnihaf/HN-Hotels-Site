@@ -144,6 +144,40 @@
   .primary-flag { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-dim); }
   .primary-flag input[type="radio"] { width: 16px; height: 16px; accent-color: var(--accent); }
 
+  /* Identity / structured input form */
+  .id-form { background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  .id-form .grp { margin-bottom: 12px; }
+  .id-form .grp:last-child { margin-bottom: 0; }
+  .id-form .grp-label { font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 6px; display: block; }
+  .id-form .help { font-size: 11px; color: var(--ink-faint); margin-top: 4px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 8px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; cursor: pointer; user-select: none; min-height: 38px; font-weight: 500; }
+  .chip input { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+  .chip:hover { background: rgba(255,255,255,0.07); border-color: var(--border-strong); }
+  .chip.checked { background: rgba(232,147,12,0.12); border-color: var(--accent); color: var(--accent); }
+  .chip.checked.l { background: rgba(96,165,250,0.12); border-color: var(--info); color: var(--info); }
+  .chip.checked.b { background: rgba(192,132,252,0.12); border-color: var(--purple); color: var(--purple); }
+  .chip.checked.i { background: rgba(45,212,191,0.12); border-color: var(--teal); color: var(--teal); }
+  .id-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .id-grid > div { min-width: 0; }
+
+  /* Computed-code display */
+  .code-display { background: linear-gradient(135deg, rgba(232,147,12,0.06), rgba(96,165,250,0.04)); border: 1px solid var(--border-strong); border-radius: 12px; padding: 16px; margin-bottom: 14px; text-align: center; }
+  .code-display .computed { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.3; word-break: break-all; }
+  .code-display .computed .seg-brand { color: var(--accent); }
+  .code-display .computed .seg-type { color: var(--info); }
+  .code-display .computed .seg-src-l { color: var(--info); }
+  .code-display .computed .seg-src-b { color: var(--purple); }
+  .code-display .computed .seg-src-i { color: var(--teal); }
+  .code-display .computed .seg-item { color: var(--ink); }
+  .code-display .computed .dash { color: var(--ink-faint); }
+  .code-display .computed.incomplete { color: var(--ink-faint); }
+  .code-display .badge { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 12px; padding: 4px 10px; border-radius: 999px; font-weight: 600; }
+  .code-display .badge.ok { background: rgba(52,211,153,0.12); color: var(--good); border: 1px solid rgba(52,211,153,0.3); }
+  .code-display .badge.warn { background: rgba(251,191,36,0.12); color: var(--warn); border: 1px solid rgba(251,191,36,0.3); }
+  .code-display .label-tiny { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .ed-foot-extra { margin-right: auto; }
+
   /* Toasts */
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel-solid); border: 1px solid var(--border-strong); padding: 10px 18px; border-radius: 10px; font-size: 13px; z-index: 60; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
   .toast.success { border-color: var(--good); color: var(--good); }
@@ -215,6 +249,7 @@
         <option value="empty">Empty (untouched)</option>
         <option value="filled">Has data</option>
       </select>
+      <button class="btn btn-primary" id="add-rm-btn">+ Add New RM</button>
       <button class="btn" id="seed-btn" title="Seed only runs if table is empty">Seed</button>
       <button class="btn" id="reload-btn">Reload</button>
     </section>
@@ -236,7 +271,8 @@
   </div>
   <div class="editor-body" id="editor-body"></div>
   <div class="editor-foot">
-    <span class="sub" id="ed-foot-status"></span>
+    <span class="sub ed-foot-extra" id="ed-foot-status"></span>
+    <button class="btn btn-sm btn-danger" id="ed-delete" style="display:none;">Delete</button>
     <button class="btn btn-sm" id="ed-revert">Revert</button>
     <button class="btn btn-sm btn-primary" id="ed-save">Save</button>
   </div>
@@ -253,6 +289,8 @@
     rms: [],          // light list rows
     open: null,       // { rm_code, ... , data: {...} } currently open
     openOriginal: null,
+    identity: null,   // structured identity for the open RM (brand/approximation/useScope/itemAbbr/sourcing/primary/rm_name)
+    isNew: false,     // true when open RM is unsaved (Add New flow)
     dirty: false,
     filter: { q: '', brand: '', profile: '', status: '' },
   };
@@ -260,6 +298,95 @@
   const API = '/api/rm-sourcing';
   const V_SHAPES = ['V1a', 'V1b', 'V2', 'V3', 'V4', 'V5'];
   const PROFILE_OPTIONS = ['L', 'B', 'I', 'Lb', 'Bl', 'Li', 'Il', 'Bi', 'Ib', 'Lbi', 'Bli', 'Ilb'];
+  const BRANDS = [
+    { value: 'NCH', label: 'NCH-only' },
+    { value: 'HE',  label: 'HE-only' },
+    { value: 'HN',  label: 'Cross-brand (HN-)' },
+  ];
+  const APPROXIMATIONS = [
+    { value: 'A', label: 'Approximate (A)' },
+    { value: 'D', label: 'Definitive (D)' },
+  ];
+  const USE_SCOPES = [
+    { value: 'M', label: 'Multi-use (M)' },
+    { value: 'S', label: 'Single-use (S)' },
+  ];
+  const SOURCING_LETTERS = [
+    { value: 'L', label: 'Loose-purchased (L)', cls: 'l' },
+    { value: 'B', label: 'Branded SKU (B)',     cls: 'b' },
+    { value: 'I', label: 'In-house produced (I)', cls: 'i' },
+  ];
+
+  // ---------- Canonical-code derivation ----------
+  function autoAbbr(name) {
+    const clean = (name || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '');
+    if (!clean) return '';
+    const compact = clean.replace(/\s+/g, '');
+    if (compact.length <= 3) return compact;
+    // First-3-consonants strategy, deduplicating adjacent dupes (so "Butter" -> BTR not BTT).
+    const consonants = compact.replace(/[AEIOU]/g, '');
+    const dedup = consonants.replace(/(.)\1+/g, '$1');
+    if (dedup.length >= 3) return dedup.slice(0, 3);
+    if (consonants.length >= 3) return consonants.slice(0, 3);
+    return compact.slice(0, 3);
+  }
+
+  function deriveSourcingSlot(letters, primary) {
+    if (!letters || letters.length === 0) return null;
+    const set = Array.from(new Set(letters)).filter(l => 'LBI'.includes(l));
+    if (set.length === 0) return null;
+    const p = (primary && set.includes(primary)) ? primary : set[0];
+    const alts = set.filter(l => l !== p).sort();
+    return p + alts.map(a => a.toLowerCase()).join('');
+  }
+
+  function deriveCode(parts) {
+    const { brand, approximation, useScope, itemAbbr, sourcing, primary } = parts;
+    if (!brand || !approximation || !useScope || !itemAbbr || !sourcing || sourcing.length === 0) return null;
+    if (!/^[A-Z0-9]{2,4}$/.test(itemAbbr)) return null;
+    const slot = deriveSourcingSlot(sourcing, primary);
+    if (!slot) return null;
+    return `${brand}-${approximation}${useScope}-${slot}-${itemAbbr}`;
+  }
+
+  function renderCodeHTML(parts) {
+    const { brand, approximation, useScope, itemAbbr, sourcing, primary } = parts;
+    const code = deriveCode(parts);
+    if (!code) return '<span class="incomplete">?</span>';
+    const slot = deriveSourcingSlot(sourcing, primary);
+    // Color the sourcing slot per primary letter
+    let srcHtml = '';
+    if (slot) {
+      const prim = slot[0];
+      const cls = prim === 'L' ? 'seg-src-l' : prim === 'B' ? 'seg-src-b' : 'seg-src-i';
+      srcHtml = `<span class="${cls}">${slot}</span>`;
+    }
+    return `<span class="seg-brand">${brand}</span><span class="dash">-</span>` +
+           `<span class="seg-type">${approximation}${useScope}</span><span class="dash">-</span>` +
+           `${srcHtml}<span class="dash">-</span>` +
+           `<span class="seg-item">${itemAbbr}</span>`;
+  }
+
+  /* Parse an existing rm_code into structured identity parts. */
+  function parseCodeToIdentity(code) {
+    const parts = (code || '').split('-');
+    if (parts.length !== 4) return null;
+    const [brand, type, slot, item] = parts;
+    if (!/^[A-Z]{2,3}$/.test(brand) || type.length !== 2) return null;
+    const approximation = type[0];
+    const useScope = type[1];
+    // Parse sourcing slot: first char primary uppercase, rest lowercase alts
+    const primary = slot[0];
+    const alts = slot.slice(1).toUpperCase().split('').filter(c => 'LBI'.includes(c));
+    const sourcing = [primary, ...alts];
+    return {
+      brand, approximation, useScope,
+      itemAbbr: item,
+      sourcing,
+      primary,
+      itemAbbrTouched: true, // existing code → preserve abbr unless user changes it
+    };
+  }
 
   // ---------- Helpers ----------
   const $ = sel => document.querySelector(sel);
@@ -439,16 +566,55 @@
       State.open = data;
       // ensure data shape
       State.open.data = data.data || {};
-      State.openOriginal = JSON.parse(JSON.stringify(State.open));
+      const idn = parseCodeToIdentity(data.rm_code) || {
+        brand: data.brand_prefix, approximation: 'A', useScope: 'M',
+        itemAbbr: data.item_abbr || '', sourcing: ['L'], primary: 'L', itemAbbrTouched: true,
+      };
+      idn.rm_name = data.rm_name || '';
+      State.identity = idn;
+      State.isNew = false;
+      State.openOriginal = JSON.parse(JSON.stringify({ open: State.open, identity: State.identity }));
       State.dirty = false;
       $('#ed-unsaved').style.display = 'none';
       $('#ed-title').textContent = data.rm_name;
       $('#ed-sub').innerHTML = `<span class="mono" style="color:var(--accent)">${escapeHtml(data.rm_code)}</span> · ${escapeHtml(data.brand_prefix)} · ${escapeHtml(data.rm_type)}`;
       $('#ed-foot-status').textContent = 'Last saved: ' + fmtTime(data.updated_at) + (data.updated_by ? ' by ' + data.updated_by : '');
+      $('#ed-delete').style.display = 'inline-block';
       renderEditor();
       $('#editor-overlay').classList.add('open');
       $('#editor-panel').classList.add('open');
     } catch (e) { toast(e.message, 'error'); }
+  }
+
+  function openNewEditor() {
+    if (State.dirty && !confirm('Discard unsaved changes?')) return;
+    State.open = {
+      rm_code: '',
+      rm_name: '',
+      brand_prefix: '',
+      rm_type: '',
+      sourcing_profile: '',
+      item_abbr: '',
+      data: { loose: { vendors: [] } },
+      updated_at: null,
+      updated_by: null,
+    };
+    State.identity = {
+      brand: '', approximation: '', useScope: '',
+      itemAbbr: '', sourcing: [], primary: '',
+      rm_name: '', itemAbbrTouched: false,
+    };
+    State.isNew = true;
+    State.openOriginal = JSON.parse(JSON.stringify({ open: State.open, identity: State.identity }));
+    State.dirty = false;
+    $('#ed-unsaved').style.display = 'none';
+    $('#ed-title').textContent = 'New RM';
+    $('#ed-sub').innerHTML = '<span class="mono" style="color:var(--ink-faint)">code derives from inputs below</span>';
+    $('#ed-foot-status').textContent = 'New record — fill identity fields, then Save';
+    $('#ed-delete').style.display = 'none';
+    renderEditor();
+    $('#editor-overlay').classList.add('open');
+    $('#editor-panel').classList.add('open');
   }
 
   function closeEditor() {
@@ -457,10 +623,13 @@
     $('#editor-panel').classList.remove('open');
     State.open = null;
     State.openOriginal = null;
+    State.identity = null;
+    State.isNew = false;
     State.dirty = false;
   }
   $('#ed-close').onclick = closeEditor;
   $('#editor-overlay').onclick = closeEditor;
+  $('#add-rm-btn').onclick = openNewEditor;
 
   function markDirty() {
     State.dirty = true;
@@ -469,40 +638,128 @@
 
   function renderEditor() {
     const o = State.open;
-    if (!o) return;
-    const profile = o.sourcing_profile || '';
+    const idn = State.identity;
+    if (!o || !idn) return;
+
+    // Sync sourcing profile into open from identity (so derived data sections match)
+    const slot = deriveSourcingSlot(idn.sourcing, idn.primary);
+    const profile = slot || '';
+    o.sourcing_profile = profile;
+
     const lower = profile.toLowerCase();
     const showL = lower.includes('l');
     const showB = lower.includes('b');
     const showI = lower.includes('i');
 
-    // Ensure shape
-    if (showL && !o.data.loose) o.data.loose = { vendors: [] };
-    if (showB && !o.data.branded) o.data.branded = { brands: [] };
+    // Ensure data shape for visible sections
+    if (showL && !o.data.loose)    o.data.loose = { vendors: [] };
+    if (showB && !o.data.branded)  o.data.branded = { brands: [] };
     if (showI && !o.data.in_house) o.data.in_house = { recipes: [] };
 
-    const profileOpts = PROFILE_OPTIONS.map(p => `<option value="${p}" ${p === profile ? 'selected' : ''}>${p}</option>`).join('');
+    // ---- Identity form ----
+    const brandRadios = BRANDS.map(b =>
+      `<label class="chip ${idn.brand === b.value ? 'checked' : ''}">
+        <input type="radio" name="id-brand" value="${b.value}" ${idn.brand === b.value ? 'checked' : ''}>
+        ${escapeHtml(b.label)}
+      </label>`
+    ).join('');
+
+    const apxRadios = APPROXIMATIONS.map(a =>
+      `<label class="chip ${idn.approximation === a.value ? 'checked' : ''}">
+        <input type="radio" name="id-apx" value="${a.value}" ${idn.approximation === a.value ? 'checked' : ''}>
+        ${escapeHtml(a.label)}
+      </label>`
+    ).join('');
+
+    const useRadios = USE_SCOPES.map(u =>
+      `<label class="chip ${idn.useScope === u.value ? 'checked' : ''}">
+        <input type="radio" name="id-use" value="${u.value}" ${idn.useScope === u.value ? 'checked' : ''}>
+        ${escapeHtml(u.label)}
+      </label>`
+    ).join('');
+
+    const sourcingChips = SOURCING_LETTERS.map(s => {
+      const checked = (idn.sourcing || []).includes(s.value);
+      return `<label class="chip ${s.cls} ${checked ? 'checked' : ''}">
+        <input type="checkbox" name="id-src" value="${s.value}" ${checked ? 'checked' : ''}>
+        ${escapeHtml(s.label)}
+      </label>`;
+    }).join('');
+
+    let primaryHtml = '';
+    if ((idn.sourcing || []).length >= 2) {
+      primaryHtml = `<div class="grp">
+        <label class="grp-label">Currently primary</label>
+        <div class="chip-row">
+          ${idn.sourcing.map(letter => {
+            const meta = SOURCING_LETTERS.find(s => s.value === letter);
+            return `<label class="chip ${meta.cls} ${idn.primary === letter ? 'checked' : ''}">
+              <input type="radio" name="id-primary" value="${letter}" ${idn.primary === letter ? 'checked' : ''}>
+              ${escapeHtml(meta.label.split(' (')[0])}
+            </label>`;
+          }).join('')}
+        </div>
+        <div class="help">Sets the uppercase letter in the sourcing slot. Alternates fall to lowercase.</div>
+      </div>`;
+    }
+
+    // ---- Computed code panel ----
+    const codeOk = deriveCode(idn) !== null;
+    const codeHtml = renderCodeHTML(idn);
+    const badge = codeOk
+      ? '<span class="badge ok">&#10003; Canonical code complete</span>'
+      : '<span class="badge warn">&#9888; Code incomplete &mdash; fill missing fields</span>';
 
     let html = `
-      <div class="field-row">
-        <label>Canonical Code</label>
-        <input class="txt mono" id="ed-rmcode" value="${escapeHtml(o.rm_code)}" disabled title="Code change not supported in this editor — re-seed to rename">
+      <div class="id-form">
+        <div class="grp">
+          <label class="grp-label">Brand scope</label>
+          <div class="chip-row">${brandRadios}</div>
+          <div class="help">Cross-brand uses HN-, single-brand uses NCH- or HE-.</div>
+        </div>
+        <div class="id-grid">
+          <div class="grp">
+            <label class="grp-label">Approximation</label>
+            <div class="chip-row">${apxRadios}</div>
+            <div class="help">Portioned approximately (A) or counted exactly 1=1 (D).</div>
+          </div>
+          <div class="grp">
+            <label class="grp-label">Use scope</label>
+            <div class="chip-row">${useRadios}</div>
+            <div class="help">Consumed by multiple POS products (M) or just one (S).</div>
+          </div>
+        </div>
+        <div class="grp">
+          <label class="grp-label">RM name</label>
+          <input class="txt" id="id-rmname" value="${escapeHtml(idn.rm_name || '')}" placeholder="e.g. Sugar, Buffalo Milk, Saffron">
+        </div>
+        <div class="grp">
+          <label class="grp-label">Item abbreviation (3 chars)</label>
+          <input class="txt mono" id="id-itemabbr" value="${escapeHtml(idn.itemAbbr || '')}" maxlength="4" placeholder="auto" style="text-transform:uppercase;max-width:140px;">
+          <div class="help">Auto-derived from name (consonants, vowel-stripped). Override anytime.</div>
+        </div>
+        <div class="grp">
+          <label class="grp-label">Sourcing possibilities</label>
+          <div class="chip-row">${sourcingChips}</div>
+          <div class="help">Tick every channel this RM could come from. At least one required.</div>
+        </div>
+        ${primaryHtml}
       </div>
-      <div class="field-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div>
-          <label>Sourcing Profile</label>
-          <select class="txt mono" id="ed-profile">${profileOpts}</select>
-        </div>
-        <div>
-          <label>RM Name</label>
-          <input class="txt" value="${escapeHtml(o.rm_name)}" disabled>
-        </div>
+
+      <div class="code-display">
+        <div class="label-tiny">Auto-derived canonical code</div>
+        <div class="computed ${codeOk ? '' : 'incomplete'}">${codeHtml}</div>
+        ${badge}
       </div>
     `;
 
     if (showL) html += renderLooseSection(o.data.loose);
     if (showB) html += renderBrandedSection(o.data.branded);
     if (showI) html += renderInHouseSection(o.data.in_house);
+
+    if (!showL && !showB && !showI) {
+      html += `<div style="text-align:center;color:var(--ink-faint);padding:30px;font-size:13px;">Tick a sourcing channel above to start adding vendors / brands / recipes.</div>`;
+    }
 
     $('#editor-body').innerHTML = html;
     bindEditor();
@@ -634,18 +891,101 @@
   // ---------- Editor binding ----------
   function bindEditor() {
     const body = $('#editor-body');
+    const idn = State.identity;
 
-    // Sourcing profile change
-    $('#ed-profile').onchange = e => {
-      State.open.sourcing_profile = e.target.value;
-      markDirty();
-      renderEditor();
-    };
+    // Identity radio groups
+    body.querySelectorAll('input[name="id-brand"]').forEach(el => {
+      el.onchange = () => { idn.brand = el.value; markDirty(); renderEditor(); };
+    });
+    body.querySelectorAll('input[name="id-apx"]').forEach(el => {
+      el.onchange = () => { idn.approximation = el.value; markDirty(); renderEditor(); };
+    });
+    body.querySelectorAll('input[name="id-use"]').forEach(el => {
+      el.onchange = () => { idn.useScope = el.value; markDirty(); renderEditor(); };
+    });
+    body.querySelectorAll('input[name="id-src"]').forEach(el => {
+      el.onchange = () => {
+        const val = el.value;
+        const set = new Set(idn.sourcing || []);
+        if (el.checked) {
+          set.add(val);
+        } else {
+          // Confirm if this letter has data attached.
+          const hasData =
+            (val === 'L' && (State.open.data.loose?.vendors || []).length > 0) ||
+            (val === 'B' && (State.open.data.branded?.brands || []).length > 0) ||
+            (val === 'I' && (State.open.data.in_house?.recipes || []).length > 0);
+          if (hasData && !confirm(`Section "${val}" has data. Unchecking will remove it from this RM. Continue?`)) {
+            el.checked = true;
+            return;
+          }
+          set.delete(val);
+          // Drop the data section so it doesn't sneak back in.
+          if (val === 'L') delete State.open.data.loose;
+          if (val === 'B') delete State.open.data.branded;
+          if (val === 'I') delete State.open.data.in_house;
+        }
+        idn.sourcing = Array.from(set).filter(l => 'LBI'.includes(l));
+        // If primary no longer in sourcing, reset to first.
+        if (!idn.sourcing.includes(idn.primary)) idn.primary = idn.sourcing[0] || '';
+        markDirty(); renderEditor();
+      };
+    });
+    body.querySelectorAll('input[name="id-primary"]').forEach(el => {
+      el.onchange = () => { idn.primary = el.value; markDirty(); renderEditor(); };
+    });
 
-    // Field-level inputs (delegation)
+    // RM name (free text)
+    const rmNameEl = $('#id-rmname');
+    if (rmNameEl) {
+      rmNameEl.oninput = () => {
+        idn.rm_name = rmNameEl.value;
+        // Auto-suggest item abbr if user hasn't manually overridden
+        if (!idn.itemAbbrTouched) {
+          idn.itemAbbr = autoAbbr(rmNameEl.value);
+          const aEl = $('#id-itemabbr');
+          if (aEl) aEl.value = idn.itemAbbr;
+        }
+        // Update header title
+        $('#ed-title').textContent = rmNameEl.value || 'New RM';
+        // Update computed-code panel only (no full re-render — preserves cursor)
+        updateComputedCode();
+        markDirty();
+      };
+    }
+
+    // Item abbr override
+    const abbrEl = $('#id-itemabbr');
+    if (abbrEl) {
+      abbrEl.oninput = () => {
+        idn.itemAbbr = abbrEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+        abbrEl.value = idn.itemAbbr;
+        idn.itemAbbrTouched = true;
+        updateComputedCode();
+        markDirty();
+      };
+    }
+
+    // Field-level inputs (delegation) for vendor/brand/sku/supplier/recipe cards.
+    // Direct property assignment so re-rendering replaces (not stacks) handlers.
     body.oninput = handleEditorInput;
     body.onchange = handleEditorInput;
     body.onclick = handleEditorClick;
+  }
+
+  function updateComputedCode() {
+    const idn = State.identity;
+    const display = document.querySelector('.code-display .computed');
+    const badge = document.querySelector('.code-display .badge');
+    if (!display || !idn) return;
+    const codeOk = deriveCode(idn) !== null;
+    display.innerHTML = renderCodeHTML(idn);
+    display.classList.toggle('incomplete', !codeOk);
+    if (badge) {
+      badge.outerHTML = codeOk
+        ? '<span class="badge ok">&#10003; Canonical code complete</span>'
+        : '<span class="badge warn">&#9888; Code incomplete &mdash; fill missing fields</span>';
+    }
   }
 
   function autoUpper(name) {
@@ -805,26 +1145,82 @@
   $('#ed-revert').onclick = () => {
     if (!State.open) return;
     if (!confirm('Revert all unsaved changes?')) return;
-    State.open = JSON.parse(JSON.stringify(State.openOriginal));
+    const snap = JSON.parse(JSON.stringify(State.openOriginal));
+    State.open = snap.open;
+    State.identity = snap.identity;
     State.dirty = false;
     $('#ed-unsaved').style.display = 'none';
     renderEditor();
   };
 
-  $('#ed-save').onclick = async () => {
-    if (!State.open) return;
+  $('#ed-delete').onclick = async () => {
+    if (!State.open || State.isNew) return;
+    const code = State.open.rm_code;
+    if (!confirm(`Delete ${code} permanently? This cannot be undone.`)) return;
     try {
-      const o = State.open;
-      const r = await api('?rm_code=' + encodeURIComponent(o.rm_code), {
-        method: 'PUT',
-        body: { sourcing_profile: o.sourcing_profile, data: o.data },
-      });
+      await api('?rm_code=' + encodeURIComponent(code), { method: 'DELETE' });
+      toast('Deleted ' + code, 'success');
+      $('#editor-overlay').classList.remove('open');
+      $('#editor-panel').classList.remove('open');
+      State.open = null; State.identity = null; State.dirty = false;
+      const list = await api('');
+      State.rms = list.rms || [];
+      render();
+    } catch (e) { toast(e.message, 'error'); }
+  };
+
+  $('#ed-save').onclick = async () => {
+    if (!State.open || !State.identity) return;
+    const idn = State.identity;
+    const newCode = deriveCode(idn);
+    if (!newCode) {
+      toast('Cannot save — canonical code is incomplete', 'error');
+      return;
+    }
+    if (!idn.rm_name || !idn.rm_name.trim()) {
+      toast('RM name is required', 'error');
+      return;
+    }
+
+    const sourcing_profile = deriveSourcingSlot(idn.sourcing, idn.primary);
+    const rm_type = idn.approximation + idn.useScope;
+    const payload = {
+      brand_prefix: idn.brand,
+      rm_type,
+      sourcing_profile,
+      item_abbr: idn.itemAbbr,
+      rm_name: idn.rm_name.trim(),
+      data: State.open.data,
+    };
+
+    try {
+      let r;
+      if (State.isNew) {
+        r = await api('?action=create', { method: 'POST', body: payload });
+      } else {
+        const oldCode = State.open.rm_code;
+        r = await api('?rm_code=' + encodeURIComponent(oldCode), {
+          method: 'PUT',
+          body: payload,
+        });
+      }
+      // Update open state with returned code
+      State.open.rm_code = r.rm_code;
+      State.open.brand_prefix = idn.brand;
+      State.open.rm_type = rm_type;
+      State.open.sourcing_profile = sourcing_profile;
+      State.open.item_abbr = idn.itemAbbr;
+      State.open.rm_name = idn.rm_name.trim();
+      State.isNew = false;
       State.dirty = false;
-      State.openOriginal = JSON.parse(JSON.stringify(o));
+      State.openOriginal = JSON.parse(JSON.stringify({ open: State.open, identity: State.identity }));
       $('#ed-unsaved').style.display = 'none';
       $('#ed-foot-status').textContent = 'Saved · ' + fmtTime(r.updated_at) + ' by ' + r.updated_by;
-      toast('Saved ' + o.rm_code, 'success');
-      // refresh list row
+      $('#ed-sub').innerHTML = `<span class="mono" style="color:var(--accent)">${escapeHtml(r.rm_code)}</span> · ${escapeHtml(idn.brand)} · ${escapeHtml(rm_type)}`;
+      $('#ed-delete').style.display = 'inline-block';
+      const verb = r.migrated_from ? `Migrated ${r.migrated_from} → ${r.rm_code}` : 'Saved ' + r.rm_code;
+      toast(verb, 'success');
+      // refresh list
       const list = await api('');
       State.rms = list.rms || [];
       render();
