@@ -1,0 +1,1311 @@
+{
+  "generated_at": "2026-05-07T13:40:23",
+  "fleet": [
+    {
+      "tv_id": "tv-v1",
+      "playlist_name": "Menu Page 1",
+      "player": {
+        "group": {
+          "_id": "69a0c685c219823ea50b6532",
+          "name": "Menu Screen 3 - Page 1"
+        },
+        "createdBy": {
+          "_id": "69a09fa3c219823ea503d41a",
+          "name": "hamzaexpress"
+        },
+        "_id": "69a0bd975b9a6c146ac9dfae",
+        "version": "5.4.2",
+        "platform_version": "NA",
+        "cpuSerialNumber": "500000005ac7e22f",
+        "myIpAddress": "192.168.31.113",
+        "ip": "49.37.161.113",
+        "playlistOn": true,
+        "currentPlaylist": "Menu Page 1",
+        "diskSpaceUsed": "55%",
+        "diskSpaceAvailable": "2291.2734375MB",
+        "lastUpload": 1778141304673,
+        "wgetBytes": "0/7 files completed",
+        "wgetSpeed": "current file:Final_v3_TV-V1_C2_GheeRice_DalFry_Kabab.png",
+        "syncInProgress": false,
+        "duration": null,
+        "tvStatus": true,
+        "lastReported": "2026-05-07T08:08:29.977Z",
+        "connectionCount": 1,
+        "socket": "32157_15122",
+        "newSocketIo": true,
+        "webSocket": true,
+        "playlists": [],
+        "registered": true,
+        "serverServiceDisabled": false,
+        "labels": [],
+        "installation": "hamzaexpress",
+        "licensed": true,
+        "ethMac": "",
+        "wifiMac": "",
+        "cecTvStatus": true,
+        "isCecSupported": false,
+        "piTemperature": "",
+        "uptime": "0",
+        "disabled": false,
+        "otherGroups": [],
+        "createdAt": "2026-02-26T21:39:35.956Z",
+        "isConnected": true,
+        "__v": 0,
+        "location": "unknown",
+        "TZ": "Asia/Calcutta",
+        "name": "GheeRice TV-1 C1+C2",
+        "notes": "",
+        "configLocation": "",
+        "statusChangeTime": "2026-05-07T08:08:29.980Z"
+      },
+      "playlist": {
+        "name": "Menu Page 1",
+        "settings": {},
+        "layout": "1",
+        "assets": [
+          {
+            "filename": "Video_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.mp4",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Final_v3_TV-V10_GR_AllInOne_C1_C2_C3_C4.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Video_v3_TV-V6_C6_MuttonBiryani_Kabab.mp4",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Final_v3_TV-V7_GR_ProteinPair_C3_C4.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Final_v3_TV-V2_C1_GheeRice_DalFry.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          }
+        ],
+        "videoWindow": null,
+        "zoneVideoWindow": {},
+        "templateName": "custom_layout.html",
+        "schedule": {},
+        "groupIds": null,
+        "labels": [],
+        "emoji": "\ud83c\udf5b",
+        "description": "GheeRice C1 Dal Fry + C2 Dal Fry Kabab | 4s static -> 4s video | 16s loop | TV-V1"
+      },
+      "group": {
+        "sleep": {
+          "enable": false
+        },
+        "reboot": {
+          "enable": true,
+          "time": "06:45"
+        },
+        "kioskUi": {
+          "enable": false
+        },
+        "qrObj": {
+          "show": false,
+          "link": "https://pisignage.com",
+          "posX": "l",
+          "posY": "t",
+          "fileName": "_out_qrcode.png"
+        },
+        "showClock": {
+          "enable": false,
+          "format": "12",
+          "position": "bottom"
+        },
+        "monitorArrangement": {
+          "mode": "mirror",
+          "reverse": false
+        },
+        "emergencyMessage": {
+          "enable": false,
+          "msg": "",
+          "hPos": "middle",
+          "vPos": "middle"
+        },
+        "createdBy": {
+          "_id": "69a09fa3c219823ea503d41a",
+          "name": "hamzaexpress"
+        },
+        "_id": "69a0c685c219823ea50b6532",
+        "name": "Menu Screen 3 - Page 1",
+        "description": "",
+        "playlists": [
+          {
+            "name": "Menu Page 1",
+            "plType": "regular",
+            "skipForSchedule": false
+          }
+        ],
+        "combineDefaultPlaylist": false,
+        "playAllEligiblePlaylists": false,
+        "shuffleContent": false,
+        "alternateContent": false,
+        "timeToStopVideo": 0,
+        "assets": [
+          "Video_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.mp4",
+          "Final_v3_TV-V10_GR_AllInOne_C1_C2_C3_C4.png",
+          "Video_v3_TV-V6_C6_MuttonBiryani_Kabab.mp4",
+          "Final_v3_TV-V7_GR_ProteinPair_C3_C4.png",
+          "Final_v3_TV-V2_C1_GheeRice_DalFry.png",
+          "__Menu Page 1.json"
+        ],
+        "assetsValidity": [],
+        "deployedPlaylists": [
+          {
+            "name": "Menu Page 1",
+            "plType": "regular",
+            "skipForSchedule": false
+          }
+        ],
+        "deployedAssets": [
+          "Video_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.mp4",
+          "Final_v3_TV-V10_GR_AllInOne_C1_C2_C3_C4.png",
+          "Video_v3_TV-V6_C6_MuttonBiryani_Kabab.mp4",
+          "Final_v3_TV-V7_GR_ProteinPair_C3_C4.png",
+          "Final_v3_TV-V2_C1_GheeRice_DalFry.png",
+          "__Menu Page 1.json"
+        ],
+        "labels": [],
+        "deployEveryday": true,
+        "enableMpv": false,
+        "mpvAudioDelay": "0",
+        "selectedVideoPlayer": "default",
+        "disableWebUi": false,
+        "disableHwWidgets": false,
+        "disableWarnings": false,
+        "enablePio": false,
+        "disableAp": false,
+        "installation": "hamzaexpress",
+        "orientation": "portrait270",
+        "animationEnable": true,
+        "animationType": "fade",
+        "resizeAssets": true,
+        "videoKeepAspect": false,
+        "videoShowSubtitles": false,
+        "imageLetterboxed": false,
+        "signageBackgroundColor": "#000",
+        "urlReloadDisable": true,
+        "keepWeblinksInMemory": false,
+        "loadPlaylistOnCompletion": false,
+        "resolution": "auto",
+        "omxVolume": 100,
+        "logo": null,
+        "logox": 10,
+        "logoy": 10,
+        "color": "blue",
+        "createdAt": "2026-02-26T22:17:41.678Z",
+        "__v": 27,
+        "lastDeployed": "1778141277684",
+        "deployTime": "02:00"
+      }
+    },
+    {
+      "tv_id": "tv-v2",
+      "playlist_name": "Menu Page 2",
+      "player": {
+        "group": {
+          "_id": "69faf67259be778b7af67f2b",
+          "name": "Kathi - Left Wall V2"
+        },
+        "createdBy": {
+          "_id": "69a09fa3c219823ea503d41a",
+          "name": "hamzaexpress"
+        },
+        "_id": "69a0dd165b9a6c146ad84a85",
+        "version": "5.4.2",
+        "platform_version": "NA",
+        "cpuSerialNumber": "500000003663ed95",
+        "myIpAddress": "192.168.31.81",
+        "ip": "49.37.161.113",
+        "playlistOn": true,
+        "currentPlaylist": "Menu Page 2",
+        "diskSpaceUsed": "65%",
+        "diskSpaceAvailable": "1763.2734375MB",
+        "lastUpload": 1778141304229,
+        "wgetBytes": "0/7 files completed",
+        "wgetSpeed": "current file:Final_v3_TV-V1_C2_GheeRice_DalFry_Kabab.png",
+        "syncInProgress": false,
+        "duration": null,
+        "tvStatus": true,
+        "lastReported": "2026-05-07T08:08:29.380Z",
+        "connectionCount": 1,
+        "socket": "32157_15121",
+        "newSocketIo": true,
+        "webSocket": true,
+        "playlists": [],
+        "registered": true,
+        "serverServiceDisabled": false,
+        "labels": [],
+        "installation": "hamzaexpress",
+        "licensed": true,
+        "ethMac": "",
+        "wifiMac": "",
+        "cecTvStatus": true,
+        "isCecSupported": false,
+        "piTemperature": "",
+        "uptime": "0",
+        "disabled": false,
+        "otherGroups": [],
+        "createdAt": "2026-02-26T23:53:58.117Z",
+        "isConnected": true,
+        "__v": 0,
+        "TZ": "Asia/Calcutta",
+        "name": "GheeRice TV-2 C3+C4",
+        "notes": "",
+        "location": "unknown",
+        "statusChangeTime": "2026-05-07T08:08:29.382Z",
+        "selfGroupId": null
+      },
+      "playlist": {
+        "name": "Menu Page 2",
+        "settings": {},
+        "layout": "1",
+        "assets": [
+          {
+            "filename": "Final_v3_TV-V11_K1_Chicken_Kathi.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Video_v3_TV-V11_K1_Chicken_Kathi_c.mp4",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Final_v3_TV-V13_Kathi_Pair_K1_KT.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Final_v3_TV-V12_KT_Chicken_Tikka_Kathi.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Video_v3_TV-V12_KT_Chicken_Tikka_Kathi_c.mp4",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          }
+        ],
+        "videoWindow": null,
+        "zoneVideoWindow": {},
+        "templateName": "custom_layout.html",
+        "schedule": {},
+        "groupIds": null,
+        "labels": [],
+        "emoji": "\u2b50",
+        "description": "GheeRice C3 Butter Chicken SMART PICK + C4 Mutton Chatpata | 4s static -> 4s video | 16s loop | TV-V2"
+      },
+      "group": {
+        "sleep": {
+          "enable": false
+        },
+        "reboot": {
+          "enable": true,
+          "time": "06:45"
+        },
+        "kioskUi": {
+          "enable": false
+        },
+        "qrObj": {
+          "show": false,
+          "link": "https://pisignage.com",
+          "posX": "l",
+          "posY": "t",
+          "fileName": "_out_qrcode.png"
+        },
+        "showClock": {
+          "enable": false,
+          "format": "12",
+          "position": "bottom"
+        },
+        "monitorArrangement": {
+          "mode": "mirror",
+          "reverse": false
+        },
+        "emergencyMessage": {
+          "enable": false,
+          "msg": "",
+          "hPos": "middle",
+          "vPos": "middle"
+        },
+        "createdBy": {
+          "_id": "69a09fa3c219823ea503d41a",
+          "name": "hamzaexpress"
+        },
+        "_id": "69faf67259be778b7af67f2b",
+        "name": "Kathi - Left Wall V2",
+        "playlists": [
+          {
+            "name": "Menu Page 2",
+            "plType": "regular",
+            "skipForSchedule": false
+          }
+        ],
+        "combineDefaultPlaylist": false,
+        "playAllEligiblePlaylists": false,
+        "shuffleContent": false,
+        "alternateContent": false,
+        "timeToStopVideo": 0,
+        "assets": [
+          "Final_v3_TV-V11_K1_Chicken_Kathi.png",
+          "Video_v3_TV-V11_K1_Chicken_Kathi_c.mp4",
+          "Final_v3_TV-V13_Kathi_Pair_K1_KT.png",
+          "Final_v3_TV-V12_KT_Chicken_Tikka_Kathi.png",
+          "Video_v3_TV-V12_KT_Chicken_Tikka_Kathi_c.mp4",
+          "__Menu Page 2.json"
+        ],
+        "assetsValidity": [],
+        "deployedPlaylists": [
+          {
+            "name": "Menu Page 2",
+            "plType": "regular",
+            "skipForSchedule": false
+          }
+        ],
+        "deployedAssets": [
+          "Final_v3_TV-V11_K1_Chicken_Kathi.png",
+          "Video_v3_TV-V11_K1_Chicken_Kathi_c.mp4",
+          "Final_v3_TV-V13_Kathi_Pair_K1_KT.png",
+          "Final_v3_TV-V12_KT_Chicken_Tikka_Kathi.png",
+          "Video_v3_TV-V12_KT_Chicken_Tikka_Kathi_c.mp4",
+          "__Menu Page 2.json"
+        ],
+        "labels": [],
+        "deployEveryday": false,
+        "enableMpv": false,
+        "mpvAudioDelay": "0",
+        "selectedVideoPlayer": "default",
+        "disableWebUi": false,
+        "disableHwWidgets": false,
+        "disableWarnings": false,
+        "enablePio": false,
+        "disableAp": false,
+        "installation": "hamzaexpress",
+        "orientation": "portrait270",
+        "animationEnable": true,
+        "animationType": "fade",
+        "resizeAssets": true,
+        "videoKeepAspect": false,
+        "videoShowSubtitles": false,
+        "imageLetterboxed": false,
+        "signageBackgroundColor": "#000",
+        "urlReloadDisable": true,
+        "keepWeblinksInMemory": false,
+        "loadPlaylistOnCompletion": false,
+        "resolution": "auto",
+        "omxVolume": 100,
+        "logo": null,
+        "logox": 10,
+        "logoy": 10,
+        "color": "indigo",
+        "createdAt": "2026-05-06T08:06:10.617Z",
+        "__v": 5,
+        "lastDeployed": "1778141277684"
+      }
+    },
+    {
+      "tv_id": "tv-v3",
+      "playlist_name": "Menu Page 3",
+      "player": {
+        "group": {
+          "_id": "69a0a259c219823ea50423bf",
+          "name": "Menu Screen 1 - Page 3"
+        },
+        "createdBy": {
+          "_id": "69a09fa3c219823ea503d41a",
+          "name": "hamzaexpress"
+        },
+        "_id": "69a0dd165b9a6c146ad84a7d",
+        "version": "4.9.4.5",
+        "platform_version": "NA",
+        "cpuSerialNumber": "5000000000c9a687",
+        "myIpAddress": "unknown",
+        "ip": "49.37.161.113",
+        "playlistOn": true,
+        "currentPlaylist": "Menu Page 3",
+        "diskSpaceUsed": "30%",
+        "diskSpaceAvailable": "3563.5625MB",
+        "lastUpload": 1778141307652,
+        "wgetBytes": "0/7 files completed",
+        "wgetSpeed": "current file:Final_v3_TV-V1_C2_GheeRice_DalFry_Kabab.png",
+        "syncInProgress": false,
+        "duration": null,
+        "tvStatus": true,
+        "lastReported": "2026-05-07T08:10:01.453Z",
+        "connectionCount": 1,
+        "socket": "32157_15154",
+        "newSocketIo": true,
+        "webSocket": true,
+        "playlists": [],
+        "registered": true,
+        "serverServiceDisabled": false,
+        "labels": [],
+        "installation": "hamzaexpress",
+        "licensed": true,
+        "ethMac": "",
+        "wifiMac": "",
+        "cecTvStatus": true,
+        "isCecSupported": false,
+        "piTemperature": "",
+        "uptime": "0",
+        "disabled": false,
+        "otherGroups": [],
+        "createdAt": "2026-02-26T23:53:58.032Z",
+        "isConnected": true,
+        "__v": 0,
+        "TZ": "Asia/Calcutta",
+        "name": "Biryani TV-1 Chicken",
+        "notes": "",
+        "location": "unknown",
+        "statusChangeTime": "2026-05-07T08:10:01.455Z"
+      },
+      "playlist": {
+        "name": "Menu Page 3",
+        "settings": {},
+        "layout": "1",
+        "assets": [
+          {
+            "filename": "Video_v3_TV-V5_C5_ChickenBiryani_Kabab.mp4",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Final_v3_TV-V6_C6_MuttonBiryani_Kabab.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Video_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.mp4",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Final_v3_TV-V9_Biryani_Pair_C5_C6.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Final_v3_TV-V8_GR_VegPair_C1_C2.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          }
+        ],
+        "videoWindow": null,
+        "zoneVideoWindow": {},
+        "templateName": "custom_layout.html",
+        "schedule": {},
+        "groupIds": null,
+        "labels": [],
+        "emoji": "\ud83c\udf57",
+        "description": "Biryani C5 Chicken Biryani + Kabab | 8s static -> 8s video | 16s loop | TV-V3"
+      },
+      "group": {
+        "sleep": {
+          "enable": false
+        },
+        "reboot": {
+          "enable": true,
+          "time": "06:45"
+        },
+        "kioskUi": {
+          "enable": false
+        },
+        "qrObj": {
+          "show": false,
+          "link": "https://pisignage.com",
+          "posX": "l",
+          "posY": "t",
+          "fileName": "_out_qrcode.png"
+        },
+        "showClock": {
+          "enable": false,
+          "format": "12",
+          "position": "bottom"
+        },
+        "monitorArrangement": {
+          "mode": "mirror",
+          "reverse": false
+        },
+        "emergencyMessage": {
+          "enable": false,
+          "msg": "",
+          "hPos": "middle",
+          "vPos": "middle"
+        },
+        "createdBy": {
+          "_id": "69a09fa3c219823ea503d41a",
+          "name": "hamzaexpress"
+        },
+        "_id": "69a0a259c219823ea50423bf",
+        "name": "Menu Screen 1 - Page 3",
+        "playlists": [
+          {
+            "name": "Menu Page 3",
+            "plType": "regular",
+            "skipForSchedule": false
+          }
+        ],
+        "combineDefaultPlaylist": false,
+        "playAllEligiblePlaylists": false,
+        "shuffleContent": false,
+        "alternateContent": false,
+        "timeToStopVideo": 0,
+        "assets": [
+          "Video_v3_TV-V5_C5_ChickenBiryani_Kabab.mp4",
+          "Final_v3_TV-V6_C6_MuttonBiryani_Kabab.png",
+          "Video_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.mp4",
+          "Final_v3_TV-V9_Biryani_Pair_C5_C6.png",
+          "Final_v3_TV-V8_GR_VegPair_C1_C2.png",
+          "__Menu Page 3.json"
+        ],
+        "assetsValidity": [],
+        "deployedPlaylists": [
+          {
+            "name": "Menu Page 3",
+            "plType": "regular",
+            "skipForSchedule": false
+          }
+        ],
+        "deployedAssets": [
+          "Video_v3_TV-V5_C5_ChickenBiryani_Kabab.mp4",
+          "Final_v3_TV-V6_C6_MuttonBiryani_Kabab.png",
+          "Video_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.mp4",
+          "Final_v3_TV-V9_Biryani_Pair_C5_C6.png",
+          "Final_v3_TV-V8_GR_VegPair_C1_C2.png",
+          "__Menu Page 3.json"
+        ],
+        "labels": [],
+        "deployEveryday": true,
+        "enableMpv": false,
+        "mpvAudioDelay": "0",
+        "selectedVideoPlayer": "default",
+        "disableWebUi": false,
+        "disableHwWidgets": false,
+        "disableWarnings": false,
+        "enablePio": false,
+        "disableAp": false,
+        "installation": "hamzaexpress",
+        "orientation": "portrait270",
+        "animationEnable": true,
+        "animationType": "fade",
+        "resizeAssets": true,
+        "videoKeepAspect": false,
+        "videoShowSubtitles": false,
+        "imageLetterboxed": false,
+        "signageBackgroundColor": "#000",
+        "urlReloadDisable": true,
+        "keepWeblinksInMemory": false,
+        "loadPlaylistOnCompletion": false,
+        "resolution": "auto",
+        "omxVolume": 100,
+        "logo": null,
+        "logox": 10,
+        "logoy": 10,
+        "color": "indigo",
+        "createdAt": "2026-02-26T19:43:21.744Z",
+        "__v": 28,
+        "lastDeployed": "1778141277690",
+        "deployTime": "02:00"
+      }
+    },
+    {
+      "tv_id": "tv-v4",
+      "playlist_name": "KDS Bain Marie",
+      "player": {
+        "group": {
+          "_id": "69a0b678c219823ea507ef1e",
+          "name": "Bain Marie - KDS"
+        },
+        "createdBy": {
+          "_id": "69a09fa3c219823ea503d41a",
+          "name": "hamzaexpress"
+        },
+        "_id": "69a060985b9a6c146a9dc94f",
+        "version": "5.4.2",
+        "platform_version": "NA",
+        "cpuSerialNumber": "50000000d983526a",
+        "myIpAddress": "192.168.31.164",
+        "ip": "49.37.161.113",
+        "playlistOn": true,
+        "currentPlaylist": "KDS Bain Marie",
+        "diskSpaceUsed": "35%",
+        "diskSpaceAvailable": "3273.5234375MB",
+        "lastUpload": 1778141305047,
+        "wgetBytes": "0/7 files completed",
+        "wgetSpeed": "current file:Final_v3_TV-V1_C2_GheeRice_DalFry_Kabab.png",
+        "syncInProgress": false,
+        "duration": null,
+        "tvStatus": true,
+        "lastReported": "2026-05-07T08:08:30.002Z",
+        "connectionCount": 1,
+        "socket": "32157_15123",
+        "newSocketIo": true,
+        "webSocket": true,
+        "playlists": [],
+        "registered": true,
+        "serverServiceDisabled": false,
+        "labels": [],
+        "installation": "hamzaexpress",
+        "licensed": true,
+        "ethMac": "",
+        "wifiMac": "",
+        "cecTvStatus": true,
+        "isCecSupported": false,
+        "piTemperature": "",
+        "uptime": "0",
+        "disabled": false,
+        "otherGroups": [],
+        "createdAt": "2026-02-26T15:02:48.016Z",
+        "isConnected": true,
+        "__v": 0,
+        "location": "unknown",
+        "TZ": "Asia/Calcutta",
+        "name": "Biryani TV-2 Mutton",
+        "notes": "",
+        "statusChangeTime": "2026-05-07T08:08:30.005Z"
+      },
+      "playlist": {
+        "name": "KDS Bain Marie",
+        "settings": {},
+        "layout": "1",
+        "assets": [
+          {
+            "filename": "Final_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Final_v3_TV-V5_C5_ChickenBiryani_Kabab.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Final_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.png",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Video_v3_TV-V2_C1_GheeRice_DalFry.mp4",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          },
+          {
+            "filename": "Video_v3_TV-V1_C2_GheeRice_DalFry_Kabab.mp4",
+            "duration": 10,
+            "selected": true,
+            "fullscreen": true
+          }
+        ],
+        "videoWindow": null,
+        "zoneVideoWindow": {},
+        "templateName": "custom_layout.html",
+        "schedule": {},
+        "groupIds": null,
+        "labels": [],
+        "emoji": "\ud83e\udd69",
+        "description": "Biryani C6 Mutton Biryani + Kabab | 8s static -> 8s video | 16s loop | TV-V4"
+      },
+      "group": {
+        "sleep": {
+          "enable": false
+        },
+        "reboot": {
+          "enable": true,
+          "time": "06:45"
+        },
+        "kioskUi": {
+          "enable": false
+        },
+        "qrObj": {
+          "show": false,
+          "link": "https://pisignage.com",
+          "posX": "l",
+          "posY": "t",
+          "fileName": "_out_qrcode.png"
+        },
+        "showClock": {
+          "enable": false,
+          "format": "12",
+          "position": "bottom"
+        },
+        "monitorArrangement": {
+          "mode": "mirror",
+          "reverse": false
+        },
+        "emergencyMessage": {
+          "enable": false,
+          "msg": "",
+          "hPos": "middle",
+          "vPos": "middle"
+        },
+        "createdBy": {
+          "_id": "69a09fa3c219823ea503d41a",
+          "name": "hamzaexpress"
+        },
+        "_id": "69a0b678c219823ea507ef1e",
+        "name": "Bain Marie - KDS",
+        "playlists": [
+          {
+            "name": "KDS Bain Marie",
+            "plType": "regular",
+            "skipForSchedule": false
+          }
+        ],
+        "combineDefaultPlaylist": false,
+        "playAllEligiblePlaylists": false,
+        "shuffleContent": false,
+        "alternateContent": false,
+        "timeToStopVideo": 0,
+        "assets": [
+          "Final_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.png",
+          "Final_v3_TV-V5_C5_ChickenBiryani_Kabab.png",
+          "Final_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.png",
+          "Video_v3_TV-V2_C1_GheeRice_DalFry.mp4",
+          "Video_v3_TV-V1_C2_GheeRice_DalFry_Kabab.mp4",
+          "__KDS Bain Marie.json"
+        ],
+        "assetsValidity": [],
+        "deployedPlaylists": [
+          {
+            "name": "KDS Bain Marie",
+            "plType": "regular",
+            "skipForSchedule": false
+          }
+        ],
+        "deployedAssets": [
+          "Final_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.png",
+          "Final_v3_TV-V5_C5_ChickenBiryani_Kabab.png",
+          "Final_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.png",
+          "Video_v3_TV-V2_C1_GheeRice_DalFry.mp4",
+          "Video_v3_TV-V1_C2_GheeRice_DalFry_Kabab.mp4",
+          "__KDS Bain Marie.json"
+        ],
+        "labels": [],
+        "deployEveryday": true,
+        "enableMpv": false,
+        "mpvAudioDelay": "0",
+        "selectedVideoPlayer": "default",
+        "disableWebUi": false,
+        "disableHwWidgets": false,
+        "disableWarnings": false,
+        "enablePio": false,
+        "disableAp": false,
+        "installation": "hamzaexpress",
+        "orientation": "portrait270",
+        "animationEnable": true,
+        "animationType": "fade",
+        "resizeAssets": true,
+        "videoKeepAspect": false,
+        "videoShowSubtitles": false,
+        "imageLetterboxed": false,
+        "signageBackgroundColor": "#000",
+        "urlReloadDisable": true,
+        "keepWeblinksInMemory": true,
+        "loadPlaylistOnCompletion": false,
+        "resolution": "auto",
+        "omxVolume": 100,
+        "logo": null,
+        "logox": 10,
+        "logoy": 10,
+        "color": "indigo",
+        "createdAt": "2026-02-26T21:09:12.320Z",
+        "__v": 27,
+        "lastDeployed": "1778141277694",
+        "deployTime": "02:00"
+      }
+    }
+  ],
+  "library": [
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798dacad60c98641d21d6",
+      "name": "Final_v3_TV-V1_C2_GheeRice_DalFry_Kabab.png",
+      "type": "image",
+      "duration": null,
+      "size": "1.8541MB",
+      "thumbnail": "/media/_thumbnails/8902_Final_v3_TV-V1_C2_GheeRice_DalFry_Kabab.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:02.602Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798dacad60c98641d21d9",
+      "name": "Final_v3_TV-V2_C1_GheeRice_DalFry.png",
+      "type": "image",
+      "duration": null,
+      "size": "1.7331MB",
+      "thumbnail": "/media/_thumbnails/7837_Final_v3_TV-V2_C1_GheeRice_DalFry.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:02.610Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798dacad60c98641d21dc",
+      "name": "Final_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.png",
+      "type": "image",
+      "duration": null,
+      "size": "1.92926MB",
+      "thumbnail": "/media/_thumbnails/7201_Final_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:02.618Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798dacad60c98641d21df",
+      "name": "Final_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.png",
+      "type": "image",
+      "duration": null,
+      "size": "1.89588MB",
+      "thumbnail": "/media/_thumbnails/9311_Final_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:02.625Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798dacad60c98641d21e2",
+      "name": "Video_v3_TV-V1_C2_GheeRice_DalFry_Kabab.mp4",
+      "type": "video",
+      "duration": "8",
+      "size": "3741KB",
+      "thumbnail": "/media/_thumbnails/1130_Video_v3_TV-V1_C2_GheeRice_DalFry_Kabab.mp4.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:02.632Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798dacad60c98641d21e5",
+      "name": "Video_v3_TV-V2_C1_GheeRice_DalFry.mp4",
+      "type": "video",
+      "duration": "8",
+      "size": "5656KB",
+      "thumbnail": "/media/_thumbnails/2696_Video_v3_TV-V2_C1_GheeRice_DalFry.mp4.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:02.640Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798dacad60c98641d21e8",
+      "name": "Video_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.mp4",
+      "type": "video",
+      "duration": "8",
+      "size": "5812KB",
+      "thumbnail": "/media/_thumbnails/5959_Video_v3_TV-V3_C3_GheeRice_ButterChicken_Kabab.mp4.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:02.646Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798dacad60c98641d21eb",
+      "name": "Video_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.mp4",
+      "type": "video",
+      "duration": "8",
+      "size": "5114KB",
+      "thumbnail": "/media/_thumbnails/5289_Video_v3_TV-V4_C4_GheeRice_MuttonChatpata_Kabab.mp4.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:02.652Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798edcad60c98641d26a8",
+      "name": "Final_v3_TV-V5_C5_ChickenBiryani_Kabab.png",
+      "type": "image",
+      "duration": null,
+      "size": "2.0348MB",
+      "thumbnail": "/media/_thumbnails/5693_Final_v3_TV-V5_C5_ChickenBiryani_Kabab.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:21.055Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798edcad60c98641d26ab",
+      "name": "Final_v3_TV-V6_C6_MuttonBiryani_Kabab.png",
+      "type": "image",
+      "duration": null,
+      "size": "1886530B",
+      "thumbnail": "/media/_thumbnails/8855_Final_v3_TV-V6_C6_MuttonBiryani_Kabab.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:21.067Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798edcad60c98641d26ae",
+      "name": "Video_v3_TV-V5_C5_ChickenBiryani_Kabab.mp4",
+      "type": "video",
+      "duration": "8",
+      "size": "6408KB",
+      "thumbnail": "/media/_thumbnails/8013_Video_v3_TV-V5_C5_ChickenBiryani_Kabab.mp4.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:21.077Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f798edcad60c98641d26b1",
+      "name": "Video_v3_TV-V6_C6_MuttonBiryani_Kabab.mp4",
+      "type": "video",
+      "duration": "8",
+      "size": "3976KB",
+      "thumbnail": "/media/_thumbnails/1295_Video_v3_TV-V6_C6_MuttonBiryani_Kabab.mp4.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-03T18:50:21.085Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f89fe1edc3464da6fd3639",
+      "name": "Final_v3_TV-V7_GR_ProteinPair_C3_C4.png",
+      "type": "image",
+      "duration": null,
+      "size": "2.10933MB",
+      "thumbnail": "/media/_thumbnails/8027_Final_v3_TV-V7_GR_ProteinPair_C3_C4.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-04T13:32:17.849Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f89fe1edc3464da6fd363c",
+      "name": "Final_v3_TV-V8_GR_VegPair_C1_C2.png",
+      "type": "image",
+      "duration": null,
+      "size": "2.04285MB",
+      "thumbnail": "/media/_thumbnails/1382_Final_v3_TV-V8_GR_VegPair_C1_C2.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-04T13:32:17.857Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f89fe1edc3464da6fd363f",
+      "name": "Final_v3_TV-V9_Biryani_Pair_C5_C6.png",
+      "type": "image",
+      "duration": null,
+      "size": "2225640B",
+      "thumbnail": "/media/_thumbnails/9130_Final_v3_TV-V9_Biryani_Pair_C5_C6.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-04T13:32:17.863Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f89fe1edc3464da6fd3642",
+      "name": "Final_v3_TV-V10_GR_AllInOne_C1_C2_C3_C4.png",
+      "type": "image",
+      "duration": null,
+      "size": "1427350B",
+      "thumbnail": "/media/_thumbnails/5861_Final_v3_TV-V10_GR_AllInOne_C1_C2_C3_C4.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-04T13:32:17.869Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f8a937edc3464da6ff8907",
+      "name": "Final_v3_TV-V11_K1_Chicken_Kathi.png",
+      "type": "image",
+      "duration": null,
+      "size": "1.90449MB",
+      "thumbnail": "/media/_thumbnails/5924_Final_v3_TV-V11_K1_Chicken_Kathi.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-04T14:12:07.009Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f8a937edc3464da6ff890a",
+      "name": "Final_v3_TV-V12_KT_Chicken_Tikka_Kathi.png",
+      "type": "image",
+      "duration": null,
+      "size": "1.93612MB",
+      "thumbnail": "/media/_thumbnails/9938_Final_v3_TV-V12_KT_Chicken_Tikka_Kathi.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-04T14:12:07.017Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f8a937edc3464da6ff890d",
+      "name": "Final_v3_TV-V13_Kathi_Pair_K1_KT.png",
+      "type": "image",
+      "duration": null,
+      "size": "2.13297MB",
+      "thumbnail": "/media/_thumbnails/6085_Final_v3_TV-V13_Kathi_Pair_K1_KT.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-04T14:12:07.024Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f8a937edc3464da6ff8910",
+      "name": "Video_v3_TV-V11_K1_Chicken_Kathi_c.mp4",
+      "type": "video",
+      "duration": "8",
+      "size": "2412KB",
+      "thumbnail": "/media/_thumbnails/1804_Video_v3_TV-V11_K1_Chicken_Kathi_c.mp4.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-04T14:12:07.030Z",
+      "__v": 0
+    },
+    {
+      "resolution": {
+        "width": "1920",
+        "height": "1080"
+      },
+      "createdBy": {
+        "_id": "69a09fa3c219823ea503d41a",
+        "name": "hamzaexpress"
+      },
+      "_id": "69f8a937edc3464da6ff8913",
+      "name": "Video_v3_TV-V12_KT_Chicken_Tikka_Kathi_c.mp4",
+      "type": "video",
+      "duration": "8",
+      "size": "2975KB",
+      "thumbnail": "/media/_thumbnails/2990_Video_v3_TV-V12_KT_Chicken_Tikka_Kathi_c.mp4.png",
+      "labels": [],
+      "playlists": [],
+      "groupIds": [],
+      "installation": "hamzaexpress",
+      "createdAt": "2026-05-04T14:12:07.037Z",
+      "__v": 0
+    }
+  ]
+}

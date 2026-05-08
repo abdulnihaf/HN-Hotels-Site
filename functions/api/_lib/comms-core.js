@@ -277,12 +277,13 @@ export async function sendVoice(env, { phone, message_text, alert_id = '' }) {
   }
   const To = toExotelPhone(phone);
   const From = env.EXOTEL_CALLER_ID;
-  const ttsUrl = new URL('https://hnhotels.in/api/comms-webhook');
+  const base = env.PUBLIC_BASE_URL || 'https://hnhotels.in';
+  const ttsUrl = new URL(`${base}/api/comms-webhook`);
   ttsUrl.searchParams.set('action', 'exotel-tts');
   ttsUrl.searchParams.set('text', message_text || 'HN Hotels alert.');
   if (alert_id) ttsUrl.searchParams.set('alert_id', alert_id);
 
-  const statusUrl = new URL('https://hnhotels.in/api/comms-webhook');
+  const statusUrl = new URL(`${base}/api/comms-webhook`);
   statusUrl.searchParams.set('action', 'exotel-status');
   if (alert_id) statusUrl.searchParams.set('alert_id', alert_id);
 

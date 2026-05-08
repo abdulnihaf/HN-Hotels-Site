@@ -18,10 +18,115 @@
 import { callOpus, callSonnet, callHaiku, parseJsonOutput } from '../../_shared/anthropic.js';
 
 const WORKER_NAME = 'wealth-trader';
-const PAPER_CAPITAL_PAISE = 100000000;        // ₹10,00,000
-const DAILY_LOSS_LIMIT_PAISE = 3000000;       // ₹30,000 (-3% halt — exit all + halt for the day)
-const PROFIT_LOCK_PAISE = 3000000;            // ₹30,000 daily target — tighten all trails to lock gains
-const DAILY_BEST_TARGET_PAISE = 5000000;      // ₹50,000 best-case stretch — informational
+
+// ─── RISK CONFIG (May 7 2026 — TWO-LAYER capital architecture) ────────────
+//
+// Owner architectural principle:
+//   "Total fund of ₹10L is the ceiling — that's a funding event that rarely
+//    changes. Daily commitment varies (₹10K Friday test, ₹1L next, ₹10L
+//    full deployment). The system must support both layers without code change."
+//
+// LAYER 1 — total_capital_paise (CEILING):
+//   Total funded amount available in the account. Changes only when funds
+//   are added/removed (HDFC transfer, etc.). Used by display contexts,
+//   verdict narratives, and as a hard upper bound.
+//
+// LAYER 2 — today_deployable_paise (DAILY COMMITMENT):
+//   What you're actually willing to risk TODAY. ≤ total_capital_paise.
+//   This drives:
+//     - position sizing (qty calc in rangeCapture and breakout-trigger)
+//     - profit lock threshold (5% of today_deployable_paise)
+//     - loss halt threshold (3% of today_deployable_paise)
+//     - best target informational (7% of today_deployable_paise)
+//
+// Owner flips today_deployable_paise daily via ONE SQL UPDATE. No code change.
+// Backwards-compat: if today_deployable_paise is missing in user_config, falls
+// back to total_capital_paise (preserves prior single-layer behavior).
+//
+// Defaults if user_config missing the rows:
+//   profit_lock_pct    0.05  (was 3%, raised to 5% per scenario backtest data)
+//   loss_halt_pct      0.03  (kept at 3% — asymmetric protection: losses cost more)
+//   best_target_pct    0.07  (was 5%, raised to 7% — informational only)
+//
+// One batched D1 read per cron invocation (5 keys) — trivial cost.
+const DEFAULT_PROFIT_LOCK_PCT = 0.05;
+const DEFAULT_LOSS_HALT_PCT   = 0.03;
+const DEFAULT_BEST_TARGET_PCT = 0.07;
+const DEFAULT_CAPITAL_PAISE   = 100000000;    // ₹10L fallback if user_config missing
+
+// Legacy constants kept for any code path still referencing them — preserve the
+// 3% values so this PR is purely additive at the schema level. Live code switches
+// to getRiskConfig() below.
+const PAPER_CAPITAL_PAISE = 100000000;        // legacy ref
+const DAILY_LOSS_LIMIT_PAISE = 3000000;       // legacy ref
+const PROFIT_LOCK_PAISE = 3000000;            // legacy ref
+const DAILY_BEST_TARGET_PAISE = 5000000;      // legacy ref
+
+/**
+ * getRiskConfig — TWO-LAYER capital model.
+ *
+ * Returns:
+ *   {
+ *     // LAYER 1 — ceiling (rarely changes)
+ *     ceiling_paise:        total_capital_paise (₹10L typical)
+ *
+ *     // LAYER 2 — today's commitment (daily judgment)
+ *     deployable_paise:     today_deployable_paise (≤ ceiling)
+ *
+ *     // Aliased for backward compat: capital_paise = deployable_paise
+ *     // (existing code reads risk.capital_paise; that semantic is now
+ *     // explicitly "today's deployable" not "total ceiling")
+ *     capital_paise:        same as deployable_paise
+ *
+ *     // Risk thresholds — computed against deployable, not ceiling
+ *     profit_lock_paise:    deployable × profit_lock_pct
+ *     loss_halt_paise:      deployable × loss_halt_pct
+ *     best_target_paise:    deployable × best_target_pct
+ *
+ *     // Raw ratios for display
+ *     profit_lock_pct, loss_halt_pct, best_target_pct
+ *   }
+ *
+ * Single batched SQL read of 5 user_config keys.
+ */
+async function getRiskConfig(db) {
+  const rows = (await db.prepare(`
+    SELECT config_key, config_value FROM user_config
+    WHERE config_key IN (
+      'total_capital_paise',
+      'today_deployable_paise',
+      'profit_lock_pct',
+      'loss_halt_pct',
+      'best_target_pct'
+    )
+  `).all().catch(() => ({ results: [] }))).results || [];
+  const cfg = Object.fromEntries(rows.map(r => [r.config_key, r.config_value]));
+  const ceilingPaise   = parseInt(cfg.total_capital_paise) || DEFAULT_CAPITAL_PAISE;
+  // Today's deployable: explicit config wins; otherwise fall back to ceiling
+  // (this preserves single-layer behavior for any existing flows that haven't
+  // set today_deployable_paise).
+  const deployablePaise = parseInt(cfg.today_deployable_paise) || ceilingPaise;
+  // Guard: deployable cannot exceed ceiling (data correctness, not enforcement)
+  const safeDeployable = Math.min(deployablePaise, ceilingPaise);
+  const profitLockPct  = parseFloat(cfg.profit_lock_pct) || DEFAULT_PROFIT_LOCK_PCT;
+  const lossHaltPct    = parseFloat(cfg.loss_halt_pct)   || DEFAULT_LOSS_HALT_PCT;
+  const bestTargetPct  = parseFloat(cfg.best_target_pct) || DEFAULT_BEST_TARGET_PCT;
+  return {
+    // Two-layer capital
+    ceiling_paise:      ceilingPaise,
+    deployable_paise:   safeDeployable,
+    // Backward-compat alias (existing code reads risk.capital_paise)
+    capital_paise:      safeDeployable,
+    // Risk thresholds — computed against deployable
+    profit_lock_paise:  Math.round(safeDeployable * profitLockPct),
+    loss_halt_paise:    Math.round(safeDeployable * lossHaltPct),
+    best_target_paise:  Math.round(safeDeployable * bestTargetPct),
+    // Raw ratios
+    profit_lock_pct:    profitLockPct,
+    loss_halt_pct:      lossHaltPct,
+    best_target_pct:    bestTargetPct,
+  };
+}
 
 // ─── Time helpers ──────────────────────────────────────────────────────────
 function istNow() { return new Date(Date.now() + 5.5 * 3600000); }
@@ -102,6 +207,167 @@ async function logDecision(db, fields) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// AUTO-BRIDGE — paper_trades.ENTERED → real Kite order (May 7 2026 EOD)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Owner principle: manual one-click from /trading/today/ → /trading/execute/
+// adds ~7 min latency between signal and filled position. On today's
+// TDPOWERSYS the breakout window was only 8 min, so manual flow loses momentum.
+//
+// Auto-bridge: when BREAKOUT_TRIGGER (priceMonitor) or Opus ENTER_NOW
+// (entryDecision) successfully transitions paper_trades to ENTERED, fire
+// /api/kite?action=place_bracket synchronously. Latency drops from 7min to ~5s.
+//
+// SAFETY GATES (3-of-3 must pass to fire real order):
+//   1. user_config.auto_real_trades_enabled = '1'  (owner master switch)
+//   2. user_config.block_real_orders        = '0'  (existing safety gate)
+//   3. user_config.engine_mode              = 'live' (existing mode gate)
+//
+// If any gate fails, returns silently (paper-only behavior, no error).
+// If all 3 pass, posts to https://hnhotels.in/api/kite?action=place_bracket.
+//
+// On SUCCESS: sets paper_trades.kite_bracket_id, appends trader_notes with
+// "AUTO_BRIDGE_PLACED: bracket=X fill=Y gtt=Z", logs decision row.
+//
+// On FAILURE (network / Kite reject / GTT fail): leaves kite_bracket_id NULL,
+// appends trader_notes with "AUTO_BRIDGE_FAILED: <reason>", logs decision.
+// Paper trade stays ENTERED so position_mgmt continues; owner sees failure
+// in /trading/today/ and can manually click /execute/ as fallback.
+//
+// IDEMPOTENCY: this is called from inside the BREAKOUT_TRIGGER / ENTER_NOW
+// transition, which only fires once per pick (state guard prevents re-fire).
+async function tryAutoBridge(env, db, trade, params) {
+  const { stop_paise, target_paise, qty, fill_paise } = params;
+  const cfgRows = (await db.prepare(`
+    SELECT config_key, config_value FROM user_config
+    WHERE config_key IN ('auto_real_trades_enabled','block_real_orders','engine_mode')
+  `).all().catch(() => ({ results: [] }))).results || [];
+  const cfg = Object.fromEntries(cfgRows.map(r => [r.config_key, r.config_value]));
+
+  // Three-gate check
+  if (cfg.auto_real_trades_enabled !== '1') return { fired: false, skip: 'auto_disabled' };
+  if (cfg.block_real_orders === '1') return { fired: false, skip: 'block_real_orders' };
+  if (cfg.engine_mode !== 'live') return { fired: false, skip: 'engine_not_live' };
+
+  const stopPriceRupees   = stop_paise / 100;
+  const targetPriceRupees = target_paise / 100;
+
+  let response, body;
+  try {
+    response = await fetch('https://hnhotels.in/api/kite?action=place_bracket', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': env.DASHBOARD_KEY || '',
+      },
+      body: JSON.stringify({
+        exchange: 'NSE',
+        tradingsymbol: trade.symbol,
+        quantity: qty,
+        stop_price: stopPriceRupees,
+        target_price: targetPriceRupees,
+        product: 'MIS',           // Intraday MIS — required (CNC won't work for intraday)
+        order_type: 'MARKET',
+        validity: 'DAY',
+        tag: 'HN_WE_AUTO',
+      }),
+      signal: AbortSignal.timeout(20000),  // 20s ceiling — place_bracket has 12s fill poll + 3 GTT retries
+    });
+    body = await response.json().catch(() => ({}));
+  } catch (e) {
+    const reason = `network_error: ${String(e.message || e).slice(0, 200)}`;
+    await db.prepare(`UPDATE paper_trades SET trader_notes = COALESCE(trader_notes, '') || ? WHERE id=?`)
+      .bind(` | AUTO_BRIDGE_FAILED: ${reason}`, trade.id).run().catch(() => {});
+    await logDecision(db, {
+      cron_phase: 'auto_bridge_real_order', symbol: trade.symbol, trade_id: trade.id,
+      state_before: 'ENTERED', decision: 'AUTO_BRIDGE_NETWORK_FAIL', state_after: 'ENTERED',
+      ltp_paise: fill_paise, composed_by_model: 'deterministic', rationale: reason,
+    });
+    return { fired: false, error: reason };
+  }
+
+  if (!response.ok || body.blocked || body.ok === false) {
+    const reason = body.blocked
+      ? `blocked: ${body.reason || 'shadow_run'}`
+      : (body.error || body.message || `HTTP ${response.status}`);
+    const stepsSummary = (body.steps || []).map(s => `${s.step}=${s.ok ? 'ok' : 'fail'}`).join(',');
+    await db.prepare(`UPDATE paper_trades SET trader_notes = COALESCE(trader_notes, '') || ? WHERE id=?`)
+      .bind(` | AUTO_BRIDGE_FAILED: ${reason}${stepsSummary ? ` (steps: ${stepsSummary})` : ''}`, trade.id).run().catch(() => {});
+    await logDecision(db, {
+      cron_phase: 'auto_bridge_real_order', symbol: trade.symbol, trade_id: trade.id,
+      state_before: 'ENTERED', decision: 'AUTO_BRIDGE_FAILED', state_after: 'ENTERED',
+      ltp_paise: fill_paise, composed_by_model: 'deterministic',
+      rationale: `${reason}${stepsSummary ? ` (steps: ${stepsSummary})` : ''}`,
+    });
+    return { fired: false, error: reason };
+  }
+
+  // SUCCESS path
+  const fillPriceRupees = body.fill_price;
+  const gttId = body.gtt_id;
+  const bracketId = body.bracket_id;
+  const fallbackUsed = body.fallback_used;
+  const note = ` | AUTO_BRIDGE_PLACED: bracket=${bracketId} fill=₹${fillPriceRupees} gtt=${gttId || 'fallback_sl'}${fallbackUsed ? ' (GTT failed, SL-M fallback)' : ''}`;
+  await db.prepare(`UPDATE paper_trades SET kite_bracket_id=?, trader_notes = COALESCE(trader_notes, '') || ? WHERE id=?`)
+    .bind(bracketId, note, trade.id).run().catch(() => {});
+  await logDecision(db, {
+    cron_phase: 'auto_bridge_real_order', symbol: trade.symbol, trade_id: trade.id,
+    state_before: 'ENTERED', decision: fallbackUsed ? 'AUTO_BRIDGE_PLACED_WITH_FALLBACK' : 'AUTO_BRIDGE_PLACED',
+    state_after: 'ENTERED',
+    ltp_paise: fillPriceRupees ? Math.round(fillPriceRupees * 100) : fill_paise,
+    composed_by_model: 'deterministic',
+    rationale: `bracket=${bracketId}, fill=₹${fillPriceRupees}, gtt=${gttId || 'sl_fallback'}, qty=${qty}, stop=₹${stopPriceRupees}, target=₹${targetPriceRupees}`,
+  });
+  return { fired: true, bracket_id: bracketId, fill_price: fillPriceRupees, gtt_id: gttId };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F-EXIT-2 — TICK-CONFIRMATION HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+// May 7 2026 incident: TDPOWERSYS got SKIP_GAPPED_BELOW_STOP at 10:00 IST on a
+// SINGLE-TICK wick to ₹1213.60 (stop ₹1214.05). Stock immediately recovered,
+// broke trigger ₹1235.70 again at 10:55 IST, sustained for 30+ min. But because
+// SKIP set state permanently, priceMonitor never re-considered it. Owner had to
+// manually revive at 11:28 IST.
+//
+// Lesson: deterministic single-tick guardrails are too brittle. Real-money
+// wick-stops on equivalent moves would be devastating. Both ENTRY-side
+// SKIP_GAPPED_BELOW_STOP and EXIT-side STOP_HIT / TRAILING_STOP_HIT must require
+// SUSTAINED breach across at least 2 ticks within last 2 minutes — confirmed
+// move, not wick.
+//
+// confirmedSustainedBelow: returns true ONLY if last 2 min of intraday_ticks
+// has ≥ 2 ticks AND ALL of them are ≤ threshold. Used to confirm REAL stop
+// breach before SKIP/EXIT. Falls open (returns false) on missing data — better
+// to hold the position than exit on bad data.
+//
+// confirmedSustainedAbove: mirror — returns true if ≥ 2 ticks in last 2 min
+// AND ALL > threshold. Used to confirm SKIPPED-row resurrection.
+async function confirmedSustainedBelow(db, symbol, thresholdPaise, today) {
+  const cutoff = Date.now() - 2 * 60 * 1000;
+  const ticks = (await db.prepare(`
+    SELECT ts, ltp_paise FROM intraday_ticks
+    WHERE symbol=? AND ts >= ?
+      AND DATE(ts/1000, 'unixepoch') = ?
+    ORDER BY ts DESC LIMIT 10
+  `).bind(symbol, cutoff, today).all().catch(() => ({ results: [] }))).results || [];
+  if (ticks.length < 2) return false;
+  return ticks.every(t => t.ltp_paise <= thresholdPaise);
+}
+
+async function confirmedSustainedAbove(db, symbol, thresholdPaise, today) {
+  const cutoff = Date.now() - 2 * 60 * 1000;
+  const ticks = (await db.prepare(`
+    SELECT ts, ltp_paise FROM intraday_ticks
+    WHERE symbol=? AND ts >= ?
+      AND DATE(ts/1000, 'unixepoch') = ?
+    ORDER BY ts DESC LIMIT 10
+  `).bind(symbol, cutoff, today).all().catch(() => ({ results: [] }))).results || [];
+  if (ticks.length < 2) return false;
+  return ticks.every(t => t.ltp_paise > thresholdPaise);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // KITE LIVE PRICE — fetch LTP for symbols via Kite Connect REST API.
 // Kite endpoint: https://api.kite.trade/quote?i=NSE:SYMBOL&i=NSE:SYMBOL2
 // Auth header: "token <api_key>:<access_token>"
@@ -174,6 +440,12 @@ async function getKiteLtp(env, symbols) {
 async function rangeCapture(env) {
   const db = env.DB;
   const today = istToday();
+  // Risk config — drives qty calculation per pick weight. Replaces previously
+  // hardcoded ₹10L constant at line 310 so flipping total_capital_paise to
+  // ₹10K (Fri 8 May test) ↔ ₹10L (Mon 11 May launch) auto-rescales position
+  // sizing. Without this, qty would always be sized for ₹10L regardless of
+  // capital config — silent over-allocation.
+  const risk = await getRiskConfig(db);
 
   // Find today's morning verdict picks
   const verdict = await db.prepare(`
@@ -206,7 +478,10 @@ async function rangeCapture(env) {
   // CRITICAL: picks_json contains Opus's percentages (stop_pct, target_pct, weight_pct)
   // but NOT computed paise values. Compute them HERE using live LTP at range_capture
   // time — entries will use the same baseline.
-  const PAPER_CAPITAL_PAISE = 100000000;  // ₹10L
+  //
+  // Capital comes from risk.capital_paise (read from user_config above) — was
+  // hardcoded 100000000 ₹10L. Now scales with config so ₹10K mode produces
+  // correctly-sized paper trades.
   for (const p of picks) {
     if (!p.symbol) continue;
     const q = ltp[p.symbol];
@@ -227,7 +502,7 @@ async function rangeCapture(env) {
     const weight = parseFloat(p.weight_pct) || 30;
     const stopPaise = Math.round(entryEstimate * (1 - stopPct/100));
     const targetPaise = Math.round(entryEstimate * (1 + targetPct/100));
-    const capitalDeployed = Math.round(PAPER_CAPITAL_PAISE * weight / 100);
+    const capitalDeployed = Math.round(risk.capital_paise * weight / 100);
     const qty = Math.max(1, Math.floor(capitalDeployed / entryEstimate));
     const rrRatio = +(targetPct / stopPct).toFixed(2);
 
@@ -319,9 +594,20 @@ async function entryDecision(env, attemptNum) {
       continue;
     }
     if (w.stop_paise && q.ltp_paise <= w.stop_paise) {
-      await db.prepare(`UPDATE paper_trades SET trader_state='SKIPPED', trader_notes='gap below stop', last_check_at=? WHERE id=?`).bind(Date.now(), w.id).run();
-      await logDecision(db, { cron_phase: `entry_${attemptNum}`, symbol: w.symbol, trade_id: w.id, state_before: 'WATCHING', decision: 'SKIP_GAPPED_BELOW_STOP', state_after: 'SKIPPED', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic' });
-      continue;
+      // F-EXIT-2 (May 7 2026): require sustained 2-min breach, not single tick.
+      // TDPOWERSYS got SKIPPED on 1-tick wick at 10:00, then broke out at 10:55
+      // and ran. Single-tick SKIP is too brittle.
+      const confirmed = await confirmedSustainedBelow(db, w.symbol, w.stop_paise, today);
+      if (confirmed) {
+        await db.prepare(`UPDATE paper_trades SET trader_state='SKIPPED', trader_notes='gap below stop (confirmed 2-min)', last_check_at=? WHERE id=?`).bind(Date.now(), w.id).run();
+        await logDecision(db, { cron_phase: `entry_${attemptNum}`, symbol: w.symbol, trade_id: w.id, state_before: 'WATCHING', decision: 'SKIP_GAPPED_BELOW_STOP', state_after: 'SKIPPED', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic', rationale: 'F-EXIT-2 confirmed: ≥2 ticks in last 2min all ≤ stop. Real gap-down, not wick.' });
+        continue;
+      } else {
+        // Single-tick wick — log but DO NOT SKIP. Stay WATCHING for next cycle.
+        await db.prepare(`UPDATE paper_trades SET last_check_at=?, trader_notes=? WHERE id=?`).bind(Date.now(), `wick below stop @ ₹${q.ltp_paise/100} (stop ₹${w.stop_paise/100}) — F-EXIT-2 not confirmed, holding WATCHING`, w.id).run();
+        await logDecision(db, { cron_phase: `entry_${attemptNum}`, symbol: w.symbol, trade_id: w.id, state_before: 'WATCHING', decision: 'WICK_BELOW_STOP_HOLDING', state_after: 'WATCHING', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic', rationale: 'F-EXIT-2: LTP touched stop but only single tick — last 2min not all below. Holding for next cycle.' });
+        continue;
+      }
     }
 
     // VOLUME CONFIRMATION: pull last 10-day avg volume per 5-min bar to compare with
@@ -422,7 +708,10 @@ Be decisive. Most attempts should be ENTER_NOW (with vol confirmed + no negative
     if (!parsed?.decision) continue;
 
     if (parsed.decision === 'ENTER_NOW') {
-      // Fire paper entry — update paper_trade row
+      // Fire paper entry — update paper_trade row.
+      // Note: stop_paise/target_paise/qty stay as set by rangeCapture (not
+      // recomputed here, unlike BREAKOUT_TRIGGER which recomputes on actual
+      // entry). Auto-bridge uses w.stop_paise/w.target_paise/w.qty as-is.
       await db.prepare(`
         UPDATE paper_trades
         SET trader_state='ENTERED', entry_paise=?, peak_price_paise=?,
@@ -434,6 +723,17 @@ Be decisive. Most attempts should be ENTER_NOW (with vol confirmed + no negative
         (parsed.rationale || '').slice(0, 300), w.id,
       ).run();
       entered++;
+
+      // AUTO-BRIDGE: same gating as BREAKOUT_TRIGGER path.
+      // Opus's stop/target weren't recomputed against the actual entry price,
+      // so they may differ from breakout-trigger sizing. That's intentional —
+      // Opus enters at LTP with the original plan, not a recomputed stop.
+      await tryAutoBridge(env, db, { id: w.id, symbol: w.symbol }, {
+        stop_paise: w.stop_paise,
+        target_paise: w.target_paise,
+        qty: w.qty,
+        fill_paise: q.ltp_paise,
+      });
     } else if (parsed.decision === 'ABANDON') {
       await db.prepare(`UPDATE paper_trades SET trader_state='ABANDONED', trader_notes=?, last_check_at=? WHERE id=?`)
         .bind((parsed.rationale || '').slice(0, 300), Date.now(), w.id).run();
@@ -468,18 +768,27 @@ Be decisive. Most attempts should be ENTER_NOW (with vol confirmed + no negative
 async function priceMonitor(env) {
   const db = env.DB;
   const today = istToday();
+  // Risk config — percentage-based, scales with total_capital_paise.
+  // Single batched read; used for profit_lock and loss_halt thresholds below.
+  const risk = await getRiskConfig(db);
 
-  // ─── PRECISION ENTRY TRIGGERS — process WATCHING setups first ─────────
-  // Continuous deterministic check: if LTP > OR-high × 1.001 AND volume ≥ 1.2x
-  // historical avg → fire ENTER. Catches breakouts within 60s vs every-15-min
-  // Opus decisions. Today's lesson: missed 10:07 HFCL breakout because Opus
-  // crons only fire at 09:45/10:00/10:15.
+  // ─── PRECISION ENTRY TRIGGERS — process WATCHING + SKIPPED setups ──────
+  // Continuous deterministic check: if LTP > OR-high × 1.001 AND volume ≥ 0.8x
+  // expected pace → fire ENTER. Catches breakouts within 60s vs every-15-min
+  // Opus decisions.
+  //
+  // F-EXIT-2 RESURRECTION (May 7 2026): SKIPPED rows are now eligible for entry
+  // IF stock has sustained 2-min above OR-high × 1.001 AND above stop. Today's
+  // TDPOWERSYS broke trigger at 09:40 (5 min above), got SKIPPED at 10:00 on
+  // wick, broke trigger again at 10:55 — production missed both because of
+  // permanent SKIP-lock + 09:30-09:50 dead zone.
   const watching = (await db.prepare(`
     SELECT id, symbol, qty, entry_paise, stop_paise, target_paise,
-           or_high_paise, or_low_paise, rationale,
+           or_high_paise, or_low_paise, rationale, trader_state,
            DATE(created_at/1000, 'unixepoch') AS opened_date
     FROM paper_trades
-    WHERE auto_managed=1 AND is_active=1 AND trader_state='WATCHING'
+    WHERE auto_managed=1 AND is_active=1
+      AND trader_state IN ('WATCHING', 'SKIPPED')
       AND DATE(created_at/1000, 'unixepoch') = ?
   `).bind(today).all()).results || [];
 
@@ -495,6 +804,23 @@ async function priceMonitor(env) {
         // BREAKOUT TRIGGER: LTP must clear OR-high by 0.1% (filters wick noise)
         const breakoutThreshold = Math.round(w.or_high_paise * 1.001);
         if (q.ltp_paise <= breakoutThreshold) continue;
+
+        // F-EXIT-2 RESURRECTION GUARD (May 7 2026): SKIPPED rows need stricter
+        // confirmation than WATCHING rows. A stock that wicked below stop earlier
+        // must now be sustainedly above trigger AND above original stop for ≥ 2 min
+        // before we re-enter. WATCHING rows entering for the first time keep the
+        // simpler ≥1 tick above trigger rule (volume confirmation downstream).
+        if (w.trader_state === 'SKIPPED') {
+          const aboveTrigger = await confirmedSustainedAbove(db, w.symbol, breakoutThreshold, today);
+          const aboveStop    = await confirmedSustainedAbove(db, w.symbol, w.stop_paise, today);
+          if (!aboveTrigger || !aboveStop) continue;
+          await logDecision(db, {
+            cron_phase: 'price_monitor', symbol: w.symbol, trade_id: w.id,
+            state_before: 'SKIPPED', decision: 'SKIPPED_RESURRECTION_QUALIFIED',
+            ltp_paise: q.ltp_paise, composed_by_model: 'deterministic',
+            rationale: `F-EXIT-2: stock recovered. LTP ₹${q.ltp_paise/100} sustained 2-min above trigger ₹${breakoutThreshold/100} AND above stop ₹${w.stop_paise/100}. Eligible for fresh entry.`,
+          });
+        }
 
         // VOLUME CONFIRMATION: pull 14-day avg vol/5min for this symbol
         const volRow = await db.prepare(`
@@ -538,9 +864,12 @@ async function priceMonitor(env) {
         // Recompute stop/target based on ACTUAL breakout entry price (not stale estimate)
         const newStop = Math.round(actualEntry * (1 - stopPctFromOriginal/100));
         const newTarget = Math.round(actualEntry * (1 + targetPctFromOriginal/100));
-        // Recompute qty based on actual entry (preserve weight)
-        const PAPER_CAPITAL_PAISE_LOCAL = 100000000;
-        const originalCapital = w.qty * w.entry_paise; // preserves intent
+        // Recompute qty based on actual entry (preserve original capital
+        // deployment from rangeCapture time). Note: w.qty was set in
+        // rangeCapture using risk.capital_paise × weight, so multiplying
+        // back by w.entry_paise reconstructs the deployed-paise we intended.
+        // This is implicitly capital-aware via paper_trades state.
+        const originalCapital = w.qty * w.entry_paise;
         const newQty = Math.max(1, Math.floor(originalCapital / actualEntry));
 
         await db.prepare(`
@@ -566,6 +895,16 @@ async function priceMonitor(env) {
           rationale: `Auto-entered at breakout: LTP ₹${actualEntry/100} > OR-high ₹${w.or_high_paise/100}, vol_ratio ${volRatio?.toFixed(2) || '?'}, qty ${newQty}, stop ₹${newStop/100}, target ₹${newTarget/100}`,
         });
         entriesFired++;
+
+        // AUTO-BRIDGE: fire real Kite order if owner has flipped the gates
+        // (auto_real_trades_enabled='1' + block_real_orders='0' + engine_mode='live').
+        // Otherwise this returns {fired:false, skip:'<reason>'} silently.
+        await tryAutoBridge(env, db, { id: w.id, symbol: w.symbol }, {
+          stop_paise: newStop,
+          target_paise: newTarget,
+          qty: newQty,
+          fill_paise: actualEntry,
+        });
       }
     }
   }
@@ -604,9 +943,10 @@ async function priceMonitor(env) {
       portfolioPnL += (q.ltp_paise - a.entry_paise) * a.qty;
     }
   }
-  // PROFIT LOCK: when portfolio P&L ≥ +₹30K, tighten trailing stops to
-  // max(entry+1%, current_trail). Winning day can't turn losing after this.
-  const profitLockActive = portfolioPnL >= PROFIT_LOCK_PAISE;
+  // PROFIT LOCK: when portfolio P&L ≥ profit_lock threshold, tighten trailing
+  // stops to max(entry+1%, current_trail). Winning day can't turn losing.
+  // Threshold is now percentage-based (default 5% of total_capital_paise).
+  const profitLockActive = portfolioPnL >= risk.profit_lock_paise;
 
   // ─── VOLATILITY REGIME GUARD ──────────────────────────────────────────
   // Read latest India VIX. If it spiked vs morning open → tighten ALL trails
@@ -755,8 +1095,25 @@ async function priceMonitor(env) {
     //   then q.ltp_paise <= a.stop_paise also fires the locked-floor exit.
     //   Reason text is differentiated for audit clarity.
     if (q.ltp_paise <= a.stop_paise) {
-      exitNow = true;
-      exitReason = a.target_locked ? 'TARGET_LOCKED_FLOOR_EXIT' : 'STOP_HIT';
+      // F-EXIT-2 (May 7 2026): require 2-min sustained breach, not single tick.
+      // Wick-stop on a single tick costs us a real position when the stock
+      // recovers within seconds. Real gap-down stays below for at least 2 min.
+      const confirmed = await confirmedSustainedBelow(db, a.symbol, a.stop_paise, today);
+      if (confirmed) {
+        exitNow = true;
+        exitReason = a.target_locked ? 'TARGET_LOCKED_FLOOR_EXIT' : 'STOP_HIT';
+      } else {
+        // Wick — log + skip exit this cycle, let next price_monitor reassess
+        await logDecision(db, {
+          cron_phase: 'price_monitor', symbol: a.symbol, trade_id: a.id,
+          state_before: 'ENTERED', decision: 'WICK_BELOW_STOP_HOLDING',
+          state_after: 'ENTERED', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic',
+          rationale: `F-EXIT-2: LTP ₹${q.ltp_paise/100} ≤ stop ₹${a.stop_paise/100} but last 2min not all below. Single-tick wick — holding position.`,
+        });
+        // Update peak/trail still — stop check will re-fire next cycle if real
+        await db.prepare(`UPDATE paper_trades SET peak_price_paise=?, trailing_stop_paise=?, last_check_at=? WHERE id=?`).bind(newPeak, trailingStop, Date.now(), a.id).run();
+        continue;
+      }
     } else if (!a.target_locked && q.ltp_paise >= a.target_paise) {
       // F-EXIT-1: lock target as floor, let trail continue. Don't exit this cycle.
       const newStopPaise = Math.max(a.stop_paise, a.target_paise);
@@ -775,8 +1132,21 @@ async function priceMonitor(env) {
       });
       continue; // Skip exit this cycle
     } else if (trailingStop && q.ltp_paise <= trailingStop) {
-      exitNow = true;
-      exitReason = a.target_locked ? 'TARGET_LOCKED_TRAIL_EXIT' : 'TRAILING_STOP_HIT';
+      // F-EXIT-2: also confirm trailing-stop breach with 2-min rule
+      const confirmedTrail = await confirmedSustainedBelow(db, a.symbol, trailingStop, today);
+      if (confirmedTrail) {
+        exitNow = true;
+        exitReason = a.target_locked ? 'TARGET_LOCKED_TRAIL_EXIT' : 'TRAILING_STOP_HIT';
+      } else {
+        await logDecision(db, {
+          cron_phase: 'price_monitor', symbol: a.symbol, trade_id: a.id,
+          state_before: 'ENTERED', decision: 'WICK_BELOW_TRAIL_HOLDING',
+          state_after: 'ENTERED', ltp_paise: q.ltp_paise, composed_by_model: 'deterministic',
+          rationale: `F-EXIT-2: LTP ₹${q.ltp_paise/100} ≤ trail ₹${trailingStop/100} but last 2min not all below. Single-tick wick — holding.`,
+        });
+        await db.prepare(`UPDATE paper_trades SET peak_price_paise=?, trailing_stop_paise=?, last_check_at=? WHERE id=?`).bind(newPeak, trailingStop, Date.now(), a.id).run();
+        continue;
+      }
     }
 
     if (exitNow) {
@@ -796,15 +1166,19 @@ async function priceMonitor(env) {
     }
   }
 
-  // ★ F-L4-LOCK (May 6 2026, P1) — owner's explicit ₹30K profit-lock rule
-  // Owner principle: "On ₹10L deployment I want to safely exit at ₹10,30,000.
-  // Only hold past +₹30K when probability of going above +₹50K is extremely
-  // high (very sure)."
+  // ★ F-L4-LOCK (May 7 2026 update — percentage-based) — owner's profit-lock rule.
+  // Originally hardcoded ₹30K (3%) for ₹10L. Now scales by `profit_lock_pct` from
+  // user_config (default 5% per scenario backtest of 7 May session).
+  // For ₹10L capital + 5% pct → threshold = ₹50K. For ₹10K capital + 5% → ₹500.
   //
-  // Implementation: at portfolio +₹30K, FORCE EXIT default. Each pick exits
-  // unless it has explicit opus_extension_until > now (set by Opus position_mgmt
-  // EXTEND_PROFIT decision).
-  if (portfolioPnL >= PROFIT_LOCK_PAISE) {
+  // Owner principle (raised from 3% to 5% in scenario backtest analysis):
+  //   "On ₹10L deployment I want to safely exit at ₹10,50,000. Only hold past
+  //    +₹50K when probability of going above +₹70K is extremely high."
+  //
+  // Implementation: at portfolio P&L ≥ risk.profit_lock_paise, FORCE EXIT default.
+  // Each pick exits unless it has opus_extension_until > now (set by Opus
+  // position_mgmt EXTEND_PROFIT decision).
+  if (portfolioPnL >= risk.profit_lock_paise) {
     const remaining = (await db.prepare(`
       SELECT id, symbol, qty, entry_paise, opus_extension_until FROM paper_trades
       WHERE auto_managed=1 AND is_active=1 AND trader_state='ENTERED'
@@ -813,16 +1187,16 @@ async function priceMonitor(env) {
     let forceExited = 0;
     let extended = 0;
     const nowMs = Date.now();
+    const lockRupees = Math.round(risk.profit_lock_paise / 100);
     for (const r of remaining) {
       const q = ltp[r.symbol];
       if (!q?.ltp_paise) continue;
       const hasExtension = r.opus_extension_until && r.opus_extension_until > nowMs;
       if (hasExtension) {
-        // Position has Opus extension flag — keep running (Opus will re-eval at next position_mgmt)
         extended++;
         continue;
       }
-      await firePaperExit(db, r, q.ltp_paise, 'PROFIT_LOCK_FORCE_EXIT_30K');
+      await firePaperExit(db, r, q.ltp_paise, `PROFIT_LOCK_FORCE_EXIT_${lockRupees}`);
       exitsfired++;
       forceExited++;
     }
@@ -830,29 +1204,31 @@ async function priceMonitor(env) {
       await logDecision(db, {
         cron_phase: 'price_monitor',
         decision: 'PROFIT_LOCK_FORCE_EXIT_FIRED',
-        rationale: `Portfolio P&L +₹${Math.round(portfolioPnL/100)} ≥ ₹30K threshold. Force-exited ${forceExited} positions. ${extended} kept on Opus EXTEND_PROFIT flag. Owner's "safe ₹10,30,000 exit" rule honored.`,
+        rationale: `Portfolio P&L +₹${Math.round(portfolioPnL/100)} ≥ ₹${lockRupees} threshold (${(risk.profit_lock_pct*100).toFixed(1)}% of ₹${Math.round(risk.capital_paise/100)} capital). Force-exited ${forceExited} positions. ${extended} kept on Opus EXTEND_PROFIT flag.`,
         composed_by_model: 'deterministic',
       });
     }
   }
 
-  // LOSS HALT rule: portfolio P&L ≤ -₹30K → exit all remaining + halt for the day.
-  if (portfolioPnL <= -DAILY_LOSS_LIMIT_PAISE) {
+  // LOSS HALT rule (kept asymmetric at 3% — losses cost more emotionally).
+  // Threshold is now percentage-based via risk.loss_halt_paise.
+  if (portfolioPnL <= -risk.loss_halt_paise) {
     const remaining = (await db.prepare(`
       SELECT id, symbol, qty, entry_paise FROM paper_trades
       WHERE auto_managed=1 AND is_active=1 AND trader_state='ENTERED'
         AND DATE(created_at/1000, 'unixepoch') = ?
     `).bind(today).all()).results || [];
+    const haltRupees = Math.round(risk.loss_halt_paise / 100);
     for (const r of remaining) {
       const q = ltp[r.symbol];
       if (!q?.ltp_paise) continue;
-      await firePaperExit(db, r, q.ltp_paise, 'DAILY_HALT_LOSS_30K');
+      await firePaperExit(db, r, q.ltp_paise, `DAILY_HALT_LOSS_${haltRupees}`);
       exitsfired++;
     }
     await logDecision(db, {
       cron_phase: 'price_monitor',
       decision: 'PORTFOLIO_LOSS_HALT_FIRED',
-      rationale: `Portfolio P&L -₹${Math.round(Math.abs(portfolioPnL)/100)} hit -₹30K halt rule. Exited ${remaining.length} positions. Halted for the day.`,
+      rationale: `Portfolio P&L -₹${Math.round(Math.abs(portfolioPnL)/100)} hit -₹${haltRupees} halt rule (${(risk.loss_halt_pct*100).toFixed(1)}% of ₹${Math.round(risk.capital_paise/100)} capital). Exited ${remaining.length} positions. Halted for the day.`,
       composed_by_model: 'deterministic',
     });
   }
@@ -1753,6 +2129,19 @@ async function firePaperExit(db, trade, exitPaise, reason) {
   const pnlNetPaise = pnlGrossPaise - costPaise;
   const winLoss = pnlNetPaise > 0 ? 'win' : (pnlNetPaise < 0 ? 'loss' : 'breakeven');
 
+  // BUG FIX (May 7 2026, 12:18 IST): the partial-50 booking at first-target
+  // (line ~707) ACCUMULATES into pnl_net_paise / cost_paise / pnl_gross_paise
+  // via COALESCE(...,0) + ?, but firePaperExit was OVERWRITING with =?, which
+  // erased the partial booking on runner exit. Today TDPOWERSYS booked +₹2,469
+  // partial, then SONNET_URGENT_EXIT fired on the runner and overwrote the row
+  // with only the runner's ₹2,661 — losing ₹2,469 from the daily tally.
+  //
+  // Fix: ACCUMULATE here too. For trades with no prior partial, COALESCE(...,0)
+  // means the result equals the new value (same as old behavior). For trades
+  // with a partial, the partial's contribution is preserved.
+  //
+  // win_loss is recomputed against the FINAL accumulated pnl_net so the flag
+  // reflects whether the position-as-a-whole made money, not just the runner.
   await db.prepare(`
     UPDATE paper_trades
     SET is_active = 0,
@@ -1760,15 +2149,19 @@ async function firePaperExit(db, trade, exitPaise, reason) {
         exit_paise = ?,
         exit_at = ?,
         exit_reason = ?,
-        pnl_gross_paise = ?,
-        pnl_net_paise = ?,
-        cost_paise = ?,
-        win_loss = ?,
+        pnl_gross_paise = COALESCE(pnl_gross_paise, 0) + ?,
+        pnl_net_paise = COALESCE(pnl_net_paise, 0) + ?,
+        cost_paise = COALESCE(cost_paise, 0) + ?,
+        win_loss = CASE
+                     WHEN COALESCE(pnl_net_paise, 0) + ? > 0 THEN 'win'
+                     WHEN COALESCE(pnl_net_paise, 0) + ? < 0 THEN 'loss'
+                     ELSE 'breakeven' END,
         last_check_at = ?
     WHERE id = ?
   `).bind(
     exitPaise, Date.now(), reason,
-    pnlGrossPaise, pnlNetPaise, costPaise, winLoss,
+    pnlGrossPaise, pnlNetPaise, costPaise,
+    pnlNetPaise, pnlNetPaise,  // for the CASE comparison (sqlite re-binds positionally)
     Date.now(), trade.id,
   ).run();
 }
@@ -1867,10 +2260,18 @@ function routeByIstTime(hhmm) {
   }
 
   // All other 5-min marks during market hours → deterministic price monitor.
-  // Extended through 15:09 so trailing stops + halt rules + profit lock keep firing
-  // until the hard_exit at 15:10.
+  //
+  // F-EXIT-2 DEAD ZONE FIX (May 7 2026): was `m >= 50`, which gave a 09:30-09:49
+  // dead zone where breakout-trigger never ran. TDPOWERSYS broke its trigger
+  // ₹1235.70 at 09:40 IST and stayed above for 5 min — production missed it
+  // entirely. Now starts at m >= 35: range_capture runs at 09:30, OR is in DB
+  // by 09:31, first price_monitor at 09:35. (09:45 returns 'entry_1' first so
+  // no double-fire.)
+  //
+  // Extended through 15:09 so trailing stops + halt rules + profit lock keep
+  // firing until the hard_exit at 15:10.
   const [h, m] = hhmm.split(':').map(Number);
-  const isMarketHr = (h >= 10 && h < 15) || (h === 15 && m < 10) || (h === 9 && m >= 50);
+  const isMarketHr = (h >= 10 && h < 15) || (h === 15 && m < 10) || (h === 9 && m >= 35);
   if (isMarketHr && m % 5 === 0) return 'price_monitor';
   return null;
 }

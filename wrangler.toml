@@ -18,6 +18,10 @@ compatibility_flags = ["nodejs_compat"]
 # GOOGLE_ADS_CLIENT_ID         — OAuth client ID (NCH Marketing Web). Used by /api/gbp-cockpit
 # GOOGLE_ADS_CLIENT_SECRET     — OAuth client secret. Used by /api/gbp-cockpit
 # GOOGLE_ORGANIC_REFRESH_TOKEN — refresh token with scopes adwords + webmasters.readonly + business.manage. Used by /api/gbp-cockpit. See docs/GBP_COCKPIT_RUNBOOK.md
+# EXOTEL_SID                   — Exotel account SID (hnhotels1) ✅ set 2026-05-05
+# EXOTEL_API_KEY               — Exotel API key (username) ✅ set 2026-05-05
+# EXOTEL_API_TOKEN             — Exotel API token (password) ✅ set 2026-05-05
+# EXOTEL_CALLER_ID             — 09513886363 (existing India mobile on account) ✅ set 2026-05-05
 
 [vars]
 # Kite Connect public-ish API key — exposed in Worker env, used by OAuth flow

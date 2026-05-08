@@ -2,7 +2,7 @@
 // Caches static assets for offline / fast reload.
 // API calls are NEVER cached — always fresh.
 
-const CACHE_VERSION = 'wealth-v43';  // v43: chart UX upgrade — HTML label overlay (no more stretched SVG text), 1-min tick resolution, breakout-trigger banner on WATCHING cards
+const CACHE_VERSION = 'wealth-v56';  // v56: yesterday recap mini-banner shown in PRE_MARKET / OFF_HOURS when today empty (00:00-08:30 IST gap fill). Auto-hides once today verdict composes.
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [

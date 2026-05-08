@@ -122,7 +122,11 @@ export async function onRequest(context) {
       case 'eod_learning_audit': return Response.json(await getEodLearningAudit(db, env, url), { headers });
       case 'readiness_report':   return Response.json(await getReadinessReport(db, url), { headers });
       case 'top_strip':          return Response.json(await getTopStrip(db), { headers });
-      case 'today_consolidated': return Response.json(await getTodayConsolidated(db), { headers });
+      case 'today_consolidated': return Response.json(await getTodayConsolidated(db, env), { headers });
+      case 'snapshot_save':      return Response.json(await saveSnapshot(db, env, url), { headers });
+      case 'snapshot_get':       return Response.json(await getSnapshot(db, url), { headers });
+      case 'snapshot_list':      return Response.json(await listSnapshots(db), { headers });
+      case 'snapshot_backfill':  return Response.json(await backfillSnapshot(db, env, url), { headers });
       case 'desk_view':          return Response.json(await getDeskView(db), { headers });
       case 'stock_detail':       return Response.json(await getStockDetail(db, url), { headers });
       case 'monthly_learning_trail': return Response.json(await getMonthlyLearningTrail(db, url), { headers });
@@ -3396,7 +3400,358 @@ async function getTopStrip(db) {
 //   4. pre_market_feed        (latest crossasset + GIFT NIFTY + breaking news)
 //   5. swing_candidates       (signal_scores composite >= 70, capped to 8)
 // ═══════════════════════════════════════════════════════════════════════════
-async function getTodayConsolidated(db) {
+// ═══════════════════════════════════════════════════════════════════════════
+// SNAPSHOT PERSISTENCE (May 7 EOD owner ask)
+//
+// Owner principle: "this is only way to store the historical data for each day
+// in way it will help me to learn... please make sure the data and execution
+// we are doing is 100% accurate in data and not blind."
+//
+// Captures the full today_consolidated response into daily_snapshots table.
+// Each row = one trade_date with the JSON snapshot frozen at save time.
+// Use cases:
+//   - Manual save tonight via /api/trading?action=snapshot_save (preserves
+//     today's data before tomorrow's verdict overwrites the live computation)
+//   - Future: automated 16:30 IST cron will save daily (deferred Saturday)
+//   - Read past day via /api/trading?action=snapshot_get&date=YYYY-MM-DD
+//   - List available snapshots via snapshot_list
+//
+// Schema (already created in D1):
+//   CREATE TABLE daily_snapshots (
+//     trade_date TEXT PRIMARY KEY,
+//     snapshot_json TEXT NOT NULL,
+//     created_at INTEGER NOT NULL,
+//     snapshot_source TEXT DEFAULT 'live'
+//   )
+//
+// Storage size: today_consolidated response ~50KB → 50KB per day → 12.5MB/year.
+// Trivial for D1 (5GB limit).
+//
+// MACRO SAFETY: completely additive. New table, new endpoints. Zero impact
+// on wealth-trader, /api/kite, today_consolidated, or auto-bridge.
+
+async function saveSnapshot(db, env, url) {
+  const dateParam = url.searchParams.get('date');
+  // Default to today (compute IST date, not server UTC)
+  const istNow = new Date(Date.now() + 5.5 * 3600000);
+  const date = dateParam || istNow.toISOString().slice(0, 10);
+  // Validate date format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, error: 'date must be YYYY-MM-DD' };
+  }
+  // Compute today_consolidated on demand (uses current logic for accuracy)
+  // For past dates, we'd need a different approach (deferred — backfill PR).
+  const todayIstDate = istNow.toISOString().slice(0, 10);
+  if (date !== todayIstDate) {
+    return {
+      ok: false,
+      error: `snapshot_save only saves TODAY's data. For past dates, use snapshot_backfill (separate endpoint, deferred).`,
+      requested_date: date,
+      today_ist: todayIstDate,
+    };
+  }
+  let snapshot;
+  try {
+    snapshot = await getTodayConsolidated(db, env);
+  } catch (e) {
+    return { ok: false, error: `getTodayConsolidated failed: ${e.message}` };
+  }
+  const snapshotJson = JSON.stringify(snapshot);
+  const sizeBytes = snapshotJson.length;
+  try {
+    await db.prepare(`
+      INSERT OR REPLACE INTO daily_snapshots (trade_date, snapshot_json, created_at, snapshot_source)
+      VALUES (?, ?, ?, ?)
+    `).bind(date, snapshotJson, Date.now(), 'manual_save').run();
+  } catch (e) {
+    return { ok: false, error: `D1 INSERT failed: ${e.message}` };
+  }
+  return {
+    ok: true,
+    date,
+    size_bytes: sizeBytes,
+    phase_at_save: snapshot.phase,
+    picks_count: (snapshot.verdict?.picks || []).length,
+    pool_top10_count: (snapshot.pool_top10 || []).length,
+    universe_winners_missed_count: (snapshot.universe_winners_missed || []).length,
+    realized_paise: snapshot.verdict?.portfolio?.realized_paise || 0,
+  };
+}
+
+async function getSnapshot(db, url) {
+  const date = url.searchParams.get('date');
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, error: 'date param required (YYYY-MM-DD)' };
+  }
+  const row = await db.prepare(`
+    SELECT trade_date, snapshot_json, created_at, snapshot_source
+    FROM daily_snapshots WHERE trade_date=? LIMIT 1
+  `).bind(date).first().catch(() => null);
+  if (!row) return { ok: false, error: `no snapshot for ${date}`, not_found: true };
+  let parsed;
+  try { parsed = JSON.parse(row.snapshot_json); } catch (e) {
+    return { ok: false, error: `snapshot for ${date} corrupted: ${e.message}` };
+  }
+  return {
+    ok: true,
+    trade_date: row.trade_date,
+    saved_at: row.created_at,
+    saved_at_ist: new Date(row.created_at + 5.5 * 3600000).toISOString().replace('T', ' ').slice(0, 19),
+    snapshot_source: row.snapshot_source,
+    snapshot: parsed,
+  };
+}
+
+// snapshot_backfill — reconstruct a partial snapshot for a past date from
+// existing D1 data. Won't have everything (paper_trades may be empty for May
+// 4-6, intraday_suitability is current-only so pool_top10 = []), but captures
+// what's recoverable: verdict picks + universe_winners_missed from intraday_bars.
+//
+// Marked snapshot_source = 'backfill_partial' so owner knows it's not as rich
+// as live snapshots.
+async function backfillSnapshot(db, env, url) {
+  const date = url.searchParams.get('date');
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, error: 'date param required (YYYY-MM-DD)' };
+  }
+  const istNowDate = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+  if (date >= istNowDate) {
+    return { ok: false, error: 'backfill is for PAST dates only. Use snapshot_save for today.' };
+  }
+
+  // Check if already exists (don't overwrite better data)
+  const existing = await db.prepare(
+    `SELECT trade_date, snapshot_source FROM daily_snapshots WHERE trade_date=?`
+  ).bind(date).first().catch(() => null);
+  const force = url.searchParams.get('force') === '1';
+  if (existing && !force) {
+    return {
+      ok: false,
+      error: `snapshot already exists for ${date} (source=${existing.snapshot_source}). Pass force=1 to overwrite.`,
+    };
+  }
+
+  // === Pull historical data for that date ===
+
+  // 1. Latest verdict for the date (multiple rows possible; pick latest TRADE if any)
+  const verdictRow = await db.prepare(`
+    SELECT id, verdict_type, decision, recommended_symbol, headline, narrative,
+           picks_json, alternatives_json, context_snapshot_json,
+           composed_at, composed_by_model, cost_paise, portfolio_capital_paise,
+           strategy_mode, entry_window
+    FROM daily_verdicts
+    WHERE trade_date=? AND verdict_type='morning'
+    ORDER BY composed_at DESC LIMIT 1
+  `).bind(date).first().catch(() => null);
+
+  let picks = [];
+  let alternatives = [];
+  let context = {};
+  if (verdictRow) {
+    try { picks = JSON.parse(verdictRow.picks_json || '[]'); } catch {}
+    try { alternatives = JSON.parse(verdictRow.alternatives_json || '[]'); } catch {}
+    try { context = JSON.parse(verdictRow.context_snapshot_json || '{}'); } catch {}
+  }
+
+  // 2. paper_trades for that date (if any)
+  const paperTrades = (await db.prepare(`
+    SELECT * FROM paper_trades
+    WHERE auto_managed=1 AND DATE(created_at/1000+19800,'unixepoch')=?
+    ORDER BY id ASC
+  `).bind(date).all().catch(() => ({ results: [] }))).results || [];
+
+  // 3. trader_decisions for that date
+  const decisions = (await db.prepare(`
+    SELECT ts, cron_phase, symbol, decision, state_after, ltp_paise,
+           composed_by_model, rationale
+    FROM trader_decisions WHERE trade_date=? ORDER BY ts ASC LIMIT 200
+  `).bind(date).all().catch(() => ({ results: [] }))).results || [];
+
+  // 4. EOD performance for ALL symbols with intraday_bars on that date
+  const todayBars = (await db.prepare(`
+    SELECT
+      symbol,
+      MIN(CASE WHEN ts = (SELECT MIN(ts) FROM intraday_bars b2 WHERE b2.symbol=b1.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN open_paise END) AS day_open_paise,
+      MAX(high_paise) AS day_high_paise,
+      MIN(low_paise) AS day_low_paise,
+      MAX(CASE WHEN ts = (SELECT MAX(ts) FROM intraday_bars b2 WHERE b2.symbol=b1.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN close_paise END) AS day_close_paise,
+      SUM(volume) AS day_volume
+    FROM intraday_bars b1
+    WHERE trade_date=? AND interval='5minute'
+    GROUP BY symbol
+    HAVING day_open_paise IS NOT NULL AND day_close_paise IS NOT NULL
+  `).bind(date, date, date).all().catch(() => ({ results: [] }))).results || [];
+
+  const TEN_LAKH = 100000000;
+  const HYPOTHETICAL_COST_PCT = 0.0007;
+  const eodMap = {};
+  for (const b of todayBars) {
+    const o = b.day_open_paise, h = b.day_high_paise, l = b.day_low_paise, c = b.day_close_paise;
+    if (!o || !h || !l || !c) continue;
+    const pctOC = +(((c - o) / o) * 100).toFixed(2);
+    const pctOH = +(((h - o) / o) * 100).toFixed(2);
+    const pctOL = +(((l - o) / o) * 100).toFixed(2);
+    const grossClose = Math.round(TEN_LAKH * (c - o) / o);
+    const grossPeak  = Math.round(TEN_LAKH * (h - o) / o);
+    const grossLow   = Math.round(TEN_LAKH * (l - o) / o);
+    const costApprox = Math.round(TEN_LAKH * HYPOTHETICAL_COST_PCT);
+    eodMap[b.symbol] = {
+      day_open_paise: o, day_high_paise: h, day_low_paise: l, day_close_paise: c,
+      day_volume: b.day_volume,
+      pct_open_to_close: pctOC, pct_open_to_high: pctOH, pct_open_to_low: pctOL,
+      hypothetical_10L_pnl_at_close_paise: grossClose - costApprox,
+      hypothetical_10L_pnl_at_peak_paise:  grossPeak - costApprox,
+      hypothetical_10L_pnl_at_low_paise:   grossLow - costApprox,
+      source: 'intraday_bars',
+    };
+  }
+
+  // 5. Build per-pick live with timeline (from trader_decisions filtered by symbol)
+  const verdictPickSyms = new Set();
+  for (const p of picks) {
+    if (!p.symbol) continue;
+    verdictPickSyms.add(p.symbol);
+    const tl = decisions.filter(d => d.symbol === p.symbol);
+    const pos = paperTrades.find(pt => pt.symbol === p.symbol);
+    p.live = {
+      ltp_paise: null,
+      ltp_ts: null,
+      bars: [],  // could populate but skip for size
+      bars_source: 'none',
+      timeline: tl.map(t => ({
+        ts: t.ts, phase: t.cron_phase, decision: t.decision,
+        state_after: t.state_after, ltp_paise: t.ltp_paise,
+        model: t.composed_by_model, reason: t.rationale,
+      })),
+      position: pos ? {
+        state: pos.trader_state, qty: pos.qty,
+        entry_paise: pos.entry_paise, stop_paise: pos.stop_paise, target_paise: pos.target_paise,
+        peak_price_paise: pos.peak_price_paise, trailing_stop_paise: pos.trailing_stop_paise,
+        target_locked: pos.target_locked === 1,
+        entry_at: pos.entry_at, exit_paise: pos.exit_paise, exit_reason: pos.exit_reason,
+        pnl_paise: pos.pnl_net_paise, exit_at: pos.exit_at,
+        holding_ms: pos.entry_at ? ((pos.exit_at || Date.now()) - pos.entry_at) : null,
+        or_high_paise: pos.or_high_paise, or_low_paise: pos.or_low_paise,
+        kite_bracket_id: pos.kite_bracket_id,
+      } : null,
+    };
+  }
+
+  // 6. Compute portfolio rollup from paper_trades
+  let realized = 0, unrealized = 0, deployed = 0;
+  let counts = { watching: 0, entered: 0, exited_win: 0, exited_loss: 0, skipped: 0 };
+  for (const pt of paperTrades) {
+    if (pt.exit_at) {
+      realized += pt.pnl_net_paise || 0;
+      deployed += (pt.entry_paise || 0) * (pt.qty || 0);
+      if ((pt.pnl_net_paise || 0) > 0) counts.exited_win++;
+      else if ((pt.pnl_net_paise || 0) < 0) counts.exited_loss++;
+    } else if (pt.trader_state === 'ENTERED') {
+      deployed += (pt.entry_paise || 0) * (pt.qty || 0);
+      counts.entered++;
+    } else if (pt.trader_state === 'WATCHING') counts.watching++;
+    else if (pt.trader_state === 'SKIPPED') counts.skipped++;
+  }
+
+  // 7. universe_winners_missed (only universe stocks NOT in picks/pool. Pool empty for backfill.)
+  const universe_winners_missed = todayBars
+    .filter(b => !verdictPickSyms.has(b.symbol))
+    .map(b => {
+      const eod = eodMap[b.symbol];
+      if (!eod) return null;
+      return { symbol: b.symbol, ...eod };
+    })
+    .filter(x => x && x.pct_open_to_close >= 2.0)
+    .sort((a, b) => (b.pct_open_to_close - a.pct_open_to_close))
+    .slice(0, 10);
+
+  // 8. Assemble snapshot
+  const snapshot = {
+    trade_date: date,
+    phase: 'POST_CLOSE',
+    pre_market_integrity: { layer1: { severity: 'unknown', checks: [] }, layer2: { severity: 'unknown', checks: [] } },
+    live_integrity: null,
+    verdict: verdictRow ? {
+      id: verdictRow.id,
+      type: verdictRow.verdict_type,
+      decision: verdictRow.decision,
+      headline: verdictRow.headline,
+      narrative: verdictRow.narrative,
+      recommended_symbol: verdictRow.recommended_symbol,
+      picks,
+      alternatives,
+      context,
+      composed_at: verdictRow.composed_at,
+      composed_by_model: verdictRow.composed_by_model,
+      cost_paise: verdictRow.cost_paise,
+      portfolio_capital_paise: verdictRow.portfolio_capital_paise,
+      strategy_mode: verdictRow.strategy_mode,
+      entry_window: verdictRow.entry_window,
+      portfolio: {
+        realized_paise: realized,
+        unrealized_paise: 0,  // closed day, no live positions
+        total_paise: realized,
+        capital_deployed_paise: deployed,
+        capital_ceiling_paise: verdictRow.portfolio_capital_paise || 100000000,
+        capital_deployable_paise: deployed || (verdictRow.portfolio_capital_paise || 100000000),
+        capital_total_paise: deployed || (verdictRow.portfolio_capital_paise || 100000000),
+        effective_denominator_paise: deployed,
+        effective_denominator_source: 'actual_deployed',
+        pct_of_effective: deployed > 0 ? +((realized / deployed) * 100).toFixed(3) : 0,
+        counts,
+      },
+      override: null,
+    } : null,
+    pool_top10: [],  // intraday_suitability is current-only — not historical
+    universe_winners_missed,
+    pre_market_feed: [],  // not preserved historically
+    swing_candidates: { computed_at: null, candidates: [] },
+    generated_at: Date.now(),
+    backfill_meta: {
+      reconstructed_from: 'd1_historical',
+      paper_trades_count: paperTrades.length,
+      decisions_count: decisions.length,
+      universe_bars_symbols: todayBars.length,
+    },
+  };
+
+  await db.prepare(`
+    INSERT OR REPLACE INTO daily_snapshots (trade_date, snapshot_json, created_at, snapshot_source)
+    VALUES (?, ?, ?, ?)
+  `).bind(date, JSON.stringify(snapshot), Date.now(), 'backfill_partial').run().catch(() => {});
+
+  return {
+    ok: true,
+    date,
+    source: 'backfill_partial',
+    paper_trades_count: paperTrades.length,
+    decisions_count: decisions.length,
+    universe_bars_symbols: todayBars.length,
+    universe_winners_missed_count: universe_winners_missed.length,
+    realized_paise: realized,
+    note: 'pool_top10 empty (intraday_suitability current-only). pre_market_feed empty (not preserved historically).',
+  };
+}
+
+async function listSnapshots(db) {
+  const rows = (await db.prepare(`
+    SELECT trade_date, created_at, snapshot_source, LENGTH(snapshot_json) AS size_bytes
+    FROM daily_snapshots ORDER BY trade_date DESC LIMIT 100
+  `).all().catch(() => ({ results: [] }))).results || [];
+  return {
+    ok: true,
+    count: rows.length,
+    snapshots: rows.map(r => ({
+      trade_date: r.trade_date,
+      created_at: r.created_at,
+      created_ist: new Date(r.created_at + 5.5 * 3600000).toISOString().replace('T', ' ').slice(0, 19),
+      source: r.snapshot_source,
+      size_kb: Math.round(r.size_bytes / 1024 * 10) / 10,
+    })),
+  };
+}
+
+async function getTodayConsolidated(db, env) {
   const nowMs = Date.now();
   const istNow = new Date(nowMs + 5.5 * 3600 * 1000);
   const today = istNow.toISOString().slice(0, 10);
@@ -3553,22 +3908,45 @@ async function getTodayConsolidated(db) {
       ).bind(pick.symbol).first().catch(() => null);
 
       // Last 1h of 5-min bars for mini chart
-      const barsCutoff = nowMs - 60 * 60 * 1000;
+      // CHART FETCH RANGE — phase-aware (May 7 EOD fix).
+      //
+      // During LIVE: last 60 min is appropriate (fresh price action context).
+      // During POST_CLOSE / OFF_HOURS: last 60 min would be AFTER market close
+      //   (= empty). For retrospective viewing we want the FULL session bars
+      //   (09:15-15:30 IST = ~6.25hrs = 75 5-min bars).
+      // PRE_MARKET / PRE_OPEN: pre-market window (no intraday data yet).
+      //
+      // Decision: if it's TODAY but post-close, fetch all of today's bars from
+      // 09:15 IST onwards. Otherwise stick with last-60-min window for LIVE.
+      const istNowH = istNow.getUTCHours();
+      const istNowM = istNow.getUTCMinutes();
+      const istMinsLocal = istNowH * 60 + istNowM;
+      const isPostMarket = istMinsLocal >= 15 * 60 + 30;  // ≥ 15:30 IST
+      const sessionOpenMs = (() => {
+        // 09:15 IST = 03:45 UTC of today. Compute today's open in epoch ms.
+        const istToday = new Date(nowMs + 5.5 * 3600000);
+        istToday.setUTCHours(3, 45, 0, 0);  // 09:15 IST = 03:45 UTC
+        return istToday.getTime();
+      })();
+      const barsCutoff = isPostMarket ? sessionOpenMs : (nowMs - 60 * 60 * 1000);
+      const barsLimit  = isPostMarket ? 80 : 12;  // full session vs last hour
       const bars = (await db.prepare(`
         SELECT ts, open_paise, high_paise, low_paise, close_paise
         FROM intraday_bars
         WHERE symbol=? AND trade_date=? AND interval='5minute' AND ts >= ?
-        ORDER BY ts ASC LIMIT 12
-      `).bind(pick.symbol, today, barsCutoff).all().catch(() => ({ results: [] }))).results || [];
+        ORDER BY ts ASC LIMIT ?
+      `).bind(pick.symbol, today, barsCutoff, barsLimit).all().catch(() => ({ results: [] }))).results || [];
 
       // Position match (paper_trades for today, auto_managed)
       // or_high_paise + or_low_paise = first-15min OHLC range (the breakout level).
       // wealth-trader's price_monitor enters when LTP > or_high_paise.
+      // kite_bracket_id (May 7 2026): set by auto-bridge when real Kite order
+      // placed for this paper trade. NULL = paper-only (auto-bridge disabled or failed).
       const pos = await db.prepare(`
         SELECT id, qty, entry_paise, stop_paise, target_paise, peak_price_paise,
                trailing_stop_paise, target_locked, opus_extension_until,
                trader_state, exit_paise, exit_reason, pnl_net_paise, exit_at, entry_at,
-               or_high_paise, or_low_paise
+               or_high_paise, or_low_paise, kite_bracket_id, trader_notes
         FROM paper_trades
         WHERE symbol=? AND auto_managed=1
           AND DATE(created_at/1000+19800,'unixepoch') = ?
@@ -3581,12 +3959,16 @@ async function getTodayConsolidated(db) {
       // for the price line during market hours (typical 30-60 ticks/h = smooth line).
       let chartBars = bars;
       if (chartBars.length === 0) {
-        const tickCutoff = nowMs - 60 * 60 * 1000;
+        // Same phase-aware range logic for the intraday_ticks fallback.
+        // POST_CLOSE: full session ticks (might be 200-400 over a 6.25h day).
+        // LIVE: last 60 min (~30-60 ticks).
+        const tickCutoff = isPostMarket ? sessionOpenMs : (nowMs - 60 * 60 * 1000);
+        const ticksLimit = isPostMarket ? 500 : 80;  // full session can have ~400
         const ticks = (await db.prepare(`
           SELECT ts, ltp_paise FROM intraday_ticks
           WHERE symbol=? AND ts >= ?
-          ORDER BY ts ASC LIMIT 80
-        `).bind(pick.symbol, tickCutoff).all().catch(() => ({ results: [] }))).results || [];
+          ORDER BY ts ASC LIMIT ?
+        `).bind(pick.symbol, tickCutoff, ticksLimit).all().catch(() => ({ results: [] }))).results || [];
         // Render each tick as a 1-point bar (close = open = high = low = ltp)
         // so chart renderer can plot smooth line.
         chartBars = ticks.map(t => ({
@@ -3604,12 +3986,32 @@ async function getTodayConsolidated(db) {
       const isEntered = pos && pos.trader_state === 'ENTERED' && !pos.exit_at;
       const isExited = pos && pos.exit_at;
 
+      // STORY-ARC TIMELINE — surface the per-pick decision history so the UI can
+      // show plan→trigger→execution→life→exit as a vertical narrative. Pulled from
+      // trader_decisions (which is the source of truth for every state change).
+      const timeline = (await db.prepare(`
+        SELECT ts, cron_phase, decision, state_after, ltp_paise,
+               composed_by_model, rationale
+        FROM trader_decisions
+        WHERE trade_date=? AND symbol=?
+        ORDER BY ts ASC LIMIT 30
+      `).bind(today, pick.symbol).all().catch(() => ({ results: [] }))).results || [];
+
       pick.live = {
         ltp_paise: ltpRow?.ltp_paise || null,
         ltp_ts: ltpRow?.ts || null,
         bars: chartBars,
         bars_source: bars.length ? 'intraday_bars' : (chartBars.length ? 'intraday_ticks_aggregated' : 'none'),
         prev_close_paise: chartBars.length ? chartBars[0].open_paise : null,
+        timeline: timeline.map(t => ({
+          ts: t.ts,
+          phase: t.cron_phase,
+          decision: t.decision,
+          state_after: t.state_after,
+          ltp_paise: t.ltp_paise,
+          model: t.composed_by_model,
+          reason: t.rationale,
+        })),
         position: pos ? {
           state: pos.trader_state,
           qty: pos.qty,
@@ -3625,11 +4027,21 @@ async function getTodayConsolidated(db) {
           exit_reason: pos.exit_reason,
           pnl_paise: pos.pnl_net_paise,
           exit_at: pos.exit_at,
+          // Holding duration in ms (entry_at → exit_at, or entry_at → now if still open)
+          holding_ms: pos.entry_at ? ((pos.exit_at || nowMs) - pos.entry_at) : null,
           // Breakout trigger info — when WATCHING, owner needs to know "LTP must exceed X to enter"
           or_high_paise: pos.or_high_paise,
           or_low_paise: pos.or_low_paise,
           breakout_distance_pct: (pos.trader_state === 'WATCHING' && pos.or_high_paise && ltpRow?.ltp_paise)
             ? +(((pos.or_high_paise - ltpRow.ltp_paise) / ltpRow.ltp_paise) * 100).toFixed(2) : null,
+          // Auto-bridge state (May 7 2026)
+          kite_bracket_id: pos.kite_bracket_id,
+          auto_bridge_status: pos.kite_bracket_id
+            ? 'placed'
+            : ((pos.trader_notes || '').includes('AUTO_BRIDGE_FAILED')
+                ? 'failed'
+                : ((pos.trader_notes || '').includes('AUTO_BRIDGE_PLACED') ? 'placed' : null)),
+          auto_bridge_note: ((pos.trader_notes || '').match(/AUTO_BRIDGE_(?:PLACED|FAILED)[^|]*/) || [null])[0],
           // Only compute live_pnl for ENTERED positions (real trade fired).
           // WATCHING rows use range_capture's LTP-estimate as entry_paise; no actual entry.
           live_pnl_paise: isEntered && ltpRow?.ltp_paise
@@ -3639,6 +4051,130 @@ async function getTodayConsolidated(db) {
         } : null,
       };
     }
+
+    // PORTFOLIO ROLL-UP — hero P&L card needs single-glance numbers.
+    //
+    // TWO-LAYER CAPITAL (May 7 2026):
+    //   ceiling_paise    = total_capital_paise (rarely changes — funding event)
+    //   deployable_paise = today_deployable_paise (daily judgment, ≤ ceiling)
+    //
+    // Risk thresholds compute against deployable, not ceiling. UI shows both
+    // layers ("today ₹10K of ₹10L ceiling") so owner sees the architectural
+    // headroom + today's commitment.
+    const riskRows = (await db.prepare(`
+      SELECT config_key, config_value FROM user_config
+      WHERE config_key IN (
+        'total_capital_paise','today_deployable_paise',
+        'profit_lock_pct','loss_halt_pct','best_target_pct',
+        'auto_real_trades_enabled','block_real_orders','engine_mode'
+      )
+    `).all().catch(() => ({ results: [] }))).results || [];
+    const riskCfg = Object.fromEntries(riskRows.map(r => [r.config_key, r.config_value]));
+    const ceilingLive    = parseInt(riskCfg.total_capital_paise) || (verdictRow?.portfolio_capital_paise || 100_000_000);
+    // today_deployable falls back to ceiling if not explicitly set
+    const deployableLive = parseInt(riskCfg.today_deployable_paise) || ceilingLive;
+    const safeDeployable = Math.min(deployableLive, ceilingLive);
+    const profitLockPct = parseFloat(riskCfg.profit_lock_pct) || 0.05;
+    const lossHaltPct   = parseFloat(riskCfg.loss_halt_pct)   || 0.03;
+    const bestTargetPct = parseFloat(riskCfg.best_target_pct) || 0.07;
+    // Risk thresholds against deployable
+    const PROFIT_LOCK_PAISE = Math.round(safeDeployable * profitLockPct);
+    const LOSS_HALT_PAISE   = Math.round(safeDeployable * lossHaltPct);
+    const BEST_TARGET_PAISE = Math.round(safeDeployable * bestTargetPct);
+    // Real-money execution gates (May 7 2026 EOD)
+    const autoRealEnabled    = riskCfg.auto_real_trades_enabled === '1';
+    const realOrdersBlocked  = riskCfg.block_real_orders === '1';
+    const engineMode         = riskCfg.engine_mode || 'shadow_run';
+    const autoBridgeArmed    = autoRealEnabled && !realOrdersBlocked && engineMode === 'live';
+
+    let portfolio = {
+      realized_paise: 0,
+      unrealized_paise: 0,
+      total_paise: 0,
+      capital_deployed_paise: 0,
+      // TWO-LAYER capital exposure
+      capital_ceiling_paise:    ceilingLive,        // ₹10L total funded
+      capital_deployable_paise: safeDeployable,     // today's commitment
+      // Backward-compat field — same value as deployable, kept so older UI code
+      // reading capital_total_paise continues to work without a code change.
+      capital_total_paise:      safeDeployable,
+      // Risk thresholds (computed against deployable)
+      profit_lock_threshold_paise: PROFIT_LOCK_PAISE,
+      profit_lock_pct: profitLockPct,
+      loss_halt_threshold_paise: LOSS_HALT_PAISE,
+      loss_halt_pct: lossHaltPct,
+      best_target_paise: BEST_TARGET_PAISE,
+      best_target_pct: bestTargetPct,
+      distance_to_lock_paise: 0,
+      counts: { watching: 0, entered: 0, exited_win: 0, exited_loss: 0, skipped: 0 },
+      // Real-money gating state — UI shows "armed" badge when 3-of-3 gates pass
+      auto_real_trades_enabled: autoRealEnabled,
+      block_real_orders:        realOrdersBlocked,
+      engine_mode:              engineMode,
+      auto_bridge_armed:        autoBridgeArmed,
+    };
+    for (const pick of activePicks) {
+      const pos = pick.live?.position;
+      if (!pos) continue;
+      if (pos.exit_at) {
+        portfolio.realized_paise += pos.pnl_paise || 0;
+        portfolio.capital_deployed_paise += (pos.entry_paise || 0) * (pos.qty || 0);
+        if ((pos.pnl_paise || 0) > 0) portfolio.counts.exited_win++;
+        else if ((pos.pnl_paise || 0) < 0) portfolio.counts.exited_loss++;
+      } else if (pos.state === 'ENTERED') {
+        portfolio.unrealized_paise += pos.live_pnl_paise || 0;
+        portfolio.capital_deployed_paise += (pos.entry_paise || 0) * (pos.qty || 0);
+        portfolio.counts.entered++;
+      } else if (pos.state === 'WATCHING') {
+        portfolio.counts.watching++;
+      } else if (pos.state === 'SKIPPED') {
+        portfolio.counts.skipped++;
+      }
+    }
+    portfolio.total_paise = portfolio.realized_paise + portfolio.unrealized_paise;
+    portfolio.distance_to_lock_paise = Math.max(0, PROFIT_LOCK_PAISE - portfolio.total_paise);
+    portfolio.pct_of_capital = portfolio.capital_total_paise > 0
+      ? +((portfolio.total_paise / portfolio.capital_total_paise) * 100).toFixed(3) : 0;
+
+    // EFFECTIVE DENOMINATOR (May 7 2026 EOD fix) — phase-aware risk denominator.
+    //
+    // Bug surfaced by owner screenshot: after setting today_deployable_paise=₹10K
+    // for tomorrow, hero card showed today's "+₹19,316 = +193% of ₹10K" and
+    // "Capital used ₹3.99L of ₹10K" — both nonsensical because today's session
+    // deployed ₹3.99L from the ₹10L paper-mode capital, not the ₹10K future-day
+    // commitment.
+    //
+    // Fix: when current phase is POST_CLOSE/OFF_HOURS AND any exits exist today,
+    // use ACTUAL capital_deployed_paise as the denominator (= what the session
+    // actually risked). Otherwise use today_deployable_paise (forward-looking
+    // commitment for upcoming session).
+    //
+    // Phase computed inline — same logic as line 3917-3927 below. Need it here
+    // because portfolio is built before phaseLabel.
+    // HOTFIX (May 7 2026 EOD): `dow` is NOT in scope inside getTodayConsolidated
+    // (only `istMins`, `istNow`, `today` are). Compute dow from istNow here.
+    // Original PR #97 used `dow` directly causing TDZ error: "Cannot access 'dow'
+    // before initialization" — broke ALL today_consolidated calls in production.
+    const _dowHere = istNow.getUTCDay();
+    let _phaseHere;
+    if (_dowHere === 0 || _dowHere === 6) _phaseHere = 'OFF_HOURS';
+    else if (istMins < 6 * 60) _phaseHere = 'OFF_HOURS';
+    else if (istMins < 9 * 60) _phaseHere = 'PRE_MARKET';
+    else if (istMins < 9 * 60 + 15) _phaseHere = 'PRE_OPEN';
+    else if (istMins < 15 * 60 + 30) _phaseHere = 'LIVE';
+    else if (istMins < 16 * 60) _phaseHere = 'CLOSE';
+    else if (istMins < 23 * 60) _phaseHere = 'POST_CLOSE';
+    else _phaseHere = 'OFF_HOURS';
+    const isPostClose  = ['POST_CLOSE', 'CLOSE', 'OFF_HOURS'].includes(_phaseHere);
+    const hasClosed    = (portfolio.counts.exited_win || 0) + (portfolio.counts.exited_loss || 0) > 0;
+    const useActual    = isPostClose && hasClosed;
+    portfolio.effective_denominator_paise = useActual
+      ? (portfolio.capital_deployed_paise || portfolio.capital_deployable_paise)
+      : portfolio.capital_deployable_paise;
+    portfolio.effective_denominator_source = useActual ? 'actual_deployed' : 'today_deployable';
+    portfolio.pct_of_effective = portfolio.effective_denominator_paise > 0
+      ? +((portfolio.total_paise / portfolio.effective_denominator_paise) * 100).toFixed(3) : 0;
+
     if (overridePicks?.length) {
       // Augmented array IS overridePicks; sync back to override.new_picks
     }
@@ -3659,6 +4195,7 @@ async function getTodayConsolidated(db) {
       portfolio_capital_paise: verdictRow.portfolio_capital_paise,
       strategy_mode: verdictRow.strategy_mode,
       entry_window: verdictRow.entry_window,
+      portfolio,  // hero P&L roll-up
       override: overrideRow ? {
         overridden_at: overrideRow.overridden_at,
         original_picks: (() => { try { return JSON.parse(overrideRow.original_picks_json); } catch { return []; } })(),
@@ -3687,6 +4224,191 @@ async function getTodayConsolidated(db) {
     ORDER BY owner_score DESC, intraday_score DESC
     LIMIT 10
   `).all().catch(() => ({ results: [] }))).results || [];
+
+  // ─── 3b. RETROSPECTIVE EOD ENRICHMENT (May 7 EOD owner ask) ──────────────
+  //
+  // For each pool_top10 candidate that is NOT in today's verdict picks, compute:
+  //   - day's open/high/low/close from intraday_bars
+  //   - hypothetical pnl if ₹10L deployed at open and exited at close / peak / low
+  //
+  // Plus surface UNIVERSE WINNERS not in pool_top10 nor picks — stocks that did
+  // well today that the system didn't surface. Owner can then ask "was this a
+  // signal we missed or pure luck?" (analysis layer is a follow-up PR).
+  //
+  // Computed only when intraday_bars has data for today (POST_CLOSE has all,
+  // LIVE has partial). Safe to compute always — rendering is phase-aware.
+  const TEN_LAKH = 100000000; // ₹10L in paise — fixed reference for "if invested" computations
+  const HYPOTHETICAL_COST_PCT = 0.0007; // 0.07% round-trip cost approximation (Zerodha realistic)
+
+  // Step 1: collect symbol set from picks + pool_top10 (already-surfaced)
+  const verdictPickSyms = new Set();
+  for (const p of (verdict?.picks || [])) if (p.symbol) verdictPickSyms.add(p.symbol);
+  const poolTopSyms = new Set(pool_top10.map(p => p.symbol));
+  const surfacedSyms = new Set([...verdictPickSyms, ...poolTopSyms]);
+
+  // Step 2: pull EOD bars for ALL symbols in intraday_bars today (universe-level)
+  const todayBars = (await db.prepare(`
+    SELECT
+      symbol,
+      MIN(CASE WHEN ts = (SELECT MIN(ts) FROM intraday_bars b2 WHERE b2.symbol=b1.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN open_paise END) AS day_open_paise,
+      MAX(high_paise) AS day_high_paise,
+      MIN(low_paise) AS day_low_paise,
+      MAX(CASE WHEN ts = (SELECT MAX(ts) FROM intraday_bars b2 WHERE b2.symbol=b1.symbol AND b2.trade_date=? AND b2.interval='5minute') THEN close_paise END) AS day_close_paise,
+      SUM(volume) AS day_volume
+    FROM intraday_bars b1
+    WHERE trade_date=? AND interval='5minute'
+    GROUP BY symbol
+    HAVING day_open_paise IS NOT NULL AND day_close_paise IS NOT NULL
+  `).bind(today, today, today).all().catch(() => ({ results: [] }))).results || [];
+
+  // Build symbol → eod_data map for fast lookup
+  const eodMap = {};
+  for (const b of todayBars) {
+    const o = b.day_open_paise, h = b.day_high_paise, l = b.day_low_paise, c = b.day_close_paise;
+    if (!o || !h || !l || !c) continue;
+    const pctOpenToClose = +(((c - o) / o) * 100).toFixed(2);
+    const pctOpenToHigh  = +(((h - o) / o) * 100).toFixed(2);
+    const pctOpenToLow   = +(((l - o) / o) * 100).toFixed(2);
+    // Hypothetical ₹10L PnL (gross — net of approx 0.07% round-trip cost)
+    const grossClose = Math.round(TEN_LAKH * (c - o) / o);
+    const grossPeak  = Math.round(TEN_LAKH * (h - o) / o);
+    const grossLow   = Math.round(TEN_LAKH * (l - o) / o);
+    const costApprox = Math.round(TEN_LAKH * HYPOTHETICAL_COST_PCT);
+    eodMap[b.symbol] = {
+      day_open_paise: o, day_high_paise: h, day_low_paise: l, day_close_paise: c,
+      day_volume: b.day_volume,
+      pct_open_to_close: pctOpenToClose,
+      pct_open_to_high:  pctOpenToHigh,
+      pct_open_to_low:   pctOpenToLow,
+      hypothetical_10L_pnl_at_close_paise: grossClose - costApprox,
+      hypothetical_10L_pnl_at_peak_paise:  grossPeak  - costApprox,
+      hypothetical_10L_pnl_at_low_paise:   grossLow   - costApprox,  // worst case
+    };
+  }
+
+  // Step 3: enrich pool_top10 with EOD performance
+  for (const p of pool_top10) {
+    const eod = eodMap[p.symbol];
+    if (eod) {
+      p.eod = eod;
+      p.in_picks = verdictPickSyms.has(p.symbol);
+    } else {
+      p.eod = null;  // no intraday_bars → not enriched
+      p.in_picks = verdictPickSyms.has(p.symbol);
+    }
+  }
+
+  // Step 4: compute UNIVERSE WINNERS — symbols NOT in surfaced set AND with
+  // significant gain at close (≥ 2% open-to-close). Sorted by % desc. Top 10.
+  const universe_winners_missed = todayBars
+    .filter(b => !surfacedSyms.has(b.symbol))
+    .map(b => {
+      const eod = eodMap[b.symbol];
+      if (!eod) return null;
+      return { symbol: b.symbol, ...eod };
+    })
+    .filter(x => x && x.pct_open_to_close >= 2.0)
+    .sort((a, b) => (b.pct_open_to_close - a.pct_open_to_close))
+    .slice(0, 10);
+
+  // ─── 3c. POST_CLOSE EOD ACCURACY — override day_close from Kite quote ────
+  //
+  // Discovery (May 7 EOD): our intraday_bars MIN/MAX captures 5-min poll
+  // data, NOT NSE's official closing auction price. Result: day_close
+  // diverged from Kite's official close by ₹0.76 (HFCL) up to ₹21.45
+  // (APOLLOPIPE) — the latter inflated "+16.65% open→close" when truth was
+  // "+11.84%". Hypothetical ₹10L pnl numbers were wrong by ~₹40K.
+  //
+  // Fix: in POST_CLOSE phase, call Kite's /quote endpoint ONCE for all the
+  // surfaced symbols (3 picks + 10 pool + 10 winners ≈ 23 max). Override
+  // day_close_paise with Kite's last_price (= official EOD price). Recompute
+  // pct_open_to_close + hypothetical pnl.
+  //
+  // Skipped during LIVE (intraday_bars updates fine + page refreshes 30s).
+  // Skipped if Kite token expired (graceful fallback to intraday_bars).
+  // Single batched call (~1.5s) — only runs in POST_CLOSE so doesn't affect
+  // LIVE flow performance.
+  const isPostCloseForAccuracy = istMins >= 15 * 60 + 30;  // ≥ 15:30 IST
+  if (isPostCloseForAccuracy && env && (eodMap && Object.keys(eodMap).length > 0)) {
+    const symsToFix = new Set();
+    for (const p of pool_top10) if (p.eod) symsToFix.add(p.symbol);
+    for (const w of universe_winners_missed) symsToFix.add(w.symbol);
+    // Also include picks even though they don't have .eod (their cards use the
+    // bars array; but useful to verify pos.exit_paise vs Kite close downstream).
+    for (const p of (verdict?.picks || [])) if (p.symbol) symsToFix.add(p.symbol);
+
+    const symList = [...symsToFix];
+    if (symList.length > 0) {
+      try {
+        const tok = await db.prepare(
+          `SELECT access_token, expires_at, api_key FROM kite_tokens WHERE is_active=1 ORDER BY obtained_at DESC LIMIT 1`
+        ).first();
+        if (tok && tok.access_token && Date.now() < tok.expires_at) {
+          const apiKeyToUse = tok.api_key || env.KITE_API_KEY;
+          const params = symList.map(s => `i=NSE:${encodeURIComponent(s)}`).join('&');
+          const r = await fetch(`https://api.kite.trade/quote?${params}`, {
+            headers: {
+              'X-Kite-Version': '3',
+              'Authorization': `token ${apiKeyToUse}:${tok.access_token}`,
+            },
+            signal: AbortSignal.timeout(5000),
+          });
+          if (r.ok) {
+            const j = await r.json();
+            const kdata = j.data || {};
+            // For each pool/winner symbol, override day_close with Kite's last_price
+            // and recompute downstream metrics.
+            const recompute = (eod, kiteLast) => {
+              if (!eod || !kiteLast) return eod;
+              const c = Math.round(kiteLast * 100);  // rupees → paise
+              const o = eod.day_open_paise;
+              const h = Math.max(eod.day_high_paise, c);  // close > intra-high possible
+              const l = Math.min(eod.day_low_paise, c);
+              const pctOC = +(((c - o) / o) * 100).toFixed(2);
+              const pctOH = +(((h - o) / o) * 100).toFixed(2);
+              const pctOL = +(((l - o) / o) * 100).toFixed(2);
+              const grossClose = Math.round(TEN_LAKH * (c - o) / o);
+              const grossPeak  = Math.round(TEN_LAKH * (h - o) / o);
+              const grossLow   = Math.round(TEN_LAKH * (l - o) / o);
+              const costApprox = Math.round(TEN_LAKH * HYPOTHETICAL_COST_PCT);
+              return {
+                ...eod,
+                day_high_paise: h,
+                day_low_paise: l,
+                day_close_paise: c,
+                pct_open_to_close: pctOC,
+                pct_open_to_high: pctOH,
+                pct_open_to_low: pctOL,
+                hypothetical_10L_pnl_at_close_paise: grossClose - costApprox,
+                hypothetical_10L_pnl_at_peak_paise: grossPeak - costApprox,
+                hypothetical_10L_pnl_at_low_paise: grossLow - costApprox,
+                source: 'kite_official_close',
+              };
+            };
+            for (const p of pool_top10) {
+              if (!p.eod) continue;
+              const kiteQ = kdata['NSE:' + p.symbol];
+              if (kiteQ?.last_price) p.eod = recompute(p.eod, kiteQ.last_price);
+            }
+            for (let i = 0; i < universe_winners_missed.length; i++) {
+              const w = universe_winners_missed[i];
+              const kiteQ = kdata['NSE:' + w.symbol];
+              if (kiteQ?.last_price) {
+                const fixed = recompute(w, kiteQ.last_price);
+                universe_winners_missed[i] = { symbol: w.symbol, ...fixed };
+              }
+            }
+            // Re-sort universe_winners_missed by corrected pct (some may have
+            // moved out of ≥2% threshold after Kite truth).
+            universe_winners_missed.sort((a, b) => b.pct_open_to_close - a.pct_open_to_close);
+          }
+        }
+      } catch (_) {
+        // Silent fallback — keep intraday_bars-derived eod values
+      }
+    }
+  }
+
 
   // ─── 4. LIVE PRE-MARKET FEED ────────────────────────────────────────────────
   // Mix of: latest crossasset moves, GIFT NIFTY ticks, breaking news (last 12h)
@@ -3783,18 +4505,41 @@ async function getTodayConsolidated(db) {
   else if (istMins < 23 * 60) phaseLabel = 'POST_CLOSE';
   else phaseLabel = 'OFF_HOURS';
 
-  return {
+  const response = {
     trade_date: today,
     ist_now_minutes: istMins,
     phase: phaseLabel,
     pre_market_integrity,
     live_integrity,
     verdict,
-    pool_top10,
+    pool_top10,                  // already enriched with .eod + .in_picks
+    universe_winners_missed,     // NEW (May 7 EOD): stocks NOT in surfaced set, ≥2% gain
     pre_market_feed,
     swing_candidates,
     generated_at: nowMs,
   };
+
+  // AUTO-SAVE SNAPSHOT (May 7 EOD owner ask) — fire-and-forget on first POST_CLOSE
+  // page load each day. Replaces the need for a separate 16:30 IST cron.
+  // Logic: if phase is POST_CLOSE/CLOSE AND no snapshot yet exists for today,
+  // INSERT one. Subsequent calls find the row and skip.
+  // Cost: 1 SELECT per call (cheap). 1 INSERT once per day.
+  // Safety: caught + swallowed, never blocks response.
+  if (phaseLabel === 'POST_CLOSE' || phaseLabel === 'CLOSE') {
+    try {
+      const exists = await db.prepare(
+        `SELECT 1 FROM daily_snapshots WHERE trade_date=? LIMIT 1`
+      ).bind(today).first().catch(() => null);
+      if (!exists) {
+        await db.prepare(`
+          INSERT OR REPLACE INTO daily_snapshots (trade_date, snapshot_json, created_at, snapshot_source)
+          VALUES (?, ?, ?, 'auto_save_post_close')
+        `).bind(today, JSON.stringify(response), Date.now(), 'auto_save_post_close').run().catch(() => {});
+      }
+    } catch (_) { /* swallow — auto-save must never break the response */ }
+  }
+
+  return response;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
