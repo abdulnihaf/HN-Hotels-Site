@@ -51,10 +51,13 @@ export async function onRequest(context) {
 
   try {
     if (request.method === 'GET') {
-      if (action === 'status')   return await getStatus(env);
-      if (action === 'runs')     return await getRuns(env, url);
-      if (action === 'config')   return await getConfig(env);
-      if (action === 'queue')    return await getQueue(env, url);
+      if (action === 'status')              return await getStatus(env);
+      if (action === 'runs')                return await getRuns(env, url);
+      if (action === 'config')              return await getConfig(env);
+      if (action === 'queue')               return await getQueue(env, url);
+      // Modash rotation
+      if (action === 'modash-status')       return await modashStatus(env);
+      if (action === 'modash-next-job')     return await modashNextJob(env, request);
     }
 
     if (request.method === 'POST') {
@@ -66,9 +69,16 @@ export async function onRequest(context) {
       if (action === 'cron-score')           return await cronScore(env, body, request);
       if (action === 'cron-outreach-wave')   return await cronOutreachWave(env, body, request);
 
+      // Modash poller (X-Cron-Token auth, called by hn-winpc)
+      if (action === 'modash-job-done')      return await modashJobDone(env, body, request);
+      if (action === 'modash-cookies-expired') return await modashCookiesExpired(env, body, request);
+
       // Owner-triggered
       if (action === 'set-config')           return await setConfig(env, body, request);
       if (action === 'trigger-now')          return await triggerNow(env, body, request);
+      if (action === 'modash-register-profile') return await modashRegisterProfile(env, body, request);
+      if (action === 'modash-mark-active')   return await modashMarkActive(env, body, request);
+      if (action === 'modash-enqueue-job')   return await modashEnqueueJob(env, body, request);
     }
 
     return json({ error: 'unknown action: ' + action }, 400);
@@ -196,6 +206,28 @@ async function cronDiscover(env, body, request) {
 
   const runId = await startRun(env, 'discovery');
   try {
+    // BRANCH: if Modash is enabled and we have an active profile, enqueue a Modash search job.
+    // The hn-winpc poller will pick it up; results land here via modash-job-done → discovery_queue.
+    // Apify hashtag-scrape is the fallback when Modash is off or no active profiles.
+    if (config.modash_enabled === 'true') {
+      const dailyCap = parseInt(config.modash_searches_per_profile_per_day || '1');
+      const activeProfile = await env.DB.prepare(`
+        SELECT profile_num FROM modash_profiles
+        WHERE status='active' AND searches_today < ? LIMIT 1
+      `).bind(dailyCap).first();
+
+      if (activeProfile) {
+        const filters = JSON.parse(config.modash_default_filters || '{}');
+        const job = await env.DB.prepare(`
+          INSERT INTO modash_jobs (job_type, search_filters_json, status)
+          VALUES ('search', ?, 'pending')
+        `).bind(JSON.stringify(filters)).run();
+        return await finishRun(env, runId, 'ok', 0, 0, 0,
+          `Modash job ${job.meta.last_row_id} queued for hn-winpc poller (profile ${activeProfile.profile_num} available)`);
+      }
+      // Fall through to Apify if no active profile
+    }
+
     // Pick today's hashtag slot from rotation
     const rotation = JSON.parse(config.hashtag_rotation || '[]');
     const idx = parseInt(config.hashtag_rotation_index || '0') % rotation.length;
@@ -576,6 +608,183 @@ async function logSendResult(env, c, channel, payload, sendResult) {
     sendResult.provider_msg_id || null,
     c.tier, c.tier_meta?.covers || null
   ).run();
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// MODASH ROTATION — multi-account browser-session-based discovery
+// ────────────────────────────────────────────────────────────────────────────
+// Architecture:
+//   Owner pre-logs each Modash trial account on hn-winpc Chrome (one isolated
+//   user-data-dir per account). Cookies persist for ~30d. The hn-winpc poller
+//   pulls jobs from this API, runs the search via headless Chromium against
+//   the right profile, POSTs results back. No passwords ever stored or seen.
+
+async function modashStatus(env) {
+  const profiles = await env.DB.prepare(`
+    SELECT * FROM modash_profiles ORDER BY profile_num
+  `).all();
+  const jobsToday = await env.DB.prepare(`
+    SELECT status, COUNT(*) c FROM modash_jobs
+    WHERE date(created_at, 'localtime') = date('now', 'localtime')
+    GROUP BY status
+  `).all();
+  const recentJobs = await env.DB.prepare(`
+    SELECT id, status, profile_num, result_count, result_summary,
+           created_at, completed_at, error_msg
+    FROM modash_jobs ORDER BY created_at DESC LIMIT 20
+  `).all();
+  const config = await getConfigMap(env);
+  return json({
+    success: true,
+    enabled: config.modash_enabled === 'true',
+    profiles: profiles.results,
+    profile_counts: {
+      total: profiles.results.length,
+      active: profiles.results.filter(p => p.status === 'active').length,
+      pending: profiles.results.filter(p => p.status === 'pending_setup').length,
+      depleted: profiles.results.filter(p => p.status === 'depleted').length,
+      broken: profiles.results.filter(p => p.status === 'broken').length,
+    },
+    jobs_today: jobsToday.results,
+    recent_jobs: recentJobs.results,
+  });
+}
+
+async function modashRegisterProfile(env, body, request) {
+  if (!requireOwner(env, request, body)) return json({ error: 'unauthorized' }, 401);
+  if (!body.profile_num) return json({ error: 'profile_num required' }, 400);
+  await env.DB.prepare(`
+    INSERT INTO modash_profiles (profile_num, email, status)
+    VALUES (?, ?, 'pending_setup')
+    ON CONFLICT(profile_num) DO UPDATE SET email=excluded.email, status='pending_setup'
+  `).bind(body.profile_num, body.email || null).run();
+  return json({ success: true, profile_num: body.profile_num });
+}
+
+async function modashMarkActive(env, body, request) {
+  if (!requireOwner(env, request, body)) return json({ error: 'unauthorized' }, 401);
+  if (!body.profile_num) return json({ error: 'profile_num required' }, 400);
+  await env.DB.prepare(`
+    UPDATE modash_profiles SET status='active', cookies_setup_at=datetime('now'),
+                                cookies_invalid_at=NULL
+    WHERE profile_num = ?
+  `).bind(body.profile_num).run();
+  return json({ success: true });
+}
+
+async function modashEnqueueJob(env, body, request) {
+  // Owner can manually enqueue a Modash search job. Also called from cronDiscover.
+  if (!requireOwner(env, request, body) && !requireCron(env, request)) {
+    return json({ error: 'unauthorized' }, 401);
+  }
+  const config = await getConfigMap(env);
+  const filters = body.filters || JSON.parse(config.modash_default_filters || '{}');
+  const r = await env.DB.prepare(`
+    INSERT INTO modash_jobs (job_type, search_filters_json, status)
+    VALUES (?, ?, 'pending')
+  `).bind(body.job_type || 'search', JSON.stringify(filters)).run();
+  return json({ success: true, job_id: r.meta.last_row_id });
+}
+
+async function modashNextJob(env, request) {
+  // Called by hn-winpc poller — needs CRON_TOKEN auth.
+  if (!requireCron(env, request)) return json({ error: 'unauthorized' }, 401);
+
+  // Pick next pending job. Assign to least-recently-used active profile.
+  const job = await env.DB.prepare(`
+    SELECT * FROM modash_jobs WHERE status='pending' ORDER BY created_at LIMIT 1
+  `).first();
+  if (!job) return json({ no_jobs: true });
+
+  const config = await getConfigMap(env);
+  const dailyCap = parseInt(config.modash_searches_per_profile_per_day || '1');
+
+  // Pick LRU active profile that hasn't hit daily cap
+  const profile = await env.DB.prepare(`
+    SELECT * FROM modash_profiles
+    WHERE status='active' AND searches_today < ?
+    ORDER BY COALESCE(last_used_at, '1970-01-01') ASC
+    LIMIT 1
+  `).bind(dailyCap).first();
+  if (!profile) {
+    // No profile available right now — leave job pending
+    return json({ no_jobs: true, reason: 'no_active_profile_below_cap' });
+  }
+
+  // Assign + mark running
+  await env.DB.prepare(`
+    UPDATE modash_jobs SET status='running', profile_num=?, picked_at=datetime('now') WHERE id=?
+  `).bind(profile.profile_num, job.id).run();
+  await env.DB.prepare(`
+    UPDATE modash_profiles
+    SET searches_today = searches_today + 1,
+        searches_lifetime = searches_lifetime + 1,
+        last_used_at = datetime('now')
+    WHERE profile_num=?
+  `).bind(profile.profile_num).run();
+
+  return json({
+    job_id: job.id,
+    job_type: job.job_type,
+    profile_num: profile.profile_num,
+    profile_email: profile.email,
+    search_filters: JSON.parse(job.search_filters_json),
+  });
+}
+
+async function modashJobDone(env, body, request) {
+  if (!requireCron(env, request)) return json({ error: 'unauthorized' }, 401);
+  if (!body.job_id) return json({ error: 'job_id required' }, 400);
+
+  const results = body.results || [];
+  const error = body.error || null;
+  const status = error ? 'failed' : 'done';
+
+  await env.DB.prepare(`
+    UPDATE modash_jobs
+    SET status=?, completed_at=datetime('now'), error_msg=?, result_count=?, result_summary=?
+    WHERE id=?
+  `).bind(status, error, results.length, body.summary || null, body.job_id).run();
+
+  // Push each result into discovery_queue (dedup vs bio_pulse + queue)
+  let added = 0, skippedExisting = 0;
+  for (const r of results) {
+    const u = (r.username || '').toLowerCase().trim();
+    if (!u) continue;
+    const inDb = await env.DB.prepare(`SELECT 1 FROM influencer_bio_pulse WHERE username=?`).bind(u).first();
+    if (inDb) { skippedExisting++; continue; }
+    try {
+      await env.DB.prepare(`
+        INSERT INTO influencer_discovery_queue (username, source, source_meta)
+        VALUES (?, 'modash', ?)
+      `).bind(u, JSON.stringify({
+        job_id: body.job_id,
+        followers: r.followers || null,
+        engagement_rate: r.engagement_rate || null,
+        full_name: r.full_name || null,
+      })).run();
+      added++;
+    } catch (e) { /* unique conflict — already queued */ }
+  }
+
+  return json({
+    success: true,
+    job_id: body.job_id,
+    status,
+    pushed_to_queue: added,
+    skipped_existing: skippedExisting,
+  });
+}
+
+async function modashCookiesExpired(env, body, request) {
+  if (!requireCron(env, request)) return json({ error: 'unauthorized' }, 401);
+  if (!body.profile_num) return json({ error: 'profile_num required' }, 400);
+  await env.DB.prepare(`
+    UPDATE modash_profiles SET status='broken', cookies_invalid_at=datetime('now'),
+                                notes=COALESCE(notes,'') || ' [cookies expired ' || datetime('now') || ']'
+    WHERE profile_num=?
+  `).bind(body.profile_num).run();
+  return json({ success: true, action: 'profile_marked_broken' });
 }
 
 // ────────────────────────────────────────────────────────────────────────────

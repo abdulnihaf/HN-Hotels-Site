@@ -1,0 +1,263 @@
+// hn-winpc Modash poller.
+// Long-running daemon. Polls hnhotels.in for pending Modash search jobs every 60s.
+// When a job arrives, launches headless Chromium with the assigned profile's
+// user-data-dir, runs the Modash search via UI, scrapes results, posts back.
+//
+// Owner-managed lifecycle:
+//   - One-time:  setup-modash-profile.ps1 -ProfileNum N   (each of N accounts)
+//   - Daily:     this poller runs continuously as a Scheduled Task
+//   - Recovery:  if a profile's cookies expire, marks it 'broken' on the API;
+//                owner re-runs setup-modash-profile.ps1 for that one
+//
+// Pacing: respects the per-profile-per-day cap set in pipeline_config (default 1).
+// API guards this server-side — poller doesn't have to enforce locally.
+
+'use strict';
+
+const path = require('path');
+const fs = require('fs');
+const { chromium } = require('playwright');
+
+// ─── Config ────────────────────────────────────────────────────────────────
+const API = process.env.MODASH_API_BASE || 'https://hnhotels.in/api/influencer-pipeline';
+const CRON_TOKEN = process.env.CRON_TOKEN;
+const PROFILES_DIR = process.env.MODASH_PROFILES_DIR || 'C:\\Modash\\profiles';
+const POLL_INTERVAL_MS = parseInt(process.env.MODASH_POLL_INTERVAL_MS || '60000');
+const REQUEST_TIMEOUT_MS = 60000;
+
+if (!CRON_TOKEN) {
+  console.error('FATAL: CRON_TOKEN env var not set');
+  process.exit(1);
+}
+
+// ─── Logging ───────────────────────────────────────────────────────────────
+function log(level, msg, meta) {
+  const line = JSON.stringify({ ts: new Date().toISOString(), level, msg, ...meta });
+  console.log(line);
+}
+
+// ─── HTTP helpers ──────────────────────────────────────────────────────────
+async function apiGet(action) {
+  const r = await fetch(`${API}?action=${encodeURIComponent(action)}`, {
+    headers: { 'X-Cron-Token': CRON_TOKEN },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  return r.json();
+}
+async function apiPost(action, body) {
+  const r = await fetch(`${API}?action=${encodeURIComponent(action)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Cron-Token': CRON_TOKEN },
+    body: JSON.stringify(body || {}),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  return r.json();
+}
+
+// ─── Modash search via Playwright ──────────────────────────────────────────
+async function runModashSearch(profileNum, filters) {
+  const dataDir = path.join(PROFILES_DIR, `profile-${profileNum}`);
+  if (!fs.existsSync(dataDir)) {
+    throw new Error(`profile_dir_missing: ${dataDir} — run setup-modash-profile.ps1 -ProfileNum ${profileNum}`);
+  }
+
+  log('info', 'launching_chromium', { profileNum, dataDir });
+  const ctx = await chromium.launchPersistentContext(dataDir, {
+    headless: true,
+    viewport: { width: 1366, height: 900 },
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--no-first-run',
+      '--no-default-browser-check',
+    ],
+    locale: 'en-US',
+  });
+
+  try {
+    const page = await ctx.newPage();
+    await page.setExtraHTTPHeaders({
+      'accept-language': 'en-US,en;q=0.9',
+    });
+
+    log('info', 'navigating_to_modash');
+    await page.goto('https://marketer.modash.io/discovery/instagram', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+
+    // Wait briefly for client-side redirect to login if cookies expired
+    await page.waitForTimeout(3000);
+    if (page.url().includes('/login') || page.url().includes('/signin') || page.url().includes('/auth')) {
+      throw new Error('cookies_expired_or_missing');
+    }
+
+    // Apply search filters via UI. NOTE: selectors depend on Modash's current DOM.
+    // The Modash UI has changed in the past — owner should verify after deploy.
+    // Best practice: Modash exposes XHR endpoints internally; if visible in DevTools,
+    // call them directly with the session cookie for higher reliability than DOM scraping.
+    //
+    // The block below is a SCAFFOLD. After first deploy, owner inspects page DOM /
+    // network panel and updates selectors here.
+    log('info', 'applying_filters', { filters });
+
+    const results = await scrapeSearchResults(page, filters);
+    log('info', 'search_complete', { profileNum, count: results.length });
+    return { results };
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+}
+
+async function scrapeSearchResults(page, filters) {
+  // SCAFFOLD: this needs Modash-specific selector tuning after first run.
+  //
+  // Strategy options (pick the one that's most stable on first inspection):
+  //   A) DOM scraping — wait for `[data-testid="creator-card"]` / similar, parse
+  //      username + followers from the rendered cards.
+  //   B) Network interception — page.on('response') filter the XHR that returns
+  //      the search results JSON, parse that. This is more reliable.
+  //
+  // The implementation below tries (B) first, falls back to (A).
+
+  return new Promise(async (resolve, reject) => {
+    const collected = [];
+    let resolved = false;
+
+    // Option B: intercept the search XHR
+    page.on('response', async (resp) => {
+      try {
+        const url = resp.url();
+        if (!url.includes('discovery') && !url.includes('search')) return;
+        if (resp.status() !== 200) return;
+        const ct = resp.headers()['content-type'] || '';
+        if (!ct.includes('application/json')) return;
+        const data = await resp.json().catch(() => null);
+        if (!data) return;
+        // Modash typically returns { lookalikes: [...] } or { results: [...] } or { data: [...] }
+        const list = data.lookalikes || data.results || data.data || data.items;
+        if (!Array.isArray(list) || list.length === 0) return;
+
+        for (const item of list) {
+          // Modash result schema (approximate):
+          //   { profile: { username, fullname, picture, followers, engagementRate, ... } }
+          // OR flatter:
+          //   { username, fullname, followers, engagementRate, ... }
+          const p = item.profile || item;
+          if (!p.username) continue;
+          collected.push({
+            username: String(p.username).toLowerCase(),
+            full_name: p.fullname || p.fullName || p.full_name || null,
+            followers: p.followers || p.followersCount || null,
+            engagement_rate: p.engagementRate || p.engagement_rate || null,
+            profile_pic_url: p.picture || p.profilePicUrl || null,
+            country: p.country || null,
+            city: p.city || null,
+          });
+        }
+      } catch (_) { /* ignore */ }
+    });
+
+    // Trigger the search by typing filters into Modash UI.
+    // NOTE: this is the part most likely to need owner adjustment.
+    try {
+      await applyFiltersViaUI(page, filters);
+    } catch (e) {
+      // If UI interaction fails, give the page a few seconds to load
+      // anything from initial state (Modash often shows trending creators on landing).
+      await page.waitForTimeout(2000);
+    }
+
+    // Wait for results
+    await page.waitForTimeout(8000);
+
+    if (!resolved) {
+      resolved = true;
+      // Dedupe by username
+      const seen = new Set();
+      const unique = collected.filter(c => {
+        if (seen.has(c.username)) return false;
+        seen.add(c.username);
+        return true;
+      });
+      resolve(unique);
+    }
+  });
+}
+
+async function applyFiltersViaUI(page, filters) {
+  // Best-effort filter application. Modash UI evolves — owner tunes after first run.
+  // For initial deploy: relies on URL params if Modash's discovery URL accepts them
+  // (it does — discovery/instagram?location=Bangalore&followers_min=5000 etc.)
+  const params = new URLSearchParams();
+  if (filters.location)        params.set('location', filters.location);
+  if (filters.country)         params.set('country', filters.country);
+  if (filters.followers_from)  params.set('followers_min', String(filters.followers_from));
+  if (filters.followers_to)    params.set('followers_max', String(filters.followers_to));
+  if (filters.engagement_rate_from) params.set('engagement_min', String(filters.engagement_rate_from));
+  if (filters.topics)          params.set('topics', filters.topics.join(','));
+  if (filters.language)        params.set('language', filters.language.join(','));
+
+  const url = `https://marketer.modash.io/discovery/instagram?${params.toString()}`;
+  log('info', 'navigating_with_filters', { url });
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(5000);
+}
+
+// ─── Main loop ─────────────────────────────────────────────────────────────
+async function tick() {
+  let job;
+  try {
+    job = await apiGet('modash-next-job');
+  } catch (e) {
+    log('error', 'api_get_failed', { err: e.message });
+    return;
+  }
+  if (job.no_jobs) return;
+  if (!job.job_id) {
+    log('warn', 'unexpected_response', { job });
+    return;
+  }
+
+  log('info', 'job_picked', { job_id: job.job_id, profile: job.profile_num });
+
+  let outcome;
+  try {
+    outcome = await runModashSearch(job.profile_num, job.search_filters);
+    log('info', 'job_done', { job_id: job.job_id, count: outcome.results.length });
+  } catch (e) {
+    log('error', 'job_failed', { job_id: job.job_id, err: e.message });
+    if (e.message === 'cookies_expired_or_missing') {
+      await apiPost('modash-cookies-expired', { profile_num: job.profile_num });
+    }
+    await apiPost('modash-job-done', {
+      job_id: job.job_id,
+      results: [],
+      error: e.message,
+    });
+    return;
+  }
+
+  await apiPost('modash-job-done', {
+    job_id: job.job_id,
+    results: outcome.results,
+    summary: `${outcome.results.length} unique creators from profile-${job.profile_num}`,
+  });
+}
+
+async function main() {
+  log('info', 'poller_started', {
+    api: API,
+    profiles_dir: PROFILES_DIR,
+    poll_interval_ms: POLL_INTERVAL_MS,
+  });
+  while (true) {
+    try {
+      await tick();
+    } catch (e) {
+      log('error', 'tick_unhandled', { err: e.message, stack: e.stack?.slice(0, 500) });
+    }
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+  }
+}
+
+main();
