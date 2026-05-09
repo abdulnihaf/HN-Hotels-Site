@@ -1,0 +1,68 @@
+{
+  "_comment": "Modash-driver entry for the shared C:\\hn-control\\manifest.json. Chat 1's manifest builder reads this file (or this content) and merges it into the master manifest.json on hn-winpc. Keep this file in sync with reality — when behavior changes, update here too.",
+
+  "name": "modash-driver",
+  "owner_chat": "Hamza Express marketing (May 2026 influencer push)",
+  "purpose": "Autonomous Modash discovery — pre-logged Chromium profiles run searches under rotated trial accounts, push results into HN influencer pipeline.",
+
+  "install_path": "C:\\hn-control\\modash-driver\\",
+  "data_paths": [
+    "C:\\hn-control\\modash-driver\\profiles\\profile-N\\  (per-account Chromium user-data-dir)",
+    "C:\\hn-control\\modash-driver\\poller.log"
+  ],
+  "scheduled_tasks": [
+    "HN-Modash-Poller  (logon trigger, restart-on-failure 5 min, single-instance)"
+  ],
+  "processes": [
+    "node.exe (running poller.js)",
+    "Playwright-managed Chromium (only when a job is active — usually <60s/run, headless)"
+  ],
+
+  "uses_default_chrome": false,
+  "uses_chrome_default_profile": false,
+  "manipulates_chrome_tabs": false,
+  "needs_chrome_tabs_lock": false,
+
+  "do_not_disturb": [
+    "C:\\hn-control\\modash-driver\\  (all subdirs, especially profiles/profile-N which holds session cookies)",
+    "Scheduled Task HN-Modash-Poller",
+    "Playwright Chromium binaries under %LOCALAPPDATA%\\ms-playwright\\"
+  ],
+
+  "i_promise_not_to_touch": [
+    "Default Chrome processes / windows / tabs",
+    "Default Chrome user-data-dir",
+    "C:\\hn-control\\aggregator-pulse\\",
+    "C:\\hn-control\\dine-aggregator\\",
+    "Any Scheduled Task other than HN-Modash-Poller",
+    "System-wide Stop-Process -Name chrome (or any broad chrome-killing command)"
+  ],
+
+  "lock_acquisition": {
+    "needed_for": [
+      "running install.ps1 (to prevent concurrent npm install / Scheduled Task race)",
+      "running setup-modash-profile.ps1 -ProfileNum N (per-profile-num lock to prevent concurrent re-login)"
+    ],
+    "lock_naming_convention": "modash-driver.<operation>.<scope>.lock — e.g. modash-driver.install.lock, modash-driver.setup-profile.1.lock",
+    "uses_shared_helpers": "C:\\hn-control\\_shared\\acquire-lock.ps1 / release-lock.ps1"
+  },
+
+  "api_endpoints_used": [
+    "https://hnhotels.in/api/influencer-pipeline?action=modash-next-job (GET, X-Cron-Token)",
+    "https://hnhotels.in/api/influencer-pipeline?action=modash-job-done (POST, X-Cron-Token)",
+    "https://hnhotels.in/api/influencer-pipeline?action=modash-cookies-expired (POST, X-Cron-Token)"
+  ],
+  "secrets_needed": [
+    "CRON_TOKEN (User env var, set by install.ps1)",
+    "MODASH_API_BASE (User env var, defaults to https://hnhotels.in/api/influencer-pipeline)",
+    "MODASH_PROFILES_DIR (User env var, defaults to C:\\hn-control\\modash-driver\\profiles)"
+  ],
+
+  "human_touchpoints": [
+    "One-time: setup-modash-profile.ps1 per Modash account (owner types Modash password into Chrome)",
+    "Recurring: re-run setup when cookies expire (~30 days, signaled via API status=broken)"
+  ],
+
+  "version": "1.0.0",
+  "last_updated": "2026-05-10"
+}

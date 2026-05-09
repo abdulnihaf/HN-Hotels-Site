@@ -1,0 +1,19 @@
+name = "hn-influencer-pipeline-cron"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# Cron schedule (UTC). IST = UTC + 5:30
+# 22:30 UTC = 04:00 IST  · daily discovery (Apify hashtag rotation, ~30-50 new handles)
+# */15 * * * *           · enrichment ticker (process 8 from queue every 15 min)
+# 23:30 UTC = 05:00 IST  · score+bucket recompute (no-op currently; placeholder for future)
+# 04:30 UTC = 10:00 IST  · daily outreach wave (50 unique creators across 3 channels)
+[triggers]
+crons = [
+  "30 22 * * *",
+  "*/15 * * * *",
+  "30 23 * * *",
+  "30 4 * * *"
+]
+
+# Secrets (set via `wrangler secret put`):
+#   CRON_TOKEN — must match Pages env CRON_TOKEN (same as hr-cron uses)
