@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const OUTLET_ID = 'he_eazydiner';
+  const OUTLET_ID = '712958';  // EazyDiner Rest. ID for Hamza Express (verified May 2026)
   const brand = 'he';
 
   chrome.runtime.sendMessage({ type: 'PAGE_READY', platform: 'eazydiner' }).catch(() => {});
