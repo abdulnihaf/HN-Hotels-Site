@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "manifest_path_on_pc": "C:\\Users\\HN Hotels\\Documents\\hn-fleet\\manifest.json",
+  "last_updated": "2026-05-10",
+  "automations": {
+    "aggregator-pulse": {
+      "purpose": "Swiggy + Zomato partner portal data scraping. Powers /ops/aggregator/he/swiggy and /ops/aggregator/he/zomato dashboards.",
+      "criticality": "high",
+      "owner_chat_session": "frosty-heisenberg-e1616d",
+      "started_at": "2026-05-09T17:18Z",
+      "owns": {
+        "files": [
+          "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-ext\\",
+          "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-ext.zip",
+          "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-watchdog.ps1",
+          "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-watchdog.log",
+          "C:\\Users\\HN Hotels\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\hn-aggregator-chrome.bat"
+        ],
+        "tasks": ["HN-Aggregator-Watchdog"],
+        "chrome_user_data_dir": "default",
+        "chrome_tabs": [
+          "https://partner.swiggy.com/food/",
+          "https://www.zomato.com/partners/"
+        ],
+        "registry": [
+          "HKLM\\Software\\Policies\\Google\\Chrome\\RestoreOnStartup"
+        ]
+      },
+      "do_not_disturb": [
+        "chrome.exe processes in default user profile (do not run taskkill /IM chrome.exe)",
+        "the HN-Aggregator-Watchdog scheduled task (do not delete or reschedule)",
+        "Chrome RestoreOnStartup registry policy (other chats can add their own keys but not remove)"
+      ],
+      "health_check": "https://hnhotels.in/api/aggregator-pulse?action=health&key=<DASHBOARD_API_KEY>",
+      "fix_when_broken": "If pipeline silent for >30 min: 1) ssh hn-winpc check Chrome alive, 2) check watchdog log, 3) reload extension manually if needed. See fleet/HOWTO-USE-WINPC.md."
+    }
+  },
+  "shared_infrastructure": {
+    "tailscale": {
+      "purpose": "Network bridge laptop ↔ hn-winpc, works on any internet",
+      "owns": ["Tailscale.exe service", "tailscaled daemon"],
+      "do_not_disturb": "Never stop the Tailscale service. If laptop SSH fails, fix on laptop side, not by touching the PC's Tailscale.",
+      "set_unattended": true
+    },
+    "openssh_server": {
+      "purpose": "Inbound SSH from laptop",
+      "owns": ["sshd service", "C:\\ProgramData\\ssh\\administrators_authorized_keys", "firewall rule OpenSSH-Server-In-TCP"],
+      "do_not_disturb": "Never disable sshd or remove the laptop pubkey from administrators_authorized_keys."
+    },
+    "auto_login": {
+      "purpose": "Survive reboots without human at PC",
+      "configured_via": "Sysinternals AutoLogon (LSA-encrypted)",
+      "do_not_disturb": "Never call netplwiz UI or modify HKLM\\...\\Winlogon\\AutoAdminLogon."
+    }
+  }
+}

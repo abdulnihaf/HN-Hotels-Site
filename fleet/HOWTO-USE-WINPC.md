@@ -79,8 +79,31 @@ Most failure modes have a short diagnosis pattern:
 | Chrome won't auto-restart | Watchdog task not firing | `ssh "HN Hotels@hn-winpc" 'schtasks /Query /TN HN-Aggregator-Watchdog /V'` |
 | PC rebooted, nothing started | Auto-login disabled, so user never logged in, so Startup folder didn't fire | Need user to enable autologin via `netplwiz` |
 
+## hn-winpc is shared — multi-tenant rules apply
+
+Multiple Claude Code chats may operate on this PC concurrently. Read **`fleet/MULTI-TENANT-WINPC.md`** before doing anything destructive. The short version:
+
+- Read `C:\Users\HN Hotels\Documents\hn-fleet\manifest.json` first — lists every running automation and its `do_not_disturb` boundaries.
+- **NEVER** run `taskkill /IM chrome.exe` or `Get-Process chrome | Stop-Process` — that kills the aggregator running in Chrome's default profile.
+- If you need a browser, launch with `--user-data-dir="C:\Users\HN Hotels\Documents\chrome-profiles\<your-purpose>"` for an isolated instance.
+- Namespace everything you create: `hn-<purpose>\` files, `HN-<Purpose>-<Job>` task names.
+
 ## The starter prompt for new Claude sessions
 
-When you open a fresh Claude Code session in this repo and want it to understand `hn-winpc` and what it can do, paste this:
+When you open a fresh Claude Code session in this repo and want it to operate `hn-winpc`, paste this:
 
-> I have a Windows appliance PC called `hn-winpc` reachable from this laptop via Tailscale + SSH key auth. SSH command: `ssh "HN Hotels@hn-winpc" '<cmd>'` (note the quoted username — it has a space). It runs Chrome 24/7 with the HN aggregator-pulse extension scraping Swiggy + Zomato partner portals, pushing to hnhotels.in/api/aggregator-pulse. Read `fleet/HOWTO-USE-WINPC.md` for the full operational reference, `fleet/devices.json` for the structured device data, and `fleet/README.md` for the bridge architecture. The extension source is at `ext/aggregator/`. Treat this PC as fully under my control — I can deploy code, restart processes, read logs, schedule tasks, anything I'd do locally.
+> hn-winpc is a SHARED Windows appliance reachable from this laptop via Tailscale + SSH. SSH command: `ssh "HN Hotels@hn-winpc" '<cmd>'` (quoted username — has a space). Default remote shell is cmd.exe; wrap PowerShell explicitly.
+>
+> Multiple Claude chats run automations on this PC concurrently. **Before doing anything destructive** (process kills, file deletes, scheduled task changes, registry changes), READ the manifest first:
+>
+> ```
+> ssh "HN Hotels@hn-winpc" 'type "C:\Users\HN Hotels\Documents\hn-fleet\manifest.json"'
+> ```
+>
+> You MUST respect every automation's `do_not_disturb` list. NEVER run `taskkill /IM chrome.exe` — that would kill the aggregator running in the default Chrome profile.
+>
+> If you need a browser, launch one with `--user-data-dir=C:\Users\HN Hotels\Documents\chrome-profiles\<your-purpose>` — that's your isolated Chrome, kill it freely.
+>
+> Namespace your work: files → `hn-<your-purpose>\`, tasks → `HN-<YourPurpose>-<Job>`. Read `fleet/MULTI-TENANT-WINPC.md` for full rules + `fleet/HOWTO-USE-WINPC.md` for the bridge details. The aggregator extension source is at `ext/aggregator/`.
+>
+> When starting a new persistent automation, append a block to the manifest. When decommissioning, remove it.
