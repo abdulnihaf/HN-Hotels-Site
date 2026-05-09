@@ -271,31 +271,36 @@
       <div class="subtitle">Print → Hand-fill OPM and PMS columns → Return to system for canonical-code seeding</div>
     </div>
     <div class="meta">
-      <div><span class="key">Generated:</span> 9 May 2026, 10:14 am</div>
+      <div><span class="key">Generated:</span> 9 May 2026, 2:13 pm</div>
       <div><span class="key">Window:</span> last 365 days (since 2025-05-09)</div>
       <div><span class="key">NCH active vendors:</span> <strong>24</strong></div>
-      <div><span class="key">POs in window:</span> 293 · <span class="key">PO lines:</span> 321 · <span class="key">Bills:</span> 8</div>
+      <div><span class="key">POs in window:</span> 297 · <span class="key">PO lines:</span> 331 · <span class="key">Bills:</span> 8</div>
     </div>
   </header>
 
   <div class="legend">
     <div>
       <h3>OPM — Order Placement Mechanism</h3>
-      <span class="lg-item"><dt>M-PH</dt><dd>phone call</dd> <dt>M-WA</dt><dd>WhatsApp</dd></span>
-      <span class="lg-item"><dt>M-WI</dt><dd>walk-in</dd> <dt>M-RT</dt><dd>route/visit</dd></span>
-      <span class="lg-item"><dt>A-AP</dt><dd>app</dd> <dt>A-WB</dt><dd>web</dd> <dt>A-API</dt><dd>API</dd></span>
+      <span class="lg-item"><dt>M</dt><dd>manual only (phone / WhatsApp / walk-in / route)</dd></span>
+      <span class="lg-item"><dt>A</dt><dd>automatable only (app / web / API)</dd></span>
+      <span class="lg-item"><dt>Ma</dt><dd>manual primary, automatable alt</dd></span>
+      <span class="lg-item"><dt>Am</dt><dd>automatable primary, manual alt</dd></span>
+      <span class="lg-item" style="color:#888;font-size:7.4pt">Sub-channel (PH/WA/WI/RT/AP/WB/API) is a property — not in the code.</span>
     </div>
     <div>
       <h3>PMS — Payment Method Set</h3>
       <span class="lg-item"><dt>C</dt><dd>cash only</dd></span>
-      <span class="lg-item"><dt>D</dt><dd>digital only (UPI / NEFT / app)</dd></span>
-      <span class="lg-item"><dt>H</dt><dd>hybrid (cash + digital)</dd></span>
+      <span class="lg-item"><dt>B</dt><dd>bank only (UPI / NEFT / card / app)</dd></span>
+      <span class="lg-item"><dt>Cb</dt><dd>cash primary, bank alt</dd></span>
+      <span class="lg-item"><dt>Bc</dt><dd>bank primary, cash alt</dd></span>
     </div>
     <div>
       <h3>Auto-inferred (verify)</h3>
-      <span class="lg-item"><dt>Rf</dt><dd>regular-recurring (PO → bill → pay)</dd></span>
-      <span class="lg-item"><dt>Pf</dt><dd>prepaid (app/quick-commerce)</dd></span>
-      <span class="lg-item"><dt>L / B / LB</dt><dd>loose / branded / both</dd></span>
+      <span class="lg-item"><dt>Pf</dt><dd>pay-first only</dd></span>
+      <span class="lg-item"><dt>Rf</dt><dd>receive-first only</dd></span>
+      <span class="lg-item"><dt>Pfr</dt><dd>pay-first primary, receive-first alt</dd></span>
+      <span class="lg-item"><dt>Rfp</dt><dd>receive-first primary, pay-first alt</dd></span>
+      <span class="lg-item"><dt>L / B / Lb / Bl</dt><dd>loose / branded / loose-primary / branded-primary</dd></span>
       <span class="lg-item" style="color:#b22222"><dt>?</dt><dd>uncertain — please confirm</dd></span>
     </div>
   </div>
@@ -322,8 +327,8 @@
         <th>Total ₹<span class="hint">(365d)</span></th>
         <th>PAY_SEQ<span class="hint">(auto)</span></th>
         <th>SELLS<span class="hint">(auto)</span></th>
-        <th class="fillable-head">OPM ✏<span class="hint">M-PH/WA/WI/RT or A-AP/WB/API</span></th>
-        <th class="fillable-head">PMS ✏<span class="hint">C / D / H</span></th>
+        <th class="fillable-head">OPM ✏<span class="hint">M / A / Ma / Am</span></th>
+        <th class="fillable-head">PMS ✏<span class="hint">C / B / Cb / Bc</span></th>
         <th class="fillable-head">Notes ✏<span class="hint">(corrections, omissions)</span></th>
       </tr>
     </thead>
@@ -339,7 +344,7 @@
         <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-MLK</span> <span class="rm-meta">(52 PO · 3317)</span></div></td>
         <td class="money">₹1,82,490</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -355,7 +360,7 @@
         <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AS-P-Lbi-BUN</span> <span class="rm-meta">(41 PO · 4289)</span></div></td>
         <td class="money">₹34,966</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -400,10 +405,10 @@
           
         </td>
         <td class="identity"><span class="badge">BUTTER</span></td>
-        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(24 PO · 65)</span></div></td>
-        <td class="money">₹36,151</td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(25 PO · 67)</span></div></td>
+        <td class="money">₹36,771</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -448,10 +453,10 @@
           
         </td>
         <td class="identity"><span class="badge">LOCAL</span></td>
-        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(5 PO · 17)</span></div><div class="rm-line"><span class="rm-code">NCH-AS-P-Lbi-BUN</span> <span class="rm-meta">(3 PO · 85)</span></div><div class="rm-line"><span class="rm-code">NCH-AS-P-Li-SMS</span> <span class="rm-meta">(2 PO · 20)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-MLK</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line unmapped">[Odoo: Tissue paper] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Iyengar bakery] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
-        <td class="money">₹7,981</td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(5 PO · 17)</span></div><div class="rm-line"><span class="rm-code">NCH-AS-P-Lbi-BUN</span> <span class="rm-meta">(3 PO · 85)</span></div><div class="rm-line"><span class="rm-code">NCH-AS-P-Li-SMS</span> <span class="rm-meta">(2 PO · 20)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-MLK</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line unmapped">[Odoo: Banana] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Tissue paper] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Iyengar bakery] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
+        <td class="money">₹8,011</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -467,7 +472,7 @@
         <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SUG</span> <span class="rm-meta">(6 PO · 300)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-B-MMD</span> <span class="rm-meta">(3 PO · 25)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-OIL</span> <span class="rm-meta">(2 PO · 16)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-MDA</span> <span class="rm-meta">(1 PO · 5)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SOJ</span> <span class="rm-meta">(1 PO · 2)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-CUS</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-KAJ</span> <span class="rm-meta">(1 PO · 0)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SAU</span> <span class="rm-meta">(1 PO · 0)</span></div><div class="rm-line"><span class="rm-code">NCH-AS-P-Lb-HNY</span> <span class="rm-meta">(1 PO · 1)</span></div></td>
         <td class="money">₹24,536</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -480,10 +485,10 @@
           <div class="v-phone">9006134732</div>
         </td>
         <td class="identity"><span class="badge">ANSARI</span></td>
-        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(11 PO · 48)</span></div></td>
-        <td class="money">₹14,645</td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(11 PO · 50)</span></div></td>
+        <td class="money">₹15,345</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -496,10 +501,10 @@
           
         </td>
         <td class="identity"><span class="badge">DEEPAK</span></td>
-        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-OIL</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line unmapped">[Odoo: Silver pouch (5*7)] <span class="rm-meta">(4 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Silver pouch 6*9] <span class="rm-meta">(2 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Paper glass (75 Ml)] <span class="rm-meta">(2 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Use and throw cups] <span class="rm-meta">(2 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Yellow big glass] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-OIL</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line unmapped">[Odoo: Silver pouch (5*7)] <span class="rm-meta">(4 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Paper glass (75 Ml)] <span class="rm-meta">(3 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Silver pouch 6*9] <span class="rm-meta">(2 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Use and throw cups] <span class="rm-meta">(2 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Tea stick] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
         <td class="money">₹3,040</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -515,7 +520,7 @@
         <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AS-P-Lbi-BUN</span> <span class="rm-meta">(4 PO · 149)</span></div><div class="rm-line unmapped">[Odoo: Iyengar bakery] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
         <td class="money">₹1,108</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -524,14 +529,14 @@
       <tr>
         <td class="num">13</td>
         <td class="vendor-name">
-          <div class="v-main">Jay &amp; Jay Dehydrofoods Pvt Ltd</div>
-          <div class="v-phone">+91 99766 88833</div>
+          <div class="v-main">Ashrafiya Store</div>
+          <div class="v-phone">9844473739</div>
         </td>
-        <td class="identity"><span class="badge">JAY</span></td>
-        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-Bl-SMP</span> <span class="rm-meta">(4 PO · 99)</span></div></td>
-        <td class="money">₹30,690</td>
+        <td class="identity"><span class="badge">ASHRAFIYA</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-MDA</span> <span class="rm-meta">(2 PO · 13)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SOJ</span> <span class="rm-meta">(2 PO · 3)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-CUS</span> <span class="rm-meta">(2 PO · 2)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-B-SOD</span> <span class="rm-meta">(2 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SAU</span> <span class="rm-meta">(2 PO · 2)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SUG</span> <span class="rm-meta">(2 PO · 99)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-OIL</span> <span class="rm-meta">(1 PO · 8)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(1 PO · 5)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-KAJ</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-CAR</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-B-MMD</span> <span class="rm-meta">(1 PO · 5)</span></div><div class="rm-line"><span class="rm-code">NCH-DS-P-B-CPP</span> <span class="rm-meta">(1 PO · 50)</span></div><div class="rm-line unmapped">[Odoo: Ruchi gold] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Magaz] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
+        <td class="money">₹6,782</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -540,14 +545,14 @@
       <tr>
         <td class="num">14</td>
         <td class="vendor-name">
-          <div class="v-main">Afeefa Impex Agencies</div>
-          
+          <div class="v-main">Jay &amp; Jay Dehydrofoods Pvt Ltd</div>
+          <div class="v-phone">+91 99766 88833</div>
         </td>
-        <td class="identity"><span class="badge">AFEEFA</span></td>
-        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-Pr-Bl-TEA</span> <span class="rm-meta">(3 PO · 150)</span></div></td>
-        <td class="money">₹67,500</td>
+        <td class="identity"><span class="badge">JAY</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-Bl-SMP</span> <span class="rm-meta">(4 PO · 99)</span></div></td>
+        <td class="money">₹30,690</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -556,14 +561,14 @@
       <tr>
         <td class="num">15</td>
         <td class="vendor-name">
-          <div class="v-main">Ashrafiya Store</div>
-          <div class="v-phone">9844473739</div>
+          <div class="v-main">Afeefa Impex Agencies</div>
+          
         </td>
-        <td class="identity"><span class="badge">ASHRAFIYA</span></td>
-        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SUG</span> <span class="rm-meta">(2 PO · 99)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(1 PO · 5)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SOJ</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-MDA</span> <span class="rm-meta">(1 PO · 8)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-B-SOD</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-KAJ</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-CUS</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SAU</span> <span class="rm-meta">(1 PO · 2)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-CAR</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-B-MMD</span> <span class="rm-meta">(1 PO · 5)</span></div><div class="rm-line"><span class="rm-code">NCH-DS-P-B-CPP</span> <span class="rm-meta">(1 PO · 50)</span></div><div class="rm-line unmapped">[Odoo: Ruchi gold] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Magaz] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
-        <td class="money">₹5,317</td>
+        <td class="identity"><span class="badge">AFEEFA</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-Pr-Bl-TEA</span> <span class="rm-meta">(3 PO · 150)</span></div></td>
+        <td class="money">₹67,500</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -643,7 +648,7 @@
         <td class="rms"><div class="rm-line"><span class="rm-code">NCH-DM-Pr-Bl-OSB</span> <span class="rm-meta">(1 PO · 4320)</span></div></td>
         <td class="money">₹13,522</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -691,7 +696,7 @@
         <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-MLK</span> <span class="rm-meta">(1 PO · 100)</span></div></td>
         <td class="money">₹8,000</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -707,7 +712,7 @@
         <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-Pr-Bl-TEA</span> <span class="rm-meta">(1 PO · 50)</span></div></td>
         <td class="money">₹0</td>
         <td class="seq">Rf?</td>
-        <td class="seq">LB</td>
+        <td class="seq">Lb?</td>
         <td class="fillable opm-cell" data-col="opm"></td>
         <td class="fillable pms-cell" data-col="pms"></td>
         <td class="fillable notes-cell" data-col="notes"></td>
@@ -910,17 +915,17 @@
   </table>
 
   <div class="recipe">
-    <h3>Canonical Code Recipe</h3>
-    <div class="formula">{PAY_SEQ}-{SELLS}-{OPM_LETTER}-{PMS}-{IDENTITY}</div>
+    <h3>Canonical Code Recipe — v8 grammar</h3>
+    <div class="formula">{PAY_SEQ}-{SELLS}-{OPM}-{PMS}-{IDENTITY}</div>
     <ul>
-      <li><strong>PAY_SEQ:</strong> Rf (recurring) or Pf (prepaid)</li>
-      <li><strong>SELLS:</strong> L (loose) · B (branded) · LB (both)</li>
-      <li><strong>OPM_LETTER:</strong> M if any M-* sub-channel · A if any A-* sub-channel. Sub-channel (PHONE/WA/WI/RT/AP/WB/API) becomes a property in the vendor record, not in the code.</li>
-      <li><strong>PMS:</strong> C (cash) · D (digital) · H (hybrid)</li>
+      <li><strong>PAY_SEQ:</strong> Pf (pay-first) · Rf (receive-first) · Pfr (pay-first primary, receive-first alt) · Rfp (receive-first primary, pay-first alt)</li>
+      <li><strong>SELLS:</strong> L (loose only) · B (branded only) · Lb (loose primary, branded alt) · Bl (branded primary, loose alt)</li>
+      <li><strong>OPM:</strong> M (manual) · A (automatable) · Ma (manual primary, automatable alt) · Am (automatable primary, manual alt). Sub-channel (PH/WA/WI/RT/AP/WB/API) is a vendor property, not part of the code.</li>
+      <li><strong>PMS:</strong> C (cash only) · B (bank only) · Cb (cash primary, bank alt) · Bc (bank primary, cash alt)</li>
       <li><strong>IDENTITY:</strong> 3-10 char vendor abbreviation (uppercase)</li>
     </ul>
     <div class="example">
-      Worked example: <em>Prabhu Buffalo Milk Vendor</em> with hand-filled <em>OPM=M-WA, PMS=C</em> → canonical code:
+      Worked example: <em>Prabhu Buffalo Milk Vendor</em> with hand-filled <em>OPM=M, PMS=C</em> → canonical code:
       <span class="code">Rf-L-M-C-PRABHU</span>
     </div>
   </div>
