@@ -70,7 +70,9 @@
         "windows_update_active_hours": "06:00-23:00",
         "chrome_restore_policy": "HKLM\\Software\\Policies\\Google\\Chrome\\RestoreOnStartup=1",
         "chrome_watchdog": "schtasks HN-Aggregator-Watchdog every 5min + at logon",
-        "auto_login": "PENDING USER (set via netplwiz)"
+        "auto_login": "enabled via Sysinternals AutoLogon (LSA-encrypted, not plaintext registry) 2026-05-09",
+        "extension_load_method": "manual via chrome://extensions Developer Mode + Load unpacked. --load-extension cmdline flag was abandoned because Chrome 137+ silently disables it via DisableLoadExtensionCommandLineSwitch feature. Chrome remembers the unpacked extension across launches as long as Developer Mode stays on.",
+        "live_data_verified_at": "2026-05-09T17:18 UTC — health=ok, swiggy_snap=0min, zomato_snap=1min, last_zomato_order=17:17 same day"
       },
       "deployed_paths": {
         "extension": "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-ext\\",
