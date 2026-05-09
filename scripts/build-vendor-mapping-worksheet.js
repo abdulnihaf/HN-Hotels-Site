@@ -278,7 +278,9 @@ function inferSells(rmCodes) {
     if (primary === 'L' || alts.includes('L')) hasL = true;
     if (primary === 'B' || alts.includes('B')) hasB = true;
   }
-  if (hasL && hasB) return { sells: 'LB', confident: true };
+  // v8: case-encoded primary + alt. Default primary = L (alphabetical first);
+  // owner flips to Bl in the editor when branded dominates.
+  if (hasL && hasB) return { sells: 'Lb', confident: true };
   if (hasB) return { sells: 'B', confident: true };
   if (hasL) return { sells: 'L', confident: true };
   return { sells: 'L', confident: false };

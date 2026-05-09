@@ -162,7 +162,7 @@
   <div class="header-row">
     <div>
       <h1>Vendor Ring — Live Snapshot</h1>
-      <div class="meta-line">Canonical vendor identities · Pf / Rf payment sequence × IDENTITY abbreviation · with computed brand scope, sells categories, and RM links</div>
+      <div class="meta-line">Canonical vendor identities · 5-segment grammar (PAY_SEQ × SELLS × OPM × PMS × IDENTITY) · case-encoded primary/alt across all four architectural dimensions · with computed brand scope and RM links</div>
       <div class="stamp" id="stamp"></div>
     </div>
     <div class="toolbar no-print">
@@ -270,27 +270,29 @@
     $('#gen-stamp').textContent = fmtDateTime(now);
 
     const total = State.vendors.length;
-    const pf = State.vendors.filter(v => v.pay_seq === 'Pf').length;
-    const rf = State.vendors.filter(v => v.pay_seq === 'Rf').length;
+    const pf = State.vendors.filter(v => (v.pay_seq || '').startsWith('P')).length;
+    const rf = State.vendors.filter(v => (v.pay_seq || '').startsWith('R')).length;
     const linked = State.vendors.filter(v => v.computed && v.computed.rm_count > 0).length;
     $('#stats').innerHTML = `
       <div class="stat"><div class="label">Vendors</div><div class="value">${total}</div><div class="meta">canonical</div></div>
-      <div class="stat"><div class="label">Pay-first</div><div class="value">${pf}</div><div class="meta">Pf · cash leaves first</div></div>
-      <div class="stat"><div class="label">Receive-first</div><div class="value">${rf}</div><div class="meta">Rf · goods arrive first</div></div>
+      <div class="stat"><div class="label">Pay-first primary</div><div class="value">${pf}</div><div class="meta">Pf + Pfr</div></div>
+      <div class="stat"><div class="label">Receive-first primary</div><div class="value">${rf}</div><div class="meta">Rf + Rfp</div></div>
       <div class="stat"><div class="label">Linked to RMs</div><div class="value">${linked}</div><div class="meta">${total - linked} orphan${total - linked === 1 ? '' : 's'}</div></div>
     `;
 
-    const groups = { Pf: [], Rf: [], '?': [] };
+    // v8: group by leading letter so Pf+Pfr and Rf+Rfp stack together.
+    const groups = { P: [], R: [], '?': [] };
     State.vendors.forEach(v => {
-      if (v.pay_seq === 'Pf')      groups.Pf.push(v);
-      else if (v.pay_seq === 'Rf') groups.Rf.push(v);
-      else                          groups['?'].push(v);
+      const lead = (v.pay_seq || '?')[0];
+      if (lead === 'P')      groups.P.push(v);
+      else if (lead === 'R') groups.R.push(v);
+      else                    groups['?'].push(v);
     });
 
     let html = '';
-    [['Pf', 'PAY-FIRST · Pf · cash leaves first'],
-     ['Rf', 'RECEIVE-FIRST · Rf · goods arrive first'],
-     ['?',  'OTHER']].forEach(([key, label]) => {
+    [['P', 'PAY-FIRST PRIMARY · Pf / Pfr · cash leaves first'],
+     ['R', 'RECEIVE-FIRST PRIMARY · Rf / Rfp · goods arrive first'],
+     ['?', 'OTHER']].forEach(([key, label]) => {
       const list = groups[key] || [];
       if (list.length === 0) return;
       html += `<div class="group-head"><span class="name">${label}</span><span class="count">${list.length} vendor${list.length===1?'':'s'}</span></div>`;
@@ -307,7 +309,7 @@
     const c = full.computed || v.computed || {};
     const hasErr = full.__error;
 
-    const cls = v.pay_seq === 'Pf' ? 'pill-pf' : 'pill-rf';
+    const cls = (v.pay_seq || '').startsWith('P') ? 'pill-pf' : 'pill-rf';
     let body = '';
     if (hasErr) {
       body = '<div style="color:#b81818;font-style:italic;">Error: ' + escapeHtml(hasErr) + '</div>';

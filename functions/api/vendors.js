@@ -3,19 +3,30 @@
  * Route:  /api/vendors
  * D1:     DB (hn-hiring) — table vendor_profiles
  *
- * Canonical grammar (locked, 5 segments):
+ * Canonical grammar (locked, 5 segments — v8 doctrine fix: case-encoded
+ * primary/alternate across ALL FOUR architectural dimensions):
  *   {PAY_SEQ}-{SELLS}-{OPM}-{PMS}-{IDENTITY}
- *     PAY_SEQ ∈ {Pf, Rf}        — pay-first vs receive-first
- *     SELLS   ∈ {L, B, LB}      — alphabetical subset of {L, B}
- *                                 (RM-purchase scope; S/C reserved for services/capex)
- *     OPM     ∈ {M, A}          — Manual (call/WA/walk-in/route)
- *                                 vs Automatable (app/web/API)
- *     PMS     ∈ {C, B, Cb, Bc}  — Cash-only / Bank-only / Hybrid (case-encoded
- *                                 primary+alt: uppercase primary, lowercase alt;
- *                                 mirrors SOURCING Lb/Bl and USAGE Pr/Rp)
- *     IDENTITY                  — uppercase 3-10 chars, unique across all vendors
+ *     PAY_SEQ ∈ {Pf, Rf, Pfr, Rfp}
+ *                                 Pf  = only pay-first
+ *                                 Rf  = only receive-first
+ *                                 Pfr = pay-first primary + receive-first alt
+ *                                 Rfp = receive-first primary + pay-first alt
+ *     SELLS   ∈ {L, B, Lb, Bl}    Loose-only / Branded-only / Lb (loose primary
+ *                                 + branded alt) / Bl (branded primary + loose
+ *                                 alt). Flat 'LB' is no longer valid (v8).
+ *     OPM     ∈ {M, A, Ma, Am}    Manual / Automatable / Ma (manual primary +
+ *                                 auto alt) / Am (auto primary + manual alt).
+ *     PMS     ∈ {C, B, Cb, Bc}    Cash-only / Bank-only / Cb (cash primary +
+ *                                 bank alt) / Bc (bank primary + cash alt).
+ *     IDENTITY                    Uppercase 3-10 chars, globally unique.
  *
- * Examples: Rf-L-M-C-PRABHU, Pf-B-A-B-ZEPTO, Rf-LB-M-Cb-SHARIFF, Rf-B-A-Bc-HYPERPURE
+ * All four architectural dimensions follow the same case-encoded pattern:
+ *   uppercase letter = primary rail, lowercase letter = also possible (alt),
+ *   absent letter = impossible. This lets the canonical code fully encode
+ *   possibility from impossibility — the v7 grammar fix.
+ *
+ * Examples: Rf-L-M-C-PRABHU, Pf-B-A-B-ZEPTO, Rf-Lb-M-Cb-SHARIFF, Rf-B-A-Bc-HYPERPURE,
+ *           Rfp-Lb-Ma-Cb-EXAMPLE (all alternates set)
  *
  * Endpoints (PIN-gated; same USERS table as rm-sourcing.js):
  *   GET    /api/vendors?pin=…                                    → list (lightweight)
@@ -76,25 +87,41 @@ function authPin(url) {
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 function validatePaySeq(p) {
-  if (!p || typeof p !== 'string') return 'pay_seq required (Pf or Rf)';
-  if (p !== 'Pf' && p !== 'Rf') return `pay_seq must be Pf or Rf (got "${p}")`;
+  if (!p || typeof p !== 'string') return 'PAY_SEQ required — must be Pf, Rf, Pfr, or Rfp';
+  // Explicit enum match: the 'f' suffix on every value makes a generic
+  // case-encoded regex hard to write narrowly. Enumerate the four legal codes.
+  if (!['Pf', 'Rf', 'Pfr', 'Rfp'].includes(p)) {
+    return `PAY_SEQ must be Pf (only pay-first), Rf (only receive-first), Pfr (pay-first primary + receive-first alt), or Rfp (receive-first primary + pay-first alt). Got "${p}".`;
+  }
   return null;
 }
 
 function validateSells(v) {
   if (!v || typeof v !== 'string') {
-    return 'SELLS required — must be L, B, or LB (alphabetically ordered subset of {L, B} for RM-purchase scope)';
+    return 'SELLS required — must be L, B, Lb, or Bl';
   }
-  if (!/^(L|B|LB)$/.test(v)) {
-    return `SELLS must be L, B, or LB (alphabetically ordered subset of {L, B} for RM-purchase scope) — got "${v}"`;
+  if (!/^[LB][lb]?$/.test(v)) {
+    return `SELLS must be L (loose only), B (branded only), Lb (loose primary + branded alt), or Bl (branded primary + loose alt). Got "${v}". Note: flat 'LB' is no longer valid — use Lb or Bl with a primary letter.`;
+  }
+  // No duplicate letters — Ll / Bb forbidden.
+  const upper = v.toUpperCase();
+  if (upper.length !== new Set(upper).size) {
+    return `SELLS contains duplicate letter — got "${v}". Each letter (L, B) appears at most once.`;
   }
   return null;
 }
 
 function validateOpm(v) {
-  if (!v || typeof v !== 'string') return 'OPM required — must be M (Manual) or A (Automatable)';
-  if (v !== 'M' && v !== 'A') {
-    return `OPM must be M (Manual: call/WA/walk-in/route) or A (Automatable: app/web/API) — got "${v}"`;
+  if (!v || typeof v !== 'string') {
+    return 'OPM required — must be M, A, Ma, or Am';
+  }
+  if (!/^[MA][ma]?$/.test(v)) {
+    return `OPM must be M (manual only), A (automatable only), Ma (manual primary + automatable alt), or Am (automatable primary + manual alt). Got "${v}".`;
+  }
+  // No duplicate letters — Mm / Aa forbidden.
+  const upper = v.toUpperCase();
+  if (upper.length !== new Set(upper).size) {
+    return `OPM contains duplicate letter — got "${v}". Each letter (M, A) appears at most once.`;
   }
   return null;
 }
@@ -126,14 +153,29 @@ function validateIdentity(id) {
   return null;
 }
 
-/* Normalize SELLS — accepts arrays/strings, returns canonical 'L' | 'B' | 'LB'. */
+/* Normalize SELLS — accepts strings only; arrays from older clients are
+ * collapsed to a deterministic Lb/Bl encoding (alphabetical primary).
+ *
+ * v8: SELLS is now case-encoded (uppercase primary + lowercase alt). Strings
+ * MUST preserve case — do NOT toUpperCase the whole value. Trim only.
+ *
+ * Legacy array shape (from pre-v8 editor builds that posted ['L','B']) is
+ * mapped to 'Lb' as a deterministic default. The editor sends a string after
+ * v8, so this branch is a compatibility belt-and-braces for any stale tab. */
 function normalizeSells(v) {
   if (Array.isArray(v)) {
-    const set = new Set(v.map(s => String(s || '').trim().toUpperCase()));
-    return Array.from(set).filter(x => x === 'L' || x === 'B').sort().join('');
+    const set = new Set(
+      v.map(s => String(s || '').trim()).filter(s => s === 'L' || s === 'B' || s === 'l' || s === 'b')
+    );
+    const arr = Array.from(set).map(s => s.toUpperCase()).sort();
+    if (arr.length === 0) return '';
+    if (arr.length === 1) return arr[0];
+    // Two letters → primary letter is the alphabetical first by default.
+    return arr[0] + arr[1].toLowerCase();
   }
   if (typeof v === 'string') {
-    return v.trim().toUpperCase();
+    // Preserve case — Lb / Bl are case-meaningful.
+    return v.trim();
   }
   return '';
 }
@@ -148,11 +190,15 @@ function composeVendorCode({ pay_seq, sells, opm, pms, identity_abbr }) {
   return `${pay_seq}-${sells}-${opm}-${pms}-${identity_abbr.trim().toUpperCase()}`;
 }
 
-/* Parse a 5-segment vendor code. Returns null if shape doesn't match. */
+/* Parse a 5-segment vendor code. Returns null if shape doesn't match.
+ * v8 grammar:
+ *   PAY_SEQ ∈ {Pf, Rf, Pfr, Rfp}
+ *   SELLS   ∈ {L, B, Lb, Bl}
+ *   OPM     ∈ {M, A, Ma, Am}
+ *   PMS     ∈ {C, B, Cb, Bc} */
 function parseVendorCode(code) {
   if (!code || typeof code !== 'string') return null;
-  // Match "{Pf|Rf}-{L|B|LB}-{M|A}-{C|B|Cb|Bc}-{IDENTITY}"
-  const m = code.match(/^(Pf|Rf)-(L|B|LB)-(M|A)-([CB][cb]?)-([A-Z0-9]{3,10})$/);
+  const m = code.match(/^(Pf|Rf|Pfr|Rfp)-([LB][lb]?)-([MA][ma]?)-([CB][cb]?)-([A-Z0-9]{3,10})$/);
   if (!m) return null;
   return { pay_seq: m[1], sells: m[2], opm: m[3], pms: m[4], identity_abbr: m[5] };
 }
@@ -407,11 +453,13 @@ async function getOne(DB, vendorCode, url) {
 
 async function createOne(DB, request, user) {
   const body = await request.json();
-  const pay_seq       = body.pay_seq;
+  // v8: PAY_SEQ, SELLS, OPM, PMS are ALL case-sensitive (uppercase primary +
+  // optional lowercase alt). Do NOT toUpperCase any of them — that would
+  // collapse Lb→LB and Ma→MA, defeating the whole point of the doctrine fix.
+  // Trim only. IDENTITY remains uppercase-normalized.
+  const pay_seq       = (body.pay_seq || '').toString().trim();
   const sells         = normalizeSells(body.sells);
-  const opm           = (body.opm || '').toString().trim().toUpperCase();
-  // PMS is case-sensitive (Cb / Bc preserve case to encode primary rail) —
-  // do NOT uppercase the whole string. Trim only.
+  const opm           = (body.opm || '').toString().trim();
   const pms           = (body.pms || '').toString().trim();
   const identity_abbr = (body.identity_abbr || '').toString().trim().toUpperCase();
   const vendor_name   = (body.vendor_name || '').toString().trim();
@@ -477,10 +525,11 @@ async function putOne(DB, vendorCode, request, user) {
   ).bind(vendorCode).first();
   if (!existing) return json({ error: 'Vendor not found' }, 404);
 
-  const pay_seq = body.pay_seq !== undefined ? body.pay_seq : existing.pay_seq;
+  // v8: ALL FOUR architectural dimensions preserve case (Pfr/Rfp on PAY_SEQ,
+  // Lb/Bl on SELLS, Ma/Am on OPM, Cb/Bc on PMS). Trim only — never toUpperCase.
+  const pay_seq = (body.pay_seq !== undefined ? body.pay_seq : existing.pay_seq).toString().trim();
   const sells   = body.sells   !== undefined ? normalizeSells(body.sells) : existing.sells;
-  const opm     = (body.opm    !== undefined ? body.opm    : existing.opm).toString().trim().toUpperCase();
-  // PMS is case-sensitive (Cb / Bc preserve case) — trim only, no uppercasing.
+  const opm     = (body.opm    !== undefined ? body.opm    : existing.opm).toString().trim();
   const pms     = (body.pms    !== undefined ? body.pms    : existing.pms).toString().trim();
   const identity_abbr = (body.identity_abbr !== undefined
     ? body.identity_abbr
