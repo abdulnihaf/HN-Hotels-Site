@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Influencer Bookings · Owner Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f1a; --card:#111826; --card2:#1a2234; --line:#273042;
+  --text:#e6edf7; --mute:#8b95a8; --dim:#5a6477;
+  --tan:#D2B48C; --sienna:#713520; --offwhite:#FAF3E3;
+  --green:#22c55e; --red:#ef4444; --yellow:#eab308; --orange:#f97316; --blue:#3b82f6; --purple:#a855f7;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}
+button,input,select,textarea{font-family:inherit;font-size:13px}
+
+.bar{position:sticky;top:0;z-index:50;background:rgba(10,15,26,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:14px 22px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.title{font-weight:800;font-size:16px;display:flex;align-items:center;gap:10px}
+.title::before{content:'';width:4px;height:20px;background:linear-gradient(135deg,#fbbf24,#f59e0b);border-radius:2px}
+.stats{display:flex;gap:14px;font-size:12px;color:var(--mute);flex-wrap:wrap}
+.stats b{color:var(--text);font-weight:700}
+
+.wrap{padding:20px 22px 80px;max-width:1320px;margin:0 auto}
+
+.section{margin-bottom:26px}
+.section-h{font-size:13px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:12px}
+
+/* TILES */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:14px}
+.tile .lbl{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:6px}
+.tile .v{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:800;letter-spacing:-.01em}
+.tile .v.green{color:#4ade80}
+.tile .v.orange{color:#fbbf24}
+.tile .v.red{color:#fca5a5}
+.tile .v.blue{color:#93c5fd}
+.tile .sub{font-size:11px;color:var(--dim);font-family:'JetBrains Mono',monospace;margin-top:3px}
+
+/* Generate token form */
+.gen-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;grid-template-columns:2fr 2fr 1fr 1fr 1fr;gap:8px;align-items:end}
+.gen-card label{display:block;font-size:10px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:4px}
+.gen-card input{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);padding:9px 11px;border-radius:7px}
+.gen-card input:focus{outline:none;border-color:var(--tan)}
+.gen-card button{background:linear-gradient(135deg,var(--sienna),var(--tan));color:var(--bg);border:none;padding:10px 16px;border-radius:7px;font-weight:800;cursor:pointer;font-size:13px}
+.gen-card button:hover{transform:translateY(-1px)}
+@media (max-width:780px){.gen-card{grid-template-columns:1fr}}
+
+.gen-result{background:var(--card2);border:1px dashed var(--green);border-radius:8px;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:12px;margin-top:10px;display:none}
+.gen-result.show{display:block}
+.gen-result .url{color:#86efac;word-break:break-all;margin-top:4px}
+.gen-result .meta{color:var(--mute);font-size:10px;margin-top:6px;display:flex;gap:14px;flex-wrap:wrap}
+.copy-btn{cursor:pointer;background:rgba(34,197,94,.12);border:1px solid var(--green);color:#86efac;padding:5px 10px;border-radius:5px;font-family:inherit;font-size:11px;font-weight:700;margin-left:8px;text-transform:uppercase;letter-spacing:.04em}
+
+/* Filters */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filters select,.filters button{background:var(--card);border:1px solid var(--line);color:var(--text);padding:7px 12px;border-radius:6px;cursor:pointer}
+.filters button.active{background:var(--sienna);border-color:var(--tan);color:var(--offwhite)}
+
+/* TABLE */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--mute);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;background:var(--card2);position:sticky;top:60px;z-index:1}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:hover td{background:rgba(212,180,140,.04)}
+
+.handle a{color:var(--tan);font-family:'JetBrains Mono',monospace;text-decoration:none}
+.handle a:hover{text-decoration:underline}
+.followers{font-family:'JetBrains Mono',monospace;color:var(--mute)}
+.tier{display:inline-block;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.tier.T1{background:rgba(212,180,140,.15);color:var(--tan)}
+.tier.T2{background:rgba(168,85,247,.15);color:#d8b4fe}
+.tier.T3{background:linear-gradient(135deg,rgba(245,158,11,.18),rgba(212,180,140,.15));color:#fbbf24}
+.tier.T4{background:linear-gradient(135deg,rgba(251,191,36,.25),rgba(245,158,11,.2));color:#0a0f1a;font-weight:800;background:linear-gradient(135deg,#fbbf24,#f59e0b)}
+
+.status-pill{display:inline-block;padding:3px 9px;border-radius:99px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-family:'JetBrains Mono',monospace}
+.status-PENDING,.status-pending{background:rgba(120,130,150,.18);color:#a0a8b8}
+.status-confirmed{background:rgba(34,197,94,.18);color:#4ade80}
+.status-rejected{background:rgba(239,68,68,.18);color:#fca5a5}
+.status-arrived{background:rgba(59,130,246,.18);color:#93c5fd}
+.status-no_show{background:rgba(168,85,247,.18);color:#d8b4fe}
+.status-posted{background:linear-gradient(135deg,rgba(34,197,94,.25),rgba(168,85,247,.18));color:#86efac}
+.status-attributed{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0f1a;font-weight:800}
+
+.row-actions{display:flex;gap:4px;flex-wrap:wrap}
+.row-actions button{background:var(--card2);border:1px solid var(--line);color:var(--text);padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600}
+.row-actions button:hover{border-color:var(--tan)}
+.row-actions .approve{color:#4ade80}.row-actions .approve:hover{background:rgba(34,197,94,.12);border-color:var(--green)}
+.row-actions .reject{color:#fca5a5}.row-actions .reject:hover{background:rgba(239,68,68,.12);border-color:var(--red)}
+.row-actions .arrived{color:#93c5fd}.row-actions .arrived:hover{background:rgba(59,130,246,.12);border-color:var(--blue)}
+.row-actions .deliv{color:#d8b4fe}.row-actions .deliv:hover{background:rgba(168,85,247,.12);border-color:var(--purple)}
+
+.empty{padding:40px;text-align:center;color:var(--mute)}
+
+#authBox{position:fixed;inset:0;background:rgba(10,15,26,.96);display:flex;align-items:center;justify-content:center;z-index:100}
+.auth-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:32px;max-width:380px;width:90%;text-align:center}
+.auth-card h2{font-size:18px;margin-bottom:14px}
+.auth-card input{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);padding:12px;border-radius:8px;font-family:'JetBrains Mono',monospace;text-align:center}
+.auth-card input:focus{outline:none;border-color:var(--tan)}
+.auth-card button{width:100%;margin-top:12px;background:linear-gradient(135deg,var(--sienna),var(--tan));color:var(--bg);border:none;padding:12px;border-radius:8px;font-weight:800;cursor:pointer}
+
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--green);color:var(--green);padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .25s;z-index:200}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div id="authBox" style="display:none">
+  <div class="auth-card">
+    <h2>Influencer Bookings · Owner</h2>
+    <p style="color:var(--mute);font-size:13px;margin-bottom:18px">Enter DASHBOARD_KEY to continue.</p>
+    <input type="password" id="authKey" placeholder="dashboard key" autofocus>
+    <button onclick="saveKey()">Unlock</button>
+  </div>
+</div>
+
+<div class="bar">
+  <div class="title">Influencer Bookings</div>
+  <div class="stats" id="stats">Loading…</div>
+</div>
+
+<div class="wrap">
+  <!-- Generate token -->
+  <div class="section">
+    <div class="section-h">Generate booking link for a creator</div>
+    <div class="gen-card">
+      <div>
+        <label>IG Handle (without @)</label>
+        <input type="text" id="genHandle" placeholder="appetitemode" autocomplete="off">
+      </div>
+      <div>
+        <label>Display Name</label>
+        <input type="text" id="genName" placeholder="BLR | HYD Food blogger" autocomplete="off">
+      </div>
+      <div>
+        <label>Followers</label>
+        <input type="number" id="genFollowers" placeholder="24692">
+      </div>
+      <div></div>
+      <div><button onclick="generate()">Generate Link</button></div>
+    </div>
+    <div class="gen-result" id="genResult"></div>
+  </div>
+
+  <!-- Stats tiles -->
+  <div class="section">
+    <div class="section-h">May Pipeline</div>
+    <div class="tiles" id="tiles"></div>
+  </div>
+
+  <!-- Bookings -->
+  <div class="section">
+    <div class="section-h">Bookings <span style="color:var(--dim);font-weight:500;text-transform:none;letter-spacing:0;font-size:12px">— click status to filter</span></div>
+    <div class="filters">
+      <button onclick="setFilter('')" id="fAll" class="active">All</button>
+      <button onclick="setFilter('pending')" id="fPending">Pending</button>
+      <button onclick="setFilter('confirmed')" id="fConfirmed">Confirmed</button>
+      <button onclick="setFilter('arrived')" id="fArrived">Arrived</button>
+      <button onclick="setFilter('posted')" id="fPosted">Posted</button>
+      <button onclick="setFilter('rejected')" id="fRejected">Rejected</button>
+    </div>
+    <div class="table-wrap">
+      <table id="bookingsTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Creator</th>
+            <th>Tier</th>
+            <th>Followers</th>
+            <th>Slot</th>
+            <th>Status</th>
+            <th>Covers</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="bookingsBody"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api/influencer-bookings';
+let KEY = localStorage.getItem('ops_key') || '';
+let FILTER = '';
+let BOOKINGS = [];
+
+if (!KEY) document.getElementById('authBox').style.display = 'flex';
+else load();
+
+function saveKey() {
+  KEY = document.getElementById('authKey').value.trim();
+  if (!KEY) return;
+  localStorage.setItem('ops_key', KEY);
+  document.getElementById('authBox').style.display = 'none';
+  load();
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+async function load() {
+  await Promise.all([loadStats(), loadBookings()]);
+}
+
+async function loadStats() {
+  const r = await fetch(`${API}?action=stats&key=${encodeURIComponent(KEY)}`);
+  if (r.status === 401) { localStorage.removeItem('ops_key'); location.reload(); return; }
+  const d = await r.json();
+  if (!d.success) return;
+  const counts = d.counts || [];
+  const get = s => counts.find(c => c.status === s)?.c || 0;
+  document.getElementById('stats').innerHTML = `
+    Pending <b>${get('pending') + get('PENDING')}</b>
+    · Confirmed <b style="color:#4ade80">${get('confirmed')}</b>
+    · Arrived <b style="color:#93c5fd">${get('arrived')}</b>
+    · Posted <b style="color:#86efac">${get('posted')}</b>
+    · Rejected <b style="color:#fca5a5">${get('rejected')}</b>
+  `;
+  document.getElementById('tiles').innerHTML = `
+    <div class="tile"><div class="lbl">Total committed covers</div><div class="v orange">${d.total_committed_covers || 0}</div><div class="sub">across all bookings</div></div>
+    <div class="tile"><div class="lbl">Arrived covers</div><div class="v green">${d.arrived_covers || 0}</div><div class="sub">actual at-table count</div></div>
+    <div class="tile"><div class="lbl">Pending review</div><div class="v">${get('pending') + get('PENDING')}</div><div class="sub">awaiting your approval</div></div>
+    <div class="tile"><div class="lbl">Active confirmed</div><div class="v green">${get('confirmed')}</div><div class="sub">visiting in coming days</div></div>
+    <div class="tile"><div class="lbl">Reels posted</div><div class="v blue">${get('posted')}</div><div class="sub">deliverables captured</div></div>
+    <div class="tile"><div class="lbl">By tier</div><div class="v" style="font-size:14px">${(d.by_tier || []).map(t => `${t.creator_tier}:${t.c}`).join(' · ') || '—'}</div></div>
+  `;
+}
+
+async function loadBookings() {
+  const url = `${API}?action=list${FILTER ? '&status=' + FILTER : ''}&key=${encodeURIComponent(KEY)}`;
+  const r = await fetch(url);
+  const d = await r.json();
+  if (!d.success) return;
+  BOOKINGS = d.bookings;
+  renderBookings();
+}
+
+function fmt(n){ if(!n) return '—'; if(n>=1000) return (n/1000).toFixed(1).replace(/\.0$/,'')+'K'; return n; }
+
+function renderBookings() {
+  const body = document.getElementById('bookingsBody');
+  if (!BOOKINGS.length) {
+    body.innerHTML = `<tr><td colspan="8" class="empty">No bookings yet. Generate links above to start outreach.</td></tr>`;
+    return;
+  }
+  body.innerHTML = BOOKINGS.map(b => {
+    const status = (b.status || 'pending').toLowerCase();
+    const slotLabel = b.slot_id > 0 ? `${b.slot_date} · ${b.window_code}` : '<span style="color:var(--dim)">— not booked yet —</span>';
+    return `
+      <tr>
+        <td class="mono" style="color:var(--dim)">${b.id}</td>
+        <td>
+          <div class="handle"><a href="https://instagram.com/${b.creator_username}" target="_blank">@${b.creator_username}</a></div>
+          <div style="color:var(--mute);font-size:11px">${(b.creator_name || '').slice(0,40)}</div>
+        </td>
+        <td><span class="tier ${b.creator_tier}">${b.creator_tier}</span></td>
+        <td class="followers">${fmt(b.creator_followers)}</td>
+        <td class="mono" style="font-size:11px">${slotLabel}</td>
+        <td><span class="status-pill status-${status}">${status}</span></td>
+        <td class="mono" style="text-align:center;font-weight:700">${b.cover_commitment}${b.actual_cover_count ? `<br><span style="color:var(--green);font-size:10px">arr ${b.actual_cover_count}</span>` : ''}</td>
+        <td>
+          <div class="row-actions">
+            ${b.outreach_token ? `<button onclick="copyLink('${b.outreach_token}')" title="Copy booking link">🔗</button>` : ''}
+            ${(status === 'pending' && b.slot_id > 0) ? `<button class="approve" onclick="approve(${b.id})">✓ Approve</button>` : ''}
+            ${(status === 'pending' && b.slot_id > 0) ? `<button class="reject" onclick="reject(${b.id})">✗</button>` : ''}
+            ${status === 'confirmed' ? `<button class="arrived" onclick="markArrived(${b.id}, ${b.cover_commitment})">📍 Arrived</button>` : ''}
+            ${status === 'arrived' ? `<button class="deliv" onclick="captureDeliverable(${b.id})">📸 Deliverable</button>` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function generate() {
+  const handle = document.getElementById('genHandle').value.trim().replace(/^@/, '');
+  const name = document.getElementById('genName').value.trim();
+  const followers = parseInt(document.getElementById('genFollowers').value, 10);
+  if (!handle) { toast('Handle required'); return; }
+  const r = await fetch(`${API}?action=create-token&key=${encodeURIComponent(KEY)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ creator_username: handle, creator_name: name, followers })
+  });
+  const d = await r.json();
+  if (!d.success) { toast(d.error || 'failed'); return; }
+  document.getElementById('genResult').innerHTML = `
+    <div><b style="color:var(--green)">✓ Booking link created</b> for @${handle}</div>
+    <div class="url" id="genUrl">${d.booking_url}</div>
+    <div class="meta">
+      <span>Tier: <b style="color:var(--text)">${d.tier_label}</b></span>
+      <span>Covers: <b style="color:var(--text)">${d.cover_commitment}</b></span>
+      <span>Budget: <b style="color:var(--text)">₹${d.meal_budget_paise/100}</b></span>
+      <span class="copy-btn" onclick="copyText('${d.booking_url}')">📋 Copy URL</span>
+    </div>
+  `;
+  document.getElementById('genResult').classList.add('show');
+  // Clear inputs
+  document.getElementById('genHandle').value = '';
+  document.getElementById('genName').value = '';
+  document.getElementById('genFollowers').value = '';
+  loadBookings();
+}
+
+function copyLink(token) {
+  const url = `https://hnhotels.in/marketing/Influencer/booking/?token=${token}`;
+  copyText(url);
+}
+
+function copyText(t) {
+  navigator.clipboard.writeText(t);
+  toast('Copied!');
+}
+
+async function approve(id) {
+  const r = await fetch(`${API}?action=approve&key=${encodeURIComponent(KEY)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ booking_id: id, approved_by: 'owner' })
+  });
+  const d = await r.json();
+  if (d.success) { toast('Approved'); load(); } else toast('Error: ' + d.error);
+}
+
+async function reject(id) {
+  const reason = prompt('Reason for rejection (optional):') || 'owner rejected';
+  const r = await fetch(`${API}?action=reject&key=${encodeURIComponent(KEY)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ booking_id: id, reason })
+  });
+  const d = await r.json();
+  if (d.success) { toast('Rejected'); load(); } else toast('Error: ' + d.error);
+}
+
+async function markArrived(id, defaultCovers) {
+  const cv = prompt(`Actual cover count (default ${defaultCovers}):`, defaultCovers);
+  if (!cv) return;
+  const tc = prompt('Table or counter? (table/counter)', 'table');
+  const r = await fetch(`${API}?action=mark-arrived&key=${encodeURIComponent(KEY)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ booking_id: id, actual_cover_count: parseInt(cv, 10), table_or_counter: tc })
+  });
+  const d = await r.json();
+  if (d.success) { toast('Marked arrived'); load(); } else toast('Error: ' + d.error);
+}
+
+async function captureDeliverable(id) {
+  const url = prompt('Reel/Story/Post URL:');
+  if (!url) return;
+  const r = await fetch(`${API}?action=capture-deliverable&key=${encodeURIComponent(KEY)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ booking_id: id, deliverable_url: url })
+  });
+  const d = await r.json();
+  if (d.success) { toast('Deliverable captured'); load(); } else toast('Error: ' + d.error);
+}
+
+function setFilter(f) {
+  FILTER = f;
+  document.querySelectorAll('.filters button').forEach(b => b.classList.remove('active'));
+  document.getElementById('f' + (f === '' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1))).classList.add('active');
+  loadBookings();
+}
+
+// Auto-refresh every 60s
+setInterval(load, 60_000);
+document.getElementById('authKey')?.addEventListener('keyup', e => { if (e.key === 'Enter') saveKey(); });
+</script>
+
+</body>
+</html>
