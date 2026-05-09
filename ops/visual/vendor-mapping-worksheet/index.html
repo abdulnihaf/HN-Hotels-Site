@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NCH Vendor Mapping Worksheet</title>
+<style>
+  @page { size: A4 landscape; margin: 10mm; }
+  :root {
+    --ink: #111;
+    --ink-dim: #555;
+    --ink-faint: #888;
+    --line: #999;
+    --line-soft: #ccc;
+    --line-faint: #ddd;
+    --bg: #fff;
+    --stripe: #f5f5f5;
+    --fill-bg: #f0f7ff;
+    --fill-border: #6b8db5;
+    --accent: #1f4d8c;
+    --warn: #b8860b;
+    --bad: #b22222;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    font-size: 9pt;
+    line-height: 1.35;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .container { padding: 6mm 4mm; }
+
+  /* Header */
+  header.sheet-head {
+    border-bottom: 1.5pt solid var(--ink);
+    padding-bottom: 6pt;
+    margin-bottom: 8pt;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12pt;
+    align-items: end;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 15pt;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  header .subtitle {
+    color: var(--ink-dim);
+    font-size: 9pt;
+    margin-top: 2pt;
+    font-weight: 500;
+  }
+  header .meta {
+    text-align: right;
+    font-size: 8pt;
+    color: var(--ink-dim);
+    line-height: 1.6;
+  }
+  header .meta .key { font-weight: 600; color: var(--ink); }
+
+  /* Legend */
+  .legend {
+    border: 1pt solid var(--line-soft);
+    padding: 6pt 8pt;
+    margin-bottom: 8pt;
+    background: #fafafa;
+    border-radius: 3pt;
+    font-size: 8pt;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8pt;
+  }
+  .legend h3 {
+    margin: 0 0 3pt;
+    font-size: 9pt;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .legend dl { margin: 0; padding: 0; }
+  .legend dt { display: inline; font-weight: 700; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .legend dd { display: inline; margin: 0 6pt 0 2pt; color: var(--ink-dim); }
+  .legend .lg-item { display: block; line-height: 1.5; }
+
+  /* Table */
+  table.worksheet {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 8.2pt;
+  }
+  table.worksheet thead th {
+    background: #e8e8e8;
+    border: 0.5pt solid var(--line);
+    padding: 4pt 4pt;
+    text-align: left;
+    font-weight: 700;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    vertical-align: top;
+    line-height: 1.25;
+  }
+  table.worksheet thead th .hint {
+    display: block;
+    font-weight: 400;
+    font-size: 6.8pt;
+    color: var(--ink-dim);
+    text-transform: none;
+    letter-spacing: 0;
+    margin-top: 1pt;
+  }
+  table.worksheet thead th.fillable-head {
+    background: #d8e6f5;
+    color: var(--accent);
+  }
+  table.worksheet tbody td {
+    border: 0.4pt solid var(--line-soft);
+    padding: 3pt 4pt;
+    vertical-align: top;
+  }
+  table.worksheet tbody tr:nth-child(even) td:not(.fillable) {
+    background: var(--stripe);
+  }
+
+  /* Column widths */
+  col.c-num     { width: 3%; }
+  col.c-vendor  { width: 13%; }
+  col.c-id      { width: 7%; }
+  col.c-rms     { width: 24%; }
+  col.c-money   { width: 7%; }
+  col.c-seq     { width: 5%; }
+  col.c-fill-md { width: 8%; }
+  col.c-fill-lg { width: 10%; }
+
+  td.num { text-align: center; color: var(--ink-faint); font-family: ui-monospace, monospace; }
+  td.vendor-name .v-main { font-weight: 600; line-height: 1.3; }
+  td.vendor-name .v-phone { font-size: 7.5pt; color: var(--ink-faint); margin-top: 1pt; font-family: ui-monospace, monospace; }
+  td.identity .badge {
+    display: inline-block;
+    padding: 1pt 4pt;
+    background: #e8e8e8;
+    border: 0.4pt solid var(--line);
+    border-radius: 2pt;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  td.rms .rm-line { line-height: 1.45; }
+  td.rms .rm-code { font-family: ui-monospace, monospace; font-weight: 600; font-size: 7.6pt; color: var(--accent); }
+  td.rms .rm-meta { color: var(--ink-faint); font-size: 7.5pt; }
+  td.rms .unmapped { color: var(--warn); font-style: italic; font-size: 7.4pt; }
+  td.rms .flag { font-weight: 700; color: var(--bad); }
+  td.money { text-align: right; font-family: ui-monospace, monospace; font-size: 8pt; }
+  td.seq { text-align: center; font-family: ui-monospace, monospace; font-weight: 600; }
+
+  /* Fillable cells — the columns owner hand-fills */
+  td.fillable {
+    background: var(--fill-bg) !important;
+    border: 0.6pt solid var(--fill-border) !important;
+    min-height: 28pt;
+  }
+  td.fillable.opm-cell, td.fillable.pms-cell { min-height: 28pt; }
+  td.fillable.notes-cell { min-height: 28pt; }
+
+  tr.blank-row td.fillable { min-height: 22pt; }
+  tr.blank-row { background: #fff; }
+
+  /* Section divider */
+  .divider {
+    margin: 14pt 0 6pt;
+    padding: 5pt 8pt;
+    background: #fff8e6;
+    border-left: 3pt solid var(--warn);
+    border-top: 0.5pt solid var(--line-soft);
+    border-bottom: 0.5pt solid var(--line-soft);
+    font-weight: 700;
+    font-size: 9.5pt;
+    color: var(--warn);
+  }
+  .divider .hint { font-weight: 400; color: var(--ink-dim); margin-left: 6pt; }
+
+  /* Recipe footer */
+  .recipe {
+    margin-top: 14pt;
+    padding: 8pt 10pt;
+    border: 1pt solid var(--accent);
+    border-radius: 3pt;
+    background: #f0f5fa;
+    font-size: 9pt;
+    page-break-inside: avoid;
+  }
+  .recipe h3 {
+    margin: 0 0 4pt;
+    font-size: 10pt;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .recipe .formula {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11pt;
+    font-weight: 700;
+    background: #fff;
+    padding: 6pt 10pt;
+    border: 0.5pt solid var(--line);
+    border-radius: 2pt;
+    margin: 4pt 0 6pt;
+    text-align: center;
+    letter-spacing: 0.02em;
+  }
+  .recipe ul { margin: 4pt 0 0 18pt; padding: 0; }
+  .recipe li { margin-bottom: 2pt; }
+  .recipe .example {
+    margin-top: 6pt;
+    padding-top: 5pt;
+    border-top: 0.4pt dashed var(--line-soft);
+    font-size: 8.5pt;
+    color: var(--ink-dim);
+  }
+  .recipe .example .code { font-family: ui-monospace, monospace; font-weight: 700; color: var(--accent); }
+
+  /* Print rules */
+  @media print {
+    body { background: #fff; color: #111; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+    .no-print { display: none !important; }
+    table.worksheet tbody tr:nth-child(even) td:not(.fillable) { background: var(--stripe) !important; }
+    td.fillable { background: var(--fill-bg) !important; }
+  }
+
+  /* Screen overrides */
+  @media screen {
+    body { padding: 12px; max-width: 1500px; margin: 0 auto; }
+    .container { padding: 0; }
+  }
+
+  /* Web nav (only on screen) */
+  .web-nav { margin-bottom: 10pt; padding: 6pt 8pt; background: #f5f5f5; border-radius: 4pt; font-size: 9pt; display: flex; gap: 10pt; flex-wrap: wrap; align-items: center; }
+  .web-nav a { color: var(--accent); text-decoration: none; padding: 4pt 8pt; background: #fff; border: 0.5pt solid var(--line-soft); border-radius: 3pt; font-weight: 600; }
+  .web-nav a:hover { background: #e8f0fa; }
+  .web-nav .sep { color: var(--ink-faint); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="web-nav no-print">
+    <strong>NCH Vendor Mapping Worksheet</strong>
+    <span class="sep">·</span>
+    <a href="/docs/Vendor-Mapping-Worksheet.pdf">⬇ Download PDF</a>
+    <a href="/ops/vendor-editor/">↗ Vendor Editor</a>
+    <a href="/ops/visual/vendor-shape-directory/">↗ Vendor Shape Directory</a>
+    <a href="/ops/visual/coa-doctrine/">↗ COA Doctrine</a>
+    <span class="sep">·</span>
+    <span style="color:#555">Print this page (Ctrl/Cmd+P) — landscape A4</span>
+  </div>
+
+  <header class="sheet-head">
+    <div>
+      <h1>NCH Vendor Mapping Worksheet — Canonical Code Capture</h1>
+      <div class="subtitle">Print → Hand-fill OPM and PMS columns → Return to system for canonical-code seeding</div>
+    </div>
+    <div class="meta">
+      <div><span class="key">Generated:</span> 9 May 2026, 10:14 am</div>
+      <div><span class="key">Window:</span> last 365 days (since 2025-05-09)</div>
+      <div><span class="key">NCH active vendors:</span> <strong>24</strong></div>
+      <div><span class="key">POs in window:</span> 293 · <span class="key">PO lines:</span> 321 · <span class="key">Bills:</span> 8</div>
+    </div>
+  </header>
+
+  <div class="legend">
+    <div>
+      <h3>OPM — Order Placement Mechanism</h3>
+      <span class="lg-item"><dt>M-PH</dt><dd>phone call</dd> <dt>M-WA</dt><dd>WhatsApp</dd></span>
+      <span class="lg-item"><dt>M-WI</dt><dd>walk-in</dd> <dt>M-RT</dt><dd>route/visit</dd></span>
+      <span class="lg-item"><dt>A-AP</dt><dd>app</dd> <dt>A-WB</dt><dd>web</dd> <dt>A-API</dt><dd>API</dd></span>
+    </div>
+    <div>
+      <h3>PMS — Payment Method Set</h3>
+      <span class="lg-item"><dt>C</dt><dd>cash only</dd></span>
+      <span class="lg-item"><dt>D</dt><dd>digital only (UPI / NEFT / app)</dd></span>
+      <span class="lg-item"><dt>H</dt><dd>hybrid (cash + digital)</dd></span>
+    </div>
+    <div>
+      <h3>Auto-inferred (verify)</h3>
+      <span class="lg-item"><dt>Rf</dt><dd>regular-recurring (PO → bill → pay)</dd></span>
+      <span class="lg-item"><dt>Pf</dt><dd>prepaid (app/quick-commerce)</dd></span>
+      <span class="lg-item"><dt>L / B / LB</dt><dd>loose / branded / both</dd></span>
+      <span class="lg-item" style="color:#b22222"><dt>?</dt><dd>uncertain — please confirm</dd></span>
+    </div>
+  </div>
+
+  <table class="worksheet">
+    <colgroup>
+      <col class="c-num">
+      <col class="c-vendor">
+      <col class="c-id">
+      <col class="c-rms">
+      <col class="c-money">
+      <col class="c-seq">
+      <col class="c-seq">
+      <col class="c-fill-md">
+      <col class="c-fill-md">
+      <col class="c-fill-lg">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Vendor Name<span class="hint">(from Odoo)</span></th>
+        <th>Identity<span class="hint">(auto)</span></th>
+        <th>RMs Supplied<span class="hint">(canonical · PO count)</span></th>
+        <th>Total ₹<span class="hint">(365d)</span></th>
+        <th>PAY_SEQ<span class="hint">(auto)</span></th>
+        <th>SELLS<span class="hint">(auto)</span></th>
+        <th class="fillable-head">OPM ✏<span class="hint">M-PH/WA/WI/RT or A-AP/WB/API</span></th>
+        <th class="fillable-head">PMS ✏<span class="hint">C / D / H</span></th>
+        <th class="fillable-head">Notes ✏<span class="hint">(corrections, omissions)</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td class="num">1</td>
+        <td class="vendor-name">
+          <div class="v-main">Prabhu Buffalo Milk Vendor</div>
+          <div class="v-phone">9886806395</div>
+        </td>
+        <td class="identity"><span class="badge">PRABHU</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-MLK</span> <span class="rm-meta">(52 PO · 3317)</span></div></td>
+        <td class="money">₹1,82,490</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">2</td>
+        <td class="vendor-name">
+          <div class="v-main">Ganga Bakery</div>
+          <div class="v-phone">7019547835</div>
+        </td>
+        <td class="identity"><span class="badge">GANGA</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AS-P-Lbi-BUN</span> <span class="rm-meta">(41 PO · 4289)</span></div></td>
+        <td class="money">₹34,966</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">3</td>
+        <td class="vendor-name">
+          <div class="v-main">Sameer Hamza Samosa Vendor</div>
+          <div class="v-phone">9746581122</div>
+        </td>
+        <td class="identity"><span class="badge">SAMEER</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AS-P-Li-SMS</span> <span class="rm-meta">(32 PO · 372)</span></div></td>
+        <td class="money">₹3,514</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">L</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">4</td>
+        <td class="vendor-name">
+          <div class="v-main">Nisarcha Brother (Hamza/Krispy Eats)</div>
+          <div class="v-phone">8971457998</div>
+        </td>
+        <td class="identity"><span class="badge">NISARCHA</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AS-P-Li-CCT</span> <span class="rm-meta">(30 PO · 1125)</span></div></td>
+        <td class="money">₹16,875</td>
+        <td class="seq">Rf</td>
+        <td class="seq">L</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">5</td>
+        <td class="vendor-name">
+          <div class="v-main">Butter Online</div>
+          
+        </td>
+        <td class="identity"><span class="badge">BUTTER</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(24 PO · 65)</span></div></td>
+        <td class="money">₹36,151</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">6</td>
+        <td class="vendor-name">
+          <div class="v-main">Filter Water Supplier</div>
+          
+        </td>
+        <td class="identity"><span class="badge">FILTER</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-B-WTR</span> <span class="rm-meta">(24 PO · 223)</span></div></td>
+        <td class="money">₹7,590</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">B</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">7</td>
+        <td class="vendor-name">
+          <div class="v-main">Nazeer Nadeem</div>
+          
+        </td>
+        <td class="identity"><span class="badge">NAZEER</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-B-WTR</span> <span class="rm-meta">(19 PO · 2136)</span></div></td>
+        <td class="money">₹14,395</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">B</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">8</td>
+        <td class="vendor-name">
+          <div class="v-main">local shop</div>
+          
+        </td>
+        <td class="identity"><span class="badge">LOCAL</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(5 PO · 17)</span></div><div class="rm-line"><span class="rm-code">NCH-AS-P-Lbi-BUN</span> <span class="rm-meta">(3 PO · 85)</span></div><div class="rm-line"><span class="rm-code">NCH-AS-P-Li-SMS</span> <span class="rm-meta">(2 PO · 20)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-MLK</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line unmapped">[Odoo: Tissue paper] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Iyengar bakery] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
+        <td class="money">₹7,981</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">9</td>
+        <td class="vendor-name">
+          <div class="v-main">Shariff Departmental Stores</div>
+          <div class="v-phone">+91 89514 84783</div>
+        </td>
+        <td class="identity"><span class="badge">SHARIFF</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SUG</span> <span class="rm-meta">(6 PO · 300)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-B-MMD</span> <span class="rm-meta">(3 PO · 25)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-OIL</span> <span class="rm-meta">(2 PO · 16)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-MDA</span> <span class="rm-meta">(1 PO · 5)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SOJ</span> <span class="rm-meta">(1 PO · 2)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-CUS</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-KAJ</span> <span class="rm-meta">(1 PO · 0)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SAU</span> <span class="rm-meta">(1 PO · 0)</span></div><div class="rm-line"><span class="rm-code">NCH-AS-P-Lb-HNY</span> <span class="rm-meta">(1 PO · 1)</span></div></td>
+        <td class="money">₹24,536</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">10</td>
+        <td class="vendor-name">
+          <div class="v-main">Ansari</div>
+          <div class="v-phone">9006134732</div>
+        </td>
+        <td class="identity"><span class="badge">ANSARI</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(11 PO · 48)</span></div></td>
+        <td class="money">₹14,645</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">11</td>
+        <td class="vendor-name">
+          <div class="v-main">Deepak Packaging Store</div>
+          
+        </td>
+        <td class="identity"><span class="badge">DEEPAK</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-OIL</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line unmapped">[Odoo: Silver pouch (5*7)] <span class="rm-meta">(4 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Silver pouch 6*9] <span class="rm-meta">(2 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Paper glass (75 Ml)] <span class="rm-meta">(2 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Use and throw cups] <span class="rm-meta">(2 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Yellow big glass] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
+        <td class="money">₹3,040</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">12</td>
+        <td class="vendor-name">
+          <div class="v-main">Iyengars Cake House</div>
+          
+        </td>
+        <td class="identity"><span class="badge">IYENGARS</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AS-P-Lbi-BUN</span> <span class="rm-meta">(4 PO · 149)</span></div><div class="rm-line unmapped">[Odoo: Iyengar bakery] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
+        <td class="money">₹1,108</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">13</td>
+        <td class="vendor-name">
+          <div class="v-main">Jay &amp; Jay Dehydrofoods Pvt Ltd</div>
+          <div class="v-phone">+91 99766 88833</div>
+        </td>
+        <td class="identity"><span class="badge">JAY</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-Bl-SMP</span> <span class="rm-meta">(4 PO · 99)</span></div></td>
+        <td class="money">₹30,690</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">14</td>
+        <td class="vendor-name">
+          <div class="v-main">Afeefa Impex Agencies</div>
+          
+        </td>
+        <td class="identity"><span class="badge">AFEEFA</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-Pr-Bl-TEA</span> <span class="rm-meta">(3 PO · 150)</span></div></td>
+        <td class="money">₹67,500</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">15</td>
+        <td class="vendor-name">
+          <div class="v-main">Ashrafiya Store</div>
+          <div class="v-phone">9844473739</div>
+        </td>
+        <td class="identity"><span class="badge">ASHRAFIYA</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SUG</span> <span class="rm-meta">(2 PO · 99)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Bl-BTR</span> <span class="rm-meta">(1 PO · 5)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SOJ</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-MDA</span> <span class="rm-meta">(1 PO · 8)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-B-SOD</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-KAJ</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-CUS</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-SAU</span> <span class="rm-meta">(1 PO · 2)</span></div><div class="rm-line"><span class="rm-code">HN-AM-P-Lb-CAR</span> <span class="rm-meta">(1 PO · 1)</span></div><div class="rm-line"><span class="rm-code">NCH-AM-P-B-MMD</span> <span class="rm-meta">(1 PO · 5)</span></div><div class="rm-line"><span class="rm-code">NCH-DS-P-B-CPP</span> <span class="rm-meta">(1 PO · 50)</span></div><div class="rm-line unmapped">[Odoo: Ruchi gold] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div><div class="rm-line unmapped">[Odoo: Magaz] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
+        <td class="money">₹5,317</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">16</td>
+        <td class="vendor-name">
+          <div class="v-main">Bisleri Water Supplier</div>
+          <div class="v-phone">9900323484</div>
+        </td>
+        <td class="identity"><span class="badge">BISLERI</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-B-WTR</span> <span class="rm-meta">(2 PO · 320)</span></div></td>
+        <td class="money">₹2,240</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">B</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">17</td>
+        <td class="vendor-name">
+          <div class="v-main">AS Store</div>
+          
+        </td>
+        <td class="identity"><span class="badge">AS</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-B-MMD</span> <span class="rm-meta">(1 PO · 5)</span></div></td>
+        <td class="money">₹1,600</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">B</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">18</td>
+        <td class="vendor-name">
+          <div class="v-main">Abid Cheese Balls Vendor</div>
+          <div class="v-phone">9742770048</div>
+        </td>
+        <td class="identity"><span class="badge">ABID</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AS-P-Li-SMS</span> <span class="rm-meta">(1 PO · 10)</span></div></td>
+        <td class="money">₹100</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">L</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">19</td>
+        <td class="vendor-name">
+          <div class="v-main">Ahmed - Gas Cylinder</div>
+          <div class="v-phone">8553568718</div>
+        </td>
+        <td class="identity"><span class="badge">AHMED</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">HN-AM-O-B-LPG</span> <span class="rm-meta">(1 PO · 1)</span></div></td>
+        <td class="money">₹2,500</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">B</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">20</td>
+        <td class="vendor-name">
+          <div class="v-main">Galaxy Bakery Products</div>
+          
+        </td>
+        <td class="identity"><span class="badge">GALAXY</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-DM-Pr-Bl-OSB</span> <span class="rm-meta">(1 PO · 4320)</span></div></td>
+        <td class="money">₹13,522</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">21</td>
+        <td class="vendor-name">
+          <div class="v-main">Manju Veg Supplier</div>
+          
+        </td>
+        <td class="identity"><span class="badge">MANJU</span></td>
+        <td class="rms"><div class="rm-line unmapped">[Odoo: [HN-RM-065] Lemon (Nimbu)] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
+        <td class="money">₹120</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">L?</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">22</td>
+        <td class="vendor-name">
+          <div class="v-main">NH  Tissues</div>
+          
+        </td>
+        <td class="identity"><span class="badge">NH</span></td>
+        <td class="rms"><div class="rm-line unmapped">[Odoo: Tissue paper] <span class="rm-meta">(1 PO)</span> <span class="flag">?</span></div></td>
+        <td class="money">₹850</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">L?</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">23</td>
+        <td class="vendor-name">
+          <div class="v-main">R Prasad Dairy</div>
+          <div class="v-phone">+91 99726 08280</div>
+        </td>
+        <td class="identity"><span class="badge">R</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-P-Lb-MLK</span> <span class="rm-meta">(1 PO · 100)</span></div></td>
+        <td class="money">₹8,000</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+      <tr>
+        <td class="num">24</td>
+        <td class="vendor-name">
+          <div class="v-main">Ranveer Tea Supplier</div>
+          
+        </td>
+        <td class="identity"><span class="badge">RANVEER</span></td>
+        <td class="rms"><div class="rm-line"><span class="rm-code">NCH-AM-Pr-Bl-TEA</span> <span class="rm-meta">(1 PO · 50)</span></div></td>
+        <td class="money">₹0</td>
+        <td class="seq">Rf?</td>
+        <td class="seq">LB</td>
+        <td class="fillable opm-cell" data-col="opm"></td>
+        <td class="fillable pms-cell" data-col="pms"></td>
+        <td class="fillable notes-cell" data-col="notes"></td>
+      </tr>
+    
+    </tbody>
+  </table>
+
+  <div class="divider">
+    Vendors I might be missing — please add here
+    <span class="hint">(Zepto, Blinkit, Hyperpure, fresh-produce vendor, distributor visits, etc.)</span>
+  </div>
+
+  <table class="worksheet">
+    <colgroup>
+      <col class="c-num">
+      <col class="c-vendor">
+      <col class="c-id">
+      <col class="c-rms">
+      <col class="c-money">
+      <col class="c-seq">
+      <col class="c-seq">
+      <col class="c-fill-md">
+      <col class="c-fill-md">
+      <col class="c-fill-lg">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th class="fillable-head">Vendor Name ✏</th>
+        <th class="fillable-head">Identity ✏</th>
+        <th class="fillable-head">RMs Supplied ✏</th>
+        <th class="fillable-head">Approx ₹ ✏</th>
+        <th class="fillable-head">PAY_SEQ ✏</th>
+        <th class="fillable-head">SELLS ✏</th>
+        <th class="fillable-head">OPM ✏</th>
+        <th class="fillable-head">PMS ✏</th>
+        <th class="fillable-head">Notes ✏</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+    <tr class="blank-row">
+      <td class="num">1</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">2</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">3</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">4</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">5</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">6</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">7</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">8</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">9</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">10</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">11</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    <tr class="blank-row">
+      <td class="num">12</td>
+      <td class="fillable name-cell"></td>
+      <td class="fillable identity-cell"></td>
+      <td class="fillable rms-cell"></td>
+      <td class="fillable money-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable seq-cell"></td>
+      <td class="fillable opm-cell"></td>
+      <td class="fillable pms-cell"></td>
+      <td class="fillable notes-cell"></td>
+    </tr>
+  
+    </tbody>
+  </table>
+
+  <div class="recipe">
+    <h3>Canonical Code Recipe</h3>
+    <div class="formula">{PAY_SEQ}-{SELLS}-{OPM_LETTER}-{PMS}-{IDENTITY}</div>
+    <ul>
+      <li><strong>PAY_SEQ:</strong> Rf (recurring) or Pf (prepaid)</li>
+      <li><strong>SELLS:</strong> L (loose) · B (branded) · LB (both)</li>
+      <li><strong>OPM_LETTER:</strong> M if any M-* sub-channel · A if any A-* sub-channel. Sub-channel (PHONE/WA/WI/RT/AP/WB/API) becomes a property in the vendor record, not in the code.</li>
+      <li><strong>PMS:</strong> C (cash) · D (digital) · H (hybrid)</li>
+      <li><strong>IDENTITY:</strong> 3-10 char vendor abbreviation (uppercase)</li>
+    </ul>
+    <div class="example">
+      Worked example: <em>Prabhu Buffalo Milk Vendor</em> with hand-filled <em>OPM=M-WA, PMS=C</em> → canonical code:
+      <span class="code">Rf-L-M-C-PRABHU</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
