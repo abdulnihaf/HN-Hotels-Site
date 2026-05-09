@@ -81,12 +81,14 @@ Most failure modes have a short diagnosis pattern:
 
 ## hn-winpc is shared — multi-tenant rules apply
 
-Multiple Claude Code chats may operate on this PC concurrently. Read **`fleet/MULTI-TENANT-WINPC.md`** before doing anything destructive. The short version:
+Multiple Claude Code chats may operate on this PC concurrently (currently 3: this aggregator chat, the modash-driver marketing chat, and the dine-aggregator audit chat). Read **`fleet/MULTI-TENANT-WINPC.md`** before doing anything destructive. The short version:
 
-- Read `C:\Users\HN Hotels\Documents\hn-fleet\manifest.json` first — lists every running automation and its `do_not_disturb` boundaries.
+- Coordination root: `C:\hn-control\` (no spaces, shared directory)
+- Read `C:\hn-control\manifest.json` first — lists every running automation and its `do_not_disturb` boundaries.
 - **NEVER** run `taskkill /IM chrome.exe` or `Get-Process chrome | Stop-Process` — that kills the aggregator running in Chrome's default profile.
-- If you need a browser, launch with `--user-data-dir="C:\Users\HN Hotels\Documents\chrome-profiles\<your-purpose>"` for an isolated instance.
-- Namespace everything you create: `hn-<purpose>\` files, `HN-<Purpose>-<Job>` task names.
+- For visiting URLs, just `chrome.exe URL` opens new tab in existing Chrome (safe). For full isolation, use `--user-data-dir="C:\hn-control\<your-purpose>\chrome-profile"`.
+- For navigating the Zomato/Swiggy Online Ordering partner tabs, hold `chrome-tabs.lock` (acquire via `C:\hn-control\_shared\acquire-lock.ps1`) — aggregator auto-cycles them every 3 min otherwise.
+- Namespace everything you create: `C:\hn-control\<purpose>\` files, `HN-<Purpose>-<Job>` task names.
 
 ## The starter prompt for new Claude sessions
 
@@ -94,16 +96,20 @@ When you open a fresh Claude Code session in this repo and want it to operate `h
 
 > hn-winpc is a SHARED Windows appliance reachable from this laptop via Tailscale + SSH. SSH command: `ssh "HN Hotels@hn-winpc" '<cmd>'` (quoted username — has a space). Default remote shell is cmd.exe; wrap PowerShell explicitly.
 >
-> Multiple Claude chats run automations on this PC concurrently. **Before doing anything destructive** (process kills, file deletes, scheduled task changes, registry changes), READ the manifest first:
+> Multiple Claude chats run automations on this PC concurrently (as of 2026-05-10: aggregator-pulse, modash-driver, dine-aggregator). Coordination root: `C:\hn-control\`. **Before doing anything destructive** (process kills, file deletes, scheduled task changes, registry changes), READ the manifest first:
 >
 > ```
-> ssh "HN Hotels@hn-winpc" 'type "C:\Users\HN Hotels\Documents\hn-fleet\manifest.json"'
+> ssh "HN Hotels@hn-winpc" 'type "C:\hn-control\manifest.json"'
 > ```
 >
 > You MUST respect every automation's `do_not_disturb` list. NEVER run `taskkill /IM chrome.exe` — that would kill the aggregator running in the default Chrome profile.
 >
-> If you need a browser, launch one with `--user-data-dir=C:\Users\HN Hotels\Documents\chrome-profiles\<your-purpose>` — that's your isolated Chrome, kill it freely.
+> If you need a browser:
+> - For visiting URLs: `chrome.exe URL` opens a new tab in existing Chrome (safe, doesn't disturb others).
+> - For full isolation: launch with `--user-data-dir=C:\hn-control\<your-purpose>\chrome-profile` — that's your isolated Chrome, kill it freely.
 >
-> Namespace your work: files → `hn-<your-purpose>\`, tasks → `HN-<YourPurpose>-<Job>`. Read `fleet/MULTI-TENANT-WINPC.md` for full rules + `fleet/HOWTO-USE-WINPC.md` for the bridge details. The aggregator extension source is at `ext/aggregator/`.
+> If you need to navigate the Zomato/Swiggy Online Ordering partner tabs, hold `chrome-tabs.lock`: `& "C:\hn-control\_shared\acquire-lock.ps1" -Resource chrome-tabs -TimeoutSec 60 -OwnerChat <your-chat-id>` — aggregator auto-cycles them every 3 min otherwise.
+>
+> Namespace your work: files → `C:\hn-control\<your-purpose>\`, tasks → `HN-<YourPurpose>-<Job>`. Read `fleet/MULTI-TENANT-WINPC.md` for full rules + `fleet/HOWTO-USE-WINPC.md` for the bridge details. The aggregator extension source is at `ext/aggregator/`.
 >
 > When starting a new persistent automation, append a block to the manifest. When decommissioning, remove it.

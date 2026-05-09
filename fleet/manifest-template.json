@@ -1,10 +1,13 @@
 {
-  "schema_version": 1,
-  "manifest_path_on_pc": "C:\\Users\\HN Hotels\\Documents\\hn-fleet\\manifest.json",
+  "schema_version": 2,
+  "manifest_path_on_pc": "C:\\hn-control\\manifest.json",
+  "coordination_root": "C:\\hn-control\\",
+  "lock_dir": "C:\\hn-control\\.locks\\",
+  "shared_helpers_dir": "C:\\hn-control\\_shared\\",
   "last_updated": "2026-05-10",
   "automations": {
     "aggregator-pulse": {
-      "purpose": "Swiggy + Zomato partner portal data scraping. Powers /ops/aggregator/he/swiggy and /ops/aggregator/he/zomato dashboards.",
+      "purpose": "Swiggy + Zomato Online Ordering data scraping. Powers /ops/aggregator/he/swiggy and /ops/aggregator/he/zomato dashboards.",
       "criticality": "high",
       "owner_chat_session": "frosty-heisenberg-e1616d",
       "started_at": "2026-05-09T17:18Z",
@@ -20,19 +23,70 @@
         "chrome_user_data_dir": "default",
         "chrome_tabs": [
           "https://partner.swiggy.com/food/",
-          "https://www.zomato.com/partners/"
+          "https://www.zomato.com/partners/onlineordering/reporting?selected_view=view_live_tracking"
         ],
         "registry": [
           "HKLM\\Software\\Policies\\Google\\Chrome\\RestoreOnStartup"
         ]
       },
       "do_not_disturb": [
-        "chrome.exe processes in default user profile (do not run taskkill /IM chrome.exe)",
+        "chrome.exe processes in default user profile (do not run taskkill /IM chrome.exe or Stop-Process chrome)",
         "the HN-Aggregator-Watchdog scheduled task (do not delete or reschedule)",
-        "Chrome RestoreOnStartup registry policy (other chats can add their own keys but not remove)"
+        "Chrome RestoreOnStartup registry policy (other chats can add their own keys but not remove)",
+        "the partner Online Ordering tabs (acquire chrome-tabs.lock if you need to navigate them)"
       ],
+      "auto_cycles": {
+        "interval_min": 3,
+        "navigates_to": [
+          "https://www.zomato.com/partners/onlineordering/orderHistory/",
+          "https://www.zomato.com/partners/onlineordering/reporting?selected_view=view_live_tracking",
+          "https://www.zomato.com/partners/onlineordering/reporting?selected_view=view_business_reports&business_reports_type=table",
+          "https://www.zomato.com/partners/onlineordering/finance/",
+          "https://www.zomato.com/partners/onlineordering/ads/",
+          "https://www.zomato.com/partners/onlineordering/reviews/"
+        ],
+        "note": "Will overwrite any other chat's navigation of the Zomato partner tab unless they hold chrome-tabs.lock."
+      },
       "health_check": "https://hnhotels.in/api/aggregator-pulse?action=health&key=<DASHBOARD_API_KEY>",
-      "fix_when_broken": "If pipeline silent for >30 min: 1) ssh hn-winpc check Chrome alive, 2) check watchdog log, 3) reload extension manually if needed. See fleet/HOWTO-USE-WINPC.md."
+      "fix_when_broken": "If pipeline silent for >30 min: 1) check Chrome alive (ssh hn-winpc), 2) read C:\\Users\\HN Hotels\\Documents\\hn-aggregator-watchdog.log, 3) reload extension manually if needed (chrome://extensions → reload). See fleet/HOWTO-USE-WINPC.md."
+    },
+    "modash-driver": {
+      "purpose": "Influencer marketing analysis (Modash-driven outreach). Per-profile setup orchestration.",
+      "criticality": "medium",
+      "owner_chat_session": "vibrant-wozniak-b62a56",
+      "owns": {
+        "files": [
+          "C:\\hn-control\\modash-driver\\",
+          "C:\\hn-control\\_shared\\acquire-lock.ps1",
+          "C:\\hn-control\\_shared\\release-lock.ps1"
+        ],
+        "tasks": "TBD — fill in when registered",
+        "chrome_user_data_dir": "TBD"
+      },
+      "do_not_disturb": [
+        "C:\\hn-control\\modash-driver\\ working directory and lock files",
+        "any setup-modash-profile.ps1 / install.ps1 invocations in progress (use chrome-default.lock)"
+      ],
+      "_note_to_modash_chat": "Please update this block with your full ownership: tasks, Chrome user-data-dir if any, do_not_disturb list. The aggregator-pulse chat documented this on your behalf based on what was visible from cross-chat context."
+    },
+    "dine-aggregator": {
+      "purpose": "Zomato Partner DINING-OUT (Book a Table) audit — different surface from Online Ordering. One-time audit, not 24/7.",
+      "criticality": "low",
+      "owner_chat_session": "bold-mccarthy-572b58",
+      "owns": {
+        "files": "C:\\hn-control\\dine-aggregator\\ (when created)",
+        "tasks": "none (one-time audit, no scheduled tasks)",
+        "chrome_user_data_dir": "TBD — see cross-chat-risk note"
+      },
+      "do_not_disturb": [],
+      "cross_chat_risk_with_aggregator_pulse": {
+        "issue": "If you navigate the Zomato Partner tab to Dining Out mode, aggregator-pulse will navigate it back to Online Ordering on its next cycle (every 3 min).",
+        "safe_options": [
+          "Open a NEW tab via 'chrome.exe URL' for dine-in work — aggregator content scripts only fire on /onlineordering/... pages so new tab is untouched.",
+          "Acquire chrome-tabs.lock before navigating the existing tab (requires aggregator's content script to honor the lock — patch pending)."
+        ]
+      },
+      "_note_to_dine_chat": "Please update this block with your full ownership when you start creating files. Read the cross_chat_risk note carefully."
     }
   },
   "shared_infrastructure": {
@@ -51,6 +105,19 @@
       "purpose": "Survive reboots without human at PC",
       "configured_via": "Sysinternals AutoLogon (LSA-encrypted)",
       "do_not_disturb": "Never call netplwiz UI or modify HKLM\\...\\Winlogon\\AutoAdminLogon."
+    }
+  },
+  "lock_protocol": {
+    "lock_file_format": "JSON: {owner_chat: '<chat-id>', acquired_at: ISO-8601, ttl_sec: int}",
+    "ttl_default": 600,
+    "stale_after_sec": 600,
+    "helpers": {
+      "acquire": "C:\\hn-control\\_shared\\acquire-lock.ps1 -Resource <name> -TimeoutSec 60 -OwnerChat <id>",
+      "release": "C:\\hn-control\\_shared\\release-lock.ps1 -Resource <name>"
+    },
+    "known_resources": {
+      "chrome-default.lock": "Held while modifying default-profile Chrome (extensions, settings, profile data)",
+      "chrome-tabs.lock": "Held while navigating Online Ordering partner tabs (aggregator-pulse should respect this once content scripts are patched)"
     }
   }
 }
