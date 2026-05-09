@@ -201,8 +201,14 @@ async function triggerNow(env, body, request) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// CRON 1: DISCOVERY — Apify hashtag rotation
+// CRON 1: DISCOVERY — multi-vector rotation
 // ────────────────────────────────────────────────────────────────────────────
+// Daily rotation across 4 Apify discovery vectors:
+//   day mod 4 = 0: hashtag rotation        (current — 18 BLR food hashtags in slots)
+//   day mod 4 = 1: geotag location scrape  (BLR food location pages)
+//   day mod 4 = 2: tagged-user expansion   (top creators' collab network)
+//   day mod 4 = 3: comment-author scrape   (engaged audience on viral BLR food posts)
+// Modash branch (when modash_enabled=true) takes priority over all 4 Apify vectors.
 
 async function cronDiscover(env, body, request) {
   if (!requireCron(env, request)) return json({ error: 'unauthorized' }, 401);
@@ -210,76 +216,221 @@ async function cronDiscover(env, body, request) {
   const config = await getConfigMap(env);
   if (config.discovery_enabled !== 'true') return json({ skipped: 'disabled' });
 
-  const runId = await startRun(env, 'discovery');
-  try {
-    // BRANCH: if Modash is enabled and we have an active profile, enqueue a Modash search job.
-    // The hn-winpc poller will pick it up; results land here via modash-job-done → discovery_queue.
-    // Apify hashtag-scrape is the fallback when Modash is off or no active profiles.
-    if (config.modash_enabled === 'true') {
-      const dailyCap = parseInt(config.modash_searches_per_profile_per_day || '1');
-      const activeProfile = await env.DB.prepare(`
-        SELECT profile_num FROM modash_profiles
-        WHERE status='active' AND searches_today < ? LIMIT 1
-      `).bind(dailyCap).first();
-
-      if (activeProfile) {
-        const filters = JSON.parse(config.modash_default_filters || '{}');
-        const job = await env.DB.prepare(`
-          INSERT INTO modash_jobs (job_type, search_filters_json, status)
-          VALUES ('search', ?, 'pending')
-        `).bind(JSON.stringify(filters)).run();
-        return await finishRun(env, runId, 'ok', 0, 0, 0,
-          `Modash job ${job.meta.last_row_id} queued for hn-winpc poller (profile ${activeProfile.profile_num} available)`);
-      }
-      // Fall through to Apify if no active profile
+  // Pay-as-you-go cost cap: if this month's Apify spend exceeds the cap, skip.
+  const cap = parseFloat(config.apify_monthly_cap_usd || '0');
+  if (cap > 0) {
+    const monthSpend = await env.DB.prepare(`
+      SELECT COALESCE(SUM(cost_usd), 0) as total
+      FROM influencer_pipeline_runs
+      WHERE strftime('%Y-%m', started_at) = strftime('%Y-%m', 'now')
+        AND status = 'ok'
+    `).first();
+    if ((monthSpend?.total || 0) >= cap) {
+      const runId = await startRun(env, 'discovery');
+      return await finishRun(env, runId, 'skipped', 0, 0, 0,
+        `month-to-date Apify spend $${(monthSpend.total).toFixed(2)} >= cap $${cap.toFixed(2)} — skipping`);
     }
+  }
 
-    // Pick today's hashtag slot from rotation
+  // Modash takes priority when an active profile is below daily cap
+  if (config.modash_enabled === 'true') {
+    const dailyCap = parseInt(config.modash_searches_per_profile_per_day || '1');
+    const activeProfile = await env.DB.prepare(`
+      SELECT profile_num FROM modash_profiles
+      WHERE status='active' AND searches_today < ? LIMIT 1
+    `).bind(dailyCap).first();
+
+    if (activeProfile) {
+      const runId = await startRun(env, 'discovery');
+      const filters = JSON.parse(config.modash_default_filters || '{}');
+      const job = await env.DB.prepare(`
+        INSERT INTO modash_jobs (job_type, search_filters_json, status)
+        VALUES ('search', ?, 'pending')
+      `).bind(JSON.stringify(filters)).run();
+      return await finishRun(env, runId, 'ok', 0, 0, 0,
+        `Modash job ${job.meta.last_row_id} queued (profile ${activeProfile.profile_num} available)`);
+    }
+  }
+
+  // Pick today's vector — manual override via discovery_vector_today config (else date-based)
+  const override = config.discovery_vector_today;
+  const VECTORS = ['hashtag', 'geotag', 'tagged', 'comments'];
+  let vector = override && VECTORS.includes(override) ? override : null;
+  if (!vector) {
+    const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+    vector = VECTORS[dayOfYear % VECTORS.length];
+  }
+
+  // Dispatch
+  if (vector === 'hashtag')  return await runHashtagDiscovery(env, config);
+  if (vector === 'geotag')   return await runGeotagDiscovery(env, config);
+  if (vector === 'tagged')   return await runTaggedDiscovery(env, config);
+  if (vector === 'comments') return await runCommentsDiscovery(env, config);
+  return json({ error: 'unknown vector: ' + vector }, 400);
+}
+
+// Vector 1: hashtag rotation
+async function runHashtagDiscovery(env, config) {
+  const runId = await startRun(env, 'discovery_hashtag');
+  try {
     const rotation = JSON.parse(config.hashtag_rotation || '[]');
     const idx = parseInt(config.hashtag_rotation_index || '0') % rotation.length;
     const hashtags = rotation[idx];
-    if (!hashtags || hashtags.length === 0) {
-      return await finishRun(env, runId, 'skipped', 0, 0, 0, 'no hashtags');
-    }
+    if (!hashtags || hashtags.length === 0) return await finishRun(env, runId, 'skipped', 0, 0, 0, 'no hashtags');
 
-    // Trigger Apify hashtag-scraper
     const apifyRun = await apifyTrigger(env, APIFY_HASHTAG_ACTOR, {
       hashtags, resultsLimit: 50, resultsType: 'posts',
     });
     const dataset = await apifyWaitAndRead(env, apifyRun.id, 600);
 
-    // Extract unique usernames
-    const uniqueUsernames = new Set();
-    for (const item of dataset.items) {
-      const u = (item.ownerUsername || '').toLowerCase().trim();
-      if (u) uniqueUsernames.add(u);
-    }
+    const usernames = uniqueOwnerUsernames(dataset.items);
+    const { added, skipped } = await ingestDiscovered(env, usernames, 'apify_hashtag', { hashtags, dataset_id: apifyRun.dataset_id });
 
-    // Dedupe vs influencer_bio_pulse (already enriched) and influencer_discovery_queue (already queued)
-    let added = 0, skippedExisting = 0;
-    for (const u of uniqueUsernames) {
-      const inDb = await env.DB.prepare(`SELECT 1 FROM influencer_bio_pulse WHERE username=?`).bind(u).first();
-      if (inDb) { skippedExisting++; continue; }
-      try {
-        await env.DB.prepare(`
-          INSERT INTO influencer_discovery_queue (username, source, source_meta)
-          VALUES (?, 'apify_hashtag', ?)
-        `).bind(u, JSON.stringify({ hashtags, dataset_id: apifyRun.dataset_id })).run();
-        added++;
-      } catch (e) { /* unique conflict — already queued */ }
-    }
-
-    // Advance rotation index
     const nextIdx = (idx + 1) % rotation.length;
-    await env.DB.prepare(`
-      UPDATE influencer_pipeline_config SET value=? , updated_at=datetime('now') WHERE key='hashtag_rotation_index'
-    `).bind(String(nextIdx)).run();
+    await env.DB.prepare(`UPDATE influencer_pipeline_config SET value=?, updated_at=datetime('now') WHERE key='hashtag_rotation_index'`).bind(String(nextIdx)).run();
 
-    return await finishRun(env, runId, 'ok', uniqueUsernames.size, added, apifyRun.cost_usd,
-      `slot ${idx}: ${hashtags.join(',')} → ${uniqueUsernames.size} unique, ${added} new (${skippedExisting} already in DB)`);
+    return await finishRun(env, runId, 'ok', usernames.size, added, apifyRun.cost_usd,
+      `hashtag slot ${idx}: ${hashtags.join(',')} → ${usernames.size} unique, ${added} new (${skipped} dup)`);
   } catch (e) {
     return await finishRun(env, runId, 'error', 0, 0, 0, null, e.message);
   }
+}
+
+// Vector 2: geotag location scrape
+async function runGeotagDiscovery(env, config) {
+  const runId = await startRun(env, 'discovery_geotag');
+  try {
+    const locations = JSON.parse(config.geotag_locations || '[]');
+    if (!locations.length) return await finishRun(env, runId, 'skipped', 0, 0, 0, 'no locations seeded');
+
+    const directUrls = locations.map(l => l.url);
+    const postsPerLocation = parseInt(config.geotag_posts_per_location || '50');
+
+    const apifyRun = await apifyTrigger(env, APIFY_PROFILE_ACTOR, {
+      directUrls, resultsType: 'posts', resultsLimit: postsPerLocation,
+    });
+    const dataset = await apifyWaitAndRead(env, apifyRun.id, 600);
+
+    const usernames = uniqueOwnerUsernames(dataset.items);
+    const { added, skipped } = await ingestDiscovered(env, usernames, 'apify_geotag',
+      { locations: locations.map(l => l.name), dataset_id: apifyRun.dataset_id });
+
+    return await finishRun(env, runId, 'ok', usernames.size, added, apifyRun.cost_usd,
+      `geotag ${locations.length} locations → ${usernames.size} unique, ${added} new (${skipped} dup)`);
+  } catch (e) {
+    return await finishRun(env, runId, 'error', 0, 0, 0, null, e.message);
+  }
+}
+
+// Vector 3: tagged-user expansion (network of top creators)
+async function runTaggedDiscovery(env, config) {
+  const runId = await startRun(env, 'discovery_tagged');
+  try {
+    const seedCount = parseInt(config.tagged_seed_count || '20');
+    const postsPerSeed = parseInt(config.tagged_posts_per_seed || '12');
+
+    // Pick top BLR-food creators as seeds
+    const seeds = await env.DB.prepare(`
+      SELECT username FROM influencer_bio_pulse
+      WHERE status='ok' AND is_private=0
+        AND followers_count BETWEEN 5000 AND 200000
+        AND (LOWER(IFNULL(biography,'') || ' ' || IFNULL(full_name,'')) LIKE '%bangalore%'
+          OR LOWER(IFNULL(biography,'') || ' ' || IFNULL(full_name,'')) LIKE '%bengaluru%'
+          OR LOWER(IFNULL(biography,'') || ' ' || IFNULL(full_name,'')) LIKE '%blr%')
+        AND (LOWER(IFNULL(biography,'')) LIKE '%food%' OR LOWER(IFNULL(biography,'')) LIKE '%foodie%'
+          OR LOWER(IFNULL(biography,'')) LIKE '%biryani%' OR LOWER(IFNULL(biography,'')) LIKE '%cafe%'
+          OR LOWER(IFNULL(biography,'')) LIKE '%restaurant%')
+      ORDER BY contact_channels DESC, followers_count DESC
+      LIMIT ?
+    `).bind(seedCount).all();
+
+    if (seeds.results.length === 0) return await finishRun(env, runId, 'skipped', 0, 0, 0, 'no seeds');
+
+    const directUrls = seeds.results.map(s => `https://www.instagram.com/${s.username}/`);
+    const apifyRun = await apifyTrigger(env, APIFY_PROFILE_ACTOR, {
+      directUrls, resultsType: 'posts', resultsLimit: postsPerSeed, addParentData: false,
+    });
+    const dataset = await apifyWaitAndRead(env, apifyRun.id, 600);
+
+    // Extract taggedUsers from each post
+    const tagged = new Set();
+    for (const post of dataset.items) {
+      const tags = post.taggedUsers || [];
+      for (const t of tags) {
+        const u = (typeof t === 'string' ? t : t?.username || '').toLowerCase().trim();
+        if (u) tagged.add(u);
+      }
+    }
+
+    const { added, skipped } = await ingestDiscovered(env, tagged, 'apify_tagged',
+      { seed_count: seeds.results.length, dataset_id: apifyRun.dataset_id });
+
+    return await finishRun(env, runId, 'ok', tagged.size, added, apifyRun.cost_usd,
+      `tagged: ${seeds.results.length} seeds × ${postsPerSeed} posts → ${tagged.size} unique tagged, ${added} new (${skipped} dup)`);
+  } catch (e) {
+    return await finishRun(env, runId, 'error', 0, 0, 0, null, e.message);
+  }
+}
+
+// Vector 4: comment-author scrape on viral BLR food posts
+async function runCommentsDiscovery(env, config) {
+  const runId = await startRun(env, 'discovery_comments');
+  try {
+    const postUrls = JSON.parse(config.comment_post_urls || '[]');
+    if (!postUrls.length) return await finishRun(env, runId, 'skipped', 0, 0, 0, 'no post URLs seeded — owner adds via config');
+
+    const authorsPerPost = parseInt(config.comment_authors_per_post || '300');
+    const apifyRun = await apifyTrigger(env, 'apify~instagram-comment-scraper', {
+      directUrls: postUrls, resultsLimit: authorsPerPost,
+    });
+    const dataset = await apifyWaitAndRead(env, apifyRun.id, 600);
+
+    const authors = new Set();
+    for (const c of dataset.items) {
+      const u = (c.ownerUsername || c.username || '').toLowerCase().trim();
+      if (u) authors.add(u);
+    }
+
+    const { added, skipped } = await ingestDiscovered(env, authors, 'apify_comments',
+      { post_urls: postUrls, dataset_id: apifyRun.dataset_id });
+
+    return await finishRun(env, runId, 'ok', authors.size, added, apifyRun.cost_usd,
+      `comments: ${postUrls.length} posts → ${authors.size} unique authors, ${added} new (${skipped} dup)`);
+  } catch (e) {
+    return await finishRun(env, runId, 'error', 0, 0, 0, null, e.message);
+  }
+}
+
+// Shared helpers
+function uniqueOwnerUsernames(items) {
+  const set = new Set();
+  for (const it of items) {
+    const u = (it.ownerUsername || it.username || '').toLowerCase().trim();
+    if (u) set.add(u);
+  }
+  return set;
+}
+
+async function ingestDiscovered(env, usernames, vector, sourceMeta) {
+  let added = 0, skipped = 0;
+  for (const u of usernames) {
+    // Always record the discovery vector (even for known creators — for multi-vector bonus)
+    try {
+      await env.DB.prepare(`
+        INSERT INTO influencer_discovery_vectors (username, vector, source_meta) VALUES (?, ?, ?)
+      `).bind(u, vector, JSON.stringify(sourceMeta)).run();
+    } catch { /* unique conflict — already discovered via this vector */ }
+
+    const inDb = await env.DB.prepare(`SELECT 1 FROM influencer_bio_pulse WHERE username=?`).bind(u).first();
+    if (inDb) { skipped++; continue; }
+    try {
+      await env.DB.prepare(`
+        INSERT INTO influencer_discovery_queue (username, source, source_meta) VALUES (?, ?, ?)
+      `).bind(u, vector, JSON.stringify(sourceMeta)).run();
+      added++;
+    } catch { /* already queued */ }
+  }
+  return { added, skipped };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -292,9 +443,27 @@ async function cronEnrichTick(env, body, request) {
   const config = await getConfigMap(env);
   if (config.enrichment_enabled !== 'true') return json({ skipped: 'disabled' });
 
+  // Cost-cap check (same logic as cronDiscover)
+  const cap = parseFloat(config.apify_monthly_cap_usd || '0');
+  if (cap > 0) {
+    const monthSpend = await env.DB.prepare(`
+      SELECT COALESCE(SUM(cost_usd), 0) as total
+      FROM influencer_pipeline_runs
+      WHERE strftime('%Y-%m', started_at) = strftime('%Y-%m', 'now') AND status = 'ok'
+    `).first();
+    if ((monthSpend?.total || 0) >= cap) {
+      const runId = await startRun(env, 'enrichment');
+      return await finishRun(env, runId, 'skipped', 0, 0, 0,
+        `month-to-date Apify spend $${(monthSpend.total).toFixed(2)} >= cap $${cap.toFixed(2)} — skipping`);
+    }
+  }
+
   const runId = await startRun(env, 'enrichment');
   try {
-    const batchSize = 8;
+    // Pay-as-you-go cost optimisation: drain a large batch once daily
+    // (vs every-15-min smaller batches that paid Apify trigger overhead 96x).
+    // 100 profiles in a single Apify run takes ~15-25 min, costs ~$0.50 vs ~$2 if split.
+    const batchSize = parseInt(config.enrichment_batch_size || '100');
     const batch = await env.DB.prepare(`
       SELECT id, username FROM influencer_discovery_queue
       WHERE enrich_status = 'pending' ORDER BY discovered_at LIMIT ?
@@ -315,18 +484,32 @@ async function cronEnrichTick(env, body, request) {
     const usernames = batch.results.map(r => r.username);
     const directUrls = usernames.map(u => `https://www.instagram.com/${u}/`);
 
+    // resultsType:'details' returns the profile + recent posts. We use the posts
+    // to compute ER + last_post_at + topic_density per creator.
     const apifyRun = await apifyTrigger(env, APIFY_PROFILE_ACTOR, {
-      directUrls, resultsType: 'details', resultsLimit: 1, addParentData: false,
+      directUrls, resultsType: 'details', resultsLimit: 12, addParentData: false,
     });
     const dataset = await apifyWaitAndRead(env, apifyRun.id, 300);
 
+    // Group items by username — one profile + N posts per username
+    const byUser = new Map();
+    for (const it of dataset.items) {
+      const u = (it.username || it.ownerUsername || '').toLowerCase();
+      if (!u) continue;
+      if (!byUser.has(u)) byUser.set(u, { profile: null, posts: [] });
+      const slot = byUser.get(u);
+      // Profile items have followersCount; post items have likesCount + caption
+      if (it.followersCount != null) slot.profile = it;
+      else if (it.likesCount != null || it.caption != null) slot.posts.push(it);
+    }
+
     // Ingest each result into influencer_bio_pulse + flip queue row to 'enriched'
     let okCount = 0, errCount = 0;
-    const byUser = new Map();
-    for (const it of dataset.items) byUser.set((it.username || '').toLowerCase(), it);
 
     for (const row of batch.results) {
-      const item = byUser.get(row.username);
+      const slot = byUser.get(row.username);
+      const item = slot?.profile;
+      const posts = slot?.posts || [];
       if (!item || item.followersCount == null) {
         await env.DB.prepare(`
           UPDATE influencer_discovery_queue SET enrich_status='failed', enriched_at=datetime('now'),
@@ -336,7 +519,9 @@ async function cronEnrichTick(env, body, request) {
         continue;
       }
       try {
-        await ingestApifyProfile(env, item);
+        // Compute ER + last_post_at + topic_density from posts
+        const metrics = computePostMetrics(posts, item.followersCount);
+        await ingestApifyProfile(env, item, metrics);
         await env.DB.prepare(`
           UPDATE influencer_discovery_queue SET enrich_status='enriched', enriched_at=datetime('now') WHERE id=?
         `).bind(row.id).run();
@@ -843,7 +1028,7 @@ async function apifyWaitAndRead(env, runId, maxSecs = 300) {
   throw new Error('apify_timeout');
 }
 
-async function ingestApifyProfile(env, it) {
+async function ingestApifyProfile(env, it, metrics = {}) {
   const u = (it.username || '').toLowerCase().trim();
   if (!u) throw new Error('no_username');
   const bio = it.biography || '';
@@ -865,8 +1050,10 @@ async function ingestApifyProfile(env, it) {
       has_email_button, has_call_button, has_any_button,
       extracted_emails_json, extracted_phones_json, extracted_whatsapp_json,
       has_email, has_phone, has_whatsapp, has_any_contact, contact_channels,
+      engagement_rate, last_post_at, food_topic_density,
+      avg_likes_per_post, avg_comments_per_post, posts_analyzed,
       status, source, fetched_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok', 'apify_profile_cron', datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok', 'apify_profile_cron', datetime('now'))
     ON CONFLICT(username) DO UPDATE SET
       full_name=excluded.full_name, biography=excluded.biography, external_url=excluded.external_url,
       bio_links_json=excluded.bio_links_json, category_name=excluded.category_name,
@@ -882,6 +1069,12 @@ async function ingestApifyProfile(env, it) {
       extracted_whatsapp_json=excluded.extracted_whatsapp_json,
       has_email=excluded.has_email, has_phone=excluded.has_phone, has_whatsapp=excluded.has_whatsapp,
       has_any_contact=excluded.has_any_contact, contact_channels=excluded.contact_channels,
+      engagement_rate=COALESCE(excluded.engagement_rate, engagement_rate),
+      last_post_at=COALESCE(excluded.last_post_at, last_post_at),
+      food_topic_density=COALESCE(excluded.food_topic_density, food_topic_density),
+      avg_likes_per_post=COALESCE(excluded.avg_likes_per_post, avg_likes_per_post),
+      avg_comments_per_post=COALESCE(excluded.avg_comments_per_post, avg_comments_per_post),
+      posts_analyzed=COALESCE(excluded.posts_analyzed, posts_analyzed),
       status=excluded.status, source=excluded.source, fetched_at=datetime('now')
   `).bind(
     u, it.fullName || null, bio, it.externalUrl || null, JSON.stringify(bioLinks),
@@ -893,8 +1086,48 @@ async function ingestApifyProfile(env, it) {
     bizEmail, bizPhone,
     bizEmail ? 1 : 0, bizPhone ? 1 : 0, (bizEmail || bizPhone) ? 1 : 0,
     JSON.stringify(emails), JSON.stringify(phones), JSON.stringify(whatsapp),
-    hasEmail, hasPhone, hasWa, (hasEmail || hasPhone || hasWa) ? 1 : 0, hasEmail + hasPhone + hasWa
+    hasEmail, hasPhone, hasWa, (hasEmail || hasPhone || hasWa) ? 1 : 0, hasEmail + hasPhone + hasWa,
+    metrics.engagement_rate || null,
+    metrics.last_post_at || null,
+    metrics.food_topic_density || null,
+    metrics.avg_likes || null,
+    metrics.avg_comments || null,
+    metrics.posts_analyzed || null
   ).run();
+}
+
+// Compute ER + last_post_at + topic-density from posts array.
+// Returns {} if no posts so we keep existing values via COALESCE.
+function computePostMetrics(posts, followersCount) {
+  if (!posts || posts.length === 0 || !followersCount || followersCount < 1) return {};
+
+  const FOOD_KEYWORDS = /food|biryani|kabab|kebab|tandoor|cafe|cafe|cuisine|dakhni|hyderab|muslim|halal|mughlai|chai|coffee|restaurant|eats|recipe|tasting|gourmet|cooking|baker|dessert|chef|foodie|foodgasm|delicious|yummy|street ?food|barbecue|bbq|grill|kitchen/i;
+
+  let totalLikes = 0, totalComments = 0;
+  let foodCount = 0;
+  let latestTimestamp = null;
+  for (const p of posts) {
+    totalLikes += (p.likesCount || 0);
+    totalComments += (p.commentsCount || 0);
+    const cap = (p.caption || p.text || '').slice(0, 1000);
+    if (FOOD_KEYWORDS.test(cap)) foodCount++;
+    const ts = p.timestamp || p.takenAtTimestamp;
+    if (ts) {
+      const t = typeof ts === 'string' ? new Date(ts).getTime() : (ts > 1e12 ? ts : ts * 1000);
+      if (t && (!latestTimestamp || t > latestTimestamp)) latestTimestamp = t;
+    }
+  }
+  const avgLikes = Math.round(totalLikes / posts.length);
+  const avgComments = Math.round(totalComments / posts.length);
+  const er = (avgLikes + avgComments) / followersCount;  // standard IG ER calc
+  return {
+    engagement_rate: Math.round(er * 10000) / 10000,  // 4 decimal places
+    avg_likes: avgLikes,
+    avg_comments: avgComments,
+    posts_analyzed: posts.length,
+    last_post_at: latestTimestamp ? new Date(latestTimestamp).toISOString() : null,
+    food_topic_density: Math.round((foodCount / posts.length) * 100) / 100,
+  };
 }
 
 const EMAIL_RE = /[\w.+-]+(?:@[\w.+-]+)*@[\w-]+(?:\.[\w-]+)+/g;

@@ -9,16 +9,16 @@ export default {
     const cron = event.cron;
     const fired = [];
 
-    if (cron === '30 22 * * *') {
+    if (cron === '0 22 * * *') {
       fired.push(call(env, 'cron-discover'));
-    } else if (cron === '*/15 * * * *') {
+    } else if (cron === '30 22 * * *') {
       fired.push(call(env, 'cron-enrich-tick'));
-    } else if (cron === '30 23 * * *') {
+    } else if (cron === '0 23 * * *') {
       fired.push(call(env, 'cron-score'));
     } else if (cron === '30 4 * * *') {
       fired.push(call(env, 'cron-outreach-wave'));
     } else {
-      // Unknown cron — fire enrich ticker (safe default, idempotent)
+      // Unknown cron - fire enrich ticker (safe default, idempotent)
       fired.push(call(env, 'cron-enrich-tick'));
     }
 

@@ -164,6 +164,42 @@ export function scoreRelevance(profile) {
   // 8. Business account — real-intent signal (+1)
   if (profile.is_business_account) { score += 1; reasons.push('business:+1'); }
 
+  // 9. Engagement rate (Apify multi-vector enrichment) — +1.5 if ER ≥ 2%, +0.5 if 1-2%
+  const er = parseFloat(profile.engagement_rate || 0);
+  if (er >= 0.02) {
+    score += 1.5; reasons.push(`er_high:+1.5(${(er*100).toFixed(2)}%)`);
+  } else if (er >= 0.01) {
+    score += 0.5; reasons.push(`er_ok:+0.5(${(er*100).toFixed(2)}%)`);
+  }
+
+  // 10. Recency — last post within 30d = +0.5; within 7d = +1
+  if (profile.last_post_at) {
+    const ageDays = (Date.now() - new Date(profile.last_post_at).getTime()) / 86400000;
+    if (ageDays <= 7) {
+      score += 1; reasons.push(`active_7d:+1`);
+    } else if (ageDays <= 30) {
+      score += 0.5; reasons.push(`active_30d:+0.5`);
+    } else if (ageDays > 60) {
+      score -= 1; reasons.push(`dormant:-1(${Math.round(ageDays)}d)`);
+    }
+  }
+
+  // 11. Topic density — % of recent posts about food. Strong vs casual food creator distinction.
+  const td = parseFloat(profile.food_topic_density || 0);
+  if (td >= 0.7) {
+    score += 1.5; reasons.push(`topic_strong:+1.5(${Math.round(td*100)}%)`);
+  } else if (td >= 0.4) {
+    score += 0.5; reasons.push(`topic_mid:+0.5(${Math.round(td*100)}%)`);
+  }
+
+  // 12. Multi-vector bonus — discovered by N vectors gets +(N-1) × 0.5
+  // (passed in via profile.vector_count when scoring is run with vector data)
+  const vectorCount = parseInt(profile.vector_count || 0);
+  if (vectorCount >= 2) {
+    const bonus = (vectorCount - 1) * 0.5;
+    score += bonus; reasons.push(`multi_vector:+${bonus}(${vectorCount}vectors)`);
+  }
+
   return { score: Math.round(score * 10) / 10, reasons };
 }
 
