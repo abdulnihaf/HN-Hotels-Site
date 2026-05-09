@@ -78,28 +78,37 @@ const SUB_GEO_TOKENS = [
   'frazer town', 'frazertown', 'mosque road', 'shivajinagar',
   'commercial st', 'commercial street', 'mg rd', 'm.g. road', 'mg road',
   'brigade rd', 'brigade road', 'cubbon park', 'shivajinagar bus',
+  'richmond town', 'indiranagar', 'jayanagar', 'koramangala',  // BLR neighborhoods that creators commonly mention
 ];
-const HALAL_TOKENS = [
-  'halal', 'muslim', 'islamic', 'mughlai', 'urdu', 'iftar', 'eid', 'biryani',
+// Cuisine tokens — broadened to capture all Indian regional cuisines that align with HE's Dakhni positioning.
+const CUISINE_TOKENS = [
+  'halal', 'muslim', 'islamic', 'mughlai', 'mughal', 'urdu', 'iftar', 'eid', 'biryani',
   'hyderab', 'dakhni', 'kabab', 'kebab', 'tandoor', 'mutton',
+  'awadh', 'awadhi', 'lucknow', 'lucknowi', 'nawab', 'nawabi',
+  'bhopal', 'bhopali', 'zayka', 'zaika', 'rampuri',
+  'parsi', 'irani', 'persian', 'mughul',
+  'kashmiri', 'pasanda', 'rezala', 'kalmi', 'chaap', 'haleem',
 ];
 const HERITAGE_TOKENS = [
   'authentic', 'heritage', 'classic', 'legacy', 'family-run', 'family run',
-  'generations', 'oldest', 'since 1', 'vintage', 'traditional', 'original',
+  'generations', 'oldest', 'since 1', 'since 18', 'since 19', 'since 20',
+  'vintage', 'traditional', 'original', 'time-tested', 'old-school', 'old school',
 ];
 const LATENIGHT_TOKENS = [
-  'late night', 'late-night', '24x7', 'midnight', 'after dark', 'nightlife',
-  'party', 'late', 'night out',
+  'late night', 'late-night', '24x7', '24/7', 'midnight', 'after dark', 'nightlife',
+  'party', 'late', 'night out', 'after hours',
 ];
 const FOOD_PRIMARY_TOKENS = [
   'food blogger', 'foodblogger', 'food vlogger', 'foodvlogger', 'food critic',
   'food reviewer', 'food journal', 'foodie', 'food creator', 'chef',
-  'food explorer', 'food hunter', 'food diary',
+  'food explorer', 'food hunter', 'food diary', 'food enthusiast', 'food lover',
+  'food influencer', 'food story', 'food stories', 'food journey', 'food review',
+  'food vlog', 'food blog', 'foodgram',
 ];
-const BLR_STRONG_TOKENS = [
+const BLR_RESIDENT_TOKENS = [
   'bangalore based', 'bengaluru based', 'based in bangalore', 'based in bengaluru',
-  'living in bangalore', 'living in bengaluru', 'namma bengaluru',
-  'in bangalore', 'in bengaluru', '📍bangalore', '📍bengaluru',
+  'living in bangalore', 'living in bengaluru', 'namma bengaluru', 'namma bangalore',
+  '📍bangalore', '📍bengaluru', '📍 bangalore', '📍 bengaluru',
 ];
 
 export function scoreRelevance(profile) {
@@ -111,22 +120,22 @@ export function scoreRelevance(profile) {
   let score = 0;
   const reasons = [];
 
-  // 1. BLR resident strong signal (+3) vs casual mention (+1)
-  if (BLR_STRONG_TOKENS.some(t => blob.includes(t))) {
-    score += 3; reasons.push('blr_resident:+3');
-  } else if (/bangalore|bengaluru|blr|bglr/.test(blob)) {
-    score += 1; reasons.push('blr_mention:+1');
+  // 1. BLR signal — any BLR mention scores well (+2.5), strong "based in" gets +3.5
+  if (BLR_RESIDENT_TOKENS.some(t => blob.includes(t))) {
+    score += 3.5; reasons.push('blr_resident:+3.5');
+  } else if (/bangalore|bengaluru|blr|bglr|namma uru/.test(blob)) {
+    score += 2.5; reasons.push('blr_mention:+2.5');
   }
 
-  // 2. Food vertical primary (+2)
+  // 2. Food vertical (+2 primary, +1 secondary)
   if (FOOD_PRIMARY_TOKENS.some(t => blob.includes(t))) {
     score += 2; reasons.push('food_primary:+2');
-  } else if (/food|restaurant|cafe|cuisine|kitchen|baker|dessert/.test(blob)) {
+  } else if (/food|restaurant|cafe|cuisine|kitchen|baker|dessert|patisserie|grill|bbq|barbecue/.test(blob)) {
     score += 1; reasons.push('food_secondary:+1');
   }
 
-  // 3. Cuisine alignment (+2 — Dakhni/biryani/halal)
-  const cuisineHits = HALAL_TOKENS.filter(t => blob.includes(t));
+  // 3. Cuisine alignment with HE's Dakhni / Hyderabadi / halal positioning (+2 strong, +1 single)
+  const cuisineHits = CUISINE_TOKENS.filter(t => blob.includes(t));
   if (cuisineHits.length >= 2) {
     score += 2; reasons.push(`cuisine_strong:+2(${cuisineHits.slice(0,3).join(',')})`);
   } else if (cuisineHits.length === 1) {
@@ -149,20 +158,23 @@ export function scoreRelevance(profile) {
     score += 1; reasons.push('late_night:+1');
   }
 
-  // 7. Verified (+0.5)
-  if (profile.is_verified) { score += 0.5; reasons.push('verified:+0.5'); }
+  // 7. Verified — strong trust signal (+1)
+  if (profile.is_verified) { score += 1; reasons.push('verified:+1'); }
 
-  // 8. Business account (+0.5)
-  if (profile.is_business_account) { score += 0.5; reasons.push('business:+0.5'); }
+  // 8. Business account — real-intent signal (+1)
+  if (profile.is_business_account) { score += 1; reasons.push('business:+1'); }
 
   return { score: Math.round(score * 10) / 10, reasons };
 }
 
 export function bucketOf(score) {
-  if (score >= 7)   return 'HERO';        // top 5-15: white-glove, all 3 channels, +1 cover bonus
-  if (score >= 4.5) return 'PRIORITY';    // 25-40: email + WABA primary, IG DM if no other
-  if (score >= 2.5) return 'STANDARD';    // rest: single channel only
-  return 'SKIP';                          // below threshold — not worth contacting
+  // Buckets are PRIORITY ORDER for outreach, not gating.
+  // STANDARD bucket creators are still actionable — they just go in the third send wave.
+  // SKIP is reserved for genuine off-vertical (fashion / weight-loss / non-food categories).
+  if (score >= 6)    return 'HERO';        // top 10-20%: white-glove, all 3 channels, owner-personalised
+  if (score >= 4)    return 'PRIORITY';    // strong fit: email + WABA in standard wave
+  if (score >= 2)    return 'STANDARD';    // viable: single best-channel, third wave
+  return 'SKIP';                            // off-vertical — manual review before contacting
 }
 
 // Small helper: returns a friendly cover offer line for outreach text
