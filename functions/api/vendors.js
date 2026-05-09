@@ -10,10 +10,12 @@
  *                                 (RM-purchase scope; S/C reserved for services/capex)
  *     OPM     ∈ {M, A}          — Manual (call/WA/walk-in/route)
  *                                 vs Automatable (app/web/API)
- *     PMS     ∈ {C, D, H}       — Cash-only / Digital-only / Hybrid
+ *     PMS     ∈ {C, B, Cb, Bc}  — Cash-only / Bank-only / Hybrid (case-encoded
+ *                                 primary+alt: uppercase primary, lowercase alt;
+ *                                 mirrors SOURCING Lb/Bl and USAGE Pr/Rp)
  *     IDENTITY                  — uppercase 3-10 chars, unique across all vendors
  *
- * Examples: Rf-L-M-C-PRABHU, Pf-B-A-D-ZEPTO, Rf-LB-M-H-SHARIFF
+ * Examples: Rf-L-M-C-PRABHU, Pf-B-A-B-ZEPTO, Rf-LB-M-Cb-SHARIFF, Rf-B-A-Bc-HYPERPURE
  *
  * Endpoints (PIN-gated; same USERS table as rm-sourcing.js):
  *   GET    /api/vendors?pin=…                                    → list (lightweight)
@@ -98,9 +100,17 @@ function validateOpm(v) {
 }
 
 function validatePms(v) {
-  if (!v || typeof v !== 'string') return 'PMS required — must be C (Cash-only), D (Digital-only), or H (Hybrid)';
-  if (v !== 'C' && v !== 'D' && v !== 'H') {
-    return `PMS must be C (Cash-only), D (Digital-only), or H (Hybrid) — got "${v}"`;
+  if (!v || typeof v !== 'string') {
+    return 'PMS required — must be C, B, Cb, or Bc';
+  }
+  // Shape: uppercase primary letter from {C,B}, optional lowercase alt from {c,b}.
+  if (!/^[CB][cb]?$/.test(v)) {
+    return `PMS must be C (Cash-only), B (Bank-only), Cb (cash primary + bank alt), or Bc (bank primary + cash alt). Got "${v}". Primary letter uppercase; alternate lowercase. No duplicates.`;
+  }
+  // No duplicate letters — Cc / Bb forbidden.
+  const upper = v.toUpperCase();
+  if (upper.length !== new Set(upper).size) {
+    return `PMS contains duplicate letter — got "${v}". Each letter (C, B) appears at most once.`;
   }
   return null;
 }
@@ -141,8 +151,8 @@ function composeVendorCode({ pay_seq, sells, opm, pms, identity_abbr }) {
 /* Parse a 5-segment vendor code. Returns null if shape doesn't match. */
 function parseVendorCode(code) {
   if (!code || typeof code !== 'string') return null;
-  // Match "{Pf|Rf}-{L|B|LB}-{M|A}-{C|D|H}-{IDENTITY}"
-  const m = code.match(/^(Pf|Rf)-(L|B|LB)-(M|A)-(C|D|H)-([A-Z0-9]{3,10})$/);
+  // Match "{Pf|Rf}-{L|B|LB}-{M|A}-{C|B|Cb|Bc}-{IDENTITY}"
+  const m = code.match(/^(Pf|Rf)-(L|B|LB)-(M|A)-([CB][cb]?)-([A-Z0-9]{3,10})$/);
   if (!m) return null;
   return { pay_seq: m[1], sells: m[2], opm: m[3], pms: m[4], identity_abbr: m[5] };
 }
