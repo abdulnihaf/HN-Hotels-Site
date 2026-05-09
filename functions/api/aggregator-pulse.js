@@ -399,7 +399,353 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
-  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance', 'health', 'snapshots', 'reviews'] }), { status: 400, headers });
+  // --- v6.1 PARSED: per-brand per-platform structured data for the new HE/NCH UI ---
+  // Returns clean, sectioned data that the new dashboard can consume directly without
+  // having to know about raw metric_types or snapshot shape. Each section carries a
+  // `data_scope` flag so the UI can label clearly when data is HE-only vs combined.
+  if (action === 'parsed') {
+    const brand = url.searchParams.get('brand');     // 'he' | 'nch'
+    const platform = url.searchParams.get('platform'); // 'swiggy' | 'zomato'
+    const period = url.searchParams.get('period') || 'today'; // today|yesterday|thisweek|lastweek|month
+    const HE_OUTLET_SWIGGY = '1342887';
+    const NCH_OUTLET_SWIGGY = '1342888';
+    const HE_OUTLET_ZOMATO = '22632449';
+    const NCH_OUTLET_ZOMATO = '22632430';
+    const targetSwiggyOutlet = brand === 'he' ? HE_OUTLET_SWIGGY : NCH_OUTLET_SWIGGY;
+    const targetZomatoOutlet = brand === 'he' ? HE_OUTLET_ZOMATO : NCH_OUTLET_ZOMATO;
+
+    if (!['he', 'nch'].includes(brand)) {
+      return new Response(JSON.stringify({ error: 'brand must be he or nch' }), { status: 400, headers });
+    }
+    if (!['swiggy', 'zomato'].includes(platform)) {
+      return new Response(JSON.stringify({ error: 'platform must be swiggy or zomato' }), { status: 400, headers });
+    }
+
+    // Helper: latest snapshot of a given metric_type (any brand/outlet)
+    const latestSnap = async (mt, brandFilter) => {
+      let sql = `SELECT * FROM aggregator_snapshots WHERE platform = ? AND metric_type = ?`;
+      const p = [platform, mt];
+      if (brandFilter) { sql += ` AND brand = ?`; p.push(brandFilter); }
+      sql += ` ORDER BY captured_at DESC LIMIT 1`;
+      const row = await db.prepare(sql).bind(...p).first();
+      return row ? { ...row, data: safeJsonParse(row.data) } : null;
+    };
+
+    // Helper: latest snapshot whose metric_type has a given prefix (e.g. live_tracking_api)
+    const latestSnapPrefix = async (prefix, brandFilter) => {
+      let sql = `SELECT * FROM aggregator_snapshots WHERE platform = ? AND metric_type LIKE ?`;
+      const p = [platform, prefix + '%'];
+      if (brandFilter) { sql += ` AND brand = ?`; p.push(brandFilter); }
+      sql += ` ORDER BY captured_at DESC LIMIT 1`;
+      const row = await db.prepare(sql).bind(...p).first();
+      return row ? { ...row, data: safeJsonParse(row.data) } : null;
+    };
+
+    const sections = {};
+
+    if (platform === 'swiggy') {
+      // === SWIGGY ===
+      const reportType = `reports_swiggy_${period}`;
+      const report = await latestSnap(reportType, 'all');
+      const liveOrders = await latestSnap('live_orders', 'all');
+      const apiOrders = await latestSnap('api_orders', 'all');
+
+      const num = (v) => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      };
+
+      // ---- GROWTH (combined HE+NCH; per-outlet needs extension upgrade) ----
+      if (report) {
+        const r = report.data || {};
+        const impressions = num(r.impressions);
+        const menuOpens = num(r.menu_opens);
+        const cartBuilds = num(r.cart_builds);
+        const ordersPlaced = num(r.orders_placed);
+        const pct = (a, b) => (a !== null && b && b > 0) ? Math.round((a / b) * 1000) / 10 : null;
+
+        sections.growth = {
+          data_scope: 'combined_he_nch',
+          data_scope_note: 'Swiggy business-metrics page does not split per-outlet here. Per-outlet capture requires extension to apply outlet filter (Phase 1B).',
+          captured_at: report.captured_at,
+          period: r.period || period,
+          date_range: r.date_range || null,
+          funnel: {
+            impressions,
+            menu_opens: menuOpens,
+            cart_builds: cartBuilds,
+            orders_placed: ordersPlaced,
+            menu_open_rate_pct: pct(menuOpens, impressions),
+            cart_build_rate_pct: pct(cartBuilds, menuOpens),
+            order_conversion_rate_pct: pct(ordersPlaced, cartBuilds),
+          },
+          customers: {
+            new: num(r.new_customers),
+            repeat: num(r.repeat_customers),
+            dormant: num(r.dormant_customers),
+            new_pct: num(r.new_cust_order_pct),
+            repeat_pct: num(r.repeat_cust_order_pct),
+          },
+          ads: {
+            cpc_sales: num(r.cpc_sales),
+            cpc_orders: num(r.cpc_orders),
+            cpc_spends: num(r.cpc_spends),
+            roas: num(r.roas),
+            cba_sales: num(r.cba_sales),
+            cba_spends: num(r.cba_spends),
+          },
+          discounts: {
+            disc_sales: num(r.disc_sales),
+            rdpo: num(r.rdpo),
+          },
+          listing: {
+            menu_score: num(r.menu_score),
+            items_with_photos_pct: num(r.items_with_photos),
+            items_with_desc_pct: num(r.items_with_desc),
+            online_availability_pct: num(r.online_availability),
+          },
+        };
+      } else {
+        sections.growth = { data_scope: 'unavailable', reason: `No ${reportType} snapshot in DB.` };
+      }
+
+      // ---- OPS (HE-only live status from api_orders.restaurantData; combined quality from report) ----
+      const liveOutlet = (() => {
+        if (!apiOrders) return null;
+        const rd = apiOrders.data?.restaurantData;
+        if (!Array.isArray(rd)) return null;
+        return rd.find(x => String(x.restaurantId) === targetSwiggyOutlet) || null;
+      })();
+      const liveOrderEntry = (() => {
+        if (!liveOrders) return null;
+        const outlets = liveOrders.data?.outlets;
+        if (!Array.isArray(outlets)) return null;
+        return outlets.find(x => String(x.restaurantId) === targetSwiggyOutlet) || null;
+      })();
+
+      if (report) {
+        const r = report.data || {};
+        sections.ops = {
+          data_scope: 'partial_he_only',
+          data_scope_note: 'Live outlet status is HE-only (from api_orders per-outlet). Delivery quality / cancellations / complaints are combined HE+NCH.',
+          captured_at: report.captured_at,
+          live_status: liveOutlet ? {
+            outlet_id: liveOutlet.restaurantId,
+            is_open: liveOutlet.isOpen,
+            is_serviceable: liveOutlet.isServiceable,
+            stress: liveOutlet.stressInfo?.stress || false,
+            active_batches: Object.keys(liveOutlet.batches || {}).length,
+            updated_at: apiOrders.captured_at,
+          } : (liveOrderEntry ? {
+            outlet_id: liveOrderEntry.restaurantId,
+            is_serviceable: liveOrderEntry.isServiceable,
+            active_batches: liveOrderEntry.activeBatches,
+            updated_at: liveOrders.captured_at,
+          } : { available: false }),
+          delivery_quality_combined: {
+            kitchen_prep_time_min: num(r.kitchen_prep_time),
+            mfr_accuracy_pct: num(r.mfr_accuracy),
+            delayed_10min_pct: num(r.delayed_10min),
+            online_availability_pct: num(r.online_availability),
+            avg_prep_time_min: num(r.avg_prep_time),
+          },
+          cancellations_combined: {
+            cancelled_orders: num(r.rpt_cancelled_orders),
+            cancelled_loss: num(r.rpt_cancelled_loss),
+            rated_orders: num(r.rated_orders),
+            poor_rated_orders: num(r.poor_rated_orders),
+          },
+          complaints_combined: {
+            complaint_pct: num(r.complaint_pct),
+            complaint_orders: num(r.complaint_orders),
+            unresolved_complaints: num(r.unresolved_complaints),
+            wrong_items: num(r.wrong_items),
+            missing_items: num(r.missing_items),
+            quality_issues: num(r.quality_issues),
+            packaging_issues: num(r.packaging_issues),
+          },
+          bolt_combined: {
+            order_count: num(r.bolt_order_count),
+            pct: num(r.bolt_pct),
+            aov: num(r.bolt_aov),
+            avg_prep_min: num(r.bolt_avg_prep),
+            lt6min_pct: num(r.bolt_lt6min_pct),
+            delayed_pct: num(r.delayed_bolt_pct),
+          },
+        };
+      } else {
+        sections.ops = { data_scope: 'unavailable', reason: `No ${reportType} snapshot.` };
+      }
+
+      // ---- SALES (combined; per-outlet pending) ----
+      if (report) {
+        const r = report.data || {};
+        sections.sales = {
+          data_scope: 'combined_he_nch',
+          data_scope_note: 'Combined HE+NCH. Per-outlet sales requires Swiggy outlet filter capture in extension.',
+          captured_at: report.captured_at,
+          totals: {
+            net_sales: num(r.rpt_net_sales),
+            delivered_orders: num(r.rpt_delivered_orders),
+            aov: num(r.rpt_net_aov),
+            cancelled_orders: num(r.rpt_cancelled_orders),
+            cancelled_loss: num(r.rpt_cancelled_loss),
+          },
+          date_range: r.date_range || null,
+        };
+      } else {
+        sections.sales = { data_scope: 'unavailable', reason: `No ${reportType} snapshot.` };
+      }
+
+      sections.finance = {
+        data_scope: 'unavailable',
+        reason: 'Swiggy finance page DOM extraction not yet implemented. The api_finance_* snapshots in DB are misclassified Swiggy config responses, not real finance data.',
+      };
+
+      sections.reviews = {
+        data_scope: 'unavailable',
+        reason: 'Swiggy reviews extraction not yet implemented.',
+      };
+
+    } else {
+      // === ZOMATO (delivery only) ===
+      const liveTrack = await latestSnap('live_tracking', 'all');
+      const liveTrackApi = await latestSnap('live_tracking_api', 'all');
+      const restMetrics = await latestSnap('restaurant_metrics', 'all');
+
+      const num = (v) => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      };
+
+      // ---- GROWTH ----
+      if (liveTrack) {
+        const d = liveTrack.data || {};
+        sections.growth = {
+          data_scope: 'combined_he_nch',
+          data_scope_note: 'Zomato live tracking returns combined when both outlets are selected. Per-outlet capture requires extension to apply outlet filter (Phase 1B).',
+          captured_at: liveTrack.captured_at,
+          funnel: {
+            impressions: num(d.impressions),
+            menu_opens: num(d.menu_opens),
+            cart_builds: num(d.cart_builds),
+            orders_placed: num(d.orders_placed),
+          },
+          customers: {
+            new: num(d.new_customers),
+            repeat: num(d.repeat_customers),
+            lapsed: num(d.lapsed_customers),
+          },
+          ads: { available: false, note: 'Zomato ads page extraction pending.' },
+          listing: { available: false, note: 'Zomato listing/menu metrics pending.' },
+        };
+      } else {
+        sections.growth = { data_scope: 'unavailable', reason: 'No live_tracking snapshot.' };
+      }
+
+      // ---- OPS ----
+      const myOutletMeta = (() => {
+        if (!restMetrics) return null;
+        const ents = restMetrics.data?.entities;
+        if (!Array.isArray(ents)) return null;
+        return ents.find(e => String(e.res_id) === targetZomatoOutlet || String(e.id) === targetZomatoOutlet) || null;
+      })();
+
+      if (liveTrack) {
+        const d = liveTrack.data || {};
+        sections.ops = {
+          data_scope: myOutletMeta ? 'partial_he_only' : 'combined_he_nch',
+          data_scope_note: 'Live tracking metrics are combined; outlet metadata is HE-only when available.',
+          captured_at: liveTrack.captured_at,
+          outlet_metadata: myOutletMeta ? {
+            res_id: myOutletMeta.res_id || myOutletMeta.id,
+            address: myOutletMeta.address,
+            active_since: myOutletMeta.active_since,
+            am_email: myOutletMeta.am_details?.poc_email,
+            am_phone: myOutletMeta.am_details?.poc_phone,
+          } : null,
+          delivery_quality_combined: {
+            rejected_pct: num(d.rejected_pct),
+            delayed_pct: num(d.delayed_pct),
+            poor_rated_pct: num(d.poor_rated_pct),
+            lost_sales: num(d.lost_sales),
+          },
+        };
+      } else {
+        sections.ops = { data_scope: 'unavailable', reason: 'No live_tracking snapshot.' };
+      }
+
+      // ---- SALES ----
+      if (liveTrack) {
+        const d = liveTrack.data || {};
+        sections.sales = {
+          data_scope: 'combined_he_nch',
+          data_scope_note: 'Combined HE+NCH. Per-outlet split requires extension outlet-filter capture.',
+          captured_at: liveTrack.captured_at,
+          totals: {
+            sales: num(d.sales),
+            delivered_orders: num(d.delivered_orders),
+            aov: num(d.aov),
+          },
+        };
+      } else {
+        sections.sales = { data_scope: 'unavailable', reason: 'No live_tracking snapshot.' };
+      }
+
+      sections.finance = {
+        data_scope: 'unavailable',
+        reason: 'Zomato delivery finance/payout extraction not yet implemented in extension.',
+      };
+
+      sections.reviews = {
+        data_scope: 'unavailable',
+        reason: 'Zomato delivery reviews/NPS extraction not yet implemented in extension.',
+      };
+    }
+
+    // ---- ORDERS (always per-brand from aggregator_orders table) ----
+    const IST = "'+5 hours', '+30 minutes'";
+    const EFFECTIVE_DATE = `COALESCE(NULLIF(order_date, ''), date(captured_at, ${IST}))`;
+    let dateWhere;
+    switch (period) {
+      case 'today':     dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST})`; break;
+      case 'yesterday': dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST}, '-1 day')`; break;
+      case 'thisweek':  dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'weekday 0', '-7 days')`; break;
+      case 'lastweek':  dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'weekday 0', '-14 days') AND ${EFFECTIVE_DATE} < date('now', ${IST}, 'weekday 0', '-7 days')`; break;
+      case 'month':     dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'start of month')`; break;
+      default:          dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST})`;
+    }
+    const orderRows = await db.prepare(`
+      SELECT * FROM aggregator_orders
+      WHERE ${dateWhere} AND platform = ? AND brand = ?
+      ORDER BY order_date DESC, order_time DESC LIMIT 200
+    `).bind(platform, brand).all();
+
+    const ordersList = orderRows.results || [];
+    const delivered = ordersList.filter(r => /delivered/i.test(r.status || ''));
+    sections.orders = {
+      data_scope: 'he_only_or_nch_only',
+      captured_at: ordersList[0]?.captured_at || null,
+      total_orders: ordersList.length,
+      total_delivered: delivered.length,
+      total_revenue: Math.round(delivered.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100,
+      total_payout: Math.round(delivered.reduce((s, r) => s + (r.net_payout || 0), 0) * 100) / 100,
+      orders: ordersList,
+    };
+
+    return new Response(JSON.stringify({
+      ok: true,
+      brand,
+      platform,
+      period,
+      generated_at: new Date().toISOString(),
+      sections,
+    }), { headers });
+  }
+
+  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance', 'health', 'snapshots', 'reviews', 'parsed'] }), { status: 400, headers });
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
