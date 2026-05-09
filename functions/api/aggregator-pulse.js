@@ -753,14 +753,38 @@ async function handleGet(db, url, headers) {
 
     const ordersList = orderRows.results || [];
     const delivered = ordersList.filter(r => /delivered/i.test(r.status || ''));
+    const totalRevenue = Math.round(delivered.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100;
+    const totalPayout = Math.round(delivered.reduce((s, r) => s + (r.net_payout || 0), 0) * 100) / 100;
+    const aov = delivered.length ? Math.round(totalRevenue / delivered.length) : 0;
+    const cancelled = ordersList.filter(r => /cancel|reject/i.test(r.status || ''));
+    const cancelledLoss = Math.round(cancelled.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100;
+
     sections.orders = {
       data_scope: 'he_only_or_nch_only',
       captured_at: ordersList[0]?.captured_at || null,
       total_orders: ordersList.length,
       total_delivered: delivered.length,
-      total_revenue: Math.round(delivered.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100,
-      total_payout: Math.round(delivered.reduce((s, r) => s + (r.net_payout || 0), 0) * 100) / 100,
+      total_revenue: totalRevenue,
+      total_payout: totalPayout,
       orders: ordersList,
+    };
+
+    // CRITICAL: override Sales section with HE-only / NCH-only aggregation from
+    // aggregator_orders. The earlier sections.sales (set by Swiggy/Zomato platform
+    // blocks above) used combined data — replaced here with brand-filtered truth.
+    sections.sales = {
+      data_scope: brand === 'he' ? 'he_only' : 'nch_only',
+      data_scope_note: `Aggregated from aggregator_orders WHERE brand='${brand}' AND platform='${platform}'. Genuinely ${brand.toUpperCase()}-only — does NOT include the other brand.`,
+      captured_at: ordersList[0]?.captured_at || null,
+      totals: {
+        net_sales: totalRevenue,
+        delivered_orders: delivered.length,
+        aov: aov,
+        cancelled_orders: cancelled.length,
+        cancelled_loss: cancelledLoss,
+        net_payout: totalPayout,
+      },
+      period_note: `${ordersList.length} orders found in period (${delivered.length} delivered).`,
     };
 
     return new Response(JSON.stringify({

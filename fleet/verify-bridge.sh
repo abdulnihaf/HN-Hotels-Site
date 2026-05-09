@@ -50,7 +50,13 @@ else
 fi
 
 hdr "4. SSH reachable"
-SSH_OUT=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$TARGET" 'echo OK; uname -srv; whoami' 2>&1) || true
+# For hn-winpc the SSH user is "HN Hotels" (with space) — quote on cmd line.
+# Default remote shell on Windows is cmd.exe which uses & not ; as command separator.
+if [[ "$TARGET" == "hn-winpc" ]]; then
+  SSH_OUT=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "HN Hotels@hn-winpc" 'echo OK' 2>&1) || true
+else
+  SSH_OUT=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$TARGET" 'echo OK; uname -srv; whoami' 2>&1) || true
+fi
 if echo "$SSH_OUT" | grep -q "^OK$"; then
   pass "SSH login (key-based, no password)"
   echo "$SSH_OUT" | tail -2 | sed 's/^/    /'
@@ -68,12 +74,16 @@ else
 fi
 
 hdr "6. iMac appliance state"
-ssh -o ConnectTimeout=5 "$TARGET" 'bash -s' 2>/dev/null <<'EOF' || warn "couldn't query appliance state"
+if [[ "$TARGET" == "hn-winpc" ]]; then
+  ssh "HN Hotels@hn-winpc" 'powershell -Command "$os=Get-CimInstance Win32_OperatingSystem; $up=(Get-Date) - $os.LastBootUpTime; \"  uptime:        $($up.Days)d $($up.Hours)h $($up.Minutes)m\"; $cn=(Get-Process chrome -ErrorAction SilentlyContinue | Measure-Object).Count; \"  chrome procs:  $cn\"; $ts=& \"C:\Program Files\Tailscale\tailscale.exe\" status; \"  tailscale:     $($ts.Split(\"`n\")[0])\""' 2>&1 | head -10 || warn "couldn't query appliance state"
+else
+  ssh -o ConnectTimeout=5 "$TARGET" 'bash -s' 2>/dev/null <<'EOF' || warn "couldn't query appliance state"
 echo -n "  uptime:        "; uptime | awk -F'up ' '{print $2}' | awk -F',' '{print $1, $2}'
 echo -n "  chrome alive:  "; pgrep -fl 'Google Chrome' >/dev/null && echo "yes ($(pgrep -fl 'Google Chrome' | wc -l | tr -d ' ') procs)" || echo "NO"
 echo -n "  caffeinate:    "; pmset -g | awk '/sleep/ {print "sleep="$3}' | head -1
 echo -n "  tailscale:     "; /Applications/Tailscale.app/Contents/MacOS/Tailscale status 2>/dev/null | head -1
 EOF
+fi
 
 echo
 if [[ $FAILED -eq 0 ]]; then
