@@ -241,7 +241,7 @@ export async function onRequest(context) {
     if (rmCodeParam) {
       // Codes are mixed-case (e.g. HN-AM-Bl-BTR) — preserve as-is.
       const rmCode = rmCodeParam;
-      if (method === 'GET') return await getOne(DB, rmCode);
+      if (method === 'GET') return await getOne(DB, rmCode, url);
       if (method === 'PUT') return await putOne(DB, rmCode, context.request, user);
       if (method === 'DELETE') return await deleteOne(DB, rmCode, user);
       return json({ error: 'Method not allowed' }, 405);
@@ -295,13 +295,23 @@ async function listAll(DB) {
   return json({ count: rows.length, rms: rows });
 }
 
-async function getOne(DB, rmCode) {
+async function getOne(DB, rmCode, url) {
   const rs = await DB.prepare(
     `SELECT * FROM rm_sourcing_profiles WHERE rm_code = ?`
   ).bind(rmCode).first();
   if (!rs) return json({ error: 'RM not found' }, 404);
   let data = {};
   try { data = JSON.parse(rs.data_json || '{}'); } catch (_) {}
+
+  // Optional server-side enrichment — for each vendor_code FK reference,
+  // inline the live vendor row (vendor_name, pay_seq, sells, opm, pms,
+  // identity_abbr) so the editor can render names without an N+1 fetch.
+  // Without ?expand=vendors, the raw compact data_json is returned.
+  const expand = url ? url.searchParams.get('expand') : null;
+  if (expand && /(^|,|=)vendors(=|$|,)/i.test(expand) || expand === 'vendors' || expand === '1') {
+    await enrichVendorRefs(DB, data);
+  }
+
   return json({
     rm_code: rs.rm_code,
     brand_prefix: rs.brand_prefix,
@@ -314,6 +324,69 @@ async function getOne(DB, rmCode) {
     updated_at: rs.updated_at,
     updated_by: rs.updated_by,
   });
+}
+
+/* Walk a data_json tree and inline vendor_profile fields next to each
+ * { vendor_code } reference. Adds: vendor_name, pay_seq, sells, opm, pms,
+ * identity_abbr. Single batched SELECT — no N+1.
+ *
+ * Mutates `data` in place for efficiency. Refs without vendor_code (legacy
+ * name+abbr only) are left untouched. */
+async function enrichVendorRefs(DB, data) {
+  const refs = [];
+  collectVendorRefs(data, refs);
+  if (refs.length === 0) return;
+
+  const codes = Array.from(new Set(refs.map(r => r.vendor_code).filter(Boolean)));
+  if (codes.length === 0) return;
+
+  const placeholders = codes.map(() => '?').join(',');
+  const rs = await DB.prepare(
+    `SELECT vendor_code, vendor_name, pay_seq, sells, opm, pms, identity_abbr
+       FROM vendor_profiles WHERE vendor_code IN (${placeholders})`
+  ).bind(...codes).all();
+  const byCode = new Map();
+  for (const v of (rs.results || [])) byCode.set(v.vendor_code, v);
+
+  for (const ref of refs) {
+    const v = byCode.get(ref.vendor_code);
+    if (v) {
+      ref.vendor_name   = v.vendor_name;
+      ref.pay_seq       = v.pay_seq;
+      ref.sells         = v.sells;
+      ref.opm           = v.opm;
+      ref.pms           = v.pms;
+      ref.identity_abbr = v.identity_abbr;
+    } else {
+      // FK points to a vendor that no longer exists — flag for owner attention.
+      ref.vendor_missing = true;
+    }
+  }
+}
+
+/* Collect every supplier-row object (carries `vendor_code` field) inside a
+ * data_json tree, returning the live array of refs (mutating these refs
+ * mutates the data_json). */
+function collectVendorRefs(data, out) {
+  if (!data || typeof data !== 'object') return;
+  const looseV = (data.loose && Array.isArray(data.loose.vendors)) ? data.loose.vendors : [];
+  for (const v of looseV) if (v.vendor_code) out.push(v);
+  const brands = (data.branded && Array.isArray(data.branded.brands)) ? data.branded.brands : [];
+  for (const br of brands) {
+    for (const sk of (br.skus || [])) {
+      for (const sup of (sk.suppliers || [])) {
+        if (sup.vendor_code) out.push(sup);
+      }
+    }
+  }
+  // In-house recipes occasionally carry suppliers[] too (rare, supported
+  // for symmetry with vendors.js computeRelationships).
+  const recipes = (data.in_house && Array.isArray(data.in_house.recipes)) ? data.in_house.recipes : [];
+  for (const rec of recipes) {
+    for (const sup of (rec.suppliers || [])) {
+      if (sup.vendor_code) out.push(sup);
+    }
+  }
 }
 
 async function putOne(DB, rmCode, request, user) {

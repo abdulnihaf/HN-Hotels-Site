@@ -139,6 +139,10 @@
   .item-card.brand { border-left: 3px solid var(--purple); }
   .item-card.sku { background: rgba(192,132,252,0.04); border: 1px dashed rgba(192,132,252,0.3); margin-left: 14px; }
   .item-card.supplier { background: rgba(96,165,250,0.05); border: 1px solid rgba(96,165,250,0.18); margin-left: 14px; }
+  .item-card.legacy { background: rgba(251,191,36,0.05); border-color: rgba(251,191,36,0.30); }
+  #vendor-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 70; opacity: 0; pointer-events: none; transition: opacity 0.12s; }
+  #vendor-picker-overlay.open { opacity: 1; pointer-events: auto; }
+  .vp-row:hover { background: rgba(255,255,255,0.06) !important; }
   .item-card.recipe { border-left: 3px solid var(--teal); }
   .icon-btn { background: transparent; border: 1px solid var(--border); color: var(--ink-dim); padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 12px; min-height: 32px; min-width: 32px; }
   .icon-btn:hover { color: var(--bad); border-color: rgba(248,113,113,0.3); }
@@ -747,9 +751,13 @@
     isNew: false,     // true when open RM is unsaved (Add New flow)
     dirty: false,
     filter: { q: '', brand: '', usage: '', profile: '', status: '' },
+    vendors: [],      // [{vendor_code, vendor_name, identity_abbr, pay_seq, sells, opm, pms}, …] — populated post-auth
+    vendorsLoaded: false,
+    showLegacy: localStorage.getItem('rm_show_legacy') === '1',
   };
 
   const API = '/api/rm-sourcing';
+  const VENDORS_API = '/api/vendors';
   const V_SHAPES = ['V1a', 'V1b', 'V2', 'V3', 'V4', 'V5'];
   const PROFILE_OPTIONS = ['L', 'B', 'I', 'Lb', 'Bl', 'Li', 'Il', 'Bi', 'Ib', 'Lbi', 'Bli', 'Ilb'];
   const BRANDS = [
@@ -920,6 +928,32 @@
     return data;
   }
 
+  /* Load vendor list from /api/vendors. Cached on State so we only fetch once
+   * per session — re-renders read straight from State.vendors. Call
+   * reloadVendors() if a vendor PUT cascaded and changed codes. */
+  async function loadVendors() {
+    const url = new URL(window.location.origin + VENDORS_API);
+    url.searchParams.set('pin', State.pin);
+    const r = await fetch(url.toString());
+    const txt = await r.text();
+    let data; try { data = JSON.parse(txt); } catch { data = { error: 'Bad JSON: ' + txt.slice(0, 200) }; }
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    State.vendors = (data.vendors || []).map(v => ({
+      vendor_code:   v.vendor_code,
+      vendor_name:   v.vendor_name,
+      identity_abbr: v.identity_abbr,
+      pay_seq:       v.pay_seq,
+      sells:         v.sells,
+      opm:           v.opm,
+      pms:           v.pms,
+    }));
+    State.vendorsLoaded = true;
+  }
+
+  function vendorByCode(code) {
+    return State.vendors.find(v => v.vendor_code === code) || null;
+  }
+
   // ---------- PIN gate ----------
   async function tryAuth(pin) {
     const url = new URL(window.location.origin + API);
@@ -951,6 +985,9 @@
       localStorage.setItem('rm_sourcing_pin', pin);
       State.rms = data.rms || [];
       $('#user-pill').textContent = 'pin: ' + pin;
+      // Vendor list is needed before any supplier picker can render.
+      // Failing here is non-fatal — picker falls back to legacy free-text view.
+      try { await loadVendors(); } catch (e) { console.warn('vendor load failed', e); }
       showApp();
       render();
     } catch (e) {
@@ -1173,6 +1210,134 @@
     $('#ed-unsaved').style.display = 'inline-block';
   }
 
+  /* ---------- Vendor picker modal ----------
+   * The modal is created lazily on first open (kept in DOM after that).
+   * `target` describes which supplier-row receives the picked vendor:
+   *   { kind: 'loose',   i }
+   *   { kind: 'branded', bi, si, ssi }
+   * On pick: sets `vendor_code` on the row, strips legacy fields, re-renders. */
+  function ensureVendorPickerDom() {
+    if ($('#vendor-picker-overlay')) return;
+    const html = `
+      <div id="vendor-picker-overlay" class="overlay" role="presentation"></div>
+      <div id="vendor-picker-modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Pick vendor"
+           style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--panel-solid);
+                  border:1px solid var(--border-strong);border-radius:14px;width:min(560px,92vw);max-height:80vh;
+                  display:none;flex-direction:column;z-index:80;box-shadow:0 30px 80px rgba(0,0,0,0.6);">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <strong style="font-size:15px;">Pick vendor</strong>
+          <button id="vp-close" class="btn btn-sm" type="button">Close</button>
+        </div>
+        <div style="padding:12px 18px;border-bottom:1px solid var(--border);">
+          <input id="vp-search" class="txt" type="search" placeholder="Search by name or canonical code…"
+                 style="width:100%;padding:10px 12px;background:rgba(0,0,0,0.4);color:var(--ink);
+                        border:1px solid var(--border-strong);border-radius:8px;font-size:13px;">
+        </div>
+        <div id="vp-list" style="overflow-y:auto;padding:8px;"></div>
+        <div style="padding:10px 18px;border-top:1px solid var(--border);font-size:12px;color:var(--ink-faint);">
+          <span id="vp-count"></span> · click a vendor to attach &mdash; or
+          <a href="/ops/vendor-editor/" target="_blank" style="color:var(--accent);">+ create a new one</a>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', html);
+    $('#vp-close').onclick = closeVendorPicker;
+    $('#vendor-picker-overlay').onclick = closeVendorPicker;
+    $('#vp-search').oninput = () => renderVendorPickerList($('#vp-search').value);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && $('#vendor-picker-modal').style.display === 'flex') closeVendorPicker();
+    });
+  }
+
+  let vendorPickerTarget = null;
+
+  function openVendorPicker(target) {
+    vendorPickerTarget = target;
+    ensureVendorPickerDom();
+    $('#vendor-picker-overlay').classList.add('open');
+    const m = $('#vendor-picker-modal');
+    m.style.display = 'flex';
+    m.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    $('#vp-search').value = '';
+    renderVendorPickerList('');
+    setTimeout(() => $('#vp-search').focus(), 50);
+  }
+
+  function closeVendorPicker() {
+    const m = $('#vendor-picker-modal');
+    if (!m) return;
+    m.style.display = 'none';
+    m.setAttribute('aria-hidden', 'true');
+    $('#vendor-picker-overlay').classList.remove('open');
+    document.body.style.overflow = '';
+    vendorPickerTarget = null;
+  }
+
+  function renderVendorPickerList(qRaw) {
+    const list = $('#vp-list');
+    if (!list) return;
+    if (!State.vendorsLoaded) {
+      list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--ink-dim);">Loading vendors…</div>`;
+      loadVendors().then(() => renderVendorPickerList($('#vp-search').value)).catch(e => {
+        list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--bad);">Failed to load: ${escapeHtml(e.message)}</div>`;
+      });
+      return;
+    }
+    const q = (qRaw || '').trim().toLowerCase();
+    const matches = State.vendors.filter(v => {
+      if (!q) return true;
+      return (v.vendor_name || '').toLowerCase().includes(q) ||
+             (v.vendor_code || '').toLowerCase().includes(q) ||
+             (v.identity_abbr || '').toLowerCase().includes(q);
+    }).slice(0, 100);
+    $('#vp-count').textContent = `${matches.length} vendor${matches.length === 1 ? '' : 's'}${q ? ' (filtered)' : ''}`;
+    if (matches.length === 0) {
+      list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--ink-dim);">No matches.</div>`;
+      return;
+    }
+    list.innerHTML = matches.map(v => `
+      <button type="button" class="vp-row" data-code="${escapeHtml(v.vendor_code)}"
+              style="display:flex;flex-direction:column;width:100%;padding:10px 12px;margin-bottom:4px;
+                     background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;
+                     text-align:left;cursor:pointer;color:var(--ink);">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;">
+          <strong style="font-size:13px;">${escapeHtml(v.vendor_name || '')}</strong>
+          <span class="mono" style="font-size:11px;color:var(--accent);">${escapeHtml(v.vendor_code)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--ink-dim);margin-top:2px;">
+          ${escapeHtml(v.pay_seq || '')} · ${escapeHtml(v.sells || '')} · ${escapeHtml(v.opm || '')} · ${escapeHtml(v.pms || '')}
+        </div>
+      </button>
+    `).join('');
+    list.querySelectorAll('.vp-row').forEach(btn => {
+      btn.onclick = () => attachVendorToTarget(btn.dataset.code);
+    });
+  }
+
+  function attachVendorToTarget(code) {
+    if (!vendorPickerTarget || !State.open) { closeVendorPicker(); return; }
+    const o = State.open;
+    let row = null;
+    if (vendorPickerTarget.kind === 'loose') {
+      row = o.data.loose?.vendors?.[vendorPickerTarget.i];
+    } else if (vendorPickerTarget.kind === 'branded') {
+      const { bi, si, ssi } = vendorPickerTarget;
+      row = o.data.branded?.brands?.[bi]?.skus?.[si]?.suppliers?.[ssi];
+    }
+    if (!row) { closeVendorPicker(); return; }
+    row.vendor_code = code;
+    // Strip legacy free-text fields — vendor_code is the source of truth now.
+    delete row.name;
+    delete row.abbr;
+    delete row.v_shape;
+    delete row.abbrTouched;
+    delete row.legacy;
+    markDirty();
+    closeVendorPicker();
+    renderEditor();
+  }
+
   function renderEditor() {
     const o = State.open;
     const idn = State.identity;
@@ -1332,6 +1497,21 @@
       </div>
     `;
 
+    // Count any legacy supplier rows still in this RM tree so the toggle has context.
+    const legacyCount = countLegacyRefs(o.data);
+    if (legacyCount > 0 || State.showLegacy) {
+      html += `<div style="margin:10px 0;padding:8px 12px;background:rgba(251,191,36,0.06);
+                          border:1px solid rgba(251,191,36,0.18);border-radius:8px;font-size:12px;
+                          display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <span style="color:var(--warn);">
+          ${legacyCount} legacy supplier row${legacyCount === 1 ? '' : 's'} (no vendor_code FK).
+        </span>
+        <button class="btn btn-sm" data-action="toggle-legacy" type="button">
+          ${State.showLegacy ? 'Hide legacy rows' : 'Show legacy rows'}
+        </button>
+      </div>`;
+    }
+
     if (showL) html += renderLooseSection(o.data.loose);
     if (showB) html += renderBrandedSection(o.data.branded);
     if (showI) html += renderInHouseSection(o.data.in_house);
@@ -1374,6 +1554,23 @@
     return V_SHAPES.map(v => `<option value="${v}" ${v === selected ? 'selected' : ''}>${v}</option>`).join('');
   }
 
+  /* Count supplier rows that lack vendor_code (legacy free-text refs).
+   * Used to surface the "Show legacy rows" toggle banner. */
+  function countLegacyRefs(data) {
+    let n = 0;
+    const looseV = (data?.loose?.vendors) || [];
+    for (const v of looseV) if (!v.vendor_code) n++;
+    const brands = (data?.branded?.brands) || [];
+    for (const br of brands) {
+      for (const sk of (br.skus || [])) {
+        for (const sup of (sk.suppliers || [])) {
+          if (!sup.vendor_code) n++;
+        }
+      }
+    }
+    return n;
+  }
+
   function renderLooseSection(loose) {
     const vendors = loose.vendors || [];
     return `
@@ -1388,12 +1585,15 @@
   }
 
   function looseVendorCard(v, i) {
+    const isLegacy = !v.vendor_code;
+    if (isLegacy && !State.showLegacy) {
+      // Hide legacy rows by default — surface count via the legacy banner instead.
+      return '';
+    }
     return `
-      <div class="item-card" data-i="${i}">
+      <div class="item-card ${isLegacy ? 'legacy' : ''}" data-i="${i}">
         <div class="row">
-          <input class="txt" placeholder="Vendor name" data-field="name" value="${escapeHtml(v.name || '')}">
-          <input class="txt mono" placeholder="ABBR" data-field="abbr" value="${escapeHtml(v.abbr || '')}" style="text-transform:uppercase;">
-          <select class="txt mono" data-field="v_shape">${vshapeOpts(v.v_shape || 'V1a')}</select>
+          ${vendorRefDisplay(v, 'loose', { i })}
           <label class="primary-flag"><input type="radio" name="loose-primary" data-field="primary" ${v.primary ? 'checked' : ''}>primary</label>
           <button class="icon-btn" data-action="del-vendor">✕</button>
         </div>
@@ -1402,6 +1602,45 @@
         </div>
       </div>
     `;
+  }
+
+  /* Render a single vendor reference (loose vendor or branded supplier).
+   * Mode: 'picker' (no vendor_code yet — show search box) or 'set'
+   * (vendor_code present — show name + canonical code + change/clear).
+   * Legacy rows (no vendor_code, but old name/abbr fields present) get a
+   * yellow banner inviting the owner to re-link.
+   *
+   * Args: ref = the supplier-row object
+   *       layer = 'loose' | 'branded'  (used only for picker action labels)
+   *       loc   = location keys for picker click handlers (i for loose; bi/si/ssi for branded) */
+  function vendorRefDisplay(ref, layer, loc) {
+    if (ref.vendor_code) {
+      const v = vendorByCode(ref.vendor_code);
+      if (v) {
+        return `
+          <div class="vendor-ref" style="flex:1;display:flex;flex-direction:column;gap:2px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <strong>${escapeHtml(v.vendor_name || '')}</strong>
+              <span class="mono" style="font-size:11px;color:var(--accent);">${escapeHtml(v.vendor_code)}</span>
+              <button class="btn btn-sm" data-action="change-vendor" type="button">Change</button>
+            </div>
+          </div>`;
+      }
+      // Vendor referenced but missing in vendor_profiles (deleted upstream).
+      return `
+        <div class="vendor-ref" style="flex:1;color:var(--bad);">
+          <strong>Vendor missing:</strong> <span class="mono">${escapeHtml(ref.vendor_code)}</span>
+          <button class="btn btn-sm" data-action="change-vendor" type="button">Re-link</button>
+        </div>`;
+    }
+    // No vendor_code yet — show legacy hint + picker button.
+    const legacyHint = (ref.name || ref.abbr) ?
+      `<span style="color:var(--warn);font-size:11px;margin-right:8px;">legacy: ${escapeHtml(ref.name || '')}${ref.abbr ? ' (' + escapeHtml(ref.abbr) + ')' : ''}</span>` :
+      '';
+    return `
+      <div class="vendor-ref" style="flex:1;">
+        ${legacyHint}<button class="btn btn-primary btn-sm" data-action="pick-vendor" type="button">+ Pick vendor</button>
+      </div>`;
   }
 
   function renderBrandedSection(branded) {
@@ -1453,12 +1692,15 @@
 
   function supplierCard(s, bi, si, ssi) {
     const radioName = `sku-primary-${bi}-${si}`;
+    const isLegacy = !s.vendor_code;
+    if (isLegacy && !State.showLegacy && (s.name || s.abbr)) {
+      // Hide legacy supplier rows when toggle is off.
+      return '';
+    }
     return `
-      <div class="item-card supplier" data-bi="${bi}" data-si="${si}" data-ssi="${ssi}">
+      <div class="item-card supplier ${isLegacy && (s.name || s.abbr) ? 'legacy' : ''}" data-bi="${bi}" data-si="${si}" data-ssi="${ssi}">
         <div class="row">
-          <input class="txt" placeholder="Supplier name" data-field="sup-name" value="${escapeHtml(s.name || '')}">
-          <input class="txt mono" placeholder="ABBR" data-field="sup-abbr" value="${escapeHtml(s.abbr || '')}" style="text-transform:uppercase;">
-          <select class="txt mono" data-field="sup-vshape">${vshapeOpts(s.v_shape || 'V1a')}</select>
+          ${vendorRefDisplay(s, 'branded', { bi, si, ssi })}
           <label class="primary-flag"><input type="radio" name="${radioName}" data-field="sup-primary" ${s.primary ? 'checked' : ''}>primary</label>
           <button class="icon-btn" data-action="del-supplier">✕</button>
         </div>
@@ -1641,16 +1883,9 @@
     if (card.parentElement?.id === 'loose-list') {
       const i = +card.dataset.i;
       const v = o.data.loose.vendors[i];
-      if (f === 'name') {
-        v.name = t.value;
-        const ab = card.querySelector('[data-field="abbr"]');
-        if (ab && !v.abbrTouched) ab.value = autoUpper(t.value);
-        v.abbr = ab.value;
-      } else if (f === 'abbr') {
-        v.abbr = t.value.toUpperCase();
-        v.abbrTouched = true;
-      } else if (f === 'v_shape') v.v_shape = t.value;
-      else if (f === 'primary') {
+      // v8 FK shape: only `primary` and `notes` are user-editable here;
+      // identity fields come from vendor_profiles via vendor_code.
+      if (f === 'primary') {
         if (t.checked) o.data.loose.vendors.forEach((vv, j) => vv.primary = (j === i));
       } else if (f === 'notes') v.notes = t.value;
       markDirty();
@@ -1703,16 +1938,9 @@
       const si = +card.dataset.si;
       const ssi = +card.dataset.ssi;
       const sup = o.data.branded.brands[bi].skus[si].suppliers[ssi];
-      if (f === 'sup-name') {
-        sup.name = t.value;
-        const ab = card.querySelector('[data-field="sup-abbr"]');
-        if (ab && !sup.abbrTouched) ab.value = autoUpper(t.value);
-        sup.abbr = ab.value;
-      } else if (f === 'sup-abbr') {
-        sup.abbr = t.value.toUpperCase();
-        sup.abbrTouched = true;
-      } else if (f === 'sup-vshape') sup.v_shape = t.value;
-      else if (f === 'sup-primary') {
+      // v8 FK shape: only `primary` and `notes` are user-editable here;
+      // identity fields come from vendor_profiles via vendor_code.
+      if (f === 'sup-primary') {
         if (t.checked) o.data.branded.brands[bi].skus[si].suppliers.forEach((s, j) => s.primary = (j === ssi));
       } else if (f === 'sup-notes') sup.notes = t.value;
       markDirty();
@@ -1727,8 +1955,13 @@
     const o = State.open;
 
     if (a === 'add-vendor') {
-      o.data.loose.vendors.push({ id: uuid(), name: '', abbr: '', v_shape: 'V1a', primary: o.data.loose.vendors.length === 0, notes: '' });
-      markDirty(); renderEditor(); return;
+      const arr = o.data.loose.vendors;
+      arr.push({ id: uuid(), vendor_code: null, primary: arr.length === 0, notes: '' });
+      markDirty();
+      // Open the picker immediately so the new row gets a vendor before render.
+      openVendorPicker({ kind: 'loose', i: arr.length - 1 });
+      renderEditor();
+      return;
     }
     if (a === 'del-vendor') {
       const i = +btn.closest('.item-card').dataset.i;
@@ -1759,8 +1992,30 @@
       const skuCard = btn.closest('.item-card.sku');
       const bi = +skuCard.dataset.bi, si = +skuCard.dataset.si;
       const arr = o.data.branded.brands[bi].skus[si].suppliers;
-      arr.push({ id: uuid(), name: '', abbr: '', v_shape: 'V1a', primary: arr.length === 0, notes: '' });
-      markDirty(); renderEditor(); return;
+      arr.push({ id: uuid(), vendor_code: null, primary: arr.length === 0, notes: '' });
+      markDirty();
+      openVendorPicker({ kind: 'branded', bi, si, ssi: arr.length - 1 });
+      renderEditor();
+      return;
+    }
+    if (a === 'pick-vendor' || a === 'change-vendor') {
+      // Read the surrounding card to figure out coords.
+      const card = btn.closest('.item-card');
+      if (!card) return;
+      if (card.classList.contains('supplier')) {
+        const bi = +card.dataset.bi, si = +card.dataset.si, ssi = +card.dataset.ssi;
+        openVendorPicker({ kind: 'branded', bi, si, ssi });
+      } else if (card.parentElement?.id === 'loose-list') {
+        const i = +card.dataset.i;
+        openVendorPicker({ kind: 'loose', i });
+      }
+      return;
+    }
+    if (a === 'toggle-legacy') {
+      State.showLegacy = !State.showLegacy;
+      localStorage.setItem('rm_show_legacy', State.showLegacy ? '1' : '0');
+      renderEditor();
+      return;
     }
     if (a === 'del-supplier') {
       const card = btn.closest('.item-card.supplier');
@@ -1884,6 +2139,7 @@
         const data = await tryAuth(State.pin);
         State.rms = data.rms || [];
         $('#user-pill').textContent = 'pin: ' + State.pin;
+        try { await loadVendors(); } catch (e) { console.warn('vendor load failed', e); }
         showApp();
         render();
         return;

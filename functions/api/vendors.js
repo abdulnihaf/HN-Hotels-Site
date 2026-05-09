@@ -207,6 +207,36 @@ function parseVendorCode(code) {
  * Computed-views helpers — walk rm_sourcing_profiles for vendor refs
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
+/* Rewrite every vendor_code FK reference inside an rm_sourcing data_json
+ * tree from oldCode to newCode. Mutates `data` in place. Returns true if at
+ * least one ref was changed (so the caller knows whether to write back).
+ *
+ * Walks the same three buckets as collectVendorRefs / computeRelationships:
+ * loose.vendors[], branded.brands[].skus[].suppliers[], in_house.recipes[].suppliers[]. */
+function rewriteVendorCodeRefs(data, oldCode, newCode) {
+  if (!data || typeof data !== 'object') return false;
+  let changed = false;
+  const looseV = (data.loose && Array.isArray(data.loose.vendors)) ? data.loose.vendors : [];
+  for (const v of looseV) {
+    if (v && v.vendor_code === oldCode) { v.vendor_code = newCode; changed = true; }
+  }
+  const brands = (data.branded && Array.isArray(data.branded.brands)) ? data.branded.brands : [];
+  for (const br of brands) {
+    for (const sk of (br.skus || [])) {
+      for (const sup of (sk.suppliers || [])) {
+        if (sup && sup.vendor_code === oldCode) { sup.vendor_code = newCode; changed = true; }
+      }
+    }
+  }
+  const recipes = (data.in_house && Array.isArray(data.in_house.recipes)) ? data.in_house.recipes : [];
+  for (const rec of recipes) {
+    for (const sup of (rec.suppliers || [])) {
+      if (sup && sup.vendor_code === oldCode) { sup.vendor_code = newCode; changed = true; }
+    }
+  }
+  return changed;
+}
+
 /* Determine if a supplier/vendor ref name matches the given vendor.
  * Match strategy: case-insensitive equality on `name` OR `abbr` matches identity_abbr,
  * OR vendor_code stored on the ref equals the canonical code. */
@@ -563,7 +593,9 @@ async function putOne(DB, vendorCode, request, user) {
   const now = Date.now();
 
   if (newCode !== vendorCode) {
-    // Re-key path: new identity is unique, INSERT new + DELETE old atomically.
+    // Re-key path: new identity is unique, INSERT new + DELETE old atomically,
+    // AND cascade-rewrite any rm_sourcing_profiles.data_json that references
+    // the old code so RM trees never go stale (Framework Gap 1 closed).
     const idCollide = await DB.prepare(
       `SELECT vendor_code FROM vendor_profiles WHERE identity_abbr = ? AND vendor_code != ?`
     ).bind(identity_abbr, vendorCode).first();
@@ -579,20 +611,61 @@ async function putOne(DB, vendorCode, request, user) {
       return json({ error: `vendor_code ${newCode} already exists.` }, 409);
     }
 
-    await DB.batch([
+    // Find every RM tree that references the old code as a supplier FK.
+    // LIKE-based scan is exact-string-safe because vendor codes are
+    // dash-separated 5-segment tokens and the JSON encoding is
+    // deterministic ("vendor_code":"<code>").
+    const oldRefRs = await DB.prepare(
+      `SELECT rm_code, data_json FROM rm_sourcing_profiles
+        WHERE data_json LIKE ?`
+    ).bind(`%"vendor_code":"${vendorCode}"%`).all();
+    const cascadeRows = oldRefRs.results || [];
+
+    // Walk each match, rewrite vendor_code FK references in place, prepare
+    // a single atomic batch (vendor INSERT + DELETE + each RM UPDATE).
+    const cascadedRmCodes = [];
+    const stmts = [
       DB.prepare(
         `INSERT INTO vendor_profiles
            (vendor_code, pay_seq, sells, opm, pms, identity_abbr, vendor_name, data_json, updated_at, updated_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(newCode, pay_seq, sells, opm, pms, identity_abbr, vendor_name, dataStr, now, user.name),
       DB.prepare(`DELETE FROM vendor_profiles WHERE vendor_code = ?`).bind(vendorCode),
-    ]);
+    ];
+
+    for (const row of cascadeRows) {
+      let rmData = {};
+      try { rmData = JSON.parse(row.data_json || '{}'); } catch (_) { continue; }
+      const changed = rewriteVendorCodeRefs(rmData, vendorCode, newCode);
+      if (!changed) continue;
+      cascadedRmCodes.push(row.rm_code);
+      stmts.push(
+        DB.prepare(
+          `UPDATE rm_sourcing_profiles
+              SET data_json = ?, updated_at = ?, updated_by = ?
+            WHERE rm_code = ?`
+        ).bind(JSON.stringify(rmData), now, user.name, row.rm_code)
+      );
+    }
+
+    try {
+      await DB.batch(stmts);
+    } catch (e) {
+      // D1 batch is atomic — if anything fails, nothing is written.
+      // Surface the cascade context in the error so callers can debug.
+      return json({
+        error: `Cascade failed: ${e.message}`,
+        attempted_cascade: cascadedRmCodes,
+      }, 500);
+    }
 
     return json({
       success: true,
       vendor_code:   newCode,
       migrated_from: vendorCode,
       pay_seq, sells, opm, pms, identity_abbr, vendor_name,
+      cascaded_rms:  cascadedRmCodes,
+      cascade_count: cascadedRmCodes.length,
       updated_at:    now,
       updated_by:    user.name,
     });
@@ -622,17 +695,30 @@ async function deleteOne(DB, vendorCode, user) {
   ).bind(vendorCode).first();
   if (!existing) return json({ error: 'Vendor not found' }, 404);
 
-  // Check RM-references — refuse delete if any RM references this vendor.
+  // Fast FK pre-check: any RM referencing this vendor_code as the canonical FK?
+  // (Catches the v9 supplier-row shape that stores vendor_code only.)
+  const fkRs = await DB.prepare(
+    `SELECT rm_code FROM rm_sourcing_profiles WHERE data_json LIKE ?`
+  ).bind(`%"vendor_code":"${vendorCode}"%`).all();
+  const fkRms = (fkRs.results || []).map(r => r.rm_code);
+
+  // Belt-and-braces: also check legacy refs (name/abbr/v_shape rows from
+  // before the FK migration) via the existing relationship walker.
   const refs = await computeRelationships(DB, {
     vendor_code:   existing.vendor_code,
     identity_abbr: existing.identity_abbr,
     vendor_name:   existing.vendor_name,
   });
 
-  if (refs.rms_supplied.length > 0) {
+  const referencedRmCodes = Array.from(
+    new Set([...fkRms, ...refs.rms_supplied.map(r => r.rm_code)])
+  );
+
+  if (referencedRmCodes.length > 0) {
     return json({
-      error: `Vendor referenced in ${refs.rms_supplied.length} RM${refs.rms_supplied.length === 1 ? '' : 's'}. Remove from RM tree first.`,
-      rms_supplied: refs.rms_supplied,
+      error: `Vendor referenced in ${referencedRmCodes.length} RM${referencedRmCodes.length === 1 ? '' : 's'}. Remove from RM tree first.`,
+      referenced_rms: referencedRmCodes,
+      rms_supplied:   refs.rms_supplied, // keep legacy shape for clients
     }, 409);
   }
 
