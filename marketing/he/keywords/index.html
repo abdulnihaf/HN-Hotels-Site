@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>HE · Keyword Demand Tracker</title>
+<meta name="theme-color" content="#0a0f1a">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f1a;--bg2:#111827;--card:#161f33;--border:#2d3a4f;
+  --text:#f1f5f9;--text2:#cbd5e1;--muted:#94a3b8;--dim:#64748b;
+  --green:#10b981;--red:#ef4444;--orange:#f97316;--yellow:#f59e0b;
+  --blue:#3b82f6;--purple:#8b5cf6;--cyan:#06b6d4;
+  --brand:#f97316; --brand2:#ea580c; --brand-soft:rgba(249,115,22,.12);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.45}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.container{max-width:1280px;margin:0 auto;padding:14px 14px 80px}
+
+.hdr{background:var(--bg);position:sticky;top:0;z-index:50;border-bottom:1px solid var(--border);margin:-14px -14px 0;padding:10px 14px}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
+.hdr-row a{color:var(--brand);text-decoration:none}
+.hdr-title{display:flex;align-items:baseline;gap:8px;margin:6px 0 2px;flex-wrap:wrap}
+.hdr-title h1{font-size:18px;font-weight:800;letter-spacing:-.01em}
+.hdr-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--text2)}
+.hdr-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.hdr-actions button, .hdr-actions a{font-size:11px;padding:5px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-weight:600;cursor:pointer;text-decoration:none}
+.hdr-actions button:hover,.hdr-actions a:hover{border-color:var(--brand);color:var(--text)}
+.hdr-actions button.primary{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+
+/* SUMMARY CARDS */
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin:14px 0}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px}
+.card .lbl{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:700;margin-bottom:4px}
+.card .val{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.card .sub{font-size:11px;color:var(--dim);margin-top:2px}
+.card.green .val{color:var(--green)} .card.red .val{color:var(--red)} .card.orange .val{color:var(--orange)}
+
+/* BLOCK FILTER PILLS */
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.pill{padding:5px 11px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;user-select:none}
+.pill.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.pill .ct{margin-left:5px;font-size:10px;color:var(--dim)}
+.pill.on .ct{color:var(--brand)}
+
+/* TABLE */
+.tbl-wrap{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl thead th{background:var(--bg2);padding:9px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700;border-bottom:1px solid var(--border);position:sticky;top:0;cursor:pointer;user-select:none}
+.tbl thead th.r{text-align:right}
+.tbl thead th:hover{color:var(--text)}
+.tbl thead th.sort-asc::after{content:' ▲';color:var(--brand)}
+.tbl thead th.sort-desc::after{content:' ▼';color:var(--brand)}
+.tbl tbody td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px}
+.tbl tbody tr:hover{background:var(--bg2)}
+.tbl td.r{text-align:right}
+.tbl td.kw{font-weight:600;color:var(--text);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbl td.block{font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:600;color:var(--muted)}
+.tbl td.vol{font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--text)}
+.tbl td.gap-red{color:var(--red);font-weight:700}
+.tbl td.gap-orange{color:var(--orange);font-weight:700}
+.tbl td.gap-green{color:var(--green);font-weight:700}
+.tbl td.bid{font-family:'JetBrains Mono',monospace;color:var(--text2)}
+.tbl td.share{font-family:'JetBrains Mono',monospace}
+
+.comp-low{color:var(--green)} .comp-medium{color:var(--orange)} .comp-high{color:var(--red)} .comp-unspecified{color:var(--dim)}
+
+.empty{padding:60px 20px;text-align:center;color:var(--muted)}
+.empty h3{font-size:16px;color:var(--text2);margin-bottom:6px}
+.empty code{background:var(--bg2);padding:2px 8px;border-radius:4px;color:var(--brand);font-family:'JetBrains Mono',monospace;font-size:11px}
+.loading{padding:40px;text-align:center;color:var(--muted)}
+.err{padding:14px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);border-radius:8px;font-size:12px;margin:14px 0}
+
+/* DESKTOP TWEAKS */
+@media (min-width:768px){
+  body{font-size:14px}
+  .hdr-title h1{font-size:22px}
+  .summary{grid-template-columns:repeat(6,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="hdr">
+    <div class="hdr-row">
+      <span><a href="/marketing/">Marketing</a> · HE · Keywords</span>
+      <span id="hdr-asof" class="mono">—</span>
+    </div>
+    <div class="hdr-title">
+      <h1>Keyword Demand Tracker</h1>
+      <span class="mono" style="color:var(--muted);font-size:12px">Bangalore · live</span>
+    </div>
+    <div class="hdr-meta">
+      <span>HE-relevant searches in Bangalore — what people type, what HE captures, where the gap is</span>
+    </div>
+    <div class="hdr-actions">
+      <button id="btn-refresh" class="primary">Refresh now</button>
+      <button id="btn-fetch">Re-fetch from Keyword Planner</button>
+      <a href="/marketing/he/gbp/">→ GBP cockpit</a>
+      <a href="/api/keyword-tracker?action=universe" target="_blank">universe</a>
+    </div>
+  </header>
+
+  <div id="err-strip"></div>
+
+  <div class="summary" id="summary">
+    <div class="card"><div class="lbl">Tracked</div><div class="val" id="s-tracked">—</div><div class="sub">keywords</div></div>
+    <div class="card"><div class="lbl">Total demand</div><div class="val mono" id="s-vol">—</div><div class="sub">searches/mo BLR</div></div>
+    <div class="card orange"><div class="lbl">HE captured</div><div class="val mono" id="s-he">—</div><div class="sub">imp/28d</div></div>
+    <div class="card red"><div class="lbl">Capture rate</div><div class="val mono" id="s-share">—</div><div class="sub">vs avg-monthly demand</div></div>
+    <div class="card green"><div class="lbl">Top opportunity</div><div class="val mono" id="s-top">—</div><div class="sub" id="s-top-sub">—</div></div>
+    <div class="card"><div class="lbl">Snapshot</div><div class="val mono" style="font-size:14px" id="s-date">—</div><div class="sub" id="s-prior">—</div></div>
+  </div>
+
+  <div class="pills" id="pills"></div>
+
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th data-sort="keyword">Keyword</th>
+          <th data-sort="block">Block</th>
+          <th class="r" data-sort="avg_monthly_searches">Vol/mo BLR</th>
+          <th class="r" data-sort="he_imp_28d">HE 28d</th>
+          <th class="r" data-sort="he_share_pct">Share %</th>
+          <th class="r" data-sort="low_bid_inr">Low ₹</th>
+          <th class="r" data-sort="high_bid_inr">High ₹</th>
+          <th data-sort="competition">Comp</th>
+          <th class="r" data-sort="trend_pct">Trend</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="9" class="loading">loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const STATE = {
+  rows:        [],
+  filtered:    [],
+  blocks:      {},
+  block:       'all',
+  sortBy:      'avg_monthly_searches',
+  sortDesc:    true,
+  latestDate:  null,
+  priorDate:   null,
+  totals:      null,
+};
+
+const BLOCK_LABELS = {
+  generic_near_me: 'Near-me',
+  shivajinagar:    'Shivajinagar',
+  hero:            'Hero items',
+  landmark:        'Landmark',
+  other:           'Other BLR',
+};
+
+async function loadLatest() {
+  setError('');
+  setLoading();
+  try {
+    const r = await fetch('/api/keyword-tracker?action=latest');
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    STATE.rows       = d.keywords || [];
+    STATE.totals     = d.totals;
+    STATE.latestDate = d.latest_date;
+    STATE.priorDate  = d.prior_date;
+    if (!STATE.rows.length) {
+      renderEmpty();
+      return;
+    }
+    countBlocks();
+    renderPills();
+    renderSummary();
+    applyFilterAndSort();
+    renderTable();
+    document.getElementById('hdr-asof').textContent = `as of ${STATE.latestDate}`;
+  } catch (e) {
+    setError(`Failed to load: ${e.message}`);
+    renderEmpty();
+  }
+}
+
+async function refetch() {
+  if (!confirm('Re-fetch from Google Ads Keyword Planner? (uses upstream API quota)')) return;
+  setError('Fetching from Keyword Planner — this takes ~10-20 seconds…');
+  try {
+    const r = await fetch('/api/keyword-tracker?action=fetch');
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    setError(`Fetched: ${d.keywords_returned} of ${d.keywords_requested} keywords, ${d.rows_inserted} new rows on ${d.captured_at}`);
+    setTimeout(() => { loadLatest(); }, 800);
+  } catch (e) {
+    setError(`Fetch failed: ${e.message}`);
+  }
+}
+
+function countBlocks() {
+  STATE.blocks = { all: STATE.rows.length };
+  for (const r of STATE.rows) {
+    STATE.blocks[r.block] = (STATE.blocks[r.block] || 0) + 1;
+  }
+}
+
+function renderPills() {
+  const order = ['all','generic_near_me','shivajinagar','hero','landmark','other'];
+  const pills = order
+    .filter(b => b === 'all' || STATE.blocks[b])
+    .map(b => `<div class="pill ${STATE.block===b?'on':''}" data-block="${b}">${b==='all'?'All':BLOCK_LABELS[b]||b}<span class="ct">${STATE.blocks[b]||0}</span></div>`)
+    .join('');
+  const el = document.getElementById('pills');
+  el.innerHTML = pills;
+  el.querySelectorAll('.pill').forEach(p => {
+    p.onclick = () => {
+      STATE.block = p.dataset.block;
+      renderPills();
+      applyFilterAndSort();
+      renderTable();
+    };
+  });
+}
+
+function renderSummary() {
+  const t = STATE.totals || { total_volume: 0, total_he_imp_28d: 0 };
+  // HE 28d → equivalent monthly proxy = (28d / 30d) inverse; treat 28d as ~28d
+  // Capture rate = HE 28d × (30/28) / total monthly volume × 100
+  const heMo = t.total_he_imp_28d * (30/28);
+  const shareTotal = t.total_volume > 0 ? (100 * heMo / t.total_volume) : 0;
+
+  // Top opportunity = highest BLR vol with lowest HE share (filtered to vol > 500 to avoid noise)
+  const cands = STATE.rows.filter(r => r.avg_monthly_searches > 500);
+  cands.sort((a,b) => (a.he_share_pct - b.he_share_pct) || (b.avg_monthly_searches - a.avg_monthly_searches));
+  const top = cands[0];
+
+  document.getElementById('s-tracked').textContent = STATE.rows.length;
+  document.getElementById('s-vol').textContent     = fmt(t.total_volume);
+  document.getElementById('s-he').textContent      = fmt(t.total_he_imp_28d);
+  document.getElementById('s-share').textContent   = `${shareTotal.toFixed(2)}%`;
+  document.getElementById('s-top').textContent     = top ? truncate(top.keyword, 22) : '—';
+  document.getElementById('s-top-sub').textContent = top
+    ? `${fmt(top.avg_monthly_searches)}/mo · ${top.he_share_pct}% share`
+    : '—';
+  document.getElementById('s-date').textContent    = STATE.latestDate || '—';
+  document.getElementById('s-prior').textContent   = STATE.priorDate
+    ? `prior: ${STATE.priorDate}`
+    : 'first snapshot';
+}
+
+function applyFilterAndSort() {
+  const b = STATE.block;
+  STATE.filtered = b === 'all' ? STATE.rows.slice() : STATE.rows.filter(r => r.block === b);
+  STATE.filtered.sort((a,b)=>{
+    let av = a[STATE.sortBy], bv = b[STATE.sortBy];
+    if (av == null) av = STATE.sortDesc ? -Infinity : Infinity;
+    if (bv == null) bv = STATE.sortDesc ? -Infinity : Infinity;
+    if (typeof av === 'string') return STATE.sortDesc ? bv.localeCompare(av) : av.localeCompare(bv);
+    return STATE.sortDesc ? (bv - av) : (av - bv);
+  });
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tbody');
+  if (!STATE.filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty"><h3>No keywords in this block</h3></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = STATE.filtered.map(r => {
+    const gapClass = r.he_share_pct < 0.1 ? 'gap-red'
+                   : r.he_share_pct < 1   ? 'gap-orange'
+                   : r.he_share_pct < 5   ? ''
+                   : 'gap-green';
+    const trendStr = r.trend_pct == null ? '—'
+                   : r.trend_pct > 0 ? `↑ ${r.trend_pct}%`
+                   : r.trend_pct < 0 ? `↓ ${Math.abs(r.trend_pct)}%`
+                   : '→ 0%';
+    const trendCol = r.trend_pct == null ? 'var(--dim)'
+                   : r.trend_pct > 5  ? 'var(--green)'
+                   : r.trend_pct < -5 ? 'var(--red)'
+                   : 'var(--text2)';
+    return `<tr>
+      <td class="kw" title="${escape(r.keyword)}">${escape(r.keyword)}</td>
+      <td class="block">${BLOCK_LABELS[r.block] || r.block}</td>
+      <td class="r vol">${fmt(r.avg_monthly_searches)}</td>
+      <td class="r mono">${r.he_imp_28d || 0}</td>
+      <td class="r share ${gapClass}">${r.he_share_pct.toFixed(2)}%</td>
+      <td class="r bid">${r.low_bid_inr  != null ? '₹'+r.low_bid_inr.toFixed(2)  : '—'}</td>
+      <td class="r bid">${r.high_bid_inr != null ? '₹'+r.high_bid_inr.toFixed(2) : '—'}</td>
+      <td class="comp-${(r.competition||'unspecified').toLowerCase()}">${r.competition||'—'}</td>
+      <td class="r mono" style="color:${trendCol}">${trendStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderEmpty() {
+  document.getElementById('tbody').innerHTML = `
+    <tr><td colspan="9" class="empty">
+      <h3>No snapshots yet</h3>
+      <p>Hit the <b>Re-fetch from Keyword Planner</b> button above, or call <code>GET /api/keyword-tracker?action=fetch</code></p>
+    </td></tr>`;
+}
+
+function setLoading() {
+  document.getElementById('tbody').innerHTML = `<tr><td colspan="9" class="loading">loading…</td></tr>`;
+}
+function setError(msg) {
+  document.getElementById('err-strip').innerHTML = msg
+    ? `<div class="err">${escape(msg)}</div>`
+    : '';
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────
+function fmt(n) {
+  if (n == null || n === 0) return '0';
+  if (n >= 100000) return (n/100000).toFixed(1) + 'L';
+  if (n >= 1000)   return (n/1000).toFixed(1) + 'K';
+  return String(n);
+}
+function truncate(s, n) { return s.length > n ? s.slice(0, n-1) + '…' : s; }
+function escape(s) { return String(s).replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ─── sortable headers ───────────────────────────────────────────────────
+document.querySelectorAll('.tbl thead th[data-sort]').forEach(th => {
+  th.onclick = () => {
+    const col = th.dataset.sort;
+    if (STATE.sortBy === col) STATE.sortDesc = !STATE.sortDesc;
+    else { STATE.sortBy = col; STATE.sortDesc = true; }
+    document.querySelectorAll('.tbl thead th').forEach(t => t.classList.remove('sort-asc','sort-desc'));
+    th.classList.add(STATE.sortDesc ? 'sort-desc' : 'sort-asc');
+    applyFilterAndSort();
+    renderTable();
+  };
+});
+
+document.getElementById('btn-refresh').onclick = loadLatest;
+document.getElementById('btn-fetch').onclick   = refetch;
+
+loadLatest();
+</script>
+</body>
+</html>
