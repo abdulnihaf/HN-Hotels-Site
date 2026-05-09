@@ -83,46 +83,58 @@
       $('#pane-growth').innerHTML = `<div class="empty"><h3>Growth data not yet captured</h3><p>${g.reason || ''}</p></div>`;
       return;
     }
-    const f = g.funnel || {};
-    const c = g.customers || {};
-    const ad = g.ads || {};
-    const ds = g.discounts || {};
-    const ls = g.listing || {};
+
+    // STRICT HE-only schema: top_dishes_he + customer_cohort_he + payment_mix_he + discount_usage_he
+    const dishes = g.top_dishes_he || [];
+    const cohort = g.customer_cohort_he || {};
+    const payments = g.payment_mix_he || {};
+    const disc = g.discount_usage_he || {};
+    const gaps = g.not_yet_he_only || {};
+
+    const dishesRows = dishes.slice(0, 10).map((d, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${d.name}</td>
+        <td class="num">${fmt(d.orders)}</td>
+        <td class="num">${fmt(d.quantity)}</td>
+        <td class="num">${fmt(d.revenue, { money: true })}</td>
+        <td class="num">${d.discount_count || 0}</td>
+        <td><span class="tags">${(d.tags || []).filter(t => t.startsWith('dt-')).slice(0, 3).join(', ')}</span></td>
+      </tr>`).join('');
+
+    const paymentRows = Object.entries(payments).map(([k, v]) =>
+      `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
 
     $('#pane-growth').innerHTML = `
       <div class="scope-bar">${scopeBadge(g.data_scope)}<span class="scope-note">${g.data_scope_note || ''}</span></div>
       <div class="grid4">
-        ${card('FUNNEL', `
-          <div class="kv"><span class="k">Impressions</span><span class="v">${fmt(f.impressions)}</span></div>
-          <div class="kv"><span class="k">Menu opens</span><span class="v">${fmt(f.menu_opens)}<small>${fmt(f.menu_open_rate_pct, { pct: true })}</small></span></div>
-          <div class="kv"><span class="k">Cart builds</span><span class="v">${fmt(f.cart_builds)}<small>${fmt(f.cart_build_rate_pct, { pct: true })}</small></span></div>
-          <div class="kv"><span class="k">Orders placed</span><span class="v">${fmt(f.orders_placed)}<small>${fmt(f.order_conversion_rate_pct, { pct: true })}</small></span></div>
-          ${(f.menu_opens && f.cart_builds && f.menu_opens > 0) ? `<div class="diag">${diagFunnel(f)}</div>` : ''}
-        `)}
-        ${card('CUSTOMERS', `
-          <div class="kv"><span class="k">New</span><span class="v">${fmt(c.new)}</span></div>
-          <div class="kv"><span class="k">Repeat</span><span class="v">${fmt(c.repeat)}</span></div>
-          <div class="kv"><span class="k">Dormant</span><span class="v">${fmt(c.dormant)}</span></div>
-          ${c.new_pct !== null && c.new_pct !== undefined ? `<div class="kv"><span class="k">New %</span><span class="v">${fmt(c.new_pct, { pct: true })}</span></div>` : ''}
-          ${c.repeat_pct !== null && c.repeat_pct !== undefined ? `<div class="kv"><span class="k">Repeat %</span><span class="v">${fmt(c.repeat_pct, { pct: true })}</span></div>` : ''}
-          ${c.lapsed !== undefined ? `<div class="kv"><span class="k">Lapsed</span><span class="v">${fmt(c.lapsed)}</span></div>` : ''}
-        `)}
-        ${card('ADS', ad.available === false ? `<div class="not-cap">${ad.note || 'not yet captured'}</div>` : `
-          <div class="kv"><span class="k">CPC sales</span><span class="v">${fmt(ad.cpc_sales, { money: true })}</span></div>
-          <div class="kv"><span class="k">CPC orders</span><span class="v">${fmt(ad.cpc_orders)}</span></div>
-          <div class="kv"><span class="k">CPC spend</span><span class="v">${fmt(ad.cpc_spends, { money: true })}</span></div>
-          <div class="kv"><span class="k">ROAS</span><span class="v">${fmt(ad.roas, { dec: 1 })}x</span></div>
-          ${ad.cba_sales !== undefined ? `<div class="kv"><span class="k">CBA sales</span><span class="v">${fmt(ad.cba_sales, { money: true })}</span></div>` : ''}
-          ${ad.cba_spends !== undefined ? `<div class="kv"><span class="k">CBA spend</span><span class="v">${fmt(ad.cba_spends, { money: true })}</span></div>` : ''}
-        `)}
-        ${card('LISTING & DISCOUNTS', ls.available === false ? `<div class="not-cap">${ls.note || 'not yet captured'}</div>` : `
-          <div class="kv"><span class="k">Menu score</span><span class="v">${fmt(ls.menu_score)}<small>/100</small></span></div>
-          <div class="kv"><span class="k">Items with photos</span><span class="v">${fmt(ls.items_with_photos_pct, { pct: true })}</span></div>
-          <div class="kv"><span class="k">Items with desc</span><span class="v">${fmt(ls.items_with_desc_pct, { pct: true })}</span></div>
-          <div class="kv"><span class="k">Online availability</span><span class="v ${ls.online_availability_pct < 90 ? 'warn' : ''}">${fmt(ls.online_availability_pct, { pct: true })}</span></div>
-          ${ds.disc_sales !== undefined ? `<div class="kv"><span class="k">Discount sales</span><span class="v">${fmt(ds.disc_sales, { money: true })}</span></div>` : ''}
+        ${card(`CUSTOMER COHORT · ${cfg.brand.toUpperCase()} only`, cohort.sample_size ? `
+          <div class="big-num">${fmt(cohort.first_time_pct, { pct: true })}</div>
+          <div class="kv"><span class="k">First-time</span><span class="v">${fmt(cohort.first_time_orders)}</span></div>
+          <div class="kv"><span class="k">Repeat</span><span class="v">${fmt(cohort.repeat_orders)}</span></div>
+          <div class="kv"><span class="k">Sample</span><span class="v">${fmt(cohort.sample_size)} orders</span></div>
+        ` : '<div class="not-cap">No order-detail captures yet for this brand</div>')}
+        ${card(`DISCOUNT USAGE · ${cfg.brand.toUpperCase()} only`, disc.total_orders_in_sample ? `
+          <div class="big-num ${disc.usage_rate_pct > 50 ? 'warn' : ''}">${fmt(disc.usage_rate_pct, { pct: true })}</div>
+          <div class="kv"><span class="k">With discount</span><span class="v">${fmt(disc.orders_with_discount)}</span></div>
+          <div class="kv"><span class="k">Sample</span><span class="v">${fmt(disc.total_orders_in_sample)} orders</span></div>
+          ${disc.usage_rate_pct > 50 ? '<div class="diag-bad" style="margin-top:6px;font-size:10px">Heavy reliance on discounts — margin risk</div>' : ''}
+        ` : '<div class="not-cap">No order-detail captures yet</div>')}
+        ${card(`PAYMENT MIX · ${cfg.brand.toUpperCase()} only`, paymentRows || '<div class="not-cap">No payment data yet</div>')}
+        ${card('NOT YET HE-ONLY', `
+          ${Object.entries(gaps).slice(0, 6).map(([k, v]) =>
+            `<div style="font-size:10px;padding:3px 0;border-bottom:1px solid var(--very-faint, #1a1a30)"><strong>${k}</strong><br><span style="color:var(--dim)">${v}</span></div>`
+          ).join('')}
+          ${Object.keys(gaps).length > 6 ? `<div style="font-size:10px;color:var(--dim);margin-top:4px">+ ${Object.keys(gaps).length - 6} more gaps</div>` : ''}
         `)}
       </div>
+      ${dishes.length ? `
+        <h3 style="margin-top:18px;font-size:11px;font-weight:700;color:var(--dim);letter-spacing:0.4px">TOP DISHES · ${cfg.brand.toUpperCase()} ONLY (from order-detail captures)</h3>
+        <table class="orders-table" style="margin-top:6px">
+          <thead><tr><th>#</th><th>Dish</th><th class="num">Orders</th><th class="num">Qty</th><th class="num">Revenue</th><th class="num">w/Disc</th><th>Zomato tags</th></tr></thead>
+          <tbody>${dishesRows}</tbody>
+        </table>
+      ` : ''}
     `;
   }
 
@@ -148,58 +160,53 @@
     }
     const live = o.live_status || {};
     const meta = o.outlet_metadata;
-    const dq = o.delivery_quality_combined || {};
-    const cn = o.cancellations_combined || {};
-    const cm = o.complaints_combined || {};
-    const bolt = o.bolt_combined;
+    const issueBreakdown = o.issue_breakdown || {};
+    const gaps = o.not_yet_he_only || {};
+    // Old combined fields no longer in payload — only HE-only fields below.
+    const dq = {}, cn = {}, cm = {}, bolt = null;  // kept as empty so existing code doesn't NPE if dashboard cached
+
+    const issueRows = Object.entries(issueBreakdown).map(([k, v]) =>
+      `<div class="kv"><span class="k">${k.replace(/_/g, ' ')}</span><span class="v ${v > 0 ? 'warn' : ''}">${v}</span></div>`).join('');
 
     $('#pane-ops').innerHTML = `
       <div class="scope-bar">${scopeBadge(o.data_scope)}<span class="scope-note">${o.data_scope_note || ''}</span></div>
       <div class="grid4">
-        ${card('LIVE STATUS · HE only', live.available === false ? '<div class="not-cap">live status not available</div>' : `
-          <div class="big-status ${live.is_open === false ? 'bad' : 'good'}">${live.is_open === false ? 'OFFLINE' : 'OPEN'}</div>
-          <div class="kv"><span class="k">Outlet ID</span><span class="v">${live.outlet_id || meta?.res_id || '—'}</span></div>
-          <div class="kv"><span class="k">Serviceable</span><span class="v">${live.is_serviceable === false ? '✗ no' : '✓ yes'}</span></div>
+        ${card(`LIVE STATUS · ${cfg.brand.toUpperCase()} only`, live.available === false ? `<div class="not-cap">${live.reason || 'live status not available'}</div>` : `
+          <div class="big-status ${live.is_open === false ? 'bad' : 'good'}">${live.is_open === false ? 'OFFLINE' : (live.is_open === true ? 'OPEN' : '—')}</div>
+          ${live.outlet_id ? `<div class="kv"><span class="k">Outlet ID</span><span class="v">${live.outlet_id}</span></div>` : (meta?.res_id ? `<div class="kv"><span class="k">Outlet ID</span><span class="v">${meta.res_id}</span></div>` : '')}
+          ${live.is_serviceable !== undefined ? `<div class="kv"><span class="k">Serviceable</span><span class="v">${live.is_serviceable === false ? '✗ no' : '✓ yes'}</span></div>` : ''}
           ${live.stress !== undefined ? `<div class="kv"><span class="k">Stress mode</span><span class="v ${live.stress ? 'warn' : ''}">${live.stress ? 'yes' : 'no'}</span></div>` : ''}
           ${live.active_batches !== undefined ? `<div class="kv"><span class="k">Active batches</span><span class="v">${live.active_batches}</span></div>` : ''}
-          ${meta ? `<div class="kv"><span class="k">Active since</span><span class="v">${meta.active_since || '—'}</span></div>` : ''}
-          ${meta?.am_email ? `<div class="kv"><span class="k">AM</span><span class="v" title="${meta.am_email}">${meta.am_email.split('@')[0]}</span></div>` : ''}
         `)}
-        ${card('DELIVERY QUALITY', `
-          ${dq.kitchen_prep_time_min !== undefined ? `<div class="kv"><span class="k">Kitchen prep</span><span class="v">${fmt(dq.kitchen_prep_time_min, { dec: 1 })} min</span></div>` : ''}
-          ${dq.avg_prep_time_min !== undefined ? `<div class="kv"><span class="k">Avg prep</span><span class="v">${fmt(dq.avg_prep_time_min, { dec: 1 })} min</span></div>` : ''}
-          ${dq.mfr_accuracy_pct !== undefined ? `<div class="kv"><span class="k">Accuracy</span><span class="v ${dq.mfr_accuracy_pct < 90 ? 'warn' : ''}">${fmt(dq.mfr_accuracy_pct, { pct: true })}</span></div>` : ''}
-          ${dq.delayed_10min_pct !== undefined ? `<div class="kv"><span class="k">Delayed >10min</span><span class="v ${dq.delayed_10min_pct > 5 ? 'warn' : ''}">${fmt(dq.delayed_10min_pct, { pct: true })}</span></div>` : ''}
-          ${dq.online_availability_pct !== undefined ? `<div class="kv"><span class="k">Avail %</span><span class="v ${dq.online_availability_pct < 90 ? 'warn' : ''}">${fmt(dq.online_availability_pct, { pct: true })}</span></div>` : ''}
-          ${dq.rejected_pct !== undefined ? `<div class="kv"><span class="k">Rejected %</span><span class="v ${dq.rejected_pct > 0 ? 'warn' : ''}">${fmt(dq.rejected_pct, { pct: true })}</span></div>` : ''}
-          ${dq.delayed_pct !== undefined ? `<div class="kv"><span class="k">Delayed %</span><span class="v ${dq.delayed_pct > 5 ? 'warn' : ''}">${fmt(dq.delayed_pct, { pct: true })}</span></div>` : ''}
-          ${dq.poor_rated_pct !== undefined ? `<div class="kv"><span class="k">Poor-rated %</span><span class="v ${dq.poor_rated_pct > 5 ? 'warn' : ''}">${fmt(dq.poor_rated_pct, { pct: true })}</span></div>` : ''}
-          ${dq.lost_sales !== undefined ? `<div class="kv"><span class="k">Lost sales</span><span class="v ${dq.lost_sales > 0 ? 'warn' : ''}">${fmt(dq.lost_sales, { money: true })}</span></div>` : ''}
+        ${meta && !meta.available === false ? card(`OUTLET METADATA · ${cfg.brand.toUpperCase()} only`, `
+          ${meta.address ? `<div class="kv"><span class="k">Address</span><span class="v" style="font-size:10px;text-align:right">${meta.address}</span></div>` : ''}
+          ${meta.active_since ? `<div class="kv"><span class="k">Active since</span><span class="v">${meta.active_since}</span></div>` : ''}
+          ${meta.am_email ? `<div class="kv"><span class="k">AM email</span><span class="v" style="font-size:10px"><a href="mailto:${meta.am_email}" style="color:var(--text)">${meta.am_email}</a></span></div>` : ''}
+          ${meta.am_phone ? `<div class="kv"><span class="k">AM phone</span><span class="v"><a href="tel:${meta.am_phone}" style="color:var(--text)">${meta.am_phone}</a></span></div>` : ''}
+        `) : ''}
+        ${card(`CANCELLATIONS · ${cfg.brand.toUpperCase()} only`, `
+          <div class="big-num ${o.cancellation_rate_pct > 5 ? 'warn' : ''}">${fmt(o.cancellation_rate_pct, { pct: true })}</div>
+          <div class="kv"><span class="k">Count</span><span class="v ${o.cancellation_count > 0 ? 'warn' : ''}">${fmt(o.cancellation_count)}</span></div>
+          ${o.avg_rating !== null && o.avg_rating !== undefined ? `<div class="kv"><span class="k">Avg rating</span><span class="v">${fmt(o.avg_rating, { dec: 1 })} ★</span></div>` : ''}
+          ${o.poor_rated_count > 0 ? `<div class="kv"><span class="k">Poor-rated</span><span class="v warn">${fmt(o.poor_rated_count)}</span></div>` : ''}
+          <div style="font-size:9px;color:var(--dim);margin-top:6px">From aggregator_orders WHERE brand='${cfg.brand}'</div>
         `)}
-        ${cn.cancelled_orders !== undefined ? card('CANCELLATIONS', `
-          <div class="kv"><span class="k">Cancelled orders</span><span class="v ${cn.cancelled_orders > 0 ? 'warn' : ''}">${fmt(cn.cancelled_orders)}</span></div>
-          <div class="kv"><span class="k">Cancelled loss</span><span class="v ${cn.cancelled_loss > 0 ? 'warn' : ''}">${fmt(cn.cancelled_loss, { money: true })}</span></div>
-          <div class="kv"><span class="k">Rated orders</span><span class="v">${fmt(cn.rated_orders)}</span></div>
-          <div class="kv"><span class="k">Poor-rated orders</span><span class="v ${cn.poor_rated_orders > 0 ? 'warn' : ''}">${fmt(cn.poor_rated_orders)}</span></div>
-        `) : ''}
-        ${cm.complaint_orders !== undefined ? card('COMPLAINTS', `
-          ${cm.complaint_pct !== undefined ? `<div class="kv"><span class="k">Complaint %</span><span class="v ${cm.complaint_pct > 0 ? 'warn' : ''}">${fmt(cm.complaint_pct, { pct: true })}</span></div>` : ''}
-          <div class="kv"><span class="k">Total</span><span class="v ${cm.complaint_orders > 0 ? 'warn' : ''}">${fmt(cm.complaint_orders)}</span></div>
-          <div class="kv"><span class="k">Unresolved</span><span class="v ${cm.unresolved_complaints > 0 ? 'bad' : ''}">${fmt(cm.unresolved_complaints)}</span></div>
-          <div class="kv"><span class="k">Wrong items</span><span class="v">${fmt(cm.wrong_items)}</span></div>
-          <div class="kv"><span class="k">Missing items</span><span class="v">${fmt(cm.missing_items)}</span></div>
-          <div class="kv"><span class="k">Quality</span><span class="v">${fmt(cm.quality_issues)}</span></div>
-          <div class="kv"><span class="k">Packaging</span><span class="v">${fmt(cm.packaging_issues)}</span></div>
-        `) : ''}
+        ${card(`ISSUES · ${cfg.brand.toUpperCase()} only`, o.issue_rate_pct !== undefined ? `
+          <div class="big-num ${o.issue_rate_pct > 5 ? 'warn' : ''}">${fmt(o.issue_rate_pct, { pct: true })}</div>
+          <div class="kv"><span class="k">Issue rate</span><span class="v"></span></div>
+          ${issueRows}
+          ${Object.keys(issueBreakdown).length === 0 ? '<div style="font-size:10px;color:var(--green);margin-top:4px">no issues found</div>' : ''}
+        ` : '<div class="not-cap">no order data this period</div>')}
       </div>
-      ${bolt ? `<div class="grid4" style="margin-top:12px">${card('BOLT (instant delivery)', `
-        <div class="kv"><span class="k">Orders</span><span class="v">${fmt(bolt.order_count)}</span></div>
-        <div class="kv"><span class="k">% of total</span><span class="v">${fmt(bolt.pct, { pct: true })}</span></div>
-        <div class="kv"><span class="k">AOV</span><span class="v">${fmt(bolt.aov, { money: true })}</span></div>
-        <div class="kv"><span class="k">Avg prep</span><span class="v">${fmt(bolt.avg_prep_min, { dec: 1 })} min</span></div>
-        <div class="kv"><span class="k"><6min %</span><span class="v">${fmt(bolt.lt6min_pct, { pct: true })}</span></div>
-        <div class="kv"><span class="k">Delayed %</span><span class="v ${bolt.delayed_pct > 5 ? 'warn' : ''}">${fmt(bolt.delayed_pct, { pct: true })}</span></div>
-      `)}</div>` : ''}
+      ${Object.keys(gaps).length ? `
+        <div class="grid4" style="margin-top:12px">
+          ${card('NOT YET HE-ONLY', `
+            ${Object.entries(gaps).map(([k, v]) =>
+              `<div style="font-size:10px;padding:3px 0;border-bottom:1px solid var(--very-faint, #1a1a30)"><strong>${k}</strong><br><span style="color:var(--dim)">${v}</span></div>`
+            ).join('')}
+          `)}
+        </div>
+      ` : ''}
     `;
   }
 
