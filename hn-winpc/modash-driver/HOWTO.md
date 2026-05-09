@@ -18,19 +18,61 @@ cookies persist for ~30 days.
 [hn-winpc poller, every 60s]
   └─> GET  hnhotels.in/api/influencer-pipeline?action=modash-next-job
        └─> Pulls one pending job + assigns LRU active profile
-  └─> launches Chromium with --user-data-dir=C:\Modash\profiles\profile-N
+  └─> launches Chromium with --user-data-dir=C:\hn-control\modash-driver\profiles\profile-N
   └─> navigates marketer.modash.io/discovery/instagram?<filters>
   └─> intercepts XHR with results / scrapes DOM as fallback
   └─> POST hnhotels.in/api/influencer-pipeline?action=modash-job-done
        └─> server pushes results into discovery_queue (Cron 2 enriches via Apify next)
 ```
 
+## Multi-tenant convention (cross-chat)
+
+This automation is one of three on hn-winpc, all coordinated under the shared root
+`C:\hn-control\` per the convention established in fleet/MULTI-TENANT-WINPC.md.
+
+```
+C:\hn-control\
+├── manifest.json                    ← shared registry of all 3 automations
+├── _shared\
+│   ├── acquire-lock.ps1             ← shared lock helpers
+│   └── release-lock.ps1
+├── .locks\                          ← lockfile dir (one .lock file per active op)
+├── modash-driver\                   ← THIS automation lives here
+│   ├── poller.js
+│   ├── setup-modash-profile.ps1
+│   ├── install.ps1
+│   ├── package.json
+│   ├── HOWTO.md
+│   └── profiles\                    ← per-Modash-account isolated user-data-dirs
+│       ├── profile-1\
+│       └── profile-2\
+├── aggregator-pulse\                ← (other chat) Swiggy/Zomato Online Ordering
+└── dine-aggregator\                 ← (other chat) Zomato Partner Dining-Out audit
+```
+
+## Do-not-disturb list (this automation owns)
+
+Other Claude chats / automations on hn-winpc must NOT touch:
+
+| Path / Process | What it is |
+|---|---|
+| `C:\hn-control\modash-driver\` | All my code + state |
+| `C:\hn-control\modash-driver\profiles\profile-N\` | Per-account Chromium cookies — corrupting these = forced re-login |
+| `HN-Modash-Poller` Scheduled Task | My long-running daemon |
+| Playwright-managed Chromium binaries (under user `~/AppData/Local/ms-playwright/`) | Different from system Chrome — used only by my poller |
+
+**I do not touch**:
+- Default Chrome / aggregator-pulse extension / aggregator profile
+- `C:\hn-control\aggregator-pulse\` or `C:\hn-control\dine-aggregator\`
+- Any tabs in default Chrome
+
 ## Critical safety boundary
 
-- Aggregator-pulse Chrome runs under default Chrome user-data-dir. UNTOUCHED.
+- Aggregator-pulse Chrome runs in default Chrome user-data-dir. UNTOUCHED.
 - This poller uses Playwright's bundled Chromium (separate binary, separate user-data-dirs).
-- All Modash data lives in C:\Modash\. Aggregator data is elsewhere.
-- Killing/restarting this poller never affects aggregator.
+- All Modash data lives in `C:\hn-control\modash-driver\`. Aggregator data is elsewhere.
+- Killing/restarting my Scheduled Task never affects aggregator (different process tree).
+- I never run `Stop-Process -Name chrome` or any system-Chrome-targeting command.
 
 ## One-time install
 
@@ -39,11 +81,11 @@ Run AS THE "HN Hotels" user (the one currently running aggregator):
 ```powershell
 # 1. Pull/copy the modash-driver folder to the PC
 #    (rsync from laptop or git clone or scp the folder over Tailscale)
-mkdir C:\Modash\modash-driver
-# ...copy hn-winpc/modash-driver/* into C:\Modash\modash-driver\
+mkdir C:\hn-control\modash-driver
+# ...copy hn-winpc/modash-driver/* into C:\hn-control\modash-driver\
 
 # 2. Run installer
-cd C:\Modash\modash-driver
+cd C:\hn-control\modash-driver
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -CronToken "<paste CRON_TOKEN secret>"
 #   Installs Node deps, Playwright Chromium, env vars, scheduled task.
 #   CRON_TOKEN must match the same secret used by Pages Functions and the cron Worker.
@@ -55,7 +97,7 @@ For each Modash trial account:
 
 ```powershell
 # Open Chromium for profile-1, log into account-1 manually
-powershell -ExecutionPolicy Bypass -File C:\Modash\modash-driver\setup-modash-profile.ps1 `
+powershell -ExecutionPolicy Bypass -File C:\hn-control\modash-driver\setup-modash-profile.ps1 `
   -ProfileNum 1 -Email "contact@hamzahotel.com"
 
 # After logging in and closing Chrome, register the profile:
@@ -95,7 +137,7 @@ curl -X POST "https://hnhotels.in/api/influencer-pipeline?action=modash-enqueue-
   -H "X-Dashboard-Key: $key" -H "Content-Type: application/json" -d '{}'
 
 # Watch the poller log
-Get-Content C:\Modash\modash-driver\poller.log -Tail 30 -Wait
+Get-Content C:\hn-control\modash-driver\poller.log -Tail 30 -Wait
 
 # Or check status via API
 curl "https://hnhotels.in/api/influencer-pipeline?action=modash-status"
@@ -156,7 +198,7 @@ shapes; if Modash's API shape differs, owner adjusts the parser in
 
 ```powershell
 # Tail logs
-Get-Content C:\Modash\modash-driver\poller.log -Tail 50 -Wait
+Get-Content C:\hn-control\modash-driver\poller.log -Tail 50 -Wait
 
 # Or via Scheduled Task event log
 Get-ScheduledTaskInfo -TaskName HN-Modash-Poller

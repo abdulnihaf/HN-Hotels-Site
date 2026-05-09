@@ -16,8 +16,8 @@
 
 param(
   [Parameter(Mandatory=$true)][string]$CronToken,
-  [string]$InstallDir = "C:\Modash\modash-driver",
-  [string]$ProfilesDir = "C:\Modash\profiles"
+  [string]$InstallDir = "C:\hn-control\modash-driver",
+  [string]$ProfilesDir = "C:\hn-control\modash-driver\profiles"
 )
 
 $ErrorActionPreference = "Stop"

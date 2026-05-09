@@ -14,7 +14,7 @@
 param(
   [Parameter(Mandatory=$true)][int]$ProfileNum,
   [string]$Email = "",
-  [string]$ProfilesDir = "C:\Modash\profiles",
+  [string]$ProfilesDir = "C:\hn-control\modash-driver\profiles",
   [string]$ChromeExe = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 )
 

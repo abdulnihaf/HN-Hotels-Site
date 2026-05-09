@@ -21,7 +21,7 @@ const { chromium } = require('playwright');
 // ─── Config ────────────────────────────────────────────────────────────────
 const API = process.env.MODASH_API_BASE || 'https://hnhotels.in/api/influencer-pipeline';
 const CRON_TOKEN = process.env.CRON_TOKEN;
-const PROFILES_DIR = process.env.MODASH_PROFILES_DIR || 'C:\\Modash\\profiles';
+const PROFILES_DIR = process.env.MODASH_PROFILES_DIR || 'C:\\hn-control\\modash-driver\\profiles';
 const POLL_INTERVAL_MS = parseInt(process.env.MODASH_POLL_INTERVAL_MS || '60000');
 const REQUEST_TIMEOUT_MS = 60000;
 
