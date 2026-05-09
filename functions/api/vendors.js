@@ -622,15 +622,20 @@ async function putOne(DB, vendorCode, request, user) {
     const cascadeRows = oldRefRs.results || [];
 
     // Walk each match, rewrite vendor_code FK references in place, prepare
-    // a single atomic batch (vendor INSERT + DELETE + each RM UPDATE).
+    // a single atomic batch.
+    // Order matters: DELETE old FIRST, then INSERT new — otherwise re-keys
+    // that preserve identity_abbr (e.g. PAY_SEQ-only edits Pf→Pfr) trip the
+    // UNIQUE(identity_abbr) constraint mid-batch. D1 batches run sequentially
+    // within a single transaction, so DELETE-then-INSERT is atomic from
+    // outside while sidestepping the momentary duplicate.
     const cascadedRmCodes = [];
     const stmts = [
+      DB.prepare(`DELETE FROM vendor_profiles WHERE vendor_code = ?`).bind(vendorCode),
       DB.prepare(
         `INSERT INTO vendor_profiles
            (vendor_code, pay_seq, sells, opm, pms, identity_abbr, vendor_name, data_json, updated_at, updated_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(newCode, pay_seq, sells, opm, pms, identity_abbr, vendor_name, dataStr, now, user.name),
-      DB.prepare(`DELETE FROM vendor_profiles WHERE vendor_code = ?`).bind(vendorCode),
     ];
 
     for (const row of cascadeRows) {
