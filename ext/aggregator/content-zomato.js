@@ -133,12 +133,18 @@
         setTimeout(() => {
           const freshText = document.body?.innerText || '';
           extractLiveTracking(freshText);
+          // Dump DOM context AFTER click + re-render so we see expanded state
+          setTimeout(() => dumpDomContext('live_tracking'), 1500);
         }, 2000);
       } else {
         extractLiveTracking(text);
+        setTimeout(() => dumpDomContext('live_tracking'), 1500);
       }
     }
-    else if (view === 'business-reports') extractBusinessReports(text);
+    else if (view === 'business-reports') {
+      extractBusinessReports(text);
+      setTimeout(() => dumpDomContext('business_reports'), 1500);
+    }
     else pushHeartbeat('unknown_view');
   }
 
@@ -360,6 +366,93 @@
   }
 
   // ─── PUSH FUNCTIONS ───────────────────────────────────────────────────────────
+  // ─── DOM DUMP DIAGNOSTIC (Phase 1B helper) ──────────────────────────────────
+  // Captures clickable element details + outlet-name positions on the live tracking
+  // page so the next iteration can write proper outlet-filter click logic without
+  // remote DOM inspection. Runs once per Chrome session per view (sessionStorage
+  // gated). Pushed as metric_type='dom_dump_<view>' to D1.
+  function dumpDomContext(viewName) {
+    const sessionKey = `hn_dom_dumped_${viewName}`;
+    if (sessionStorage.getItem(sessionKey)) return;
+    sessionStorage.setItem(sessionKey, '1');
+
+    const dump = {
+      view: viewName,
+      url: location.href.slice(0, 200),
+      title: document.title,
+      captured_at: new Date().toISOString(),
+      interactive: [],
+      outlet_anchors: [],
+      filter_pills: [],
+      page_text_first_3k: (document.body?.innerText || '').slice(0, 3000),
+    };
+
+    // 1. All visible interactive elements with text
+    for (const el of document.querySelectorAll('button, a, [role="button"], [role="menuitem"], [role="tab"], [role="option"]')) {
+      if (!el.offsetParent) continue;
+      const text = (el.textContent || '').trim().slice(0, 80);
+      if (!text) continue;
+      const item = {
+        tag: el.tagName.toLowerCase(),
+        role: el.getAttribute('role') || null,
+        text,
+        cls: (el.className || '').toString().slice(0, 80),
+        id: el.id || null,
+      };
+      const rect = el.getBoundingClientRect();
+      item.pos = `${Math.round(rect.x)},${Math.round(rect.y)}`;
+      dump.interactive.push(item);
+      if (dump.interactive.length >= 80) break;
+    }
+
+    // 2. Leaf text nodes containing outlet names — useful for finding click targets
+    for (const el of document.querySelectorAll('*')) {
+      if (el.children.length > 0) continue;
+      const text = (el.textContent || '').trim();
+      if (!text || text.length > 200) continue;
+      if (/hamza express|nawabi chai|22632449|22632430/i.test(text)) {
+        const anchor = el.closest('button, a, [role="button"], [onclick], [role="menuitem"]');
+        dump.outlet_anchors.push({
+          tag: el.tagName.toLowerCase(),
+          text: text.slice(0, 150),
+          parent_tag: el.parentElement?.tagName?.toLowerCase() || null,
+          parent_cls: (el.parentElement?.className || '').toString().slice(0, 60),
+          clickable_ancestor_tag: anchor?.tagName?.toLowerCase() || null,
+          clickable_ancestor_role: anchor?.getAttribute('role') || null,
+        });
+        if (dump.outlet_anchors.length >= 30) break;
+      }
+    }
+
+    // 3. Filter pill candidates — anything with text matching common filter labels
+    const FILTER_RX = /^(All outlets|All|Daily|Today|Yesterday|Filter|Outlets?)$/i;
+    for (const el of document.querySelectorAll('*')) {
+      if (el.children.length > 0) continue;
+      const text = (el.textContent || '').trim();
+      if (!text || !FILTER_RX.test(text)) continue;
+      const anchor = el.closest('button, [role="button"], [data-clickable]');
+      if (!anchor || !anchor.offsetParent) continue;
+      dump.filter_pills.push({
+        text,
+        tag: anchor.tagName.toLowerCase(),
+        role: anchor.getAttribute('role') || null,
+        cls: (anchor.className || '').toString().slice(0, 80),
+      });
+      if (dump.filter_pills.length >= 20) break;
+    }
+
+    // Force-push (bypass the 30s pushMetrics dedup) by using a unique page key.
+    fetch(CONFIG.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': CONFIG.apiKey },
+      body: JSON.stringify({ snapshots: [{
+        source: 'dom_dump', platform: 'zomato', brand: 'system', outlet_id: 'diag',
+        page: `dom_dump_${viewName}`, metrics: dump, captured_at: new Date().toISOString(),
+      }] }),
+    }).catch(() => {});
+    console.log(`[HN] Zomato DOM dump pushed for view=${viewName}: ${dump.interactive.length} interactive, ${dump.outlet_anchors.length} outlet anchors, ${dump.filter_pills.length} filter pills`);
+  }
+
   async function pushMetrics(payload) {
     const key = payload.page || 'default';
     const now = Date.now();
