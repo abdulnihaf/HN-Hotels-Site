@@ -1,12 +1,12 @@
-# setup-winpc.ps1 — one-shot onboarding for the HN office Windows PC appliance.
+﻿# setup-winpc.ps1 - one-shot onboarding for the HN office Windows PC appliance.
 #
 # Target hardware: HP EliteDesk 800 G3 DM 35W (or any Windows 10/11 machine).
 #
-# Run as Administrator. Right-click PowerShell → "Run as Administrator", then:
+# Run as Administrator. Right-click PowerShell -> "Run as Administrator", then:
 #   Set-ExecutionPolicy -Scope Process Bypass -Force
 #   .\setup-winpc.ps1
 #
-# What this does (idempotent — safe to re-run):
+# What this does (idempotent - safe to re-run):
 #   1. Renames PC to hn-winpc.
 #   2. Enables OpenSSH Server (built into Windows 10/11).
 #   3. Authorizes the laptop's SSH pubkey for passwordless login (BOTH locations
@@ -19,9 +19,9 @@
 #
 # What this does NOT do (you do these manually):
 #   - Sign into Tailscale (run `tailscale up` after install OR use the auth key
-#     baked in the TAILSCALE_AUTHKEY var below — get one from
+#     baked in the TAILSCALE_AUTHKEY var below - get one from
 #     login.tailscale.com/admin/settings/keys, reusable, ephemeral=OFF).
-#   - Install Google Chrome (download from google.com/chrome — Edge alone is
+#   - Install Google Chrome (download from google.com/chrome - Edge alone is
 #     insufficient because the aggregator extension targets Chrome MV3).
 #   - Log in to Swiggy + Zomato partner portals.
 #   - Load the aggregator-pulse extension into Chrome.
@@ -41,48 +41,48 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-# ─── CONFIG ───────────────────────────────────────────────────────────────────
+# --- CONFIG -------------------------------------------------------------------
 $LaptopPubkey      = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE3dsouKr9nCWMyc1AWtfYuT9vHIqygSWCUVcMkuW9Lb nihaf-laptop@hn-fleet'
 $TargetHostname    = 'hn-winpc'
 $TailscaleAuthKey  = if ($AuthKey) { $AuthKey } elseif ($env:TS_AUTHKEY) { $env:TS_AUTHKEY } else { '' }
 $TailscaleMsiUrl   = 'https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi'
 
-# ─── helpers ──────────────────────────────────────────────────────────────────
-function Section($msg) { Write-Host "`n══ $msg" -ForegroundColor Cyan }
+# --- helpers ------------------------------------------------------------------
+function Section($msg) { Write-Host "`n== $msg" -ForegroundColor Cyan }
 function Ok($msg)      { Write-Host "  [OK]  $msg" -ForegroundColor Green }
 function Warn($msg)    { Write-Host "  [..]  $msg" -ForegroundColor Yellow }
 function Fail($msg)    { Write-Host "  [!!]  $msg" -ForegroundColor Red; exit 1 }
 
-# ─── 0. preflight ─────────────────────────────────────────────────────────────
+# --- 0. preflight -------------------------------------------------------------
 Section "Preflight"
 
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Fail "Must run as Administrator. Right-click PowerShell → Run as Administrator."
+    Fail "Must run as Administrator. Right-click PowerShell -> Run as Administrator."
 }
 Ok "Running as Administrator"
 
 $winVer = [System.Environment]::OSVersion.Version
 Ok ("Windows version: {0}.{1}.{2}.{3}" -f $winVer.Major, $winVer.Minor, $winVer.Build, $winVer.Revision)
 
-# ─── 1. hostname ──────────────────────────────────────────────────────────────
-Section "Hostname → $TargetHostname"
+# --- 1. hostname --------------------------------------------------------------
+Section "Hostname -> $TargetHostname"
 
 $current = $env:COMPUTERNAME
 if ($current -ieq $TargetHostname) {
     Ok "Hostname already $TargetHostname"
 } else {
     Rename-Computer -NewName $TargetHostname -Force
-    Ok "Hostname: $current → $TargetHostname (takes effect after reboot)"
+    Ok "Hostname: $current -> $TargetHostname (takes effect after reboot)"
     Warn "Reboot required at end of script for hostname to take effect"
     $script:NeedsReboot = $true
 }
 
-# ─── 2. OpenSSH Server ────────────────────────────────────────────────────────
+# --- 2. OpenSSH Server --------------------------------------------------------
 Section "OpenSSH Server"
 
 $sshd = Get-WindowsCapability -Online | Where-Object Name -like 'OpenSSH.Server*'
 if ($sshd.State -ne 'Installed') {
-    Warn "Installing OpenSSH Server (may take a minute)…"
+    Warn "Installing OpenSSH Server (may take a minute)..."
     Add-WindowsCapability -Online -Name $sshd.Name | Out-Null
     Ok "OpenSSH Server installed"
 } else {
@@ -127,7 +127,7 @@ if (Test-Path $sshdConfig) {
     }
 }
 
-# ─── 3. authorize laptop pubkey ───────────────────────────────────────────────
+# --- 3. authorize laptop pubkey -----------------------------------------------
 Section "Authorize laptop SSH pubkey"
 
 # CRITICAL Windows quirk: members of the Administrators group do NOT use
@@ -148,7 +148,7 @@ if ($content -notcontains $LaptopPubkey) {
     Ok "User authorized_keys: already has pubkey"
 }
 
-# 3b. administrators_authorized_keys (for admin users — including the default
+# 3b. administrators_authorized_keys (for admin users - including the default
 #     account on most home Windows installs).
 $adminAuth = "$env:ProgramData\ssh\administrators_authorized_keys"
 $adminAuthDir = Split-Path $adminAuth
@@ -169,7 +169,7 @@ icacls $adminAuth /grant 'Administrators:F' 'SYSTEM:F' 2>&1 | Out-Null
 icacls $adminAuth /remove 'Authenticated Users' 'Users' "$env:USERNAME" 2>&1 | Out-Null
 Ok "administrators_authorized_keys: ACL locked to Administrators + SYSTEM"
 
-# ─── 4. Tailscale ─────────────────────────────────────────────────────────────
+# --- 4. Tailscale -------------------------------------------------------------
 Section "Tailscale install"
 
 $tailscaleExe = "$env:ProgramFiles\Tailscale\tailscale.exe"
@@ -179,7 +179,7 @@ if (Test-Path $tailscaleExe) {
     Warn "Downloading Tailscale MSI from $TailscaleMsiUrl"
     $msi = Join-Path $env:TEMP 'tailscale-setup.msi'
     Invoke-WebRequest -Uri $TailscaleMsiUrl -OutFile $msi -UseBasicParsing
-    Warn "Installing (silent)…"
+    Warn "Installing (silent)..."
     Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/quiet', '/qn', '/norestart' -Wait
     if (Test-Path $tailscaleExe) {
         Ok "Tailscale installed at $tailscaleExe"
@@ -191,7 +191,7 @@ if (Test-Path $tailscaleExe) {
 
 # Sign in if an auth key was provided.
 if ($TailscaleAuthKey -and $TailscaleAuthKey -match '^tskey-') {
-    Warn "Signing into Tailscale with provided auth key (--accept-routes off, no-exit-node)…"
+    Warn "Signing into Tailscale with provided auth key (--accept-routes off, no-exit-node)..."
     & $tailscaleExe up `
         --authkey=$TailscaleAuthKey `
         --hostname=$TargetHostname `
@@ -206,7 +206,7 @@ if ($TailscaleAuthKey -and $TailscaleAuthKey -match '^tskey-') {
     Warn "Then complete the browser sign-in with nihafwork@gmail.com."
 }
 
-# ─── 5. always-on power settings ──────────────────────────────────────────────
+# --- 5. always-on power settings ----------------------------------------------
 Section "Power plan (appliance-mode: never sleep)"
 
 # High Performance plan
@@ -230,20 +230,20 @@ powercfg /SETDCVALUEINDEX SCHEME_CURRENT $sub $set 0 2>&1 | Out-Null
 powercfg -s SCHEME_CURRENT 2>&1 | Out-Null
 Ok "USB selective suspend disabled"
 
-# ─── 6. Windows Update — defer reboots ────────────────────────────────────────
-Section "Windows Update — defer reboots during business hours"
+# --- 6. Windows Update - defer reboots ----------------------------------------
+Section "Windows Update - defer reboots during business hours"
 
 # Active hours: 06:00 to 23:00 (Windows won't auto-reboot during this window).
 $wuKey = 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings'
 if (Test-Path $wuKey) {
     Set-ItemProperty -Path $wuKey -Name 'ActiveHoursStart' -Value 6 -Type DWord -ErrorAction SilentlyContinue
     Set-ItemProperty -Path $wuKey -Name 'ActiveHoursEnd' -Value 23 -Type DWord -ErrorAction SilentlyContinue
-    Ok "Active hours: 06:00–23:00 (no auto-reboot during this window)"
+    Ok "Active hours: 06:00-23:00 (no auto-reboot during this window)"
 } else {
-    Warn "WindowsUpdate settings key not found — skipping active hours config"
+    Warn "WindowsUpdate settings key not found - skipping active hours config"
 }
 
-# ─── 7. capture device fingerprint ────────────────────────────────────────────
+# --- 7. capture device fingerprint --------------------------------------------
 Section "Device fingerprint"
 
 $os    = Get-CimInstance Win32_OperatingSystem
@@ -258,10 +258,10 @@ $diskGb = if ($disk) { [math]::Round($disk.Size / 1GB, 0) } else { '?' }
 
 @"
 
-──────────────────────────────────────────────────────────
+----------------------------------------------------------
 Paste this into fleet/devices.json on the LAPTOP, replacing
 the existing hn-winpc block:
-──────────────────────────────────────────────────────────
+----------------------------------------------------------
 
   "hn-winpc": {
     "role": "appliance-primary",
@@ -281,14 +281,14 @@ the existing hn-winpc block:
     "local_ip_at_setup": "$ip",
     "registered_at": "$(Get-Date -Format 'yyyy-MM-dd')",
     "always_on": true,
-    "purpose": "PRIMARY appliance — aggregator pulse runs here (Chrome + extension 24/7).",
+    "purpose": "PRIMARY appliance - aggregator pulse runs here (Chrome + extension 24/7).",
     "capabilities": ["chrome-runtime", "aggregator-pulse", "windows-automation"]
   }
 
-──────────────────────────────────────────────────────────
+----------------------------------------------------------
 "@ | Write-Host
 
-# ─── 8. final manual steps ────────────────────────────────────────────────────
+# --- 8. final manual steps ----------------------------------------------------
 Section "Manual steps you still need to do"
 Write-Host @"
 
@@ -297,21 +297,21 @@ Write-Host @"
      and complete browser sign-in with nihafwork@gmail.com.
 
   2. Install Google Chrome from https://www.google.com/chrome
-     (Edge alone is not enough — aggregator extension targets Chrome MV3).
+     (Edge alone is not enough - aggregator extension targets Chrome MV3).
 
-  3. Chrome → Settings → On startup → "Continue where you left off".
+  3. Chrome -> Settings -> On startup -> "Continue where you left off".
      Log in to:
        https://partner.swiggy.com/food/
        https://www.zomato.com/partners/
 
-  4. Settings → Apps → Startup → toggle Google Chrome ON
+  4. Settings -> Apps -> Startup -> toggle Google Chrome ON
      (auto-launches on boot/login).
 
   5. From the LAPTOP, run:  ./fleet/verify-bridge.sh hn-winpc
      to confirm the bridge is up.
 
   6. Once verified, the aggregator extension gets pushed from laptop and
-     loaded in Chrome. (Separate step — not this script.)
+     loaded in Chrome. (Separate step - not this script.)
 
 "@ -ForegroundColor Yellow
 
