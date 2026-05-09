@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>HE May 2026 · DO-OR-DIE Command Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f1a; --card:#111826; --card2:#1a2234; --line:#273042;
+  --text:#e6edf7; --mute:#8b95a8; --dim:#5a6477;
+  --tan:#D2B48C; --sienna:#713520; --offwhite:#FAF3E3;
+  --green:#22c55e; --red:#ef4444; --yellow:#eab308; --orange:#f97316;
+  --blue:#3b82f6; --purple:#a855f7; --cyan:#06b6d4;
+  --gold:linear-gradient(135deg,#fbbf24,#f59e0b);
+  --silver:linear-gradient(135deg,#cbd5e1,#94a3b8);
+  --bronze:linear-gradient(135deg,#d97706,#b45309);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}
+a{color:var(--tan);text-decoration:none}
+a:hover{color:var(--offwhite)}
+
+/* Top bar */
+.bar{position:sticky;top:0;z-index:100;background:rgba(10,15,26,.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.title{display:flex;gap:10px;align-items:center;font-weight:800;font-size:16px;letter-spacing:-.01em}
+.title::before{content:'';width:4px;height:20px;background:linear-gradient(135deg,#ef4444,#f97316);border-radius:2px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.do-or-die{font-size:11px;color:#fca5a5;background:rgba(239,68,68,.12);padding:3px 10px;border-radius:99px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:.08em;border:1px solid rgba(239,68,68,.3)}
+.timer{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mute)}
+.timer b{color:var(--text)}
+.refreshing{color:var(--green);animation:pulse 1s infinite}
+
+/* Hero */
+.hero{padding:24px 24px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px}
+.big-card{background:linear-gradient(180deg,var(--card) 0%,var(--bg) 100%);border:1px solid var(--line);border-radius:14px;padding:22px;position:relative;overflow:hidden}
+.big-card::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at top right,rgba(249,115,22,.08) 0%,transparent 60%);pointer-events:none}
+.big-card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--mute);font-weight:700;margin-bottom:8px}
+.big-card .num{font-family:'JetBrains Mono',monospace;font-size:36px;font-weight:800;letter-spacing:-.02em;line-height:1;color:var(--text)}
+.big-card .sub{font-size:12px;color:var(--mute);margin-top:8px;font-family:'JetBrains Mono',monospace}
+.big-card .target{font-size:13px;color:var(--mute);margin-top:4px}
+.big-card .target b{color:var(--text);font-weight:600}
+.bar-track{margin-top:14px;height:10px;background:var(--card2);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.bar-fill{height:100%;background:linear-gradient(90deg,var(--orange),#fbbf24);border-radius:6px;transition:width 1.5s cubic-bezier(.4,0,.2,1);position:relative}
+.bar-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 70%,rgba(255,255,255,.18));animation:shimmer 2s infinite linear}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.bar-fill.green{background:linear-gradient(90deg,var(--green),#86efac)}
+.bar-fill.red{background:linear-gradient(90deg,var(--red),#fca5a5)}
+.bar-fill.yellow{background:linear-gradient(90deg,var(--yellow),#fde047)}
+.pct-row{display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin-top:6px;font-family:'JetBrains Mono',monospace}
+.pct-row b{color:var(--text)}
+.delta{font-size:12px;color:var(--mute);margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);font-family:'JetBrains Mono',monospace;line-height:1.7}
+.delta b{color:var(--text)}
+.delta .behind{color:var(--red);font-weight:700}
+.delta .ahead{color:var(--green);font-weight:700}
+
+/* Pace strip */
+.pace-strip{margin:16px 24px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 18px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;align-items:center}
+.pace-cell{padding:0 8px;border-right:1px dashed var(--line);min-width:0}
+.pace-cell:last-child{border-right:none}
+.pace-cell .lbl{font-size:10px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:700}
+.pace-cell .v{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--text)}
+.pace-cell .v.lift{color:var(--orange)}
+.pace-cell .sub{font-size:10px;color:var(--dim);margin-top:2px;font-family:'JetBrains Mono',monospace}
+@media (max-width:780px){.pace-strip{grid-template-columns:1fr 1fr}.pace-cell{border-right:none;border-bottom:1px dashed var(--line);padding-bottom:10px}.pace-cell:nth-last-child(-n+2){border-bottom:none}}
+
+/* Section heading */
+.h2{padding:24px 24px 0;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.h2 h2{font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--mute)}
+.h2 .right{font-size:11px;color:var(--dim);font-family:'JetBrains Mono',monospace}
+
+/* Today block */
+.today-row{padding:8px 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.tile .lbl{font-size:10px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:4px}
+.tile .v{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--text)}
+.tile .sub{font-size:11px;color:var(--dim);font-family:'JetBrains Mono',monospace;margin-top:2px}
+
+/* Layer cards */
+.layers{padding:8px 24px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px}
+.layer{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;transition:all .15s;position:relative}
+.layer:hover{border-color:var(--tan);transform:translateY(-1px)}
+.layer.bonus{border-style:dashed;opacity:.85}
+.layer-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.layer-num{width:28px;height:28px;border-radius:50%;background:var(--card2);color:var(--mute);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;flex-shrink:0;border:1px solid var(--line)}
+.layer-name{font-size:14px;font-weight:700;color:var(--text);line-height:1.3;flex:1}
+.status{font-size:10px;padding:3px 9px;border-radius:99px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.status-planning{background:rgba(120,130,150,.18);color:#a0a8b8;border:1px solid rgba(120,130,150,.3)}
+.status-executing{background:rgba(245,158,11,.18);color:#fbbf24;border:1px solid rgba(245,158,11,.3)}
+.status-live{background:rgba(34,197,94,.2);color:#4ade80;border:1px solid rgba(34,197,94,.4);animation:pulse 1.6s infinite}
+.status-paused{background:rgba(168,85,247,.18);color:#d8b4fe;border:1px solid rgba(168,85,247,.3)}
+.status-done{background:rgba(59,130,246,.18);color:#93c5fd;border:1px solid rgba(59,130,246,.3)}
+.layer-desc{font-size:12px;color:var(--mute);line-height:1.5}
+.layer-rev{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card2);border-radius:8px;padding:8px 10px}
+.layer-rev .col{flex:1;text-align:center;border-right:1px dashed var(--line);padding-right:8px}
+.layer-rev .col:last-child{border-right:none}
+.layer-rev .lbl{font-size:9px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:2px}
+.layer-rev .v{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--text)}
+.layer-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.layer-actions button,.layer-actions a{background:var(--card2);border:1px solid var(--line);color:var(--text);padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600;transition:all .12s;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.layer-actions button:hover,.layer-actions a:hover{border-color:var(--tan)}
+.layer-actions .primary{background:var(--sienna);color:var(--offwhite);border-color:var(--tan)}
+.layer-actions .primary:hover{background:var(--tan);color:var(--bg)}
+.next-action{font-size:11px;color:var(--mute);font-style:italic;border-left:2px solid var(--orange);padding-left:8px;font-family:'JetBrains Mono',monospace}
+.next-action b{color:var(--text);font-style:normal;font-weight:600}
+.bonus-tag{font-size:9px;background:rgba(249,115,22,.18);color:#fdba74;padding:2px 7px;border-radius:4px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-family:'JetBrains Mono',monospace}
+
+/* Hourly mini chart for today */
+.hourly-row{display:flex;gap:2px;align-items:flex-end;height:40px;margin-top:8px}
+.hour-bar{flex:1;background:var(--orange);border-radius:2px 2px 0 0;min-height:1px;opacity:.7;transition:opacity .2s}
+.hour-bar:hover{opacity:1}
+
+/* Modal for layer edit */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.modal.show{display:flex}
+.modal-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px;max-width:600px;width:100%;max-height:88vh;overflow-y:auto}
+.modal-card h3{font-size:18px;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.modal-card label{display:block;font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;margin-top:14px;margin-bottom:5px;font-weight:700}
+.modal-card input,.modal-card select,.modal-card textarea{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);padding:9px 11px;border-radius:7px;font-family:inherit;font-size:13px}
+.modal-card input:focus,.modal-card select:focus,.modal-card textarea:focus{outline:none;border-color:var(--tan)}
+.modal-card textarea{min-height:70px;resize:vertical;font-family:'JetBrains Mono',monospace;font-size:12px}
+.modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+.modal-actions button{background:var(--card2);border:1px solid var(--line);color:var(--text);padding:9px 16px;border-radius:7px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.modal-actions button:hover{border-color:var(--tan)}
+.modal-actions .save{background:var(--sienna);border-color:var(--tan);color:var(--offwhite)}
+
+/* Toast */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--green);color:var(--green);padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .25s;z-index:300}
+#toast.show{opacity:1}
+
+/* Daily strip */
+.daily-strip{padding:0 24px 24px;display:flex;gap:5px;overflow-x:auto}
+.day-cell{min-width:48px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px 6px;text-align:center;font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.day-cell .d{font-size:10px;color:var(--mute)}
+.day-cell .v{font-size:11px;font-weight:700;color:var(--text);margin-top:2px}
+.day-cell.hit{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.06)}
+.day-cell.miss{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.04)}
+.day-cell.today{border-color:var(--orange);box-shadow:0 0 0 2px rgba(249,115,22,.15)}
+.day-cell.future{opacity:.4}
+
+@media (max-width:600px){
+  .hero{padding:14px 14px 0}
+  .pace-strip{margin:10px 14px;padding:12px}
+  .h2,.today-row,.layers,.daily-strip{padding-left:14px;padding-right:14px}
+  .big-card .num{font-size:30px}
+}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="title">HE May 2026 · Command Center <span class="do-or-die">DO OR DIE</span></div>
+  <div class="timer"><span id="dayInfo">Loading…</span> · <span id="lastRefresh" class="refreshing">connecting…</span></div>
+</div>
+
+<div class="hero" id="hero"></div>
+
+<div class="pace-strip" id="paceStrip"></div>
+
+<div class="h2"><h2>Today's Inflow</h2><div class="right" id="todayMeta"></div></div>
+<div class="today-row" id="todayRow"></div>
+
+<div class="h2"><h2>Daily Trajectory</h2><div class="right">May 1 → 31 · ✓ hit pace · ✗ missed</div></div>
+<div class="daily-strip" id="dailyStrip"></div>
+
+<div class="h2"><h2>7 Marketing Layers</h2><div class="right" id="layersMeta"></div></div>
+<div class="layers" id="layers"></div>
+
+<div class="modal" id="layerModal">
+  <div class="modal-card">
+    <h3 id="modalTitle">Edit Layer</h3>
+    <label>Status</label>
+    <select id="mStatus">
+      <option value="planning">Planning</option>
+      <option value="executing">Executing</option>
+      <option value="live">Live</option>
+      <option value="paused">Paused</option>
+      <option value="done">Done</option>
+    </select>
+    <label>Next Action (one short sentence)</label>
+    <input type="text" id="mNextAction" placeholder="e.g. Send 5 personalized DMs to Gold-tier creators with cover commitment">
+    <label>Next Action ETA (ISO date or natural)</label>
+    <input type="text" id="mNextActionEta" placeholder="e.g. 2026-05-10T20:00 IST">
+    <label>Chat URL (parallel chat link)</label>
+    <input type="text" id="mChatUrl" placeholder="https://claude.ai/chat/...">
+    <label>Description</label>
+    <input type="text" id="mDescription">
+    <label>Notes</label>
+    <textarea id="mNotes" placeholder="Surgical detail, blockers, attribution insights..."></textarea>
+    <label>Expected Revenue (₹) — what this layer should produce in May</label>
+    <input type="number" id="mExpected" placeholder="100000">
+    <label>Realized Revenue (₹) — attributed so far</label>
+    <input type="number" id="mRealized" placeholder="0">
+    <label>Actor (your name)</label>
+    <input type="text" id="mActor" placeholder="nihaf">
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="save" onclick="saveLayer()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api/may-execution';
+let STATE = null;
+let editingLayer = null;
+const ACTOR = localStorage.getItem('me_actor') || 'nihaf';
+
+const fmtINR = n => {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const num = Math.round(n);
+  if (num >= 10000000) return '₹' + (num/10000000).toFixed(2) + ' Cr';
+  if (num >= 100000) return '₹' + (num/100000).toFixed(2) + ' L';
+  if (num >= 1000) return '₹' + (num/1000).toFixed(1) + 'K';
+  return '₹' + num.toLocaleString('en-IN');
+};
+const fmtINRfull = n => {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return '₹' + Math.round(n).toLocaleString('en-IN');
+};
+const paiseToR = p => (p || 0) / 100;
+const pct = (a, b) => b > 0 ? (a / b * 100) : 0;
+
+async function fetchState() {
+  try {
+    const r = await fetch(API);
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'state fetch failed');
+    STATE = d;
+    render();
+    document.getElementById('lastRefresh').textContent = 'updated ' + new Date().toLocaleTimeString('en-IN', {timeZone: 'Asia/Kolkata'});
+    document.getElementById('lastRefresh').classList.remove('refreshing');
+  } catch (e) {
+    document.getElementById('lastRefresh').textContent = 'ERR: ' + e.message;
+    document.getElementById('lastRefresh').classList.remove('refreshing');
+  }
+}
+
+function render() {
+  if (!STATE) return;
+  const { month, targets, banked, progress_pct, required_pace, today, daily, layers, aggregator_breakdown } = STATE;
+
+  // Day info
+  document.getElementById('dayInfo').innerHTML = `Day <b>${month.day_index}</b> of 31 · <b>${month.days_remaining_incl_today}</b> days remaining`;
+
+  // Hero cards
+  const outletPct = progress_pct.outlet;
+  const aggPct = progress_pct.aggregator;
+  const outletColor = outletPct < 30 ? 'red' : outletPct < 70 ? 'yellow' : 'green';
+  const aggColor = aggPct < 30 ? 'red' : aggPct < 70 ? 'yellow' : 'green';
+
+  document.getElementById('hero').innerHTML = `
+    <div class="big-card">
+      <div class="lbl">Direct Outlet Sales (Dine-in + Direct Takeaway)</div>
+      <div class="num" data-target="${paiseToR(banked.outlet_paise)}">${fmtINRfull(paiseToR(banked.outlet_paise))}</div>
+      <div class="target">Target: <b>${fmtINR(targets.outlet_rupees)}</b> · ${banked.outlet_orders} orders so far</div>
+      <div class="bar-track"><div class="bar-fill ${outletColor}" style="width:${Math.min(100, outletPct)}%"></div></div>
+      <div class="pct-row"><span><b>${outletPct.toFixed(1)}%</b> banked</span><span>${fmtINRfull(targets.outlet_rupees - paiseToR(banked.outlet_paise))} to go</span></div>
+      <div class="delta">
+        Required pace from now: <b>${fmtINR(required_pace.outlet_rupees_per_day)}/day</b><br>
+        Original even pace: <b>${fmtINR(required_pace.original_pace_outlet_per_day)}/day</b><br>
+        Lift needed: <span class="${required_pace.outlet_rupees_per_day > required_pace.original_pace_outlet_per_day ? 'behind' : 'ahead'}">${((required_pace.outlet_rupees_per_day / required_pace.original_pace_outlet_per_day - 1) * 100).toFixed(1)}%</span> over even-baseline
+      </div>
+    </div>
+    <div class="big-card">
+      <div class="lbl">Aggregator Delivery (Zomato + Swiggy HE)</div>
+      <div class="num">${fmtINRfull(paiseToR(banked.aggregator_paise))}</div>
+      <div class="target">Target: <b>${fmtINR(targets.aggregator_rupees)}</b> · ${banked.aggregator_orders} orders</div>
+      <div class="bar-track"><div class="bar-fill ${aggColor}" style="width:${Math.min(100, aggPct)}%"></div></div>
+      <div class="pct-row"><span><b>${aggPct.toFixed(1)}%</b> banked</span><span>${fmtINRfull(targets.aggregator_rupees - paiseToR(banked.aggregator_paise))} to go</span></div>
+      <div class="delta">
+        Required pace: <b>${fmtINR(required_pace.aggregator_rupees_per_day)}/day</b><br>
+        ${aggregator_breakdown && aggregator_breakdown.zomato ? `Zomato: ${fmtINR(aggregator_breakdown.zomato.revenue)} (${aggregator_breakdown.zomato.orders}) · Swiggy: ${fmtINR(aggregator_breakdown.swiggy.revenue)} (${aggregator_breakdown.swiggy.orders})` : '<span class="behind">aggregator data feed broken — fix VM extension</span>'}
+      </div>
+    </div>
+  `;
+
+  // Pace strip
+  const totalBanked = paiseToR(banked.outlet_paise + banked.aggregator_paise);
+  const totalTarget = targets.outlet_rupees + targets.aggregator_rupees;
+  const totalPct = pct(totalBanked, totalTarget);
+  document.getElementById('paceStrip').innerHTML = `
+    <div class="pace-cell">
+      <div class="lbl">Combined Banked</div>
+      <div class="v">${fmtINR(totalBanked)}</div>
+      <div class="sub">of ${fmtINR(totalTarget)} (${totalPct.toFixed(1)}%)</div>
+    </div>
+    <div class="pace-cell">
+      <div class="lbl">Required Pace · Outlet</div>
+      <div class="v lift">${fmtINR(required_pace.outlet_rupees_per_day)}/day</div>
+      <div class="sub">${month.days_remaining_incl_today} days left</div>
+    </div>
+    <div class="pace-cell">
+      <div class="lbl">Required Pace · Aggregator</div>
+      <div class="v lift">${fmtINR(required_pace.aggregator_rupees_per_day)}/day</div>
+      <div class="sub">Zomato + Swiggy combined</div>
+    </div>
+    <div class="pace-cell">
+      <div class="lbl">Required Combined</div>
+      <div class="v lift">${fmtINR(required_pace.outlet_rupees_per_day + required_pace.aggregator_rupees_per_day)}/day</div>
+      <div class="sub">to hit ₹13L primary</div>
+    </div>
+  `;
+
+  // Today's tiles + hourly
+  const hourly = today.hourly || [];
+  const maxHour = Math.max(...hourly.map(h => h.amount), 1);
+  document.getElementById('todayRow').innerHTML = `
+    <div class="tile"><div class="lbl">Outlet Today (MTD-by-day approx)</div><div class="v">${fmtINR(paiseToR(banked.outlet_paise))}</div><div class="sub">cumulative May 1 → today</div></div>
+    <div class="tile"><div class="lbl">Orders Today</div><div class="v">${banked.outlet_orders}</div><div class="sub">across 3 POS configs</div></div>
+    <div class="tile"><div class="lbl">Avg Order Value</div><div class="v">${fmtINR(paiseToR(banked.outlet_paise) / Math.max(1, banked.outlet_orders))}</div><div class="sub">May AOV</div></div>
+    <div class="tile" style="grid-column:span 2">
+      <div class="lbl">Hourly Today</div>
+      <div class="hourly-row">${hourly.map(h => `<div class="hour-bar" style="height:${(h.amount/maxHour)*100}%" title="${h.label}: ₹${Math.round(h.amount)} (${h.orders} orders)"></div>`).join('')}</div>
+      <div class="sub" style="display:flex;justify-content:space-between;margin-top:4px">${hourly.filter((_,i)=>[0,6,12,18,23].includes(i)).map(h=>`<span>${h.label}</span>`).join('')}</div>
+    </div>
+  `;
+  document.getElementById('todayMeta').textContent = STATE.today_ist + ' IST';
+
+  // Daily strip
+  const dailyMap = {};
+  for (const r of (daily || [])) dailyMap[r.date] = r;
+  const stripHtml = [];
+  for (let d = 1; d <= 31; d++) {
+    const date = `2026-05-${String(d).padStart(2,'0')}`;
+    const row = dailyMap[date];
+    const isToday = date === STATE.today_ist;
+    const isFuture = d > month.day_index;
+    let cls = 'day-cell';
+    if (isFuture) cls += ' future';
+    if (isToday) cls += ' today';
+    if (!isFuture && !isToday && row) {
+      const required = row.required_pace_outlet_paise || 0;
+      // simple hit/miss based on whether the day's revenue (vs prior day cumulative) was above/below the day's required pace
+      // (day-by-day delta isn't perfectly captured; using >0 as proxy for now)
+      cls += row.outlet_revenue_paise > 0 ? ' hit' : ' miss';
+    }
+    const dailyR = row ? Math.round(paiseToR(row.outlet_revenue_paise || 0)) : null;
+    stripHtml.push(`<div class="${cls}" title="${date}: ${fmtINRfull(dailyR)}">
+      <div class="d">${d}</div>
+      <div class="v">${dailyR != null ? (dailyR > 1000 ? Math.round(dailyR/1000) + 'K' : dailyR) : '—'}</div>
+    </div>`);
+  }
+  document.getElementById('dailyStrip').innerHTML = stripHtml.join('');
+
+  // Layers
+  const liveCount = layers.filter(l => l.status === 'live').length;
+  const execCount = layers.filter(l => l.status === 'executing').length;
+  const planCount = layers.filter(l => l.status === 'planning').length;
+  document.getElementById('layersMeta').textContent = `${liveCount} live · ${execCount} executing · ${planCount} planning`;
+
+  document.getElementById('layers').innerHTML = layers.map(l => `
+    <div class="layer ${l.is_bonus ? 'bonus' : ''}" data-code="${l.code}">
+      <div class="layer-h">
+        <div class="layer-num">${l.position}</div>
+        <div class="layer-name">${l.name}${l.is_bonus ? ' <span class="bonus-tag">bonus</span>' : ''}</div>
+        <div class="status status-${l.status}">${l.status}</div>
+      </div>
+      <div class="layer-desc">${l.description || '—'}</div>
+      <div class="layer-rev">
+        <div class="col"><div class="lbl">Expected</div><div class="v">${fmtINR(paiseToR(l.expected_revenue_paise))}</div></div>
+        <div class="col"><div class="lbl">Realized</div><div class="v" style="color:${l.realized_revenue_paise > 0 ? '#4ade80' : 'var(--mute)'}">${fmtINR(paiseToR(l.realized_revenue_paise))}</div></div>
+        <div class="col"><div class="lbl">Last touched</div><div class="v" style="font-size:11px;color:var(--mute)">${formatTime(l.updated_at)}</div></div>
+      </div>
+      ${l.next_action ? `<div class="next-action">Next: <b>${l.next_action}</b>${l.next_action_eta ? ' · by ' + l.next_action_eta : ''}</div>` : ''}
+      ${l.notes ? `<div style="font-size:11px;color:var(--dim);font-family:'JetBrains Mono',monospace;line-height:1.5">${l.notes.slice(0, 200)}${l.notes.length > 200 ? '…' : ''}</div>` : ''}
+      <div class="layer-actions">
+        <button class="primary" onclick="openModal('${l.code}')">Update</button>
+        ${l.chat_url ? `<a href="${l.chat_url}" target="_blank">Open chat ↗</a>` : ''}
+        <button onclick="setLayerStatus('${l.code}','live')">Mark Live</button>
+        <button onclick="setLayerStatus('${l.code}','executing')">Executing</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function formatTime(s) {
+  if (!s) return '—';
+  const d = new Date(s.replace(' ', 'T') + 'Z');
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return Math.floor(diff) + 's ago';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
+
+function openModal(code) {
+  const l = STATE.layers.find(x => x.code === code);
+  if (!l) return;
+  editingLayer = code;
+  document.getElementById('modalTitle').textContent = `Update — ${l.name}`;
+  document.getElementById('mStatus').value = l.status;
+  document.getElementById('mNextAction').value = l.next_action || '';
+  document.getElementById('mNextActionEta').value = l.next_action_eta || '';
+  document.getElementById('mChatUrl').value = l.chat_url || '';
+  document.getElementById('mDescription').value = l.description || '';
+  document.getElementById('mNotes').value = l.notes || '';
+  document.getElementById('mExpected').value = Math.round(paiseToR(l.expected_revenue_paise));
+  document.getElementById('mRealized').value = Math.round(paiseToR(l.realized_revenue_paise));
+  document.getElementById('mActor').value = ACTOR;
+  document.getElementById('layerModal').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('layerModal').classList.remove('show');
+  editingLayer = null;
+}
+async function saveLayer() {
+  if (!editingLayer) return;
+  const actor = document.getElementById('mActor').value || 'unknown';
+  localStorage.setItem('me_actor', actor);
+  const body = {
+    code: editingLayer,
+    status: document.getElementById('mStatus').value,
+    next_action: document.getElementById('mNextAction').value,
+    next_action_eta: document.getElementById('mNextActionEta').value,
+    chat_url: document.getElementById('mChatUrl').value,
+    description: document.getElementById('mDescription').value,
+    notes: document.getElementById('mNotes').value,
+    expected_revenue_paise: Math.round(parseFloat(document.getElementById('mExpected').value || 0) * 100),
+    realized_revenue_paise: Math.round(parseFloat(document.getElementById('mRealized').value || 0) * 100),
+    actor,
+  };
+  try {
+    const r = await fetch(API + '?action=update-layer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'save failed');
+    closeModal();
+    fetchState();
+    toast('✓ Saved');
+  } catch (e) {
+    toast('✗ ' + e.message);
+  }
+}
+async function setLayerStatus(code, status) {
+  try {
+    const r = await fetch(API + '?action=update-layer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, status, actor: ACTOR }) });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'update failed');
+    fetchState();
+    toast('✓ → ' + status);
+  } catch (e) {
+    toast('✗ ' + e.message);
+  }
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// Initial load + auto-refresh every 60s
+fetchState();
+setInterval(fetchState, 60_000);
+
+// Click outside modal to close
+document.getElementById('layerModal').addEventListener('click', e => { if (e.target.id === 'layerModal') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+</script>
+
+</body>
+</html>
