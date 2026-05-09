@@ -67,14 +67,7 @@ async function handlePost(db, request, headers, env) {
     }
     const outletId = snap.outlet?.outlet_id || snap.outlet_id || 'unknown';
     const metricType = snap.source === 'api_intercept' ? 'api_' + classifyUrl(snap.url) : snap.page || 'dom_read';
-    // Embed source URL inside the data JSON for api_intercept captures so Phase 3
-    // mining can identify the originating endpoint after the fact. No schema change
-    // needed; consumers just read data._intercept_url when present.
-    let payload = snap.metrics || snap.data || snap;
-    if (snap.source === 'api_intercept' && snap.url && typeof payload === 'object' && payload !== null && !Array.isArray(payload)) {
-      payload = { ...payload, _intercept_url: snap.url };
-    }
-    const data = JSON.stringify(payload);
+    const data = JSON.stringify(snap.metrics || snap.data || snap);
     const capturedAt = snap.captured_at || new Date().toISOString();
 
     if (data === '{}' || data === 'null') continue;
@@ -630,44 +623,23 @@ async function handleGet(db, url, headers) {
       // ---- GROWTH ----
       if (liveTrack) {
         const d = liveTrack.data || {};
-        // Zomato reports the funnel as percentages (imp_to_menu / menu_to_cart / cart_to_order)
-        // rather than absolute counts at each stage. Surface the percentages directly and
-        // back-derive counts from impressions when possible.
-        const impressions = num(d.impressions);
-        const impToMenuPct = num(d.imp_to_menu);
-        const menuToCartPct = num(d.menu_to_cart);
-        const cartToOrderPct = num(d.cart_to_order);
-        const menuOpens = (impressions !== null && impToMenuPct !== null) ? Math.round(impressions * impToMenuPct / 100) : null;
-        const cartBuilds = (menuOpens !== null && menuToCartPct !== null) ? Math.round(menuOpens * menuToCartPct / 100) : null;
-        const ordersPlaced = (cartBuilds !== null && cartToOrderPct !== null) ? Math.round(cartBuilds * cartToOrderPct / 100) : num(d.delivered_orders);
         sections.growth = {
           data_scope: 'combined_he_nch',
           data_scope_note: 'Zomato live tracking returns combined when both outlets are selected. Per-outlet capture requires extension to apply outlet filter (Phase 1B).',
           captured_at: liveTrack.captured_at,
           funnel: {
-            impressions,
-            menu_opens: menuOpens,
-            cart_builds: cartBuilds,
-            orders_placed: ordersPlaced,
-            menu_open_rate_pct: impToMenuPct,
-            cart_build_rate_pct: menuToCartPct,
-            order_conversion_rate_pct: cartToOrderPct,
+            impressions: num(d.impressions),
+            menu_opens: num(d.menu_opens),
+            cart_builds: num(d.cart_builds),
+            orders_placed: num(d.orders_placed),
           },
           customers: {
-            new: num(d.new_users ?? d.new_customers),
-            repeat: num(d.repeat_users ?? d.repeat_customers),
-            lapsed: num(d.lapsed_users ?? d.lapsed_customers),
+            new: num(d.new_customers),
+            repeat: num(d.repeat_customers),
+            lapsed: num(d.lapsed_customers),
           },
-          ads: {
-            sales_from_offers: num(d.sales_from_offers),
-            note: d.sales_from_offers !== undefined ? null : 'Zomato ads page extraction pending — currently only "sales from offers" is captured from live tracking.',
-          },
-          listing: { available: false, note: 'Zomato listing/menu metrics pending — separate menu page extraction needed.' },
-          per_outlet_zomato: {
-            he_sales: num(d.he_sales),
-            nch_sales: num(d.nch_sales),
-            note: (d.he_sales || d.nch_sales) ? 'Per-outlet sales captured via outlet-breakdown click on live tracking page.' : 'Per-outlet sales not captured this snapshot — outlet-breakdown click did not find expected DOM element. Phase 1B click logic needs update.',
-          },
+          ads: { available: false, note: 'Zomato ads page extraction pending.' },
+          listing: { available: false, note: 'Zomato listing/menu metrics pending.' },
         };
       } else {
         sections.growth = { data_scope: 'unavailable', reason: 'No live_tracking snapshot.' };
@@ -733,7 +705,11 @@ async function handleGet(db, url, headers) {
       };
     }
 
-    // ---- ORDERS (always per-brand from aggregator_orders table) ----
+    // ---- ORDERS + per-brand SALES OVERRIDE (always per-brand from aggregator_orders) ----
+    // Source of truth for sales/orders/AOV is aggregator_orders WHERE brand=he/nch — that's
+    // already per-outlet correctly. We override the Sales section's combined numbers from
+    // live_tracking/reports with this HE-only aggregation so /he/swiggy and /he/zomato
+    // dashboards show truly HE-only sales numbers.
     const IST = "'+5 hours', '+30 minutes'";
     const EFFECTIVE_DATE = `COALESCE(NULLIF(order_date, ''), date(captured_at, ${IST}))`;
     let dateWhere;
@@ -753,14 +729,38 @@ async function handleGet(db, url, headers) {
 
     const ordersList = orderRows.results || [];
     const delivered = ordersList.filter(r => /delivered/i.test(r.status || ''));
+    const totalRevenue = Math.round(delivered.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100;
+    const totalPayout = Math.round(delivered.reduce((s, r) => s + (r.net_payout || 0), 0) * 100) / 100;
+    const aov = delivered.length ? Math.round(totalRevenue / delivered.length) : 0;
+    const cancelled = ordersList.filter(r => /cancel|reject/i.test(r.status || ''));
+    const cancelledLoss = Math.round(cancelled.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100;
+
     sections.orders = {
       data_scope: 'he_only_or_nch_only',
       captured_at: ordersList[0]?.captured_at || null,
       total_orders: ordersList.length,
       total_delivered: delivered.length,
-      total_revenue: Math.round(delivered.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100,
-      total_payout: Math.round(delivered.reduce((s, r) => s + (r.net_payout || 0), 0) * 100) / 100,
+      total_revenue: totalRevenue,
+      total_payout: totalPayout,
       orders: ordersList,
+    };
+
+    // CRITICAL: override Sales section with HE-only / NCH-only aggregation from
+    // aggregator_orders. The earlier sections.sales (set by Swiggy/Zomato platform
+    // blocks above) used combined data — we now replace it with brand-filtered truth.
+    sections.sales = {
+      data_scope: brand === 'he' ? 'he_only' : 'nch_only',
+      data_scope_note: `Aggregated from aggregator_orders WHERE brand='${brand}' AND platform='${platform}'. This is genuinely ${brand.toUpperCase()}-only — does NOT include the other brand.`,
+      captured_at: ordersList[0]?.captured_at || null,
+      totals: {
+        net_sales: totalRevenue,
+        delivered_orders: delivered.length,
+        aov: aov,
+        cancelled_orders: cancelled.length,
+        cancelled_loss: cancelledLoss,
+        net_payout: totalPayout,
+      },
+      period_note: `${ordersList.length} orders found in period (${delivered.length} delivered).`,
     };
 
     return new Response(JSON.stringify({
@@ -773,128 +773,7 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
-  // --- v6.2 ORDER-DETAIL: Phase 3 API mining — parse api_orders captures into rich per-order data ---
-  // The Zomato partner portal fires GET /merchant-api/order/{id} when an order detail
-  // panel is opened. The response includes the cart breakdown (dishes/quantities/prices/
-  // discounts/tags), customer profile (name + lifetime order count), timeline, and prep
-  // time settings. We were storing this raw as metric_type='api_orders' but never
-  // exposing the structured fields. This action surfaces them.
-  if (action === 'order-detail') {
-    const brand = url.searchParams.get('brand'); // 'he' | 'nch' | null=all
-    const platform = url.searchParams.get('platform') || 'zomato';
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
-    const HE_OUTLET_ZOMATO = '22632449';
-    const NCH_OUTLET_ZOMATO = '22632430';
-
-    // Pull api_orders captures (the raw order-detail API responses)
-    const { results } = await db.prepare(`
-      SELECT * FROM aggregator_snapshots
-      WHERE platform = ? AND metric_type = 'api_orders'
-      ORDER BY captured_at DESC LIMIT ?
-    `).bind(platform, limit * 3).all();  // over-fetch since list+detail mixed
-
-    const parsedOrders = [];
-    const dishStats = {};  // name -> {orders, quantity, revenue, tags_seen}
-
-    for (const row of (results || [])) {
-      const data = safeJsonParse(row.data);
-      const order = data?.order;
-      if (!order || !order.id) continue;  // skip list responses
-
-      const resId = String(order.resId || '');
-      const orderBrand = resId === HE_OUTLET_ZOMATO ? 'he' : resId === NCH_OUTLET_ZOMATO ? 'nch' : 'unknown';
-      if (brand && brand !== 'all' && orderBrand !== brand) continue;
-
-      const cart = order.cartDetails || {};
-      const dishes = cart.items?.dishes || [];
-      const creator = order.creator || {};
-
-      const parsedDishes = dishes.map(d => ({
-        catalogue_id: d.metadata?.catalogueId || null,
-        name: d.name,
-        quantity: d.quantity,
-        unit_cost: d.unitCost,
-        total_cost: d.totalCost,
-        discount: (d.calculations || []).map(c => ({
-          name: c.name,
-          amount: c.amount,
-          is_percentage: c.isPercentage,
-        })),
-        tags: d.metadata?.tags || [],
-      }));
-
-      // Aggregate dish stats across all orders
-      for (const d of parsedDishes) {
-        const k = d.name || 'unknown';
-        if (!dishStats[k]) {
-          dishStats[k] = { name: k, catalogue_id: d.catalogue_id, orders: 0, quantity: 0, revenue: 0, tags: new Set(), discount_count: 0 };
-        }
-        dishStats[k].orders += 1;
-        dishStats[k].quantity += d.quantity || 0;
-        dishStats[k].revenue += d.total_cost || 0;
-        if (d.discount.length > 0) dishStats[k].discount_count += 1;
-        for (const t of (d.tags || [])) dishStats[k].tags.add(t);
-      }
-
-      parsedOrders.push({
-        order_id: order.id,
-        display_id: order.displayId,
-        platform: 'zomato',
-        brand: orderBrand,
-        outlet_res_id: resId,
-        state: order.state,
-        delivery_mode: order.deliveryMode,
-        zomato_delivered: order.zomatoDelivered,
-        rider_assigned: order.riderAssigned,
-        payment: {
-          method: order.paymentMethod,
-          type: order.paymentDetails?.paymentType,
-        },
-        timeline: {
-          created_at: order.createdAt,
-          actioned_at: order.actionedAt,
-          food_ready_at: order.foodOrderReady,
-          updated_at: order.updatedAt,
-          prep_min: order.handoverDetails?.time,
-          prep_min_min: order.handoverDetails?.minTime,
-          prep_min_max: order.handoverDetails?.maxTime,
-        },
-        customer: {
-          user_id: creator.userId,
-          name: creator.name,
-          lifetime_orders: creator.orderCount,
-          lifetime_orders_label: creator.orderCountDisplay,
-          country_code: creator.countryIsdCode,
-          profile_url: creator.profileUrl,
-        },
-        cart: {
-          subtotal: cart.subtotal?.amountDetails?.totalCost,
-          total: cart.total?.amountDetails?.totalCost,
-          dishes: parsedDishes,
-        },
-        captured_at: row.captured_at,
-      });
-    }
-
-    // Convert dish stats Set to array, sort
-    const dishesAgg = Object.values(dishStats)
-      .map(d => ({ ...d, tags: Array.from(d.tags) }))
-      .sort((a, b) => b.revenue - a.revenue);
-
-    return new Response(JSON.stringify({
-      ok: true,
-      platform,
-      brand: brand || 'all',
-      order_count: parsedOrders.length,
-      orders: parsedOrders.slice(0, limit),
-      dish_aggregate: dishesAgg,
-      mining_note: parsedOrders.length < 5
-        ? 'Sparse data — extension needs to capture more order-detail API calls (currently fires only when partner clicks into an order). Phase 3B candidate: extension auto-clicks each order in order history.'
-        : null,
-    }), { headers });
-  }
-
-  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'order-detail'] }), { status: 400, headers });
+  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance', 'health', 'snapshots', 'reviews', 'parsed'] }), { status: 400, headers });
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
