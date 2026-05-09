@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POS Snapshot · HN Hotels</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #111;
+    --ink-dim: #555;
+    --ink-faint: #888;
+    --accent: #b86c00;
+    --good: #0e7a3f;
+    --info: #1f5cbf;
+    --purple: #6b3ab1;
+    --teal: #0a7062;
+    --pink: #b8186e;
+    --warn: #8a6d00;
+    --bad: #b81818;
+    --border: #d4d4d4;
+    --paper: #ffffff;
+    --soft: #fafafa;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #f0f0f0;
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.5;
+    font-size: 12px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .page {
+    background: var(--paper);
+    max-width: 900px;
+    margin: 24px auto;
+    padding: 28px 32px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  h1 { font-size: 22px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 14px; font-weight: 700; margin: 18px 0 4px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+  h3 { font-size: 13px; font-weight: 700; margin: 10px 0 4px; color: var(--ink); }
+  p  { margin: 4px 0 8px; color: var(--ink); }
+  .header-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 2px solid var(--border); padding-bottom: 14px; margin-bottom: 16px; }
+  .meta-line { font-size: 11px; color: var(--ink-dim); }
+  .stamp { font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono', monospace; }
+  .toolbar { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    padding: 8px 14px; background: var(--accent); color: #fff; border: 0;
+    border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+    text-decoration: none; display: inline-block; font-family: inherit;
+  }
+  .btn:hover { background: #9a5b00; }
+  .btn.secondary { background: #f0f0f0; color: var(--ink); border: 1px solid var(--border); }
+  .btn.secondary:hover { background: #e5e5e5; }
+
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 12px 0 18px; }
+  .stat { background: var(--soft); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .stat .label { font-size: 9.5px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat .value { font-size: 18px; font-weight: 700; margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+  .stat .meta { font-size: 10px; color: var(--ink-faint); margin-top: 2px; }
+
+  .group-head { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  .group-head .name { font-size: 14px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+  .group-head .count { font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono', monospace; }
+
+  table.pos-table {
+    width: 100%; border-collapse: collapse; font-size: 11.5px; margin: 6px 0 8px;
+  }
+  table.pos-table th, table.pos-table td {
+    padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  table.pos-table th { background: var(--soft); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-dim); font-weight: 600; }
+  table.pos-table .code { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-weight: 700; }
+  table.pos-table .price { font-family: 'JetBrains Mono', monospace; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; background: #f0f0f0; color: #333; }
+  .pill-nch { background: #ffe6f4; color: var(--pink); }
+  .pill-he  { background: #fff3e0; color: var(--accent); }
+  .pill-hn  { background: #f3eaff; color: var(--purple); }
+  .pill-shape { background: #e6f8f5; color: var(--teal); font-family: 'JetBrains Mono', monospace; }
+  .pill-empty { background: #f5f5f5; color: var(--ink-faint); border: 1px dashed var(--border); }
+
+  .gate {
+    background: var(--paper); padding: 32px;
+    max-width: 380px; margin: 80px auto;
+    border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    text-align: center;
+  }
+  .gate h2 { font-size: 18px; margin: 0 0 6px; color: var(--ink); text-transform: none; letter-spacing: 0; }
+  .gate p { color: var(--ink-dim); font-size: 13px; margin: 0 0 16px; }
+  .gate input {
+    width: 100%; padding: 12px; font-size: 16px; background: #fafafa; color: var(--ink);
+    border: 1px solid var(--border); border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.3em; text-align: center;
+  }
+  .gate button {
+    width: 100%; padding: 11px; margin-top: 10px; background: var(--accent); color: #fff;
+    font-weight: 700; border: 0; border-radius: 6px; font-size: 14px; cursor: pointer;
+  }
+  .gate .err { color: var(--bad); font-size: 12px; margin-top: 6px; min-height: 16px; }
+
+  .loading { padding: 80px 20px; text-align: center; color: var(--ink-dim); font-size: 14px; }
+  .loading .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .footer { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--ink-faint); text-align: center; }
+
+  @page { size: A4; margin: 12mm; }
+  @media print {
+    body { background: #fff !important; }
+    .page { box-shadow: none !important; max-width: none; margin: 0; padding: 0; }
+    .toolbar, .no-print { display: none !important; }
+    .header-row { border-bottom: 1.5px solid #888; }
+    .group-head { page-break-after: avoid; break-after: avoid; }
+    h2 { page-break-after: avoid; break-after: avoid; }
+    a { color: inherit; text-decoration: none; }
+    table.pos-table tr { page-break-inside: avoid; break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate" style="display:none;">
+  <h2>POS Products — Print Snapshot</h2>
+  <p>Enter your PIN to load the live data.</p>
+  <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="PIN" autocomplete="off">
+  <button id="pin-submit">Unlock</button>
+  <div class="err" id="pin-err"></div>
+</div>
+
+<div id="loading" class="loading" style="display:none;">
+  <span class="spinner"></span> Loading POS products from <code>/api/pos-products</code>…
+</div>
+
+<div id="error" class="loading" style="display:none;color:#b81818;">
+  <strong>Failed to load.</strong>
+  <div id="error-msg" style="margin-top:6px;font-size:12px;color:#666;"></div>
+  <button class="btn" id="retry-btn" style="margin-top:14px;">Retry</button>
+</div>
+
+<div id="content" class="page" style="display:none;">
+  <div class="header-row">
+    <div>
+      <h1>POS Product Ring — Live Snapshot</h1>
+      <div class="meta-line">Canonical POS items · 3-segment grammar (BRAND × SHAPE × ITEM) · the entity ring underpinning recipes (future Action ring)</div>
+      <div class="stamp" id="stamp"></div>
+    </div>
+    <div class="toolbar no-print">
+      <button class="btn" id="print-now">⬇ Print to PDF</button>
+      <a class="btn secondary" href="/ops/pos-editor/">← Back to editor</a>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div id="groups"></div>
+
+  <div class="footer">
+    Generated <span id="gen-stamp"></span> · Source of truth: <span class="mono">/api/pos-products</span> · D1 table <span class="mono">pos_products</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const API = '/api/pos-products';
+  const STORAGE_KEY = 'pos_editor_pin';
+  const State = {
+    pin: localStorage.getItem(STORAGE_KEY) || '',
+    products: [],
+    full: {},
+  };
+
+  const $ = sel => document.querySelector(sel);
+  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const fmtDate     = d => d.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: '2-digit' });
+  const fmtDateTime = d => d.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' });
+
+  function show(id) {
+    ['gate', 'loading', 'error', 'content'].forEach(k => {
+      const el = document.getElementById(k);
+      if (el) el.style.display = (k === id) ? 'block' : 'none';
+    });
+  }
+
+  async function tryAuth(pin) {
+    const url = new URL(window.location.origin + API);
+    url.searchParams.set('pin', pin);
+    const r = await fetch(url.toString());
+    const data = await r.json();
+    if (r.status === 401) throw new Error('Invalid PIN');
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    return data;
+  }
+
+  async function fetchOne(pin, code) {
+    const url = new URL(window.location.origin + API);
+    url.searchParams.set('pin', pin);
+    url.searchParams.set('pos_code', code);
+    const r = await fetch(url.toString());
+    if (!r.ok) throw new Error('Failed loading ' + code + ': HTTP ' + r.status);
+    return r.json();
+  }
+
+  async function loadAll() {
+    show('loading');
+    try {
+      const list = await tryAuth(State.pin);
+      State.products = list.pos_products || [];
+      const batchSize = 8;
+      for (let i = 0; i < State.products.length; i += batchSize) {
+        const slice = State.products.slice(i, i + batchSize);
+        const results = await Promise.all(slice.map(r => fetchOne(State.pin, r.pos_code).catch(e => ({ __error: e.message, pos_code: r.pos_code }))));
+        results.forEach(rec => {
+          if (rec && rec.pos_code) State.full[rec.pos_code] = rec;
+        });
+      }
+      render();
+      show('content');
+      setTimeout(() => {
+        try { window.print(); } catch (_) {}
+      }, 1500);
+    } catch (e) {
+      $('#error-msg').textContent = e.message;
+      show('error');
+    }
+  }
+
+  function brandPill(b) {
+    const cls = b === 'NCH' ? 'pill-nch' : b === 'HE' ? 'pill-he' : 'pill-hn';
+    return `<span class="pill ${cls}">${escapeHtml(b)}</span>`;
+  }
+
+  function render() {
+    const now = new Date();
+    document.title = 'POS Snapshot — ' + fmtDate(now);
+    $('#stamp').textContent = 'Snapshot: ' + fmtDateTime(now);
+    $('#gen-stamp').textContent = fmtDateTime(now);
+
+    const total = State.products.length;
+    const byBrand = { NCH: 0, HE: 0, HN: 0 };
+    const byShape = {};
+    State.products.forEach(p => {
+      byBrand[p.brand_prefix] = (byBrand[p.brand_prefix] || 0) + 1;
+      byShape[p.shape] = (byShape[p.shape] || 0) + 1;
+    });
+    const topShapes = Object.entries(byShape).sort((a,b) => b[1]-a[1]).slice(0,3)
+      .map(([s,n]) => `${s}:${n}`).join(' · ');
+
+    $('#stats').innerHTML = `
+      <div class="stat"><div class="label">POS products</div><div class="value">${total}</div><div class="meta">canonical</div></div>
+      <div class="stat"><div class="label">NCH</div><div class="value">${byBrand.NCH || 0}</div><div class="meta">Nawabi Chai House</div></div>
+      <div class="stat"><div class="label">HE</div><div class="value">${byBrand.HE || 0}</div><div class="meta">Hamza Express</div></div>
+      <div class="stat"><div class="label">HN</div><div class="value">${byBrand.HN || 0}</div><div class="meta">Cross-brand</div></div>
+      <div class="stat"><div class="label">Top shapes</div><div class="value" style="font-size:13px;">${topShapes || '—'}</div><div class="meta">by count</div></div>
+    `;
+
+    // Group by brand, then by shape within each brand.
+    const groups = { NCH: [], HE: [], HN: [] };
+    State.products.forEach(p => {
+      if (groups[p.brand_prefix]) groups[p.brand_prefix].push(p);
+    });
+
+    let html = '';
+    [['NCH', 'NAWABI CHAI HOUSE · NCH'],
+     ['HE',  'HAMZA EXPRESS · HE'],
+     ['HN',  'HN HOTELS · HN (cross-brand)']].forEach(([key, label]) => {
+      const list = groups[key] || [];
+      if (list.length === 0) return;
+      html += `<div class="group-head"><span class="name">${label}</span><span class="count">${list.length} POS product${list.length===1?'':'s'}</span></div>`;
+      list.sort((a,b) => a.pos_code.localeCompare(b.pos_code));
+      html += '<table class="pos-table"><thead><tr>'
+            + '<th>Code</th><th>Name</th><th>Shape</th><th>MRP</th><th>DSP</th><th>Channels</th><th>Category</th>'
+            + '</tr></thead><tbody>';
+      list.forEach(p => {
+        const full = State.full[p.pos_code] || {};
+        const data = full.data || {};
+        const price = data.price || {};
+        const channels = data.channels || {};
+        const chKeys = Object.keys(channels).filter(k => channels[k]).map(k => k.replace('_', ' ')).join(', ');
+        html += `<tr>
+          <td class="code">${escapeHtml(p.pos_code)}</td>
+          <td>${escapeHtml(p.pos_name)}</td>
+          <td><span class="pill pill-shape">${escapeHtml(p.shape)}</span></td>
+          <td class="price">${price.mrp != null ? '₹' + price.mrp : '—'}</td>
+          <td class="price">${price.dsp != null ? '₹' + price.dsp : '—'}</td>
+          <td style="font-size:10.5px;color:#555;">${escapeHtml(chKeys || '—')}</td>
+          <td style="font-size:11px;color:#666;">${escapeHtml(data.category || '—')}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+    });
+
+    if (!html) {
+      html = '<p style="color:#888;font-style:italic;">No POS products yet.</p>';
+    }
+
+    $('#groups').innerHTML = html;
+  }
+
+  $('#pin-submit').onclick = async () => {
+    const pin = $('#pin-input').value.trim();
+    if (!pin) return;
+    $('#pin-err').textContent = '';
+    State.pin = pin;
+    try {
+      await tryAuth(pin);
+      localStorage.setItem(STORAGE_KEY, pin);
+      loadAll();
+    } catch (e) {
+      $('#pin-err').textContent = e.message;
+      State.pin = '';
+    }
+  };
+  $('#pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pin-submit').click(); });
+  $('#print-now').onclick = () => window.print();
+  $('#retry-btn').onclick = loadAll;
+
+  if (State.pin) {
+    loadAll();
+  } else {
+    show('gate');
+    setTimeout(() => $('#pin-input').focus(), 100);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POS Product Editor · HN Hotels</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c14;
+    --panel: rgba(22,22,31,0.7);
+    --panel-solid: #16161f;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.16);
+    --ink: #e4e4ed;
+    --ink-dim: #94a3b8;
+    --ink-faint: #64748b;
+    --accent: #e8930c;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --info: #60a5fa;
+    --purple: #c084fc;
+    --teal: #2dd4bf;
+    --pink: #f472b6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif; line-height: 1.55;
+    -webkit-font-smoothing: antialiased; min-height: 100vh;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .glass { background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(20px); border-radius: 14px; }
+  a { color: inherit; text-decoration: none; }
+
+  header.app-header { border-bottom: 1px solid var(--border); padding: 16px 20px; position: sticky; top: 0; z-index: 30; background: rgba(12,12,20,0.92); backdrop-filter: blur(14px); }
+  main { max-width: 1400px; margin: 0 auto; padding: 18px 20px 120px; }
+
+  .gate { max-width: 380px; margin: 80px auto; padding: 32px; }
+  .gate h2 { margin: 0 0 8px; font-size: 22px; }
+  .gate p { color: var(--ink-dim); font-size: 13px; margin: 0 0 18px; }
+  .gate input { width: 100%; padding: 14px; font-size: 18px; background: rgba(0,0,0,0.4); color: var(--ink); border: 1px solid var(--border-strong); border-radius: 10px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.3em; text-align: center; }
+  .gate button { width: 100%; padding: 12px; margin-top: 12px; background: var(--accent); color: #0c0c14; font-weight: 700; border: 0; border-radius: 10px; font-size: 15px; cursor: pointer; }
+  .gate .err { color: var(--bad); font-size: 13px; margin-top: 8px; min-height: 18px; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .stat-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+  .stat-card .label { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 22px; font-weight: 700; margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+  .stat-card .meta { font-size: 11px; color: var(--ink-faint); }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .filters input, .filters select {
+    padding: 9px 12px; background: rgba(0,0,0,0.4); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 9px; font-size: 13px;
+    font-family: inherit; min-height: 44px;
+  }
+  .filters input { flex: 1; min-width: 180px; }
+  .btn { padding: 9px 14px; background: rgba(255,255,255,0.06); color: var(--ink); border: 1px solid var(--border); border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 44px; }
+  .btn:hover { background: rgba(255,255,255,0.10); }
+  .btn-primary { background: var(--accent); color: #0c0c14; border-color: var(--accent); }
+  .btn-primary:hover { background: #ffa928; }
+  .btn-danger { background: rgba(248,113,113,0.10); color: var(--bad); border-color: rgba(248,113,113,0.3); }
+  .btn-danger:hover { background: rgba(248,113,113,0.18); }
+  .btn-sm { padding: 6px 10px; font-size: 12px; min-height: 32px; }
+
+  /* POS list */
+  .p-grid { display: grid; gap: 8px; }
+  .p-row {
+    background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; cursor: pointer;
+    display: grid; grid-template-columns: 220px 1fr 80px 110px 130px;
+    gap: 14px; align-items: center; transition: all 0.12s;
+  }
+  .p-row:hover { background: rgba(255,255,255,0.04); border-color: var(--border-strong); }
+  .p-row.nch { border-left: 3px solid var(--pink); }
+  .p-row.he  { border-left: 3px solid var(--accent); }
+  .p-row.hn  { border-left: 3px solid var(--purple); }
+  .p-row .code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .p-row .name { font-size: 14px; font-weight: 500; }
+  .p-row .price { font-size: 12px; color: var(--ink); font-family: 'JetBrains Mono', monospace; text-align: right; }
+  .p-row .price .lbl { color: var(--ink-faint); margin-right: 4px; }
+  .p-row .updated { font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .pill-nch { background: rgba(244,114,182,0.15); color: var(--pink); }
+  .pill-he  { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-hn  { background: rgba(192,132,252,0.15); color: var(--purple); }
+  .pill-shape { background: rgba(45,212,191,0.15); color: var(--teal); font-family: 'JetBrains Mono', monospace; }
+  .pill-pos { background: rgba(232,147,12,0.15); color: var(--accent); }
+  .pill-unsaved { background: rgba(251,191,36,0.20); color: var(--warn); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.55 } }
+
+  /* Editor side panel */
+  .editor-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 40; display: none; }
+  .editor-overlay.open { display: block; }
+  .editor-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(820px, 100vw); background: var(--panel-solid); z-index: 41; transform: translateX(100%); transition: transform 0.22s ease; box-shadow: -10px 0 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
+  .editor-panel.open { transform: translateX(0); }
+  .editor-head { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .editor-head h2 { margin: 0; font-size: 16px; font-weight: 700; }
+  .editor-head .sub { font-size: 12px; color: var(--ink-dim); }
+  .editor-body { flex: 1; overflow-y: auto; padding: 18px 20px 20px; }
+  .editor-foot { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; align-items: center; background: rgba(0,0,0,0.3); }
+
+  .field-row { margin-bottom: 14px; }
+  .field-row > label { display: block; font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; font-weight: 600; }
+  input.txt, select.txt, textarea.txt {
+    width: 100%; padding: 9px 11px; background: rgba(0,0,0,0.45); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit;
+    min-height: 38px;
+  }
+  input.txt.mono, select.txt.mono { font-family: 'JetBrains Mono', monospace; }
+  textarea.txt { min-height: 60px; resize: vertical; }
+  input.txt:focus, select.txt:focus, textarea.txt:focus { outline: none; border-color: var(--accent); }
+
+  .section { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 14px; background: rgba(255,255,255,0.015); }
+  .section.identity { border-top: 3px solid var(--accent); }
+  .section.shape    { border-top: 3px solid var(--teal); }
+  .section.price    { border-top: 3px solid var(--good); }
+  .section.channels { border-top: 3px solid var(--info); }
+  .section.meta     { border-top: 3px solid var(--purple); }
+  .section h3 { margin: 0 0 10px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 8px; }
+
+  .id-form .grp { margin-bottom: 12px; }
+  .id-form .grp:last-child { margin-bottom: 0; }
+  .grp-label { font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 6px; display: block; }
+  .help { font-size: 11px; color: var(--ink-faint); margin-top: 4px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 8px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; cursor: pointer; user-select: none; min-height: 38px; font-weight: 500; }
+  .chip input { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+  .chip:hover { background: rgba(255,255,255,0.07); border-color: var(--border-strong); }
+  .chip.checked { background: rgba(232,147,12,0.12); border-color: var(--accent); color: var(--accent); }
+  .chip.checked.nch { background: rgba(244,114,182,0.12); border-color: var(--pink); color: var(--pink); }
+  .chip.checked.he  { background: rgba(232,147,12,0.12); border-color: var(--accent); color: var(--accent); }
+  .chip.checked.hn  { background: rgba(192,132,252,0.12); border-color: var(--purple); color: var(--purple); }
+  .id-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* Computed-code display */
+  .code-display { background: linear-gradient(135deg, rgba(232,147,12,0.06), rgba(96,165,250,0.04)); border: 1px solid var(--border-strong); border-radius: 12px; padding: 16px; margin-bottom: 14px; text-align: center; }
+  .code-display .computed { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.3; word-break: break-all; }
+  .code-display .computed .seg-brand-nch { color: var(--pink); }
+  .code-display .computed .seg-brand-he  { color: var(--accent); }
+  .code-display .computed .seg-brand-hn  { color: var(--purple); }
+  .code-display .computed .seg-shape { color: var(--teal); }
+  .code-display .computed .seg-item  { color: var(--accent); }
+  .code-display .computed .dash { color: var(--ink-faint); }
+  .code-display .computed.incomplete { color: var(--ink-faint); }
+  .code-display .badge { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 12px; padding: 4px 10px; border-radius: 999px; font-weight: 600; }
+  .code-display .badge.ok { background: rgba(52,211,153,0.12); color: var(--good); border: 1px solid rgba(52,211,153,0.3); }
+  .code-display .badge.warn { background: rgba(251,191,36,0.12); color: var(--warn); border: 1px solid rgba(251,191,36,0.3); }
+  .code-display .label-tiny { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+
+  /* Shape help */
+  .shape-help {
+    padding: 8px 10px; background: rgba(45,212,191,0.05);
+    border: 1px solid rgba(45,212,191,0.2); border-radius: 8px;
+    font-size: 12px; color: var(--ink); margin-top: 6px; line-height: 1.5;
+  }
+  .shape-help strong { color: var(--teal); font-family: 'JetBrains Mono', monospace; }
+
+  .ed-foot-extra { margin-right: auto; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel-solid); border: 1px solid var(--border-strong); padding: 10px 18px; border-radius: 10px; font-size: 13px; z-index: 60; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+  .toast.success { border-color: var(--good); color: var(--good); }
+  .toast.error { border-color: var(--bad); color: var(--bad); }
+
+  @media (max-width: 720px) {
+    .p-row { grid-template-columns: 1fr auto; }
+    .p-row .price, .p-row .updated, .p-row > div:nth-child(3) { display: none; }
+    .id-grid { grid-template-columns: 1fr; }
+    .editor-panel { width: 100vw; }
+  }
+
+  .help-btn {
+    width: 32px; height: 32px; min-height: 32px; padding: 0;
+    border-radius: 50%; background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border-strong); color: var(--ink);
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: 'Inter', sans-serif;
+  }
+  .help-btn:hover { background: rgba(232,147,12,0.12); color: var(--accent); border-color: var(--accent); }
+
+  /* Legend modal */
+  .legend-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 50; display: none; backdrop-filter: blur(4px); }
+  .legend-overlay.open { display: block; }
+  .legend-modal {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(900px, 100vw);
+    background: var(--panel-solid); z-index: 51; transform: translateX(100%);
+    transition: transform 0.22s ease; box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+    display: flex; flex-direction: column;
+  }
+  .legend-modal.open { transform: translateX(0); }
+  .legend-head { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); }
+  .legend-head h2 { margin: 0; font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .legend-head .sub { font-size: 12px; color: var(--ink-dim); margin-top: 2px; }
+  .legend-body { flex: 1; overflow-y: auto; padding: 18px 20px 40px; }
+  .legend-section { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .legend-section h3 { margin: 0 0 10px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
+  .legend-section p { font-size: 13px; color: var(--ink); margin: 0 0 10px; line-height: 1.6; }
+  .legend-section p.note { color: var(--ink-dim); font-size: 12px; font-style: italic; }
+  .legend-section ul { padding-left: 20px; margin: 6px 0 10px; font-size: 13px; color: var(--ink); }
+  .legend-section ul li { margin-bottom: 4px; }
+  .legend-section code { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 1px 6px; background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 5px; color: var(--accent); }
+  .anatomy { background: linear-gradient(135deg, rgba(232,147,12,0.06), rgba(96,165,250,0.04)); border: 1px solid var(--border-strong); border-radius: 12px; padding: 18px 14px; text-align: center; margin: 6px 0 14px; }
+  .anatomy .pattern { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.4; word-break: break-word; }
+  .anatomy .pattern .seg-brand { color: var(--pink); }
+  .anatomy .pattern .seg-shape { color: var(--teal); }
+  .anatomy .pattern .seg-item  { color: var(--accent); }
+  .anatomy .pattern .dash { color: var(--ink-faint); margin: 0 4px; }
+  .anatomy .legend-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .anatomy .legend-grid > div { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 11px; color: var(--ink-dim); text-align: left; }
+  .anatomy .legend-grid .seg-name { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; display: block; margin-bottom: 3px; }
+  .legend-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .legend-table th, .legend-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .legend-table th { background: rgba(255,255,255,0.04); color: var(--ink-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; }
+  .legend-table tr:last-child td { border-bottom: none; }
+  .legend-table td.code-cell { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--accent); white-space: nowrap; }
+  @media (max-width: 720px) {
+    .legend-modal { width: 100vw; }
+    .anatomy .pattern { font-size: 16px; }
+    .anatomy .legend-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- PIN gate -->
+<div id="gate" class="glass gate" style="display:none;">
+  <h2>POS Product Editor</h2>
+  <p>Enter your PIN to load the canonical POS products.</p>
+  <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="PIN" autocomplete="off">
+  <button id="pin-submit">Unlock</button>
+  <div class="err" id="pin-err"></div>
+</div>
+
+<!-- App -->
+<div id="app" style="display:none;">
+  <header class="app-header">
+    <div style="max-width:1400px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;">🛒</span>
+          <h1 style="margin:0;font-size:18px;font-weight:700;">POS Product Editor</h1>
+          <button class="help-btn" id="help-btn" title="Code Legend / Source of Truth" aria-label="Open Code Legend">?</button>
+          <span class="pill pill-pos" id="user-pill">user</span>
+        </div>
+        <p style="margin:2px 0 0;font-size:12px;color:var(--ink-dim);">Canonical POS items — BRAND × SHAPE × ITEM. Each row is a sellable POS product; SHAPE encodes the recipe pattern (S1 resale, S5 batch+approx, etc.).</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="/ops/pos-editor/print/" target="_blank" rel="noopener" class="btn" title="Open printable snapshot in a new tab">⬇ PDF</a>
+        <a href="/ops/visual/rm-shape-directory/" class="btn">📖 Shape Directory</a>
+        <a href="/ops/rm-sourcing-editor/" class="btn">↗ RM Editor</a>
+        <a href="/ops/vendor-editor/" class="btn">↗ Vendor Editor</a>
+        <button class="btn btn-danger" id="logout-btn" style="display:none;">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="stats" id="stats"></section>
+
+    <section class="filters">
+      <input type="text" id="filter-q" placeholder="Search POS code or name…">
+      <select id="filter-brand">
+        <option value="">All BRANDS</option>
+        <option value="NCH">NCH only</option>
+        <option value="HE">HE only</option>
+        <option value="HN">HN only</option>
+      </select>
+      <select id="filter-shape">
+        <option value="">All SHAPES</option>
+        <option value="S1">S1 · RESALE</option>
+        <option value="S2">S2 · MULTI_UNIT</option>
+        <option value="S3">S3 · SINGLE_PORTION</option>
+        <option value="S4">S4 · MULTI_PORTION</option>
+        <option value="S5">S5 · BATCH+APX</option>
+        <option value="S6">S6 · MARINATED_PROTEIN</option>
+        <option value="S7">S7 · WRAP</option>
+        <option value="S8">S8 · UNIT_PROTEIN</option>
+        <option value="S9">S9 · COMPOSITE</option>
+        <option value="S10">S10 · NO_RM</option>
+      </select>
+      <button class="btn btn-primary" id="add-btn">+ Add New POS Product</button>
+      <button class="btn" id="reload-btn">Reload</button>
+    </section>
+
+    <section class="p-grid" id="p-list"></section>
+  </main>
+</div>
+
+<!-- Code Legend modal -->
+<div class="legend-overlay" id="legend-overlay"></div>
+<aside class="legend-modal" id="legend-modal" aria-hidden="true">
+  <div class="legend-head">
+    <div>
+      <h2><span style="font-size:18px;">📖</span> POS Product Code Legend</h2>
+      <div class="sub">Decode any POS code on this page without leaving.</div>
+    </div>
+    <button class="btn btn-sm" id="legend-close">Close</button>
+  </div>
+  <div class="legend-body">
+
+    <div class="legend-section">
+      <h3>Code Anatomy — 3 segments</h3>
+      <div class="anatomy">
+        <div class="pattern">
+          <span class="seg-brand">{BRAND}</span><span class="dash">-</span><span class="seg-shape">{SHAPE}</span><span class="dash">-</span><span class="seg-item">{ITEM}</span>
+        </div>
+        <div class="legend-grid">
+          <div><span class="seg-name" style="color:var(--pink)">BRAND</span>NCH / HE / HN — outlet that sells this product</div>
+          <div><span class="seg-name" style="color:var(--teal)">SHAPE</span>S1...S10 — recipe pattern</div>
+          <div><span class="seg-name" style="color:var(--accent)">ITEM</span>3-char abbreviation, unique within (BRAND,SHAPE)</div>
+        </div>
+      </div>
+      <p class="note">The POS code IS the operation. It encodes which outlet sells the item, which recipe shape governs RM consumption, and the unique short identifier — three coordinates, one canonical row, no free-text interpretation step between data and action.</p>
+    </div>
+
+    <div class="legend-section">
+      <h3>BRAND values · selling outlet</h3>
+      <table class="legend-table">
+        <thead><tr><th>Code</th><th>Meaning</th><th>Examples</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="code-cell" style="color:var(--pink)">NCH</td>
+            <td>Nawabi Chai House — Irani chai cafe. Concentrated menu (chai + haleem + snacks).</td>
+            <td><code>NCH-S5-IRC</code> Irani Chai · <code>NCH-S5-BMK</code> Bun Maska</td>
+          </tr>
+          <tr>
+            <td class="code-cell" style="color:var(--accent)">HE</td>
+            <td>Hamza Express — QSR biryani. ~176 SKU menu, Dakhni cuisine focus.</td>
+            <td><code>HE-S3-CKB</code> Chicken Biryani · <code>HE-S6-TCK</code> Tandoori Chicken</td>
+          </tr>
+          <tr>
+            <td class="code-cell" style="color:var(--purple)">HN</td>
+            <td>HN Hotels — cross-brand items shared across both outlets (drinks, packaging, etc.).</td>
+            <td><code>HN-S10-PKG</code> Packaging fee · <code>HN-S1-WTR</code> Bottled water</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="legend-section">
+      <h3>SHAPE values · recipe pattern</h3>
+      <table class="legend-table">
+        <thead><tr><th>Shape</th><th>Pattern</th><th>Real example</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">S1</td>
+            <td><strong>RESALE.</strong> Bought-and-sold-as-is. No recipe transformation. Direct pass-through from RM to POS.</td>
+            <td><code>NCH-S1-NLF</code> (Niloufer 100g pack)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">S2</td>
+            <td><strong>MULTI_UNIT.</strong> N units of the same RM per sale. Counted, not measured.</td>
+            <td><code>NCH-S2-OB3</code> (Osmania Biscuit · Pack of 3)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">S3</td>
+            <td><strong>SINGLE_PORTION.</strong> Exact recipe with multiple RMs in fixed proportions. One sale = one portion of recipe.</td>
+            <td><code>NCH-S3-HLM</code> (Haleem · 1 plate)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">S4</td>
+            <td><strong>MULTI_PORTION.</strong> Recipe scaled to multiple portions sold as a unit (e.g. half-kg / full-kg).</td>
+            <td><code>NCH-S4-HLF</code> (Haleem · half-kg / family pack)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">S5</td>
+            <td><strong>BATCH+APX.</strong> Drawn from a prepared batch with approximate per-cup ratios. Per-sale RM consumption is a ratio of batch size.</td>
+            <td><code>NCH-S5-IRC</code> (Irani Chai — drawn from chai vat)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">S6</td>
+            <td><strong>MARINATED_PROTEIN.</strong> Protein with marination prep. HE-side. Sale unit = marinated portion.</td>
+            <td><code>HE-S6-TCK</code> (Tandoori Chicken)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">S7</td>
+            <td><strong>WRAP.</strong> Wrap / roll item. HE-side. Sale unit = one wrap with bread + filling + sauces.</td>
+            <td><code>HE-S7-CKR</code> (Chicken Roll)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">S8</td>
+            <td><strong>UNIT_PROTEIN.</strong> Unit-priced protein item. HE-side. Sale unit = one piece (kabab, leg piece).</td>
+            <td><code>HE-S8-CKK</code> (Chicken Kabab)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">S9</td>
+            <td><strong>COMPOSITE.</strong> Composite of multiple sub-items sold together (thali plate, combo).</td>
+            <td><code>HE-S9-THL</code> (Thali plate)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">S10</td>
+            <td><strong>NO_RM.</strong> No RM consumption — service charge, packaging fee, delivery fee. Pure revenue line.</td>
+            <td><code>HN-S10-PKG</code> (Packaging fee)</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">Each SHAPE governs how RMs are consumed when the POS row sells. The future Action ring (rm_recipes) will reference pos_code by FK, with the SHAPE constraining the recipe structure: S1 needs a single RM ref, S3 needs a recipe with proportional RMs, S5 needs a batch-ratio table, etc.</p>
+    </div>
+
+    <div class="legend-section">
+      <h3>ITEM rules</h3>
+      <table class="legend-table">
+        <thead><tr><th>Rule</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Length</td><td>Exactly 3 characters, uppercase A-Z and 0-9 only</td></tr>
+          <tr><td>Source</td><td>Auto-derived from pos_name (consonants stripped of vowels), owner-overridable</td></tr>
+          <tr><td>Uniqueness</td><td>Unique within (BRAND, SHAPE) — <code>NCH-S5-IRC</code> blocks any other <code>NCH-S5-IRC</code>, but <code>HE-S5-IRC</code> would still be allowed.</td></tr>
+          <tr><td>Case</td><td>Always uppercase. Editor normalises lowercase on save.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="legend-section">
+      <h3>Forbidden combinations</h3>
+      <table class="legend-table">
+        <thead><tr><th>Forbidden</th><th>Why caught</th></tr></thead>
+        <tbody>
+          <tr><td>BRAND outside {NCH, HE, HN}</td><td>Enumerated set. Anything else rejected.</td></tr>
+          <tr><td>SHAPE outside {S1...S10}</td><td>Enumerated set. <code>S99</code>, <code>SX</code> etc. rejected.</td></tr>
+          <tr><td>ITEM not exactly 3 chars</td><td>Length is fixed; <code>IRA</code> ok, <code>IRANI</code> rejected (too long).</td></tr>
+          <tr><td>ITEM with lowercase or symbols</td><td>Uppercase A-Z / 0-9 only; <code>irc</code> normalised to <code>IRC</code>; <code>IR-</code> rejected.</td></tr>
+          <tr><td>Duplicate (BRAND, SHAPE, ITEM)</td><td>Returns 409 with the existing pos_code.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="legend-section">
+      <h3>Why this entity ring closes Framework Gap 2</h3>
+      <p>Before this editor, the 33 NCH service POS items + 21 retail Niloufer SKUs lived only in the Foundation Sheet's "POS Products" tab. Recipes referenced POS codes by string with no FK enforcement — when a POS code mutated (size variant added → renamed), recipes silently went stale.</p>
+      <p>Now the entity ring is closed: pos_code is the canonical key, the constraint set excludes impossible (BRAND, SHAPE, ITEM) combinations at write time, and the future rm_recipes table can FK against pos_code — so renaming a POS item raises a referential error instead of silently breaking recipes.</p>
+      <p class="note">Per COA Doctrine: <em>Entity → Action → Event.</em> POS Products = entity. Recipes (S3 ratios, S5 batch ratios, etc.) = action. Sales events = composition. This ring closes before the next opens.</p>
+    </div>
+
+  </div>
+</aside>
+
+<!-- Editor side panel -->
+<div class="editor-overlay" id="editor-overlay"></div>
+<div class="editor-panel" id="editor-panel">
+  <div class="editor-head">
+    <div style="flex:1;min-width:200px;">
+      <h2 id="ed-title">POS Product</h2>
+      <div class="sub" id="ed-sub"></div>
+    </div>
+    <span class="pill pill-unsaved" id="ed-unsaved" style="display:none;">unsaved</span>
+    <button class="btn btn-sm" id="ed-close">Close</button>
+  </div>
+  <div class="editor-body" id="editor-body"></div>
+  <div class="editor-foot">
+    <span class="sub ed-foot-extra" id="ed-foot-status"></span>
+    <button class="btn btn-sm btn-danger" id="ed-delete" style="display:none;">Delete</button>
+    <button class="btn btn-sm" id="ed-revert">Revert</button>
+    <button class="btn btn-sm btn-primary" id="ed-save">Save</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const State = {
+    pin: localStorage.getItem('pos_editor_pin') || '',
+    user: null,
+    products: [],
+    open: null,
+    openOriginal: null,
+    identity: null,
+    isNew: false,
+    dirty: false,
+    filter: { q: '', brand: '', shape: '' },
+    knownCategories: new Set(),
+  };
+
+  const API = '/api/pos-products';
+
+  const BRANDS = [
+    { value: 'NCH', label: 'NCH', sub: 'Nawabi Chai House',  cls: 'nch' },
+    { value: 'HE',  label: 'HE',  sub: 'Hamza Express',      cls: 'he' },
+    { value: 'HN',  label: 'HN',  sub: 'Cross-brand',        cls: 'hn' },
+  ];
+  const SHAPES = [
+    { value: 'S1',  label: 'S1 · RESALE',           sub: 'Bought-and-sold-as-is, no recipe transformation' },
+    { value: 'S2',  label: 'S2 · MULTI_UNIT',       sub: 'N units of same RM per sale (3-pack biscuits)' },
+    { value: 'S3',  label: 'S3 · SINGLE_PORTION',   sub: 'Exact recipe, fixed proportions of multiple RMs' },
+    { value: 'S4',  label: 'S4 · MULTI_PORTION',    sub: 'Recipe scaled to multiple portions (half-kg, family pack)' },
+    { value: 'S5',  label: 'S5 · BATCH+APX',        sub: 'Drawn from batch with approximate per-cup ratios (Irani Chai)' },
+    { value: 'S6',  label: 'S6 · MARINATED_PROTEIN', sub: 'Protein with marination — HE-side' },
+    { value: 'S7',  label: 'S7 · WRAP',             sub: 'Wrap / roll item — HE-side' },
+    { value: 'S8',  label: 'S8 · UNIT_PROTEIN',     sub: 'Unit-priced protein piece — HE-side' },
+    { value: 'S9',  label: 'S9 · COMPOSITE',        sub: 'Composite of multiple sub-items (thali, combo)' },
+    { value: 'S10', label: 'S10 · NO_RM',           sub: 'No RM consumption — service charge, packaging fee' },
+  ];
+  const SHAPE_BY_VALUE = Object.fromEntries(SHAPES.map(s => [s.value, s]));
+  const CHANNELS = [
+    { key: 'dine_in',     label: 'Dine-in' },
+    { key: 'delivery',    label: 'Delivery (own)' },
+    { key: 'swiggy',      label: 'Swiggy' },
+    { key: 'zomato',      label: 'Zomato' },
+    { key: 'eazy_diner',  label: 'EazyDiner' },
+    { key: 'waba',        label: 'WABA Direct' },
+  ];
+  const SEASONS = [
+    { value: 'year-round', label: 'Year-round' },
+    { value: 'monsoon',    label: 'Monsoon' },
+    { value: 'summer',     label: 'Summer' },
+    { value: 'winter',     label: 'Winter' },
+    { value: 'festival',   label: 'Festival-only' },
+  ];
+
+  const $  = s => document.querySelector(s);
+  const $$ = s => Array.from(document.querySelectorAll(s));
+  const fmtTime = ts => ts ? new Date(ts).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+  function toast(msg, kind = '') {
+    const el = document.createElement('div');
+    el.className = 'toast ' + kind;
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2400);
+  }
+
+  function autoItem(name) {
+    const clean = (name || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '');
+    if (!clean) return '';
+    const compact = clean.replace(/\s+/g, '');
+    if (compact.length <= 3) return compact.padEnd(3, 'X').slice(0, 3);
+    const consonants = compact.replace(/[AEIOU]/g, '');
+    const dedup = consonants.replace(/(.)\1+/g, '$1');
+    if (dedup.length >= 3) return dedup.slice(0, 3);
+    if (consonants.length >= 3) return consonants.slice(0, 3);
+    return compact.slice(0, 3);
+  }
+
+  function deriveCode(idn) {
+    if (!idn) return null;
+    if (!['NCH','HE','HN'].includes(idn.brand_prefix || '')) return null;
+    if (!/^S(?:[1-9]|10)$/.test(idn.shape || '')) return null;
+    const item = (idn.item_abbr || '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{3}$/.test(item)) return null;
+    return `${idn.brand_prefix}-${idn.shape}-${item}`;
+  }
+
+  function brandColor(brand) {
+    return brand === 'NCH' ? 'seg-brand-nch'
+         : brand === 'HE'  ? 'seg-brand-he'
+         : brand === 'HN'  ? 'seg-brand-hn'
+         : '';
+  }
+
+  function renderCodeHTML(idn) {
+    if (!idn) return '<span class="incomplete">?</span>';
+    const b  = idn.brand_prefix || '?';
+    const s  = idn.shape || '?';
+    const i  = idn.item_abbr || '?';
+    return `<span class="${brandColor(b)}">${escapeHtml(b)}</span><span class="dash">-</span>` +
+           `<span class="seg-shape">${escapeHtml(s)}</span><span class="dash">-</span>` +
+           `<span class="seg-item">${escapeHtml(i)}</span>`;
+  }
+
+  async function api(path, opts = {}) {
+    const url = new URL(window.location.origin + API + path);
+    url.searchParams.set('pin', State.pin);
+    const r = await fetch(url.toString(), {
+      method: opts.method || 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    const txt = await r.text();
+    let data; try { data = JSON.parse(txt); } catch { data = { error: 'Bad JSON: ' + txt.slice(0, 200) }; }
+    if (!r.ok) {
+      const err = new Error(data.error || ('HTTP ' + r.status));
+      err.status = r.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  }
+
+  /* ---------- PIN gate ---------- */
+  async function tryAuth(pin) {
+    const url = new URL(window.location.origin + API);
+    url.searchParams.set('pin', pin);
+    const r = await fetch(url.toString());
+    const data = await r.json();
+    if (r.status === 401) throw new Error('Invalid PIN');
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    return data;
+  }
+
+  function showApp() {
+    $('#gate').style.display = 'none';
+    $('#app').style.display = 'block';
+    $('#logout-btn').style.display = 'inline-block';
+  }
+  function showGate() {
+    $('#gate').style.display = 'block';
+    $('#app').style.display = 'none';
+  }
+
+  $('#pin-submit').onclick = async () => {
+    const pin = $('#pin-input').value.trim();
+    if (!pin) return;
+    $('#pin-err').textContent = '';
+    try {
+      State.pin = pin;
+      const data = await tryAuth(pin);
+      localStorage.setItem('pos_editor_pin', pin);
+      State.products = data.pos_products || [];
+      collectKnownCategories();
+      $('#user-pill').textContent = 'pin: ' + pin;
+      showApp();
+      render();
+    } catch (e) {
+      $('#pin-err').textContent = e.message;
+      State.pin = '';
+    }
+  };
+  $('#pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pin-submit').click(); });
+  $('#logout-btn').onclick = () => {
+    localStorage.removeItem('pos_editor_pin');
+    State.pin = '';
+    State.products = [];
+    $('#pin-input').value = '';
+    showGate();
+  };
+
+  function collectKnownCategories() {
+    State.knownCategories = new Set();
+    for (const p of State.products) {
+      if (p.preview && p.preview.category) State.knownCategories.add(p.preview.category);
+    }
+  }
+
+  /* ---------- Code Legend modal ---------- */
+  function openLegend() {
+    $('#legend-overlay').classList.add('open');
+    $('#legend-modal').classList.add('open');
+    $('#legend-modal').setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeLegend() {
+    $('#legend-overlay').classList.remove('open');
+    $('#legend-modal').classList.remove('open');
+    $('#legend-modal').setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+  $('#help-btn').onclick = openLegend;
+  $('#legend-close').onclick = closeLegend;
+  $('#legend-overlay').onclick = closeLegend;
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && $('#legend-modal').classList.contains('open')) closeLegend();
+  });
+
+  /* ---------- List render ---------- */
+  function renderStats() {
+    const total = State.products.length;
+    const byBrand = { NCH: 0, HE: 0, HN: 0 };
+    const byShape = {};
+    for (const p of State.products) {
+      byBrand[p.brand_prefix] = (byBrand[p.brand_prefix] || 0) + 1;
+      byShape[p.shape] = (byShape[p.shape] || 0) + 1;
+    }
+    const topShapes = Object.entries(byShape).sort((a,b) => b[1]-a[1]).slice(0,3)
+      .map(([s,n]) => `${s}:${n}`).join(' · ');
+
+    $('#stats').innerHTML = `
+      <div class="stat-card"><div class="label">POS products</div><div class="value">${total}</div><div class="meta">canonical</div></div>
+      <div class="stat-card"><div class="label">NCH</div><div class="value" style="color:var(--pink)">${byBrand.NCH || 0}</div><div class="meta">Nawabi Chai House</div></div>
+      <div class="stat-card"><div class="label">HE</div><div class="value" style="color:var(--accent)">${byBrand.HE || 0}</div><div class="meta">Hamza Express</div></div>
+      <div class="stat-card"><div class="label">HN</div><div class="value" style="color:var(--purple)">${byBrand.HN || 0}</div><div class="meta">Cross-brand</div></div>
+      <div class="stat-card"><div class="label">Top shapes</div><div class="value" style="font-size:14px;color:var(--teal)">${topShapes || '—'}</div><div class="meta">by count</div></div>
+    `;
+  }
+
+  function renderList() {
+    const f = State.filter;
+    const q = (f.q || '').toLowerCase();
+    const rows = State.products.filter(p => {
+      if (f.brand && p.brand_prefix !== f.brand) return false;
+      if (f.shape && p.shape !== f.shape) return false;
+      if (q && !(p.pos_code.toLowerCase().includes(q) || p.pos_name.toLowerCase().includes(q))) return false;
+      return true;
+    });
+    if (rows.length === 0) {
+      $('#p-list').innerHTML = `<div style="padding:30px;text-align:center;color:var(--ink-dim);">No POS products match. ${State.products.length === 0 ? 'Click <strong>+ Add New POS Product</strong> to begin.' : ''}</div>`;
+      return;
+    }
+    $('#p-list').innerHTML = rows.map(p => {
+      const cls = (p.brand_prefix || '').toLowerCase();
+      const pv = p.preview || {};
+      const mrp = pv.mrp != null ? '<span class="lbl">MRP</span>₹' + pv.mrp : '';
+      const dsp = pv.dsp != null ? '<span class="lbl">DSP</span>₹' + pv.dsp : '';
+      const priceHtml = (mrp || dsp) ? `${mrp}${mrp && dsp ? ' · ' : ''}${dsp}` : '—';
+      return `
+        <div class="p-row ${cls}" data-code="${escapeHtml(p.pos_code)}">
+          <div class="code">${escapeHtml(p.pos_code)}</div>
+          <div class="name">${escapeHtml(p.pos_name)}</div>
+          <div title="Recipe shape"><span class="pill pill-shape">${escapeHtml(p.shape)}</span></div>
+          <div class="price">${priceHtml}</div>
+          <div class="updated">${fmtTime(p.updated_at)}<br><span style="color:var(--ink-faint)">${escapeHtml(p.updated_by || '')}</span></div>
+        </div>`;
+    }).join('');
+    $$('.p-row').forEach(el => {
+      el.onclick = () => openEditor(el.dataset.code);
+    });
+  }
+
+  function render() {
+    renderStats();
+    renderList();
+  }
+
+  $('#filter-q').oninput = e => { State.filter.q = e.target.value; renderList(); };
+  $('#filter-brand').onchange = e => { State.filter.brand = e.target.value; renderList(); };
+  $('#filter-shape').onchange = e => { State.filter.shape = e.target.value; renderList(); };
+  $('#reload-btn').onclick = async () => {
+    try {
+      const data = await api('');
+      State.products = data.pos_products || [];
+      collectKnownCategories();
+      render();
+      toast('Reloaded ' + State.products.length + ' POS products');
+    } catch (e) { toast(e.message, 'error'); }
+  };
+
+  /* ---------- Editor ---------- */
+  async function openEditor(posCode) {
+    if (State.dirty && !confirm('Discard unsaved changes?')) return;
+    try {
+      const data = await api('?pos_code=' + encodeURIComponent(posCode));
+      State.open = data;
+      State.open.data = data.data || {};
+      State.identity = {
+        brand_prefix: data.brand_prefix,
+        shape:        data.shape,
+        item_abbr:    data.item_abbr,
+        pos_name:     data.pos_name,
+        idTouched: true,
+      };
+      State.isNew = false;
+      State.openOriginal = JSON.parse(JSON.stringify({ open: State.open, identity: State.identity }));
+      State.dirty = false;
+      $('#ed-unsaved').style.display = 'none';
+      $('#ed-title').textContent = data.pos_name;
+      $('#ed-sub').innerHTML = `<span class="mono" style="color:var(--accent)">${escapeHtml(data.pos_code)}</span>`;
+      $('#ed-foot-status').textContent = 'Last saved: ' + fmtTime(data.updated_at) + (data.updated_by ? ' by ' + data.updated_by : '');
+      $('#ed-delete').style.display = 'inline-block';
+      renderEditor();
+      $('#editor-overlay').classList.add('open');
+      $('#editor-panel').classList.add('open');
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  function openNewEditor() {
+    if (State.dirty && !confirm('Discard unsaved changes?')) return;
+    State.open = {
+      pos_code: '',
+      brand_prefix: '',
+      shape: '',
+      item_abbr: '',
+      pos_name: '',
+      data: {
+        price: {},
+        channels: { dine_in: true, delivery: false, swiggy: false, zomato: false },
+        category: '',
+        season: 'year-round',
+        notes: '',
+      },
+      updated_at: null,
+      updated_by: null,
+    };
+    State.identity = { brand_prefix: '', shape: '', item_abbr: '', pos_name: '', idTouched: false };
+    State.isNew = true;
+    State.openOriginal = JSON.parse(JSON.stringify({ open: State.open, identity: State.identity }));
+    State.dirty = false;
+    $('#ed-unsaved').style.display = 'none';
+    $('#ed-title').textContent = 'New POS Product';
+    $('#ed-sub').innerHTML = '<span class="mono" style="color:var(--ink-faint)">code derives from inputs below</span>';
+    $('#ed-foot-status').textContent = 'New record — fill identity fields, then Save';
+    $('#ed-delete').style.display = 'none';
+    renderEditor();
+    $('#editor-overlay').classList.add('open');
+    $('#editor-panel').classList.add('open');
+  }
+
+  function closeEditor() {
+    if (State.dirty && !confirm('Discard unsaved changes?')) return;
+    $('#editor-overlay').classList.remove('open');
+    $('#editor-panel').classList.remove('open');
+    State.open = null;
+    State.openOriginal = null;
+    State.identity = null;
+    State.isNew = false;
+    State.dirty = false;
+  }
+  $('#ed-close').onclick = closeEditor;
+  $('#editor-overlay').onclick = closeEditor;
+  $('#add-btn').onclick = openNewEditor;
+
+  function markDirty() {
+    State.dirty = true;
+    $('#ed-unsaved').style.display = 'inline-block';
+  }
+
+  function renderEditor() {
+    const o = State.open;
+    const idn = State.identity;
+    if (!o || !idn) return;
+
+    if (!o.data.price)    o.data.price    = {};
+    if (!o.data.channels) o.data.channels = {};
+
+    // BRAND chips
+    const brandChips = BRANDS.map(b => {
+      const checked = idn.brand_prefix === b.value;
+      return `<label class="chip ${b.cls} ${checked ? 'checked' : ''}" style="flex-direction:column;align-items:flex-start;padding:10px 12px;">
+        <span style="display:flex;align-items:center;gap:5px;font-weight:600;">
+          <input type="radio" name="id-brand" value="${b.value}" ${checked ? 'checked' : ''}>
+          ${escapeHtml(b.label)}
+        </span>
+        <span style="font-size:11px;color:var(--ink-faint);margin-top:2px;font-weight:400;">${escapeHtml(b.sub)}</span>
+      </label>`;
+    }).join('');
+
+    // SHAPE select
+    const shapeOpts = ['', ...SHAPES.map(s => s.value)].map(v => {
+      const def = SHAPE_BY_VALUE[v];
+      return `<option value="${escapeHtml(v)}" ${idn.shape === v ? 'selected' : ''}>${v ? escapeHtml(def.label) : '— pick a SHAPE —'}</option>`;
+    }).join('');
+    const shapeHelp = idn.shape && SHAPE_BY_VALUE[idn.shape]
+      ? `<div class="shape-help"><strong>${escapeHtml(idn.shape)}</strong> — ${escapeHtml(SHAPE_BY_VALUE[idn.shape].sub)}</div>`
+      : '';
+
+    const codeOk = deriveCode(idn) !== null;
+    const codeHtml = renderCodeHTML(idn);
+    let badge;
+    if (!idn.brand_prefix) {
+      badge = '<span class="badge warn">&#9888; Pick BRAND (NCH / HE / HN)</span>';
+    } else if (!idn.shape) {
+      badge = '<span class="badge warn">&#9888; Pick SHAPE (S1...S10)</span>';
+    } else if (!idn.item_abbr || idn.item_abbr.length !== 3) {
+      badge = '<span class="badge warn">&#9888; ITEM needs exactly 3 chars</span>';
+    } else if (codeOk) {
+      badge = '<span class="badge ok">&#10003; Canonical code complete</span>';
+    } else {
+      badge = '<span class="badge warn">&#9888; Code incomplete</span>';
+    }
+
+    let html = `
+      <div class="section identity id-form">
+        <h3><span class="pill pill-pos">ID</span> Identity (canonical code)</h3>
+        <div class="grp">
+          <label class="grp-label">BRAND — outlet that sells this product</label>
+          <div class="chip-row" style="flex-direction:column;align-items:stretch;gap:8px;">${brandChips}</div>
+        </div>
+        <div class="grp">
+          <label class="grp-label">POS name (human-readable)</label>
+          <input class="txt" id="id-pname" value="${escapeHtml(idn.pos_name || '')}" placeholder="e.g. Irani Chai">
+        </div>
+        <div class="grp">
+          <label class="grp-label">ITEM abbreviation (exactly 3 chars)</label>
+          <input class="txt mono" id="id-itemabbr" value="${escapeHtml(idn.item_abbr || '')}" maxlength="3" placeholder="auto" style="text-transform:uppercase;max-width:140px;">
+          <div class="help">Auto-derived from POS name (consonants, vowel-stripped). Override anytime. Must be unique within (BRAND, SHAPE).</div>
+        </div>
+      </div>
+
+      <div class="section shape id-form">
+        <h3><span class="pill pill-shape">SHAPE</span> Recipe pattern</h3>
+        <div class="grp">
+          <label class="grp-label">Pick the SHAPE that governs how RMs are consumed</label>
+          <select class="txt" id="id-shape">${shapeOpts}</select>
+          ${shapeHelp}
+        </div>
+      </div>
+
+      <div class="code-display">
+        <div class="label-tiny">Auto-derived canonical code</div>
+        <div class="computed ${codeOk ? '' : 'incomplete'}">${codeHtml}</div>
+        ${badge}
+      </div>
+    `;
+
+    // Price section
+    const price = o.data.price || {};
+    html += `
+      <div class="section price">
+        <h3><span class="pill" style="background:rgba(52,211,153,0.15);color:var(--good);">PRICE</span> Pricing</h3>
+        <div class="id-grid">
+          <div class="field-row">
+            <label>MRP (₹)</label>
+            <input class="txt mono" type="number" min="0" step="1" data-section="price" data-field="mrp" value="${price.mrp ?? ''}" placeholder="e.g. 60">
+          </div>
+          <div class="field-row">
+            <label>DSP / dine-in selling price (₹)</label>
+            <input class="txt mono" type="number" min="0" step="1" data-section="price" data-field="dsp" value="${price.dsp ?? ''}" placeholder="e.g. 48">
+          </div>
+        </div>
+        <div class="help">MRP is the printed/maximum price. DSP is the actual dine-in selling price (often discounted from MRP for delivery channels).</div>
+      </div>
+    `;
+
+    // Channels section
+    const channels = o.data.channels || {};
+    const channelChips = CHANNELS.map(c => {
+      const checked = !!channels[c.key];
+      return `<label class="chip ${checked ? 'checked' : ''}">
+        <input type="checkbox" data-section="channels" data-field="${c.key}" ${checked ? 'checked' : ''}>
+        ${escapeHtml(c.label)}
+      </label>`;
+    }).join('');
+    html += `
+      <div class="section channels">
+        <h3><span class="pill" style="background:rgba(96,165,250,0.15);color:var(--info);">CH</span> Sales channels</h3>
+        <div class="grp">
+          <label class="grp-label">Where is this product available? Tick all that apply.</label>
+          <div class="chip-row">${channelChips}</div>
+        </div>
+      </div>
+    `;
+
+    // Metadata section
+    const knownCats = Array.from(State.knownCategories).sort();
+    const catList = knownCats.length
+      ? `<datalist id="known-categories">${knownCats.map(c => `<option value="${escapeHtml(c)}">`).join('')}</datalist>`
+      : '';
+    const seasonOpts = SEASONS.map(s =>
+      `<option value="${escapeHtml(s.value)}" ${(o.data.season || 'year-round') === s.value ? 'selected' : ''}>${escapeHtml(s.label)}</option>`
+    ).join('');
+    html += `
+      <div class="section meta">
+        <h3><span class="pill" style="background:rgba(192,132,252,0.15);color:var(--purple);">META</span> Metadata</h3>
+        <div class="id-grid">
+          <div class="field-row">
+            <label>Category</label>
+            <input class="txt" data-section="root" data-field="category" value="${escapeHtml(o.data.category || '')}" placeholder="biscuit / chai / cookies / breads / sweets" list="known-categories">
+            ${catList}
+            <div class="help">Free-form. Reuse an existing one (autocomplete) or type a new category — it's added to the known list automatically.</div>
+          </div>
+          <div class="field-row">
+            <label>Season</label>
+            <select class="txt" data-section="root" data-field="season">${seasonOpts}</select>
+          </div>
+        </div>
+        <div class="field-row">
+          <label>Notes</label>
+          <textarea class="txt" data-section="root" data-field="notes" placeholder="Free-form notes — pricing history, supplier quirks, seasonality">${escapeHtml(o.data.notes || '')}</textarea>
+        </div>
+      </div>
+    `;
+
+    $('#editor-body').innerHTML = html;
+    bindEditor();
+    updateSaveButtonState();
+  }
+
+  function updateSaveButtonState() {
+    const idn = State.identity;
+    const saveBtn = $('#ed-save');
+    if (!saveBtn || !idn) return;
+    const codeOk = deriveCode(idn) !== null;
+    const nameOk = idn.pos_name && idn.pos_name.trim().length > 0;
+    if (!codeOk || !nameOk) {
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = '0.45';
+      saveBtn.style.cursor = 'not-allowed';
+      saveBtn.title = !nameOk
+        ? 'Cannot save — POS name required'
+        : 'Cannot save — canonical code is incomplete';
+    } else {
+      saveBtn.disabled = false;
+      saveBtn.style.opacity = '';
+      saveBtn.style.cursor = '';
+      saveBtn.title = '';
+    }
+  }
+
+  function updateComputedCode() {
+    const idn = State.identity;
+    const display = document.querySelector('.code-display .computed');
+    const badge = document.querySelector('.code-display .badge');
+    if (!display || !idn) return;
+    const codeOk = deriveCode(idn) !== null;
+    display.innerHTML = renderCodeHTML(idn);
+    display.classList.toggle('incomplete', !codeOk);
+    if (badge) {
+      let html;
+      if (!idn.brand_prefix) html = '<span class="badge warn">&#9888; Pick BRAND (NCH / HE / HN)</span>';
+      else if (!idn.shape) html = '<span class="badge warn">&#9888; Pick SHAPE (S1...S10)</span>';
+      else if (!idn.item_abbr || idn.item_abbr.length !== 3) html = '<span class="badge warn">&#9888; ITEM needs exactly 3 chars</span>';
+      else if (codeOk) html = '<span class="badge ok">&#10003; Canonical code complete</span>';
+      else html = '<span class="badge warn">&#9888; Code incomplete</span>';
+      badge.outerHTML = html;
+    }
+    updateSaveButtonState();
+  }
+
+  function bindEditor() {
+    const body = $('#editor-body');
+    const idn = State.identity;
+    const o = State.open;
+
+    // BRAND radios
+    body.querySelectorAll('input[name="id-brand"]').forEach(el => {
+      el.onchange = () => {
+        if (el.checked) {
+          idn.brand_prefix = el.value;
+          // Re-render so the chip styling and help re-evaluates.
+          renderEditor();
+          markDirty();
+        }
+      };
+    });
+
+    // SHAPE select
+    const shapeEl = $('#id-shape');
+    if (shapeEl) {
+      shapeEl.onchange = () => {
+        idn.shape = shapeEl.value;
+        renderEditor();
+        markDirty();
+      };
+    }
+
+    // POS name
+    const nameEl = $('#id-pname');
+    if (nameEl) {
+      nameEl.oninput = () => {
+        idn.pos_name = nameEl.value;
+        if (!idn.idTouched) {
+          idn.item_abbr = autoItem(nameEl.value);
+          const aEl = $('#id-itemabbr');
+          if (aEl) aEl.value = idn.item_abbr;
+        }
+        $('#ed-title').textContent = nameEl.value || 'New POS Product';
+        updateComputedCode();
+        markDirty();
+      };
+    }
+
+    // ITEM abbr
+    const itemEl = $('#id-itemabbr');
+    if (itemEl) {
+      itemEl.oninput = () => {
+        idn.item_abbr = itemEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+        itemEl.value = idn.item_abbr;
+        idn.idTouched = true;
+        updateComputedCode();
+        markDirty();
+      };
+    }
+
+    // data_json field bindings
+    body.querySelectorAll('[data-section][data-field]').forEach(el => {
+      const handler = () => {
+        const section = el.dataset.section;
+        const field = el.dataset.field;
+        let val;
+        if (el.type === 'checkbox') val = el.checked;
+        else if (el.type === 'number') {
+          val = el.value === '' ? null : Number(el.value);
+        } else val = el.value;
+
+        if (section === 'root') {
+          o.data[field] = val;
+          if (field === 'category' && val) State.knownCategories.add(val);
+        } else {
+          if (!o.data[section]) o.data[section] = {};
+          o.data[section][field] = val;
+        }
+
+        // Live chip styling for channel checkboxes
+        if (section === 'channels') {
+          el.parentElement.classList.toggle('checked', el.checked);
+        }
+
+        markDirty();
+      };
+      el.oninput = handler;
+      el.onchange = handler;
+    });
+  }
+
+  $('#ed-revert').onclick = () => {
+    if (!State.open) return;
+    if (!confirm('Revert all unsaved changes?')) return;
+    const snap = JSON.parse(JSON.stringify(State.openOriginal));
+    State.open = snap.open;
+    State.identity = snap.identity;
+    State.dirty = false;
+    $('#ed-unsaved').style.display = 'none';
+    renderEditor();
+  };
+
+  $('#ed-delete').onclick = async () => {
+    if (!State.open || State.isNew) return;
+    const code = State.open.pos_code;
+    if (!confirm(`Delete ${code} permanently? This cannot be undone.`)) return;
+    try {
+      await api('?pos_code=' + encodeURIComponent(code), { method: 'DELETE' });
+      toast('Deleted ' + code, 'success');
+      $('#editor-overlay').classList.remove('open');
+      $('#editor-panel').classList.remove('open');
+      State.open = null; State.identity = null; State.dirty = false;
+      const list = await api('');
+      State.products = list.pos_products || [];
+      collectKnownCategories();
+      render();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  $('#ed-save').onclick = async () => {
+    if (!State.open || !State.identity) return;
+    const idn = State.identity;
+    const newCode = deriveCode(idn);
+    if (!newCode) {
+      toast('Cannot save — canonical code is incomplete', 'error');
+      return;
+    }
+    if (!idn.pos_name || !idn.pos_name.trim()) {
+      toast('POS name is required', 'error');
+      return;
+    }
+    const payload = {
+      brand_prefix: idn.brand_prefix,
+      shape:        idn.shape,
+      item_abbr:    idn.item_abbr,
+      pos_name:     idn.pos_name.trim(),
+      data:         State.open.data,
+    };
+    try {
+      let r;
+      if (State.isNew) {
+        r = await api('?action=create', { method: 'POST', body: payload });
+      } else {
+        const oldCode = State.open.pos_code;
+        r = await api('?pos_code=' + encodeURIComponent(oldCode), { method: 'PUT', body: payload });
+      }
+      State.open.pos_code     = r.pos_code;
+      State.open.brand_prefix = r.brand_prefix;
+      State.open.shape        = r.shape;
+      State.open.item_abbr    = r.item_abbr;
+      State.open.pos_name     = r.pos_name;
+      State.isNew = false;
+      State.dirty = false;
+      State.openOriginal = JSON.parse(JSON.stringify({ open: State.open, identity: State.identity }));
+      $('#ed-unsaved').style.display = 'none';
+      $('#ed-foot-status').textContent = 'Saved · ' + fmtTime(r.updated_at) + ' by ' + r.updated_by;
+      $('#ed-sub').innerHTML = `<span class="mono" style="color:var(--accent)">${escapeHtml(r.pos_code)}</span>`;
+      $('#ed-delete').style.display = 'inline-block';
+      const verb = r.migrated_from ? `Migrated ${r.migrated_from} → ${r.pos_code}` : 'Saved ' + r.pos_code;
+      toast(verb, 'success');
+      const list = await api('');
+      State.products = list.pos_products || [];
+      collectKnownCategories();
+      render();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  /* ---------- Bootstrap ---------- */
+  async function bootstrap() {
+    if (State.pin) {
+      try {
+        const data = await tryAuth(State.pin);
+        State.products = data.pos_products || [];
+        collectKnownCategories();
+        $('#user-pill').textContent = 'pin: ' + State.pin;
+        showApp();
+        render();
+        return;
+      } catch (e) {
+        localStorage.removeItem('pos_editor_pin');
+        State.pin = '';
+      }
+    }
+    showGate();
+    setTimeout(() => $('#pin-input').focus(), 100);
+  }
+  bootstrap();
+})();
+</script>
+</body>
+</html>

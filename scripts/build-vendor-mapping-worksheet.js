@@ -279,8 +279,9 @@ function inferSells(rmCodes) {
     if (primary === 'B' || alts.includes('B')) hasB = true;
   }
   // v8: case-encoded primary + alt. Default primary = L (alphabetical first);
-  // owner flips to Bl in the editor when branded dominates.
-  if (hasL && hasB) return { sells: 'Lb', confident: true };
+  // owner flips to Bl in the editor when branded dominates. Mark as
+  // not-confident so the worksheet renders `Lb?` and prompts owner to confirm.
+  if (hasL && hasB) return { sells: 'Lb', confident: false };
   if (hasB) return { sells: 'B', confident: true };
   if (hasL) return { sells: 'L', confident: true };
   return { sells: 'L', confident: false };
@@ -827,21 +828,26 @@ function renderHtml(rows, stats) {
   <div class="legend">
     <div>
       <h3>OPM — Order Placement Mechanism</h3>
-      <span class="lg-item"><dt>M-PH</dt><dd>phone call</dd> <dt>M-WA</dt><dd>WhatsApp</dd></span>
-      <span class="lg-item"><dt>M-WI</dt><dd>walk-in</dd> <dt>M-RT</dt><dd>route/visit</dd></span>
-      <span class="lg-item"><dt>A-AP</dt><dd>app</dd> <dt>A-WB</dt><dd>web</dd> <dt>A-API</dt><dd>API</dd></span>
+      <span class="lg-item"><dt>M</dt><dd>manual only (phone / WhatsApp / walk-in / route)</dd></span>
+      <span class="lg-item"><dt>A</dt><dd>automatable only (app / web / API)</dd></span>
+      <span class="lg-item"><dt>Ma</dt><dd>manual primary, automatable alt</dd></span>
+      <span class="lg-item"><dt>Am</dt><dd>automatable primary, manual alt</dd></span>
+      <span class="lg-item" style="color:#888;font-size:7.4pt">Sub-channel (PH/WA/WI/RT/AP/WB/API) is a property — not in the code.</span>
     </div>
     <div>
       <h3>PMS — Payment Method Set</h3>
       <span class="lg-item"><dt>C</dt><dd>cash only</dd></span>
-      <span class="lg-item"><dt>D</dt><dd>digital only (UPI / NEFT / app)</dd></span>
-      <span class="lg-item"><dt>H</dt><dd>hybrid (cash + digital)</dd></span>
+      <span class="lg-item"><dt>B</dt><dd>bank only (UPI / NEFT / card / app)</dd></span>
+      <span class="lg-item"><dt>Cb</dt><dd>cash primary, bank alt</dd></span>
+      <span class="lg-item"><dt>Bc</dt><dd>bank primary, cash alt</dd></span>
     </div>
     <div>
       <h3>Auto-inferred (verify)</h3>
-      <span class="lg-item"><dt>Rf</dt><dd>regular-recurring (PO → bill → pay)</dd></span>
-      <span class="lg-item"><dt>Pf</dt><dd>prepaid (app/quick-commerce)</dd></span>
-      <span class="lg-item"><dt>L / B / LB</dt><dd>loose / branded / both</dd></span>
+      <span class="lg-item"><dt>Pf</dt><dd>pay-first only</dd></span>
+      <span class="lg-item"><dt>Rf</dt><dd>receive-first only</dd></span>
+      <span class="lg-item"><dt>Pfr</dt><dd>pay-first primary, receive-first alt</dd></span>
+      <span class="lg-item"><dt>Rfp</dt><dd>receive-first primary, pay-first alt</dd></span>
+      <span class="lg-item"><dt>L / B / Lb / Bl</dt><dd>loose / branded / loose-primary / branded-primary</dd></span>
       <span class="lg-item" style="color:#b22222"><dt>?</dt><dd>uncertain — please confirm</dd></span>
     </div>
   </div>
@@ -868,8 +874,8 @@ function renderHtml(rows, stats) {
         <th>Total ₹<span class="hint">(365d)</span></th>
         <th>PAY_SEQ<span class="hint">(auto)</span></th>
         <th>SELLS<span class="hint">(auto)</span></th>
-        <th class="fillable-head">OPM ✏<span class="hint">M-PH/WA/WI/RT or A-AP/WB/API</span></th>
-        <th class="fillable-head">PMS ✏<span class="hint">C / D / H</span></th>
+        <th class="fillable-head">OPM ✏<span class="hint">M / A / Ma / Am</span></th>
+        <th class="fillable-head">PMS ✏<span class="hint">C / B / Cb / Bc</span></th>
         <th class="fillable-head">Notes ✏<span class="hint">(corrections, omissions)</span></th>
       </tr>
     </thead>
@@ -916,17 +922,17 @@ function renderHtml(rows, stats) {
   </table>
 
   <div class="recipe">
-    <h3>Canonical Code Recipe</h3>
-    <div class="formula">{PAY_SEQ}-{SELLS}-{OPM_LETTER}-{PMS}-{IDENTITY}</div>
+    <h3>Canonical Code Recipe — v8 grammar</h3>
+    <div class="formula">{PAY_SEQ}-{SELLS}-{OPM}-{PMS}-{IDENTITY}</div>
     <ul>
-      <li><strong>PAY_SEQ:</strong> Rf (recurring) or Pf (prepaid)</li>
-      <li><strong>SELLS:</strong> L (loose) · B (branded) · LB (both)</li>
-      <li><strong>OPM_LETTER:</strong> M if any M-* sub-channel · A if any A-* sub-channel. Sub-channel (PHONE/WA/WI/RT/AP/WB/API) becomes a property in the vendor record, not in the code.</li>
-      <li><strong>PMS:</strong> C (cash) · D (digital) · H (hybrid)</li>
+      <li><strong>PAY_SEQ:</strong> Pf (pay-first) · Rf (receive-first) · Pfr (pay-first primary, receive-first alt) · Rfp (receive-first primary, pay-first alt)</li>
+      <li><strong>SELLS:</strong> L (loose only) · B (branded only) · Lb (loose primary, branded alt) · Bl (branded primary, loose alt)</li>
+      <li><strong>OPM:</strong> M (manual) · A (automatable) · Ma (manual primary, automatable alt) · Am (automatable primary, manual alt). Sub-channel (PH/WA/WI/RT/AP/WB/API) is a vendor property, not part of the code.</li>
+      <li><strong>PMS:</strong> C (cash only) · B (bank only) · Cb (cash primary, bank alt) · Bc (bank primary, cash alt)</li>
       <li><strong>IDENTITY:</strong> 3-10 char vendor abbreviation (uppercase)</li>
     </ul>
     <div class="example">
-      Worked example: <em>Prabhu Buffalo Milk Vendor</em> with hand-filled <em>OPM=M-WA, PMS=C</em> → canonical code:
+      Worked example: <em>Prabhu Buffalo Milk Vendor</em> with hand-filled <em>OPM=M, PMS=C</em> → canonical code:
       <span class="code">Rf-L-M-C-PRABHU</span>
     </div>
   </div>
