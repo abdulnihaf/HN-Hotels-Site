@@ -177,25 +177,129 @@
     if (tab === 'audit')         return renderAudit(s);
   }
 
-  // ─── INSIGHTS TAB — auto-generated diagnostic statements ─────────────────
+  // ─── INSIGHTS TAB — daily chart + auto-generated diagnostic statements ───
   function renderInsights(s) {
     const insights = generateInsights(s);
-    if (!insights.length) {
-      $('#pane-insights').innerHTML = '<div class="empty"><h3>Not enough data yet</h3><p>Insights need at least one delivered order in this period.</p></div>';
-      return;
+    const chartHtml = renderDailyChart(s.daily);
+    const insightsHtml = insights.length
+      ? html`<div class="insights-grid">
+          ${insights.map(i => html`
+            <div class="insight tone-${i.tone}" ${i.action ? `onclick="window.HN_AGG_API.${i.action}"` : ''} ${i.action ? 'role="button" tabindex="0"' : ''}>
+              <div class="insight-tag">${i.tag}</div>
+              <div class="insight-headline">${i.headline}</div>
+              <div class="insight-body">${i.body}</div>
+              ${i.action_label ? `<div class="insight-cta">${i.action_label} →</div>` : ''}
+            </div>
+          `).join('')}
+        </div>`
+      : '<div class="empty"><h3>No insight cards for this period</h3><p>The chart above still shows your last 31 days.</p></div>';
+    $('#pane-insights').innerHTML = chartHtml + insightsHtml;
+  }
+
+  // ─── DAILY CHART — 31-day bar chart, clickable per day ───────────────────
+  function renderDailyChart(daily) {
+    if (!daily || !daily.points || !daily.points.length) {
+      return '<div class="chart-card"><div class="chart-empty">No daily data yet.</div></div>';
     }
-    $('#pane-insights').innerHTML = html`
-      <div class="insights-grid">
-        ${insights.map(i => html`
-          <div class="insight tone-${i.tone}" ${i.action ? `onclick="window.HN_AGG_API.${i.action}"` : ''} ${i.action ? 'role="button" tabindex="0"' : ''}>
-            <div class="insight-tag">${i.tag}</div>
-            <div class="insight-headline">${i.headline}</div>
-            <div class="insight-body">${i.body}</div>
-            ${i.action_label ? `<div class="insight-cta">${i.action_label} →</div>` : ''}
+    const points = daily.points;
+    const maxRev = Math.max(1, ...points.map(p => p.revenue || 0));
+    const maxOrd = Math.max(1, ...points.map(p => p.orders || 0));
+    const totalRev = points.reduce((s, p) => s + (p.revenue || 0), 0);
+    const totalOrd = points.reduce((s, p) => s + (p.orders || 0), 0);
+    const zeroDays = points.filter(p => (p.orders || 0) === 0).length;
+    const fmtDateShort = (ds) => {
+      const [, m, d] = ds.split('-').map(Number);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${d} ${months[m - 1]}`;
+    };
+    const bars = points.map(p => {
+      const rh = Math.max(2, Math.round((p.revenue / maxRev) * 100));
+      const oh = Math.max(2, Math.round((p.orders / maxOrd) * 100));
+      const isZero = (p.orders || 0) === 0;
+      const tip = isZero
+        ? `${fmtDateShort(p.date)} — no orders / no captures`
+        : `${fmtDateShort(p.date)} — ${p.orders} orders · ₹${Math.round(p.revenue).toLocaleString('en-IN')} · ${p.delivered} delivered${p.cancelled ? ' · ' + p.cancelled + ' cancelled' : ''}`;
+      return html`
+        <div class="bar-col ${isZero ? 'is-zero' : ''}"
+             onclick="window.HN_AGG_API.openDayDrilldown('${p.date}')"
+             title="${escape(tip)}"
+             role="button" tabindex="0">
+          <div class="bar-stack">
+            <div class="bar-rev" style="height:${rh}%"></div>
+            <div class="bar-ord" style="height:${oh}%"></div>
           </div>
-        `).join('')}
+          <div class="bar-x">${fmtDateShort(p.date).split(' ')[0]}</div>
+        </div>
+      `;
+    }).join('');
+    return html`
+      <div class="chart-card">
+        <div class="chart-h">
+          <div class="chart-title">Last 31 days · daily revenue & orders</div>
+          <div class="chart-summary">
+            <span><b>₹${Math.round(totalRev).toLocaleString('en-IN')}</b> total</span>
+            <span><b>${totalOrd}</b> orders</span>
+            <span class="${zeroDays > 0 ? 'warn' : ''}">${zeroDays} zero-order days</span>
+          </div>
+        </div>
+        <div class="chart-legend">
+          <span class="lg-rev">■ revenue</span>
+          <span class="lg-ord">■ orders</span>
+          <span class="lg-note">click any bar to see that day's orders</span>
+        </div>
+        <div class="chart-bars">${bars}</div>
       </div>
     `;
+  }
+
+  // ─── DAY DRILLDOWN — fetch and modal-display all orders for one IST day ──
+  async function openDayDrilldown(dateStr) {
+    openModal(`Orders on ${dateStr}`, '<div class="modal-loading">Loading…</div>');
+    try {
+      const r = await fetch(`/api/aggregator-pulse?action=day-orders&platform=${cfg.platform}&brand=${cfg.brand}&date=${dateStr}`);
+      const j = await r.json();
+      if (!j.ok) {
+        openModal(`Orders on ${dateStr}`, `<div class="err">Error: ${escape(JSON.stringify(j))}</div>`);
+        return;
+      }
+      const orders = j.orders || [];
+      if (!orders.length) {
+        openModal(`Orders on ${dateStr}`, html`
+          <div class="empty">
+            <h3>No orders captured on ${dateStr}</h3>
+            <p>This may be a genuine zero-order day — or a day when the extension was offline (e.g. May 1–5 during the Tailscale migration). Check the order count from your POS to distinguish.</p>
+          </div>
+        `);
+        return;
+      }
+      const body = html`
+        <div class="day-summary">
+          <div><b>${j.total_orders}</b> total orders · <b>${j.total_delivered}</b> delivered · <b>${j.total_cancelled}</b> cancelled</div>
+          <div><b>₹${Math.round(j.revenue).toLocaleString('en-IN')}</b> delivered revenue</div>
+        </div>
+        <table class="orders-tbl">
+          <thead><tr>
+            <th>Time</th><th>ID</th><th>Status</th><th>Customer</th><th class="right">Value</th><th class="right">Payout</th><th>Rating</th>
+          </tr></thead>
+          <tbody>
+            ${orders.map(o => html`
+              <tr>
+                <td>${escape(o.order_time || '—')}</td>
+                <td><code>${escape(String(o.order_id || '—'))}</code></td>
+                <td><span class="pill st-${(o.status || 'unknown').toLowerCase().replace(/[^a-z]/g, '')}">${escape(o.status || '—')}</span></td>
+                <td>${escape(o.customer_name || '—')}</td>
+                <td class="right">₹${Math.round(o.order_value || 0).toLocaleString('en-IN')}</td>
+                <td class="right">${o.net_payout ? '₹' + Math.round(o.net_payout).toLocaleString('en-IN') : '—'}</td>
+                <td>${o.rating != null ? '★ ' + o.rating : '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      openModal(`Orders on ${dateStr} · ${cfg.brand.toUpperCase()} · ${cfg.platform}`, body);
+    } catch (e) {
+      openModal(`Orders on ${dateStr}`, `<div class="err">Network error: ${escape(e.message)}</div>`);
+    }
   }
 
   function generateInsights(s) {
@@ -922,6 +1026,7 @@
     showOrderDetail,
     showIssueOrders,
     showAllIssueOrders,
+    openDayDrilldown,
     sortDishes(key) {
       if (dishSortKey === key) dishSortDir = dishSortDir === 'asc' ? 'desc' : 'asc';
       else { dishSortKey = key; dishSortDir = 'desc'; }
