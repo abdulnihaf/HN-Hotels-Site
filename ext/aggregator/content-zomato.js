@@ -366,14 +366,33 @@
   }
 
   // ─── PUSH FUNCTIONS ───────────────────────────────────────────────────────────
-  // ─── DOM DUMP DIAGNOSTIC (Phase 1B helper) ──────────────────────────────────
+  // ─── DOM DUMP DIAGNOSTIC (Phase 1B helper, v2) ──────────────────────────────
   // Captures clickable element details + outlet-name positions on the live tracking
   // page so the next iteration can write proper outlet-filter click logic without
-  // remote DOM inspection. Runs once per Chrome session per view (sessionStorage
-  // gated). Pushed as metric_type='dom_dump_<view>' to D1.
+  // remote DOM inspection. v2: waits for real content (outlet filter / outlet names)
+  // to be present before dumping — retries up to 8 times at 2s intervals because
+  // Zomato's reporting view loads dynamic content asynchronously after page render.
   function dumpDomContext(viewName) {
-    const sessionKey = `hn_dom_dumped_${viewName}`;
+    const sessionKey = `hn_dom_dumped_${viewName}_v2`;
     if (sessionStorage.getItem(sessionKey)) return;
+
+    // Wait for actual content: any of these markers present in page text means
+    // the live tracking content has rendered (not just sidebar nav).
+    const text = document.body?.innerText || '';
+    const contentReady = /All outlets|Hamza Express|Nawabi Chai|Sales overview|Customer Experience|Customer funnel|Outlet level breakdown/i.test(text);
+
+    if (!contentReady) {
+      const attemptKey = `${sessionKey}_attempts`;
+      const n = parseInt(sessionStorage.getItem(attemptKey) || '0', 10);
+      if (n < 8) {
+        sessionStorage.setItem(attemptKey, String(n + 1));
+        console.log(`[HN] Zomato DOM dump waiting for ${viewName} content (attempt ${n + 1}/8)`);
+        setTimeout(() => dumpDomContext(viewName), 2000);
+        return;
+      }
+      console.log(`[HN] Zomato DOM dump giving up after 8 attempts for ${viewName}, dumping anyway`);
+    }
+
     sessionStorage.setItem(sessionKey, '1');
 
     const dump = {
