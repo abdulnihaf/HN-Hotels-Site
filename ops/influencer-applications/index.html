@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Creator Applications · HN Ops</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f1a; --card:#111826; --card2:#1a2234; --line:#273042;
+  --text:#e6edf7; --mute:#8b95a8; --dim:#5a6477;
+  --tan:#D2B48C; --sienna:#713520; --offwhite:#FAF3E3;
+  --gold:#fbbf24; --green:#22c55e; --green-d:#16a34a; --red:#ef4444; --orange:#f59e0b;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+
+.hdr{padding:14px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;background:rgba(10,15,26,.95);backdrop-filter:blur(12px);position:sticky;top:0;z-index:50}
+.brand{font-size:16px;font-weight:800;display:flex;align-items:center;gap:10px}
+.brand::before{content:'';width:5px;height:20px;background:var(--gold);border-radius:3px}
+.brand small{font-size:11px;color:var(--mute);font-weight:500;margin-left:6px}
+.keybox input{background:var(--card);border:1px solid var(--line);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:'JetBrains Mono',monospace;width:140px}
+.keybox button{margin-left:6px;padding:6px 10px;background:var(--sienna);border:1px solid var(--tan);color:var(--offwhite);border-radius:6px;font-size:12px;cursor:pointer}
+
+.tabs{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;gap:0}
+.tab{padding:10px 18px;border:none;background:transparent;color:var(--mute);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab.active{color:var(--text);border-bottom-color:var(--tan)}
+.tab .count{margin-left:6px;padding:2px 7px;background:rgba(212,180,140,.15);color:var(--tan);border-radius:99px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700}
+
+.stats{padding:14px 24px;border-bottom:1px solid var(--line);display:flex;gap:24px;flex-wrap:wrap;font-size:12px;color:var(--mute)}
+.stats b{color:var(--text);font-family:'JetBrains Mono',monospace;font-weight:700}
+.stats .green{color:#4ade80}
+.stats .gold{color:var(--gold)}
+.stats .red{color:#fca5a5}
+
+.grid{padding:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.card.pending{border-color:rgba(251,191,36,.4);background:linear-gradient(180deg,rgba(251,191,36,.03) 0%,var(--card) 100%)}
+.card.approved,.card.auto_approved{border-color:rgba(34,197,94,.3)}
+.card.declined{opacity:.55}
+
+.row1{display:flex;gap:10px;align-items:center}
+.avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--sienna),var(--tan));display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#0a0f1a;flex-shrink:0;font-family:'JetBrains Mono',monospace;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.who{flex:1;min-width:0}
+.name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px}
+.handle{color:var(--tan);font-size:12px;font-family:'JetBrains Mono',monospace}
+.followers{color:var(--mute);font-size:11px;display:flex;gap:6px;align-items:center;margin-top:3px;font-family:'JetBrains Mono',monospace}
+.followers b{color:var(--text)}
+.tier{font-size:9px;padding:2px 7px;border-radius:4px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:.05em;background:rgba(212,180,140,.18);color:var(--tan)}
+.tier-T0{background:rgba(139,149,168,.18);color:var(--mute)}
+.tier-T1,.tier-T2{background:rgba(212,180,140,.18);color:var(--tan)}
+.tier-T3{background:rgba(34,197,94,.18);color:#4ade80}
+.tier-T4{background:rgba(59,130,246,.2);color:#93c5fd}
+.tier-T5,.tier-T6{background:rgba(245,158,11,.22);color:#fcd34d}
+.tier-T7{background:rgba(168,85,247,.22);color:#d8b4fe}
+
+.offer{font-size:11px;color:var(--mute);background:rgba(212,180,140,.06);border-left:2px solid var(--tan);padding:6px 10px;border-radius:0 6px 6px 0;font-family:'JetBrains Mono',monospace;line-height:1.55}
+.offer b{color:var(--tan)}
+.offer .cash{color:var(--gold);font-weight:700}
+
+.slot-row{font-size:11px;color:var(--mute);font-family:'JetBrains Mono',monospace;display:flex;justify-content:space-between}
+.slot-row b{color:var(--text)}
+
+.why{font-size:11px;color:var(--mute);background:rgba(168,85,247,.05);border-left:2px solid #a855f7;padding:6px 10px;border-radius:0 6px 6px 0;line-height:1.5;font-style:italic}
+
+.contact{font-size:11px;color:var(--mute);font-family:'JetBrains Mono',monospace}
+.contact a{color:var(--tan);text-decoration:none}
+
+.status-badge{font-size:10px;padding:3px 8px;border-radius:99px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-family:'JetBrains Mono',monospace}
+.status-pending{background:rgba(251,191,36,.18);color:var(--gold)}
+.status-auto_approved,.status-approved{background:rgba(34,197,94,.18);color:#4ade80}
+.status-declined{background:rgba(239,68,68,.15);color:#fca5a5}
+.status-adjusted{background:rgba(168,85,247,.18);color:#d8b4fe}
+
+.actions-row{display:flex;gap:6px;margin-top:auto}
+.actions-row button{flex:1;padding:8px 10px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--line);transition:all .15s}
+.actions-row .btn-approve{background:var(--green-d);border-color:var(--green);color:var(--offwhite)}
+.actions-row .btn-approve:hover{background:var(--green)}
+.actions-row .btn-decline{background:var(--card2);color:#fca5a5;border-color:rgba(239,68,68,.3)}
+.actions-row .btn-decline:hover{border-color:var(--red);color:#fff}
+.actions-row .btn-adjust{background:var(--card2);color:var(--mute)}
+.actions-row .btn-adjust:hover{border-color:var(--tan);color:var(--text)}
+
+.empty{padding:60px 24px;text-align:center;color:var(--mute);grid-column:1/-1}
+.modal{position:fixed;inset:0;background:rgba(10,15,26,.85);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:24px;z-index:200}
+.modal.open{display:flex}
+.modal-inner{background:var(--card);border:1px solid var(--tan);border-radius:14px;max-width:480px;width:100%;padding:24px}
+.modal h3{font-size:18px;margin-bottom:14px}
+.modal label{display:block;font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-top:14px;margin-bottom:6px;font-family:'JetBrains Mono',monospace}
+.modal input,.modal textarea,.modal select{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);padding:9px 12px;border-radius:6px;font-family:inherit;font-size:14px}
+.modal .actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
+.modal .actions button{padding:9px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer}
+
+.toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--green);color:var(--offwhite);padding:12px 18px;border-radius:8px;font-size:13px;z-index:300;display:none}
+.toast.show{display:block;animation:fadein .2s}
+.toast.error{border-color:var(--red)}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+@media (max-width:600px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="brand">Creator Applications <small>· /ops</small></div>
+  <div class="keybox">
+    <input id="key" placeholder="Dashboard key" type="password">
+    <button onclick="saveKey()">Save</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="pending" onclick="setTab('pending')">⌛ Pending review <span class="count" id="count-pending">0</span></button>
+  <button class="tab" data-tab="all" onclick="setTab('all')">All recent <span class="count" id="count-all">0</span></button>
+</div>
+
+<div class="stats" id="stats">Loading…</div>
+
+<div class="grid" id="grid"></div>
+
+<!-- Decline modal -->
+<div class="modal" id="modal-decline">
+  <div class="modal-inner">
+    <h3>Decline application</h3>
+    <input type="hidden" id="decline-id">
+    <label>Reason (sent to creator)</label>
+    <textarea id="decline-reason" placeholder="Be polite — they'll see this."></textarea>
+    <div class="actions">
+      <button class="btn" onclick="closeModal('modal-decline')" style="background:transparent;border:1px solid var(--line);color:var(--mute)">Cancel</button>
+      <button class="btn btn-decline" onclick="confirmDecline()" style="background:var(--card2);color:#fca5a5;border:1px solid rgba(239,68,68,.3)">Decline</button>
+    </div>
+  </div>
+</div>
+
+<!-- Adjust modal -->
+<div class="modal" id="modal-adjust">
+  <div class="modal-inner">
+    <h3>Adjust offer</h3>
+    <input type="hidden" id="adjust-id">
+    <label>Adjusted tier (overrides auto-detection)</label>
+    <select id="adjust-tier">
+      <option value="T1">T1 · 1K-5K · 1 cover</option>
+      <option value="T2">T2 · 5K-15K · 2 covers</option>
+      <option value="T3">T3 · 15K-30K · 3 covers</option>
+      <option value="T4">T4 · 30K-60K · 4 covers</option>
+      <option value="T5">T5 · 60K-100K · 4 covers + ₹500</option>
+      <option value="T6">T6 · 100K-250K · 4 covers + ₹3,000</option>
+      <option value="T7">T7 · 250K+ · 6 covers + ₹8,000</option>
+    </select>
+    <label>Notes (internal)</label>
+    <input id="adjust-notes" placeholder="e.g. ER too low for T5, downgraded">
+    <div class="actions">
+      <button class="btn" onclick="closeModal('modal-adjust')" style="background:transparent;border:1px solid var(--line);color:var(--mute)">Cancel</button>
+      <button class="btn" onclick="confirmAdjust()" style="background:var(--sienna);color:var(--offwhite);border:1px solid var(--tan)">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://hamzaexpress.in/api/creator-application';   // Note: API lives on hamzaexpress.in (HE repo)
+let activeTab = 'pending';
+let allApps = [];
+
+function getKey(){ return localStorage.getItem('hn_dashkey') || ''; }
+function saveKey(){ const v=document.getElementById('key').value.trim(); if(v){localStorage.setItem('hn_dashkey',v);toast('Key saved');load();} }
+function loadKey(){ document.getElementById('key').value = getKey(); }
+function toast(m, e=false){ const t=document.getElementById('toast'); t.textContent=m; t.className='toast' + (e?' error':'') + ' show'; setTimeout(()=>t.classList.remove('show'), 2400); }
+function fmt(n){ if(n==null) return '—'; if(n>=1000) return (n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'') + 'K'; return String(n); }
+function escHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDate(s){ if (!s) return ''; return s.replace('T',' ').slice(0,16); }
+
+async function load(){
+  const k = getKey();
+  if (!k) { document.getElementById('grid').innerHTML = '<div class="empty">Set your dashboard key to view applications.</div>'; return; }
+  try {
+    const r = await fetch(API + '?action=list-recent&limit=200', { headers: { 'X-Dashboard-Key': k }});
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    allApps = d.applications || [];
+    renderStats(d.stats || []);
+    render();
+  } catch (e) { toast('Load failed: '+e.message, true); }
+}
+
+function renderStats(stats){
+  const m = {}; for (const s of stats) m[s.status] = s.c;
+  document.getElementById('stats').innerHTML = `
+    This month:
+    <span>Submitted <b>${(m.pending||0)+(m.auto_approved||0)+(m.approved||0)+(m.declined||0)+(m.adjusted||0)}</b></span>
+    <span class="green">Auto-approved <b>${m.auto_approved||0}</b></span>
+    <span class="gold">Pending <b>${m.pending||0}</b></span>
+    <span class="green">Manually approved <b>${m.approved||0}</b></span>
+    <span class="red">Declined <b>${m.declined||0}</b></span>
+  `;
+  document.getElementById('count-pending').textContent = m.pending || 0;
+  document.getElementById('count-all').textContent = allApps.length;
+}
+
+function setTab(t){
+  activeTab = t;
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  render();
+}
+
+function render(){
+  const list = activeTab === 'pending' ? allApps.filter(a => a.status === 'pending') : allApps;
+  if (!list.length) {
+    document.getElementById('grid').innerHTML = `<div class="empty">${activeTab === 'pending' ? 'No pending applications. ✓' : 'No applications yet.'}</div>`;
+    return;
+  }
+  document.getElementById('grid').innerHTML = list.map(a => {
+    const initial = (a.full_name || a.username || '?').charAt(0).toUpperCase();
+    const er = a.engagement_rate;
+    const erDisplay = er != null ? ` · <b>${(er*100).toFixed(2)}%</b> ER` : '';
+    const cashLine = a.offer_cash_paise > 0 ? `<span class="cash">+ ₹${(a.offer_cash_paise/100).toLocaleString('en-IN')} cash</span>` : '';
+    const addOns = (() => { try { return (JSON.parse(a.offer_addons_json||'[]') || []).join(', '); } catch { return ''; } })();
+    return `
+      <div class="card ${a.status}" data-id="${a.id}">
+        <div class="row1">
+          <div class="avatar">${a.profile_pic_url ? `<img src="${a.profile_pic_url}" onerror="this.parentElement.textContent='${initial}'">` : initial}</div>
+          <div class="who">
+            <div class="name">${escHtml(a.full_name || '@'+a.username)} <span class="tier tier-${a.computed_tier}">${a.computed_tier}</span></div>
+            <a class="handle" href="https://instagram.com/${a.username}" target="_blank">@${escHtml(a.username)}</a>
+            <div class="followers"><b>${fmt(a.followers_count)}</b> followers${erDisplay}</div>
+          </div>
+          <span class="status-badge status-${a.status}">${a.status.replace('_',' ')}</span>
+        </div>
+
+        <div class="offer">
+          <b>OFFER:</b> ${a.offer_covers} cover${a.offer_covers !== 1 ? 's' : ''}${addOns ? ' + ' + escHtml(addOns) : ''} ${cashLine}
+        </div>
+
+        <div class="slot-row">
+          <span>Slot:</span>
+          <span><b>${escHtml(a.preferred_slot_date || '')} · ${escHtml(a.preferred_window_code || '')}</b></span>
+        </div>
+
+        ${a.why_us_text ? `<div class="why">"${escHtml(a.why_us_text)}"</div>` : ''}
+
+        <div class="contact">
+          📱 <a href="https://wa.me/${(a.contact_phone||'').replace(/\D/g,'')}" target="_blank">${escHtml(a.contact_phone)}</a>
+          ${a.contact_email ? ` · 📧 ${escHtml(a.contact_email)}` : ''}
+          ${a.youtube_handle ? ` · YT @${escHtml(a.youtube_handle)}` : ''}
+          ${a.tiktok_handle ? ` · TT @${escHtml(a.tiktok_handle)}` : ''}
+        </div>
+
+        ${a.decline_reason ? `<div class="why" style="border-color:var(--red);background:rgba(239,68,68,.04);color:#fca5a5">${escHtml(a.decline_reason)}</div>` : ''}
+
+        ${a.status === 'pending' ? `
+          <div class="actions-row">
+            <button class="btn-approve" onclick="approve(${a.id})">✓ Approve</button>
+            <button class="btn-adjust" onclick="openAdjust(${a.id}, '${a.computed_tier}')">↓ Adjust</button>
+            <button class="btn-decline" onclick="openDecline(${a.id})">✗ Decline</button>
+          </div>
+        ` : `
+          <div class="contact" style="margin-top:auto">Submitted: ${fmtDate(a.submitted_at)}${a.reviewed_at ? ` · Reviewed: ${fmtDate(a.reviewed_at)}` : ''}</div>
+        `}
+      </div>
+    `;
+  }).join('');
+}
+
+async function approve(id){
+  const k = getKey(); if (!k) return toast('Set key first', true);
+  try {
+    const r = await fetch(API + '?action=approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard-Key': k },
+      body: JSON.stringify({ id }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    toast('✓ Approved · booking ' + d.booking_id);
+    load();
+  } catch (e) { toast('Approve failed: '+e.message, true); }
+}
+
+function openDecline(id){
+  document.getElementById('decline-id').value = id;
+  document.getElementById('decline-reason').value = '';
+  document.getElementById('modal-decline').classList.add('open');
+}
+function openAdjust(id, currentTier){
+  document.getElementById('adjust-id').value = id;
+  document.getElementById('adjust-tier').value = currentTier;
+  document.getElementById('adjust-notes').value = '';
+  document.getElementById('modal-adjust').classList.add('open');
+}
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+async function confirmDecline(){
+  const k = getKey(); if (!k) return toast('Set key first', true);
+  const id = document.getElementById('decline-id').value;
+  const reason = document.getElementById('decline-reason').value.trim();
+  if (!reason) return toast('Reason required', true);
+  try {
+    const r = await fetch(API + '?action=decline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard-Key': k },
+      body: JSON.stringify({ id, reason }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    closeModal('modal-decline');
+    toast('Declined');
+    load();
+  } catch (e) { toast('Decline failed: '+e.message, true); }
+}
+
+async function confirmAdjust(){
+  const k = getKey(); if (!k) return toast('Set key first', true);
+  const id = document.getElementById('adjust-id').value;
+  const tier = document.getElementById('adjust-tier').value;
+  const notes = document.getElementById('adjust-notes').value.trim();
+  try {
+    const r = await fetch(API + '?action=adjust', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard-Key': k },
+      body: JSON.stringify({ id, adjusted_tier: tier, notes }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    closeModal('modal-adjust');
+    toast('Adjusted offer recorded — manually message creator with revised offer');
+    load();
+  } catch (e) { toast('Adjust failed: '+e.message, true); }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelectorAll('.modal.open').forEach(m=>m.classList.remove('open')); }});
+
+loadKey();
+load();
+setInterval(load, 60000);
+</script>
+
+</body>
+</html>

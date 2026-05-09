@@ -8,66 +8,146 @@
 //   - HE's 1918 Dakhni heritage + late-night exclusivity = unique enough to be barter-first.
 //   - Cover counts scale with follower count, but cash component only kicks in at T4 (60K+).
 
+// Extended T0-T7 tier matrix grounded in 2026 Indian food creator economy benchmarks.
+// See docs/CREATOR-PORTAL-ARCHITECTURE.md for market-research methodology.
 export const TIER_MATRIX = {
+  T0: {
+    label:        '<1K · Newbie',
+    min:          0,
+    max:          999,
+    covers:       0,
+    cash_paise:   0,
+    budget_paise: 0,
+    add_ons:      [],
+    asks:         [],
+    auto_decline: true,
+    decline_reason: 'We work with creators who have at least 1K active followers. Build your audience and apply again!',
+  },
   T1: {
-    label:        '5K–15K · Nano-Micro',
+    label:        '1K–5K · Nano',
+    min:          1000,
+    max:          4999,
+    covers:       1,
+    cash_paise:   0,
+    budget_paise: 60000,                    // ₹600
+    add_ons:      [],
+    asks:         ['1 reel · 3 stories · tag @hamzaexpressblr'],
+    auto_approve: true,
+  },
+  T2: {
+    label:        '5K–15K · Micro',
     min:          5000,
     max:          14999,
     covers:       2,
     cash_paise:   0,
-    budget_paise: 120000,                   // ₹1,200 retail = 2 covers @ ₹600 generous
-    add_on:       null,
-    ask:          '1 reel + 3 stories + tag',
+    budget_paise: 120000,                   // ₹1,200
+    add_ons:      ['Welcome chai'],
+    asks:         ['1 reel · 5 stories · tag @hamzaexpressblr · use the geotag pin'],
+    auto_approve: true,
   },
-  T2: {
+  T3: {
     label:        '15K–30K · Mid-Micro',
     min:          15000,
     max:          29999,
     covers:       3,
     cash_paise:   0,
     budget_paise: 180000,                   // ₹1,800
-    add_on:       'Welcome chai',
-    ask:          '1 reel + 5 stories + tag',
+    add_ons:      ['Welcome chai', 'Dessert'],
+    asks:         ['1 reel · 5 stories · tag · 24-hour bio link'],
+    auto_approve: true,
   },
-  T3: {
+  T4: {
     label:        '30K–60K · Upper-Micro',
     min:          30000,
     max:          59999,
     covers:       4,
     cash_paise:   0,
     budget_paise: 240000,                   // ₹2,400
-    add_on:       'Welcome chai + dessert flight',
-    ask:          '1 reel + 1 permanent post + 5 stories',
+    add_ons:      ['Welcome chai', 'Dessert flight', 'Chef interaction'],
+    asks:         ['1 reel · 1 permanent grid post · 5 stories · tag'],
+    auto_approve: true,
+    auto_approve_min_er: 0.015,             // ER >= 1.5% required for auto-approve at this tier
   },
-  T4: {
+  T5: {
     label:        '60K–100K · Macro-Micro',
     min:          60000,
     max:          99999,
     covers:       4,
     cash_paise:   50000,                    // ₹500
-    budget_paise: 290000,                   // ₹2,400 food + ₹500 cash
-    add_on:       'Mutton Brain Dry comp + dessert flight + chai',
-    ask:          '1 reel + 1 permanent post + 7 stories + 7-day bio tag',
+    budget_paise: 290000,
+    add_ons:      ['Mutton Brain Dry comp', 'Dessert flight', 'Chai', 'Chef interaction'],
+    asks:         ['1 reel · 1 permanent grid post · 7 stories · 7-day bio tag'],
+    auto_approve: false,                    // Manual review (cash component)
   },
-  T5: {
-    label:        '100K+ · Edge-Macro',
+  T6: {
+    label:        '100K–250K · Edge-Macro',
     min:          100000,
-    max:          99999999,
+    max:          249999,
     covers:       4,
-    cash_paise:   200000,                   // ₹2,000
-    budget_paise: 440000,                   // ₹2,400 food + ₹2,000 cash
-    add_on:       'Full chef tasting (8 dishes) + family photo + chef interaction',
-    ask:          '2 reels + 1 permanent post + collab post + IG live snippet',
+    cash_paise:   300000,                   // ₹3,000
+    budget_paise: 540000,
+    add_ons:      ['Chef tasting (8 dishes)', 'Family photo', 'Chef interaction'],
+    asks:         ['2 reels · 1 permanent grid post · collab post · IG live snippet'],
+    auto_approve: false,
+  },
+  T7: {
+    label:        '250K+ · Macro',
+    min:          250000,
+    max:          99999999,
+    covers:       6,
+    cash_paise:   800000,                   // ₹8,000
+    budget_paise: 1064000,
+    add_ons:      ['Full chef tasting menu', 'Brand brief', 'Behind-the-scenes access'],
+    asks:         ['2 reels · 1 permanent grid · collab · IG live · 14-day bio tag'],
+    auto_approve: false,                    // Custom proposal possible
   },
 };
 
 export function tierOf(followers) {
   const f = followers || 0;
-  if (f < 15000)  return 'T1';
-  if (f < 30000)  return 'T2';
-  if (f < 60000)  return 'T3';
-  if (f < 100000) return 'T4';
-  return 'T5';
+  if (f < 1000)   return 'T0';
+  if (f < 5000)   return 'T1';
+  if (f < 15000)  return 'T2';
+  if (f < 30000)  return 'T3';
+  if (f < 60000)  return 'T4';
+  if (f < 100000) return 'T5';
+  if (f < 250000) return 'T6';
+  return 'T7';
+}
+
+// Decision: auto-approve, manual review, or auto-decline?
+// Inputs: tier, ER (engagement rate), is_private, last_post_at
+// Returns: { decision: 'auto_approve' | 'manual' | 'decline', reason: string }
+export function approvalDecision({ tier, engagement_rate, is_private, last_post_at }) {
+  const t = TIER_MATRIX[tier];
+  if (!t) return { decision: 'decline', reason: 'Unknown tier' };
+
+  if (t.auto_decline) return { decision: 'decline', reason: t.decline_reason };
+  if (is_private) return { decision: 'decline', reason: 'Private profiles — please switch to public to apply' };
+
+  // ER floor: < 0.5% likely indicates inactive / bought followers
+  const er = parseFloat(engagement_rate || 0);
+  if (er > 0 && er < 0.005) {
+    return { decision: 'decline', reason: 'Active engagement is what we look for. Your engagement rate is below our threshold — try again as it grows.' };
+  }
+
+  // Activity floor: dormant creators (last post > 60d) get manual review
+  if (last_post_at) {
+    const ageDays = (Date.now() - new Date(last_post_at).getTime()) / 86400000;
+    if (ageDays > 60) {
+      return { decision: 'manual', reason: `Last post was ${Math.round(ageDays)} days ago. Sending to manual review.` };
+    }
+  }
+
+  // Tier-level auto-approve gate
+  if (!t.auto_approve) return { decision: 'manual', reason: 'High-tier creators get personalised review.' };
+
+  // T4+ requires ER threshold
+  if (t.auto_approve_min_er && er > 0 && er < t.auto_approve_min_er) {
+    return { decision: 'manual', reason: `T4+ requires ER >= ${(t.auto_approve_min_er*100).toFixed(1)}%. Yours is ${(er*100).toFixed(2)}%. Sending to manual review.` };
+  }
+
+  return { decision: 'auto_approve', reason: 'Auto-approved' };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
