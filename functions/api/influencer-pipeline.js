@@ -216,6 +216,22 @@ async function cronDiscover(env, body, request) {
   const config = await getConfigMap(env);
   if (config.discovery_enabled !== 'true') return json({ skipped: 'disabled' });
 
+  // Pay-as-you-go cost cap: if this month's Apify spend exceeds the cap, skip.
+  const cap = parseFloat(config.apify_monthly_cap_usd || '0');
+  if (cap > 0) {
+    const monthSpend = await env.DB.prepare(`
+      SELECT COALESCE(SUM(cost_usd), 0) as total
+      FROM influencer_pipeline_runs
+      WHERE strftime('%Y-%m', started_at) = strftime('%Y-%m', 'now')
+        AND status = 'ok'
+    `).first();
+    if ((monthSpend?.total || 0) >= cap) {
+      const runId = await startRun(env, 'discovery');
+      return await finishRun(env, runId, 'skipped', 0, 0, 0,
+        `month-to-date Apify spend $${(monthSpend.total).toFixed(2)} >= cap $${cap.toFixed(2)} — skipping`);
+    }
+  }
+
   // Modash takes priority when an active profile is below daily cap
   if (config.modash_enabled === 'true') {
     const dailyCap = parseInt(config.modash_searches_per_profile_per_day || '1');
@@ -427,9 +443,27 @@ async function cronEnrichTick(env, body, request) {
   const config = await getConfigMap(env);
   if (config.enrichment_enabled !== 'true') return json({ skipped: 'disabled' });
 
+  // Cost-cap check (same logic as cronDiscover)
+  const cap = parseFloat(config.apify_monthly_cap_usd || '0');
+  if (cap > 0) {
+    const monthSpend = await env.DB.prepare(`
+      SELECT COALESCE(SUM(cost_usd), 0) as total
+      FROM influencer_pipeline_runs
+      WHERE strftime('%Y-%m', started_at) = strftime('%Y-%m', 'now') AND status = 'ok'
+    `).first();
+    if ((monthSpend?.total || 0) >= cap) {
+      const runId = await startRun(env, 'enrichment');
+      return await finishRun(env, runId, 'skipped', 0, 0, 0,
+        `month-to-date Apify spend $${(monthSpend.total).toFixed(2)} >= cap $${cap.toFixed(2)} — skipping`);
+    }
+  }
+
   const runId = await startRun(env, 'enrichment');
   try {
-    const batchSize = 8;
+    // Pay-as-you-go cost optimisation: drain a large batch once daily
+    // (vs every-15-min smaller batches that paid Apify trigger overhead 96x).
+    // 100 profiles in a single Apify run takes ~15-25 min, costs ~$0.50 vs ~$2 if split.
+    const batchSize = parseInt(config.enrichment_batch_size || '100');
     const batch = await env.DB.prepare(`
       SELECT id, username FROM influencer_discovery_queue
       WHERE enrich_status = 'pending' ORDER BY discovered_at LIMIT ?
