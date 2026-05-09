@@ -399,7 +399,94 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
-  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance', 'health', 'snapshots', 'reviews'] }), { status: 400, headers });
+  // --- DINE-HEALTH: pipeline status for dine-in platforms (zomato_dining, swiggy_dineout, eazydiner) ---
+  if (action === 'dine-health') {
+    const { results } = await db.prepare(`
+      SELECT platform, MAX(captured_at) AS last_seen, COUNT(*) AS total_snapshots
+      FROM aggregator_snapshots
+      WHERE platform IN ('zomato_dining', 'swiggy_dineout', 'eazydiner')
+      GROUP BY platform
+    `).all();
+
+    const now = Date.now();
+    const STALE_MS = 15 * 60 * 1000;
+    const expected = ['zomato_dining', 'swiggy_dineout', 'eazydiner'];
+    const byPlatform = Object.fromEntries(results.map(r => [r.platform, r]));
+
+    const platforms = expected.map(p => {
+      const row = byPlatform[p];
+      const lastMs = row?.last_seen ? new Date(row.last_seen).getTime() : null;
+      const staleMs = lastMs ? now - lastMs : null;
+      return {
+        platform: p,
+        last_seen: row?.last_seen || null,
+        stale_minutes: staleMs != null ? Math.round(staleMs / 60000) : null,
+        total_snapshots: row?.total_snapshots || 0,
+        status: !row ? 'never' : staleMs > STALE_MS ? 'stale' : 'live',
+      };
+    });
+
+    return new Response(JSON.stringify({ ok: true, action: 'dine-health', platforms, checked_at: new Date().toISOString() }), { headers });
+  }
+
+  // --- DINE-SUMMARY: latest snapshot per dine platform + outlet ---
+  if (action === 'dine-summary') {
+    const { results } = await db.prepare(`
+      SELECT a.platform, a.brand, a.outlet_id, a.metric_type, a.data, a.captured_at
+      FROM aggregator_snapshots a
+      INNER JOIN (
+        SELECT platform, outlet_id, metric_type, MAX(captured_at) AS max_ts
+        FROM aggregator_snapshots
+        WHERE platform IN ('zomato_dining', 'swiggy_dineout', 'eazydiner')
+        GROUP BY platform, outlet_id, metric_type
+      ) latest ON a.platform = latest.platform
+        AND a.outlet_id = latest.outlet_id
+        AND a.metric_type = latest.metric_type
+        AND a.captured_at = latest.max_ts
+      ORDER BY a.platform, a.outlet_id, a.captured_at DESC
+      LIMIT 60
+    `).all();
+
+    const byPlatform = {};
+    for (const row of results) {
+      if (!byPlatform[row.platform]) byPlatform[row.platform] = [];
+      byPlatform[row.platform].push({ ...row, data: safeJsonParse(row.data) });
+    }
+    return new Response(JSON.stringify({ ok: true, action: 'dine-summary', platforms: byPlatform, ts: new Date().toISOString() }), { headers });
+  }
+
+  // --- DINE-ATTRIBUTION: best-effort May 2026 revenue inferred from DOM scraping ---
+  if (action === 'dine-attribution') {
+    const { results } = await db.prepare(`
+      SELECT platform, outlet_id, data, captured_at
+      FROM aggregator_snapshots
+      WHERE platform IN ('zomato_dining', 'swiggy_dineout', 'eazydiner')
+        AND captured_at >= '2026-05-01T00:00:00'
+      ORDER BY platform, outlet_id, captured_at DESC
+      LIMIT 500
+    `).all();
+
+    const totals = {};
+    for (const row of results) {
+      const d = safeJsonParse(row.data);
+      const amounts = Array.isArray(d?.rupee_amounts) ? d.rupee_amounts : [];
+      const maxAmt = amounts.length ? Math.max(...amounts) : 0;
+      const key = `${row.platform}::${row.outlet_id}`;
+      if (!totals[key]) totals[key] = { platform: row.platform, outlet_id: row.outlet_id, max_inferred: 0, snapshots: 0 };
+      totals[key].snapshots++;
+      if (maxAmt > totals[key].max_inferred) totals[key].max_inferred = maxAmt;
+    }
+
+    const rows = Object.values(totals);
+    const grandTotal = rows.reduce((s, r) => s + r.max_inferred, 0);
+    return new Response(JSON.stringify({
+      ok: true, action: 'dine-attribution', grand_total_inferred: grandTotal, by_platform: rows,
+      note: 'Inferred from DOM rupee amounts — manual attribution in may_layers is authoritative',
+      ts: new Date().toISOString(),
+    }), { headers });
+  }
+
+  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance', 'health', 'snapshots', 'reviews', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
