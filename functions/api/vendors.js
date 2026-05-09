@@ -410,7 +410,9 @@ async function createOne(DB, request, user) {
   const pay_seq       = body.pay_seq;
   const sells         = normalizeSells(body.sells);
   const opm           = (body.opm || '').toString().trim().toUpperCase();
-  const pms           = (body.pms || '').toString().trim().toUpperCase();
+  // PMS is case-sensitive (Cb / Bc preserve case to encode primary rail) —
+  // do NOT uppercase the whole string. Trim only.
+  const pms           = (body.pms || '').toString().trim();
   const identity_abbr = (body.identity_abbr || '').toString().trim().toUpperCase();
   const vendor_name   = (body.vendor_name || '').toString().trim();
 
@@ -478,7 +480,8 @@ async function putOne(DB, vendorCode, request, user) {
   const pay_seq = body.pay_seq !== undefined ? body.pay_seq : existing.pay_seq;
   const sells   = body.sells   !== undefined ? normalizeSells(body.sells) : existing.sells;
   const opm     = (body.opm    !== undefined ? body.opm    : existing.opm).toString().trim().toUpperCase();
-  const pms     = (body.pms    !== undefined ? body.pms    : existing.pms).toString().trim().toUpperCase();
+  // PMS is case-sensitive (Cb / Bc preserve case) — trim only, no uppercasing.
+  const pms     = (body.pms    !== undefined ? body.pms    : existing.pms).toString().trim();
   const identity_abbr = (body.identity_abbr !== undefined
     ? body.identity_abbr
     : existing.identity_abbr).toString().trim().toUpperCase();
