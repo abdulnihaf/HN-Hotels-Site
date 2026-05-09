@@ -39,9 +39,15 @@ const requireOwner = (env, request, body) => {
   const k = request.headers.get('X-Dashboard-Key') || new URL(request.url).searchParams.get('key') || (body && body.key);
   return k && k === ownerKey(env);
 };
-const requireCron = (env, request) =>
-  request.headers.get('X-Cron-Token') === env.CRON_TOKEN ||
-  requireOwner(env, request);
+const requireCron = (env, request) => {
+  // Accept either the global CRON_TOKEN (used by hr-cron Worker etc.) or
+  // the modash-specific MODASH_CRON_TOKEN (used by hn-winpc poller). Either
+  // grants /api/influencer-pipeline cron access. Owner key also passes.
+  const tok = request.headers.get('X-Cron-Token');
+  if (tok && env.CRON_TOKEN && tok === env.CRON_TOKEN) return true;
+  if (tok && env.MODASH_CRON_TOKEN && tok === env.MODASH_CRON_TOKEN) return true;
+  return requireOwner(env, request);
+};
 
 export async function onRequest(context) {
   const { request, env } = context;
