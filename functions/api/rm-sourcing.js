@@ -107,6 +107,29 @@ function parseRmCode(code) {
   return { brand_prefix, rm_type, usage_profile, sourcing_profile, item_abbr };
 }
 
+/* Closed value sets per locked grammar (mirrored in DB CHECKs from
+ * migrations/0008_rm_check_constraints.sql). Single source of truth here so
+ * validators read off the same enumerations the DB enforces. */
+const ALLOWED_BRANDS = new Set(['HN', 'NCH', 'HE']);
+const ALLOWED_RM_TYPES = new Set(['AM', 'AS', 'DM', 'DS']);
+const ALLOWED_SOURCING_PROFILES = new Set([
+  'L', 'B', 'Lb', 'Bl', 'Li', 'Bi', 'Lbi', 'Bli'
+]);
+const FORBIDDEN_I_PRIMARY = new Set(['I', 'Il', 'Ib', 'Ilb']);
+
+/* Validate rm_type per the locked {AM, AS, DM, DS} closed set.
+ * The 'P' prefix (PM/PS) was experimental, never doctrine-locked, and is
+ * silently filtered out by the DB CHECK as well. */
+function validateRmType(rmType) {
+  if (!rmType || typeof rmType !== 'string') {
+    return 'rm_type is required';
+  }
+  if (!ALLOWED_RM_TYPES.has(rmType)) {
+    return `rm_type must be AM, AS, DM, or DS. Got "${rmType}". The 'P' prefix is not valid (it was an experimental placeholder, never doctrine-locked).`;
+  }
+  return null;
+}
+
 /* Compose canonical rm_code from structured parts.
  * USAGE: 1 uppercase primary {P,R,O} + 0-2 lowercase alts {p,r,o} (each letter at most once).
  * SOURCING: primary uppercase first, alternates lowercase sorted. */
@@ -114,20 +137,22 @@ function composeRmCode({ brand_prefix, rm_type, usage_profile, sourcing_profile,
   if (!brand_prefix || !rm_type || !usage_profile || !sourcing_profile || !item_abbr) {
     throw new Error('Missing required parts to compose rm_code');
   }
-  const allowedBrands = new Set(['HN', 'NCH', 'HE']);
-  if (!allowedBrands.has(brand_prefix)) {
+  if (!ALLOWED_BRANDS.has(brand_prefix)) {
     throw new Error(`Bad brand_prefix: ${brand_prefix}`);
   }
-  if (!/^[ADP][MS]$/.test(rm_type)) {
-    throw new Error(`Bad rm_type: ${rm_type} (expected e.g. AM/AS/DM/DS)`);
+  const rmTypeErr = validateRmType(rm_type);
+  if (rmTypeErr) {
+    throw new Error(rmTypeErr);
   }
   // USAGE validation delegated to validateUsageProfile (handles P/R/O singletons, pairs, triples)
   const usageErr = validateUsageProfile(usage_profile);
   if (usageErr) {
     throw new Error(`Bad usage_profile: ${usage_profile} — ${usageErr}`);
   }
-  if (!/^[LBI][lbi]*$/.test(sourcing_profile)) {
-    throw new Error(`Bad sourcing_profile: ${sourcing_profile}`);
+  // SOURCING validation delegated to validateSourcingProfile (rejects I-primary).
+  const sourcingErr = validateSourcingProfile(sourcing_profile);
+  if (sourcingErr) {
+    throw new Error(sourcingErr);
   }
   if (!/^[A-Z0-9]{2,4}$/.test(item_abbr)) {
     throw new Error(`Bad item_abbr: ${item_abbr}`);
@@ -164,24 +189,29 @@ function validateUsageProfile(usage) {
   return null;
 }
 
-/* Validate sourcing_profile per the "RM must be purchasable" rule.
+/* Validate sourcing_profile per the locked closed set
+ *   {L, B, Lb, Bl, Li, Bi, Lbi, Bli}  — 8 valid combinations
+ *
+ * I-primary forms ({I, Il, Ib, Ilb}) are explicitly forbidden — RMs that can
+ * ONLY be produced in-house are states-of-production, not RMs. (Doctrine §4 —
+ * states layer is its own ring, deferred.)
+ *
+ * Other rejected forms:
+ *   - lowercase-first / no primary uppercase  (e.g. 'l', 'lb')
+ *   - duplicate letters                       (e.g. 'Lbb', 'BB')
+ *   - unsorted alternates                     (e.g. 'Lib' instead of 'Lbi')
+ *   - unknown letters                         (e.g. 'Lx')
+ *
  * Returns null if valid, or a string error message if not. */
 function validateSourcingProfile(profile) {
   if (!profile || typeof profile !== 'string') {
-    return 'Sourcing profile is required';
+    return 'SOURCING profile is required (L, B, Lb, Bl, Li, Bi, Lbi, or Bli)';
   }
-  if (profile === 'I') {
-    return 'An RM must be purchasable. Items only producible in-house are states of production, not RMs. Either add L or B as another sourcing mode, or move this item to the States layer.';
-  }
-  if (!/^[LBI][lbi]*$/.test(profile)) {
-    return 'Invalid sourcing profile. Must contain only L, B, I letters with primary uppercase.';
-  }
-  // First letter is primary; rest are alternates
-  const primary = profile[0];
-  const alternates = profile.slice(1);
-  // Check no duplicates: primary letter shouldn't appear lowercase in alternates
-  if (alternates.toUpperCase().includes(primary)) {
-    return 'Sourcing profile is malformed: primary letter cannot also appear as alternate.';
+  if (!ALLOWED_SOURCING_PROFILES.has(profile)) {
+    if (FORBIDDEN_I_PRIMARY.has(profile)) {
+      return `I-primary profiles (I, Il, Ib, Ilb) are forbidden — RMs that can ONLY be produced in-house are states-of-production, not RMs. Got "${profile}". Either add L or B as another sourcing mode, or move this item to the States layer.`;
+    }
+    return `SOURCING must be one of: L, B, Lb, Bl, Li, Bi, Lbi, Bli. Got "${profile}".`;
   }
   return null; // valid
 }

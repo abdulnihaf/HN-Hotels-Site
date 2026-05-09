@@ -759,8 +759,10 @@
 
   const API = '/api/rm-sourcing';
   const VENDORS_API = '/api/vendors';
-  const V_SHAPES = ['V1a', 'V1b', 'V2', 'V3', 'V4', 'V5'];
-  const PROFILE_OPTIONS = ['L', 'B', 'I', 'Lb', 'Bl', 'Li', 'Il', 'Bi', 'Ib', 'Lbi', 'Bli', 'Ilb'];
+  // Doctrine-locked SOURCING closed set (8 combos). I-primary forms ({I, Il,
+  // Ib, Ilb}) are forbidden — those are states-of-production, not RMs. Mirrors
+  // CHECK constraint in migrations/0008_rm_check_constraints.sql.
+  const PROFILE_OPTIONS = ['L', 'B', 'Lb', 'Bl', 'Li', 'Bi', 'Lbi', 'Bli'];
   const BRANDS = [
     { value: 'NCH', label: 'NCH-only' },
     { value: 'HE',  label: 'HE-only' },
@@ -821,9 +823,12 @@
     return p + alts.map(a => a.toLowerCase()).join('');
   }
 
+  /* True when the chosen sourcing primary is 'I' (in-house) regardless of any
+   * L/B alternates. All four I-primary forms ({I, Il, Ib, Ilb}) are invalid:
+   * RMs that can ONLY be produced in-house are states-of-production, not RMs. */
   function isIOnlyProfile(parts) {
     const slot = deriveSourcingSlot(parts.sourcing, parts.primary);
-    return slot === 'I';
+    return !!slot && slot[0] === 'I';
   }
 
   function isEmptyUsage(parts) {
@@ -837,8 +842,9 @@
     if (!/^[A-Z0-9]{2,4}$/.test(itemAbbr)) return null;
     const slot = deriveSourcingSlot(sourcing, primary);
     if (!slot) return null;
-    // I-only profile is invalid (RM must be purchasable)
-    if (slot === 'I') return null;
+    // I-primary profiles ({I, Il, Ib, Ilb}) are invalid — RM must be
+    // purchasable. Items only producible in-house are states-of-production.
+    if (slot[0] === 'I') return null;
     const usageSlot = deriveUsageSlot(usage, usagePrimary);
     if (!usageSlot) return null;
     return `${brand}-${approximation}${useScope}-${usageSlot}-${slot}-${itemAbbr}`;
@@ -1549,10 +1555,6 @@
       saveBtn.style.cursor = '';
       saveBtn.title = '';
     }
-  }
-
-  function vshapeOpts(selected) {
-    return V_SHAPES.map(v => `<option value="${v}" ${v === selected ? 'selected' : ''}>${v}</option>`).join('');
   }
 
   /* Count supplier rows that lack vendor_code (legacy free-text refs).
