@@ -178,9 +178,9 @@
       <div class="flex items-center gap-3 mb-1">
         <span class="text-2xl">🏪</span>
         <h1 class="text-xl font-bold tracking-tight">Vendor · Canonical Shape Directory</h1>
-        <span class="pill pill-vendor">Reference · v2.0 · 5-segment</span>
+        <span class="pill pill-vendor">Reference · v8 · case-encoded across 4 dims</span>
       </div>
-      <p class="text-sm text-white/60 max-w-3xl">The 5-segment vendor identity — locked grammar. PAY_SEQ × SELLS × OPM × PMS × IDENTITY. Brand scope is still computed from the RM ring at query time.</p>
+      <p class="text-sm text-white/60 max-w-3xl">The 5-segment vendor identity — locked grammar. PAY_SEQ × SELLS × OPM × PMS × IDENTITY. All four architectural dimensions are case-encoded (uppercase primary + optional lowercase alt). Brand scope is still computed from the RM ring at query time.</p>
     </div>
     <div class="flex items-center gap-2 text-xs no-print">
       <a href="/docs/Vendor-Shape-Directory.pdf" class="btn btn-accent" title="Download static PDF snapshot">⬇ PDF</a>
@@ -198,14 +198,14 @@
     <div class="section-num">SECTION 1</div>
     <h2>The 5-segment vendor identity</h2>
     <div class="prose mt-2">
-      <p>The vendor canonical code carries five locked dimensions: <strong>PAY_SEQ</strong> (cash-flow direction), <strong>SELLS</strong> (what they stock — RM scope), <strong>OPM</strong> (how we order — manual vs automatable), <strong>PMS</strong> (which payment methods they accept), and <strong>IDENTITY</strong> (unique abbreviation). Brand scope is still a <strong>computed view</strong> derived from the RM ring at query time.</p>
-      <p>This obeys the COA Doctrine: every dimension is fully enumerated, the constraint set rejects impossible combinations, and the canonical code IS the operation — not a description of it. New vendors slot into the same space without schema migration.</p>
+      <p>The vendor canonical code carries five locked dimensions: <strong>PAY_SEQ</strong> (cash-flow direction), <strong>SELLS</strong> (what they stock — RM scope), <strong>OPM</strong> (how we order), <strong>PMS</strong> (which payment methods they accept), and <strong>IDENTITY</strong> (unique abbreviation). Brand scope is still a <strong>computed view</strong> derived from the RM ring at query time.</p>
+      <p><strong>v8 doctrine fix:</strong> all four architectural dimensions follow the same case-encoded pattern — <strong>uppercase letter = primary rail/direction</strong>, <strong>lowercase letter = also possible (alternate)</strong>, <strong>letter absent = impossible</strong>. The grammar fully encodes possibility from impossibility — no information is thrown away. Every dimension is enumerated; the constraint set rejects impossible combinations.</p>
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
       <div class="stat-card"><div class="label">Total vendors</div><div class="value" id="stat-total">—</div><div class="meta">live in editor</div></div>
-      <div class="stat-card"><div class="label">Pay-first (Pf)</div><div class="value mono" id="stat-pf" style="font-size:18px">—</div><div class="meta">cash leaves first</div></div>
-      <div class="stat-card"><div class="label">Receive-first (Rf)</div><div class="value mono" id="stat-rf" style="font-size:18px">—</div><div class="meta">goods arrive first</div></div>
+      <div class="stat-card"><div class="label">Pay-first primary</div><div class="value mono" id="stat-pf" style="font-size:18px">—</div><div class="meta">Pf + Pfr</div></div>
+      <div class="stat-card"><div class="label">Receive-first primary</div><div class="value mono" id="stat-rf" style="font-size:18px">—</div><div class="meta">Rf + Rfp</div></div>
       <div class="stat-card"><div class="label">Linked vs orphan</div><div class="value mono" id="stat-linked" style="font-size:14px">—</div><div class="meta">RM-referenced vendors</div></div>
     </div>
 
@@ -230,26 +230,26 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
       <div class="seg-card payseq">
         <div class="seg-name">PAY_SEQ</div>
-        <div class="seg-pos">Position 1 · 2 chars · the architectural binary</div>
-        <div class="seg-desc"><span class="mono" style="color:var(--info)">Pf</span> = pay-first (cash leaves before goods arrive) · <span class="mono" style="color:var(--good)">Rf</span> = receive-first (goods arrive before money goes out).</div>
-        <div class="seg-ex">2 values · Pf · Rf</div>
+        <div class="seg-pos">Position 1 · 2-3 chars · cash-flow direction</div>
+        <div class="seg-desc"><span class="mono" style="color:var(--info)">Pf</span> = pay-first only · <span class="mono" style="color:var(--good)">Rf</span> = receive-first only · <span class="mono" style="color:var(--info)">Pfr</span> = pay-first primary + receive-first alt · <span class="mono" style="color:var(--good)">Rfp</span> = receive-first primary + pay-first alt.</div>
+        <div class="seg-ex">4 values · Pf · Rf · Pfr · Rfp</div>
       </div>
       <div class="seg-card sells">
         <div class="seg-name">SELLS</div>
         <div class="seg-pos">Position 2 · 1-2 chars · what they stock (RM scope)</div>
-        <div class="seg-desc"><span class="mono" style="color:var(--purple)">L</span> = Loose only · <span class="mono" style="color:var(--purple)">B</span> = Branded only · <span class="mono" style="color:var(--purple)">LB</span> = Both (alphabetical). RM-purchase scope only.</div>
-        <div class="seg-ex">3 values · L · B · LB</div>
+        <div class="seg-desc"><span class="mono" style="color:var(--purple)">L</span> = loose only · <span class="mono" style="color:var(--purple)">B</span> = branded only · <span class="mono" style="color:var(--purple)">Lb</span> = loose primary + branded alt · <span class="mono" style="color:var(--purple)">Bl</span> = branded primary + loose alt. Flat <code>LB</code> retired in v8.</div>
+        <div class="seg-ex">4 values · L · B · Lb · Bl</div>
       </div>
       <div class="seg-card opm">
         <div class="seg-name">OPM</div>
-        <div class="seg-pos">Position 3 · 1 char · order-placement method</div>
-        <div class="seg-desc"><span class="mono" style="color:var(--teal)">M</span> = Manual (call / WhatsApp / walk-in / route) · <span class="mono" style="color:var(--teal)">A</span> = Automatable (app / web / API). Gates whether actions are agent-emitted.</div>
-        <div class="seg-ex">2 values · M · A</div>
+        <div class="seg-pos">Position 3 · 1-2 chars · order-placement method</div>
+        <div class="seg-desc"><span class="mono" style="color:var(--teal)">M</span> = manual only · <span class="mono" style="color:var(--teal)">A</span> = automatable only · <span class="mono" style="color:var(--teal)">Ma</span> = manual primary + auto alt · <span class="mono" style="color:var(--teal)">Am</span> = auto primary + manual alt.</div>
+        <div class="seg-ex">4 values · M · A · Ma · Am</div>
       </div>
       <div class="seg-card pms">
         <div class="seg-name">PMS</div>
         <div class="seg-pos">Position 4 · 1-2 chars · payment-method support</div>
-        <div class="seg-desc"><span class="mono" style="color:var(--pink)">C</span> = Cash-only · <span class="mono" style="color:var(--pink)">B</span> = Bank-only · <span class="mono" style="color:var(--pink)">Cb</span> / <span class="mono" style="color:var(--pink)">Bc</span> = Hybrid (uppercase = primary rail, lowercase = alternate). Mirrors SOURCING <code>Lb/Bl</code>.</div>
+        <div class="seg-desc"><span class="mono" style="color:var(--pink)">C</span> = cash only · <span class="mono" style="color:var(--pink)">B</span> = bank only · <span class="mono" style="color:var(--pink)">Cb</span> = cash primary + bank alt · <span class="mono" style="color:var(--pink)">Bc</span> = bank primary + cash alt.</div>
         <div class="seg-ex">4 values · C · B · Cb · Bc</div>
       </div>
       <div class="seg-card id" style="grid-column: span 2 / span 2;">
@@ -261,37 +261,62 @@
     </div>
 
     <div class="quote mt-5 text-sm">
-      <strong>Reading order:</strong> PAY_SEQ (cash direction) → SELLS (what they stock) → OPM (how we order) → PMS (how we pay) → IDENTITY (who they are). Five locked dimensions, all enumerated; brand scope still computed from the RM ring upstream.
+      <strong>Reading order:</strong> PAY_SEQ (cash direction) → SELLS (what they stock) → OPM (how we order) → PMS (how we pay) → IDENTITY (who they are). Five locked dimensions, all enumerated. <strong>Universal case convention:</strong> uppercase letter = primary, lowercase letter = also possible, letter absent = impossible. Brand scope still computed from the RM ring upstream.
     </div>
   </section>
 
   <!-- SECTION 3 — PAY_SEQ -->
   <section class="glass p-6" id="section-3">
     <div class="section-num">SECTION 3</div>
-    <h2>PAY_SEQ directory <span class="pill pill-info" style="font-size:10px">Position 1 · 2 chars</span></h2>
-    <p class="text-sm text-white/70 mt-1">The architectural binary that classifies every vendor by cash-flow direction.</p>
+    <h2>PAY_SEQ directory <span class="pill pill-info" style="font-size:10px">Position 1 · 2-3 chars</span></h2>
+    <p class="text-sm text-white/70 mt-1">Cash-flow direction. v8: case-encoded primary + alt — same pattern that runs across SELLS, OPM, and PMS.</p>
 
-    <div class="overflow-x-auto mt-4">
+    <h3 class="mt-4">Letter table</h3>
+    <div class="overflow-x-auto">
       <table class="dir-table">
         <thead><tr><th>Code</th><th>Meaning</th><th>Real examples</th></tr></thead>
         <tbody>
           <tr>
             <td class="code-cell"><span class="code-pf">Pf</span></td>
-            <td><strong>Pay-first.</strong> Money leaves our account before goods/service arrives. Quick commerce apps, prepaid subscriptions, advance rent, prepaid utilities.</td>
+            <td><strong>Pay-first only.</strong> Money always leaves our account before goods/service arrives. Pure quick commerce, strict prepaid.</td>
             <td><span class="mono"><span class="code-pf">Pf</span>-B-A-B-<span class="code-id">ZEPTO</span></span> · <span class="mono"><span class="code-pf">Pf</span>-L-M-C-<span class="code-id">WALKIN</span></span></td>
           </tr>
           <tr>
             <td class="code-cell"><span class="code-rf">Rf</span></td>
-            <td><strong>Receive-first.</strong> Goods/service arrives before money goes out. Daily milk, departmental stores with credit terms, post-paid utilities, monthly bills.</td>
-            <td><span class="mono"><span class="code-rf">Rf</span>-L-M-C-<span class="code-id">PRABHU</span></span> · <span class="mono"><span class="code-rf">Rf</span>-LB-M-Cb-<span class="code-id">SHARIFF</span></span></td>
+            <td><strong>Receive-first only.</strong> Goods/service always arrives before money goes out. Pure daily milk, post-paid utilities, strict credit-term vendors.</td>
+            <td><span class="mono"><span class="code-rf">Rf</span>-L-M-C-<span class="code-id">PRABHU</span></span> · <span class="mono"><span class="code-rf">Rf</span>-Lb-M-Cb-<span class="code-id">SHARIFF</span></span></td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-pf">Pfr</span></td>
+            <td><strong>Pay-first primary + Receive-first alt.</strong> Default flow is pay-first, but receive-first is also possible (e.g. a quick-commerce vendor that occasionally ships COD).</td>
+            <td><span class="mono"><span class="code-pf">Pfr</span>-B-Am-Bc-<span class="code-id">EXAMPLE</span></span> (hypothetical)</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-rf">Rfp</span></td>
+            <td><strong>Receive-first primary + Pay-first alt.</strong> Default flow is receive-first, but pay-first happens occasionally (e.g. a credit-term vendor where rare items require advance payment).</td>
+            <td><span class="mono"><span class="code-rf">Rfp</span>-Lb-Ma-Cb-<span class="code-id">SHARIFF</span></span> (hypothetical)</td>
           </tr>
         </tbody>
       </table>
     </div>
 
+    <h3 class="mt-5">Case-encoded combinations · primary/alt convention</h3>
+    <p class="text-sm text-white/70">When a vendor's cash-flow direction admits both flows, the canonical code uses three letters: leading <strong>uppercase</strong> = primary direction; the trailing <code>f</code> is a legibility suffix; trailing <strong>lowercase</strong> letter = alternate direction. The dropped information from a flat binary — which direction dominates — is preserved here.</p>
+
+    <h3 class="mt-5">Forbidden combinations</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Forbidden</th><th>Why caught</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell">PAY_SEQ outside <code>{Pf, Rf, Pfr, Rfp}</code></td><td>Enumerated set of legal codes. The 'f' suffix anchors the primary letter; <code>Prf</code> / <code>Rpf</code> are rejected.</td></tr>
+          <tr><td class="code-cell"><code>Pf</code> + <code>Rf</code> as separate vendors for the same entity</td><td>Once a real vendor admits both flows, it should be <code>Pfr</code> or <code>Rfp</code> (primary specified) — never two records.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <div class="layer-card mt-4 text-sm text-white/75">
-      <strong class="text-white">Why a binary, not a 6-letter V-shape?</strong>
-      <p class="mt-1">The richer V-shapes (V1a / V1b / V2 / V3 / V4 / V5) capture the precise cash-flow choreography of a single purchase event. Those live at the <em>action layer</em> and modulate per-purchase, per-supplier within a single vendor record. PAY_SEQ at the vendor level only captures the dominant direction — that's enough for the entity ring; the action ring fills in the granularity.</p>
+      <strong class="text-white">Why not a 6-letter V-shape here?</strong>
+      <p class="mt-1">The richer V-shapes (V1a / V1b / V2 / V3 / V4 / V5) capture the precise cash-flow choreography of a single purchase event. Those live at the <em>action layer</em> and modulate per-purchase, per-supplier within a single vendor record. PAY_SEQ at the vendor level only captures the directional possibility space (which flows are possible, which is dominant) — that's enough for the entity ring; the action ring fills in the granularity.</p>
     </div>
   </section>
 
@@ -299,9 +324,10 @@
   <section class="glass p-6" id="section-sells">
     <div class="section-num">SECTION 3.5</div>
     <h2>SELLS directory <span class="pill pill-purple" style="font-size:10px">Position 2 · 1-2 chars</span></h2>
-    <p class="text-sm text-white/70 mt-1">What the vendor stocks at the RM-purchase layer. Subset of {L, B}, alphabetically ordered, non-empty.</p>
+    <p class="text-sm text-white/70 mt-1">What the vendor stocks at the RM-purchase layer. v8: case-encoded primary + alt. Flat <code>LB</code> retired.</p>
 
-    <div class="overflow-x-auto mt-4">
+    <h3 class="mt-4">Letter table</h3>
+    <div class="overflow-x-auto">
       <table class="dir-table">
         <thead><tr><th>Code</th><th>Meaning</th><th>Real examples</th></tr></thead>
         <tbody>
@@ -316,47 +342,94 @@
             <td><span class="mono">Pf-<span class="code-purple">B</span>-A-B-<span class="code-id">ZEPTO</span></span> · <span class="mono">Rf-<span class="code-purple">B</span>-A-Bc-<span class="code-id">HYPERPURE</span></span></td>
           </tr>
           <tr>
-            <td class="code-cell"><span class="code-purple">LB</span></td>
-            <td><strong>Both Loose and Branded.</strong> Mixed departmental stores or wholesalers that stock unbranded staples plus branded SKUs side by side. Always alphabetical — never <code>BL</code>.</td>
-            <td><span class="mono">Rf-<span class="code-purple">LB</span>-M-Cb-<span class="code-id">SHARIFF</span></span> (departmental store)</td>
+            <td class="code-cell"><span class="code-purple">Lb</span></td>
+            <td><strong>Loose primary + Branded alt.</strong> Mixed shop where loose dominates (by volume/value) but branded packs are also stocked as a secondary line.</td>
+            <td><span class="mono">Rf-<span class="code-purple">Lb</span>-M-Cb-<span class="code-id">SHARIFF</span></span> (loose-led departmental)</td>
           </tr>
+          <tr>
+            <td class="code-cell"><span class="code-purple">Bl</span></td>
+            <td><strong>Branded primary + Loose alt.</strong> Mixed shop where branded SKUs dominate but some loose staples also stocked.</td>
+            <td><span class="mono">Rf-<span class="code-purple">Bl</span>-M-Cb-<span class="code-id">NILDIST</span></span> (hypothetical brand-led distributor)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="mt-5">Case-encoded combinations · primary/alt convention</h3>
+    <p class="text-sm text-white/70">When a vendor stocks both loose and branded, the canonical code uses two letters: <strong>uppercase</strong> = primary stock type (the bulk of what they sell); <strong>lowercase</strong> = alternate (the secondary line). The information that was discarded by the flat <code>LB</code> alphabet is preserved here.</p>
+
+    <h3 class="mt-5">Forbidden combinations</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Forbidden</th><th>Why caught</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell">SELLS = <code>LB</code> (flat alphabetical)</td><td>v8 rejects flat ordering — owner must declare a primary letter. Use <code>Lb</code> or <code>Bl</code>.</td></tr>
+          <tr><td class="code-cell">SELLS empty</td><td>Every RM-supplying vendor stocks at least one of {L, B}. Empty SELLS would be an unsupplied vendor — not a valid entity-ring state.</td></tr>
+          <tr><td class="code-cell">Lowercase first (<code>lB</code>) / both upper (<code>LB</code>) / duplicates (<code>Ll</code>)</td><td>Same constraints as PMS. Primary is uppercase; alt is lowercase; each letter at most once.</td></tr>
+          <tr><td class="code-cell">Letter outside <code>{L, B}</code></td><td>The two-class enumeration is exhaustive in RM-purchase scope. New letters S/C reserved for the bill/expense scope.</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="layer-card mt-4 text-sm text-white/75">
       <strong class="text-white">Future SELLS extension</strong>
-      <p class="mt-1">When the bill/expense scope opens (rent, utilities, services, capex), the SELLS alphabet extends to include <code>S</code> (services) and <code>C</code> (capex). New combinations like <code>LBS</code>, <code>BC</code>, <code>S</code> become valid points in the same space — <strong>no migration required</strong>. The constraint set widens; the existing <code>{L, B, LB}</code> rows stay valid.</p>
+      <p class="mt-1">When the bill/expense scope opens (rent, utilities, services, capex), the SELLS alphabet extends to include <code>S</code> (services) and <code>C</code> (capex). New combinations like <code>Sb</code>, <code>Cl</code>, <code>S</code> become valid points in the same case-encoded space — <strong>no migration required</strong>. The constraint set widens; the existing <code>{L, B, Lb, Bl}</code> rows stay valid.</p>
     </div>
   </section>
 
   <!-- SECTION 3.6 — OPM -->
   <section class="glass p-6" id="section-opm">
     <div class="section-num">SECTION 3.6</div>
-    <h2>OPM directory <span class="pill pill-teal" style="font-size:10px">Position 3 · 1 char</span></h2>
-    <p class="text-sm text-white/70 mt-1">Order-Placement Method — how an order with this vendor is initiated. Binary: human-mediated vs automatable.</p>
+    <h2>OPM directory <span class="pill pill-teal" style="font-size:10px">Position 3 · 1-2 chars</span></h2>
+    <p class="text-sm text-white/70 mt-1">Order-Placement Method — how an order with this vendor is initiated. v8: case-encoded primary + alt. Same pattern as SELLS / PMS.</p>
 
-    <div class="overflow-x-auto mt-4">
+    <h3 class="mt-4">Letter table</h3>
+    <div class="overflow-x-auto">
       <table class="dir-table">
         <thead><tr><th>Code</th><th>Meaning</th><th>Real examples</th></tr></thead>
         <tbody>
           <tr>
             <td class="code-cell"><span class="code-teal">M</span></td>
-            <td><strong>Manual.</strong> Ordering routes through a human channel — phone call, WhatsApp, walk-in, or a fixed daily/weekly delivery route. No app/API in the loop.</td>
-            <td><span class="mono">Rf-L-<span class="code-teal">M</span>-C-<span class="code-id">PRABHU</span></span> (daily route) · <span class="mono">Rf-LB-<span class="code-teal">M</span>-Cb-<span class="code-id">SHARIFF</span></span> (WA)</td>
+            <td><strong>Manual only.</strong> Ordering always routes through a human channel — phone call, WhatsApp, walk-in, or a fixed daily/weekly delivery route. No app/API in the loop.</td>
+            <td><span class="mono">Rf-L-<span class="code-teal">M</span>-C-<span class="code-id">PRABHU</span></span> (daily route) · <span class="mono">Rf-Lb-<span class="code-teal">M</span>-Cb-<span class="code-id">SHARIFF</span></span> (WA)</td>
           </tr>
           <tr>
             <td class="code-cell"><span class="code-teal">A</span></td>
-            <td><strong>Automatable.</strong> Ordering can be placed by a Cron Worker via app, web portal, or API — quick commerce, B2B platforms, marketplace integrations.</td>
+            <td><strong>Automatable only.</strong> Ordering always goes via app, web portal, or API — quick commerce, B2B platforms, marketplace integrations.</td>
             <td><span class="mono">Pf-B-<span class="code-teal">A</span>-B-<span class="code-id">ZEPTO</span></span> (app) · <span class="mono">Rf-B-<span class="code-teal">A</span>-Bc-<span class="code-id">HYPERPURE</span></span> (B2B)</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-teal">Ma</span></td>
+            <td><strong>Manual primary + Automatable alt.</strong> Default ordering is manual but the vendor also exposes an app/API as a backup channel.</td>
+            <td><span class="mono">Rf-Lb-<span class="code-teal">Ma</span>-Cb-<span class="code-id">EXAMPLE</span></span> (hypothetical hybrid)</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-teal">Am</span></td>
+            <td><strong>Automatable primary + Manual alt.</strong> Default ordering is via app/API but a human channel exists as fallback (call vendor when API down).</td>
+            <td><span class="mono">Pf-B-<span class="code-teal">Am</span>-B-<span class="code-id">EXAMPLEAPP</span></span> (hypothetical)</td>
           </tr>
         </tbody>
       </table>
     </div>
 
+    <h3 class="mt-5">Case-encoded combinations · primary/alt convention</h3>
+    <p class="text-sm text-white/70">When a vendor admits both ordering channels, the canonical code uses two letters: <strong>uppercase</strong> = primary method (the channel that handles most orders); <strong>lowercase</strong> = alternate (the backup channel). The primary letter is what gates whether agents emit orders by default.</p>
+
+    <h3 class="mt-5">Forbidden combinations</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Forbidden</th><th>Why caught</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell">OPM outside <code>{M, A, Ma, Am}</code></td><td>Same case-encoded pattern as SELLS / PMS.</td></tr>
+          <tr><td class="code-cell">Lowercase first (<code>mA</code>) / both upper (<code>MA</code>) / duplicates (<code>Mm</code>)</td><td>Primary uppercase, alt lowercase, each letter at most once.</td></tr>
+          <tr><td class="code-cell">Letter outside <code>{M, A}</code></td><td>The two-method enumeration is exhaustive at the entity layer. New ordering channels would require a doctrine extension.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <div class="layer-card mt-4 text-sm text-white/75">
-      <strong class="text-white">Why this dimension</strong>
-      <p class="mt-1">OPM separates "needs a human to send WA" from "Cron Worker can place the order." That binary is the gate that decides whether an action becomes agent-emitted (A) or staff-emitted (M). Without OPM in the canonical code, automation routing requires lookup; with it, the agent reads the coordinate and acts.</p>
+      <strong class="text-white">Why this dimension matters</strong>
+      <p class="mt-1">OPM separates "needs a human to send WA" from "Cron Worker can place the order." The primary letter is the gate that decides whether an action becomes agent-emitted (<code>A</code> / <code>Am</code>) or staff-emitted (<code>M</code> / <code>Ma</code>) <em>by default</em>. The alt letter declares the fallback path is also available — useful for graceful degradation when the primary channel fails.</p>
     </div>
   </section>
 
@@ -394,7 +467,7 @@
           <tr>
             <td class="code-cell"><span class="code-pink">Cb</span></td>
             <td><strong>Hybrid · Cash primary.</strong> Vendor accepts both, but cash is the default rail; bank is the alternate. Common for small/local vendors who occasionally take UPI.</td>
-            <td><span class="mono">Rf-LB-M-<span class="code-pink">Cb</span>-<span class="code-id">SHARIFF</span></span> (departmental store)</td>
+            <td><span class="mono">Rf-Lb-M-<span class="code-pink">Cb</span>-<span class="code-id">SHARIFF</span></span> (departmental store)</td>
           </tr>
           <tr>
             <td class="code-cell"><span class="code-pink">Bc</span></td>
@@ -477,12 +550,12 @@
       <table class="dir-table">
         <thead><tr><th>Forbidden</th><th>Why caught</th><th>Result</th></tr></thead>
         <tbody>
-          <tr><td class="code-cell"><span class="code-pf">PAY_SEQ</span> outside {Pf, Rf}</td><td>The architectural binary is exhaustive — any third value would require a doctrine change.</td><td class="text-white/70">400 reject</td></tr>
-          <tr><td class="code-cell"><span class="code-purple">SELLS</span> empty</td><td>RM-purchase scope requires at least one of {L, B}.</td><td class="text-white/70">400 reject</td></tr>
-          <tr><td class="code-cell"><span class="code-purple">SELLS</span> outside {L, B, LB}</td><td>Constraint set in RM-purchase scope. S/C reserved for the bill/expense scope.</td><td class="text-white/70">400 reject</td></tr>
-          <tr><td class="code-cell"><span class="code-purple">SELLS</span> = "BL"</td><td>Subsets must be alphabetically ordered — only "LB" is canonical.</td><td class="text-white/70">400 reject</td></tr>
-          <tr><td class="code-cell"><span class="code-teal">OPM</span> outside {M, A}</td><td>Manual / Automatable is the exhaustive binary — no third state.</td><td class="text-white/70">400 reject</td></tr>
-          <tr><td class="code-cell"><span class="code-pink">PMS</span> outside {C, B, Cb, Bc}</td><td>Cash-only / Bank-only / case-encoded Hybrids is the exhaustive enumeration. Lowercase-first (<code>cB</code>), duplicates (<code>Cc</code>), or both uppercase (<code>CB</code>) all rejected.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-pf">PAY_SEQ</span> outside {Pf, Rf, Pfr, Rfp}</td><td>Enumerated set; the 'f' suffix anchors the primary letter. <code>Prf</code> / <code>Rpf</code> rejected.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-purple">SELLS</span> = "LB" (flat)</td><td>v8 retired flat ordering — owner must declare a primary. Use <code>Lb</code> or <code>Bl</code>.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-purple">SELLS</span> outside {L, B, Lb, Bl}</td><td>Same case-encoded pattern as PMS. S/C reserved for the bill/expense scope.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-teal">OPM</span> outside {M, A, Ma, Am}</td><td>Same case-encoded pattern.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-pink">PMS</span> outside {C, B, Cb, Bc}</td><td>Same case-encoded pattern.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell">Any case-encoded segment with lowercase first / both upper / duplicate letter</td><td>Universal v8 constraint. Primary uppercase, alt lowercase, each letter at most once.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-id">IDENTITY</span> empty</td><td>Identity required.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-id">IDENTITY</span> &lt; 3 chars</td><td>Codes need to stay readable.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-id">IDENTITY</span> &gt; 10 chars</td><td>Codes need to stay scannable.</td><td class="text-white/70">400 reject</td></tr>
@@ -509,7 +582,7 @@
   <section class="glass p-6" id="section-7">
     <div class="section-num">SECTION 7</div>
     <h2>Worked Examples — Reading codes left to right</h2>
-    <p class="text-sm text-white/70 mt-1">Six real codes (one hypothetical), each decomposed segment by segment.</p>
+    <p class="text-sm text-white/70 mt-1">Six codes spanning the v8 grammar: two pure-binary forms (<code>Rf-L-M-C</code>, <code>Pf-B-A-B</code>), the full-alternates form (<code>Rfp-Lb-Ma-Cb</code>), branded-primary hybrid (<code>Rf-Bl-M-Bc</code>), and intermediate cases. Each decomposed segment by segment.</p>
 
     <h3 class="mt-4">1 · <span class="mono">Rf-L-M-C-PRABHU</span> — Daily loose milk vendor</h3>
     <div class="walk-block">
@@ -533,16 +606,16 @@
     </div>
     <div class="walk-reads">Reads as: "Pay-first, branded only, automatable, bank-only vendor named ZEPTO." Note PMS position 4 carries a single uppercase <code>B</code> — distinct from SELLS at position 2, even though they share the letter shape. Computed scope = HN (cross-brand — both NCH and HE order from Zepto).</div>
 
-    <h3 class="mt-5">3 · <span class="mono">Rf-LB-M-Cb-SHARIFF</span> — Mixed departmental store, cash primary</h3>
+    <h3 class="mt-5">3 · <span class="mono">Rfp-Lb-Ma-Cb-SHARIFF</span> — Full alternates: every dim carries a primary + alt</h3>
     <div class="walk-block">
-<span class="r">Rf</span>-<span class="s">LB</span>-<span class="o">M</span>-<span class="m">Cb</span>-<span class="i">SHARIFF</span>
- <span class="lbl">│   │ │ │    └─</span> <span class="i">SHARIFF</span> — identity (Shivajinagar departmental store)
- <span class="lbl">│   │ │ └──────</span> <span class="m">Cb</span> — Hybrid · Cash primary + Bank alt (accepts UPI but cash is default)
- <span class="lbl">│   │ └────────</span> <span class="o">M</span> — Manual order (we WhatsApp / call / walk-in)
- <span class="lbl">│   └──────────</span> <span class="s">LB</span> — Both Loose and Branded (alphabetical)
- <span class="lbl">└──────────────</span> <span class="r">Rf</span> — Receive-first (collect goods, settle monthly)
+<span class="r">Rfp</span>-<span class="s">Lb</span>-<span class="o">Ma</span>-<span class="m">Cb</span>-<span class="i">SHARIFF</span>
+ <span class="lbl">│    │  │  │    └─</span> <span class="i">SHARIFF</span> — identity (Shivajinagar departmental store)
+ <span class="lbl">│    │  │  └──────</span> <span class="m">Cb</span> — Cash primary + Bank alt (cash is default; UPI accepted)
+ <span class="lbl">│    │  └─────────</span> <span class="o">Ma</span> — Manual primary + Auto alt (we WA mostly; vendor's app exists as backup)
+ <span class="lbl">│    └────────────</span> <span class="s">Lb</span> — Loose primary + Branded alt (loose is the bulk; branded packs are secondary)
+ <span class="lbl">└─────────────────</span> <span class="r">Rfp</span> — Receive-first primary + Pay-first alt (settle monthly mostly; rare items prepaid)
     </div>
-    <div class="walk-reads">Reads as: "Receive-first, sells both loose and branded, manually ordered, cash-primary hybrid vendor named SHARIFF." Per-transaction settlement (which UPI handle, exact split for a partial-bank payment) decided at action layer; <code>Cb</code> just declares the entity-level option space.</div>
+    <div class="walk-reads">Reads as: "Every dimension has both rails, but one is dominant: receive-first leads cash flow, loose leads stock, manual leads ordering, cash leads payment." This is the doctrine fix in action — the v7 grammar (<code>Rf-LB-M-Cb-SHARIFF</code>) couldn't say which direction / stock / method dominated; v8 puts that information into the code itself. The action layer reads coordinates and routes accordingly without a lookup.</div>
 
     <h3 class="mt-5">4 · <span class="mono">Rf-B-A-Bc-HYPERPURE</span> — B2B platform with COD option</h3>
     <div class="walk-block">
@@ -566,16 +639,16 @@
     </div>
     <div class="walk-reads">Reads as: "Pay-first, loose only, manually ordered, cash-only vendor named WALKIN." A functional vendor record covering all ad-hoc emergency procurement — counts as one entity even though physical shops vary.</div>
 
-    <h3 class="mt-5">6 · <span class="mono">Rf-LB-A-Cb-FUTUREVEND</span> — Hypothetical future state</h3>
+    <h3 class="mt-5">6 · <span class="mono">Rf-Bl-M-Bc-NILDIST</span> — Branded primary + loose alt, bank-primary hybrid</h3>
     <div class="walk-block">
-<span class="r">Rf</span>-<span class="s">LB</span>-<span class="o">A</span>-<span class="m">Cb</span>-<span class="i">FUTUREVEND</span>
- <span class="lbl">│   │ │ │    └─</span> <span class="i">FUTUREVEND</span> — identity (a hypothetical mixed-stock vendor with API)
- <span class="lbl">│   │ │ └──────</span> <span class="m">Cb</span> — Hybrid · Cash primary + Bank alt (vendor adopts UPI alongside legacy cash, but cash still default)
- <span class="lbl">│   │ └────────</span> <span class="o">A</span> — Automatable (vendor exposes WhatsApp Business API or webform)
- <span class="lbl">│   └──────────</span> <span class="s">LB</span> — Loose + Branded (mixed stock continues)
- <span class="lbl">└──────────────</span> <span class="r">Rf</span> — Receive-first (continues as credit terms vendor)
+<span class="r">Rf</span>-<span class="s">Bl</span>-<span class="o">M</span>-<span class="m">Bc</span>-<span class="i">NILDIST</span>
+ <span class="lbl">│  │  │ │    └─</span> <span class="i">NILDIST</span> — identity (hypothetical brand-led distributor)
+ <span class="lbl">│  │  │ └──────</span> <span class="m">Bc</span> — Bank primary + Cash alt (NEFT/UPI default; cash possible on rare COD)
+ <span class="lbl">│  │  └────────</span> <span class="o">M</span> — Manual only (call/WA — no app yet)
+ <span class="lbl">│  └───────────</span> <span class="s">Bl</span> — Branded primary + Loose alt (brand-led wholesaler with some loose staples)
+ <span class="lbl">└──────────────</span> <span class="r">Rf</span> — Receive-first (delivery + invoice; settle on credit terms)
     </div>
-    <div class="walk-reads">Reads as: "Receive-first, mixed stock, automatable, cash-primary hybrid vendor." Demonstrates that <strong>SHARIFF could legitimately migrate</strong> to <code>Rf-LB-A-Cb-SHARIFF</code> the day they expose ordering automation — a single PUT updates the row, the canonical code re-keys, and the action ring picks up the change with no further migration. If they later flip to bank-primary (modal payment becomes UPI), another PUT moves the row to <code>Bc</code>.</div>
+    <div class="walk-reads">Reads as: "Receive-first, branded-dominant with loose alt, manual ordering only, bank-primary hybrid vendor." Demonstrates the v8 grammar's reach: SHARIFF and NILDIST share PAY_SEQ (<code>Rf</code>) and OPM (<code>M</code>), but their SELLS primary (<code>Lb</code> vs <code>Bl</code>) and PMS primary (<code>Cb</code> vs <code>Bc</code>) flip — a difference that v7's flat grammar couldn't represent. The day NILDIST exposes an API, a single PUT moves the row to <code>Rf-Bl-Am-Bc-NILDIST</code>; the canonical code re-keys; the action ring picks up the change with no migration.</div>
   </section>
 
   <!-- SECTION 8 — WHAT'S IN AND WHAT'S OUT -->
@@ -619,7 +692,7 @@
 
     <div class="layer-card mt-4 text-sm text-white/75" style="border-top: 3px solid var(--purple);">
       <strong class="text-white">Future SELLS dimension extension</strong>
-      <p class="mt-1">The current SELLS alphabet is <code>{L, B}</code> with subsets <code>{L, B, LB}</code>, valid in RM-purchase scope only. When the bill/expense scope opens (rent, utilities, services, capex), the alphabet extends: <code>S</code> = services, <code>C</code> = capex. Combinations like <code>LBS</code>, <code>BC</code>, <code>S</code> become valid — same constraint pattern (alphabetical, non-empty subset), just a wider letter set. <strong>No migration required:</strong> existing rows stay valid, the CHECK constraint widens, and new combinations slot in as new points in the same space.</p>
+      <p class="mt-1">The current SELLS alphabet is <code>{L, B}</code> with case-encoded values <code>{L, B, Lb, Bl}</code>, valid in RM-purchase scope only. When the bill/expense scope opens (rent, utilities, services, capex), the alphabet extends: <code>S</code> = services, <code>C</code> = capex. Combinations like <code>S</code>, <code>Sb</code>, <code>Cl</code> become valid — same case-encoded constraint pattern, just a wider letter set. <strong>No migration required:</strong> existing rows stay valid, the CHECK constraint widens, and new combinations slot in as new points in the same space.</p>
     </div>
   </section>
 
@@ -639,7 +712,7 @@
 Examples:
   PUR-NCH-AM-P-Lb-MLK-Rf-L-M-C-PRABHU-V1a-2026050801   ← daily milk receipt
   PUR-HN-AM-P-Bl-BTR-Pf-B-A-B-ZEPTO-V3-2026050802      ← Amul butter via Zepto
-  PUR-HN-AM-P-Lb-VEG-Rf-LB-M-Cb-SHARIFF-V2-2026050803    ← veg + branded staples</pre>
+  PUR-HN-AM-P-Lb-VEG-Rfp-Lb-Ma-Cb-SHARIFF-V2-2026050803  ← veg + branded staples</pre>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
@@ -665,7 +738,7 @@ Examples:
 </main>
 
 <footer class="border-t border-white/5 px-6 py-5 text-xs text-white/40 text-center">
-  Vendor Canonical Shape Directory · v2.0 (5-segment) · May 2026 ·
+  Vendor Canonical Shape Directory · v8 (case-encoded across 4 dims) · May 2026 ·
   <a href="/ops/vendor-editor/" class="text-white/60 hover:text-white">Vendor Editor</a> ·
   <a href="/ops/visual/rm-shape-directory/" class="text-white/60 hover:text-white">RM Shape Directory</a> ·
   <a href="/ops/visual/coa-doctrine/" class="text-white/60 hover:text-white">COA Doctrine</a> ·
@@ -703,30 +776,32 @@ Examples:
     const data = await res.json();
     const vendors = data.vendors || [];
     const total = vendors.length;
-    const pf = vendors.filter(v => v.pay_seq === 'Pf').length;
-    const rf = vendors.filter(v => v.pay_seq === 'Rf').length;
     const linked = vendors.filter(v => v.computed && v.computed.rm_count > 0).length;
 
     document.getElementById('stat-total').textContent = total;
-    document.getElementById('stat-pf').textContent = pf;
-    document.getElementById('stat-rf').textContent = rf;
+    document.getElementById('stat-pf').textContent = vendors.filter(v => (v.pay_seq||'').startsWith('P')).length;
+    document.getElementById('stat-rf').textContent = vendors.filter(v => (v.pay_seq||'').startsWith('R')).length;
     document.getElementById('stat-linked').textContent = linked + ' linked · ' + (total - linked) + ' orphan';
 
     const editorHref = (code) => '/ops/vendor-editor/?q=' + encodeURIComponent(code);
 
-    const groups = { Pf: [], Rf: [] };
-    vendors.forEach(v => { if (groups[v.pay_seq]) groups[v.pay_seq].push(v); });
+    // v8: group by leading PAY_SEQ letter so Pf+Pfr stack as one group, Rf+Rfp another.
+    const groups = { P: [], R: [] };
+    vendors.forEach(v => {
+      const lead = (v.pay_seq || '')[0];
+      if (groups[lead]) groups[lead].push(v);
+    });
 
     let html = '';
     if (total === 0) {
       html = '<div class="failure-card text-sm">No vendors yet. Open the <a href="/ops/vendor-editor/" class="underline">Vendor Editor</a> and click + Add New Vendor to begin populating the ring.</div>';
     } else {
-      [['Pf', 'Pay-first · cash leaves first', 'var(--info)'],
-       ['Rf', 'Receive-first · goods arrive first', 'var(--good)']].forEach(([key, label, color]) => {
+      [['P', 'Pay-first primary · Pf / Pfr', 'var(--info)'],
+       ['R', 'Receive-first primary · Rf / Rfp', 'var(--good)']].forEach(([key, label, color]) => {
         const list = groups[key] || [];
         if (list.length === 0) return;
         html += '<div class="census-group">';
-        html += `<div class="census-head"><span style="color:${color}">PAY_SEQ: ${key}</span> <span class="text-white/70">${label}</span> <span class="count">— ${list.length} vendor${list.length===1?'':'s'}</span></div>`;
+        html += `<div class="census-head"><span style="color:${color}">PAY_SEQ leading ${key}</span> <span class="text-white/70">${label}</span> <span class="count">— ${list.length} vendor${list.length===1?'':'s'}</span></div>`;
         html += '<ul class="census-list">';
         list.sort((a,b) => a.identity_abbr.localeCompare(b.identity_abbr)).forEach(v => {
           const c = v.computed || {};

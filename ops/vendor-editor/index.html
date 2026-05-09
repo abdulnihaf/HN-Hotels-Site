@@ -288,19 +288,24 @@
       <input type="text" id="filter-q" placeholder="Search vendor code or name…">
       <select id="filter-payseq">
         <option value="">All PAY_SEQ</option>
-        <option value="Pf">Pf · Pay-first</option>
-        <option value="Rf">Rf · Receive-first</option>
+        <option value="Pf">Pf · Pay-first only</option>
+        <option value="Rf">Rf · Receive-first only</option>
+        <option value="Pfr">Pfr · Pay-first primary + Rf alt</option>
+        <option value="Rfp">Rfp · Receive-first primary + Pf alt</option>
       </select>
       <select id="filter-sells">
         <option value="">All SELLS</option>
         <option value="L">L · Loose only</option>
         <option value="B">B · Branded only</option>
-        <option value="LB">LB · Both Loose + Branded</option>
+        <option value="Lb">Lb · Loose primary + Branded alt</option>
+        <option value="Bl">Bl · Branded primary + Loose alt</option>
       </select>
       <select id="filter-opm">
         <option value="">All OPM</option>
-        <option value="M">M · Manual</option>
-        <option value="A">A · Automatable</option>
+        <option value="M">M · Manual only</option>
+        <option value="A">A · Automatable only</option>
+        <option value="Ma">Ma · Manual primary + Auto alt</option>
+        <option value="Am">Am · Auto primary + Manual alt</option>
       </select>
       <select id="filter-pms">
         <option value="">All PMS</option>
@@ -336,36 +341,51 @@
           <span class="seg-pf">{PAY_SEQ}</span><span class="dash">-</span><span style="color:var(--purple)">{SELLS}</span><span class="dash">-</span><span style="color:var(--teal)">{OPM}</span><span class="dash">-</span><span style="color:var(--pink)">{PMS}</span><span class="dash">-</span><span class="seg-id">{IDENTITY}</span>
         </div>
         <div class="legend-grid">
-          <div><span class="seg-name" style="color:var(--info)">PAY_SEQ</span>Pf (Pay-first) or Rf (Receive-first) — the architectural binary</div>
-          <div><span class="seg-name" style="color:var(--purple)">SELLS</span>L (Loose) / B (Branded) / LB (both, alphabetical) — RM scope</div>
-          <div><span class="seg-name" style="color:var(--teal)">OPM</span>M (Manual: call/WA/walk-in/route) or A (Automatable: app/web/API)</div>
-          <div><span class="seg-name" style="color:var(--pink)">PMS</span>C (Cash-only) / B (Bank-only) / Cb (Cash primary + Bank alt) / Bc (Bank primary + Cash alt)</div>
+          <div><span class="seg-name" style="color:var(--info)">PAY_SEQ</span>Pf / Rf / Pfr / Rfp — cash-flow direction (case-encoded primary + alt)</div>
+          <div><span class="seg-name" style="color:var(--purple)">SELLS</span>L / B / Lb / Bl — RM-scope stock (case-encoded primary + alt)</div>
+          <div><span class="seg-name" style="color:var(--teal)">OPM</span>M / A / Ma / Am — order-placement method (case-encoded primary + alt)</div>
+          <div><span class="seg-name" style="color:var(--pink)">PMS</span>C / B / Cb / Bc — payment-rail support (case-encoded primary + alt)</div>
           <div><span class="seg-name" style="color:var(--accent)">IDENTITY</span>3-10 char uppercase abbreviation, unique across all vendors</div>
         </div>
       </div>
 
+      <p class="note"><strong>Universal case convention (v8).</strong> All four architectural dimensions follow the same pattern: <strong>uppercase letter = primary rail/direction</strong>, <strong>lowercase letter = also possible (alternate)</strong>, <strong>letter absent = impossible</strong>. The grammar fully encodes possibility and impossibility — no information thrown away.</p>
+
       <h4>Example walkthrough — <code>Rf-L-M-C-PRABHU</code></h4>
-      <p><code>Rf</code> = Receive-first (milk delivered daily, settled later). <code>L</code> = sells loose. <code>M</code> = manual ordering (we call/WA him). <code>C</code> = cash-only payment (single uppercase letter — bank not accepted). <code>PRABHU</code> = the loose milk vendor's identity.</p>
+      <p><code>Rf</code> = Receive-first only (milk delivered daily, settled later — pay-first letter absent → pay-first impossible). <code>L</code> = loose only (branded letter absent). <code>M</code> = manual only (auto absent). <code>C</code> = cash only (bank absent). <code>PRABHU</code> = identity.</p>
+
+      <h4>Full-alternates example — <code>Rfp-Lb-Ma-Cb-EXAMPLE</code></h4>
+      <p>A vendor where <em>every</em> dimension carries both rails: Receive-first primary + Pay-first alt; Loose primary + Branded alt; Manual primary + Automatable alt; Cash primary + Bank alt. Each lowercase letter declares "this is also possible" — the alt rail isn't impossible, it's just not the default.</p>
     </div>
 
     <div class="legend-section">
-      <h3>PAY_SEQ values · the architectural binary</h3>
+      <h3>PAY_SEQ values · cash-flow direction</h3>
       <table class="legend-table">
         <thead><tr><th>Code</th><th>Meaning</th><th>Real example</th></tr></thead>
         <tbody>
           <tr>
             <td class="code-cell" style="color:var(--info)">Pf</td>
-            <td><strong>Pay-first.</strong> Money leaves our account before goods/service arrives. Quick commerce, prepaid subscriptions, advance-rent, prepaid utilities.</td>
+            <td><strong>Pay-first only.</strong> Money always leaves our account before goods/service arrives. Pure quick commerce, strict prepaid.</td>
             <td><code>Pf-B-A-B-ZEPTO</code>, <code>Pf-L-M-C-WALKIN</code></td>
           </tr>
           <tr>
             <td class="code-cell" style="color:var(--good)">Rf</td>
-            <td><strong>Receive-first.</strong> Goods/service arrive before money goes out. Daily milk, departmental stores with credit terms, post-paid utilities.</td>
-            <td><code>Rf-L-M-C-PRABHU</code>, <code>Rf-LB-M-Cb-SHARIFF</code></td>
+            <td><strong>Receive-first only.</strong> Goods always arrive before money goes out. Daily milk, post-paid utilities, pure credit-term vendors.</td>
+            <td><code>Rf-L-M-C-PRABHU</code>, <code>Rf-Lb-M-Cb-SHARIFF</code></td>
+          </tr>
+          <tr>
+            <td class="code-cell" style="color:var(--info)">Pfr</td>
+            <td><strong>Pay-first primary + Receive-first alt.</strong> Default flow is pay-first, but receive-first happens occasionally (e.g. a quick-commerce vendor that sometimes ships COD).</td>
+            <td><code>Pfr-B-A-Bc-EXAMPLEQC</code> (hypothetical)</td>
+          </tr>
+          <tr>
+            <td class="code-cell" style="color:var(--good)">Rfp</td>
+            <td><strong>Receive-first primary + Pay-first alt.</strong> Default flow is receive-first, but pay-first happens occasionally (e.g. a credit-term vendor where rare items require advance payment).</td>
+            <td><code>Rfp-Lb-Ma-Cb-SHARIFF</code> (hypothetical)</td>
           </tr>
         </tbody>
       </table>
-      <p class="note">Why a binary, not a 6-letter V-shape? PAY_SEQ at the vendor level captures the cash-flow direction. The richer V-shape (V1a / V1b / V2 / V3 / V4 / V5) lives at the action layer and modulates per-purchase, per-supplier within a single vendor record.</p>
+      <p class="note">Case convention: uppercase letter = primary direction (the dominant flow); lowercase letter = also possible (the rarer flow). The richer V-shape (V1a / V1b / V2 / V3 / V4 / V5) at the action layer captures per-transaction choreography within whichever direction the action takes.</p>
     </div>
 
     <div class="legend-section">
@@ -384,13 +404,18 @@
             <td><code>Pf-B-A-B-ZEPTO</code>, <code>Rf-B-A-Bc-HYPERPURE</code></td>
           </tr>
           <tr>
-            <td class="code-cell" style="color:var(--purple)">LB</td>
-            <td><strong>Both Loose AND Branded.</strong> Mixed departmental stores or wholesalers that stock unbranded staples plus branded SKUs side by side.</td>
-            <td><code>Rf-LB-M-Cb-SHARIFF</code> (departmental store)</td>
+            <td class="code-cell" style="color:var(--purple)">Lb</td>
+            <td><strong>Loose primary + Branded alt.</strong> Mixed shop where loose dominates but branded packs are also stocked as a secondary line.</td>
+            <td><code>Rf-Lb-M-Cb-SHARIFF</code> (loose-led departmental)</td>
+          </tr>
+          <tr>
+            <td class="code-cell" style="color:var(--purple)">Bl</td>
+            <td><strong>Branded primary + Loose alt.</strong> Mixed shop where branded SKUs dominate but some loose staples also stocked.</td>
+            <td><code>Rf-Bl-M-Cb-NILDIST</code> (hypothetical brand-led distributor)</td>
           </tr>
         </tbody>
       </table>
-      <p class="note">Alphabetical ordering enforced — always <code>LB</code>, never <code>BL</code>. Constraint set on this dimension is <code>{L, B, LB}</code> in RM-purchase scope. <code>S</code> (services) and <code>C</code> (capex) are reserved for future expansion when the bill/expense scope opens — that will extend the alphabet to combinations like <code>LBS</code>, <code>BC</code>, <code>S</code>, etc., without migration.</p>
+      <p class="note">Flat <code>LB</code> is no longer valid (v8). The case-encoded form preserves which side dominates — information that was lost in the old alphabetical pair. <code>S</code> (services) and <code>C</code> (capex) are reserved for the bill/expense scope.</p>
     </div>
 
     <div class="legend-section">
@@ -400,17 +425,27 @@
         <tbody>
           <tr>
             <td class="code-cell" style="color:var(--teal)">M</td>
-            <td><strong>Manual.</strong> Ordering goes through a human channel — phone call, WhatsApp message, walk-in to vendor's shop, or a fixed daily delivery route. No app/API in the loop.</td>
-            <td><code>Rf-L-M-C-PRABHU</code> (daily route), <code>Rf-LB-M-Cb-SHARIFF</code> (WhatsApp)</td>
+            <td><strong>Manual only.</strong> Ordering always routes through a human channel — phone, WhatsApp, walk-in, or fixed delivery route. No app/API in the loop.</td>
+            <td><code>Rf-L-M-C-PRABHU</code> (daily route), <code>Rf-Lb-M-Cb-SHARIFF</code> (WhatsApp)</td>
           </tr>
           <tr>
             <td class="code-cell" style="color:var(--teal)">A</td>
-            <td><strong>Automatable.</strong> Ordering can be automated through an app, web portal, or API — quick commerce, B2B platforms, marketplace integrations.</td>
+            <td><strong>Automatable only.</strong> Ordering always goes through an app, web portal, or API — pure quick commerce, B2B platforms, marketplace integrations.</td>
             <td><code>Pf-B-A-B-ZEPTO</code> (app), <code>Rf-B-A-Bc-HYPERPURE</code> (B2B portal)</td>
+          </tr>
+          <tr>
+            <td class="code-cell" style="color:var(--teal)">Ma</td>
+            <td><strong>Manual primary + Automatable alt.</strong> Default ordering is manual but the vendor also exposes an app/API as a backup channel.</td>
+            <td><code>Rf-Lb-Ma-Cb-EXAMPLEHYBRID</code> (hypothetical)</td>
+          </tr>
+          <tr>
+            <td class="code-cell" style="color:var(--teal)">Am</td>
+            <td><strong>Automatable primary + Manual alt.</strong> Default ordering is via app/API but a human channel exists as a fallback (call vendor when API down).</td>
+            <td><code>Pf-B-Am-B-EXAMPLEAPP</code> (hypothetical)</td>
           </tr>
         </tbody>
       </table>
-      <p class="note">OPM separates "needs a human to send WA" from "Cron Worker can place the order." It's the binary that gates whether an action becomes agent-emitted or staff-emitted.</p>
+      <p class="note">The primary letter gates the agent vs. staff emission: when <code>M</code> or <code>Ma</code>, ordering routes through a staff WA prompt; when <code>A</code> or <code>Am</code>, a Cron Worker can place the order autonomously.</p>
     </div>
 
     <div class="legend-section">
@@ -481,16 +516,17 @@
       <table class="legend-table">
         <thead><tr><th>Forbidden</th><th>Why caught</th></tr></thead>
         <tbody>
-          <tr><td>PAY_SEQ outside {Pf, Rf}</td><td>Architectural binary — extending it requires doctrine change</td></tr>
-          <tr><td>SELLS empty / outside {L, B, LB}</td><td>Subset must be alphabetically ordered and non-empty in RM scope</td></tr>
-          <tr><td>SELLS = "BL"</td><td>Reject — must be "LB" alphabetically</td></tr>
-          <tr><td>OPM outside {M, A}</td><td>Manual or Automatable — no third state</td></tr>
-          <tr><td>PMS outside {C, B, Cb, Bc}</td><td>Cash-only / Bank-only / case-encoded Hybrids — exhaustive enumeration. Lowercase first (<code>cB</code>), duplicates (<code>Cc</code>), or both uppercase (<code>CB</code>) are rejected.</td></tr>
+          <tr><td>PAY_SEQ outside {Pf, Rf, Pfr, Rfp}</td><td>Enumerated set. Suffixes 'fr' and 'fp' fix the primary/alt order; <code>Prf</code> / <code>Rpf</code> rejected.</td></tr>
+          <tr><td>SELLS = "LB" (flat alphabetical)</td><td>v8 rejects flat ordering — use <code>Lb</code> or <code>Bl</code> with a primary letter.</td></tr>
+          <tr><td>SELLS outside {L, B, Lb, Bl}</td><td>Same case-encoded pattern. Lowercase-first (<code>lB</code>), duplicates (<code>Ll</code>), or both uppercase (<code>LB</code>) are rejected.</td></tr>
+          <tr><td>OPM outside {M, A, Ma, Am}</td><td>Same case-encoded pattern.</td></tr>
+          <tr><td>PMS outside {C, B, Cb, Bc}</td><td>Same case-encoded pattern. Lowercase-first (<code>cB</code>), duplicates (<code>Cc</code>), or both uppercase (<code>CB</code>) are rejected.</td></tr>
           <tr><td>IDENTITY empty</td><td>Identity required, ≥3 chars</td></tr>
           <tr><td>IDENTITY too long (&gt;10)</td><td>Codes need to stay scannable</td></tr>
           <tr><td>IDENTITY collision</td><td>Globally unique — any case-insensitive duplicate is rejected with 409</td></tr>
         </tbody>
       </table>
+      <p class="note">All four architectural dimensions enforce the same case-encoded pattern: uppercase primary, optional lowercase alt, no duplicate letter. The grammar fully encodes possibility from impossibility — no ambiguity remains.</p>
     </div>
 
     <div class="legend-section">
@@ -539,17 +575,29 @@
   };
 
   const API = '/api/vendors';
-  const PAY_SEQS = [
-    { value: 'Pf', label: 'Pay-first (Pf)',     cls: 'pf' },
-    { value: 'Rf', label: 'Receive-first (Rf)', cls: 'rf' },
+
+  // v8 grammar: ALL FOUR dimensions follow the same case-encoded pattern.
+  // For each dimension, pick one or both letters; when both ticked, choose
+  // a primary letter (the uppercase one) — the alt becomes lowercase.
+  //   PAY_SEQ: Pf / Rf / Pfr / Rfp   (suffix 'f' kept for legibility — read 'P' / 'R' as the letters)
+  //   SELLS:   L  / B  / Lb  / Bl
+  //   OPM:     M  / A  / Ma  / Am
+  //   PMS:     C  / B  / Cb  / Bc
+  const PAY_SEQ_LETTERS = [
+    { value: 'P', label: 'P · Pay-first',     sub: 'Cash leaves before goods arrive (Zepto, prepaid)', cls: 'pf' },
+    { value: 'R', label: 'R · Receive-first', sub: 'Goods arrive before money goes out (daily milk)',  cls: 'rf' },
   ];
-  const OPM_VALUES = [
-    { value: 'M', label: 'M — Manual',      sub: 'Phone call · WhatsApp · Walk-in · Daily route', cls: 'teal' },
-    { value: 'A', label: 'A — Automatable', sub: 'App · Web portal · API integration',            cls: 'teal' },
+  const SELLS_LETTERS = [
+    { value: 'L', label: 'L · Loose',   sub: 'Unbranded by weight / volume',     cls: 'purple' },
+    { value: 'B', label: 'B · Branded', sub: 'SKU-coded packs',                  cls: 'purple' },
+  ];
+  const OPM_LETTERS = [
+    { value: 'M', label: 'M · Manual',      sub: 'Phone · WhatsApp · Walk-in · Daily route', cls: 'teal' },
+    { value: 'A', label: 'A · Automatable', sub: 'App · Web portal · API integration',       cls: 'teal' },
   ];
   // PMS letters — vendor accepts which payment rail(s)?
   // Multi-select: tick C and/or B; if both ticked, primary radio appears.
-  // Composes into 'C' / 'B' / 'Cb' / 'Bc' via composePmsSlot.
+  // Composes into 'C' / 'B' / 'Cb' / 'Bc' via composeCaseEncodedSlot.
   const PMS_LETTERS = [
     { value: 'C', label: 'C · Cash',   sub: 'Cash settlement (no bank rail)',     cls: 'pink' },
     { value: 'B', label: 'B · Bank',   sub: 'UPI / NEFT / card / cheque',         cls: 'pink' },
@@ -593,63 +641,105 @@
     return compact.slice(0, 8);
   }
 
-  function normSells(idn) {
-    if (!idn) return '';
-    if (Array.isArray(idn.sells)) {
-      const s = new Set(idn.sells.filter(x => x === 'L' || x === 'B'));
-      return Array.from(s).sort().join('');
-    }
-    if (typeof idn.sells === 'string') return idn.sells;
-    return '';
-  }
-
-  // Compose the PMS slot from checked-letter array + primary letter.
-  //   []                     → null     (no rail picked)
-  //   ['C']                  → 'C'
-  //   ['B']                  → 'B'
-  //   ['C','B'], primary='C' → 'Cb'     (cash primary + bank alt)
-  //   ['C','B'], primary='B' → 'Bc'     (bank primary + cash alt)
-  function composePmsSlot(checkedArr, primary) {
-    const checked = Array.from(new Set((checkedArr || []).filter(x => x === 'C' || x === 'B')));
+  // Generic case-encoded slot composer — works for SELLS / OPM / PMS, where the
+  // value alphabet is two letters and the second one (when both picked) carries
+  // an uppercase primary + lowercase alt encoding.
+  //   []                       → null
+  //   ['L']                    → 'L'
+  //   ['B']                    → 'B'
+  //   ['L','B'], primary='L'   → 'Lb'
+  //   ['L','B'], primary='B'   → 'Bl'
+  function composeCaseEncodedSlot(checkedArr, primary, validLetters) {
+    const valid = new Set(validLetters);
+    const checked = Array.from(new Set((checkedArr || []).filter(x => valid.has(x))));
     if (checked.length === 0) return null;
     if (checked.length === 1) return checked[0];
-    // Two ticked — case-encode primary uppercase + alt lowercase.
-    if (primary !== 'C' && primary !== 'B') return null;
-    const alt = primary === 'C' ? 'B' : 'C';
+    if (!valid.has(primary)) return null;
+    const alt = checked.find(x => x !== primary);
+    if (!alt) return null;
     return primary + alt.toLowerCase();
   }
 
-  // Inverse — given a PMS code, return { checked: [...], primary: 'C'|'B'|null }.
-  function parsePmsToInputs(pmsCode) {
-    const v = (pmsCode || '').trim();
-    if (v === 'C') return { checked: ['C'], primary: 'C' };
-    if (v === 'B') return { checked: ['B'], primary: 'B' };
-    if (v === 'Cb') return { checked: ['C', 'B'], primary: 'C' };
-    if (v === 'Bc') return { checked: ['C', 'B'], primary: 'B' };
+  // Generic inverse — given a code, return { checked: [...], primary: <letter>|null }.
+  // 'L' / 'B' → single tick. 'Lb' → both ticked, primary L. 'Bl' → both ticked, primary B.
+  function parseCaseEncodedToInputs(code, validLetters) {
+    const v = (code || '').trim();
+    if (!v) return { checked: [], primary: null };
+    const valid = new Set(validLetters);
+    // Single uppercase letter ?
+    if (v.length === 1 && valid.has(v)) return { checked: [v], primary: v };
+    // Two letters: primary uppercase + alt lowercase
+    if (v.length === 2 && valid.has(v[0]) && valid.has(v[1].toUpperCase())) {
+      const upperAlt = v[1].toUpperCase();
+      if (upperAlt !== v[0]) {
+        return { checked: [v[0], upperAlt].sort(), primary: v[0] };
+      }
+    }
     return { checked: [], primary: null };
   }
 
+  // PAY_SEQ uses 'Pf' / 'Rf' / 'Pfr' / 'Rfp' — the trailing 'f' is a legibility
+  // suffix, but the architecture letter is the leading P/R. We compose / parse
+  // by stripping that 'f' and reusing the generic case-encoded helpers.
+  //   ['P']           → 'Pf'
+  //   ['R']           → 'Rf'
+  //   ['P','R'], P    → 'Pfr'   (pay-first primary + receive-first alt)
+  //   ['P','R'], R    → 'Rfp'   (receive-first primary + pay-first alt)
+  function composePaySeqSlot(checkedArr, primary) {
+    const checked = Array.from(new Set((checkedArr || []).filter(x => x === 'P' || x === 'R')));
+    if (checked.length === 0) return null;
+    if (checked.length === 1) return checked[0] + 'f';
+    if (primary !== 'P' && primary !== 'R') return null;
+    const alt = primary === 'P' ? 'R' : 'P';
+    return primary + 'f' + alt.toLowerCase();
+  }
+  function parsePaySeqToInputs(code) {
+    const v = (code || '').trim();
+    if (v === 'Pf')  return { checked: ['P'],      primary: 'P' };
+    if (v === 'Rf')  return { checked: ['R'],      primary: 'R' };
+    if (v === 'Pfr') return { checked: ['P', 'R'], primary: 'P' };
+    if (v === 'Rfp') return { checked: ['P', 'R'], primary: 'R' };
+    return { checked: [], primary: null };
+  }
+
+  // Convenience wrappers for SELLS / OPM / PMS.
+  const composeSellsSlot = (checked, primary) => composeCaseEncodedSlot(checked, primary, ['L', 'B']);
+  const parseSellsToInputs = code => parseCaseEncodedToInputs(code, ['L', 'B']);
+  const composeOpmSlot   = (checked, primary) => composeCaseEncodedSlot(checked, primary, ['M', 'A']);
+  const parseOpmToInputs   = code => parseCaseEncodedToInputs(code, ['M', 'A']);
+  const composePmsSlot   = (checked, primary) => composeCaseEncodedSlot(checked, primary, ['C', 'B']);
+  const parsePmsToInputs   = code => parseCaseEncodedToInputs(code, ['C', 'B']);
+
+  // v8: each segment validated against its case-encoded alphabet. PAY_SEQ
+  // enumerated; SELLS/OPM/PMS regex-checked (uppercase primary + optional
+  // lowercase alt, no duplicate letter).
   function deriveCode(idn) {
     if (!idn) return null;
-    if (!idn.pay_seq || (idn.pay_seq !== 'Pf' && idn.pay_seq !== 'Rf')) return null;
-    const sells = normSells(idn);
-    if (!/^(L|B|LB)$/.test(sells)) return null;
-    if (idn.opm !== 'M' && idn.opm !== 'A') return null;
-    if (!/^[CB][cb]?$/.test(idn.pms || '')) return null;
+    if (!['Pf','Rf','Pfr','Rfp'].includes(idn.pay_seq || '')) return null;
+    const sells = (idn.sells || '').trim();
+    if (!/^[LB][lb]?$/.test(sells)) return null;
+    if (sells.length === 2 && sells[0].toUpperCase() === sells[1].toUpperCase()) return null;
+    const opm = (idn.opm || '').trim();
+    if (!/^[MA][ma]?$/.test(opm)) return null;
+    if (opm.length === 2 && opm[0].toUpperCase() === opm[1].toUpperCase()) return null;
+    const pms = (idn.pms || '').trim();
+    if (!/^[CB][cb]?$/.test(pms)) return null;
+    if (pms.length === 2 && pms[0].toUpperCase() === pms[1].toUpperCase()) return null;
     const id = (idn.identity_abbr || '').trim().toUpperCase();
     if (id.length < 3 || id.length > 10) return null;
     if (!/^[A-Z0-9]+$/.test(id)) return null;
-    return [idn.pay_seq, sells, idn.opm, idn.pms, id].join('-');
+    return [idn.pay_seq, sells, opm, pms, id].join('-');
   }
 
   function renderCodeHTML(idn) {
     if (!idn) return '<span class="incomplete">?</span>';
     const p  = idn.pay_seq || '?';
-    const s  = normSells(idn) || '?';
+    const s  = (idn.sells || '?');
     const o  = idn.opm || '?';
     const m  = idn.pms || '?';
     const i  = idn.identity_abbr || '?';
-    const pCls = p === 'Pf' ? 'seg-payseq-pf' : p === 'Rf' ? 'seg-payseq-rf' : '';
+    // PAY_SEQ leading letter — Pf/Pfr → pf colour; Rf/Rfp → rf colour.
+    const pCls = p.startsWith('P') ? 'seg-payseq-pf' : p.startsWith('R') ? 'seg-payseq-rf' : '';
     return `<span class="${pCls}">${escapeHtml(p)}</span><span class="dash">-</span>` +
            `<span class="seg-sells">${escapeHtml(s)}</span><span class="dash">-</span>` +
            `<span class="seg-opm">${escapeHtml(o)}</span><span class="dash">-</span>` +
@@ -759,16 +849,18 @@
     }).join(' ');
   }
 
+  // v8 grouping: count by leading letter (P / R) so Pf+Pfr collapse into "pay-first"
+  // and Rf+Rfp collapse into "receive-first" — distribution by primary direction.
   function renderStats() {
     const total = State.vendors.length;
-    const pf = State.vendors.filter(v => v.pay_seq === 'Pf').length;
-    const rf = State.vendors.filter(v => v.pay_seq === 'Rf').length;
+    const pf = State.vendors.filter(v => (v.pay_seq || '').startsWith('P')).length;
+    const rf = State.vendors.filter(v => (v.pay_seq || '').startsWith('R')).length;
     const linked = State.vendors.filter(v => v.computed && v.computed.rm_count > 0).length;
     const orphan = total - linked;
     $('#stats').innerHTML = `
       <div class="stat-card"><div class="label">Vendors</div><div class="value">${total}</div><div class="meta">canonical</div></div>
-      <div class="stat-card"><div class="label">Pay-first (Pf)</div><div class="value" style="color:var(--info)">${pf}</div><div class="meta">cash leaves first</div></div>
-      <div class="stat-card"><div class="label">Receive-first (Rf)</div><div class="value" style="color:var(--good)">${rf}</div><div class="meta">goods arrive first</div></div>
+      <div class="stat-card"><div class="label">Pay-first primary</div><div class="value" style="color:var(--info)">${pf}</div><div class="meta">Pf + Pfr</div></div>
+      <div class="stat-card"><div class="label">Receive-first primary</div><div class="value" style="color:var(--good)">${rf}</div><div class="meta">Rf + Rfp</div></div>
       <div class="stat-card"><div class="label">Linked to RMs</div><div class="value" style="color:var(--accent)">${linked}</div><div class="meta">${orphan} orphan${orphan === 1 ? '' : 's'}</div></div>
     `;
   }
@@ -789,7 +881,7 @@
       return;
     }
     $('#v-list').innerHTML = rows.map(v => {
-      const cls = v.pay_seq === 'Pf' ? 'pf' : 'rf';
+      const cls = (v.pay_seq || '').startsWith('P') ? 'pf' : 'rf';
       const c = v.computed || {};
       return `
         <div class="v-row ${cls}" data-code="${escapeHtml(v.vendor_code)}">
@@ -920,56 +1012,100 @@
     if (!o.data.payment)       o.data.payment = {};
     if (!o.data.gst)           o.data.gst = {};
 
-    const paySeqChips = PAY_SEQS.map(p =>
-      `<label class="chip ${p.cls} ${idn.pay_seq === p.value ? 'checked' : ''}">
-        <input type="radio" name="id-payseq" value="${p.value}" ${idn.pay_seq === p.value ? 'checked' : ''}>
-        ${escapeHtml(p.label)}
-      </label>`
-    ).join('');
+    // v8: ALL FOUR architectural dimensions use the case-encoded checkbox+primary
+    // pattern. For each, render two checkboxes; if both are ticked, render a
+    // primary-radio row. Single tick → bare letter (e.g. 'L' / 'M' / 'C').
+    // Both ticks → primary + lowercase alt (e.g. 'Lb' / 'Ma' / 'Cb').
+    // PAY_SEQ keeps its 'f' suffix; the checkbox letter is the leading P/R.
 
-    const sellsNow = normSells(idn);
-    const codeOk = deriveCode(idn) !== null;
-    const codeHtml = renderCodeHTML(idn);
-    let badge;
-    if (!idn.pay_seq) {
-      badge = '<span class="badge warn">&#9888; Pick PAY_SEQ</span>';
-    } else if (!sellsNow) {
-      badge = '<span class="badge warn">&#9888; Pick SELLS (L / B / LB)</span>';
-    } else if (!idn.opm) {
-      badge = '<span class="badge warn">&#9888; Pick OPM (Manual / Automatable)</span>';
-    } else if (!idn.pms) {
-      badge = '<span class="badge warn">&#9888; Pick PMS (Cash / Bank / both)</span>';
-    } else if (!idn.identity_abbr || idn.identity_abbr.length < 3) {
-      badge = '<span class="badge warn">&#9888; IDENTITY needs ≥3 chars</span>';
-    } else if (codeOk) {
-      badge = '<span class="badge ok">&#10003; Canonical code complete</span>';
-    } else {
-      badge = '<span class="badge warn">&#9888; Code incomplete</span>';
-    }
-
-    // SELLS chips (multi-checkbox L / B → derived to L / B / LB)
-    const sellsChips = ['L', 'B'].map(letter => {
-      const checked = sellsNow.includes(letter);
-      const labelText = letter === 'L' ? 'L · Loose (unbranded by weight/volume)' : 'B · Branded (SKU-coded packs)';
-      return `<label class="chip purple ${checked ? 'checked' : ''}">
-        <input type="checkbox" name="id-sells" value="${letter}" ${checked ? 'checked' : ''}>
-        ${escapeHtml(labelText)}
+    const paySeqParsed = parsePaySeqToInputs(idn.pay_seq);
+    const paySeqChips = PAY_SEQ_LETTERS.map(p => {
+      const checked = paySeqParsed.checked.includes(p.value);
+      return `<label class="chip ${p.cls} ${checked ? 'checked' : ''}" style="flex-direction:column;align-items:flex-start;padding:10px 12px;">
+        <span style="display:flex;align-items:center;gap:5px;font-weight:600;">
+          <input type="checkbox" name="id-payseq" value="${p.value}" ${checked ? 'checked' : ''}>
+          ${escapeHtml(p.label)}
+        </span>
+        <span style="font-size:11px;color:var(--ink-faint);margin-top:2px;font-weight:400;">${escapeHtml(p.sub)}</span>
       </label>`;
     }).join('');
+    const paySeqBothChecked = paySeqParsed.checked.length === 2;
+    const paySeqPrimaryRow = paySeqBothChecked ? `
+      <div class="grp" id="payseq-primary-row" style="margin-top:10px;">
+        <label class="grp-label">Primary direction · which is the dominant cash flow?</label>
+        <div class="chip-row">
+          ${['P','R'].map(letter => {
+            const isPrimary = paySeqParsed.primary === letter;
+            const lbl = letter === 'P' ? 'P · Pay-first primary (Pfr)' : 'R · Receive-first primary (Rfp)';
+            const cls = letter === 'P' ? 'pf' : 'rf';
+            return `<label class="chip ${cls} ${isPrimary ? 'checked' : ''}">
+              <input type="radio" name="id-payseq-primary" value="${letter}" ${isPrimary ? 'checked' : ''}>
+              ${escapeHtml(lbl)}
+            </label>`;
+          }).join('')}
+        </div>
+        <div class="help">Composed: <code>${paySeqParsed.primary === 'P' ? 'Pfr' : paySeqParsed.primary === 'R' ? 'Rfp' : '?'}</code> — uppercase = primary, lowercase = alternate direction.</div>
+      </div>
+    ` : '';
 
-    // OPM radios
-    const opmChips = OPM_VALUES.map(o =>
-      `<label class="chip teal ${idn.opm === o.value ? 'checked' : ''}" style="flex-direction:column;align-items:flex-start;padding:10px 12px;">
+    const sellsParsed = parseSellsToInputs(idn.sells);
+    const sellsChips = SELLS_LETTERS.map(s => {
+      const checked = sellsParsed.checked.includes(s.value);
+      return `<label class="chip purple ${checked ? 'checked' : ''}" style="flex-direction:column;align-items:flex-start;padding:10px 12px;">
         <span style="display:flex;align-items:center;gap:5px;font-weight:600;">
-          <input type="radio" name="id-opm" value="${o.value}" ${idn.opm === o.value ? 'checked' : ''}>
+          <input type="checkbox" name="id-sells" value="${s.value}" ${checked ? 'checked' : ''}>
+          ${escapeHtml(s.label)}
+        </span>
+        <span style="font-size:11px;color:var(--ink-faint);margin-top:2px;font-weight:400;">${escapeHtml(s.sub)}</span>
+      </label>`;
+    }).join('');
+    const sellsBothChecked = sellsParsed.checked.length === 2;
+    const sellsPrimaryRow = sellsBothChecked ? `
+      <div class="grp" id="sells-primary-row" style="margin-top:10px;">
+        <label class="grp-label">Primary stock · which side is the bulk?</label>
+        <div class="chip-row">
+          ${['L','B'].map(letter => {
+            const isPrimary = sellsParsed.primary === letter;
+            const lbl = letter === 'L' ? 'L · Loose primary (Lb)' : 'B · Branded primary (Bl)';
+            return `<label class="chip purple ${isPrimary ? 'checked' : ''}">
+              <input type="radio" name="id-sells-primary" value="${letter}" ${isPrimary ? 'checked' : ''}>
+              ${escapeHtml(lbl)}
+            </label>`;
+          }).join('')}
+        </div>
+        <div class="help">Composed: <code>${sellsParsed.primary === 'L' ? 'Lb' : sellsParsed.primary === 'B' ? 'Bl' : '?'}</code> — uppercase = primary, lowercase = alternate.</div>
+      </div>
+    ` : '';
+
+    const opmParsed = parseOpmToInputs(idn.opm);
+    const opmChips = OPM_LETTERS.map(o => {
+      const checked = opmParsed.checked.includes(o.value);
+      return `<label class="chip teal ${checked ? 'checked' : ''}" style="flex-direction:column;align-items:flex-start;padding:10px 12px;">
+        <span style="display:flex;align-items:center;gap:5px;font-weight:600;">
+          <input type="checkbox" name="id-opm" value="${o.value}" ${checked ? 'checked' : ''}>
           ${escapeHtml(o.label)}
         </span>
         <span style="font-size:11px;color:var(--ink-faint);margin-top:2px;font-weight:400;">${escapeHtml(o.sub)}</span>
-      </label>`
-    ).join('');
+      </label>`;
+    }).join('');
+    const opmBothChecked = opmParsed.checked.length === 2;
+    const opmPrimaryRow = opmBothChecked ? `
+      <div class="grp" id="opm-primary-row" style="margin-top:10px;">
+        <label class="grp-label">Primary order method · which one routes most orders?</label>
+        <div class="chip-row">
+          ${['M','A'].map(letter => {
+            const isPrimary = opmParsed.primary === letter;
+            const lbl = letter === 'M' ? 'M · Manual primary (Ma)' : 'A · Automatable primary (Am)';
+            return `<label class="chip teal ${isPrimary ? 'checked' : ''}">
+              <input type="radio" name="id-opm-primary" value="${letter}" ${isPrimary ? 'checked' : ''}>
+              ${escapeHtml(lbl)}
+            </label>`;
+          }).join('')}
+        </div>
+        <div class="help">Composed: <code>${opmParsed.primary === 'M' ? 'Ma' : opmParsed.primary === 'A' ? 'Am' : '?'}</code> — uppercase = primary, lowercase = alternate.</div>
+      </div>
+    ` : '';
 
-    // PMS checkboxes (Cash / Bank) + conditional primary radio when both ticked.
-    // Mirrors SELLS pattern. composePmsSlot derives the canonical 'C' / 'B' / 'Cb' / 'Bc'.
     const pmsParsed = parsePmsToInputs(idn.pms);
     const pmsChips = PMS_LETTERS.map(p => {
       const checked = pmsParsed.checked.includes(p.value);
@@ -995,19 +1131,39 @@
             </label>`;
           }).join('')}
         </div>
-        <div class="help">Composed code: <code>${pmsParsed.primary === 'C' ? 'Cb' : pmsParsed.primary === 'B' ? 'Bc' : '?b'}</code> — uppercase = primary, lowercase = alternate.</div>
+        <div class="help">Composed: <code>${pmsParsed.primary === 'C' ? 'Cb' : pmsParsed.primary === 'B' ? 'Bc' : '?'}</code> — uppercase = primary, lowercase = alternate.</div>
       </div>
     ` : '';
+
+    const codeOk = deriveCode(idn) !== null;
+    const codeHtml = renderCodeHTML(idn);
+    let badge;
+    if (!idn.pay_seq) {
+      badge = '<span class="badge warn">&#9888; Pick PAY_SEQ (Pf / Rf / Pfr / Rfp)</span>';
+    } else if (!idn.sells) {
+      badge = '<span class="badge warn">&#9888; Pick SELLS (L / B / Lb / Bl)</span>';
+    } else if (!idn.opm) {
+      badge = '<span class="badge warn">&#9888; Pick OPM (M / A / Ma / Am)</span>';
+    } else if (!idn.pms) {
+      badge = '<span class="badge warn">&#9888; Pick PMS (C / B / Cb / Bc)</span>';
+    } else if (!idn.identity_abbr || idn.identity_abbr.length < 3) {
+      badge = '<span class="badge warn">&#9888; IDENTITY needs ≥3 chars</span>';
+    } else if (codeOk) {
+      badge = '<span class="badge ok">&#10003; Canonical code complete</span>';
+    } else {
+      badge = '<span class="badge warn">&#9888; Code incomplete</span>';
+    }
 
     // Identity section
     let html = `
       <div class="section identity id-form">
         <h3><span class="pill pill-vendor">ID</span> Identity (canonical code)</h3>
         <div class="grp">
-          <label class="grp-label">PAY_SEQ — the architectural binary</label>
-          <div class="chip-row">${paySeqChips}</div>
-          <div class="help">Pf = pay before receive (Zepto, rent, prepaid). Rf = receive before pay (daily milk, post-paid).</div>
+          <label class="grp-label">PAY_SEQ — cash-flow direction (tick one or both)</label>
+          <div class="chip-row" style="flex-direction:column;align-items:stretch;gap:8px;">${paySeqChips}</div>
+          <div class="help">Tick P (pay-first) or R (receive-first), or both. Single tick composes <code>Pf</code>/<code>Rf</code>; both ticks reveals primary radio → composes <code>Pfr</code> (pay-first dominant) or <code>Rfp</code> (receive-first dominant).</div>
         </div>
+        ${paySeqPrimaryRow}
         <div class="grp">
           <label class="grp-label">Vendor name</label>
           <input class="txt" id="id-vname" value="${escapeHtml(idn.vendor_name || '')}" placeholder="e.g. Prabhu Buffalo Milk Vendor">
@@ -1022,19 +1178,21 @@
       <div class="section sells id-form">
         <h3><span class="pill" style="background:rgba(192,132,252,0.15);color:var(--purple);">SELLS</span> What this vendor sells (RM scope)</h3>
         <div class="grp">
-          <label class="grp-label">Tick at least one — alphabetical order auto-applied</label>
-          <div class="chip-row">${sellsChips}</div>
-          <div class="help">L = Loose (unbranded, by weight/volume) · B = Branded (SKU-coded packs). Both ticked → <code>LB</code>. <em>S (services) and C (capex) are reserved for when the bill/expense scope opens.</em></div>
+          <label class="grp-label">Tick at least one — case-encoded primary if both</label>
+          <div class="chip-row" style="flex-direction:column;align-items:stretch;gap:8px;">${sellsChips}</div>
+          <div class="help">Single tick → <code>L</code> or <code>B</code>. Both ticks → primary radio → <code>Lb</code> (loose primary) or <code>Bl</code> (branded primary). Flat <code>LB</code> is no longer valid (v8). <em>S/C reserved for services/capex when expense scope opens.</em></div>
         </div>
+        ${sellsPrimaryRow}
       </div>
 
       <div class="section opm id-form">
         <h3><span class="pill" style="background:rgba(45,212,191,0.15);color:var(--teal);">OPM</span> Order-placement method</h3>
         <div class="grp">
-          <label class="grp-label">How do we place orders with this vendor?</label>
+          <label class="grp-label">Which methods do we use? Tick all that apply.</label>
           <div class="chip-row" style="flex-direction:column;align-items:stretch;gap:8px;">${opmChips}</div>
-          <div class="help">Manual = needs a human to send WA / make a call / walk in. Automatable = a Cron Worker can place the order via app or API.</div>
+          <div class="help">Single tick → <code>M</code> (only manual) or <code>A</code> (only auto). Both ticks → primary radio → <code>Ma</code> (manual dominant) or <code>Am</code> (auto dominant). The primary letter gates whether agents emit orders by default.</div>
         </div>
+        ${opmPrimaryRow}
       </div>
 
       <div class="section pms id-form">
@@ -1267,16 +1425,15 @@
     const display = document.querySelector('.code-display .computed');
     const badge = document.querySelector('.code-display .badge');
     if (!display || !idn) return;
-    const sellsNow = normSells(idn);
     const codeOk = deriveCode(idn) !== null;
     display.innerHTML = renderCodeHTML(idn);
     display.classList.toggle('incomplete', !codeOk);
     if (badge) {
       let html;
-      if (!idn.pay_seq) html = '<span class="badge warn">&#9888; Pick PAY_SEQ</span>';
-      else if (!sellsNow) html = '<span class="badge warn">&#9888; Pick SELLS (L / B / LB)</span>';
-      else if (!idn.opm) html = '<span class="badge warn">&#9888; Pick OPM (Manual / Automatable)</span>';
-      else if (!idn.pms) html = '<span class="badge warn">&#9888; Pick PMS (Cash / Bank / both)</span>';
+      if (!idn.pay_seq) html = '<span class="badge warn">&#9888; Pick PAY_SEQ (Pf / Rf / Pfr / Rfp)</span>';
+      else if (!idn.sells) html = '<span class="badge warn">&#9888; Pick SELLS (L / B / Lb / Bl)</span>';
+      else if (!idn.opm) html = '<span class="badge warn">&#9888; Pick OPM (M / A / Ma / Am)</span>';
+      else if (!idn.pms) html = '<span class="badge warn">&#9888; Pick PMS (C / B / Cb / Bc)</span>';
       else if (!idn.identity_abbr || idn.identity_abbr.length < 3) html = '<span class="badge warn">&#9888; IDENTITY needs ≥3 chars</span>';
       else if (codeOk) html = '<span class="badge ok">&#10003; Canonical code complete</span>';
       else html = '<span class="badge warn">&#9888; Code incomplete</span>';
@@ -1290,48 +1447,48 @@
     const idn = State.identity;
     const o = State.open;
 
-    // PAY_SEQ radios
-    body.querySelectorAll('input[name="id-payseq"]').forEach(el => {
-      el.onchange = () => {
-        idn.pay_seq = el.value;
-        // Update only chip styling and computed code, no full re-render
-        body.querySelectorAll('input[name="id-payseq"]').forEach(r => {
-          r.parentElement.classList.toggle('checked', r.checked);
-        });
-        updateComputedCode();
-        markDirty();
-      };
-    });
+    // v8: ALL FOUR architectural dimensions use checkbox+primary pattern.
+    // Each dimension has its own compose/parse helpers; the wiring is identical.
+    // Whenever a checkbox flips, we re-render so the conditional primary-radio
+    // row appears/disappears. Whenever a primary radio flips, we re-render so
+    // the help-text snippet shows the current composed code.
 
-    // SELLS checkboxes — multi-pick L / B → derive 'L' | 'B' | 'LB'
-    body.querySelectorAll('input[name="id-sells"]').forEach(el => {
-      el.onchange = () => {
-        const picked = [];
-        body.querySelectorAll('input[name="id-sells"]').forEach(c => {
-          c.parentElement.classList.toggle('checked', c.checked);
-          if (c.checked) picked.push(c.value);
-        });
-        idn.sells = picked.sort().join('');  // alphabetical
-        updateComputedCode();
-        markDirty();
-      };
-    });
-
-    // OPM radios
-    body.querySelectorAll('input[name="id-opm"]').forEach(el => {
-      el.onchange = () => {
-        idn.opm = el.value;
-        body.querySelectorAll('input[name="id-opm"]').forEach(r => {
-          r.parentElement.classList.toggle('checked', r.checked);
-        });
-        updateComputedCode();
-        markDirty();
-      };
-    });
-
-    // PMS checkboxes (Cash / Bank) + conditional primary radio.
-    // Mirrors SELLS — picked array → composePmsSlot → canonical 'C' / 'B' / 'Cb' / 'Bc'.
-    // Two ticks reveals primary radio; one tick auto-primary.
+    function readPaySeqInputs() {
+      const picked = [];
+      body.querySelectorAll('input[name="id-payseq"]').forEach(c => {
+        if (c.checked) picked.push(c.value);
+      });
+      let primary = null;
+      const primaryEl = body.querySelector('input[name="id-payseq-primary"]:checked');
+      if (primaryEl) primary = primaryEl.value;
+      if (picked.length === 1) primary = picked[0];
+      if (picked.length === 2 && !primary) primary = picked[0];  // deterministic default
+      return composePaySeqSlot(picked, primary) || '';
+    }
+    function readSellsInputs() {
+      const picked = [];
+      body.querySelectorAll('input[name="id-sells"]').forEach(c => {
+        if (c.checked) picked.push(c.value);
+      });
+      let primary = null;
+      const primaryEl = body.querySelector('input[name="id-sells-primary"]:checked');
+      if (primaryEl) primary = primaryEl.value;
+      if (picked.length === 1) primary = picked[0];
+      if (picked.length === 2 && !primary) primary = picked[0];
+      return composeSellsSlot(picked, primary) || '';
+    }
+    function readOpmInputs() {
+      const picked = [];
+      body.querySelectorAll('input[name="id-opm"]').forEach(c => {
+        if (c.checked) picked.push(c.value);
+      });
+      let primary = null;
+      const primaryEl = body.querySelector('input[name="id-opm-primary"]:checked');
+      if (primaryEl) primary = primaryEl.value;
+      if (picked.length === 1) primary = picked[0];
+      if (picked.length === 2 && !primary) primary = picked[0];
+      return composeOpmSlot(picked, primary) || '';
+    }
     function readPmsInputs() {
       const picked = [];
       body.querySelectorAll('input[name="id-pms"]').forEach(c => {
@@ -1341,14 +1498,75 @@
       const primaryEl = body.querySelector('input[name="id-pms-primary"]:checked');
       if (primaryEl) primary = primaryEl.value;
       if (picked.length === 1) primary = picked[0];
-      if (picked.length === 2 && !primary) primary = picked[0];  // deterministic default
+      if (picked.length === 2 && !primary) primary = picked[0];
       return composePmsSlot(picked, primary) || '';
     }
+
+    // PAY_SEQ checkboxes + primary radio
+    body.querySelectorAll('input[name="id-payseq"]').forEach(el => {
+      el.onchange = () => {
+        el.parentElement.classList.toggle('checked', el.checked);
+        idn.pay_seq = readPaySeqInputs();
+        renderEditor();
+        markDirty();
+      };
+    });
+    body.querySelectorAll('input[name="id-payseq-primary"]').forEach(el => {
+      el.onchange = () => {
+        body.querySelectorAll('input[name="id-payseq-primary"]').forEach(r => {
+          r.parentElement.classList.toggle('checked', r.checked);
+        });
+        idn.pay_seq = readPaySeqInputs();
+        renderEditor();
+        markDirty();
+      };
+    });
+
+    // SELLS checkboxes + primary radio
+    body.querySelectorAll('input[name="id-sells"]').forEach(el => {
+      el.onchange = () => {
+        el.parentElement.classList.toggle('checked', el.checked);
+        idn.sells = readSellsInputs();
+        renderEditor();
+        markDirty();
+      };
+    });
+    body.querySelectorAll('input[name="id-sells-primary"]').forEach(el => {
+      el.onchange = () => {
+        body.querySelectorAll('input[name="id-sells-primary"]').forEach(r => {
+          r.parentElement.classList.toggle('checked', r.checked);
+        });
+        idn.sells = readSellsInputs();
+        renderEditor();
+        markDirty();
+      };
+    });
+
+    // OPM checkboxes + primary radio
+    body.querySelectorAll('input[name="id-opm"]').forEach(el => {
+      el.onchange = () => {
+        el.parentElement.classList.toggle('checked', el.checked);
+        idn.opm = readOpmInputs();
+        renderEditor();
+        markDirty();
+      };
+    });
+    body.querySelectorAll('input[name="id-opm-primary"]').forEach(el => {
+      el.onchange = () => {
+        body.querySelectorAll('input[name="id-opm-primary"]').forEach(r => {
+          r.parentElement.classList.toggle('checked', r.checked);
+        });
+        idn.opm = readOpmInputs();
+        renderEditor();
+        markDirty();
+      };
+    });
+
+    // PMS checkboxes + primary radio
     body.querySelectorAll('input[name="id-pms"]').forEach(el => {
       el.onchange = () => {
         el.parentElement.classList.toggle('checked', el.checked);
         idn.pms = readPmsInputs();
-        // Need the primary-radio row to appear/disappear → full re-render.
         renderEditor();
         markDirty();
       };
@@ -1359,7 +1577,6 @@
           r.parentElement.classList.toggle('checked', r.checked);
         });
         idn.pms = readPmsInputs();
-        // Help-text snippet shows current composed code — re-render to refresh it.
         renderEditor();
         markDirty();
       };
@@ -1469,7 +1686,7 @@
     }
     const payload = {
       pay_seq: idn.pay_seq,
-      sells:   normSells(idn),
+      sells:   idn.sells,
       opm:     idn.opm,
       pms:     idn.pms,
       identity_abbr: idn.identity_abbr,
