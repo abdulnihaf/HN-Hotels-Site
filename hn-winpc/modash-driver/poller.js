@@ -62,7 +62,11 @@ async function runModashSearch(profileNum, filters) {
   }
 
   log('info', 'launching_chromium', { profileNum, dataDir });
-  const ctx = await chromium.launchPersistentContext(dataDir, {
+  // Use system Chrome (channel: 'chrome') if Playwright's bundled Chromium isn't available.
+  // System Chrome is already installed at C:\Program Files\Google\Chrome\Application\chrome.exe.
+  // Each profile-N has its own user-data-dir, so this doesn't conflict with aggregator-pulse's
+  // default-profile Chrome (different user-data-dir = different process tree, isolated cookies).
+  const launchOptions = {
     headless: true,
     viewport: { width: 1366, height: 900 },
     args: [
@@ -71,7 +75,12 @@ async function runModashSearch(profileNum, filters) {
       '--no-default-browser-check',
     ],
     locale: 'en-US',
-  });
+  };
+  // Prefer system Chrome (channel) when MODASH_USE_SYSTEM_CHROME=1 (set by install if Chromium download failed)
+  if (process.env.MODASH_USE_SYSTEM_CHROME === '1') {
+    launchOptions.channel = 'chrome';
+  }
+  const ctx = await chromium.launchPersistentContext(dataDir, launchOptions);
 
   try {
     const page = await ctx.newPage();
