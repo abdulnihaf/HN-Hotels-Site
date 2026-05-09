@@ -1,0 +1,17 @@
+{
+  "name": "hn-modash-driver",
+  "version": "1.0.0",
+  "description": "Headless-Chromium poller that runs Modash searches under pre-logged accounts on hn-winpc.",
+  "main": "poller.js",
+  "scripts": {
+    "start": "node poller.js",
+    "test-search": "node test-search.js"
+  },
+  "dependencies": {
+    "playwright": "^1.45.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "UNLICENSED"
+}
