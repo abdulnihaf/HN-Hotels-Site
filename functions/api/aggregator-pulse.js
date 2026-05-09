@@ -645,7 +645,7 @@ async function handleGet(db, url, headers) {
       case 'yesterday': dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST}, '-1 day')`; break;
       case 'thisweek':  dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'weekday 0', '-7 days')`; break;
       case 'lastweek':  dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'weekday 0', '-14 days') AND ${EFFECTIVE_DATE} < date('now', ${IST}, 'weekday 0', '-7 days')`; break;
-      case 'month':     dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'start of month')`; break;
+      case 'month':     dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, '-30 days')`; break;
       default:          dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST})`;
     }
     const orderRows = await db.prepare(`

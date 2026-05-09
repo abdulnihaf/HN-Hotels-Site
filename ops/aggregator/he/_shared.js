@@ -42,9 +42,21 @@
   const priorPeriod = (p) => ({
     today: 'yesterday', yesterday: 'today', thisweek: 'lastweek', lastweek: 'thisweek', month: 'lastweek',
   }[p] || null);
-  const periodLabel = (p) => ({
-    today: 'today', yesterday: 'yesterday', thisweek: 'this week', lastweek: 'last week', month: 'this month',
-  }[p] || p);
+  // IST "now" (UTC+5:30) — used for period range display only.
+  const istNow = () => new Date(Date.now() + (5 * 60 + 30) * 60 * 1000);
+  const fmtDM = (d) => d.toUTCString().slice(5, 11).trim(); // "10 May"
+  const periodLabel = (p) => {
+    const n = istNow();
+    const sub = (days) => { const d = new Date(n); d.setUTCDate(d.getUTCDate() - days); return d; };
+    // weekday 0 = Sunday in SQLite. Compute most recent Sunday.
+    const lastSun = (() => { const d = new Date(n); d.setUTCDate(d.getUTCDate() - d.getUTCDay()); return d; });
+    if (p === 'today')     return `today (${fmtDM(n)})`;
+    if (p === 'yesterday') return `yesterday (${fmtDM(sub(1))})`;
+    if (p === 'thisweek')  return `this week (${fmtDM(lastSun())} – ${fmtDM(n)})`;
+    if (p === 'lastweek')  { const e = lastSun(); const s = new Date(e); s.setUTCDate(e.getUTCDate() - 7); const eM1 = new Date(e); eM1.setUTCDate(e.getUTCDate() - 1); return `last week (${fmtDM(s)} – ${fmtDM(eM1)})`; }
+    if (p === 'month')     return `last 30 days (${fmtDM(sub(30))} – ${fmtDM(n)})`;
+    return p;
+  };
 
   // ─── delta arrows ────────────────────────────────────────────────────────
   function delta(curr, prev, opts = {}) {
@@ -423,7 +435,7 @@
         <div class="dishes-summary">
           <div class="ds-stat"><span class="ds-num">0</span><span class="ds-lbl">orders</span></div>
         </div>
-        <div class="empty"><h3>No orders in this period.</h3><p>Try widening to "month" or check if extension is healthy on hn-winpc.</p></div>
+        <div class="empty"><h3>No orders in this period.</h3><p>Try widening to "Last 30 days" or check if extension is healthy on hn-winpc.</p></div>
       `;
       return;
     }
