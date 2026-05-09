@@ -248,9 +248,9 @@
       </div>
       <div class="seg-card pms">
         <div class="seg-name">PMS</div>
-        <div class="seg-pos">Position 4 · 1 char · payment-method support</div>
-        <div class="seg-desc"><span class="mono" style="color:var(--pink)">C</span> = Cash-only · <span class="mono" style="color:var(--pink)">D</span> = Digital-only (e.g. Zepto) · <span class="mono" style="color:var(--pink)">H</span> = Hybrid (accepts both).</div>
-        <div class="seg-ex">3 values · C · D · H</div>
+        <div class="seg-pos">Position 4 · 1-2 chars · payment-method support</div>
+        <div class="seg-desc"><span class="mono" style="color:var(--pink)">C</span> = Cash-only · <span class="mono" style="color:var(--pink)">B</span> = Bank-only · <span class="mono" style="color:var(--pink)">Cb</span> / <span class="mono" style="color:var(--pink)">Bc</span> = Hybrid (uppercase = primary rail, lowercase = alternate). Mirrors SOURCING <code>Lb/Bl</code>.</div>
+        <div class="seg-ex">4 values · C · B · Cb · Bc</div>
       </div>
       <div class="seg-card id" style="grid-column: span 2 / span 2;">
         <div class="seg-name">IDENTITY</div>
@@ -278,12 +278,12 @@
           <tr>
             <td class="code-cell"><span class="code-pf">Pf</span></td>
             <td><strong>Pay-first.</strong> Money leaves our account before goods/service arrives. Quick commerce apps, prepaid subscriptions, advance rent, prepaid utilities.</td>
-            <td><span class="mono"><span class="code-pf">Pf</span>-B-A-D-<span class="code-id">ZEPTO</span></span> · <span class="mono"><span class="code-pf">Pf</span>-L-M-C-<span class="code-id">WALKIN</span></span></td>
+            <td><span class="mono"><span class="code-pf">Pf</span>-B-A-B-<span class="code-id">ZEPTO</span></span> · <span class="mono"><span class="code-pf">Pf</span>-L-M-C-<span class="code-id">WALKIN</span></span></td>
           </tr>
           <tr>
             <td class="code-cell"><span class="code-rf">Rf</span></td>
             <td><strong>Receive-first.</strong> Goods/service arrives before money goes out. Daily milk, departmental stores with credit terms, post-paid utilities, monthly bills.</td>
-            <td><span class="mono"><span class="code-rf">Rf</span>-L-M-C-<span class="code-id">PRABHU</span></span> · <span class="mono"><span class="code-rf">Rf</span>-LB-M-H-<span class="code-id">SHARIFF</span></span></td>
+            <td><span class="mono"><span class="code-rf">Rf</span>-L-M-C-<span class="code-id">PRABHU</span></span> · <span class="mono"><span class="code-rf">Rf</span>-LB-M-Cb-<span class="code-id">SHARIFF</span></span></td>
           </tr>
         </tbody>
       </table>
@@ -313,12 +313,12 @@
           <tr>
             <td class="code-cell"><span class="code-purple">B</span></td>
             <td><strong>Branded only.</strong> Vendor only stocks SKU-coded branded goods — quick commerce apps, B2B platforms, dedicated brand suppliers.</td>
-            <td><span class="mono">Pf-<span class="code-purple">B</span>-A-D-<span class="code-id">ZEPTO</span></span> · <span class="mono">Rf-<span class="code-purple">B</span>-A-D-<span class="code-id">HYPERPURE</span></span></td>
+            <td><span class="mono">Pf-<span class="code-purple">B</span>-A-B-<span class="code-id">ZEPTO</span></span> · <span class="mono">Rf-<span class="code-purple">B</span>-A-Bc-<span class="code-id">HYPERPURE</span></span></td>
           </tr>
           <tr>
             <td class="code-cell"><span class="code-purple">LB</span></td>
             <td><strong>Both Loose and Branded.</strong> Mixed departmental stores or wholesalers that stock unbranded staples plus branded SKUs side by side. Always alphabetical — never <code>BL</code>.</td>
-            <td><span class="mono">Rf-<span class="code-purple">LB</span>-M-H-<span class="code-id">SHARIFF</span></span> (departmental store)</td>
+            <td><span class="mono">Rf-<span class="code-purple">LB</span>-M-Cb-<span class="code-id">SHARIFF</span></span> (departmental store)</td>
           </tr>
         </tbody>
       </table>
@@ -343,12 +343,12 @@
           <tr>
             <td class="code-cell"><span class="code-teal">M</span></td>
             <td><strong>Manual.</strong> Ordering routes through a human channel — phone call, WhatsApp, walk-in, or a fixed daily/weekly delivery route. No app/API in the loop.</td>
-            <td><span class="mono">Rf-L-<span class="code-teal">M</span>-C-<span class="code-id">PRABHU</span></span> (daily route) · <span class="mono">Rf-LB-<span class="code-teal">M</span>-H-<span class="code-id">SHARIFF</span></span> (WA)</td>
+            <td><span class="mono">Rf-L-<span class="code-teal">M</span>-C-<span class="code-id">PRABHU</span></span> (daily route) · <span class="mono">Rf-LB-<span class="code-teal">M</span>-Cb-<span class="code-id">SHARIFF</span></span> (WA)</td>
           </tr>
           <tr>
             <td class="code-cell"><span class="code-teal">A</span></td>
             <td><strong>Automatable.</strong> Ordering can be placed by a Cron Worker via app, web portal, or API — quick commerce, B2B platforms, marketplace integrations.</td>
-            <td><span class="mono">Pf-B-<span class="code-teal">A</span>-D-<span class="code-id">ZEPTO</span></span> (app) · <span class="mono">Rf-B-<span class="code-teal">A</span>-D-<span class="code-id">HYPERPURE</span></span> (B2B)</td>
+            <td><span class="mono">Pf-B-<span class="code-teal">A</span>-B-<span class="code-id">ZEPTO</span></span> (app) · <span class="mono">Rf-B-<span class="code-teal">A</span>-Bc-<span class="code-id">HYPERPURE</span></span> (B2B)</td>
           </tr>
         </tbody>
       </table>
@@ -363,35 +363,65 @@
   <!-- SECTION 3.7 — PMS -->
   <section class="glass p-6" id="section-pms">
     <div class="section-num">SECTION 3.7</div>
-    <h2>PMS directory <span class="pill pill-warn" style="font-size:10px;background:rgba(244,114,182,0.15);color:var(--pink)">Position 4 · 1 char</span></h2>
-    <p class="text-sm text-white/70 mt-1">Payment-Method Support — which payment channels this vendor accepts. Three exhaustive states.</p>
+    <h2>PMS directory <span class="pill pill-warn" style="font-size:10px;background:rgba(244,114,182,0.15);color:var(--pink)">Position 4 · 1-2 chars</span></h2>
+    <p class="text-sm text-white/70 mt-1">Payment-Method Support — which payment rails this vendor accepts. Two letters, case-encoded for hybrid primaries. Mirrors SOURCING <code>Lb/Bl</code> and USAGE <code>Pr/Rp</code>.</p>
 
-    <div class="overflow-x-auto mt-4">
+    <h3 class="mt-4">Letter set · pure rails</h3>
+    <div class="overflow-x-auto">
       <table class="dir-table">
         <thead><tr><th>Code</th><th>Meaning</th><th>Real examples</th></tr></thead>
         <tbody>
           <tr>
             <td class="code-cell"><span class="code-pink">C</span></td>
-            <td><strong>Cash-only.</strong> Vendor doesn't accept digital payments — no UPI, no card, no NEFT. Settlement always physical.</td>
+            <td><strong>Cash-only.</strong> Vendor doesn't accept bank rails — no UPI, no NEFT, no card. Settlement always physical.</td>
             <td><span class="mono">Rf-L-M-<span class="code-pink">C</span>-<span class="code-id">PRABHU</span></span> (small loose milk vendor)</td>
           </tr>
           <tr>
-            <td class="code-cell"><span class="code-pink">D</span></td>
-            <td><strong>Digital-only.</strong> Vendor doesn't accept cash — typical for app-based platforms, registered B2B suppliers, online subscriptions, GST-registered wholesalers.</td>
-            <td><span class="mono">Pf-B-A-<span class="code-pink">D</span>-<span class="code-id">ZEPTO</span></span> · <span class="mono">Rf-B-A-<span class="code-pink">D</span>-<span class="code-id">HYPERPURE</span></span></td>
+            <td class="code-cell"><span class="code-pink">B</span></td>
+            <td><strong>Bank-only.</strong> Vendor doesn't accept cash — typical for app-based platforms, registered B2B suppliers, online subscriptions, GST-registered wholesalers. UPI / NEFT / card / cheque only.</td>
+            <td><span class="mono">Pf-B-A-<span class="code-pink">B</span>-<span class="code-id">ZEPTO</span></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="mt-5">Case-encoded combinations · hybrid rails</h3>
+    <p class="text-sm text-white/70">When a vendor accepts both rails, the canonical code uses two letters: <strong>uppercase</strong> = primary (default) rail, <strong>lowercase</strong> = alternate. The information thrown away by a flat <code>H</code> letter — which rail is the default — is preserved here.</p>
+    <div class="overflow-x-auto mt-2">
+      <table class="dir-table">
+        <thead><tr><th>Code</th><th>Meaning</th><th>Real examples</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="code-cell"><span class="code-pink">Cb</span></td>
+            <td><strong>Hybrid · Cash primary.</strong> Vendor accepts both, but cash is the default rail; bank is the alternate. Common for small/local vendors who occasionally take UPI.</td>
+            <td><span class="mono">Rf-LB-M-<span class="code-pink">Cb</span>-<span class="code-id">SHARIFF</span></span> (departmental store)</td>
           </tr>
           <tr>
-            <td class="code-cell"><span class="code-pink">H</span></td>
-            <td><strong>Hybrid.</strong> Vendor accepts both cash and at least one digital channel (UPI / NEFT / card). The settlement decision is made per-transaction at the action layer.</td>
-            <td><span class="mono">Rf-LB-M-<span class="code-pink">H</span>-<span class="code-id">SHARIFF</span></span> (departmental store)</td>
+            <td class="code-cell"><span class="code-pink">Bc</span></td>
+            <td><strong>Hybrid · Bank primary.</strong> Vendor accepts both, but bank is the default rail; cash is the alternate. B2B platforms / registered vendors with COD option.</td>
+            <td><span class="mono">Rf-B-A-<span class="code-pink">Bc</span>-<span class="code-id">HYPERPURE</span></span> (B2B with cash possible)</td>
           </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="mt-5">Forbidden combinations · what the regex rejects</h3>
+    <div class="overflow-x-auto">
+      <table class="dir-table">
+        <thead><tr><th>Forbidden</th><th>Why caught</th></tr></thead>
+        <tbody>
+          <tr><td class="code-cell">PMS empty</td><td>Every vendor accepts at least one rail. Empty PMS would mean "we cannot pay this vendor at all" — not a valid operational state.</td></tr>
+          <tr><td class="code-cell"><span class="code-pink">bC</span> · <span class="code-pink">cB</span></td><td>Lowercase-first reverses the primary/alternate convention. Primary letter must be uppercase.</td></tr>
+          <tr><td class="code-cell"><span class="code-pink">Cc</span> · <span class="code-pink">Bb</span></td><td>Each letter (C, B) appears at most once. Duplicate is meaningless.</td></tr>
+          <tr><td class="code-cell"><span class="code-pink">CB</span> · <span class="code-pink">BC</span></td><td>Both uppercase declares two primaries — only one rail can be primary at a time.</td></tr>
+          <tr><td class="code-cell">Letter outside <code>{C, B}</code></td><td>The two-rail enumeration is exhaustive at the entity layer. New rails (e.g. crypto) would require a doctrine extension, not a free-form letter.</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="layer-card mt-4 text-sm text-white/75">
       <strong class="text-white">What PMS does NOT capture</strong>
-      <p class="mt-1">PMS describes what the vendor <em>accepts</em>, not what was used. The exact payment channel for a specific bill (UPI vs cash for a hybrid vendor) is a property of the action — settled when the transaction happens. PMS only narrows the option space.</p>
+      <p class="mt-1">PMS describes what the vendor <em>accepts</em> and <em>which rail is primary</em>, not what was used. The exact payment channel for a specific bill (UPI vs cash for a <code>Cb</code> vendor, NEFT vs UPI for a <code>B</code> vendor) is a property of the action — settled when the transaction happens. PMS only narrows the option space; the action picks one.</p>
     </div>
   </section>
 
@@ -412,7 +442,7 @@
       </div>
       <div class="layer-card">
         <strong class="text-white">Uniqueness</strong>
-        <p class="text-sm text-white/75 mt-1"><strong>Globally unique</strong> across ALL vendors regardless of the four leading dimensions. <span class="code-inline">Rf-L-M-C-PRABHU</span> blocks <span class="code-inline">Pf-B-A-D-PRABHU</span>.</p>
+        <p class="text-sm text-white/75 mt-1"><strong>Globally unique</strong> across ALL vendors regardless of the four leading dimensions. <span class="code-inline">Rf-L-M-C-PRABHU</span> blocks <span class="code-inline">Pf-B-A-B-PRABHU</span>.</p>
       </div>
       <div class="layer-card">
         <strong class="text-white">Case</strong>
@@ -434,7 +464,7 @@
         </tbody>
       </table>
     </div>
-    <p class="text-sm text-white/60 mt-2">When two vendors play the same operational role (e.g. two electricity providers across outlets), use a discriminator suffix in IDENTITY — <code>Pf-B-A-D-ELECTRICNCH</code>, <code>Pf-B-A-D-ELECTRICHE</code>.</p>
+    <p class="text-sm text-white/60 mt-2">When two vendors play the same operational role (e.g. two electricity providers across outlets), use a discriminator suffix in IDENTITY — <code>Pf-B-A-B-ELECTRICNCH</code>, <code>Pf-B-A-B-ELECTRICHE</code>.</p>
   </section>
 
   <!-- SECTION 5 — FORBIDDEN -->
@@ -452,7 +482,7 @@
           <tr><td class="code-cell"><span class="code-purple">SELLS</span> outside {L, B, LB}</td><td>Constraint set in RM-purchase scope. S/C reserved for the bill/expense scope.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-purple">SELLS</span> = "BL"</td><td>Subsets must be alphabetically ordered — only "LB" is canonical.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-teal">OPM</span> outside {M, A}</td><td>Manual / Automatable is the exhaustive binary — no third state.</td><td class="text-white/70">400 reject</td></tr>
-          <tr><td class="code-cell"><span class="code-pink">PMS</span> outside {C, D, H}</td><td>Cash / Digital / Hybrid is the exhaustive enumeration.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-pink">PMS</span> outside {C, B, Cb, Bc}</td><td>Cash-only / Bank-only / case-encoded Hybrids is the exhaustive enumeration. Lowercase-first (<code>cB</code>), duplicates (<code>Cc</code>), or both uppercase (<code>CB</code>) all rejected.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-id">IDENTITY</span> empty</td><td>Identity required.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-id">IDENTITY</span> &lt; 3 chars</td><td>Codes need to stay readable.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-id">IDENTITY</span> &gt; 10 chars</td><td>Codes need to stay scannable.</td><td class="text-white/70">400 reject</td></tr>
@@ -485,67 +515,67 @@
     <div class="walk-block">
 <span class="r">Rf</span>-<span class="s">L</span>-<span class="o">M</span>-<span class="m">C</span>-<span class="i">PRABHU</span>
  <span class="lbl">│  │ │ │   └─</span> <span class="i">PRABHU</span> — identity (loose buffalo milk vendor in Shivajinagar)
- <span class="lbl">│  │ │ └─────</span> <span class="m">C</span> — Cash-only (small vendor, doesn't accept UPI)
+ <span class="lbl">│  │ │ └─────</span> <span class="m">C</span> — Cash-only (small vendor, no bank rail at all)
  <span class="lbl">│  │ └───────</span> <span class="o">M</span> — Manual order (we WhatsApp him daily)
  <span class="lbl">│  └─────────</span> <span class="s">L</span> — Loose only (unbranded buffalo milk by litre)
  <span class="lbl">└────────────</span> <span class="r">Rf</span> — Receive-first (delivers milk daily; settled weekly/monthly)
     </div>
     <div class="walk-reads">Reads as: "Receive-first, sells loose, manually ordered, cash-only vendor named PRABHU." Computed scope from RM ring = NCH (only NCH consumes buffalo milk).</div>
 
-    <h3 class="mt-5">2 · <span class="mono">Pf-B-A-D-ZEPTO</span> — Quick commerce platform</h3>
+    <h3 class="mt-5">2 · <span class="mono">Pf-B-A-B-ZEPTO</span> — Quick commerce platform</h3>
     <div class="walk-block">
-<span class="p">Pf</span>-<span class="s">B</span>-<span class="o">A</span>-<span class="m">D</span>-<span class="i">ZEPTO</span>
+<span class="p">Pf</span>-<span class="s">B</span>-<span class="o">A</span>-<span class="m">B</span>-<span class="i">ZEPTO</span>
  <span class="lbl">│  │ │ │   └─</span> <span class="i">ZEPTO</span> — identity (the quick commerce platform)
- <span class="lbl">│  │ │ └─────</span> <span class="m">D</span> — Digital-only (no cash settlement; in-app payment)
+ <span class="lbl">│  │ │ └─────</span> <span class="m">B</span> — Bank-only (no cash settlement; in-app UPI/card payment)
  <span class="lbl">│  │ └───────</span> <span class="o">A</span> — Automatable (Cron Worker can place orders via app/API)
  <span class="lbl">│  └─────────</span> <span class="s">B</span> — Branded only (SKU-coded packs — Zepto doesn't deal in loose)
  <span class="lbl">└────────────</span> <span class="p">Pf</span> — Pay-first (paid in-app, then 10-minute delivery)
     </div>
-    <div class="walk-reads">Reads as: "Pay-first, branded only, automatable, digital-only vendor named ZEPTO." Computed scope = HN (cross-brand — both NCH and HE order from Zepto).</div>
+    <div class="walk-reads">Reads as: "Pay-first, branded only, automatable, bank-only vendor named ZEPTO." Note PMS position 4 carries a single uppercase <code>B</code> — distinct from SELLS at position 2, even though they share the letter shape. Computed scope = HN (cross-brand — both NCH and HE order from Zepto).</div>
 
-    <h3 class="mt-5">3 · <span class="mono">Rf-LB-M-H-SHARIFF</span> — Mixed departmental store</h3>
+    <h3 class="mt-5">3 · <span class="mono">Rf-LB-M-Cb-SHARIFF</span> — Mixed departmental store, cash primary</h3>
     <div class="walk-block">
-<span class="r">Rf</span>-<span class="s">LB</span>-<span class="o">M</span>-<span class="m">H</span>-<span class="i">SHARIFF</span>
- <span class="lbl">│   │ │ │   └─</span> <span class="i">SHARIFF</span> — identity (Shivajinagar departmental store)
- <span class="lbl">│   │ │ └─────</span> <span class="m">H</span> — Hybrid (accepts cash + UPI; settle per-transaction)
- <span class="lbl">│   │ └───────</span> <span class="o">M</span> — Manual order (we WhatsApp / call / walk-in)
- <span class="lbl">│   └─────────</span> <span class="s">LB</span> — Both Loose and Branded (alphabetical)
- <span class="lbl">└─────────────</span> <span class="r">Rf</span> — Receive-first (collect goods, settle monthly)
+<span class="r">Rf</span>-<span class="s">LB</span>-<span class="o">M</span>-<span class="m">Cb</span>-<span class="i">SHARIFF</span>
+ <span class="lbl">│   │ │ │    └─</span> <span class="i">SHARIFF</span> — identity (Shivajinagar departmental store)
+ <span class="lbl">│   │ │ └──────</span> <span class="m">Cb</span> — Hybrid · Cash primary + Bank alt (accepts UPI but cash is default)
+ <span class="lbl">│   │ └────────</span> <span class="o">M</span> — Manual order (we WhatsApp / call / walk-in)
+ <span class="lbl">│   └──────────</span> <span class="s">LB</span> — Both Loose and Branded (alphabetical)
+ <span class="lbl">└──────────────</span> <span class="r">Rf</span> — Receive-first (collect goods, settle monthly)
     </div>
-    <div class="walk-reads">Reads as: "Receive-first, sells both loose and branded, manually ordered, hybrid-payment vendor named SHARIFF." Computed scope = HN (cross-brand); per-transaction payment method (UPI vs cash) decided at action layer.</div>
+    <div class="walk-reads">Reads as: "Receive-first, sells both loose and branded, manually ordered, cash-primary hybrid vendor named SHARIFF." Per-transaction settlement (which UPI handle, exact split for a partial-bank payment) decided at action layer; <code>Cb</code> just declares the entity-level option space.</div>
 
-    <h3 class="mt-5">4 · <span class="mono">Rf-B-A-D-HYPERPURE</span> — B2B platform</h3>
+    <h3 class="mt-5">4 · <span class="mono">Rf-B-A-Bc-HYPERPURE</span> — B2B platform with COD option</h3>
     <div class="walk-block">
-<span class="r">Rf</span>-<span class="s">B</span>-<span class="o">A</span>-<span class="m">D</span>-<span class="i">HYPERPURE</span>
- <span class="lbl">│  │ │ │   └─</span> <span class="i">HYPERPURE</span> — identity (Zomato's B2B sourcing platform)
- <span class="lbl">│  │ │ └─────</span> <span class="m">D</span> — Digital-only (NEFT/UPI; no cash on B2B portal)
- <span class="lbl">│  │ └───────</span> <span class="o">A</span> — Automatable (B2B portal supports API)
- <span class="lbl">│  └─────────</span> <span class="s">B</span> — Branded only (SKU-coded wholesale)
- <span class="lbl">└────────────</span> <span class="r">Rf</span> — Receive-first (delivery + invoice; settle on credit terms)
+<span class="r">Rf</span>-<span class="s">B</span>-<span class="o">A</span>-<span class="m">Bc</span>-<span class="i">HYPERPURE</span>
+ <span class="lbl">│  │ │ │    └─</span> <span class="i">HYPERPURE</span> — identity (Zomato's B2B sourcing platform)
+ <span class="lbl">│  │ │ └──────</span> <span class="m">Bc</span> — Hybrid · Bank primary + Cash alt (NEFT/UPI default; cash possible on COD orders)
+ <span class="lbl">│  │ └────────</span> <span class="o">A</span> — Automatable (B2B portal supports API)
+ <span class="lbl">│  └──────────</span> <span class="s">B</span> — Branded only (SKU-coded wholesale)
+ <span class="lbl">└─────────────</span> <span class="r">Rf</span> — Receive-first (delivery + invoice; settle on credit terms)
     </div>
-    <div class="walk-reads">Reads as: "Receive-first, branded only, automatable, digital-only vendor named HYPERPURE." Distinct from ZEPTO precisely on PAY_SEQ — Hyperpure invoices on credit, Zepto charges in-app upfront.</div>
+    <div class="walk-reads">Reads as: "Receive-first, branded only, automatable, bank-primary hybrid vendor named HYPERPURE." Distinct from ZEPTO on two dimensions: PAY_SEQ (Hyperpure invoices on credit, Zepto charges in-app upfront) and PMS (<code>Bc</code> vs <code>B</code> — Hyperpure has a fall-back cash option on COD).</div>
 
     <h3 class="mt-5">5 · <span class="mono">Pf-L-M-C-WALKIN</span> — Emergency walk-in procurement</h3>
     <div class="walk-block">
 <span class="p">Pf</span>-<span class="s">L</span>-<span class="o">M</span>-<span class="m">C</span>-<span class="i">WALKIN</span>
  <span class="lbl">│  │ │ │   └─</span> <span class="i">WALKIN</span> — identity (functional handle for ad-hoc local buys)
- <span class="lbl">│  │ │ └─────</span> <span class="m">C</span> — Cash-only (counter purchase, immediate cash)
+ <span class="lbl">│  │ │ └─────</span> <span class="m">C</span> — Cash-only (counter purchase, immediate cash; no bank rail)
  <span class="lbl">│  │ └───────</span> <span class="o">M</span> — Manual order (staff walks to local shop)
  <span class="lbl">│  └─────────</span> <span class="s">L</span> — Loose only (vegetables / mutton emergency top-up)
  <span class="lbl">└────────────</span> <span class="p">Pf</span> — Pay-first (cash handed over before goods loaded)
     </div>
     <div class="walk-reads">Reads as: "Pay-first, loose only, manually ordered, cash-only vendor named WALKIN." A functional vendor record covering all ad-hoc emergency procurement — counts as one entity even though physical shops vary.</div>
 
-    <h3 class="mt-5">6 · <span class="mono">Rf-LB-A-H-FUTUREVEND</span> — Hypothetical future state</h3>
+    <h3 class="mt-5">6 · <span class="mono">Rf-LB-A-Cb-FUTUREVEND</span> — Hypothetical future state</h3>
     <div class="walk-block">
-<span class="r">Rf</span>-<span class="s">LB</span>-<span class="o">A</span>-<span class="m">H</span>-<span class="i">FUTUREVEND</span>
- <span class="lbl">│   │ │ │   └─</span> <span class="i">FUTUREVEND</span> — identity (a hypothetical mixed-stock vendor with API)
- <span class="lbl">│   │ │ └─────</span> <span class="m">H</span> — Hybrid (vendor adopts UPI alongside legacy cash)
- <span class="lbl">│   │ └───────</span> <span class="o">A</span> — Automatable (vendor exposes WhatsApp Business API or webform)
- <span class="lbl">│   └─────────</span> <span class="s">LB</span> — Loose + Branded (mixed stock continues)
- <span class="lbl">└─────────────</span> <span class="r">Rf</span> — Receive-first (continues as credit terms vendor)
+<span class="r">Rf</span>-<span class="s">LB</span>-<span class="o">A</span>-<span class="m">Cb</span>-<span class="i">FUTUREVEND</span>
+ <span class="lbl">│   │ │ │    └─</span> <span class="i">FUTUREVEND</span> — identity (a hypothetical mixed-stock vendor with API)
+ <span class="lbl">│   │ │ └──────</span> <span class="m">Cb</span> — Hybrid · Cash primary + Bank alt (vendor adopts UPI alongside legacy cash, but cash still default)
+ <span class="lbl">│   │ └────────</span> <span class="o">A</span> — Automatable (vendor exposes WhatsApp Business API or webform)
+ <span class="lbl">│   └──────────</span> <span class="s">LB</span> — Loose + Branded (mixed stock continues)
+ <span class="lbl">└──────────────</span> <span class="r">Rf</span> — Receive-first (continues as credit terms vendor)
     </div>
-    <div class="walk-reads">Reads as: "Receive-first, mixed stock, automatable, hybrid-payment vendor." Demonstrates that <strong>SHARIFF could legitimately migrate</strong> to <code>Rf-LB-A-H-SHARIFF</code> the day they expose ordering automation — a single PUT updates the row, the canonical code re-keys, and the action ring picks up the change with no further migration.</div>
+    <div class="walk-reads">Reads as: "Receive-first, mixed stock, automatable, cash-primary hybrid vendor." Demonstrates that <strong>SHARIFF could legitimately migrate</strong> to <code>Rf-LB-A-Cb-SHARIFF</code> the day they expose ordering automation — a single PUT updates the row, the canonical code re-keys, and the action ring picks up the change with no further migration. If they later flip to bank-primary (modal payment becomes UPI), another PUT moves the row to <code>Bc</code>.</div>
   </section>
 
   <!-- SECTION 8 — WHAT'S IN AND WHAT'S OUT -->
@@ -608,8 +638,8 @@
 
 Examples:
   PUR-NCH-AM-P-Lb-MLK-Rf-L-M-C-PRABHU-V1a-2026050801   ← daily milk receipt
-  PUR-HN-AM-P-Bl-BTR-Pf-B-A-D-ZEPTO-V3-2026050802      ← Amul butter via Zepto
-  PUR-HN-AM-P-Lb-VEG-Rf-LB-M-H-SHARIFF-V2-2026050803    ← veg + branded staples</pre>
+  PUR-HN-AM-P-Bl-BTR-Pf-B-A-B-ZEPTO-V3-2026050802      ← Amul butter via Zepto
+  PUR-HN-AM-P-Lb-VEG-Rf-LB-M-Cb-SHARIFF-V2-2026050803    ← veg + branded staples</pre>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
