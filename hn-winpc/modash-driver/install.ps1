@@ -27,19 +27,32 @@ Write-Host "Install dir: $InstallDir"
 Write-Host "Profiles dir: $ProfilesDir"
 Write-Host ""
 
-# 1. Verify Node.js
+# 1. Verify Node.js (install via direct MSI if missing - winget can be blocked
+#    by Microsoft Store terms-of-use gate on appliance PCs, so we don't rely on it)
 try {
-  $nodeVer = node --version 2>$null
-  Write-Host "Node.js detected: $nodeVer"
-  if ($nodeVer -match 'v(\d+)\.' -and [int]$matches[1] -lt 18) {
-    Write-Error "Node.js >= 18 required. Got $nodeVer."
-    exit 1
-  }
+  $nodeVer = & node --version 2>$null
+  if ($nodeVer) {
+    Write-Host "Node.js detected: $nodeVer"
+    if ($nodeVer -match 'v(\d+)\.' -and [int]$matches[1] -lt 18) {
+      Write-Error "Node.js >= 18 required. Got $nodeVer."
+      exit 1
+    }
+  } else { throw "node not found" }
 } catch {
-  Write-Host "Node.js not found. Installing via winget..."
-  winget install OpenJS.NodeJS.LTS --silent --accept-source-agreements --accept-package-agreements
-  Write-Host "Node installed. You may need to restart this PowerShell session before continuing."
-  exit 0
+  Write-Host "Node.js not found. Downloading MSI direct from nodejs.org..."
+  $nodeVersion = "v20.18.1"
+  $msiUrl = "https://nodejs.org/dist/$nodeVersion/node-$nodeVersion-x64.msi"
+  $msiPath = "$env:TEMP\nodejs-$nodeVersion.msi"
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
+  Write-Host "Installing Node $nodeVersion silently..."
+  $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i","`"$msiPath`"","/qn","/norestart" -Wait -PassThru
+  if ($proc.ExitCode -ne 0) { Write-Error "Node MSI install failed (exit $($proc.ExitCode))"; exit 1 }
+  $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+  Remove-Item $msiPath -ErrorAction SilentlyContinue
+  $nodeVer = & node --version
+  if (-not $nodeVer) { Write-Error "Node still not in PATH after install"; exit 1 }
+  Write-Host "Node installed: $nodeVer"
 }
 
 # 2. Install npm deps

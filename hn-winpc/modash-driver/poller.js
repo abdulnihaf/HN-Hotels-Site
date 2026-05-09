@@ -62,16 +62,31 @@ async function runModashSearch(profileNum, filters) {
   }
 
   log('info', 'launching_chromium', { profileNum, dataDir });
-  const ctx = await chromium.launchPersistentContext(dataDir, {
-    headless: true,
+  // Use system Chrome (channel: 'chrome') if Playwright's bundled Chromium isn't available.
+  // System Chrome is already installed at C:\Program Files\Google\Chrome\Application\chrome.exe.
+  // Each profile-N has its own user-data-dir, so this doesn't conflict with aggregator-pulse's
+  // default-profile Chrome (different user-data-dir = different process tree, isolated cookies).
+  // Configurable headless via env (default: true). MODASH_HEADLESS=0 to debug visually.
+  const headless = process.env.MODASH_HEADLESS !== '0';
+  const launchOptions = {
+    headless,
     viewport: { width: 1366, height: 900 },
     args: [
       '--disable-blink-features=AutomationControlled',
       '--no-first-run',
       '--no-default-browser-check',
+      // Mask common headless fingerprints to reduce anti-bot detection
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-site-isolation-trials',
     ],
     locale: 'en-US',
-  });
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+  };
+  // Prefer system Chrome (channel) when MODASH_USE_SYSTEM_CHROME=1 (set by install if Chromium download failed)
+  if (process.env.MODASH_USE_SYSTEM_CHROME === '1') {
+    launchOptions.channel = 'chrome';
+  }
+  const ctx = await chromium.launchPersistentContext(dataDir, launchOptions);
 
   try {
     const page = await ctx.newPage();
@@ -80,9 +95,11 @@ async function runModashSearch(profileNum, filters) {
     });
 
     log('info', 'navigating_to_modash');
+    // 'load' fires later than 'domcontentloaded' but is more reliable for SPAs.
+    // Modash is heavy SPA — initial paint may take 30-60s. Bumped timeout to 90s.
     await page.goto('https://marketer.modash.io/discovery/instagram', {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000,
+      waitUntil: 'load',
+      timeout: 90000,
     });
 
     // Wait briefly for client-side redirect to login if cookies expired

@@ -127,6 +127,37 @@ Snapshots are **manual-refresh**. Owner runs the script when needed. If a snapsh
 - If you discover a secret accidentally committed: rotate first, then strip from history.
 - Reference env-var **names** in scripts; never hardcode values.
 
+## Working with `hn-winpc` (the always-on Windows appliance) — REQUIRED READING
+
+This appliance is **shared by multiple concurrent Claude Code chats**. As of 2026-05-10
+three automations are co-resident on it:
+
+1. **`aggregator-pulse`** — Swiggy + Zomato Online Ordering scraping (Chrome default profile, fragile)
+2. **`modash-driver`** — Modash influencer pipeline (isolated Chrome profiles per Modash account)
+3. **`dine-aggregator`** — Zomato Partner Dining-Out audit (isolated Chrome profile)
+
+**If your task touches `hn-winpc` in any way** (SSH, file deploy, Chrome automation,
+Scheduled Task, registry change), you MUST:
+
+1. Read [`fleet/MULTI-TENANT-WINPC.md`](fleet/MULTI-TENANT-WINPC.md) — the runbook
+2. Read the live manifest before mutating: `ssh "HN Hotels@hn-winpc" 'type "C:\hn-control\manifest.json"'`
+3. Respect every automation's `do_not_disturb` list
+4. Never run `taskkill /IM chrome.exe /F` or `Get-Process chrome | Stop-Process` —
+   that kills the aggregator. Always filter by user-data-dir cmdline match.
+5. Namespace everything you create — files in `C:\hn-control\<purpose>\`,
+   Scheduled Tasks named `HN-<Purpose>-<Job>`
+
+**For a new automation** (4th, 5th, ...): follow the step-by-step in
+[`fleet/NEW-OPERATION-TEMPLATE.md`](fleet/NEW-OPERATION-TEMPLATE.md).
+
+**SSH command pattern:** `ssh "HN Hotels@hn-winpc" 'cmd'` (quoted, space in username).
+On a laptop where Tailscale is up but routing fails with "Can't assign requested
+address", add `-o BindAddress=$(ifconfig | grep "inet 100\." | awk '{print $2}' | head -1)`.
+
+**If Tailscale is down on the laptop**, no chat can reach hn-winpc — owner reconnects
+via menu bar before any work proceeds. Tailscale on the PC itself is `set unattended`
+and never needs reconnect from Claude.
+
 ## Repo execution rules (binding for all sessions)
 
 See `docs/EXECUTION-CHARTER.md` for full charter. Key rules:
