@@ -45,7 +45,7 @@ Set-StrictMode -Version Latest
 $LaptopPubkey      = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE3dsouKr9nCWMyc1AWtfYuT9vHIqygSWCUVcMkuW9Lb nihaf-laptop@hn-fleet'
 $TargetHostname    = 'hn-winpc'
 $TailscaleAuthKey  = if ($AuthKey) { $AuthKey } elseif ($env:TS_AUTHKEY) { $env:TS_AUTHKEY } else { '' }
-$TailscaleMsiUrl   = 'https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi'
+$TailscaleMsiUrl   = 'https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi'
 
 # --- helpers ------------------------------------------------------------------
 function Section($msg) { Write-Host "`n== $msg" -ForegroundColor Cyan }
