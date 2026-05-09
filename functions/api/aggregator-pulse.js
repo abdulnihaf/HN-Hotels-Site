@@ -722,6 +722,7 @@ async function handleGet(db, url, headers) {
     // blocks above) used combined data — replaced here with brand-filtered truth.
     sections.sales = {
       data_scope: brand === 'he' ? 'he_only' : 'nch_only',
+      data_provenance: 'aggregator_orders (per-order rows, brand-filtered)',
       data_scope_note: `Aggregated from aggregator_orders WHERE brand='${brand}' AND platform='${platform}'. Genuinely ${brand.toUpperCase()}-only — does NOT include the other brand.`,
       captured_at: ordersList[0]?.captured_at || null,
       totals: {
@@ -734,6 +735,74 @@ async function handleGet(db, url, headers) {
       },
       period_note: `${ordersList.length} orders found in period (${delivered.length} delivered).`,
     };
+
+    // ---- CAPTURE HEALTH ----
+    // Reports the truth about how reliable the per-order data is. The dashboard
+    // uses this to decide whether to show the per-order chart vs the aggregate
+    // fallback banner.
+    const lastOrderRow = await db.prepare(`
+      SELECT MAX(captured_at) AS last_capture, COUNT(*) AS total_orders
+      FROM aggregator_orders WHERE platform = ? AND brand = ?
+    `).bind(platform, brand).first();
+    const last30dCount = dailyFilled.reduce((s, p) => s + p.orders, 0);
+    const nonZeroDays = dailyFilled.filter(p => p.orders > 0).length;
+    sections.capture_health = {
+      platform,
+      brand,
+      last_per_order_capture: lastOrderRow?.last_capture || null,
+      total_per_order_rows_alltime: lastOrderRow?.total_orders || 0,
+      orders_last_30d: last30dCount,
+      non_zero_days_last_30d: nonZeroDays,
+      coverage_pct_last_30d: Math.round(nonZeroDays / 31 * 100),
+      // "sparse" = effectively no per-order data (Swiggy is currently in this state)
+      per_order_status: last30dCount < 5 ? 'sparse' : (nonZeroDays < 15 ? 'partial' : 'healthy'),
+    };
+
+    // ---- SWIGGY AGGREGATE FALLBACK ----
+    // Swiggy historical per-order data isn't being captured by the extension
+    // today (Finance-page DOM scrape died ~Apr 17, fetchOrders API isn't
+    // intercepted in normal nav flow). However, business-metrics page DOES
+    // produce reports_swiggy_{period} aggregates which we capture every cycle.
+    // When per-order data is sparse, populate sections.sales_aggregate with
+    // those numbers so the dashboard isn't empty.
+    //
+    // CAVEAT: reports_swiggy_* is brand='all' (combined HE+NCH) because
+    // Swiggy's business-metrics page shows combined view by default.
+    // Surfacing it as he_only would lie. We label it explicitly as combined.
+    if (platform === 'swiggy' && sections.capture_health.per_order_status === 'sparse') {
+      const reportType = `reports_swiggy_${period}`;
+      const reportRow = await db.prepare(`
+        SELECT * FROM aggregator_snapshots
+        WHERE platform='swiggy' AND metric_type=? AND brand='all'
+        ORDER BY captured_at DESC LIMIT 1
+      `).bind(reportType).first();
+      if (reportRow) {
+        const reportData = safeJsonParse(reportRow.data) || {};
+        const num = (v) => {
+          if (v === null || v === undefined || v === '') return null;
+          const n = parseFloat(v);
+          return isNaN(n) ? null : n;
+        };
+        sections.sales_aggregate = {
+          data_scope: 'combined_he_nch',
+          data_provenance: `aggregator_snapshots metric_type='${reportType}' (Swiggy business-metrics page, combined view)`,
+          captured_at: reportRow.captured_at,
+          totals: {
+            net_sales: num(reportData.rpt_net_sales),
+            delivered_orders: num(reportData.rpt_delivered_orders),
+            cancelled_orders: num(reportData.rpt_cancelled_orders),
+            aov: num(reportData.rpt_net_aov),
+            impressions: num(reportData.impressions),
+            menu_opens: num(reportData.menu_opens),
+            cart_builds: num(reportData.cart_builds),
+            orders_placed: num(reportData.orders_placed),
+            new_customers: num(reportData.new_customers),
+            repeat_customers: num(reportData.repeat_customers),
+          },
+          warning: `These numbers are COMBINED HE+NCH on Swiggy. Per-outlet split requires Finance-page DOM scrape (broken since 2026-04-17) or fetchOrders API capture (not currently triggered by extension nav). Use as approximate signal only.`,
+        };
+      }
+    }
 
     // ===== HE-only enrichment from per-brand order data =====
     // Sales is already correct above. Now populate Growth + Ops with HE-only-derived
@@ -1025,18 +1094,26 @@ function classifyUrl(url) {
   const brandSuffix = ZOMATO_OUTLET[resId] || SWIGGY_OUTLET[resId];
   const suffix = brandSuffix ? `_${brandSuffix}` : '';
 
+  // Config endpoints — checked first so we don't mistake fetchConfig / fetchKey-list for orders/finance.
+  // Swiggy in particular fires rms.swiggy.com/api/v1/fetchConfig?key=CLOUDINARY_MIGRATION_ENABLED,...
+  // every few minutes — that's not finance, it's runtime feature flags.
+  if (/fetchConfig|featureFlag|\/config(?:s)?\b|key=[A-Z_,]+/i.test(url)) return 'config';
+  if (/restaurant.*config/i.test(url)) return 'config';
+
   // Check specific patterns BEFORE generic ones (order matters).
   if (/\/nps\b|\/review|feedback|customer-voice/i.test(url)) return `reviews${suffix}`;
   if (/\/ads\b|promot|campaign|marketing-tools/i.test(url)) return `ads${suffix}`;
   if (/\/finance\b|payout|settlement|invoice|earning/i.test(url)) return `finance${suffix}`;
   if (/\/rating\b/i.test(url)) return `ratings${suffix}`;
-  if (/order/i.test(url)) return `orders${suffix}`;
+  if (/fetchOrders|order.*list|order\/history|merchant-api\/orders/i.test(url)) return `orders${suffix}`;
+  // Generic /order/ pattern is intentionally narrower than before — too many config
+  // and routing endpoints contain the word "order" without being order data.
+  if (/\/orders?\//i.test(url) && !/config|tracking|key=|status$/i.test(url)) return `orders${suffix}`;
   if (/sales|revenue|metrics|business.report/i.test(url)) return `sales${suffix}`;
   if (/menu/i.test(url)) return `menu${suffix}`;
   if (/funnel/i.test(url)) return `funnel${suffix}`;
   if (/customer/i.test(url)) return `customers${suffix}`;
   if (/discount|offer/i.test(url)) return `discounts${suffix}`;
-  if (/restaurant.*config/i.test(url)) return 'config';
   return 'other';
 }
 
