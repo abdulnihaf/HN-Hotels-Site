@@ -22,21 +22,8 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-// Tier matrix — coordinate space (no free-text)
-const TIER_MATRIX = {
-  T1: { label: '5K–15K Micro', min: 5000,   max: 15000,   covers: 2, budget_paise: 120000 },   // ₹1,200
-  T2: { label: '15K–50K Mid',  min: 15000,  max: 50000,   covers: 4, budget_paise: 240000 },   // ₹2,400
-  T3: { label: '50K–100K Big', min: 50000,  max: 100000,  covers: 6, budget_paise: 360000 },   // ₹3,600
-  T4: { label: '100K+ Macro',  min: 100000, max: 99999999,covers: 8, budget_paise: 480000 },   // ₹4,800 + cash custom
-};
-
-function tierOf(followers) {
-  const f = followers || 0;
-  if (f < 15000)   return 'T1';
-  if (f < 50000)   return 'T2';
-  if (f < 100000)  return 'T3';
-  return 'T4';
-}
+// Tier matrix is the shared single source of truth (used by outreach API too).
+import { TIER_MATRIX, tierOf } from './_lib/influencer-tier.js';
 
 function genToken() {
   // 16-char URL-safe token (~95 bits entropy)

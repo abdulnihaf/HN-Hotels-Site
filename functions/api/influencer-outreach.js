@@ -17,6 +17,7 @@
 //      flips status='booked' on the same log row → conversion closes.
 
 import { sendWaba, normalizePhone } from './_lib/comms-core.js';
+import { TIER_MATRIX, tierOf, scoreRelevance, bucketOf, offerLine } from './_lib/influencer-tier.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -27,13 +28,6 @@ const json = (b, s = 200) => new Response(JSON.stringify(b), {
   status: s,
   headers: { 'Content-Type': 'application/json', ...CORS },
 });
-
-const TIER_MATRIX = {
-  T1: { name: 'T1', covers: 2, budget_paise: 120000 },   // 5K-15K · ₹1200
-  T2: { name: 'T2', covers: 4, budget_paise: 240000 },   // 15K-50K · ₹2400
-  T3: { name: 'T3', covers: 6, budget_paise: 360000 },   // 50K-100K · ₹3600
-  T4: { name: 'T4', covers: 8, budget_paise: 480000 },   // 100K+ · ₹4800
-};
 
 const dashboardKey = (env) => env.DASHBOARD_KEY || env.DASHBOARD_API_KEY || null;
 
@@ -62,6 +56,8 @@ export async function onRequest(context) {
       if (action === 'history')          return await getHistory(env, url);
       if (action === 'ig-dm-payload')    return await getIgDmPayload(env, url);
       if (action === 'email-payload')    return await getEmailPayload(env, url);
+      if (action === 'buckets')          return await getBuckets(env, url);
+      if (action === 'tier-matrix')      return json({ success: true, matrix: TIER_MATRIX });
     }
 
     if (request.method === 'POST') {
@@ -131,7 +127,73 @@ async function getList(env, url) {
     LIMIT 500`;
 
   const r = await env.DB.prepare(sql).bind(minF, maxF).all();
-  return json({ success: true, count: r.results.length, results: r.results });
+  // Score + bucket each row in-flight
+  const enriched = r.results.map(c => {
+    const { score, reasons } = scoreRelevance(c);
+    const bucket = bucketOf(score);
+    const tierKey = tierOf(c.followers_count);
+    return { ...c, relevance_score: score, score_reasons: reasons, bucket, tier: tierKey, tier_meta: TIER_MATRIX[tierKey] };
+  });
+  // Sort by score desc within bucket order HERO > PRIORITY > STANDARD > SKIP, then followers desc
+  const bucketRank = { HERO: 0, PRIORITY: 1, STANDARD: 2, SKIP: 3 };
+  enriched.sort((a, b) =>
+    (bucketRank[a.bucket] - bucketRank[b.bucket]) ||
+    (b.relevance_score - a.relevance_score) ||
+    (b.followers_count - a.followers_count)
+  );
+  return json({ success: true, count: enriched.length, results: enriched });
+}
+
+async function getBuckets(env, url) {
+  const minF = parseInt(url.searchParams.get('min_followers') || '5000');
+  const maxF = parseInt(url.searchParams.get('max_followers') || '100000');
+  const requireFood = url.searchParams.get('food') !== '0';
+
+  const FOOD_PATTERNS = [
+    'food','biryani','foodie','blogger','cafe','restaurant','eats','cuisine',
+    'kitchen','dine','chef','review','halal','muslim','street food','hyderab',
+    'dakhni','kebab','kabab','mughlai','baker','dessert','chai','coffee','creator','lifestyle',
+  ];
+  const BLR_PATTERNS = ['bangalore','blr','bengaluru',"b''lore",'banglore','bglr'];
+  const blrLikes = BLR_PATTERNS.map(p => `LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%${p}%'`).join(' OR ');
+  const foodLikes = FOOD_PATTERNS.map(p => `LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'') || ' ' || IFNULL(p.category_name,'')) LIKE '%${p}%'`).join(' OR ');
+
+  let where = `p.status='ok' AND p.is_private=0
+    AND p.followers_count BETWEEN ? AND ?
+    AND p.has_any_contact=1
+    AND (${blrLikes})`;
+  if (requireFood) where += ` AND (${foodLikes})`;
+
+  const r = await env.DB.prepare(`
+    SELECT p.username, p.full_name, p.biography, p.followers_count, p.is_business_account,
+           p.is_verified, p.category_name, p.has_email, p.has_phone, p.has_whatsapp,
+           p.profile_pic_url
+    FROM influencer_bio_pulse p
+    WHERE ${where}
+  `).bind(minF, maxF).all();
+
+  const buckets = { HERO: [], PRIORITY: [], STANDARD: [], SKIP: [] };
+  for (const c of r.results) {
+    const { score } = scoreRelevance(c);
+    const bucket = bucketOf(score);
+    const tierKey = tierOf(c.followers_count);
+    buckets[bucket].push({ ...c, relevance_score: score, bucket, tier: tierKey, tier_meta: TIER_MATRIX[tierKey] });
+  }
+  for (const b of Object.keys(buckets)) {
+    buckets[b].sort((a, b2) => b2.relevance_score - a.relevance_score || b2.followers_count - a.followers_count);
+  }
+
+  return json({
+    success: true,
+    counts: {
+      HERO: buckets.HERO.length,
+      PRIORITY: buckets.PRIORITY.length,
+      STANDARD: buckets.STANDARD.length,
+      SKIP: buckets.SKIP.length,
+    },
+    buckets,
+    tier_matrix: TIER_MATRIX,
+  });
 }
 
 async function getStats(env) {
@@ -521,11 +583,8 @@ async function ensureBookingShell(env, profile, tier) {
 }
 
 function pickTier(followers) {
-  const f = followers || 0;
-  if (f < 15000)  return TIER_MATRIX.T1;
-  if (f < 50000)  return TIER_MATRIX.T2;
-  if (f < 100000) return TIER_MATRIX.T3;
-  return TIER_MATRIX.T4;
+  const key = tierOf(followers);
+  return { ...TIER_MATRIX[key], name: key };
 }
 
 function pickFirstName(p) {
