@@ -379,3 +379,55 @@ body.modal-open { overflow:hidden; }
 .orders-tbl .pill.st-cancelled,
 .orders-tbl .pill.st-cancelledbycustomer,
 .orders-tbl .pill.st-rejected { background:rgba(244,67,54,.18); color:var(--red); }
+
+/* ─── CAPTURE HEALTH BANNER ──────────────────────────────────────────── */
+.capture-health {
+  display:flex; gap:14px; align-items:flex-start;
+  padding:12px 16px; border-radius:8px; margin-bottom:14px;
+  border:1px solid;
+}
+.capture-health.tone-bad {
+  background:rgba(244,67,54,0.08);
+  border-color:rgba(244,67,54,0.4);
+}
+.capture-health.tone-warn {
+  background:rgba(255,152,0,0.08);
+  border-color:rgba(255,152,0,0.35);
+}
+.ch-icon { font-size:18px; line-height:1; padding-top:1px; }
+.capture-health.tone-bad  .ch-icon { color:var(--red); }
+.capture-health.tone-warn .ch-icon { color:var(--orange); }
+.ch-body { flex:1; }
+.ch-h { font-size:13px; font-weight:600; color:var(--text); margin-bottom:3px; }
+.ch-d { font-size:11px; color:var(--dim); line-height:1.5; }
+
+/* ─── AGGREGATE FALLBACK CARD ───────────────────────────────────────── */
+.agg-card {
+  background:var(--surface); border:1px solid var(--border2, #222);
+  border-radius:10px; padding:14px 18px; margin-bottom:16px;
+}
+.agg-h {
+  display:flex; justify-content:space-between; align-items:flex-end;
+  flex-wrap:wrap; gap:8px; margin-bottom:10px;
+}
+.agg-title { font-size:13px; font-weight:600; color:var(--text); }
+.agg-pill {
+  display:inline-block; padding:1px 8px; margin-left:6px;
+  border-radius:10px; font-size:9px; text-transform:uppercase;
+  background:rgba(255,152,0,0.16); color:var(--orange);
+  letter-spacing:.6px;
+}
+.agg-cap { font-size:10px; color:var(--faint); }
+.agg-grid {
+  display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
+  gap:10px; margin-bottom:8px;
+}
+.agg-cell {
+  background:var(--surface2); padding:9px 11px; border-radius:6px;
+}
+.agg-l { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.4px; }
+.agg-v { font-size:15px; color:var(--text); font-weight:600; margin-top:3px; }
+.agg-warn {
+  font-size:10px; color:var(--orange); line-height:1.5;
+  border-top:1px solid var(--border2, #222); padding-top:8px; margin-top:6px;
+}
