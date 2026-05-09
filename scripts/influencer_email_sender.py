@@ -51,8 +51,9 @@ def load_env(path=ENV_FILE):
 
 def log(m): print(f"[{datetime.now().strftime('%H:%M:%S')}] {m}", flush=True)
 
-def post(url, body, headers=None):
+def post(url, body, key=None, headers=None):
     h = {"Content-Type": "application/json"}
+    if key:    h["X-Dashboard-Key"] = key
     if headers: h.update(headers)
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=h, method="POST")
     return json.load(urllib.request.urlopen(req, timeout=30))
@@ -74,7 +75,7 @@ def main():
 
     log(f"Claiming batch of {args.limit} from API ...")
     batch = post(API_BASE + "?action=create-batch",
-                 {"key": key, "channel": "email", "limit": args.limit})
+                 {"channel": "email", "limit": args.limit}, key=key)
     items = batch.get("batch", [])
     log(f"Got {len(items)} queued sends")
     if not items: return
@@ -112,7 +113,7 @@ def main():
 
             # Log success
             post(API_BASE + "?action=log", {
-                "key": key, "username": u, "channel": "email",
+                "username": u, "channel": "email",
                 "status": "sent", "recipient": to,
                 "template_used": "cold_email_v1",
                 "subject": subj, "message_text": body,
@@ -122,7 +123,7 @@ def main():
                 "cover_offer": it.get("cover_offer"),
                 "niche_tag": it.get("niche_tag"),
                 "actor": "email_sender_local",
-            })
+            }, key=key)
             sent += 1
             log(f"  ✓ @{u} → {to}")
         except Exception as e:
@@ -130,13 +131,13 @@ def main():
             log(f"  ✗ @{u} → {to}  err: {e}")
             try:
                 post(API_BASE + "?action=log", {
-                    "key": key, "username": u, "channel": "email",
+                    "username": u, "channel": "email",
                     "status": "failed", "recipient": to,
                     "bounce_reason": str(e)[:200],
                     "outreach_token": token,
                     "provider": "gmail",
                     "actor": "email_sender_local",
-                })
+                }, key=key)
             except: pass
         time.sleep(SLEEP_BETWEEN)
 

@@ -422,7 +422,6 @@ function chipsOf(p){
   const out = [];
   for (const sig of (p.signals || [])) {
     if (sig === 'foodblogger_topic') out.push(['foodblogger', 'chip-foodblogger']);
-    else if (sig === 'bangalorefood_hashtag') out.push(['#bangalorefood', 'chip-hashtag']);
     else if (sig === 'has_email') out.push(['email', 'chip-email']);
     else if (sig === 'has_email_bio') out.push(['📧 bio email', 'chip-email']);
     else if (sig === 'has_phone_bio') out.push(['📞 phone', 'chip-creator']);
@@ -589,7 +588,7 @@ function render(){
         ${bioBlock}
         ${contactsRow}
         <div class="signals">${chips.map(([t,c]) => `<span class="chip ${c}">${t}</span>`).join('')}</div>
-        <div class="meta-line"><span>${(p.buckets||[]).join(' · ')}</span><span>${p.city || ''}</span></div>
+        <div class="meta-line"><span>${(p.buckets||[]).filter(b => !b.includes('hashtag')).join(' · ')}</span><span>${p.city || ''}</span></div>
         <div class="notes-area ${notes ? 'open' : ''}" id="notes-${handle}"><textarea oninput="onNotes('${handle}', this.value)" placeholder="Notes…">${notes}</textarea></div>
         <div class="actions">
           <button class="btn-approve ${status==='approved'?'active':''}" onclick="setStatus('${handle}','approved')">✓ Approve</button>

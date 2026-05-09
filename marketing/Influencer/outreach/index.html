@@ -376,7 +376,6 @@ async function confirmSend(){
   if (!k) return toast('Set dashboard key first', true);
 
   const body = {
-    key: k,
     username: currentSendCtx.username,
     channel: currentSendCtx.mode,
     status: 'sent',
@@ -387,13 +386,14 @@ async function confirmSend(){
     outreach_token: currentSendCtx.token,
     tier_assigned: currentSendCtx.tier,
     cover_offer: currentSendCtx.cover_offer,
+    niche_tag: currentSendCtx.niche_tag,
     provider: currentSendCtx.mode === 'email' ? 'gmail' : 'manual',
     actor: 'ui',
   };
   try {
     const r = await fetch(API + '?action=log', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard-Key': k },
       body: JSON.stringify(body),
     });
     const d = await r.json();
