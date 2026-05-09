@@ -133,12 +133,18 @@
         setTimeout(() => {
           const freshText = document.body?.innerText || '';
           extractLiveTracking(freshText);
+          // Dump DOM context AFTER click + re-render so we see expanded state
+          setTimeout(() => dumpDomContext('live_tracking'), 1500);
         }, 2000);
       } else {
         extractLiveTracking(text);
+        setTimeout(() => dumpDomContext('live_tracking'), 1500);
       }
     }
-    else if (view === 'business-reports') extractBusinessReports(text);
+    else if (view === 'business-reports') {
+      extractBusinessReports(text);
+      setTimeout(() => dumpDomContext('business_reports'), 1500);
+    }
     else pushHeartbeat('unknown_view');
   }
 
@@ -234,19 +240,33 @@
   }
 
   // ─── OUTLET BREAKDOWN EXPANDER ───────────────────────────────────────────────
-  // Live Tracking page has "See outlet level breakdown →" links that must be clicked
-  // to expose per-outlet (HE/NCH) sales data in the DOM.
+  // Live Tracking page has "See outlet level breakdown →" links per section
+  // (Sales overview, Customer Experience, Customer funnel, Ads & Offers).
+  // Clicking expands inline per-outlet (HE/NCH) data in the DOM.
+  // v2 (2026-05-10): match LEAF text nodes only and try the leaf's closest
+  // clickable ancestor — the v1 code matched parent containers too which
+  // caused multi-click toggling that left the breakdown collapsed.
   function expandOutletBreakdowns() {
     let clicked = 0;
-    for (const el of document.querySelectorAll('a, button, span, div, [role="button"]')) {
-      if (!el.offsetParent) continue;
-      const t = el.textContent?.trim();
-      if (t && t.includes('outlet level breakdown')) {
-        el.click();
+    const seen = new WeakSet();
+    // First pass: find leaf elements with exact "See outlet level breakdown" text
+    for (const el of document.querySelectorAll('*')) {
+      if (el.children.length > 0) continue;            // leaf only
+      if (!el.offsetParent) continue;                  // visible only
+      const t = (el.textContent || '').trim();
+      if (t !== 'See outlet level breakdown') continue;
+
+      // Walk up to find the closest clickable ancestor and click that (or the leaf itself).
+      // De-dup by tracking each clickable target so we don't click the same DOM node twice.
+      const clickable = el.closest('button, a, [role="button"], [onclick]') || el;
+      if (seen.has(clickable)) continue;
+      seen.add(clickable);
+      try {
+        clickable.click();
         clicked++;
-      }
+      } catch (_) {}
     }
-    if (clicked > 0) console.log(`[HN] Zomato: expanded ${clicked} outlet breakdown(s)`);
+    if (clicked > 0) console.log(`[HN] Zomato: expanded ${clicked} outlet breakdown(s) (v2 leaf-match)`);
     return clicked;
   }
 
@@ -360,6 +380,112 @@
   }
 
   // ─── PUSH FUNCTIONS ───────────────────────────────────────────────────────────
+  // ─── DOM DUMP DIAGNOSTIC (Phase 1B helper, v2) ──────────────────────────────
+  // Captures clickable element details + outlet-name positions on the live tracking
+  // page so the next iteration can write proper outlet-filter click logic without
+  // remote DOM inspection. v2: waits for real content (outlet filter / outlet names)
+  // to be present before dumping — retries up to 8 times at 2s intervals because
+  // Zomato's reporting view loads dynamic content asynchronously after page render.
+  function dumpDomContext(viewName) {
+    const sessionKey = `hn_dom_dumped_${viewName}_v2`;
+    if (sessionStorage.getItem(sessionKey)) return;
+
+    // Wait for actual content: any of these markers present in page text means
+    // the live tracking content has rendered (not just sidebar nav).
+    const text = document.body?.innerText || '';
+    const contentReady = /All outlets|Hamza Express|Nawabi Chai|Sales overview|Customer Experience|Customer funnel|Outlet level breakdown/i.test(text);
+
+    if (!contentReady) {
+      const attemptKey = `${sessionKey}_attempts`;
+      const n = parseInt(sessionStorage.getItem(attemptKey) || '0', 10);
+      if (n < 8) {
+        sessionStorage.setItem(attemptKey, String(n + 1));
+        console.log(`[HN] Zomato DOM dump waiting for ${viewName} content (attempt ${n + 1}/8)`);
+        setTimeout(() => dumpDomContext(viewName), 2000);
+        return;
+      }
+      console.log(`[HN] Zomato DOM dump giving up after 8 attempts for ${viewName}, dumping anyway`);
+    }
+
+    sessionStorage.setItem(sessionKey, '1');
+
+    const dump = {
+      view: viewName,
+      url: location.href.slice(0, 200),
+      title: document.title,
+      captured_at: new Date().toISOString(),
+      interactive: [],
+      outlet_anchors: [],
+      filter_pills: [],
+      page_text_first_3k: (document.body?.innerText || '').slice(0, 3000),
+    };
+
+    // 1. All visible interactive elements with text
+    for (const el of document.querySelectorAll('button, a, [role="button"], [role="menuitem"], [role="tab"], [role="option"]')) {
+      if (!el.offsetParent) continue;
+      const text = (el.textContent || '').trim().slice(0, 80);
+      if (!text) continue;
+      const item = {
+        tag: el.tagName.toLowerCase(),
+        role: el.getAttribute('role') || null,
+        text,
+        cls: (el.className || '').toString().slice(0, 80),
+        id: el.id || null,
+      };
+      const rect = el.getBoundingClientRect();
+      item.pos = `${Math.round(rect.x)},${Math.round(rect.y)}`;
+      dump.interactive.push(item);
+      if (dump.interactive.length >= 80) break;
+    }
+
+    // 2. Leaf text nodes containing outlet names — useful for finding click targets
+    for (const el of document.querySelectorAll('*')) {
+      if (el.children.length > 0) continue;
+      const text = (el.textContent || '').trim();
+      if (!text || text.length > 200) continue;
+      if (/hamza express|nawabi chai|22632449|22632430/i.test(text)) {
+        const anchor = el.closest('button, a, [role="button"], [onclick], [role="menuitem"]');
+        dump.outlet_anchors.push({
+          tag: el.tagName.toLowerCase(),
+          text: text.slice(0, 150),
+          parent_tag: el.parentElement?.tagName?.toLowerCase() || null,
+          parent_cls: (el.parentElement?.className || '').toString().slice(0, 60),
+          clickable_ancestor_tag: anchor?.tagName?.toLowerCase() || null,
+          clickable_ancestor_role: anchor?.getAttribute('role') || null,
+        });
+        if (dump.outlet_anchors.length >= 30) break;
+      }
+    }
+
+    // 3. Filter pill candidates — anything with text matching common filter labels
+    const FILTER_RX = /^(All outlets|All|Daily|Today|Yesterday|Filter|Outlets?)$/i;
+    for (const el of document.querySelectorAll('*')) {
+      if (el.children.length > 0) continue;
+      const text = (el.textContent || '').trim();
+      if (!text || !FILTER_RX.test(text)) continue;
+      const anchor = el.closest('button, [role="button"], [data-clickable]');
+      if (!anchor || !anchor.offsetParent) continue;
+      dump.filter_pills.push({
+        text,
+        tag: anchor.tagName.toLowerCase(),
+        role: anchor.getAttribute('role') || null,
+        cls: (anchor.className || '').toString().slice(0, 80),
+      });
+      if (dump.filter_pills.length >= 20) break;
+    }
+
+    // Force-push (bypass the 30s pushMetrics dedup) by using a unique page key.
+    fetch(CONFIG.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': CONFIG.apiKey },
+      body: JSON.stringify({ snapshots: [{
+        source: 'dom_dump', platform: 'zomato', brand: 'system', outlet_id: 'diag',
+        page: `dom_dump_${viewName}`, metrics: dump, captured_at: new Date().toISOString(),
+      }] }),
+    }).catch(() => {});
+    console.log(`[HN] Zomato DOM dump pushed for view=${viewName}: ${dump.interactive.length} interactive, ${dump.outlet_anchors.length} outlet anchors, ${dump.filter_pills.length} filter pills`);
+  }
+
   async function pushMetrics(payload) {
     const key = payload.page || 'default';
     const now = Date.now();
