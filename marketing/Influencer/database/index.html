@@ -92,6 +92,7 @@ a:hover{color:var(--offwhite)}
 .contact-btn.has.phone-c{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.5);color:#93c5fd}
 .contact-btn.has.wa-c{background:rgba(34,197,94,.12);border-color:#22c55e;color:#22c55e}
 .contact-btn:hover.has{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.contact-btn.btn-hidden{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.4);color:#fbbf24;cursor:help}
 .contact-btn span.lbl{font-size:9px;opacity:.7;text-transform:uppercase}
 .contact-btn span.val{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 
@@ -216,6 +217,7 @@ select.sort{cursor:pointer}
     <button id="bFood" data-filter="foodblogger">🍴 Food topic</button>
     <button id="bER" data-filter="erStrong">🔥 ER ≥2%</button>
     <button id="bEnriched" data-filter="enriched">✨ Bio enriched</button>
+    <button id="bButtonOnly" data-filter="buttonOnly" title="Creators with Email/Call buttons but values hidden by API — needs Apify or logged-in scrape">🔘 Button-only (Apify cohort)</button>
     <select class="sort" id="qSort">
       <option value="score">Sort: Score ↓</option>
       <option value="followers">Sort: Followers ↓</option>
@@ -291,6 +293,18 @@ async function fetchEnrichment() {
         p.media_count = e.media_count;
         p.contact_channels = e.contact_channels || 0;
         p.has_any_contact = e.has_any_contact === 1;
+        // Button presence flags (from v2 schema)
+        p.has_email_btn = e.has_email_button === 1;
+        p.has_call_btn = e.has_call_button === 1;
+        p.has_any_btn = e.has_any_button === 1;
+        p.business_contact_method = e.business_contact_method;
+        p.business_address = e.business_address_json ? (() => { try { return JSON.parse(e.business_address_json); } catch (_) { return null; } })() : null;
+        // Apify cohort: button exists but no contact extracted
+        p.has_button_no_value = p.has_any_btn && !p.has_any_contact;
+        // Bio links — also surface them
+        p.bio_links = (() => { try { return JSON.parse(e.bio_links_json || '[]'); } catch (_) { return []; } })();
+        p.media_count = e.media_count;
+        p.following_count = e.following_count;
         // Recompute score with enrichment signals
         recomputeScore(p);
       } else {
@@ -451,6 +465,8 @@ function applyFilters(){
     if (onlyWA && (!p.bio_whatsapp || !p.bio_whatsapp.length)) return false;
     if (onlyBiz && !p.is_business) return false;
     if (onlyEnriched && !p._enriched) return false;
+    const onlyButtonOnly = document.getElementById('bButtonOnly')?.classList.contains('active');
+    if (onlyButtonOnly && !(p._enriched && p.has_button_no_value)) return false;
     if (onlyUrdu && !(p.signals || []).includes('urdu_muslim_signal')) return false;
     if (onlyFood && !(p.signals || []).includes('foodblogger_topic')) return false;
     if (onlyER) {
@@ -523,18 +539,28 @@ function render(){
       const primaryEmail = emails[0];
       const primaryPhone = phones[0];
       const primaryWa = wa[0];
+      const emailBtnHidden = p.has_email_btn && !primaryEmail;
+      const phoneBtnHidden = p.has_call_btn && !primaryPhone;
       const contactsRow = `
         <div class="contacts-row">
           ${primaryEmail
             ? `<a class="contact-btn has email-c" href="mailto:${primaryEmail}" title="${primaryEmail}"><span><span class="lbl">Email</span><br><span class="val">${primaryEmail.length > 20 ? primaryEmail.slice(0,18)+'…' : primaryEmail}</span></span></a>`
-            : `<div class="contact-btn"><span><span class="lbl">Email</span><br><span class="val">—</span></span></div>`}
+            : emailBtnHidden
+              ? `<div class="contact-btn btn-hidden" title="IG Email button is set up but value hidden by API — needs Apify or logged-in scrape"><span><span class="lbl">Email btn</span><br><span class="val">🔘 hidden</span></span></div>`
+              : `<div class="contact-btn"><span><span class="lbl">Email</span><br><span class="val">—</span></span></div>`}
           ${primaryPhone
             ? `<a class="contact-btn has phone-c" href="tel:${primaryPhone}" title="${primaryPhone}"><span><span class="lbl">Phone</span><br><span class="val">${primaryPhone}</span></span></a>`
-            : `<div class="contact-btn"><span><span class="lbl">Phone</span><br><span class="val">—</span></span></div>`}
+            : phoneBtnHidden
+              ? `<div class="contact-btn btn-hidden" title="IG Call button is set up but value hidden by API"><span><span class="lbl">Call btn</span><br><span class="val">🔘 hidden</span></span></div>`
+              : `<div class="contact-btn"><span><span class="lbl">Phone</span><br><span class="val">—</span></span></div>`}
           ${primaryWa
             ? `<a class="contact-btn has wa-c" href="https://wa.me/${primaryWa.replace(/[^\\d]/g,'')}" target="_blank" title="${primaryWa}"><span><span class="lbl">WhatsApp</span><br><span class="val">${primaryWa}</span></span></a>`
             : `<div class="contact-btn"><span><span class="lbl">WhatsApp</span><br><span class="val">—</span></span></div>`}
-        </div>`;
+        </div>
+        ${emails.length > 1 ? `<div style="font-size:10px;color:var(--mute);font-family:'JetBrains Mono',monospace;padding:4px 0">+${emails.length-1} more email${emails.length>2?'s':''}: ${emails.slice(1).map(e => `<span style="cursor:pointer" onclick="copyEmail('${e}')">${e}</span>`).join(', ')}</div>` : ''}
+        ${phones.length > 1 ? `<div style="font-size:10px;color:var(--mute);font-family:'JetBrains Mono',monospace;padding:4px 0">+${phones.length-1} more phone${phones.length>2?'s':''}: ${phones.slice(1).join(', ')}</div>` : ''}
+        ${wa.length > 1 ? `<div style="font-size:10px;color:var(--mute);font-family:'JetBrains Mono',monospace;padding:4px 0">+${wa.length-1} more WhatsApp: ${wa.slice(1).join(', ')}</div>` : ''}
+        ${(p.bio_links && p.bio_links.length > 1) ? `<div style="font-size:10px;color:var(--mute);font-family:'JetBrains Mono',monospace;padding:4px 0">🔗 ${p.bio_links.length} bio links: ${p.bio_links.slice(0, 3).map(l => `<a href="${l.url || '#'}" target="_blank" style="color:var(--cyan)">${(l.title || (l.url||'').replace(/^https?:\/\//,'').slice(0,30))}</a>`).join(' · ')}</div>` : ''}`;
 
       // Bio block
       const bioBlock = isEnriched
@@ -562,7 +588,6 @@ function render(){
         </div>
         ${bioBlock}
         ${contactsRow}
-        ${emails.length > 1 ? `<div style="font-size:10px;color:var(--mute);font-family:'JetBrains Mono',monospace">+${emails.length-1} more email${emails.length>2?'s':''}: ${emails.slice(1).join(', ')}</div>` : ''}
         <div class="signals">${chips.map(([t,c]) => `<span class="chip ${c}">${t}</span>`).join('')}</div>
         <div class="meta-line"><span>${(p.buckets||[]).join(' · ')}</span><span>${p.city || ''}</span></div>
         <div class="notes-area ${notes ? 'open' : ''}" id="notes-${handle}"><textarea oninput="onNotes('${handle}', this.value)" placeholder="Notes…">${notes}</textarea></div>
@@ -654,6 +679,8 @@ function updateHeaderStats(){
   const withWA = DATA.filter(p => p.bio_whatsapp && p.bio_whatsapp.length).length;
   const enriched = DATA.filter(p => p._enriched).length;
   const urdu = DATA.filter(p => (p.signals||[]).includes('urdu_muslim_signal')).length;
+  const buttonOnly = DATA.filter(p => p.has_button_no_value).length;
+  const business = DATA.filter(p => p.is_business).length;
   document.getElementById('stats').innerHTML = `
     Total <b>${total}</b>
     · <span class="gold">Gold <b>${gold}</b></span>
@@ -662,6 +689,8 @@ function updateHeaderStats(){
     · <span class="email">📧 <b>${withEmail}</b></span>
     · 📞 <b>${withPhone}</b>
     · 💬 <b>${withWA}</b>
+    · 🔘 <b style="color:#fbbf24">${buttonOnly}</b> btn-only
+    · 🏢 <b>${business}</b>
     · ✨ <b>${enriched}</b> enriched
     · 🌙 <b>${urdu}</b>
   `;
