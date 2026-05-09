@@ -463,61 +463,30 @@ async function handleGet(db, url, headers) {
         return isNaN(n) ? null : n;
       };
 
-      // ---- GROWTH (combined HE+NCH; per-outlet needs extension upgrade) ----
-      if (report) {
-        const r = report.data || {};
-        const impressions = num(r.impressions);
-        const menuOpens = num(r.menu_opens);
-        const cartBuilds = num(r.cart_builds);
-        const ordersPlaced = num(r.orders_placed);
-        const pct = (a, b) => (a !== null && b && b > 0) ? Math.round((a / b) * 1000) / 10 : null;
+      // ---- GROWTH (HE-only — DERIVED from per-brand orders + order-detail captures) ----
+      // Strict policy: NO combined HE+NCH data on a brand-specific endpoint. If we
+      // can't compute HE-only, we explicitly list the metric as not_yet_he_only with
+      // a reason — never show combined data masquerading as HE.
+      sections.growth = {
+        data_scope: 'he_only',
+        data_scope_note: 'Strict per-brand. Funnel/ads/listing not surfaced here because Swiggy business-metrics is combined-only — listed in not_yet_he_only with the gap reason.',
+        captured_at: null,  // populated from orders block below
+        not_yet_he_only: {
+          impressions: 'Combined HE+NCH only on Swiggy business-metrics. Needs extension to apply outlet filter (Phase 1B).',
+          menu_opens: 'same — combined-only',
+          funnel_conversion_pct: 'same — combined-only',
+          ads_spend: 'same — combined-only (Swiggy reports ads at brand=all)',
+          cba_sales: 'same — combined-only',
+          listing_menu_score: 'Combined Swiggy menu score covers HE+NCH menu union. Per-outlet score requires outlet filter.',
+          items_with_photos_pct: 'same — combined-only',
+          online_availability_pct_swiggy_metric: 'Use the per-brand availability derived from api_orders.restaurantData below instead.',
+          discount_sales: 'Combined-only on Swiggy. Per-brand discount usage IS available via order-detail (Zomato platform), see /he/zomato.',
+        },
+        // HE-only fields (derived from per-brand sources) populated after orders block runs.
+        // See section.sales for the actual numbers — Sales section is the canonical HE-only revenue/order view.
+      };
 
-        sections.growth = {
-          data_scope: 'combined_he_nch',
-          data_scope_note: 'Swiggy business-metrics page does not split per-outlet here. Per-outlet capture requires extension to apply outlet filter (Phase 1B).',
-          captured_at: report.captured_at,
-          period: r.period || period,
-          date_range: r.date_range || null,
-          funnel: {
-            impressions,
-            menu_opens: menuOpens,
-            cart_builds: cartBuilds,
-            orders_placed: ordersPlaced,
-            menu_open_rate_pct: pct(menuOpens, impressions),
-            cart_build_rate_pct: pct(cartBuilds, menuOpens),
-            order_conversion_rate_pct: pct(ordersPlaced, cartBuilds),
-          },
-          customers: {
-            new: num(r.new_customers),
-            repeat: num(r.repeat_customers),
-            dormant: num(r.dormant_customers),
-            new_pct: num(r.new_cust_order_pct),
-            repeat_pct: num(r.repeat_cust_order_pct),
-          },
-          ads: {
-            cpc_sales: num(r.cpc_sales),
-            cpc_orders: num(r.cpc_orders),
-            cpc_spends: num(r.cpc_spends),
-            roas: num(r.roas),
-            cba_sales: num(r.cba_sales),
-            cba_spends: num(r.cba_spends),
-          },
-          discounts: {
-            disc_sales: num(r.disc_sales),
-            rdpo: num(r.rdpo),
-          },
-          listing: {
-            menu_score: num(r.menu_score),
-            items_with_photos_pct: num(r.items_with_photos),
-            items_with_desc_pct: num(r.items_with_desc),
-            online_availability_pct: num(r.online_availability),
-          },
-        };
-      } else {
-        sections.growth = { data_scope: 'unavailable', reason: `No ${reportType} snapshot in DB.` };
-      }
-
-      // ---- OPS (HE-only live status from api_orders.restaurantData; combined quality from report) ----
+      // ---- OPS (strict HE-only) ----
       const liveOutlet = (() => {
         if (!apiOrders) return null;
         const rd = apiOrders.data?.restaurantData;
@@ -531,79 +500,46 @@ async function handleGet(db, url, headers) {
         return outlets.find(x => String(x.restaurantId) === targetSwiggyOutlet) || null;
       })();
 
-      if (report) {
-        const r = report.data || {};
-        sections.ops = {
-          data_scope: 'partial_he_only',
-          data_scope_note: 'Live outlet status is HE-only (from api_orders per-outlet). Delivery quality / cancellations / complaints are combined HE+NCH.',
-          captured_at: report.captured_at,
-          live_status: liveOutlet ? {
-            outlet_id: liveOutlet.restaurantId,
-            is_open: liveOutlet.isOpen,
-            is_serviceable: liveOutlet.isServiceable,
-            stress: liveOutlet.stressInfo?.stress || false,
-            active_batches: Object.keys(liveOutlet.batches || {}).length,
-            updated_at: apiOrders.captured_at,
-          } : (liveOrderEntry ? {
-            outlet_id: liveOrderEntry.restaurantId,
-            is_serviceable: liveOrderEntry.isServiceable,
-            active_batches: liveOrderEntry.activeBatches,
-            updated_at: liveOrders.captured_at,
-          } : { available: false }),
-          delivery_quality_combined: {
-            kitchen_prep_time_min: num(r.kitchen_prep_time),
-            mfr_accuracy_pct: num(r.mfr_accuracy),
-            delayed_10min_pct: num(r.delayed_10min),
-            online_availability_pct: num(r.online_availability),
-            avg_prep_time_min: num(r.avg_prep_time),
-          },
-          cancellations_combined: {
-            cancelled_orders: num(r.rpt_cancelled_orders),
-            cancelled_loss: num(r.rpt_cancelled_loss),
-            rated_orders: num(r.rated_orders),
-            poor_rated_orders: num(r.poor_rated_orders),
-          },
-          complaints_combined: {
-            complaint_pct: num(r.complaint_pct),
-            complaint_orders: num(r.complaint_orders),
-            unresolved_complaints: num(r.unresolved_complaints),
-            wrong_items: num(r.wrong_items),
-            missing_items: num(r.missing_items),
-            quality_issues: num(r.quality_issues),
-            packaging_issues: num(r.packaging_issues),
-          },
-          bolt_combined: {
-            order_count: num(r.bolt_order_count),
-            pct: num(r.bolt_pct),
-            aov: num(r.bolt_aov),
-            avg_prep_min: num(r.bolt_avg_prep),
-            lt6min_pct: num(r.bolt_lt6min_pct),
-            delayed_pct: num(r.delayed_bolt_pct),
-          },
-        };
-      } else {
-        sections.ops = { data_scope: 'unavailable', reason: `No ${reportType} snapshot.` };
-      }
+      sections.ops = {
+        data_scope: 'he_only',
+        data_scope_note: 'Strict per-brand. Live status is HE-only via api_orders.restaurantData filter. Combined HE+NCH delivery-quality / cancellations / complaints / bolt metrics REMOVED — see not_yet_he_only.',
+        captured_at: apiOrders?.captured_at || liveOrders?.captured_at || null,
+        live_status: liveOutlet ? {
+          outlet_id: liveOutlet.restaurantId,
+          is_open: liveOutlet.isOpen,
+          is_serviceable: liveOutlet.isServiceable,
+          stress: liveOutlet.stressInfo?.stress || false,
+          active_batches: Object.keys(liveOutlet.batches || {}).length,
+          updated_at: apiOrders.captured_at,
+        } : (liveOrderEntry ? {
+          outlet_id: liveOrderEntry.restaurantId,
+          is_serviceable: liveOrderEntry.isServiceable,
+          active_batches: liveOrderEntry.activeBatches,
+          updated_at: liveOrders.captured_at,
+        } : { available: false, reason: 'api_orders capture for this outlet not present yet — extension cycles every few min' }),
+        // HE-only cancellation + delay rate computed from aggregator_orders below
+        not_yet_he_only: {
+          kitchen_prep_time_min: 'Combined Swiggy reports — needs extension outlet filter',
+          mfr_accuracy_pct: 'same — combined Swiggy metric',
+          delayed_10min_pct: 'same',
+          online_availability_pct: 'same',
+          poor_rated_orders: 'same',
+          complaint_pct: 'same — Swiggy combined complaint counter',
+          wrong_items: 'same',
+          missing_items: 'same',
+          quality_issues: 'same',
+          packaging_issues: 'same',
+          bolt_metrics: 'Bolt instant-delivery metrics combined HE+NCH. HE not enrolled in Bolt — number is irrelevant for HE.',
+        },
+      };
 
-      // ---- SALES (combined; per-outlet pending) ----
-      if (report) {
-        const r = report.data || {};
-        sections.sales = {
-          data_scope: 'combined_he_nch',
-          data_scope_note: 'Combined HE+NCH. Per-outlet sales requires Swiggy outlet filter capture in extension.',
-          captured_at: report.captured_at,
-          totals: {
-            net_sales: num(r.rpt_net_sales),
-            delivered_orders: num(r.rpt_delivered_orders),
-            aov: num(r.rpt_net_aov),
-            cancelled_orders: num(r.rpt_cancelled_orders),
-            cancelled_loss: num(r.rpt_cancelled_loss),
-          },
-          date_range: r.date_range || null,
-        };
-      } else {
-        sections.sales = { data_scope: 'unavailable', reason: `No ${reportType} snapshot.` };
-      }
+      // ---- SALES (will be overridden later by per-brand aggregation from aggregator_orders) ----
+      // Placeholder — the actual per-brand sales numbers are computed in the ORDERS block below.
+      sections.sales = {
+        data_scope: 'he_only',
+        data_scope_note: 'Computed from aggregator_orders WHERE brand=he/nch — see below for actual values.',
+        // overridden after orders block runs
+      };
 
       sections.finance = {
         data_scope: 'unavailable',
@@ -627,53 +563,34 @@ async function handleGet(db, url, headers) {
         return isNaN(n) ? null : n;
       };
 
-      // ---- GROWTH ----
-      if (liveTrack) {
-        const d = liveTrack.data || {};
-        // Zomato reports the funnel as percentages (imp_to_menu / menu_to_cart / cart_to_order)
-        // rather than absolute counts at each stage. Surface the percentages directly and
-        // back-derive counts from impressions when possible.
-        const impressions = num(d.impressions);
-        const impToMenuPct = num(d.imp_to_menu);
-        const menuToCartPct = num(d.menu_to_cart);
-        const cartToOrderPct = num(d.cart_to_order);
-        const menuOpens = (impressions !== null && impToMenuPct !== null) ? Math.round(impressions * impToMenuPct / 100) : null;
-        const cartBuilds = (menuOpens !== null && menuToCartPct !== null) ? Math.round(menuOpens * menuToCartPct / 100) : null;
-        const ordersPlaced = (cartBuilds !== null && cartToOrderPct !== null) ? Math.round(cartBuilds * cartToOrderPct / 100) : num(d.delivered_orders);
-        sections.growth = {
-          data_scope: 'combined_he_nch',
-          data_scope_note: 'Zomato live tracking returns combined when both outlets are selected. Per-outlet capture requires extension to apply outlet filter (Phase 1B).',
-          captured_at: liveTrack.captured_at,
-          funnel: {
-            impressions,
-            menu_opens: menuOpens,
-            cart_builds: cartBuilds,
-            orders_placed: ordersPlaced,
-            menu_open_rate_pct: impToMenuPct,
-            cart_build_rate_pct: menuToCartPct,
-            order_conversion_rate_pct: cartToOrderPct,
-          },
-          customers: {
-            new: num(d.new_users ?? d.new_customers),
-            repeat: num(d.repeat_users ?? d.repeat_customers),
-            lapsed: num(d.lapsed_users ?? d.lapsed_customers),
-          },
-          ads: {
-            sales_from_offers: num(d.sales_from_offers),
-            note: d.sales_from_offers !== undefined ? null : 'Zomato ads page extraction pending — currently only "sales from offers" is captured from live tracking.',
-          },
-          listing: { available: false, note: 'Zomato listing/menu metrics pending — separate menu page extraction needed.' },
-          per_outlet_zomato: {
-            he_sales: num(d.he_sales),
-            nch_sales: num(d.nch_sales),
-            note: (d.he_sales || d.nch_sales) ? 'Per-outlet sales captured via outlet-breakdown click on live tracking page.' : 'Per-outlet sales not captured this snapshot — outlet-breakdown click did not find expected DOM element. Phase 1B click logic needs update.',
-          },
-        };
-      } else {
-        sections.growth = { data_scope: 'unavailable', reason: 'No live_tracking snapshot.' };
-      }
+      // ---- GROWTH (HE-only — strict; no combined data leaks through) ----
+      // Zomato live_tracking metrics are combined HE+NCH because both outlets are
+      // selected by default. We do NOT surface those numbers here. Per-brand growth
+      // intelligence comes from order-detail captures (top dishes, customer cohorts,
+      // discount usage, payment methods) computed below.
+      sections.growth = {
+        data_scope: 'he_only',
+        data_scope_note: 'Strict per-brand. Combined-only Zomato metrics excluded — see not_yet_he_only for the full gap list.',
+        captured_at: null,  // populated by order-detail compute below
+        // Top dishes + customer cohorts populated after the order-detail compute step further down.
+        not_yet_he_only: {
+          impressions: 'Zomato live_tracking returns combined HE+NCH. Needs outlet filter applied by extension (Phase 1B).',
+          menu_opens: 'same — combined-only',
+          cart_builds: 'same',
+          orders_placed: 'same',
+          imp_to_menu_pct: 'same',
+          menu_to_cart_pct: 'same',
+          cart_to_order_pct: 'same',
+          new_users: 'Combined Zomato customer counters — outlet filter needed for per-brand split.',
+          repeat_users: 'same',
+          lapsed_users: 'same',
+          sales_from_offers: 'Combined Zomato offer revenue. Per-brand offer effectiveness is derivable from order-detail.calculations field — see top_dishes / discount_orders below when populated.',
+          listing_score: 'Zomato never exposes a per-outlet listing score in the merchant view. Listing-quality audit needs consumer-side scraping (Phase 4).',
+        },
+        // top_dishes_he, customer_cohort_he, payment_mix_he, discount_usage_pct populated after the order-detail join below.
+      };
 
-      // ---- OPS ----
+      // ---- OPS (strict HE-only) ----
       const myOutletMeta = (() => {
         if (!restMetrics) return null;
         const ents = restMetrics.data?.entities;
@@ -681,46 +598,32 @@ async function handleGet(db, url, headers) {
         return ents.find(e => String(e.res_id) === targetZomatoOutlet || String(e.id) === targetZomatoOutlet) || null;
       })();
 
-      if (liveTrack) {
-        const d = liveTrack.data || {};
-        sections.ops = {
-          data_scope: myOutletMeta ? 'partial_he_only' : 'combined_he_nch',
-          data_scope_note: 'Live tracking metrics are combined; outlet metadata is HE-only when available.',
-          captured_at: liveTrack.captured_at,
-          outlet_metadata: myOutletMeta ? {
-            res_id: myOutletMeta.res_id || myOutletMeta.id,
-            address: myOutletMeta.address,
-            active_since: myOutletMeta.active_since,
-            am_email: myOutletMeta.am_details?.poc_email,
-            am_phone: myOutletMeta.am_details?.poc_phone,
-          } : null,
-          delivery_quality_combined: {
-            rejected_pct: num(d.rejected_pct),
-            delayed_pct: num(d.delayed_pct),
-            poor_rated_pct: num(d.poor_rated_pct),
-            lost_sales: num(d.lost_sales),
-          },
-        };
-      } else {
-        sections.ops = { data_scope: 'unavailable', reason: 'No live_tracking snapshot.' };
-      }
+      sections.ops = {
+        data_scope: 'he_only',
+        data_scope_note: 'Strict per-brand. Outlet metadata is HE-only via restaurant_metrics filter. Combined HE+NCH delivery_quality fields REMOVED — see not_yet_he_only.',
+        captured_at: restMetrics?.captured_at || null,
+        outlet_metadata: myOutletMeta ? {
+          res_id: myOutletMeta.res_id || myOutletMeta.id,
+          address: myOutletMeta.address,
+          active_since: myOutletMeta.active_since,
+          am_email: myOutletMeta.am_details?.poc_email,
+          am_phone: myOutletMeta.am_details?.poc_phone,
+        } : { available: false, reason: `Restaurant metadata for outlet ${targetZomatoOutlet} not found in latest restaurant_metrics capture` },
+        // HE-only cancellation rate, delay rate, issue counts computed from aggregator_orders below
+        not_yet_he_only: {
+          rejected_pct: 'Combined Zomato live_tracking metric. Per-brand rejection rate is derivable from aggregator_orders.status — surfaced below as cancellation_rate_pct.',
+          delayed_pct: 'Combined-only. Per-brand delay info is in aggregator_orders.issues.',
+          poor_rated_pct: 'Combined-only.',
+          lost_sales: 'Combined Zomato lost_sales. Cannot derive HE-only without outlet filter capture.',
+        },
+      };
 
-      // ---- SALES ----
-      if (liveTrack) {
-        const d = liveTrack.data || {};
-        sections.sales = {
-          data_scope: 'combined_he_nch',
-          data_scope_note: 'Combined HE+NCH. Per-outlet split requires extension outlet-filter capture.',
-          captured_at: liveTrack.captured_at,
-          totals: {
-            sales: num(d.sales),
-            delivered_orders: num(d.delivered_orders),
-            aov: num(d.aov),
-          },
-        };
-      } else {
-        sections.sales = { data_scope: 'unavailable', reason: 'No live_tracking snapshot.' };
-      }
+      // ---- SALES (placeholder — actual values from per-brand orders below) ----
+      sections.sales = {
+        data_scope: 'he_only',
+        data_scope_note: 'Computed from aggregator_orders WHERE brand=he/nch — see Sales totals below.',
+        // overridden after orders block runs
+      };
 
       sections.finance = {
         data_scope: 'unavailable',
@@ -786,6 +689,95 @@ async function handleGet(db, url, headers) {
       },
       period_note: `${ordersList.length} orders found in period (${delivered.length} delivered).`,
     };
+
+    // ===== HE-only enrichment from per-brand order data =====
+    // Sales is already correct above. Now populate Growth + Ops with HE-only-derived
+    // metrics from aggregator_orders + Zomato order-detail captures.
+
+    const cancellationRate = ordersList.length ? Math.round(cancelled.length / ordersList.length * 1000) / 10 : null;
+    const ordersWithIssues = ordersList.filter(r => r.issues && String(r.issues).trim());
+    const issueRate = ordersList.length ? Math.round(ordersWithIssues.length / ordersList.length * 1000) / 10 : null;
+    const issueBreakdown = {};
+    for (const r of ordersWithIssues) {
+      const text = String(r.issues).toLowerCase();
+      if (/delay/.test(text))                           issueBreakdown.delay = (issueBreakdown.delay || 0) + 1;
+      if (/wrong/.test(text))                           issueBreakdown.wrong_item = (issueBreakdown.wrong_item || 0) + 1;
+      if (/missing/.test(text))                         issueBreakdown.missing_item = (issueBreakdown.missing_item || 0) + 1;
+      if (/quality|cold|stale/.test(text))              issueBreakdown.quality = (issueBreakdown.quality || 0) + 1;
+      if (/packag/.test(text))                          issueBreakdown.packaging = (issueBreakdown.packaging || 0) + 1;
+    }
+    const ratedOrders = ordersList.filter(r => r.rating !== null && r.rating !== undefined);
+    const avgRating = ratedOrders.length ? Math.round(ratedOrders.reduce((s, r) => s + (r.rating || 0), 0) / ratedOrders.length * 10) / 10 : null;
+    const poorRated = ratedOrders.filter(r => (r.rating || 0) <= 3);
+
+    sections.ops.cancellation_rate_pct = cancellationRate;
+    sections.ops.cancellation_count = cancelled.length;
+    sections.ops.issue_rate_pct = issueRate;
+    sections.ops.issue_breakdown = issueBreakdown;
+    sections.ops.rated_orders = ratedOrders.length;
+    sections.ops.avg_rating = avgRating;
+    sections.ops.poor_rated_count = poorRated.length;
+
+    // Top dishes + customer cohort from Zomato order-detail captures (only Zomato has these)
+    if (platform === 'zomato') {
+      const HE_OUTLET_Z = '22632449', NCH_OUTLET_Z = '22632430';
+      const targetOutlet = brand === 'he' ? HE_OUTLET_Z : NCH_OUTLET_Z;
+      // Pull api_orders captures matching this brand (filter by resId in the order JSON)
+      const { results: detailRows } = await db.prepare(`
+        SELECT * FROM aggregator_snapshots
+        WHERE platform='zomato' AND metric_type='api_orders'
+        ORDER BY captured_at DESC LIMIT 200
+      `).all();
+      const dishStats = {};      // name -> {orders, quantity, revenue, tags, discount_count}
+      let firstTimeCustomers = 0, repeatCustomers = 0;
+      let ordersWithDiscount = 0, totalDetailOrders = 0;
+      const paymentMethods = {};
+      for (const row of (detailRows || [])) {
+        const d = safeJsonParse(row.data);
+        const order = d?.order;
+        if (!order || !order.id) continue;
+        if (String(order.resId) !== targetOutlet) continue;
+        totalDetailOrders++;
+        const dishes = order.cartDetails?.items?.dishes || [];
+        const creator = order.creator || {};
+        const lifetime = creator.orderCount;
+        if (lifetime === 1) firstTimeCustomers++;
+        else if (lifetime > 1) repeatCustomers++;
+        const pm = order.paymentMethod || 'unknown';
+        paymentMethods[pm] = (paymentMethods[pm] || 0) + 1;
+        let orderHadDiscount = false;
+        for (const dish of dishes) {
+          const k = dish.name || 'unknown';
+          if (!dishStats[k]) dishStats[k] = { name: k, orders: 0, quantity: 0, revenue: 0, tags: new Set(), discount_count: 0 };
+          dishStats[k].orders++;
+          dishStats[k].quantity += dish.quantity || 0;
+          dishStats[k].revenue += dish.totalCost || 0;
+          for (const t of (dish.metadata?.tags || [])) dishStats[k].tags.add(t);
+          const calcs = dish.calculations || [];
+          if (calcs.length > 0) { dishStats[k].discount_count++; orderHadDiscount = true; }
+        }
+        if (orderHadDiscount) ordersWithDiscount++;
+      }
+      const topDishes = Object.values(dishStats)
+        .map(d => ({ ...d, tags: Array.from(d.tags) }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 15);
+      sections.growth.top_dishes_he = topDishes;
+      sections.growth.customer_cohort_he = {
+        sample_size: firstTimeCustomers + repeatCustomers,
+        first_time_orders: firstTimeCustomers,
+        repeat_orders: repeatCustomers,
+        first_time_pct: (firstTimeCustomers + repeatCustomers) ? Math.round(firstTimeCustomers / (firstTimeCustomers + repeatCustomers) * 1000) / 10 : null,
+      };
+      sections.growth.payment_mix_he = paymentMethods;
+      sections.growth.discount_usage_he = {
+        orders_with_discount: ordersWithDiscount,
+        total_orders_in_sample: totalDetailOrders,
+        usage_rate_pct: totalDetailOrders ? Math.round(ordersWithDiscount / totalDetailOrders * 1000) / 10 : null,
+        note: 'Discount usage rate is from order-detail captures (Zomato only). Sample size = total order-detail captures with brand match. Smaller than total HE orders because order-detail fires only when partner clicks into an order.',
+      };
+      sections.growth.captured_at = ordersList[0]?.captured_at || null;
+    }
 
     return new Response(JSON.stringify({
       ok: true,
