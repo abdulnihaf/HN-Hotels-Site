@@ -74,15 +74,24 @@
   .dir-table .code-id { color: var(--accent); }
   .dir-table .code-mute { color: var(--ink-dim); }
 
-  .anatomy-row { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 600; text-align: center; padding: 22px 0; letter-spacing: 0.04em; }
+  .anatomy-row { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 600; text-align: center; padding: 22px 0; letter-spacing: 0.04em; line-height: 1.5; word-break: break-word; }
   .anatomy-row .seg-payseq { color: var(--info); }
+  .anatomy-row .seg-sells  { color: var(--purple); }
+  .anatomy-row .seg-opm    { color: var(--teal); }
+  .anatomy-row .seg-pms    { color: var(--pink); }
   .anatomy-row .seg-id { color: var(--accent); }
   .anatomy-row .dash { color: var(--ink-dim); }
   .seg-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px; height: 100%; }
   .seg-card.payseq { border-top: 3px solid var(--info); }
+  .seg-card.sells  { border-top: 3px solid var(--purple); }
+  .seg-card.opm    { border-top: 3px solid var(--teal); }
+  .seg-card.pms    { border-top: 3px solid var(--pink); }
   .seg-card.id { border-top: 3px solid var(--accent); }
   .seg-card .seg-name { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; }
   .seg-card.payseq .seg-name { color: var(--info); }
+  .seg-card.sells  .seg-name { color: var(--purple); }
+  .seg-card.opm    .seg-name { color: var(--teal); }
+  .seg-card.pms    .seg-name { color: var(--pink); }
   .seg-card.id .seg-name { color: var(--accent); }
   .seg-card .seg-pos { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
   .seg-card .seg-desc { font-size: 12px; color: rgba(228,228,237,0.78); margin-top: 8px; line-height: 1.5; }
@@ -103,7 +112,13 @@
   .walk-block .lbl { color: var(--ink-dim); }
   .walk-block .p   { color: var(--info); }
   .walk-block .r   { color: var(--good); }
+  .walk-block .s   { color: var(--purple); font-weight: 700; }
+  .walk-block .o   { color: var(--teal); font-weight: 700; }
+  .walk-block .m   { color: var(--pink); font-weight: 700; }
   .walk-block .i   { color: var(--accent); font-weight: 700; }
+  .dir-table .code-purple { color: var(--purple); }
+  .dir-table .code-teal   { color: var(--teal); }
+  .dir-table .code-pink   { color: var(--pink); }
   .walk-reads { font-family: 'Inter', sans-serif; font-size: 13px; color: rgba(228,228,237,0.85); padding: 10px 14px; background: rgba(232,147,12,0.04); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; margin-top: 10px; }
 
   .qbar a { font-size: 12px; color: var(--ink-dim); padding: 6px 10px; border-radius: 6px; text-decoration: none; }
@@ -143,13 +158,14 @@
     .dir-table th { background: #f0f0f0 !important; color: #555 !important; }
     .dir-table td.code-cell, .dir-table .code-pf, .dir-table .code-rf, .dir-table .code-id { color: #111 !important; }
     .dir-table .code-mute { color: #888 !important; }
-    .anatomy-row .seg-payseq, .anatomy-row .seg-id { color: #111 !important; }
+    .anatomy-row .seg-payseq, .anatomy-row .seg-sells, .anatomy-row .seg-opm, .anatomy-row .seg-pms, .anatomy-row .seg-id { color: #111 !important; }
     .anatomy-row .dash { color: #888 !important; }
-    .seg-card.payseq .seg-name, .seg-card.id .seg-name { color: #111 !important; }
+    .seg-card.payseq .seg-name, .seg-card.sells .seg-name, .seg-card.opm .seg-name, .seg-card.pms .seg-name, .seg-card.id .seg-name { color: #111 !important; }
     .census-head { color: #b86c00 !important; }
     .census-list li, .census-list li a { color: #111 !important; }
     .census-list li .v-name, .census-list li .v-meta { color: #555 !important; }
-    .walk-block .lbl, .walk-block .p, .walk-block .r, .walk-block .i { color: #111 !important; }
+    .walk-block .lbl, .walk-block .p, .walk-block .r, .walk-block .s, .walk-block .o, .walk-block .m, .walk-block .i { color: #111 !important; }
+    .dir-table .code-purple, .dir-table .code-teal, .dir-table .code-pink { color: #111 !important; }
     *, *:hover { transition: none !important; }
   }
 </style>
@@ -162,9 +178,9 @@
       <div class="flex items-center gap-3 mb-1">
         <span class="text-2xl">🏪</span>
         <h1 class="text-xl font-bold tracking-tight">Vendor · Canonical Shape Directory</h1>
-        <span class="pill pill-vendor">Reference · v1.0</span>
+        <span class="pill pill-vendor">Reference · v2.0 · 5-segment</span>
       </div>
-      <p class="text-sm text-white/60 max-w-3xl">The 2-segment vendor identity — minimal by doctrine. PAY_SEQ × IDENTITY. Brand scope and sells categories are computed from the RM ring at query time.</p>
+      <p class="text-sm text-white/60 max-w-3xl">The 5-segment vendor identity — locked grammar. PAY_SEQ × SELLS × OPM × PMS × IDENTITY. Brand scope is still computed from the RM ring at query time.</p>
     </div>
     <div class="flex items-center gap-2 text-xs no-print">
       <a href="/docs/Vendor-Shape-Directory.pdf" class="btn btn-accent" title="Download static PDF snapshot">⬇ PDF</a>
@@ -180,10 +196,10 @@
   <!-- SECTION 1 — INTRO -->
   <section class="glass p-6">
     <div class="section-num">SECTION 1</div>
-    <h2>The minimal vendor identity</h2>
+    <h2>The 5-segment vendor identity</h2>
     <div class="prose mt-2">
-      <p>The vendor canonical code carries only what's mathematically necessary: <strong>PAY_SEQ</strong> (the architectural cash-flow binary) and <strong>IDENTITY</strong> (the unique abbreviation). Everything else — which BRANDs they supply, what they SELL — is a <strong>computed view</strong> derived from the RM ring at query time.</p>
-      <p>This obeys the COA Doctrine: properties that can be derived from upstream entity rings are never duplicated as static fields. A vendor that stops supplying NCH automatically loses its NCH scope; no manual sync required.</p>
+      <p>The vendor canonical code carries five locked dimensions: <strong>PAY_SEQ</strong> (cash-flow direction), <strong>SELLS</strong> (what they stock — RM scope), <strong>OPM</strong> (how we order — manual vs automatable), <strong>PMS</strong> (which payment methods they accept), and <strong>IDENTITY</strong> (unique abbreviation). Brand scope is still a <strong>computed view</strong> derived from the RM ring at query time.</p>
+      <p>This obeys the COA Doctrine: every dimension is fully enumerated, the constraint set rejects impossible combinations, and the canonical code IS the operation — not a description of it. New vendors slot into the same space without schema migration.</p>
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
@@ -205,29 +221,47 @@
   <!-- SECTION 2 — CODE ANATOMY -->
   <section class="glass p-6" id="section-2">
     <div class="section-num">SECTION 2</div>
-    <h2>Code Anatomy — 2 segments, left to right</h2>
+    <h2>Code Anatomy — 5 segments, left to right</h2>
 
     <div class="anatomy-row mt-2">
-      <span class="seg-payseq">{PAY_SEQ}</span><span class="dash"> - </span><span class="seg-id">{IDENTITY}</span>
+      <span class="seg-payseq">{PAY_SEQ}</span><span class="dash"> - </span><span class="seg-sells">{SELLS}</span><span class="dash"> - </span><span class="seg-opm">{OPM}</span><span class="dash"> - </span><span class="seg-pms">{PMS}</span><span class="dash"> - </span><span class="seg-id">{IDENTITY}</span>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
       <div class="seg-card payseq">
         <div class="seg-name">PAY_SEQ</div>
         <div class="seg-pos">Position 1 · 2 chars · the architectural binary</div>
         <div class="seg-desc"><span class="mono" style="color:var(--info)">Pf</span> = pay-first (cash leaves before goods arrive) · <span class="mono" style="color:var(--good)">Rf</span> = receive-first (goods arrive before money goes out).</div>
         <div class="seg-ex">2 values · Pf · Rf</div>
       </div>
-      <div class="seg-card id">
+      <div class="seg-card sells">
+        <div class="seg-name">SELLS</div>
+        <div class="seg-pos">Position 2 · 1-2 chars · what they stock (RM scope)</div>
+        <div class="seg-desc"><span class="mono" style="color:var(--purple)">L</span> = Loose only · <span class="mono" style="color:var(--purple)">B</span> = Branded only · <span class="mono" style="color:var(--purple)">LB</span> = Both (alphabetical). RM-purchase scope only.</div>
+        <div class="seg-ex">3 values · L · B · LB</div>
+      </div>
+      <div class="seg-card opm">
+        <div class="seg-name">OPM</div>
+        <div class="seg-pos">Position 3 · 1 char · order-placement method</div>
+        <div class="seg-desc"><span class="mono" style="color:var(--teal)">M</span> = Manual (call / WhatsApp / walk-in / route) · <span class="mono" style="color:var(--teal)">A</span> = Automatable (app / web / API). Gates whether actions are agent-emitted.</div>
+        <div class="seg-ex">2 values · M · A</div>
+      </div>
+      <div class="seg-card pms">
+        <div class="seg-name">PMS</div>
+        <div class="seg-pos">Position 4 · 1 char · payment-method support</div>
+        <div class="seg-desc"><span class="mono" style="color:var(--pink)">C</span> = Cash-only · <span class="mono" style="color:var(--pink)">D</span> = Digital-only (e.g. Zepto) · <span class="mono" style="color:var(--pink)">H</span> = Hybrid (accepts both).</div>
+        <div class="seg-ex">3 values · C · D · H</div>
+      </div>
+      <div class="seg-card id" style="grid-column: span 2 / span 2;">
         <div class="seg-name">IDENTITY</div>
-        <div class="seg-pos">Position 2 · 3-10 chars uppercase</div>
-        <div class="seg-desc">Unique abbreviation drawn from the vendor name. Auto-derived (consonants vowel-stripped); owner-overridable. Globally unique across all vendors.</div>
-        <div class="seg-ex">PRABHU · ZEPTO · SHARIFF · RENT · INTERNET</div>
+        <div class="seg-pos">Position 5 · 3-10 chars uppercase</div>
+        <div class="seg-desc">Unique abbreviation drawn from the vendor name. Auto-derived (consonants vowel-stripped); owner-overridable. Globally unique across all vendors regardless of the four leading dimensions.</div>
+        <div class="seg-ex">PRABHU · ZEPTO · SHARIFF · HYPERPURE · WALKIN</div>
       </div>
     </div>
 
     <div class="quote mt-5 text-sm">
-      <strong>Reading order:</strong> PAY_SEQ tells the system the cash-flow direction. IDENTITY tells the system who the vendor is. That's it. Brand scope, sells categories, RMs supplied — all computed from the upstream RM ring.
+      <strong>Reading order:</strong> PAY_SEQ (cash direction) → SELLS (what they stock) → OPM (how we order) → PMS (how we pay) → IDENTITY (who they are). Five locked dimensions, all enumerated; brand scope still computed from the RM ring upstream.
     </div>
   </section>
 
@@ -244,12 +278,12 @@
           <tr>
             <td class="code-cell"><span class="code-pf">Pf</span></td>
             <td><strong>Pay-first.</strong> Money leaves our account before goods/service arrives. Quick commerce apps, prepaid subscriptions, advance rent, prepaid utilities.</td>
-            <td><span class="mono"><span class="code-pf">Pf</span>-<span class="code-id">ZEPTO</span></span> · <span class="mono"><span class="code-pf">Pf</span>-<span class="code-id">RENT</span></span> · <span class="mono"><span class="code-pf">Pf</span>-<span class="code-id">INTERNET</span></span></td>
+            <td><span class="mono"><span class="code-pf">Pf</span>-B-A-D-<span class="code-id">ZEPTO</span></span> · <span class="mono"><span class="code-pf">Pf</span>-L-M-C-<span class="code-id">WALKIN</span></span></td>
           </tr>
           <tr>
             <td class="code-cell"><span class="code-rf">Rf</span></td>
             <td><strong>Receive-first.</strong> Goods/service arrives before money goes out. Daily milk, departmental stores with credit terms, post-paid utilities, monthly bills.</td>
-            <td><span class="mono"><span class="code-rf">Rf</span>-<span class="code-id">PRABHU</span></span> · <span class="mono"><span class="code-rf">Rf</span>-<span class="code-id">SHARIFF</span></span> · <span class="mono"><span class="code-rf">Rf</span>-<span class="code-id">ELECTRICITY</span></span></td>
+            <td><span class="mono"><span class="code-rf">Rf</span>-L-M-C-<span class="code-id">PRABHU</span></span> · <span class="mono"><span class="code-rf">Rf</span>-LB-M-H-<span class="code-id">SHARIFF</span></span></td>
           </tr>
         </tbody>
       </table>
@@ -261,10 +295,110 @@
     </div>
   </section>
 
+  <!-- SECTION 3.5 — SELLS -->
+  <section class="glass p-6" id="section-sells">
+    <div class="section-num">SECTION 3.5</div>
+    <h2>SELLS directory <span class="pill pill-purple" style="font-size:10px">Position 2 · 1-2 chars</span></h2>
+    <p class="text-sm text-white/70 mt-1">What the vendor stocks at the RM-purchase layer. Subset of {L, B}, alphabetically ordered, non-empty.</p>
+
+    <div class="overflow-x-auto mt-4">
+      <table class="dir-table">
+        <thead><tr><th>Code</th><th>Meaning</th><th>Real examples</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="code-cell"><span class="code-purple">L</span></td>
+            <td><strong>Loose only.</strong> Vendor only deals in unbranded RM by weight/volume — daily milk, vegetables, mutton, fish, walk-in emergency procurement.</td>
+            <td><span class="mono">Rf-<span class="code-purple">L</span>-M-C-<span class="code-id">PRABHU</span></span> (loose milk)</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-purple">B</span></td>
+            <td><strong>Branded only.</strong> Vendor only stocks SKU-coded branded goods — quick commerce apps, B2B platforms, dedicated brand suppliers.</td>
+            <td><span class="mono">Pf-<span class="code-purple">B</span>-A-D-<span class="code-id">ZEPTO</span></span> · <span class="mono">Rf-<span class="code-purple">B</span>-A-D-<span class="code-id">HYPERPURE</span></span></td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-purple">LB</span></td>
+            <td><strong>Both Loose and Branded.</strong> Mixed departmental stores or wholesalers that stock unbranded staples plus branded SKUs side by side. Always alphabetical — never <code>BL</code>.</td>
+            <td><span class="mono">Rf-<span class="code-purple">LB</span>-M-H-<span class="code-id">SHARIFF</span></span> (departmental store)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="layer-card mt-4 text-sm text-white/75">
+      <strong class="text-white">Future SELLS extension</strong>
+      <p class="mt-1">When the bill/expense scope opens (rent, utilities, services, capex), the SELLS alphabet extends to include <code>S</code> (services) and <code>C</code> (capex). New combinations like <code>LBS</code>, <code>BC</code>, <code>S</code> become valid points in the same space — <strong>no migration required</strong>. The constraint set widens; the existing <code>{L, B, LB}</code> rows stay valid.</p>
+    </div>
+  </section>
+
+  <!-- SECTION 3.6 — OPM -->
+  <section class="glass p-6" id="section-opm">
+    <div class="section-num">SECTION 3.6</div>
+    <h2>OPM directory <span class="pill pill-teal" style="font-size:10px">Position 3 · 1 char</span></h2>
+    <p class="text-sm text-white/70 mt-1">Order-Placement Method — how an order with this vendor is initiated. Binary: human-mediated vs automatable.</p>
+
+    <div class="overflow-x-auto mt-4">
+      <table class="dir-table">
+        <thead><tr><th>Code</th><th>Meaning</th><th>Real examples</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="code-cell"><span class="code-teal">M</span></td>
+            <td><strong>Manual.</strong> Ordering routes through a human channel — phone call, WhatsApp, walk-in, or a fixed daily/weekly delivery route. No app/API in the loop.</td>
+            <td><span class="mono">Rf-L-<span class="code-teal">M</span>-C-<span class="code-id">PRABHU</span></span> (daily route) · <span class="mono">Rf-LB-<span class="code-teal">M</span>-H-<span class="code-id">SHARIFF</span></span> (WA)</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-teal">A</span></td>
+            <td><strong>Automatable.</strong> Ordering can be placed by a Cron Worker via app, web portal, or API — quick commerce, B2B platforms, marketplace integrations.</td>
+            <td><span class="mono">Pf-B-<span class="code-teal">A</span>-D-<span class="code-id">ZEPTO</span></span> (app) · <span class="mono">Rf-B-<span class="code-teal">A</span>-D-<span class="code-id">HYPERPURE</span></span> (B2B)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="layer-card mt-4 text-sm text-white/75">
+      <strong class="text-white">Why this dimension</strong>
+      <p class="mt-1">OPM separates "needs a human to send WA" from "Cron Worker can place the order." That binary is the gate that decides whether an action becomes agent-emitted (A) or staff-emitted (M). Without OPM in the canonical code, automation routing requires lookup; with it, the agent reads the coordinate and acts.</p>
+    </div>
+  </section>
+
+  <!-- SECTION 3.7 — PMS -->
+  <section class="glass p-6" id="section-pms">
+    <div class="section-num">SECTION 3.7</div>
+    <h2>PMS directory <span class="pill pill-warn" style="font-size:10px;background:rgba(244,114,182,0.15);color:var(--pink)">Position 4 · 1 char</span></h2>
+    <p class="text-sm text-white/70 mt-1">Payment-Method Support — which payment channels this vendor accepts. Three exhaustive states.</p>
+
+    <div class="overflow-x-auto mt-4">
+      <table class="dir-table">
+        <thead><tr><th>Code</th><th>Meaning</th><th>Real examples</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="code-cell"><span class="code-pink">C</span></td>
+            <td><strong>Cash-only.</strong> Vendor doesn't accept digital payments — no UPI, no card, no NEFT. Settlement always physical.</td>
+            <td><span class="mono">Rf-L-M-<span class="code-pink">C</span>-<span class="code-id">PRABHU</span></span> (small loose milk vendor)</td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-pink">D</span></td>
+            <td><strong>Digital-only.</strong> Vendor doesn't accept cash — typical for app-based platforms, registered B2B suppliers, online subscriptions, GST-registered wholesalers.</td>
+            <td><span class="mono">Pf-B-A-<span class="code-pink">D</span>-<span class="code-id">ZEPTO</span></span> · <span class="mono">Rf-B-A-<span class="code-pink">D</span>-<span class="code-id">HYPERPURE</span></span></td>
+          </tr>
+          <tr>
+            <td class="code-cell"><span class="code-pink">H</span></td>
+            <td><strong>Hybrid.</strong> Vendor accepts both cash and at least one digital channel (UPI / NEFT / card). The settlement decision is made per-transaction at the action layer.</td>
+            <td><span class="mono">Rf-LB-M-<span class="code-pink">H</span>-<span class="code-id">SHARIFF</span></span> (departmental store)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="layer-card mt-4 text-sm text-white/75">
+      <strong class="text-white">What PMS does NOT capture</strong>
+      <p class="mt-1">PMS describes what the vendor <em>accepts</em>, not what was used. The exact payment channel for a specific bill (UPI vs cash for a hybrid vendor) is a property of the action — settled when the transaction happens. PMS only narrows the option space.</p>
+    </div>
+  </section>
+
   <!-- SECTION 4 — IDENTITY -->
   <section class="glass p-6" id="section-4">
     <div class="section-num">SECTION 4</div>
-    <h2>IDENTITY directory <span class="pill pill-vendor" style="font-size:10px">Position 2 · 3-10 chars</span></h2>
+    <h2>IDENTITY directory <span class="pill pill-vendor" style="font-size:10px">Position 5 · 3-10 chars</span></h2>
     <p class="text-sm text-white/70 mt-1">A 3-10 character uppercase abbreviation that gives the vendor its identity within the global vendor namespace.</p>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
@@ -278,7 +412,7 @@
       </div>
       <div class="layer-card">
         <strong class="text-white">Uniqueness</strong>
-        <p class="text-sm text-white/75 mt-1"><strong>Globally unique</strong> across ALL vendors regardless of PAY_SEQ. <span class="code-inline">Rf-PRABHU</span> blocks <span class="code-inline">Pf-PRABHU</span>.</p>
+        <p class="text-sm text-white/75 mt-1"><strong>Globally unique</strong> across ALL vendors regardless of the four leading dimensions. <span class="code-inline">Rf-L-M-C-PRABHU</span> blocks <span class="code-inline">Pf-B-A-D-PRABHU</span>.</p>
       </div>
       <div class="layer-card">
         <strong class="text-white">Case</strong>
@@ -300,7 +434,7 @@
         </tbody>
       </table>
     </div>
-    <p class="text-sm text-white/60 mt-2">When two vendors play the same operational role (e.g. two electricity providers across outlets), use a discriminator suffix — <code>Rf-ELECTRICITYNCH</code>, <code>Rf-ELECTRICITYHE</code>.</p>
+    <p class="text-sm text-white/60 mt-2">When two vendors play the same operational role (e.g. two electricity providers across outlets), use a discriminator suffix in IDENTITY — <code>Pf-B-A-D-ELECTRICNCH</code>, <code>Pf-B-A-D-ELECTRICHE</code>.</p>
   </section>
 
   <!-- SECTION 5 — FORBIDDEN -->
@@ -314,10 +448,15 @@
         <thead><tr><th>Forbidden</th><th>Why caught</th><th>Result</th></tr></thead>
         <tbody>
           <tr><td class="code-cell"><span class="code-pf">PAY_SEQ</span> outside {Pf, Rf}</td><td>The architectural binary is exhaustive — any third value would require a doctrine change.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-purple">SELLS</span> empty</td><td>RM-purchase scope requires at least one of {L, B}.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-purple">SELLS</span> outside {L, B, LB}</td><td>Constraint set in RM-purchase scope. S/C reserved for the bill/expense scope.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-purple">SELLS</span> = "BL"</td><td>Subsets must be alphabetically ordered — only "LB" is canonical.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-teal">OPM</span> outside {M, A}</td><td>Manual / Automatable is the exhaustive binary — no third state.</td><td class="text-white/70">400 reject</td></tr>
+          <tr><td class="code-cell"><span class="code-pink">PMS</span> outside {C, D, H}</td><td>Cash / Digital / Hybrid is the exhaustive enumeration.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-id">IDENTITY</span> empty</td><td>Identity required.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-id">IDENTITY</span> &lt; 3 chars</td><td>Codes need to stay readable.</td><td class="text-white/70">400 reject</td></tr>
           <tr><td class="code-cell"><span class="code-id">IDENTITY</span> &gt; 10 chars</td><td>Codes need to stay scannable.</td><td class="text-white/70">400 reject</td></tr>
-          <tr><td class="code-cell"><span class="code-id">IDENTITY</span> collision</td><td>Two vendors cannot share the same identity, even across PAY_SEQ tiers.</td><td class="text-white/70">409 conflict</td></tr>
+          <tr><td class="code-cell"><span class="code-id">IDENTITY</span> collision</td><td>Two vendors cannot share the same identity, even when the four leading dimensions differ.</td><td class="text-white/70">409 conflict</td></tr>
           <tr><td class="code-cell">Lowercase / non-alphanumeric</td><td>IDENTITY is uppercase A-Z and 0-9 only.</td><td class="text-white/70">400 reject (auto-uppercased on input)</td></tr>
           <tr><td class="code-cell">DELETE while RM-referenced</td><td>Cannot orphan an RM's supplier link silently — caller must remove from RM tree first.</td><td class="text-white/70">409 conflict</td></tr>
         </tbody>
@@ -329,7 +468,7 @@
   <section class="glass p-6" id="section-6">
     <div class="section-num">SECTION 6</div>
     <h2>Live Vendor Census — All Vendors Today</h2>
-    <p class="text-sm text-white/70 mt-1">Fetched live from <span class="code-inline">/api/vendors</span>. Each vendor shows its computed scope (BRAND set) and sells categories (L=Loose / B=Branded / I=In-house). Click any code to open the editor.</p>
+    <p class="text-sm text-white/70 mt-1">Fetched live from <span class="code-inline">/api/vendors</span>. Each vendor shows its declared SELLS / OPM / PMS pills plus the brand scope computed from the RM ring. Click any code to open the editor.</p>
 
     <div id="census-mount" class="mt-5">
       <div class="loading">Loading live vendors…</div>
@@ -340,90 +479,117 @@
   <section class="glass p-6" id="section-7">
     <div class="section-num">SECTION 7</div>
     <h2>Worked Examples — Reading codes left to right</h2>
-    <p class="text-sm text-white/70 mt-1">Six real codes, each walked through one segment at a time.</p>
+    <p class="text-sm text-white/70 mt-1">Six real codes (one hypothetical), each decomposed segment by segment.</p>
 
-    <h3 class="mt-4">1 · <span class="mono">Rf-PRABHU</span> — Loose milk vendor</h3>
+    <h3 class="mt-4">1 · <span class="mono">Rf-L-M-C-PRABHU</span> — Daily loose milk vendor</h3>
     <div class="walk-block">
-<span class="r">Rf</span>-<span class="i">PRABHU</span>
- <span class="lbl">│   └─</span> <span class="i">PRABHU</span> — identity (loose buffalo milk vendor in Shivajinagar)
- <span class="lbl">└─────</span> <span class="r">Rf</span> — Receive-first (delivers milk daily; settled weekly/monthly)
+<span class="r">Rf</span>-<span class="s">L</span>-<span class="o">M</span>-<span class="m">C</span>-<span class="i">PRABHU</span>
+ <span class="lbl">│  │ │ │   └─</span> <span class="i">PRABHU</span> — identity (loose buffalo milk vendor in Shivajinagar)
+ <span class="lbl">│  │ │ └─────</span> <span class="m">C</span> — Cash-only (small vendor, doesn't accept UPI)
+ <span class="lbl">│  │ └───────</span> <span class="o">M</span> — Manual order (we WhatsApp him daily)
+ <span class="lbl">│  └─────────</span> <span class="s">L</span> — Loose only (unbranded buffalo milk by litre)
+ <span class="lbl">└────────────</span> <span class="r">Rf</span> — Receive-first (delivers milk daily; settled weekly/monthly)
     </div>
-    <div class="walk-reads">Reads as: "A receive-first vendor named PRABHU." The computed view fills in: scope = NCH (only NCH consumes buffalo milk), sells = L (loose layer of <span class="mono">NCH-AM-P-Lb-MLK</span>).</div>
+    <div class="walk-reads">Reads as: "Receive-first, sells loose, manually ordered, cash-only vendor named PRABHU." Computed scope from RM ring = NCH (only NCH consumes buffalo milk).</div>
 
-    <h3 class="mt-5">2 · <span class="mono">Pf-ZEPTO</span> — Quick commerce app</h3>
+    <h3 class="mt-5">2 · <span class="mono">Pf-B-A-D-ZEPTO</span> — Quick commerce platform</h3>
     <div class="walk-block">
-<span class="p">Pf</span>-<span class="i">ZEPTO</span>
- <span class="lbl">│   └─</span> <span class="i">ZEPTO</span> — identity (the quick commerce platform)
- <span class="lbl">└─────</span> <span class="p">Pf</span> — Pay-first (you pay in app, then goods arrive in 10 minutes)
+<span class="p">Pf</span>-<span class="s">B</span>-<span class="o">A</span>-<span class="m">D</span>-<span class="i">ZEPTO</span>
+ <span class="lbl">│  │ │ │   └─</span> <span class="i">ZEPTO</span> — identity (the quick commerce platform)
+ <span class="lbl">│  │ │ └─────</span> <span class="m">D</span> — Digital-only (no cash settlement; in-app payment)
+ <span class="lbl">│  │ └───────</span> <span class="o">A</span> — Automatable (Cron Worker can place orders via app/API)
+ <span class="lbl">│  └─────────</span> <span class="s">B</span> — Branded only (SKU-coded packs — Zepto doesn't deal in loose)
+ <span class="lbl">└────────────</span> <span class="p">Pf</span> — Pay-first (paid in-app, then 10-minute delivery)
     </div>
-    <div class="walk-reads">Reads as: "A pay-first vendor named ZEPTO." Computed: scope = HN (cross-brand — both NCH and HE order from Zepto); sells = B (branded SKUs only — Zepto doesn't deal in loose).</div>
+    <div class="walk-reads">Reads as: "Pay-first, branded only, automatable, digital-only vendor named ZEPTO." Computed scope = HN (cross-brand — both NCH and HE order from Zepto).</div>
 
-    <h3 class="mt-5">3 · <span class="mono">Rf-SHARIFF</span> — Departmental store with credit terms</h3>
+    <h3 class="mt-5">3 · <span class="mono">Rf-LB-M-H-SHARIFF</span> — Mixed departmental store</h3>
     <div class="walk-block">
-<span class="r">Rf</span>-<span class="i">SHARIFF</span>
- <span class="lbl">│   └─</span> <span class="i">SHARIFF</span> — identity (Shivajinagar departmental store)
- <span class="lbl">└─────</span> <span class="r">Rf</span> — Receive-first (we collect goods, settle monthly bill)
+<span class="r">Rf</span>-<span class="s">LB</span>-<span class="o">M</span>-<span class="m">H</span>-<span class="i">SHARIFF</span>
+ <span class="lbl">│   │ │ │   └─</span> <span class="i">SHARIFF</span> — identity (Shivajinagar departmental store)
+ <span class="lbl">│   │ │ └─────</span> <span class="m">H</span> — Hybrid (accepts cash + UPI; settle per-transaction)
+ <span class="lbl">│   │ └───────</span> <span class="o">M</span> — Manual order (we WhatsApp / call / walk-in)
+ <span class="lbl">│   └─────────</span> <span class="s">LB</span> — Both Loose and Branded (alphabetical)
+ <span class="lbl">└─────────────</span> <span class="r">Rf</span> — Receive-first (collect goods, settle monthly)
     </div>
-    <div class="walk-reads">Reads as: "A receive-first vendor named SHARIFF." Computed: scope = HN (cross-brand); sells = L + B (loose AND branded — they stock both formats).</div>
+    <div class="walk-reads">Reads as: "Receive-first, sells both loose and branded, manually ordered, hybrid-payment vendor named SHARIFF." Computed scope = HN (cross-brand); per-transaction payment method (UPI vs cash) decided at action layer.</div>
 
-    <h3 class="mt-5">4 · <span class="mono">Pf-RENT</span> — Landlord, advance rent</h3>
+    <h3 class="mt-5">4 · <span class="mono">Rf-B-A-D-HYPERPURE</span> — B2B platform</h3>
     <div class="walk-block">
-<span class="p">Pf</span>-<span class="i">RENT</span>
- <span class="lbl">│   └─</span> <span class="i">RENT</span> — identity (landlord — functional handle, not personal name)
- <span class="lbl">└─────</span> <span class="p">Pf</span> — Pay-first (rent paid 1st of every month, in advance for that month)
+<span class="r">Rf</span>-<span class="s">B</span>-<span class="o">A</span>-<span class="m">D</span>-<span class="i">HYPERPURE</span>
+ <span class="lbl">│  │ │ │   └─</span> <span class="i">HYPERPURE</span> — identity (Zomato's B2B sourcing platform)
+ <span class="lbl">│  │ │ └─────</span> <span class="m">D</span> — Digital-only (NEFT/UPI; no cash on B2B portal)
+ <span class="lbl">│  │ └───────</span> <span class="o">A</span> — Automatable (B2B portal supports API)
+ <span class="lbl">│  └─────────</span> <span class="s">B</span> — Branded only (SKU-coded wholesale)
+ <span class="lbl">└────────────</span> <span class="r">Rf</span> — Receive-first (delivery + invoice; settle on credit terms)
     </div>
-    <div class="walk-reads">Reads as: "A pay-first vendor named RENT." Computed: scope is empty for now (rent isn't an RM purchase — it's an opex line). The RM ring won't list this vendor; that's fine — orphan vendors are valid for non-RM expense relationships.</div>
+    <div class="walk-reads">Reads as: "Receive-first, branded only, automatable, digital-only vendor named HYPERPURE." Distinct from ZEPTO precisely on PAY_SEQ — Hyperpure invoices on credit, Zepto charges in-app upfront.</div>
 
-    <h3 class="mt-5">5 · <span class="mono">Rf-ELECTRICITY</span> — Post-consumption utility</h3>
+    <h3 class="mt-5">5 · <span class="mono">Pf-L-M-C-WALKIN</span> — Emergency walk-in procurement</h3>
     <div class="walk-block">
-<span class="r">Rf</span>-<span class="i">ELECTRICITY</span>
- <span class="lbl">│   └─</span> <span class="i">ELECTRICITY</span> — identity (BESCOM, the Bangalore electricity board)
- <span class="lbl">└─────</span> <span class="r">Rf</span> — Receive-first (you consume electricity, then get the monthly bill)
+<span class="p">Pf</span>-<span class="s">L</span>-<span class="o">M</span>-<span class="m">C</span>-<span class="i">WALKIN</span>
+ <span class="lbl">│  │ │ │   └─</span> <span class="i">WALKIN</span> — identity (functional handle for ad-hoc local buys)
+ <span class="lbl">│  │ │ └─────</span> <span class="m">C</span> — Cash-only (counter purchase, immediate cash)
+ <span class="lbl">│  │ └───────</span> <span class="o">M</span> — Manual order (staff walks to local shop)
+ <span class="lbl">│  └─────────</span> <span class="s">L</span> — Loose only (vegetables / mutton emergency top-up)
+ <span class="lbl">└────────────</span> <span class="p">Pf</span> — Pay-first (cash handed over before goods loaded)
     </div>
-    <div class="walk-reads">Reads as: "A receive-first vendor named ELECTRICITY." Like rent — orphan in the RM sense, but real for opex tracking. PAY_SEQ correctly classifies it as receive-first (post-consumption billing).</div>
+    <div class="walk-reads">Reads as: "Pay-first, loose only, manually ordered, cash-only vendor named WALKIN." A functional vendor record covering all ad-hoc emergency procurement — counts as one entity even though physical shops vary.</div>
 
-    <h3 class="mt-5">6 · <span class="mono">Pf-INTERNET</span> — Subscription, advance payment</h3>
+    <h3 class="mt-5">6 · <span class="mono">Rf-LB-A-H-FUTUREVEND</span> — Hypothetical future state</h3>
     <div class="walk-block">
-<span class="p">Pf</span>-<span class="i">INTERNET</span>
- <span class="lbl">│   └─</span> <span class="i">INTERNET</span> — identity (BSNL or whichever ISP)
- <span class="lbl">└─────</span> <span class="p">Pf</span> — Pay-first (monthly fee paid in advance for the next billing period)
+<span class="r">Rf</span>-<span class="s">LB</span>-<span class="o">A</span>-<span class="m">H</span>-<span class="i">FUTUREVEND</span>
+ <span class="lbl">│   │ │ │   └─</span> <span class="i">FUTUREVEND</span> — identity (a hypothetical mixed-stock vendor with API)
+ <span class="lbl">│   │ │ └─────</span> <span class="m">H</span> — Hybrid (vendor adopts UPI alongside legacy cash)
+ <span class="lbl">│   │ └───────</span> <span class="o">A</span> — Automatable (vendor exposes WhatsApp Business API or webform)
+ <span class="lbl">│   └─────────</span> <span class="s">LB</span> — Loose + Branded (mixed stock continues)
+ <span class="lbl">└─────────────</span> <span class="r">Rf</span> — Receive-first (continues as credit terms vendor)
     </div>
-    <div class="walk-reads">Reads as: "A pay-first vendor named INTERNET." Distinguishes itself from <span class="mono">Rf-ELECTRICITY</span> precisely because subscriptions reverse the cash-flow direction — that's the value PAY_SEQ adds.</div>
+    <div class="walk-reads">Reads as: "Receive-first, mixed stock, automatable, hybrid-payment vendor." Demonstrates that <strong>SHARIFF could legitimately migrate</strong> to <code>Rf-LB-A-H-SHARIFF</code> the day they expose ordering automation — a single PUT updates the row, the canonical code re-keys, and the action ring picks up the change with no further migration.</div>
   </section>
 
-  <!-- SECTION 8 — WHY MINIMAL -->
+  <!-- SECTION 8 — WHAT'S IN AND WHAT'S OUT -->
   <section class="glass p-6" id="section-8">
     <div class="section-num">SECTION 8</div>
-    <h2>Why minimal · the doctrine</h2>
+    <h2>What stays out of the code</h2>
 
     <div class="prose mt-2">
-      <p>An obvious instinct would be to encode BRAND scope (NCH/HE/HN) directly in the vendor code: <span class="code-inline">Rf-NCH-PRABHU</span>. We deliberately don't, because:</p>
+      <p>An obvious instinct would be to encode BRAND scope (NCH/HE/HN) directly in the vendor code: <span class="code-inline">Rf-L-M-C-NCH-PRABHU</span>. We deliberately don't — and the same discipline applies to several other tempting fields:</p>
       <ul>
-        <li><strong>BRAND is a relationship, not an identity.</strong> It changes when the RM ring changes — without any vendor mutation. Encoding it statically would create sync drift the day NCH stops using PRABHU.</li>
-        <li><strong>SELLS is even more derived.</strong> Whether a vendor sells Loose or Branded depends on which RM layer their record sits in. That answer comes from the RM ring, not the vendor row.</li>
-        <li><strong>PAY_SEQ is the only static fact.</strong> Whether you pay before or after receiving is a property of the vendor's commercial structure — it doesn't change based on which RM you bought.</li>
+        <li><strong>BRAND scope is derivable.</strong> It changes when the RM ring changes — without any vendor mutation. Encoding it statically would create sync drift the day NCH stops using PRABHU.</li>
+        <li><strong>Per-transaction payment method.</strong> Whether a hybrid vendor was paid in UPI or cash for a specific bill is a property of the action, not the vendor. PMS narrows the option space; the action picks one.</li>
+        <li><strong>Money source / L3 routing.</strong> Which bank account, which till, which UPI handle paid this vendor — that's a Layer-3 ledger concern, not a vendor identity concern.</li>
+        <li><strong>Communication channel.</strong> Phone/WhatsApp/email is a property field. OPM captures whether ordering can be automated; the actual contact details are data_json.</li>
+        <li><strong>Bank account / contact details.</strong> Pure properties — they live in <code>data_json</code>, never in the canonical code.</li>
       </ul>
-      <p>So the canonical code carries only PAY_SEQ + IDENTITY. The richer view — what scope, what sells, which RMs — is computed at query time via <code>?include=relationships</code>, by walking <code>rm_sourcing_profiles.data_json</code> for vendor refs. Ledger-style: the entity is the immutable kernel; properties bloom from the relationships.</p>
+      <p>Five canonical dimensions; everything else is property or derived view.</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
       <div class="ok-card text-sm">
         <strong class="text-white">In the static row</strong>
         <ul class="mt-1 ml-4 list-disc text-white/85">
-          <li>vendor_code (Pf/Rf-IDENTITY)</li>
-          <li>pay_seq, identity_abbr, vendor_name</li>
+          <li>vendor_code (Pf/Rf-SELLS-OPM-PMS-IDENTITY)</li>
+          <li>pay_seq, sells, opm, pms, identity_abbr, vendor_name</li>
           <li>communication / location / payment / GST in data_json</li>
         </ul>
       </div>
       <div class="failure-card text-sm">
         <strong class="text-white">Never in the static row</strong>
         <ul class="mt-1 ml-4 list-disc text-white/85">
-          <li>BRAND scope</li>
-          <li>SELLS categories</li>
-          <li>RMs supplied</li>
-          <li>V-shape (lives at action layer)</li>
+          <li>BRAND scope (derivable from RM ring)</li>
+          <li>Per-transaction payment method (action layer)</li>
+          <li>Money source / L3 routing (ledger)</li>
+          <li>Communication channel (property)</li>
+          <li>Bank account / contact (property)</li>
+          <li>V-shape (action layer)</li>
         </ul>
       </div>
+    </div>
+
+    <div class="layer-card mt-4 text-sm text-white/75" style="border-top: 3px solid var(--purple);">
+      <strong class="text-white">Future SELLS dimension extension</strong>
+      <p class="mt-1">The current SELLS alphabet is <code>{L, B}</code> with subsets <code>{L, B, LB}</code>, valid in RM-purchase scope only. When the bill/expense scope opens (rent, utilities, services, capex), the alphabet extends: <code>S</code> = services, <code>C</code> = capex. Combinations like <code>LBS</code>, <code>BC</code>, <code>S</code> become valid — same constraint pattern (alphabetical, non-empty subset), just a wider letter set. <strong>No migration required:</strong> existing rows stay valid, the CHECK constraint widens, and new combinations slot in as new points in the same space.</p>
     </div>
   </section>
 
@@ -441,9 +607,9 @@
       <pre class="code-block mt-2"><span style="color:var(--accent)">{ACTION}</span>-<span style="color:var(--info)">{RM_CODE}</span>-<span style="color:var(--good)">{VENDOR_CODE}</span>-<span style="color:var(--purple)">{V_SHAPE}</span>-<span style="color:var(--ink)">{TXN_ID}</span>
 
 Examples:
-  PUR-NCH-AM-P-Lb-MLK-Rf-PRABHU-V1a-2026050801   ← daily milk receipt
-  PUR-HN-AM-P-Bl-BTR-Pf-ZEPTO-V3-2026050802     ← Amul butter via Zepto
-  EXP-OPEX-Pf-RENT-V5-2026050801                ← monthly rent payment</pre>
+  PUR-NCH-AM-P-Lb-MLK-Rf-L-M-C-PRABHU-V1a-2026050801   ← daily milk receipt
+  PUR-HN-AM-P-Bl-BTR-Pf-B-A-D-ZEPTO-V3-2026050802      ← Amul butter via Zepto
+  PUR-HN-AM-P-Lb-VEG-Rf-LB-M-H-SHARIFF-V2-2026050803    ← veg + branded staples</pre>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
@@ -453,7 +619,7 @@ Examples:
       </div>
       <div class="layer-card" style="border-top: 3px solid var(--good)">
         <strong class="text-white">Vendor ring (this page)</strong>
-        <p class="text-sm text-white/75 mt-1">Two segments — who supplied + cash-flow direction. Computed views fill in scope/sells via the RM ring.</p>
+        <p class="text-sm text-white/75 mt-1">Five segments — cash direction · what they sell · how we order · how they accept payment · who they are. Brand scope still computed via the RM ring.</p>
       </div>
       <div class="layer-card" style="border-top: 3px solid var(--purple)">
         <strong class="text-white">Action ring</strong>
@@ -469,7 +635,7 @@ Examples:
 </main>
 
 <footer class="border-t border-white/5 px-6 py-5 text-xs text-white/40 text-center">
-  Vendor Canonical Shape Directory · v1.0 · May 2026 ·
+  Vendor Canonical Shape Directory · v2.0 (5-segment) · May 2026 ·
   <a href="/ops/vendor-editor/" class="text-white/60 hover:text-white">Vendor Editor</a> ·
   <a href="/ops/visual/rm-shape-directory/" class="text-white/60 hover:text-white">RM Shape Directory</a> ·
   <a href="/ops/visual/coa-doctrine/" class="text-white/60 hover:text-white">COA Doctrine</a> ·
@@ -489,12 +655,16 @@ Examples:
       return `<span class="pill ${cls}" style="font-size:10px">${escapeHtml(b)}</span>`;
     }).join(' ');
   }
-  function sellsPills(sells) {
+  function sellsActualPills(sells) {
     if (!sells || sells.length === 0) return '';
     return sells.map(s => {
       const cls = s === 'L' ? 'pill-info' : s === 'B' ? 'pill-purple' : 'pill-teal';
-      return `<span class="pill ${cls}" style="font-size:10px">${escapeHtml(s)}</span>`;
+      return `<span class="pill ${cls}" style="font-size:10px" title="RM-ring observed">${escapeHtml(s)}</span>`;
     }).join(' ');
+  }
+  function dimPill(value, color, title) {
+    if (!value) return '';
+    return `<span class="pill" style="font-size:10px;background:${color}22;color:${color}" title="${escapeHtml(title)}">${escapeHtml(value)}</span>`;
   }
 
   try {
@@ -533,7 +703,11 @@ Examples:
           const meta = (c.rm_count > 0)
             ? `<span class="v-meta">${c.rm_count} RM${c.rm_count===1?'':'s'}</span>`
             : '<span class="v-meta">no RM links</span>';
-          html += `<li><a href="${editorHref(v.vendor_code)}">${escapeHtml(v.vendor_code)}</a><span class="v-name">· ${escapeHtml(v.vendor_name)}</span> ${scopePills(c.scope)} ${sellsPills(c.sells)} ${meta}</li>`;
+          const sellsPill = dimPill(v.sells, '#c084fc', 'SELLS · what they stock');
+          const opmPill   = dimPill(v.opm,   '#2dd4bf', 'OPM · order-placement method');
+          const pmsPill   = dimPill(v.pms,   '#f472b6', 'PMS · payment-method support');
+          const sellsActual = c.sells_actual || c.sells || [];
+          html += `<li><a href="${editorHref(v.vendor_code)}">${escapeHtml(v.vendor_code)}</a><span class="v-name">· ${escapeHtml(v.vendor_name)}</span> ${sellsPill} ${opmPill} ${pmsPill} ${scopePills(c.scope)} ${sellsActualPills(sellsActual)} ${meta}</li>`;
         });
         html += '</ul></div>';
       });
