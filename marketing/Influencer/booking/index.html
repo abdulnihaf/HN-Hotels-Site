@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Hamza Express · Influencer Cover Booking</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f1a; --card:#111826; --card2:#1a2234; --line:#273042;
+  --text:#e6edf7; --mute:#8b95a8; --dim:#5a6477;
+  --tan:#D2B48C; --sienna:#713520; --offwhite:#FAF3E3;
+  --green:#22c55e; --red:#ef4444; --orange:#f97316;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+.serif{font-family:'Cinzel',serif;letter-spacing:.02em}
+.mono{font-family:'JetBrains Mono',monospace}
+a{color:var(--tan);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* HERO with 1918 frame */
+.hero{background:linear-gradient(135deg,#1a1410 0%,var(--bg) 60%);border-bottom:1px solid var(--line);padding:32px 24px 24px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;right:-80px;top:-80px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(212,180,140,.18) 0%,transparent 70%)}
+.brand{font-size:22px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand-1918{font-family:'Cinzel',serif;font-size:32px;font-weight:700;color:var(--tan);background:linear-gradient(135deg,var(--tan),var(--offwhite));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.04em}
+.subline{color:var(--mute);font-size:13px;margin-top:6px}
+.subline b{color:var(--text)}
+.hero-h1{font-size:24px;font-weight:800;margin-top:18px;letter-spacing:-.01em;line-height:1.25}
+.hero-sub{color:var(--mute);font-size:14px;margin-top:8px;line-height:1.55;max-width:560px}
+.hero-sub b{color:var(--text)}
+
+/* CONTAINER */
+.wrap{max-width:760px;margin:0 auto;padding:24px;padding-bottom:96px}
+
+/* CREATOR card */
+.creator{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:20px;display:flex;gap:16px;align-items:center}
+.cr-pic{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--sienna),var(--tan));display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--bg);font-family:'JetBrains Mono',monospace;flex-shrink:0;overflow:hidden}
+.cr-pic img{width:100%;height:100%;object-fit:cover}
+.cr-info{flex:1;min-width:0}
+.cr-name{font-size:18px;font-weight:700;line-height:1.2}
+.cr-handle{font-size:13px;color:var(--mute);font-family:'JetBrains Mono',monospace;margin-top:2px}
+.cr-tier{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0f1a;font-weight:700;padding:4px 11px;border-radius:99px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-top:8px}
+
+/* COMMITMENT card */
+.commitment{background:linear-gradient(135deg,rgba(249,115,22,.08),rgba(212,180,140,.05));border:1px solid rgba(212,180,140,.3);border-radius:14px;padding:22px;margin-top:16px;text-align:center}
+.commit-h{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px}
+.commit-num{font-family:'Cinzel',serif;font-size:64px;font-weight:700;line-height:1;color:var(--tan);margin-bottom:6px}
+.commit-label{color:var(--text);font-size:14px;font-weight:600}
+.commit-budget{color:var(--mute);font-size:13px;margin-top:10px;padding-top:14px;border-top:1px dashed var(--line)}
+.commit-budget b{color:var(--text);font-family:'JetBrains Mono',monospace}
+.commit-deliverables{font-size:11px;color:var(--mute);margin-top:8px;line-height:1.6}
+
+/* SECTION */
+.section{margin-top:28px}
+.section-h{font-size:13px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:12px;display:flex;justify-content:space-between;align-items:baseline}
+.section-h .right{color:var(--dim);font-size:11px}
+
+/* SLOTS */
+.day-group{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+.day-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.day-date{font-weight:700;font-size:15px}
+.day-day{color:var(--mute);font-size:12px;font-family:'JetBrains Mono',monospace}
+.day-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px}
+.slot{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;text-align:center;transition:all .12s;position:relative}
+.slot:hover:not(.full):not(.selected){border-color:var(--tan);transform:translateY(-1px)}
+.slot.selected{background:rgba(212,180,140,.18);border-color:var(--tan);box-shadow:0 0 0 1px var(--tan)}
+.slot.full{opacity:.4;cursor:not-allowed}
+.slot.eid{background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(212,180,140,.06));border-color:rgba(245,158,11,.35)}
+.slot.jumma{background:linear-gradient(135deg,rgba(34,197,94,.08),rgba(212,180,140,.05));border-color:rgba(34,197,94,.3)}
+.slot-window{font-size:10px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:2px}
+.slot-time{font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.slot-cap{font-size:10px;color:var(--dim);margin-top:3px}
+.slot-cap.tight{color:var(--orange)}
+
+/* FORM */
+.form{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:16px}
+.form label{display:block;font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-top:14px;margin-bottom:6px}
+.form input,.form textarea{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:8px;font-family:inherit;font-size:14px}
+.form input:focus,.form textarea:focus{outline:none;border-color:var(--tan)}
+.form textarea{min-height:70px;resize:vertical}
+.form .helper{font-size:11px;color:var(--mute);margin-top:4px}
+
+/* SUBMIT */
+.submit{width:100%;background:linear-gradient(135deg,var(--sienna),var(--tan));color:var(--bg);border:none;padding:16px;border-radius:12px;font-family:inherit;font-size:15px;font-weight:800;cursor:pointer;margin-top:20px;letter-spacing:.02em;transition:all .15s}
+.submit:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(212,180,140,.3)}
+.submit:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* CONFIRMED state */
+.confirmed{background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(212,180,140,.04));border:1px solid rgba(34,197,94,.4);border-radius:14px;padding:32px 24px;text-align:center;margin-top:20px}
+.confirmed .check{font-size:64px;line-height:1;margin-bottom:14px}
+.confirmed h2{font-size:22px;font-weight:800;margin-bottom:10px}
+.confirmed .info{color:var(--mute);font-size:14px;line-height:1.6;margin-top:12px}
+.confirmed .info b{color:var(--text);font-family:'JetBrains Mono',monospace}
+.confirmed .map-link{display:inline-block;background:var(--card);border:1px solid var(--tan);color:var(--tan);padding:12px 20px;border-radius:10px;margin-top:18px;font-weight:700;text-transform:uppercase;font-size:12px;letter-spacing:.05em}
+
+/* MENU PREVIEW */
+.menu{margin-top:20px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.menu-h{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px}
+.menu-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;font-size:13px}
+.menu-item{background:var(--card2);padding:8px 12px;border-radius:7px;color:var(--text2)}
+.menu-item b{color:var(--tan);display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;font-family:'JetBrains Mono',monospace}
+
+/* ERROR / LOADING */
+.loading,.err{padding:60px 20px;text-align:center;color:var(--mute)}
+.err{color:var(--red)}
+
+/* MOBILE */
+@media (max-width:600px){
+  .wrap{padding:16px}
+  .hero{padding:24px 16px 18px}
+  .creator{padding:16px}
+  .cr-pic{width:56px;height:56px;font-size:18px}
+  .day-slots{grid-template-columns:1fr 1fr}
+  .commit-num{font-size:50px}
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="brand">
+    <div class="brand-1918">EST. 1918</div>
+    <div>Hamza Express<div class="subline mono">Shivajinagar · HKP Road · Bangalore</div></div>
+  </div>
+  <h1 class="hero-h1">You're invited.</h1>
+  <p class="hero-sub">
+    Four generations of Dakhni cuisine, kept alive by the Hamza family. We'd love to host you for
+    <b id="heroCovers">a meal</b> — book your slot below.
+  </p>
+</div>
+
+<div class="wrap" id="root">
+  <div class="loading">Loading your invitation…</div>
+</div>
+
+<script>
+const API = '/api/influencer-bookings';
+const params = new URLSearchParams(location.search);
+const TOKEN = params.get('token');
+
+let STATE = null;       // tokenDetail response
+let SELECTED_SLOT = null;
+
+async function load() {
+  if (!TOKEN) {
+    document.getElementById('root').innerHTML = '<div class="err">Invalid invitation link. Please contact us at hamza@hnhotels.in.</div>';
+    return;
+  }
+  try {
+    const r = await fetch(`${API}?action=token-detail&token=${encodeURIComponent(TOKEN)}`);
+    if (r.status === 404) {
+      document.getElementById('root').innerHTML = '<div class="err">This invitation link is invalid or expired. Please reach out to us directly.</div>';
+      return;
+    }
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'load failed');
+    STATE = d;
+
+    // If already booked
+    if (d.booking.status === 'confirmed' || d.booking.status === 'pending' && d.booking.slot_id > 0) {
+      renderConfirmed(d);
+      return;
+    }
+    render();
+    document.getElementById('heroCovers').textContent = d.booking.cover_commitment + ' covers';
+  } catch (e) {
+    document.getElementById('root').innerHTML = `<div class="err">Couldn't load invitation: ${e.message}</div>`;
+  }
+}
+
+function fmtINR(p){
+  const r = p / 100;
+  return '₹' + r.toLocaleString('en-IN');
+}
+
+function fmtDate(s){
+  const d = new Date(s + 'T00:00:00');
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return { day: days[d.getDay()], date: d.getDate() + ' ' + months[d.getMonth()] };
+}
+
+function render() {
+  const d = STATE;
+  const { creator, booking, slots } = d;
+
+  // Group slots by date
+  const byDate = {};
+  for (const s of slots) {
+    if (!byDate[s.slot_date]) byDate[s.slot_date] = [];
+    byDate[s.slot_date].push(s);
+  }
+
+  const bioPreview = creator.bio ? `<div style="font-size:12px;color:var(--mute);margin-top:8px;font-style:italic">"${creator.bio.replace(/[<>]/g,'').slice(0,140)}${creator.bio.length>140?'…':''}"</div>` : '';
+
+  document.getElementById('root').innerHTML = `
+    <!-- CREATOR card -->
+    <div class="creator">
+      <div class="cr-pic">${creator.pic ? `<img src="${creator.pic}" alt="${creator.username}" referrerpolicy="no-referrer" onerror="this.parentNode.innerHTML='${(creator.username||'?').slice(0,2).toUpperCase()}'">` : (creator.username||'?').slice(0,2).toUpperCase()}</div>
+      <div class="cr-info">
+        <div class="cr-name">${(creator.name||creator.username).replace(/[<>]/g,'')}</div>
+        <div class="cr-handle">@${creator.username}${creator.followers ? ' · ' + (creator.followers >= 1000 ? Math.round(creator.followers/1000)+'K' : creator.followers) + ' followers' : ''}</div>
+        <span class="cr-tier">${booking.tier_label}</span>
+        ${bioPreview}
+      </div>
+    </div>
+
+    <!-- COMMITMENT -->
+    <div class="commitment">
+      <div class="commit-h">Your Cover Commitment</div>
+      <div class="commit-num">${booking.cover_commitment}</div>
+      <div class="commit-label">covers (you + ${booking.cover_commitment - 1} guest${booking.cover_commitment > 2 ? 's' : ''})</div>
+      <div class="commit-budget">Meal on us — up to <b>${fmtINR(booking.meal_budget_paise)}</b> covered</div>
+      <div class="commit-deliverables">In return: 1 reel + 3 stories${booking.cover_commitment >= 4 ? ' + 1 grid post' : ''}${booking.cover_commitment >= 6 ? ' · 7-day usage rights' : ''}</div>
+    </div>
+
+    <!-- MENU PREVIEW -->
+    <div class="menu">
+      <div class="menu-h">What you'll taste</div>
+      <div class="menu-list">
+        <div class="menu-item"><b>Signature</b>Ghee Rice (1918 recipe)</div>
+        <div class="menu-item"><b>Mutton</b>Mutton Biryani · Brain Dry · Hamza Special</div>
+        <div class="menu-item"><b>Tandoor</b>Chicken Kabab · Tandoori Chicken · Sheek</div>
+        <div class="menu-item"><b>Chicken</b>Mughlai Chicken · Butter Chicken</div>
+        <div class="menu-item"><b>Breads</b>Butter Naan · Rumali · Kerala Paratha</div>
+        <div class="menu-item"><b>Bites</b>Shawarma Roll · Kathi Roll</div>
+      </div>
+    </div>
+
+    <!-- SLOTS -->
+    <div class="section">
+      <div class="section-h">Pick your slot <span class="right">May 10 – 31</span></div>
+      <div id="slots">${Object.entries(byDate).map(([date, list]) => {
+        const fd = fmtDate(date);
+        return `
+          <div class="day-group">
+            <div class="day-h">
+              <span class="day-date">${fd.date}</span>
+              <span class="day-day">${fd.day}${date === '2026-05-27' ? ' · EID 🌙' : ''}${fd.day === 'Fri' ? ' · JUMMA' : ''}</span>
+            </div>
+            <div class="day-slots">${list.map(s => {
+              const remaining = s.remaining;
+              const full = remaining <= 0;
+              const tight = remaining <= 2 && !full;
+              const cls = ['slot', s.window_code === 'EID' ? 'eid' : '', s.window_code === 'JUMMA' ? 'jumma' : '', full ? 'full' : ''].filter(Boolean).join(' ');
+              return `
+                <div class="${cls}" data-slot-id="${s.id}" ${full ? '' : `onclick="selectSlot(${s.id})"`}>
+                  <div class="slot-window">${s.window_code}</div>
+                  <div class="slot-time">${s.window_label}</div>
+                  <div class="slot-cap ${tight ? 'tight' : ''}">${full ? 'Full' : `${remaining} of ${s.capacity} left`}</div>
+                </div>
+              `;
+            }).join('')}</div>
+          </div>
+        `;
+      }).join('')}</div>
+    </div>
+
+    <!-- FORM -->
+    <div class="form" id="bookingForm" style="display:none">
+      <div class="section-h">Confirm your details</div>
+      <label>Phone (for booking confirmation)</label>
+      <input type="tel" id="cPhone" placeholder="+91 9876543210" required>
+      <label>Email (optional)</label>
+      <input type="email" id="cEmail" placeholder="you@gmail.com">
+      <label>Anything we should know? (dietary preferences, plus-one names, etc.)</label>
+      <textarea id="cNotes" placeholder="(optional)"></textarea>
+      <button class="submit" id="submitBtn" onclick="submitBooking()">Confirm slot · ${booking.cover_commitment} covers</button>
+      <div class="helper" style="margin-top:12px;text-align:center">
+        We'll WhatsApp you a confirmation. Bring up to ${booking.cover_commitment} guests including yourself.
+      </div>
+    </div>
+  `;
+}
+
+function selectSlot(id) {
+  SELECTED_SLOT = id;
+  document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
+  document.querySelector(`[data-slot-id="${id}"]`).classList.add('selected');
+  document.getElementById('bookingForm').style.display = 'block';
+  document.getElementById('bookingForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function submitBooking() {
+  const phone = document.getElementById('cPhone').value.trim();
+  if (!phone) { alert('Phone number required'); return; }
+  const email = document.getElementById('cEmail').value.trim();
+  const notes = document.getElementById('cNotes').value.trim();
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = 'Booking…';
+
+  try {
+    const r = await fetch(`${API}?action=book`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: TOKEN,
+        slot_id: SELECTED_SLOT,
+        contact_phone: phone,
+        contact_email: email || null,
+        notes_creator: notes || null,
+      })
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'booking failed');
+    // Re-render as confirmed
+    renderConfirmed({
+      booking: { ...STATE.booking, status: 'pending', slot_date: d.slot_date, window_label: d.window_label },
+      creator: STATE.creator,
+      address: d.address,
+      map_url: d.map_url,
+    });
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Confirm slot';
+    alert('Booking failed: ' + e.message);
+  }
+}
+
+function renderConfirmed(d) {
+  const slot = STATE?.slots?.find(s => s.id === d.booking.slot_id);
+  const dateLabel = slot ? `${fmtDate(slot.slot_date).day}, ${fmtDate(slot.slot_date).date}` : (d.booking.slot_date || '—');
+  const windowLabel = slot?.window_label || d.booking.window_label || '—';
+
+  document.getElementById('root').innerHTML = `
+    <div class="confirmed">
+      <div class="check">✓</div>
+      <h2>You're booked.</h2>
+      <div class="info">
+        <b>${dateLabel}</b><br>
+        <b>${windowLabel}</b><br>
+        ${d.booking.cover_commitment} covers · meal on us
+      </div>
+      <div class="info" style="margin-top:18px">
+        We've saved your spot. Faheem will WhatsApp you to confirm shortly.
+        Just walk in at the time slot you picked — show this confirmation to staff at the entrance.
+      </div>
+      <a class="map-link" href="${d.map_url || 'https://maps.app.goo.gl/uV5UPq3DA2DfL3RT9'}" target="_blank">📍 Get directions</a>
+      <div class="info" style="margin-top:24px;font-size:12px">
+        Hamza Express · #19 H.K.P. Road · Shivajinagar · Bangalore 560051<br>
+        Open 2 PM – 3 AM · WhatsApp: +91 ____<br>
+        <span style="color:var(--tan);font-family:'Cinzel',serif;font-weight:700">EST. 1918</span>
+      </div>
+    </div>
+  `;
+}
+
+load();
+</script>
+
+</body>
+</html>
