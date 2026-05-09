@@ -41,7 +41,10 @@ if (!PIN) { console.error('Missing --pin'); process.exit(1); }
 /* ───────── D1 source pull ───────── */
 
 function d1Query(sql) {
-  const cmd = `wrangler d1 execute hn-hiring --remote --command ${JSON.stringify(sql)} --json`;
+  // Wrangler's --command arg passes verbatim into SQLite — newlines blow up
+  // the SQL parser. Collapse the SQL onto one line first.
+  const flat = sql.replace(/\s+/g, ' ').trim();
+  const cmd = `wrangler d1 execute hn-hiring --remote --command ${JSON.stringify(flat)} --json`;
   const out = execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'inherit'] });
   const parsed = JSON.parse(out);
   return (parsed[0] && parsed[0].results) || [];
