@@ -3,12 +3,17 @@
  * Route:  /api/vendors
  * D1:     DB (hn-hiring) — table vendor_profiles
  *
- * Canonical grammar (locked):
- *   {PAY_SEQ}-{IDENTITY}
- *     PAY_SEQ ∈ {Pf, Rf}     — Pay-first vs Receive-first
- *     IDENTITY                — uppercase 3-10 chars, unique across all vendors
+ * Canonical grammar (locked, 5 segments):
+ *   {PAY_SEQ}-{SELLS}-{OPM}-{PMS}-{IDENTITY}
+ *     PAY_SEQ ∈ {Pf, Rf}        — pay-first vs receive-first
+ *     SELLS   ∈ {L, B, LB}      — alphabetical subset of {L, B}
+ *                                 (RM-purchase scope; S/C reserved for services/capex)
+ *     OPM     ∈ {M, A}          — Manual (call/WA/walk-in/route)
+ *                                 vs Automatable (app/web/API)
+ *     PMS     ∈ {C, D, H}       — Cash-only / Digital-only / Hybrid
+ *     IDENTITY                  — uppercase 3-10 chars, unique across all vendors
  *
- * Examples: Rf-PRABHU, Pf-ZEPTO, Rf-SHARIFF, Pf-RENT, Rf-ELECTRICITY, Pf-INTERNET
+ * Examples: Rf-L-M-C-PRABHU, Pf-B-A-D-ZEPTO, Rf-LB-M-H-SHARIFF
  *
  * Endpoints (PIN-gated; same USERS table as rm-sourcing.js):
  *   GET    /api/vendors?pin=…                                    → list (lightweight)
@@ -74,6 +79,32 @@ function validatePaySeq(p) {
   return null;
 }
 
+function validateSells(v) {
+  if (!v || typeof v !== 'string') {
+    return 'SELLS required — must be L, B, or LB (alphabetically ordered subset of {L, B} for RM-purchase scope)';
+  }
+  if (!/^(L|B|LB)$/.test(v)) {
+    return `SELLS must be L, B, or LB (alphabetically ordered subset of {L, B} for RM-purchase scope) — got "${v}"`;
+  }
+  return null;
+}
+
+function validateOpm(v) {
+  if (!v || typeof v !== 'string') return 'OPM required — must be M (Manual) or A (Automatable)';
+  if (v !== 'M' && v !== 'A') {
+    return `OPM must be M (Manual: call/WA/walk-in/route) or A (Automatable: app/web/API) — got "${v}"`;
+  }
+  return null;
+}
+
+function validatePms(v) {
+  if (!v || typeof v !== 'string') return 'PMS required — must be C (Cash-only), D (Digital-only), or H (Hybrid)';
+  if (v !== 'C' && v !== 'D' && v !== 'H') {
+    return `PMS must be C (Cash-only), D (Digital-only), or H (Hybrid) — got "${v}"`;
+  }
+  return null;
+}
+
 function validateIdentity(id) {
   if (!id || typeof id !== 'string') return 'identity_abbr required';
   const trimmed = id.trim();
@@ -85,12 +116,35 @@ function validateIdentity(id) {
   return null;
 }
 
-function composeVendorCode({ pay_seq, identity_abbr }) {
-  const pErr = validatePaySeq(pay_seq);
-  if (pErr) throw new Error(pErr);
+/* Normalize SELLS — accepts arrays/strings, returns canonical 'L' | 'B' | 'LB'. */
+function normalizeSells(v) {
+  if (Array.isArray(v)) {
+    const set = new Set(v.map(s => String(s || '').trim().toUpperCase()));
+    return Array.from(set).filter(x => x === 'L' || x === 'B').sort().join('');
+  }
+  if (typeof v === 'string') {
+    return v.trim().toUpperCase();
+  }
+  return '';
+}
+
+function composeVendorCode({ pay_seq, sells, opm, pms, identity_abbr }) {
+  const pErr = validatePaySeq(pay_seq);   if (pErr) throw new Error(pErr);
+  const sErr = validateSells(sells);      if (sErr) throw new Error(sErr);
+  const oErr = validateOpm(opm);          if (oErr) throw new Error(oErr);
+  const mErr = validatePms(pms);          if (mErr) throw new Error(mErr);
   const iErr = validateIdentity(identity_abbr);
   if (iErr) throw new Error(iErr);
-  return `${pay_seq}-${identity_abbr.trim().toUpperCase()}`;
+  return `${pay_seq}-${sells}-${opm}-${pms}-${identity_abbr.trim().toUpperCase()}`;
+}
+
+/* Parse a 5-segment vendor code. Returns null if shape doesn't match. */
+function parseVendorCode(code) {
+  if (!code || typeof code !== 'string') return null;
+  // Match "{Pf|Rf}-{L|B|LB}-{M|A}-{C|D|H}-{IDENTITY}"
+  const m = code.match(/^(Pf|Rf)-(L|B|LB)-(M|A)-(C|D|H)-([A-Z0-9]{3,10})$/);
+  if (!m) return null;
+  return { pay_seq: m[1], sells: m[2], opm: m[3], pms: m[4], identity_abbr: m[5] };
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -237,7 +291,8 @@ export async function onRequest(context) {
 
 async function listAll(DB) {
   const rs = await DB.prepare(
-    `SELECT vendor_code, pay_seq, identity_abbr, vendor_name, data_json, updated_at, updated_by
+    `SELECT vendor_code, pay_seq, sells, opm, pms, identity_abbr, vendor_name,
+            data_json, updated_at, updated_by
        FROM vendor_profiles
        ORDER BY pay_seq, identity_abbr`
   ).all();
@@ -287,13 +342,16 @@ async function listAll(DB) {
     return {
       vendor_code:   r.vendor_code,
       pay_seq:       r.pay_seq,
+      sells:         r.sells,
+      opm:           r.opm,
+      pms:           r.pms,
       identity_abbr: r.identity_abbr,
       vendor_name:   r.vendor_name,
       preview:       dataPreview,
       computed: {
-        scope:    Array.from(brandSet).sort(),
-        sells:    Array.from(sellSet).sort(),
-        rm_count: rmCount,
+        scope:        Array.from(brandSet).sort(),
+        sells_actual: Array.from(sellSet).sort(),
+        rm_count:     rmCount,
       },
       updated_at:    r.updated_at,
       updated_by:    r.updated_by,
@@ -315,6 +373,9 @@ async function getOne(DB, vendorCode, url) {
   const out = {
     vendor_code:   rs.vendor_code,
     pay_seq:       rs.pay_seq,
+    sells:         rs.sells,
+    opm:           rs.opm,
+    pms:           rs.pms,
     identity_abbr: rs.identity_abbr,
     vendor_name:   rs.vendor_name,
     data,
@@ -337,19 +398,24 @@ async function getOne(DB, vendorCode, url) {
 async function createOne(DB, request, user) {
   const body = await request.json();
   const pay_seq       = body.pay_seq;
+  const sells         = normalizeSells(body.sells);
+  const opm           = (body.opm || '').toString().trim().toUpperCase();
+  const pms           = (body.pms || '').toString().trim().toUpperCase();
   const identity_abbr = (body.identity_abbr || '').toString().trim().toUpperCase();
   const vendor_name   = (body.vendor_name || '').toString().trim();
 
   if (!vendor_name) return json({ error: 'vendor_name required' }, 400);
 
-  const pErr = validatePaySeq(pay_seq);
-  if (pErr) return json({ error: pErr }, 400);
+  const pErr = validatePaySeq(pay_seq);  if (pErr) return json({ error: pErr }, 400);
+  const sErr = validateSells(sells);     if (sErr) return json({ error: sErr }, 400);
+  const oErr = validateOpm(opm);         if (oErr) return json({ error: oErr }, 400);
+  const mErr = validatePms(pms);         if (mErr) return json({ error: mErr }, 400);
   const iErr = validateIdentity(identity_abbr);
   if (iErr) return json({ error: iErr }, 400);
 
   let vendor_code;
   try {
-    vendor_code = composeVendorCode({ pay_seq, identity_abbr });
+    vendor_code = composeVendorCode({ pay_seq, sells, opm, pms, identity_abbr });
   } catch (e) {
     return json({ error: e.message }, 400);
   }
@@ -377,14 +443,14 @@ async function createOne(DB, request, user) {
 
   await DB.prepare(
     `INSERT INTO vendor_profiles
-       (vendor_code, pay_seq, identity_abbr, vendor_name, data_json, updated_at, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).bind(vendor_code, pay_seq, identity_abbr, vendor_name, dataStr, now, user.name).run();
+       (vendor_code, pay_seq, sells, opm, pms, identity_abbr, vendor_name, data_json, updated_at, updated_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(vendor_code, pay_seq, sells, opm, pms, identity_abbr, vendor_name, dataStr, now, user.name).run();
 
   return json({
     success: true,
     vendor_code,
-    pay_seq,
+    pay_seq, sells, opm, pms,
     identity_abbr,
     vendor_name,
     updated_at: now,
@@ -400,6 +466,9 @@ async function putOne(DB, vendorCode, request, user) {
   if (!existing) return json({ error: 'Vendor not found' }, 404);
 
   const pay_seq = body.pay_seq !== undefined ? body.pay_seq : existing.pay_seq;
+  const sells   = body.sells   !== undefined ? normalizeSells(body.sells) : existing.sells;
+  const opm     = (body.opm    !== undefined ? body.opm    : existing.opm).toString().trim().toUpperCase();
+  const pms     = (body.pms    !== undefined ? body.pms    : existing.pms).toString().trim().toUpperCase();
   const identity_abbr = (body.identity_abbr !== undefined
     ? body.identity_abbr
     : existing.identity_abbr).toString().trim().toUpperCase();
@@ -409,14 +478,16 @@ async function putOne(DB, vendorCode, request, user) {
 
   if (!vendor_name) return json({ error: 'vendor_name required' }, 400);
 
-  const pErr = validatePaySeq(pay_seq);
-  if (pErr) return json({ error: pErr }, 400);
+  const pErr = validatePaySeq(pay_seq);  if (pErr) return json({ error: pErr }, 400);
+  const sErr = validateSells(sells);     if (sErr) return json({ error: sErr }, 400);
+  const oErr = validateOpm(opm);         if (oErr) return json({ error: oErr }, 400);
+  const mErr = validatePms(pms);         if (mErr) return json({ error: mErr }, 400);
   const iErr = validateIdentity(identity_abbr);
   if (iErr) return json({ error: iErr }, 400);
 
   let newCode;
   try {
-    newCode = composeVendorCode({ pay_seq, identity_abbr });
+    newCode = composeVendorCode({ pay_seq, sells, opm, pms, identity_abbr });
   } catch (e) {
     return json({ error: e.message }, 400);
   }
@@ -449,9 +520,9 @@ async function putOne(DB, vendorCode, request, user) {
     await DB.batch([
       DB.prepare(
         `INSERT INTO vendor_profiles
-           (vendor_code, pay_seq, identity_abbr, vendor_name, data_json, updated_at, updated_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).bind(newCode, pay_seq, identity_abbr, vendor_name, dataStr, now, user.name),
+           (vendor_code, pay_seq, sells, opm, pms, identity_abbr, vendor_name, data_json, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(newCode, pay_seq, sells, opm, pms, identity_abbr, vendor_name, dataStr, now, user.name),
       DB.prepare(`DELETE FROM vendor_profiles WHERE vendor_code = ?`).bind(vendorCode),
     ]);
 
@@ -459,7 +530,7 @@ async function putOne(DB, vendorCode, request, user) {
       success: true,
       vendor_code:   newCode,
       migrated_from: vendorCode,
-      pay_seq, identity_abbr, vendor_name,
+      pay_seq, sells, opm, pms, identity_abbr, vendor_name,
       updated_at:    now,
       updated_by:    user.name,
     });
@@ -468,14 +539,16 @@ async function putOne(DB, vendorCode, request, user) {
   // In-place update.
   await DB.prepare(
     `UPDATE vendor_profiles
-        SET pay_seq = ?, identity_abbr = ?, vendor_name = ?, data_json = ?, updated_at = ?, updated_by = ?
+        SET pay_seq = ?, sells = ?, opm = ?, pms = ?,
+            identity_abbr = ?, vendor_name = ?, data_json = ?,
+            updated_at = ?, updated_by = ?
       WHERE vendor_code = ?`
-  ).bind(pay_seq, identity_abbr, vendor_name, dataStr, now, user.name, vendorCode).run();
+  ).bind(pay_seq, sells, opm, pms, identity_abbr, vendor_name, dataStr, now, user.name, vendorCode).run();
 
   return json({
     success: true,
     vendor_code: vendorCode,
-    pay_seq, identity_abbr, vendor_name,
+    pay_seq, sells, opm, pms, identity_abbr, vendor_name,
     updated_at:  now,
     updated_by:  user.name,
   });
