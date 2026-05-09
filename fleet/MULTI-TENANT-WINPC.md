@@ -122,15 +122,19 @@ Before launching anything that's meant to keep running, add a block to `manifest
 | Chrome | default profile, tabs: `partner.swiggy.com/food/`, `www.zomato.com/partners/onlineordering/reporting?selected_view=view_live_tracking` |
 | Do not disturb | `chrome.exe` in default profile, the watchdog task, the partner-portal tabs (unless you hold `chrome-tabs.lock`) |
 
-### `modash-driver` (chat — vibrant-wozniak-b62a56)
+### `modash-driver` (chat — vibrant-wozniak-b62a56) — VERIFIED LIVE 2026-05-10
 
 | Aspect | Detail |
 |---|---|
-| Purpose | Influencer marketing analysis via Modash. Per-profile setup runs. |
-| Files | `C:\hn-control\modash-driver\` (`setup-modash-profile.ps1`, `install.ps1`, `acquire-lock.ps1`, `release-lock.ps1`, etc) |
-| Tasks | TBD |
-| Chrome | TBD (likely separate user-data-dir per profile-num) |
-| Do not disturb | their `.locks\` files, their working dir |
+| Purpose | Autonomous Modash influencer discovery. Polls `hnhotels.in/api/influencer-pipeline` every 60s; when a job is queued, launches headless Chrome with one of the pre-logged Modash profiles, scrapes search results, posts back. |
+| Files | `C:\hn-control\modash-driver\` — `poller.js`, `package.json`, `node_modules\`, `setup-modash-profile.ps1`, `install.ps1`, `run-poller.bat`, `poller.log`, `manifest-entry.json`, `HOWTO.md` |
+| Profiles | `C:\hn-control\modash-driver\profiles\profile-1\` (account: `contact@hamzahotel.com`) · `profile-2\` (`nihaf@hamzahotel.com`) — each is an isolated Chrome user-data-dir holding cookies. Owner-set, persist ~30d. |
+| Tasks | `HN-Modash-Poller` (logon trigger, 5-min restart-on-failure, runs `run-poller.bat`) |
+| Chrome | **System Chrome** (`C:\Program Files\Google\Chrome\Application\chrome.exe`) launched by Playwright `chromium.launchPersistentContext` against the per-profile user-data-dir. Headless when polling; visible only during owner-driven `setup-modash-profile.ps1` runs. |
+| Cookies / state | `C:\hn-control\modash-driver\profiles\profile-N\Default\Network\Cookies` (32 KB once logged in). DO NOT touch — corrupting forces re-login of that profile. |
+| Env vars | `CRON_TOKEN` (=Pages env `MODASH_CRON_TOKEN`, value embedded in `run-poller.bat`), `MODASH_API_BASE`, `MODASH_PROFILES_DIR`, `MODASH_USE_SYSTEM_CHROME=1`, `MODASH_HEADLESS` |
+| Do not disturb | The 2 profile dirs (cookies = login state) · `HN-Modash-Poller` Scheduled Task · `node.exe` processes whose cmdline contains `C:\hn-control\modash-driver\poller.js` · the `run-poller.bat` (it has the cron token embedded). Chrome processes whose cmdline matches `*modash-driver\profiles\profile-*` are mine — kill only those if you must, never broadly. |
+| Cross-chat risk | **None active.** Modash uses isolated user-data-dirs (different from default Chrome where aggregator runs, different from `dine-profile`), launches a separate Chrome process tree. As long as nobody runs `taskkill /IM chrome.exe /F`, no contention. |
 
 ### `dine-aggregator` (chat — bold-mccarthy-572b58)
 
