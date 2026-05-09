@@ -21,8 +21,12 @@ a{color:var(--tan);text-decoration:none}
 a:hover{text-decoration:underline}
 
 /* HERO with 1918 frame */
-.hero{background:linear-gradient(135deg,#1a1410 0%,var(--bg) 60%);border-bottom:1px solid var(--line);padding:32px 24px 24px;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;right:-80px;top:-80px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(212,180,140,.18) 0%,transparent 70%)}
+.hero{background:linear-gradient(135deg,#1a1410 0%,var(--bg) 60%);border-bottom:1px solid var(--line);padding:36px 24px 28px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;right:-80px;top:-80px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(212,180,140,.20) 0%,transparent 70%);pointer-events:none}
+.hero::after{content:'';position:absolute;left:-40px;bottom:-60px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(113,53,32,.18) 0%,transparent 70%);pointer-events:none}
+.trust-strip{display:flex;gap:18px;margin-top:18px;padding-top:16px;border-top:1px solid rgba(212,180,140,.15);flex-wrap:wrap;color:var(--mute);font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.trust-strip span{display:inline-flex;align-items:center;gap:5px}
+.trust-strip span::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--tan);display:inline-block}
 .brand{font-size:22px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .brand-1918{font-family:'Cinzel',serif;font-size:32px;font-weight:700;color:var(--tan);background:linear-gradient(135deg,var(--tan),var(--offwhite));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.04em}
 .subline{color:var(--mute);font-size:13px;margin-top:6px}
@@ -67,12 +71,15 @@ a:hover{text-decoration:underline}
 .slot:hover:not(.full):not(.selected){border-color:var(--tan);transform:translateY(-1px)}
 .slot.selected{background:rgba(212,180,140,.18);border-color:var(--tan);box-shadow:0 0 0 1px var(--tan)}
 .slot.full{opacity:.4;cursor:not-allowed}
-.slot.eid{background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(212,180,140,.06));border-color:rgba(245,158,11,.35)}
-.slot.jumma{background:linear-gradient(135deg,rgba(34,197,94,.08),rgba(212,180,140,.05));border-color:rgba(34,197,94,.3)}
+.slot.eid-day{background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(212,180,140,.06));border-color:rgba(245,158,11,.35)}
+.slot.midnight{background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(212,180,140,.05));border-color:rgba(168,85,247,.25)}
+.slot.afternoon{background:linear-gradient(135deg,rgba(251,191,36,.06),rgba(212,180,140,.03));border-color:rgba(251,191,36,.18)}
+.slot-icon{font-size:14px;margin-bottom:3px;display:block}
 .slot-window{font-size:10px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:2px}
 .slot-time{font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace}
 .slot-cap{font-size:10px;color:var(--dim);margin-top:3px}
 .slot-cap.tight{color:var(--orange)}
+.slot-cap.exclusive{color:var(--tan);font-weight:700}
 
 /* FORM */
 .form{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:16px}
@@ -126,9 +133,15 @@ a:hover{text-decoration:underline}
   </div>
   <h1 class="hero-h1">You're invited.</h1>
   <p class="hero-sub">
-    Four generations of Dakhni cuisine, kept alive by the Hamza family. We'd love to host you for
-    <b id="heroCovers">a meal</b> — book your slot below.
+    Four generations of Dakhni cuisine, kept alive by the Hamza family since 1918. We'd love to host you for
+    <b id="heroCovers">a meal</b> — pick a slot below. We open one slot per window, so it stays personal.
   </p>
+  <div class="trust-strip">
+    <span>Est. 1918</span>
+    <span>Dakhni / Hyderabadi</span>
+    <span>Shivajinagar · BLR</span>
+    <span>2 PM – 3 AM</span>
+  </div>
 </div>
 
 <div class="wrap" id="root">
@@ -139,6 +152,30 @@ a:hover{text-decoration:underline}
 const API = '/api/influencer-bookings';
 const params = new URLSearchParams(location.search);
 const TOKEN = params.get('token');
+
+const WINDOW_ICONS = {
+  AFTERNOON: '☀',
+  GOLDEN:    '◐',
+  PRIME:     '✦',
+  LATE:      '☾',
+  MIDNIGHT:  '✧',
+};
+
+const TIER_ADD_ONS = {
+  T1: null,
+  T2: 'Welcome chai',
+  T3: 'Welcome chai + dessert flight',
+  T4: 'Mutton Brain Dry comp + dessert flight + chai · ₹500 reel bump',
+  T5: 'Full chef tasting (8 dishes) + family photo + chef interaction · ₹2,000 reel bump',
+};
+
+const TIER_ASKS = {
+  T1: '1 reel · 3 stories · tag @hamzaexpressblr',
+  T2: '1 reel · 5 stories · tag @hamzaexpressblr',
+  T3: '1 reel · 1 permanent post · 5 stories',
+  T4: '1 reel · 1 permanent post · 7 stories · 7-day bio tag',
+  T5: '2 reels · 1 permanent post · collab post · IG live snippet',
+};
 
 let STATE = null;       // tokenDetail response
 let SELECTED_SLOT = null;
@@ -209,11 +246,12 @@ function render() {
 
     <!-- COMMITMENT -->
     <div class="commitment">
-      <div class="commit-h">Your Cover Commitment</div>
+      <div class="commit-h">Your invitation</div>
       <div class="commit-num">${booking.cover_commitment}</div>
-      <div class="commit-label">covers (you + ${booking.cover_commitment - 1} guest${booking.cover_commitment > 2 ? 's' : ''})</div>
+      <div class="commit-label">covers · you + ${booking.cover_commitment - 1} guest${booking.cover_commitment > 2 ? 's' : ''}</div>
       <div class="commit-budget">Meal on us — up to <b>${fmtINR(booking.meal_budget_paise)}</b> covered</div>
-      <div class="commit-deliverables">In return: 1 reel + 3 stories${booking.cover_commitment >= 4 ? ' + 1 grid post' : ''}${booking.cover_commitment >= 6 ? ' · 7-day usage rights' : ''}</div>
+      ${TIER_ADD_ONS[booking.creator_tier || 'T1'] ? `<div class="commit-deliverables" style="color:var(--tan);font-weight:600">+ ${TIER_ADD_ONS[booking.creator_tier]}</div>` : ''}
+      <div class="commit-deliverables">We ask: <b style="color:var(--text)">${TIER_ASKS[booking.creator_tier || 'T1']}</b></div>
     </div>
 
     <!-- MENU PREVIEW -->
@@ -234,22 +272,25 @@ function render() {
       <div class="section-h">Pick your slot <span class="right">May 10 – 31</span></div>
       <div id="slots">${Object.entries(byDate).map(([date, list]) => {
         const fd = fmtDate(date);
+        const isEid = date === '2026-05-27';
         return `
           <div class="day-group">
             <div class="day-h">
               <span class="day-date">${fd.date}</span>
-              <span class="day-day">${fd.day}${date === '2026-05-27' ? ' · EID 🌙' : ''}${fd.day === 'Fri' ? ' · JUMMA' : ''}</span>
+              <span class="day-day">${fd.day}${isEid ? ' · EID 🌙' : ''}${fd.day === 'Fri' ? ' · Jumma' : ''}</span>
             </div>
             <div class="day-slots">${list.map(s => {
               const remaining = s.remaining;
               const full = remaining <= 0;
-              const tight = remaining <= 2 && !full;
-              const cls = ['slot', s.window_code === 'EID' ? 'eid' : '', s.window_code === 'JUMMA' ? 'jumma' : '', full ? 'full' : ''].filter(Boolean).join(' ');
+              const wc = (s.window_code || '').toLowerCase();
+              const icon = WINDOW_ICONS[s.window_code] || '·';
+              const cls = ['slot', wc, isEid ? 'eid-day' : '', full ? 'full' : ''].filter(Boolean).join(' ');
               return `
                 <div class="${cls}" data-slot-id="${s.id}" ${full ? '' : `onclick="selectSlot(${s.id})"`}>
+                  <span class="slot-icon">${icon}</span>
                   <div class="slot-window">${s.window_code}</div>
                   <div class="slot-time">${s.window_label}</div>
-                  <div class="slot-cap ${tight ? 'tight' : ''}">${full ? 'Full' : `${remaining} of ${s.capacity} left`}</div>
+                  <div class="slot-cap ${full ? '' : 'exclusive'}">${full ? 'Booked' : '1 spot · exclusive'}</div>
                 </div>
               `;
             }).join('')}</div>
@@ -334,14 +375,15 @@ function renderConfirmed(d) {
         ${d.booking.cover_commitment} covers · meal on us
       </div>
       <div class="info" style="margin-top:18px">
-        We've saved your spot. Faheem will WhatsApp you to confirm shortly.
-        Just walk in at the time slot you picked — show this confirmation to staff at the entrance.
+        Slot saved. We'll WhatsApp you a confirmation within an hour.<br>
+        Just walk in at your chosen time — mention your handle at the entrance.
       </div>
       <a class="map-link" href="${d.map_url || 'https://maps.app.goo.gl/uV5UPq3DA2DfL3RT9'}" target="_blank">📍 Get directions</a>
-      <div class="info" style="margin-top:24px;font-size:12px">
-        Hamza Express · #19 H.K.P. Road · Shivajinagar · Bangalore 560051<br>
-        Open 2 PM – 3 AM · WhatsApp: +91 ____<br>
-        <span style="color:var(--tan);font-family:'Cinzel',serif;font-weight:700">EST. 1918</span>
+      <div class="info" style="margin-top:24px;font-size:12px;line-height:1.7">
+        <b>Hamza Express</b> · #19 H.K.P. Road · Shivajinagar<br>
+        Bangalore 560051 · Open 2 PM – 3 AM<br>
+        <span style="color:var(--tan);font-family:'Cinzel',serif;font-weight:700;letter-spacing:.05em">EST. 1918</span>
+        <span style="color:var(--dim)"> · Four generations of Dakhni cuisine</span>
       </div>
     </div>
   `;

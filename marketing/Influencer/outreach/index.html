@@ -58,6 +58,21 @@ button{font-family:inherit;cursor:pointer}
 .tier-T2{background:rgba(34,197,94,.18);color:#4ade80}
 .tier-T3{background:rgba(59,130,246,.2);color:#93c5fd}
 .tier-T4{background:rgba(168,85,247,.2);color:#d8b4fe}
+.tier-T5{background:rgba(245,158,11,.22);color:#fcd34d}
+.bucket-bar{padding:14px 24px;border-bottom:1px solid var(--line);display:flex;gap:0;background:var(--card)}
+.bucket-tab{flex:1;padding:14px 18px;border:none;background:transparent;color:var(--mute);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;text-align:left;border-bottom:2px solid transparent;transition:all .15s}
+.bucket-tab:hover{color:var(--text);background:rgba(212,180,140,.04)}
+.bucket-tab.active{color:var(--text);border-bottom-color:var(--tan);background:rgba(212,180,140,.06)}
+.bucket-tab .count{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;display:block;margin-bottom:2px}
+.bucket-tab.hero .count{color:#fbbf24}
+.bucket-tab.priority .count{color:var(--green)}
+.bucket-tab.standard .count{color:var(--mute)}
+.score-pill{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;padding:2px 6px;border-radius:99px;letter-spacing:.04em;text-transform:uppercase}
+.score-hero{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0f1a}
+.score-priority{background:rgba(34,197,94,.22);color:#4ade80}
+.score-standard{background:rgba(139,149,168,.18);color:var(--mute)}
+.offer-strip{font-size:10px;color:var(--mute);background:rgba(212,180,140,.06);border-left:2px solid var(--tan);padding:5px 8px;border-radius:0 6px 6px 0;margin-top:2px;font-family:'JetBrains Mono',monospace;line-height:1.5}
+.offer-strip b{color:var(--tan);font-weight:700}
 .bio{font-size:11px;color:var(--mute);line-height:1.45;background:rgba(168,85,247,.05);padding:5px 8px;border-radius:6px;border-left:2px solid var(--purple);max-height:50px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
 .badges{display:flex;gap:5px;flex-wrap:wrap}
 .badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:.05em;display:inline-flex;gap:3px}
@@ -123,6 +138,21 @@ button{font-family:inherit;cursor:pointer}
   </div>
 </div>
 
+<div class="bucket-bar" id="bucket-bar">
+  <button class="bucket-tab hero active" data-bucket="HERO" onclick="setBucket('HERO')">
+    <span class="count" id="b-hero">—</span>🔥 HERO · highest relevance · all 3 channels
+  </button>
+  <button class="bucket-tab priority" data-bucket="PRIORITY" onclick="setBucket('PRIORITY')">
+    <span class="count" id="b-priority">—</span>⭐ PRIORITY · high relevance · email + WABA
+  </button>
+  <button class="bucket-tab standard" data-bucket="STANDARD" onclick="setBucket('STANDARD')">
+    <span class="count" id="b-standard">—</span>📋 STANDARD · single channel
+  </button>
+  <button class="bucket-tab" data-bucket="ALL" onclick="setBucket('ALL')">
+    <span class="count" id="b-all">—</span>All buckets
+  </button>
+</div>
+
 <div class="toolbar">
   <div class="filters">
     <select id="f-channel">
@@ -177,6 +207,15 @@ let creators = [];
 let stats = {};
 let currentSendCtx = null;
 let foodFilter = true;
+let activeBucket = 'HERO';
+
+const TIER_OFFERS = {
+  T1: '2 covers · ₹1,200 retail · 1 reel + 3 stories',
+  T2: '3 covers + chai · ₹1,800 · 1 reel + 5 stories',
+  T3: '4 covers + chai + dessert flight · ₹2,400 · 1 reel + 1 post + 5 stories',
+  T4: '4 covers + add-ons + ₹500 cash · ₹2,900 · 1 reel + 1 post + 7 stories',
+  T5: '4 covers + chef tasting + ₹2,000 cash · ₹4,400 · 2 reels + post + collab',
+};
 
 function getKey(){ return localStorage.getItem('hn_dashkey') || ''; }
 function saveKey(){
@@ -199,10 +238,17 @@ function fmt(n){
 }
 
 function tierFor(f){
-  if (f < 15000) return 'T1';
-  if (f < 50000) return 'T2';
-  if (f < 100000) return 'T3';
-  return 'T4';
+  if (f < 15000)  return 'T1';
+  if (f < 30000)  return 'T2';
+  if (f < 60000)  return 'T3';
+  if (f < 100000) return 'T4';
+  return 'T5';
+}
+
+function setBucket(b){
+  activeBucket = b;
+  document.querySelectorAll('.bucket-tab').forEach(t => t.classList.toggle('active', t.dataset.bucket === b));
+  render();
 }
 
 function nicheFor(c){
@@ -234,6 +280,13 @@ async function load(){
 function renderStats(){
   document.getElementById('s-total').textContent = creators.length;
   document.getElementById('s-contactable').textContent = creators.filter(c => c.has_email||c.has_phone||c.has_whatsapp).length;
+  // Bucket counts
+  const buckets = { HERO: 0, PRIORITY: 0, STANDARD: 0, SKIP: 0 };
+  for (const c of creators) buckets[c.bucket || 'STANDARD']++;
+  document.getElementById('b-hero').textContent     = buckets.HERO;
+  document.getElementById('b-priority').textContent = buckets.PRIORITY;
+  document.getElementById('b-standard').textContent = buckets.STANDARD;
+  document.getElementById('b-all').textContent      = creators.length;
   if (stats.totals) {
     document.getElementById('s-replied').textContent = stats.totals.replied || 0;
   }
@@ -261,6 +314,7 @@ function render(){
   const q = document.getElementById('f-search').value.toLowerCase();
 
   const list = creators.filter(c => {
+    if (activeBucket !== 'ALL' && (c.bucket || 'STANDARD') !== activeBucket) return false;
     if (ch === 'email' && !c.has_email) return false;
     if (ch === 'waba' && !c.has_phone) return false;
     if (ch === 'whatsapp' && !c.has_whatsapp) return false;
@@ -281,22 +335,26 @@ function render(){
   if (!list.length) { g.innerHTML = '<div class="empty">No creators match.</div>'; return; }
 
   g.innerHTML = list.slice(0,200).map(c => {
-    const t = tierFor(c.followers_count);
+    const t = c.tier || tierFor(c.followers_count);
     const niche = nicheFor(c);
     const initial = (c.full_name || c.username).charAt(0).toUpperCase();
     const replied = !!c.last_replied_at;
     const anyContacted = !!(c.email_sent_at || c.waba_sent_at || c.ig_dm_sent_at);
+    const bucket = c.bucket || 'STANDARD';
+    const scoreClass = bucket === 'HERO' ? 'score-hero' : bucket === 'PRIORITY' ? 'score-priority' : 'score-standard';
+    const score = c.relevance_score != null ? c.relevance_score : 0;
     return `
       <div class="card ${replied?'replied':anyContacted?'contacted-any':''}" data-username="${c.username}">
         <div class="row1">
           <div class="avatar">${c.profile_pic_url ? `<img src="${c.profile_pic_url}" onerror="this.parentElement.innerHTML='${initial}'">` : initial}</div>
           <div class="who">
-            <div class="name">${escapeHtml((c.full_name||c.username).slice(0,30))}<span class="tier tier-${t}">${t}</span></div>
+            <div class="name">${escapeHtml((c.full_name||c.username).slice(0,28))}<span class="tier tier-${t}">${t}</span><span class="score-pill ${scoreClass}" title="${(c.score_reasons||[]).join(' · ')}">${score}</span></div>
             <a class="handle" target="_blank" href="https://instagram.com/${c.username}">@${c.username}</a>
             <div class="followers"><b>${fmt(c.followers_count)}</b> followers · ${niche}</div>
           </div>
         </div>
         ${c.biography ? `<div class="bio">${escapeHtml(c.biography.slice(0,140))}</div>` : ''}
+        <div class="offer-strip"><b>OFFER</b> · ${TIER_OFFERS[t] || TIER_OFFERS.T1}</div>
         <div class="badges">
           ${c.is_business_account ? '<span class="badge badge-biz">🏢 BIZ</span>' : ''}
           ${c.is_verified ? '<span class="badge badge-ver">✓ VERIFIED</span>' : ''}
