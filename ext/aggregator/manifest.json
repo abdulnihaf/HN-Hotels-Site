@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "HN Aggregator Pulse",
+  "version": "6.1.0",
+  "description": "Extracts live operational data from Swiggy and Zomato partner portals for HN Hotels",
+  "permissions": [
+    "storage",
+    "alarms",
+    "cookies",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://partner.swiggy.com/*",
+    "https://*.swiggy.com/*",
+    "https://www.zomato.com/partners/*",
+    "https://*.zomato.com/*",
+    "https://accounts.zomato.com/*",
+    "https://hnhotels.in/*",
+    "https://hamzaexpress.in/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://partner.swiggy.com/*"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://partner.swiggy.com/*"],
+      "js": ["content-swiggy.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.zomato.com/partners/*"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.zomato.com/partners/*"],
+      "js": ["content-zomato.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon48.png"
+  }
+}
