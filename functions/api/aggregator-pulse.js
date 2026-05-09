@@ -623,23 +623,44 @@ async function handleGet(db, url, headers) {
       // ---- GROWTH ----
       if (liveTrack) {
         const d = liveTrack.data || {};
+        // Zomato reports the funnel as percentages (imp_to_menu / menu_to_cart / cart_to_order)
+        // rather than absolute counts at each stage. Surface the percentages directly and
+        // back-derive counts from impressions when possible.
+        const impressions = num(d.impressions);
+        const impToMenuPct = num(d.imp_to_menu);
+        const menuToCartPct = num(d.menu_to_cart);
+        const cartToOrderPct = num(d.cart_to_order);
+        const menuOpens = (impressions !== null && impToMenuPct !== null) ? Math.round(impressions * impToMenuPct / 100) : null;
+        const cartBuilds = (menuOpens !== null && menuToCartPct !== null) ? Math.round(menuOpens * menuToCartPct / 100) : null;
+        const ordersPlaced = (cartBuilds !== null && cartToOrderPct !== null) ? Math.round(cartBuilds * cartToOrderPct / 100) : num(d.delivered_orders);
         sections.growth = {
           data_scope: 'combined_he_nch',
           data_scope_note: 'Zomato live tracking returns combined when both outlets are selected. Per-outlet capture requires extension to apply outlet filter (Phase 1B).',
           captured_at: liveTrack.captured_at,
           funnel: {
-            impressions: num(d.impressions),
-            menu_opens: num(d.menu_opens),
-            cart_builds: num(d.cart_builds),
-            orders_placed: num(d.orders_placed),
+            impressions,
+            menu_opens: menuOpens,
+            cart_builds: cartBuilds,
+            orders_placed: ordersPlaced,
+            menu_open_rate_pct: impToMenuPct,
+            cart_build_rate_pct: menuToCartPct,
+            order_conversion_rate_pct: cartToOrderPct,
           },
           customers: {
-            new: num(d.new_customers),
-            repeat: num(d.repeat_customers),
-            lapsed: num(d.lapsed_customers),
+            new: num(d.new_users ?? d.new_customers),
+            repeat: num(d.repeat_users ?? d.repeat_customers),
+            lapsed: num(d.lapsed_users ?? d.lapsed_customers),
           },
-          ads: { available: false, note: 'Zomato ads page extraction pending.' },
-          listing: { available: false, note: 'Zomato listing/menu metrics pending.' },
+          ads: {
+            sales_from_offers: num(d.sales_from_offers),
+            note: d.sales_from_offers !== undefined ? null : 'Zomato ads page extraction pending — currently only "sales from offers" is captured from live tracking.',
+          },
+          listing: { available: false, note: 'Zomato listing/menu metrics pending — separate menu page extraction needed.' },
+          per_outlet_zomato: {
+            he_sales: num(d.he_sales),
+            nch_sales: num(d.nch_sales),
+            note: (d.he_sales || d.nch_sales) ? 'Per-outlet sales captured via outlet-breakdown click on live tracking page.' : 'Per-outlet sales not captured this snapshot — outlet-breakdown click did not find expected DOM element. Phase 1B click logic needs update.',
+          },
         };
       } else {
         sections.growth = { data_scope: 'unavailable', reason: 'No live_tracking snapshot.' };
