@@ -60,8 +60,24 @@
       "hostname_tailscale": null,
       "registered_at": null,
       "always_on": true,
-      "purpose": "PRIMARY appliance — aggregator pulse runs here (Chrome + extension 24/7). Long-term home for any Windows-bound automation. Designated primary because the hardware is purpose-built for 24/7 mini-PC business use, has wired ethernet, modern Chrome, and clean storage.",
+      "purpose": "PRIMARY appliance — aggregator pulse runs here (Chrome + extension 24/7). Long-term home for any Windows-bound automation. Designated primary because the hardware is purpose-built for 24/7 mini-PC business use, modern Chrome, and clean storage.",
       "capabilities": ["chrome-runtime", "aggregator-pulse", "windows-automation"],
+      "hardening": {
+        "power": "powercfg standby-timeout-ac/dc=0, hibernate=off (file removed), monitor=30min only",
+        "wifi_adapter_power_mgmt": "disabled (Disable-NetAdapterPowerManagement)",
+        "tailscale_unattended": true,
+        "usb_selective_suspend": "disabled",
+        "windows_update_active_hours": "06:00-23:00",
+        "chrome_restore_policy": "HKLM\\Software\\Policies\\Google\\Chrome\\RestoreOnStartup=1",
+        "chrome_watchdog": "schtasks HN-Aggregator-Watchdog every 5min + at logon",
+        "auto_login": "PENDING USER (set via netplwiz)"
+      },
+      "deployed_paths": {
+        "extension": "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-ext\\",
+        "startup_bat": "C:\\Users\\HN Hotels\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\hn-aggregator-chrome.bat",
+        "watchdog_bat": "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-watchdog.bat",
+        "watchdog_log": "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-watchdog.log"
+      },
       "notes": "HP EliteDesk DM is a 35W mini-PC built for always-on business use — SSD, no moving parts beyond a small fan, gigabit ethernet. To be onboarded via fleet/setup-winpc.ps1. Replace null fields after registration. Win10 EOL was Oct 2025 but as appliance behind Tailscale this is acceptable for 1-2 years; long-term move is Linux on this hardware."
     },
     "hn-imac": {
