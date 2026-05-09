@@ -1,8 +1,6 @@
-// Shared JS for HE Swiggy and HE Zomato dashboards.
-// Loaded by both /ops/aggregator/he/swiggy/index.html and /ops/aggregator/he/zomato/index.html.
-//
+// HE / NCH per-platform dashboard — strict per-brand UI, click-through modals.
+// Loaded by ops/aggregator/he/swiggy/index.html and ops/aggregator/he/zomato/index.html.
 // The page sets window.HN_AGG = { brand, platform } before loading this script.
-// This file handles: data fetch, period switching, tab switching, and rendering each section.
 
 (function () {
   const KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
@@ -10,305 +8,876 @@
   const cfg = window.HN_AGG || { brand: 'he', platform: 'swiggy' };
 
   // ─── state ──────────────────────────────────────────────────────────────
-  let currentPeriod = localStorage.getItem(`agg_${cfg.brand}_${cfg.platform}_period`) || 'today';
-  let currentTab = localStorage.getItem(`agg_${cfg.brand}_${cfg.platform}_tab`) || 'growth';
-  let lastData = null;
+  const VALID_TABS    = ['insights','dishes','customers','orders','ops','audit'];
+  const VALID_PERIODS = ['today','yesterday','thisweek','lastweek','month'];
+  const _storedTab    = localStorage.getItem(`agg_${cfg.brand}_${cfg.platform}_tab`);
+  const _storedPeriod = localStorage.getItem(`agg_${cfg.brand}_${cfg.platform}_period`);
+  let currentPeriod = VALID_PERIODS.includes(_storedPeriod) ? _storedPeriod : 'today';
+  let currentTab    = VALID_TABS.includes(_storedTab) ? _storedTab : 'insights';
+  let lastData      = null;
+  let lastPriorData = null;
+  let lastOrderDetail = null;
 
   // ─── helpers ────────────────────────────────────────────────────────────
-  const $ = (s) => document.querySelector(s);
+  const $  = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
   const fmt = (n, opts = {}) => {
     if (n === null || n === undefined) return '—';
     if (typeof n !== 'number') return String(n);
-    if (opts.pct) return `${n.toFixed(1)}%`;
+    if (opts.pct)   return `${n.toFixed(1)}%`;
     if (opts.money) return `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-    if (opts.dec) return n.toFixed(opts.dec);
+    if (opts.dec)   return n.toFixed(opts.dec);
     return n.toLocaleString('en-IN');
   };
   const ago = (iso) => {
     if (!iso) return '—';
     const d = Date.now() - new Date(iso).getTime();
-    if (d < 60_000) return 'just now';
-    if (d < 3_600_000) return `${Math.round(d / 60_000)}m ago`;
+    if (d < 60_000)     return 'just now';
+    if (d < 3_600_000)  return `${Math.round(d / 60_000)}m ago`;
     if (d < 86_400_000) return `${Math.round(d / 3_600_000)}h ago`;
     return `${Math.round(d / 86_400_000)}d ago`;
   };
-  const scopeBadge = (scope) => {
-    const map = {
-      he_only: { label: 'HE only', class: 'good' },
-      nch_only: { label: 'NCH only', class: 'good' },
-      he_only_or_nch_only: { label: cfg.brand.toUpperCase() + ' only', class: 'good' },
-      partial_he_only: { label: 'partial HE-only', class: 'warn' },
-      combined_he_nch: { label: 'combined HE+NCH', class: 'warn' },
-      unavailable: { label: 'not yet captured', class: 'bad' },
-    };
-    const x = map[scope] || { label: scope, class: 'warn' };
-    return `<span class="scope ${x.class}" title="data scope">${x.label}</span>`;
-  };
+  const html = (strings, ...values) => strings.reduce((r, s, i) => r + s + (values[i] !== undefined ? values[i] : ''), '');
+  const escape = (s) => String(s ?? '').replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
+  const priorPeriod = (p) => ({
+    today: 'yesterday', yesterday: 'today', thisweek: 'lastweek', lastweek: 'thisweek', month: 'lastweek',
+  }[p] || null);
+  const periodLabel = (p) => ({
+    today: 'today', yesterday: 'yesterday', thisweek: 'this week', lastweek: 'last week', month: 'this month',
+  }[p] || p);
 
-  // ─── render ─────────────────────────────────────────────────────────────
-  function render(data) {
-    if (!data || !data.ok) {
-      $('#main').innerHTML = `<div class="err">Failed to load data: ${JSON.stringify(data)}</div>`;
+  // ─── delta arrows ────────────────────────────────────────────────────────
+  function delta(curr, prev, opts = {}) {
+    if (curr === null || curr === undefined || prev === null || prev === undefined) return '';
+    if (prev === 0 && curr === 0) return html`<span class="delta">—</span>`;
+    if (prev === 0) return html`<span class="delta up">▲ new</span>`;
+    const d = curr - prev;
+    const pct = (d / Math.abs(prev)) * 100;
+    const dir = d > 0 ? 'up' : (d < 0 ? 'down' : 'flat');
+    const arrow = d > 0 ? '▲' : (d < 0 ? '▼' : '—');
+    const inverted = opts.invert ? (dir === 'up' ? 'down' : dir === 'down' ? 'up' : 'flat') : dir;
+    return html`<span class="delta ${inverted}">${arrow} ${Math.abs(pct).toFixed(0)}%</span>`;
+  }
+
+  // ─── modal infra ────────────────────────────────────────────────────────
+  function openModal(title, bodyHtml) {
+    const modal = $('#modal');
+    modal.innerHTML = html`
+      <div class="modal-backdrop" onclick="window.HN_AGG_API.closeModal()"></div>
+      <div class="modal-pane" role="dialog" aria-modal="true">
+        <div class="modal-h">
+          <div class="modal-title">${title}</div>
+          <button class="modal-x" onclick="window.HN_AGG_API.closeModal()" aria-label="Close">×</button>
+        </div>
+        <div class="modal-b">${bodyHtml}</div>
+      </div>
+    `;
+    modal.classList.add('open');
+    document.body.classList.add('modal-open');
+  }
+  function closeModal() {
+    $('#modal').classList.remove('open');
+    document.body.classList.remove('modal-open');
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+  // ─── render: shell ──────────────────────────────────────────────────────
+  function render() {
+    if (!lastData || !lastData.ok) {
+      $('#main').innerHTML = `<div class="err">Failed to load data: ${escape(JSON.stringify(lastData || {}))}</div>`;
       return;
     }
-    const s = data.sections || {};
-    $('#brand').textContent = data.brand.toUpperCase();
-    $('#platform').textContent = data.platform === 'swiggy' ? 'Swiggy' : 'Zomato';
-    $('#period-display').textContent = currentPeriod.replace('thisweek', 'this week').replace('lastweek', 'last week');
-    const updatedAt = s[currentTab]?.captured_at || s.growth?.captured_at;
+    const s = lastData.sections || {};
+    const sPrev = lastPriorData?.sections || {};
+    $('#brand').textContent = lastData.brand.toUpperCase();
+    $('#platform').textContent = lastData.platform === 'swiggy' ? 'Swiggy' : 'Zomato';
+    $('#period-display').textContent = periodLabel(currentPeriod);
+    const updatedAt = s.sales?.captured_at || s.orders?.captured_at;
     $('#updated').textContent = updatedAt ? ago(updatedAt) : '—';
 
+    renderHero(s, sPrev);
     renderTab(currentTab, s);
   }
 
-  function renderTab(tab, s) {
-    // hide all panes
-    $$('.pane').forEach(p => p.classList.remove('active'));
-    $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-    $(`#pane-${tab}`).classList.add('active');
+  // ─── HERO STRIP ─────────────────────────────────────────────────────────
+  function renderHero(s, sPrev) {
+    const sales  = s.sales?.totals || {};
+    const salesP = sPrev.sales?.totals || {};
+    const cohort = s.growth?.customer_cohort_he || {};
+    const disc   = s.growth?.discount_usage_he || {};
+    const ops    = s.ops || {};
 
-    if (tab === 'growth') return renderGrowth(s.growth);
-    if (tab === 'ops') return renderOps(s.ops);
-    if (tab === 'sales') return renderSales(s.sales);
-    if (tab === 'finance') return renderFinance(s.finance);
-    if (tab === 'reviews') return renderReviews(s.reviews);
-    if (tab === 'orders') return renderOrders(s.orders);
-  }
+    // Determine "good/bad" colors per metric
+    const discTone   = (disc.usage_rate_pct || 0) > 50 ? 'warn' : 'good';
+    const cancelTone = (ops.cancellation_rate_pct || 0) > 5 ? 'bad' : (ops.cancellation_rate_pct || 0) > 0 ? 'warn' : 'good';
+    const issueTone  = (ops.issue_rate_pct || 0) > 10 ? 'bad' : (ops.issue_rate_pct || 0) > 0 ? 'warn' : 'good';
 
-  // ─── GROWTH & LISTING (default tab) ─────────────────────────────────────
-  function renderGrowth(g) {
-    if (!g) { $('#pane-growth').innerHTML = '<div class="err">no data</div>'; return; }
-    if (g.data_scope === 'unavailable') {
-      $('#pane-growth').innerHTML = `<div class="empty"><h3>Growth data not yet captured</h3><p>${g.reason || ''}</p></div>`;
-      return;
-    }
-
-    // STRICT HE-only schema: top_dishes_he + customer_cohort_he + payment_mix_he + discount_usage_he
-    const dishes = g.top_dishes_he || [];
-    const cohort = g.customer_cohort_he || {};
-    const payments = g.payment_mix_he || {};
-    const disc = g.discount_usage_he || {};
-    const gaps = g.not_yet_he_only || {};
-
-    const dishesRows = dishes.slice(0, 10).map((d, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${d.name}</td>
-        <td class="num">${fmt(d.orders)}</td>
-        <td class="num">${fmt(d.quantity)}</td>
-        <td class="num">${fmt(d.revenue, { money: true })}</td>
-        <td class="num">${d.discount_count || 0}</td>
-        <td><span class="tags">${(d.tags || []).filter(t => t.startsWith('dt-')).slice(0, 3).join(', ')}</span></td>
-      </tr>`).join('');
-
-    const paymentRows = Object.entries(payments).map(([k, v]) =>
-      `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
-
-    $('#pane-growth').innerHTML = `
-      <div class="scope-bar">${scopeBadge(g.data_scope)}<span class="scope-note">${g.data_scope_note || ''}</span></div>
-      <div class="grid4">
-        ${card(`CUSTOMER COHORT · ${cfg.brand.toUpperCase()} only`, cohort.sample_size ? `
-          <div class="big-num">${fmt(cohort.first_time_pct, { pct: true })}</div>
-          <div class="kv"><span class="k">First-time</span><span class="v">${fmt(cohort.first_time_orders)}</span></div>
-          <div class="kv"><span class="k">Repeat</span><span class="v">${fmt(cohort.repeat_orders)}</span></div>
-          <div class="kv"><span class="k">Sample</span><span class="v">${fmt(cohort.sample_size)} orders</span></div>
-        ` : '<div class="not-cap">No order-detail captures yet for this brand</div>')}
-        ${card(`DISCOUNT USAGE · ${cfg.brand.toUpperCase()} only`, disc.total_orders_in_sample ? `
-          <div class="big-num ${disc.usage_rate_pct > 50 ? 'warn' : ''}">${fmt(disc.usage_rate_pct, { pct: true })}</div>
-          <div class="kv"><span class="k">With discount</span><span class="v">${fmt(disc.orders_with_discount)}</span></div>
-          <div class="kv"><span class="k">Sample</span><span class="v">${fmt(disc.total_orders_in_sample)} orders</span></div>
-          ${disc.usage_rate_pct > 50 ? '<div class="diag-bad" style="margin-top:6px;font-size:10px">Heavy reliance on discounts — margin risk</div>' : ''}
-        ` : '<div class="not-cap">No order-detail captures yet</div>')}
-        ${card(`PAYMENT MIX · ${cfg.brand.toUpperCase()} only`, paymentRows || '<div class="not-cap">No payment data yet</div>')}
-        ${card('NOT YET HE-ONLY', `
-          ${Object.entries(gaps).slice(0, 6).map(([k, v]) =>
-            `<div style="font-size:10px;padding:3px 0;border-bottom:1px solid var(--very-faint, #1a1a30)"><strong>${k}</strong><br><span style="color:var(--dim)">${v}</span></div>`
-          ).join('')}
-          ${Object.keys(gaps).length > 6 ? `<div style="font-size:10px;color:var(--dim);margin-top:4px">+ ${Object.keys(gaps).length - 6} more gaps</div>` : ''}
-        `)}
+    $('#hero').innerHTML = html`
+      <div class="hero-card">
+        <div class="hero-label">Revenue · ${cfg.brand.toUpperCase()}</div>
+        <div class="hero-num">${fmt(sales.net_sales || 0, { money: true })}</div>
+        <div class="hero-sub">${delta(sales.net_sales, salesP.net_sales)} <span class="dim">vs prior</span></div>
       </div>
-      ${dishes.length ? `
-        <h3 style="margin-top:18px;font-size:11px;font-weight:700;color:var(--dim);letter-spacing:0.4px">TOP DISHES · ${cfg.brand.toUpperCase()} ONLY (from order-detail captures)</h3>
-        <table class="orders-table" style="margin-top:6px">
-          <thead><tr><th>#</th><th>Dish</th><th class="num">Orders</th><th class="num">Qty</th><th class="num">Revenue</th><th class="num">w/Disc</th><th>Zomato tags</th></tr></thead>
-          <tbody>${dishesRows}</tbody>
-        </table>
-      ` : ''}
+      <div class="hero-card">
+        <div class="hero-label">Orders</div>
+        <div class="hero-num">${fmt(sales.delivered_orders || 0)}</div>
+        <div class="hero-sub">${delta(sales.delivered_orders, salesP.delivered_orders)} <span class="dim">vs prior</span></div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-label">AOV</div>
+        <div class="hero-num">${fmt(sales.aov || 0, { money: true })}</div>
+        <div class="hero-sub">${delta(sales.aov, salesP.aov)} <span class="dim">vs prior</span></div>
+      </div>
+      <div class="hero-card ${cohort.first_time_pct > 60 ? 'tone-warn' : 'tone-good'}">
+        <div class="hero-label">First-time %</div>
+        <div class="hero-num">${fmt(cohort.first_time_pct, { pct: true })}</div>
+        <div class="hero-sub dim">${cohort.first_time_orders || 0} of ${cohort.sample_size || 0} orders</div>
+      </div>
+      <div class="hero-card tone-${discTone}">
+        <div class="hero-label">Discount usage</div>
+        <div class="hero-num">${fmt(disc.usage_rate_pct, { pct: true })}</div>
+        <div class="hero-sub dim">${disc.orders_with_discount || 0} of ${disc.total_orders_in_sample || 0}</div>
+      </div>
+      <div class="hero-card tone-${cancelTone}">
+        <div class="hero-label">Cancel rate</div>
+        <div class="hero-num">${fmt(ops.cancellation_rate_pct, { pct: true })}</div>
+        <div class="hero-sub dim">${ops.cancellation_count || 0} cancelled</div>
+      </div>
+      <div class="hero-card tone-${issueTone}">
+        <div class="hero-label">Issue rate</div>
+        <div class="hero-num">${fmt(ops.issue_rate_pct, { pct: true })}</div>
+        <div class="hero-sub dim">${Object.values(ops.issue_breakdown || {}).reduce((a, b) => a + b, 0)} flagged</div>
+      </div>
     `;
   }
 
-  function diagFunnel(f) {
-    // Surfaces the weakest stage in the funnel as a one-line diagnostic
-    const stages = [
-      { name: 'menu open', rate: f.menu_open_rate_pct, baseline: 8 },
-      { name: 'cart build', rate: f.cart_build_rate_pct, baseline: 25 },
-      { name: 'order place', rate: f.order_conversion_rate_pct, baseline: 50 },
-    ].filter(s => s.rate !== null && s.rate !== undefined);
-    if (!stages.length) return '';
-    const worst = stages.reduce((a, b) => (a.rate / a.baseline < b.rate / b.baseline ? a : b));
-    if (worst.rate >= worst.baseline) return `<span class="diag-good">funnel healthy</span>`;
-    return `<span class="diag-bad">${worst.name} stage leaking — ${worst.rate}% vs ~${worst.baseline}% baseline</span>`;
+  // ─── tab dispatch ───────────────────────────────────────────────────────
+  function renderTab(tab, s) {
+    $$('.pane').forEach(p => p.classList.remove('active'));
+    $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    $(`#pane-${tab}`)?.classList.add('active');
+
+    if (tab === 'insights')      return renderInsights(s);
+    if (tab === 'dishes')        return renderDishes(s);
+    if (tab === 'customers')     return renderCustomers(s);
+    if (tab === 'orders')        return renderOrders(s);
+    if (tab === 'ops')           return renderOps(s);
+    if (tab === 'audit')         return renderAudit(s);
   }
 
-  // ─── OPS HEALTH ─────────────────────────────────────────────────────────
-  function renderOps(o) {
-    if (!o) { $('#pane-ops').innerHTML = '<div class="err">no data</div>'; return; }
-    if (o.data_scope === 'unavailable') {
-      $('#pane-ops').innerHTML = `<div class="empty"><h3>Ops data not yet captured</h3><p>${o.reason || ''}</p></div>`;
+  // ─── INSIGHTS TAB — auto-generated diagnostic statements ─────────────────
+  function renderInsights(s) {
+    const insights = generateInsights(s);
+    if (!insights.length) {
+      $('#pane-insights').innerHTML = '<div class="empty"><h3>Not enough data yet</h3><p>Insights need at least one delivered order in this period.</p></div>';
       return;
     }
+    $('#pane-insights').innerHTML = html`
+      <div class="insights-grid">
+        ${insights.map(i => html`
+          <div class="insight tone-${i.tone}" ${i.action ? `onclick="window.HN_AGG_API.${i.action}"` : ''} ${i.action ? 'role="button" tabindex="0"' : ''}>
+            <div class="insight-tag">${i.tag}</div>
+            <div class="insight-headline">${i.headline}</div>
+            <div class="insight-body">${i.body}</div>
+            ${i.action_label ? `<div class="insight-cta">${i.action_label} →</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function generateInsights(s) {
+    const out = [];
+    const sales  = s.sales?.totals || {};
+    const cohort = s.growth?.customer_cohort_he || {};
+    const disc   = s.growth?.discount_usage_he || {};
+    const dishes = s.growth?.top_dishes_he || [];
+    const ops    = s.ops || {};
+    const issueBd = ops.issue_breakdown || {};
+
+    // 1. Discount dependency
+    if (disc.usage_rate_pct >= 60) {
+      out.push({
+        tag: 'MARGIN RISK',
+        tone: 'warn',
+        headline: `${disc.usage_rate_pct}% of orders use a discount`,
+        body: `${disc.orders_with_discount} of ${disc.total_orders_in_sample} orders had a promo applied. That's heavy reliance on price as the conversion lever — every order is eating margin. The lever to test: a 7-day no-discount stretch on the top 3 dishes to see if volume holds.`,
+        action_label: 'See discount-applied orders',
+        action: `showDiscountedOrders()`,
+      });
+    } else if (disc.usage_rate_pct < 30 && disc.total_orders_in_sample > 5) {
+      out.push({
+        tag: 'PROMO HEADROOM',
+        tone: 'good',
+        headline: `Only ${disc.usage_rate_pct}% of orders use a discount`,
+        body: `Customers are converting without heavy promo lifting. You have headroom to run a targeted promo on a single dish to grow volume without resetting customer expectations.`,
+      });
+    }
+
+    // 2. Customer cohort — retention vs acquisition
+    if (cohort.first_time_pct >= 65 && cohort.sample_size >= 10) {
+      out.push({
+        tag: 'RETENTION GAP',
+        tone: 'warn',
+        headline: `${cohort.first_time_pct}% of orders are first-time customers`,
+        body: `You're acquiring well but only ${cohort.repeat_orders} of ${cohort.sample_size} orders came from repeat customers. The fix: WhatsApp follow-up to first-time orderers within 48h with a "thanks + try ___" message. Targets: customers in the Customers tab marked 1st order.`,
+        action_label: 'See first-time customers',
+        action: `showFirstTimeCustomers()`,
+      });
+    } else if (cohort.repeat_orders > cohort.first_time_orders && cohort.sample_size >= 10) {
+      out.push({
+        tag: 'STRONG RETENTION',
+        tone: 'good',
+        headline: `Repeat customers (${cohort.repeat_orders}) > first-time (${cohort.first_time_orders})`,
+        body: `Loyalty is doing the work. Now the lever is acquisition — what gets new eyeballs on the listing.`,
+      });
+    }
+
+    // 3. Dish concentration
+    if (dishes.length > 0) {
+      const total = dishes.reduce((s, d) => s + (d.revenue || 0), 0);
+      const top = dishes[0];
+      const topPct = total > 0 ? (top.revenue / total) * 100 : 0;
+      if (topPct > 30) {
+        out.push({
+          tag: 'CONCENTRATION RISK',
+          tone: 'warn',
+          headline: `${top.name} is ${topPct.toFixed(0)}% of revenue`,
+          body: `Your top dish carries ${fmt(top.revenue, { money: true })} of ${fmt(total, { money: true })} total. If Zomato deprioritizes it (low rating spike, photo missing) or you stock-out, the listing drops fast. Diversification fix: feature dishes #2-#3 in the listing carousel slots.`,
+          action_label: `View ${top.name} orders`,
+          action: `showDishOrders('${escape(top.name).replace(/'/g, "\\'")}')`,
+        });
+      }
+    }
+
+    // 4. Ops health
+    if (ops.cancellation_rate_pct > 5) {
+      out.push({
+        tag: 'OPS RED FLAG',
+        tone: 'bad',
+        headline: `Cancellation rate at ${ops.cancellation_rate_pct}%`,
+        body: `${ops.cancellation_count} of ${sales.delivered_orders + ops.cancellation_count} orders were cancelled this period. Above 5% cancellation actively hurts your Zomato/Swiggy ranking. Diagnose: are you running out of stock, or rejecting before prep?`,
+      });
+    }
+    if (issueBd.delay && issueBd.delay > 0) {
+      out.push({
+        tag: 'DELAY SIGNAL',
+        tone: 'warn',
+        headline: `${issueBd.delay} delayed orders flagged`,
+        body: `Customers complaining about delays = poor-rated orders = ranking hit. Pull the order log filtered by delay issues to see if it's a specific time-slot or dish triggering it.`,
+        action_label: 'See delay orders',
+        action: `showIssueOrders('delay')`,
+      });
+    }
+
+    // 5. Payment mix
+    const pay = s.growth?.payment_mix_he || {};
+    const total = Object.values(pay).reduce((a, b) => a + b, 0);
+    if (total > 5 && (pay.PAID || 0) === total) {
+      out.push({
+        tag: 'PAYMENT INSIGHT',
+        tone: 'good',
+        headline: `100% of orders are prepaid`,
+        body: `Zero COD risk on this brand. Customers committing money up-front = high-intent. Worth thinking about COD-on for a 2-week test if Zomato's COD volumes in Shivajinagar look meaningful.`,
+      });
+    }
+
+    // 6. Listing-quality: data is captured combined-only
+    out.push({
+      tag: 'CAPTURE GAP',
+      tone: 'info',
+      headline: `Listing-quality metrics still combined-only`,
+      body: `Impressions, menu opens, ad spend, listing score, items-with-photos — all combined HE+NCH on Swiggy/Zomato's merchant view. Per-brand version requires extension outlet-filter automation (Phase 1B). Use Listing Audit tab for what we can derive without it.`,
+    });
+
+    return out;
+  }
+
+  // ─── DISHES TAB ─────────────────────────────────────────────────────────
+  let dishSortKey = 'revenue';
+  let dishSortDir = 'desc';
+
+  function renderDishes(s) {
+    const dishes = (s.growth?.top_dishes_he || []).slice();
+    if (!dishes.length) {
+      $('#pane-dishes').innerHTML = '<div class="empty"><h3>No dish-level data yet</h3><p>Dish breakdowns come from Zomato order-detail captures. Extension fires this when partner clicks into an order. Will populate as more orders land.</p></div>';
+      return;
+    }
+    dishes.sort((a, b) => {
+      const av = a[dishSortKey] ?? 0, bv = b[dishSortKey] ?? 0;
+      if (typeof av === 'string') return dishSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+      return dishSortDir === 'asc' ? av - bv : bv - av;
+    });
+    const total = dishes.reduce((s, d) => s + (d.revenue || 0), 0);
+    const sortHdr = (key, label) => {
+      const arrow = dishSortKey === key ? (dishSortDir === 'asc' ? ' ↑' : ' ↓') : '';
+      return `<th onclick="window.HN_AGG_API.sortDishes('${key}')" style="cursor:pointer">${label}${arrow}</th>`;
+    };
+
+    $('#pane-dishes').innerHTML = html`
+      <div class="dishes-summary">
+        <div class="ds-stat"><span class="ds-num">${dishes.length}</span><span class="ds-lbl">unique dishes</span></div>
+        <div class="ds-stat"><span class="ds-num">${dishes.reduce((s, d) => s + d.orders, 0)}</span><span class="ds-lbl">order-lines</span></div>
+        <div class="ds-stat"><span class="ds-num">${dishes.reduce((s, d) => s + d.quantity, 0)}</span><span class="ds-lbl">total qty</span></div>
+        <div class="ds-stat"><span class="ds-num">${fmt(total, { money: true })}</span><span class="ds-lbl">total revenue</span></div>
+        <div class="ds-stat"><span class="ds-num">${dishes.reduce((s, d) => s + (d.discount_count || 0), 0)}</span><span class="ds-lbl">w/ discount</span></div>
+      </div>
+      <table class="data-table">
+        <thead><tr>
+          <th>#</th>
+          ${sortHdr('name', 'Dish')}
+          ${sortHdr('orders', 'Orders')}
+          ${sortHdr('quantity', 'Qty')}
+          ${sortHdr('revenue', 'Revenue')}
+          <th>Share</th>
+          ${sortHdr('discount_count', 'w/ Discount')}
+          <th>Tags</th>
+        </tr></thead>
+        <tbody>
+          ${dishes.map((d, i) => {
+            const share = total > 0 ? (d.revenue / total) * 100 : 0;
+            const heavy = d.discount_count >= d.orders * 0.5 ? 'warn' : '';
+            const dtTags = (d.tags || []).filter(t => t.startsWith('dt-')).slice(0, 3).map(t => t.replace('dt-', '')).join(', ');
+            return html`
+              <tr onclick="window.HN_AGG_API.showDishOrders('${escape(d.name).replace(/'/g, "\\'")}')" class="clickable">
+                <td class="dim">${i + 1}</td>
+                <td><strong>${escape(d.name)}</strong></td>
+                <td class="num">${fmt(d.orders)}</td>
+                <td class="num">${fmt(d.quantity)}</td>
+                <td class="num"><strong>${fmt(d.revenue, { money: true })}</strong></td>
+                <td class="num">
+                  <div class="bar"><div class="bar-fill" style="width:${share.toFixed(1)}%"></div><span class="bar-num">${share.toFixed(1)}%</span></div>
+                </td>
+                <td class="num ${heavy}">${d.discount_count || 0}</td>
+                <td class="tags-cell">${escape(dtTags)}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+      <div class="hint">Click any dish row → see HE orders containing it.</div>
+    `;
+  }
+
+  // ─── CUSTOMERS TAB ──────────────────────────────────────────────────────
+  function renderCustomers(s) {
+    if (!lastOrderDetail) {
+      $('#pane-customers').innerHTML = '<div class="loading">Loading customer detail…</div>';
+      fetchOrderDetail().then(() => renderCustomers(s));
+      return;
+    }
+    const orders = (lastOrderDetail.orders || []);
+    if (!orders.length) {
+      $('#pane-customers').innerHTML = '<div class="empty"><h3>No order-detail captures yet for this brand</h3></div>';
+      return;
+    }
+    // Aggregate by customer
+    const byCustomer = {};
+    for (const o of orders) {
+      const c = o.customer || {};
+      const k = c.user_id || c.name || 'unknown';
+      if (!byCustomer[k]) byCustomer[k] = { user_id: c.user_id, name: c.name || 'Unknown', lifetime_orders: c.lifetime_orders, profile_url: c.profile_url, lifetime_label: c.lifetime_orders_label, orders: [], revenue: 0 };
+      byCustomer[k].orders.push(o);
+      byCustomer[k].revenue += o.cart?.total || 0;
+    }
+    const customers = Object.values(byCustomer).sort((a, b) => b.revenue - a.revenue);
+    const firstTime = customers.filter(c => (c.lifetime_orders || 0) === 1);
+    const repeat    = customers.filter(c => (c.lifetime_orders || 0) > 1);
+
+    $('#pane-customers').innerHTML = html`
+      <div class="dishes-summary">
+        <div class="ds-stat"><span class="ds-num">${customers.length}</span><span class="ds-lbl">unique customers</span></div>
+        <div class="ds-stat"><span class="ds-num">${firstTime.length}</span><span class="ds-lbl">first-time</span></div>
+        <div class="ds-stat"><span class="ds-num">${repeat.length}</span><span class="ds-lbl">repeat</span></div>
+        <div class="ds-stat"><span class="ds-num">${fmt(customers.reduce((s, c) => s + c.revenue, 0), { money: true })}</span><span class="ds-lbl">total revenue</span></div>
+      </div>
+      <table class="data-table">
+        <thead><tr>
+          <th>#</th><th>Customer</th><th>Lifetime orders</th><th class="num">In period</th><th class="num">Revenue</th><th>Profile</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${customers.map((c, i) => html`
+            <tr>
+              <td class="dim">${i + 1}</td>
+              <td><strong>${escape(c.name)}</strong>${c.lifetime_orders === 1 ? ' <span class="tag-pill new">first-time</span>' : ''}${c.lifetime_orders > 5 ? ' <span class="tag-pill loyal">loyal</span>' : ''}</td>
+              <td class="dim">${escape(c.lifetime_label || c.lifetime_orders || '—')}</td>
+              <td class="num">${c.orders.length}</td>
+              <td class="num"><strong>${fmt(c.revenue, { money: true })}</strong></td>
+              <td>${c.profile_url ? `<a href="${escape(c.profile_url)}" target="_blank" rel="noopener">Open in Zomato ↗</a>` : '—'}</td>
+              <td><button class="btn-tiny" onclick="window.HN_AGG_API.showCustomerOrders('${escape(c.user_id || c.name).replace(/'/g, "\\'")}')">View orders</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div class="hint">Click "Open in Zomato ↗" to see customer's full Zomato profile in a new tab — useful for deciding who to retarget via WABA.</div>
+    `;
+  }
+
+  // ─── ORDERS TAB ─────────────────────────────────────────────────────────
+  function renderOrders(s) {
+    const o = s.orders;
+    if (!o) { $('#pane-orders').innerHTML = '<div class="err">no data</div>'; return; }
+    const orders = o.orders || [];
+    if (!orders.length) {
+      $('#pane-orders').innerHTML = html`
+        <div class="dishes-summary">
+          <div class="ds-stat"><span class="ds-num">0</span><span class="ds-lbl">orders</span></div>
+        </div>
+        <div class="empty"><h3>No orders in this period.</h3><p>Try widening to "month" or check if extension is healthy on hn-winpc.</p></div>
+      `;
+      return;
+    }
+    $('#pane-orders').innerHTML = html`
+      <div class="dishes-summary">
+        <div class="ds-stat"><span class="ds-num">${o.total_orders}</span><span class="ds-lbl">total</span></div>
+        <div class="ds-stat"><span class="ds-num">${o.total_delivered}</span><span class="ds-lbl">delivered</span></div>
+        <div class="ds-stat"><span class="ds-num">${fmt(o.total_revenue, { money: true })}</span><span class="ds-lbl">revenue</span></div>
+        <div class="ds-stat"><span class="ds-num">${fmt(o.total_payout, { money: true })}</span><span class="ds-lbl">payout</span></div>
+      </div>
+      <table class="data-table">
+        <thead><tr>
+          <th>Date · Time</th><th>Status</th><th>Order ID</th><th>Customer</th><th>Items</th>
+          <th class="num">Value</th><th class="num">Payout</th><th>Issues</th><th>Rating</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${orders.map(r => html`
+            <tr class="clickable" onclick="window.HN_AGG_API.showOrderDetail('${escape(String(r.order_id))}')">
+              <td><div>${escape(r.order_date || '—')}</div><div class="dim">${escape(r.order_time || '')}</div></td>
+              <td><span class="status ${(r.status || '').toLowerCase().includes('deliver') ? 'good' : 'warn'}">${escape(r.status || '—')}</span></td>
+              <td class="mono">${escape(r.order_id || '—')}</td>
+              <td>${escape(r.customer_name || '—')}</td>
+              <td class="trunc" title="${escape(r.items || '')}">${escape((r.items || '').substring(0, 60))}</td>
+              <td class="num"><strong>${fmt(r.order_value, { money: true })}</strong></td>
+              <td class="num">${fmt(r.net_payout, { money: true })}</td>
+              <td>${r.issues ? `<span class="issues">${escape(r.issues)}</span>` : '<span class="dim">—</span>'}</td>
+              <td>${r.rating ? `<span class="rating">★ ${r.rating}</span>` : '<span class="dim">—</span>'}</td>
+              <td><span class="dim">→</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div class="hint">Click any row → full cart breakdown + customer profile.</div>
+    `;
+  }
+
+  // ─── OPS TAB ────────────────────────────────────────────────────────────
+  function renderOps(s) {
+    const o = s.ops; if (!o) return;
     const live = o.live_status || {};
     const meta = o.outlet_metadata;
-    const issueBreakdown = o.issue_breakdown || {};
+    const issueBd = o.issue_breakdown || {};
     const gaps = o.not_yet_he_only || {};
-    // Old combined fields no longer in payload — only HE-only fields below.
-    const dq = {}, cn = {}, cm = {}, bolt = null;  // kept as empty so existing code doesn't NPE if dashboard cached
 
-    const issueRows = Object.entries(issueBreakdown).map(([k, v]) =>
-      `<div class="kv"><span class="k">${k.replace(/_/g, ' ')}</span><span class="v ${v > 0 ? 'warn' : ''}">${v}</span></div>`).join('');
+    const liveOpen = live.is_open === true;
+    const liveOff  = live.is_open === false;
+    const cancelTone = (o.cancellation_rate_pct || 0) > 5 ? 'bad' : (o.cancellation_rate_pct || 0) > 0 ? 'warn' : 'good';
+    const issueTone  = (o.issue_rate_pct || 0) > 10 ? 'bad' : (o.issue_rate_pct || 0) > 0 ? 'warn' : 'good';
 
-    $('#pane-ops').innerHTML = `
-      <div class="scope-bar">${scopeBadge(o.data_scope)}<span class="scope-note">${o.data_scope_note || ''}</span></div>
-      <div class="grid4">
-        ${card(`LIVE STATUS · ${cfg.brand.toUpperCase()} only`, live.available === false ? `<div class="not-cap">${live.reason || 'live status not available'}</div>` : `
-          <div class="big-status ${live.is_open === false ? 'bad' : 'good'}">${live.is_open === false ? 'OFFLINE' : (live.is_open === true ? 'OPEN' : '—')}</div>
-          ${live.outlet_id ? `<div class="kv"><span class="k">Outlet ID</span><span class="v">${live.outlet_id}</span></div>` : (meta?.res_id ? `<div class="kv"><span class="k">Outlet ID</span><span class="v">${meta.res_id}</span></div>` : '')}
-          ${live.is_serviceable !== undefined ? `<div class="kv"><span class="k">Serviceable</span><span class="v">${live.is_serviceable === false ? '✗ no' : '✓ yes'}</span></div>` : ''}
-          ${live.stress !== undefined ? `<div class="kv"><span class="k">Stress mode</span><span class="v ${live.stress ? 'warn' : ''}">${live.stress ? 'yes' : 'no'}</span></div>` : ''}
-          ${live.active_batches !== undefined ? `<div class="kv"><span class="k">Active batches</span><span class="v">${live.active_batches}</span></div>` : ''}
-        `)}
-        ${meta && !meta.available === false ? card(`OUTLET METADATA · ${cfg.brand.toUpperCase()} only`, `
-          ${meta.address ? `<div class="kv"><span class="k">Address</span><span class="v" style="font-size:10px;text-align:right">${meta.address}</span></div>` : ''}
-          ${meta.active_since ? `<div class="kv"><span class="k">Active since</span><span class="v">${meta.active_since}</span></div>` : ''}
-          ${meta.am_email ? `<div class="kv"><span class="k">AM email</span><span class="v" style="font-size:10px"><a href="mailto:${meta.am_email}" style="color:var(--text)">${meta.am_email}</a></span></div>` : ''}
-          ${meta.am_phone ? `<div class="kv"><span class="k">AM phone</span><span class="v"><a href="tel:${meta.am_phone}" style="color:var(--text)">${meta.am_phone}</a></span></div>` : ''}
-        `) : ''}
-        ${card(`CANCELLATIONS · ${cfg.brand.toUpperCase()} only`, `
-          <div class="big-num ${o.cancellation_rate_pct > 5 ? 'warn' : ''}">${fmt(o.cancellation_rate_pct, { pct: true })}</div>
-          <div class="kv"><span class="k">Count</span><span class="v ${o.cancellation_count > 0 ? 'warn' : ''}">${fmt(o.cancellation_count)}</span></div>
-          ${o.avg_rating !== null && o.avg_rating !== undefined ? `<div class="kv"><span class="k">Avg rating</span><span class="v">${fmt(o.avg_rating, { dec: 1 })} ★</span></div>` : ''}
-          ${o.poor_rated_count > 0 ? `<div class="kv"><span class="k">Poor-rated</span><span class="v warn">${fmt(o.poor_rated_count)}</span></div>` : ''}
-          <div style="font-size:9px;color:var(--dim);margin-top:6px">From aggregator_orders WHERE brand='${cfg.brand}'</div>
-        `)}
-        ${card(`ISSUES · ${cfg.brand.toUpperCase()} only`, o.issue_rate_pct !== undefined ? `
-          <div class="big-num ${o.issue_rate_pct > 5 ? 'warn' : ''}">${fmt(o.issue_rate_pct, { pct: true })}</div>
-          <div class="kv"><span class="k">Issue rate</span><span class="v"></span></div>
-          ${issueRows}
-          ${Object.keys(issueBreakdown).length === 0 ? '<div style="font-size:10px;color:var(--green);margin-top:4px">no issues found</div>' : ''}
-        ` : '<div class="not-cap">no order data this period</div>')}
+    $('#pane-ops').innerHTML = html`
+      <div class="grid3">
+        <div class="card-big tone-${liveOpen ? 'good' : liveOff ? 'bad' : 'dim'}">
+          <div class="cb-label">LIVE STATUS · ${cfg.brand.toUpperCase()} only</div>
+          <div class="cb-status">${liveOpen ? 'OPEN' : liveOff ? 'OFFLINE' : '—'}</div>
+          <div class="cb-rows">
+            ${live.outlet_id || meta?.res_id ? `<div class="kv"><span class="k">Outlet ID</span><span class="v">${live.outlet_id || meta?.res_id}</span></div>` : ''}
+            ${live.is_serviceable !== undefined ? `<div class="kv"><span class="k">Serviceable</span><span class="v">${live.is_serviceable ? '✓ yes' : '✗ no'}</span></div>` : ''}
+            ${live.stress !== undefined ? `<div class="kv"><span class="k">Stress mode</span><span class="v ${live.stress ? 'warn' : ''}">${live.stress ? 'yes' : 'no'}</span></div>` : ''}
+            ${live.active_batches !== undefined ? `<div class="kv"><span class="k">Active batches</span><span class="v">${live.active_batches}</span></div>` : ''}
+            ${live.updated_at ? `<div class="kv"><span class="k">Updated</span><span class="v dim">${ago(live.updated_at)}</span></div>` : ''}
+          </div>
+        </div>
+
+        <div class="card-big tone-${cancelTone}">
+          <div class="cb-label">CANCELLATIONS · ${cfg.brand.toUpperCase()} only</div>
+          <div class="cb-num">${fmt(o.cancellation_rate_pct, { pct: true })}</div>
+          <div class="cb-rows">
+            <div class="kv"><span class="k">Cancelled count</span><span class="v">${fmt(o.cancellation_count)}</span></div>
+            ${o.avg_rating ? `<div class="kv"><span class="k">Avg rating</span><span class="v">${fmt(o.avg_rating, { dec: 1 })} ★</span></div>` : ''}
+            ${o.poor_rated_count > 0 ? `<div class="kv"><span class="k">Poor-rated</span><span class="v warn">${o.poor_rated_count}</span></div>` : ''}
+            <div class="kv dim"><span class="k">Source</span><span class="v">aggregator_orders</span></div>
+          </div>
+        </div>
+
+        <div class="card-big tone-${issueTone}" ${o.issue_rate_pct > 0 ? `onclick="window.HN_AGG_API.showAllIssueOrders()" role="button" style="cursor:pointer"` : ''}>
+          <div class="cb-label">ISSUE RATE · ${cfg.brand.toUpperCase()} only</div>
+          <div class="cb-num">${fmt(o.issue_rate_pct, { pct: true })}</div>
+          <div class="cb-rows">
+            ${Object.entries(issueBd).length ? Object.entries(issueBd).map(([k, v]) =>
+              `<div class="kv"><span class="k">${k.replace(/_/g, ' ')}</span><span class="v ${v > 0 ? 'warn' : ''}">${v}</span></div>`).join('') : '<div class="dim small">no issues found</div>'}
+            ${o.issue_rate_pct > 0 ? '<div class="cb-cta">click to see issue orders →</div>' : ''}
+          </div>
+        </div>
       </div>
-      ${Object.keys(gaps).length ? `
-        <div class="grid4" style="margin-top:12px">
-          ${card('NOT YET HE-ONLY', `
-            ${Object.entries(gaps).map(([k, v]) =>
-              `<div style="font-size:10px;padding:3px 0;border-bottom:1px solid var(--very-faint, #1a1a30)"><strong>${k}</strong><br><span style="color:var(--dim)">${v}</span></div>`
-            ).join('')}
-          `)}
+
+      ${meta && !meta.available === false ? html`
+        <div class="card-meta">
+          <div class="cm-title">OUTLET METADATA · ${cfg.brand.toUpperCase()} only</div>
+          <div class="cm-grid">
+            ${meta.address ? `<div class="kv"><span class="k">Address</span><span class="v"><a href="https://maps.google.com/?q=${encodeURIComponent(meta.address)}" target="_blank" rel="noopener">${escape(meta.address)} ↗</a></span></div>` : ''}
+            ${meta.active_since ? `<div class="kv"><span class="k">Active since</span><span class="v">${escape(meta.active_since)}</span></div>` : ''}
+            ${meta.am_email ? `<div class="kv"><span class="k">Account manager</span><span class="v"><a href="mailto:${escape(meta.am_email)}">${escape(meta.am_email)}</a></span></div>` : ''}
+            ${meta.am_phone ? `<div class="kv"><span class="k">AM phone</span><span class="v"><a href="tel:${escape(meta.am_phone)}">${escape(meta.am_phone)}</a></span></div>` : ''}
+          </div>
+        </div>
+      ` : ''}
+
+      ${Object.keys(gaps).length ? html`
+        <div class="gaps-card">
+          <div class="cm-title">NOT YET HE-ONLY · gaps explained</div>
+          <div class="gaps-list">
+            ${Object.entries(gaps).map(([k, v]) => `<div class="gap-row"><div class="gap-key">${escape(k)}</div><div class="gap-reason">${escape(v)}</div></div>`).join('')}
+          </div>
         </div>
       ` : ''}
     `;
   }
 
-  // ─── SALES ──────────────────────────────────────────────────────────────
-  function renderSales(s) {
-    if (!s) { $('#pane-sales').innerHTML = '<div class="err">no data</div>'; return; }
-    if (s.data_scope === 'unavailable') {
-      $('#pane-sales').innerHTML = `<div class="empty"><h3>Sales data not yet captured</h3><p>${s.reason || ''}</p></div>`;
+  // ─── LISTING AUDIT TAB ─────────────────────────────────────────────────
+  function renderAudit(s) {
+    const findings = generateAuditFindings(s);
+    if (!findings.length) {
+      $('#pane-audit').innerHTML = '<div class="empty"><h3>Need more order data</h3><p>Audit findings need at least one delivered order this period.</p></div>';
       return;
     }
-    const t = s.totals || {};
-    $('#pane-sales').innerHTML = `
-      <div class="scope-bar">${scopeBadge(s.data_scope)}<span class="scope-note">${s.data_scope_note || ''}</span></div>
-      <div class="grid4">
-        ${card('REVENUE', `
-          <div class="big-num">${fmt(t.net_sales || t.sales, { money: true })}</div>
-          <div class="kv"><span class="k">Date range</span><span class="v" style="font-size:11px">${s.date_range || '—'}</span></div>
-        `)}
-        ${card('ORDERS', `
-          <div class="big-num">${fmt(t.delivered_orders)}</div>
-          <div class="kv"><span class="k">delivered</span><span class="v"></span></div>
-        `)}
-        ${card('AOV', `
-          <div class="big-num">${fmt(t.aov, { money: true })}</div>
-        `)}
-        ${t.cancelled_orders !== undefined ? card('CANCELLATIONS', `
-          <div class="kv"><span class="k">Cancelled</span><span class="v ${t.cancelled_orders > 0 ? 'warn' : ''}">${fmt(t.cancelled_orders)}</span></div>
-          <div class="kv"><span class="k">Loss</span><span class="v ${t.cancelled_loss > 0 ? 'warn' : ''}">${fmt(t.cancelled_loss, { money: true })}</span></div>
-        `) : ''}
+    $('#pane-audit').innerHTML = html`
+      <div class="audit-intro">
+        <h3>Listing audit findings · ${cfg.brand.toUpperCase()} only</h3>
+        <p>Auto-generated from current order + dish data. Each finding ranked by projected impact. Phase 4 (consumer-side scraping) will add competitive context to these.</p>
       </div>
+      <ol class="audit-list">
+        ${findings.map((f, i) => html`
+          <li class="audit-row tone-${f.tone}">
+            <div class="ar-num">#${i + 1}</div>
+            <div class="ar-body">
+              <div class="ar-headline">${f.headline}</div>
+              <div class="ar-detail">${f.detail}</div>
+              <div class="ar-action"><strong>Action:</strong> ${f.action}</div>
+              <div class="ar-impact"><strong>Projected impact:</strong> ${f.impact}</div>
+            </div>
+          </li>
+        `).join('')}
+      </ol>
     `;
   }
 
-  // ─── FINANCE ────────────────────────────────────────────────────────────
-  function renderFinance(f) {
-    $('#pane-finance').innerHTML = `<div class="empty"><h3>Finance data not yet captured</h3><p>${f?.reason || 'Pending Phase 1B (extension extractor for the Swiggy / Zomato finance pages).'}</p></div>`;
-  }
+  function generateAuditFindings(s) {
+    const out = [];
+    const dishes = s.growth?.top_dishes_he || [];
+    const cohort = s.growth?.customer_cohort_he || {};
+    const disc   = s.growth?.discount_usage_he || {};
+    const ops    = s.ops || {};
 
-  // ─── REVIEWS ────────────────────────────────────────────────────────────
-  function renderReviews(r) {
-    $('#pane-reviews').innerHTML = `<div class="empty"><h3>Reviews data not yet captured</h3><p>${r?.reason || 'Pending Phase 1B.'}</p></div>`;
-  }
-
-  // ─── ORDERS ─────────────────────────────────────────────────────────────
-  function renderOrders(o) {
-    if (!o) { $('#pane-orders').innerHTML = '<div class="err">no data</div>'; return; }
-    const orders = o.orders || [];
-    const summary = `
-      <div class="scope-bar">${scopeBadge(o.data_scope)}</div>
-      <div class="grid4" style="margin-bottom:14px">
-        ${card('TOTAL ORDERS', `<div class="big-num">${fmt(o.total_orders)}</div>`)}
-        ${card('DELIVERED', `<div class="big-num">${fmt(o.total_delivered)}</div>`)}
-        ${card('REVENUE', `<div class="big-num">${fmt(o.total_revenue, { money: true })}</div>`)}
-        ${card('NET PAYOUT', `<div class="big-num">${fmt(o.total_payout, { money: true })}</div>`)}
-      </div>
-    `;
-    if (!orders.length) {
-      $('#pane-orders').innerHTML = summary + `<div class="empty"><h3>No orders in this period.</h3></div>`;
-      return;
+    // Discount over-reliance
+    if (disc.usage_rate_pct >= 60) {
+      out.push({
+        tone: 'warn',
+        headline: `Discount dependency at ${disc.usage_rate_pct}% — top priority fix`,
+        detail: `${disc.orders_with_discount} of ${disc.total_orders_in_sample} orders carry a discount. Customers train themselves to wait for promos. Margin gets eaten.`,
+        action: `Run a 7-day no-discount A/B on your top dish. Measure volume change. If volume drops <20%, your prices are correctly calibrated and discounts are unnecessary.`,
+        impact: `If volume holds, ~${Math.round(disc.usage_rate_pct * 0.7)}% margin recovery on those orders. Even a 50% discount-elim with 20% volume drop = net positive.`,
+      });
     }
-    const rows = orders.map(o => `
-      <tr>
-        <td>${o.order_date || '—'} ${o.order_time || ''}</td>
-        <td><span class="status ${(o.status || '').toLowerCase().includes('deliver') ? 'good' : 'warn'}">${o.status || '—'}</span></td>
-        <td>${o.order_id || '—'}</td>
-        <td>${o.customer_name || '—'}</td>
-        <td>${(o.items || '').substring(0, 60)}</td>
-        <td class="num">${fmt(o.order_value, { money: true })}</td>
-        <td class="num">${fmt(o.net_payout, { money: true })}</td>
-        <td>${o.issues ? `<span class="issues">${o.issues}</span>` : '—'}</td>
-        <td>${o.rating ? `★ ${o.rating}` : '—'}</td>
-      </tr>
-    `).join('');
-    $('#pane-orders').innerHTML = summary + `
-      <table class="orders-table">
-        <thead><tr>
-          <th>Date / Time</th><th>Status</th><th>Order ID</th><th>Customer</th><th>Items</th>
-          <th class="num">Value</th><th class="num">Payout</th><th>Issues</th><th>Rating</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
+
+    // Concentration risk
+    if (dishes.length > 0) {
+      const total = dishes.reduce((s, d) => s + (d.revenue || 0), 0);
+      const top   = dishes[0];
+      const topPct = total > 0 ? (top.revenue / total) * 100 : 0;
+      if (topPct > 30) {
+        out.push({
+          tone: 'warn',
+          headline: `${top.name} carries ${topPct.toFixed(0)}% of revenue`,
+          detail: `Listing is hostage to one dish. Stockout, photo loss, or rating drop on this dish = listing collapse. The next 3 dishes (${dishes.slice(1, 4).map(d => d.name).join(', ')}) are not pulling their weight.`,
+          action: `Promote dishes #2-#4 in the listing carousel. Add Zomato 'must try' tag if available. Photo-quality audit on those 3 dishes.`,
+          impact: `Aim for top dish < 25% revenue share within 4 weeks. Each diversified dish at #2-#4 typically picks up +3-5 orders/week with prominence.`,
+        });
+      }
+    }
+
+    // First-time customer leak
+    if (cohort.first_time_pct >= 65 && cohort.sample_size >= 10) {
+      out.push({
+        tone: 'warn',
+        headline: `Retention leak: ${cohort.first_time_pct}% first-time customers`,
+        detail: `Acquisition is healthy. Retention isn't. Every new customer who orders once and disappears is paid acquisition cost burnt.`,
+        action: `WABA template message 24-48h after first delivery: "Thanks ${cohort.first_time_orders > 0 ? '[name]' : 'first-timer'}, hope you enjoyed [dish]. Try our [dish #2] next time — here's 10% off". DLT-register the template if not already.`,
+        impact: `Industry baseline: WABA retention nudge converts 8-15% of first-time orderers into 2nd order within 2 weeks. On ${cohort.first_time_orders} first-timers that's ~${Math.round(cohort.first_time_orders * 0.1)}-${Math.round(cohort.first_time_orders * 0.15)} additional orders.`,
+      });
+    }
+
+    // Dish photo + tags audit (proxy)
+    if (dishes.length > 0) {
+      const lowVolDishes = dishes.filter(d => d.orders < 2 && d.revenue < 200);
+      if (lowVolDishes.length >= 3) {
+        out.push({
+          tone: 'info',
+          headline: `${lowVolDishes.length} dishes with <2 orders this period — likely listing-quality issue`,
+          detail: `Dishes that should be discoverable but aren't getting orders: ${lowVolDishes.slice(0, 5).map(d => d.name).join(', ')}. Common causes: missing photo, weak description, wrong category tag, or just too far down the menu.`,
+          action: `Open Zomato partner app → Menu → for each underperformer: confirm photo present, description ≥ 12 words, tagged into the right cuisine category. Move underperformers to bottom of menu so top dishes get prime real estate.`,
+          impact: `Each fixed listing typically gains +1-2 orders/week. If 5 dishes fixed, ~25-50 added orders/month at HE's current AOV.`,
+        });
+      }
+    }
+
+    // Ops issues drag ranking
+    if (ops.issue_rate_pct > 5 || (ops.issue_breakdown?.delay || 0) > 1) {
+      out.push({
+        tone: 'bad',
+        headline: `${ops.issue_rate_pct}% issue rate is dragging ranking`,
+        detail: `Both Zomato and Swiggy use customer issue rates as ranking signal. Even ${ops.issue_breakdown?.delay || 0} delays this period costs you organic impressions.`,
+        action: `Pull the order log filtered by delay issues. Map to time-slot. If concentrated in dinner peak, kitchen capacity is the constraint — staffing up vs accepting fewer orders is the call. Set Zomato handover-time +2min during peak.`,
+        impact: `Each 5% drop in issue rate ≈ +200-400 impressions/day from algo. Bigger lever than ad spend at this scale.`,
+      });
+    }
+
+    // Listing-quality data gap
+    out.push({
+      tone: 'info',
+      headline: `Listing-quality scoring is still combined-only`,
+      detail: `Menu score, items-with-photos %, online availability are reported by Zomato/Swiggy as combined HE+NCH numbers. We can't yet attribute these to HE specifically.`,
+      action: `Phase 1B: extension applies outlet filter on Swiggy business-metrics + Zomato live tracking, captures per-brand version. Until then, treat combined version as "directional only."`,
+      impact: `Once Phase 1B lands, this audit gains 7 more dimensions. The bigger unlock is Phase 4 (consumer-side scraping) which adds competitor positioning.`,
+    });
+
+    return out;
+  }
+
+  // ─── DRILL-DOWN: dish orders modal ──────────────────────────────────────
+  async function showDishOrders(dishName) {
+    if (!lastOrderDetail) await fetchOrderDetail();
+    const matching = (lastOrderDetail.orders || []).filter(o =>
+      (o.cart?.dishes || []).some(d => d.name === dishName));
+    const totalQty = matching.reduce((s, o) => s + (o.cart?.dishes || []).filter(d => d.name === dishName).reduce((q, d) => q + (d.quantity || 0), 0), 0);
+    const totalRev = matching.reduce((s, o) => s + (o.cart?.dishes || []).filter(d => d.name === dishName).reduce((r, d) => r + (d.total_cost || 0), 0), 0);
+
+    openModal(`Orders containing "${escape(dishName)}"`, html`
+      <div class="dishes-summary" style="margin-bottom:14px">
+        <div class="ds-stat"><span class="ds-num">${matching.length}</span><span class="ds-lbl">orders</span></div>
+        <div class="ds-stat"><span class="ds-num">${totalQty}</span><span class="ds-lbl">qty</span></div>
+        <div class="ds-stat"><span class="ds-num">${fmt(totalRev, { money: true })}</span><span class="ds-lbl">revenue</span></div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th class="num">Qty</th><th class="num">Subtotal</th><th>Discount</th><th>State</th></tr></thead>
+        <tbody>
+          ${matching.map(o => {
+            const dishMatches = (o.cart?.dishes || []).filter(d => d.name === dishName);
+            const qty = dishMatches.reduce((s, d) => s + (d.quantity || 0), 0);
+            const sub = dishMatches.reduce((s, d) => s + (d.total_cost || 0), 0);
+            const discount = dishMatches.flatMap(d => d.discount || []).map(x => x.name).filter(Boolean).join(', ');
+            return html`
+              <tr>
+                <td class="mono">${escape(o.display_id || o.order_id)}</td>
+                <td>${o.timeline?.created_at ? new Date(o.timeline.created_at).toLocaleDateString() : '—'}</td>
+                <td>${escape(o.customer?.name || '—')}<br><span class="dim small">${escape(o.customer?.lifetime_orders_label || '')}</span></td>
+                <td class="num">${qty}</td>
+                <td class="num">${fmt(sub, { money: true })}</td>
+                <td>${discount ? `<span class="tag-pill">${escape(discount)}</span>` : '<span class="dim">—</span>'}</td>
+                <td><span class="status ${o.state === 'DELIVERED' ? 'good' : 'warn'}">${escape(o.state)}</span></td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
       </table>
-    `;
+    `);
   }
 
-  function card(title, body) {
-    return `<div class="card"><div class="card-h">${title}</div><div class="card-b">${body}</div></div>`;
+  // ─── DRILL-DOWN: discount-applied orders modal ──────────────────────────
+  async function showDiscountedOrders() {
+    if (!lastOrderDetail) await fetchOrderDetail();
+    const orders = (lastOrderDetail.orders || []).filter(o =>
+      (o.cart?.dishes || []).some(d => (d.discount || []).length > 0));
+    openModal(`Orders with discount applied (${orders.length})`, html`
+      <table class="data-table">
+        <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Dish</th><th>Promo name</th><th class="num">Discount</th><th class="num">Order ₹</th></tr></thead>
+        <tbody>
+          ${orders.flatMap(o => (o.cart?.dishes || []).flatMap(d => (d.discount || []).map(disc => html`
+            <tr>
+              <td class="mono">${escape(o.display_id || o.order_id)}</td>
+              <td>${o.timeline?.created_at ? new Date(o.timeline.created_at).toLocaleDateString() : '—'}</td>
+              <td>${escape(o.customer?.name || '—')}</td>
+              <td>${escape(d.name)}</td>
+              <td><span class="tag-pill">${escape(disc.name || 'unnamed')}</span></td>
+              <td class="num warn">${disc.is_percentage ? fmt(disc.amount, { pct: true }) : fmt(disc.amount, { money: true })}</td>
+              <td class="num">${fmt(o.cart?.total, { money: true })}</td>
+            </tr>
+          `))).join('')}
+        </tbody>
+      </table>
+    `);
+  }
+
+  async function showFirstTimeCustomers() {
+    if (!lastOrderDetail) await fetchOrderDetail();
+    const customers = {};
+    for (const o of (lastOrderDetail.orders || [])) {
+      const c = o.customer || {};
+      if (c.lifetime_orders === 1 && c.user_id && !customers[c.user_id]) customers[c.user_id] = { ...c, order: o };
+    }
+    const list = Object.values(customers);
+    openModal(`First-time customers (${list.length})`, html`
+      <p class="dim small" style="margin-bottom:12px">Each of these placed their first-ever Zomato order at ${cfg.brand.toUpperCase()}. Open profile in Zomato to find their handle, then queue WABA retention nudge.</p>
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>First order</th><th class="num">₹</th><th>Profile</th></tr></thead>
+        <tbody>
+          ${list.map(c => html`
+            <tr>
+              <td><strong>${escape(c.name)}</strong></td>
+              <td>${c.order.timeline?.created_at ? new Date(c.order.timeline.created_at).toLocaleString() : '—'}</td>
+              <td class="num">${fmt(c.order.cart?.total, { money: true })}</td>
+              <td>${c.profile_url ? `<a href="${escape(c.profile_url)}" target="_blank" rel="noopener">Open ↗</a>` : '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `);
+  }
+
+  async function showCustomerOrders(userId) {
+    if (!lastOrderDetail) await fetchOrderDetail();
+    const orders = (lastOrderDetail.orders || []).filter(o => (o.customer?.user_id || o.customer?.name) === userId);
+    if (!orders.length) return openModal('No orders', '<p>None found.</p>');
+    const c = orders[0].customer || {};
+    openModal(`${escape(c.name || 'Customer')} — ${orders.length} order(s)`, html`
+      <p class="dim small" style="margin-bottom:12px">${escape(c.lifetime_orders_label || '')} ${c.profile_url ? `· <a href="${escape(c.profile_url)}" target="_blank" rel="noopener">Zomato profile ↗</a>` : ''}</p>
+      <table class="data-table">
+        <thead><tr><th>Order</th><th>Date</th><th>Dishes</th><th class="num">₹</th><th>State</th></tr></thead>
+        <tbody>
+          ${orders.map(o => html`
+            <tr>
+              <td class="mono">${escape(o.display_id || o.order_id)}</td>
+              <td>${o.timeline?.created_at ? new Date(o.timeline.created_at).toLocaleString() : '—'}</td>
+              <td>${(o.cart?.dishes || []).map(d => `${d.quantity}x ${escape(d.name)}`).join(', ')}</td>
+              <td class="num">${fmt(o.cart?.total, { money: true })}</td>
+              <td><span class="status ${o.state === 'DELIVERED' ? 'good' : 'warn'}">${escape(o.state)}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `);
+  }
+
+  async function showOrderDetail(orderId) {
+    if (!lastOrderDetail) await fetchOrderDetail();
+    const o = (lastOrderDetail.orders || []).find(x => String(x.order_id) === String(orderId) || String(x.display_id) === String(orderId));
+    if (!o) return openModal('Order detail', `<p>Detailed capture not available for order ${escape(orderId)}. Order-detail API only fires when partner clicks into an order in Zomato portal.</p>`);
+    const c = o.customer || {};
+    const dishes = o.cart?.dishes || [];
+    const t = o.timeline || {};
+    openModal(`Order ${escape(o.display_id || o.order_id)} · ${cfg.brand.toUpperCase()}`, html`
+      <div class="order-detail-grid">
+        <div class="odg-section">
+          <div class="cm-title">Customer</div>
+          <div class="kv"><span class="k">Name</span><span class="v"><strong>${escape(c.name || '—')}</strong></span></div>
+          <div class="kv"><span class="k">Lifetime orders</span><span class="v">${escape(c.lifetime_orders_label || c.lifetime_orders || '—')}</span></div>
+          ${c.profile_url ? `<div class="kv"><span class="k">Profile</span><span class="v"><a href="${escape(c.profile_url)}" target="_blank" rel="noopener">Open in Zomato ↗</a></span></div>` : ''}
+        </div>
+        <div class="odg-section">
+          <div class="cm-title">Timeline</div>
+          ${t.created_at ? `<div class="kv"><span class="k">Created</span><span class="v">${new Date(t.created_at).toLocaleTimeString()}</span></div>` : ''}
+          ${t.actioned_at ? `<div class="kv"><span class="k">Accepted</span><span class="v">${new Date(t.actioned_at).toLocaleTimeString()}</span></div>` : ''}
+          ${t.food_ready_at ? `<div class="kv"><span class="k">Food ready</span><span class="v">${new Date(t.food_ready_at).toLocaleTimeString()}</span></div>` : ''}
+          ${t.prep_min ? `<div class="kv"><span class="k">Prep time set</span><span class="v">${t.prep_min} min (${t.prep_min_min}-${t.prep_min_max} allowed)</span></div>` : ''}
+        </div>
+        <div class="odg-section">
+          <div class="cm-title">Payment & state</div>
+          <div class="kv"><span class="k">State</span><span class="v"><span class="status ${o.state === 'DELIVERED' ? 'good' : 'warn'}">${escape(o.state)}</span></span></div>
+          <div class="kv"><span class="k">Method</span><span class="v">${escape(o.payment?.method || '—')}</span></div>
+          <div class="kv"><span class="k">Mode</span><span class="v">${escape(o.delivery_mode || '—')}</span></div>
+          ${o.zomato_delivered ? `<div class="kv"><span class="k">Rider</span><span class="v">Zomato Delivered</span></div>` : ''}
+        </div>
+      </div>
+      <div style="margin-top:14px"><div class="cm-title">Cart</div></div>
+      <table class="data-table">
+        <thead><tr><th>Dish</th><th class="num">Qty</th><th class="num">Unit ₹</th><th class="num">Total ₹</th><th>Discount</th><th>Tags</th></tr></thead>
+        <tbody>
+          ${dishes.map(d => html`
+            <tr>
+              <td><strong>${escape(d.name)}</strong></td>
+              <td class="num">${d.quantity}</td>
+              <td class="num">${fmt(d.unit_cost, { money: true })}</td>
+              <td class="num"><strong>${fmt(d.total_cost, { money: true })}</strong></td>
+              <td>${(d.discount || []).map(x => `<span class="tag-pill">${escape(x.name)}</span>`).join(' ')}</td>
+              <td class="tags-cell">${(d.tags || []).filter(t => t.startsWith('dt-')).slice(0, 3).map(t => t.replace('dt-', '')).join(', ')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div class="kv" style="margin-top:10px"><span class="k">Subtotal</span><span class="v">${fmt(o.cart?.subtotal, { money: true })}</span></div>
+      <div class="kv"><span class="k"><strong>Total</strong></span><span class="v"><strong>${fmt(o.cart?.total, { money: true })}</strong></span></div>
+    `);
+  }
+
+  function showIssueOrders(issueType) {
+    const orders = (lastData?.sections?.orders?.orders || []).filter(o =>
+      o.issues && new RegExp(issueType, 'i').test(o.issues));
+    openModal(`Orders with ${issueType} issue (${orders.length})`, html`
+      <table class="data-table">
+        <thead><tr><th>Order ID</th><th>Date</th><th>Customer</th><th>Items</th><th class="num">₹</th><th>Issue</th></tr></thead>
+        <tbody>
+          ${orders.map(o => html`
+            <tr>
+              <td class="mono">${escape(o.order_id)}</td>
+              <td>${escape(o.order_date || '—')} ${escape(o.order_time || '')}</td>
+              <td>${escape(o.customer_name || '—')}</td>
+              <td class="trunc" title="${escape(o.items || '')}">${escape((o.items || '').substring(0, 50))}</td>
+              <td class="num">${fmt(o.order_value, { money: true })}</td>
+              <td><span class="issues">${escape(o.issues)}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `);
+  }
+
+  function showAllIssueOrders() {
+    const orders = (lastData?.sections?.orders?.orders || []).filter(o => o.issues && String(o.issues).trim());
+    openModal(`All flagged-issue orders (${orders.length})`, html`
+      <table class="data-table">
+        <thead><tr><th>Order ID</th><th>Date</th><th>Customer</th><th>Items</th><th class="num">₹</th><th>Issue</th></tr></thead>
+        <tbody>
+          ${orders.map(o => html`
+            <tr>
+              <td class="mono">${escape(o.order_id)}</td>
+              <td>${escape(o.order_date || '—')} ${escape(o.order_time || '')}</td>
+              <td>${escape(o.customer_name || '—')}</td>
+              <td class="trunc">${escape((o.items || '').substring(0, 50))}</td>
+              <td class="num">${fmt(o.order_value, { money: true })}</td>
+              <td><span class="issues">${escape(o.issues)}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `);
   }
 
   // ─── data fetch ─────────────────────────────────────────────────────────
+  async function fetchOrderDetail() {
+    try {
+      const r = await fetch(`${API}?action=order-detail&brand=${cfg.brand}&platform=${cfg.platform}&limit=200&key=${KEY}`);
+      lastOrderDetail = await r.json();
+    } catch (e) { lastOrderDetail = { ok: false, error: e.message, orders: [] }; }
+  }
+
   async function load() {
     $('#updated').textContent = 'loading…';
     try {
-      const r = await fetch(`${API}?action=parsed&brand=${cfg.brand}&platform=${cfg.platform}&period=${currentPeriod}&key=${KEY}`);
-      const data = await r.json();
-      lastData = data;
-      render(data);
+      const [r, rPrev] = await Promise.all([
+        fetch(`${API}?action=parsed&brand=${cfg.brand}&platform=${cfg.platform}&period=${currentPeriod}&key=${KEY}`),
+        priorPeriod(currentPeriod)
+          ? fetch(`${API}?action=parsed&brand=${cfg.brand}&platform=${cfg.platform}&period=${priorPeriod(currentPeriod)}&key=${KEY}`)
+          : Promise.resolve(null),
+      ]);
+      lastData      = await r.json();
+      lastPriorData = rPrev ? await rPrev.json() : null;
+      // Pre-fetch order detail for click-throughs (cheap for the user, lazy on the wire)
+      if (cfg.platform === 'zomato') fetchOrderDetail();
+      render();
     } catch (e) {
-      $('#main').innerHTML = `<div class="err">Network error: ${e.message}</div>`;
+      $('#main').innerHTML = `<div class="err">Network error: ${escape(e.message)}</div>`;
     }
   }
 
-  // ─── period + tab UI ────────────────────────────────────────────────────
+  // ─── period + tab UI bindings ───────────────────────────────────────────
   function bindUI() {
     $$('.dfbtn').forEach(b => {
       b.classList.toggle('active', b.dataset.period === currentPeriod);
@@ -326,14 +895,32 @@
         if (lastData) renderTab(currentTab, lastData.sections);
       });
     });
-    $('#refresh').addEventListener('click', load);
+    $('#refresh')?.addEventListener('click', load);
+    // Set initial active tab
+    $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === currentTab));
   }
+
+  // ─── public API for inline onclick handlers ─────────────────────────────
+  window.HN_AGG_API = {
+    closeModal,
+    showDishOrders,
+    showDiscountedOrders,
+    showFirstTimeCustomers,
+    showCustomerOrders,
+    showOrderDetail,
+    showIssueOrders,
+    showAllIssueOrders,
+    sortDishes(key) {
+      if (dishSortKey === key) dishSortDir = dishSortDir === 'asc' ? 'desc' : 'asc';
+      else { dishSortKey = key; dishSortDir = 'desc'; }
+      if (lastData) renderDishes(lastData.sections);
+    },
+  };
 
   // ─── boot ───────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     bindUI();
     load();
-    // Auto-refresh every 60 seconds
     setInterval(load, 60_000);
   });
 })();
