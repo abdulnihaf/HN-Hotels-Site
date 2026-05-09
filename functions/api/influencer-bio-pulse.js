@@ -25,9 +25,15 @@ const UA_POOL = [
 ];
 
 // Regex patterns — broad matches with cleanup
-const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
-const INDIAN_PHONE_RE = /(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}/g;
-const WHATSAPP_RE = /(?:wa\.me\/|whatsapp\.com\/send\?phone=|chat\.whatsapp\.com\/)([+\d-]+)/gi;
+// Email: tolerates extra @ in local part (typos like name@123@domain.com → name123@domain.com on cleanup)
+const EMAIL_RE = /[\w.+-]+(?:@[\w.+-]+)*@[\w-]+(?:\.[\w-]+)+/g;
+// Indian mobile: with/without +91, with/without separators
+const INDIAN_MOBILE_RE = /(?:\+?91[\s.-]?)?[6-9]\d{4}[\s.-]?\d{5}/g;
+// Indian landline: 080-/011-/044- city codes
+const INDIAN_LANDLINE_RE = /(?:0\d{2,4}|\+?91[\s.-]?\d{2,4})[\s.-]?\d{6,8}/g;
+// WhatsApp links + "WhatsApp <num>" inline mentions
+const WHATSAPP_LINK_RE = /(?:wa\.me\/|whatsapp\.com\/send\?phone=|chat\.whatsapp\.com\/|api\.whatsapp\.com\/send\?phone=)([+\d-]+)/gi;
+const WHATSAPP_TEXT_RE = /(?:whatsapp|wa|chat)[:\s]+(\+?\d[\s\d.-]{8,14})/gi;
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: CORS });
@@ -46,6 +52,7 @@ export async function onRequest(context) {
       if (action === 'enrich') return enrich(env, body);
       if (action === 'start-run') return startRun(env, body);
       if (action === 'finish-run') return finishRun(env, body);
+      if (action === 'reextract') return reextract(env, body);
       return json({ error: 'unknown POST action' }, 400);
     }
     if (request.method === 'GET') {
@@ -82,8 +89,9 @@ async function enrich(env, body) {
       const elapsed = Date.now() - t0;
       results.push(await storeError(env, h, e.message, elapsed));
     }
-    // Inter-request delay to stay under IG soft throttle (~9 calls / 30s observed)
-    if (i < handles.length - 1) await sleep(2500 + Math.random() * 1500); // 2.5–4s jitter
+    // Inter-request delay to stay under IG rate limit (verified ~9 calls/30s before throttle)
+    // Slowed to 6-9s after seeing rate-limit cascades at 2.5-4s pace
+    if (i < handles.length - 1) await sleep(6000 + Math.random() * 3000);
   }
 
   // Update run progress if run_id provided
@@ -136,11 +144,23 @@ async function storeResult(env, username, raw, elapsedMs) {
 
   const bio = user.biography || '';
   const bioLinks = user.bio_links || [];
-  const contacts = extractContacts(bio, bioLinks);
-  const hasEmail = contacts.emails.length > 0 || !!user.business_email;
-  const hasPhone = contacts.phones.length > 0 || !!user.business_phone_number;
+  const contacts = extractContacts(bio, bioLinks, {
+    business_email: user.business_email,
+    business_phone_number: user.business_phone_number,
+  });
+  const hasEmail = contacts.emails.length > 0;
+  const hasPhone = contacts.phones.length > 0;
   const hasWa = contacts.whatsapp.length > 0;
   const channels = (hasEmail ? 1 : 0) + (hasPhone ? 1 : 0) + (hasWa ? 1 : 0);
+
+  // Button presence flags — IG creators often have CALL/EMAIL buttons even when API hides the value
+  const bcm = (user.business_contact_method || 'UNKNOWN').toUpperCase();
+  const hasCallBtn = bcm === 'CALL' || !!user.business_phone_number;
+  const hasEmailBtn = bcm === 'EMAIL' || bcm === 'TEXT' || !!user.business_email;
+  const hasButton = hasCallBtn || hasEmailBtn;
+  // Address (Business creator-only)
+  const businessAddrJson = user.business_address_json || null;
+  const shouldShowPublicContacts = user.should_show_public_contacts ? 1 : 0;
 
   await env.DB.prepare(`
     INSERT INTO influencer_bio_pulse
@@ -148,10 +168,12 @@ async function storeResult(env, username, raw, elapsedMs) {
        is_business_account, is_professional_account, is_verified, is_private,
        followers_count, following_count, media_count, profile_pic_url,
        business_email, business_phone_number, business_contact_method,
+       business_address_json, should_show_public_contacts,
+       has_email_button, has_call_button, has_any_button,
        extracted_emails_json, extracted_phones_json, extracted_whatsapp_json,
        has_email, has_phone, has_whatsapp, has_any_contact, contact_channels,
        status, error_message, raw_response_size, fetched_at, fetch_duration_ms)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok', NULL, ?, datetime('now'), ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok', NULL, ?, datetime('now'), ?)
     ON CONFLICT(username) DO UPDATE SET
       full_name = excluded.full_name,
       biography = excluded.biography,
@@ -169,6 +191,11 @@ async function storeResult(env, username, raw, elapsedMs) {
       business_email = excluded.business_email,
       business_phone_number = excluded.business_phone_number,
       business_contact_method = excluded.business_contact_method,
+      business_address_json = excluded.business_address_json,
+      should_show_public_contacts = excluded.should_show_public_contacts,
+      has_email_button = excluded.has_email_button,
+      has_call_button = excluded.has_call_button,
+      has_any_button = excluded.has_any_button,
       extracted_emails_json = excluded.extracted_emails_json,
       extracted_phones_json = excluded.extracted_phones_json,
       extracted_whatsapp_json = excluded.extracted_whatsapp_json,
@@ -200,6 +227,11 @@ async function storeResult(env, username, raw, elapsedMs) {
     user.business_email || null,
     user.business_phone_number || null,
     user.business_contact_method || null,
+    businessAddrJson ? JSON.stringify(businessAddrJson) : null,
+    shouldShowPublicContacts,
+    hasEmailBtn ? 1 : 0,
+    hasCallBtn ? 1 : 0,
+    hasButton ? 1 : 0,
     JSON.stringify(contacts.emails),
     JSON.stringify(contacts.phones),
     JSON.stringify(contacts.whatsapp),
@@ -247,48 +279,110 @@ function classifyStatus(raw) {
   return 'error';
 }
 
-function extractContacts(bio, bioLinks) {
-  const txt = bio || '';
+function deobfuscate(s) {
+  if (!s) return '';
+  // Common obfuscations: foo [at] bar [dot] com   foo (at) bar (dot) com   foo AT bar DOT com
+  return s
+    .replace(/\s*[\[\(\{]?\s*at\s*[\]\)\}]?\s*/gi, '@')
+    .replace(/\s*[\[\(\{]?\s*dot\s*[\]\)\}]?\s*/gi, '.')
+    // Collapse repeated @@ from typos
+    .replace(/@+/g, '@');
+}
+
+function cleanEmail(e) {
+  if (!e) return null;
+  let v = e.toLowerCase().trim();
+  // Strip extra @ from typos: 'foo@123@gmail.com' → 'foo123@gmail.com'
+  if ((v.match(/@/g) || []).length > 1) {
+    const parts = v.split('@');
+    const domain = parts.pop();
+    v = parts.join('') + '@' + domain;
+  }
+  // Strip trailing punctuation
+  v = v.replace(/^[.,;:]+|[.,;:!?]+$/g, '');
+  // Reject extension-like strings
+  if (v.endsWith('.png') || v.endsWith('.jpg') || v.endsWith('.svg') || v.endsWith('.webp')) return null;
+  // Reject obviously broken (no domain)
+  const m = v.match(/^([\w.+-]+)@([\w-]+)(\.[\w.-]+)+$/);
+  if (!m) return null;
+  // Reject too-short local part or unlikely TLDs
+  if (m[1].length < 2) return null;
+  return v;
+}
+
+function extractContacts(bio, bioLinks, businessFields = {}) {
+  const txtRaw = bio || '';
+  const txt = deobfuscate(txtRaw);
   const emails = new Set();
   const phones = new Set();
   const wa = new Set();
 
-  for (const m of txt.matchAll(EMAIL_RE)) {
-    const e = m[0].toLowerCase();
-    if (e.endsWith('.png') || e.endsWith('.jpg') || e.endsWith('.svg')) continue; // dud
-    emails.add(e);
+  // Email — both raw + deobfuscated text
+  for (const src of [txtRaw, txt]) {
+    for (const m of src.matchAll(EMAIL_RE)) {
+      const e = cleanEmail(m[0]);
+      if (e) emails.add(e);
+    }
   }
-  for (const m of txt.matchAll(INDIAN_PHONE_RE)) {
+  // Phones (mobile preferred)
+  for (const m of txt.matchAll(INDIAN_MOBILE_RE)) {
     const p = normalizePhone(m[0]);
     if (p) phones.add(p);
   }
-  for (const m of txt.matchAll(WHATSAPP_RE)) {
+  // Indian landlines (lower priority — may capture mobiles too, but normalize handles it)
+  for (const m of txt.matchAll(INDIAN_LANDLINE_RE)) {
+    const p = normalizePhone(m[0]);
+    if (p && p.length >= 11) phones.add(p);
+  }
+  // WhatsApp link patterns
+  for (const m of txt.matchAll(WHATSAPP_LINK_RE)) {
+    const w = normalizePhone(m[1]);
+    if (w) wa.add(w);
+  }
+  // "WhatsApp +91 xxxxx" inline text
+  for (const m of txt.matchAll(WHATSAPP_TEXT_RE)) {
     const w = normalizePhone(m[1]);
     if (w) wa.add(w);
   }
 
-  // Also scan bio_links URLs
+  // Bio links
   for (const link of (bioLinks || [])) {
     const candidates = [link.url, link.lynx_url].filter(Boolean);
     for (const u of candidates) {
       const decoded = tryDecode(u);
-      for (const m of decoded.matchAll(EMAIL_RE)) emails.add(m[0].toLowerCase());
-      for (const m of decoded.matchAll(WHATSAPP_RE)) {
+      for (const m of decoded.matchAll(EMAIL_RE)) {
+        const e = cleanEmail(m[0]);
+        if (e) emails.add(e);
+      }
+      for (const m of decoded.matchAll(WHATSAPP_LINK_RE)) {
         const w = normalizePhone(m[1]);
         if (w) wa.add(w);
       }
-      // mailto: links
       if (decoded.startsWith('mailto:')) {
-        const e = decoded.slice(7).split('?')[0].toLowerCase();
-        if (e.includes('@')) emails.add(e);
+        const e = cleanEmail(decoded.slice(7).split('?')[0]);
+        if (e) emails.add(e);
+      }
+      if (decoded.startsWith('tel:')) {
+        const p = normalizePhone(decoded.slice(4));
+        if (p) phones.add(p);
       }
     }
   }
 
+  // Pull from structured business fields if present (rare but free)
+  if (businessFields.business_email) {
+    const e = cleanEmail(businessFields.business_email);
+    if (e) emails.add(e);
+  }
+  if (businessFields.business_phone_number) {
+    const p = normalizePhone(businessFields.business_phone_number);
+    if (p) phones.add(p);
+  }
+
   return {
-    emails: [...emails],
-    phones: [...phones],
-    whatsapp: [...wa],
+    emails: [...emails].slice(0, 5),
+    phones: [...phones].slice(0, 5),
+    whatsapp: [...wa].slice(0, 5),
   };
 }
 
@@ -333,6 +427,57 @@ async function finishRun(env, body) {
   if (!body.run_id) return json({ error: 'run_id required' }, 400);
   await env.DB.prepare(`UPDATE influencer_bio_pulse_runs SET completed_at = datetime('now') WHERE id = ?`).bind(body.run_id).run();
   return json({ success: true });
+}
+
+// Re-process existing biographies with current regex (no IG re-fetch — pure SQL + regex)
+async function reextract(env, body) {
+  const limit = Math.min(parseInt(body.limit || '500', 10), 1000);
+  const rows = await env.DB.prepare(`
+    SELECT username, biography, bio_links_json, business_email, business_phone_number
+    FROM influencer_bio_pulse
+    WHERE status = 'ok' AND biography IS NOT NULL AND biography != ''
+    ORDER BY fetched_at DESC LIMIT ?
+  `).bind(limit).all();
+
+  let updated = 0;
+  let newContacts = 0;
+  for (const r of (rows.results || [])) {
+    let bioLinks = [];
+    try { bioLinks = JSON.parse(r.bio_links_json || '[]'); } catch (_) {}
+    const contacts = extractContacts(r.biography, bioLinks, {
+      business_email: r.business_email,
+      business_phone_number: r.business_phone_number,
+    });
+    const hasEmail = contacts.emails.length > 0;
+    const hasPhone = contacts.phones.length > 0;
+    const hasWa = contacts.whatsapp.length > 0;
+    const channels = (hasEmail ? 1 : 0) + (hasPhone ? 1 : 0) + (hasWa ? 1 : 0);
+
+    // Compare to existing — only update if changed
+    const existing = await env.DB.prepare(`
+      SELECT extracted_emails_json, extracted_phones_json, extracted_whatsapp_json, has_any_contact
+      FROM influencer_bio_pulse WHERE username = ?
+    `).bind(r.username).first();
+    const newE = JSON.stringify(contacts.emails);
+    const newP = JSON.stringify(contacts.phones);
+    const newW = JSON.stringify(contacts.whatsapp);
+    if (existing.extracted_emails_json !== newE || existing.extracted_phones_json !== newP || existing.extracted_whatsapp_json !== newW) {
+      await env.DB.prepare(`
+        UPDATE influencer_bio_pulse SET
+          extracted_emails_json = ?, extracted_phones_json = ?, extracted_whatsapp_json = ?,
+          has_email = ?, has_phone = ?, has_whatsapp = ?, has_any_contact = ?, contact_channels = ?,
+          fetched_at = datetime('now')
+        WHERE username = ?
+      `).bind(
+        newE, newP, newW,
+        hasEmail ? 1 : 0, hasPhone ? 1 : 0, hasWa ? 1 : 0,
+        channels > 0 ? 1 : 0, channels, r.username
+      ).run();
+      updated++;
+      if (channels > 0 && !existing.has_any_contact) newContacts++;
+    }
+  }
+  return json({ success: true, scanned: rows.results.length, updated, newContacts });
 }
 
 async function getRuns(env) {
