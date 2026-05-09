@@ -240,19 +240,33 @@
   }
 
   // ─── OUTLET BREAKDOWN EXPANDER ───────────────────────────────────────────────
-  // Live Tracking page has "See outlet level breakdown →" links that must be clicked
-  // to expose per-outlet (HE/NCH) sales data in the DOM.
+  // Live Tracking page has "See outlet level breakdown →" links per section
+  // (Sales overview, Customer Experience, Customer funnel, Ads & Offers).
+  // Clicking expands inline per-outlet (HE/NCH) data in the DOM.
+  // v2 (2026-05-10): match LEAF text nodes only and try the leaf's closest
+  // clickable ancestor — the v1 code matched parent containers too which
+  // caused multi-click toggling that left the breakdown collapsed.
   function expandOutletBreakdowns() {
     let clicked = 0;
-    for (const el of document.querySelectorAll('a, button, span, div, [role="button"]')) {
-      if (!el.offsetParent) continue;
-      const t = el.textContent?.trim();
-      if (t && t.includes('outlet level breakdown')) {
-        el.click();
+    const seen = new WeakSet();
+    // First pass: find leaf elements with exact "See outlet level breakdown" text
+    for (const el of document.querySelectorAll('*')) {
+      if (el.children.length > 0) continue;            // leaf only
+      if (!el.offsetParent) continue;                  // visible only
+      const t = (el.textContent || '').trim();
+      if (t !== 'See outlet level breakdown') continue;
+
+      // Walk up to find the closest clickable ancestor and click that (or the leaf itself).
+      // De-dup by tracking each clickable target so we don't click the same DOM node twice.
+      const clickable = el.closest('button, a, [role="button"], [onclick]') || el;
+      if (seen.has(clickable)) continue;
+      seen.add(clickable);
+      try {
+        clickable.click();
         clicked++;
-      }
+      } catch (_) {}
     }
-    if (clicked > 0) console.log(`[HN] Zomato: expanded ${clicked} outlet breakdown(s)`);
+    if (clicked > 0) console.log(`[HN] Zomato: expanded ${clicked} outlet breakdown(s) (v2 leaf-match)`);
     return clicked;
   }
 
