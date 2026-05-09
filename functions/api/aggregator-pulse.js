@@ -645,7 +645,7 @@ async function handleGet(db, url, headers) {
       case 'yesterday': dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST}, '-1 day')`; break;
       case 'thisweek':  dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'weekday 0', '-7 days')`; break;
       case 'lastweek':  dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'weekday 0', '-14 days') AND ${EFFECTIVE_DATE} < date('now', ${IST}, 'weekday 0', '-7 days')`; break;
-      case 'month':     dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'start of month')`; break;
+      case 'month':     dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, '-30 days')`; break;
       default:          dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST})`;
     }
     const orderRows = await db.prepare(`
@@ -653,6 +653,43 @@ async function handleGet(db, url, headers) {
       WHERE ${dateWhere} AND platform = ? AND brand = ?
       ORDER BY order_date DESC, order_time DESC LIMIT 200
     `).bind(platform, brand).all();
+
+    // ---- DAILY series (always 30-day window, regardless of period filter) ----
+    // This powers the Insights-tab daily chart. Built independent of the period
+    // filter so the chart is a stable 30-day reference for trend + gap detection.
+    const dailyRows = await db.prepare(`
+      SELECT
+        ${EFFECTIVE_DATE} AS d,
+        COUNT(*) AS orders,
+        SUM(CASE WHEN LOWER(status) LIKE '%delivered%' THEN order_value ELSE 0 END) AS revenue,
+        SUM(CASE WHEN LOWER(status) LIKE '%delivered%' THEN 1 ELSE 0 END) AS delivered,
+        SUM(CASE WHEN LOWER(status) LIKE '%cancel%' OR LOWER(status) LIKE '%reject%' THEN 1 ELSE 0 END) AS cancelled
+      FROM aggregator_orders
+      WHERE ${EFFECTIVE_DATE} >= date('now', ${IST}, '-30 days')
+        AND platform = ? AND brand = ?
+      GROUP BY d
+      ORDER BY d ASC
+    `).bind(platform, brand).all();
+    // Fill calendar gaps so chart shows missing-capture days as zero bars
+    const dailyMap = {};
+    for (const r of (dailyRows.results || [])) {
+      dailyMap[r.d] = {
+        date: r.d,
+        orders: r.orders || 0,
+        revenue: Math.round((r.revenue || 0) * 100) / 100,
+        delivered: r.delivered || 0,
+        cancelled: r.cancelled || 0,
+      };
+    }
+    // Generate 30 calendar dates ending today (IST)
+    const dailyFilled = [];
+    const todayIst = new Date(Date.now() + (5 * 60 + 30) * 60 * 1000);
+    for (let i = 30; i >= 0; i--) {
+      const d = new Date(todayIst);
+      d.setUTCDate(d.getUTCDate() - i);
+      const ds = d.toISOString().slice(0, 10);
+      dailyFilled.push(dailyMap[ds] || { date: ds, orders: 0, revenue: 0, delivered: 0, cancelled: 0 });
+    }
 
     const ordersList = orderRows.results || [];
     const delivered = ordersList.filter(r => /delivered/i.test(r.status || ''));
@@ -670,6 +707,14 @@ async function handleGet(db, url, headers) {
       total_revenue: totalRevenue,
       total_payout: totalPayout,
       orders: ordersList,
+    };
+
+    // 30-day daily series — for Insights chart + gap visualization
+    sections.daily = {
+      data_scope: brand === 'he' ? 'he_only' : 'nch_only',
+      window_days: 31,
+      points: dailyFilled,
+      note: 'Per-IST-day orders + delivered revenue. Days with zero values may be (a) genuine zero-order days or (b) capture gaps when extension was offline. Click a bar to drill into that day\'s orders.',
     };
 
     // CRITICAL: override Sales section with HE-only / NCH-only aggregation from
@@ -786,6 +831,40 @@ async function handleGet(db, url, headers) {
       period,
       generated_at: new Date().toISOString(),
       sections,
+    }), { headers });
+  }
+
+  // --- DAY-ORDERS: drill-through for the daily chart. Returns the full order list for one IST day. ---
+  if (action === 'day-orders') {
+    const brand = url.searchParams.get('brand');
+    const platform = url.searchParams.get('platform');
+    const date = url.searchParams.get('date'); // YYYY-MM-DD (IST day)
+    if (!['he', 'nch'].includes(brand)) {
+      return new Response(JSON.stringify({ error: 'brand must be he or nch' }), { status: 400, headers });
+    }
+    if (!['swiggy', 'zomato'].includes(platform)) {
+      return new Response(JSON.stringify({ error: 'platform must be swiggy or zomato' }), { status: 400, headers });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
+      return new Response(JSON.stringify({ error: 'date must be YYYY-MM-DD' }), { status: 400, headers });
+    }
+    const IST = "'+5 hours', '+30 minutes'";
+    const EFFECTIVE_DATE = `COALESCE(NULLIF(order_date, ''), date(captured_at, ${IST}))`;
+    const rows = await db.prepare(`
+      SELECT * FROM aggregator_orders
+      WHERE ${EFFECTIVE_DATE} = ? AND platform = ? AND brand = ?
+      ORDER BY order_time DESC, captured_at DESC
+    `).bind(date, platform, brand).all();
+    const orders = rows.results || [];
+    const delivered = orders.filter(r => /delivered/i.test(r.status || ''));
+    const cancelled = orders.filter(r => /cancel|reject/i.test(r.status || ''));
+    return new Response(JSON.stringify({
+      ok: true, brand, platform, date,
+      total_orders: orders.length,
+      total_delivered: delivered.length,
+      total_cancelled: cancelled.length,
+      revenue: Math.round(delivered.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100,
+      orders,
     }), { headers });
   }
 
