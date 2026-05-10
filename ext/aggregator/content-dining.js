@@ -1,4 +1,4 @@
-// content-dining.js v1.0.0
+// content-dining.js v1.1.0
 // Zomato Dining (go-out) scraper for HN Hotels — HE (22632449) and NCH (22632430).
 // Injected alongside content-zomato.js on /partners/* — URL guard prevents delivery cycling.
 // POSTs to /api/aggregator-pulse with platform=zomato_dining.
@@ -28,7 +28,9 @@
   const CONFIG = {
     endpoint: 'https://hnhotels.in/api/aggregator-pulse',
     apiKey: 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA',
-    hydrationDelay: 5_000,
+    hydrationMinBytes: 600,   // wait until SPA renders real content
+    hydrationPollMs: 1_000,
+    hydrationMaxMs: 30_000,
     readInterval: 90_000,
     pageCycleInterval: 300_000,  // 5 min per section
   };
@@ -42,6 +44,16 @@
   ];
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // Poll until body has real content or timeout — handles Zomato React SPA slow hydration
+  async function waitForContent() {
+    const deadline = Date.now() + CONFIG.hydrationMaxMs;
+    while (Date.now() < deadline) {
+      if (document.body.innerText.length >= CONFIG.hydrationMinBytes) return;
+      await sleep(CONFIG.hydrationPollMs);
+    }
+    console.log('[HN] Dining: hydration timeout — scraping anyway');
+  }
 
   function currentSectionIdx() {
     const url = location.href;
@@ -125,7 +137,7 @@
   }
 
   async function run() {
-    await sleep(CONFIG.hydrationDelay);
+    await waitForContent();
     if (dismissModal()) await sleep(500);
 
     const data = scrape();
