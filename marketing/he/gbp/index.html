@@ -71,6 +71,55 @@ html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans'
 .section-h .tip{font-size:11px;color:var(--muted);font-weight:400;margin-left:4px}
 .section-h .stale{font-size:10px;color:var(--yellow);background:rgba(245,158,11,.1);padding:2px 8px;border-radius:10px}
 
+/* ACTION QUEUE */
+.aq-row{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:8px;margin-bottom:6px;border:1px solid var(--border);background:var(--bg2)}
+.aq-row.crit{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.06)}
+.aq-row.warn{border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.06)}
+.aq-row.info{border-color:rgba(66,133,244,.3);background:rgba(66,133,244,.05)}
+.aq-row .badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0;font-family:'JetBrains Mono',monospace}
+.aq-row.crit .badge{background:rgba(239,68,68,.2);color:var(--red)}
+.aq-row.warn .badge{background:rgba(249,115,22,.2);color:var(--orange)}
+.aq-row.info .badge{background:rgba(66,133,244,.2);color:var(--gblue)}
+.aq-row .body{flex:1;min-width:0}
+.aq-row .body .t{font-size:13px;font-weight:700;line-height:1.35;margin-bottom:3px}
+.aq-row .body .d{font-size:12px;color:var(--text2);line-height:1.5}
+.aq-row .body .a{display:inline-block;font-size:11px;font-weight:700;color:var(--brand);text-decoration:none;margin-top:5px}
+.aq-row .body .a:hover{text-decoration:underline}
+
+/* PHOTOS */
+.ph-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.ph-stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
+.ph-stat .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.ph-stat .v{font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace;margin-top:3px}
+.ph-cat{display:flex;flex-wrap:wrap;gap:5px;margin:5px 0 10px}
+.ph-cat span{font-size:11px;padding:3px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;color:var(--text2);font-family:'JetBrains Mono',monospace}
+.ph-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(95px,1fr));gap:6px}
+.ph-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border);background:var(--bg2)}
+
+/* Q&A */
+.qa-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.qa-stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
+.qa-stat .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.qa-stat .v{font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace;margin-top:3px}
+.qa-list{display:flex;flex-direction:column;gap:6px}
+.qa-item{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px}
+.qa-item .qrow{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px;align-items:flex-start}
+.qa-item .qtxt{font-size:12px;font-weight:700;color:var(--text);line-height:1.4;flex:1}
+.qa-item .qmeta{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.qa-item .qans{font-size:11px;color:var(--text2);line-height:1.5;padding-left:10px;border-left:2px solid var(--border)}
+.qa-item .qans.owner{border-left-color:var(--ggreen);color:var(--text2)}
+.qa-item .nopill{display:inline-block;font-size:10px;font-weight:700;color:var(--orange);background:rgba(249,115,22,.12);padding:2px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:.4px}
+
+/* ALGORITHM TIPS */
+.tip-row{display:flex;gap:10px;padding:10px 12px;border-radius:8px;margin-bottom:6px;background:var(--bg2);border:1px solid var(--border)}
+.tip-row.high{border-left:3px solid var(--red)}
+.tip-row.medium{border-left:3px solid var(--orange)}
+.tip-row.low{border-left:3px solid var(--blue)}
+.tip-row .level{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-family:'JetBrains Mono',monospace;flex-shrink:0;padding-top:2px;width:60px}
+.tip-row .body .t{font-size:12.5px;font-weight:700;line-height:1.35;margin-bottom:3px}
+.tip-row .body .d{font-size:11.5px;color:var(--text2);line-height:1.5}
+.tip-row .body .a{font-size:11px;font-weight:700;color:var(--brand);margin-top:4px;display:inline-block}
+
 /* HERO FUNNEL */
 .hero{display:grid;grid-template-columns:1fr;gap:8px}
 .funnel-step{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;position:relative;overflow:hidden}
@@ -250,6 +299,15 @@ html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans'
     </div>
   </div>
 
+  <!-- ACTION QUEUE — what owner needs to do today -->
+  <div class="section" id="actionQueueSection" style="display:none">
+    <div class="section-h">
+      <h2>🛠 Action queue <span class="tip">— what to fix this week</span></h2>
+      <span id="aqSummary" class="tip"></span>
+    </div>
+    <div id="actionQueue"></div>
+  </div>
+
   <!-- HERO FUNNEL -->
   <div class="section">
     <div class="section-h">
@@ -315,6 +373,32 @@ html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans'
       <h2>Reviews <span class="tip">— public aggregate (replies managed in Google Business Profile app)</span></h2>
     </div>
     <div id="reviewsBlock"></div>
+  </div>
+
+  <!-- PHOTOS -->
+  <div class="section" id="photosSection" style="display:none">
+    <div class="section-h">
+      <h2>📸 Photos <span class="tip">— freshness matters; aim for 3–5 uploads/week</span></h2>
+      <span id="photosSummary" class="tip"></span>
+    </div>
+    <div id="photosBlock"></div>
+  </div>
+
+  <!-- Q&A -->
+  <div class="section" id="qandaSection" style="display:none">
+    <div class="section-h">
+      <h2>❓ Questions &amp; answers <span class="tip">— owner-seeded Q&A acts as long-tail content</span></h2>
+      <span id="qandaSummary" class="tip"></span>
+    </div>
+    <div id="qandaBlock"></div>
+  </div>
+
+  <!-- ALGORITHM TIPS -->
+  <div class="section" id="tipsSection" style="display:none">
+    <div class="section-h">
+      <h2>🧠 Algorithm tips <span class="tip">— rules-driven recommendations specific to HE</span></h2>
+    </div>
+    <div id="tipsBlock"></div>
   </div>
 
   <!-- HEALTH -->
@@ -458,14 +542,123 @@ function renderAll(d) {
   document.getElementById('footerMeta').textContent =
     `Account: ${d.location.locationName} · GBP API live, T-2 day lag · last fetch ${captured.toLocaleString('en-IN')}`;
 
+  renderActionQueue(d);
   renderHero(d);
   renderSubMetrics(d);
   renderImpressionBreakdown(d);
   renderChart(d);
   renderKeywords(d);
   renderReviews(d);
+  renderPhotos(d);
+  renderQandA(d);
+  renderTips(d);
   renderHealth(d);
   renderAlerts(d);
+}
+
+function renderActionQueue(d) {
+  const q = d.actionQueue || [];
+  const sec = document.getElementById('actionQueueSection');
+  if (q.length === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  const counts = q.reduce((c, r) => (c[r.severity] = (c[r.severity]||0)+1, c), {});
+  document.getElementById('aqSummary').textContent =
+    `${counts.critical||0} critical · ${counts.warn||0} warn · ${counts.info||0} info`;
+  document.getElementById('actionQueue').innerHTML = q.map(r => `
+    <div class="aq-row ${r.severity === 'critical' ? 'crit' : r.severity}">
+      <span class="badge">${r.severity}</span>
+      <div class="body">
+        <div class="t">${escapeHtml(r.title)}</div>
+        <div class="d">${escapeHtml(r.detail)}</div>
+        ${r.actionUri ? `<a class="a" href="${r.actionUri}" target="_blank" rel="noopener">Open in Business Profile →</a>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderPhotos(d) {
+  const m = d.media;
+  const sec = document.getElementById('photosSection');
+  if (!m || m.error) {
+    sec.style.display = m?.error ? '' : 'none';
+    if (m?.error) document.getElementById('photosBlock').innerHTML =
+      `<div class="d" style="font-size:12px;color:var(--muted)">Photos data unavailable: ${escapeHtml(m.error)}</div>`;
+    return;
+  }
+  sec.style.display = '';
+  const lastDays = m.daysSinceLastUpload != null ? `${m.daysSinceLastUpload}d ago` : 'never';
+  document.getElementById('photosSummary').textContent =
+    `${m.total} total · ${m.recent30d} in last 30d · last upload ${lastDays}`;
+  const cats = Object.entries(m.byCategory || {}).map(([k,v]) =>
+    `<span>${escapeHtml(k.replace(/_/g,' ').toLowerCase())}: ${v}</span>`).join('');
+  const grid = (m.recent || []).slice(0, 12).map(p =>
+    p.thumbnailUrl ? `<img src="${p.thumbnailUrl}" alt="" loading="lazy">` : '').join('');
+  document.getElementById('photosBlock').innerHTML = `
+    <div class="ph-stats">
+      <div class="ph-stat"><div class="l">Total</div><div class="v">${m.total}</div></div>
+      <div class="ph-stat"><div class="l">Last 30d</div><div class="v">${m.recent30d}</div></div>
+      <div class="ph-stat"><div class="l">Days since last</div><div class="v">${m.daysSinceLastUpload != null ? m.daysSinceLastUpload : '—'}</div></div>
+    </div>
+    ${cats ? `<div class="ph-cat">${cats}</div>` : ''}
+    ${grid ? `<div class="ph-grid">${grid}</div>` : ''}
+  `;
+}
+
+function renderQandA(d) {
+  const q = d.qanda;
+  const sec = document.getElementById('qandaSection');
+  if (!q || q.error) {
+    sec.style.display = q?.error ? '' : 'none';
+    if (q?.error) document.getElementById('qandaBlock').innerHTML =
+      `<div class="d" style="font-size:12px;color:var(--muted)">Q&amp;A data unavailable: ${escapeHtml(q.error)}</div>`;
+    return;
+  }
+  sec.style.display = '';
+  document.getElementById('qandaSummary').textContent =
+    `${q.total} total · ${q.ownerAsked} owner-seeded · ${q.ownerAnsweredPct}% have owner answer · ${q.unanswered} need reply`;
+  const stats = `
+    <div class="qa-stats">
+      <div class="qa-stat"><div class="l">Total Q&amp;As</div><div class="v">${q.total}</div></div>
+      <div class="qa-stat"><div class="l">Owner-seeded</div><div class="v">${q.ownerAsked}</div></div>
+      <div class="qa-stat"><div class="l">Need reply</div><div class="v" style="color:${q.unanswered > 0 ? 'var(--orange)' : 'var(--ggreen)'}">${q.unanswered}</div></div>
+    </div>`;
+  const list = (q.items || []).slice(0, 8).map(it => {
+    const ownerAsk = it.authorType === 'MERCHANT' ? '<span style="color:var(--ggreen);font-size:10px;font-weight:700">★ OWNER</span>' : '';
+    const noAns = !it.ownerAnswered ? '<span class="nopill">no owner reply</span>' : '';
+    return `
+      <div class="qa-item">
+        <div class="qrow">
+          <div class="qtxt">Q. ${escapeHtml(it.text)}</div>
+          <div class="qmeta">${it.upvoteCount}↑ · ${it.totalAnswerCount} ans</div>
+        </div>
+        ${ownerAsk}${noAns ? ' ' + noAns : ''}
+        ${it.topAnswerText ? `<div class="qans${it.ownerAnswered ? ' owner' : ''}">A. ${escapeHtml(it.topAnswerText)}</div>` : ''}
+      </div>`;
+  }).join('');
+  document.getElementById('qandaBlock').innerHTML = stats +
+    (list ? `<div class="qa-list">${list}</div>` : '<div class="d" style="font-size:12px;color:var(--muted);text-align:center;padding:12px">No questions on the listing yet — ideal time to seed owner-asked Q&amp;As.</div>');
+}
+
+function renderTips(d) {
+  const tips = d.algorithmTips || [];
+  const sec = document.getElementById('tipsSection');
+  if (tips.length === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  document.getElementById('tipsBlock').innerHTML = tips.map(t => `
+    <div class="tip-row ${t.level}">
+      <span class="level">${t.level}</span>
+      <div class="body">
+        <div class="t">${escapeHtml(t.title)}</div>
+        <div class="d">${escapeHtml(t.detail)}</div>
+        ${t.action ? `<span class="a">${escapeHtml(t.action)}</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 }
 
 function renderHero(d) {
