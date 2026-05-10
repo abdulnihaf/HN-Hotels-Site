@@ -679,15 +679,24 @@ function buildActionQueue(ctx) {
   const push = (severity, id, title, detail, actionUri) =>
     queue.push({ severity, id, title, detail, actionUri });
 
-  // 1. Hours dead-zone detector — find any continuous gap >5h inside 8AM-10PM
-  //    that suggests the listing is invisible during peak meal times.
+  // 1. Hours summary — surface the configured weekly schedule as a single
+  //    INFO item. We do NOT auto-flag morning closures as critical, because
+  //    many QSRs (especially North Indian / biryani in Bangalore) deliberately
+  //    open at 12 PM or 2 PM. False-positive critical alerts spam the queue.
+  //    The owner inspects the schedule and acts only when it doesn't match
+  //    their actual operations.
   const periods = profile?.regularHours?.periods || [];
   if (periods.length > 0) {
-    const gaps = detectPeakHourGaps(periods);
-    for (const g of gaps) {
-      push('critical', `hours_gap_${g.day}`,
-        `Hours dead-zone: ${g.day} ${g.startHour}:00–${g.endHour}:00 shows as Closed`,
-        `${g.gapHours}h gap inside the 8AM–10PM peak window. If you serve customers during this time, Maps filters you out of "open now" searches.`,
+    const summary = summarizeWeeklyHours(periods);
+    if (summary.uniformPattern) {
+      push('info', 'hours_summary',
+        `Listing hours: ${summary.uniformPattern}`,
+        `${summary.coveredDays} days configured. If your actual operating hours differ from this, fix in business.google.com — Maps filters you out of "open now" searches during the closed window.`,
+        'https://business.google.com/');
+    } else {
+      push('info', 'hours_summary',
+        `Listing has ${summary.distinctPatterns} distinct daily schedules`,
+        'Hours vary across days of the week. Verify each day matches your actual operations in business.google.com.',
         'https://business.google.com/');
     }
   }
@@ -787,60 +796,44 @@ function buildActionQueue(ctx) {
   return queue;
 }
 
-// detectPeakHourGaps: any uncovered window inside 8:00 – 22:00 IST,
-// computed by merging the day's periods and finding gaps.
-// Returns [{ day, startHour, endHour, gapHours }]
-function detectPeakHourGaps(periods) {
+// summarizeWeeklyHours: present the configured weekly schedule in a way the
+// owner can verify at a glance. Detects the common case where all 7 days
+// share the same window ("uniform pattern"); otherwise reports that hours
+// vary. Crucially does NOT impose an opinion about whether the schedule is
+// "right" — that's the owner's call. We surface, owner decides.
+function summarizeWeeklyHours(periods) {
   const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
-  const PEAK_START = 8, PEAK_END = 22;
   const byDay = {};
   for (const d of DAYS) byDay[d] = [];
   for (const p of periods) {
-    const sd = p.openDay, ed = p.closeDay;
+    const sd = p.openDay;
     const sh = p.openTime?.hours || 0;
-    const eh = p.closeTime?.hours != null ? (p.closeTime.hours === 0 ? 24 : p.closeTime.hours) : 24;
+    const sm = p.openTime?.minutes || 0;
+    // closeTime.hours of 0 with no minutes = midnight (next day boundary)
+    const eh = p.closeTime?.hours != null ? p.closeTime.hours : 24;
+    const em = p.closeTime?.minutes || 0;
     if (!byDay[sd]) continue;
-    if (sd === ed) byDay[sd].push([sh, eh]);
-    else byDay[sd].push([sh, 24]); // wraps to next day — count current day until midnight
+    byDay[sd].push({ sh, sm, eh, em, crossesMidnight: sd !== p.closeDay });
   }
-  const gaps = [];
+  // Build a per-day signature for the merged hours
+  const sigByDay = {};
+  let coveredDays = 0;
   for (const d of DAYS) {
-    const intervals = byDay[d].filter(([s, e]) => e > PEAK_START && s < PEAK_END);
-    if (intervals.length === 0) {
-      // Whole peak window uncovered — only flag once per day
-      gaps.push({ day: d, startHour: PEAK_START, endHour: PEAK_END, gapHours: PEAK_END - PEAK_START });
-      continue;
-    }
-    // Merge intervals
-    intervals.sort((a, b) => a[0] - b[0]);
-    const merged = [intervals[0].slice()];
-    for (const [s, e] of intervals.slice(1)) {
-      const last = merged[merged.length - 1];
-      if (s <= last[1]) last[1] = Math.max(last[1], e);
-      else merged.push([s, e]);
-    }
-    // Find biggest gap inside peak window
-    let cursor = PEAK_START;
-    let biggest = null;
-    for (const [s, e] of merged) {
-      if (s > cursor && (s - cursor) >= 5) {
-        const gapHours = Math.min(s, PEAK_END) - cursor;
-        if (gapHours >= 5 && (!biggest || gapHours > biggest.gapHours)) {
-          biggest = { day: d, startHour: cursor, endHour: Math.min(s, PEAK_END), gapHours };
-        }
-      }
-      cursor = Math.max(cursor, e);
-    }
-    if (cursor < PEAK_END && (PEAK_END - cursor) >= 5) {
-      const gapHours = PEAK_END - cursor;
-      if (!biggest || gapHours > biggest.gapHours) {
-        biggest = { day: d, startHour: cursor, endHour: PEAK_END, gapHours };
-      }
-    }
-    if (biggest) gaps.push(biggest);
+    if (byDay[d].length === 0) { sigByDay[d] = '(closed)'; continue; }
+    coveredDays++;
+    const sorted = byDay[d].slice().sort((a, b) => a.sh - b.sh);
+    sigByDay[d] = sorted.map(p =>
+      `${pad2(p.sh)}:${pad2(p.sm)}–${pad2(p.eh)}:${pad2(p.em)}${p.crossesMidnight ? '+1' : ''}`
+    ).join(', ');
   }
-  return gaps;
+  const distinct = new Set(Object.values(sigByDay).filter(s => s !== '(closed)'));
+  if (distinct.size === 1) {
+    return { uniformPattern: [...distinct][0], coveredDays, distinctPatterns: 1, sigByDay };
+  }
+  return { uniformPattern: null, coveredDays, distinctPatterns: distinct.size, sigByDay };
 }
+
+function pad2(n) { return String(n).padStart(2, '0'); }
 
 // ─── Build helpers — Algorithm Tips ──────────────────────────────────────
 // Rules-driven recommendations. These come from algorithm-cracking knowledge:
