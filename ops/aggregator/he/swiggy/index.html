@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HE · Swiggy — HN Aggregator</title>
+<link rel="stylesheet" href="/ops/aggregator/he/_dashboard.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr sticky">
+    <div class="hdr-l">
+      <a href="/ops/aggregator/" class="back">← all aggregator</a>
+      <div class="title">
+        <span id="brand">HE</span> · <span class="plat" id="platform">Swiggy</span>
+        <small>delivery operations · period: <span id="period-display">today</span></small>
+      </div>
+    </div>
+    <div class="hdr-r">
+      <div class="pipeline"><span class="pdot"></span><span>updated <span id="updated" class="upd">—</span></span></div>
+      <button class="btn" id="refresh">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="dbar" id="period-bar">
+    <button class="dfbtn" data-period="today">Today</button>
+    <button class="dfbtn" data-period="yesterday">Yesterday</button>
+    <button class="dfbtn" data-period="thisweek">This Week</button>
+    <button class="dfbtn" data-period="lastweek">Last Week</button>
+    <button class="dfbtn" data-period="month">Last 30 days</button>
+  </div>
+
+  <div class="hero" id="hero"></div>
+
+  <div class="tabs">
+    <div class="tab" data-tab="insights">Insights</div>
+    <div class="tab" data-tab="dishes">Dishes</div>
+    <div class="tab" data-tab="customers">Customers</div>
+    <div class="tab" data-tab="orders">Orders</div>
+    <div class="tab" data-tab="ops">Ops</div>
+    <div class="tab" data-tab="audit">Listing Audit</div>
+  </div>
+
+  <div id="main">
+    <div class="pane" id="pane-insights"></div>
+    <div class="pane" id="pane-dishes"></div>
+    <div class="pane" id="pane-customers"></div>
+    <div class="pane" id="pane-orders"></div>
+    <div class="pane" id="pane-ops"></div>
+    <div class="pane" id="pane-audit"></div>
+  </div>
+</div>
+
+<div id="modal" class="modal"></div>
+
+<script>window.HN_AGG = { brand: 'he', platform: 'swiggy' };</script>
+<script src="/ops/aggregator/he/_shared.js"></script>
+</body>
+</html>

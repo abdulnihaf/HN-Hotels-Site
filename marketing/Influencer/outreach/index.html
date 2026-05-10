@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Influencer Outreach · Hamza Express · May 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f1a; --card:#111826; --card2:#1a2234; --line:#273042;
+  --text:#e6edf7; --mute:#8b95a8; --dim:#5a6477;
+  --gold:#fbbf24; --tan:#D2B48C; --sienna:#713520; --offwhite:#fff5e6;
+  --green:#22c55e; --green-d:#16a34a; --red:#ef4444; --blue:#3b82f6;
+  --purple:#a855f7; --orange:#f59e0b;
+  --waba:#25d366; --ig:#e1306c; --email:#34d399;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+button{font-family:inherit;cursor:pointer}
+.hdr{position:sticky;top:0;z-index:100;background:rgba(10,15,26,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:14px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
+.brand{font-size:17px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+.brand::before{content:'';width:5px;height:22px;background:var(--gold);border-radius:3px}
+.brand small{font-size:11px;font-weight:500;color:var(--mute);margin-left:6px}
+.stats{display:flex;gap:18px;font-size:12px;color:var(--mute);flex-wrap:wrap}
+.stats b{color:var(--text);font-weight:600;font-family:'JetBrains Mono',monospace}
+.stats .green{color:var(--email)}
+.stats .waba{color:var(--waba)}
+.stats .ig{color:var(--ig)}
+.keybox input{background:var(--card);border:1px solid var(--line);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:'JetBrains Mono',monospace;width:140px}
+.keybox button{margin-left:6px;padding:6px 10px;background:var(--sienna);border:1px solid var(--tan);color:var(--offwhite);border-radius:6px;font-size:12px}
+
+.toolbar{padding:12px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filters select,.filters input,.filters button{background:var(--card);border:1px solid var(--line);color:var(--text);padding:7px 12px;border-radius:7px;font-family:inherit;font-size:13px}
+.filters button.active{background:var(--sienna);border-color:var(--tan);color:var(--offwhite)}
+.actions{display:flex;gap:8px;align-items:center}
+.actions button{background:var(--card);border:1px solid var(--line);color:var(--text);padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600}
+.actions button.primary{background:var(--green-d);border-color:var(--green);color:var(--offwhite)}
+
+.grid{padding:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;transition:all .15s;position:relative}
+.card:hover{border-color:var(--tan);transform:translateY(-1px)}
+.card.contacted-any{border-color:rgba(34,197,94,.4)}
+.card.replied{border-color:var(--green);background:linear-gradient(180deg,rgba(34,197,94,.07) 0%,var(--card) 100%)}
+.row1{display:flex;gap:10px;align-items:center}
+.avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#713520,#D2B48C);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#0a0f1a;flex-shrink:0;font-family:'JetBrains Mono',monospace;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.who{flex:1;min-width:0}
+.name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:5px}
+.handle{color:var(--tan);font-size:12px;font-family:'JetBrains Mono',monospace}
+.followers{color:var(--mute);font-size:11px;display:flex;gap:6px;align-items:center}
+.followers b{color:var(--text);font-family:'JetBrains Mono',monospace}
+.tier{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:.05em}
+.tier-T1{background:rgba(212,180,140,.18);color:var(--tan)}
+.tier-T2{background:rgba(34,197,94,.18);color:#4ade80}
+.tier-T3{background:rgba(59,130,246,.2);color:#93c5fd}
+.tier-T4{background:rgba(168,85,247,.2);color:#d8b4fe}
+.tier-T5{background:rgba(245,158,11,.22);color:#fcd34d}
+.bucket-bar{padding:14px 24px;border-bottom:1px solid var(--line);display:flex;gap:0;background:var(--card)}
+.bucket-tab{flex:1;padding:14px 18px;border:none;background:transparent;color:var(--mute);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;text-align:left;border-bottom:2px solid transparent;transition:all .15s}
+.bucket-tab:hover{color:var(--text);background:rgba(212,180,140,.04)}
+.bucket-tab.active{color:var(--text);border-bottom-color:var(--tan);background:rgba(212,180,140,.06)}
+.bucket-tab .count{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;display:block;margin-bottom:2px}
+.bucket-tab.hero .count{color:#fbbf24}
+.bucket-tab.priority .count{color:var(--green)}
+.bucket-tab.standard .count{color:var(--mute)}
+.score-pill{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;padding:2px 6px;border-radius:99px;letter-spacing:.04em;text-transform:uppercase}
+.score-hero{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0f1a}
+.score-priority{background:rgba(34,197,94,.22);color:#4ade80}
+.score-standard{background:rgba(139,149,168,.18);color:var(--mute)}
+.offer-strip{font-size:10px;color:var(--mute);background:rgba(212,180,140,.06);border-left:2px solid var(--tan);padding:5px 8px;border-radius:0 6px 6px 0;margin-top:2px;font-family:'JetBrains Mono',monospace;line-height:1.5}
+.offer-strip b{color:var(--tan);font-weight:700}
+.bio{font-size:11px;color:var(--mute);line-height:1.45;background:rgba(168,85,247,.05);padding:5px 8px;border-radius:6px;border-left:2px solid var(--purple);max-height:50px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.badges{display:flex;gap:5px;flex-wrap:wrap}
+.badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:.05em;display:inline-flex;gap:3px}
+.badge-biz{background:rgba(34,197,94,.16);color:#4ade80}
+.badge-ver{background:rgba(59,130,246,.18);color:#93c5fd}
+.badge-niche{background:rgba(212,180,140,.16);color:var(--tan)}
+.channels{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:auto}
+.ch{padding:7px 8px;border-radius:7px;border:1px solid var(--line);background:var(--card2);color:var(--mute);font-size:11px;font-weight:600;text-align:center;font-family:'JetBrains Mono',monospace;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all .15s}
+.ch.has{color:var(--text);border-color:rgba(255,255,255,.15)}
+.ch.has:hover{border-color:var(--tan);background:rgba(212,180,140,.08)}
+.ch.email.has{color:var(--email)}
+.ch.email.has:hover{border-color:var(--email);background:rgba(52,211,153,.08)}
+.ch.waba.has{color:var(--waba)}
+.ch.waba.has:hover{border-color:var(--waba);background:rgba(37,211,102,.08)}
+.ch.ig{color:var(--ig)}
+.ch.ig:hover{border-color:var(--ig);background:rgba(225,48,108,.08)}
+.ch.no{opacity:.35;cursor:not-allowed}
+.ch .stat{font-size:8px;color:var(--dim)}
+.ch.sent .stat{color:var(--green)}
+.ch.replied .stat{color:var(--gold)}
+
+.modal{position:fixed;inset:0;background:rgba(10,15,26,.85);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:24px;z-index:200}
+.modal.open{display:flex}
+.modal-inner{background:var(--card);border:1px solid var(--tan);border-radius:14px;max-width:640px;width:100%;max-height:88vh;overflow-y:auto;padding:24px}
+.modal h3{margin:0 0 14px;font-size:18px;display:flex;justify-content:space-between;align-items:center}
+.modal .close{background:none;border:none;color:var(--mute);font-size:22px;cursor:pointer;padding:0;line-height:1}
+.modal .recipient{font-family:'JetBrains Mono',monospace;color:var(--tan);font-size:13px;background:var(--card2);padding:8px 12px;border-radius:6px;margin-bottom:12px;word-break:break-all}
+.modal .subject-input{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);padding:9px 12px;border-radius:6px;font-family:inherit;font-size:14px;margin-bottom:8px}
+.modal .body-textarea{width:100%;min-height:280px;background:var(--card2);border:1px solid var(--line);color:var(--text);padding:12px;border-radius:6px;font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;line-height:1.55;resize:vertical}
+.modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.modal .actions button{padding:9px 16px;border-radius:7px;font-size:13px;font-weight:600}
+.modal .send-btn{background:var(--green-d);border:1px solid var(--green);color:var(--offwhite)}
+.modal .copy-btn{background:var(--card2);border:1px solid var(--line);color:var(--text)}
+.modal .skip-btn{background:transparent;border:1px solid var(--line);color:var(--mute)}
+
+.empty{padding:40px;text-align:center;color:var(--mute);grid-column:1/-1}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--green);color:var(--offwhite);padding:12px 18px;border-radius:8px;font-size:13px;z-index:300;display:none}
+.toast.error{border-color:var(--red)}
+.toast.show{display:block;animation:fadein .2s}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:640px){
+  .grid{grid-template-columns:1fr}
+  .stats{gap:10px}
+  .toolbar{flex-direction:column;align-items:stretch}
+}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="brand">Influencer Outreach <small>· May 2026 · 5 bookings/day target</small></div>
+  <div class="stats" id="stats">
+    <span>BLR keepers <b id="s-total">—</b></span>
+    <span>Contactable <b id="s-contactable">—</b></span>
+    <span class="green">Sent today <b id="s-sent-today">—</b></span>
+    <span class="waba">WABA total <b id="s-waba">—</b></span>
+    <span class="green">Email total <b id="s-email">—</b></span>
+    <span class="ig">IG DM total <b id="s-ig">—</b></span>
+    <span>Replied <b id="s-replied">—</b></span>
+  </div>
+  <div class="keybox">
+    <input id="key" placeholder="Dashboard key" type="password">
+    <button onclick="saveKey()">Save</button>
+  </div>
+</div>
+
+<div class="bucket-bar" id="bucket-bar">
+  <button class="bucket-tab hero active" data-bucket="HERO" onclick="setBucket('HERO')">
+    <span class="count" id="b-hero">—</span>🔥 HERO · highest relevance · all 3 channels
+  </button>
+  <button class="bucket-tab priority" data-bucket="PRIORITY" onclick="setBucket('PRIORITY')">
+    <span class="count" id="b-priority">—</span>⭐ PRIORITY · high relevance · email + WABA
+  </button>
+  <button class="bucket-tab standard" data-bucket="STANDARD" onclick="setBucket('STANDARD')">
+    <span class="count" id="b-standard">—</span>📋 STANDARD · single channel
+  </button>
+  <button class="bucket-tab" data-bucket="ALL" onclick="setBucket('ALL')">
+    <span class="count" id="b-all">—</span>All buckets
+  </button>
+</div>
+
+<div class="toolbar">
+  <div class="filters">
+    <select id="f-channel">
+      <option value="">All channels</option>
+      <option value="email">Has email</option>
+      <option value="waba">Has phone (WABA)</option>
+      <option value="whatsapp">Has WhatsApp link</option>
+    </select>
+    <select id="f-tier">
+      <option value="">All tiers</option>
+      <option value="T1">T1 · 5K-15K · 2 covers</option>
+      <option value="T2">T2 · 15K-50K · 4 covers</option>
+      <option value="T3">T3 · 50K-100K · 6 covers</option>
+    </select>
+    <select id="f-status">
+      <option value="">All</option>
+      <option value="uncontacted">Uncontacted</option>
+      <option value="contacted">Contacted</option>
+      <option value="replied">Replied</option>
+    </select>
+    <input id="f-search" placeholder="search bio / name / handle" style="width:180px">
+    <button id="f-food" class="active" onclick="toggleFood()">food signal ✓</button>
+  </div>
+  <div class="actions">
+    <span id="visible-count" style="color:var(--mute);font-size:12px">— shown</span>
+    <button onclick="sendNextEmailBatch(5)">📧 Email next 5</button>
+    <button onclick="sendNextEmailBatch(20)" class="primary">📧 Email next 20</button>
+  </div>
+</div>
+
+<div id="grid" class="grid"></div>
+
+<div class="modal" id="modal">
+  <div class="modal-inner">
+    <h3 id="modal-title">Outreach <button class="close" onclick="closeModal()">×</button></h3>
+    <div class="recipient" id="modal-recipient"></div>
+    <input class="subject-input" id="modal-subject" placeholder="Subject (email only)">
+    <textarea class="body-textarea" id="modal-body"></textarea>
+    <div class="actions">
+      <button class="copy-btn" onclick="copyMessage()">📋 Copy</button>
+      <button class="skip-btn" onclick="closeModal()">Cancel</button>
+      <button class="send-btn" id="modal-send-btn" onclick="confirmSend()">Send</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/influencer-outreach';
+let creators = [];
+let stats = {};
+let currentSendCtx = null;
+let foodFilter = true;
+let activeBucket = 'HERO';
+
+const TIER_OFFERS = {
+  T1: '2 covers · ₹1,200 retail · 1 reel + 3 stories',
+  T2: '3 covers + chai · ₹1,800 · 1 reel + 5 stories',
+  T3: '4 covers + chai + dessert flight · ₹2,400 · 1 reel + 1 post + 5 stories',
+  T4: '4 covers + add-ons + ₹500 cash · ₹2,900 · 1 reel + 1 post + 7 stories',
+  T5: '4 covers + chef tasting + ₹2,000 cash · ₹4,400 · 2 reels + post + collab',
+};
+
+function getKey(){ return localStorage.getItem('hn_dashkey') || ''; }
+function saveKey(){
+  const v = document.getElementById('key').value.trim();
+  if (v) { localStorage.setItem('hn_dashkey', v); toast('Key saved'); load(); }
+}
+function loadKey(){ document.getElementById('key').value = getKey(); }
+
+function toast(msg, isErr=false){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isErr ? ' error' : '') + ' show';
+  setTimeout(()=> t.classList.remove('show'), 2400);
+}
+
+function fmt(n){
+  if (n == null) return '—';
+  if (n >= 1000) return (n/1000).toFixed(1).replace(/\.0$/,'') + 'K';
+  return String(n);
+}
+
+function tierFor(f){
+  if (f < 15000)  return 'T1';
+  if (f < 30000)  return 'T2';
+  if (f < 60000)  return 'T3';
+  if (f < 100000) return 'T4';
+  return 'T5';
+}
+
+function setBucket(b){
+  activeBucket = b;
+  document.querySelectorAll('.bucket-tab').forEach(t => t.classList.toggle('active', t.dataset.bucket === b));
+  render();
+}
+
+function nicheFor(c){
+  const blob = ((c.biography||'') + ' ' + (c.category_name||'')).toLowerCase();
+  if (/biryani|hyderab|dakhni|mughlai|kebab|kabab/.test(blob)) return 'biryani';
+  if (/cafe|coffee|chai/.test(blob)) return 'cafes';
+  if (/street food/.test(blob)) return 'street food';
+  if (/halal|muslim/.test(blob)) return 'halal';
+  if (/dessert|baker|cake|patisserie/.test(blob)) return 'desserts';
+  if (/restaurant|eats|cuisine|dine/.test(blob)) return 'restaurants';
+  return 'food';
+}
+
+async function load(){
+  try {
+    const r = await fetch(API + '?action=list&food=' + (foodFilter?'1':'0'));
+    const d = await r.json();
+    creators = d.results || [];
+    renderStats();
+    render();
+    const sr = await fetch(API + '?action=stats');
+    stats = await sr.json();
+    renderStats();
+  } catch (e) {
+    toast('Load failed: ' + e.message, true);
+  }
+}
+
+function renderStats(){
+  document.getElementById('s-total').textContent = creators.length;
+  document.getElementById('s-contactable').textContent = creators.filter(c => c.has_email||c.has_phone||c.has_whatsapp).length;
+  // Bucket counts
+  const buckets = { HERO: 0, PRIORITY: 0, STANDARD: 0, SKIP: 0 };
+  for (const c of creators) buckets[c.bucket || 'STANDARD']++;
+  document.getElementById('b-hero').textContent     = buckets.HERO;
+  document.getElementById('b-priority').textContent = buckets.PRIORITY;
+  document.getElementById('b-standard').textContent = buckets.STANDARD;
+  document.getElementById('b-all').textContent      = creators.length;
+  if (stats.totals) {
+    document.getElementById('s-replied').textContent = stats.totals.replied || 0;
+  }
+  if (stats.by_channel_status) {
+    let waba = 0, email = 0, ig = 0;
+    for (const r of stats.by_channel_status) {
+      if (r.channel === 'waba')  waba += r.c;
+      if (r.channel === 'email') email += r.c;
+      if (r.channel === 'ig_dm') ig += r.c;
+    }
+    document.getElementById('s-waba').textContent = waba;
+    document.getElementById('s-email').textContent = email;
+    document.getElementById('s-ig').textContent = ig;
+  }
+  if (stats.today) {
+    let today = 0; for (const r of stats.today) today += r.c;
+    document.getElementById('s-sent-today').textContent = today;
+  }
+}
+
+function render(){
+  const ch = document.getElementById('f-channel').value;
+  const tier = document.getElementById('f-tier').value;
+  const stat = document.getElementById('f-status').value;
+  const q = document.getElementById('f-search').value.toLowerCase();
+
+  const list = creators.filter(c => {
+    if (activeBucket !== 'ALL' && (c.bucket || 'STANDARD') !== activeBucket) return false;
+    if (ch === 'email' && !c.has_email) return false;
+    if (ch === 'waba' && !c.has_phone) return false;
+    if (ch === 'whatsapp' && !c.has_whatsapp) return false;
+    if (tier && tierFor(c.followers_count) !== tier) return false;
+    if (stat === 'uncontacted' && (c.email_sent_at || c.waba_sent_at || c.ig_dm_sent_at)) return false;
+    if (stat === 'contacted' && !(c.email_sent_at || c.waba_sent_at || c.ig_dm_sent_at)) return false;
+    if (stat === 'replied' && !c.last_replied_at) return false;
+    if (q) {
+      const blob = (c.username + ' ' + (c.full_name||'') + ' ' + (c.biography||'')).toLowerCase();
+      if (!blob.includes(q)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('visible-count').textContent = list.length + ' shown';
+
+  const g = document.getElementById('grid');
+  if (!list.length) { g.innerHTML = '<div class="empty">No creators match.</div>'; return; }
+
+  g.innerHTML = list.slice(0,200).map(c => {
+    const t = c.tier || tierFor(c.followers_count);
+    const niche = nicheFor(c);
+    const initial = (c.full_name || c.username).charAt(0).toUpperCase();
+    const replied = !!c.last_replied_at;
+    const anyContacted = !!(c.email_sent_at || c.waba_sent_at || c.ig_dm_sent_at);
+    const bucket = c.bucket || 'STANDARD';
+    const scoreClass = bucket === 'HERO' ? 'score-hero' : bucket === 'PRIORITY' ? 'score-priority' : 'score-standard';
+    const score = c.relevance_score != null ? c.relevance_score : 0;
+    return `
+      <div class="card ${replied?'replied':anyContacted?'contacted-any':''}" data-username="${c.username}">
+        <div class="row1">
+          <div class="avatar">${c.profile_pic_url ? `<img src="${c.profile_pic_url}" onerror="this.parentElement.innerHTML='${initial}'">` : initial}</div>
+          <div class="who">
+            <div class="name">${escapeHtml((c.full_name||c.username).slice(0,28))}<span class="tier tier-${t}">${t}</span><span class="score-pill ${scoreClass}" title="${(c.score_reasons||[]).join(' · ')}">${score}</span></div>
+            <a class="handle" target="_blank" href="https://instagram.com/${c.username}">@${c.username}</a>
+            <div class="followers"><b>${fmt(c.followers_count)}</b> followers · ${niche}</div>
+          </div>
+        </div>
+        ${c.biography ? `<div class="bio">${escapeHtml(c.biography.slice(0,140))}</div>` : ''}
+        <div class="offer-strip"><b>OFFER</b> · ${TIER_OFFERS[t] || TIER_OFFERS.T1}</div>
+        <div class="badges">
+          ${c.is_business_account ? '<span class="badge badge-biz">🏢 BIZ</span>' : ''}
+          ${c.is_verified ? '<span class="badge badge-ver">✓ VERIFIED</span>' : ''}
+          <span class="badge badge-niche">${niche}</span>
+        </div>
+        <div class="channels">
+          <div class="ch email ${c.has_email?'has':'no'} ${c.email_status||''}" onclick="${c.has_email?`openEmail('${c.username}')`:''}">
+            📧 EMAIL <span class="stat">${c.email_status||(c.has_email?'ready':'—')}</span>
+          </div>
+          <div class="ch waba ${c.has_phone?'has':'no'} ${c.waba_status||''}" onclick="${c.has_phone?`openWaba('${c.username}')`:''}">
+            💬 WABA <span class="stat">${c.waba_status||(c.has_phone?'ready':'—')}</span>
+          </div>
+          <div class="ch ig ${c.ig_dm_status||''}" onclick="openIgDm('${c.username}')">
+            📷 IG DM <span class="stat">${c.ig_dm_status||'ready'}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function openEmail(username){
+  const k = getKey();
+  if (!k) return toast('Set dashboard key first', true);
+  try {
+    const r = await fetch(API + '?action=email-payload&username=' + username);
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    currentSendCtx = { mode: 'email', ...d };
+    document.getElementById('modal-title').innerHTML = `Email · @${username} <button class="close" onclick="closeModal()">×</button>`;
+    document.getElementById('modal-recipient').textContent = '→ ' + d.recipient;
+    document.getElementById('modal-subject').value = d.subject;
+    document.getElementById('modal-subject').style.display = 'block';
+    document.getElementById('modal-body').value = d.body;
+    document.getElementById('modal-send-btn').textContent = 'Mark sent (after Gmail send)';
+    document.getElementById('modal').classList.add('open');
+  } catch (e) { toast('Failed: ' + e.message, true); }
+}
+
+async function openWaba(username){
+  const k = getKey();
+  if (!k) return toast('Set dashboard key first', true);
+  toast('WABA template approval pending — submit he_influencer_barter_v1 to Meta first', true);
+}
+
+async function openIgDm(username){
+  const k = getKey();
+  if (!k) return toast('Set dashboard key first', true);
+  try {
+    const r = await fetch(API + '?action=ig-dm-payload&username=' + username);
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    currentSendCtx = { mode: 'ig_dm', ...d };
+    document.getElementById('modal-title').innerHTML = `IG DM · @${username} <button class="close" onclick="closeModal()">×</button>`;
+    document.getElementById('modal-recipient').innerHTML = `<a href="${d.dm_url}" target="_blank" style="color:var(--ig)">→ Open IG DM (new tab)</a>`;
+    document.getElementById('modal-subject').style.display = 'none';
+    document.getElementById('modal-body').value = d.message;
+    document.getElementById('modal-send-btn').textContent = 'Mark sent (after IG DM)';
+    document.getElementById('modal').classList.add('open');
+  } catch (e) { toast('Failed: ' + e.message, true); }
+}
+
+function closeModal(){ document.getElementById('modal').classList.remove('open'); currentSendCtx = null; }
+
+function copyMessage(){
+  const subj = document.getElementById('modal-subject').value;
+  const body = document.getElementById('modal-body').value;
+  const txt = subj && currentSendCtx?.mode === 'email' ? `Subject: ${subj}\n\n${body}` : body;
+  navigator.clipboard.writeText(txt).then(()=> toast('Copied'));
+}
+
+async function confirmSend(){
+  if (!currentSendCtx) return;
+  const k = getKey();
+  if (!k) return toast('Set dashboard key first', true);
+
+  const body = {
+    username: currentSendCtx.username,
+    channel: currentSendCtx.mode,
+    status: 'sent',
+    recipient: currentSendCtx.recipient || (currentSendCtx.mode === 'ig_dm' ? '@' + currentSendCtx.username : null),
+    template_used: currentSendCtx.mode === 'email' ? 'cold_email_v1' : currentSendCtx.mode === 'ig_dm' ? 'ig_dm_v1' : null,
+    subject: currentSendCtx.mode === 'email' ? document.getElementById('modal-subject').value : null,
+    message_text: document.getElementById('modal-body').value,
+    outreach_token: currentSendCtx.token,
+    tier_assigned: currentSendCtx.tier,
+    cover_offer: currentSendCtx.cover_offer,
+    niche_tag: currentSendCtx.niche_tag,
+    provider: currentSendCtx.mode === 'email' ? 'gmail' : 'manual',
+    actor: 'ui',
+  };
+  try {
+    const r = await fetch(API + '?action=log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard-Key': k },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'log failed');
+    toast('✓ Logged · #' + d.id);
+    closeModal();
+    load();
+  } catch (e) { toast('Log failed: ' + e.message, true); }
+}
+
+async function sendNextEmailBatch(n){
+  const k = getKey();
+  if (!k) return toast('Set dashboard key first', true);
+  toast('Run on laptop: python3 scripts/influencer_email_sender.py --limit ' + n);
+  // Note: actual sending happens via the local Python sender script which calls
+  // /api/influencer-outreach?action=create-batch then SMTP-sends each, then logs back.
+}
+
+document.getElementById('f-channel').addEventListener('change', render);
+document.getElementById('f-tier').addEventListener('change', render);
+document.getElementById('f-status').addEventListener('change', render);
+document.getElementById('f-search').addEventListener('input', render);
+
+function toggleFood(){
+  foodFilter = !foodFilter;
+  const b = document.getElementById('f-food');
+  b.classList.toggle('active', foodFilter);
+  b.textContent = 'food signal ' + (foodFilter ? '✓' : '✗');
+  load();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+loadKey();
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

@@ -67,7 +67,14 @@ async function handlePost(db, request, headers, env) {
     }
     const outletId = snap.outlet?.outlet_id || snap.outlet_id || 'unknown';
     const metricType = snap.source === 'api_intercept' ? 'api_' + classifyUrl(snap.url) : snap.page || 'dom_read';
-    const data = JSON.stringify(snap.metrics || snap.data || snap);
+    // Embed source URL inside the data JSON for api_intercept captures so Phase 3
+    // mining can identify the originating endpoint after the fact. No schema change
+    // needed; consumers just read data._intercept_url when present.
+    let payload = snap.metrics || snap.data || snap;
+    if (snap.source === 'api_intercept' && snap.url && typeof payload === 'object' && payload !== null && !Array.isArray(payload)) {
+      payload = { ...payload, _intercept_url: snap.url };
+    }
+    const data = JSON.stringify(payload);
     const capturedAt = snap.captured_at || new Date().toISOString();
 
     if (data === '{}' || data === 'null') continue;
@@ -486,7 +493,621 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
-  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance', 'health', 'snapshots', 'reviews', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
+  // --- v6.1 PARSED: per-brand per-platform structured data for the new HE/NCH UI ---
+  // Returns clean, sectioned data that the new dashboard can consume directly without
+  // having to know about raw metric_types or snapshot shape. Each section carries a
+  // `data_scope` flag so the UI can label clearly when data is HE-only vs combined.
+  if (action === 'parsed') {
+    const brand = url.searchParams.get('brand');     // 'he' | 'nch'
+    const platform = url.searchParams.get('platform'); // 'swiggy' | 'zomato'
+    const period = url.searchParams.get('period') || 'today'; // today|yesterday|thisweek|lastweek|month
+    const HE_OUTLET_SWIGGY = '1342887';
+    const NCH_OUTLET_SWIGGY = '1342888';
+    const HE_OUTLET_ZOMATO = '22632449';
+    const NCH_OUTLET_ZOMATO = '22632430';
+    const targetSwiggyOutlet = brand === 'he' ? HE_OUTLET_SWIGGY : NCH_OUTLET_SWIGGY;
+    const targetZomatoOutlet = brand === 'he' ? HE_OUTLET_ZOMATO : NCH_OUTLET_ZOMATO;
+
+    if (!['he', 'nch'].includes(brand)) {
+      return new Response(JSON.stringify({ error: 'brand must be he or nch' }), { status: 400, headers });
+    }
+    if (!['swiggy', 'zomato'].includes(platform)) {
+      return new Response(JSON.stringify({ error: 'platform must be swiggy or zomato' }), { status: 400, headers });
+    }
+
+    // Helper: latest snapshot of a given metric_type (any brand/outlet)
+    const latestSnap = async (mt, brandFilter) => {
+      let sql = `SELECT * FROM aggregator_snapshots WHERE platform = ? AND metric_type = ?`;
+      const p = [platform, mt];
+      if (brandFilter) { sql += ` AND brand = ?`; p.push(brandFilter); }
+      sql += ` ORDER BY captured_at DESC LIMIT 1`;
+      const row = await db.prepare(sql).bind(...p).first();
+      return row ? { ...row, data: safeJsonParse(row.data) } : null;
+    };
+
+    // Helper: latest snapshot whose metric_type has a given prefix (e.g. live_tracking_api)
+    const latestSnapPrefix = async (prefix, brandFilter) => {
+      let sql = `SELECT * FROM aggregator_snapshots WHERE platform = ? AND metric_type LIKE ?`;
+      const p = [platform, prefix + '%'];
+      if (brandFilter) { sql += ` AND brand = ?`; p.push(brandFilter); }
+      sql += ` ORDER BY captured_at DESC LIMIT 1`;
+      const row = await db.prepare(sql).bind(...p).first();
+      return row ? { ...row, data: safeJsonParse(row.data) } : null;
+    };
+
+    const sections = {};
+
+    if (platform === 'swiggy') {
+      // === SWIGGY ===
+      const reportType = `reports_swiggy_${period}`;
+      const report = await latestSnap(reportType, 'all');
+      const liveOrders = await latestSnap('live_orders', 'all');
+      const apiOrders = await latestSnap('api_orders', 'all');
+
+      const num = (v) => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      };
+
+      // ---- GROWTH (HE-only — DERIVED from per-brand orders + order-detail captures) ----
+      // Strict policy: NO combined HE+NCH data on a brand-specific endpoint. If we
+      // can't compute HE-only, we explicitly list the metric as not_yet_he_only with
+      // a reason — never show combined data masquerading as HE.
+      sections.growth = {
+        data_scope: 'he_only',
+        data_scope_note: 'Strict per-brand. Funnel/ads/listing not surfaced here because Swiggy business-metrics is combined-only — listed in not_yet_he_only with the gap reason.',
+        captured_at: null,  // populated from orders block below
+        not_yet_he_only: {
+          impressions: 'Combined HE+NCH only on Swiggy business-metrics. Needs extension to apply outlet filter (Phase 1B).',
+          menu_opens: 'same — combined-only',
+          funnel_conversion_pct: 'same — combined-only',
+          ads_spend: 'same — combined-only (Swiggy reports ads at brand=all)',
+          cba_sales: 'same — combined-only',
+          listing_menu_score: 'Combined Swiggy menu score covers HE+NCH menu union. Per-outlet score requires outlet filter.',
+          items_with_photos_pct: 'same — combined-only',
+          online_availability_pct_swiggy_metric: 'Use the per-brand availability derived from api_orders.restaurantData below instead.',
+          discount_sales: 'Combined-only on Swiggy. Per-brand discount usage IS available via order-detail (Zomato platform), see /he/zomato.',
+        },
+        // HE-only fields (derived from per-brand sources) populated after orders block runs.
+        // See section.sales for the actual numbers — Sales section is the canonical HE-only revenue/order view.
+      };
+
+      // ---- OPS (strict HE-only) ----
+      const liveOutlet = (() => {
+        if (!apiOrders) return null;
+        const rd = apiOrders.data?.restaurantData;
+        if (!Array.isArray(rd)) return null;
+        return rd.find(x => String(x.restaurantId) === targetSwiggyOutlet) || null;
+      })();
+      const liveOrderEntry = (() => {
+        if (!liveOrders) return null;
+        const outlets = liveOrders.data?.outlets;
+        if (!Array.isArray(outlets)) return null;
+        return outlets.find(x => String(x.restaurantId) === targetSwiggyOutlet) || null;
+      })();
+
+      sections.ops = {
+        data_scope: 'he_only',
+        data_scope_note: 'Strict per-brand. Live status is HE-only via api_orders.restaurantData filter. Combined HE+NCH delivery-quality / cancellations / complaints / bolt metrics REMOVED — see not_yet_he_only.',
+        captured_at: apiOrders?.captured_at || liveOrders?.captured_at || null,
+        live_status: liveOutlet ? {
+          outlet_id: liveOutlet.restaurantId,
+          is_open: liveOutlet.isOpen,
+          is_serviceable: liveOutlet.isServiceable,
+          stress: liveOutlet.stressInfo?.stress || false,
+          active_batches: Object.keys(liveOutlet.batches || {}).length,
+          updated_at: apiOrders.captured_at,
+        } : (liveOrderEntry ? {
+          outlet_id: liveOrderEntry.restaurantId,
+          is_serviceable: liveOrderEntry.isServiceable,
+          active_batches: liveOrderEntry.activeBatches,
+          updated_at: liveOrders.captured_at,
+        } : { available: false, reason: 'api_orders capture for this outlet not present yet — extension cycles every few min' }),
+        // HE-only cancellation + delay rate computed from aggregator_orders below
+        not_yet_he_only: {
+          kitchen_prep_time_min: 'Combined Swiggy reports — needs extension outlet filter',
+          mfr_accuracy_pct: 'same — combined Swiggy metric',
+          delayed_10min_pct: 'same',
+          online_availability_pct: 'same',
+          poor_rated_orders: 'same',
+          complaint_pct: 'same — Swiggy combined complaint counter',
+          wrong_items: 'same',
+          missing_items: 'same',
+          quality_issues: 'same',
+          packaging_issues: 'same',
+          bolt_metrics: 'Bolt instant-delivery metrics combined HE+NCH. HE not enrolled in Bolt — number is irrelevant for HE.',
+        },
+      };
+
+      // ---- SALES (will be overridden later by per-brand aggregation from aggregator_orders) ----
+      // Placeholder — the actual per-brand sales numbers are computed in the ORDERS block below.
+      sections.sales = {
+        data_scope: 'he_only',
+        data_scope_note: 'Computed from aggregator_orders WHERE brand=he/nch — see below for actual values.',
+        // overridden after orders block runs
+      };
+
+      sections.finance = {
+        data_scope: 'unavailable',
+        reason: 'Swiggy finance page DOM extraction not yet implemented. The api_finance_* snapshots in DB are misclassified Swiggy config responses, not real finance data.',
+      };
+
+      sections.reviews = {
+        data_scope: 'unavailable',
+        reason: 'Swiggy reviews extraction not yet implemented.',
+      };
+
+    } else {
+      // === ZOMATO (delivery only) ===
+      const liveTrack = await latestSnap('live_tracking', 'all');
+      const liveTrackApi = await latestSnap('live_tracking_api', 'all');
+      const restMetrics = await latestSnap('restaurant_metrics', 'all');
+
+      const num = (v) => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      };
+
+      // ---- GROWTH (HE-only — strict; no combined data leaks through) ----
+      // Zomato live_tracking metrics are combined HE+NCH because both outlets are
+      // selected by default. We do NOT surface those numbers here. Per-brand growth
+      // intelligence comes from order-detail captures (top dishes, customer cohorts,
+      // discount usage, payment methods) computed below.
+      sections.growth = {
+        data_scope: 'he_only',
+        data_scope_note: 'Strict per-brand. Combined-only Zomato metrics excluded — see not_yet_he_only for the full gap list.',
+        captured_at: null,  // populated by order-detail compute below
+        // Top dishes + customer cohorts populated after the order-detail compute step further down.
+        not_yet_he_only: {
+          impressions: 'Zomato live_tracking returns combined HE+NCH. Needs outlet filter applied by extension (Phase 1B).',
+          menu_opens: 'same — combined-only',
+          cart_builds: 'same',
+          orders_placed: 'same',
+          imp_to_menu_pct: 'same',
+          menu_to_cart_pct: 'same',
+          cart_to_order_pct: 'same',
+          new_users: 'Combined Zomato customer counters — outlet filter needed for per-brand split.',
+          repeat_users: 'same',
+          lapsed_users: 'same',
+          sales_from_offers: 'Combined Zomato offer revenue. Per-brand offer effectiveness is derivable from order-detail.calculations field — see top_dishes / discount_orders below when populated.',
+          listing_score: 'Zomato never exposes a per-outlet listing score in the merchant view. Listing-quality audit needs consumer-side scraping (Phase 4).',
+        },
+        // top_dishes_he, customer_cohort_he, payment_mix_he, discount_usage_pct populated after the order-detail join below.
+      };
+
+      // ---- OPS (strict HE-only) ----
+      const myOutletMeta = (() => {
+        if (!restMetrics) return null;
+        const ents = restMetrics.data?.entities;
+        if (!Array.isArray(ents)) return null;
+        return ents.find(e => String(e.res_id) === targetZomatoOutlet || String(e.id) === targetZomatoOutlet) || null;
+      })();
+
+      sections.ops = {
+        data_scope: 'he_only',
+        data_scope_note: 'Strict per-brand. Outlet metadata is HE-only via restaurant_metrics filter. Combined HE+NCH delivery_quality fields REMOVED — see not_yet_he_only.',
+        captured_at: restMetrics?.captured_at || null,
+        outlet_metadata: myOutletMeta ? {
+          res_id: myOutletMeta.res_id || myOutletMeta.id,
+          address: myOutletMeta.address,
+          active_since: myOutletMeta.active_since,
+          am_email: myOutletMeta.am_details?.poc_email,
+          am_phone: myOutletMeta.am_details?.poc_phone,
+        } : { available: false, reason: `Restaurant metadata for outlet ${targetZomatoOutlet} not found in latest restaurant_metrics capture` },
+        // HE-only cancellation rate, delay rate, issue counts computed from aggregator_orders below
+        not_yet_he_only: {
+          rejected_pct: 'Combined Zomato live_tracking metric. Per-brand rejection rate is derivable from aggregator_orders.status — surfaced below as cancellation_rate_pct.',
+          delayed_pct: 'Combined-only. Per-brand delay info is in aggregator_orders.issues.',
+          poor_rated_pct: 'Combined-only.',
+          lost_sales: 'Combined Zomato lost_sales. Cannot derive HE-only without outlet filter capture.',
+        },
+      };
+
+      // ---- SALES (placeholder — actual values from per-brand orders below) ----
+      sections.sales = {
+        data_scope: 'he_only',
+        data_scope_note: 'Computed from aggregator_orders WHERE brand=he/nch — see Sales totals below.',
+        // overridden after orders block runs
+      };
+
+      sections.finance = {
+        data_scope: 'unavailable',
+        reason: 'Zomato delivery finance/payout extraction not yet implemented in extension.',
+      };
+
+      sections.reviews = {
+        data_scope: 'unavailable',
+        reason: 'Zomato delivery reviews/NPS extraction not yet implemented in extension.',
+      };
+    }
+
+    // ---- ORDERS (always per-brand from aggregator_orders table) ----
+    const IST = "'+5 hours', '+30 minutes'";
+    const EFFECTIVE_DATE = `COALESCE(NULLIF(order_date, ''), date(captured_at, ${IST}))`;
+    let dateWhere;
+    switch (period) {
+      case 'today':     dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST})`; break;
+      case 'yesterday': dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST}, '-1 day')`; break;
+      case 'thisweek':  dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'weekday 0', '-7 days')`; break;
+      case 'lastweek':  dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, 'weekday 0', '-14 days') AND ${EFFECTIVE_DATE} < date('now', ${IST}, 'weekday 0', '-7 days')`; break;
+      case 'month':     dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, '-30 days')`; break;
+      default:          dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST})`;
+    }
+    const orderRows = await db.prepare(`
+      SELECT * FROM aggregator_orders
+      WHERE ${dateWhere} AND platform = ? AND brand = ?
+      ORDER BY order_date DESC, order_time DESC LIMIT 200
+    `).bind(platform, brand).all();
+
+    // ---- DAILY series (always 30-day window, regardless of period filter) ----
+    // This powers the Insights-tab daily chart. Built independent of the period
+    // filter so the chart is a stable 30-day reference for trend + gap detection.
+    const dailyRows = await db.prepare(`
+      SELECT
+        ${EFFECTIVE_DATE} AS d,
+        COUNT(*) AS orders,
+        SUM(CASE WHEN LOWER(status) LIKE '%delivered%' THEN order_value ELSE 0 END) AS revenue,
+        SUM(CASE WHEN LOWER(status) LIKE '%delivered%' THEN 1 ELSE 0 END) AS delivered,
+        SUM(CASE WHEN LOWER(status) LIKE '%cancel%' OR LOWER(status) LIKE '%reject%' THEN 1 ELSE 0 END) AS cancelled
+      FROM aggregator_orders
+      WHERE ${EFFECTIVE_DATE} >= date('now', ${IST}, '-30 days')
+        AND platform = ? AND brand = ?
+      GROUP BY d
+      ORDER BY d ASC
+    `).bind(platform, brand).all();
+    // Fill calendar gaps so chart shows missing-capture days as zero bars
+    const dailyMap = {};
+    for (const r of (dailyRows.results || [])) {
+      dailyMap[r.d] = {
+        date: r.d,
+        orders: r.orders || 0,
+        revenue: Math.round((r.revenue || 0) * 100) / 100,
+        delivered: r.delivered || 0,
+        cancelled: r.cancelled || 0,
+      };
+    }
+    // Generate 30 calendar dates ending today (IST)
+    const dailyFilled = [];
+    const todayIst = new Date(Date.now() + (5 * 60 + 30) * 60 * 1000);
+    for (let i = 30; i >= 0; i--) {
+      const d = new Date(todayIst);
+      d.setUTCDate(d.getUTCDate() - i);
+      const ds = d.toISOString().slice(0, 10);
+      dailyFilled.push(dailyMap[ds] || { date: ds, orders: 0, revenue: 0, delivered: 0, cancelled: 0 });
+    }
+
+    const ordersList = orderRows.results || [];
+    const delivered = ordersList.filter(r => /delivered/i.test(r.status || ''));
+    const totalRevenue = Math.round(delivered.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100;
+    const totalPayout = Math.round(delivered.reduce((s, r) => s + (r.net_payout || 0), 0) * 100) / 100;
+    const aov = delivered.length ? Math.round(totalRevenue / delivered.length) : 0;
+    const cancelled = ordersList.filter(r => /cancel|reject/i.test(r.status || ''));
+    const cancelledLoss = Math.round(cancelled.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100;
+
+    sections.orders = {
+      data_scope: 'he_only_or_nch_only',
+      captured_at: ordersList[0]?.captured_at || null,
+      total_orders: ordersList.length,
+      total_delivered: delivered.length,
+      total_revenue: totalRevenue,
+      total_payout: totalPayout,
+      orders: ordersList,
+    };
+
+    // 30-day daily series — for Insights chart + gap visualization
+    sections.daily = {
+      data_scope: brand === 'he' ? 'he_only' : 'nch_only',
+      window_days: 31,
+      points: dailyFilled,
+      note: 'Per-IST-day orders + delivered revenue. Days with zero values may be (a) genuine zero-order days or (b) capture gaps when extension was offline. Click a bar to drill into that day\'s orders.',
+    };
+
+    // CRITICAL: override Sales section with HE-only / NCH-only aggregation from
+    // aggregator_orders. The earlier sections.sales (set by Swiggy/Zomato platform
+    // blocks above) used combined data — replaced here with brand-filtered truth.
+    sections.sales = {
+      data_scope: brand === 'he' ? 'he_only' : 'nch_only',
+      data_provenance: 'aggregator_orders (per-order rows, brand-filtered)',
+      data_scope_note: `Aggregated from aggregator_orders WHERE brand='${brand}' AND platform='${platform}'. Genuinely ${brand.toUpperCase()}-only — does NOT include the other brand.`,
+      captured_at: ordersList[0]?.captured_at || null,
+      totals: {
+        net_sales: totalRevenue,
+        delivered_orders: delivered.length,
+        aov: aov,
+        cancelled_orders: cancelled.length,
+        cancelled_loss: cancelledLoss,
+        net_payout: totalPayout,
+      },
+      period_note: `${ordersList.length} orders found in period (${delivered.length} delivered).`,
+    };
+
+    // ---- CAPTURE HEALTH ----
+    // Reports the truth about how reliable the per-order data is. The dashboard
+    // uses this to decide whether to show the per-order chart vs the aggregate
+    // fallback banner.
+    const lastOrderRow = await db.prepare(`
+      SELECT MAX(captured_at) AS last_capture, COUNT(*) AS total_orders
+      FROM aggregator_orders WHERE platform = ? AND brand = ?
+    `).bind(platform, brand).first();
+    const last30dCount = dailyFilled.reduce((s, p) => s + p.orders, 0);
+    const nonZeroDays = dailyFilled.filter(p => p.orders > 0).length;
+    sections.capture_health = {
+      platform,
+      brand,
+      last_per_order_capture: lastOrderRow?.last_capture || null,
+      total_per_order_rows_alltime: lastOrderRow?.total_orders || 0,
+      orders_last_30d: last30dCount,
+      non_zero_days_last_30d: nonZeroDays,
+      coverage_pct_last_30d: Math.round(nonZeroDays / 31 * 100),
+      // "sparse" = effectively no per-order data (Swiggy is currently in this state)
+      per_order_status: last30dCount < 5 ? 'sparse' : (nonZeroDays < 15 ? 'partial' : 'healthy'),
+    };
+
+    // ---- SWIGGY AGGREGATE FALLBACK — REMOVED 2026-05-10 ----
+    // Previously surfaced reports_swiggy_{period} (brand='all' = combined HE+NCH)
+    // when per-order data was sparse. STRICT HE-ONLY POLICY prohibits any
+    // combined data on a brand-specific endpoint, even labelled. Removed.
+    // The capture_health field above signals the gap; UI shows banner only.
+    // Per-outlet Swiggy capture is being rebuilt via the Finance-page DOM
+    // path (work in progress 2026-05-10).
+
+    // ===== HE-only enrichment from per-brand order data =====
+    // Sales is already correct above. Now populate Growth + Ops with HE-only-derived
+    // metrics from aggregator_orders + Zomato order-detail captures.
+
+    const cancellationRate = ordersList.length ? Math.round(cancelled.length / ordersList.length * 1000) / 10 : null;
+    const ordersWithIssues = ordersList.filter(r => r.issues && String(r.issues).trim());
+    const issueRate = ordersList.length ? Math.round(ordersWithIssues.length / ordersList.length * 1000) / 10 : null;
+    const issueBreakdown = {};
+    for (const r of ordersWithIssues) {
+      const text = String(r.issues).toLowerCase();
+      if (/delay/.test(text))                           issueBreakdown.delay = (issueBreakdown.delay || 0) + 1;
+      if (/wrong/.test(text))                           issueBreakdown.wrong_item = (issueBreakdown.wrong_item || 0) + 1;
+      if (/missing/.test(text))                         issueBreakdown.missing_item = (issueBreakdown.missing_item || 0) + 1;
+      if (/quality|cold|stale/.test(text))              issueBreakdown.quality = (issueBreakdown.quality || 0) + 1;
+      if (/packag/.test(text))                          issueBreakdown.packaging = (issueBreakdown.packaging || 0) + 1;
+    }
+    const ratedOrders = ordersList.filter(r => r.rating !== null && r.rating !== undefined);
+    const avgRating = ratedOrders.length ? Math.round(ratedOrders.reduce((s, r) => s + (r.rating || 0), 0) / ratedOrders.length * 10) / 10 : null;
+    const poorRated = ratedOrders.filter(r => (r.rating || 0) <= 3);
+
+    sections.ops.cancellation_rate_pct = cancellationRate;
+    sections.ops.cancellation_count = cancelled.length;
+    sections.ops.issue_rate_pct = issueRate;
+    sections.ops.issue_breakdown = issueBreakdown;
+    sections.ops.rated_orders = ratedOrders.length;
+    sections.ops.avg_rating = avgRating;
+    sections.ops.poor_rated_count = poorRated.length;
+
+    // Top dishes + customer cohort from Zomato order-detail captures (only Zomato has these)
+    if (platform === 'zomato') {
+      const HE_OUTLET_Z = '22632449', NCH_OUTLET_Z = '22632430';
+      const targetOutlet = brand === 'he' ? HE_OUTLET_Z : NCH_OUTLET_Z;
+      // Pull api_orders captures matching this brand (filter by resId in the order JSON)
+      const { results: detailRows } = await db.prepare(`
+        SELECT * FROM aggregator_snapshots
+        WHERE platform='zomato' AND metric_type='api_orders'
+        ORDER BY captured_at DESC LIMIT 200
+      `).all();
+      const dishStats = {};      // name -> {orders, quantity, revenue, tags, discount_count}
+      let firstTimeCustomers = 0, repeatCustomers = 0;
+      let ordersWithDiscount = 0, totalDetailOrders = 0;
+      const paymentMethods = {};
+      for (const row of (detailRows || [])) {
+        const d = safeJsonParse(row.data);
+        const order = d?.order;
+        if (!order || !order.id) continue;
+        if (String(order.resId) !== targetOutlet) continue;
+        totalDetailOrders++;
+        const dishes = order.cartDetails?.items?.dishes || [];
+        const creator = order.creator || {};
+        const lifetime = creator.orderCount;
+        if (lifetime === 1) firstTimeCustomers++;
+        else if (lifetime > 1) repeatCustomers++;
+        const pm = order.paymentMethod || 'unknown';
+        paymentMethods[pm] = (paymentMethods[pm] || 0) + 1;
+        let orderHadDiscount = false;
+        for (const dish of dishes) {
+          const k = dish.name || 'unknown';
+          if (!dishStats[k]) dishStats[k] = { name: k, orders: 0, quantity: 0, revenue: 0, tags: new Set(), discount_count: 0 };
+          dishStats[k].orders++;
+          dishStats[k].quantity += dish.quantity || 0;
+          dishStats[k].revenue += dish.totalCost || 0;
+          for (const t of (dish.metadata?.tags || [])) dishStats[k].tags.add(t);
+          const calcs = dish.calculations || [];
+          if (calcs.length > 0) { dishStats[k].discount_count++; orderHadDiscount = true; }
+        }
+        if (orderHadDiscount) ordersWithDiscount++;
+      }
+      const topDishes = Object.values(dishStats)
+        .map(d => ({ ...d, tags: Array.from(d.tags) }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 15);
+      sections.growth.top_dishes_he = topDishes;
+      sections.growth.customer_cohort_he = {
+        sample_size: firstTimeCustomers + repeatCustomers,
+        first_time_orders: firstTimeCustomers,
+        repeat_orders: repeatCustomers,
+        first_time_pct: (firstTimeCustomers + repeatCustomers) ? Math.round(firstTimeCustomers / (firstTimeCustomers + repeatCustomers) * 1000) / 10 : null,
+      };
+      sections.growth.payment_mix_he = paymentMethods;
+      sections.growth.discount_usage_he = {
+        orders_with_discount: ordersWithDiscount,
+        total_orders_in_sample: totalDetailOrders,
+        usage_rate_pct: totalDetailOrders ? Math.round(ordersWithDiscount / totalDetailOrders * 1000) / 10 : null,
+        note: 'Discount usage rate is from order-detail captures (Zomato only). Sample size = total order-detail captures with brand match. Smaller than total HE orders because order-detail fires only when partner clicks into an order.',
+      };
+      sections.growth.captured_at = ordersList[0]?.captured_at || null;
+    }
+
+    return new Response(JSON.stringify({
+      ok: true,
+      brand,
+      platform,
+      period,
+      generated_at: new Date().toISOString(),
+      sections,
+    }), { headers });
+  }
+
+  // --- DAY-ORDERS: drill-through for the daily chart. Returns the full order list for one IST day. ---
+  if (action === 'day-orders') {
+    const brand = url.searchParams.get('brand');
+    const platform = url.searchParams.get('platform');
+    const date = url.searchParams.get('date'); // YYYY-MM-DD (IST day)
+    if (!['he', 'nch'].includes(brand)) {
+      return new Response(JSON.stringify({ error: 'brand must be he or nch' }), { status: 400, headers });
+    }
+    if (!['swiggy', 'zomato'].includes(platform)) {
+      return new Response(JSON.stringify({ error: 'platform must be swiggy or zomato' }), { status: 400, headers });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
+      return new Response(JSON.stringify({ error: 'date must be YYYY-MM-DD' }), { status: 400, headers });
+    }
+    const IST = "'+5 hours', '+30 minutes'";
+    const EFFECTIVE_DATE = `COALESCE(NULLIF(order_date, ''), date(captured_at, ${IST}))`;
+    const rows = await db.prepare(`
+      SELECT * FROM aggregator_orders
+      WHERE ${EFFECTIVE_DATE} = ? AND platform = ? AND brand = ?
+      ORDER BY order_time DESC, captured_at DESC
+    `).bind(date, platform, brand).all();
+    const orders = rows.results || [];
+    const delivered = orders.filter(r => /delivered/i.test(r.status || ''));
+    const cancelled = orders.filter(r => /cancel|reject/i.test(r.status || ''));
+    return new Response(JSON.stringify({
+      ok: true, brand, platform, date,
+      total_orders: orders.length,
+      total_delivered: delivered.length,
+      total_cancelled: cancelled.length,
+      revenue: Math.round(delivered.reduce((s, r) => s + (r.order_value || 0), 0) * 100) / 100,
+      orders,
+    }), { headers });
+  }
+
+  // --- v6.2 ORDER-DETAIL: Phase 3 API mining — parse api_orders captures into rich per-order data ---
+  // The Zomato partner portal fires GET /merchant-api/order/{id} when an order detail
+  // panel is opened. The response includes the cart breakdown (dishes/quantities/prices/
+  // discounts/tags), customer profile (name + lifetime order count), timeline, and prep
+  // time settings. We were storing this raw as metric_type='api_orders' but never
+  // exposing the structured fields. This action surfaces them.
+  if (action === 'order-detail') {
+    const brand = url.searchParams.get('brand'); // 'he' | 'nch' | null=all
+    const platform = url.searchParams.get('platform') || 'zomato';
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
+    const HE_OUTLET_ZOMATO = '22632449';
+    const NCH_OUTLET_ZOMATO = '22632430';
+
+    // Pull api_orders captures (the raw order-detail API responses)
+    const { results } = await db.prepare(`
+      SELECT * FROM aggregator_snapshots
+      WHERE platform = ? AND metric_type = 'api_orders'
+      ORDER BY captured_at DESC LIMIT ?
+    `).bind(platform, limit * 3).all();  // over-fetch since list+detail mixed
+
+    const parsedOrders = [];
+    const dishStats = {};  // name -> {orders, quantity, revenue, tags_seen}
+
+    for (const row of (results || [])) {
+      const data = safeJsonParse(row.data);
+      const order = data?.order;
+      if (!order || !order.id) continue;  // skip list responses
+
+      const resId = String(order.resId || '');
+      const orderBrand = resId === HE_OUTLET_ZOMATO ? 'he' : resId === NCH_OUTLET_ZOMATO ? 'nch' : 'unknown';
+      if (brand && brand !== 'all' && orderBrand !== brand) continue;
+
+      const cart = order.cartDetails || {};
+      const dishes = cart.items?.dishes || [];
+      const creator = order.creator || {};
+
+      const parsedDishes = dishes.map(d => ({
+        catalogue_id: d.metadata?.catalogueId || null,
+        name: d.name,
+        quantity: d.quantity,
+        unit_cost: d.unitCost,
+        total_cost: d.totalCost,
+        discount: (d.calculations || []).map(c => ({
+          name: c.name,
+          amount: c.amount,
+          is_percentage: c.isPercentage,
+        })),
+        tags: d.metadata?.tags || [],
+      }));
+
+      // Aggregate dish stats across all orders
+      for (const d of parsedDishes) {
+        const k = d.name || 'unknown';
+        if (!dishStats[k]) {
+          dishStats[k] = { name: k, catalogue_id: d.catalogue_id, orders: 0, quantity: 0, revenue: 0, tags: new Set(), discount_count: 0 };
+        }
+        dishStats[k].orders += 1;
+        dishStats[k].quantity += d.quantity || 0;
+        dishStats[k].revenue += d.total_cost || 0;
+        if (d.discount.length > 0) dishStats[k].discount_count += 1;
+        for (const t of (d.tags || [])) dishStats[k].tags.add(t);
+      }
+
+      parsedOrders.push({
+        order_id: order.id,
+        display_id: order.displayId,
+        platform: 'zomato',
+        brand: orderBrand,
+        outlet_res_id: resId,
+        state: order.state,
+        delivery_mode: order.deliveryMode,
+        zomato_delivered: order.zomatoDelivered,
+        rider_assigned: order.riderAssigned,
+        payment: {
+          method: order.paymentMethod,
+          type: order.paymentDetails?.paymentType,
+        },
+        timeline: {
+          created_at: order.createdAt,
+          actioned_at: order.actionedAt,
+          food_ready_at: order.foodOrderReady,
+          updated_at: order.updatedAt,
+          prep_min: order.handoverDetails?.time,
+          prep_min_min: order.handoverDetails?.minTime,
+          prep_min_max: order.handoverDetails?.maxTime,
+        },
+        customer: {
+          user_id: creator.userId,
+          name: creator.name,
+          lifetime_orders: creator.orderCount,
+          lifetime_orders_label: creator.orderCountDisplay,
+          country_code: creator.countryIsdCode,
+          profile_url: creator.profileUrl,
+        },
+        cart: {
+          subtotal: cart.subtotal?.amountDetails?.totalCost,
+          total: cart.total?.amountDetails?.totalCost,
+          dishes: parsedDishes,
+        },
+        captured_at: row.captured_at,
+      });
+    }
+
+    // Convert dish stats Set to array, sort
+    const dishesAgg = Object.values(dishStats)
+      .map(d => ({ ...d, tags: Array.from(d.tags) }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    return new Response(JSON.stringify({
+      ok: true,
+      platform,
+      brand: brand || 'all',
+      order_count: parsedOrders.length,
+      orders: parsedOrders.slice(0, limit),
+      dish_aggregate: dishesAgg,
+      mining_note: parsedOrders.length < 5
+        ? 'Sparse data — extension needs to capture more order-detail API calls (currently fires only when partner clicks into an order). Phase 3B candidate: extension auto-clicks each order in order history.'
+        : null,
+    }), { headers });
+  }
+
+  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
@@ -522,18 +1143,26 @@ function classifyUrl(url) {
   const brandSuffix = ZOMATO_OUTLET[resId] || SWIGGY_OUTLET[resId];
   const suffix = brandSuffix ? `_${brandSuffix}` : '';
 
+  // Config endpoints — checked first so we don't mistake fetchConfig / fetchKey-list for orders/finance.
+  // Swiggy in particular fires rms.swiggy.com/api/v1/fetchConfig?key=CLOUDINARY_MIGRATION_ENABLED,...
+  // every few minutes — that's not finance, it's runtime feature flags.
+  if (/fetchConfig|featureFlag|\/config(?:s)?\b|key=[A-Z_,]+/i.test(url)) return 'config';
+  if (/restaurant.*config/i.test(url)) return 'config';
+
   // Check specific patterns BEFORE generic ones (order matters).
   if (/\/nps\b|\/review|feedback|customer-voice/i.test(url)) return `reviews${suffix}`;
   if (/\/ads\b|promot|campaign|marketing-tools/i.test(url)) return `ads${suffix}`;
   if (/\/finance\b|payout|settlement|invoice|earning/i.test(url)) return `finance${suffix}`;
   if (/\/rating\b/i.test(url)) return `ratings${suffix}`;
-  if (/order/i.test(url)) return `orders${suffix}`;
+  if (/fetchOrders|order.*list|order\/history|merchant-api\/orders/i.test(url)) return `orders${suffix}`;
+  // Generic /order/ pattern is intentionally narrower than before — too many config
+  // and routing endpoints contain the word "order" without being order data.
+  if (/\/orders?\//i.test(url) && !/config|tracking|key=|status$/i.test(url)) return `orders${suffix}`;
   if (/sales|revenue|metrics|business.report/i.test(url)) return `sales${suffix}`;
   if (/menu/i.test(url)) return `menu${suffix}`;
   if (/funnel/i.test(url)) return `funnel${suffix}`;
   if (/customer/i.test(url)) return `customers${suffix}`;
   if (/discount|offer/i.test(url)) return `discounts${suffix}`;
-  if (/restaurant.*config/i.test(url)) return 'config';
   return 'other';
 }
 
