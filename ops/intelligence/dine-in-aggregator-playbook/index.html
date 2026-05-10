@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dine-In Aggregator Playbook · Hamza Express · May 2026</title>
+<link rel="stylesheet" href="playbook.css">
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-inner">
+    <div>
+      <a href="/ops/" class="hdr-back">← ops</a>
+      <span class="hdr-title">
+        Dine-In Aggregator Playbook · Hamza Express
+        <small>EazyDiner · Zomato Dining · Swiggy Dineout · May 2026 · synthesised from 787-restaurant offer corpus + HE detail-page scrape</small>
+      </span>
+    </div>
+    <nav class="hdr-nav">
+      <a href="#platforms">Platforms</a>
+      <a href="#directory">Offer Directory</a>
+      <a href="#decisions">Decisions</a>
+      <a href="#kam">KAM Talk</a>
+      <a href="#sources">Sources</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ══════════ HERO ══════════ -->
+  <div class="hero">
+    <div class="hero-card tone-info">
+      <div class="hero-l">May 2026 target</div>
+      <div class="hero-v">₹15,00,000</div>
+      <div class="hero-d">Vs Mar actuals ₹6,59,903 — needs <b>2.3×</b> growth in 30 days</div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-l">Dine-in platforms</div>
+      <div class="hero-v">3</div>
+      <div class="hero-d">Zomato Dining · EazyDiner · Swiggy Dineout</div>
+    </div>
+    <div class="hero-card tone-good">
+      <div class="hero-l">Offer corpus analysed</div>
+      <div class="hero-v">787+</div>
+      <div class="hero-d">566 EazyDiner BLR · 221 Zomato Dining BLR · Swiggy pending</div>
+    </div>
+    <div class="hero-card tone-good">
+      <div class="hero-l">Verified deltas asked</div>
+      <div class="hero-v">21</div>
+      <div class="hero-d">Each scraped against HE's actual detail page — no redundant asks</div>
+    </div>
+    <div class="hero-card tone-warn">
+      <div class="hero-l">HE's hard moat</div>
+      <div class="hero-v">11 PM – 3 AM</div>
+      <div class="hero-d">Late-night Dakhni biryani — uncontested slot in BLR Zomato Dining corpus</div>
+    </div>
+    <div class="hero-card tone-bad">
+      <div class="hero-l">Margin floor</div>
+      <div class="hero-v">≤30% R-funded</div>
+      <div class="hero-d">Above 30% restaurant-funded discount drives HE into negative contribution</div>
+    </div>
+  </div>
+
+  <!-- ══════════ HE economic baseline ══════════ -->
+  <section class="section">
+    <div class="section-h">
+      <div class="section-num">CONTEXT</div>
+      <h2 class="section-t">Hamza Express baseline</h2>
+      <div class="section-d">Inputs every offer recommendation is calibrated against</div>
+    </div>
+    <div class="matrix-wrap">
+      <table class="matrix">
+        <thead>
+          <tr><th>Field</th><th>Value</th><th>Source</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Average ticket value (ATV)</td><td><b>₹464</b></td><td>HE POS data — Mar 2026 fingerprint</td></tr>
+          <tr><td>Operating hours</td><td><b>2:00 PM – 3:00 AM</b></td><td>Owner-confirmed (note: differs from CLAUDE.md, which incorrectly listed 7am–11pm)</td></tr>
+          <tr><td>Blended food cost</td><td><b>~31%</b></td><td>Biryani 35% / Kabab 30% / Chai-dessert 15% — weighted by revenue mix</td></tr>
+          <tr><td>Heroes (revenue rank)</td><td>Ghee Rice 9.7% · Chicken Kabab 8.6% · Tandoori Chicken 5.3% · Mutton Biryani 5.1% · Chicken Biryani 5.1%</td><td>POS data</td></tr>
+          <tr><td>Customer-cited heroes (verbatim)</td><td>"Ghee Rice ultimate" · Mutton Brain Dry · Mutton Paya Soup · Butter Chicken</td><td>Google reviews corpus</td></tr>
+          <tr><td>Heritage moat</td><td><b>Since 1918</b> — four generations Hamza family on H.K.P. Road</td><td>Owner registry; uncopyable in BLR Dakhni-biryani band</td></tr>
+          <tr><td>Address (operating outlet)</td><td>151 to 154, HKP Road, Sulthangunta, Shivajinagar, Bengaluru, Karnataka 560051</td><td>FSSAI / GST</td></tr>
+          <tr><td>Platform commissions (effective)</td><td>Zomato Dining 8.26% · EazyDiner 5% + ₹30/cover + 1.8% gw · Swiggy Dineout TBD (pre-book fee + commission)</td><td>Contracts + CLAUDE.md</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════ SECTION 1: PER-PLATFORM PRIMERS ══════════ -->
+  <section id="platforms" class="section">
+    <div class="section-h">
+      <div class="section-num">SECTION 1</div>
+      <h2 class="section-t">Per-platform offer grammar</h2>
+      <div class="section-d">Three platforms · three completely different offer-config systems · why one-size-fits-all doesn't work</div>
+    </div>
+
+    <div class="preface">
+      <div class="preface-h">The single most important insight</div>
+      <p>
+        <b>EazyDiner, Zomato Dining, and Swiggy Dineout are NOT comparable platforms.</b> They share a category (table-booking aggregators) but their offer-configuration grammars are fundamentally different. EazyDiner exposes a single X% slider with a 25%-bank-stack auto-attached. Zomato Dining is a 5-tile stack (PRE-BOOK + INSTANT + EXCLUSIVE + SCRATCH + BANK) with time-bound subtitle creative. Swiggy Dineout uses pre-book deposits with cashback layering. The "right offer" on one platform is the wrong offer on another. This is why the recommendations below differ structurally per platform — not by accident.
+      </p>
+    </div>
+
+    <div class="platform-grid">
+
+      <!-- ═══ EAZYDINER CARD ═══ -->
+      <div class="platform-card eazy">
+        <div class="platform-card-h">
+          <div class="platform-card-name">EazyDiner</div>
+          <span class="platform-card-status live">Live · Vidur (KAM)</span>
+        </div>
+        <div class="dim small">HE Restaurant ID: <b>712958</b> · Contract: 28 Mar 2026 · Currently: Flat 10% + 25% Bank</div>
+
+        <h4 class="subsec-h" style="margin-top:18px;">Offer grammar — single-slider</h4>
+        <p class="small dim">
+          Across 566 offer-having BLR restaurants + 50 detail-page deep-dives, EazyDiner forces every restaurant into ONE format: <code>Flat X% + 25% with Bank Offers</code>. The 25% bank-stack is auto-attached, funded by EazyDiner+RBL — it costs the restaurant <b>nothing</b>. The X% slider is the only restaurant-funded lever.
+        </p>
+
+        <h4 class="subsec-h">X% distribution among 566 offer-having BLR restaurants</h4>
+        <table class="matrix">
+          <thead><tr><th>X%</th><th>Count</th><th>Share</th><th>Tier</th></tr></thead>
+          <tbody>
+            <tr><td>10%</td><td>439</td><td>77.6%</td><td class="dim">Mass cluster (HE today)</td></tr>
+            <tr><td>15%</td><td>71</td><td>12.5%</td><td class="dim">Mid-mass</td></tr>
+            <tr style="background:rgba(76,175,80,0.06);"><td>20%</td><td>26</td><td>4.6%</td><td style="color:var(--green);font-weight:600;">Top decile (HE target)</td></tr>
+            <tr><td>25%</td><td>11</td><td>1.9%</td><td class="dim">Top 3% (diminishing return)</td></tr>
+            <tr><td>30%+</td><td>7</td><td>1.2%</td><td class="dim">Outlier (mid-quality bars)</td></tr>
+            <tr><td>50%</td><td>4</td><td>0.7%</td><td class="dim">Clearance / new-launch</td></tr>
+          </tbody>
+        </table>
+
+        <h4 class="subsec-h">Non-offer algorithmic levers (the actual gold)</h4>
+        <p class="small dim">EazyDiner has 9 ranking levers BEYOND the X% slider. From corpus + HE's detail-page scrape:</p>
+        <table class="matrix">
+          <thead><tr><th>Lever</th><th>HE today</th><th>Recommended</th><th>Defended by corpus</th></tr></thead>
+          <tbody>
+            <tr><td>restaurant_subtype</td><td>Table ✓</td><td class="dim">Already correct</td><td>33/50 top performers</td></tr>
+            <tr><td>category</td><td>Casual Dining ✓</td><td class="dim">Already correct</td><td>23/50 top performers</td></tr>
+            <tr><td>cuisine_tags</td><td>Biryani · Chinese · North Indian</td><td class="he">drop Chinese; add Mughlai · Hyderabadi · Kebab</td><td>Multi-tag = multi-index discovery</td></tr>
+            <tr><td>restaurant_offer_pct</td><td>10%</td><td class="he">20%</td><td>26 BLR precedents at this %</td></tr>
+            <tr><td>freeze_time</td><td>30 min</td><td class="he">0 min</td><td>4/20 top performers (Barbecue PG, Rumi, Barista)</td></tr>
+            <tr><td>RDV deal type</td><td>postpaid only</td><td class="he">add prepaid_voucher (₹500/₹1000/₹2000 SKUs)</td><td>15/50 top-50 use this</td></tr>
+            <tr><td>Prime carousel</td><td>False</td><td class="he">Apply for enrolment</td><td>Hoy Punjab, Rumi, Lunch Box-AT (free-standing Prime)</td></tr>
+            <tr><td>bottomsheet_notification</td><td>empty</td><td class="he">Request BLR banner slot</td><td>0/50 — uncontested</td></tr>
+            <tr><td>webview_menu_url</td><td>None ⚠️</td><td class="he">Add menu URL</td><td>Customers can't view menu before booking</td></tr>
+            <tr><td>photos count</td><td>3 ⚠️</td><td class="he">30+</td><td>Top performers carry 30+</td></tr>
+            <tr><td>foodie_awards</td><td>None</td><td class="he">Submit nomination</td><td>Hoy Punjab carries 2023 award</td></tr>
+            <tr><td>chain linkage</td><td>chain_id null</td><td class="he">Link Hamza Hotel if also onboarded</td><td>—</td></tr>
+          </tbody>
+        </table>
+
+        <div class="recommend">
+          <div class="recommend-h">⭐ HE's chosen EazyDiner setup</div>
+          <div class="mock-listing">
+            <div class="mock-listing-name">Hamza Express — Since 1918</div>
+            <div class="mock-listing-meta">Biryani · Hyderabadi · Mughlai · Kebab · North Indian · ★4.0 (625 favourites) · ₹650 P4T · Shivajinagar</div>
+            <span class="mock-offer-string">Flat 20% + 25% with Bank Offers</span>
+            <span class="mock-offer-perception">Customer brain reads: ~45% off</span>
+          </div>
+          <div class="small dim" style="margin-top:10px;">
+            <b>Restaurant-funded burn</b>: ~₹93/cover (20% of ₹464) | <b>Bank-funded</b>: 25% (FREE to HE) |
+            <b>Δ vs current 10%</b>: −₹47/cover but jumps from 78th-percentile mass to top-decile visibility
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ZOMATO DINING CARD ═══ -->
+      <div class="platform-card zd">
+        <div class="platform-card-h">
+          <div class="platform-card-name">Zomato Dining</div>
+          <span class="platform-card-status live">Live · Srusti (KAM)</span>
+        </div>
+        <div class="dim small">HE resId: <b>22632449</b> · Contract: 27 Mar 2026 · Currently: Pre-book (0) / Walk-in (0)</div>
+
+        <h4 class="subsec-h" style="margin-top:18px;">Offer grammar — 5-tile stack</h4>
+        <p class="small dim">
+          Across 221 offer-having BLR Zomato Dining listings, every restaurant runs 2–5 of these tiles. <b>3 are platform-uniform</b> (auto-attached, free to restaurant) — <b>2 are restaurant-funded</b> levers you actually decide.
+        </p>
+
+        <div class="offer-tiles">
+          <div class="offer-tile auto">
+            <div class="offer-tile-h">SURPRISE · auto · 100%</div>
+            <div class="offer-tile-t">Get a scratch card</div>
+            <div class="offer-tile-s">after every transaction</div>
+          </div>
+          <div class="offer-tile auto">
+            <div class="offer-tile-h">EXCLUSIVE · ~auto · 99%</div>
+            <div class="offer-tile-t">Flat ₹250 OFF</div>
+            <div class="offer-tile-s">on next dining payment · uniformly ₹250</div>
+          </div>
+          <div class="offer-tile auto">
+            <div class="offer-tile-h">BANK · auto · 99%</div>
+            <div class="offer-tile-t">25% OFF up to ₹5000 · RBL LUMIÈRE</div>
+            <div class="offer-tile-s">220/221 restaurants share this exact offer</div>
+          </div>
+          <div class="offer-tile he">
+            <div class="offer-tile-h">PRE-BOOK · 70% adoption · LEVER</div>
+            <div class="offer-tile-t">Flat X% OFF</div>
+            <div class="offer-tile-s">X = 10/15/20/25/30/35/40/50 with optional time-bound subtitle</div>
+          </div>
+          <div class="offer-tile he">
+            <div class="offer-tile-h">INSTANT · 23% adoption · LEVER</div>
+            <div class="offer-tile-t">Flat X% OFF</div>
+            <div class="offer-tile-s">walk-in · X = 10/15/20</div>
+          </div>
+        </div>
+
+        <h4 class="subsec-h">Pre-book X% distribution (156 of 221 run pre-book)</h4>
+        <table class="matrix">
+          <thead><tr><th>PB %</th><th>Count</th><th>Tier</th><th>Notable peers</th></tr></thead>
+          <tbody>
+            <tr><td>10%</td><td>25</td><td class="dim">Token</td><td>—</td></tr>
+            <tr><td>15%</td><td>37</td><td class="dim">Mid</td><td>Punjab Grill, Jook Taproom</td></tr>
+            <tr><td>20%</td><td>45</td><td class="dim">Mode</td><td>Biergarten, YouMee, Stories Brewery</td></tr>
+            <tr style="background:rgba(76,175,80,0.06);"><td>25%</td><td>15</td><td style="color:var(--green);font-weight:600;">Top 21% (HE late-lunch slot)</td><td>Sanchez, Hops Haus</td></tr>
+            <tr style="background:rgba(76,175,80,0.06);"><td>30%</td><td>23</td><td style="color:var(--green);font-weight:600;">Top 15% (HE late-night moat)</td><td>Hard Rock Cafe ★4.7, Le Cirque (Leela), Brothers Biriyani</td></tr>
+            <tr><td>35-40%</td><td>6</td><td class="dim">Hotel-only</td><td>Choice 64 Clarion, Ssaffron Shangri-La</td></tr>
+            <tr><td>50%</td><td>5</td><td class="dim">Clearance / lounges</td><td>Feast Sheraton, Shift Lounge, HOD</td></tr>
+          </tbody>
+        </table>
+
+        <h4 class="subsec-h">Time-bound subtitle creative — the algorithm-cracking lever</h4>
+        <p class="small dim">From corpus subtitle scan: pre-book offers can carry validity windows. <b>This is the most powerful lever Zomato Dining offers — but only ~12% of restaurants use it.</b></p>
+        <table class="matrix">
+          <thead><tr><th>Subtitle pattern</th><th>Count</th><th>Use case</th></tr></thead>
+          <tbody>
+            <tr><td><code>Valid from 12PM to 6PM today · Booking required</code></td><td>26</td><td>Lunch-only fill</td></tr>
+            <tr><td><code>Valid from 12PM to 11:55PM today</code></td><td>25</td><td>Full-day with booking</td></tr>
+            <tr><td><code>Valid from 12PM to 3:01PM today</code></td><td>9</td><td>Strict lunch (12–3pm)</td></tr>
+            <tr><td><code>Valid from 6:30PM to 11:55PM today</code></td><td>2</td><td>Dinner-only</td></tr>
+            <tr><td><code>Valid from 11PM onwards</code></td><td><b>0 ⚡</b></td><td><b>Late-night — uncontested moat for HE</b></td></tr>
+          </tbody>
+        </table>
+
+        <div class="moat">
+          <div class="moat-h">⚡ HE's uncontested algorithmic moat</div>
+          <p class="small">
+            Zero restaurants in the 221-corpus run a pre-book subtitle extending past midnight. <b>HE operates 2 PM–3 AM.</b> Setting <code>PRE-BOOK Flat 30% OFF · Valid 11 PM to 3 AM today · Booking required</code> gives HE the entire late-night biryani search slot in BLR Zomato Dining — a real product-market fit for the Mosque-Road / Shivajinagar Muslim-quarter post-event / late-shift-worker / after-mosque crowd.
+          </p>
+        </div>
+
+        <div class="recommend">
+          <div class="recommend-h">⭐ HE's chosen Zomato Dining setup — 3-slot time-bound pre-book + auto stack</div>
+
+          <div class="offer-tiles">
+            <div class="offer-tile he">
+              <div class="offer-tile-h">PRE-BOOK · slot 1</div>
+              <div class="offer-tile-t">Flat 25% OFF</div>
+              <div class="offer-tile-s">Valid 2 PM – 6 PM · late-lunch fill</div>
+            </div>
+            <div class="offer-tile he">
+              <div class="offer-tile-h">PRE-BOOK · slot 2</div>
+              <div class="offer-tile-t">Flat 15% OFF</div>
+              <div class="offer-tile-s">Valid 7 PM – 11 PM · dinner peak</div>
+            </div>
+            <div class="offer-tile he">
+              <div class="offer-tile-h">PRE-BOOK · slot 3 ⚡</div>
+              <div class="offer-tile-t">Flat 30% OFF</div>
+              <div class="offer-tile-s">Valid 11 PM – 3 AM · uncontested late-night</div>
+            </div>
+            <div class="offer-tile he">
+              <div class="offer-tile-h">INSTANT · walk-in</div>
+              <div class="offer-tile-t">Flat 10% OFF</div>
+              <div class="offer-tile-s">all hours · choice-architecture nudge</div>
+            </div>
+            <div class="offer-tile auto">
+              <div class="offer-tile-h">AUTO · 3 tiles</div>
+              <div class="offer-tile-t">Scratch · ₹250 EXCL · 25% RBL</div>
+              <div class="offer-tile-s">platform default — no decision</div>
+            </div>
+            <div class="offer-tile he">
+              <div class="offer-tile-h">REQUEST</div>
+              <div class="offer-tile-t">Flat 10% on bill</div>
+              <div class="offer-tile-s">HDFC second bank tile · 33/221 do this</div>
+            </div>
+          </div>
+
+          <div class="mock-listing">
+            <div class="mock-listing-name">Hamza Express - Since 1918</div>
+            <div class="mock-listing-meta">Hyderabadi · Biryani · Mughlai · Kebab · North Indian · Chinese · ★3.9 · ₹500 P4T · 2 PM – 3 AM</div>
+            <span class="mock-offer-string">Flat 30% OFF + 25% with Bank Offers</span>
+            <span class="mock-offer-perception">Customer brain reads: ~55% off</span>
+          </div>
+
+          <div class="small dim" style="margin-top:10px;">
+            <b>Stack density</b>: 6 tiles = top 5% of corpus | <b>PB peak</b>: top 21% of corpus aggression |
+            <b>Time-bound</b>: top 12% of corpus uses this layer |
+            <b>Late-night</b>: 0 of 221 restaurants holds this slot
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ SWIGGY DINEOUT CARD ═══ -->
+      <div class="platform-card swd tbd">
+        <div class="platform-card-h">
+          <div class="platform-card-name">Swiggy Dineout</div>
+          <span class="platform-card-status tbd">Pending corpus</span>
+        </div>
+        <div class="dim small">HE outlet ID: <b>1372737</b> · Contract: 02 Mar 2026 · Currently: zero offers active</div>
+
+        <h4 class="subsec-h" style="margin-top:18px;">Known so far (8-restaurant peer set, not full corpus)</h4>
+        <p class="small dim">
+          From an earlier 8-restaurant Swiggy Dineout peer scan around HE's locality, the offer grammar appears to be: <b>flat % off + pre-book deposit (₹/guest) + cashback bank stack</b>. Award Winner 2026 Sharief Bhai (outlet 63048) runs <code>Flat 15% + ₹25/guest pre-book + HDFC 10% cashback up to ₹150 + ICICI 5%</code>. No restaurant in the 8-set has a free-dish hook — uncontested space.
+        </p>
+
+        <h4 class="subsec-h">Pending: full 500-restaurant BLR Swiggy Dineout corpus</h4>
+        <p class="small dim">
+          The 500-restaurant offer corpus extraction has not yet been run for Swiggy Dineout. Until that corpus is built, the Swiggy v3 recommendation cannot be made with the same rigor as the EazyDiner and Zomato Dining recommendations on this page. The Swiggy v2 draft currently in Gmail asks for <b>Flat 25% pre-book + ₹15/guest fee + free Mutton Paya Soup hook + HDFC/SwiggyOne/RuPay bank stack</b> — directionally aligned with Sharief Bhai's structure but not corpus-validated.
+        </p>
+
+        <div class="recommend">
+          <div class="recommend-h">⏳ Action needed before Swiggy KAM conversation</div>
+          <p class="small">
+            Run the standalone Swiggy Dineout 500-corpus extraction prompt (already drafted in the planning thread) in a fresh Sonnet session before contacting <b>partnersupport@swiggy.in</b>. Without corpus validation, the Swiggy ask risks the same loss-making positioning we corrected on EazyDiner (initial 25% recommendation → final 20% after corpus).
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ SECTION 2: DIRECTORY OF ALL OFFER POSSIBILITIES ══════════ -->
+  <section id="directory" class="section">
+    <div class="section-h">
+      <div class="section-num">SECTION 2</div>
+      <h2 class="section-t">Directory of all offer possibilities</h2>
+      <div class="section-d">Cross-platform support matrix · what each platform supports · what HE chose · what's not supported</div>
+    </div>
+
+    <p class="dim small" style="margin-bottom:14px;">
+      This is the FULL inventory of offer mechanics available in dine-in aggregators. Use it during the KAM call: if Vidur or Srusti suggests a creative we haven't planned, look it up here and check the platform-support row first. If a creative isn't on this list, it likely doesn't exist on the platform — HE has done 787-restaurant corpus scans confirming this.
+    </p>
+
+    <div class="matrix-wrap">
+      <table class="decision-matrix">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Offer mechanic</th>
+            <th>EazyDiner</th>
+            <th>Zomato Dining</th>
+            <th>Swiggy Dineout</th>
+            <th>HE's choice</th>
+            <th>Burn</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><b>Flat % off (cart-wide)</b></td>
+            <td class="yes">Yes — single slider</td>
+            <td class="yes">Yes — Pre-book + Instant tiles</td>
+            <td class="yes">Yes — pre-book + walk-in</td>
+            <td class="he">All 3 (20% E · time-bound 25/15/30% Z · 25% S)</td>
+            <td>Restaurant</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><b>Flat ₹ off above min cart</b></td>
+            <td class="no">No</td>
+            <td class="yes">Yes — EXCLUSIVE ₹250 (uniform, near-auto)</td>
+            <td class="tbd">TBD</td>
+            <td class="he">Z auto-attaches</td>
+            <td>Restaurant</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td><b>Bank-card stack (X% off via card)</b></td>
+            <td class="yes">Yes — RBL 25% auto (free to restaurant)</td>
+            <td class="yes">Yes — RBL 25% auto + optional 2nd bank tile</td>
+            <td class="yes">Yes — HDFC/ICICI/RuPay cashback layers</td>
+            <td class="he">All 3 (auto + HDFC tile request on Z)</td>
+            <td><b>Bank/Platform</b> — FREE to HE</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td><b>Scratch card / variable reward</b></td>
+            <td class="no">No</td>
+            <td class="yes">Yes — 100% restaurants auto-attached</td>
+            <td class="tbd">TBD</td>
+            <td class="he">Z auto-attaches</td>
+            <td>Platform</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td><b>Time-bound subtitle (lunch / dinner / late-night)</b></td>
+            <td class="no">No — no time variants in 566 corpus</td>
+            <td class="yes">Yes — visible in subtitle (~12% of restaurants use)</td>
+            <td class="tbd">TBD — likely yes via slot-block</td>
+            <td class="he">Z (3 slots: 25% / 15% / 30%)</td>
+            <td>Restaurant</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td><b>Pre-book vs walk-in differential</b></td>
+            <td class="no">No (single flat for both)</td>
+            <td class="yes">Yes — separate Pre-book + Instant tiles</td>
+            <td class="yes">Yes — distinct deposit-based pre-book</td>
+            <td class="he">Z (PB 30 / INS 10 = 20pp gap)</td>
+            <td>Restaurant</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td><b>Pre-book deposit (₹/guest)</b></td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="yes">Yes — ₹15/₹25/₹49 typical</td>
+            <td class="he">S (₹15/guest planned)</td>
+            <td>Customer-paid</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td><b>BOGO / 1+1</b></td>
+            <td class="no">No (566-corpus confirmed)</td>
+            <td class="no">No (221-corpus confirmed)</td>
+            <td class="tbd">TBD</td>
+            <td class="dim">N/A</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td><b>Combo / set menu price</b></td>
+            <td class="no">No (no combo SKU type)</td>
+            <td class="no">No (in offer panel)</td>
+            <td class="tbd">TBD</td>
+            <td class="dim">N/A</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td><b>Free dish / starter / dessert hook</b></td>
+            <td class="no">No</td>
+            <td class="no">No (not in offer copy field)</td>
+            <td class="tbd">TBD — 0 of 8-peer-set use; uncontested</td>
+            <td class="he">S (Free Mutton Paya Soup)</td>
+            <td>Restaurant (low COGS)</td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td><b>Free upgrade (large biryani etc.)</b></td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="tbd">TBD</td>
+            <td class="dim">N/A</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td><b>First-time customer offer</b></td>
+            <td class="no">No (no first-time tier)</td>
+            <td class="yes">Yes — EXCLUSIVE Flat ₹250 first dining payment</td>
+            <td class="tbd">TBD</td>
+            <td class="he">Z auto-attaches</td>
+            <td>Restaurant</td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td><b>Loyalty / wallet credit (EazyPoints)</b></td>
+            <td class="yes-cond">Yes — uniform 25% wallet cap (PayEazy default)</td>
+            <td class="no">No equivalent in offer panel</td>
+            <td class="tbd">TBD</td>
+            <td class="he">E auto-attaches</td>
+            <td>Platform</td>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td><b>Birthday / anniversary special</b></td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="tbd">TBD</td>
+            <td class="dim">N/A</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td><b>Group / family / bulk offer</b></td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="tbd">TBD (min-2-guests pre-book is closest)</td>
+            <td class="dim">N/A</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>16</td>
+            <td><b>Membership / Prime tier</b></td>
+            <td class="yes">Yes — Prime carousel (gated, partner-team-grant)</td>
+            <td class="yes">Yes — Zomato Gold (partner-team-grant)</td>
+            <td class="yes">Yes — SwiggyOne (member-only stack layer)</td>
+            <td class="he">E (Prime application)</td>
+            <td>Hybrid (annual fee + per-cover)</td>
+          </tr>
+          <tr>
+            <td>17</td>
+            <td><b>Award badge (visibility-amplifier)</b></td>
+            <td class="yes">Yes — Foodie Awards (annual nomination cycle)</td>
+            <td class="no">No equivalent</td>
+            <td class="yes">Yes — Swiggy Restaurant Awards (annual)</td>
+            <td class="he">E (Foodie Awards) · S (RAW)</td>
+            <td>Free</td>
+          </tr>
+          <tr>
+            <td>18</td>
+            <td><b>Banner / bottomsheet placement</b></td>
+            <td class="yes">Yes — bottomsheet_notification slot</td>
+            <td class="yes">Yes — sponsored promotional carousel</td>
+            <td class="yes">Yes — sponsored listing CPC</td>
+            <td class="he">E (request) · Z (separate ads brief)</td>
+            <td>Mixed</td>
+          </tr>
+          <tr>
+            <td>19</td>
+            <td><b>Sponsored / search-rank boost</b></td>
+            <td class="tbd">TBD — not visibly available</td>
+            <td class="yes">Yes — top-of-search</td>
+            <td class="yes">Yes — CPC ads</td>
+            <td class="dim">Out of scope this phase</td>
+            <td>Restaurant</td>
+          </tr>
+          <tr>
+            <td>20</td>
+            <td><b>Photo / menu freshness signal</b></td>
+            <td class="yes">Yes — menu_last_updated tracked + flagged in dashboard</td>
+            <td class="yes">Yes — in algorithm</td>
+            <td class="yes">Yes — in algorithm</td>
+            <td class="he">All 3 (operational refresh)</td>
+            <td>Free</td>
+          </tr>
+          <tr>
+            <td>21</td>
+            <td><b>Booking-widget slot density / hours coverage</b></td>
+            <td class="yes">Yes — operational hours config</td>
+            <td class="yes">Yes — slot config (≥15 slots correlates with top-traction)</td>
+            <td class="yes">Yes — Reserve module</td>
+            <td class="he">Z (15-min slots 2pm-3am) · E (hours fix)</td>
+            <td>Free</td>
+          </tr>
+          <tr>
+            <td>22</td>
+            <td><b>Cuisine-tag breadth (multi-index discovery)</b></td>
+            <td class="yes">Yes — 5-tag max</td>
+            <td class="yes">Yes — 8-tag max (Empire/Karama use 8)</td>
+            <td class="yes">Yes — multiple</td>
+            <td class="he">E 5-tag · Z 6-tag (drop Chinese E; add Mughlai/Hyderabadi/Kebab)</td>
+            <td>Free</td>
+          </tr>
+          <tr>
+            <td>23</td>
+            <td><b>Heritage / since-year suffix in display name</b></td>
+            <td class="yes">Yes — partner-team-edited</td>
+            <td class="yes">Yes — Empire uses "Empire Restaurant - Since 1966"</td>
+            <td class="yes">Yes</td>
+            <td class="he">All 3 (HE — Since 1918)</td>
+            <td>Free</td>
+          </tr>
+          <tr>
+            <td>24</td>
+            <td><b>Webview menu URL (clickable menu before booking)</b></td>
+            <td class="yes">Yes — currently None for HE ⚠️</td>
+            <td class="yes-cond">Linked via main menu page</td>
+            <td class="tbd">TBD</td>
+            <td class="he">E (request to add)</td>
+            <td>Free</td>
+          </tr>
+          <tr>
+            <td>25</td>
+            <td><b>Chain linkage (multiple outlets)</b></td>
+            <td class="yes">Yes — chain_id field</td>
+            <td class="yes">Yes</td>
+            <td class="yes">Yes</td>
+            <td class="he">E (link Hamza Hotel if also onboarded)</td>
+            <td>Free</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════ SECTION 3: PER-PLATFORM DECISIONS + COST MATH ══════════ -->
+  <section id="decisions" class="section">
+    <div class="section-h">
+      <div class="section-num">SECTION 3</div>
+      <h2 class="section-t">Decision rationale + cost math</h2>
+      <div class="section-d">Why each X was chosen · per-cover contribution math · expected algorithm lift</div>
+    </div>
+
+    <h3 class="subsec-h">EazyDiner — 20% slider + 9 backend levers</h3>
+    <table class="decision-matrix">
+      <thead>
+        <tr><th>Setup</th><th>R-funded burn / cover</th><th>HE realises</th><th>Food cost (31% of ₹464)</th><th>Contribution / cover</th><th>Δ vs current</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Current 10% offer</td><td>₹46</td><td>~₹378</td><td>₹144</td><td><b>~₹240</b></td><td>baseline</td></tr>
+        <tr style="background:rgba(76,175,80,0.06);"><td><b>Recommended 20% offer</b></td><td>₹93</td><td>~₹321</td><td>₹144</td><td><b>~₹177</b></td><td><b>−₹63 / cover</b></td></tr>
+        <tr><td>(Hypothetical 25%)</td><td>₹116</td><td>~₹298</td><td>₹144</td><td>~₹154</td><td>−₹86 (excessive)</td></tr>
+      </tbody>
+    </table>
+    <p class="small dim">
+      Break-even volume lift needed: ~36% on EazyDiner channel. Given HE moves from 78th-percentile mass cluster to top 7.8% of offer density (the visibility breakpoint), and gains 9 backend lever activations (Prime carousel + freeze_time + RDV prepaid + bottomsheet etc.), 36% lift is conservative. Bank-funded 25% costs HE nothing — it's the customer-perception multiplier that makes 20% feel like 45%.
+    </p>
+
+    <h3 class="subsec-h">Zomato Dining — 3-slot time-bound pre-book + INS + 2 bank tiles</h3>
+    <table class="decision-matrix">
+      <thead>
+        <tr><th>Time slot</th><th>Pre-book %</th><th>Burn / cover</th><th>Contribution / cover</th><th>Rationale</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2 PM – 6 PM (late-lunch)</td><td>25%</td><td>₹116</td><td>~₹166</td><td>HE's quietest slot — aggressive fill where margin is moot (slots empty otherwise)</td></tr>
+        <tr><td>7 PM – 11 PM (dinner peak)</td><td>15%</td><td>₹70</td><td>~₹212</td><td>Visibility token only — don't bleed peak</td></tr>
+        <tr style="background:rgba(76,175,80,0.06);"><td><b>11 PM – 3 AM (late-night moat) ⚡</b></td><td><b>30%</b></td><td>₹139</td><td>~₹143</td><td>Uncontested — 0/221 restaurants hold this slot. Pure incremental margin (slots otherwise empty)</td></tr>
+        <tr><td>INSTANT walk-in (all hours)</td><td>10%</td><td>₹46</td><td>~₹236</td><td>Choice-architecture nudge to pre-book</td></tr>
+      </tbody>
+    </table>
+    <p class="small dim">
+      Customer-facing listing card headline: <code>Flat 30% OFF + 25% with Bank Offers</code> — perception ~55% off. Stack density 6 tiles = top 5% of corpus. Listing card algorithm signal lifts dramatically — HE moves from invisible to top-decile placement.
+    </p>
+
+    <h3 class="subsec-h">Swiggy Dineout — pending corpus, v2 directionally right</h3>
+    <p class="small dim">
+      Cost math at HE's ATV: ₹464 cover × 25% off = ₹116 R-funded burn. Plus Free Mutton Paya Soup COGS ~₹35. Minus pre-book deposits ₹15/guest × 2.5 guests = ₹37 collected. Net cost ~₹114/cover. Vs Swiggy delivery commission 24.6% = ₹114 — essentially break-even on commission, plus zero packaging cost and dine-in upsell. Will refine after 500-corpus extraction.
+    </p>
+  </section>
+
+  <!-- ══════════ SECTION 4: KAM TALK TRACK ══════════ -->
+  <section id="kam" class="section">
+    <div class="section-h">
+      <div class="section-num">SECTION 4</div>
+      <h2 class="section-t">KAM conversation flow</h2>
+      <div class="section-d">Per-platform talk-track for the call · open · lead · negotiate · close</div>
+    </div>
+
+    <div class="platform-grid">
+
+      <div class="platform-card eazy">
+        <div class="platform-card-h">
+          <div class="platform-card-name">Vidur · EazyDiner BD</div>
+          <span class="platform-card-status live">vidur@eazydiner.com</span>
+        </div>
+        <div class="talk-track">
+          <div class="talk-track-h">Conversation flow</div>
+          <div class="talk-step">
+            <div class="talk-step-num">1</div>
+            <div class="talk-step-body"><b>Open with the asset</b>: "Vidur, we have 625 favourites on EazyDiner already — sitting on a strong organic signal. Want to convert it into bookings."</div>
+          </div>
+          <div class="talk-step">
+            <div class="talk-step-num">2</div>
+            <div class="talk-step-body"><b>Lead with backend changes</b>: "Three quick fixes on cuisine tags (drop Chinese, add Mughlai/Hyderabadi/Kebab), freeze_time 30→0, and offer 10→20%. Each has 5+ corpus precedents in our price tier."</div>
+          </div>
+          <div class="talk-step">
+            <div class="talk-step-num">3</div>
+            <div class="talk-step-body"><b>Push on Prime</b>: "Hoy Punjab and Rumi — both free-standing, both Prime. Our 1918 four-generation Dakhni heritage is the same narrative tier. What's the Prime fee structure for our P4T band?"</div>
+          </div>
+          <div class="talk-step">
+            <div class="talk-step-num">4</div>
+            <div class="talk-step-body"><b>Identify quiet wins</b>: "webview_menu_url is None on our detail page — customers can't see our menu before booking. How do we add one? Photo cap — currently at 3, what's the upload limit?"</div>
+          </div>
+          <div class="talk-step">
+            <div class="talk-step-num">5</div>
+            <div class="talk-step-body"><b>Surface bottomsheet</b>: "I noticed the bottomsheet notification slot is empty across the BLR top-50. Is there a Bengaluru-region home-feed banner we can request — paid or partner-grant?"</div>
+          </div>
+          <div class="talk-step">
+            <div class="talk-step-num">6</div>
+            <div class="talk-step-body"><b>Close with a date</b>: "All effective 11 May 2026 — what's needed from our side (FSSAI, GST, contract refs)? Happy to share or jump on WhatsApp."</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="platform-card zd">
+        <div class="platform-card-h">
+          <div class="platform-card-name">Srusti · Zomato Dining KAM</div>
+          <span class="platform-card-status live">srusti.swamy@zomato.com</span>
+        </div>
+        <div class="talk-track">
+          <div class="talk-track-h">Conversation flow</div>
+          <div class="talk-step">
+            <div class="talk-step-num">1</div>
+            <div class="talk-step-body"><b>Open with positioning</b>: "Srusti, we want to activate our Zomato Dining listing aggressively. Currently at Pre-book (0) / Walk-in (0) — we want a 3-slot time-bound pre-book that nobody in the BLR Dining corpus runs."</div>
+          </div>
+          <div class="talk-step">
+            <div class="talk-step-num">2</div>
+            <div class="talk-step-body"><b>Lead with the late-night moat</b>: "We operate 2 PM – 3 AM. The most important ask is <b>PRE-BOOK Flat 30% OFF · Valid 11 PM to 3 AM today</b> — across 221 BLR Dining listings, zero have a subtitle extending past midnight. We get the entire late-night biryani search slot."</div>
+          </div>
+          <div class="talk-step">
+            <div class="talk-step-num">3</div>
+            <div class="talk-step-body"><b>Round out the stack</b>: "Layered with Pre-book 25% lunch (2-6 PM) and 15% dinner peak (7-11 PM), plus Instant 10% walk-in. Total 6-tile stack including the auto-attached Scratch + Exclusive ₹250 + RBL bank."</div>
+          </div>
+          <div class="talk-step">
+            <div class="talk-step-num">4</div>
+            <div class="talk-step-body"><b>Negotiate second bank tile</b>: "33 of 221 Dining restaurants run a second bank tile alongside RBL — usually <code>Flat 10% on bill payments</code>. We'd like HDFC since we bank with them; can we add this?"</div>
+          </div>
+          <div class="talk-step">
+            <div class="talk-step-num">5</div>
+            <div class="talk-step-body"><b>Listing fixes</b>: "Display name to Hamza Express - Since 1918 (matches Empire's "- Since 1966" format). Address fix to 151 to 154 HKP Road Sulthangunta. Add Hyderabadi + Kebab cuisine tags. Reconfigure booking widget for 15-min slots from 2 PM through 3 AM."</div>
+          </div>
+          <div class="talk-step">
+            <div class="talk-step-num">6</div>
+            <div class="talk-step-body"><b>Close with channel + timeline</b>: "All effective 11 May 2026 — happy to switch to WhatsApp +91-8527950012 if faster. Documents (FSSAI / GST / contract refs) ready to share."</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="platform-card swd tbd">
+        <div class="platform-card-h">
+          <div class="platform-card-name">Swiggy Dineout partner</div>
+          <span class="platform-card-status tbd">Pending corpus + KAM identification</span>
+        </div>
+        <div class="talk-track">
+          <div class="talk-track-h">Pending — do not call yet</div>
+          <p class="small dim">
+            Run the 500-restaurant Swiggy Dineout corpus extraction first (prompt in planning thread). Without corpus validation, the v2 ask of <b>Flat 25% pre-book + ₹15/guest fee + Free Mutton Paya Soup</b> may need adjustment. The contact path is <code>partnersupport@swiggy.in</code> (no specific KAM identified in HE's Gmail history yet — only transactional emails from <code>no-reply@swiggy.manchtech.in</code>).
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ SECTION 5: STATE OF EMAILS ══════════ -->
+  <section class="section">
+    <div class="section-h">
+      <div class="section-num">SECTION 5</div>
+      <h2 class="section-t">Current state of partner-team drafts</h2>
+      <div class="section-d">Gmail Drafts inventory · what's send-ready</div>
+    </div>
+    <table class="decision-matrix">
+      <thead><tr><th>Platform</th><th>Recipient</th><th>Latest version</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr style="background:rgba(76,175,80,0.06);">
+          <td>EazyDiner</td>
+          <td>vidur@eazydiner.com</td>
+          <td><b>v4</b></td>
+          <td class="yes">Send-ready</td>
+          <td>20% offer + 9 backend asks + 5 listing fixes · 2 PM–3 AM hours</td>
+        </tr>
+        <tr style="background:rgba(76,175,80,0.06);">
+          <td>Zomato Dining</td>
+          <td>srusti.swamy@zomato.com (CC: diningpartner)</td>
+          <td><b>v4</b></td>
+          <td class="yes">Send-ready</td>
+          <td>3-slot time-bound pre-book + late-night 30% moat + listing fixes</td>
+        </tr>
+        <tr>
+          <td>Swiggy Dineout</td>
+          <td>partnersupport@swiggy.in</td>
+          <td>v2</td>
+          <td class="tbd">Hold</td>
+          <td>Corpus-loose · run 500-corpus extraction before sending</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="small dim" style="margin-top:10px;">
+      Owner action: open Gmail Drafts, send the two [v4] drafts, delete all earlier [v1/v2/v3] versions of the same emails to keep the inbox clean.
+    </p>
+  </section>
+
+  <!-- ══════════ SECTION 6: METHODOLOGY + SOURCES ══════════ -->
+  <section id="sources" class="section">
+    <div class="section-h">
+      <div class="section-num">SECTION 6</div>
+      <h2 class="section-t">Methodology &amp; sources</h2>
+      <div class="section-d">How the recommendations were derived · honesty preface · data files</div>
+    </div>
+
+    <div class="preface">
+      <div class="preface-h">Methodology</div>
+      <ul>
+        <li><b>EazyDiner corpus</b>: 956 unique BLR restaurants scraped via Next.js <code>__NEXT_DATA__</code> across 21 cuisine pages → 566 offer-having (filter: <code>restaurant_offer_pct &gt; 0</code> or non-standard offer string). Top 50 by X% had detail pages re-scraped for <code>eazypay_details</code>, <code>other_deals</code>, <code>rdv_offer_data</code>, <code>foodie_awards</code>, <code>buffet_deals</code>, <code>has_dynamic_buffet</code>, <code>wallet_config</code>. Conclusion: single-grammar surface — no creative addons (BOGOs, time-bound, free-dish hooks) exist on the platform.</li>
+        <li><b>Zomato Dining corpus</b>: 221 unique BLR restaurants with <code>has_any_offer = true</code>, all 5 offer-tile fields enumerated (PRE-BOOK / INSTANT / EXCLUSIVE / SCRATCH / BANK) including <code>funded_by</code> markers. Time-bound subtitle scan revealed ~12% of restaurants use validity windows (lunch-only, full-day, etc.) but ZERO use a window past midnight — HE's late-night moat.</li>
+        <li><b>HE detail-page scrape</b>: HE's actual EazyDiner detail page (<code>res_id 712958</code>) scraped to verify 46 fields → 2 of 8 originally-recommended changes were already correct (subtype + category) and got dropped from the email; 4 new asks emerged (webview_menu_url, photo cap, foodie awards, chain linkage) that the corpus alone wouldn't have surfaced.</li>
+        <li><b>Cost math</b>: Restaurant-funded burn only. Bank-stack and platform-funded portions are excluded — they cost HE nothing.</li>
+        <li><b>Customer perception</b>: derived from listing-card display string ("Flat X% + 25% Bank" reads as additive in scan-mode browsing).</li>
+      </ul>
+    </div>
+
+    <div class="preface" style="margin-top:14px;">
+      <div class="preface-h">Honesty preface</div>
+      <ul>
+        <li>The "no creative addons exist" claim on EazyDiner is high-confidence but bounded by the cuisines scraped — Lounge/Bar-and-pub/Multi-cuisine slugs returned 0 results both runs, suggesting EazyDiner mis-named those slugs. Substituted desserts/street-food/fast-food/bakery to reach 956 unique. The 566-restaurant corpus is broad enough that this gap is unlikely to hide creative-addon patterns.</li>
+        <li>Volume-lift estimates ("36% break-even", "top-decile placement = 50× lift") are back-of-envelope. Real lift is testable post-flip via the dine-in aggregator-pulse tracking already deployed (resId 22632449 + outlet 1372737 + EazyDiner 712958 in D1).</li>
+        <li>Swiggy Dineout recommendations have NOT been corpus-validated — they're directionally aligned with the Award Winner Sharief Bhai but should be refined after the 500-corpus extraction runs.</li>
+        <li>The 11 PM–3 AM late-night moat assumption depends on HE's actual operating hours being correctly displayed on Zomato. Currently the dashboard may show different hours; one of the listing fixes asks to ensure 2 PM–3 AM is set.</li>
+      </ul>
+    </div>
+
+    <h4 class="subsec-h">Data files</h4>
+    <ul>
+      <li><code>~/Desktop/eazydiner_offers_500_2026-05-10.json</code> — 956 unique BLR restaurants (566 offer-having)</li>
+      <li><code>~/Desktop/eazydiner_top50_details_2026-05-10.json</code> — top 50 detail-page payloads</li>
+      <li><code>~/Desktop/zomato_dining_offers_500_2026-05-10.json</code> — 221 BLR Zomato Dining offer-having restaurants</li>
+      <li><code>~/Desktop/eazydiner_corpus_2026-05-10.json</code> — earlier 200-restaurant scan (superseded)</li>
+    </ul>
+
+    <p class="dim small" style="margin-top:14px;">
+      Last updated 2026-05-10 · synthesised from corpus extractions (Anthropic Sonnet) + HE detail-page live scrape + 5 partner-team email drafts in Gmail.
+    </p>
+  </section>
+
+</div>
+
+</body>
+</html>

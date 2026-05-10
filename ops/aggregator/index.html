@@ -241,6 +241,10 @@ tr:hover td{background:rgba(255,255,255,.03)}
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
     Finance &amp; Payouts
   </div>
+  <div class="ntab" onclick="showSection('dine',this)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M8 12h8M12 8v8"/></svg>
+    Dine Bonus
+  </div>
 </div>
 
 <!-- ════════════════════════════════════════════════════════════════════ -->
@@ -380,6 +384,25 @@ tr:hover td{background:rgba(255,255,255,.03)}
 
 </div>
 
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- DINE BONUS SECTION                                                  -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="section" id="sec-dine">
+
+  <!-- 4-pill status strip -->
+  <div class="ostrip" id="dine-strip" style="margin-bottom:14px"></div>
+
+  <!-- May bonus attribution -->
+  <div class="fin-note" id="dine-attr-note" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+    <span>May 2026 bonus revenue (inferred from DOM scraping)</span>
+    <strong id="dine-grand-total" style="font-size:20px;color:var(--accent);white-space:nowrap">₹ —</strong>
+  </div>
+
+  <!-- Platform cards -->
+  <div id="dine-body"></div>
+
+</div>
+
 </div><!-- /wrap -->
 
 <script>
@@ -406,6 +429,7 @@ function showSection(id, el) {
   if (id === 'analytics') loadAnalytics();
   if (id === 'finance')   loadFinance();
   if (id === 'reviews')   loadReviews();
+  if (id === 'dine')      loadDine();
 }
 
 // ── DATE FILTER ───────────────────────────────────────────────────────
@@ -1308,6 +1332,129 @@ function renderReviews(lat, ord, heRev, nchRev) {
   document.getElementById('reviewsBody').innerHTML = html;
 }
 
+// ── DINE BONUS ────────────────────────────────────────────────────────
+async function loadDine() {
+  const strip = document.getElementById('dine-strip');
+  const body  = document.getElementById('dine-body');
+  if (!strip || !body) return;
+
+  try {
+    const [health, summary, attr] = await Promise.all([
+      fetch(`${API}?action=dine-health&key=${KEY}`).then(r => r.json()),
+      fetch(`${API}?action=dine-summary&key=${KEY}`).then(r => r.json()),
+      fetch(`${API}?action=dine-attribution&key=${KEY}`).then(r => r.json()),
+    ]);
+
+    // Status strip
+    const LABELS = { zomato_dining: 'ZD DINING', swiggy_dineout: 'SWIGGY DO', eazydiner: 'EAZYDINER' };
+    strip.innerHTML = (health.platforms || []).map(p => {
+      const cls = p.status === 'live' ? 'on' : p.status === 'stale' ? 'unk' : 'off';
+      const age = p.stale_minutes != null ? ` · ${p.stale_minutes}m ago` : ' · never';
+      const platTag = p.platform === 'zomato_dining' ? 'zm' : 'sw';
+      return `<div class="ostatus">
+        <div class="odot ${cls}"></div>
+        <span class="oplat ${platTag}">${LABELS[p.platform] || p.platform}</span>
+        <span class="ostate ${cls}">${p.status.toUpperCase()}</span>
+        <span class="oname">${age}</span>
+      </div>`;
+    }).join('');
+
+    // May attribution total
+    const gt = document.getElementById('dine-grand-total');
+    if (gt) gt.textContent = `₹${fmtRs(attr.grand_total_inferred || 0)}`;
+
+    // Platform cards
+    const platforms = summary.platforms || {};
+    const PLAT_META = {
+      zomato_dining:  { label: 'ZOMATO DINING',    cls: 'zm', sub: 'HE 22632449 · NCH 22632430 · 8.26% eff.' },
+      swiggy_dineout: { label: 'SWIGGY DINE-OUT',  cls: 'sw', sub: 'HE 1372737 · contract Mar 2026' },
+      eazydiner:      { label: 'EAZYDINER',         cls: 'zm', sub: 'HE only · ₹30/cover + 5% + 1.8% gateway' },
+    };
+
+    let html = '';
+    for (const [plat, rows] of Object.entries(platforms)) {
+      const meta = PLAT_META[plat] || { label: plat, cls: 'zm', sub: '' };
+      const h = health.platforms?.find(p => p.platform === plat);
+      const statusCls = h?.status === 'live' ? 'on' : h?.status === 'stale' ? 'unk' : 'off';
+      const statusLbl = h?.status?.toUpperCase() || 'NEVER';
+
+      html += `<div class="pccard" style="margin-bottom:14px">
+        <div class="pcc-hdr">
+          <div>
+            <div class="pcc-title">${meta.label}</div>
+            <div class="pcc-sub">${meta.sub}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="odot ${statusCls}" style="width:8px;height:8px"></div>
+            <span class="pcc-plat ${meta.cls}">${statusLbl}</span>
+          </div>
+        </div>
+        <div class="pcc-body">`;
+
+      // Group by outlet_id
+      const byOutlet = {};
+      for (const row of rows) {
+        const key = row.outlet_id || 'unknown';
+        if (!byOutlet[key]) byOutlet[key] = [];
+        byOutlet[key].push(row);
+      }
+
+      for (const [outletId, orows] of Object.entries(byOutlet)) {
+        const latest = orows[0];
+        const d = latest.data || {};
+        const rupees = Array.isArray(d.rupee_amounts) ? d.rupee_amounts : [];
+        const age = latest.captured_at ? relAge(latest.captured_at) : '—';
+
+        html += `<div class="pc-line"><span class="pcl">Outlet / ResID</span><span class="pcv">${outletId}</span></div>`;
+        html += `<div class="pc-line"><span class="pcl">Last section</span><span class="pcv">${d.section || latest.metric_type || '—'}</span></div>`;
+        if (d.covers_count != null)       html += `<div class="pc-line"><span class="pcl">Covers detected</span><span class="pcv">${d.covers_count}</span></div>`;
+        if (d.bookings_count != null)     html += `<div class="pc-line"><span class="pcl">Bookings detected</span><span class="pcv">${d.bookings_count}</span></div>`;
+        if (d.reservations_count != null) html += `<div class="pc-line"><span class="pcl">Reservations detected</span><span class="pcv">${d.reservations_count}</span></div>`;
+        if (rupees.length)                html += `<div class="pc-line"><span class="pcl">₹ amounts found</span><span class="pcv" style="font-size:11px">${rupees.slice(0,5).map(v=>'₹'+fmtRs(v)).join(' · ')}</span></div>`;
+        html += `<div class="pc-line"><span class="pcl">Last captured</span><span class="pcv" style="color:var(--dim)">${age}</span></div>`;
+
+        if (d.raw_snippet) {
+          html += `<details style="margin:4px 0 8px"><summary style="font-size:10px;color:var(--faint);cursor:pointer;list-style:none">▶ raw snippet</summary>
+            <pre style="font-size:10px;color:var(--faint);white-space:pre-wrap;word-break:break-word;max-height:80px;overflow:auto;margin-top:4px">${d.raw_snippet.slice(0,400)}</pre>
+          </details>`;
+        }
+
+        if (Object.keys(byOutlet).length > 1) html += `<div class="pc-divider"></div>`;
+      }
+
+      if (!Object.keys(byOutlet).length) {
+        html += `<div class="pc-empty">No snapshots yet — Chrome tab must be logged in on hn-winpc</div>`;
+        if (plat === 'eazydiner') html += `<div class="pc-empty" style="color:var(--orange);font-size:11px">⚠ EazyDiner requires one-time OTP login at apps.livetableapp.com</div>`;
+      }
+
+      html += `</div></div>`;
+    }
+
+    if (!Object.keys(platforms).length) {
+      html = `<div class="pc-empty">No dine-platform snapshots in D1 yet.<br>Chrome extension v6.2.0 is running — data appears within 5–10 min of first scrape.</div>`;
+    }
+
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = `<div class="pc-empty" style="color:var(--red)">Error loading dine data: ${e.message}</div>`;
+  }
+}
+
+function fmtRs(n) {
+  if (!n) return '0';
+  if (n >= 100000) return (n/100000).toFixed(1) + 'L';
+  if (n >= 1000)   return (n/1000).toFixed(1) + 'K';
+  return Math.round(n).toString();
+}
+
+function relAge(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const m = Math.round(ms / 60000);
+  if (m < 2)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  return `${Math.round(m/60)}h ago`;
+}
+
 // ── HEALTH POLLING ────────────────────────────────────────────────────
 async function loadHealth() {
   try {
@@ -1336,6 +1483,7 @@ setInterval(loadFinance,   300000);   // finance refresh every 5 min
 setInterval(loadAnalytics, 300000);   // analytics refresh every 5 min
 setInterval(loadReviews,   600000);   // reviews refresh every 10 min
 setInterval(loadHealth,    30000);    // health pill every 30s
+setInterval(loadDine,      300000);   // dine bonus refresh every 5 min
 </script>
 </body>
 </html>
