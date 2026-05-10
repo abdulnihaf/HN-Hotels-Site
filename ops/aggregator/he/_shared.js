@@ -178,10 +178,14 @@
   }
 
   // ─── INSIGHTS TAB — capture-health banner + daily chart + insights cards ───
+  // STRICT HE-ONLY POLICY: never render combined HE+NCH metrics on this dashboard,
+  // even labeled. The aggregate fallback that previously rendered here showed
+  // combined metrics from Swiggy's business-metrics page (brand=all). Removed.
+  // When per-order data is sparse, the capture-health banner is the only signal —
+  // honest about the gap, no NCH numbers leaking in.
   function renderInsights(s) {
     const insights = generateInsights(s);
-    const healthBanner = renderCaptureHealth(s.capture_health, s.sales_aggregate);
-    const aggregateCard = renderAggregateFallback(s.sales_aggregate);
+    const healthBanner = renderCaptureHealth(s.capture_health);
     const chartHtml = renderDailyChart(s.daily);
     const insightsHtml = insights.length
       ? html`<div class="insights-grid">
@@ -195,11 +199,11 @@
           `).join('')}
         </div>`
       : '<div class="empty"><h3>No insight cards for this period</h3><p>The chart above still shows your last 31 days.</p></div>';
-    $('#pane-insights').innerHTML = healthBanner + aggregateCard + chartHtml + insightsHtml;
+    $('#pane-insights').innerHTML = healthBanner + chartHtml + insightsHtml;
   }
 
-  // ─── CAPTURE HEALTH BANNER — honest data status indicator ────────────────
-  function renderCaptureHealth(ch, sa) {
+  // ─── CAPTURE HEALTH BANNER — honest data status indicator (HE-only) ─────
+  function renderCaptureHealth(ch) {
     if (!ch) return '';
     const status = ch.per_order_status;
     if (status === 'healthy') return ''; // silent when healthy
@@ -213,7 +217,7 @@
       headline = `Per-order data not captured for ${ch.platform.toUpperCase()} ${ch.brand.toUpperCase()}`;
       body = `Only ${ch.orders_last_30d} per-order rows in last 30 days · last capture ${lastCap}. ${
         ch.platform === 'swiggy'
-          ? 'Swiggy Finance-page DOM scrape stopped 2026-04-17. Showing aggregate metrics from business-metrics page below — combined HE+NCH only.'
+          ? 'Swiggy Finance-page DOM scrape stopped 2026-04-17. Per-outlet capture pipeline being rebuilt — no combined HE+NCH numbers shown until ' + ch.brand.toUpperCase() + '-only data resumes.'
           : 'Extension may be offline or partner portal layout changed.'
       }`;
     } else {
@@ -231,33 +235,6 @@
     `;
   }
 
-  // ─── AGGREGATE FALLBACK CARD — combined HE+NCH metrics for Swiggy ────────
-  function renderAggregateFallback(sa) {
-    if (!sa) return '';
-    const t = sa.totals || {};
-    const fmtR = (v) => v != null ? '₹' + Math.round(v).toLocaleString('en-IN') : '—';
-    const fmtN = (v) => v != null ? Math.round(v).toLocaleString('en-IN') : '—';
-    const cap = sa.captured_at ? new Date(sa.captured_at).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
-    return html`
-      <div class="agg-card">
-        <div class="agg-h">
-          <div class="agg-title">Aggregate metrics (combined HE + NCH) <span class="agg-pill">fallback</span></div>
-          <div class="agg-cap">last update ${cap}</div>
-        </div>
-        <div class="agg-grid">
-          <div class="agg-cell"><div class="agg-l">Net Sales</div><div class="agg-v">${fmtR(t.net_sales)}</div></div>
-          <div class="agg-cell"><div class="agg-l">Delivered</div><div class="agg-v">${fmtN(t.delivered_orders)}</div></div>
-          <div class="agg-cell"><div class="agg-l">Cancelled</div><div class="agg-v">${fmtN(t.cancelled_orders)}</div></div>
-          <div class="agg-cell"><div class="agg-l">AOV</div><div class="agg-v">${fmtR(t.aov)}</div></div>
-          <div class="agg-cell"><div class="agg-l">Impressions</div><div class="agg-v">${fmtN(t.impressions)}</div></div>
-          <div class="agg-cell"><div class="agg-l">Menu opens</div><div class="agg-v">${fmtN(t.menu_opens)}</div></div>
-          <div class="agg-cell"><div class="agg-l">Cart builds</div><div class="agg-v">${fmtN(t.cart_builds)}</div></div>
-          <div class="agg-cell"><div class="agg-l">Orders placed</div><div class="agg-v">${fmtN(t.orders_placed)}</div></div>
-        </div>
-        <div class="agg-warn">${escape(sa.warning || '')}</div>
-      </div>
-    `;
-  }
 
   // ─── DAILY CHART — 31-day bar chart, clickable per day ───────────────────
   function renderDailyChart(daily) {
