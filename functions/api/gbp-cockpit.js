@@ -202,21 +202,23 @@ export async function onRequest(context) {
     }
     if (include.includes('actionQueue')) {
       out.actionQueue = buildActionQueue({
-        profile: results.profile,
+        profile: results.profile,        // raw, for hours periods (not transformed)
+        builtProfile: out.profile,        // transformed (additionalCategories as strings)
         perf: results.perf,
         perfPrior: results.perfPrior,
         places: results.places,
-        media: results.media,
-        qanda: results.qanda,
+        media: out.media,                 // built shape with total/recent30d
+        qanda: out.qanda,                 // built shape (or { error })
         summary: out.summary,
       });
     }
     if (include.includes('algorithmTips')) {
       out.algorithmTips = buildAlgorithmTips({
         brand: brandKey,
-        profile: results.profile,
-        media: results.media,
-        qanda: results.qanda,
+        profile: results.profile,         // raw, for description/categories.primaryCategory
+        builtProfile: out.profile,        // built (additionalCategories as strings)
+        media: out.media,
+        qanda: out.qanda,
       });
     }
 
@@ -359,15 +361,20 @@ async function fetchMedia(token, locationName) {
 }
 
 // ─── Q&A via My Business Q&A API ─────────────────────────────────────────
-// Returns the most-recent questions on the listing. Each has author info,
-// upvoteCount, totalAnswerCount, topAnswers (with isAnonymous + author),
-// and createTime. Owner-asked questions show authorType=MERCHANT.
+// NOTE: As of 2024 the My Business Q&A API has been retired by Google.
+// Returns a structured "deprecated" response so the UI can show a friendly
+// message instead of an error. Q&A still exists on the listing — but it
+// can only be managed via the Google Maps app (mobile) and the Business
+// Profile UI on desktop. No public API access remains.
 async function fetchQandA(token, locationName) {
   const r = await fetch(
     `https://mybusinessqanda.googleapis.com/v1/${locationName}/questions?pageSize=50&answersPerQuestion=2`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const d = await r.json();
+  if (r.status === 501 || (d.error?.message || '').match(/no longer supported/i)) {
+    return { deprecated: true, items: [] };
+  }
   if (!r.ok) return { error: `Q&A API ${r.status}: ${d.error?.message || 'unknown'}`, items: [] };
   return { items: d.questions || [] };
 }
@@ -615,6 +622,13 @@ function buildMedia(media) {
 
 // ─── Build helpers — Q&A ────────────────────────────────────────────────
 function buildQandA(qanda) {
+  if (qanda?.deprecated) {
+    return {
+      deprecated: true,
+      message: 'Q&A monitoring via API is no longer available — Google retired the My Business Q&A API in 2024. Manage Q&A directly via the Google Maps app or business.google.com.',
+      items: [],
+    };
+  }
   if (qanda?.error) return { error: qanda.error, items: [] };
   const items = qanda?.items || [];
   const total = items.length;
@@ -706,8 +720,9 @@ function buildActionQueue(ctx) {
     }
   }
 
-  // 4. Q&A coverage — alert if <10 owner-seeded Q&As, or unanswered queue >0
-  if (qanda && !qanda.error) {
+  // 4. Q&A coverage — alert if <10 owner-seeded Q&As, or unanswered queue >0.
+  // Skipped silently when the Q&A API is deprecated (Google retired it in 2024).
+  if (qanda && !qanda.error && !qanda.deprecated) {
     if ((qanda.ownerAsked || 0) < 10) {
       push('warn', 'qanda_seed_low',
         `Only ${qanda.ownerAsked || 0} owner-seeded Q&As (target: 10+)`,
@@ -720,6 +735,12 @@ function buildActionQueue(ctx) {
         'Owner replies on community Q&As get more upvotes than third-party answers and rank higher.',
         'https://business.google.com/');
     }
+  } else if (qanda?.deprecated) {
+    // One-time info: surface the manual-only action even though we can't track it
+    push('info', 'qanda_manual_only',
+      'Q&A: API retired — manage via Maps app',
+      'Google retired the My Business Q&A API in 2024. You still have ~10–12 customer questions you should owner-seed and answer (halal, parking, specialty, late-night, family-friendly, etc.) — but it has to happen in the Google Maps app on your phone.',
+      'https://business.google.com/');
   }
 
   // 5. Bakrid 2026 — special hours not configured for May 19
@@ -823,12 +844,17 @@ function detectPeakHourGaps(periods) {
 // ─── Build helpers — Algorithm Tips ──────────────────────────────────────
 // Rules-driven recommendations. These come from algorithm-cracking knowledge:
 // what we observe vs what the local-pack ranking ladder rewards.
-function buildAlgorithmTips({ brand, profile, media, qanda }) {
+function buildAlgorithmTips({ brand, profile, builtProfile, media, qanda }) {
   const tips = [];
   const desc = profile?.profile?.description || '';
-  const cats = (profile?.categories?.additionalCategories || []).map(c =>
-    typeof c === 'string' ? c : (c.displayName || ''));
-  const primary = profile?.categories?.primaryCategory?.displayName || '';
+  // Prefer the built profile (additionalCategories already an array of strings)
+  // and fall back to raw API shape if needed.
+  const cats = (builtProfile?.additionalCategories
+    || (profile?.categories?.additionalCategories || []).map(c => c?.displayName || c?.name || c)
+    || []);
+  const primary = builtProfile?.primaryCategory
+    || profile?.categories?.primaryCategory?.displayName
+    || '';
 
   // HE-specific keyword targets
   const heKeywords = ['halal','dakhni','biryani','1918','mg road','shivajinagar','ghee rice','kabab'];
@@ -881,8 +907,8 @@ function buildAlgorithmTips({ brand, profile, media, qanda }) {
     }
   }
 
-  // Q&A seed coverage
-  if (qanda && !qanda.error && (qanda.ownerAsked || 0) < 5) {
+  // Q&A seed coverage (skipped if API deprecated)
+  if (qanda && !qanda.error && !qanda.deprecated && (qanda.ownerAsked || 0) < 5) {
     const ideas = brand === 'nch'
       ? ['Are you halal?','Do you serve haleem all year?','Do you have parking?','Are you family-friendly?','Hours on weekends?']
       : ['Are you halal?','Do you have parking near MG Road?','What\'s your specialty?','Are you open late?','Vegetarian options?','Family-friendly seating?'];
