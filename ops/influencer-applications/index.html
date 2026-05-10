@@ -240,7 +240,14 @@ function render(){
           <span><b>${escHtml(a.preferred_slot_date || '')} · ${escHtml(a.preferred_window_code || '')}</b></span>
         </div>
 
-        ${a.why_us_text ? `<div class="why">"${escHtml(a.why_us_text)}"</div>` : ''}
+        ${(() => {
+          let aud = [];
+          try { aud = JSON.parse(a.audience_json || '[]'); } catch {}
+          if (!aud.length) return '';
+          return `<div style="margin:10px 0;font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;font-weight:600">Audience: <span style="color:var(--tan)">${aud.map(x => escHtml(x)).join(' · ')}</span></div>`;
+        })()}
+
+        ${a.why_us_text ? `<div class="why" style="border-left:3px solid var(--tan);padding-left:12px">"${escHtml(a.why_us_text)}"</div>` : ''}
 
         <div class="contact">
           📱 <a href="https://wa.me/${(a.contact_phone||'').replace(/\D/g,'')}" target="_blank">${escHtml(a.contact_phone)}</a>
