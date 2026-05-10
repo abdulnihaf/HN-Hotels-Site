@@ -1,5 +1,9 @@
 // HN Hotels — Google Business Profile Cockpit API
-// GET /api/gbp-cockpit?brand=he|nch&period=7d|28d|90d&compare=prior|yoy|off&include=summary,daily,keywords,profile,reviews,health
+// GET /api/gbp-cockpit?brand=he|nch&period=7d|28d|90d&compare=prior|yoy|off
+//   &include=summary,daily,keywords,profile,reviews,health,media,qanda,actionQueue,algorithmTips
+//
+// Default include set covers the operations layer: summary,daily,keywords,
+// profile,reviews,health,media,qanda,actionQueue,algorithmTips
 //
 // Powers the dual-brand organic dashboards at:
 //   - hnhotels.in/marketing/he/gbp/
@@ -99,7 +103,7 @@ export async function onRequest(context) {
 
   const periodKey = url.searchParams.get('period') || '7d';
   const compareMode = url.searchParams.get('compare') || 'prior';
-  const include = (url.searchParams.get('include') || 'summary,daily,keywords,profile,reviews,health')
+  const include = (url.searchParams.get('include') || 'summary,daily,keywords,profile,reviews,health,media,qanda,actionQueue,algorithmTips')
     .split(',').map(s => s.trim()).filter(Boolean);
 
   // GBP Performance API data lags 1-2 days. Use today-2 as endDate to ensure data exists.
@@ -122,8 +126,14 @@ export async function onRequest(context) {
     if (include.includes('profile') || include.includes('health')) {
       tasks.profile = fetchProfile(token, brand.location);
     }
-    if (include.includes('reviews') || include.includes('profile')) {
+    if (include.includes('reviews') || include.includes('profile') || include.includes('actionQueue')) {
       tasks.places = fetchPlaceDetails(env, brand.placeId);
+    }
+    if (include.includes('media') || include.includes('actionQueue')) {
+      tasks.media = fetchMedia(token, brand.location);
+    }
+    if (include.includes('qanda') || include.includes('actionQueue')) {
+      tasks.qanda = fetchQandA(token, brand.location);
     }
 
     const results = await runAll(tasks);
@@ -183,6 +193,31 @@ export async function onRequest(context) {
     }
     if (include.includes('health')) {
       out.health = buildHealth(results.profile, results.places, results.perf);
+    }
+    if (results.media !== undefined) {
+      out.media = buildMedia(results.media);
+    }
+    if (results.qanda !== undefined) {
+      out.qanda = buildQandA(results.qanda);
+    }
+    if (include.includes('actionQueue')) {
+      out.actionQueue = buildActionQueue({
+        profile: results.profile,
+        perf: results.perf,
+        perfPrior: results.perfPrior,
+        places: results.places,
+        media: results.media,
+        qanda: results.qanda,
+        summary: out.summary,
+      });
+    }
+    if (include.includes('algorithmTips')) {
+      out.algorithmTips = buildAlgorithmTips({
+        brand: brandKey,
+        profile: results.profile,
+        media: results.media,
+        qanda: results.qanda,
+      });
     }
 
     return json(out, 200);
@@ -305,6 +340,36 @@ async function fetchProfile(token, locationName) {
   const d = await r.json();
   if (!r.ok) throw new Error(`Business Information API ${r.status}: ${d.error?.message || 'unknown'}`);
   return d;
+}
+
+// ─── Media (photos) via Business Information API ─────────────────────────
+// Returns up to ~100 most-recent media items (photos + videos). Each has
+// mediaFormat (PHOTO/VIDEO), category (COVER/PROFILE/INTERIOR/EXTERIOR/etc),
+// createTime, and dimensions. Owner-uploaded only (createSource=MERCHANT).
+async function fetchMedia(token, locationName) {
+  // mybusinessbusinessinformation doesn't expose media — that lives on the
+  // legacy mybusiness/v4 endpoint, which is still active for this resource.
+  const r = await fetch(
+    `https://mybusiness.googleapis.com/v4/${locationName.replace('locations/', 'accounts/-/locations/')}/media?pageSize=100`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const d = await r.json();
+  if (!r.ok) return { error: `Media API ${r.status}: ${d.error?.message || 'unknown'}`, items: [] };
+  return { items: d.mediaItems || [] };
+}
+
+// ─── Q&A via My Business Q&A API ─────────────────────────────────────────
+// Returns the most-recent questions on the listing. Each has author info,
+// upvoteCount, totalAnswerCount, topAnswers (with isAnonymous + author),
+// and createTime. Owner-asked questions show authorType=MERCHANT.
+async function fetchQandA(token, locationName) {
+  const r = await fetch(
+    `https://mybusinessqanda.googleapis.com/v1/${locationName}/questions?pageSize=50&answersPerQuestion=2`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const d = await r.json();
+  if (!r.ok) return { error: `Q&A API ${r.status}: ${d.error?.message || 'unknown'}`, items: [] };
+  return { items: d.questions || [] };
 }
 
 // ─── Places API (New) — review aggregate, no OAuth needed ────────────────
@@ -512,6 +577,339 @@ function scoreHealth(items) {
     else if (it.status === 'warn') earned += it.weight * 0.5;
   }
   return total > 0 ? Math.round(100 * earned / total) : 0;
+}
+
+// ─── Build helpers — Media ──────────────────────────────────────────────
+function buildMedia(media) {
+  if (media?.error) return { error: media.error, items: [] };
+  const items = media?.items || [];
+  const byCategory = {};
+  let recentCount = 0;
+  const thirtyDaysAgo = Date.now() - 30 * 86400000;
+  let lastUploadAt = null;
+  for (const m of items) {
+    const cat = m.locationAssociation?.category || 'OTHER';
+    byCategory[cat] = (byCategory[cat] || 0) + 1;
+    const t = m.createTime ? new Date(m.createTime).getTime() : 0;
+    if (t > thirtyDaysAgo) recentCount++;
+    if (t > (lastUploadAt || 0)) lastUploadAt = t;
+  }
+  const recent = items.slice(0, 12).map(m => ({
+    name: m.name,
+    category: m.locationAssociation?.category || 'OTHER',
+    mediaFormat: m.mediaFormat,
+    thumbnailUrl: m.thumbnailUrl || null,
+    googleUrl: m.googleUrl || null,
+    createTime: m.createTime || null,
+    dimensions: m.dimensions || null,
+  }));
+  return {
+    total: items.length,
+    recent30d: recentCount,
+    lastUploadAt: lastUploadAt ? new Date(lastUploadAt).toISOString() : null,
+    daysSinceLastUpload: lastUploadAt ? Math.floor((Date.now() - lastUploadAt) / 86400000) : null,
+    byCategory,
+    recent,
+  };
+}
+
+// ─── Build helpers — Q&A ────────────────────────────────────────────────
+function buildQandA(qanda) {
+  if (qanda?.error) return { error: qanda.error, items: [] };
+  const items = qanda?.items || [];
+  const total = items.length;
+  let ownerAsked = 0, ownerAnswered = 0, unanswered = 0;
+  const unansweredItems = [];
+  for (const q of items) {
+    if (q.author?.type === 'MERCHANT') ownerAsked++;
+    const answers = q.topAnswers || [];
+    const hasOwnerAnswer = answers.some(a => a.author?.type === 'MERCHANT');
+    if (hasOwnerAnswer) ownerAnswered++;
+    if (answers.length === 0 || !hasOwnerAnswer) {
+      unanswered++;
+      unansweredItems.push({
+        text: q.text || '',
+        author: q.author?.displayName || 'Anonymous',
+        upvoteCount: q.upvoteCount || 0,
+        createTime: q.createTime,
+      });
+    }
+  }
+  return {
+    total,
+    ownerAsked,
+    ownerAnswered,
+    ownerAnsweredPct: total ? Math.round(100 * ownerAnswered / total) : 0,
+    unanswered,
+    unansweredItems: unansweredItems.slice(0, 8),
+    items: items.slice(0, 12).map(q => ({
+      text: q.text || '',
+      authorType: q.author?.type || 'USER',
+      author: q.author?.displayName || 'Anonymous',
+      upvoteCount: q.upvoteCount || 0,
+      totalAnswerCount: q.totalAnswerCount || 0,
+      ownerAnswered: (q.topAnswers || []).some(a => a.author?.type === 'MERCHANT'),
+      topAnswerText: (q.topAnswers || [])[0]?.text || null,
+      createTime: q.createTime,
+    })),
+  };
+}
+
+// ─── Build helpers — Action Queue ────────────────────────────────────────
+// The "what should the owner do today" engine. Consumes everything else and
+// emits a sorted list of actions. severity: critical | warn | info.
+function buildActionQueue(ctx) {
+  const { profile, perf, perfPrior, places, media, qanda, summary } = ctx;
+  const queue = [];
+  const push = (severity, id, title, detail, actionUri) =>
+    queue.push({ severity, id, title, detail, actionUri });
+
+  // 1. Hours dead-zone detector — find any continuous gap >5h inside 8AM-10PM
+  //    that suggests the listing is invisible during peak meal times.
+  const periods = profile?.regularHours?.periods || [];
+  if (periods.length > 0) {
+    const gaps = detectPeakHourGaps(periods);
+    for (const g of gaps) {
+      push('critical', `hours_gap_${g.day}`,
+        `Hours dead-zone: ${g.day} ${g.startHour}:00–${g.endHour}:00 shows as Closed`,
+        `${g.gapHours}h gap inside the 8AM–10PM peak window. If you serve customers during this time, Maps filters you out of "open now" searches.`,
+        'https://business.google.com/');
+    }
+  }
+
+  // 2. Menu-click cliff — flag if menu clicks dropped >50% vs prior period.
+  if (summary?.actions) {
+    const m = summary.actions.menu, mp = summary.actions.menuPrior;
+    if (mp >= 10 && m / mp <= 0.5) {
+      const dropPct = Math.round(100 * (mp - m) / mp);
+      push('critical', 'menu_clicks_drop',
+        `Menu clicks down ${dropPct}% (${mp} → ${m})`,
+        `Menu engagement is the leading indicator of intent. Investigate: (1) is hamzaexpress.in/menu reachable? (2) did the GBP menu URL change? (3) anything broken on the menu page?`,
+        null);
+    }
+  }
+
+  // 3. Photos cadence — alert if no upload in 30 days
+  if (media && !media.error) {
+    if ((media.recent30d || 0) === 0) {
+      const last = media.daysSinceLastUpload != null ? `${media.daysSinceLastUpload} days ago` : 'never';
+      push('warn', 'photos_stale',
+        `No photos uploaded in 30 days (last: ${last})`,
+        `Google rewards listing freshness. Target: 3–5 photos/week for the first 8 weeks. Categories needed: food (close-ups of hero dishes), interior (busy hours), exterior (signboard, foot-traffic).`,
+        'https://business.google.com/');
+    }
+    if ((media.total || 0) < 25) {
+      push('warn', 'photos_low_count',
+        `Only ${media.total || 0} owner photos (target: 25+)`,
+        `Listings with 100+ photos see ~520% more calls and 2,717% more direction requests vs 11-photo profiles.`,
+        'https://business.google.com/');
+    }
+  }
+
+  // 4. Q&A coverage — alert if <10 owner-seeded Q&As, or unanswered queue >0
+  if (qanda && !qanda.error) {
+    if ((qanda.ownerAsked || 0) < 10) {
+      push('warn', 'qanda_seed_low',
+        `Only ${qanda.ownerAsked || 0} owner-seeded Q&As (target: 10+)`,
+        `Owner-seeded Q&As act as long-tail indexed content. Seed top customer questions: halal? parking? specialty? late-night? family-friendly?`,
+        'https://business.google.com/');
+    }
+    if ((qanda.unanswered || 0) > 0) {
+      push('warn', 'qanda_unanswered',
+        `${qanda.unanswered} community question(s) need an owner reply`,
+        'Owner replies on community Q&As get more upvotes than third-party answers and rank higher.',
+        'https://business.google.com/');
+    }
+  }
+
+  // 5. Bakrid 2026 — special hours not configured for May 19
+  const sh = profile?.specialHours?.specialHourPeriods || [];
+  const hasBakrid = sh.some(p => {
+    const d = p.startDate;
+    return d && d.year === 2026 && d.month === 5 && d.day >= 18 && d.day <= 20;
+  });
+  if (!hasBakrid) {
+    push('info', 'bakrid_special_hours',
+      'Bakrid 2026 (May 19) — no special hours set',
+      'Eid al-Adha drives surge demand for halal restaurants. Configure extended hours (e.g. 11 AM – 2 AM) for May 18–20.',
+      'https://business.google.com/');
+  }
+
+  // 6. Reviews response gap (using Places sample)
+  const reviews = places?.value?.reviews || [];
+  if (reviews.length > 0) {
+    const recent = reviews.slice(0, 5);
+    const lowRated = recent.filter(r => (r.rating || 5) <= 3);
+    if (lowRated.length > 0) {
+      push('warn', 'reviews_low_rated',
+        `${lowRated.length} of last 5 reviews ≤ 3 stars`,
+        'Respond directly. Acknowledge specifics, apologise sincerely, invite to call you. Public response is for the next reader, not the reviewer.',
+        'https://business.google.com/');
+    }
+  }
+
+  // 7. Action rate decline (overall)
+  if (summary?.actionRate != null && summary?.actionRatePrior != null && summary.actionRatePrior > 0) {
+    const delta = summary.actionRate - summary.actionRatePrior;
+    if (delta < -1) {
+      push('warn', 'action_rate_decline',
+        `Action rate ${summary.actionRate}% (was ${summary.actionRatePrior}% — down ${(-delta).toFixed(1)}pp)`,
+        'Listing impressions are converting less. Likely causes: stale photos, menu broken, no posts in 14+ days, or rank drop pushing you to lower-quality impressions.',
+        null);
+    }
+  }
+
+  // Sort: critical first, then warn, then info
+  const order = { critical: 0, warn: 1, info: 2 };
+  queue.sort((a, b) => order[a.severity] - order[b.severity]);
+  return queue;
+}
+
+// detectPeakHourGaps: any uncovered window inside 8:00 – 22:00 IST,
+// computed by merging the day's periods and finding gaps.
+// Returns [{ day, startHour, endHour, gapHours }]
+function detectPeakHourGaps(periods) {
+  const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+  const PEAK_START = 8, PEAK_END = 22;
+  const byDay = {};
+  for (const d of DAYS) byDay[d] = [];
+  for (const p of periods) {
+    const sd = p.openDay, ed = p.closeDay;
+    const sh = p.openTime?.hours || 0;
+    const eh = p.closeTime?.hours != null ? (p.closeTime.hours === 0 ? 24 : p.closeTime.hours) : 24;
+    if (!byDay[sd]) continue;
+    if (sd === ed) byDay[sd].push([sh, eh]);
+    else byDay[sd].push([sh, 24]); // wraps to next day — count current day until midnight
+  }
+  const gaps = [];
+  for (const d of DAYS) {
+    const intervals = byDay[d].filter(([s, e]) => e > PEAK_START && s < PEAK_END);
+    if (intervals.length === 0) {
+      // Whole peak window uncovered — only flag once per day
+      gaps.push({ day: d, startHour: PEAK_START, endHour: PEAK_END, gapHours: PEAK_END - PEAK_START });
+      continue;
+    }
+    // Merge intervals
+    intervals.sort((a, b) => a[0] - b[0]);
+    const merged = [intervals[0].slice()];
+    for (const [s, e] of intervals.slice(1)) {
+      const last = merged[merged.length - 1];
+      if (s <= last[1]) last[1] = Math.max(last[1], e);
+      else merged.push([s, e]);
+    }
+    // Find biggest gap inside peak window
+    let cursor = PEAK_START;
+    let biggest = null;
+    for (const [s, e] of merged) {
+      if (s > cursor && (s - cursor) >= 5) {
+        const gapHours = Math.min(s, PEAK_END) - cursor;
+        if (gapHours >= 5 && (!biggest || gapHours > biggest.gapHours)) {
+          biggest = { day: d, startHour: cursor, endHour: Math.min(s, PEAK_END), gapHours };
+        }
+      }
+      cursor = Math.max(cursor, e);
+    }
+    if (cursor < PEAK_END && (PEAK_END - cursor) >= 5) {
+      const gapHours = PEAK_END - cursor;
+      if (!biggest || gapHours > biggest.gapHours) {
+        biggest = { day: d, startHour: cursor, endHour: PEAK_END, gapHours };
+      }
+    }
+    if (biggest) gaps.push(biggest);
+  }
+  return gaps;
+}
+
+// ─── Build helpers — Algorithm Tips ──────────────────────────────────────
+// Rules-driven recommendations. These come from algorithm-cracking knowledge:
+// what we observe vs what the local-pack ranking ladder rewards.
+function buildAlgorithmTips({ brand, profile, media, qanda }) {
+  const tips = [];
+  const desc = profile?.profile?.description || '';
+  const cats = (profile?.categories?.additionalCategories || []).map(c =>
+    typeof c === 'string' ? c : (c.displayName || ''));
+  const primary = profile?.categories?.primaryCategory?.displayName || '';
+
+  // HE-specific keyword targets
+  const heKeywords = ['halal','dakhni','biryani','1918','mg road','shivajinagar','ghee rice','kabab'];
+  const nchKeywords = ['irani chai','haleem','osmania','chai','nawabi','shivajinagar'];
+  const targets = brand === 'nch' ? nchKeywords : heKeywords;
+  const descLower = desc.toLowerCase();
+  const missing = targets.filter(k => !descLower.includes(k.toLowerCase()));
+  if (missing.length > 0) {
+    tips.push({
+      id: 'desc_keyword_coverage',
+      level: 'medium',
+      title: `Description missing ${missing.length} high-intent keywords`,
+      detail: `Top keywords absent from your 750-char description: ${missing.join(', ')}. Description text is indexed for local-pack ranking.`,
+      action: 'Edit description in business.google.com',
+    });
+  }
+
+  // Primary category — should be the highest-revenue lever, not "Restaurant"
+  if (brand === 'he' && /^Restaurant$/i.test(primary)) {
+    tips.push({
+      id: 'primary_category_generic',
+      level: 'high',
+      title: `Primary category "${primary}" is too generic`,
+      detail: 'Switch to "Biryani restaurant" — it\'s the highest-volume search match for HE\'s menu and a stronger ranking signal than generic "Restaurant".',
+      action: 'Edit primary category in business.google.com',
+    });
+  }
+
+  // Halal attribute — verify in categories, recommend explicit attribute
+  if (brand === 'he' && !cats.some(c => /halal/i.test(c))) {
+    tips.push({
+      id: 'halal_category_missing',
+      level: 'high',
+      title: 'No halal-specific category present',
+      detail: 'Add "Halal restaurant" as a secondary category. Direct match for halal_food_searchers — a top-3 PMax audience and a major Bangalore-Muslim-quarter filter signal.',
+      action: 'Add category in business.google.com',
+    });
+  }
+
+  // Photo recency
+  if (media && !media.error) {
+    if ((media.daysSinceLastUpload || 0) > 14) {
+      tips.push({
+        id: 'photo_recency',
+        level: 'medium',
+        title: `Last photo upload was ${media.daysSinceLastUpload} days ago`,
+        detail: 'Photo recency is a freshness signal. Aim for 3–5 photos/week minimum during the first 8 weeks of a new optimisation cycle.',
+        action: 'Upload via business.google.com',
+      });
+    }
+  }
+
+  // Q&A seed coverage
+  if (qanda && !qanda.error && (qanda.ownerAsked || 0) < 5) {
+    const ideas = brand === 'nch'
+      ? ['Are you halal?','Do you serve haleem all year?','Do you have parking?','Are you family-friendly?','Hours on weekends?']
+      : ['Are you halal?','Do you have parking near MG Road?','What\'s your specialty?','Are you open late?','Vegetarian options?','Family-friendly seating?'];
+    tips.push({
+      id: 'qanda_seed_owner',
+      level: 'medium',
+      title: 'Owner-seeded Q&As under 5 — leaving long-tail rank on the table',
+      detail: `Owner-asked Q&As are indexed as on-listing content. Suggested seeds for ${brand.toUpperCase()}: ${ideas.slice(0, 4).join(' · ')}…`,
+      action: 'Seed via business.google.com',
+    });
+  }
+
+  // Description length sweet spot (Google rewards 350-700 chars)
+  if (desc.length > 0 && desc.length < 350) {
+    tips.push({
+      id: 'desc_too_short',
+      level: 'low',
+      title: `Description only ${desc.length} chars (sweet spot: 350–700)`,
+      detail: 'A richer description at 500-700 chars correlates with higher local-pack ranking. Front-load brand + heritage + cuisine keywords in the first 250 chars (only that prefix shows without "more").',
+      action: 'Expand description',
+    });
+  }
+
+  // Order: high → medium → low
+  const order = { high: 0, medium: 1, low: 2 };
+  tips.sort((a, b) => order[a.level] - order[b.level]);
+  return tips;
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────
