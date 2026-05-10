@@ -1,0 +1,592 @@
+{
+  "platform": "swiggy",
+  "brand": "he",
+  "outlet_url": "https://www.swiggy.com/city/bangalore/hamza-express-central-bangalore-rest1342888",
+  "outlet_id_swiggy_consumer_url": "1342888",
+  "outlet_status": "closed (back at 12:00 PM)",
+  "badges": [
+    "NEW"
+  ],
+  "rest_meta": {
+    "cost_for_two": 600,
+    "cuisine": [
+      "Biryani",
+      "South Indian"
+    ],
+    "location": "Central Bangalore"
+  },
+  "active_offers": [
+    {
+      "description": "30% Off Upto \u20b975",
+      "code": "TRYNEW",
+      "segment": "New users (Swiggy-funded acquisition)"
+    },
+    {
+      "description": "Flat \u20b9200 Off",
+      "code": "FLAT200",
+      "segment": "general (Swiggy promo)"
+    },
+    {
+      "description": "10% Off Upto \u20b975",
+      "code": "VISAPLATINUMCC",
+      "segment": "Visa Platinum CC"
+    },
+    {
+      "description": "10% Off Upto \u20b975",
+      "code": "VISAPLATINUMDC",
+      "segment": "Visa Platinum DC"
+    },
+    {
+      "description": "Flat \u20b9150 Off",
+      "code": "AXISREWARDS",
+      "segment": "Axis Rewards"
+    }
+  ],
+  "sections": [
+    {
+      "name": "Starters & Kebabs",
+      "item_count": 15,
+      "pos": 23
+    },
+    {
+      "name": "Combo Meals",
+      "item_count": 10,
+      "pos": 4688
+    },
+    {
+      "name": "Chicken Curries",
+      "item_count": 13,
+      "pos": 8093
+    },
+    {
+      "name": "Indian Breads",
+      "item_count": 8,
+      "pos": 15006
+    },
+    {
+      "name": "Chinese",
+      "item_count": 11,
+      "pos": 17431
+    },
+    {
+      "name": "Biryani",
+      "item_count": 4,
+      "pos": 19968
+    },
+    {
+      "name": "Vegetarian",
+      "item_count": 8,
+      "pos": 21565
+    },
+    {
+      "name": "Rice & Pulao",
+      "item_count": 4,
+      "pos": 24391
+    },
+    {
+      "name": "Rolls",
+      "item_count": 3,
+      "pos": 25466
+    },
+    {
+      "name": "Beverages",
+      "item_count": 3,
+      "pos": 27158
+    },
+    {
+      "name": "Salad",
+      "item_count": 1,
+      "pos": 27632
+    },
+    {
+      "name": "Egg Dishes",
+      "item_count": 1,
+      "pos": 27816
+    }
+  ],
+  "items": [
+    {
+      "veg": false,
+      "name": "Chicken Lollipop",
+      "price": 200.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Pepper Dry",
+      "price": 235.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Kabab",
+      "price": 210.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Reshmi Kabab",
+      "price": 240.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Lemon Chicken",
+      "price": 255.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Malai Tikka",
+      "price": 250.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Irani Chicken",
+      "price": 230.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "American Chops",
+      "price": 270.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Singapuri",
+      "price": 255.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Chatpata",
+      "price": 235.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Chicken 65",
+      "price": 230.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Tikka",
+      "price": 265.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Kalmi Kabab",
+      "price": 270.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Andhra Tikka",
+      "price": 250.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Kabab Platter",
+      "price": 499.0,
+      "section": "Starters & Kebabs"
+    },
+    {
+      "veg": false,
+      "name": "Butter Naan+Butter Chicken+Chicken Kabab",
+      "price": 269.0,
+      "section": "Combo Meals"
+    },
+    {
+      "veg": false,
+      "name": "Biryani Rice + Chicken Kabab",
+      "price": 219.0,
+      "section": "Combo Meals"
+    },
+    {
+      "veg": false,
+      "name": "Ghee Rice + Butter Chicken + Chicken Kabab",
+      "price": 299.0,
+      "section": "Combo Meals"
+    },
+    {
+      "veg": false,
+      "name": "Ghee Rice + Butter Chicken",
+      "price": 219.0,
+      "section": "Combo Meals"
+    },
+    {
+      "veg": false,
+      "name": "Butter Naan + Butter Chicken",
+      "price": 219.0,
+      "section": "Combo Meals"
+    },
+    {
+      "veg": true,
+      "name": "Ghee Rice With Dal Fry",
+      "price": 219.0,
+      "section": "Combo Meals"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Biryani + Chicken Kabab",
+      "price": 339.0,
+      "section": "Combo Meals"
+    },
+    {
+      "veg": false,
+      "name": "Mutton Biryani + Chicken Lollipop",
+      "price": 495.0,
+      "section": "Combo Meals"
+    },
+    {
+      "veg": false,
+      "name": "Full Loaded Combo",
+      "price": 619.0,
+      "section": "Combo Meals"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Kolhapuri Gravy",
+      "price": 210.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Methi Chicken",
+      "price": 225.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Butter Chicken",
+      "price": 225.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Hyderabadi Chicken",
+      "price": 225.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Punjabi Chicken",
+      "price": 235.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Hamza Special Chicken",
+      "price": 220.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Kadai Chicken",
+      "price": 225.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Masala",
+      "price": 225.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Mughlai Chicken",
+      "price": 245.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Kalimirch",
+      "price": 225.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Tandoori Chicken Masala",
+      "price": 295.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Tikka Masala",
+      "price": 300.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Do Pyaza",
+      "price": 235.0,
+      "section": "Chicken Curries"
+    },
+    {
+      "veg": true,
+      "name": "Garlic Naan",
+      "price": 50.0,
+      "section": "Indian Breads"
+    },
+    {
+      "veg": true,
+      "name": "Ceylon Paratha",
+      "price": 35.0,
+      "section": "Indian Breads"
+    },
+    {
+      "veg": true,
+      "name": "Kerala Paratha",
+      "price": 30.0,
+      "section": "Indian Breads"
+    },
+    {
+      "veg": true,
+      "name": "Wheat Paratha",
+      "price": 45.0,
+      "section": "Indian Breads"
+    },
+    {
+      "veg": true,
+      "name": "Chapathi",
+      "price": 20.0,
+      "section": "Indian Breads"
+    },
+    {
+      "veg": true,
+      "name": "Butter Naan",
+      "price": 45.0,
+      "section": "Indian Breads"
+    },
+    {
+      "veg": true,
+      "name": "Kulcha",
+      "price": 50.0,
+      "section": "Indian Breads"
+    },
+    {
+      "veg": true,
+      "name": "Tandoori Paratha",
+      "price": 50.0,
+      "section": "Indian Breads"
+    },
+    {
+      "veg": true,
+      "name": "Veg Fried Rice",
+      "price": 160.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": false,
+      "name": "Egg Fried Rice",
+      "price": 180.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": false,
+      "name": "Prawns Fried Rice",
+      "price": 230.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": false,
+      "name": "Mix Fried Rice",
+      "price": 250.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Noodles",
+      "price": 190.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": false,
+      "name": "Prawns Noodles",
+      "price": 230.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": false,
+      "name": "Chilli Chicken",
+      "price": 220.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": false,
+      "name": "Singapore Chicken",
+      "price": 220.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": true,
+      "name": "Veg Schezwan Noodles",
+      "price": 200.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": false,
+      "name": "Garlic Chicken",
+      "price": 235.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Manchurian",
+      "price": 220.0,
+      "section": "Chinese"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Boneless Biryani",
+      "price": 280.0,
+      "section": "Biryani"
+    },
+    {
+      "veg": false,
+      "name": "Mutton Biryani",
+      "price": 350.0,
+      "section": "Biryani"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Biryani",
+      "price": 275.0,
+      "section": "Biryani"
+    },
+    {
+      "veg": false,
+      "name": "Egg Biryani",
+      "price": 190.0,
+      "section": "Biryani"
+    },
+    {
+      "veg": true,
+      "name": "Paneer Butter Masala",
+      "price": 180.0,
+      "section": "Vegetarian"
+    },
+    {
+      "veg": true,
+      "name": "Kadai Paneer",
+      "price": 180.0,
+      "section": "Vegetarian"
+    },
+    {
+      "veg": true,
+      "name": "Palak Paneer",
+      "price": 200.0,
+      "section": "Vegetarian"
+    },
+    {
+      "veg": true,
+      "name": "Paneer Matar Masala",
+      "price": 200.0,
+      "section": "Vegetarian"
+    },
+    {
+      "veg": true,
+      "name": "Dal Tadka",
+      "price": 120.0,
+      "section": "Vegetarian"
+    },
+    {
+      "veg": true,
+      "name": "Aloo Gobi",
+      "price": 180.0,
+      "section": "Vegetarian"
+    },
+    {
+      "veg": true,
+      "name": "Malai Kofta",
+      "price": 240.0,
+      "section": "Vegetarian"
+    },
+    {
+      "veg": true,
+      "name": "Gobi Masala",
+      "price": 160.0,
+      "section": "Vegetarian"
+    },
+    {
+      "veg": false,
+      "name": "Biryani Rice",
+      "price": 120.0,
+      "section": "Rice & Pulao"
+    },
+    {
+      "veg": true,
+      "name": "Ghee Rice",
+      "price": 100.0,
+      "section": "Rice & Pulao"
+    },
+    {
+      "veg": true,
+      "name": "Jeera Rice",
+      "price": 130.0,
+      "section": "Rice & Pulao"
+    },
+    {
+      "veg": true,
+      "name": "Curd Rice",
+      "price": 100.0,
+      "section": "Rice & Pulao"
+    },
+    {
+      "veg": false,
+      "name": "Chicken Roll",
+      "price": 115.0,
+      "section": "Rolls"
+    },
+    {
+      "veg": false,
+      "name": "Egg Roll",
+      "price": 115.0,
+      "section": "Rolls"
+    },
+    {
+      "veg": true,
+      "name": "Paneer Roll",
+      "price": 115.0,
+      "section": "Rolls"
+    },
+    {
+      "veg": true,
+      "name": "Thums Up (300Ml)",
+      "price": 39.0,
+      "section": "Beverages"
+    },
+    {
+      "veg": true,
+      "name": "Sprite (300Ml)",
+      "price": 40.0,
+      "section": "Beverages"
+    },
+    {
+      "veg": true,
+      "name": "Pepsi (300Ml)",
+      "price": 39.0,
+      "section": "Beverages"
+    },
+    {
+      "veg": true,
+      "name": "Onion Salad",
+      "price": 29.0,
+      "section": "Salad"
+    },
+    {
+      "veg": false,
+      "name": "Egg Masala",
+      "price": 150.0,
+      "section": "Egg Dishes"
+    }
+  ],
+  "captured_at": "2026-05-10T07:05:00+05:30",
+  "captured_via": "Chrome DevTools (port 9223 dining-Chrome over Tailscale SSH tunnel)",
+  "note": "Customer-facing URL says rest1342888 = Hamza Express. This CONTRADICTS our extension OUTLETS mapping which says 1342888=NCH. The extension mapping needs to be flipped for Swiggy."
+}
