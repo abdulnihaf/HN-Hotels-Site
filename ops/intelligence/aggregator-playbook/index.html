@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aggregator Playbook · Hamza Express · May 2026</title>
+<link rel="stylesheet" href="playbook.css">
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-inner">
+    <div>
+      <a href="/ops/" class="hdr-back">← ops</a>
+      <span class="hdr-title">
+        Aggregator Playbook · Hamza Express
+        <small>Customer offers + paid visibility · Swiggy &amp; Zomato · May 2026 · synthesised from two parallel research agents</small>
+      </span>
+    </div>
+    <nav class="hdr-nav">
+      <a href="#offers">Offers</a>
+      <a href="#ads">Ads</a>
+      <a href="#plan">Week 1</a>
+      <a href="#sources">Sources</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ══════════ HERO ══════════ -->
+  <div class="hero">
+    <div class="hero-card tone-info">
+      <div class="hero-l">May 2026 target</div>
+      <div class="hero-v">₹15,00,000</div>
+      <div class="hero-d">vs Mar actuals ₹6,59,903 — needs <b>2.3×</b> growth in 30 days</div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-l">Recommended ad spend</div>
+      <div class="hero-v">₹18–28K/mo</div>
+      <div class="hero-d">65% Zomato · 35% Swiggy</div>
+    </div>
+    <div class="hero-card tone-good">
+      <div class="hero-l">Surgical offers ready</div>
+      <div class="hero-v">7</div>
+      <div class="hero-d">All ≤ 25% effective discount cap (margin-safe)</div>
+    </div>
+    <div class="hero-card tone-good">
+      <div class="hero-l">Ad scenarios mapped</div>
+      <div class="hero-v">4</div>
+      <div class="hero-d">Cold-start · conversion-lift · re-engage · daypart</div>
+    </div>
+    <div class="hero-card tone-warn">
+      <div class="hero-l">Hard moat</div>
+      <div class="hero-v">1918</div>
+      <div class="hero-d">Hamza-family Dakhni heritage, four generations — never lead with price</div>
+    </div>
+    <div class="hero-card tone-bad">
+      <div class="hero-l">Margin trap</div>
+      <div class="hero-v">25%</div>
+      <div class="hero-d">Restaurant-funded discount &gt;25% drives HE into negative contribution per order</div>
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 1: OFFERS ══════════ -->
+  <section id="offers" class="section">
+    <div class="section-h">
+      <div class="section-num">SECTION 1</div>
+      <h2 class="section-t">Customer-Facing Offers</h2>
+      <div class="section-d">22 offer types across both platforms · 7 surgical recommendations</div>
+    </div>
+
+    <div class="preface">
+      <div class="preface-h">Honesty preface on sourcing</div>
+      <p>
+        Researched across UrbanPiper's partner-help docs (the most authoritative public source — UrbanPiper is the POS layer that integrates with both Swiggy and Zomato APIs and exposes their underlying offer schemas), Swiggy's Catalyst blog and Partner FAQ, Zomato's policy pages, third-party restaurant-tech guides (Menuviel, Foodiv, Kouzina), and TheMediaAnt for ad-pricing primary data.
+      </p>
+      <ul>
+        <li><b>Swiggy keeps its offer-config UI nearly invisible to the public web.</b> UrbanPiper itself states: <em>"Swiggy doesn't send its share of discount in the Order Relay payload, and the configuration of discounts has to be done at the Swiggy backend directly. You can get in touch with your Swiggy PoC for the same."</em> Translation: Swiggy offer creation is largely PoC-mediated, not fully self-serve like Zomato.</li>
+        <li><b>Zomato is much better-documented</b> because UrbanPiper's KB enumerates the exact discount schema. Treat that as ground truth for Zomato.</li>
+        <li><b>Funding-split percentages</b> for "co-funded" offers are commercially confidential — any number quoted here is observed-from-customer-side, not contractual.</li>
+        <li><b>CTRs/conversion benchmarks</b> in Layer 3 are directional industry estimates, not verified for HE specifically. Treat as planning hypotheses.</li>
+      </ul>
+    </div>
+
+    <!-- ══ Matrix ══ -->
+    <h3 class="subsec-h">Layer 1 · Side-by-side offer-type matrix</h3>
+    <div class="matrix-wrap">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Offer Type</th>
+            <th>Swiggy</th>
+            <th>Zomato</th>
+            <th>Granularity</th>
+            <th>Funded by</th>
+            <th>Segment-target</th>
+            <th>Time / Day</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Flat % off cart</td><td class="yes">Yes</td><td class="yes">Yes (Percentage Discount)</td><td>Cart-wide</td><td>Restaurant; co-fund possible via PoC</td><td class="partial">Limited</td><td class="yes">Yes (timing groups)</td></tr>
+          <tr><td class="num">2</td><td>Flat ₹ off above min cart</td><td class="yes">Yes</td><td class="yes">Yes (Fixed Discount)</td><td>Cart-wide</td><td>Restaurant; co-fund possible</td><td class="partial">Limited</td><td class="yes">Yes</td></tr>
+          <tr><td class="num">3</td><td>% off on a specific dish</td><td class="yes-cond">Yes (PoC)</td><td class="yes">Yes (Percentage Dish Discount — once per order)</td><td>Item-level</td><td>Restaurant</td><td class="no">No (publicly)</td><td class="yes">Yes</td></tr>
+          <tr><td class="num">4</td><td>BOGO (Buy 1 Get 1)</td><td class="yes">Yes</td><td class="yes">Yes (requires <code>offer-bogo</code> tag on items)</td><td>Item-pair</td><td>Restaurant; Zomato may co-fund</td><td class="no">No</td><td class="yes">Yes</td></tr>
+          <tr><td class="num">5</td><td>Free item above threshold</td><td class="yes-cond">Limited (manual via PoC)</td><td class="yes-cond">Workaround via BOGO + low-priced "free" item</td><td>Item-level</td><td>Restaurant</td><td class="no">No</td><td class="yes">Yes</td></tr>
+          <tr><td class="num">6</td><td>Combo / meal-deal fixed price</td><td class="yes">Yes (built into menu as combo SKU)</td><td class="yes">Yes (built into menu)</td><td>Item-level</td><td>Restaurant</td><td class="no">No</td><td class="partial">Indirect (via menu visibility hours)</td></tr>
+          <tr><td class="num">7</td><td>Tiered threshold (more % at higher cart)</td><td class="yes-cond">Workaround: stack 2 separate offers</td><td class="yes-cond">Workaround: stack 2 separate offers</td><td>Cart-wide</td><td>Restaurant</td><td class="partial">Limited</td><td class="yes">Yes</td></tr>
+          <tr><td class="num">8</td><td>Free delivery</td><td class="yes-cond">Yes (Swiggy-funded for One members; restaurant pays for "Free Delivery" badge)</td><td class="yes-cond">Yes (Gold members; restaurant pays partial under Gold)</td><td>Cart-wide</td><td>Mixed</td><td class="yes">Yes (members vs non-members)</td><td class="partial">Conditional</td></tr>
+          <tr><td class="num">9</td><td>Membership-program participation</td><td class="yes"><b>Swiggy One</b> — partly Swiggy-funded</td><td class="yes"><b>Zomato Gold</b> — restaurant funds visible discount; commission may renegotiate</td><td>Cart-wide</td><td>Co-funded but restaurant is bigger payer</td><td class="yes">Yes (members only)</td><td>Always-on while opted in</td></tr>
+          <tr><td class="num">10</td><td>First-order / new-user offer</td><td class="yes">Yes — "Try New" badging; usually Swiggy-funded</td><td class="yes">Yes — "New on Zomato" badge; Zomato-funded</td><td>Cart-wide</td><td>Platform (Pepper)</td><td class="yes">Yes (new users only)</td><td>N/A</td></tr>
+          <tr><td class="num">11</td><td>Lapsed-user / win-back</td><td class="yes-cond">Yes (Swiggy runs platform-wide; restaurants opt-in via PoC)</td><td class="yes-cond">Limited public visibility — Zomato-internal "we miss you"</td><td>Cart-wide</td><td>Platform</td><td class="yes">Yes</td><td>Triggered</td></tr>
+          <tr><td class="num">12</td><td>Daypart (lunch/dinner/late-night)</td><td class="yes">Yes — Timing Group field</td><td class="yes">Yes — explicit Timing Group field</td><td>Cart or Item</td><td>Restaurant</td><td class="no">No</td><td class="yes">Yes (HH:MM)</td></tr>
+          <tr><td class="num">13</td><td>Day-of-week offers</td><td class="yes">Yes</td><td class="yes">Yes (timing group includes day rules)</td><td>Cart or Item</td><td>Restaurant</td><td class="no">No</td><td class="yes">Yes</td></tr>
+          <tr><td class="num">14</td><td>Banner ad placements</td><td class="yes">Swiggy Self-Serve Ads (CPC)</td><td class="yes">Sponsored Brand Listings + display banners + homepage takeover</td><td>Brand-level</td><td>Restaurant pays</td><td class="yes">Hyperlocal geo</td><td>Schedulable</td></tr>
+          <tr><td class="num">15</td><td>Sponsored / promoted listing</td><td class="yes">Search-result rank boost via CPC ads</td><td class="yes">Top-of-search sponsored slot</td><td>Brand</td><td>Restaurant</td><td class="yes">Hyperlocal</td><td>Always-on</td></tr>
+          <tr><td class="num">16</td><td>Coupon-code / wallet</td><td class="partial">Limited — Swiggy issues codes; restaurants don't usually self-issue</td><td class="partial">Same — Zomato issues; restaurant-level coupons not standard</td><td>Cart-wide</td><td>Mostly platform / bank co-fund</td><td class="yes">Code-bearer</td><td class="yes">Yes</td></tr>
+          <tr><td class="num">17</td><td>Mealmate / group order</td><td class="yes-cond">Platform-feature; not a restaurant offer</td><td class="no">N/A as configurable offer</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+          <tr><td class="num">18</td><td>Pre-order / scheduled-order discount</td><td class="no">Not standard</td><td class="no">Not standard</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+          <tr><td class="num">19</td><td>"Markup price" / inflated MRP for visible discount</td><td class="yes">Yes — markup-price field (UrbanPiper-exposed)</td><td class="yes">Yes — MRP-vs-selling-price visible</td><td>Item-level</td><td>Restaurant (perceived discount, no real cost)</td><td class="no">No</td><td class="yes">Yes</td></tr>
+          <tr><td class="num">20</td><td>"Trending" / "Popular near you" curated badges</td><td class="yes-cond">Algorithmic + paid (Swiggy POP)</td><td class="yes-cond">Algorithmic + paid</td><td>Brand</td><td>Mixed</td><td class="no">No</td><td>—</td></tr>
+          <tr><td class="num">21</td><td>Cashback offer</td><td class="partial">Customer-side via Swiggy Money / bank tie-ups</td><td class="partial">Same — Zomato Money cashback or HDFC/Kotak co-branded</td><td>Cart-wide</td><td>Bank/platform</td><td class="yes">Yes (cardholders)</td><td>Variable</td></tr>
+          <tr><td class="num">22</td><td>Single-use coupon flag</td><td class="yes">Yes</td><td class="yes">Yes — explicit "Single use" field</td><td>Per-customer</td><td>Restaurant</td><td class="yes">Per-customer cap</td><td class="yes">Yes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>Key insight from the matrix:</b> Customer-segment targeting (new-user / lapsed-user) is largely <b>NOT exposed to the partner</b> on either platform — both run those segments internally as platform-funded acquisition campaigns. You can geo-target via ads, but you cannot self-serve a "20% off only for users who haven't ordered HE in 30 days" offer.
+    </div>
+
+    <!-- ══ Per-platform deep dive ══ -->
+    <h3 class="subsec-h">Layer 2 · Per-platform deep dive</h3>
+
+    <div class="platform-card zomato">
+      <div class="pc-h">
+        <span class="pf pf-zm">Zomato</span>
+        <span class="pc-t">Restaurant-partner offer config</span>
+        <span class="pc-d">UrbanPiper-documented, mostly self-serve</span>
+      </div>
+      <p>
+        The single best public source is UrbanPiper's <em>"Running Discounts on Zomato"</em> KB page. It documents <b>four discount categories</b> mapping to Zomato's underlying offer schema:
+      </p>
+      <ol style="margin:8px 0 8px 24px; font-size:12px;">
+        <li><b>Percentage Discount</b> — "Apply a percentage off the total cart value, also typically with a minimum spend condition." Cart-wide, with min-cart-value gate.</li>
+        <li><b>Fixed Discount</b> — "Offer a set amount off the total bill, usually when a customer spends a certain minimum." Same shape, ₹-denominated.</li>
+        <li><b>Percentage Dish Discount</b> — "Give a percentage discount on a single specific item that you choose. This applies once per order." Item-level, idempotent per cart.</li>
+        <li><b>BOGO (Buy One Get One Free)</b> — "When your customer adds eligible items to their cart, an item with lower price will be discounted as a free item." Requires tagging eligible items with <code>offer-bogo</code>.</li>
+      </ol>
+      <div class="field-block">
+        <div class="fb-h">Configuration fields exposed (any of the above)</div>
+        Title · Start &amp; End Date · Value (% or ₹) · Minimum Order Value · Timing group (HH:MM + day-of-week) · Single use flag
+      </div>
+      <div class="field-block">
+        <div class="fb-h">Funding model — Salt / Pepper terminology</div>
+        <b>Salt Discount</b> = fully restaurant-sponsored (default).<br>
+        <b>Pepper Discount</b> = fully Zomato-sponsored. Restaurant pays nothing.<br>
+        <b>Salt + Pepper</b> = co-funded. Split is negotiated case-by-case via your Zomato PoC; not publicly published.
+      </div>
+      <p>
+        <b>Zomato Gold</b> is a separate construct. Restaurants opt in for visibility on a paying-member base; in exchange they offer BOGO/percentage benefits to Gold members. Commission can be renegotiated downward in some cases. Restaurant primarily funds the visible discount; Zomato bundles you into Gold marketing.
+      </p>
+      <div class="warn-block">
+        <div class="wb-h">Stackability warning</div>
+        Restaurant offer + Gold benefit + Zomato platform coupon can stack within Zomato's stacking rules; the customer sees the best combination. <b>This often eats deeper into your margin than expected</b> — flag in Layer 3.
+      </div>
+    </div>
+
+    <div class="platform-card swiggy">
+      <div class="pc-h">
+        <span class="pf pf-sw">Swiggy</span>
+        <span class="pc-t">Restaurant-partner offer config</span>
+        <span class="pc-d">PoC-heavy; thin public docs</span>
+      </div>
+      <p>
+        Swiggy is much less self-serve. UrbanPiper plainly says Swiggy offer config <em>"has to be done at the Swiggy backend directly. You can get in touch with your Swiggy PoC."</em>
+      </p>
+      <div class="field-block">
+        <div class="fb-h">Restaurant offer types observed in the wild (so they exist)</div>
+        Percentage off (10–60%) with max ₹ cap (e.g. "60% off up to ₹120 above ₹149") · Flat ₹ off above min cart (e.g. "₹150 off above ₹500") · BOGO on selected items · Free delivery (badged) — partly Swiggy-funded under Swiggy One; restaurant-funded if you buy "Free Delivery" badge · Time-restricted promos (lunch, late-night)
+      </div>
+      <p>
+        <b>Markup-price feature</b> is exposed by Swiggy and via UrbanPiper: show inflated MRP next to selling price for perceived deal. <b>Combos</b> are configured as products in your menu, not as a separate offer object.
+      </p>
+      <p>
+        <b>Configuration UI</b> — the partner app has an "Offers &amp; Ads" module. You choose offer kind, select customer category, select duration. Field-level details should be assumed similar to Zomato but verified with your Swiggy KAM.
+      </p>
+      <p>
+        <b>Swiggy One</b> — Swiggy's subscription. Members get free delivery &gt;₹149 and up to 30% off at participating restaurants. Restaurant opts in. <b>Funding split is co-funded</b>, but the visible discount comes off your menu — Swiggy contributes via reduced commission or marketing match. Treat the discount as ~70% your cost, ~30% Swiggy's, as a planning estimate (not contractual).
+      </p>
+      <div class="warn-block">
+        <div class="wb-h">Customer-segment targeting limitation</div>
+        Swiggy publicly describes a sophisticated internal segmentation engine. But for restaurant-side self-serve targeting, you primarily get: lifecycle status (new/repeat), geo, and platform-managed lapsed-user campaigns. <b>New-user "Try New" promotions are usually Swiggy-funded acquisition spend (Pepper-equivalent).</b>
+      </div>
+    </div>
+
+    <!-- ══ The meat: 7 surgical recommendations ══ -->
+    <h3 class="subsec-h">Layer 3 · 7 surgical offer recommendations for HE</h3>
+
+    <div class="callout">
+      <b>Critical math first.</b> At AOV ₹464 with 24.6% Swiggy commission, your platform cost per order is ₹114. If you add a restaurant-funded 20% discount (₹93), you're paying ₹207 to Swiggy ecosystem on a ₹464 order = <b>44.6% gross to platform</b>. After food cost (~30% = ₹140), you net ₹117 on a ₹464 order = 25% — and that's <b>BEFORE</b> rent, labour, packaging. <br><br>
+      <b>Any blanket &gt;20% restaurant-funded discount drives HE into negative contribution margin per order.</b> All 7 recommendations below respect this hard ceiling.
+    </div>
+
+    <div class="rec-grid">
+
+      <!-- Offer 1 -->
+      <div class="rec both">
+        <div class="rec-h">
+          <div class="rec-num">OFFER #1</div>
+          <div class="rec-t">Hero-Pair Combo @ Fixed Price</div>
+          <div class="rec-meta">
+            <span class="pf pf-both">Both</span>
+            <span class="rec-meta-pill">Combo SKU</span>
+            <span class="rec-meta-pill">Always-on</span>
+            <span class="rec-meta-pill">Restaurant-funded</span>
+          </div>
+        </div>
+        <div class="rec-body">
+          <span class="label">Config</span>
+          <div class="config">"Hamza Hero Box" = Chicken Biryani + Chicken Kabab (4 pcs) @ ₹459<br>(vs ₹520 a la carte = 11.7% perceived discount)<br>Add as new SKU under "Combos" category. Tag: "Bestseller" badge.</div>
+
+          <span class="label">Why this first</span>
+          <p>Zero restaurant-funded discount load on top of commission. Markup-price field shows ₹520 strike-through. AOV stays at ₹459 (your existing AOV) — you're not training the customer down to ₹350.</p>
+
+          <span class="label">Net AOV math</span>
+          <div class="math">₹459 cart<br>− ₹113 commission (24.6%)<br>− ₹138 food cost (30%)<br>= <b>₹208 contribution</b></div>
+
+          <span class="label">Funnel logic</span>
+          <p>Combo SKUs get "Combo" filter visibility on both platforms → +impressions. Two heroes in one box = uses your highest-velocity items.</p>
+
+          <span class="label">Success metric</span>
+          <div class="metric-row"><span>Target:</span> <b>≥40 combos/week</b> within 14 days</div>
+          <span class="label">Kill criterion</span>
+          <div class="metric-row"><span>If</span> <b>&lt;20/week → re-test at ₹429</b></div>
+        </div>
+        <div class="rec-foot">
+          <b>Don't:</b> stack a separate % discount on top of this combo — defeats the entire margin logic.
+        </div>
+      </div>
+
+      <!-- Offer 2 -->
+      <div class="rec zomato">
+        <div class="rec-h">
+          <div class="rec-num">OFFER #2</div>
+          <div class="rec-t">Lunch Daypart % Off (capped)</div>
+          <div class="rec-meta">
+            <span class="pf pf-zm">Zomato</span>
+            <span class="rec-meta-pill">Percentage Discount</span>
+            <span class="rec-meta-pill">Daypart</span>
+            <span class="rec-meta-pill">Salt (restaurant)</span>
+          </div>
+        </div>
+        <div class="rec-body">
+          <span class="label">Config</span>
+          <div class="config">20% off, max ₹100, min order ₹399<br>Timing: 12:00–15:30, Mon–Fri only<br>Funding: Salt (restaurant). Single use: OFF<br>Title: "Lunch Special — 20% off"</div>
+
+          <span class="label">Why Zomato over Swiggy</span>
+          <p>Zomato dining/delivery audience in Shivajinagar skews office-lunch heavier; Swiggy commission is higher (24.6% vs 23.4%) so restaurant-funded discount hurts more on Swiggy.</p>
+
+          <span class="label">Cost math</span>
+          <div class="math">₹399 cart × 20% = ₹80 max discount<br>₹399 − ₹80 − ₹93 commission − ₹120 food cost<br>= <b>₹106 net (26.6%)</b> · tight but positive</div>
+
+          <span class="label">Funnel</span>
+          <p>Lunch traffic is your structurally weakest daypart vs Empire/Andhra belt. The offer earns you the "Offer" badge in Zomato listings → raises CTR.</p>
+
+          <span class="label">Success metric</span>
+          <div class="metric-row"><span>Target:</span> <b>≥80 incremental lunch orders/week</b> vs 14-day pre-period baseline</div>
+          <span class="label">Kill</span>
+          <div class="metric-row"><span>14d if</span> <b>&lt;50 orders/week</b></div>
+        </div>
+        <div class="rec-foot">
+          <b>Don't:</b> extend to weekends — weekend lunch already has organic pull, you'd be discounting existing demand.
+        </div>
+      </div>
+
+      <!-- Offer 3 -->
+      <div class="rec swiggy">
+        <div class="rec-h">
+          <div class="rec-num">OFFER #3</div>
+          <div class="rec-t">Snack-Time BOGO (chai-time, narrow)</div>
+          <div class="rec-meta">
+            <span class="pf pf-sw">Swiggy</span>
+            <span class="rec-meta-pill">BOGO</span>
+            <span class="rec-meta-pill">Daypart</span>
+            <span class="rec-meta-pill">Restaurant-funded</span>
+          </div>
+        </div>
+        <div class="rec-body">
+          <span class="label">Config</span>
+          <div class="config">Buy 1 Chicken Kabab (4 pcs) → get 1 Tandoori Roti free<br>Time-bound: 16:00–19:00 daily<br><b>NOT</b> a hero-on-hero BOGO — snack-attachment design</div>
+
+          <span class="label">Why this works</span>
+          <p>Tandoori Roti has high attach-rate to kabab but low solo demand. Free roti has very low marginal food cost (~₹15) vs kabab high-margin selling price. <b>Effectively a 5-7% discount disguised as a "free item"</b> — high perceived value, low cost.</p>
+
+          <span class="label">Net AOV math</span>
+          <div class="math">Cart ~₹250 (kabab)<br>− ₹15 free-roti food cost<br>− ₹62 commission<br>− ₹75 food cost<br>= <b>₹98 contribution</b></div>
+
+          <span class="label">Funnel</span>
+          <p>Tea-time daypart (4-7pm) is structurally underutilised in QSR. BOGO badging draws snackers who weren't going to order a full meal.</p>
+
+          <span class="label">Success metric</span>
+          <div class="metric-row"><span>Target:</span> <b>≥30 BOGO orders/week</b> within 14 days</div>
+          <span class="label">Watch for</span>
+          <div class="metric-row"><span>If Swiggy AOV drops below</span> <b>₹400 → narrow time window</b></div>
+        </div>
+        <div class="rec-foot">
+          <b>Don't:</b> BOGO Mutton Biryani (margin-killer) · BOGO any item where the "free" item has food cost &gt;₹30.
+        </div>
+      </div>
+
+      <!-- Offer 4 -->
+      <div class="rec zomato">
+        <div class="rec-h">
+          <div class="rec-num">OFFER #4</div>
+          <div class="rec-t">Zomato Gold Opt-In (mandatory)</div>
+          <div class="rec-meta">
+            <span class="pf pf-zm">Zomato</span>
+            <span class="rec-meta-pill">Membership</span>
+            <span class="rec-meta-pill">Always-on</span>
+            <span class="rec-meta-pill">Acquisition cost</span>
+          </div>
+        </div>
+        <div class="rec-body">
+          <span class="label">Config</span>
+          <div class="config">Opt in to Zomato Gold delivery program<br>Members get standard Gold offer (typically BOGO on mains or 15-30% off — negotiate via PoC)<br>Restaurant funds the visible discount</div>
+
+          <span class="label">Why mandatory</span>
+          <p>You're competing with Empire and Andhra-belt outlets in a 500m radius. Gold members in Bangalore disproportionately use Gold for non-chain discoveries. <b>Without Gold, you don't appear in the Gold-only listing</b> — invisible to a meaningful chunk of your target audience.</p>
+
+          <span class="label">Cost reality</span>
+          <p>Gold orders structurally have lower margin. Treat Gold as <b>customer-acquisition cost, not profit</b>. The Gold customer's 2nd/3rd organic order at full price is where you make money.</p>
+
+          <span class="label">Success metric</span>
+          <div class="metric-row"><span>Target:</span> <b>≥15% of Zomato orders from Gold</b> within 30 days</div>
+          <span class="label">Kill criterion</span>
+          <div class="metric-row"><span>If at 60d Gold-customer return-at-full-price</span> <b>&lt;25% → renegotiate or exit</b></div>
+        </div>
+        <div class="rec-foot">
+          <b>Don't:</b> combine Gold with a separate Salt discount — stacked discounts can push effective discount past 50% on the same order.
+        </div>
+      </div>
+
+      <!-- Offer 5 -->
+      <div class="rec both">
+        <div class="rec-h">
+          <div class="rec-num">OFFER #5</div>
+          <div class="rec-t">Family-Cart Ladder ₹150 off above ₹699</div>
+          <div class="rec-meta">
+            <span class="pf pf-both">Both</span>
+            <span class="rec-meta-pill">Fixed Discount</span>
+            <span class="rec-meta-pill">Always-on</span>
+            <span class="rec-meta-pill">Restaurant-funded</span>
+          </div>
+        </div>
+        <div class="rec-body">
+          <span class="label">Config</span>
+          <div class="config">₹150 flat off above ₹699<br>Always-on (no daypart restriction)<br>Title: "Family Feast — ₹150 off above ₹699"<br>Single use: OFF</div>
+
+          <span class="label">Why this specific shape</span>
+          <p>Pulls AOV <b>UP</b> from ₹464 to ₹699+ — opposite direction from typical discount fatigue. Family-size orders are your highest-margin orders (more biryani sharing rice, fewer per-order delivery costs). The 21.5% headline is psychologically impactful but capped at ₹150 — a ₹1200 family order only gets 12.5% off.</p>
+
+          <span class="label">Net math</span>
+          <div class="math">₹699 − ₹150 − ₹163 commission − ₹210 food cost<br>= <b>₹176 contribution (25%)</b> · Healthy</div>
+
+          <span class="label">Funnel</span>
+          <p>Counters the dinner-time competitive gap with Empire — Empire is single-portion lunch-led; HE can own the family-dinner-share occasion with this nudge.</p>
+
+          <span class="label">Success metric</span>
+          <div class="metric-row"><span>Target:</span> <b>≥25 orders/week with cart &gt;₹699</b> within 21 days</div>
+          <div class="metric-row"><span>By end of May:</span> <b>blended HE AOV ↑ from ₹464 → ₹540</b></div>
+        </div>
+        <div class="rec-foot">
+          <b>Don't:</b> drop the threshold to ₹499 — that just eats margin on existing AOV without lifting it.
+        </div>
+      </div>
+
+      <!-- Offer 6 -->
+      <div class="rec swiggy">
+        <div class="rec-h">
+          <div class="rec-num">OFFER #6</div>
+          <div class="rec-t">Heritage Banner Ad (paid acquisition, non-discount)</div>
+          <div class="rec-meta">
+            <span class="pf pf-sw">Swiggy</span>
+            <span class="rec-meta-pill">Self-Serve Ads</span>
+            <span class="rec-meta-pill">CPC</span>
+            <span class="rec-meta-pill">₹500/day</span>
+          </div>
+        </div>
+        <div class="rec-body">
+          <span class="label">Config</span>
+          <div class="config">Budget ₹500/day = ₹15,000/month<br>Targeting: 4km Shivajinagar radius<br>Creative: <em>"1918 Hamza Heritage. Real Hyderabadi Dakhni Biryani."</em><br>Headline image: Mutton Brain Dry / Hamza Special (no Andhra outlet has these)</div>
+
+          <span class="label">Why a NON-discount tactic in this list</span>
+          <p>You cannot win May target on discounts alone — math breaks. Paid visibility against your unique heritage positioning is the higher-leverage lever.</p>
+
+          <span class="label">Funnel</span>
+          <div class="math">₹500/day × CPC ~₹2-4<br>= 125-250 clicks/day<br>= 6-12 incremental orders/day @ 5% CTR-to-order<br>= <b>180-360 incremental orders/month</b><br>= <b>₹83K-167K incremental revenue</b></div>
+
+          <span class="label">Cost math</span>
+          <p>₹15K ad spend + 24.6% commission. Customer-acquisition cost per first-order ≈ <b>₹50-80</b> — well within HE LTV if even 25% reorder.</p>
+
+          <span class="label">Success metric</span>
+          <div class="metric-row"><span>14d:</span> <b>cost-per-incremental-order &lt; ₹100</b></div>
+          <span class="label">Scale / kill</span>
+          <div class="metric-row"><span>If &gt;₹150 → kill ·</span> <b>If &lt;₹70 → scale to ₹1000/day</b></div>
+        </div>
+        <div class="rec-foot">
+          <b>Don't:</b> write a discount-led creative ("Flat 50% off!") — you'll get clicks from price-shoppers who never reorder. Heritage creative attracts the customer who pays full price next time.
+        </div>
+      </div>
+
+      <!-- Offer 7 -->
+      <div class="rec zomato">
+        <div class="rec-h">
+          <div class="rec-num">OFFER #7</div>
+          <div class="rec-t">Mutton Biryani — single-hero 15% off</div>
+          <div class="rec-meta">
+            <span class="pf pf-zm">Zomato</span>
+            <span class="rec-meta-pill">Percentage Dish Discount</span>
+            <span class="rec-meta-pill">Item-level</span>
+            <span class="rec-meta-pill">Always-on</span>
+          </div>
+        </div>
+        <div class="rec-body">
+          <span class="label">Config</span>
+          <div class="config">15% off Mutton Biryani <em>only</em><br>Always-on. Restaurant-funded.<br>Native Zomato "Percentage Dish Discount" field</div>
+
+          <span class="label">Why item-level (not cart-wide)</span>
+          <p>Mutton Biryani is your highest-priced hero (premium SKU). 15% off makes it competitive against Andhra belt's mutton biryani at face value, while <b>preserving full margin on every other SKU in the cart</b>. Customer comes for discounted mutton biryani, often adds chicken kabab or roti at full price → blended cart margin holds.</p>
+
+          <span class="label">Cost math (MB selling ₹350)</span>
+          <div class="math">15% = ₹52 off → customer pays ₹298 for MB<br>If MB-only: ₹298 − ₹70 commission − ₹120 food cost = <b>₹108</b><br>If attached with kabab (₹248): cart ₹546, attach lifts contribution by ₹110 net</div>
+
+          <span class="label">Funnel</span>
+          <p>Item-level discount surfaces MB at top of menu with "Offer" badge = 1.5-2× menu-item CTR uplift.</p>
+
+          <span class="label">Success metric</span>
+          <div class="metric-row"><span>30d:</span> <b>MB share of order count ↑ from 5.1% → ≥8%</b></div>
+          <span class="label">Watch attach-rate</span>
+          <div class="metric-row"><span>If 60%+ orders are MB-only:</span> <b>kill (discounting captive demand)</b></div>
+        </div>
+        <div class="rec-foot">
+          <b>Don't:</b> apply this to Chicken Biryani (lower price, smaller absolute discount, less psychological pull) · run 25%+ on mutton (food cost ratio is highest of all SKUs).
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ Master execution checklist ══ -->
+    <h3 class="subsec-h">Master execution checklist (solo-Nihaf bandwidth)</h3>
+    <div class="matrix-wrap">
+      <table class="matrix">
+        <thead>
+          <tr><th style="width:60px;">Day</th><th>Action</th><th style="width:120px;">Time</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><b>D1</b></td><td>Build Hero Box combo SKU on both platforms (Offer #1)</td><td class="mono">45 min</td></tr>
+          <tr><td><b>D1</b></td><td>Configure Lunch 20% on Zomato (Offer #2)</td><td class="mono">20 min</td></tr>
+          <tr><td><b>D2</b></td><td>Configure Snack BOGO on Swiggy via PoC call (Offer #3)</td><td class="mono">30 min call + 24h propagation</td></tr>
+          <tr><td><b>D2</b></td><td>Opt in to Zomato Gold via PoC (Offer #4)</td><td class="mono">PoC negotiation 1-3 days</td></tr>
+          <tr><td><b>D3</b></td><td>Configure ₹150-off-above-₹699 on Zomato + Swiggy (Offer #5)</td><td class="mono">20 min each</td></tr>
+          <tr><td><b>D3</b></td><td>Build Swiggy Self-Serve Ads campaign (Offer #6)</td><td class="mono">60 min</td></tr>
+          <tr><td><b>D4</b></td><td>Configure 15% MB dish discount on Zomato (Offer #7)</td><td class="mono">15 min</td></tr>
+          <tr><td><b>D7, D14, D21, D28</b></td><td>Weekly check: pull <code>data/snapshots/aggregator-latest.json</code>, evaluate each offer against its success metric</td><td class="mono">20 min each</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>Cross-cutting rules:</b>
+      <ol style="margin-top:8px; margin-left:20px;">
+        <li>Never let total discount-stack on a single order exceed 25% of cart value. Flag any offers that overlap.</li>
+        <li>Mutton Biryani never goes above 15% off (food-cost ceiling).</li>
+        <li>Every offer has a 14-day kill date if metric not hit. Solo bandwidth means no orphan offers.</li>
+        <li>Track AOV weekly. If blended AOV drops below ₹420, pause Offer #3 (BOGO) first — it's most likely to dilute.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ══════════ SECTION 2: ADS ══════════ -->
+  <section id="ads" class="section">
+    <div class="section-h">
+      <div class="section-num">SECTION 2</div>
+      <h2 class="section-t">Paid Visibility &amp; Ads</h2>
+      <div class="section-d">17 ad-product types · 4 surgical scenarios · ₹18-28K/mo recommended</div>
+    </div>
+
+    <div class="preface">
+      <div class="preface-h">Honesty preface on confidence</div>
+      <p>Both Swiggy and Zomato keep their ads pricing <b>deliberately opaque</b> (no public rate-card; per-restaurant SRFs / manager-driven onboarding). Numbers below are triangulated from policy pages, agency blogs, restaurant-owner reportage, and the Swiggy/Zomato partner-app documentation.</p>
+      <ul>
+        <li>Several "products" Zomato lists are essentially the same auction priced under a different SKU (<b>Visit Pack</b>, Dining Visit Pack, AI Video Visit Pack, Off-App Visit Pack, Hyperpure-Credits Visit Pack, Package Visit Pack, Standard Legendary Pack) — all sold by KAMs as bundles wrapping the same CPC/CPV auction.</li>
+        <li>"Visit" attribution = user accesses page <b>OR</b> views the full ad (impression-based, 24h window for Visit Pack, 1h for Dining). <b>You pay even for views that never click</b> — this is the source of "thousands of clicks no conversion" complaints in restaurant reportage.</li>
+        <li>Swiggy Self-Serve Ads has a documented April 2026 issue: defaulting to higher budgets and silent auto-renewal; restaurants charged up to ₹20 lakh in unauthorized fees. <b>Operational rule: manually verify the budget cap and end-date every Monday, never trust auto-renewal.</b></li>
+      </ul>
+    </div>
+
+    <!-- ══ Ad matrix ══ -->
+    <h3 class="subsec-h">Layer 1 · Side-by-side ad-product matrix</h3>
+    <div class="matrix-wrap">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>Ad product / family</th>
+            <th>Swiggy</th>
+            <th>Zomato</th>
+            <th>Pricing</th>
+            <th>Min spend (practical)</th>
+            <th>Granularity</th>
+            <th>Bid control</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><b>Sponsored search listing</b><br>(top of search when user types "biryani")</td><td class="yes">Yes (Search Ads — Self-Serve)</td><td class="yes">Yes (Sponsored Listing — search slot)</td><td class="mono">CPC</td><td class="mono">₹500/day Zomato · ₹2-5K/day Swiggy KAM-pushed</td><td>Keyword, geo, daypart, dish</td><td>Manual or auto</td></tr>
+          <tr><td><b>Sponsored browse / collection</b></td><td class="yes">Collection Ads</td><td class="yes">Collection Listing sponsored</td><td class="mono">CPC / CPV</td><td class="mono">Same as above</td><td>Cuisine, collection, geo</td><td>Auto usually</td></tr>
+          <tr><td><b>Restaurant-page banner</b></td><td class="yes">High-Impact Static POS banners</td><td class="yes">Banner Website / Banner Collection</td><td class="mono">CPM ₹150-350 SW · ₹50-300 ZM</td><td class="mono">₹25K-75K/mo (Zomato banner)</td><td>Restaurant/cuisine/city</td><td>Flat negotiated</td></tr>
+          <tr><td><b>Home-screen / app-home banner</b></td><td class="yes">Premium roadblock</td><td class="yes">Homepage Takeover</td><td class="mono">Flat day-buy</td><td class="mono"><b>₹25 lakh/day</b> (ZM HP takeover)</td><td>City-level</td><td>Negotiated</td></tr>
+          <tr><td><b>Push-notification ad</b></td><td class="yes">Yes (₹1-3 per push)</td><td class="yes">Email/Push within Visit Pack</td><td class="mono">CPP / per-send</td><td class="mono">₹2 lakh+ Swiggy media-buy floor</td><td>Geo, cohort</td><td>KAM</td></tr>
+          <tr><td><b>Re-engagement / lapsed-customer push</b></td><td class="yes">Self-Serve "Re-engagement" cohort</td><td class="yes">Push within Visit Pack</td><td class="mono">CPC/CPV</td><td class="mono">~₹500/day</td><td>Days-since-last-order cohort</td><td>Auto</td></tr>
+          <tr><td><b>New-user / first-order acquisition</b></td><td class="yes">Coupon-funded (restaurant funds discount)</td><td class="yes">Coupon-funded "New User" promo</td><td class="mono">Funded discount + flat fee</td><td class="mono">Restaurant funds 100% of discount</td><td>New-user filter</td><td>KAM</td></tr>
+          <tr><td><b>Featured discount / "Shock price"</b></td><td class="yes">Flat-discount + featured slot</td><td class="yes">"Deal of the Day" Visit Pack</td><td class="mono">Funded discount + CPC/CPV</td><td>Variable</td><td>SKU-level, daypart</td><td>Manual</td></tr>
+          <tr><td><b>Brand video ad</b></td><td class="yes">Pre-roll / interstitial</td><td class="yes">AI Video Visit Pack</td><td class="mono">CPV</td><td class="mono">₹50K+ campaign minimum (estimate)</td><td>Geo, cuisine</td><td>KAM</td></tr>
+          <tr><td><b>Brand-page / brand-tile ad</b></td><td class="yes">Brand Hub</td><td class="yes">Brand Tiles</td><td class="mono">CPC / flat</td><td>KAM-driven</td><td>Brand-level</td><td>KAM</td></tr>
+          <tr><td><b>Branding-on-Search</b><br>(your logo above keyword results)</td><td class="partial">Limited</td><td class="yes">Dedicated "Branding on Search" SKU</td><td class="mono">CPM/Flat</td><td class="mono">₹50K+ usually</td><td>Keyword + city</td><td>Negotiated</td></tr>
+          <tr><td><b>Off-platform / extending audience</b></td><td class="no">No native</td><td class="yes">Off-App Visit Pack (re-targets on Meta/Google)</td><td class="mono">CPV</td><td>KAM</td><td>Cohort-defined</td><td>Negotiated</td></tr>
+          <tr><td><b>Hyperpure-Credit-funded ads</b><br>(rebated as raw-material wallet credits)</td><td class="no">No (no Hyperpure)</td><td class="yes">Hyperpure-Credits Visit Pack</td><td class="mono">CPV (60% rebated, 30-day expiry, 25% per-txn cap)</td><td>KAM</td><td>Same as Visit Pack</td><td>Same</td></tr>
+          <tr><td><b>Guaranteed-ROI program</b></td><td class="no">No formal SKU</td><td class="yes-cond">Yes — Guaranteed ROI Ad Program</td><td class="mono">Performance-tied</td><td class="mono">KAM-only (large brands)</td><td>—</td><td>Zomato algorithm</td></tr>
+          <tr><td><b>Subscription-tier promotion</b><br>(Swiggy One / Zomato Gold)</td><td class="yes">One-member-only deals</td><td class="yes">Gold-member-exclusive slot</td><td class="mono">Funded discount + flat</td><td>Restaurant funds the offer</td><td>Subscriber cohort</td><td>KAM</td></tr>
+          <tr><td><b>Bolt / instant-delivery promotion</b></td><td class="yes-cond">Bolt eligibility tag (operational)</td><td class="partial">"Quick Delivery" tag (operational)</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+          <tr><td><b>SocialAds (Meta ads using Zomato's first-party data)</b></td><td class="no">No equivalent</td><td class="yes">Yes — SocialAds on FB/IG</td><td class="mono">CPM/CPC (Meta auction)</td><td class="mono">~₹3,200/mo, 3-month commitment</td><td>Demographic + Zomato cohort</td><td>Self-serve via Zomato</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>Visit Pack family decoded:</b> Zomato sells 7+ "Visit Pack" SKUs (Standard, Dining, AI Video, Off-App, Package, Hyperpure-Credits, Standard Legendary). All are the <b>same CPV auction wrapped differently</b> for sales-pitch reasons. Don't fall for "you need a separate Pack for Dining" — it's the same inventory with a different attribution window.
+    </div>
+
+    <!-- ══ Per-platform deep dive (ads) ══ -->
+    <h3 class="subsec-h">Layer 2 · Per-platform deep dive</h3>
+
+    <div class="platform-card swiggy">
+      <div class="pc-h">
+        <span class="pf pf-sw">Swiggy</span>
+        <span class="pc-t">Self-Serve Ads platform</span>
+        <span class="pc-d">Auto-renewal trap — verify Monday</span>
+      </div>
+      <p>
+        <b>Where it lives:</b> Swiggy Partner App / partner.swiggy.com → "Ads" or "Manage Ads" tab. Self-Serve Ads launched broadly through 2024 and is now the default.
+      </p>
+      <div class="field-block">
+        <div class="fb-h">Campaign-creation flow</div>
+        Create Campaign → choose ad type (search / collection / banner / re-engagement / new-user) → Campaign name → Location (city → polygon → occasionally pincode) → Schedule (start, end, days, hours) → Items to promote → Pacing (even vs accelerated) → Daily / total budget → Bid (manual CPC or auto)
+      </div>
+      <div class="field-block">
+        <div class="fb-h">Bid mechanics</div>
+        Manual CPC only goes live in the auction once your bid clears the floor for the keyword/slot in your geo. Higher bid = more aggressive in auction.
+      </div>
+      <div class="field-block">
+        <div class="fb-h">Reporting</div>
+        Real-time dashboard — Impressions, Clicks, CTR, Spend, Conversions (orders), ROAS. Attribution: <b>last-click within 24h</b> (not officially documented; inferred from Visit Pack norms).
+      </div>
+      <div class="field-block">
+        <div class="fb-h">Minimum spend (practical floors)</div>
+        <b>CPC sponsored:</b> ₹500/day works in self-serve, but Swiggy KAM nudges restaurants toward ₹2-5K/day "to see meaningful data."<br>
+        <b>Banner / CPM:</b> ₹150-350 CPM, monthly contracts often start at ₹1.5-2 lakh.<br>
+        <b>Premium/roadblock/push:</b> quoted per-campaign, ₹2 lakh entry threshold.
+      </div>
+      <div class="warn-block">
+        <div class="wb-h">Known issue (Apr 2026 reportage)</div>
+        Swiggy Self-Serve has been charging restaurants up to ₹20 lakh in unauthorized ad fees due to default-high budgets and silent auto-renewal. <b>Operational rule for HE:</b> manually verify budget cap and end-date every Monday. Never trust auto-renewal.
+      </div>
+    </div>
+
+    <div class="platform-card zomato">
+      <div class="pc-h">
+        <span class="pf pf-zm">Zomato</span>
+        <span class="pc-t">Sponsored Listing + Visit Pack family</span>
+        <span class="pc-d">Two parallel channels: self-serve auction + KAM-sold packs</span>
+      </div>
+      <p>
+        <b>Where it lives:</b> Zomato Restaurant Partner App → "Ads &amp; Promotions" section, or web partner portal → Sales → Ads.
+      </p>
+      <p>
+        <b>Two parallel channels:</b>
+      </p>
+      <ol style="margin:8px 0 8px 24px; font-size:12px;">
+        <li><b>Self-serve "Sponsored Listings"</b> — auction-based CPC; you pick budget + bid + geo + collection.</li>
+        <li><b>KAM-sold "Packs" (Visit Pack family)</b> — KAM signs you to an SRF for a specific pack, Zomato's algorithm runs the campaign. Pack = bundle of CPV-priced visits with guaranteed deliverable count.</li>
+      </ol>
+      <table class="mini-tbl">
+        <thead><tr><th>Pack</th><th>Wrapper</th><th>Pricing twist</th></tr></thead>
+        <tbody>
+          <tr><td><b>Visit Pack</b></td><td>Standard</td><td>CPV, in-app placement</td></tr>
+          <tr><td><b>Dining Visit Pack</b></td><td>Zomato Dining promo</td><td>"Visit" = click within 1h</td></tr>
+          <tr><td><b>AI Video Visit Pack</b></td><td>Auto-generated video creative</td><td>CPV + video creation included</td></tr>
+          <tr><td><b>Off-App Visit Pack</b></td><td>Re-targets on Meta/Google</td><td>CPV, off-platform inventory</td></tr>
+          <tr><td><b>Package Visit Pack</b></td><td>Bundle of multiple Visit Packs</td><td>Volume pricing</td></tr>
+          <tr><td><b>Hyperpure-Credits Visit Pack</b></td><td>60% rebated to Hyperpure wallet</td><td>30-day expiry, 25%/txn cap first 4 uses</td></tr>
+          <tr><td><b>Standard Legendary Pack</b></td><td>Premium-tier bundle</td><td>Negotiated</td></tr>
+        </tbody>
+      </table>
+      <div class="warn-block">
+        <div class="wb-h">What is a "Visit"? — read carefully</div>
+        A "Visit" = user <b>either</b> (a) accesses the Restaurant Page by clicking the ad, <b>OR</b> (b) views the full ad (impression-based, 24h window for standard Visit Pack, 1h for Dining). <b>You pay even for views that never click</b> — source of "4,877 clicks no conversion" complaints in restaurant-owner reportage.
+      </div>
+      <div class="field-block">
+        <div class="fb-h">Bid mechanics (self-serve sponsored listing)</div>
+        Manual CPC floor — Zomato CPC for restaurant search starts ~₹5-15/click in most Indian cities, can spike to ₹40-50/click in dense competitive zones. Zomato may discount the CPC daily at sole discretion.
+      </div>
+      <div class="field-block">
+        <div class="fb-h">Minimum spend (practical floors)</div>
+        <b>Self-serve sponsored listing:</b> ₹500-1000/day enough to test.<br>
+        <b>KAM-sold Visit Pack:</b> ₹15K-30K/month minimum for brand listings.<br>
+        <b>Banner ads:</b> ₹25K-75K/month for display banners; ₹25 lakh/day for homepage takeover.<br>
+        <b>SocialAds (Meta via Zomato data):</b> ~₹3,200/month minimum, 3-month commitment.
+      </div>
+      <div class="warn-block">
+        <div class="wb-h">Pressure tactic to know</div>
+        Zomato has been pushing restaurants to spend <b>≥5% of platform revenue on ads</b> as a soft requirement for ranking. For HE doing ~₹20K/month on Zomato, that's a ~₹1,000 floor (~₹35/day). <b>Don't let the KAM push you past 10% without proof of incremental orders.</b>
+      </div>
+    </div>
+
+    <!-- ══ The meat: 4 surgical ad scenarios ══ -->
+    <h3 class="subsec-h">Layer 3 · 4 surgical ad scenarios for HE</h3>
+
+    <div class="callout">
+      <b>Stage diagnosis:</b> HE is <b>discovery-starved, not conversion-starved</b>. ~67 delivered orders/mo on Zomato + minimal Swiggy impressions = the funnel doesn't have enough top-of-funnel volume for either platform's ranking algorithm to flywheel. <b>Paid spend at this stage is buying signal</b>, not just orders. Every paid impression also feeds organic ranking weight.
+    </div>
+
+    <div class="scenario-grid">
+
+      <!-- Scenario A -->
+      <div class="scenario cold">
+        <div class="sc-h">
+          <span class="sc-letter">A</span>
+          Cold-start visibility (3-5km radius, never heard of HE)
+        </div>
+        <div class="sc-d">Build top-of-funnel signal on the platform that already converts.</div>
+        <div class="sc-grid">
+          <div class="lbl">Platform</div><div class="val"><span class="pf pf-zm">Zomato first</span> · Self-serve has lower CPC floor (₹5-15) vs Swiggy CPM (₹150-350) and HE is stronger here organically</div>
+          <div class="lbl">Ad type</div><div class="val">Sponsored Search Listing (search-slot placement). Skip banners and Visit Packs at this stage.</div>
+          <div class="lbl">Daily budget</div><div class="val"><span class="mono">₹500/day</span> for first 7 days (≈ ₹3,500 test). Then if CTR &gt; 1.5% AND ≥ 1 order/day attributed → <span class="mono">₹1,000/day</span> for week 2.</div>
+          <div class="lbl">Bid</div><div class="val">Manual CPC <span class="mono">₹6 to start, ceiling ₹12</span>. Above ₹12 you bid into Empire/Meghana competitive zone where math doesn't work for ₹464 AOV.</div>
+          <div class="lbl">Geo</div><div class="val">Shivajinagar + 4km polygon — Commercial St, MG Rd, Brigade Rd, Frazer Town, Cox Town, Richmond Town, Ulsoor. Pincodes <span class="mono">560001, 560005, 560008, 560025, 560042, 560051, 560052</span>.</div>
+          <div class="lbl">Daypart</div><div class="val"><span class="mono">12:00-15:00</span> + <span class="mono">19:30-22:30</span> only. Don't waste budget on 3pm or post-midnight.</div>
+          <div class="lbl">Keywords</div><div class="val"><code>biryani · chicken biryani · mutton biryani · chicken kabab · tandoori · mughlai · dakhni · hyderabadi biryani</code><br><b>Don't bid on</b> <code>andhra biryani</code> — wrong cuisine, wasted clicks.</div>
+          <div class="lbl">Success — 14d</div><div class="val">≥1,500 sponsored impressions · CTR ≥ 1.5% · ≥20 incremental orders · CAC ≤ ₹250</div>
+          <div class="lbl">Kill criterion</div><div class="val">Day 7: CTR &lt; 0.8% <b>OR</b> CPC &gt; ₹15 <b>OR</b> zero attributed orders → pause, fix menu page (photos, ratings, response time), re-launch in 7 days.</div>
+        </div>
+      </div>
+
+      <!-- Scenario B -->
+      <div class="scenario lift">
+        <div class="sc-h">
+          <span class="sc-letter">B</span>
+          Conversion lift (opened menu, didn't order)
+        </div>
+        <div class="sc-d">Visit Pack's 24h attribution naturally captures lapsed-cart users.</div>
+        <div class="sc-grid">
+          <div class="lbl">Platform</div><div class="val"><span class="pf pf-zm">Zomato Visit Pack</span> (re-engagement cohort)</div>
+          <div class="lbl">Ad type</div><div class="val">Sponsored listing with <b>discount-pairing</b> — ₹50 off above ₹399 OR free Ghee Rice with any biryani. Discount-paired sponsored listings convert 2-3× of non-discount.</div>
+          <div class="lbl">Budget</div><div class="val"><span class="mono">₹300/day for 14 days</span> (~₹4,200 total). Separate campaign from Scenario A so attribution stays clean.</div>
+          <div class="lbl">Bid</div><div class="val">Match Scenario A bid (<span class="mono">₹6-12</span>).</div>
+          <div class="lbl">Discount math</div><div class="val">₹50/order × ₹464 AOV = 10.8% margin hit. With 23.4% commission, you keep ~₹309/order. If COGS ≤ 35% (₹162) → contribution = <span class="mono">₹147/order</span>. <b>Break-even = recover CAC inside 3 orders/customer</b> — only makes sense paired with Scenario C re-engagement.</div>
+          <div class="lbl">Success</div><div class="val">Cart-build rate (impressions → carts) ≥ 4% · Order completion (carts → orders) ≥ 35%</div>
+        </div>
+      </div>
+
+      <!-- Scenario C -->
+      <div class="scenario reengage">
+        <div class="sc-h">
+          <span class="sc-letter">C</span>
+          Re-engagement (existing customers, lapsed 30+ days)
+        </div>
+        <div class="sc-d">Lead with Mutton Biryani + 1918 heritage. Heritage tagline pulls hardest on returning customers.</div>
+        <div class="sc-grid">
+          <div class="lbl">Platform</div><div class="val"><span class="pf pf-zm">Zomato push</span> within Visit Pack + <span class="pf pf-sw">Swiggy</span> Self-Serve "Re-engagement" segment</div>
+          <div class="lbl">Creative angle</div><div class="val"><em>"Four generations. Real Dakhni mutton biryani."</em> — Mutton Biryani is heritage hero, highest emotional pull, protects against next-door Andhra-belt commodity competition.</div>
+          <div class="lbl">Budget</div><div class="val"><span class="mono">₹150/day Swiggy + ₹150/day Zomato = ₹9,000/mo</span></div>
+          <div class="lbl">Frequency cap</div><div class="val"><b>Max 2 push notifications per lapsed user per 14-day window</b> — exceeding kills brand affinity faster than it drives orders.</div>
+          <div class="lbl">Success</div><div class="val">Reactivation rate (lapsed user → 1 order in 30d) ≥ 8%</div>
+        </div>
+      </div>
+
+      <!-- Scenario D -->
+      <div class="scenario daypart">
+        <div class="sc-h">
+          <span class="sc-letter">D</span>
+          Daypart push (lunch hours, biryani peak)
+        </div>
+        <div class="sc-d">Lunch 12-3pm = biryani converts hardest in Bangalore office-corridor demographics. HE's location is uniquely suited (MG Rd / Commercial St / Shivajinagar bus stand).</div>
+        <div class="sc-grid">
+          <div class="lbl">Platform</div><div class="val"><span class="pf pf-both">Both</span> — Sponsored search + sponsored collection (Biryani cuisine page)</div>
+          <div class="lbl">Time-window</div><div class="val"><span class="mono">11:30-14:30 only</span> (catch pre-lunch search + late lunch)</div>
+          <div class="lbl">Bid premium</div><div class="val">Bid <b>+50% over Scenario A baseline</b> during this window — i.e. ₹9 default → <span class="mono">₹13.5 lunch</span>. Lunch CPC inflates because Empire and chains bid hard, but conversion rate doubles, so math holds if AOV holds.</div>
+          <div class="lbl">Budget</div><div class="val"><span class="mono">₹400/day lunch-only campaign</span>, separate from always-on baseline</div>
+          <div class="lbl">Success</div><div class="val">Lunch-window orders ≥ 35% of daily ad-attributed orders · ROAS ≥ 3.0× during lunch</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ Benchmarks ══ -->
+    <h3 class="subsec-h">Industry benchmarks · Bangalore biryani QSR</h3>
+    <p class="dim small" style="margin-bottom:10px;">Estimates synthesizing agency-published ranges + Indian restaurant-owner reportage. No platform-published category benchmark exists for biryani QSR Bangalore.</p>
+    <table class="bench">
+      <thead><tr><th style="width:230px;">Metric</th><th>Zomato</th><th>Swiggy</th></tr></thead>
+      <tbody>
+        <tr><td>CPC (search)</td><td>₹5-15 typical · ₹40-50 hot zones</td><td>₹150-600 CPM (no clean CPC published)</td></tr>
+        <tr><td>CTR (sponsored search)</td><td>1.5-2.5% decent · 2.5%+ strong · &lt;1% broken</td><td>Similar</td></tr>
+        <tr><td>Cart-build rate (impression → cart)</td><td>2-4%</td><td>2-4%</td></tr>
+        <tr><td>Order rate (cart → order)</td><td>30-45%</td><td>30-45%</td></tr>
+        <tr><td>ROAS for QSR delivery</td><td>2.5-4× viable · &lt;2× kill</td><td>2.5-4× viable</td></tr>
+        <tr><td>CAC per delivered order</td><td>₹150-300 in tier-1</td><td>₹200-400 in tier-1</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ══ Budget split ══ -->
+    <h3 class="subsec-h">Total monthly ad budget for HE</h3>
+    <div class="budget-card">
+      <div class="budget-h">₹18,000 – ₹28,000 / month · split 65% Zomato · 35% Swiggy in May 2026</div>
+      <div class="budget-bar">
+        <div class="budget-seg zm" style="width:65%;">ZOMATO 65% · ~₹15K</div>
+        <div class="budget-seg sw" style="width:35%;">SWIGGY 35% · ~₹8K</div>
+      </div>
+      <p class="dim small" style="margin-top:10px;">
+        <b>Zomato 65%:</b> Already converts; organic-ad flywheel works. <b>Swiggy 35%:</b> Too thin to ignore, but the platform's KAM behaviour + min-spend pressure means keep small until it earns more. <b>Avoid at this stage:</b> premium banners, homepage takeovers, Brand Tiles, AI Video Visit Pack, SocialAds — spend-floor traps. Re-evaluate end-May; if ROAS ≥ 3.5× anywhere, double that line item for June.
+      </p>
+    </div>
+
+    <!-- ══ Scale/kill matrix ══ -->
+    <h3 class="subsec-h">Scale up vs kill — explicit thresholds</h3>
+    <table class="bench">
+      <thead><tr><th style="width:240px;">Trigger</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>ROAS ≥ 4× sustained 14d</td><td>2× the daily budget, hold bid</td></tr>
+        <tr><td>ROAS 2.5-4×</td><td>Hold steady, optimize creative/keywords</td></tr>
+        <tr><td>ROAS 1.5-2.5×</td><td>Cut budget 50%, re-test bid</td></tr>
+        <tr><td>ROAS &lt; 1.5× for 7d</td><td>Pause; diagnose menu page (photos/ratings/M2O) before relaunch</td></tr>
+        <tr><td>CPC &gt; ₹15 with no incremental orders for 7d</td><td>Pause that keyword</td></tr>
+        <tr><td>CTR &lt; 0.8% for 7d</td><td>Creative/menu-photo problem, not bid problem — pause and fix the page</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ══ Aggregator vs Meta vs Google ══ -->
+    <h3 class="subsec-h">Aggregator vs Meta vs Google — where the next ₹10K goes</h3>
+    <p style="margin-bottom:8px;">Recommended split: <b>₹6K Zomato sponsored search + ₹4K Meta CTWA</b>. Trade-offs:</p>
+    <table class="tradeoff">
+      <thead><tr><th>Channel</th><th>Strength</th><th>Weakness</th></tr></thead>
+      <tbody>
+        <tr><td>Aggregator ads</td><td>Buyers already in food-ordering mode (purchase intent locked-in). Conversion math is shorter.</td><td>Every ₹100 of ad-driven order pays ~₹23 commission to Zomato / ₹25 Swiggy. On AOV ₹464, ad rupee competes against ₹110 already going to platform.</td></tr>
+        <tr><td>Meta CTWA</td><td>Wider funnel, no aggregator commission if order routes through direct channel (WABA flow). Per-order economics ~25% better.</td><td>CAC higher (₹250-500), requires landing-page funnel.</td></tr>
+        <tr><td>Google Search</td><td>"biryani near me Shivajinagar" CPC ₹3-8.</td><td>Only works if landing page converts to direct order. HE's WABA/direct flow currently weaker than aggregator flow → wait until June.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout">
+      <b>For May ₹15L push:</b> volume math doesn't work without aggregator ads — direct channels can't realistically clear that target alone. <b>Aggregators = volume engine for May. Meta/Google = margin layer for June onwards.</b>
+    </div>
+
+    <!-- ══ Funnel benchmark ══ -->
+    <h3 class="subsec-h">Industry funnel benchmark (Bangalore food-delivery)</h3>
+    <pre class="funnel">Sponsored-listing impressions          1,000  (baseline)
+   ↓ CTR ~1.5–2.5%
+Menu page opens / clicks                  20
+   ↓ Menu→Cart ~15–25%
+Cart builds                                4
+   ↓ Cart→Order ~30–45%
+Delivered orders                       1.4–1.8</pre>
+    <p class="dim small">
+      <b>Sanity check for HE:</b> if your Zomato Sponsored Listing campaign delivers 10,000 impressions in a month and produces ~14-18 orders, you're at industry benchmark. Below that, the <b>menu page is the leak</b> (photo quality, rating, dish descriptions, response time) — fix before increasing spend.
+    </p>
+  </section>
+
+  <!-- ══════════ SECTION 3: WEEK 1 LAUNCH PLAN ══════════ -->
+  <section id="plan" class="section">
+    <div class="section-h">
+      <div class="section-num">SECTION 3</div>
+      <h2 class="section-t">Week-1 launch plan · Monday May 12, 2026</h2>
+      <div class="section-d">60-min Monday execution · solo bandwidth</div>
+    </div>
+
+    <div class="timeline-card">
+      <div class="tl-h">Pre-launch audit (do BEFORE opening any ad dashboard)</div>
+      <ol>
+        <li>Audit Zomato menu page — every hero dish (Ghee Rice, Chicken Kabab, Tandoori Chicken, Mutton Biryani, Chicken Biryani) must have a sharp photo</li>
+        <li>Confirm Zomato store rating ≥ 4.0 — below this, ads waste money</li>
+        <li>Add <em>"Since 1918 — Four-generation Dakhni heritage"</em> line in restaurant description</li>
+      </ol>
+    </div>
+
+    <div class="timeline-card">
+      <div class="tl-h">Monday actions (60 min, in this order)</div>
+      <ol>
+        <li>Open Zomato Restaurant Partner App → Ads &amp; Promotions → Create Campaign</li>
+        <li>Campaign name: <code>HE-MAY-COLD-START-V1</code></li>
+        <li>Type: Sponsored Listing — Search slot</li>
+        <li>Geo: Shivajinagar + 4km polygon (or pincodes <code>560001/05/08/25/42/51/52</code>)</li>
+        <li>Schedule: <span class="mono">May 12 → May 25</span> (14 days), all days, hours <span class="mono">12:00-15:00 + 19:30-22:30</span></li>
+        <li>Bid: Manual CPC <span class="mono">₹6, max ₹12</span></li>
+        <li>Daily budget: <span class="mono">₹500</span></li>
+        <li>Total budget cap: <span class="mono">₹7,000</span> (hard ceiling, <b>do NOT enable auto-renewal</b>)</li>
+        <li>Keywords: <code>biryani, chicken biryani, mutton biryani, chicken kabab, tandoori, mughlai, hyderabadi biryani, dakhni biryani</code></li>
+        <li>Save, launch</li>
+        <li>Set calendar reminder: <b>every Monday 9am — pull Zomato dashboard, log CTR/CPC/orders into a tracking sheet</b></li>
+      </ol>
+    </div>
+
+    <div class="donts">
+      <div class="donts-h">Don't do in Week 1</div>
+      <ul>
+        <li>Don't sign any KAM-pitched "Visit Pack" or "Growth Pack" SRF</li>
+        <li>Don't enable Hyperpure-Credit Visit Pack (locks you into Hyperpure for 30d)</li>
+        <li>Don't touch Swiggy ads (wait for Zomato baseline to read clean)</li>
+        <li>Don't authorize auto-renewal on any campaign</li>
+        <li>Don't run discount-paired ads yet (mixes attribution)</li>
+      </ul>
+    </div>
+
+    <h3 class="subsec-h">Sequencing · 4 weeks of May 2026</h3>
+    <div class="timeline-card">
+      <div class="tl-week">Week 1 · May 12-18</div>
+      <p>Launch <b>Scenario A on Zomato</b>. ₹500/day. Verify Zomato menu page is photo-optimized + has clear "1918 Heritage" line. <b>Don't touch Swiggy yet.</b> Measure baseline.</p>
+      <div class="tl-week">Week 2 · May 19-25</div>
+      <p>If A is clean (CTR &gt; 1.5%, CPC &lt; ₹12), launch <b>Scenario D (lunch push) on Zomato</b> + open <b>₹500/day Scenario A on Swiggy</b>. Add <b>Scenario C re-engagement on Zomato</b>.</p>
+      <div class="tl-week">Week 3 · May 26-30</div>
+      <p>If Zomato A+D both ROAS &gt; 3, launch <b>Scenario B (conversion-lift with discount)</b>. Add <b>Swiggy Scenario D (lunch)</b>. <b>Scale Zomato by +50%</b> if budget allows.</p>
+      <div class="tl-week">Week 4 · May 31 – Jun 4</div>
+      <p>Hold or kill based on numbers. Pull May report. Decide June allocation.</p>
+    </div>
+  </section>
+
+  <!-- ══════════ SOURCES ══════════ -->
+  <section id="sources" class="sources">
+    <h3>Sources &amp; references · clickable</h3>
+
+    <div class="sources-cat">Offer config · UrbanPiper / Sapaad (POS-layer documentation, mirrors platform APIs)</div>
+    <div class="sources-list">
+      <a href="https://help.urbanpiper.com/ordering-channels/zomato/running-discounts-on-zomato" target="_blank">Running Discounts on Zomato — UrbanPiper</a>
+      <a href="https://urbanpiper.helpjuice.com/hub-zomato/351214-bogo-offer-on-zomato" target="_blank">BOGO offer on Zomato — UrbanPiper Hub</a>
+      <a href="https://blog.urbanpiper.com/promotional-strategies-for-a-restaurateur-on-swiggy-c34138a13172/" target="_blank">Promotional strategies for Swiggy — UrbanPiper Blog</a>
+      <a href="https://kb.sapaad.com/help/how-do-i-enable-buy-one-get-one-bogo-promos-for-zomato" target="_blank">BOGO promos for Zomato — Sapaad KB</a>
+      <a href="https://help.urbanpiper.com/ordering-channels/swiggy/manage-your-orders" target="_blank">Manage Orders (Swiggy) — UrbanPiper</a>
+      <a href="https://help.urbanpiper.com/direct-ordering/configuring-coupons" target="_blank">Configuring Coupons — UrbanPiper</a>
+      <a href="https://www.urbanpiper.com/blog/zomato-marketing-strategies-for-restaurants" target="_blank">6 Best Zomato Marketing Strategies — UrbanPiper</a>
+      <a href="https://www.urbanpiper.com/blog/how-to-increase-restaurant-sales-on-swiggy-and-zomato-a-mini-guide" target="_blank">How to Increase Restaurant Sales on Swiggy &amp; Zomato — UrbanPiper</a>
+    </div>
+
+    <div class="sources-cat">Platform official · Swiggy Catalyst / Zomato</div>
+    <div class="sources-list">
+      <a href="https://blog.swiggy.com/swiggy-catalyst/elevate-your-restaurants-visibility-with-swiggys-self-serve-ads/" target="_blank">Self-Serve Ads — Swiggy Diaries</a>
+      <a href="https://blog.swiggy.com/swiggy-catalyst/skyrocket-your-restaurants-growth-say-hello-to-swiggys-smart-links/" target="_blank">Swiggy Smart Links / Menu Score</a>
+      <a href="https://bytes.swiggy.com/segmentation-at-swiggy-part-1-d9566ab1a442" target="_blank">Segmentation at Swiggy Part 1 — Swiggy Bytes Eng Blog</a>
+      <a href="https://www.zomato.com/policies/ads/" target="_blank">Zomato Ads master policy index</a>
+      <a href="https://www.zomato.com/policies/ads/visit-pack-policy/" target="_blank">Zomato Visit Pack policy</a>
+      <a href="https://www.zomato.com/policies/ads/dining-visit-pack-policy/" target="_blank">Zomato Dining Visit Pack policy</a>
+      <a href="https://www.zomato.com/policies/ads/ai-video-visit-pack-policy/" target="_blank">Zomato AI Video Visit Pack policy</a>
+      <a href="https://www.zomato.com/policies/ads/off-app-visit-pack-policy/" target="_blank">Zomato Off-App Visit Pack policy</a>
+      <a href="https://www.zomato.com/policies/ads/hyperpure-credits-visit-pack-policy/" target="_blank">Zomato Hyperpure-Credits Visit Pack policy</a>
+      <a href="https://www.zomato.com/policies/ads/growth-pack-policy/" target="_blank">Zomato Growth Pack policy</a>
+      <a href="https://www.zomato.com/policies/ads/brand-tiles-policy/" target="_blank">Zomato Brand Tiles policy</a>
+      <a href="https://www.zomato.com/policies/ads/branding-on-search-policy/" target="_blank">Zomato Branding-on-Search policy</a>
+      <a href="https://www.zomato.com/policies/ads/guaranteed-roi/" target="_blank">Zomato Guaranteed-ROI Ad Program</a>
+      <a href="https://www.zomato.com/social-ads/" target="_blank">Zomato SocialAds (Meta/IG)</a>
+      <a href="https://www.zomato.com/blog/powering-restaurant-ads-on-zomato/" target="_blank">Powering restaurant ads on Zomato — ML eng blog</a>
+    </div>
+
+    <div class="sources-cat">Pricing &amp; rate-card · agency intelligence</div>
+    <div class="sources-list">
+      <a href="https://www.themediaant.com/digital/swiggy-advertising" target="_blank">Swiggy Advertising rates — TheMediaAnt</a>
+      <a href="https://www.themediaant.com/blog/swiggy-advertising-types-targeting-and-facts/" target="_blank">Swiggy Advertising types — TheMediaAnt blog</a>
+      <a href="https://www.excellentpublicity.com/digital/swiggy-app" target="_blank">Swiggy Advertising rates — Excellent Publicity</a>
+      <a href="https://www.themediaant.com/digital/zomato-advertising" target="_blank">Zomato Advertising overview — TheMediaAnt</a>
+      <a href="https://www.themediaant.com/digital/zomato-advertising/banner" target="_blank">Zomato Banner Ad cost — TheMediaAnt</a>
+      <a href="https://chuk.in/how-to-use-social-ads-on-zomato/" target="_blank">How to use SocialAds on Zomato — chuk.in</a>
+    </div>
+
+    <div class="sources-cat">Reportage &amp; risks (read these before signing anything)</div>
+    <div class="sources-list">
+      <a href="https://www.medianama.com/2026/04/223-swiggy-ad-charges-without-consent-unauthorized-deductions-restaurants/" target="_blank">Swiggy ad-charges-without-consent — Medianama Apr 2026</a>
+      <a href="https://www.medianama.com/2025/06/223-zomato-opaque-ad-model-small-restaurants-unsustainable-spending/" target="_blank">Zomato Opaque Ad Model — Medianama</a>
+      <a href="https://www.thirdeyesight.in/how-zomatos-opaque-ad-model-is-squeezing-small-restaurants-margins-and-forcing-unsustainable-spending/" target="_blank">Zomato Opaque Ad Model analysis — ThirdEyesight</a>
+      <a href="https://inc42.com/buzz/zomato-now-asking-restaurants-to-bear-cost-of-cancellation-increase-marketing-spends/" target="_blank">Zomato 5% revenue ad spend pressure — Inc42</a>
+      <a href="https://the-captable.com/2025/03/swiggy-ad-revenue-push-restaurants/" target="_blank">Swiggy ad-revenue push — TheCapTable</a>
+    </div>
+
+    <div class="sources-cat">Commission economics &amp; market context</div>
+    <div class="sources-list">
+      <a href="https://blog.menuviel.com/zomato-fees-and-commissions-for-restaurants/" target="_blank">Zomato Fees &amp; Commissions 2026 — Menuviel</a>
+      <a href="https://blog.menuviel.com/swiggy-fees-and-commissions-for-restaurants/" target="_blank">Swiggy Fees &amp; Commissions 2026 — Menuviel</a>
+      <a href="https://www.gonukkad.com/blog/zomato-pro-plus-membership" target="_blank">Zomato Pro Plus Membership Guide — GoNukkad</a>
+      <a href="https://restromark.com/restaurant-marketing-in-bangalore-zomato-marketing/" target="_blank">Restaurant Marketing in Bangalore — RestroMark</a>
+    </div>
+  </section>
+
+  <p class="dim small" style="text-align:center; margin-top:50px;">
+    Generated 2026-05-10 · Synthesized from two parallel Opus-4.7 research agents · Live data backing this analysis at <a href="/ops/aggregator/he/zomato/">/ops/aggregator/he/zomato/</a> &amp; <a href="/ops/aggregator/he/swiggy/">/ops/aggregator/he/swiggy/</a>
+  </p>
+
+</div>
+
+</body>
+</html>
