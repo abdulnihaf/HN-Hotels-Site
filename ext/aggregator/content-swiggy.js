@@ -18,6 +18,9 @@
 
   chrome.runtime.sendMessage({ type: 'PAGE_READY', platform: 'swiggy' }).catch(() => {});
 
+  // Dine-out pages are handled by content-swiggy-dineout.js -- bail to prevent delivery page cycling
+  if (_initUrl.includes('/dineout/')) { console.log('[HN] Swiggy: dineout URL, deferring to content-swiggy-dineout.js'); return; }
+
   const CONFIG = {
     endpoint: 'https://hnhotels.in/api/aggregator-pulse',
     apiKey: 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA',
@@ -313,6 +316,26 @@
     drainBackgroundQueue().catch(() => {});   // drain background.js queue first
     const text = document.body?.innerText || '';
 
+    // 2026-05-10 DIAGNOSTIC BEACON: every readAndPush tick posts the URL + text
+    // length + detected page so we can see from server-side WHERE the user's
+    // Chrome is sitting. Fires once per minute per page. Extension-version aware
+    // so we can confirm new content-script code is actually running.
+    pushMetrics({
+      source: 'dom_read', platform: 'swiggy',
+      brand: 'all', outlet_id: 'beacon',
+      page: 'tick_beacon',
+      metrics: {
+        url: location.href,
+        text_len: text.length,
+        is_login: isLoginContent(text),
+        page_detect: detectPage(),
+        sample_first_200: text.slice(0, 200),
+        ext_v: 'v5.0.4_diag',
+        ts: new Date().toISOString(),
+      },
+      captured_at: new Date().toISOString(),
+    });
+
     if (text.length < 100 || isLoginContent(text)) {
       if (isLoginContent(text)) {
         chrome.runtime.sendMessage({ type: 'LOGIN_DETECTED', platform: 'swiggy' }).catch(() => {});
@@ -341,9 +364,24 @@
   // Page text format (verified from live portal, Apr 2026):
   // "Total Customer Paid (A)\n₹567\nTotal Fees (B)\n-₹133.81\nNet Payout (A+B+C+D+E)\n₹405.65"
   function extractFinance(text) {
+    // 2026-05-10: Finance-page parser stopped producing rows after Apr 17.
+    // Always dump first 8KB of innerText so we can see the current page format
+    // server-side and rewrite regexes without manual Chrome inspection.
+    let _ridFromUrl = null;
+    const _urlMatch = location.href.match(/order-payout\/(\d+)/);
+    if (_urlMatch) _ridFromUrl = _urlMatch[1];
+    const _brandFromUrl = OUTLETS[_ridFromUrl] || 'unknown';
+    pushMetrics({
+      source: 'dom_read', platform: 'swiggy',
+      brand: _brandFromUrl, outlet_id: _ridFromUrl || 'unknown',
+      page: 'finance_dump_' + _brandFromUrl,
+      metrics: { dump: text.slice(0, 8000), url: location.href, ts: new Date().toISOString() },
+      captured_at: new Date().toISOString(),
+    });
+
     const ridMatch = text.match(/RID:\s*(\d+)/);
-    const rid = ridMatch?.[1] || '';
-    const brand = OUTLETS[rid] || 'unknown';
+    const rid = ridMatch?.[1] || _ridFromUrl || '';
+    const brand = OUTLETS[rid] || _brandFromUrl;
 
     const finance = {};
     const nx = (key, regex) => {
