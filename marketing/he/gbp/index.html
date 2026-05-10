@@ -607,9 +607,20 @@ function renderPhotos(d) {
 function renderQandA(d) {
   const q = d.qanda;
   const sec = document.getElementById('qandaSection');
-  if (!q || q.error) {
-    sec.style.display = q?.error ? '' : 'none';
-    if (q?.error) document.getElementById('qandaBlock').innerHTML =
+  if (!q) { sec.style.display = 'none'; return; }
+  if (q.deprecated) {
+    sec.style.display = '';
+    document.getElementById('qandaSummary').textContent = 'API retired — manual only';
+    document.getElementById('qandaBlock').innerHTML = `
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px">
+        <div style="font-size:12px;color:var(--text2);line-height:1.6">${escapeHtml(q.message || '')}</div>
+        <a href="https://business.google.com/" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;font-size:11px;font-weight:700;color:var(--brand);text-decoration:none">Manage Q&amp;A in Business Profile →</a>
+      </div>`;
+    return;
+  }
+  if (q.error) {
+    sec.style.display = '';
+    document.getElementById('qandaBlock').innerHTML =
       `<div class="d" style="font-size:12px;color:var(--muted)">Q&amp;A data unavailable: ${escapeHtml(q.error)}</div>`;
     return;
   }
