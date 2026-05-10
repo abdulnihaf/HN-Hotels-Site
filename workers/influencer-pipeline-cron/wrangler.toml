@@ -2,16 +2,18 @@ name = "hn-influencer-pipeline-cron"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
 
-# Cron schedule (UTC). IST = UTC + 5:30
-# 22:30 UTC = 04:00 IST  · daily discovery (Apify hashtag rotation, ~30-50 new handles)
-# */15 * * * *           · enrichment ticker (process 8 from queue every 15 min)
-# 23:30 UTC = 05:00 IST  · score+bucket recompute (no-op currently; placeholder for future)
-# 04:30 UTC = 10:00 IST  · daily outreach wave (50 unique creators across 3 channels)
+# Cost-conscious daily-only schedule (pay-as-you-go Apify, ~$25-30/mo).
+# All 4 triggers fire ONCE per day, 30 min apart so each completes cleanly.
+#
+# 22:00 UTC = 03:30 IST  · discovery (today's vector: hashtag | geotag | tagged | comments)
+# 22:30 UTC = 04:00 IST  · enrichment (single 100-profile batch — drains queue)
+# 23:00 UTC = 04:30 IST  · scoring (no-op, reserved for future cached scoring)
+# 04:30 UTC = 10:00 IST  · outreach-wave (50 unique creators across channels)
 [triggers]
 crons = [
+  "0 22 * * *",
   "30 22 * * *",
-  "*/15 * * * *",
-  "30 23 * * *",
+  "0 23 * * *",
   "30 4 * * *"
 ]
 
