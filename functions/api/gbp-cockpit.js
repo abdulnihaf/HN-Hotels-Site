@@ -123,7 +123,8 @@ export async function onRequest(context) {
       tasks.kwThis = fetchKeywords(token, brand.location, period.thisMonth);
       tasks.kwPrev = fetchKeywords(token, brand.location, period.lastMonth);
     }
-    if (include.includes('profile') || include.includes('health')) {
+    if (include.includes('profile') || include.includes('health') ||
+        include.includes('actionQueue') || include.includes('algorithmTips')) {
       tasks.profile = fetchProfile(token, brand.location);
     }
     if (include.includes('reviews') || include.includes('profile') || include.includes('actionQueue')) {
