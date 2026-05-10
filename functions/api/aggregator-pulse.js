@@ -758,51 +758,13 @@ async function handleGet(db, url, headers) {
       per_order_status: last30dCount < 5 ? 'sparse' : (nonZeroDays < 15 ? 'partial' : 'healthy'),
     };
 
-    // ---- SWIGGY AGGREGATE FALLBACK ----
-    // Swiggy historical per-order data isn't being captured by the extension
-    // today (Finance-page DOM scrape died ~Apr 17, fetchOrders API isn't
-    // intercepted in normal nav flow). However, business-metrics page DOES
-    // produce reports_swiggy_{period} aggregates which we capture every cycle.
-    // When per-order data is sparse, populate sections.sales_aggregate with
-    // those numbers so the dashboard isn't empty.
-    //
-    // CAVEAT: reports_swiggy_* is brand='all' (combined HE+NCH) because
-    // Swiggy's business-metrics page shows combined view by default.
-    // Surfacing it as he_only would lie. We label it explicitly as combined.
-    if (platform === 'swiggy' && sections.capture_health.per_order_status === 'sparse') {
-      const reportType = `reports_swiggy_${period}`;
-      const reportRow = await db.prepare(`
-        SELECT * FROM aggregator_snapshots
-        WHERE platform='swiggy' AND metric_type=? AND brand='all'
-        ORDER BY captured_at DESC LIMIT 1
-      `).bind(reportType).first();
-      if (reportRow) {
-        const reportData = safeJsonParse(reportRow.data) || {};
-        const num = (v) => {
-          if (v === null || v === undefined || v === '') return null;
-          const n = parseFloat(v);
-          return isNaN(n) ? null : n;
-        };
-        sections.sales_aggregate = {
-          data_scope: 'combined_he_nch',
-          data_provenance: `aggregator_snapshots metric_type='${reportType}' (Swiggy business-metrics page, combined view)`,
-          captured_at: reportRow.captured_at,
-          totals: {
-            net_sales: num(reportData.rpt_net_sales),
-            delivered_orders: num(reportData.rpt_delivered_orders),
-            cancelled_orders: num(reportData.rpt_cancelled_orders),
-            aov: num(reportData.rpt_net_aov),
-            impressions: num(reportData.impressions),
-            menu_opens: num(reportData.menu_opens),
-            cart_builds: num(reportData.cart_builds),
-            orders_placed: num(reportData.orders_placed),
-            new_customers: num(reportData.new_customers),
-            repeat_customers: num(reportData.repeat_customers),
-          },
-          warning: `These numbers are COMBINED HE+NCH on Swiggy. Per-outlet split requires Finance-page DOM scrape (broken since 2026-04-17) or fetchOrders API capture (not currently triggered by extension nav). Use as approximate signal only.`,
-        };
-      }
-    }
+    // ---- SWIGGY AGGREGATE FALLBACK — REMOVED 2026-05-10 ----
+    // Previously surfaced reports_swiggy_{period} (brand='all' = combined HE+NCH)
+    // when per-order data was sparse. STRICT HE-ONLY POLICY prohibits any
+    // combined data on a brand-specific endpoint, even labelled. Removed.
+    // The capture_health field above signals the gap; UI shows banner only.
+    // Per-outlet Swiggy capture is being rebuilt via the Finance-page DOM
+    // path (work in progress 2026-05-10).
 
     // ===== HE-only enrichment from per-brand order data =====
     // Sales is already correct above. Now populate Growth + Ops with HE-only-derived
