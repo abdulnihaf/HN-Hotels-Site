@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "schema_url": "fleet/winpc-MASTER-CONTEXT.md",
-  "last_updated": "2026-05-11T12:27:08Z",
+  "last_updated": "2026-05-11T13:01:47Z",
   "appliance": {
     "hostname": "hn-winpc",
     "tailscale_ip": "100.65.7.61",
@@ -40,7 +40,7 @@
       "owner": "dine-aggregator",
       "criticality": "low",
       "lock_to_write": null,
-      "notes": "Isolated profile — separate Chrome process tree from default. Drives Dining-Out + EazyDiner."
+      "notes": "DECOMMISSIONED 2026-05-11 by chat ad531102 — Chrome processes killed; user-data-dir at C:\\hn-control\\dine-profile remains on disk but is unused. Production dine-in scraping now rides inside aggregator-pulse's shared extension v6.2.0+ in default-profile Chrome (content-dining.js / content-swiggy-dineout.js / content-eazydiner.js)."
     },
     "winpc.chrome_profile.modash-profile-1": {
       "kind": "chrome_profile",
@@ -162,7 +162,7 @@
       "owner": "dine-aggregator",
       "criticality": "low",
       "lock_to_write": null,
-      "notes": "Launches isolated Chrome with dine-profile + remote-debug port 9223. REGULARIZED 2026-05-11 (was claimed by dine-aggregator implicitly but not enumerated)."
+      "notes": "Logon trigger; launches isolated Chrome with dine-profile + remote-debug port 9223. REGULARIZED 2026-05-11; OBSOLETE post-decommission 2026-05-11 — would respawn the decommissioned isolated-Chrome strategy on next logon. Owner may disable via schtasks /Change /TN HN-Dine-Aggregator-Chrome /DISABLE."
     },
     "winpc.scheduled_task.HN-Dine-Aggregator-Tabs": {
       "kind": "scheduled_task",
@@ -202,7 +202,7 @@
       "owner": "dine-aggregator",
       "criticality": "low",
       "lock_to_write": null,
-      "notes": "Chrome instance bound to dine-profile + remote-debug port 9223."
+      "notes": "DECOMMISSIONED 2026-05-11 by chat ad531102 — no chrome.exe currently matching this pattern (killed). Pattern would re-instantiate if HN-Dine-Aggregator-Chrome task fires on next logon, but that strategy is obsolete; see dine-aggregator.purpose."
     },
     "winpc.process_pattern.aggregator-chrome": {
       "kind": "process_pattern",
@@ -218,7 +218,7 @@
       "owner": "dine-aggregator",
       "criticality": "low",
       "lock_to_write": null,
-      "notes": "Chrome remote-debug port for dine-profile. Used by cdp_driver.py."
+      "notes": "DECOMMISSIONED 2026-05-11 by chat ad531102 — port no longer listening (Chrome killed). Was used by cdp_driver.py to drive dine-profile Chrome; production dine-in scraping now via shared-extension content scripts (no CDP needed)."
     },
     "winpc.lock.chrome-default": {
       "kind": "lock",
@@ -286,7 +286,7 @@
       "owner": "dine-aggregator",
       "criticality": "low",
       "lock_to_write": null,
-      "notes": "content-swiggy-dineout.js — Swiggy Dine-Out outlet 1372737."
+      "notes": "content-swiggy-dineout.js — Swiggy Dine-Out outlet 1372737. Co-resident in aggregator-pulse's extension v6.2.0+; runs in default Chrome on Swiggy partner /food/dineout/* tabs."
     },
     "winpc.chromium_extension_content_script.apps.livetableapp.com": {
       "kind": "chromium_extension_content_script",
@@ -294,13 +294,13 @@
       "owner": "dine-aggregator",
       "criticality": "low",
       "lock_to_write": null,
-      "notes": "content-eazydiner.js — LiveTable scraper for outlet 712958. Blocked on owner OTP login."
+      "notes": "content-eazydiner.js — LiveTable scraper for outlet 712958. Co-resident in aggregator-pulse's extension v6.2.0+; runs in default Chrome on apps.livetableapp.com/* tabs. Owner reports session is logged in but content script not posting (2026-05-11) — open debug item, may need DevTools console inspection."
     }
   },
   "automations": {
     "aggregator-pulse": {
       "purpose": "Swiggy + Zomato Online Ordering data scraping; powers /ops/aggregator/he/swiggy + /he/zomato dashboards.",
-      "owner_chat_session": "frosty-heisenberg-e1616d",
+      "owner_chat_session": "c0f589f4-729e-49d2-8e30-ea1c86293f97",
       "criticality": "high",
       "started_at": "2026-05-09T17:18Z",
       "health_probe_url": "https://hnhotels.in/api/aggregator-pulse?action=health&key=<DASHBOARD_API_KEY>",
@@ -321,7 +321,8 @@
       "uses_locks": [
         "chrome-default",
         "chrome-tabs"
-      ]
+      ],
+      "owner_chat_session_status": "INHERITED 2026-05-11 from frosty-heisenberg-e1616d"
     },
     "modash-driver": {
       "purpose": "Autonomous Modash influencer discovery. Polls /api/influencer-pipeline every 60s; spawns headless Chromium per profile when work queued.",
@@ -340,9 +341,9 @@
       "uses_locks": []
     },
     "dine-aggregator": {
-      "purpose": "Zomato Dining + Swiggy Dine-Out + EazyDiner audit via isolated Chrome (dine-profile) + remote-debug port 9223.",
-      "owner_chat_session": "bold-mccarthy-572b58",
-      "owner_chat_session_status": "STALE — to be re-claimed by next active chat via `winpc inherit`",
+      "purpose": "Zomato Dining + Swiggy Dine-Out + EazyDiner audit. Production scraping rides inside aggregator-pulse's shared Chromium extension v6.2.0+ (content-dining.js, content-swiggy-dineout.js, content-eazydiner.js) running in default-profile Chrome — same merchant sessions, same window as the delivery aggregator. Isolated dine-profile Chrome + remote-debug port 9223 was the original design but was never finished (no extension was loaded into that profile); decommissioned 2026-05-11.",
+      "owner_chat_session": "ad531102-f8a1-4ae5-938c-c23b9620dd2c",
+      "owner_chat_session_status": "INHERITED 2026-05-11 from bold-mccarthy-572b58",
       "criticality": "low",
       "started_at": "2026-05-10T02:30Z",
       "health_probe_url": "https://hnhotels.in/api/aggregator-pulse?action=dine-health&key=<DASHBOARD_API_KEY>",
@@ -361,8 +362,8 @@
     },
     "tv-control": {
       "purpose": "PiSignage / Android TV deployment via adb. Pushes TV creatives to in-store Android display devices over LAN.",
-      "owner_chat_session": null,
-      "owner_chat_session_status": "REGULARIZED 2026-05-11 — claim via `winpc inherit --automation tv-control --new-owner-chat <chat-id>` when a session takes it on.",
+      "owner_chat_session": "1191f1e4-c329-4cfb-92d6-70d265e120fa",
+      "owner_chat_session_status": "INHERITED 2026-05-11 from unassigned",
       "criticality": "medium",
       "started_at": null,
       "health_probe_url": null,
