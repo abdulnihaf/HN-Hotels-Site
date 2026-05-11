@@ -141,6 +141,7 @@ async function scrapeSearchResults(page, filters) {
     let resolved = false;
 
     // Option B: intercept the search XHR
+    let firstXhrLogged = false;
     page.on('response', async (resp) => {
       try {
         const url = resp.url();
@@ -154,21 +155,47 @@ async function scrapeSearchResults(page, filters) {
         const list = data.lookalikes || data.results || data.data || data.items;
         if (!Array.isArray(list) || list.length === 0) return;
 
+        // First useful XHR: log its URL + first item's schema so owner can verify Modash version
+        if (!firstXhrLogged) {
+          firstXhrLogged = true;
+          const sample = list[0] || {};
+          const sampleProfile = sample.profile || sample;
+          log('info', 'first_search_xhr', {
+            url: url.slice(0, 200),
+            total: list.length,
+            sample_keys: Object.keys(sampleProfile).slice(0, 20),
+          });
+        }
+
         for (const item of list) {
-          // Modash result schema (approximate):
-          //   { profile: { username, fullname, picture, followers, engagementRate, ... } }
-          // OR flatter:
-          //   { username, fullname, followers, engagementRate, ... }
+          // Modash list-view XHR returns RICH profile data — captured here:
+          //   username, fullname, picture, follower_count, biography,
+          //   engagement_rate, is_business, is_verified, is_private, is_brand,
+          //   external_url, account_category, last_posted_at, user_id, _score.
+          // This is what Apify's profile-scraper would have returned for $0.10/profile.
+          // We skip Apify entirely for Modash-sourced creators.
           const p = item.profile || item;
           if (!p.username) continue;
           collected.push({
             username: String(p.username).toLowerCase(),
             full_name: p.fullname || p.fullName || p.full_name || null,
-            followers: p.followers || p.followersCount || null,
-            engagement_rate: p.engagementRate || p.engagement_rate || null,
+            followers: p.follower_count || p.followers || p.followersCount || null,
+            following: p.following_count || null,
+            engagement_rate: p.engagement_rate || p.engagementRate || null,
             profile_pic_url: p.picture || p.profilePicUrl || null,
             country: p.country || null,
             city: p.city || null,
+            // Newly captured (saves Apify enrichment cost ~$0.10/profile):
+            biography: p.biography || null,
+            is_business: p.is_business ? 1 : 0,
+            is_verified: p.is_verified ? 1 : 0,
+            is_private: p.is_private ? 1 : 0,
+            is_brand: p.is_brand ? 1 : 0,
+            external_url: p.external_url || null,
+            category_name: p.account_category || null,
+            last_post_at: p.last_posted_at || null,
+            user_id: p.user_id || null,
+            modash_score: p._score || null,
           });
         }
       } catch (_) { /* ignore */ }
@@ -184,8 +211,47 @@ async function scrapeSearchResults(page, filters) {
       await page.waitForTimeout(2000);
     }
 
-    // Wait for results
+    // Wait for first-page results
     await page.waitForTimeout(8000);
+
+    // Scroll-paginate: Modash lazy-loads more results as you scroll.
+    // Each scroll triggers another XHR → caught by the response handler above.
+    // Default 5 scrolls × ~10 results/page = ~50 results per job. Configurable via
+    // filter.scroll_pages (set from D1 modash_default_filters.scroll_pages).
+    const scrollPages = Math.max(0, Math.min(20, parseInt(filters.scroll_pages || 5)));
+    if (scrollPages > 0) {
+      log('info', 'scroll_paginate_start', { scroll_pages: scrollPages });
+      const before = collected.length;
+      for (let i = 0; i < scrollPages; i++) {
+        try {
+          const grew = await page.evaluate(() => {
+            // Try common Modash result-list containers; fall back to window.
+            const sels = [
+              '[class*="ResultsList"]',
+              '[class*="results-list"]',
+              '[class*="creator-grid"]',
+              '[class*="CreatorGrid"]',
+              '[class*="list-container"]',
+              'main',
+            ];
+            for (const sel of sels) {
+              const el = document.querySelector(sel);
+              if (el && el.scrollHeight > el.clientHeight) {
+                el.scrollTo({ top: el.scrollHeight, behavior: 'instant' });
+                return { container: sel, height: el.scrollHeight };
+              }
+            }
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+            return { container: 'window', height: document.documentElement.scrollHeight };
+          });
+          await page.waitForTimeout(2500);
+          log('info', 'scroll_iteration', { i: i + 1, grew, collected_so_far: collected.length });
+        } catch (e) {
+          log('warn', 'scroll_failed', { i, err: e.message });
+        }
+      }
+      log('info', 'scroll_paginate_done', { added_by_scrolling: collected.length - before });
+    }
 
     if (!resolved) {
       resolved = true;
@@ -203,8 +269,18 @@ async function scrapeSearchResults(page, filters) {
 
 async function applyFiltersViaUI(page, filters) {
   // Best-effort filter application. Modash UI evolves — owner tunes after first run.
-  // For initial deploy: relies on URL params if Modash's discovery URL accepts them
-  // (it does — discovery/instagram?location=Bangalore&followers_min=5000 etc.)
+  // The Modash discovery URL accepts some filters as query params; others may need
+  // post-load UI manipulation. We send all known params and log what's visibly applied.
+  //
+  // Filter spec (read from modash_default_filters config in D1):
+  //   location, country, followers_from, followers_to, engagement_rate_from,
+  //   topics[], language[],
+  //   bio_keywords[]            — searches creator bio for these words (OR-joined)
+  //   audience_interests[]      — filter by what the FOLLOWERS care about
+  //   audience_demo_religion    — { muslim: { min_pct: 15 }, ... } follower religion floor
+  //   audience_demo_location    — { Bangalore: { min_pct: 30 }, ... } follower city floor
+  //
+  // Memory: feedback_influencer_barter_targeting.md — barter outreach targets micro-tier.
   const params = new URLSearchParams();
   if (filters.location)        params.set('location', filters.location);
   if (filters.country)         params.set('country', filters.country);
@@ -214,10 +290,58 @@ async function applyFiltersViaUI(page, filters) {
   if (filters.topics)          params.set('topics', filters.topics.join(','));
   if (filters.language)        params.set('language', filters.language.join(','));
 
+  // New: bio keyword OR-search (Modash uses 'bio' or 'keywords' param; we try both)
+  if (filters.bio_keywords && Array.isArray(filters.bio_keywords) && filters.bio_keywords.length) {
+    const joined = filters.bio_keywords.join(' OR ');
+    params.set('bio', joined);
+    params.set('keywords', joined);
+  }
+
+  // New: audience interests (what followers like) — e.g. "Food & Drink"
+  if (filters.audience_interests && Array.isArray(filters.audience_interests) && filters.audience_interests.length) {
+    params.set('audience_interests', filters.audience_interests.join(','));
+  }
+
+  // New: audience demographic floors. Modash exposes religion/language/location of FOLLOWERS.
+  // URL param convention used: audience_<dim>_<value>_min=<pct>
+  if (filters.audience_demo_religion && typeof filters.audience_demo_religion === 'object') {
+    for (const [religion, spec] of Object.entries(filters.audience_demo_religion)) {
+      if (spec && typeof spec.min_pct === 'number') {
+        params.set(`audience_religion_${religion}_min`, String(spec.min_pct));
+      }
+    }
+  }
+  if (filters.audience_demo_location && typeof filters.audience_demo_location === 'object') {
+    for (const [loc, spec] of Object.entries(filters.audience_demo_location)) {
+      if (spec && typeof spec.min_pct === 'number') {
+        params.set(`audience_location_${loc.toLowerCase()}_min`, String(spec.min_pct));
+      }
+    }
+  }
+
   const url = `https://marketer.modash.io/discovery/instagram?${params.toString()}`;
-  log('info', 'navigating_with_filters', { url });
+  log('info', 'navigating_with_filters', { url, filter_count: Array.from(params.keys()).length });
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForTimeout(5000);
+
+  // Inspect which filter chips Modash actually rendered — diagnostic, not gating.
+  // Owner uses this to tune the URL param names if they don't match Modash's expected schema.
+  try {
+    const appliedChips = await page.evaluate(() => {
+      const selectors = ['[class*="chip"]', '[class*="Chip"]', '[class*="filter-tag"]', '[class*="FilterTag"]', '[class*="filter-pill"]'];
+      const all = new Set();
+      for (const sel of selectors) {
+        document.querySelectorAll(sel).forEach(el => {
+          const t = (el.textContent || '').trim();
+          if (t && t.length < 80) all.add(t);
+        });
+      }
+      return Array.from(all);
+    });
+    log('info', 'filter_chips_visible', { count: appliedChips.length, chips: appliedChips.slice(0, 15) });
+  } catch (e) {
+    log('warn', 'filter_chip_inspection_failed', { err: e.message });
+  }
 }
 
 // ─── Main loop ─────────────────────────────────────────────────────────────

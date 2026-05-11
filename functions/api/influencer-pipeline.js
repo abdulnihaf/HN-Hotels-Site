@@ -35,6 +35,44 @@ const json = (b, s = 200) => new Response(JSON.stringify(b), {
 const APIFY_HASHTAG_ACTOR = 'apify~instagram-hashtag-scraper';
 const APIFY_PROFILE_ACTOR = 'apify~instagram-scraper';
 
+// ────────────────────────────────────────────────────────────────────────────
+// List-view scorer — used by selective enrichment (cronEnrichTick) to rank
+// queue candidates BEFORE spending Apify credits on bio enrichment.
+// Inputs are the fields captured in source_meta from Modash list view ONLY:
+//   { followers, engagement_rate, full_name, city, country }
+// Memory: feedback_influencer_barter_targeting.md (barter targets micro tier).
+// ────────────────────────────────────────────────────────────────────────────
+function listViewScore(meta) {
+  let s = 0;
+  const followers = parseInt(meta.followers || 0);
+  if (followers >= 5000 && followers <= 50000) s += 2.0;          // sweet spot
+  else if (followers >= 1000 && followers <= 100000) s += 1.0;    // wider barter band
+  else if (followers > 100000) s -= 1.0;                          // T5+ penalty
+
+  const er = parseFloat(meta.engagement_rate || 0);
+  if (er >= 0.02) s += 1.5;
+  else if (er >= 0.01) s += 0.5;
+  else if (er > 0 && er < 0.005) s -= 1.0;                        // weak engagement
+
+  const city = String(meta.city || '').toLowerCase();
+  if (city.includes('bangalore') || city.includes('bengaluru')) s += 1.5;
+
+  const country = String(meta.country || '').toLowerCase();
+  if (country === 'in' || country.includes('india')) s += 0.5;
+
+  // Cuisine/heritage signal from full_name (we don't have bio yet at this point)
+  const name = String(meta.full_name || '').toLowerCase();
+  const tokens = [
+    'food','foodie','foodblogger','biryani','kabab','kebab','dakhni','mughlai',
+    'halal','muslim','urdu','iftar','chai','tandoor','hyderab','frazer','shivajinagar',
+  ];
+  const hits = tokens.filter(t => name.includes(t)).length;
+  if (hits >= 2) s += 2.0;
+  else if (hits === 1) s += 1.0;
+
+  return Math.round(s * 10) / 10;
+}
+
 const ownerKey = (env) => env.DASHBOARD_KEY || env.DASHBOARD_API_KEY || null;
 const requireOwner = (env, request, body) => {
   const k = request.headers.get('X-Dashboard-Key') || new URL(request.url).searchParams.get('key') || (body && body.key);
@@ -233,23 +271,50 @@ async function cronDiscover(env, body, request) {
     }
   }
 
-  // Modash takes priority when an active profile is below daily cap
+  // Modash takes priority when an active profile is below daily cap.
+  // Filter-set rotation: each cron-discover enqueues N jobs (one per filter variant
+  // from config.modash_filter_variants), spread across available profile capacity.
+  // This is the discovery-yield lever: 4 variants × 2 profiles × scroll-paginate
+  // (~50/job) = up to 400 unique candidates per discover run.
   if (config.modash_enabled === 'true') {
     const dailyCap = parseInt(config.modash_searches_per_profile_per_day || '1');
-    const activeProfile = await env.DB.prepare(`
-      SELECT profile_num FROM modash_profiles
-      WHERE status='active' AND searches_today < ? LIMIT 1
-    `).bind(dailyCap).first();
 
-    if (activeProfile) {
+    // Capacity = sum of (cap - searches_today) across active profiles
+    const profiles = await env.DB.prepare(`
+      SELECT profile_num, searches_today FROM modash_profiles WHERE status='active'
+    `).all();
+    const capacity = profiles.results.reduce(
+      (sum, p) => sum + Math.max(0, dailyCap - (p.searches_today || 0)),
+      0
+    );
+
+    if (capacity > 0) {
       const runId = await startRun(env, 'discovery');
-      const filters = JSON.parse(config.modash_default_filters || '{}');
-      const job = await env.DB.prepare(`
-        INSERT INTO modash_jobs (job_type, search_filters_json, status)
-        VALUES ('search', ?, 'pending')
-      `).bind(JSON.stringify(filters)).run();
-      return await finishRun(env, runId, 'ok', 0, 0, 0,
-        `Modash job ${job.meta.last_row_id} queued (profile ${activeProfile.profile_num} available)`);
+      const baseFilters = JSON.parse(config.modash_default_filters || '{}');
+
+      // Variants list: each variant is a partial filter spec that overlays baseFilters.
+      // E.g. [{bio_keywords:['biryani','dakhni']}, {bio_keywords:['halal','muslim']}, ...]
+      // Different variants → non-overlapping creator pools.
+      let variants = [];
+      try {
+        variants = JSON.parse(config.modash_filter_variants || '[]');
+      } catch {}
+      if (!Array.isArray(variants) || variants.length === 0) {
+        variants = [{}]; // single job using base filters only
+      }
+
+      const jobsToEnqueue = Math.min(capacity, variants.length);
+      const jobIds = [];
+      for (let i = 0; i < jobsToEnqueue; i++) {
+        const merged = Object.assign({}, baseFilters, variants[i]);
+        const r = await env.DB.prepare(`
+          INSERT INTO modash_jobs (job_type, search_filters_json, status)
+          VALUES ('search', ?, 'pending')
+        `).bind(JSON.stringify(merged)).run();
+        jobIds.push(r.meta.last_row_id);
+      }
+      return await finishRun(env, runId, 'ok', 0, jobsToEnqueue, 0,
+        `Enqueued ${jobsToEnqueue} Modash jobs (variants=${variants.length}, capacity=${capacity}): ids=${jobIds.join(',')}`);
     }
   }
 
@@ -461,18 +526,33 @@ async function cronEnrichTick(env, body, request) {
 
   const runId = await startRun(env, 'enrichment');
   try {
-    // Pay-as-you-go cost optimisation: drain a large batch once daily
-    // (vs every-15-min smaller batches that paid Apify trigger overhead 96x).
-    // 100 profiles in a single Apify run takes ~15-25 min, costs ~$0.50 vs ~$2 if split.
-    const batchSize = parseInt(config.enrichment_batch_size || '100');
-    const batch = await env.DB.prepare(`
-      SELECT id, username FROM influencer_discovery_queue
-      WHERE enrich_status = 'pending' ORDER BY discovered_at LIMIT ?
-    `).bind(batchSize).all();
+    // Selective enrichment: pull a WIDER candidate pool from the queue, then
+    // score each on list-view signals only (followers/ER/name/city — already
+    // captured in source_meta). Enrich only the TOP-N by list-view-score.
+    // This caps Apify cost at N × $0.10 while letting Modash discovery pile up
+    // hundreds of raw candidates. Memory: feedback_influencer_barter_targeting.md
+    const candidatePool = parseInt(config.enrichment_candidate_pool || '200');
+    const enrichTopN    = parseInt(config.enrichment_top_n_per_tick || '20');
 
-    if (batch.results.length === 0) {
+    const pool = await env.DB.prepare(`
+      SELECT id, username, source, source_meta FROM influencer_discovery_queue
+      WHERE enrich_status = 'pending' ORDER BY discovered_at LIMIT ?
+    `).bind(candidatePool).all();
+
+    if (pool.results.length === 0) {
       return await finishRun(env, runId, 'skipped', 0, 0, 0, 'queue empty');
     }
+
+    // Score candidates on Modash-list-view signals only (no bio yet — that's
+    // the whole point of selective enrichment: prioritise WHO to spend Apify
+    // credits enriching).
+    const scored = pool.results.map(r => {
+      let meta = {};
+      try { meta = JSON.parse(r.source_meta || '{}'); } catch {}
+      return { ...r, _list_score: listViewScore(meta) };
+    });
+    scored.sort((a, b) => b._list_score - a._list_score);
+    const batch = { results: scored.slice(0, enrichTopN) };
 
     // Mark in-flight
     const ids = batch.results.map(r => r.id);
@@ -995,33 +1075,75 @@ async function modashJobDone(env, body, request) {
     WHERE id=?
   `).bind(status, error, results.length, body.summary || null, body.job_id).run();
 
-  // Push each result into discovery_queue (dedup vs bio_pulse + queue)
-  let added = 0, skippedExisting = 0;
+  // Modash list-view XHR returns RICH profile data (bio, business flag, verified,
+  // ER, etc.). Write DIRECTLY to influencer_bio_pulse with status='ok' — no Apify
+  // enrichment needed for these creators. Saves ~$0.10 × N per discover-cycle.
+  // Non-Modash discovery vectors (Apify hashtag/geotag/etc.) still flow through
+  // discovery_queue → cronEnrichTick.
+  let upserted = 0, skippedBrand = 0;
   for (const r of results) {
     const u = (r.username || '').toLowerCase().trim();
     if (!u) continue;
-    const inDb = await env.DB.prepare(`SELECT 1 FROM influencer_bio_pulse WHERE username=?`).bind(u).first();
-    if (inDb) { skippedExisting++; continue; }
+    if (r.is_brand) { skippedBrand++; continue; }
+
+    const bio = r.biography || '';
+    const { emails, phones, whatsapp } = extractContacts(bio, [], null, null);
+    const hasEmail = emails.length > 0 ? 1 : 0;
+    const hasPhone = phones.length > 0 ? 1 : 0;
+    const hasWa = whatsapp.length > 0 ? 1 : 0;
+
     try {
       await env.DB.prepare(`
-        INSERT INTO influencer_discovery_queue (username, source, source_meta)
-        VALUES (?, 'modash', ?)
-      `).bind(u, JSON.stringify({
-        job_id: body.job_id,
-        followers: r.followers || null,
-        engagement_rate: r.engagement_rate || null,
-        full_name: r.full_name || null,
-      })).run();
-      added++;
-    } catch (e) { /* unique conflict — already queued */ }
+        INSERT INTO influencer_bio_pulse (
+          username, full_name, biography, external_url, bio_links_json, category_name,
+          is_business_account, is_verified, is_private,
+          followers_count, following_count, profile_pic_url,
+          extracted_emails_json, extracted_phones_json, extracted_whatsapp_json,
+          has_email, has_phone, has_whatsapp, has_any_contact, contact_channels,
+          engagement_rate, last_post_at,
+          status, source, fetched_at
+        ) VALUES (?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok', 'modash_list', datetime('now'))
+        ON CONFLICT(username) DO UPDATE SET
+          full_name=COALESCE(excluded.full_name, full_name),
+          biography=COALESCE(excluded.biography, biography),
+          external_url=COALESCE(excluded.external_url, external_url),
+          category_name=COALESCE(excluded.category_name, category_name),
+          is_business_account=excluded.is_business_account,
+          is_verified=excluded.is_verified,
+          is_private=excluded.is_private,
+          followers_count=COALESCE(excluded.followers_count, followers_count),
+          following_count=COALESCE(excluded.following_count, following_count),
+          profile_pic_url=COALESCE(excluded.profile_pic_url, profile_pic_url),
+          extracted_emails_json=excluded.extracted_emails_json,
+          extracted_phones_json=excluded.extracted_phones_json,
+          extracted_whatsapp_json=excluded.extracted_whatsapp_json,
+          has_email=excluded.has_email, has_phone=excluded.has_phone, has_whatsapp=excluded.has_whatsapp,
+          has_any_contact=excluded.has_any_contact, contact_channels=excluded.contact_channels,
+          engagement_rate=COALESCE(excluded.engagement_rate, engagement_rate),
+          last_post_at=COALESCE(excluded.last_post_at, last_post_at),
+          status='ok',
+          source='modash_list',
+          fetched_at=datetime('now')
+      `).bind(
+        u, r.full_name || null, bio || null, r.external_url || null,
+        r.category_name || null,
+        r.is_business || 0, r.is_verified || 0, r.is_private || 0,
+        r.followers || null, r.following || null, r.profile_pic_url || null,
+        JSON.stringify(emails), JSON.stringify(phones), JSON.stringify(whatsapp),
+        hasEmail, hasPhone, hasWa, (hasEmail || hasPhone || hasWa) ? 1 : 0,
+        hasEmail + hasPhone + hasWa,
+        r.engagement_rate || null, r.last_post_at || null
+      ).run();
+      upserted++;
+    } catch (e) { /* row-level error; skip */ }
   }
 
   return json({
     success: true,
     job_id: body.job_id,
     status,
-    pushed_to_queue: added,
-    skipped_existing: skippedExisting,
+    upserted_to_bio_pulse: upserted,
+    skipped_brand: skippedBrand,
   });
 }
 
