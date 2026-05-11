@@ -1,8 +1,14 @@
-// content-eazydiner.js v1.0.0
+// content-eazydiner.js v1.0.1
 // EazyDiner / LiveTable scraper for HN Hotels — Hamza Express only (HE contract signed Mar 2026).
 // Injected on: https://apps.livetableapp.com/*
 // Requires manual login via India +91 OTP once — session persists for ongoing scraping.
 // POSTs to /api/aggregator-pulse with platform=eazydiner.
+//
+// v1.0.1 (2026-05-12): Tightened isLoginPage() — v1.0.0 regex /enter.*otp|mobile.*number|login|sign in|get otp/
+//   false-positived on any logged-in dashboard showing reservations (column header "Mobile Number"
+//   or stats containing "Login time"). Result: only 2 snapshots ever posted to /api/aggregator-pulse
+//   despite session being logged in. New guard uses URL path as primary signal + tighter phrase
+//   patterns that require login-form-specific wording, not isolated keywords.
 
 (function () {
   'use strict';
@@ -30,8 +36,17 @@
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   function isLoginPage() {
+    // URL path is the most reliable signal — LiveTable redirects to /login or /auth when not logged in.
+    const path = location.pathname.toLowerCase();
+    if (/^\/(login|signin|sign-in|auth|verify)(\/|$)/.test(path)) return true;
+
+    // Body text — only login-FORM-specific phrasing. Standalone "login" or "mobile number"
+    // appear on dashboards too (column headers, "Login time" stats), so don't match them.
     const text = document.body.innerText.slice(0, 600).toLowerCase();
-    return /enter.*otp|mobile.*number|login|sign in|get otp/.test(text);
+    return /enter\s+(your\s+)?(registered\s+)?(phone|mobile)\s*number/.test(text) ||
+           /enter\s+(your\s+)?otp/.test(text) ||
+           /get\s+otp/.test(text) ||
+           /sign\s+in\s+(to|with)\s/.test(text);
   }
 
   function currentPageIdx() {
