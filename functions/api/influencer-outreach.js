@@ -18,6 +18,7 @@
 
 import { sendWaba, normalizePhone } from './_lib/comms-core.js';
 import { TIER_MATRIX, tierOf, scoreRelevance, bucketOf, offerLine } from './_lib/influencer-tier.js';
+import { fetchMenuFeed, renderOfferLines } from './_lib/menu-feed.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -472,6 +473,8 @@ async function createBatch(env, body, request) {
   const channel = body.channel || 'email';
   const limit = body.limit || 20;
 
+  // Barter band only (1K–60K = T1..T4). T5+ require cash-component pitch,
+  // never auto-batched. Memory: feedback_influencer_barter_targeting.md
   const qr = await env.DB.prepare(`
     SELECT p.username, p.full_name, p.biography, p.followers_count, p.category_name,
            p.business_email, p.business_phone_number,
@@ -480,7 +483,7 @@ async function createBatch(env, body, request) {
     LEFT JOIN influencer_outreach_log o
       ON o.creator_username = p.username AND o.channel = ? AND o.campaign='may_2026_v1'
     WHERE p.status='ok' AND p.is_private=0
-      AND p.followers_count BETWEEN 5000 AND 100000
+      AND p.followers_count BETWEEN 1000 AND 59999
       AND ${channel === 'email' ? 'p.has_email=1' : channel === 'waba' ? 'p.has_phone=1' : '1=1'}
       AND o.id IS NULL
       AND (LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%bangalore%'
@@ -489,10 +492,14 @@ async function createBatch(env, body, request) {
     ORDER BY
       (CASE WHEN p.is_business_account=1 THEN 1 ELSE 0 END
        + CASE WHEN p.is_verified=1 THEN 1 ELSE 0 END
-       + CASE WHEN p.followers_count BETWEEN 15000 AND 50000 THEN 1 ELSE 0 END) DESC,
+       + CASE WHEN p.followers_count BETWEEN 5000 AND 15000 THEN 1 ELSE 0 END) DESC,
       p.followers_count DESC
     LIMIT ?
   `).bind(channel, limit).all();
+
+  // Pull POS top-sellers once for the whole batch — dish names in copy
+  // come from live POS, never hardcoded. Memory: feedback_never_invent_menu_items.md
+  const menuFeed = await fetchMenuFeed(env);
 
   const batch = [];
   for (const r of qr.results) {
@@ -509,7 +516,7 @@ async function createBatch(env, body, request) {
         username: r.username,
         recipient: emails[0],
         subject: 'Barter collab — 1918 Hamza Express, Shivajinagar',
-        body: renderEmailBody(firstName, niche, tier, token),
+        body: renderEmailBody(firstName, niche, tier, token, menuFeed),
         token, tier: tier.name, cover_offer: tier.covers, niche_tag: niche,
       };
     } else if (channel === 'waba') {
@@ -639,23 +646,27 @@ function genToken() {
   return btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, c => ({'+':'-','/':'_','=':''}[c]));
 }
 
-function renderEmailBody(firstName, niche, tier, token) {
+function renderEmailBody(firstName, niche, tier, token, menuFeed) {
   const url = `https://hnhotels.in/marketing/Influencer/booking/?token=${token}`;
+  // Offer lines pulled from live HE POS (categories + current top item per category).
+  // No hardcoded dish list. Memory: feedback_never_invent_menu_items.md
+  const offerLines = renderOfferLines(tier, menuFeed || { byCategory: {} });
+  const offerBullet = offerLines.map(l => `  – ${l}`).join('\n');
   return `Hi ${firstName},
 
 Quick one — Hamza Express, the 4th-generation Dakhni/Hyderabadi biryani family in Bangalore since 1918 (Shivajinagar — walking distance from MG Rd / Commercial St / Brigade Rd).
 
-Saw your ${niche} content and would love to host you for a barter collab.
+Would love to host you for a barter collab.
 
 Covered (zero cost to you):
-• Full meal for ${tier.covers} people — biryani, mutton brain dry, kababs, tandoori, our signature ghee rice
+• Full meal for ${tier.covers} ${tier.covers === 1 ? 'person' : 'people'}, drawn from what's selling on our table this month:
+${offerBullet}
 • Pick your slot: 7-9 PM (early), 9-11 PM (prime), 11 PM-1 AM (late-night)
 • Personalised reservation, no waiting
-• Pre-Eid Mutton Family Pack (₹2,200) launching May 21 — exclusive media access if you'd like to feature
 
 Ask in return:
 • 1 reel or post-set, organic style — no scripted brand-speak
-• Tag @hamzaexpressblr + use the geotag pin
+• Tag @hamzaexpress1918 + use the Shivajinagar geotag
 
 Pick your slot directly: ${url}
 
