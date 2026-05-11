@@ -197,8 +197,47 @@ async function scrapeSearchResults(page, filters) {
       await page.waitForTimeout(2000);
     }
 
-    // Wait for results
+    // Wait for first-page results
     await page.waitForTimeout(8000);
+
+    // Scroll-paginate: Modash lazy-loads more results as you scroll.
+    // Each scroll triggers another XHR → caught by the response handler above.
+    // Default 5 scrolls × ~10 results/page = ~50 results per job. Configurable via
+    // filter.scroll_pages (set from D1 modash_default_filters.scroll_pages).
+    const scrollPages = Math.max(0, Math.min(20, parseInt(filters.scroll_pages || 5)));
+    if (scrollPages > 0) {
+      log('info', 'scroll_paginate_start', { scroll_pages: scrollPages });
+      const before = collected.length;
+      for (let i = 0; i < scrollPages; i++) {
+        try {
+          const grew = await page.evaluate(() => {
+            // Try common Modash result-list containers; fall back to window.
+            const sels = [
+              '[class*="ResultsList"]',
+              '[class*="results-list"]',
+              '[class*="creator-grid"]',
+              '[class*="CreatorGrid"]',
+              '[class*="list-container"]',
+              'main',
+            ];
+            for (const sel of sels) {
+              const el = document.querySelector(sel);
+              if (el && el.scrollHeight > el.clientHeight) {
+                el.scrollTo({ top: el.scrollHeight, behavior: 'instant' });
+                return { container: sel, height: el.scrollHeight };
+              }
+            }
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+            return { container: 'window', height: document.documentElement.scrollHeight };
+          });
+          await page.waitForTimeout(2500);
+          log('info', 'scroll_iteration', { i: i + 1, grew, collected_so_far: collected.length });
+        } catch (e) {
+          log('warn', 'scroll_failed', { i, err: e.message });
+        }
+      }
+      log('info', 'scroll_paginate_done', { added_by_scrolling: collected.length - before });
+    }
 
     if (!resolved) {
       resolved = true;
