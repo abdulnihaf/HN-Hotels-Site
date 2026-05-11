@@ -30,8 +30,8 @@ if [[ -z "$LANE" || -z "$DIRECTIVE" ]]; then
 fi
 
 case "$LANE" in
-  01-influencer|02-google|03-aggregator|04-dine|05-tv|06-meta|marketing-orchestrator) ;;
-  *) echo "ERR: invalid lane '$LANE'" >&2; exit 1 ;;
+  01-influencer|02-google|03-aggregator|04-dine|05-tv|06-meta|marketing-orchestrator|99-general) ;;
+  *) echo "ERR: invalid lane '$LANE'. valid: 01-influencer 02-google 03-aggregator 04-dine 05-tv 06-meta marketing-orchestrator 99-general" >&2; exit 1 ;;
 esac
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
