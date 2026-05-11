@@ -1,0 +1,11 @@
+name = "hn-keyword-cron"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# Cron schedule (UTC). IST = UTC + 5:30
+# Keyword Planner volumes update monthly, so once daily is sufficient.
+# 22:30 UTC = 04:00 IST  (after hr-cron's 03:00 IST run, before any
+#                         business hours; no contention with aggregator-pulse
+#                         which is event-driven via the extension, not cron)
+[triggers]
+crons = ["30 22 * * *"]
