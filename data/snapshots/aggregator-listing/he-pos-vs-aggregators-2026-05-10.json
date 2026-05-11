@@ -1,0 +1,1347 @@
+{
+  "compared_at": "2026-05-10",
+  "he_pos_total_active_excl_fc": 140,
+  "he_pos_fried_chicken_excluded": 25,
+  "swiggy_listed_items": 80,
+  "zomato_listed_items": 79,
+  "in_both_platforms_count": 53,
+  "missing_from_swiggy_count": 77,
+  "missing_from_zomato_count": 70,
+  "missing_from_swiggy": [
+    {
+      "name": "Cold drink - 1Litre",
+      "price": 100.0,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1394,
+      "sku": false
+    },
+    {
+      "name": "Barbeque Chicken (Boona)",
+      "price": 209.52,
+      "cats": [
+        "Tandoor > Tandoori Starters"
+      ],
+      "pos_id": 1136,
+      "sku": "HE-1136"
+    },
+    {
+      "name": "Chicken Burtha",
+      "price": 238.1,
+      "cats": [
+        "Indian > Chicken Curry"
+      ],
+      "pos_id": 1152,
+      "sku": "HE-1152"
+    },
+    {
+      "name": "Chicken Dopiyaza",
+      "price": 219.05,
+      "cats": [
+        "Indian > Chicken Curry"
+      ],
+      "pos_id": 1147,
+      "sku": "HE-1147"
+    },
+    {
+      "name": "Chicken Fried Rice",
+      "price": 180.95,
+      "cats": [
+        "Chinese > Fried Rice"
+      ],
+      "pos_id": 1235,
+      "sku": "HE-1235"
+    },
+    {
+      "name": "Chicken Hyderabadi Gravy",
+      "price": 200.0,
+      "cats": [
+        "Indian > Chicken Curry"
+      ],
+      "pos_id": 1148,
+      "sku": "HE-1148"
+    },
+    {
+      "name": "Chicken Kali Mirch",
+      "price": 200.0,
+      "cats": [
+        "Indian > Chicken Curry"
+      ],
+      "pos_id": 1151,
+      "sku": "HE-1151"
+    },
+    {
+      "name": "Chicken Kathi Roll",
+      "price": 85.71,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1420,
+      "sku": false
+    },
+    {
+      "name": "Chicken Saagwala",
+      "price": 209.52,
+      "cats": [
+        "Indian > Chicken Curry"
+      ],
+      "pos_id": 1157,
+      "sku": "HE-1157"
+    },
+    {
+      "name": "Cold drink - 250ml",
+      "price": 20.0,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1392,
+      "sku": false
+    },
+    {
+      "name": "Cold drink - 500ml",
+      "price": 40.0,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1393,
+      "sku": false
+    },
+    {
+      "name": "Daal Fry",
+      "price": 104.76,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1225,
+      "sku": "HE-1225"
+    },
+    {
+      "name": "Daal Tadka",
+      "price": 114.29,
+      "cats": [
+        "Indian > Vegetarian"
+      ],
+      "pos_id": 1233,
+      "sku": "HE-1233"
+    },
+    {
+      "name": "Garlic Kabab",
+      "price": 228.57,
+      "cats": [
+        "Tandoor > Tandoori Starters"
+      ],
+      "pos_id": 1383,
+      "sku": false
+    },
+    {
+      "name": "Grill Chicken",
+      "price": 228.57,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1424,
+      "sku": false
+    },
+    {
+      "name": "Haryali Tikka",
+      "price": 228.57,
+      "cats": [
+        "Tandoor > Tandoori Starters"
+      ],
+      "pos_id": 1141,
+      "sku": "HE-1141"
+    },
+    {
+      "name": "[HE-CM01-1] CM1 For You \u2014 Rice+Roti+Kabab+BC",
+      "price": 284.76,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1405,
+      "sku": "HE-CM01-1"
+    },
+    {
+      "name": "[HE-CM01-2] CM1 For Two \u2014 Rice+Roti+Kabab+BC",
+      "price": 599.05,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1406,
+      "sku": "HE-CM01-2"
+    },
+    {
+      "name": "[HE-CM01-3] CM1 For Three \u2014 Rice+Roti+Kabab+BC",
+      "price": 789.52,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1407,
+      "sku": "HE-CM01-3"
+    },
+    {
+      "name": "[HE-CM03-1] CM3 For You \u2014 Rice+Dal",
+      "price": 132.38,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1411,
+      "sku": "HE-CM03-1"
+    },
+    {
+      "name": "[HE-CM03-2] CM3 For Two \u2014 Rice+Dal",
+      "price": 246.67,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1412,
+      "sku": "HE-CM03-2"
+    },
+    {
+      "name": "[HE-CM03-3] CM3 For Three \u2014 Rice+Dal",
+      "price": 341.9,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1413,
+      "sku": "HE-CM03-3"
+    },
+    {
+      "name": "[HE-CM04-1] CM4 For You \u2014 Brain+Naan",
+      "price": 189.52,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1414,
+      "sku": "HE-CM04-1"
+    },
+    {
+      "name": "[HE-CM04-2] CM4 For Two \u2014 Brain+Naan",
+      "price": 360.95,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1415,
+      "sku": "HE-CM04-2"
+    },
+    {
+      "name": "[HE-CM04-3] CM4 For Three \u2014 Brain+Naan",
+      "price": 532.38,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1416,
+      "sku": "HE-CM04-3"
+    },
+    {
+      "name": "[HE-CM05-1] CM5 For You \u2014 Rice+BC+Naan",
+      "price": 180.0,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1417,
+      "sku": "HE-CM05-1"
+    },
+    {
+      "name": "[HE-CM05-2] CM5 For Two \u2014 Rice+BC+Naan",
+      "price": 341.9,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1418,
+      "sku": "HE-CM05-2"
+    },
+    {
+      "name": "[HE-CM05-3] CM5 For Three \u2014 Rice+BC+Naan",
+      "price": 503.81,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1419,
+      "sku": "HE-CM05-3"
+    },
+    {
+      "name": "Hongkong Chicken",
+      "price": 209.52,
+      "cats": [
+        "Chinese > Chinese Gravy"
+      ],
+      "pos_id": 1174,
+      "sku": "HE-1174"
+    },
+    {
+      "name": "Kadai Mutton",
+      "price": 209.52,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1180,
+      "sku": "HE-1180"
+    },
+    {
+      "name": "Methi Mutton",
+      "price": 200.0,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1178,
+      "sku": "HE-1178"
+    },
+    {
+      "name": "Mixed Veg Curry",
+      "price": 190.48,
+      "cats": [
+        "Indian > Vegetarian"
+      ],
+      "pos_id": 1231,
+      "sku": "HE-1231"
+    },
+    {
+      "name": "Mix Noodles",
+      "price": 228.57,
+      "cats": [
+        "Chinese > Noodles"
+      ],
+      "pos_id": 1244,
+      "sku": "HE-1244"
+    },
+    {
+      "name": "Mushroom Masala",
+      "price": 171.43,
+      "cats": [
+        "Indian > Vegetarian"
+      ],
+      "pos_id": 1234,
+      "sku": "HE-1234"
+    },
+    {
+      "name": "Mutton Achari",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1179,
+      "sku": "HE-1179"
+    },
+    {
+      "name": "Mutton Brain",
+      "price": 152.38,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1198,
+      "sku": "HE-1198"
+    },
+    {
+      "name": "Mutton Brain Dry",
+      "price": 152.38,
+      "cats": [
+        "Indian > Mutton Starters"
+      ],
+      "pos_id": 1192,
+      "sku": "HE-1192"
+    },
+    {
+      "name": "Mutton Chatpata",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1181,
+      "sku": "HE-1181"
+    },
+    {
+      "name": "Mutton Chops",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Starters"
+      ],
+      "pos_id": 1199,
+      "sku": "HE-1199"
+    },
+    {
+      "name": "Mutton Fried Rice",
+      "price": 219.05,
+      "cats": [
+        "Chinese > Fried Rice"
+      ],
+      "pos_id": 1237,
+      "sku": "HE-1237"
+    },
+    {
+      "name": "Mutton Gurda Dry",
+      "price": 200.0,
+      "cats": [
+        "Indian > Mutton Starters"
+      ],
+      "pos_id": 1194,
+      "sku": "HE-1194"
+    },
+    {
+      "name": "Mutton Hamza Special",
+      "price": 228.57,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1190,
+      "sku": "HE-1190"
+    },
+    {
+      "name": "Mutton Hyderabadi Gravy",
+      "price": 209.52,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1184,
+      "sku": "HE-1184"
+    },
+    {
+      "name": "Mutton Kassa",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1188,
+      "sku": "HE-1188"
+    },
+    {
+      "name": "Mutton Khima",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1197,
+      "sku": "HE-1197"
+    },
+    {
+      "name": "Mutton Kolhapuri",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1186,
+      "sku": "HE-1186"
+    },
+    {
+      "name": "Mutton Kolhapuri Gravy",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1374,
+      "sku": false
+    },
+    {
+      "name": "Mutton Masala",
+      "price": 200.0,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1185,
+      "sku": "HE-1185"
+    },
+    {
+      "name": "Mutton Noodles",
+      "price": 219.05,
+      "cats": [
+        "Chinese > Noodles"
+      ],
+      "pos_id": 1238,
+      "sku": "HE-1238"
+    },
+    {
+      "name": "Mutton Pepper Dry",
+      "price": 200.0,
+      "cats": [
+        "Indian > Mutton Starters"
+      ],
+      "pos_id": 1191,
+      "sku": "HE-1191"
+    },
+    {
+      "name": "Mutton Pepper (Roast)",
+      "price": 209.52,
+      "cats": [
+        "Indian > Mutton Starters"
+      ],
+      "pos_id": 1187,
+      "sku": "HE-1187"
+    },
+    {
+      "name": "Mutton Punjabi",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1182,
+      "sku": "HE-1182"
+    },
+    {
+      "name": "Mutton Rogan Josh",
+      "price": 200.0,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1177,
+      "sku": "HE-1177"
+    },
+    {
+      "name": "Mutton Sagwala",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1183,
+      "sku": "HE-1183"
+    },
+    {
+      "name": "Mutton Sheekh Kabab",
+      "price": 142.86,
+      "cats": [
+        "Tandoor > Tandoori Starters"
+      ],
+      "pos_id": 1195,
+      "sku": "HE-1195"
+    },
+    {
+      "name": "Mutton Tadka",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1189,
+      "sku": "HE-1189"
+    },
+    {
+      "name": "Paneer Mutter Masala",
+      "price": 190.48,
+      "cats": [
+        "Indian > Vegetarian"
+      ],
+      "pos_id": 1229,
+      "sku": "HE-1229"
+    },
+    {
+      "name": "Pathak Kabab",
+      "price": 219.05,
+      "cats": [
+        "Tandoor > Tandoori Starters"
+      ],
+      "pos_id": 1145,
+      "sku": "HE-1145"
+    },
+    {
+      "name": "Pathiri Roti",
+      "price": 36.19,
+      "cats": [
+        "Tandoor > Indian Breads"
+      ],
+      "pos_id": 1384,
+      "sku": false
+    },
+    {
+      "name": "Plain Rice",
+      "price": 47.62,
+      "cats": [
+        "Indian > Biryani & Rice"
+      ],
+      "pos_id": 1207,
+      "sku": "HE-1207"
+    },
+    {
+      "name": "Prawns Chilly Manchurian",
+      "price": 257.14,
+      "cats": [
+        "Chinese > Chinese Gravy"
+      ],
+      "pos_id": 1258,
+      "sku": "HE-1258"
+    },
+    {
+      "name": "Roomali Roti",
+      "price": 17.14,
+      "cats": [
+        "Tandoor > Indian Breads"
+      ],
+      "pos_id": 1218,
+      "sku": "HE-1218"
+    },
+    {
+      "name": "Shawarma",
+      "price": 80.0,
+      "cats": [
+        "Shawarma"
+      ],
+      "pos_id": 1391,
+      "sku": false
+    },
+    {
+      "name": "Shezwan Chicken",
+      "price": 219.05,
+      "cats": [
+        "Chinese > Chinese Gravy"
+      ],
+      "pos_id": 1378,
+      "sku": false
+    },
+    {
+      "name": "Shezwan Fried Rice",
+      "price": 190.48,
+      "cats": [
+        "Chinese > Fried Rice"
+      ],
+      "pos_id": 1245,
+      "sku": "HE-1245"
+    },
+    {
+      "name": "Shezwan Mutton",
+      "price": 219.05,
+      "cats": [
+        "Chinese > Chinese Gravy"
+      ],
+      "pos_id": 1379,
+      "sku": false
+    },
+    {
+      "name": "Shezwan Noodles",
+      "price": 190.48,
+      "cats": [
+        "Chinese > Noodles"
+      ],
+      "pos_id": 1246,
+      "sku": "HE-1246"
+    },
+    {
+      "name": "Tandoor Roti",
+      "price": 23.81,
+      "cats": [
+        "Tandoor > Indian Breads"
+      ],
+      "pos_id": 1223,
+      "sku": "HE-1223"
+    },
+    {
+      "name": "Test product",
+      "price": 1.0,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1397,
+      "sku": false
+    },
+    {
+      "name": "Test product 2",
+      "price": 1.0,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1399,
+      "sku": false
+    },
+    {
+      "name": "Thethar Biryani",
+      "price": 257.14,
+      "cats": [
+        "Indian > Biryani & Rice"
+      ],
+      "pos_id": 1202,
+      "sku": "HE-1202"
+    },
+    {
+      "name": "Thethar Pepper Dry",
+      "price": 285.71,
+      "cats": [
+        "Indian > Chicken Starters"
+      ],
+      "pos_id": 1173,
+      "sku": "HE-1173"
+    },
+    {
+      "name": "Thethar Pepper Roast",
+      "price": 304.76,
+      "cats": [
+        "Indian > Chicken Starters"
+      ],
+      "pos_id": 1159,
+      "sku": "HE-1159"
+    },
+    {
+      "name": "Veg Kofta",
+      "price": 209.52,
+      "cats": [
+        "Indian > Vegetarian"
+      ],
+      "pos_id": 1376,
+      "sku": false
+    },
+    {
+      "name": "Veg Noodles",
+      "price": 142.86,
+      "cats": [
+        "Chinese > Noodles"
+      ],
+      "pos_id": 1248,
+      "sku": "HE-1248"
+    },
+    {
+      "name": "Water 1 Liter",
+      "price": 19.05,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1389,
+      "sku": false
+    },
+    {
+      "name": "Water 500ml",
+      "price": 9.52,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1390,
+      "sku": false
+    }
+  ],
+  "missing_from_zomato": [
+    {
+      "name": "Chicken Boneless Biryani",
+      "price": 266.67,
+      "cats": [
+        "Indian > Biryani & Rice"
+      ],
+      "pos_id": 1377,
+      "sku": false
+    },
+    {
+      "name": "Cold drink - 1Litre",
+      "price": 100.0,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1394,
+      "sku": false
+    },
+    {
+      "name": "Barbeque Chicken (Boona)",
+      "price": 209.52,
+      "cats": [
+        "Tandoor > Tandoori Starters"
+      ],
+      "pos_id": 1136,
+      "sku": "HE-1136"
+    },
+    {
+      "name": "Chicken Biryani + 2pc Kabab",
+      "price": 218.1,
+      "cats": [
+        "Combos"
+      ],
+      "pos_id": 1429,
+      "sku": false
+    },
+    {
+      "name": "Chicken Kathi Roll",
+      "price": 85.71,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1420,
+      "sku": false
+    },
+    {
+      "name": "Chicken Saagwala",
+      "price": 209.52,
+      "cats": [
+        "Indian > Chicken Curry"
+      ],
+      "pos_id": 1157,
+      "sku": "HE-1157"
+    },
+    {
+      "name": "Cold drink - 250ml",
+      "price": 20.0,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1392,
+      "sku": false
+    },
+    {
+      "name": "Cold drink - 500ml",
+      "price": 40.0,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1393,
+      "sku": false
+    },
+    {
+      "name": "Egg Biryani",
+      "price": 152.38,
+      "cats": [
+        "Indian > Biryani & Rice"
+      ],
+      "pos_id": 1204,
+      "sku": "HE-1204"
+    },
+    {
+      "name": "Garlic Kabab",
+      "price": 228.57,
+      "cats": [
+        "Tandoor > Tandoori Starters"
+      ],
+      "pos_id": 1383,
+      "sku": false
+    },
+    {
+      "name": "Ghee Rice + Dal Fry",
+      "price": 141.9,
+      "cats": [
+        "Combos"
+      ],
+      "pos_id": 1425,
+      "sku": false
+    },
+    {
+      "name": "Ghee Rice + Dal Fry + 2pc Kabab",
+      "price": 189.52,
+      "cats": [
+        "Combos"
+      ],
+      "pos_id": 1426,
+      "sku": false
+    },
+    {
+      "name": "Ghee Rice + Mutton Chatpata + 2pc Kabab",
+      "price": 275.24,
+      "cats": [
+        "Combos"
+      ],
+      "pos_id": 1428,
+      "sku": false
+    },
+    {
+      "name": "Grill Chicken",
+      "price": 228.57,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1424,
+      "sku": false
+    },
+    {
+      "name": "[HE-CM01-1] CM1 For You \u2014 Rice+Roti+Kabab+BC",
+      "price": 284.76,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1405,
+      "sku": "HE-CM01-1"
+    },
+    {
+      "name": "[HE-CM01-2] CM1 For Two \u2014 Rice+Roti+Kabab+BC",
+      "price": 599.05,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1406,
+      "sku": "HE-CM01-2"
+    },
+    {
+      "name": "[HE-CM01-3] CM1 For Three \u2014 Rice+Roti+Kabab+BC",
+      "price": 789.52,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1407,
+      "sku": "HE-CM01-3"
+    },
+    {
+      "name": "[HE-CM03-1] CM3 For You \u2014 Rice+Dal",
+      "price": 132.38,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1411,
+      "sku": "HE-CM03-1"
+    },
+    {
+      "name": "[HE-CM03-2] CM3 For Two \u2014 Rice+Dal",
+      "price": 246.67,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1412,
+      "sku": "HE-CM03-2"
+    },
+    {
+      "name": "[HE-CM03-3] CM3 For Three \u2014 Rice+Dal",
+      "price": 341.9,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1413,
+      "sku": "HE-CM03-3"
+    },
+    {
+      "name": "[HE-CM04-1] CM4 For You \u2014 Brain+Naan",
+      "price": 189.52,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1414,
+      "sku": "HE-CM04-1"
+    },
+    {
+      "name": "[HE-CM04-2] CM4 For Two \u2014 Brain+Naan",
+      "price": 360.95,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1415,
+      "sku": "HE-CM04-2"
+    },
+    {
+      "name": "[HE-CM04-3] CM4 For Three \u2014 Brain+Naan",
+      "price": 532.38,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1416,
+      "sku": "HE-CM04-3"
+    },
+    {
+      "name": "[HE-CM05-1] CM5 For You \u2014 Rice+BC+Naan",
+      "price": 180.0,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1417,
+      "sku": "HE-CM05-1"
+    },
+    {
+      "name": "[HE-CM05-2] CM5 For Two \u2014 Rice+BC+Naan",
+      "price": 341.9,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1418,
+      "sku": "HE-CM05-2"
+    },
+    {
+      "name": "[HE-CM05-3] CM5 For Three \u2014 Rice+BC+Naan",
+      "price": 503.81,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1419,
+      "sku": "HE-CM05-3"
+    },
+    {
+      "name": "Hongkong Chicken",
+      "price": 209.52,
+      "cats": [
+        "Chinese > Chinese Gravy"
+      ],
+      "pos_id": 1174,
+      "sku": "HE-1174"
+    },
+    {
+      "name": "Jeera rice",
+      "price": 95.24,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1396,
+      "sku": false
+    },
+    {
+      "name": "Kadai Mutton",
+      "price": 209.52,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1180,
+      "sku": "HE-1180"
+    },
+    {
+      "name": "Methi Mutton",
+      "price": 200.0,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1178,
+      "sku": "HE-1178"
+    },
+    {
+      "name": "Mix Fried Rice",
+      "price": 228.57,
+      "cats": [
+        "Chinese > Fried Rice"
+      ],
+      "pos_id": 1243,
+      "sku": "HE-1243"
+    },
+    {
+      "name": "Mix Noodles",
+      "price": 228.57,
+      "cats": [
+        "Chinese > Noodles"
+      ],
+      "pos_id": 1244,
+      "sku": "HE-1244"
+    },
+    {
+      "name": "Mushroom Masala",
+      "price": 171.43,
+      "cats": [
+        "Indian > Vegetarian"
+      ],
+      "pos_id": 1234,
+      "sku": "HE-1234"
+    },
+    {
+      "name": "Mutton Achari",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1179,
+      "sku": "HE-1179"
+    },
+    {
+      "name": "Mutton Brain",
+      "price": 152.38,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1198,
+      "sku": "HE-1198"
+    },
+    {
+      "name": "Mutton Brain Dry",
+      "price": 152.38,
+      "cats": [
+        "Indian > Mutton Starters"
+      ],
+      "pos_id": 1192,
+      "sku": "HE-1192"
+    },
+    {
+      "name": "Mutton Chatpata",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1181,
+      "sku": "HE-1181"
+    },
+    {
+      "name": "Mutton Chops",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Starters"
+      ],
+      "pos_id": 1199,
+      "sku": "HE-1199"
+    },
+    {
+      "name": "Mutton Fried Rice",
+      "price": 219.05,
+      "cats": [
+        "Chinese > Fried Rice"
+      ],
+      "pos_id": 1237,
+      "sku": "HE-1237"
+    },
+    {
+      "name": "Mutton Gurda Dry",
+      "price": 200.0,
+      "cats": [
+        "Indian > Mutton Starters"
+      ],
+      "pos_id": 1194,
+      "sku": "HE-1194"
+    },
+    {
+      "name": "Mutton Hyderabadi Gravy",
+      "price": 209.52,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1184,
+      "sku": "HE-1184"
+    },
+    {
+      "name": "Mutton Kassa",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1188,
+      "sku": "HE-1188"
+    },
+    {
+      "name": "Mutton Khima",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1197,
+      "sku": "HE-1197"
+    },
+    {
+      "name": "Mutton Kolhapuri",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1186,
+      "sku": "HE-1186"
+    },
+    {
+      "name": "Mutton Kolhapuri Gravy",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1374,
+      "sku": false
+    },
+    {
+      "name": "Mutton Masala",
+      "price": 200.0,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1185,
+      "sku": "HE-1185"
+    },
+    {
+      "name": "Mutton Noodles",
+      "price": 219.05,
+      "cats": [
+        "Chinese > Noodles"
+      ],
+      "pos_id": 1238,
+      "sku": "HE-1238"
+    },
+    {
+      "name": "Mutton Pepper Dry",
+      "price": 200.0,
+      "cats": [
+        "Indian > Mutton Starters"
+      ],
+      "pos_id": 1191,
+      "sku": "HE-1191"
+    },
+    {
+      "name": "Mutton Pepper (Roast)",
+      "price": 209.52,
+      "cats": [
+        "Indian > Mutton Starters"
+      ],
+      "pos_id": 1187,
+      "sku": "HE-1187"
+    },
+    {
+      "name": "Mutton Punjabi",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1182,
+      "sku": "HE-1182"
+    },
+    {
+      "name": "Mutton Rogan Josh",
+      "price": 200.0,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1177,
+      "sku": "HE-1177"
+    },
+    {
+      "name": "Mutton Sagwala",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1183,
+      "sku": "HE-1183"
+    },
+    {
+      "name": "Mutton Sheekh Kabab",
+      "price": 142.86,
+      "cats": [
+        "Tandoor > Tandoori Starters"
+      ],
+      "pos_id": 1195,
+      "sku": "HE-1195"
+    },
+    {
+      "name": "Mutton Tadka",
+      "price": 219.05,
+      "cats": [
+        "Indian > Mutton Curry"
+      ],
+      "pos_id": 1189,
+      "sku": "HE-1189"
+    },
+    {
+      "name": "Pathak Kabab",
+      "price": 219.05,
+      "cats": [
+        "Tandoor > Tandoori Starters"
+      ],
+      "pos_id": 1145,
+      "sku": "HE-1145"
+    },
+    {
+      "name": "Pathiri Roti",
+      "price": 36.19,
+      "cats": [
+        "Tandoor > Indian Breads"
+      ],
+      "pos_id": 1384,
+      "sku": false
+    },
+    {
+      "name": "Plain Rice",
+      "price": 47.62,
+      "cats": [
+        "Indian > Biryani & Rice"
+      ],
+      "pos_id": 1207,
+      "sku": "HE-1207"
+    },
+    {
+      "name": "Prawns Chilly Manchurian",
+      "price": 257.14,
+      "cats": [
+        "Chinese > Chinese Gravy"
+      ],
+      "pos_id": 1258,
+      "sku": "HE-1258"
+    },
+    {
+      "name": "Prawns Fried Rice",
+      "price": 219.05,
+      "cats": [
+        "Chinese > Fried Rice"
+      ],
+      "pos_id": 1241,
+      "sku": "HE-1241"
+    },
+    {
+      "name": "Prawns Noodles",
+      "price": 219.05,
+      "cats": [
+        "Chinese > Noodles"
+      ],
+      "pos_id": 1242,
+      "sku": "HE-1242"
+    },
+    {
+      "name": "Shawarma",
+      "price": 80.0,
+      "cats": [
+        "Shawarma"
+      ],
+      "pos_id": 1391,
+      "sku": false
+    },
+    {
+      "name": "Shezwan Fried Rice",
+      "price": 190.48,
+      "cats": [
+        "Chinese > Fried Rice"
+      ],
+      "pos_id": 1245,
+      "sku": "HE-1245"
+    },
+    {
+      "name": "Shezwan Mutton",
+      "price": 219.05,
+      "cats": [
+        "Chinese > Chinese Gravy"
+      ],
+      "pos_id": 1379,
+      "sku": false
+    },
+    {
+      "name": "Test product",
+      "price": 1.0,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1397,
+      "sku": false
+    },
+    {
+      "name": "Test product 2",
+      "price": 1.0,
+      "cats": [
+        "Indian"
+      ],
+      "pos_id": 1399,
+      "sku": false
+    },
+    {
+      "name": "Thethar Biryani",
+      "price": 257.14,
+      "cats": [
+        "Indian > Biryani & Rice"
+      ],
+      "pos_id": 1202,
+      "sku": "HE-1202"
+    },
+    {
+      "name": "Thethar Pepper Dry",
+      "price": 285.71,
+      "cats": [
+        "Indian > Chicken Starters"
+      ],
+      "pos_id": 1173,
+      "sku": "HE-1173"
+    },
+    {
+      "name": "Thethar Pepper Roast",
+      "price": 304.76,
+      "cats": [
+        "Indian > Chicken Starters"
+      ],
+      "pos_id": 1159,
+      "sku": "HE-1159"
+    },
+    {
+      "name": "Water 1 Liter",
+      "price": 19.05,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1389,
+      "sku": false
+    },
+    {
+      "name": "Water 500ml",
+      "price": 9.52,
+      "cats": [
+        "Bane Marie"
+      ],
+      "pos_id": 1390,
+      "sku": false
+    }
+  ],
+  "must_add_per_owner_instruction": [
+    {
+      "name": "Shawarma",
+      "reason": "Owner directive \u2014 sells offline, missing from both platforms"
+    },
+    {
+      "name": "Kathi Roll",
+      "reason": "Owner directive \u2014 sells offline, missing from both platforms; photo at hamzaexpress.in/ops/tv-mission-control/"
+    }
+  ]
+}
