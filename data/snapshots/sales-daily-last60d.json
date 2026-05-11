@@ -1,454 +1,32 @@
 {
-  "captured_at": "2026-04-28T12:19:02.446Z",
+  "captured_at": "2026-05-11T20:51:21.630Z",
   "brands": {
     "HE": {
       "brand": "HE",
       "label": "Hamza Express (test.hamzahotel.com — HE prod)",
       "host": "test.hamzahotel.com",
       "window": {
-        "from": "2026-02-27",
-        "to": "2026-04-28"
+        "from": "2026-03-12",
+        "to": "2026-05-11"
       },
-      "order_count": 2616,
-      "payment_lines": 2623,
-      "unmapped_orders": 0,
+      "order_count": 2906,
+      "payment_lines": 2927,
+      "unmapped_orders": 1,
       "channels_seen": [
         "HE - Card",
         "HE - Cash Captain",
         "HE - Cash Counter",
+        "HE - Cash GF Waiter",
         "HE - Swiggy",
         "HE - UPI Captain",
         "HE - UPI Counter",
         "HE - WABA General",
         "HE - Zomato",
-        "HE Captain 02 UPI",
-        "HE Captain 03 UPI",
-        "HE Captain 04 UPI",
-        "HE Captain 05 UPI",
         "HE Complimentary",
-        "HE UPI"
+        "HE UPI",
+        "UNKNOWN"
       ],
       "daily": [
-        {
-          "date": "2026-02-27",
-          "channel": "HE - Cash Counter",
-          "orders": 3,
-          "gross": 1995.01
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "HE - Card",
-          "orders": 1,
-          "gross": 200
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "HE - Cash Captain",
-          "orders": 5,
-          "gross": 6770.0599999999995
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "HE - Cash Counter",
-          "orders": 10,
-          "gross": 4090.09
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "HE - UPI Captain",
-          "orders": 3,
-          "gross": 2135.0299999999997
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "HE - UPI Counter",
-          "orders": 10,
-          "gross": 2620.0299999999997
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "HE Captain 02 UPI",
-          "orders": 11,
-          "gross": 9280.09
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "HE Captain 03 UPI",
-          "orders": 9,
-          "gross": 3395.07
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "HE Captain 04 UPI",
-          "orders": 1,
-          "gross": 655
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "HE Captain 05 UPI",
-          "orders": 1,
-          "gross": 330
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "HE Complimentary",
-          "orders": 1,
-          "gross": 150
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "HE - Card",
-          "orders": 1,
-          "gross": 220
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "HE - Cash Captain",
-          "orders": 2,
-          "gross": 360.02
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "HE - UPI Captain",
-          "orders": 1,
-          "gross": 720.02
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "HE - UPI Counter",
-          "orders": 5,
-          "gross": 1211.98
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "HE Captain 02 UPI",
-          "orders": 2,
-          "gross": 1084.03
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "HE Complimentary",
-          "orders": 1,
-          "gross": 80.02
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "HE UPI",
-          "orders": 5,
-          "gross": 3780.0699999999997
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "HE - Card",
-          "orders": 3,
-          "gross": 1060.02
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "HE - Cash Captain",
-          "orders": 1,
-          "gross": 1305.01
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "HE - Cash Counter",
-          "orders": 1,
-          "gross": 20.01
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "HE - UPI Captain",
-          "orders": 2,
-          "gross": 2519.9799999999996
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "HE - UPI Counter",
-          "orders": 1,
-          "gross": 100
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "HE Complimentary",
-          "orders": 4,
-          "gross": 1120.06
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "HE UPI",
-          "orders": 10,
-          "gross": 6980.1
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "HE - Card",
-          "orders": 2,
-          "gross": 159.98
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "HE - Cash Captain",
-          "orders": 4,
-          "gross": 2240.01
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "HE - Cash Counter",
-          "orders": 6,
-          "gross": 1850.03
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "HE - UPI Counter",
-          "orders": 12,
-          "gross": 2895.0299999999997
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "HE Complimentary",
-          "orders": 6,
-          "gross": 199.99999999999997
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "HE UPI",
-          "orders": 6,
-          "gross": 3905.0500000000006
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "HE - Cash Captain",
-          "orders": 1,
-          "gross": 270
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "HE - Cash Counter",
-          "orders": 5,
-          "gross": 970.01
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "HE - UPI Counter",
-          "orders": 13,
-          "gross": 3457.99
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "HE Complimentary",
-          "orders": 2,
-          "gross": 159.98
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "HE UPI",
-          "orders": 9,
-          "gross": 7700.09
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "HE - Cash Captain",
-          "orders": 2,
-          "gross": 1060.02
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "HE - Cash Counter",
-          "orders": 9,
-          "gross": 3829.04
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "HE - UPI Captain",
-          "orders": 1,
-          "gross": 1140.01
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "HE - UPI Counter",
-          "orders": 12,
-          "gross": 2939.9700000000003
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "HE Complimentary",
-          "orders": 4,
-          "gross": 1200.02
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "HE UPI",
-          "orders": 8,
-          "gross": 8183.099999999999
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "HE - Cash Captain",
-          "orders": 3,
-          "gross": 3110
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "HE - Cash Counter",
-          "orders": 12,
-          "gross": 2999.959999999999
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "HE - UPI Captain",
-          "orders": 1,
-          "gross": 2225.01
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "HE - UPI Counter",
-          "orders": 31,
-          "gross": 5215.050000000001
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "HE Complimentary",
-          "orders": 3,
-          "gross": 655.01
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "HE UPI",
-          "orders": 23,
-          "gross": 16880.120000000003
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "HE - Cash Captain",
-          "orders": 5,
-          "gross": 2102.98
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "HE - Cash Counter",
-          "orders": 6,
-          "gross": 190.01999999999998
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "HE - UPI Counter",
-          "orders": 16,
-          "gross": 1964.02
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "HE Complimentary",
-          "orders": 6,
-          "gross": 3544.08
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "HE UPI",
-          "orders": 12,
-          "gross": 7128.1
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "HE - Cash Captain",
-          "orders": 2,
-          "gross": 1400.02
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "HE - Cash Counter",
-          "orders": 22,
-          "gross": 2309.9700000000003
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "HE - UPI Captain",
-          "orders": 4,
-          "gross": 2689.01
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "HE - UPI Counter",
-          "orders": 11,
-          "gross": 2835
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "HE UPI",
-          "orders": 11,
-          "gross": 5932.06
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "HE - Cash Captain",
-          "orders": 5,
-          "gross": 3260.03
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "HE - Cash Counter",
-          "orders": 11,
-          "gross": 3649.99
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "HE - UPI Captain",
-          "orders": 2,
-          "gross": 2474.02
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "HE - UPI Counter",
-          "orders": 13,
-          "gross": 3950.9900000000002
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "HE Complimentary",
-          "orders": 1,
-          "gross": 10
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "HE UPI",
-          "orders": 13,
-          "gross": 9516.020000000002
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "HE - Cash Captain",
-          "orders": 1,
-          "gross": 1385.01
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "HE - Cash Counter",
-          "orders": 11,
-          "gross": 2805.0800000000004
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "HE - UPI Captain",
-          "orders": 5,
-          "gross": 3160.0200000000004
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "HE - UPI Counter",
-          "orders": 10,
-          "gross": 2295
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "HE Complimentary",
-          "orders": 1,
-          "gross": 220
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "HE UPI",
-          "orders": 6,
-          "gross": 4675.04
-        },
         {
           "date": "2026-03-12",
           "channel": "HE - Cash Captain",
@@ -2168,14 +1746,14 @@
         {
           "date": "2026-04-28",
           "channel": "HE - Cash Captain",
-          "orders": 3,
-          "gross": 1155.02
+          "orders": 5,
+          "gross": 2125.02
         },
         {
           "date": "2026-04-28",
           "channel": "HE - Cash Counter",
-          "orders": 3,
-          "gross": 50.010000000000005
+          "orders": 8,
+          "gross": 179.99999999999997
         },
         {
           "date": "2026-04-28",
@@ -2192,20 +1770,608 @@
         {
           "date": "2026-04-28",
           "channel": "HE - UPI Counter",
-          "orders": 4,
-          "gross": 665.02
+          "orders": 12,
+          "gross": 2665.0400000000004
         },
         {
           "date": "2026-04-28",
           "channel": "HE - Zomato",
-          "orders": 4,
-          "gross": 1256
+          "orders": 7,
+          "gross": 2021
         },
         {
           "date": "2026-04-28",
           "channel": "HE UPI",
+          "orders": 3,
+          "gross": 1170.05
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "HE - Cash Captain",
+          "orders": 3,
+          "gross": 1305.04
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "HE - Cash Counter",
+          "orders": 13,
+          "gross": 940.01
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "HE - UPI Counter",
+          "orders": 9,
+          "gross": 1295
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "HE - Zomato",
+          "orders": 3,
+          "gross": 1646
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "HE Complimentary",
           "orders": 1,
-          "gross": 360.02
+          "gross": 20
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "HE UPI",
+          "orders": 8,
+          "gross": 5714.08
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "HE - Cash Captain",
+          "orders": 9,
+          "gross": 8475.1
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "HE - Cash Counter",
+          "orders": 4,
+          "gross": 90.02000000000001
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "HE - Swiggy",
+          "orders": 1,
+          "gross": 582.75
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "HE - UPI Captain",
+          "orders": 1,
+          "gross": 490
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "HE - UPI Counter",
+          "orders": 11,
+          "gross": 1144.98
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "HE - Zomato",
+          "orders": 8,
+          "gross": 1636.6
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "HE Complimentary",
+          "orders": 2,
+          "gross": 40
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "HE UPI",
+          "orders": 4,
+          "gross": 2182.0299999999997
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "HE - Cash Captain",
+          "orders": 1,
+          "gross": 90
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "HE - Cash Counter",
+          "orders": 17,
+          "gross": 2379.9599999999996
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "HE - Swiggy",
+          "orders": 2,
+          "gross": 576.45
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "HE - UPI Counter",
+          "orders": 17,
+          "gross": 3340
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "HE - Zomato",
+          "orders": 6,
+          "gross": 1816.7000000000003
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "HE Complimentary",
+          "orders": 2,
+          "gross": 199.97
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "HE UPI",
+          "orders": 14,
+          "gross": 8795.16
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "HE - Cash Captain",
+          "orders": 4,
+          "gross": 4963.05
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "HE - Cash Counter",
+          "orders": 7,
+          "gross": 1269.99
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "HE - Cash GF Waiter",
+          "orders": 5,
+          "gross": 1219.97
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "HE - Swiggy",
+          "orders": 3,
+          "gross": 687.75
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "HE - UPI Captain",
+          "orders": 1,
+          "gross": 79.99
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "HE - UPI Counter",
+          "orders": 11,
+          "gross": 1469.98
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "HE - Zomato",
+          "orders": 4,
+          "gross": 2022
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "HE Complimentary",
+          "orders": 4,
+          "gross": 249.98000000000002
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "HE UPI",
+          "orders": 22,
+          "gross": 11746.130000000001
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "HE - Cash Captain",
+          "orders": 5,
+          "gross": 4346.1
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "HE - Cash Counter",
+          "orders": 16,
+          "gross": 2129.92
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "HE - Cash GF Waiter",
+          "orders": 2,
+          "gross": 1390.02
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "HE - Swiggy",
+          "orders": 4,
+          "gross": 1463.6999999999998
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "HE - UPI Counter",
+          "orders": 19,
+          "gross": 4567.97
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "HE - Zomato",
+          "orders": 9,
+          "gross": 3380.3
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "HE Complimentary",
+          "orders": 2,
+          "gross": 165
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "HE UPI",
+          "orders": 22,
+          "gross": 13629.98
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "HE - Cash Captain",
+          "orders": 5,
+          "gross": 3747.0299999999997
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "HE - Cash Counter",
+          "orders": 11,
+          "gross": 2317.93
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "HE - Cash GF Waiter",
+          "orders": 3,
+          "gross": 569.99
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "HE - Swiggy",
+          "orders": 2,
+          "gross": 754.95
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "HE - UPI Captain",
+          "orders": 2,
+          "gross": 979.99
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "HE - UPI Counter",
+          "orders": 15,
+          "gross": 2119.94
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "HE - Zomato",
+          "orders": 7,
+          "gross": 3147.6000000000004
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "HE Complimentary",
+          "orders": 1,
+          "gross": 249
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "HE UPI",
+          "orders": 10,
+          "gross": 7639.0999999999985
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "HE - Cash Captain",
+          "orders": 1,
+          "gross": 729.99
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "HE - Cash Counter",
+          "orders": 14,
+          "gross": 2069.94
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "HE - Swiggy",
+          "orders": 3,
+          "gross": 1251.6
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "HE - UPI Counter",
+          "orders": 10,
+          "gross": 1319.98
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "HE - Zomato",
+          "orders": 9,
+          "gross": 4156.8
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "HE UPI",
+          "orders": 11,
+          "gross": 7520.160000000001
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "HE - Cash Captain",
+          "orders": 3,
+          "gross": 1505.03
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "HE - Cash Counter",
+          "orders": 6,
+          "gross": 1069.97
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "HE - Cash GF Waiter",
+          "orders": 3,
+          "gross": 779.99
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "HE - UPI Counter",
+          "orders": 9,
+          "gross": 2624.9700000000003
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "HE - Zomato",
+          "orders": 6,
+          "gross": 1553
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "HE Complimentary",
+          "orders": 3,
+          "gross": 740.02
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "HE UPI",
+          "orders": 13,
+          "gross": 5200.07
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "HE - Cash Captain",
+          "orders": 5,
+          "gross": 4862.99
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "HE - Cash Counter",
+          "orders": 12,
+          "gross": 2260.04
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "HE - Cash GF Waiter",
+          "orders": 3,
+          "gross": 565.01
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "HE - Swiggy",
+          "orders": 2,
+          "gross": 862.05
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "HE - UPI Counter",
+          "orders": 20,
+          "gross": 3144.9700000000003
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "HE - Zomato",
+          "orders": 1,
+          "gross": 265
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "HE Complimentary",
+          "orders": 3,
+          "gross": 329.99
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "HE UPI",
+          "orders": 13,
+          "gross": 7180.02
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "HE - Cash Counter",
+          "orders": 10,
+          "gross": 859.98
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "HE - Cash GF Waiter",
+          "orders": 1,
+          "gross": 309.99
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "HE - Swiggy",
+          "orders": 2,
+          "gross": 222.6
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "HE - UPI Captain",
+          "orders": 2,
+          "gross": 679.01
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "HE - UPI Counter",
+          "orders": 12,
+          "gross": 2479.92
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "HE Complimentary",
+          "orders": 1,
+          "gross": 20
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "HE UPI",
+          "orders": 7,
+          "gross": 3670.99
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "HE - Cash Captain",
+          "orders": 4,
+          "gross": 2315.0299999999997
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "HE - Cash Counter",
+          "orders": 19,
+          "gross": 1874.94
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "HE - Swiggy",
+          "orders": 2,
+          "gross": 634.52
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "HE - UPI Captain",
+          "orders": 1,
+          "gross": 220.02
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "HE - UPI Counter",
+          "orders": 26,
+          "gross": 4464.9299999999985
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "HE Complimentary",
+          "orders": 3,
+          "gross": 179.97
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "HE UPI",
+          "orders": 6,
+          "gross": 1978.03
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "UNKNOWN",
+          "orders": 1,
+          "gross": 460
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "HE - Cash Captain",
+          "orders": 6,
+          "gross": 5936.04
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "HE - Cash Counter",
+          "orders": 25,
+          "gross": 2844.9800000000005
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "HE - Swiggy",
+          "orders": 2,
+          "gross": 419.64
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "HE - UPI Captain",
+          "orders": 4,
+          "gross": 1766.04
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "HE - UPI Counter",
+          "orders": 16,
+          "gross": 2869.95
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "HE Complimentary",
+          "orders": 4,
+          "gross": 630.98
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "HE UPI",
+          "orders": 20,
+          "gross": 11008.189999999999
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "HE - Cash Captain",
+          "orders": 4,
+          "gross": 1090.02
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "HE - Cash Counter",
+          "orders": 21,
+          "gross": 2849.9800000000005
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "HE - Cash GF Waiter",
+          "orders": 2,
+          "gross": 700.01
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "HE - Swiggy",
+          "orders": 1,
+          "gross": 324.45
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "HE - UPI Captain",
+          "orders": 2,
+          "gross": 890.02
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "HE - UPI Counter",
+          "orders": 11,
+          "gross": 2349.9700000000003
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "HE Complimentary",
+          "orders": 1,
+          "gross": 109.97999999999999
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "HE UPI",
+          "orders": 15,
+          "gross": 6859.98
         }
       ]
     },
@@ -2214,12 +2380,12 @@
       "label": "Nawabi Chai House (ops.hamzahotel.com — NCH prod)",
       "host": "ops.hamzahotel.com",
       "window": {
-        "from": "2026-02-27",
-        "to": "2026-04-28"
+        "from": "2026-03-12",
+        "to": "2026-05-11"
       },
-      "order_count": 21995,
-      "payment_lines": 22025,
-      "unmapped_orders": 1,
+      "order_count": 18873,
+      "payment_lines": 18899,
+      "unmapped_orders": 0,
       "channels_seen": [
         "Cash",
         "Complimentary",
@@ -2228,529 +2394,9 @@
         "NCH Cash",
         "NCH Runner Ledger",
         "NCH Token Issue",
-        "NCH UPI",
-        "NCH WABA COD",
-        "NCH WABA UPI",
-        "UNKNOWN",
-        "UPI"
+        "NCH UPI"
       ],
       "daily": [
-        {
-          "date": "2026-02-27",
-          "channel": "Cash",
-          "orders": 21,
-          "gross": 12265.130000000001
-        },
-        {
-          "date": "2026-02-27",
-          "channel": "Complimentary",
-          "orders": 30,
-          "gross": 1796
-        },
-        {
-          "date": "2026-02-27",
-          "channel": "NCH Cash",
-          "orders": 108,
-          "gross": 7609
-        },
-        {
-          "date": "2026-02-27",
-          "channel": "NCH Runner Ledger",
-          "orders": 122,
-          "gross": 7951
-        },
-        {
-          "date": "2026-02-27",
-          "channel": "NCH Token Issue",
-          "orders": 26,
-          "gross": 13080
-        },
-        {
-          "date": "2026-02-27",
-          "channel": "NCH UPI",
-          "orders": 198,
-          "gross": 13139
-        },
-        {
-          "date": "2026-02-27",
-          "channel": "UPI",
-          "orders": 10,
-          "gross": 3102
-        },
-        {
-          "date": "2026-02-28",
-          "channel": "Cash",
-          "orders": 13,
-          "gross": 10820.12
-        },
-        {
-          "date": "2026-02-28",
-          "channel": "Complimentary",
-          "orders": 17,
-          "gross": 5380
-        },
-        {
-          "date": "2026-02-28",
-          "channel": "NCH Card",
-          "orders": 1,
-          "gross": 100
-        },
-        {
-          "date": "2026-02-28",
-          "channel": "NCH Cash",
-          "orders": 213,
-          "gross": 18941
-        },
-        {
-          "date": "2026-02-28",
-          "channel": "NCH Runner Ledger",
-          "orders": 12,
-          "gross": 726
-        },
-        {
-          "date": "2026-02-28",
-          "channel": "NCH Token Issue",
-          "orders": 28,
-          "gross": 6740
-        },
-        {
-          "date": "2026-02-28",
-          "channel": "NCH UPI",
-          "orders": 378,
-          "gross": 32038
-        },
-        {
-          "date": "2026-02-28",
-          "channel": "UNKNOWN",
-          "orders": 1,
-          "gross": 0
-        },
-        {
-          "date": "2026-02-28",
-          "channel": "UPI",
-          "orders": 33,
-          "gross": 19575.08
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "Cash",
-          "orders": 11,
-          "gross": 4860.050000000001
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "Complimentary",
-          "orders": 37,
-          "gross": 6093.06
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "NCH Cash",
-          "orders": 213,
-          "gross": 14021
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "NCH Runner Ledger",
-          "orders": 7,
-          "gross": 150
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "NCH Token Issue",
-          "orders": 22,
-          "gross": 7650
-        },
-        {
-          "date": "2026-03-01",
-          "channel": "NCH UPI",
-          "orders": 310,
-          "gross": 24679
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "Complimentary",
-          "orders": 11,
-          "gross": 368
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "NCH Cash",
-          "orders": 138,
-          "gross": 10036
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "NCH Runner Ledger",
-          "orders": 34,
-          "gross": 1313
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "NCH Token Issue",
-          "orders": 19,
-          "gross": 7340
-        },
-        {
-          "date": "2026-03-02",
-          "channel": "NCH UPI",
-          "orders": 172,
-          "gross": 15505
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "Complimentary",
-          "orders": 14,
-          "gross": 571
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "NCH Card",
-          "orders": 1,
-          "gross": 120
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "NCH Cash",
-          "orders": 144,
-          "gross": 10808
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "NCH Runner Ledger",
-          "orders": 54,
-          "gross": 2963
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "NCH Token Issue",
-          "orders": 23,
-          "gross": 9320
-        },
-        {
-          "date": "2026-03-03",
-          "channel": "NCH UPI",
-          "orders": 193,
-          "gross": 15343
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "Complimentary",
-          "orders": 20,
-          "gross": 800
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "NCH Cash",
-          "orders": 193,
-          "gross": 13407
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "NCH Runner Ledger",
-          "orders": 49,
-          "gross": 1962
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "NCH Token Issue",
-          "orders": 26,
-          "gross": 9860
-        },
-        {
-          "date": "2026-03-04",
-          "channel": "NCH UPI",
-          "orders": 225,
-          "gross": 15777
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "Complimentary",
-          "orders": 23,
-          "gross": 713
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "NCH Cash",
-          "orders": 191,
-          "gross": 12997
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "NCH Runner Ledger",
-          "orders": 25,
-          "gross": 1306
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "NCH Token Issue",
-          "orders": 23,
-          "gross": 8050
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "NCH UPI",
-          "orders": 213,
-          "gross": 15854
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "NCH WABA COD",
-          "orders": 4,
-          "gross": 800
-        },
-        {
-          "date": "2026-03-05",
-          "channel": "NCH WABA UPI",
-          "orders": 3,
-          "gross": 600
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "Cash",
-          "orders": 3,
-          "gross": 1370
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "Complimentary",
-          "orders": 12,
-          "gross": 482
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "HE - WABA General",
-          "orders": 2,
-          "gross": 2.1
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "NCH Card",
-          "orders": 1,
-          "gross": 140
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "NCH Cash",
-          "orders": 183,
-          "gross": 11123
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "NCH Runner Ledger",
-          "orders": 26,
-          "gross": 746
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "NCH Token Issue",
-          "orders": 22,
-          "gross": 8020
-        },
-        {
-          "date": "2026-03-06",
-          "channel": "NCH UPI",
-          "orders": 264,
-          "gross": 18782
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "Complimentary",
-          "orders": 14,
-          "gross": 555
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "HE - WABA General",
-          "orders": 6,
-          "gross": 6.199999999999999
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "NCH Card",
-          "orders": 1,
-          "gross": 80
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "NCH Cash",
-          "orders": 288,
-          "gross": 20842
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "NCH Runner Ledger",
-          "orders": 3,
-          "gross": 98
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "NCH Token Issue",
-          "orders": 8,
-          "gross": 4550
-        },
-        {
-          "date": "2026-03-07",
-          "channel": "NCH UPI",
-          "orders": 450,
-          "gross": 32814
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "Cash",
-          "orders": 1,
-          "gross": 700.01
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "Complimentary",
-          "orders": 11,
-          "gross": 687
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "NCH Card",
-          "orders": 1,
-          "gross": 116
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "NCH Cash",
-          "orders": 209,
-          "gross": 14067
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "NCH Runner Ledger",
-          "orders": 25,
-          "gross": 734
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "NCH Token Issue",
-          "orders": 17,
-          "gross": 7030
-        },
-        {
-          "date": "2026-03-08",
-          "channel": "NCH UPI",
-          "orders": 272,
-          "gross": 23672
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "Complimentary",
-          "orders": 9,
-          "gross": 680
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "HE - WABA General",
-          "orders": 4,
-          "gross": 1512.97
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "NCH Card",
-          "orders": 3,
-          "gross": 270
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "NCH Cash",
-          "orders": 198,
-          "gross": 12521
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "NCH Runner Ledger",
-          "orders": 37,
-          "gross": 1648
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "NCH Token Issue",
-          "orders": 46,
-          "gross": 11066
-        },
-        {
-          "date": "2026-03-09",
-          "channel": "NCH UPI",
-          "orders": 194,
-          "gross": 14699
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "Complimentary",
-          "orders": 11,
-          "gross": 1481
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "HE - WABA General",
-          "orders": 1,
-          "gross": 1.05
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "NCH Cash",
-          "orders": 123,
-          "gross": 8484
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "NCH Runner Ledger",
-          "orders": 73,
-          "gross": 2833
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "NCH Token Issue",
-          "orders": 50,
-          "gross": 22510
-        },
-        {
-          "date": "2026-03-10",
-          "channel": "NCH UPI",
-          "orders": 144,
-          "gross": 10855
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "Complimentary",
-          "orders": 18,
-          "gross": 1002
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "HE - WABA General",
-          "orders": 1,
-          "gross": 1.05
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "NCH Cash",
-          "orders": 93,
-          "gross": 6112
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "NCH Runner Ledger",
-          "orders": 101,
-          "gross": 3325
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "NCH Token Issue",
-          "orders": 80,
-          "gross": 25840
-        },
-        {
-          "date": "2026-03-11",
-          "channel": "NCH UPI",
-          "orders": 73,
-          "gross": 5458
-        },
         {
           "date": "2026-03-12",
           "channel": "Complimentary",
@@ -4194,32 +3840,422 @@
         {
           "date": "2026-04-28",
           "channel": "Complimentary",
-          "orders": 9,
-          "gross": 288
+          "orders": 19,
+          "gross": 528
         },
         {
           "date": "2026-04-28",
           "channel": "NCH Cash",
-          "orders": 94,
-          "gross": 2991
+          "orders": 131,
+          "gross": 4621
         },
         {
           "date": "2026-04-28",
           "channel": "NCH Runner Ledger",
-          "orders": 15,
-          "gross": 316
+          "orders": 31,
+          "gross": 797
         },
         {
           "date": "2026-04-28",
           "channel": "NCH Token Issue",
-          "orders": 2,
-          "gross": 4300
+          "orders": 86,
+          "gross": 14965
         },
         {
           "date": "2026-04-28",
           "channel": "NCH UPI",
+          "orders": 78,
+          "gross": 3508
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "Complimentary",
+          "orders": 22,
+          "gross": 1308
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "NCH Cash",
+          "orders": 43,
+          "gross": 1625
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "NCH Runner Ledger",
+          "orders": 17,
+          "gross": 389
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "NCH Token Issue",
+          "orders": 122,
+          "gross": 18191
+        },
+        {
+          "date": "2026-04-29",
+          "channel": "NCH UPI",
+          "orders": 21,
+          "gross": 1138
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "Complimentary",
+          "orders": 20,
+          "gross": 465
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "NCH Cash",
+          "orders": 68,
+          "gross": 2508
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "NCH Runner Ledger",
+          "orders": 43,
+          "gross": 1667
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "NCH Token Issue",
+          "orders": 107,
+          "gross": 19597
+        },
+        {
+          "date": "2026-04-30",
+          "channel": "NCH UPI",
+          "orders": 48,
+          "gross": 2776
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "Complimentary",
+          "orders": 21,
+          "gross": 470
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "NCH Cash",
+          "orders": 77,
+          "gross": 3275
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "NCH Runner Ledger",
+          "orders": 93,
+          "gross": 4010
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "NCH Token Issue",
+          "orders": 35,
+          "gross": 18740
+        },
+        {
+          "date": "2026-05-01",
+          "channel": "NCH UPI",
+          "orders": 68,
+          "gross": 3745
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "Complimentary",
+          "orders": 21,
+          "gross": 420
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "NCH Cash",
+          "orders": 66,
+          "gross": 2480
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "NCH Runner Ledger",
+          "orders": 101,
+          "gross": 3810
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "NCH Token Issue",
+          "orders": 34,
+          "gross": 21380
+        },
+        {
+          "date": "2026-05-02",
+          "channel": "NCH UPI",
+          "orders": 64,
+          "gross": 3995
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "Complimentary",
+          "orders": 19,
+          "gross": 550
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "NCH Cash",
+          "orders": 64,
+          "gross": 3550
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "NCH Runner Ledger",
+          "orders": 131,
+          "gross": 5160
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "NCH Token Issue",
+          "orders": 35,
+          "gross": 16870
+        },
+        {
+          "date": "2026-05-03",
+          "channel": "NCH UPI",
+          "orders": 63,
+          "gross": 3480
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "Complimentary",
+          "orders": 23,
+          "gross": 540
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "NCH Cash",
+          "orders": 84,
+          "gross": 3750
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "NCH Runner Ledger",
+          "orders": 86,
+          "gross": 3370
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "NCH Token Issue",
+          "orders": 27,
+          "gross": 14570
+        },
+        {
+          "date": "2026-05-04",
+          "channel": "NCH UPI",
+          "orders": 39,
+          "gross": 2685
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "Complimentary",
+          "orders": 9,
+          "gross": 220
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "NCH Cash",
+          "orders": 44,
+          "gross": 1980
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "NCH Runner Ledger",
           "orders": 57,
-          "gross": 2210
+          "gross": 2915
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "NCH Token Issue",
+          "orders": 38,
+          "gross": 15820
+        },
+        {
+          "date": "2026-05-05",
+          "channel": "NCH UPI",
+          "orders": 38,
+          "gross": 2665
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "Complimentary",
+          "orders": 20,
+          "gross": 500
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "NCH Cash",
+          "orders": 75,
+          "gross": 3445
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "NCH Runner Ledger",
+          "orders": 69,
+          "gross": 3370
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "NCH Token Issue",
+          "orders": 22,
+          "gross": 14600
+        },
+        {
+          "date": "2026-05-06",
+          "channel": "NCH UPI",
+          "orders": 50,
+          "gross": 2715
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "Complimentary",
+          "orders": 21,
+          "gross": 560
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "NCH Cash",
+          "orders": 65,
+          "gross": 2580
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "NCH Runner Ledger",
+          "orders": 89,
+          "gross": 3625
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "NCH Token Issue",
+          "orders": 23,
+          "gross": 14980
+        },
+        {
+          "date": "2026-05-07",
+          "channel": "NCH UPI",
+          "orders": 31,
+          "gross": 1940
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "Complimentary",
+          "orders": 18,
+          "gross": 440
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "NCH Cash",
+          "orders": 90,
+          "gross": 3775
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "NCH Runner Ledger",
+          "orders": 95,
+          "gross": 3645
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "NCH Token Issue",
+          "orders": 26,
+          "gross": 15990
+        },
+        {
+          "date": "2026-05-08",
+          "channel": "NCH UPI",
+          "orders": 52,
+          "gross": 2825
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "Complimentary",
+          "orders": 15,
+          "gross": 410
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "NCH Cash",
+          "orders": 47,
+          "gross": 1725
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "NCH Runner Ledger",
+          "orders": 148,
+          "gross": 5905
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "NCH Token Issue",
+          "orders": 56,
+          "gross": 20950
+        },
+        {
+          "date": "2026-05-09",
+          "channel": "NCH UPI",
+          "orders": 56,
+          "gross": 2805
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "Complimentary",
+          "orders": 14,
+          "gross": 310
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "NCH Cash",
+          "orders": 67,
+          "gross": 3665
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "NCH Runner Ledger",
+          "orders": 113,
+          "gross": 3770
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "NCH Token Issue",
+          "orders": 46,
+          "gross": 20440
+        },
+        {
+          "date": "2026-05-10",
+          "channel": "NCH UPI",
+          "orders": 51,
+          "gross": 2600
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "Complimentary",
+          "orders": 14,
+          "gross": 305
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "NCH Cash",
+          "orders": 36,
+          "gross": 1360
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "NCH Runner Ledger",
+          "orders": 101,
+          "gross": 3861
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "NCH Token Issue",
+          "orders": 24,
+          "gross": 16180
+        },
+        {
+          "date": "2026-05-11",
+          "channel": "NCH UPI",
+          "orders": 15,
+          "gross": 515
         }
       ]
     }

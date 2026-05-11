@@ -1,10 +1,10 @@
 {
-  "captured_at": "2026-04-28T12:19:04.871Z",
+  "captured_at": "2026-05-11T20:51:23.023Z",
   "source": "https://hamzaexpress.in/api/google-cockpit?period=30d",
   "data": {
     "success": true,
     "period": "30d",
-    "asOf": "2026-04-28",
+    "asOf": "2026-05-12",
     "campaignId": "23748431244",
     "campaignName": "HE — Ghee Rice & Kabab — Local Search",
     "overview": {
@@ -597,6 +597,257 @@
         "text": "Swiggy",
         "matchType": "PHRASE",
         "status": "ENABLED"
+      }
+    ],
+    "allCampaigns": [
+      {
+        "id": "23834053403",
+        "name": "HE — PMax Store Goals — v1",
+        "status": "ENABLED",
+        "servingStatus": "SERVING",
+        "channelType": "PERFORMANCE_MAX",
+        "budgetINR": 300
+      },
+      {
+        "id": "23748431244",
+        "name": "HE — Ghee Rice & Kabab — Local Search",
+        "status": "PAUSED",
+        "servingStatus": "SERVING",
+        "channelType": "SEARCH",
+        "budgetINR": 500
+      }
+    ],
+    "audiences": {
+      "userLists": [
+        {
+          "id": "9384755106",
+          "name": "hamza_he_leads_v1",
+          "description": "HE WhatsApp leads — auto-uploaded from /api/leads. Used as PMax audience signal.",
+          "sizeForDisplay": 0,
+          "sizeForSearch": 0,
+          "membershipStatus": "OPEN",
+          "membershipLifeSpan": "540",
+          "uploadKeyType": "CONTACT_INFO"
+        }
+      ],
+      "customAudiences": [
+        {
+          "id": "975639929",
+          "name": "he_late_night_food_searchers",
+          "description": "Users searching for late-night/24-hour food in BLR",
+          "status": "ENABLED",
+          "type": "AUTO"
+        },
+        {
+          "id": "976493592",
+          "name": "he_halal_food_searchers",
+          "description": "Users searching for halal food/restaurants in BLR",
+          "status": "ENABLED",
+          "type": "AUTO"
+        },
+        {
+          "id": "976494318",
+          "name": "he_biryani_connoisseur",
+          "description": "Users researching destination biryani options in BLR",
+          "status": "ENABLED",
+          "type": "AUTO"
+        }
+      ]
+    },
+    "sharedSets": [
+      {
+        "id": "12074853990",
+        "name": "HE_walk_in_excludes_v1",
+        "type": "NEGATIVE_KEYWORDS",
+        "memberCount": 37,
+        "referenceCount": 2,
+        "keywords": [
+          {
+            "text": "how to cook",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "online order",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "movie",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "diet",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "streaming",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "free",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "discount",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "nutrition",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "vacancies",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "how to make",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "recipe",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "cooking",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "food delivery",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "delivery",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "download",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "careers",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "jobs",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "franchise",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "cheap",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "vegetarian",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "calories",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "home delivery",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "order online",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "budget",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "hiring",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "homemade",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "watch online",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "ingredients",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "foodpanda",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "ubereats",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "zomato",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "dineout",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "swiggy",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "veg restaurant",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "magicpin",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "eazydiner",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          },
+          {
+            "text": "veg only",
+            "matchType": "PHRASE",
+            "type": "KEYWORD"
+          }
+        ]
       }
     ]
   }
