@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "fleet/marketing-shell/state.schema.json",
+  "title": "Marketing Lane State",
+  "description": "Canonical state file for one marketing lane. Lives on winpc at ~/hn-lanes/<lane-id>/state.json. Read at every session start; updated after every meaningful action. The handoff document — when Mac is off and you reach the lane from iPhone, the lane reads THIS to know where it is, not chat scrollback. See fleet/marketing-shell/ARCHITECTURE.md for the doctrine.",
+  "type": "object",
+  "required": [
+    "lane_id",
+    "lane_name",
+    "status",
+    "last_action_at",
+    "branch"
+  ],
+  "properties": {
+    "lane_id": {
+      "type": "string",
+      "enum": [
+        "01-influencer",
+        "02-google",
+        "03-aggregator",
+        "04-dine",
+        "05-tv",
+        "06-meta",
+        "marketing-orchestrator"
+      ],
+      "description": "Canonical lane identifier. Must match the tmux session name (minus 'lane-' prefix for lanes)."
+    },
+    "lane_name": {
+      "type": "string",
+      "description": "Human-readable lane name."
+    },
+    "owner_chat_session": {
+      "type": ["string", "null"],
+      "description": "Current Claude session ID owning this lane. Null if no active session. Set by winpc inherit / set on session start."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["idle", "active", "blocked", "paused"],
+      "description": "idle = no in-flight work; active = in-flight; blocked = waiting on external dep; paused = explicitly held by owner."
+    },
+    "last_action_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp of last write to this state file."
+    },
+    "current_action": {
+      "type": ["string", "null"],
+      "description": "One-line description of what's being worked on, if anything. Null if idle."
+    },
+    "branch": {
+      "type": "string",
+      "description": "Active git branch this lane is working on. Convention: claude/<lane-name>-<slug>."
+    },
+    "in_flight": {
+      "type": "array",
+      "description": "Actions started but not done. Each must eventually complete or be moved to open_items.",
+      "items": {
+        "type": "object",
+        "required": ["id", "verb", "target", "started_at"],
+        "properties": {
+          "id": { "type": "string", "description": "Stable identifier, e.g. action-2026-05-11-001." },
+          "verb": {
+            "type": "string",
+            "enum": [
+              "launch",
+              "pause",
+              "rotate",
+              "retarget",
+              "rebid",
+              "audit-uplift",
+              "creative-render",
+              "escalate",
+              "retire",
+              "sponsor-engage",
+              "verify",
+              "publish",
+              "test"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "description": "What the verb operates on. Free-form for now; will dimensionalize when COA layer lands."
+          },
+          "started_at": { "type": "string", "format": "date-time" },
+          "awaiting": {
+            "type": ["string", "null"],
+            "description": "What this action is currently blocked on. Null if actively progressing."
+          },
+          "expected_outcome": { "type": "string" }
+        }
+      }
+    },
+    "open_items": {
+      "type": "array",
+      "description": "Known TODOs for this lane, prioritized.",
+      "items": {
+        "type": "object",
+        "required": ["text", "priority", "raised_at"],
+        "properties": {
+          "text": { "type": "string" },
+          "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+          "raised_at": { "type": "string", "format": "date-time" },
+          "owner_decision_required": {
+            "type": "boolean",
+            "description": "True if Nihaf must decide before the lane can proceed."
+          },
+          "deadline": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "cross_lane_refs": {
+      "type": "array",
+      "description": "Other lane IDs this lane consumes from or produces for. Used by orchestrator to detect dependencies.",
+      "items": {
+        "type": "object",
+        "required": ["lane_id", "direction"],
+        "properties": {
+          "lane_id": { "type": "string" },
+          "direction": { "type": "string", "enum": ["consumes_from", "produces_for"] },
+          "what": { "type": "string", "description": "What's exchanged (e.g., 'hero-creative', 'leads-segment')." }
+        }
+      }
+    },
+    "kpis_this_month": {
+      "type": "object",
+      "description": "Lane-specific KPIs. Schema is per-lane. Conventions documented in ARCHITECTURE.md.",
+      "additionalProperties": true
+    },
+    "last_orchestrator_audit": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When the orchestrator last audited this lane."
+    },
+    "schema_version": {
+      "type": "string",
+      "default": "1",
+      "description": "Bump if the schema changes. Lanes refusing unknown schema_version is the safety net."
+    }
+  }
+}
