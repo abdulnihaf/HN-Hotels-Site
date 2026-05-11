@@ -134,17 +134,48 @@ $ mkt-status           # one-line per lane
 
 Aliases live in `~/.zshrc`. SSH is via Tailscale. The Claude execution happens on winpc, not on Mac.
 
-### From iPhone (laptop off)
+### From iPhone / iPad (laptop off)
 
-1. Open Claude Code app on iPhone
-2. Either:
-   - **Resume an existing conversation** with the orchestrator — that conversation knows how to SSH+dispatch
-   - **Start a fresh conversation** with the marketing-shell starter prompt — Claude bootstraps
-3. Type a directive in plain English
-4. iPhone Claude → Bash → SSH into winpc → tmux send-keys to the right lane → captures output → returns to you
-5. Result rendered in iPhone Claude chat as if the conversation was happening on winpc
+**Constraint discovered 2026-05-11 (Phase 0):** iPhone Claude Code and iPad Claude Code sandboxes do **not** have an SSH client (`ssh: command not found`). Direct SSH-from-mobile is impossible.
 
-The phone is a thin client. The actual chat with state continuity lives on winpc tmux + JSONL.
+**The pivot:** mobile clients reach winpc through an HTTPS bridge, not SSH.
+
+```
+iPhone/iPad Claude  ──── WebFetch HTTPS ────►  Bridge endpoint
+                                                      │
+                                                      ▼
+                                              winpc (poller picks up directive)
+                                                      │
+                                                      ▼
+                                              tmux send-keys → lane → result
+                                                      │
+                                                      ▼
+                                              Result returned via bridge
+                                                      │
+iPhone/iPad Claude  ◄─── WebFetch HTTPS ────  to mobile chat
+```
+
+Bridge implementation (decided in Phase 4b, ~2-3 hours):
+- **Option A** — Cloudflare Worker at `hnhotels.in/api/marketing-bridge` (GET-only URLs with shared-token auth, writes to D1 queue, winpc polls every 10s). Uses existing infra, public internet path, ~10-20 sec latency.
+- **Option B** — Tailscale Serve on winpc exposing an HTTPS service at `https://hn-winpc.<tailnet>.ts.net`. Only-tailnet-reachable, no public exposure, direct iPhone↔winpc, ~2-5 sec latency. Requires Tailscale HTTPS feature on the tailnet.
+
+Decision deferred to Phase 4b. Both work; Option B is architecturally cleaner if Tailscale HTTPS is enabled.
+
+### From Mac (laptop on)
+
+Mac has SSH natively, so the bridge isn't needed:
+
+```
+$ mkt                  # ssh winpc -t 'wsl tmux attach -t marketing-orchestrator'
+$ lane 03              # ssh winpc -t 'wsl tmux attach -t lane-03-aggregator'
+$ mkt-dispatch 06 "compose festival CTWA copy for HE"
+$ mkt-watch 03         # stream live output
+$ mkt-status           # one-line per lane
+```
+
+Aliases live in `~/.zshrc`. SSH is via Tailscale. The Claude execution happens on winpc, not on Mac.
+
+The bridge from Phase 4b ALSO works from Mac (same URL), so a single dispatch protocol is portable across all clients. Mac just has the faster direct-SSH option available.
 
 ### Pattern (the cleanest mental model)
 
@@ -191,7 +222,8 @@ If always-on becomes necessary (e.g., reactive monitoring), the right answer is 
 | **1** | winpc as Claude execution host (WSL2 + Ubuntu + Node + Claude + tmux + git inside WSL2) | Pending — requires winpc online |
 | **2** | Cross-machine state sync (git auto-pull cron + Syncthing on Mac/winpc + artifact rsync) | Pending |
 | **3** | Lane structure on winpc (7 tmux sessions + state.json + inbox/outbox + tmux-resurrect) | Pending |
-| **4** | Mac + iPhone client tooling (`mkt`/`lane`/`mkt-dispatch`/`mkt-watch`/`mkt-status` aliases + iPhone Claude bootstrap prompt) | **Partially done** — Mac aliases in `~/.zshrc` (this branch); iPhone bootstrap awaits iPad-role decision |
+| **4a** | Mac client tooling (`mkt`/`lane`/`mkt-dispatch`/`mkt-watch`/`mkt-status` aliases in `~/.zshrc`) | **Done** — activates after winpc Phase 1+3 |
+| **4b** | Mobile bridge (iPhone + iPad) — HTTPS bridge via either CF Worker @ hnhotels.in OR Tailscale Serve on winpc. Replaces direct SSH (which iOS sandbox forbids). | Pending — design locked, build deferred |
 | **5** | Populate lanes + end-to-end test (migrate the 4 active Mac chats, spin up 02/06, run iPhone dispatch test) | Pending |
 
 Each phase has a confirmation gate. None of phases 1–5 begin until phase 0 verifications confirm the constraints, and Nihaf says "proceed."
@@ -263,7 +295,7 @@ Adding a new domain ≈ 30 min of new tmux session names + new brief files + new
 These are NOT blockers for Phase 0 or Phase 1, but should be resolved before Phase 4 ships:
 
 1. ~~**iPad role**~~ — **RESOLVED 2026-05-11:** iPad is configured identically to iPhone for v1. Both are mobile clients with Claude Code + Tailscale. iPad is used when Nihaf wants a larger screen; iPhone when truly mobile. Per-device specifics revisited later.
-2. **iPhone/iPad Claude SSH capability** — does the iOS Bash tool support SSH over Tailscale? Verification deferred to Nihaf's manual phone test. Applies identically to iPad.
+2. ~~**iPhone/iPad Claude SSH capability**~~ — **RESOLVED 2026-05-11:** Both iPhone and iPad Claude Code sandboxes return `ssh: command not found (exit 127)`. iOS sandbox does NOT ship an SSH client. **Architectural pivot:** mobile clients use an HTTPS bridge instead of direct SSH (§5 above). Bridge implementation deferred to Phase 4b.
 3. **Concurrent Claude session limit on Pro Max** — verifying as Phase 1's first step. If blocked, fall back to API-key model per lane.
 4. **Always-on vs wake-on-prompt for orchestrator** — wake-on-prompt by default; reconsider only if reactive monitoring becomes a requirement.
 5. **Cross-domain orchestrator (master CEO seat)** — defer until ≥2 domains exist (marketing + ops, etc.).
