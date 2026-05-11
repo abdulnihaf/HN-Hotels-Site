@@ -168,20 +168,34 @@ async function scrapeSearchResults(page, filters) {
         }
 
         for (const item of list) {
-          // Modash result schema (approximate):
-          //   { profile: { username, fullname, picture, followers, engagementRate, ... } }
-          // OR flatter:
-          //   { username, fullname, followers, engagementRate, ... }
+          // Modash list-view XHR returns RICH profile data — captured here:
+          //   username, fullname, picture, follower_count, biography,
+          //   engagement_rate, is_business, is_verified, is_private, is_brand,
+          //   external_url, account_category, last_posted_at, user_id, _score.
+          // This is what Apify's profile-scraper would have returned for $0.10/profile.
+          // We skip Apify entirely for Modash-sourced creators.
           const p = item.profile || item;
           if (!p.username) continue;
           collected.push({
             username: String(p.username).toLowerCase(),
             full_name: p.fullname || p.fullName || p.full_name || null,
-            followers: p.followers || p.followersCount || null,
-            engagement_rate: p.engagementRate || p.engagement_rate || null,
+            followers: p.follower_count || p.followers || p.followersCount || null,
+            following: p.following_count || null,
+            engagement_rate: p.engagement_rate || p.engagementRate || null,
             profile_pic_url: p.picture || p.profilePicUrl || null,
             country: p.country || null,
             city: p.city || null,
+            // Newly captured (saves Apify enrichment cost ~$0.10/profile):
+            biography: p.biography || null,
+            is_business: p.is_business ? 1 : 0,
+            is_verified: p.is_verified ? 1 : 0,
+            is_private: p.is_private ? 1 : 0,
+            is_brand: p.is_brand ? 1 : 0,
+            external_url: p.external_url || null,
+            category_name: p.account_category || null,
+            last_post_at: p.last_posted_at || null,
+            user_id: p.user_id || null,
+            modash_score: p._score || null,
           });
         }
       } catch (_) { /* ignore */ }

@@ -1075,33 +1075,75 @@ async function modashJobDone(env, body, request) {
     WHERE id=?
   `).bind(status, error, results.length, body.summary || null, body.job_id).run();
 
-  // Push each result into discovery_queue (dedup vs bio_pulse + queue)
-  let added = 0, skippedExisting = 0;
+  // Modash list-view XHR returns RICH profile data (bio, business flag, verified,
+  // ER, etc.). Write DIRECTLY to influencer_bio_pulse with status='ok' — no Apify
+  // enrichment needed for these creators. Saves ~$0.10 × N per discover-cycle.
+  // Non-Modash discovery vectors (Apify hashtag/geotag/etc.) still flow through
+  // discovery_queue → cronEnrichTick.
+  let upserted = 0, skippedBrand = 0;
   for (const r of results) {
     const u = (r.username || '').toLowerCase().trim();
     if (!u) continue;
-    const inDb = await env.DB.prepare(`SELECT 1 FROM influencer_bio_pulse WHERE username=?`).bind(u).first();
-    if (inDb) { skippedExisting++; continue; }
+    if (r.is_brand) { skippedBrand++; continue; }
+
+    const bio = r.biography || '';
+    const { emails, phones, whatsapp } = extractContacts(bio, [], null, null);
+    const hasEmail = emails.length > 0 ? 1 : 0;
+    const hasPhone = phones.length > 0 ? 1 : 0;
+    const hasWa = whatsapp.length > 0 ? 1 : 0;
+
     try {
       await env.DB.prepare(`
-        INSERT INTO influencer_discovery_queue (username, source, source_meta)
-        VALUES (?, 'modash', ?)
-      `).bind(u, JSON.stringify({
-        job_id: body.job_id,
-        followers: r.followers || null,
-        engagement_rate: r.engagement_rate || null,
-        full_name: r.full_name || null,
-      })).run();
-      added++;
-    } catch (e) { /* unique conflict — already queued */ }
+        INSERT INTO influencer_bio_pulse (
+          username, full_name, biography, external_url, bio_links_json, category_name,
+          is_business_account, is_verified, is_private,
+          followers_count, following_count, profile_pic_url,
+          extracted_emails_json, extracted_phones_json, extracted_whatsapp_json,
+          has_email, has_phone, has_whatsapp, has_any_contact, contact_channels,
+          engagement_rate, last_post_at,
+          status, source, fetched_at
+        ) VALUES (?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok', 'modash_list', datetime('now'))
+        ON CONFLICT(username) DO UPDATE SET
+          full_name=COALESCE(excluded.full_name, full_name),
+          biography=COALESCE(excluded.biography, biography),
+          external_url=COALESCE(excluded.external_url, external_url),
+          category_name=COALESCE(excluded.category_name, category_name),
+          is_business_account=excluded.is_business_account,
+          is_verified=excluded.is_verified,
+          is_private=excluded.is_private,
+          followers_count=COALESCE(excluded.followers_count, followers_count),
+          following_count=COALESCE(excluded.following_count, following_count),
+          profile_pic_url=COALESCE(excluded.profile_pic_url, profile_pic_url),
+          extracted_emails_json=excluded.extracted_emails_json,
+          extracted_phones_json=excluded.extracted_phones_json,
+          extracted_whatsapp_json=excluded.extracted_whatsapp_json,
+          has_email=excluded.has_email, has_phone=excluded.has_phone, has_whatsapp=excluded.has_whatsapp,
+          has_any_contact=excluded.has_any_contact, contact_channels=excluded.contact_channels,
+          engagement_rate=COALESCE(excluded.engagement_rate, engagement_rate),
+          last_post_at=COALESCE(excluded.last_post_at, last_post_at),
+          status='ok',
+          source='modash_list',
+          fetched_at=datetime('now')
+      `).bind(
+        u, r.full_name || null, bio || null, r.external_url || null,
+        r.category_name || null,
+        r.is_business || 0, r.is_verified || 0, r.is_private || 0,
+        r.followers || null, r.following || null, r.profile_pic_url || null,
+        JSON.stringify(emails), JSON.stringify(phones), JSON.stringify(whatsapp),
+        hasEmail, hasPhone, hasWa, (hasEmail || hasPhone || hasWa) ? 1 : 0,
+        hasEmail + hasPhone + hasWa,
+        r.engagement_rate || null, r.last_post_at || null
+      ).run();
+      upserted++;
+    } catch (e) { /* row-level error; skip */ }
   }
 
   return json({
     success: true,
     job_id: body.job_id,
     status,
-    pushed_to_queue: added,
-    skipped_existing: skippedExisting,
+    upserted_to_bio_pulse: upserted,
+    skipped_brand: skippedBrand,
   });
 }
 
