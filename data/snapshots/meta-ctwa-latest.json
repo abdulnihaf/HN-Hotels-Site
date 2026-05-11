@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-04-28T12:19:03.902Z",
+  "captured_at": "2026-05-11T20:51:22.980Z",
   "source": "https://hamzaexpress.in/api/ctwa-analytics?period=30d",
   "data": {
     "success": true,
@@ -788,9 +788,9 @@
       {
         "source": "organic",
         "customers": 55,
-        "orders": 0,
-        "revenue": 0,
-        "avgLtv": 0
+        "orders": 1,
+        "revenue": 179,
+        "avgLtv": 3
       }
     ]
   }
