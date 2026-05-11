@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "schema_url": "fleet/winpc-MASTER-CONTEXT.md",
-  "last_updated": "2026-05-11T13:01:47Z",
+  "last_updated": "2026-05-12T01:15:00Z",
   "appliance": {
     "hostname": "hn-winpc",
     "tailscale_ip": "100.65.7.61",
@@ -170,7 +170,7 @@
       "owner": "dine-aggregator",
       "criticality": "low",
       "lock_to_write": null,
-      "notes": "Opens Dining-Out + EazyDiner tabs after Chrome warmup."
+      "notes": "Originally opened dine tabs after Chrome warmup. As of 2026-05-12 dedup-bat cleanup, open-dine-tabs.bat is a NO-OP (was duplicating the 3 dine tabs on every reboot). Dine tab persistence now rides on Chrome's session-restore + the 4 dine tabs being pinned (Zomato Dining HE/NCH, Swiggy DO /food/dineout/, EazyDiner apps.livetableapp.com). Task remains scheduled but harmless. Original bat preserved at open-dine-tabs.bak-20260512-*."
     },
     "winpc.registry_key.RestoreOnStartup": {
       "kind": "registry_key",
