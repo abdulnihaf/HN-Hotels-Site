@@ -1,4 +1,4 @@
-// content-dining.js v1.1.0
+// content-dining.js v1.2.0
 // Zomato Dining (go-out) scraper for HN Hotels — HE (22632449) and NCH (22632430).
 // Injected alongside content-zomato.js on /partners/* — URL guard prevents delivery cycling.
 // POSTs to /api/aggregator-pulse with platform=zomato_dining.
@@ -11,8 +11,8 @@
   // Bail if not a dining URL (content-zomato.js has the same guard in reverse)
   if (!_initUrl.includes('/go-out/dining/')) return;
 
-  // Extract resId: /go-out/dining/22632449/...
-  const resMatch = _initUrl.match(/\/go-out\/dining\/(\d+)/);
+  // Extract resId from query param: ?resId=22632449 (Zomato's actual URL form)
+  const resMatch = _initUrl.match(/[?&]resId=(\d+)/);
   if (!resMatch) return;
 
   const RES_ID = resMatch[1];
@@ -35,12 +35,13 @@
     pageCycleInterval: 300_000,  // 5 min per section
   };
 
-  const BASE = `https://www.zomato.com/partners/go-out/dining/${RES_ID}/`;
+  const sectionUrl = (path) =>
+    `https://www.zomato.com/partners/go-out/dining/${path}?resId=${RES_ID}`;
 
   const SECTIONS = [
     { name: 'transaction_history', path: 'transactionHistory' },
     { name: 'offers',              path: 'offers' },
-    { name: 'payouts',             path: 'payouts/all-payouts' },
+    { name: 'payouts',             path: 'payouts' },
   ];
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -117,7 +118,7 @@
   function cyclePage() {
     const next = (currentSectionIdx() + 1) % SECTIONS.length;
     console.log(`[HN] Dining: → ${SECTIONS[next].name}`);
-    window.location.href = BASE + SECTIONS[next].path;
+    window.location.href = sectionUrl(SECTIONS[next].path);
   }
 
   // Dismiss modal overlays (Mother's Day promo, etc.)

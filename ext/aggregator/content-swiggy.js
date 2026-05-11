@@ -29,15 +29,16 @@
     initialDelay: 8_000,
   };
 
-  // Pages: NCH Finance → HE Finance → Business Metrics
-  // Verified from live portal Apr 2026: 1342888 = Nawabi Chai House, 1342887 = Hamza Express
+  // Pages: HE Finance → NCH Finance → Business Metrics
+  // Verified from live portal listing audit 2026-05-10: 1342888 = Hamza Express, 1342887 = Nawabi Chai House.
+  // (Prior comment had this inverted; appliance deploy 2026-05-10T02:46:20Z fixed it. This commit syncs main.)
   const PAGES = [
     'https://partner.swiggy.com/food/finance/order-payout/1342888',
     'https://partner.swiggy.com/food/finance/order-payout/1342887',
     'https://partner.swiggy.com/food/business-metrics',
   ];
 
-  const OUTLETS = { '1342888': 'nch', '1342887': 'he' };
+  const OUTLETS = { '1342888': 'he', '1342887': 'nch' };
 
   let lastPushTime = {};
   let dateCycleRunning = false;
