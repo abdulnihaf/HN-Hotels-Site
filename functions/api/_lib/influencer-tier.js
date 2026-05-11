@@ -75,7 +75,8 @@ export const TIER_MATRIX = {
     covers:       4,
     cash_paise:   50000,                    // ₹500
     budget_paise: 290000,
-    add_ons:      ['Mutton Brain Dry comp', 'Dessert flight', 'Chai', 'Chef interaction'],
+    // Generic category descriptors only — specific dishes pulled from /api/menu-top-sellers (HE).
+    add_ons:      ['Signature heritage dish (comped)', 'Dessert flight', 'Chai', 'Chef interaction'],
     asks:         ['1 reel · 1 permanent grid post · 7 stories · 7-day bio tag'],
     auto_approve: false,                    // Manual review (cash component)
   },
@@ -113,6 +114,27 @@ export function tierOf(followers) {
   if (f < 100000) return 'T5';
   if (f < 250000) return 'T6';
   return 'T7';
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Barter-feasibility — cold barter outreach (no cash) only makes sense
+// for micro-tier creators. T5+ (60K+) require a cash component;
+// cold-pitching them on barter alone burns brand goodwill on first touch.
+// Memory: feedback_influencer_barter_targeting.md (2026-05-11).
+// ────────────────────────────────────────────────────────────────────────────
+export const BARTER_FEASIBLE_TIERS = ['T1', 'T2', 'T3', 'T4'];
+
+export function isBarterFeasible(tier) {
+  return BARTER_FEASIBLE_TIERS.includes(tier);
+}
+
+// Within-band priority boost — T2 is the documented sweet spot for barter
+// acceptance + engagement rate. T4 is the upper edge (still feasible but
+// drops in conversion). T1 nano is feasible but ER is more volatile.
+const BARTER_FIT_BOOST = { T1: 0, T2: 1.0, T3: 0.5, T4: -0.5 };
+
+export function barterFit(tier) {
+  return BARTER_FIT_BOOST[tier] || 0;
 }
 
 // Decision: auto-approve, manual review, or auto-decline?
@@ -291,6 +313,37 @@ export function bucketOf(score) {
   if (score >= 4)    return 'PRIORITY';    // strong fit: email + WABA in standard wave
   if (score >= 2)    return 'STANDARD';    // viable: single best-channel, third wave
   return 'SKIP';                            // off-vertical — manual review before contacting
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// outreachBucket — the bucket function that actually gates the cold-cron.
+// Tier-aware:
+//   - T0      → 'SKIP'         (auto-decline; never contact)
+//   - T5+     → 'MANUAL_CASH'  (high reach; barter alone won't convert;
+//                                requires owner-personalised cash-component pitch)
+//   - T1–T4   → 'COLD_HERO' / 'COLD_PRIORITY' / 'COLD_STANDARD' / 'COLD_SKIP'
+//               (score + barterFit determines priority within the cold wave)
+//
+// The cold outreach cron MUST filter to COLD_* buckets only.
+// MANUAL_CASH creators stay in discovery + DB; they just never enter the
+// auto-send queue. Owner reviews them via a separate surface.
+// ────────────────────────────────────────────────────────────────────────────
+export function outreachBucket({ tier, score }) {
+  if (tier === 'T0') return 'SKIP';
+  if (!isBarterFeasible(tier)) return 'MANUAL_CASH';
+
+  // Within barter band: score + barterFit boost. T2 sweet spot rises.
+  const adjusted = (score || 0) + barterFit(tier);
+  if (adjusted >= 6) return 'COLD_HERO';
+  if (adjusted >= 4) return 'COLD_PRIORITY';
+  if (adjusted >= 2) return 'COLD_STANDARD';
+  return 'COLD_SKIP';
+}
+
+// Convenience: is this bucket auto-sendable from the cold cron?
+export const COLD_SENDABLE_BUCKETS = new Set(['COLD_HERO', 'COLD_PRIORITY', 'COLD_STANDARD']);
+export function isColdSendable(bucket) {
+  return COLD_SENDABLE_BUCKETS.has(bucket);
 }
 
 // Small helper: returns a friendly cover offer line for outreach text

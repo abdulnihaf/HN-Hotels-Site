@@ -1,0 +1,411 @@
+{
+  "schema_version": 3,
+  "schema_url": "fleet/winpc-MASTER-CONTEXT.md",
+  "last_updated": "2026-05-11T12:27:08Z",
+  "appliance": {
+    "hostname": "hn-winpc",
+    "tailscale_ip": "100.65.7.61",
+    "ssh_user": "HN Hotels",
+    "ssh_pattern": "ssh \"HN Hotels@hn-winpc\" '<cmd>'",
+    "coordination_root": "C:\\hn-control\\",
+    "manifest_on_pc": "C:\\hn-control\\manifest.json",
+    "lock_dir": "C:\\hn-control\\.locks\\",
+    "shared_helpers": "C:\\hn-control\\_shared\\"
+  },
+  "resource_kinds": {
+    "chrome_profile": "A persistent Chromium user-data-dir. Cookies + extensions + tabs bound to it.",
+    "chrome_tab_pattern": "A URL glob currently held open by some Chrome instance.",
+    "filesystem_path": "An absolute path on winpc owned by some automation.",
+    "scheduled_task": "A Windows Task Scheduler entry named HN-<Purpose>-<Job>.",
+    "registry_key": "A specific HKLM/HKCU value owned for a purpose.",
+    "process_pattern": "A long-running process identified by cmdline regex (cannot be killed broadly).",
+    "network_port": "A TCP port bound on winpc (incl. remote-debug ports).",
+    "lock": "A coordination resource in .locks\\ — non-physical, used to serialize writes.",
+    "chromium_extension_content_script": "URL-pattern owned inside a shared Chrome extension. Multiple automations can co-reside if their URL patterns are disjoint."
+  },
+  "resources": {
+    "winpc.chrome_profile.default": {
+      "kind": "chrome_profile",
+      "id": "default",
+      "physical_path": "C:\\Users\\HN Hotels\\AppData\\Local\\Google\\Chrome\\User Data\\Default",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": "chrome-default",
+      "notes": "Live merchant session for Swiggy + Zomato partner portals. Logged in. Do not log out."
+    },
+    "winpc.chrome_profile.dine-profile": {
+      "kind": "chrome_profile",
+      "id": "dine-profile",
+      "physical_path": "C:\\hn-control\\dine-profile",
+      "owner": "dine-aggregator",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "Isolated profile — separate Chrome process tree from default. Drives Dining-Out + EazyDiner."
+    },
+    "winpc.chrome_profile.modash-profile-1": {
+      "kind": "chrome_profile",
+      "id": "modash-profile-1",
+      "physical_path": "C:\\hn-control\\modash-driver\\profiles\\profile-1",
+      "owner": "modash-driver",
+      "criticality": "medium",
+      "lock_to_write": null,
+      "notes": "Modash account contact@hamzahotel.com. Cookies persist ~30d. Corruption forces re-login."
+    },
+    "winpc.chrome_profile.modash-profile-2": {
+      "kind": "chrome_profile",
+      "id": "modash-profile-2",
+      "physical_path": "C:\\hn-control\\modash-driver\\profiles\\profile-2",
+      "owner": "modash-driver",
+      "criticality": "medium",
+      "lock_to_write": null,
+      "notes": "Modash account nihaf@hamzahotel.com."
+    },
+    "winpc.chrome_tab_pattern.partner.swiggy.com_food": {
+      "kind": "chrome_tab_pattern",
+      "id": "partner.swiggy.com/food/*",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": "chrome-tabs",
+      "notes": "Auto-cycled every 3 min by content-swiggy.js cyclePage()."
+    },
+    "winpc.chrome_tab_pattern.zomato.com_onlineordering": {
+      "kind": "chrome_tab_pattern",
+      "id": "zomato.com/partners/onlineordering/*",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": "chrome-tabs",
+      "notes": "Auto-cycled by content-zomato.js across 6 sub-pages (orders/finance/ads/reviews/...)."
+    },
+    "winpc.filesystem_path.hn-aggregator-ext": {
+      "kind": "filesystem_path",
+      "id": "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-ext",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": "chrome-default",
+      "notes": "Unpacked Chromium extension. Pre-existing exemption to namespace rule (predates C:\\hn-control\\)."
+    },
+    "winpc.filesystem_path.hn-aggregator-watchdog-ps1": {
+      "kind": "filesystem_path",
+      "id": "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-watchdog.ps1",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": null,
+      "notes": "Watchdog script invoked every 5 min by HN-Aggregator-Watchdog."
+    },
+    "winpc.filesystem_path.hn-aggregator-watchdog-log": {
+      "kind": "filesystem_path",
+      "id": "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-watchdog.log",
+      "owner": "aggregator-pulse",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "Append-only log; safe for any chat to read."
+    },
+    "winpc.filesystem_path.startup-aggregator-bat": {
+      "kind": "filesystem_path",
+      "id": "C:\\Users\\HN Hotels\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\hn-aggregator-chrome.bat",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": null,
+      "notes": "Auto-launches Chrome on boot with all aggregator + dine + extension tabs."
+    },
+    "winpc.filesystem_path.modash-driver-root": {
+      "kind": "filesystem_path",
+      "id": "C:\\hn-control\\modash-driver",
+      "owner": "modash-driver",
+      "criticality": "medium",
+      "lock_to_write": null,
+      "notes": "poller.js + node_modules + profiles\\ + run-poller.bat."
+    },
+    "winpc.filesystem_path.dine-aggregator-root": {
+      "kind": "filesystem_path",
+      "id": "C:\\hn-control\\dine-aggregator",
+      "owner": "dine-aggregator",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "Bundled Python 3.12 interpreter + 25+ step*.ps1 scripts + workspace screenshots + cdp_driver.py."
+    },
+    "winpc.filesystem_path.platform-tools": {
+      "kind": "filesystem_path",
+      "id": "C:\\hn-control\\platform-tools",
+      "owner": "tv-control",
+      "criticality": "medium",
+      "lock_to_write": null,
+      "notes": "Android platform-tools (adb.exe, fastboot.exe). Used by PiSignage/TV deployment over USB or LAN. REGULARIZED 2026-05-11 (was unclaimed)."
+    },
+    "winpc.filesystem_path.platform-tools-zip": {
+      "kind": "filesystem_path",
+      "id": "C:\\hn-control\\platform-tools.zip",
+      "owner": "tv-control",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "Original archive; safe to delete after verifying platform-tools\\ is extracted. Owner-decision."
+    },
+    "winpc.scheduled_task.HN-Aggregator-Watchdog": {
+      "kind": "scheduled_task",
+      "id": "HN-Aggregator-Watchdog",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": null,
+      "notes": "Logon trigger + every 5 min. Relaunches Chrome with extension if dead."
+    },
+    "winpc.scheduled_task.HN-Modash-Poller": {
+      "kind": "scheduled_task",
+      "id": "HN-Modash-Poller",
+      "owner": "modash-driver",
+      "criticality": "medium",
+      "lock_to_write": null,
+      "notes": "Logon trigger + 5-min restart-on-failure. Runs run-poller.bat."
+    },
+    "winpc.scheduled_task.HN-Dine-Aggregator-Chrome": {
+      "kind": "scheduled_task",
+      "id": "HN-Dine-Aggregator-Chrome",
+      "owner": "dine-aggregator",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "Launches isolated Chrome with dine-profile + remote-debug port 9223. REGULARIZED 2026-05-11 (was claimed by dine-aggregator implicitly but not enumerated)."
+    },
+    "winpc.scheduled_task.HN-Dine-Aggregator-Tabs": {
+      "kind": "scheduled_task",
+      "id": "HN-Dine-Aggregator-Tabs",
+      "owner": "dine-aggregator",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "Opens Dining-Out + EazyDiner tabs after Chrome warmup."
+    },
+    "winpc.registry_key.RestoreOnStartup": {
+      "kind": "registry_key",
+      "id": "HKLM\\Software\\Policies\\Google\\Chrome\\RestoreOnStartup",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": null,
+      "notes": "Forces Chrome to restore last session on launch. Only affects default profile. Other chats may add keys under Policies\\Google\\Chrome\\ but not remove this one."
+    },
+    "winpc.process_pattern.modash-poller-node": {
+      "kind": "process_pattern",
+      "id": "cmdline~poller\\.js",
+      "owner": "modash-driver",
+      "criticality": "medium",
+      "lock_to_write": null,
+      "notes": "node.exe whose cmdline contains poller.js. Only kill this exact match — never broad node.exe kill."
+    },
+    "winpc.process_pattern.modash-chrome": {
+      "kind": "process_pattern",
+      "id": "cmdline~user-data-dir=C:\\\\hn-control\\\\modash-driver\\\\profiles\\\\profile-",
+      "owner": "modash-driver",
+      "criticality": "medium",
+      "lock_to_write": null,
+      "notes": "Playwright-launched Chromium per Modash profile. Distinct from default-profile aggregator Chrome."
+    },
+    "winpc.process_pattern.dine-chrome": {
+      "kind": "process_pattern",
+      "id": "cmdline~user-data-dir=C:\\\\hn-control\\\\dine-profile",
+      "owner": "dine-aggregator",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "Chrome instance bound to dine-profile + remote-debug port 9223."
+    },
+    "winpc.process_pattern.aggregator-chrome": {
+      "kind": "process_pattern",
+      "id": "cmdline~chrome\\.exe.*--profile-directory=Default",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": "chrome-default",
+      "notes": "Default-profile Chrome holding partner.swiggy + zomato/onlineordering. Killing this kills aggregator."
+    },
+    "winpc.network_port.9223": {
+      "kind": "network_port",
+      "id": "9223",
+      "owner": "dine-aggregator",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "Chrome remote-debug port for dine-profile. Used by cdp_driver.py."
+    },
+    "winpc.lock.chrome-default": {
+      "kind": "lock",
+      "id": "chrome-default",
+      "owner": null,
+      "criticality": "high",
+      "lock_to_write": null,
+      "protects": [
+        "winpc.chrome_profile.default",
+        "winpc.filesystem_path.hn-aggregator-ext",
+        "winpc.process_pattern.aggregator-chrome"
+      ],
+      "notes": "Hold while modifying default-profile Chrome or its extension. Aggregator-pulse is steady-state owner — only acquires briefly during redeploys."
+    },
+    "winpc.lock.chrome-tabs": {
+      "kind": "lock",
+      "id": "chrome-tabs",
+      "owner": null,
+      "criticality": "high",
+      "lock_to_write": null,
+      "protects": [
+        "winpc.chrome_tab_pattern.partner.swiggy.com_food",
+        "winpc.chrome_tab_pattern.zomato.com_onlineordering"
+      ],
+      "notes": "Hold to navigate the partner Online Ordering tabs. Aggregator cycler will check this before its next 3-min nav once enforced (currently advisory)."
+    },
+    "winpc.lock.manifest-write": {
+      "kind": "lock",
+      "id": "manifest-write",
+      "owner": null,
+      "criticality": "medium",
+      "lock_to_write": null,
+      "protects": [
+        "winpc.filesystem_path.manifest-on-pc"
+      ],
+      "notes": "Held by `winpc claim/regularize/inherit/decommission` during atomic manifest+graph update."
+    },
+    "winpc.chromium_extension_content_script.partner.swiggy.com_food": {
+      "kind": "chromium_extension_content_script",
+      "id": "partner.swiggy.com/food/*",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": null,
+      "notes": "content-swiggy.js — order capture, finance cycling, business-metrics."
+    },
+    "winpc.chromium_extension_content_script.zomato.com_onlineordering": {
+      "kind": "chromium_extension_content_script",
+      "id": "zomato.com/partners/onlineordering/*",
+      "owner": "aggregator-pulse",
+      "criticality": "high",
+      "lock_to_write": null,
+      "notes": "content-zomato.js — orders, finance, ads, reviews extractors (some still TODO)."
+    },
+    "winpc.chromium_extension_content_script.zomato.com_dineout": {
+      "kind": "chromium_extension_content_script",
+      "id": "zomato.com/partners/*/dineout/*",
+      "owner": "dine-aggregator",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "content-dining.js — Zomato Dining transactionHistory + offers + payouts. Co-resident in aggregator-pulse's extension v6.2.0; URL patterns are disjoint so no conflict."
+    },
+    "winpc.chromium_extension_content_script.swiggy.com_dineout": {
+      "kind": "chromium_extension_content_script",
+      "id": "partner.swiggy.com/dineout/*",
+      "owner": "dine-aggregator",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "content-swiggy-dineout.js — Swiggy Dine-Out outlet 1372737."
+    },
+    "winpc.chromium_extension_content_script.apps.livetableapp.com": {
+      "kind": "chromium_extension_content_script",
+      "id": "apps.livetableapp.com/*",
+      "owner": "dine-aggregator",
+      "criticality": "low",
+      "lock_to_write": null,
+      "notes": "content-eazydiner.js — LiveTable scraper for outlet 712958. Blocked on owner OTP login."
+    }
+  },
+  "automations": {
+    "aggregator-pulse": {
+      "purpose": "Swiggy + Zomato Online Ordering data scraping; powers /ops/aggregator/he/swiggy + /he/zomato dashboards.",
+      "owner_chat_session": "frosty-heisenberg-e1616d",
+      "criticality": "high",
+      "started_at": "2026-05-09T17:18Z",
+      "health_probe_url": "https://hnhotels.in/api/aggregator-pulse?action=health&key=<DASHBOARD_API_KEY>",
+      "owns": [
+        "winpc.chrome_profile.default",
+        "winpc.chrome_tab_pattern.partner.swiggy.com_food",
+        "winpc.chrome_tab_pattern.zomato.com_onlineordering",
+        "winpc.filesystem_path.hn-aggregator-ext",
+        "winpc.filesystem_path.hn-aggregator-watchdog-ps1",
+        "winpc.filesystem_path.hn-aggregator-watchdog-log",
+        "winpc.filesystem_path.startup-aggregator-bat",
+        "winpc.scheduled_task.HN-Aggregator-Watchdog",
+        "winpc.registry_key.RestoreOnStartup",
+        "winpc.process_pattern.aggregator-chrome",
+        "winpc.chromium_extension_content_script.partner.swiggy.com_food",
+        "winpc.chromium_extension_content_script.zomato.com_onlineordering"
+      ],
+      "uses_locks": [
+        "chrome-default",
+        "chrome-tabs"
+      ]
+    },
+    "modash-driver": {
+      "purpose": "Autonomous Modash influencer discovery. Polls /api/influencer-pipeline every 60s; spawns headless Chromium per profile when work queued.",
+      "owner_chat_session": "vibrant-wozniak-b62a56",
+      "criticality": "medium",
+      "started_at": "2026-05-10T03:30Z",
+      "health_probe_url": null,
+      "owns": [
+        "winpc.chrome_profile.modash-profile-1",
+        "winpc.chrome_profile.modash-profile-2",
+        "winpc.filesystem_path.modash-driver-root",
+        "winpc.scheduled_task.HN-Modash-Poller",
+        "winpc.process_pattern.modash-poller-node",
+        "winpc.process_pattern.modash-chrome"
+      ],
+      "uses_locks": []
+    },
+    "dine-aggregator": {
+      "purpose": "Zomato Dining + Swiggy Dine-Out + EazyDiner audit via isolated Chrome (dine-profile) + remote-debug port 9223.",
+      "owner_chat_session": "bold-mccarthy-572b58",
+      "owner_chat_session_status": "STALE — to be re-claimed by next active chat via `winpc inherit`",
+      "criticality": "low",
+      "started_at": "2026-05-10T02:30Z",
+      "health_probe_url": "https://hnhotels.in/api/aggregator-pulse?action=dine-health&key=<DASHBOARD_API_KEY>",
+      "owns": [
+        "winpc.chrome_profile.dine-profile",
+        "winpc.filesystem_path.dine-aggregator-root",
+        "winpc.scheduled_task.HN-Dine-Aggregator-Chrome",
+        "winpc.scheduled_task.HN-Dine-Aggregator-Tabs",
+        "winpc.process_pattern.dine-chrome",
+        "winpc.network_port.9223",
+        "winpc.chromium_extension_content_script.zomato.com_dineout",
+        "winpc.chromium_extension_content_script.swiggy.com_dineout",
+        "winpc.chromium_extension_content_script.apps.livetableapp.com"
+      ],
+      "uses_locks": []
+    },
+    "tv-control": {
+      "purpose": "PiSignage / Android TV deployment via adb. Pushes TV creatives to in-store Android display devices over LAN.",
+      "owner_chat_session": null,
+      "owner_chat_session_status": "REGULARIZED 2026-05-11 — claim via `winpc inherit --automation tv-control --new-owner-chat <chat-id>` when a session takes it on.",
+      "criticality": "medium",
+      "started_at": null,
+      "health_probe_url": null,
+      "owns": [
+        "winpc.filesystem_path.platform-tools",
+        "winpc.filesystem_path.platform-tools-zip"
+      ],
+      "uses_locks": []
+    }
+  },
+  "orphans": [
+    {
+      "path": "C:\\hn-control\\step2_migrate.ps1",
+      "size_bytes": 3011,
+      "last_write": "2026-05-09T15:23:02",
+      "first_seen_in_audit": "2026-05-11T17:30Z",
+      "suspected_origin": "Initial multi-tenant migration scaffolding (step1→step2→step3 series). Likely safe to delete after confirming with modash-driver chat that migration completed.",
+      "owner_decision_required": true
+    },
+    {
+      "path": "C:\\hn-control\\verify-deploy.ps1",
+      "size_bytes": 1161,
+      "last_write": "2026-05-09T15:45:17",
+      "first_seen_in_audit": "2026-05-11T17:30Z",
+      "suspected_origin": "Deploy verification script from initial winpc bridge setup (2026-05-09). May be reusable by future automations; owner can keep as `_shared\\verify-deploy.ps1` or delete.",
+      "owner_decision_required": true
+    }
+  ],
+  "constraints": {
+    "own_overlap": "No two automations may share the same resource code in `owns`. Validator rejects.",
+    "destructive_writes_need_lock": "verb ∈ {write,delete,kill,register} on a non-owned resource requires holding the resource's lock_to_write (if set).",
+    "dnd_derived": "Each automation's effective do_not_disturb = union of every other automation's `owns`. No explicit DND lists stored; the graph IS the DND.",
+    "namespace_enforcement": "An automation's owned filesystem_path resources must be under C:\\hn-control\\<automation_name>\\ EXCEPT pre-existing exemptions (aggregator-pulse's hn-aggregator-ext + Documents\\ files + Startup bat).",
+    "manifest_write_lock": "`winpc claim|regularize|inherit|decommission` must hold winpc.lock.manifest-write during the read-modify-write cycle.",
+    "chrome_tab_pattern_overlap": "Two automations may navigate overlapping URL globs only if both hold chrome-tabs.lock or the globs are disjoint."
+  },
+  "exemptions": {
+    "pre_existing_paths_outside_hn-control": [
+      "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-ext",
+      "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-watchdog.ps1",
+      "C:\\Users\\HN Hotels\\Documents\\hn-aggregator-watchdog.log",
+      "C:\\Users\\HN Hotels\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\hn-aggregator-chrome.bat"
+    ],
+    "reason": "These predate the C:\\hn-control\\ convention (2026-05-09). Aggregator was running before the multi-tenant runbook existed. Don't relocate live code; declare exemption."
+  }
+}

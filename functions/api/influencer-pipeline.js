@@ -20,7 +20,8 @@
 //   POST ?action=trigger-now      body={cron_name}  — manual fire of any cron (for testing)
 
 import { sendWaba, normalizePhone } from './_lib/comms-core.js';
-import { TIER_MATRIX, tierOf, scoreRelevance, bucketOf } from './_lib/influencer-tier.js';
+import { TIER_MATRIX, tierOf, scoreRelevance, bucketOf, outreachBucket, isColdSendable } from './_lib/influencer-tier.js';
+import { fetchMenuFeed, renderOfferLines, findUnsafeFoodTerms } from './_lib/menu-feed.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -572,21 +573,33 @@ async function cronOutreachWave(env, body, request) {
     const priorityN = parseInt(config.priority_per_day || '15');
     const standardN = parseInt(config.standard_per_day || '30');
 
-    // Pick uncontacted creators by bucket
+    // Pick uncontacted creators by bucket. T5+ (60K+) creators are scored and
+    // stored but routed to MANUAL_CASH — never enter the cold-barter wave.
+    // Memory: feedback_influencer_barter_targeting.md
     const candidates = await pickWaveCandidates(env);
-    const byBucket = { HERO: [], PRIORITY: [], STANDARD: [] };
+    const byBucket = { COLD_HERO: [], COLD_PRIORITY: [], COLD_STANDARD: [] };
+    let manualCashSeen = 0;
     for (const c of candidates) {
-      if (byBucket[c.bucket] && byBucket[c.bucket].length < (
-        c.bucket === 'HERO' ? heroN : c.bucket === 'PRIORITY' ? priorityN : standardN
-      )) {
-        byBucket[c.bucket].push(c);
+      if (c.outreach_bucket === 'MANUAL_CASH') { manualCashSeen++; continue; }
+      if (!isColdSendable(c.outreach_bucket)) continue;
+      const cap =
+        c.outreach_bucket === 'COLD_HERO' ? heroN :
+        c.outreach_bucket === 'COLD_PRIORITY' ? priorityN : standardN;
+      if (byBucket[c.outreach_bucket].length < cap) {
+        byBucket[c.outreach_bucket].push(c);
       }
     }
 
-    const wave = [...byBucket.HERO, ...byBucket.PRIORITY, ...byBucket.STANDARD];
+    const wave = [...byBucket.COLD_HERO, ...byBucket.COLD_PRIORITY, ...byBucket.COLD_STANDARD];
     if (wave.length === 0) {
-      return await finishRun(env, runId, 'skipped', 0, 0, 0, 'no eligible uncontacted creators');
+      return await finishRun(env, runId, 'skipped', 0, 0, 0,
+        `no barter-feasible uncontacted creators (manual_cash seen=${manualCashSeen})`);
     }
+
+    // Fetch HE POS top-sellers ONCE for the whole wave — dish names in
+    // outreach copy come from live POS data, never hardcoded.
+    // Memory: feedback_never_invent_menu_items.md
+    const menuFeed = await fetchMenuFeed(env);
 
     let queued = 0, sent = 0, errors = 0, aiCost = 0;
 
@@ -597,18 +610,18 @@ async function cronOutreachWave(env, body, request) {
 
       // Channels per bucket
       const channels = (
-        c.bucket === 'HERO'     ? ['email','waba','ig_dm'] :
-        c.bucket === 'PRIORITY' ? ['email','waba'] :
-        ['best']                                 // STANDARD: best available channel
+        c.outreach_bucket === 'COLD_HERO'     ? ['email','waba','ig_dm'] :
+        c.outreach_bucket === 'COLD_PRIORITY' ? ['email','waba'] :
+        ['best']                                 // COLD_STANDARD: best available channel
       );
 
       const token = await ensureBookingShell(env, c, tier);
 
-      // AI personalize (if enabled)
+      // AI personalize (if enabled) — opener forbids dish mentions; allowlist guards leaks
       let aiOpener = null;
       if (config.ai_personalization === 'true' && env.ANTHROPIC_API_KEY) {
         try {
-          const r = await aiPersonalize(env, c, niche, tier);
+          const r = await aiPersonalize(env, c, niche, tier, menuFeed);
           aiOpener = r.opener;
           aiCost += r.cost_usd;
         } catch (_) { /* fall back to template */ }
@@ -619,7 +632,7 @@ async function cronOutreachWave(env, body, request) {
           ? (c.has_email ? 'email' : c.has_phone ? 'waba' : 'ig_dm')
           : ch;
 
-        const payload = buildMessage(c, firstName, niche, tier, token, finalCh, aiOpener);
+        const payload = buildMessage(c, firstName, niche, tier, token, finalCh, aiOpener, menuFeed);
         if (!payload) { errors++; continue; }
 
         if (isLive) {
@@ -633,7 +646,7 @@ async function cronOutreachWave(env, body, request) {
       }
     }
 
-    const note = `${wave.length} unique creators · ${sent} sent · ${queued} queued · ${errors} errors · mode=${config.outreach_mode}`;
+    const note = `${wave.length} unique creators · ${sent} sent · ${queued} queued · ${errors} errors · manual_cash=${manualCashSeen} · mode=${config.outreach_mode}`;
     return await finishRun(env, runId, 'ok', wave.length, sent + queued, aiCost, note);
   } catch (e) {
     return await finishRun(env, runId, 'error', 0, 0, 0, null, e.message);
@@ -641,7 +654,8 @@ async function cronOutreachWave(env, body, request) {
 }
 
 async function pickWaveCandidates(env) {
-  // BLR + 5K-100K + has_any_contact (gives us email/waba reach) OR has_phone OR ig_dm fallback
+  // BLR + 1K–99999 (T1..T5; outreachBucket filters T5 to MANUAL_CASH downstream).
+  // Memory: feedback_influencer_barter_targeting.md — cold barter restricted to T1..T4.
   // Skip already-contacted on every channel for this campaign.
   const r = await env.DB.prepare(`
     SELECT p.*
@@ -649,7 +663,7 @@ async function pickWaveCandidates(env) {
     LEFT JOIN influencer_outreach_log o
       ON o.creator_username = p.username AND o.campaign='may_2026_v1' AND o.status != 'queued'
     WHERE p.status='ok' AND p.is_private=0
-      AND p.followers_count BETWEEN 5000 AND 100000
+      AND p.followers_count BETWEEN 1000 AND 99999
       AND o.id IS NULL
       AND (LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%bangalore%'
         OR LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%blr%'
@@ -659,10 +673,18 @@ async function pickWaveCandidates(env) {
 
   return r.results.map(c => {
     const { score } = scoreRelevance(c);
-    return { ...c, relevance_score: score, bucket: bucketOf(score), tier: tierOf(c.followers_count) };
+    const tier = tierOf(c.followers_count);
+    return {
+      ...c,
+      relevance_score: score,
+      bucket: bucketOf(score),                          // legacy fit bucket
+      tier,
+      outreach_bucket: outreachBucket({ tier, score }), // tier-aware gating bucket
+    };
   }).sort((a, b) => {
-    const r = { HERO: 0, PRIORITY: 1, STANDARD: 2, SKIP: 3 };
-    return (r[a.bucket] - r[b.bucket]) || (b.relevance_score - a.relevance_score);
+    // COLD_HERO first, then COLD_PRIORITY, COLD_STANDARD; MANUAL_CASH / SKIP last
+    const r = { COLD_HERO: 0, COLD_PRIORITY: 1, COLD_STANDARD: 2, MANUAL_CASH: 3, COLD_SKIP: 4, SKIP: 5 };
+    return ((r[a.outreach_bucket] ?? 9) - (r[b.outreach_bucket] ?? 9)) || (b.relevance_score - a.relevance_score);
   });
 }
 
@@ -670,8 +692,14 @@ async function pickWaveCandidates(env) {
 // AI PERSONALIZATION — Claude Haiku
 // ────────────────────────────────────────────────────────────────────────────
 
-async function aiPersonalize(env, creator, niche, tier) {
-  const prompt = `You are writing a one-line opener for a cold outreach message from Hamza Express, Bangalore's 1918 Dakhni biryani family restaurant, to an Instagram food creator. The opener must reference something specific from their bio — their niche, location, or a unique angle — and feel personal, not templated.
+async function aiPersonalize(env, creator, niche, tier, menuFeed) {
+  // HARD CONSTRAINT: opener must NOT mention specific dishes or menu items.
+  // Reason (memory: feedback_never_invent_menu_items.md): on 2026-05-11 the
+  // system surfaced "paya soup" — a dish HE does not sell — in creator-facing
+  // copy. Dish names are deterministic templates only; LLM never names dishes.
+  const prompt = `You are writing a one-line opener for a cold outreach message from Hamza Express, Bangalore's 1918 Dakhni biryani family restaurant, to an Instagram food creator. The opener must reference something specific from their bio — their niche, location, content style, or a unique angle — and feel personal, not templated.
+
+ABSOLUTE RULE: Do NOT mention any specific dish or menu item by name (no "biryani", no "kabab", no "soup", no "chai", etc.). Reference the creator's niche, location, content style, or audience only. Dish names come from a separate deterministic template downstream. If you mention any food item by name, the message is discarded and we waste a send slot.
 
 Creator handle: @${creator.username}
 Full name: ${creator.full_name || ''}
@@ -681,40 +709,70 @@ Detected niche: ${niche}
 
 Return ONLY the opener line (≤25 words). No greeting, no signoff, no quotes, no "Hi X". Just the body opener that follows "Hi Sara, ".
 
-Examples of good openers:
-- "Saw your reel on Mosque Road kababs last month — exactly the kind of food storytelling we admire."
-- "Your Awadhi recipes hit me — we're doing Dakhni heritage-style at Hamza, similar lineage."
-- "BLR foodie of the truest kind — your Frazer Town picks are spot-on."
+Examples of GOOD openers (no dish names):
+- "Loved your latest reel — the storytelling around Bangalore's food history is exactly the lens we'd want on our table."
+- "Your Frazer Town picks read like someone who's actually lived in this neighbourhood."
+- "Four generations in Shivajinagar, and your kind of careful eye is what we'd want at our table."
 
-Now write one for this creator.`;
+Examples of BAD openers (REJECT — contain dish names):
+- "Saw your reel on kababs last month..."  ← mentions kababs
+- "Your biryani content hits..."             ← mentions biryani
+- "Loved your chai post..."                  ← mentions chai
+
+Now write one for this creator (no dish names).`;
+
+  const callOnce = async () => {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 80,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!resp.ok) throw new Error('ai_failed_' + resp.status);
+    const j = await resp.json();
+    const opener = j.content?.[0]?.text?.trim().replace(/^["']|["']$/g, '');
+    const cost = ((j.usage?.input_tokens || 0) * 0.001 + (j.usage?.output_tokens || 0) * 0.005) / 1000;
+    return { opener, cost };
+  };
 
   const t0 = Date.now();
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 80,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!resp.ok) throw new Error('ai_failed_' + resp.status);
-  const j = await resp.json();
-  const opener = j.content?.[0]?.text?.trim().replace(/^["']|["']$/g, '');
-  // Haiku 4.5 pricing approx: $0.001 input + $0.005 output per 1K tokens. Tiny per call.
-  const cost = ((j.usage?.input_tokens || 0) * 0.001 + (j.usage?.output_tokens || 0) * 0.005) / 1000;
-  return { opener, cost_usd: cost, latency_ms: Date.now() - t0 };
+  let { opener, cost } = await callOnce();
+  let totalCost = cost;
+
+  // Sanity guard: ANY food-noun mention is a failure, regardless of allowlist.
+  // The prompt is explicit; if the model still leaked, retry once. If it
+  // leaks a second time, return null so caller falls back to deterministic template.
+  const allowlist = menuFeed?.allowlist || new Set();
+  let suspect = findUnsafeFoodTerms(opener, allowlist);
+  // Even allowlisted dishes are unwanted here — opener should mention NO dishes at all.
+  // Re-detect across the full food-noun set ignoring allowlist:
+  const anyFoodNoun = findUnsafeFoodTerms(opener, new Set());
+  if (anyFoodNoun.length > 0) {
+    const retry = await callOnce();
+    totalCost += retry.cost;
+    const retryFoodNouns = findUnsafeFoodTerms(retry.opener, new Set());
+    if (retryFoodNouns.length === 0) {
+      opener = retry.opener;
+    } else {
+      opener = null; // signal: fall back to template
+    }
+  }
+
+  return { opener, cost_usd: totalCost, latency_ms: Date.now() - t0 };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // MESSAGE BUILDERS
 // ────────────────────────────────────────────────────────────────────────────
 
-function buildMessage(c, firstName, niche, tier, token, channel, aiOpener) {
+function buildMessage(c, firstName, niche, tier, token, channel, aiOpener, menuFeed) {
   if (channel === 'email') {
     if (!c.has_email) return null;
     const recipient = pickRecipientEmails(c)[0];
@@ -722,7 +780,7 @@ function buildMessage(c, firstName, niche, tier, token, channel, aiOpener) {
     return {
       channel: 'email', recipient,
       subject: 'Barter collab — 1918 Hamza Express, Shivajinagar',
-      body: renderEmailBody(firstName, niche, tier, token, aiOpener),
+      body: renderEmailBody(firstName, niche, tier, token, aiOpener, menuFeed),
     };
   }
   if (channel === 'waba') {
@@ -738,7 +796,7 @@ function buildMessage(c, firstName, niche, tier, token, channel, aiOpener) {
   if (channel === 'ig_dm') {
     return {
       channel: 'ig_dm', recipient: '@' + c.username,
-      message: renderIgDm(firstName, niche, tier, token, aiOpener),
+      message: renderIgDm(firstName, niche, tier, token, aiOpener, menuFeed),
     };
   }
   return null;
@@ -1250,9 +1308,13 @@ function pickNiche(p) {
   return 'Bangalore food';
 }
 
-function renderEmailBody(firstName, niche, tier, token, aiOpener) {
+function renderEmailBody(firstName, niche, tier, token, aiOpener, menuFeed) {
   const url = `https://hnhotels.in/marketing/Influencer/booking/?token=${token}`;
-  const opener = aiOpener || `Saw your ${niche} content and would love to host you for a barter collab.`;
+  // Generic opener fallback (NO dish name) — matches the hardened AI prompt rule.
+  const opener = aiOpener || `Loved your content and would like to host you at our table for a barter collab.`;
+  // Offer lines come from live POS top-sellers (HE) — never hardcoded dish lists.
+  const offerLines = renderOfferLines(tier, menuFeed || { byCategory: {} });
+  const offerBullet = offerLines.map(l => `  – ${l}`).join('\n');
   return `Hi ${firstName},
 
 ${opener}
@@ -1260,13 +1322,13 @@ ${opener}
 Hamza Express — 4th-generation Dakhni/Hyderabadi biryani family in Bangalore since 1918 (Shivajinagar, walking distance from MG Rd / Commercial St / Brigade Rd).
 
 Covered (zero cost to you):
-• Full meal for ${tier.covers} people — biryani, mutton brain dry, kababs, tandoori, our signature ghee rice
+• Full meal for ${tier.covers} ${tier.covers === 1 ? 'person' : 'people'}, drawn from what's selling on our table this month:
+${offerBullet}
 • Pick your slot: 4 PM, 6 PM, 8 PM, 10 PM, or 12 AM (5 windows daily, 1 spot each)
-• Pre-Eid Mutton Family Pack (₹2,200) launching May 21 — exclusive media access if you want it
 
 Ask in return:
 • 1 reel or post-set, organic style — no scripted brand-speak
-• Tag @hamzaexpressblr + use the geotag pin
+• Tag @hamzaexpress1918 + use the Shivajinagar geotag
 
 Pick your slot: ${url}
 
@@ -1282,14 +1344,15 @@ nihaf@hnhotels.in
 `;
 }
 
-function renderIgDm(firstName, niche, tier, token, aiOpener) {
+function renderIgDm(firstName, niche, tier, token, aiOpener, menuFeed) {
   const url = `https://hnhotels.in/marketing/Influencer/booking/?token=${token}`;
-  const opener = aiOpener || `Saw your ${niche} content.`;
+  const opener = aiOpener || `Loved your content.`;
+  // IG DM stays category-level (kept short) — no dish enumeration. Tier covers count is the offer.
   return `Hi ${firstName} 👋
 
 ${opener}
 
-Hamza Express — Bangalore's 1918 Dakhni biryani family (Shivajinagar). Want to host you for a barter collab — full meal for ${tier.covers}, your choice of timing.
+Hamza Express — Bangalore's 1918 Dakhni biryani family (Shivajinagar). Want to host you for a barter collab — full meal for ${tier.covers} at our table, your choice of timing.
 
 Pick a slot: ${url}
 
