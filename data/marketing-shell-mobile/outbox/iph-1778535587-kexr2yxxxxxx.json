@@ -1,0 +1,7 @@
+{
+  "job_id": "iph-1778535587-kexr2yxxxxxx",
+  "lane": "99-general",
+  "status": "completed",
+  "result": "9ca591f fix(keyword-cron): pass DASHBOARD_KEY auth to /api/keyword-tracker (#180)\nb58089f data(snapshots): refresh 2026-05-12 — restores iPhone Claude visibility (#179)\na46eb2e feat(keyword-cron): daily Worker to refresh /api/keyword-tracker (#178)",
+  "completed_at": 1778535631
+}
