@@ -103,11 +103,16 @@ export async function onRequest(context) {
 
   const periodKey = url.searchParams.get('period') || '7d';
   const compareMode = url.searchParams.get('compare') || 'prior';
+  // Custom date range: ?from=YYYY-MM-DD&to=YYYY-MM-DD overrides period=
+  // Both must be valid ISO dates within the GBP Performance API window
+  // (~18 months back, T-2 days forward). Caller-side validation in UI.
+  const customFrom = url.searchParams.get('from');
+  const customTo   = url.searchParams.get('to');
   const include = (url.searchParams.get('include') || 'summary,daily,keywords,profile,reviews,health,media,qanda,actionQueue,algorithmTips')
     .split(',').map(s => s.trim()).filter(Boolean);
 
   // GBP Performance API data lags 1-2 days. Use today-2 as endDate to ensure data exists.
-  const period = resolvePeriod(periodKey, compareMode);
+  const period = resolvePeriod(periodKey, compareMode, customFrom, customTo);
 
   try {
     const token = await getAccessToken(env);
@@ -161,7 +166,9 @@ export async function onRequest(context) {
         manageUri: `https://business.google.com/n/${brand.location.split('/')[1]}`,
       },
       period: {
-        label: periodKey,
+        label: period.label,
+        isCustom: period.isCustom || false,
+        days: period.days,
         startDate: period.startDate,
         endDate: period.endDate,
         compareStart: period.compareStart,
@@ -176,6 +183,10 @@ export async function onRequest(context) {
     }
     if (results.kwThis !== undefined) {
       out.keywords = buildKeywords(results.kwThis, results.kwPrev);
+      // Expose the month-buckets used so the UI can render month names and
+      // show an accurate "May not finalized — showing April" fallback banner.
+      out.keywords.thisMonthMeta = { year: period.thisMonth.y, month: period.thisMonth.m };
+      out.keywords.lastMonthMeta = { year: period.lastMonth.y, month: period.lastMonth.m };
     }
     if (results.profile !== undefined) {
       out.profile = buildProfile(results.profile);
@@ -933,12 +944,25 @@ function buildAlgorithmTips({ brand, profile, builtProfile, media, qanda }) {
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────
-function resolvePeriod(label, compareMode) {
+function resolvePeriod(label, compareMode, customFrom, customTo) {
   // GBP performance data is T-2. End at 2 days ago to ensure rows exist.
   const nowMs = Date.now() + 5.5 * 3600000;
   const today = new Date(nowMs);
-  const end   = new Date(nowMs - 2 * 86400000);
-  const days = label === 'today' ? 1 : label === 'yesterday' ? 1 : label === '7d' ? 7 : label === '28d' ? 28 : label === '90d' ? 90 : 7;
+  const t2 = new Date(nowMs - 2 * 86400000);
+
+  // Custom date range path: parse YYYY-MM-DD, clamp endDate to T-2 (no GBP data
+  // exists for the last 2 days), set days from the span.
+  let end, days, isCustom = false;
+  if (customFrom && customTo && /^\d{4}-\d{2}-\d{2}$/.test(customFrom) && /^\d{4}-\d{2}-\d{2}$/.test(customTo)) {
+    isCustom = true;
+    const parsedTo = new Date(customTo + 'T00:00:00Z');
+    end = parsedTo > t2 ? t2 : parsedTo;
+    const start0 = new Date(customFrom + 'T00:00:00Z');
+    days = Math.max(1, Math.round((end - start0) / 86400000) + 1);
+  } else {
+    end = t2;
+    days = label === 'today' ? 1 : label === 'yesterday' ? 1 : label === '7d' ? 7 : label === '28d' ? 28 : label === '90d' ? 90 : 7;
+  }
   const start = new Date(end.getTime() - (days - 1) * 86400000);
   const compareEnd   = new Date(start.getTime() - 86400000);
   const compareStart = compareMode === 'yoy'
@@ -957,7 +981,9 @@ function resolvePeriod(label, compareMode) {
   const lastMonth = { y: last.getUTCFullYear(), m: last.getUTCMonth() + 1 };
 
   return {
-    days, label,
+    days,
+    label: isCustom ? `${ymd(start).iso} → ${ymd(end).iso}` : label,
+    isCustom,
     startDate: { ...ymd(start), iso: ymd(start).iso },
     endDate:   { ...ymd(end),   iso: ymd(end).iso },
     compareStart: { ...ymd(compareStart), iso: ymd(compareStart).iso },

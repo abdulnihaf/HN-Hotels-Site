@@ -61,6 +61,11 @@ html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans'
 .pbar .refresh{cursor:pointer;background:transparent;border:1px solid var(--border);color:var(--text2);width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px}
 .pbar .refresh:hover{border-color:var(--brand);color:var(--brand)}
 .pbar .refresh.loading{animation:spin 1s linear infinite}
+.pbar .dateinput{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:5px 10px;font-size:12px;font-family:inherit;color-scheme:dark;min-height:32px}
+.pbar .dateinput:focus{outline:none;border-color:var(--brand)}
+.pbar .dash{color:var(--muted);font-size:12px;margin:0 2px}
+.pbar .clear-custom{background:rgba(234,67,53,.12);border-color:rgba(234,67,53,.4);color:var(--gred);padding:6px 10px}
+.pbar .clear-custom:hover{background:rgba(234,67,53,.2);border-color:var(--gred)}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* SECTIONS */
@@ -181,6 +186,8 @@ html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans'
 .kw-table .kw-trend.new{color:var(--gblue);background:rgba(66,133,244,.12)}
 .kw-table .kw-trend.flat{color:var(--muted)}
 .kw-table .kw-bucket{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.kw-fallback{background:rgba(66,133,244,.10);border:1px solid rgba(66,133,244,.3);border-radius:8px;padding:10px 14px;margin:8px 0 12px;font-size:12px;color:var(--text2);line-height:1.5}
+.kw-fallback strong{color:var(--text)}
 .kw-empty{padding:20px;text-align:center;color:var(--muted);font-size:12px}
 
 /* REVIEWS */
@@ -288,6 +295,14 @@ html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans'
       <button class="pill" data-p="90d">90d</button>
     </div>
     <div class="pbar-group">
+      <label>Custom</label>
+      <input type="date" id="fromDate" class="dateinput" title="From (inclusive)">
+      <span class="dash">→</span>
+      <input type="date" id="toDate" class="dateinput" title="To (inclusive · max T-2)">
+      <button class="pill" id="applyCustom">Apply</button>
+      <button class="pill clear-custom" id="clearCustom" title="Clear custom range" style="display:none">✕</button>
+    </div>
+    <div class="pbar-group">
       <label>Compare</label>
       <button class="pill active" data-c="prior">Prior</button>
       <button class="pill" data-c="yoy">YoY</button>
@@ -363,6 +378,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans'
       <button class="pill" data-kw="last">Last month</button>
       <input type="text" id="kwSearch" placeholder="Filter keywords…">
     </div>
+    <div id="kwFallbackBanner" class="kw-fallback" style="display:none"></div>
     <table class="kw-table" id="kwTable"></table>
     <div id="kwEmpty" class="kw-empty" style="display:none">No keyword data yet — Google reports keywords with at least ~5 monthly impressions.</div>
   </div>
@@ -439,6 +455,8 @@ let currentChartMetric = 'impressions';
 let currentKwTab = 'this';
 let lastData = null;
 let otherData = null;
+let customFrom = null;
+let customTo   = null;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────
 document.title = `${BRAND_TITLE} · GBP`;
@@ -453,8 +471,46 @@ document.querySelectorAll('.pbar [data-p]').forEach(b => b.addEventListener('cli
   document.querySelectorAll('.pbar [data-p]').forEach(x => x.classList.remove('active'));
   b.classList.add('active');
   currentPeriod = b.dataset.p;
+  // Clicking a preset period clears any active custom range.
+  customFrom = null; customTo = null;
+  document.getElementById('fromDate').value = '';
+  document.getElementById('toDate').value = '';
+  document.getElementById('clearCustom').style.display = 'none';
   load();
 }));
+
+// Custom date range — overrides preset when both dates set + Apply pressed.
+const fromInput = document.getElementById('fromDate');
+const toInput   = document.getElementById('toDate');
+const applyBtn  = document.getElementById('applyCustom');
+const clearBtn  = document.getElementById('clearCustom');
+
+// Default the To input's max to T-2 (GBP performance API lag).
+const t2 = new Date(Date.now() + 5.5 * 3600000 - 2 * 86400000).toISOString().slice(0, 10);
+toInput.max = t2;
+fromInput.max = t2;
+
+applyBtn.addEventListener('click', () => {
+  const from = fromInput.value, to = toInput.value;
+  if (!from || !to) { alert('Pick both From and To dates'); return; }
+  if (from > to) { alert('From must be on or before To'); return; }
+  if (to > t2) { alert(`To date can't exceed ${t2} — GBP Performance API lags 2 days`); return; }
+  customFrom = from; customTo = to;
+  // Clear preset active state — custom is now active.
+  document.querySelectorAll('.pbar [data-p]').forEach(x => x.classList.remove('active'));
+  clearBtn.style.display = 'inline-flex';
+  load();
+});
+
+clearBtn.addEventListener('click', () => {
+  customFrom = null; customTo = null;
+  fromInput.value = ''; toInput.value = '';
+  clearBtn.style.display = 'none';
+  // Restore active preset (default 28d).
+  document.querySelectorAll('.pbar [data-p]').forEach(x =>
+    x.classList.toggle('active', x.dataset.p === currentPeriod));
+  load();
+});
 document.querySelectorAll('.pbar [data-c]').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('.pbar [data-c]').forEach(x => x.classList.remove('active'));
   b.classList.add('active');
@@ -483,11 +539,19 @@ document.getElementById('kwSearch').addEventListener('input', () => {
 });
 
 // ─── Data fetch ───────────────────────────────────────────────────────────
+function buildApiUrl(extra = '') {
+  // Custom date range wins over preset period.
+  const base = `${API}?brand=${BRAND}&compare=${currentCompare}${extra}`;
+  return (customFrom && customTo)
+    ? `${base}&from=${customFrom}&to=${customTo}`
+    : `${base}&period=${currentPeriod}`;
+}
+
 async function load(force) {
   document.getElementById('refreshBtn').classList.add('loading');
   document.getElementById('freshTxt').textContent = 'Loading…';
   try {
-    const url = `${API}?brand=${BRAND}&period=${currentPeriod}&compare=${currentCompare}`;
+    const url = buildApiUrl();
     const r = await fetch(url, { cache: force ? 'no-store' : 'default' });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || 'API error');
@@ -505,7 +569,10 @@ async function load(force) {
 
 async function fetchOther() {
   try {
-    const r = await fetch(`${API}?brand=${OTHER_BRAND}&period=${currentPeriod}&compare=off&include=summary`);
+    const peerUrl = (customFrom && customTo)
+      ? `${API}?brand=${OTHER_BRAND}&from=${customFrom}&to=${customTo}&compare=off&include=summary`
+      : `${API}?brand=${OTHER_BRAND}&period=${currentPeriod}&compare=off&include=summary`;
+    const r = await fetch(peerUrl);
     const d = await r.json();
     if (d.ok) {
       otherData = d;
@@ -857,7 +924,38 @@ function sparklineSvg(days, metric) {
 function renderKeywords(d) {
   const wrap = document.getElementById('kwTable');
   const empty = document.getElementById('kwEmpty');
-  const list = currentKwTab === 'this' ? (d.keywords?.thisMonth || []) : (d.keywords?.lastMonth || []);
+  const thisM = d.keywords?.thisMonth || [];
+  const lastM = d.keywords?.lastMonth || [];
+
+  // Auto-fallback: GBP delivers keyword reports as monthly buckets, and the
+  // current month doesn't appear until Google finalizes it (~end of month).
+  // If the user is on "This month" but it's empty and Last month has data,
+  // show Last month instead with a clear badge. They can still flip the tab
+  // manually to see the truly-empty This month if they want.
+  const fellBack = currentKwTab === 'this' && thisM.length === 0 && lastM.length > 0;
+  const list = fellBack ? lastM : (currentKwTab === 'this' ? thisM : lastM);
+
+  // Sync the tab UI to match what's actually being shown.
+  document.querySelectorAll('[data-kw]').forEach(b => {
+    b.classList.toggle('active', b.dataset.kw === (fellBack ? 'last' : currentKwTab));
+  });
+
+  // Fallback banner — appears above the table when we auto-flipped.
+  const monthName = (m) => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1] || '?';
+  const kwBanner = document.getElementById('kwFallbackBanner');
+  if (kwBanner) {
+    if (fellBack) {
+      const tm = d.keywords?.thisMonthMeta || {};
+      const lm = d.keywords?.lastMonthMeta || {};
+      const tmLabel = tm.year && tm.month ? `${monthName(tm.month)} ${tm.year}` : 'this month';
+      const lmLabel = lm.year && lm.month ? `${monthName(lm.month)} ${lm.year}` : 'last month';
+      kwBanner.innerHTML = `📅 <strong>${tmLabel}</strong> data not finalized yet by Google — showing <strong>${lmLabel}</strong> below. Switch tab manually to verify ${tmLabel} is still empty.`;
+      kwBanner.style.display = 'block';
+    } else {
+      kwBanner.style.display = 'none';
+    }
+  }
+
   const filterTxt = (document.getElementById('kwSearch').value || '').toLowerCase();
   const filtered = list.filter(k => !filterTxt || k.keyword.toLowerCase().includes(filterTxt));
   if (!filtered.length) {
