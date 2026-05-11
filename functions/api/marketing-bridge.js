@@ -1,4 +1,4 @@
-// functions/api/marketing-bridge.js
+// functions/api/marketing-bridge.js  (build 200940Z)
 //
 // Mobile dispatch bridge for the Marketing Shell.
 // Architecture: see fleet/marketing-shell/ARCHITECTURE.md §5 (Dispatch flow)
