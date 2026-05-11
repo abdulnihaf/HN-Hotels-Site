@@ -16,18 +16,25 @@ The marketing shell **externalizes the cognitive load**. Each lane holds the dee
 
 ## 2. The three-tier system
 
+**Note:** "mobile clients" = iPhone + iPad together. They're treated identically by the architecture — same Claude Code app, same SSH-via-Tailscale path, same dispatch flow. iPad is used when Nihaf wants a larger screen for viewing/working; iPhone when he's truly out-and-about. Per-device context (iPad-specific quirks, app states, etc.) will be revisited later — for v1, identical config.
+
 ```
-┌─────────────────┐        ┌─────────────────┐        ┌─────────────────┐
-│   iPhone        │        │   MacBook       │        │  iPad (optional)│
-│ (out + about,   │        │ (workday,       │        │   (TBD role)    │
-│  laptop off)    │        │  laptop on)     │        │                 │
-│  Claude Code +  │        │  Terminal +     │        │   Tailscale +   │
-│  Tailscale      │        │  Tailscale      │        │   ???           │
-└────────┬────────┘        └────────┬────────┘        └────────┬────────┘
-         │                          │                          │
-         │  SSH via Tailscale (100.65.7.61)                    │
-         └──────────────┬───────────┴──────────────┬───────────┘
-                        ▼                          ▼
+┌────────────────────────────────┐        ┌─────────────────┐
+│   Mobile clients               │        │   MacBook       │
+│   ┌─────────┐  ┌─────────┐     │        │ (workday,       │
+│   │ iPhone  │  │  iPad   │     │        │  laptop on)     │
+│   │ (out)   │  │(bigger  │     │        │                 │
+│   │         │  │ screen) │     │        │  Terminal +     │
+│   │ Claude  │  │ Claude  │     │        │  Tailscale      │
+│   │ Code +  │  │ Code +  │     │        │                 │
+│   │ Tailscl │  │ Tailscl │     │        │                 │
+│   └─────────┘  └─────────┘     │        │                 │
+│   (identical role, v1)         │        │                 │
+└────────────┬───────────────────┘        └────────┬────────┘
+             │                                     │
+             │   SSH via Tailscale (100.65.7.61)   │
+             └─────────────────┬───────────────────┘
+                               ▼
               ┌────────────────────────────────────────────────────┐
               │   hn-winpc (always-on, 100.65.7.61, 8 GB RAM)      │
               │                                                    │
@@ -53,7 +60,7 @@ The marketing shell **externalizes the cognitive load**. Each lane holds the dee
               └────────────────────────────────────────────────────┘
 ```
 
-**Single source of truth: winpc.** Mac, iPhone, (and iPad if it joins) are equivalent CLIENTS. None hosts state. All three reach the same brain.
+**Single source of truth: winpc.** Mac, iPhone, and iPad are equivalent CLIENTS. None hosts state. All three reach the same brain via SSH-over-Tailscale.
 
 ---
 
@@ -255,8 +262,8 @@ Adding a new domain ≈ 30 min of new tmux session names + new brief files + new
 
 These are NOT blockers for Phase 0 or Phase 1, but should be resolved before Phase 4 ships:
 
-1. **iPad role** — second-screen reading, active control with Claude Code app, or background-only? Affects whether iPad gets its own bootstrap prompt.
-2. **iPhone Claude SSH capability** — does the iOS Bash tool support SSH over Tailscale? Verification deferred to Nihaf's manual phone test.
+1. ~~**iPad role**~~ — **RESOLVED 2026-05-11:** iPad is configured identically to iPhone for v1. Both are mobile clients with Claude Code + Tailscale. iPad is used when Nihaf wants a larger screen; iPhone when truly mobile. Per-device specifics revisited later.
+2. **iPhone/iPad Claude SSH capability** — does the iOS Bash tool support SSH over Tailscale? Verification deferred to Nihaf's manual phone test. Applies identically to iPad.
 3. **Concurrent Claude session limit on Pro Max** — verifying as Phase 1's first step. If blocked, fall back to API-key model per lane.
 4. **Always-on vs wake-on-prompt for orchestrator** — wake-on-prompt by default; reconsider only if reactive monitoring becomes a requirement.
 5. **Cross-domain orchestrator (master CEO seat)** — defer until ≥2 domains exist (marketing + ops, etc.).
