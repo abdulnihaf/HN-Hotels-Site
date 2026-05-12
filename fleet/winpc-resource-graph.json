@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "schema_url": "fleet/winpc-MASTER-CONTEXT.md",
-  "last_updated": "2026-05-11T12:27:08Z",
+  "last_updated": "2026-05-11T13:16:26Z",
   "appliance": {
     "hostname": "hn-winpc",
     "tailscale_ip": "100.65.7.61",
@@ -300,7 +300,7 @@
   "automations": {
     "aggregator-pulse": {
       "purpose": "Swiggy + Zomato Online Ordering data scraping; powers /ops/aggregator/he/swiggy + /he/zomato dashboards.",
-      "owner_chat_session": "frosty-heisenberg-e1616d",
+      "owner_chat_session": "c0f589f4-729e-49d2-8e30-ea1c86293f97",
       "criticality": "high",
       "started_at": "2026-05-09T17:18Z",
       "health_probe_url": "https://hnhotels.in/api/aggregator-pulse?action=health&key=<DASHBOARD_API_KEY>",
@@ -321,7 +321,8 @@
       "uses_locks": [
         "chrome-default",
         "chrome-tabs"
-      ]
+      ],
+      "owner_chat_session_status": "INHERITED 2026-05-11 from frosty-heisenberg-e1616d"
     },
     "modash-driver": {
       "purpose": "Autonomous Modash influencer discovery. Polls /api/influencer-pipeline every 60s; spawns headless Chromium per profile when work queued.",

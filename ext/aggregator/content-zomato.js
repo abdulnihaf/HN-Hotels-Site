@@ -1,5 +1,6 @@
-// content-zomato.js v5.0.3
+// content-zomato.js v5.0.4
 // v5.0: Rebuilt from verified live portal extraction (Apr 2026).
+// v5.0.4: Bail on /go-out/dining/* — those tabs are owned by content-dining.js.
 // Pages cycled: Order History → Live Tracking → Business Reports
 //
 // Verified page structures:
@@ -10,6 +11,10 @@
 
 (function () {
   'use strict';
+
+  // ─── DINE GUARD — yield Zomato Dining tabs to content-dining.js ──────────────
+  // Without this, our cyclePage() would navigate dining tabs to /onlineordering/.
+  if (location.href.includes('/partners/go-out/dining/')) return;
 
   // ─── LOGIN DETECTION — check URL immediately on load ─────────────────────────
   const _initUrl = location.href;
