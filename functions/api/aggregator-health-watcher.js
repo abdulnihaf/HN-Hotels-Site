@@ -30,7 +30,7 @@ function withinNightSuppress() {
 function istHHMM() { return nowIST().toISOString().slice(11, 16); }
 
 async function probeJson(env, action) {
-  const key = env.DASHBOARD_API_KEY;
+  const key = env.DASHBOARD_KEY || env.DASHBOARD_API_KEY;
   try {
     const res = await fetch(`${PAGES_BASE}/api/aggregator-pulse?action=${action}&key=${encodeURIComponent(key || '')}`);
     if (!res.ok) return { ok: false, error: `http ${res.status}` };
@@ -90,7 +90,8 @@ export async function onRequest(context) {
 
   if (action !== 'status') {
     const token = url.searchParams.get('token') || request.headers.get('x-cron-token');
-    if (!env.CRON_TOKEN || token !== env.CRON_TOKEN) {
+    const expected = env.WATCHER_TOKEN || env.CRON_TOKEN;
+    if (!expected || token !== expected) {
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'content-type': 'application/json' } });
     }
   }

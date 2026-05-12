@@ -7,9 +7,10 @@ const PAGES_BASE = 'https://hnhotels.in';
 
 export default {
   async scheduled(event, env, ctx) {
-    const url = `${PAGES_BASE}/api/aggregator-health-watcher?action=tick&token=${encodeURIComponent(env.CRON_TOKEN || '')}`;
+    const token = env.WATCHER_TOKEN || env.CRON_TOKEN || '';
+    const url = `${PAGES_BASE}/api/aggregator-health-watcher?action=tick&token=${encodeURIComponent(token)}`;
     try {
-      const res = await fetch(url, { method: 'POST', headers: { 'x-cron-token': env.CRON_TOKEN || '' } });
+      const res = await fetch(url, { method: 'POST', headers: { 'x-cron-token': token } });
       const body = await res.text();
       console.log(`[health-watcher] ${res.status} ${body.slice(0, 240)}`);
     } catch (err) {

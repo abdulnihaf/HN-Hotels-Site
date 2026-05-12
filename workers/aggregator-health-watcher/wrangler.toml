@@ -9,4 +9,5 @@ compatibility_date = "2024-09-23"
 crons = ["*/5 * * * *"]
 
 # Secrets (set via `wrangler secret put`):
-#   CRON_TOKEN  — must match hnhotels.in Pages env CRON_TOKEN
+#   WATCHER_TOKEN — must match hnhotels.in Pages env WATCHER_TOKEN
+#                   (separate from shared CRON_TOKEN to keep this lane's auth isolated)
