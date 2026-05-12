@@ -126,9 +126,12 @@ export async function onRequest(context) {
     const dine = await probeJson(env, 'dine-health');
     out.probes.dine = dine;
     if (dine.ok) {
-      const platforms = dine.body?.platforms || {};
-      for (const [pname, pdata] of Object.entries(platforms)) {
+      // dine.body.platforms is an ARRAY of {platform, last_seen, stale_minutes, ...}
+      const platforms = Array.isArray(dine.body?.platforms) ? dine.body.platforms
+                       : Object.values(dine.body?.platforms || {});
+      for (const pdata of platforms) {
         const age = Number(pdata?.stale_minutes ?? pdata?.age_minutes ?? 9999);
+        const pname = pdata?.platform || 'unknown';
         if (age > DINE_MAX_STALE) {
           const r = await fireAlert(env, { platformKey: `dine_${pname}`, message: `HE-Aggregator: dine ${pname} stale ${age}m as of ${istHHMM()} IST` });
           out.alerts.push({ platform: `dine_${pname}`, stale_min: age, ...r });
