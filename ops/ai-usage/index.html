@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>HN — AI Usage Dashboard</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0; padding: env(safe-area-inset-top,16px) 16px 80px 16px;
+      font: 14px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0c0d0f; color: #e9ecef;
+    }
+    h1 { font-size: 18px; margin: 0 0 4px; font-weight: 600; }
+    .meta { color: #888; font-size: 12px; margin-bottom: 16px; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 12px; margin-bottom: 16px; }
+    .card { background: #16181c; border: 1px solid #25272b; border-radius: 12px; padding: 14px 16px; }
+    .card h3 { margin: 0 0 8px; font-size: 12px; font-weight: 500; color: #a0a4a8; text-transform: uppercase; letter-spacing: .05em; }
+    .big { font-size: 28px; font-weight: 600; line-height: 1.1; margin-bottom: 4px; }
+    .sub { font-size: 12px; color: #888; }
+    .green { color: #4ade80; } .red { color: #f87171; } .yellow { color: #fbbf24; }
+    .bar { height: 24px; background: #25272b; border-radius: 8px; overflow: hidden; display: flex; }
+    .bar-claude { background: #f87171; }
+    .bar-gemini { background: #4ade80; }
+    .bar-codex  { background: #60a5fa; }
+    .bar-kimi   { background: #fbbf24; }
+    .legend { display: flex; gap: 16px; font-size: 11px; color: #a0a4a8; margin-top: 8px; flex-wrap: wrap; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+    .pulse { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .stale .pulse { background: #f87171; animation: none; }
+    .err { background: #2a1010; border-color: #5a1a1a; padding: 12px; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid #25272b; }
+    th:first-child, td:first-child { text-align: left; }
+    .doctrine { background: #1a1f1a; border: 1px solid #2a3a2a; border-radius: 8px; padding: 12px; margin-top: 16px; font-size: 12px; color: #a0d4a0; }
+    .doctrine.warn { background: #2a1f10; border-color: #4a3a20; color: #fbbf24; }
+    @media (prefers-color-scheme: light) {
+      body { background: #f5f6f7; color: #1a1b1d; }
+      .card { background: white; border-color: #d1d5db; }
+      .card h3 { color: #6b7280; }
+      .sub, .meta, .legend { color: #6b7280; }
+      .bar { background: #d1d5db; }
+      th, td { border-color: #e5e7eb; }
+      .doctrine { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+      .doctrine.warn { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+    }
+  </style>
+</head>
+<body>
+  <h1><span class="pulse" id="pulse"></span>HN AI Usage Dashboard</h1>
+  <div class="meta" id="meta">loading…</div>
+
+  <div class="row">
+    <div class="card">
+      <h3>Routing ratio</h3>
+      <div class="bar" id="bar" title=""></div>
+      <div class="legend">
+        <span><i style="background:#f87171"></i> Claude <b id="claudePct">—</b></span>
+        <span><i style="background:#4ade80"></i> Gemini <b id="geminiPct">—</b></span>
+        <span><i style="background:#60a5fa"></i> Codex <b id="codexPct">—</b></span>
+        <span><i style="background:#fbbf24"></i> Kimi <b id="kimiPct">—</b></span>
+      </div>
+      <div class="doctrine" id="doctrine">target: Claude &lt; 40%, backups &gt; 60%</div>
+    </div>
+
+    <div class="card">
+      <h3>Claude tokens (today, billable)</h3>
+      <div class="big" id="claudeTotal">—</div>
+      <div class="sub" id="claudeSplit">—</div>
+    </div>
+
+    <div class="card">
+      <h3>Claude cost (if billed at Sonnet)</h3>
+      <div class="big" id="claudeCost">—</div>
+      <div class="sub">cache-read tokens dominate; real cost depends on Pro Max vs API</div>
+    </div>
+
+    <div class="card">
+      <h3>Backups (delegated calls today)</h3>
+      <div class="big" id="backupCalls">—</div>
+      <div class="sub" id="backupBreakdown">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Last snapshots (24h)</h3>
+    <table id="history">
+      <thead><tr>
+        <th>Time</th>
+        <th>Claude tok</th>
+        <th>Gemini</th>
+        <th>Codex</th>
+        <th>Kimi</th>
+        <th>Claude %</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    const fmt = n => (n||0).toLocaleString();
+    const pct = n => (n||0).toFixed(1) + '%';
+    const dollar = n => '$' + (n||0).toFixed(2);
+    const ago = t => {
+      if (!t) return 'never';
+      const s = Math.floor(Date.now()/1000) - t;
+      if (s < 60) return s + 's ago';
+      if (s < 3600) return Math.floor(s/60) + 'm ago';
+      if (s < 86400) return Math.floor(s/3600) + 'h ago';
+      return Math.floor(s/86400) + 'd ago';
+    };
+
+    async function refresh() {
+      try {
+        const r = await fetch('/api/ai-usage?hours=24', { cache: 'no-store' });
+        const d = await r.json();
+        const l = d.latest;
+        const stale = !l || (Math.floor(Date.now()/1000) - l.pushed_at > 600);
+        document.body.classList.toggle('stale', stale);
+
+        const metaEl = document.getElementById('meta');
+        if (!l) {
+          metaEl.textContent = '⚠️ No snapshots pushed yet. Run `hn-usage --push` on Mac.';
+          return;
+        }
+        metaEl.textContent = `Last push: ${ago(l.pushed_at)} from ${l.source_host || '?'}` + (stale ? ' — STALE (>10 min old)' : '');
+
+        // Top numbers
+        document.getElementById('claudeTotal').textContent = fmt(l.total_billable_tokens) + ' tok';
+        document.getElementById('claudeSplit').textContent =
+          `in:${fmt(l.claude_input_tokens)} · cache-read:${fmt(l.claude_cache_read_tokens)} · out:${fmt(l.claude_output_tokens)} · msgs:${fmt(l.claude_messages)} · sessions:${fmt(l.claude_sessions)}`;
+        document.getElementById('claudeCost').textContent = dollar(l.claude_cost_usd_sonnet);
+
+        const backupCalls = (l.gemini_calls||0) + (l.codex_calls||0) + (l.kimi_calls||0) + (l.image_calls||0);
+        document.getElementById('backupCalls').textContent = backupCalls + ' calls';
+        document.getElementById('backupBreakdown').textContent =
+          `gemini:${l.gemini_calls||0} · codex:${l.codex_calls||0} · kimi:${l.kimi_calls||0} · image:${l.image_calls||0}`;
+
+        // Routing ratio bar — break down across providers
+        const total = (l.total_billable_tokens || 1);
+        const backupTokens = (l.gemini_tokens||0) + (l.codex_tokens||0) + (l.kimi_tokens||0);
+        const claudeTok = total - backupTokens;
+        const p = (n) => (n / Math.max(total, 1)) * 100;
+        const cPct = Math.max(0, p(claudeTok));
+        const gPct = p(l.gemini_tokens||0);
+        const xPct = p(l.codex_tokens||0);
+        const kPct = p(l.kimi_tokens||0);
+
+        document.getElementById('claudePct').textContent = pct(cPct);
+        document.getElementById('geminiPct').textContent = pct(gPct);
+        document.getElementById('codexPct').textContent  = pct(xPct);
+        document.getElementById('kimiPct').textContent   = pct(kPct);
+
+        const bar = document.getElementById('bar');
+        bar.innerHTML = '';
+        const mk = (cls, p, label) => {
+          if (p <= 0) return null;
+          const el = document.createElement('div');
+          el.className = 'bar-' + cls;
+          el.style.width = p + '%';
+          el.title = label + ' ' + p.toFixed(1) + '%';
+          return el;
+        };
+        [mk('claude', cPct, 'Claude'), mk('gemini', gPct, 'Gemini'),
+         mk('codex', xPct, 'Codex'), mk('kimi', kPct, 'Kimi')]
+          .filter(Boolean).forEach(el => bar.appendChild(el));
+
+        // Doctrine status
+        const dEl = document.getElementById('doctrine');
+        if (cPct > 60) {
+          dEl.className = 'doctrine warn';
+          dEl.textContent = `⚠️ DOCTRINE MISS — Claude at ${cPct.toFixed(0)}% (target <40%). Delegate more to gemini/codex/kimi.`;
+        } else if (cPct > 40) {
+          dEl.className = 'doctrine warn';
+          dEl.textContent = `~ ${cPct.toFixed(0)}% Claude — slightly over heavy-week 40% target.`;
+        } else {
+          dEl.className = 'doctrine';
+          dEl.textContent = `✓ Healthy — ${cPct.toFixed(0)}% Claude, ${(100-cPct).toFixed(0)}% backups (target <40% Claude).`;
+        }
+
+        // History table
+        const tb = document.querySelector('#history tbody');
+        tb.innerHTML = '';
+        const rows = (d.last_n_hours || []).slice(-12).reverse();
+        for (const r of rows) {
+          const tr = document.createElement('tr');
+          const t = new Date(r.pushed_at * 1000).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12:false });
+          const rTotal = r.total_billable_tokens || 1;
+          const rBackup = (r.gemini_tokens||0) + (r.codex_tokens||0) + (r.kimi_tokens||0);
+          const rClaudePct = ((rTotal - rBackup) / rTotal * 100);
+          tr.innerHTML = `<td>${t}</td><td>${fmt(rTotal)}</td><td>${r.gemini_calls||0}</td><td>${r.codex_calls||0}</td><td>${r.kimi_calls||0}</td><td>${rClaudePct.toFixed(0)}%</td>`;
+          tb.appendChild(tr);
+        }
+      } catch (e) {
+        document.getElementById('meta').innerHTML = '<div class="err">fetch failed: ' + e.message + '</div>';
+      }
+    }
+    refresh();
+    setInterval(refresh, 30 * 1000);
+  </script>
+</body>
+</html>
