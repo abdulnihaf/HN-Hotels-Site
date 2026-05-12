@@ -65,16 +65,18 @@
       <div class="doctrine" id="doctrine">target: Claude &lt; 40%, backups &gt; 60%</div>
     </div>
 
-    <div class="card">
-      <h3>Claude tokens (today, billable)</h3>
-      <div class="big" id="claudeTotal">—</div>
-      <div class="sub" id="claudeSplit">—</div>
+    <div class="card" style="border-left: 3px solid #a855f7;">
+      <h3>📦 Claude · Pro Max subscription</h3>
+      <div class="big" id="subTokens">—</div>
+      <div class="sub" id="subSplit">—</div>
+      <div class="sub" style="margin-top:6px; color:#a855f7;">$<span id="subCost">—</span> saved vs API rates</div>
     </div>
 
-    <div class="card">
-      <h3>Claude cost (if billed at Sonnet)</h3>
-      <div class="big" id="claudeCost">—</div>
-      <div class="sub">cache-read tokens dominate; real cost depends on Pro Max vs API</div>
+    <div class="card" style="border-left: 3px solid #06b6d4;">
+      <h3>💳 Claude · API key (your $56)</h3>
+      <div class="big" id="apiTokens">—</div>
+      <div class="sub" id="apiSplit">—</div>
+      <div class="sub" style="margin-top:6px; color:#06b6d4;">$<span id="apiCost">—</span> billable from API balance</div>
     </div>
 
     <div class="card">
@@ -127,11 +129,17 @@
         }
         metaEl.textContent = `Last push: ${ago(l.pushed_at)} from ${l.source_host || '?'}` + (stale ? ' — STALE (>10 min old)' : '');
 
-        // Top numbers
-        document.getElementById('claudeTotal').textContent = fmt(l.total_billable_tokens) + ' tok';
-        document.getElementById('claudeSplit').textContent =
-          `in:${fmt(l.claude_input_tokens)} · cache-read:${fmt(l.claude_cache_read_tokens)} · out:${fmt(l.claude_output_tokens)} · msgs:${fmt(l.claude_messages)} · sessions:${fmt(l.claude_sessions)}`;
-        document.getElementById('claudeCost').textContent = dollar(l.claude_cost_usd_sonnet);
+        // Pro Max subscription card
+        document.getElementById('subTokens').textContent = fmt(l.claude_subscription_billable_tokens || 0) + ' tok';
+        document.getElementById('subSplit').textContent =
+          `msgs:${fmt(l.claude_subscription_messages || 0)} · sessions on subscription`;
+        document.getElementById('subCost').textContent = (l.claude_subscription_cost_usd_sonnet || 0).toFixed(2);
+
+        // API key card
+        document.getElementById('apiTokens').textContent = fmt(l.claude_api_billable_tokens || 0) + ' tok';
+        document.getElementById('apiSplit').textContent =
+          `msgs:${fmt(l.claude_api_messages || 0)} · sessions on API key`;
+        document.getElementById('apiCost').textContent = (l.claude_api_cost_usd_sonnet || 0).toFixed(2);
 
         const backupCalls = (l.gemini_calls||0) + (l.codex_calls||0) + (l.kimi_calls||0) + (l.image_calls||0);
         document.getElementById('backupCalls').textContent = backupCalls + ' calls';

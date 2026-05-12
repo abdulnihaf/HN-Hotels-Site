@@ -42,6 +42,8 @@ async function getLastN(env, hours) {
   const rows = await env.DB.prepare(
     `SELECT snapshot_id, pushed_at, total_billable_tokens, claude_pct, backup_pct,
             claude_input_tokens, claude_cache_read_tokens, claude_output_tokens,
+            claude_api_billable_tokens, claude_api_cost_usd_sonnet, claude_api_messages,
+            claude_subscription_billable_tokens, claude_subscription_cost_usd_sonnet, claude_subscription_messages,
             gemini_calls, gemini_tokens, codex_calls, codex_tokens,
             kimi_calls, kimi_tokens, image_calls,
             claude_cost_usd_sonnet
@@ -102,9 +104,13 @@ async function actionPost(env, request, url) {
        pushed_at, client_ts, source_host, since_ts,
        claude_input_tokens, claude_cache_write_tokens, claude_cache_read_tokens, claude_output_tokens,
        claude_messages, claude_sessions, claude_cost_usd_sonnet,
+       claude_api_billable_tokens, claude_api_input_tokens, claude_api_cache_read_tokens,
+       claude_api_output_tokens, claude_api_messages, claude_api_cost_usd_sonnet,
+       claude_subscription_billable_tokens, claude_subscription_input_tokens, claude_subscription_cache_read_tokens,
+       claude_subscription_output_tokens, claude_subscription_messages, claude_subscription_cost_usd_sonnet,
        gemini_calls, gemini_tokens, codex_calls, codex_tokens, kimi_calls, kimi_tokens, image_calls,
        total_billable_tokens, claude_pct, backup_pct, data_json
-     ) VALUES (?,?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?,?,?,?, ?,?,?, ?)`
+     ) VALUES (?,?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?, ?)`
   ).bind(
     now,
     v('client_ts'),
@@ -117,6 +123,18 @@ async function actionPost(env, request, url) {
     v('claude_messages'),
     v('claude_sessions'),
     f('claude_cost_usd_sonnet'),
+    v('claude_api_billable_tokens'),
+    v('claude_api_input_tokens'),
+    v('claude_api_cache_read_tokens'),
+    v('claude_api_output_tokens'),
+    v('claude_api_messages'),
+    f('claude_api_cost_usd_sonnet'),
+    v('claude_subscription_billable_tokens'),
+    v('claude_subscription_input_tokens'),
+    v('claude_subscription_cache_read_tokens'),
+    v('claude_subscription_output_tokens'),
+    v('claude_subscription_messages'),
+    f('claude_subscription_cost_usd_sonnet'),
     v('gemini_calls'),
     v('gemini_tokens'),
     v('codex_calls'),
