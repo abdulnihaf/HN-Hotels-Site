@@ -1,0 +1,12 @@
+name = "hn-aggregator-health-watcher"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# Cron: every 5 min, year-round.
+# Operating-hours suppression (02:00–09:00 IST for delivery health) is enforced
+# in the Pages Function, not here. Dine-health alerts fire any time.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Secrets (set via `wrangler secret put`):
+#   CRON_TOKEN  — must match hnhotels.in Pages env CRON_TOKEN
