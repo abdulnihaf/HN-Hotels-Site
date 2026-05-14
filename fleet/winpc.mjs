@@ -66,8 +66,12 @@ function ssh(remoteCmd, { timeout = 30000 } = {}) {
 
 function pwsh(psCmd, opts) {
   // Wrap a PowerShell command for ssh-into-cmd.exe.
+  // -ExecutionPolicy Bypass: hn-winpc default policy is Restricted, which blocks
+  // the unsigned lock helpers under C:\hn-control\_shared\ (acquire-lock.ps1,
+  // release-lock.ps1). Bypass is safe here — winpc.mjs only invokes scripts we
+  // ship in the coordination root, not arbitrary user input.
   const escaped = psCmd.replace(/"/g, '\\"');
-  return ssh(`powershell -NoProfile -Command "${escaped}"`, opts);
+  return ssh(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${escaped}"`, opts);
 }
 
 // ─── lock helpers (call into _shared\acquire-lock.ps1) ──────────────────────
