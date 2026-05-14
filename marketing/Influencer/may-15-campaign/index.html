@@ -9,6 +9,11 @@
 :root{--bg:#101113;--panel:#17191d;--panel2:#20242b;--line:#2a2e35;--text:#f6f0e8;--muted:#aaa29a;--gold:#d7a94e;--green:#48c78e;--blue:#7bb7ff;--red:#ef6b73;--orange:#f59e0b}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}header{position:sticky;top:0;z-index:10;background:#101113f4;border-bottom:1px solid var(--line);padding:12px 16px}h1{margin:0;font-size:18px}.sub{color:var(--muted);font-size:12px;margin-top:3px}main{max-width:1600px;margin:0 auto;padding:14px}.tabs{display:flex;gap:8px;margin:0 0 12px}.tab{border:1px solid var(--line);background:var(--panel2);border-radius:7px;padding:10px 12px;cursor:pointer}.tab.active{background:var(--gold);border-color:var(--gold);color:#18120a;font-weight:800}.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}.k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.v{font-size:24px;font-weight:800}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.controls input,.controls select{background:#0c0d0f;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:10px;min-height:44px}button,a.btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:7px;padding:9px 11px;min-height:40px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;margin:2px 2px 2px 0}button.primary,a.primary{background:var(--gold);border-color:var(--gold);color:#17120a;font-weight:800}button.green,a.green{background:var(--green);border-color:var(--green);color:#06110b;font-weight:800}button.blue,a.blue{background:#1e3a5f;border-color:#2b5a91;color:#d7ebff}button.red{background:#3a181b;border-color:#6f252b;color:#ffd8dc}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px}table{border-collapse:collapse;width:100%;min-width:1450px;background:var(--panel)}th,td{border-bottom:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}th{position:sticky;top:66px;background:#14161a;color:var(--muted);font-size:11px;text-transform:uppercase;z-index:2}td{font-size:13px}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.msg{max-width:430px;white-space:pre-wrap;color:#ddd6cc}.mini{max-width:360px;max-height:112px;overflow:auto;white-space:pre-wrap;color:#ddd6cc}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 7px;font-size:11px;color:var(--muted)}.A,.confirmed{color:var(--green);font-weight:800}.B,.manual_B{color:var(--blue);font-weight:800}.C,.manual_A{color:var(--gold);font-weight:800}.hidden{display:none}.review-select{width:22px;height:22px}.toast{position:fixed;right:16px;bottom:16px;background:#0d0f11;border:1px solid var(--line);border-radius:8px;padding:12px 14px;box-shadow:0 12px 40px #0008;opacity:0;transform:translateY(8px);transition:.18s;max-width:460px}.toast.show{opacity:1;transform:translateY(0)}textarea{width:220px;min-height:62px;background:#0c0d0f;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:8px}@media(max-width:900px){.grid{grid-template-columns:1fr 1fr}main{padding:10px}th{top:93px}}
 </style>
+<style>
+.action-band{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;margin:14px 0;display:grid;grid-template-columns:minmax(260px,1.1fr) minmax(280px,2fr);gap:12px;align-items:start}
+.action-band h2{margin:0 0 4px;font-size:15px}.action-band p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}.action-buttons{display:flex;gap:8px;flex-wrap:wrap}.hint{color:var(--orange);font-size:11px;margin-top:6px;line-height:1.45}.ig-note{display:block;color:var(--muted);font-size:10px;margin-top:4px;max-width:230px}
+@media(max-width:900px){.action-band{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <header>
@@ -22,6 +27,22 @@
   </nav>
 
   <section class="grid" id="kpis"></section>
+
+  <section class="action-band">
+    <div>
+      <h2>Bulk send prep</h2>
+      <p>Email and WABA are prepared as bulk-ready lists. Instagram is manual: inspect the profile first, then use direct DM if Instagram allows it.</p>
+      <div class="hint">No live send happens from this page. The buttons export/copy the prepared campaign text.</div>
+    </div>
+    <div class="action-buttons">
+      <button class="green" onclick="exportEmailCsv()">Export email CSV</button>
+      <button onclick="copyAllEmails()">Copy all email bodies</button>
+      <button class="green" onclick="exportWabaCsv()">Export WABA CSV</button>
+      <button onclick="copyAllWaba()">Copy all WABA messages</button>
+      <button class="primary" onclick="exportIgCsv()">Export IG DM CSV</button>
+      <a class="btn blue" target="_blank" rel="noopener" href="https://hamzaexpress.in/ops/creator-outreach/">Open HE bulk sender</a>
+    </div>
+  </section>
 
   <section class="controls">
     <label class="k">Campaign date <input id="campaignDate" type="date"></label>
@@ -91,9 +112,20 @@ function fallbackCopy(text){const ta=document.createElement('textarea');ta.value
 async function copyText(text){if(navigator.clipboard&&window.isSecureContext){try{await navigator.clipboard.writeText(text);return true}catch(e){}}return fallbackCopy(text)}
 function dmText(c){return c.instagram_dm||''}
 function primaryText(c){if(c.contact_route==='email')return (c.email_subject||'')+'\n\n'+(c.email_body||'');if(c.contact_route==='phone_or_waba')return c.waba_body||c.instagram_dm||'';return c.instagram_dm||''}
-function dmUrl(c){return 'https://ig.me/m/'+encodeURIComponent(c.username)}
+function dmUrl(c){return c.instagram_dm_url||('https://ig.me/m/'+encodeURIComponent(c.username))}
+function csvCell(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function exportCsv(name,rows,cols){const csv=[cols.map(c=>csvCell(c[0])).join(',')].concat(rows.map(r=>cols.map(c=>csvCell(c[1](r))).join(','))).join('\n');download(name,csv,'text/csv;charset=utf-8')}
+function emailRows(){return creators.filter(c=>String(c.emails||'').trim()&&String(c.email_body||'').trim())}
+function wabaRows(){return creators.filter(c=>String(c.phones||'').trim()&&String(c.waba_body||'').trim())}
+function igRows(){return creators.filter(c=>String(c.instagram_dm||'').trim())}
+function exportEmailCsv(){exportCsv('may-15-email-send-list.csv',emailRows(),[['username',c=>c.username],['full_name',c=>c.full_name],['email',c=>c.emails],['subject',c=>c.email_subject],['message',c=>c.email_body],['instagram_url',c=>c.instagram_url],['instagram_dm_url',c=>dmUrl(c)],['route_note',c=>c.route_instruction]]);toast('Exported email CSV: '+emailRows().length)}
+function exportWabaCsv(){exportCsv('may-15-waba-send-list.csv',wabaRows(),[['username',c=>c.username],['full_name',c=>c.full_name],['phone',c=>c.phones],['message',c=>c.waba_body],['instagram_url',c=>c.instagram_url],['instagram_dm_url',c=>dmUrl(c)],['route_note',c=>c.route_instruction]]);toast('Exported WABA CSV: '+wabaRows().length)}
+function exportIgCsv(){exportCsv('may-15-ig-dm-manual-list.csv',igRows(),[['username',c=>c.username],['full_name',c=>c.full_name],['profile_url',c=>c.instagram_url],['dm_url',c=>dmUrl(c)],['message',c=>c.instagram_dm],['priority',c=>c.priority],['bucket',c=>c.bucket_label],['route_note',c=>c.route_instruction]]);toast('Exported IG DM CSV: '+igRows().length)}
+async function copyAllEmails(){const rows=emailRows();await copyText(rows.map(c=>'TO: '+c.emails+'\nSUBJECT: '+c.email_subject+'\n\n'+c.email_body).join('\n\n---\n\n'));toast('Copied '+rows.length+' email bodies')}
+async function copyAllWaba(){const rows=wabaRows();await copyText(rows.map(c=>'TO: '+c.phones+' (@'+c.username+')\n\n'+c.waba_body).join('\n\n---\n\n'));toast('Copied '+rows.length+' WABA messages')}
 async function copyDmOpenProfile(i){const c=creators[i];await copyText(dmText(c));toast('Copied full IG DM for @'+c.username);window.open(c.instagram_url,'_blank','noopener')}
 async function copyDmOpenDm(i){const c=creators[i];await copyText(dmText(c));toast('Copied DM. Opening Instagram message link for @'+c.username);window.open(dmUrl(c),'_blank','noopener')}
+async function copyDmOnly(i){const c=creators[i];await copyText(dmText(c));toast('Copied full IG DM for @'+c.username)}
 async function copyPrimary(i){const c=creators[i];await copyText(primaryText(c));toast('Copied primary message for @'+c.username)}
 function primaryLabel(c){if(c.contact_route==='email')return c.emails||'email';if(c.contact_route==='phone_or_waba')return c.phones||'phone/WABA';if(c.contact_route==='link_in_bio_then_ig_dm')return c.external_url||'link in bio';return 'IG only'}
 function scheduleFor(c){const cfg=state.config;let time=cfg.wave4;if(c.contact_route==='email'&&c.priority==='A')time=cfg.wave1;else if(c.contact_route==='email')time=cfg.wave2;else if(c.contact_route==='phone_or_waba'||c.contact_route==='link_in_bio_then_ig_dm')time=cfg.wave3;return cfg.date+' '+time}
@@ -106,7 +138,7 @@ function renderExecute(){const rows=execFiltered();document.getElementById('exec
 +'<td><span class="pill">'+escapeHtml(c.contact_route)+'</span><br><span class="k">'+escapeHtml(c.bucket_label)+'</span></td>'
 +'<td>'+escapeHtml(scheduleFor(c))+'<br><span class="k">'+escapeHtml(c.tomorrow_slot||'')+'</span></td>'
 +'<td><div>'+escapeHtml(primaryLabel(c))+'</div><button onclick="copyPrimary('+i+')">Copy primary</button>'+(c.contact_route==='link_in_bio_then_ig_dm'&&c.external_url?'<br><a class="btn blue" target="_blank" rel="noopener" href="'+escapeHtml(c.external_url)+'">Open link</a>':'')+'</td>'
-+'<td><button class="primary" onclick="copyDmOpenProfile('+i+')">Copy DM + Open Profile</button><br><button class="green" onclick="copyDmOpenDm('+i+')">Copy DM + Open DM</button><br><a class="btn" target="_blank" rel="noopener" href="'+escapeHtml(c.instagram_url)+'">Profile only</a></td>'
++'<td><button class="primary" onclick="copyDmOpenProfile('+i+')">Copy DM + View profile</button><br><button class="green" onclick="copyDmOpenDm('+i+')">Copy DM + Try direct DM</button><br><button onclick="copyDmOnly('+i+')">Copy DM only</button><br><a class="btn" target="_blank" rel="noopener" href="'+escapeHtml(c.instagram_url)+'">Profile only</a><span class="ig-note">Direct DM opens ig.me if Instagram allows it. If a popup appears, paste the copied text manually.</span></td>'
 +'<td><select onchange="setSendStatus(\''+c.username+'\',this.value)"><option '+sel(rs.send,'pending')+' value="pending">pending</option><option '+sel(rs.send,'sent')+' value="sent">sent</option><option '+sel(rs.send,'postponed')+' value="postponed">postponed</option><option '+sel(rs.send,'done')+' value="done">done</option></select></td>'
 +'<td class="msg">'+escapeHtml(c.instagram_dm||'')+'</td>'
 +'</tr>'}).join('')}
@@ -119,7 +151,7 @@ function renderReview(){const rows=reviewFiltered();document.getElementById('rev
 +'<td class="mini"><b>Bio</b><br>'+escapeHtml(c.bio||'')+'<br><br><b>Posts</b><br>'+escapeHtml(c.post_location_names||'')+'</td>'
 +'<td class="mini">'+escapeHtml(c.manual_review_reason||'')+'<br><br>'+escapeHtml(c.manual_checklist||'')+'<br><br><b>Rule:</b> '+escapeHtml(c.recommended_decision_rule||'')+'</td>'
 +'<td><select onchange="setDecision(\''+c.username+'\',this.value)">'+TEAM_DECISIONS.map(d=>'<option '+sel(rs.decision,d)+' value="'+d+'">'+d+'</option>').join('')+'</select><br><textarea placeholder="team notes" oninput="setNotes(\''+c.username+'\',this.value)">'+escapeHtml(rs.notes||c.team_notes||'')+'</textarea></td>'
-+'<td><a class="btn primary" target="_blank" rel="noopener" href="'+escapeHtml(c.instagram_url)+'">View profile</a><br>'+(c.external_url?'<a class="btn blue" target="_blank" rel="noopener" href="'+escapeHtml(c.external_url)+'">External link</a><br>':'')+'<button onclick="markNextCampaign(\''+c.username+'\')">Select for next campaign</button></td>'
++'<td><a class="btn primary" target="_blank" rel="noopener" href="'+escapeHtml(c.instagram_url)+'">View profile</a><br><a class="btn green" target="_blank" rel="noopener" href="'+escapeHtml(dmUrl(c))+'">Try DM link</a><br>'+(c.external_url?'<a class="btn blue" target="_blank" rel="noopener" href="'+escapeHtml(c.external_url)+'">External link</a><br>':'')+'<button onclick="markNextCampaign(\''+c.username+'\')">Select for next campaign</button></td>'
 +'</tr>'}).join('')}
 function sel(a,b){return a===b?'selected':''}
 function setSendStatus(u,v){rowState(u).send=v;saveState();renderKpis()}
