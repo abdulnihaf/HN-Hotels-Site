@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HN Aggregator Pulse",
-  "version": "6.2.1",
+  "version": "6.2.3",
   "description": "Extracts live operational data from Swiggy, Zomato delivery, Zomato Dining, Swiggy Dine-Out and EazyDiner partner portals for HN Hotels",
   "permissions": [
     "storage",

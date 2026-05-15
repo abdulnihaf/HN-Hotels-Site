@@ -1,4 +1,4 @@
-// content-swiggy-dineout.js v1.0.0
+// content-swiggy-dineout.js v1.0.1
 // Swiggy Dine-Out scraper for HN Hotels — Hamza Express (outlet 1372737).
 // Injected alongside content-swiggy.js on partner.swiggy.com/* — URL guard prevents delivery overlap.
 // POSTs to /api/aggregator-pulse with platform=swiggy_dineout.
@@ -45,9 +45,9 @@
   }
 
   function extractFirstInt(text, label) {
-    const re = new RegExp(`(\\d[\\d,]*)\\s*${label}`, 'i');
+    const re = new RegExp(`(\\d[\\d,]*)\\s*(?:${label})`, 'i');
     const m = text.match(re);
-    return m ? parseInt(m[1].replace(/,/g, ''), 10) : null;
+    return m?.[1] ? parseInt(m[1].replace(/,/g, ''), 10) : null;
   }
 
   function scrape() {

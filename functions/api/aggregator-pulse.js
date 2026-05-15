@@ -412,6 +412,7 @@ async function handleGet(db, url, headers) {
       SELECT platform, MAX(captured_at) AS last_seen, COUNT(*) AS total_snapshots
       FROM aggregator_snapshots
       WHERE platform IN ('zomato_dining', 'swiggy_dineout', 'eazydiner')
+        AND substr(metric_type, 1, 1) != '_'
       GROUP BY platform
     `).all();
 
@@ -445,6 +446,7 @@ async function handleGet(db, url, headers) {
         SELECT platform, outlet_id, metric_type, MAX(captured_at) AS max_ts
         FROM aggregator_snapshots
         WHERE platform IN ('zomato_dining', 'swiggy_dineout', 'eazydiner')
+          AND substr(metric_type, 1, 1) != '_'
         GROUP BY platform, outlet_id, metric_type
       ) latest ON a.platform = latest.platform
         AND a.outlet_id = latest.outlet_id
@@ -462,33 +464,70 @@ async function handleGet(db, url, headers) {
     return new Response(JSON.stringify({ ok: true, action: 'dine-summary', platforms: byPlatform, ts: new Date().toISOString() }), { headers });
   }
 
-  // --- DINE-ATTRIBUTION: best-effort May 2026 revenue inferred from DOM scraping ---
+  // --- DINE-ATTRIBUTION: May 2026 dine-in revenue by platform/outlet ---
   if (action === 'dine-attribution') {
     const { results } = await db.prepare(`
-      SELECT platform, outlet_id, data, captured_at
+      SELECT platform, brand, outlet_id, metric_type, data, captured_at
       FROM aggregator_snapshots
       WHERE platform IN ('zomato_dining', 'swiggy_dineout', 'eazydiner')
+        AND substr(metric_type, 1, 1) != '_'
         AND captured_at >= '2026-05-01T00:00:00'
       ORDER BY platform, outlet_id, captured_at DESC
       LIMIT 500
     `).all();
 
-    const totals = {};
+    const buckets = {};
     for (const row of results) {
-      const d = safeJsonParse(row.data);
-      const amounts = Array.isArray(d?.rupee_amounts) ? d.rupee_amounts : [];
-      const maxAmt = amounts.length ? Math.max(...amounts) : 0;
       const key = `${row.platform}::${row.outlet_id}`;
-      if (!totals[key]) totals[key] = { platform: row.platform, outlet_id: row.outlet_id, max_inferred: 0, snapshots: 0 };
-      totals[key].snapshots++;
-      if (maxAmt > totals[key].max_inferred) totals[key].max_inferred = maxAmt;
+      if (!buckets[key]) buckets[key] = [];
+      buckets[key].push({ ...row, data: safeJsonParse(row.data) });
     }
 
-    const rows = Object.values(totals);
-    const grandTotal = rows.reduce((s, r) => s + r.max_inferred, 0);
+    const expected = [
+      { platform: 'eazydiner', outlet_id: '712958', brand: 'he' },
+      { platform: 'swiggy_dineout', outlet_id: '1372737', brand: 'he' },
+      { platform: 'zomato_dining', outlet_id: '22632449', brand: 'he' },
+      { platform: 'zomato_dining', outlet_id: '22632430', brand: 'nch' },
+    ];
+
+    const seen = new Set();
+    const rows = [];
+    for (const meta of expected) {
+      const key = `${meta.platform}::${meta.outlet_id}`;
+      seen.add(key);
+      rows.push(buildDineAttributionRow(meta, buckets[key] || []));
+    }
+    for (const [key, bucketRows] of Object.entries(buckets)) {
+      if (seen.has(key)) continue;
+      const [platform, outletId] = key.split('::');
+      rows.push(buildDineAttributionRow({ platform, outlet_id: outletId, brand: bucketRows[0]?.brand || 'unknown' }, bucketRows));
+    }
+
+    const grandTotal = rows.reduce((s, r) => s + (r.revenue_inferred || 0), 0);
+    const platformTotals = Object.values(rows.reduce((acc, r) => {
+      if (!acc[r.platform]) {
+        acc[r.platform] = {
+          platform: r.platform,
+          platform_label: r.platform_label,
+          total_inferred: 0,
+          outlets: 0,
+          confidence: 'empty',
+        };
+      }
+      acc[r.platform].total_inferred += r.revenue_inferred || 0;
+      acc[r.platform].outlets += 1;
+      if (r.confidence === 'structured') acc[r.platform].confidence = 'structured';
+      else if (r.confidence === 'dom_table_amount' && acc[r.platform].confidence !== 'structured') acc[r.platform].confidence = 'dom_table_amount';
+      return acc;
+    }, {}));
+
     return new Response(JSON.stringify({
-      ok: true, action: 'dine-attribution', grand_total_inferred: grandTotal, by_platform: rows,
-      note: 'Inferred from DOM rupee amounts — manual attribution in may_layers is authoritative',
+      ok: true,
+      action: 'dine-attribution',
+      grand_total_inferred: grandTotal,
+      by_platform: rows,
+      platform_totals: platformTotals,
+      note: 'Platform-specific attribution. Structured portal fields are preferred; raw DOM rupee strings are evidence only and are not treated as revenue unless they come from a transaction/payment table.',
       ts: new Date().toISOString(),
     }), { headers });
   }
@@ -1111,6 +1150,238 @@ async function handleGet(db, url, headers) {
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
+
+const DINE_PLATFORM_META = {
+  eazydiner: {
+    label: 'EazyDiner',
+    action_map: [
+      { scene: 'Dashboard', captures: 'MTD revenue, projected revenue, guests, reservations', decision: 'Attribute booked/pay-at-restaurant revenue and trigger booking movement alerts' },
+      { scene: 'Reservations', captures: 'Upcoming reservations and covers', decision: 'Alert Nihaf when a new booking/covers count appears' },
+      { scene: 'Reports', captures: 'Payment and materialisation proof', decision: 'Audit PayEazy settlement later; do not count threshold text as revenue' },
+    ],
+  },
+  swiggy_dineout: {
+    label: 'Swiggy Dine-Out',
+    action_map: [
+      { scene: 'Overview', captures: 'Outlet presence and portal heartbeat', decision: 'Prove the tab/session is alive' },
+      { scene: 'Reservations', captures: 'Booking and cover movement when exposed', decision: 'Alert on new dine-out booking activity' },
+      { scene: 'Payments', captures: 'Bill amount, restaurant discount, commission, GST, receivable', decision: 'Attribute revenue only from payment rows, not page chrome' },
+    ],
+  },
+  zomato_dining: {
+    label: 'Zomato Dining',
+    action_map: [
+      { scene: 'Transaction history', captures: 'Customer, offer details, bill amount, amount paid, settlement', decision: 'Attribute dining revenue once transaction rows exist' },
+      { scene: 'Offers', captures: 'Active offers, covers allocated, covers sold', decision: 'Tell Nihaf whether promo inventory is actually moving' },
+      { scene: 'Payouts', captures: 'Settlement status and financial reports', decision: 'Use as audit proof, not as demand signal' },
+    ],
+  },
+};
+
+const DINE_OUTLET_META = {
+  'eazydiner::712958': { outlet_label: 'Hamza Express', brand: 'he' },
+  'swiggy_dineout::1372737': { outlet_label: 'Hamza Express', brand: 'he' },
+  'zomato_dining::22632449': { outlet_label: 'Hamza Express', brand: 'he' },
+  'zomato_dining::22632430': { outlet_label: 'Nawabi Chai House', brand: 'nch' },
+};
+
+function parseDineNumber(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const n = Number(String(v).replace(/[₹,\s]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function latestDineCounter(rows, field) {
+  for (const row of rows) {
+    const n = parseDineNumber(row.data?.[field]);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+function firstDineRowWithNumber(rows, field) {
+  for (const row of rows) {
+    const n = parseDineNumber(row.data?.[field]);
+    if (n !== null && n > 0) return { row, value: n };
+  }
+  return null;
+}
+
+function dineRupeeEvidence(row) {
+  const amounts = Array.isArray(row?.data?.rupee_amounts) ? row.data.rupee_amounts : [];
+  return amounts
+    .map(parseDineNumber)
+    .filter(n => n !== null && n > 0)
+    .slice(0, 8);
+}
+
+function pickDineRevenueSource(platform, rows) {
+  if (!rows.length) {
+    return {
+      value: 0,
+      source_field: null,
+      source_label: 'No snapshots yet',
+      confidence: 'no_snapshots',
+      row: null,
+      status_note: 'No Chrome extension snapshot has reached D1 for this outlet.',
+    };
+  }
+
+  if (platform === 'eazydiner') {
+    const mtd = firstDineRowWithNumber(rows, 'revenue_summary_mtd');
+    if (mtd) {
+      return {
+        value: mtd.value,
+        source_field: 'revenue_summary_mtd',
+        source_label: 'Revenue Summary MTD',
+        confidence: 'structured',
+        row: mtd.row,
+        status_note: 'Counted from the EazyDiner dashboard revenue summary, not from raw rupee text.',
+      };
+    }
+    const payeazy = firstDineRowWithNumber(rows, 'payeazy_revenue');
+    if (payeazy) {
+      return {
+        value: payeazy.value,
+        source_field: 'payeazy_revenue',
+        source_label: 'PayEazy Revenue',
+        confidence: 'structured',
+        row: payeazy.row,
+        status_note: 'Counted from the structured PayEazy revenue field.',
+      };
+    }
+    return {
+      value: 0,
+      source_field: 'dashboard',
+      source_label: 'Dashboard checked; no structured revenue value',
+      confidence: 'no_revenue_detected',
+      row: rows[0],
+      status_note: 'EazyDiner is live, but latest May revenue fields are blank or zero.',
+    };
+  }
+
+  if (platform === 'zomato_dining') {
+    const txRow = rows.find(r => r.metric_type === 'transaction_history') || rows.find(r => r.data?.section === 'transaction_history');
+    const txText = String(txRow?.data?.raw_snippet || '');
+    if (txRow && /no transactions yet/i.test(txText)) {
+      return {
+        value: 0,
+        source_field: 'transaction_history',
+        source_label: 'Transaction history',
+        confidence: 'empty',
+        row: txRow,
+        status_note: 'Zomato Dining transaction table explicitly says no transactions yet for the current range.',
+      };
+    }
+    const txAmounts = dineRupeeEvidence(txRow);
+    if (txAmounts.length) {
+      return {
+        value: Math.max(...txAmounts),
+        source_field: 'transaction_history.rupee_amounts',
+        source_label: 'Transaction history DOM amount',
+        confidence: 'dom_table_amount',
+        row: txRow,
+        status_note: 'A rupee amount was found inside the transaction table. Treat as directional until structured column extraction is added.',
+      };
+    }
+    return {
+      value: 0,
+      source_field: txRow ? 'transaction_history' : 'dining_sections',
+      source_label: txRow ? 'Transaction history checked' : 'Dining sections checked',
+      confidence: 'no_revenue_detected',
+      row: txRow || rows[0],
+      status_note: 'No transaction revenue has been captured for this outlet yet.',
+    };
+  }
+
+  if (platform === 'swiggy_dineout') {
+    const payRow = rows.find(r => r.metric_type === 'payments') || rows.find(r => r.data?.section === 'payments');
+    const payText = String(payRow?.data?.raw_snippet || '');
+    if (payRow && /no results found/i.test(payText)) {
+      return {
+        value: 0,
+        source_field: 'payments',
+        source_label: 'Payments table',
+        confidence: 'empty',
+        row: payRow,
+        status_note: 'Swiggy Dine-Out payments table explicitly says no results found for the selected filter.',
+      };
+    }
+    const payAmounts = dineRupeeEvidence(payRow);
+    if (payAmounts.length) {
+      return {
+        value: Math.max(...payAmounts),
+        source_field: 'payments.rupee_amounts',
+        source_label: 'Payments table DOM amount',
+        confidence: 'dom_table_amount',
+        row: payRow,
+        status_note: 'A rupee amount was found in the payments table. Treat as directional until column-level payment extraction is added.',
+      };
+    }
+    return {
+      value: 0,
+      source_field: payRow ? 'payments' : 'dineout_sections',
+      source_label: payRow ? 'Payments checked' : 'Dine-Out sections checked',
+      confidence: 'no_revenue_detected',
+      row: payRow || rows[0],
+      status_note: 'No Dine-Out payment revenue has been captured for this outlet yet.',
+    };
+  }
+
+  return {
+    value: 0,
+    source_field: 'unknown',
+    source_label: 'Unknown dine platform',
+    confidence: 'unknown',
+    row: rows[0],
+    status_note: 'No attribution rule exists for this platform yet.',
+  };
+}
+
+function buildDineAttributionRow(meta, rows) {
+  const key = `${meta.platform}::${meta.outlet_id}`;
+  const platformMeta = DINE_PLATFORM_META[meta.platform] || { label: meta.platform, action_map: [] };
+  const outletMeta = DINE_OUTLET_META[key] || { outlet_label: meta.outlet_id, brand: meta.brand || 'unknown' };
+  const source = pickDineRevenueSource(meta.platform, rows);
+  const sourceRow = source.row || rows[0] || null;
+  const latestRow = rows[0] || null;
+  const value = source.value || 0;
+
+  return {
+    platform: meta.platform,
+    platform_label: platformMeta.label,
+    brand: outletMeta.brand || meta.brand || 'unknown',
+    outlet_id: meta.outlet_id,
+    outlet_label: outletMeta.outlet_label,
+    revenue_inferred: value,
+    max_inferred: value,
+    source_field: source.source_field,
+    source_label: source.source_label,
+    source_metric_type: sourceRow?.metric_type || null,
+    captured_at: sourceRow?.captured_at || null,
+    last_seen_at: latestRow?.captured_at || null,
+    confidence: source.confidence,
+    status_note: source.status_note,
+    counters: {
+      reservations_count: latestDineCounter(rows, 'reservations_count'),
+      covers_count: latestDineCounter(rows, 'covers_count'),
+      bookings_count: latestDineCounter(rows, 'bookings_count'),
+      no_show_count: latestDineCounter(rows, 'no_show_count'),
+    },
+    evidence: {
+      rupee_amounts: dineRupeeEvidence(sourceRow),
+      ignored_amounts_note: meta.platform === 'eazydiner'
+        ? 'Raw rupee strings can include projected revenue and threshold text such as "No transactions above ₹5,000"; structured fields win.'
+        : 'Raw rupee strings are shown for audit only unless sourced from the platform transaction/payment table.',
+      projected_revenue: parseDineNumber(sourceRow?.data?.projected_revenue),
+      payeazy_revenue: parseDineNumber(sourceRow?.data?.payeazy_revenue),
+      revenue_summary_mtd: parseDineNumber(sourceRow?.data?.revenue_summary_mtd),
+    },
+    action_map: platformMeta.action_map,
+    snapshots: rows.length,
+  };
+}
 
 // v6.0: Classify URL into a metric_type. For Zomato per-outlet endpoints we include
 // the res_id so HE and NCH captures don't collide in the 10-min dedup window.
