@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aggregator Delivery Positioning - Hamza Express</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#0b0d10;
+  --panel:#151a20;
+  --panel2:#1c232b;
+  --line:#303844;
+  --text:#f2f5f8;
+  --muted:#a6b0bd;
+  --soft:#cdd6e0;
+  --green:#6fd08c;
+  --amber:#f2b35d;
+  --red:#e75d68;
+  --blue:#75a7ff;
+  --violet:#b99cff;
+  --mono:"SF Mono",Menlo,Consolas,monospace;
+}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+.top{position:sticky;top:0;z-index:20;background:rgba(11,13,16,.96);border-bottom:1px solid var(--line);backdrop-filter:blur(12px)}
+.top-inner{max-width:1500px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{font-weight:800;font-size:17px}.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.status{border:1px solid rgba(111,208,140,.55);background:rgba(111,208,140,.12);color:#caffd9;border-radius:999px;padding:7px 11px;font-size:11px;font-weight:800;white-space:nowrap}
+.wrap{max-width:1500px;margin:0 auto;padding:0 22px 72px}
+.hero{padding:30px 0 18px;border-bottom:1px solid var(--line)}
+h1{margin:0 0 10px;font-size:34px;line-height:1.12;letter-spacing:0;max-width:1120px}
+.hero p{margin:0;max-width:1120px;color:#c7d0dc;font-size:15px}
+.metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-top:22px}
+.metric{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;border-top:3px solid var(--blue);min-height:108px}
+.metric.good{border-top-color:var(--green)}.metric.warn{border-top-color:var(--amber)}.metric.bad{border-top-color:var(--red)}.metric.violet{border-top-color:var(--violet)}
+.k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.v{font:800 23px/1.12 var(--mono);margin-top:5px}.d{font-size:12px;color:var(--muted);margin-top:4px}
+.section{margin-top:32px}.section-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:14px}
+h2{font-size:18px;margin:0}.note{font-size:12px;color:var(--muted);text-align:right}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:15px}
+.card h3{font-size:14px;margin:0 0 7px}.card p{font-size:12px;color:#c9d3df;margin:0}
+.number{font:800 20px/1 var(--mono);margin-bottom:8px;color:var(--blue)}
+.callout{border-left:4px solid var(--amber);background:rgba(242,179,93,.1);border-radius:8px;padding:14px 15px;color:#ffe1ba}
+.callout.good{border-left-color:var(--green);background:rgba(111,208,140,.1);color:#d9ffe5}.callout.bad{border-left-color:var(--red);background:rgba(231,93,104,.1);color:#ffd4d8}
+.flow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:13px;min-height:130px}
+.step .n{font:800 11px var(--mono);color:var(--amber);margin-bottom:6px}.step h3{font-size:13px;margin:0 0 6px}.step p{font-size:12px;color:#c9d3df;margin:0}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:1080px}th{position:sticky;top:58px;background:#202833;color:#b6c0cd;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:10px;border-bottom:1px solid var(--line);z-index:2}td{padding:10px;border-bottom:1px solid #242c37;vertical-align:top;font-size:12px;color:#e8edf3}
+.mono,.price{font-family:var(--mono);white-space:nowrap}.price{font-weight:800}.muted{color:var(--muted)}
+.tag{display:inline-block;border:1px solid var(--line);background:#202833;color:#d9e1eb;border-radius:999px;padding:3px 8px;font-size:10px;font-weight:800;white-space:nowrap}.tag.good{border-color:rgba(111,208,140,.55);background:rgba(111,208,140,.1);color:#caffd9}.tag.warn{border-color:rgba(242,179,93,.55);background:rgba(242,179,93,.1);color:#ffe1ba}.tag.bad{border-color:rgba(231,93,104,.55);background:rgba(231,93,104,.1);color:#ffd4d8}.tag.blue{border-color:rgba(117,167,255,.55);background:rgba(117,167,255,.1);color:#d7e5ff}
+ul{margin:0;padding-left:18px;color:#cdd6e0}li{margin:7px 0}.small{font-size:12px;color:var(--muted)}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:14px}.compare .card{min-height:160px}.wrong{border-top:3px solid var(--red)}.right{border-top:3px solid var(--green)}
+@media(max-width:1120px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.grid4,.grid3,.grid2,.flow,.compare{grid-template-columns:1fr}.top-inner{align-items:flex-start;flex-direction:column}.note{text-align:left}h1{font-size:26px}th{top:104px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div>
+      <div class="brand">Hamza Express - Aggregator Delivery Positioning</div>
+      <div class="sub">Swiggy volume data + Zomato MG Road rank-price data + HE current menu + aggregator playbook</div>
+    </div>
+    <div class="status">Micro-Step 36 corrected UI v1</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <h1>Offers are mandatory. The intelligence is deciding which SKU gets which base price, discount mechanic, and timing.</h1>
+    <p>
+      The corrected objective is high order volume. The work is not to avoid offers. The work is to understand where volume customers already buy, move each SKU family into the right price corridor, then add a visible offer layer that feels strong to the customer without blindly discounting the whole menu.
+    </p>
+    <div class="metrics">
+      <div class="metric good"><div class="k">Primary objective</div><div class="v">Volume</div><div class="d">More organic delivery orders</div></div>
+      <div class="metric violet"><div class="k">Data sources</div><div class="v">4</div><div class="d">Demand, price, menu, mechanic</div></div>
+      <div class="metric good"><div class="k">Zomato P0 rows</div><div class="v">21</div><div class="d">First mapped execution universe</div></div>
+      <div class="metric warn"><div class="k">Layer 1 ready</div><div class="v">8</div><div class="d">Base-price edits from MS33/MS34</div></div>
+      <div class="metric good"><div class="k">Offer layer</div><div class="v">Required</div><div class="d">Not optional in final strategy</div></div>
+      <div class="metric bad"><div class="k">Wrong move</div><div class="v">Blanket</div><div class="d">No all-menu discount blast</div></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>The Correction From Micro-Step 35</h2>
+      <div class="note">MS35 visual format was useful, but its zero-offer conclusion was too defensive</div>
+    </div>
+    <div class="compare">
+      <div class="card wrong">
+        <h3>Old reading that must not drive final strategy</h3>
+        <p>The best current move is not an offer, run only 8 price edits, keep all offers off. This was safe as a portal-protection gate, but it is not enough for the business objective.</p>
+      </div>
+      <div class="card right">
+        <h3>Corrected reading</h3>
+        <p>Offers are part of the final system. The first price packet is only the foundation. The next intelligence layer is to attach the right offer to the right SKU role and timing window.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>How The Four Sources Are Used</h2>
+      <div class="note">each source has one job; mixing them creates false confidence</div>
+    </div>
+    <div class="grid4">
+      <div class="card"><div class="number">01</div><h3>Swiggy DATA.xlsx</h3><p>Actual local volume behavior. It tells which product families customers in this cluster already order in quantity: biryani, dry starters, gravies, breads, and basket formats.</p></div>
+      <div class="card"><div class="number">02</div><h3>Zomato MG Road sheet</h3><p>Rank-price perception. It shows where customers are comfortable seeing price points by product form. It is not absolute order count.</p></div>
+      <div class="card"><div class="number">03</div><h3>HE current menu</h3><p>SKU truth and execution surface. It tells current names, prices, portions, platform rows, and whether a row can actually be edited.</p></div>
+      <div class="card"><div class="number">04</div><h3>Aggregator playbook</h3><p>Offer mechanic library. It tells how to express value: item discount, cart offer, fixed combo, timing group, Gold/One, BOGO, ads, and stack guardrails.</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>The Correct Positioning Stack</h2>
+      <div class="note">this is the new decision order</div>
+    </div>
+    <div class="flow">
+      <div class="step"><div class="n">01</div><h3>Volume family</h3><p>Find where customers already buy. This comes mainly from Swiggy and HE own-order evidence.</p></div>
+      <div class="step"><div class="n">02</div><h3>SKU role</h3><p>Classify the row: hero main, entry basket, combo, attach, premium pull, or visibility item.</p></div>
+      <div class="step"><div class="n">03</div><h3>Base price</h3><p>Move price into the demand corridor. This can be a decrease, keep, or small increase.</p></div>
+      <div class="step"><div class="n">04</div><h3>Offer mechanic</h3><p>Choose the visible discount form: item, cart, fixed combo, daypart, Gold/One, or strike-through value.</p></div>
+      <div class="step"><div class="n">05</div><h3>Timing</h3><p>Attach the offer to the daypart or buying occasion where volume is missing or where customer intent is high.</p></div>
+      <div class="step"><div class="n">06</div><h3>Proof gate</h3><p>Check stack, MOV, margin, portal state, portion, and screenshots before the team saves it.</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>First Corrected Output</h2>
+      <div class="note">Layer 1 price foundation + Layer 2 mandatory offer architecture</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Layer</th><th>SKU / Group</th><th>Base Price Move</th><th>Offer Positioning</th><th>Timing</th><th>Reason</th><th>Gate</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tag blue">Layer 1</span></td>
+            <td>Chicken Biryani, Malai Tikka, Andhra Tikka, Haryali Tikka, Chicken Burtha, Chicken Chatpata</td>
+            <td class="price">Move selected Rs315/Rs300 rows to Rs299</td>
+            <td>No item discount on these rows in the first packet.</td>
+            <td>Manual update first, then measure.</td>
+            <td>These rows sit moderately above the Zomato demand corridor. Base price removes friction without creating discount dependency.</td>
+            <td>MS34 QA screenshots and current-price match.</td>
+          </tr>
+          <tr>
+            <td><span class="tag blue">Layer 1</span></td>
+            <td>Roomali Roti, Tandoor Roti</td>
+            <td class="price">Rs25 to Rs29; Rs35 to Rs39</td>
+            <td>No bread discount.</td>
+            <td>Same manual packet.</td>
+            <td>Breads are attach economics. They should support basket value, not become discount targets.</td>
+            <td>Confirm low price is not an intentional hook before saving.</td>
+          </tr>
+          <tr>
+            <td><span class="tag good">Layer 2</span></td>
+            <td>Mutton Biryani row 102</td>
+            <td class="price">Keep base Rs425 in first model</td>
+            <td>Mandatory premium-pull offer candidate: max 15% item discount, no stacking. Effective customer price Rs361.25 if approved.</td>
+            <td>Lunch or dinner hero test, not simultaneous with cart-wide Salt offer.</td>
+            <td>Mutton is a premium SKU where visible item discount has high perceived value without discounting the full basket.</td>
+            <td>Mutton cost, packaging, active offer stack, Gold overlap.</td>
+          </tr>
+          <tr>
+            <td><span class="tag good">Layer 2</span></td>
+            <td>Zomato lunch conversion window</td>
+            <td class="price">Base prices remain corridor-led</td>
+            <td>Mandatory cart/daypart offer candidate: capped MOV offer such as 20% max Rs100 above Rs399 only if basket proof supports it.</td>
+            <td>12:00-15:30, Mon-Fri candidate from playbook.</td>
+            <td>This earns the visible offer badge in the office-lunch window, where discount perception can lift CTR and conversion.</td>
+            <td>MOV proof, basket proof, no stack with item offer or Gold.</td>
+          </tr>
+          <tr>
+            <td><span class="tag good">Layer 2</span></td>
+            <td>Combo/value rows 1-9 cluster</td>
+            <td class="price">Keep or rebuild as fixed combo prices</td>
+            <td>Mandatory value architecture through fixed combo and strike-through perception, not extra percent discount.</td>
+            <td>Meal occasions: lunch basket, dinner family/cart, bread-curry add-on.</td>
+            <td>Own-order evidence points to rice-curry, biryani-kabab, and bread-curry baskets. The customer should see a deal, but the deal should be built into the combo.</td>
+            <td>Component cost, portion promise, packaging, current portal card proof.</td>
+          </tr>
+          <tr>
+            <td><span class="tag warn">Layer 3</span></td>
+            <td>Swiggy volume families</td>
+            <td class="price">Not final until current Swiggy menu surface is clean</td>
+            <td>Mandatory Swiggy offer packet after readiness: PoC-mediated offer or markup/fixed combo based on volume families.</td>
+            <td>After price/photo/status/disabled-row cleanup.</td>
+            <td>Swiggy DATA.xlsx is the strongest volume source, so it must drive the Swiggy offer design. It cannot be safely executed until the live menu surface is clean.</td>
+            <td>Current price, photo, disabled rows, zero-price rows, combo proof.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Deep Audit: What Survives From The 35 Steps</h2>
+      <div class="note">valid intelligence retained, wrong final framing corrected</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Micro-Steps</th><th>Core Learning</th><th>Corrected Use Now</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">01</td><td>High order volume is the macro objective; sources must be separated.</td><td>Still valid. This page keeps source roles separate.</td></tr>
+          <tr><td class="mono">02-03</td><td>Swiggy has the best actual local volume signal after cleaning mixed categories.</td><td>Use Swiggy to choose future offer families, not as a direct upload sheet.</td></tr>
+          <tr><td class="mono">04</td><td>Zomato MG Road data is rank-price perception; no fixed 20% input rule.</td><td>Discount percent must be derived after anchor, margin, and mechanic are known.</td></tr>
+          <tr><td class="mono">05-06</td><td>HE workbook is menu truth and platform execution surface.</td><td>Use it to identify exact current rows, portions, and base prices before offer design.</td></tr>
+          <tr><td class="mono">07-10</td><td>Playbook mechanics are eligible only after SKU role is known.</td><td>Now used as the mandatory offer library, not as a reason to avoid offers.</td></tr>
+          <tr><td class="mono">11-26</td><td>Portal, margin, and evidence gates prevent blind saves.</td><td>Still valid. Gates sequence the offer launch; they do not remove the offer layer.</td></tr>
+          <tr><td class="mono">26A</td><td>Fresh strategy comes from demand data + menu truth + playbook + margin.</td><td>Add offer visibility as a required conversion lever on aggregator platforms.</td></tr>
+          <tr><td class="mono">27-29</td><td>Zomato P0 has 21 rows; row roles are valid; Mutton is only item-offer candidate.</td><td>Keep row roles, but reframe as price foundation plus mandatory offer architecture.</td></tr>
+          <tr><td class="mono">30-34</td><td>8 Zomato price edits are team-safe as the first narrow packet.</td><td>Layer 1 remains valid. It should not be mistaken for the final output.</td></tr>
+          <tr><td class="mono">35</td><td>Visual final readout format works.</td><td>Superseded by this corrected UI because offers are mandatory.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="grid2">
+      <div class="card">
+        <h3>What The Team Should Understand From This UI</h3>
+        <ul>
+          <li>The final win is not "cheap menu." It is "right base price plus visible deal."</li>
+          <li>Chicken Biryani and selected starters/gravy rows should first move to a cleaner Rs299 price point.</li>
+          <li>Mutton Biryani is the first item-level offer candidate, capped and non-stacking.</li>
+          <li>Lunch cart offers and combo value architecture are mandatory future lanes, not optional extras.</li>
+          <li>Swiggy must be handled after live menu readiness proof because its data is strong but the current execution surface is weaker.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Next Micro-Step After This Deploy</h3>
+        <div class="callout good">
+          Micro-Step 37 should convert this corrected offer architecture into the first offer-proof packet: one Mutton Biryani item-offer proof row, one lunch MOV/cart proof row, and one combo fixed-value proof row.
+        </div>
+        <p class="small" style="margin-top:12px">
+          That step should produce the exact evidence checklist needed before the team opens Zomato portal offer configuration.
+        </p>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

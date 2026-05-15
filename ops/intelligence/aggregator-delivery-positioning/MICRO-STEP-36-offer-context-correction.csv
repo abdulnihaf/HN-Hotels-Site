@@ -1,0 +1,13 @@
+phase,micro_steps,old_read,new_corrected_read,action_in_first_ui
+source_separation,1,"Keep data sources independent.","Same, but playbook is now treated as mandatory offer mechanic source after demand role is known.","Show four-source model."
+swiggy_demand_cleanup,2-3,"Swiggy is actual volume truth but execution blocked.","Swiggy is actual volume truth and must drive future Swiggy offer positioning once readiness is fixed.","Show Swiggy as volume source and readiness-to-offer lane."
+zomato_rank_price,4,"Zomato gives local price corridors; no fixed 20% rule.","Same, with discount percent derived after corridor and SKU role instead of fixed upfront.","Show corridor before discount."
+he_menu_surface,5-6,"Current HE menu is SKU truth.","Same, but base price may be moved up/down before discounting.","Show base price as editable positioning lever."
+mechanic_mapping,7-10,"Playbook tells possible mechanics; no blind offer.","Same, but offer is mandatory in final strategy.","Show mandatory but surgical offer layer."
+proof_gates,11-26,"Evidence blocks unsafe portal action.","Same, but gates sequence offers instead of deleting offers from strategy.","Show proof-gated offer lanes."
+gate_reset,26A,"Fresh positioning uses demand plus playbook plus margin.","Same, with offer visibility added as conversion requirement.","Show corrected rule."
+p0_model,27-29,"Base price before offer; Mutton only offer candidate.","Base price plus offer layer; Mutton first item offer candidate; lunch and combo lanes remain mandatory but proof-gated.","Show three offer lanes."
+audit_approval,30-32,"No blanket discount and no row approved without proof.","Same, but avoid saying zero offers is final.","Show not blanket, not zero."
+team_packet,33-34,"8 price-only Zomato edits can be manually executed.","Layer 1 remains valid; Layer 2 offer packet must follow proof.","Show Layer 1 and Layer 2 separation."
+final_readout,35,"Final output says no offers now.","Superseded: final strategy requires smart offers.","Replace live UI with corrected MS36 view."
+
