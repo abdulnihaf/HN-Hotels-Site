@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>HE Google Maps + Search Config Directory</title>
+<meta name="theme-color" content="#f7f8f3">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f7f8f3;
+  --panel:#ffffff;
+  --ink:#17211d;
+  --ink2:#3f4a43;
+  --muted:#6f7b72;
+  --line:#dbe3d8;
+  --soft:#eef3eb;
+  --he:#d85f21;
+  --he2:#a94717;
+  --green:#157f4f;
+  --greenSoft:#e4f3ea;
+  --red:#b7352f;
+  --redSoft:#f8e7e5;
+  --yellow:#b7791f;
+  --yellowSoft:#fff2d8;
+  --blue:#2f6690;
+  --blueSoft:#e5f0f6;
+  --violet:#6b4e9b;
+  --violetSoft:#eee9f6;
+  --shadow:0 18px 55px rgba(23,33,29,.08);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Plus Jakarta Sans",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+button{font:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+.shell{max-width:1480px;margin:0 auto;padding:18px 18px 72px}
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:60;
+  margin:-18px -18px 18px;
+  padding:12px 18px;
+  background:rgba(247,248,243,.94);
+  border-bottom:1px solid var(--line);
+  backdrop-filter:blur(12px);
+}
+.toprow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.crumb{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);font-weight:800}
+.crumb a{text-decoration:none;color:var(--he)}
+.stamp{font-size:11px;color:var(--muted)}
+.hero{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 420px;
+  gap:16px;
+  align-items:stretch;
+}
+.hero-copy,.dark-card,.panel{
+  border:1px solid var(--line);
+  border-radius:8px;
+  box-shadow:var(--shadow);
+}
+.hero-copy{background:var(--panel);padding:24px}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--he);font-weight:800;margin-bottom:8px}
+h1{font-size:clamp(28px,4vw,56px);line-height:1.02;margin:0 0 12px;font-weight:800;letter-spacing:0}
+.lead{font-size:16px;color:var(--ink2);max-width:980px;margin:0}
+.dark-card{background:#17211d;color:#f7f8f3;padding:18px;display:flex;flex-direction:column;justify-content:space-between;min-height:248px}
+.dark-card .label{font-size:10px;color:#b9c7bd;text-transform:uppercase;letter-spacing:.08em;font-weight:800}
+.dark-card .big{font-size:28px;line-height:1.06;font-weight:800;margin:8px 0}
+.dark-card .small{font-size:13px;color:#dfe8e1;margin:0}
+.status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}
+.status-tile{border:1px solid rgba(247,248,243,.16);background:rgba(255,255,255,.06);border-radius:8px;padding:10px;min-height:72px}
+.status-tile .k{font-size:10px;color:#b9c7bd;text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+.status-tile .v{font-size:14px;font-weight:800;margin-top:4px}
+.navgrid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;margin:16px 0}
+.navgrid a{
+  min-height:48px;
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:9px;
+  text-decoration:none;
+  font-size:12px;
+  font-weight:800;
+  color:var(--ink2);
+}
+.navgrid a:hover{border-color:var(--he);color:var(--he)}
+.section{margin-top:18px}
+.section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:10px}
+.section-head h2{font-size:20px;margin:0;font-weight:800}
+.section-head p{font-size:13px;color:var(--muted);margin:3px 0 0;max-width:850px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.chip{
+  min-height:38px;
+  border:1px solid #c7d1c4;
+  border-radius:999px;
+  padding:8px 12px;
+  background:var(--panel);
+  color:var(--ink2);
+  font-weight:800;
+  font-size:12px;
+  cursor:pointer;
+}
+.chip.active{background:var(--ink);border-color:var(--ink);color:#fff}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.panel{background:var(--panel);padding:16px;box-shadow:0 8px 24px rgba(23,33,29,.04)}
+.panel h3{font-size:15px;margin:0 0 8px;font-weight:800}
+.panel p{font-size:13px;color:var(--ink2);margin:0}
+.panel .note{font-size:12px;color:var(--muted);margin-top:8px}
+.metric{border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:12px;min-height:94px}
+.metric .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+.metric .v{font-size:19px;font-weight:800;margin-top:6px}
+.metric .d{font-size:11px;color:var(--muted);margin-top:4px}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+table{width:100%;border-collapse:collapse;min-width:1120px}
+th,td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+th{position:sticky;top:74px;background:#17211d;color:#f7f8f3;font-size:11px;text-transform:uppercase;letter-spacing:.06em;z-index:5}
+td{font-size:12px;color:var(--ink2)}
+td strong{color:var(--ink)}
+tr:last-child td{border-bottom:0}
+.tag{display:inline-flex;align-items:center;justify-content:center;min-height:24px;border-radius:999px;padding:4px 9px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.tag.now{background:var(--greenSoft);color:var(--green)}
+.tag.later{background:var(--yellowSoft);color:var(--yellow)}
+.tag.risk{background:var(--redSoft);color:var(--red)}
+.tag.data{background:var(--blueSoft);color:var(--blue)}
+.tag.logic{background:var(--violetSoft);color:var(--violet)}
+.tag.setup{background:var(--soft);color:var(--ink2)}
+.tag.search{background:#f7e7dc;color:var(--he2)}
+.tag.maps{background:var(--greenSoft);color:var(--green)}
+.tag.pmax{background:var(--violetSoft);color:var(--violet)}
+.mindmap{display:grid;grid-template-columns:230px repeat(5,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.mindmap > div{background:var(--panel);padding:12px;min-height:86px}
+.mindmap .head{background:#17211d;color:#f7f8f3;font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;min-height:48px}
+.mindmap .rowhead{background:var(--soft);font-weight:800;color:var(--ink)}
+.mindmap p{margin:0;font-size:12px;color:var(--ink2)}
+.spine{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.spine-step{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;min-height:168px;position:relative}
+.spine-step::before{content:"";position:absolute;left:14px;right:14px;top:0;height:4px;background:var(--he);border-radius:0 0 6px 6px}
+.spine-step .num{font-size:11px;font-weight:800;color:var(--he);letter-spacing:.06em;text-transform:uppercase;margin-bottom:15px}
+.spine-step h3{font-size:14px;margin:0 0 8px;font-weight:800}
+.spine-step p{font-size:12px;color:var(--ink2);margin:0}
+.keywords{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.kw-card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+.kw-card h3{font-size:15px;margin:0 0 8px}
+.kw-list{display:flex;flex-wrap:wrap;gap:7px}
+.kw{font-size:11px;border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:6px 9px;color:var(--ink2);font-family:"JetBrains Mono",ui-monospace,monospace}
+.split{display:grid;grid-template-columns:1.1fr .9fr;gap:12px}
+.callout{border:1px solid #e9cfbf;background:#fff7f1;border-radius:8px;padding:14px}
+.callout strong{color:var(--he2)}
+.tooltip{
+  border-bottom:1px dotted currentColor;
+  cursor:help;
+}
+.filter-hide{display:none}
+.footer{margin-top:24px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media(max-width:1100px){
+  .hero,.split{grid-template-columns:1fr}
+  .navgrid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid-3,.spine{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mindmap{grid-template-columns:180px repeat(3,minmax(0,1fr))}
+  .keywords{grid-template-columns:1fr}
+}
+@media(max-width:720px){
+  .shell{padding:14px 12px 56px}
+  .topbar{margin:-14px -12px 14px;padding:10px 12px}
+  .hero-copy{padding:18px}
+  .navgrid,.grid-2,.grid-3,.grid-4,.spine{grid-template-columns:1fr}
+  .mindmap{display:block;background:transparent;border:0}
+  .mindmap > div{border:1px solid var(--line);margin-bottom:8px;border-radius:8px}
+  .status-grid{grid-template-columns:1fr}
+  th{top:62px}
+}
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="topbar">
+    <div class="toprow">
+      <div class="crumb">
+        <a href="/marketing/he/gbp/">HE GBP</a>
+        <span>/</span>
+        <a href="https://hamzaexpress.in/ops/google-cockpit/">Google Ads Cockpit</a>
+        <span>/</span>
+        <span>Maps Config Directory</span>
+      </div>
+      <div class="stamp mono">Updated 2026-05-15 IST · static operator directory</div>
+    </div>
+  </div>
+
+  <section class="hero">
+    <div class="hero-copy">
+      <div class="eyebrow">Hamza Express · Google Maps + Search architecture</div>
+      <h1>The paid local-intent config layer, mapped as a directory.</h1>
+      <p class="lead">This page converts the HKP Road eater intelligence into exact Google Ads / Maps configuration. The target is not generic awareness. The target is physical footfall: directions, calls, map-detail clicks, and walk-in or parcel intent from people who can actually reach Hamza Express.</p>
+    </div>
+    <aside class="dark-card">
+      <div>
+        <div class="label">Owner Objective</div>
+        <div class="big">Max footfall, zero blind spend.</div>
+        <p class="small">Use PMax as the broad local discovery layer. Use late-night Search + Maps eligibility as the surgical layer for active hunger intent.</p>
+      </div>
+      <div class="status-grid">
+        <div class="status-tile"><div class="k">PMax layer</div><div class="v">Rs 300/day</div></div>
+        <div class="status-tile"><div class="k">Search/Maps layer</div><div class="v">Rs 300/day</div></div>
+        <div class="status-tile"><div class="k">Maps pin</div><div class="v mono">12.9868469,77.6044088</div></div>
+        <div class="status-tile"><div class="k">Primary time</div><div class="v mono">22:00-03:00</div></div>
+      </div>
+    </aside>
+  </section>
+
+  <nav class="navgrid" aria-label="Page sections">
+    <a href="#decision">Decision</a>
+    <a href="#pulse">Local Pulse</a>
+    <a href="#capability">Capabilities</a>
+    <a href="#config">Exact Config</a>
+    <a href="#keywords">Keywords</a>
+    <a href="#budget">Budget</a>
+    <a href="#guardrails">Guardrails</a>
+    <a href="#execution">Execution</a>
+  </nav>
+
+  <section id="decision" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Strategic Decision</h2>
+        <p>The eater categories are not equal Google campaigns. Google budget follows active intent, not category existence.</p>
+      </div>
+    </div>
+    <div class="grid-4">
+      <div class="metric"><div class="k">Google-native winner</div><div class="v">Late-night hunger</div><div class="d">Search behavior exists at the decision moment.</div></div>
+      <div class="metric"><div class="k">Second winner</div><div class="v">Parcel / pickup</div><div class="d">Call, directions, menu and quick route intent.</div></div>
+      <div class="metric"><div class="k">Brand capture</div><div class="v">Separate layer</div><div class="d">Do not hide Hamza search inside late-night data.</div></div>
+      <div class="metric"><div class="k">PMax role</div><div class="v">Base discovery</div><div class="d">Broad Google inventory, not surgical eater logic.</div></div>
+    </div>
+  </section>
+
+  <section id="pulse" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Local Pulse To Google Mapping</h2>
+        <p>The source intelligence says the market problem is category confusion: "Same HKP Road Hamza food memory. New Express face." Google captures the moments where people are already searching or navigating.</p>
+      </div>
+    </div>
+    <div class="mindmap">
+      <div class="head">Eater coordinate</div>
+      <div class="head">Google probability</div>
+      <div class="head">Search behavior</div>
+      <div class="head">Best Google surface</div>
+      <div class="head">Budget role</div>
+      <div class="head">Do not confuse with</div>
+
+      <div class="rowhead">Late-Night Heavy Non-Veg</div>
+      <div><p><strong>Very high.</strong> This person has urgency, time intent, and dish/category intent.</p></div>
+      <div><p>Open now, late night food, biryani, kabab, non-veg, halal, midnight food.</p></div>
+      <div><p>Search campaign eligible for Maps through location assets.</p></div>
+      <div><p><strong>Primary Rs 300/day Search layer.</strong></p></div>
+      <div><p>Do not mix with generic all-day restaurant search.</p></div>
+
+      <div class="rowhead">Fast Parcel / Pickup</div>
+      <div><p><strong>High near outlet.</strong> Best inside 0-3 km and for local workers/residents.</p></div>
+      <div><p>Call, directions, menu, takeaway, kabab parcel, biryani near me.</p></div>
+      <div><p>GBP organic + Search local assets + call asset.</p></div>
+      <div><p>Secondary inside same Search layer after night intent is stable.</p></div>
+      <div><p>Do not optimize to app delivery if the objective is margin-rich footfall.</p></div>
+
+      <div class="rowhead">Brand / Legacy Hamza</div>
+      <div><p><strong>High but different.</strong> This is confusion capture, not broad discovery.</p></div>
+      <div><p>Hamza Hotel, Hamza Express, Hamza HKP Road, Hamza ghee rice.</p></div>
+      <div><p>Separate Brand / Legacy Search campaign, GBP proof, Maps listing.</p></div>
+      <div><p>Carve out only after late-night is readable; otherwise reporting gets polluted.</p></div>
+      <div><p>Never attack Hamza Hotel. Convert memory respectfully.</p></div>
+
+      <div class="rowhead">Family Comfort Diner</div>
+      <div><p><strong>Medium.</strong> Works on weekends/dinner, but needs seating/photo proof.</p></div>
+      <div><p>Family restaurant Shivajinagar, non veg family restaurant, biryani family dining.</p></div>
+      <div><p>GBP photos, reviews, PMax, future dinner Search campaign.</p></div>
+      <div><p>Not day-1 late-night budget unless queries prove volume.</p></div>
+      <div><p>Do not make HE look premium or sterile.</p></div>
+
+      <div class="rowhead">Food Explorer</div>
+      <div><p><strong>Medium to low paid Search.</strong> Stronger through influencer/Meta first.</p></div>
+      <div><p>Best food Shivajinagar, HKP Road food, Bangalore food trail.</p></div>
+      <div><p>PMax, GBP organic, creator-triggered brand/search lift.</p></div>
+      <div><p>No separate paid Search budget until proof appears.</p></div>
+      <div><p>Do not bid zero-volume HKP keywords just because they sound correct.</p></div>
+
+      <div class="rowhead">Warm Retargeting Viewer</div>
+      <div><p><strong>Low unless lists are active.</strong> Google needs audience data or Customer Match.</p></div>
+      <div><p>Customer Match, site visitors, Maps/GBP interaction audiences where available.</p></div>
+      <div><p>PMax audience signals, future remarketing.</p></div>
+      <div><p>Signal layer, not a standalone Rs 300/day campaign.</p></div>
+      <div><p>Do not confuse Meta retargeting behavior with Search intent.</p></div>
+    </div>
+  </section>
+
+  <section id="capability" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Google Capability Map</h2>
+        <p>Every configurable lever is listed here with the exact HE interpretation. This prevents a repeat of the wrong-geo mistake.</p>
+      </div>
+      <div class="actions" role="group" aria-label="Filter config table">
+        <button class="chip active" data-filter="all">All</button>
+        <button class="chip" data-filter="search">Search</button>
+        <button class="chip" data-filter="maps">Maps</button>
+        <button class="chip" data-filter="pmax">PMax</button>
+        <button class="chip" data-filter="measure">Measurement</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="capabilityTable">
+        <thead>
+          <tr>
+            <th>Lever</th>
+            <th>Permutations possible</th>
+            <th>HE setting now</th>
+            <th>Why this setting</th>
+            <th>Guardrail</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-type="search maps pmax"><td><strong>Business Profile / location asset</strong><br><span class="tag maps">Maps</span></td><td>Account-level GBP link, campaign-level location group, Place ID-based maps location set through API.</td><td>Use Hamza Express GBP only. Place ID <span class="mono">ChIJ-QQjtHEXrjsR-Z1RIEm2arg</span>.</td><td>Location assets are what make Search/PMax eligible for local ad formats, map details, directions and calls.</td><td>Never let NCH or old Hamza assets attach to HE campaigns.</td></tr>
+          <tr data-type="search maps"><td><strong>Campaign type</strong><br><span class="tag search">Search</span></td><td>Search, PMax for store goals, Demand Gen, Display, Video, Smart-equivalent flows.</td><td>Use Search for late-night. Keep PMax as separate base layer.</td><td>Search gives keyword, schedule, negative, and ad-group visibility. PMax is useful but less controllable for this Rs 300 surgical objective.</td><td>Do not force PMax to do a 22:00-03:00 keyword job.</td></tr>
+          <tr data-type="pmax maps"><td><strong>PMax store-goal behavior</strong><br><span class="tag pmax">PMax</span></td><td>Store goals with Business Profile, local actions, store visits if eligible, audience signals, asset groups.</td><td>PMax campaign <span class="mono">23834053403</span> remains the Rs 300/day broad local discovery layer.</td><td>It can serve across Search, Maps, Business Profile, YouTube, Gmail and Display; useful for ambient local discovery.</td><td>Do not read PMax as persona truth. It is a discovery machine.</td></tr>
+          <tr data-type="search maps"><td><strong>Maps exclusivity</strong><br><span class="tag risk">Limit</span></td><td>Promoted pins, Map search ads, Map suggest ads, location detail clicks.</td><td>We optimize for Maps actions, but cannot force ads to show only in Google Maps.</td><td>Google's own Maps ad docs say ads cannot currently be served exclusively in Google Maps.</td><td>Dashboard must segment click type: location detail, directions, mobile click-to-call.</td></tr>
+          <tr data-type="search"><td><strong>Final URL</strong><br><span class="tag risk">Policy</span></td><td>Website final URL, mobile final URL, tracking template, final URL suffix.</td><td>If RSA final URL is required, use an HE-owned domain URL. Do not use a Google Maps URL as the main final URL.</td><td>Search ads need a landing page domain; local actions come from the location asset, not by pretending the ad destination is Google Maps.</td><td>Display URL and final URL domain must match. Avoid destination mismatch.</td></tr>
+          <tr data-type="search maps"><td><strong>Location targeting</strong><br><span class="tag setup">Geo</span></td><td>Country, city, geo target ID, radius around point, location groups, exclusions.</td><td>Use proximity around exact HE pin <span class="mono">12.9868469,77.6044088</span>. Avoid city geo IDs.</td><td>Prior Gurugram mistake came from a wrong geo ID/comment. Radius around pin is the clean coordinate.</td><td>No Bengaluru city target for late-night. No Gurugram ID. No broad India.</td></tr>
+          <tr data-type="search maps"><td><strong>Radius depth</strong><br><span class="tag logic">Distance</span></td><td>Single 10 km radius, or layered 3/7/10 km proximity criteria with bid adjustments if supported cleanly.</td><td>Late-night: up to 10 km because HKP Road is a known night-food destination. Dinner/dish campaigns later should use 3 km.</td><td>10 km only makes sense for late-night destination behavior, not normal dinner traffic.</td><td>Always report spend by distance/radius segment when possible.</td></tr>
+          <tr data-type="search"><td><strong>Location presence</strong><br><span class="tag setup">Presence</span></td><td>People in/regularly in target; people in or interested in target.</td><td>Use presence / regularly-in where available. Avoid interest-only Bangalore tourists outside reach.</td><td>The owner objective is physical arrival, not curiosity from people who cannot come tonight.</td><td>Audit live setting before enablement.</td></tr>
+          <tr data-type="search"><td><strong>Ad schedule</strong><br><span class="tag search">Time</span></td><td>All day, daypart schedule, weekday/weekend schedule, bid adjustments by time.</td><td>Daily 22:00-03:00 IST. In Google schedule, split midnight into 22:00-24:00 and 00:00-03:00 rows.</td><td>Late-night bucket has time intent. Running all day pollutes data and burns budget.</td><td>Do not say "open late" unless GBP/outlet hours are accurate for that window.</td></tr>
+          <tr data-type="search"><td><strong>Network settings</strong><br><span class="tag search">Network</span></td><td>Search Network, Google Search partners, Display expansion.</td><td>Google Search Network on. Search partners off initially. Display expansion off.</td><td>Control matters more than reach at Rs 300/day. Maps eligibility does not require Display expansion.</td><td>Audit network before launch.</td></tr>
+          <tr data-type="search"><td><strong>Bidding</strong><br><span class="tag setup">Bid</span></td><td>Manual CPC, Maximize clicks with CPC ceiling, Maximize conversions, target CPA.</td><td>Start Maximize clicks with CPC ceiling; do not use Maximize conversions until local conversions are trustworthy.</td><td>Store Visits are not directly controllable yet. Direction/call data must stabilize first.</td><td>If CPC cap blocks delivery, raise in small steps after first-night search-term audit.</td></tr>
+          <tr data-type="search"><td><strong>Keywords</strong><br><span class="tag search">Intent</span></td><td>Exact, phrase, broad; broad-match campaign setting; keyword final URLs; ad-group themes.</td><td>Use exact + phrase only for launch. No broad-match setting.</td><td>The budget is too small for broad learning on generic restaurant terms.</td><td>Search terms reviewed after every first three nights.</td></tr>
+          <tr data-type="search"><td><strong>Negative keywords</strong><br><span class="tag search">Waste cut</span></td><td>Account-level, campaign-level, ad-group-level; broad/phrase/exact negatives.</td><td>Use campaign negative list for job/recipe/room/lodging/delivery-noise and ad-group negatives for cross-bucket pollution.</td><td>Negatives are the spend firewall for a small daily budget.</td><td>Add singular/plural/synonym variants for negatives; negatives do not expand like positives.</td></tr>
+          <tr data-type="search"><td><strong>Ad copy</strong><br><span class="tag setup">Creative</span></td><td>Responsive Search Ads with headlines, descriptions, path fields, pins.</td><td>Copy must say HKP Road, Shivajinagar, Hamza Express, ghee rice/kabab/biryani/Brain Dry, directions/call.</td><td>The ad must convert old Hamza memory and night hunger without making a superiority claim.</td><td>No "better than Hamza Hotel"; no fake 24-hour/open claims.</td></tr>
+          <tr data-type="search maps pmax"><td><strong>Assets</strong><br><span class="tag maps">Proof</span></td><td>Location, call, sitelink, image, structured snippet, callout, business logo/name.</td><td>Location asset + call asset are mandatory. Image assets only after owner confirms food proof.</td><td>Maps/local ads pull address, hours, photos, reviews and calls into the decision surface.</td><td>Image proof must look like serious HKP food, not polished generic restaurant content.</td></tr>
+          <tr data-type="measure maps"><td><strong>Conversion goals</strong><br><span class="tag measure">Measure</span></td><td>Direction clicks, call clicks, location-detail clicks, website actions, store visits if eligible.</td><td>Primary proxy: direction + call + location detail clicks. Store Visits only if Google auto-enables eligibility.</td><td>Owner conversion is footfall. Since POS cannot attribute every walk-in yet, local action proxies are the control layer.</td><td>Do not create fake Store Visits actions; Google eligibility gates it.</td></tr>
+          <tr data-type="measure"><td><strong>Reporting cut</strong><br><span class="tag measure">Audit</span></td><td>Campaign, ad group, keyword, search term, click type, hour, device, location, asset, conversion action.</td><td>Dashboard must show PMax and Search separately, with Maps click-type cuts.</td><td>If PMax and Search are blended, we cannot learn which eater bucket is converting.</td><td>No optimization without segmenting by campaign and click type.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="config" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Exact Late-Night Search / Maps Config Draft</h2>
+        <p>This is the first surgical campaign configuration. It should be created/edited in PAUSED state, audited, then enabled only after the guardrails pass.</p>
+      </div>
+    </div>
+    <div class="split">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Setting</th><th>Value</th><th>Reason</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Campaign name</strong></td><td class="mono">HE - Late Night Maps Footfall Search - v1</td><td>Separate from PMax so learning is readable.</td></tr>
+            <tr><td><strong>Known campaign shell</strong></td><td class="mono">23854158442 · approval-gated / paused</td><td>Use live API audit before any enable or recreate action.</td></tr>
+            <tr><td><strong>Daily budget</strong></td><td>Rs 300/day</td><td>Enough to learn without allowing broad waste.</td></tr>
+            <tr><td><strong>Objective</strong></td><td>Footfall proxies: directions, calls, location-detail clicks.</td><td>Owner's true conversion is outlet visit / parcel pickup.</td></tr>
+            <tr><td><strong>Campaign type</strong></td><td>Search, with location asset linked to Hamza Express GBP.</td><td>Search gives keyword and schedule control while still becoming eligible for local formats.</td></tr>
+            <tr><td><strong>Networks</strong></td><td>Google Search on; Search partners off; Display expansion off.</td><td>Protect Rs 300/day from non-surgical inventory.</td></tr>
+            <tr><td><strong>Geo center</strong></td><td class="mono">12.9868469,77.6044088</td><td>Exact HE pin. No city geo ID.</td></tr>
+            <tr><td><strong>Radius</strong></td><td>10 km for this late-night campaign only.</td><td>HKP Road has destination-night behavior; normal dinner campaigns should be 3 km.</td></tr>
+            <tr><td><strong>Location option</strong></td><td>People in or regularly in targeted locations, where available.</td><td>Avoid people merely interested in Bangalore/HKP but not physically reachable.</td></tr>
+            <tr><td><strong>Schedule</strong></td><td class="mono">22:00-24:00 + 00:00-03:00, every day</td><td>Google schedule crosses midnight only through split rows.</td></tr>
+            <tr><td><strong>Bidding</strong></td><td>Maximize clicks with CPC ceiling for launch.</td><td>No trustworthy store-visit conversion volume yet; learn search terms first.</td></tr>
+            <tr><td><strong>Match types</strong></td><td>Phrase + exact only.</td><td>Control first, expansion later.</td></tr>
+            <tr><td><strong>Ads</strong></td><td>Responsive Search Ads per ad group; pin only if needed for location clarity.</td><td>Keep copy relevant to each intent bucket.</td></tr>
+            <tr><td><strong>Final URL</strong></td><td>HE-owned URL if Search ad requires final URL. Local clicks come through location asset.</td><td>Google Maps-only final URL is not the safe technical path.</td></tr>
+            <tr><td><strong>Primary assets</strong></td><td>Location asset, call asset, business name/logo, image assets after proof selection.</td><td>Maps users decide from address, photos, reviews, hours and call/directions.</td></tr>
+            <tr><td><strong>Launch status</strong></td><td>Paused until live audit passes.</td><td>Prevents another wrong-geo or wrong-hours spend event.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <strong>Important technical truth:</strong>
+        <p>We can optimize for Google Maps behavior, but we cannot force a Search campaign to serve only inside Google Maps. The correct Maps-focused implementation is: accurate GBP link, location asset, exact radius/presence targeting, local-intent keywords, night-only schedule, and click-type reporting for location detail, directions and mobile calls.</p>
+        <p style="margin-top:10px">Also, if GBP hours do not show the outlet open during 22:00-03:00, ad copy must not claim "open late" until the business hours/special hours are accurate.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="keywords" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Launch Keyword Architecture</h2>
+        <p>Keyword Planner volume is Bangalore-level. GBP/search-term data is the local proof layer. We do not bid by volume alone; we bid by volume x physical intent x distance fit x time fit.</p>
+      </div>
+    </div>
+    <div class="keywords">
+      <div class="kw-card">
+        <h3>Ad Group 1 · Open Now Hunger</h3>
+        <div class="kw-list">
+          <span class="kw">"restaurants near me open now"</span><span class="kw">[restaurants near me open now]</span>
+          <span class="kw">"food open now near me"</span><span class="kw">[food open now near me]</span>
+          <span class="kw">"biryani near me open now"</span><span class="kw">[biryani near me open now]</span>
+          <span class="kw">"late night food near me"</span><span class="kw">[late night food near me]</span>
+        </div>
+        <p class="note">Highest urgency. Must only run 22:00-03:00.</p>
+      </div>
+      <div class="kw-card">
+        <h3>Ad Group 2 · Heavy Non-Veg Dish</h3>
+        <div class="kw-list">
+          <span class="kw">"kabab near me"</span><span class="kw">[kabab near me]</span>
+          <span class="kw">"chicken kabab near me"</span><span class="kw">[chicken kabab near me]</span>
+          <span class="kw">"ghee rice near me"</span><span class="kw">[ghee rice near me]</span>
+          <span class="kw">"non veg restaurants near me open now"</span><span class="kw">[non veg restaurants near me open now]</span>
+        </div>
+        <p class="note">Best fit to HE food reality: ghee rice, kabab, biryani, Brain Dry.</p>
+      </div>
+      <div class="kw-card">
+        <h3>Ad Group 3 · Bangalore Destination Night</h3>
+        <div class="kw-list">
+          <span class="kw">"late night food bangalore"</span><span class="kw">[late night food bangalore]</span>
+          <span class="kw">"late night restaurants bangalore"</span><span class="kw">[late night restaurants bangalore]</span>
+          <span class="kw">"midnight food bangalore"</span><span class="kw">[midnight food bangalore]</span>
+          <span class="kw">"late night biryani bangalore"</span><span class="kw">[late night biryani bangalore]</span>
+        </div>
+        <p class="note">Justifies 7-10 km because HKP Road is a destination at night.</p>
+      </div>
+      <div class="kw-card">
+        <h3>Ad Group 4 · Halal / Muslim Food Filter</h3>
+        <div class="kw-list">
+          <span class="kw">"halal restaurant near me"</span><span class="kw">[halal restaurant near me]</span>
+          <span class="kw">"muslim restaurant near me"</span><span class="kw">[muslim restaurant near me]</span>
+          <span class="kw">"non veg restaurant near me"</span><span class="kw">[non veg restaurant near me]</span>
+        </div>
+        <p class="note">Useful but must be audited; not every halal searcher wants HKP heavy food.</p>
+      </div>
+      <div class="kw-card">
+        <h3>Separate Later · Brand / Legacy Guard</h3>
+        <div class="kw-list">
+          <span class="kw">"hamza hotel"</span><span class="kw">[hamza hotel]</span>
+          <span class="kw">"hamza express"</span><span class="kw">[hamza express]</span>
+          <span class="kw">"hamza hkp road"</span><span class="kw">[hamza hkp road]</span>
+          <span class="kw">"hamza ghee rice"</span><span class="kw">[hamza ghee rice]</span>
+        </div>
+        <p class="note">Do not mix into late-night day one. It needs separate reporting because intent is brand confusion, not generic night hunger.</p>
+      </div>
+      <div class="kw-card">
+        <h3>Do Not Bid Initially</h3>
+        <div class="kw-list">
+          <span class="kw">restaurants near me</span>
+          <span class="kw">restaurants</span>
+          <span class="kw">hkp road food</span>
+          <span class="kw">hkp road restaurant</span>
+          <span class="kw">parcel biryani</span>
+        </div>
+        <p class="note">Either too generic for Rs 300/day or too weak/zero-volume as paid Search terms. Use HKP Road in ad copy, not as a paid keyword until data proves it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="budget" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Budget Division / Day</h2>
+        <p>The Rs 600/day architecture is not an equal persona split. It is a controlled discovery layer plus one surgical high-intent layer.</p>
+      </div>
+    </div>
+    <div class="grid-3">
+      <div class="panel">
+        <h3>PMax Base Local Discovery · Rs 300/day</h3>
+        <p>Use for ambient discovery across Google properties and local assets. The role is to keep a broad local signal running while the Search layer creates readable intent data.</p>
+        <p class="note">Do not optimize creative or eater categories from PMax alone.</p>
+      </div>
+      <div class="panel">
+        <h3>Late-Night Search / Maps · Rs 300/day</h3>
+        <p>Use for 22:00-03:00 active searches: open now, late-night food, biryani, kabab, non-veg, halal and destination-night terms.</p>
+        <p class="note">This is the first surgical campaign.</p>
+      </div>
+      <div class="panel">
+        <h3>Future Brand Guard · Rs 50-100/day only if approved</h3>
+        <p>Hamza-brand searches are valuable but must not pollute late-night learning. Add a separate brand campaign only after the first campaign has clean search-term evidence.</p>
+        <p class="note">If added, carve from Search budget after review, not from PMax blindly.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="guardrails" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Failure Guardrails Before Enable</h2>
+        <p>These are the checks that must pass before live spend. If one fails, the campaign remains paused.</p>
+      </div>
+    </div>
+    <div class="spine">
+      <div class="spine-step"><div class="num">01 Geo</div><h3>Pin exactness</h3><p>Campaign location must be proximity centered on <span class="mono">12.9868469,77.6044088</span>. No city ID. No Gurugram. No broad India.</p></div>
+      <div class="spine-step"><div class="num">02 GBP</div><h3>HE-only asset</h3><p>Location asset must resolve to Hamza Express Place ID <span class="mono">ChIJ-QQjtHEXrjsR-Z1RIEm2arg</span>. No NCH or wrong Hamza asset.</p></div>
+      <div class="spine-step"><div class="num">03 Hours</div><h3>Night claim check</h3><p>Ad copy and GBP hours must match actual outlet operating reality. If hours stop at 23:00, do not run "open now" after that.</p></div>
+      <div class="spine-step"><div class="num">04 Networks</div><h3>No broad spill</h3><p>Search partners off initially. Display expansion off. PMax is separate and clearly labelled.</p></div>
+      <div class="spine-step"><div class="num">05 Keywords</div><h3>No broad launch</h3><p>Exact and phrase only. Generic "restaurants near me" excluded from launch even if volume is massive.</p></div>
+      <div class="spine-step"><div class="num">06 Measure</div><h3>Click-type reporting</h3><p>Dashboard must show directions, location-detail clicks, mobile calls, hour, search term and campaign separately.</p></div>
+    </div>
+  </section>
+
+  <section id="execution" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Execution Micro-Steps</h2>
+        <p>This is the exact order for campaign execution after this directory is reviewed.</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Step</th><th>Action</th><th>Mutation?</th><th>Audit output</th></tr></thead>
+        <tbody>
+          <tr><td><strong>1</strong></td><td>Fresh read-only live account audit: campaigns, budgets, geo, schedules, assets, conversion actions, negative lists.</td><td><span class="tag data">No</span></td><td>Current truth before touching spend.</td></tr>
+          <tr><td><strong>2</strong></td><td>Verify GBP link/location asset: HE Place ID only, exact address, pin, phone, hours and photos.</td><td><span class="tag data">No</span></td><td>Maps eligibility and no asset contamination.</td></tr>
+          <tr><td><strong>3</strong></td><td>Create/edit late-night Search campaign in PAUSED state with the config above.</td><td><span class="tag later">Yes, paused</span></td><td>Diff of every campaign/ad group/keyword/asset setting.</td></tr>
+          <tr><td><strong>4</strong></td><td>Run post-mutation audit: geo center, radius, schedule split, networks, negatives, keyword match types, final URL, location assets.</td><td><span class="tag data">No</span></td><td>Go/no-go checklist.</td></tr>
+          <tr><td><strong>5</strong></td><td>Enable only after owner approval and hours proof.</td><td><span class="tag risk">Yes</span></td><td>First-night spend and click-type monitor.</td></tr>
+          <tr><td><strong>6</strong></td><td>After first 3 nights: search-term audit, distance/hour/device cut, negative additions, CPC cap adjustment.</td><td><span class="tag later">Small</span></td><td>Learning loop without blind spend.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="footer">
+    <span>HN Hotels · Hamza Express Google Maps / Search directory</span>
+    <span class="mono">No campaign mutation is performed by this static page.</span>
+  </div>
+</main>
+
+<script>
+const chips = Array.from(document.querySelectorAll(".chip"));
+const rows = Array.from(document.querySelectorAll("#capabilityTable tbody tr"));
+chips.forEach((chip) => {
+  chip.addEventListener("click", () => {
+    chips.forEach((c) => c.classList.remove("active"));
+    chip.classList.add("active");
+    const filter = chip.dataset.filter;
+    rows.forEach((row) => {
+      const types = (row.dataset.type || "").split(/\s+/);
+      row.classList.toggle("filter-hide", filter !== "all" && !types.includes(filter));
+    });
+  });
+});
+</script>
+</body>
+</html>
