@@ -1,4 +1,4 @@
-// content-eazydiner.js v1.0.6
+// content-eazydiner.js v1.0.7
 // EazyDiner / LiveTable scraper for HN Hotels — Hamza Express only (HE contract signed Mar 2026).
 // Injected on: https://apps.livetableapp.com/*
 // Requires manual login via India +91 OTP once — session persists for ongoing scraping.
@@ -59,6 +59,15 @@
     return m?.[1] ? parseInt(m[1].replace(/,/g, ''), 10) : null;
   }
 
+  function firstIntBefore(text, anchorPattern) {
+    const anchor = text.search(anchorPattern);
+    if (anchor < 0) return null;
+    const segment = text.slice(Math.max(0, anchor - 80), anchor);
+    const matches = [...segment.matchAll(/(\d[\d,]*)/g)];
+    const last = matches[matches.length - 1];
+    return last?.[1] ? parseInt(last[1].replace(/,/g, ''), 10) : null;
+  }
+
   function firstRupeeNear(text, anchorPattern) {
     const anchor = text.search(anchorPattern);
     if (anchor < 0) return null;
@@ -67,14 +76,24 @@
     return amounts.length ? amounts[0] : null;
   }
 
+  function firstPlainAmountNear(text, anchorPattern) {
+    const anchor = text.search(anchorPattern);
+    if (anchor < 0) return null;
+    const segment = text.slice(anchor, anchor + 160);
+    const m = segment.match(/(?:month\s+to\s+date|mtd)\D+(\d[\d,]*)/i);
+    return m?.[1] ? parseFloat(m[1].replace(/,/g, '')) : null;
+  }
+
   function scrape() {
     const idx = currentPageIdx();
     const section = PAGES[idx].name;
     const bodyText = document.body.innerText;
     const rupees = extractRupees(bodyText);
-    const reservations = firstIntNear(bodyText, /total\s+reservations/i, /(\d[\d,]*)\s*(?:reservations?|bookings?)/i)
+    const reservations = firstIntBefore(bodyText, /total\s+reservations/i)
+      ?? firstIntNear(bodyText, /total\s+reservations/i, /(\d[\d,]*)\s*(?:reservations?|bookings?)/i)
       ?? extractFirstInt(bodyText, 'reservations?|bookings?');
-    const covers = firstIntNear(bodyText, /total\s+guests?|diners?/i, /(\d[\d,]*)\s*(?:diners?|guests?|covers?|pax)/i)
+    const covers = firstIntBefore(bodyText, /total\s+guests?/i)
+      ?? firstIntNear(bodyText, /total\s+guests?|diners?/i, /(\d[\d,]*)\s*(?:diners?|guests?|covers?|pax)/i)
       ?? extractFirstInt(bodyText, 'covers?|guests?|diners?|pax');
     return {
       section,
@@ -85,7 +104,7 @@
       no_show_count: extractFirstInt(bodyText, 'no.?shows?'),
       payeazy_revenue: firstRupeeNear(bodyText, /payeazy\s+revenue/i),
       projected_revenue: firstRupeeNear(bodyText, /projected\s+revenue/i),
-      revenue_summary_mtd: firstRupeeNear(bodyText, /revenue\s+summary/i),
+      revenue_summary_mtd: firstPlainAmountNear(bodyText, /revenue\s+summary/i) ?? firstRupeeNear(bodyText, /revenue\s+summary/i),
       body_len: bodyText.length,
       raw_snippet: bodyText.slice(0, 2000),
     };
