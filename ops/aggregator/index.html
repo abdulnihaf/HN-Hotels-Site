@@ -155,6 +155,32 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .pc-empty{padding:28px 16px;text-align:center;color:var(--faint);font-size:12px}
 .fin-note{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:12px;color:var(--dim);margin-bottom:24px}
 .fin-note strong{color:var(--text)}
+.dine-total{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.dine-total .dt-eyebrow{font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.dine-total .dt-copy{font-size:12px;color:var(--dim);max-width:760px}
+.dine-total .dt-value{font-size:24px;font-weight:800;color:var(--accent);white-space:nowrap;letter-spacing:-.4px}
+.dine-attr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin-bottom:18px}
+.dine-attr-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 13px;display:flex;flex-direction:column;gap:9px}
+.dine-attr-card.has-rev{border-color:rgba(76,175,80,.35);box-shadow:inset 0 1px 0 rgba(76,175,80,.08)}
+.dine-attr-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.dine-attr-platform{font-size:11px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.35px}
+.dine-attr-outlet{font-size:10px;color:var(--dim);margin-top:2px}
+.dine-attr-rev{font-size:22px;font-weight:800;letter-spacing:-.35px}
+.dine-attr-rev.zero{color:var(--faint)}
+.dine-badge{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.35px;padding:3px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:var(--dim);white-space:nowrap}
+.dine-badge.ok{background:rgba(76,175,80,.14);color:var(--green)}
+.dine-badge.warn{background:rgba(255,152,0,.14);color:var(--orange)}
+.dine-source{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 9px}
+.dine-source-line{display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:2px 0}
+.dine-source-line span:first-child{color:var(--dim)}
+.dine-source-line strong{font-weight:700;text-align:right}
+.dine-note{font-size:10px;color:var(--dim);line-height:1.45}
+.dine-action-map{border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:6px}
+.dine-map-row{display:grid;grid-template-columns:86px minmax(0,1fr);gap:8px;font-size:10px}
+.dine-map-row span{color:var(--accent);font-weight:700}
+.dine-map-row div{color:var(--dim)}
+.dine-map-row strong{display:block;color:var(--text);font-size:10px}
+@media(max-width:700px){.dine-total{grid-template-columns:1fr}.dine-total .dt-value{font-size:22px}.dine-map-row{grid-template-columns:1fr;gap:2px}}
 
 /* ─── COMMISSION REFERENCE ───────────────────────────────────────────── */
 .comm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
@@ -393,10 +419,14 @@ tr:hover td{background:rgba(255,255,255,.03)}
   <div class="ostrip" id="dine-strip" style="margin-bottom:14px"></div>
 
   <!-- May bonus attribution -->
-  <div class="fin-note" id="dine-attr-note" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px">
-    <span>May 2026 bonus revenue (inferred from DOM scraping)</span>
-    <strong id="dine-grand-total" style="font-size:20px;color:var(--accent);white-space:nowrap">₹ —</strong>
+  <div class="dine-total" id="dine-attr-note">
+    <div>
+      <div class="dt-eyebrow">May 2026 Dine-In Bonus</div>
+      <div class="dt-copy">Revenue is mapped by platform/outlet from structured portal scenes. Raw scraped rupee strings stay as audit evidence only.</div>
+    </div>
+    <strong class="dt-value" id="dine-grand-total">₹ —</strong>
   </div>
+  <div class="dine-attr-grid" id="dine-attribution-grid"></div>
 
   <!-- Platform cards -->
   <div id="dine-body"></div>
@@ -481,6 +511,7 @@ document.querySelectorAll('[data-ap]').forEach(b => b.classList.toggle('active',
 const rupee = v => '₹' + Math.round(v || 0).toLocaleString('en-IN');
 const pct   = v => (parseFloat(v) || 0).toFixed(1) + '%';
 const clean = s => s ? String(s).replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim() : '';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const fmtAgo = iso => {
   if (!iso) return '—';
   const m = Math.round((Date.now() - new Date(iso)) / 60000);
@@ -1333,6 +1364,63 @@ function renderReviews(lat, ord, heRev, nchRev) {
 }
 
 // ── DINE BONUS ────────────────────────────────────────────────────────
+function dineConfidenceMeta(conf) {
+  if (conf === 'structured') return { cls: 'ok', label: 'STRUCTURED' };
+  if (conf === 'dom_table_amount') return { cls: 'warn', label: 'DOM TABLE' };
+  if (conf === 'empty') return { cls: '', label: 'NO ROWS' };
+  if (conf === 'no_snapshots') return { cls: 'warn', label: 'NO SNAPSHOTS' };
+  return { cls: '', label: 'NO REVENUE' };
+}
+
+function renderDineAttribution(attr) {
+  const grid = document.getElementById('dine-attribution-grid');
+  if (!grid) return;
+  const rows = attr.by_platform || [];
+  if (!rows.length) {
+    grid.innerHTML = `<div class="pc-empty">No dine attribution rows yet.</div>`;
+    return;
+  }
+
+  grid.innerHTML = rows.map(r => {
+    const conf = dineConfidenceMeta(r.confidence);
+    const hasRev = (r.revenue_inferred || 0) > 0;
+    const counters = r.counters || {};
+    const ev = r.evidence || {};
+    const rawAmounts = Array.isArray(ev.rupee_amounts) ? ev.rupee_amounts : [];
+    const counterBits = [
+      counters.reservations_count != null ? `Reservations ${counters.reservations_count}` : null,
+      counters.covers_count != null ? `Covers ${counters.covers_count}` : null,
+      counters.bookings_count != null ? `Bookings ${counters.bookings_count}` : null,
+    ].filter(Boolean).join(' · ');
+
+    return `<div class="dine-attr-card ${hasRev ? 'has-rev' : ''}">
+      <div class="dine-attr-top">
+        <div>
+          <div class="dine-attr-platform">${esc(r.platform_label || r.platform)}</div>
+          <div class="dine-attr-outlet">${esc(r.outlet_label || r.outlet_id)} · ${esc(r.outlet_id || '')}</div>
+        </div>
+        <span class="dine-badge ${conf.cls}">${conf.label}</span>
+      </div>
+      <div class="dine-attr-rev ${hasRev ? '' : 'zero'}">${rupee(r.revenue_inferred || 0)}</div>
+      <div class="dine-source">
+        <div class="dine-source-line"><span>Source scene</span><strong>${esc(r.source_label || '—')}</strong></div>
+        <div class="dine-source-line"><span>Metric</span><strong>${esc(r.source_metric_type || r.source_field || '—')}</strong></div>
+        <div class="dine-source-line"><span>Source time</span><strong>${r.captured_at ? fmtAgo(r.captured_at) : '—'}</strong></div>
+        <div class="dine-source-line"><span>Last scrape</span><strong>${r.last_seen_at ? fmtAgo(r.last_seen_at) : '—'}</strong></div>
+        ${counterBits ? `<div class="dine-source-line"><span>Movement</span><strong>${esc(counterBits)}</strong></div>` : ''}
+        ${rawAmounts.length ? `<div class="dine-source-line"><span>Raw ₹ evidence</span><strong>${rawAmounts.map(v => rupee(v)).join(' · ')}</strong></div>` : ''}
+      </div>
+      <div class="dine-note">${esc(r.status_note || '')}</div>
+      <div class="dine-action-map">
+        ${(r.action_map || []).map(a => `<div class="dine-map-row">
+          <span>${esc(a.scene)}</span>
+          <div><strong>${esc(a.captures)}</strong>${esc(a.decision)}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 async function loadDine() {
   const strip = document.getElementById('dine-strip');
   const body  = document.getElementById('dine-body');
@@ -1361,7 +1449,10 @@ async function loadDine() {
 
     // May attribution total
     const gt = document.getElementById('dine-grand-total');
-    if (gt) gt.textContent = `₹${fmtRs(attr.grand_total_inferred || 0)}`;
+    if (gt) gt.textContent = rupee(attr.grand_total_inferred || 0);
+    renderDineAttribution(attr);
+    const attrRows = attr.by_platform || [];
+    const attrByKey = Object.fromEntries(attrRows.map(r => [`${r.platform}::${r.outlet_id}`, r]));
 
     // Platform cards
     const platforms = summary.platforms || {};
@@ -1404,18 +1495,25 @@ async function loadDine() {
         const d = latest.data || {};
         const rupees = Array.isArray(d.rupee_amounts) ? d.rupee_amounts : [];
         const age = latest.captured_at ? relAge(latest.captured_at) : '—';
+        const proof = attrByKey[`${plat}::${outletId}`];
 
         html += `<div class="pc-line"><span class="pcl">Outlet / ResID</span><span class="pcv">${outletId}</span></div>`;
         html += `<div class="pc-line"><span class="pcl">Last section</span><span class="pcv">${d.section || latest.metric_type || '—'}</span></div>`;
+        if (proof) {
+          html += `<div class="pc-line"><span class="pcl">Revenue attributed</span><span class="pcv ${proof.revenue_inferred > 0 ? 'pos' : 'zero'}">${rupee(proof.revenue_inferred || 0)} · ${esc(proof.source_label || '—')}</span></div>`;
+        }
         if (d.covers_count != null)       html += `<div class="pc-line"><span class="pcl">Covers detected</span><span class="pcv">${d.covers_count}</span></div>`;
         if (d.bookings_count != null)     html += `<div class="pc-line"><span class="pcl">Bookings detected</span><span class="pcv">${d.bookings_count}</span></div>`;
         if (d.reservations_count != null) html += `<div class="pc-line"><span class="pcl">Reservations detected</span><span class="pcv">${d.reservations_count}</span></div>`;
-        if (rupees.length)                html += `<div class="pc-line"><span class="pcl">₹ amounts found</span><span class="pcv" style="font-size:11px">${rupees.slice(0,5).map(v=>'₹'+fmtRs(v)).join(' · ')}</span></div>`;
+        if (d.revenue_summary_mtd != null) html += `<div class="pc-line"><span class="pcl">Revenue summary MTD</span><span class="pcv">${rupee(d.revenue_summary_mtd)}</span></div>`;
+        if (d.payeazy_revenue != null)     html += `<div class="pc-line"><span class="pcl">PayEazy revenue</span><span class="pcv">${rupee(d.payeazy_revenue)}</span></div>`;
+        if (d.projected_revenue != null)   html += `<div class="pc-line"><span class="pcl">Projected run-rate</span><span class="pcv">${rupee(d.projected_revenue)}</span></div>`;
+        if (rupees.length)                html += `<div class="pc-line"><span class="pcl">Raw ₹ evidence, not revenue</span><span class="pcv" style="font-size:11px">${rupees.slice(0,5).map(v=>rupee(v)).join(' · ')}</span></div>`;
         html += `<div class="pc-line"><span class="pcl">Last captured</span><span class="pcv" style="color:var(--dim)">${age}</span></div>`;
 
         if (d.raw_snippet) {
           html += `<details style="margin:4px 0 8px"><summary style="font-size:10px;color:var(--faint);cursor:pointer;list-style:none">▶ raw snippet</summary>
-            <pre style="font-size:10px;color:var(--faint);white-space:pre-wrap;word-break:break-word;max-height:80px;overflow:auto;margin-top:4px">${d.raw_snippet.slice(0,400)}</pre>
+            <pre style="font-size:10px;color:var(--faint);white-space:pre-wrap;word-break:break-word;max-height:80px;overflow:auto;margin-top:4px">${esc(d.raw_snippet).slice(0,400)}</pre>
           </details>`;
         }
 
@@ -1431,7 +1529,7 @@ async function loadDine() {
     }
 
     if (!Object.keys(platforms).length) {
-      html = `<div class="pc-empty">No dine-platform snapshots in D1 yet.<br>Chrome extension v6.2.0 is running — data appears within 5–10 min of first scrape.</div>`;
+      html = `<div class="pc-empty">No dine-platform snapshots in D1 yet.<br>Chrome extension v6.2.3+ is running — data appears within 5–10 min of first scrape.</div>`;
     }
 
     body.innerHTML = html;
