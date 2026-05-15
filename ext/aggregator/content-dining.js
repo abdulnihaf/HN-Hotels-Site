@@ -1,4 +1,4 @@
-// content-dining.js v1.2.0
+// content-dining.js v1.2.1
 // Zomato Dining (go-out) scraper for HN Hotels — HE (22632449) and NCH (22632430).
 // Injected alongside content-zomato.js on /partners/* — URL guard prevents delivery cycling.
 // POSTs to /api/aggregator-pulse with platform=zomato_dining.
@@ -70,9 +70,9 @@
   }
 
   function extractFirstInt(text, label) {
-    const re = new RegExp(`(\\d[\\d,]*)\\s*${label}`, 'i');
+    const re = new RegExp(`(\\d[\\d,]*)\\s*(?:${label})`, 'i');
     const m = text.match(re);
-    return m ? parseInt(m[1].replace(/,/g, ''), 10) : null;
+    return m?.[1] ? parseInt(m[1].replace(/,/g, ''), 10) : null;
   }
 
   function scrape() {
