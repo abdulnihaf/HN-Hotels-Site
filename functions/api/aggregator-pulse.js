@@ -412,6 +412,7 @@ async function handleGet(db, url, headers) {
       SELECT platform, MAX(captured_at) AS last_seen, COUNT(*) AS total_snapshots
       FROM aggregator_snapshots
       WHERE platform IN ('zomato_dining', 'swiggy_dineout', 'eazydiner')
+        AND substr(metric_type, 1, 1) != '_'
       GROUP BY platform
     `).all();
 
@@ -445,6 +446,7 @@ async function handleGet(db, url, headers) {
         SELECT platform, outlet_id, metric_type, MAX(captured_at) AS max_ts
         FROM aggregator_snapshots
         WHERE platform IN ('zomato_dining', 'swiggy_dineout', 'eazydiner')
+          AND substr(metric_type, 1, 1) != '_'
         GROUP BY platform, outlet_id, metric_type
       ) latest ON a.platform = latest.platform
         AND a.outlet_id = latest.outlet_id
@@ -468,6 +470,7 @@ async function handleGet(db, url, headers) {
       SELECT platform, outlet_id, data, captured_at
       FROM aggregator_snapshots
       WHERE platform IN ('zomato_dining', 'swiggy_dineout', 'eazydiner')
+        AND substr(metric_type, 1, 1) != '_'
         AND captured_at >= '2026-05-01T00:00:00'
       ORDER BY platform, outlet_id, captured_at DESC
       LIMIT 500
