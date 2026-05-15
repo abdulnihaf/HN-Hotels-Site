@@ -1,0 +1,28 @@
+source,source_rank,source_item,source_family,source_volume,source_price,best_existing_pos_similarity,opportunity_read
+Swiggy,3,box meghana special boneless biryani,biryani_chicken_boneless,1242,270.0,0.619,Potential new SKU/portion/card if operationally possible
+Swiggy,4,paneer biryani,biryani_veg,1201,380.0,0.529,Potential new SKU/portion/card if operationally possible
+Swiggy,8,box paneer biryani,biryani_box,655,270.0,0.463,Potential new SKU/portion/card if operationally possible
+Swiggy,16,mushroom biryani,biryani,351,380.0,0.57,Potential new SKU/portion/card if operationally possible
+Swiggy,17,chicken kebab rumali roll,bread,338,300.0,0.618,Potential new SKU/portion/card if operationally possible
+Swiggy,22,spl veg biryani,biryani_veg,271,340.0,0.547,Potential new SKU/portion/card if operationally possible
+Swiggy,25,chicken dum biryani (serves 1 (1 leg + egg)),combo,243,379.0,0.525,Potential new SKU/portion/card if operationally possible
+Swiggy,27,aloo dum biryani,biryani,237,330.0,0.523,Potential new SKU/portion/card if operationally possible
+Swiggy,35,box spl veg biryani,biryani_box,213,235.0,0.481,Potential new SKU/portion/card if operationally possible
+Swiggy,46,box aloo dum biryani,biryani_box,170,225.0,0.412,Potential new SKU/portion/card if operationally possible
+Swiggy,57,prawns biryani,biryani,141,470.0,0.568,Potential new SKU/portion/card if operationally possible
+Swiggy,59,chicken biryani combo with parotta,combo_bread_curry,133,299.0,0.598,Potential new SKU/portion/card if operationally possible
+Zomato,3,fish biryani,biryani,,338.0,0.589,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,3,paneer biryani,biryani_veg,,319.0,0.529,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,7,nizam roll,roll_shawarma,,83.0,0.556,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,8,box paneer biryani,biryani_box,,237.0,0.463,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,9,al faham spicy,grill_tandoor,,275.0,0.261,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,9,box meghana special boneless biryani,biryani_chicken_boneless,,250.0,0.619,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,11,al faham afghani,grill_tandoor,,275.0,0.225,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,12,al faham barbeque,grill_tandoor,,275.0,0.405,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,13,bucket biryani combo [serves 2],combo,,749.0,0.347,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,13,mushroom biryani,biryani,,303.0,0.57,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,16,al faham irani,grill_tandoor,,275.0,0.261,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,17,alfaham chicken,grill_tandoor,,203.0,0.613,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,17,spl veg biryani,biryani_veg,,326.0,0.547,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,19,nizam jumbo roll,roll_shawarma,,160.0,0.481,Popular MG Road ranked item not cleanly covered by POS menu
+Zomato,25,boneless irani tikka,dry_starter_tikka,,192.0,0.598,Popular MG Road ranked item not cleanly covered by POS menu
