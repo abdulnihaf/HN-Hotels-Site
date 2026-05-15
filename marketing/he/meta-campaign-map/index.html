@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>HE Meta Campaign Map - Static Retargeting Layer</title>
+<meta name="theme-color" content="#f7f8f3">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f7f8f3;
+  --panel:#ffffff;
+  --ink:#17211d;
+  --ink-2:#3f4a43;
+  --muted:#6e7a72;
+  --line:#dce2d8;
+  --line-2:#c8d1c4;
+  --soft:#eef2ea;
+  --he:#d85f21;
+  --he-2:#a93f16;
+  --green:#157f4f;
+  --green-soft:#e3f2e9;
+  --red:#b7352f;
+  --red-soft:#f8e8e5;
+  --yellow:#b7791f;
+  --yellow-soft:#fff3d8;
+  --blue:#2f6690;
+  --blue-soft:#e5f0f6;
+  --violet:#6b4e9b;
+  --violet-soft:#eee9f6;
+  --shadow:0 18px 55px rgba(23,33,29,.08);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Plus Jakarta Sans",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+button,input{font:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+.shell{max-width:1480px;margin:0 auto;padding:20px 18px 72px}
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:40;
+  margin:-20px -18px 18px;
+  padding:12px 18px;
+  background:rgba(247,248,243,.94);
+  border-bottom:1px solid var(--line);
+  backdrop-filter:blur(12px);
+}
+.toprow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.crumb{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);font-weight:700}
+.crumb a{text-decoration:none;color:var(--he)}
+.stamp{font-size:11px;color:var(--muted)}
+.titleblock{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 420px;
+  gap:18px;
+  align-items:stretch;
+  margin-top:14px;
+}
+.titlecopy{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:22px;
+  box-shadow:var(--shadow);
+}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--he);font-weight:800;margin-bottom:8px}
+h1{font-size:clamp(28px,4vw,54px);line-height:1.02;margin:0 0 12px;letter-spacing:0;font-weight:800;max-width:920px}
+.lead{font-size:16px;color:var(--ink-2);max-width:960px;margin:0}
+.campaign-card{
+  background:#17211d;
+  color:#f7f8f3;
+  border-radius:8px;
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  min-height:220px;
+  box-shadow:var(--shadow);
+}
+.campaign-card .label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#b8c5bc;font-weight:800}
+.campaign-card .big{font-size:28px;font-weight:800;line-height:1.05;margin:8px 0}
+.campaign-card .small{font-size:13px;color:#dbe6dd;margin:0}
+.status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}
+.status-tile{border:1px solid rgba(247,248,243,.18);border-radius:8px;padding:10px;background:rgba(255,255,255,.06)}
+.status-tile .k{font-size:10px;color:#b8c5bc;text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+.status-tile .v{font-size:14px;margin-top:4px;font-weight:800}
+.navgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:18px 0}
+.navgrid a{
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:10px;
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:8px;
+  text-decoration:none;
+  color:var(--ink-2);
+  font-size:12px;
+  font-weight:800;
+}
+.navgrid a:hover{border-color:var(--he);color:var(--he)}
+.section{margin-top:18px}
+.section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:10px}
+.section-head h2{font-size:20px;margin:0;font-weight:800;letter-spacing:0}
+.section-head p{font-size:13px;color:var(--muted);margin:3px 0 0;max-width:780px}
+.section-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{
+  border:1px solid var(--line-2);
+  background:var(--panel);
+  color:var(--ink-2);
+  border-radius:999px;
+  padding:8px 12px;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+  min-height:38px;
+}
+.chip.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.panel{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:16px;
+  box-shadow:0 8px 24px rgba(23,33,29,.04);
+}
+.panel h3{font-size:15px;margin:0 0 8px;font-weight:800}
+.panel p{font-size:13px;color:var(--ink-2);margin:0}
+.metric-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+.metric{border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:10px;min-height:82px}
+.metric .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+.metric .v{font-size:18px;font-weight:800;margin-top:5px}
+.metric .d{font-size:11px;color:var(--muted);margin-top:3px}
+.spine{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:10px;
+}
+.spine-step{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:14px;
+  min-height:180px;
+  position:relative;
+}
+.spine-step::before{content:"";position:absolute;left:14px;right:14px;top:0;height:4px;background:var(--he);border-radius:0 0 6px 6px}
+.spine-step .num{font-size:11px;font-weight:800;color:var(--he);letter-spacing:.06em;text-transform:uppercase;margin-bottom:16px}
+.spine-step h3{margin:0 0 8px;font-size:15px;font-weight:800}
+.spine-step p{font-size:12px;color:var(--ink-2);margin:0}
+.spine-step .lock{font-size:11px;color:var(--green);font-weight:800;margin-top:10px}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+table{width:100%;border-collapse:collapse;min-width:1060px}
+th,td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+th{
+  position:sticky;
+  top:78px;
+  z-index:5;
+  background:#17211d;
+  color:#f7f8f3;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+td{font-size:12px;color:var(--ink-2)}
+td strong{color:var(--ink)}
+tr:last-child td{border-bottom:0}
+.tag{display:inline-flex;align-items:center;justify-content:center;min-height:24px;border-radius:999px;padding:4px 9px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.tag.now{background:var(--green-soft);color:var(--green)}
+.tag.later{background:var(--yellow-soft);color:var(--yellow)}
+.tag.risk{background:var(--red-soft);color:var(--red)}
+.tag.data{background:var(--blue-soft);color:var(--blue)}
+.tag.logic{background:var(--violet-soft);color:var(--violet)}
+.tag.setup{background:var(--soft);color:var(--ink-2)}
+.surface-name{min-width:180px}
+.surface-name .main{font-size:13px;font-weight:800;color:var(--ink)}
+.surface-name .sub{font-size:11px;color:var(--muted);margin-top:3px}
+.recommendation{font-weight:800;color:var(--ink)}
+.matrix{
+  display:grid;
+  grid-template-columns:180px repeat(4,minmax(0,1fr));
+  gap:1px;
+  background:var(--line);
+  border:1px solid var(--line);
+  border-radius:8px;
+  overflow:hidden;
+}
+.matrix > div{background:var(--panel);padding:12px;min-height:84px}
+.matrix .head{background:#17211d;color:#f7f8f3;font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;min-height:48px}
+.matrix .rowhead{background:var(--soft);font-weight:800;color:var(--ink)}
+.matrix p{margin:0;font-size:12px;color:var(--ink-2)}
+.matrix strong{color:var(--ink)}
+.flow{
+  display:grid;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:8px;
+  align-items:stretch;
+}
+.flow-card{
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:8px;
+  padding:12px;
+  min-height:130px;
+}
+.flow-card .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+.flow-card h3{font-size:13px;margin:8px 0 6px}
+.flow-card p{font-size:11px;color:var(--ink-2);margin:0}
+.arrow{display:none}
+.asset-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.asset{
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:8px;
+  padding:14px;
+}
+.asset h3{font-size:14px;margin:0 0 8px;font-weight:800}
+.asset .path{
+  display:block;
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:11px;
+  line-height:1.45;
+  color:var(--he-2);
+  background:#fff7f1;
+  border:1px solid #f1d1bf;
+  border-radius:6px;
+  padding:9px;
+  overflow-wrap:anywhere;
+}
+.asset p{font-size:12px;color:var(--ink-2);margin:9px 0 0}
+.timing-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.time-card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;min-height:180px}
+.time-card .window{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;font-weight:800;color:var(--he);margin-bottom:8px}
+.time-card h3{font-size:15px;margin:0 0 8px}
+.time-card ul{padding-left:18px;margin:0}
+.time-card li{font-size:12px;color:var(--ink-2);margin:5px 0}
+.decision-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.decision{
+  display:grid;
+  grid-template-columns:34px 1fr;
+  gap:10px;
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:8px;
+  padding:12px;
+  min-height:110px;
+}
+.decision .n{width:34px;height:34px;border-radius:8px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:13px;font-weight:800}
+.decision h3{font-size:14px;margin:0 0 5px}
+.decision p{font-size:12px;color:var(--ink-2);margin:0}
+.qa{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.callout{
+  border-left:4px solid var(--he);
+  background:#fff7f1;
+  padding:14px;
+  border-radius:8px;
+  color:var(--ink-2);
+  font-size:13px;
+}
+.callout strong{color:var(--ink)}
+.footer-note{margin-top:22px;color:var(--muted);font-size:12px;text-align:center}
+@media(max-width:1180px){
+  .titleblock{grid-template-columns:1fr}
+  .spine{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .flow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .asset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .timing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .navgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .shell{padding:14px 12px 52px}
+  .topbar{margin:-14px -12px 14px;padding:10px 12px}
+  .titlecopy,.campaign-card,.panel{padding:14px}
+  .grid-3,.grid-2,.metric-row,.asset-grid,.timing-grid,.decision-list,.qa{grid-template-columns:1fr}
+  .spine{grid-template-columns:1fr}
+  .navgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .matrix{display:block;background:transparent;border:0}
+  .matrix > div{border:1px solid var(--line);border-radius:8px;margin-bottom:8px}
+  .matrix .head{display:none}
+  th{top:62px}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <div class="toprow">
+      <div class="crumb"><a href="/marketing/">Marketing</a><span>/</span><span>Hamza Express</span><span>/</span><span>Meta Campaign Map</span></div>
+      <div class="stamp mono">Static layer blueprint - 2026-05-15</div>
+    </div>
+  </div>
+
+  <div class="titleblock">
+    <header class="titlecopy">
+      <div class="eyebrow">Hamza Express - Bucket 1</div>
+      <h1>Meta Campaign Configuration Map</h1>
+      <p class="lead">A decision surface for setting up the first Hamza Loyalist video campaign and the static retargeting layer that follows it. The goal is to make Meta classify local eaters by response, then serve the right static creative by intent, timing, and proximity.</p>
+    </header>
+    <aside class="campaign-card">
+      <div>
+        <div class="label">Primary campaign role</div>
+        <div class="big">Recognition first, conversion second.</div>
+        <p class="small">The first video is not an offer ad. It creates the Hamza Loyalist pool. Static creatives later turn warm viewers into direction, menu, offer, call, and walk-in actions.</p>
+      </div>
+      <div class="status-grid">
+        <div class="status-tile"><div class="k">Cold CTA</div><div class="v">Get Directions</div></div>
+        <div class="status-tile"><div class="k">Warm CTA</div><div class="v">Send Message</div></div>
+        <div class="status-tile"><div class="k">Primary signal</div><div class="v">Video depth</div></div>
+        <div class="status-tile"><div class="k">Creative state</div><div class="v">Retargeting later</div></div>
+      </div>
+    </aside>
+  </div>
+
+  <nav class="navgrid" aria-label="Campaign map sections">
+    <a href="#spine">Decision Spine</a>
+    <a href="#surfaces">All Configs</a>
+    <a href="#static-layer">Static Layer</a>
+    <a href="#assets">Asset Map</a>
+    <a href="#timing">Timing Map</a>
+    <a href="#launch">Launch Decisions</a>
+  </nav>
+
+  <section id="spine" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Decision Spine</h2>
+        <p>The campaign should not be configured as one generic ad. These five decisions decide what Meta learns and how the next static layer behaves.</p>
+      </div>
+    </div>
+    <div class="spine">
+      <div class="spine-step">
+        <div class="num">Step 01</div>
+        <h3>Choose the learning job</h3>
+        <p>Decide whether Meta should find watchers, direction-clickers, message-senders, or tracked conversion users.</p>
+        <div class="lock">Bucket 1: recognition + direction intent.</div>
+      </div>
+      <div class="spine-step">
+        <div class="num">Step 02</div>
+        <h3>Constrain geography</h3>
+        <p>Define the HKP Road proximity ring before interests. Location is the strongest truth for this local food problem.</p>
+        <div class="lock">Start tight, expand only with proof.</div>
+      </div>
+      <div class="spine-step">
+        <div class="num">Step 03</div>
+        <h3>Let creative classify</h3>
+        <p>The video tells Meta who stops for the Hamza name, HKP Road, seating, parcel ease, and familiar food.</p>
+        <div class="lock">Video depth becomes audience logic.</div>
+      </div>
+      <div class="spine-step">
+        <div class="num">Step 04</div>
+        <h3>Build warm pools</h3>
+        <p>Create audiences from 25%, 50%, 75% viewers, page/IG engagers, direction clickers, and WhatsApp/menu actions.</p>
+        <div class="lock">Set audience shells now.</div>
+      </div>
+      <div class="spine-step">
+        <div class="num">Step 05</div>
+        <h3>Deploy static loops</h3>
+        <p>Serve one message per intent: map proof, dish proof, offer proof, parcel proof, family proof, or night proof.</p>
+        <div class="lock">Creatives can be designed later.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="grid-3">
+      <div class="panel">
+        <h3>What must be ready now</h3>
+        <p>Video creative, campaign/ad set naming, location ring, objective, CTA, destination, UTM/action URL, and audience naming convention.</p>
+      </div>
+      <div class="panel">
+        <h3>What can wait</h3>
+        <p>Final retargeting static creatives, dish-specific offer cards, late-night creative variants, and budget automation rules.</p>
+      </div>
+      <div class="panel">
+        <h3>What should not happen</h3>
+        <p>Do not force cold loyalists into WhatsApp first. The previous CTWA campaign proved message clicks alone do not equal restaurant intent.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="surfaces" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Meta Configuration Surfaces</h2>
+        <p>Every configurable surface we need to decide before building the final campaign. The last column says whether the setting must be locked for initial launch.</p>
+      </div>
+      <div class="section-actions">
+        <button class="chip active" data-filter="all">All</button>
+        <button class="chip" data-filter="now">Now</button>
+        <button class="chip" data-filter="later">Later</button>
+        <button class="chip" data-filter="risk">Risk</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="configTable">
+        <thead>
+          <tr>
+            <th>Surface</th>
+            <th>Technical Meaning</th>
+            <th>Possible Choices</th>
+            <th>HE Context Question</th>
+            <th>Bucket 1 Working Decision</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Business assets</div><div class="sub">Page, IG, ad account, WABA, pixel</div></td>
+            <td>Defines the identity, permissions, destination assets, and available tracking/CTA options.</td>
+            <td>Facebook Page, Instagram account, WhatsApp number, website domain, pixel/dataset, catalog.</td>
+            <td>Which identity carries Hamza trust without confusing users with HN corporate or older Hamza memory?</td>
+            <td class="recommendation">Use Hamza Express identity only. WABA stays secondary for warm offer/menu actions.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Campaign objective</div><div class="sub">Campaign level</div></td>
+            <td>Sets the campaign creation path and the type of behavior Meta will optimize toward.</td>
+            <td>Awareness, Traffic, Engagement, Leads, Sales, App promotion.</td>
+            <td>Are we buying recognition, directions, WhatsApp chats, leads, or online conversions?</td>
+            <td class="recommendation">Start as recognition/traffic logic. Avoid cold WhatsApp-first for Bucket 1.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Performance goal</div><div class="sub">Ad set level</div></td>
+            <td>The actual result Meta tries to find inside the objective.</td>
+            <td>Reach, impressions, ThruPlay/video views, link clicks, landing page views, messages, calls, conversions.</td>
+            <td>Which signal best proves a local loyalist is warming up without pushing them too early?</td>
+            <td class="recommendation">Use video/engagement for pool creation or traffic if destination is a directions/action page.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">CTA button</div><div class="sub">Ad level</div></td>
+            <td>Defines the visible action on the ad and influences user intent quality.</td>
+            <td>Get Directions, Learn More, Send Message, Call Now, See Menu, Order Now where available.</td>
+            <td>Should the loyalist act physically or enter WhatsApp?</td>
+            <td class="recommendation">Cold video: Get Directions. Warm static: Send Message for menu/offer. Hot static: Directions or Call.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Destination</div><div class="sub">Click target</div></td>
+            <td>Where Meta sends the click and what follow-up data can be measured.</td>
+            <td>Google Maps link, website/action page, WhatsApp thread, call, lead form.</td>
+            <td>Do we want map action, menu action, offer action, or conversation action?</td>
+            <td class="recommendation">Prefer trackable action page or map destination for cold. WhatsApp only after warm signal.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Location ring</div><div class="sub">Audience boundary</div></td>
+            <td>Hard geographic eligibility for who can be shown the ad.</td>
+            <td>1 km, 3 km, 5 km, pin drop, city, exclude areas if needed.</td>
+            <td>Is this person close enough to actually visit HKP Road?</td>
+            <td class="recommendation">Bucket 1 starts tight: HKP/Shivajinagar first, then 3 km if volume is weak.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Age and gender</div><div class="sub">Demographic boundary</div></td>
+            <td>Hard inclusion/exclusion before Meta prediction begins.</td>
+            <td>18-24, 25-34, 35-44, 45-55; all genders or selected gender.</td>
+            <td>Are we excluding family decision-makers and old Hamza memory by being too narrow?</td>
+            <td class="recommendation">Do not repeat old male-only logic. Bucket 1 should include older/family users.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="risk">
+            <td class="surface-name"><div class="main">Language</div><div class="sub">Profile/interface signal</div></td>
+            <td>Limits delivery to users with selected language signals.</td>
+            <td>English, Hindi, Urdu, Kannada, no language restriction.</td>
+            <td>Will language targeting shrink local reach more than it helps?</td>
+            <td class="recommendation">Keep broad. Let Urdu/Dakhni creative filter the right people subconsciously.</td>
+            <td><span class="tag risk">Risk</span></td>
+          </tr>
+          <tr data-state="risk">
+            <td class="surface-name"><div class="main">Detailed targeting</div><div class="sub">Interests/behaviors</div></td>
+            <td>Adds interest, demographic, or behavior signals, but these are weaker than real local intent.</td>
+            <td>Food, restaurants, biryani, kebab, street food, dining, delivery apps, local pages where available.</td>
+            <td>Can Meta directly know a Hamza loyalist? No. It can infer from response to creative.</td>
+            <td class="recommendation">Use lightly. Do not over-narrow. Creative response is the real classifier.</td>
+            <td><span class="tag risk">Risk</span></td>
+          </tr>
+          <tr data-state="later">
+            <td class="surface-name"><div class="main">Advantage audience</div><div class="sub">Meta expansion</div></td>
+            <td>Allows Meta more freedom beyond the suggested or original audience settings.</td>
+            <td>On, off, suggested audience, original audience controls where available.</td>
+            <td>Do we trust Meta to expand beyond HKP logic before warm data exists?</td>
+            <td class="recommendation">Use carefully after the first learning cycle. Not the first lever for Bucket 1.</td>
+            <td><span class="tag later">Later</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Placements</div><div class="sub">Where ad appears</div></td>
+            <td>Controls surfaces like Instagram Reels, Stories, Feed, Facebook Feed, Messenger, Audience Network.</td>
+            <td>Advantage placements or manual Reels/Stories/Feed selection.</td>
+            <td>Where will a loyalist actually stop and understand the Hamza reset?</td>
+            <td class="recommendation">Use vertical-first creative for Reels/Stories; Feed support for older/family users.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Budget type</div><div class="sub">Campaign or ad set</div></td>
+            <td>Decides whether Meta distributes budget across ad sets or each ad set has its own controlled spend.</td>
+            <td>Campaign budget, ad set budget, daily budget, lifetime budget.</td>
+            <td>Are we learning one bucket cleanly or letting Meta blend signals across many buckets?</td>
+            <td class="recommendation">For Bucket 1, controlled ad set budget is cleaner. Multi-bucket budget comes later.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="later">
+            <td class="surface-name"><div class="main">Schedule/dayparting</div><div class="sub">Time controls</div></td>
+            <td>Controls when ads are eligible to deliver; strict hour scheduling usually needs lifetime budget.</td>
+            <td>Always on, lunch window, evening parcel, dinner, late-night, weekend family slots.</td>
+            <td>Which eater is hungry at which time?</td>
+            <td class="recommendation">Cold video can run broad. Static retargeting should split by food window.</td>
+            <td><span class="tag later">Later</span></td>
+          </tr>
+          <tr data-state="later">
+            <td class="surface-name"><div class="main">Bid strategy</div><div class="sub">Auction behavior</div></td>
+            <td>Controls how Meta bids for the selected performance goal.</td>
+            <td>Lowest cost, cost cap, bid cap, ROAS-style controls where available.</td>
+            <td>Do we already know the value of a direction click or warm viewer?</td>
+            <td class="recommendation">Start lowest cost. Add caps only after real HE benchmarks exist.</td>
+            <td><span class="tag later">Later</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Audience shells</div><div class="sub">Retargeting pools</div></td>
+            <td>Reusable custom audiences that collect people based on engagement, video depth, website events, or lists.</td>
+            <td>25%, 50%, 75% video viewers; IG/FB engagers; website/menu viewers; WhatsApp clickers.</td>
+            <td>Which viewer response means loyalist, curious, hungry, or ready to act?</td>
+            <td class="recommendation">Create naming convention now; final static creative can come after data.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="later">
+            <td class="surface-name"><div class="main">Exclusions</div><div class="sub">Funnel hygiene</div></td>
+            <td>Prevents the wrong layer from showing to people who moved deeper or should not be contacted.</td>
+            <td>Exclude message senders, offer claimers, DND, staff, recent converters, 75% viewers from 25% layer.</td>
+            <td>Are we wasting impressions by repeating the same cold story to warm people?</td>
+            <td class="recommendation">Use exclusions once warm pools are active. Avoid over-excluding during first learning.</td>
+            <td><span class="tag later">Later</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Creative format</div><div class="sub">Video/static/carousel</div></td>
+            <td>Determines what can be shown and how people consume the message.</td>
+            <td>Single video, single image, carousel, existing post, flexible creative, instant experience.</td>
+            <td>What creative format best performs the job: recognition, hunger, proof, or action?</td>
+            <td class="recommendation">Cold: one primary video. Warm: static and carousel. Hot: single direct-action static.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="later">
+            <td class="surface-name"><div class="main">Placement customization</div><div class="sub">Crop and text by surface</div></td>
+            <td>Allows different media/crops/text treatment by Reels, Stories, Feed, and other placements.</td>
+            <td>9:16 vertical, 1:1 feed, 4:5 feed, story-safe text, placement-specific thumbnails.</td>
+            <td>Does the same creative communicate in three seconds on every surface?</td>
+            <td class="recommendation">Prepare vertical video first; build square/4:5 statics only after signal map is known.</td>
+            <td><span class="tag later">Later</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Tracking</div><div class="sub">Measurement layer</div></td>
+            <td>Defines what we can read after launch: URL params, pixel, events, API/offline events.</td>
+            <td>UTM links, short action pages, pixel events, CAPI, offline counter codes.</td>
+            <td>How do we know if a viewer became a visitor, message sender, caller, or counter customer?</td>
+            <td class="recommendation">Use trackable URLs/action routes from day one. Offline codes can follow.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+          <tr data-state="later">
+            <td class="surface-name"><div class="main">Automation rules</div><div class="sub">Budget and pause logic</div></td>
+            <td>Rules/API can shift budget, pause bad ads, or rotate time-window creatives.</td>
+            <td>Pause by cost, boost by viewer pool, schedule by hour, creative fatigue guard.</td>
+            <td>When should budget move from recognition to hunger/action?</td>
+            <td class="recommendation">Define logic now, automate later after first data cycle.</td>
+            <td><span class="tag later">Later</span></td>
+          </tr>
+          <tr data-state="now">
+            <td class="surface-name"><div class="main">Reporting columns</div><div class="sub">Judgement system</div></td>
+            <td>Controls what results are visible for decision-making.</td>
+            <td>Reach, frequency, video 25/50/75%, CPC, CTR, profile visits, direction clicks, messages.</td>
+            <td>Will we judge the campaign by cheap clicks or by useful local intent?</td>
+            <td class="recommendation">Judge cost per warm viewer and direction/menu intent, not messages alone.</td>
+            <td><span class="tag now">Now</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="static-layer" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Static Retargeting Layer</h2>
+        <p>The static creative is not needed before the first video launches. This matrix defines what to design later once Meta shows which response pools exist.</p>
+      </div>
+    </div>
+    <div class="matrix" role="table" aria-label="Static retargeting matrix">
+      <div class="head">Signal</div>
+      <div class="head">What it means</div>
+      <div class="head">Static creative</div>
+      <div class="head">CTA</div>
+      <div class="head">Timing</div>
+
+      <div class="rowhead">Video 25%</div>
+      <div><p>They noticed Hamza/HKP but did not fully buy the reset.</p></div>
+      <div><p><strong>Map + facade proof.</strong> Hamza Express, HKP Road. Familiar name, new Express face.</p></div>
+      <div><p><strong>Get Directions</strong></p></div>
+      <div><p>Same day, broad evening.</p></div>
+
+      <div class="rowhead">Video 50%</div>
+      <div><p>They understood the positioning and stayed for food/ambience proof.</p></div>
+      <div><p><strong>Ghee Rice + Kabab.</strong> Safe legacy bridge dish, not a risky novelty.</p></div>
+      <div><p><strong>Get Directions</strong></p></div>
+      <div><p>Lunch, dinner, early night.</p></div>
+
+      <div class="rowhead">Video 75%</div>
+      <div><p>They are warm enough for practical action.</p></div>
+      <div><p><strong>Menu + daily offer.</strong> No brand explanation; one reason to come today.</p></div>
+      <div><p><strong>Send Message</strong></p></div>
+      <div><p>Within 24-72 hours.</p></div>
+
+      <div class="rowhead">Profile or page engagement</div>
+      <div><p>They are checking identity, trust, photos, or social proof.</p></div>
+      <div><p><strong>Interior + counter + full spread.</strong> Comfort, clarity, and serious food.</p></div>
+      <div><p><strong>Get Directions</strong></p></div>
+      <div><p>Dinner and weekend slots.</p></div>
+
+      <div class="rowhead">Direction click</div>
+      <div><p>They had visit intent but may not have arrived.</p></div>
+      <div><p><strong>Come today reminder.</strong> Exterior night board plus one hero dish.</p></div>
+      <div><p><strong>Call Now / Get Directions</strong></p></div>
+      <div><p>2-8 hours after click.</p></div>
+
+      <div class="rowhead">WhatsApp/menu click</div>
+      <div><p>They want practical decision info: price, menu, offer, parcel.</p></div>
+      <div><p><strong>Offer/menu card.</strong> Short copy, no heavy story, clear action.</p></div>
+      <div><p><strong>Send Message</strong></p></div>
+      <div><p>Lunch, evening parcel, dinner.</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>Audience Pool Flow</h2>
+        <p>Bucket 1 starts as a video. Every response creates a reusable pool that can receive a more specific static creative later.</p>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-card">
+        <div class="label">Cold input</div>
+        <h3>Local Hamza-aware crowd</h3>
+        <p>HKP/Shivajinagar radius, broad enough for older loyalists and family users.</p>
+      </div>
+      <div class="flow-card">
+        <div class="label">Classifier</div>
+        <h3>Bucket 1 video</h3>
+        <p>Hamza name, HKP Road, new Express face, seating, food, parcel.</p>
+      </div>
+      <div class="flow-card">
+        <div class="label">Pool A</div>
+        <h3>25% viewers</h3>
+        <p>Need location and identity proof.</p>
+      </div>
+      <div class="flow-card">
+        <div class="label">Pool B</div>
+        <h3>50% viewers</h3>
+        <p>Need dish proof and hunger trigger.</p>
+      </div>
+      <div class="flow-card">
+        <div class="label">Pool C</div>
+        <h3>75% viewers</h3>
+        <p>Need menu, offer, or direct action.</p>
+      </div>
+      <div class="flow-card">
+        <div class="label">Pool D</div>
+        <h3>Action clickers</h3>
+        <p>Need reminder, call, or direction push.</p>
+      </div>
+      <div class="flow-card">
+        <div class="label">Outcome</div>
+        <h3>Visit, parcel, message</h3>
+        <p>Track as directions, calls, WhatsApp, counter codes, or offline sales.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="assets" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Static Creative Asset Map</h2>
+        <p>Use these folders when static retargeting design begins. The page maps the source, not the final creatives.</p>
+      </div>
+    </div>
+    <div class="asset-grid">
+      <div class="asset">
+        <h3>Dish-level real food</h3>
+        <code class="path">/Users/nihaf/Documents/hamza_swiggy_photos/</code>
+        <p>Use for Ghee Rice, Kabab, Tandoori, Brain Dry, Biryani, Naan, Porotta, rolls, and dish-specific hunger statics.</p>
+      </div>
+      <div class="asset">
+        <h3>Brand and locked heroes</h3>
+        <code class="path">/Users/nihaf/Documents/HE_Creative_Library/</code>
+        <p>Use logos, wordmarks, heritage assets, Ghee Rice/Biryani hero composites, and prior static layout language.</p>
+      </div>
+      <div class="asset">
+        <h3>GBP listing proof</h3>
+        <code class="path">/Users/nihaf/Desktop/HE_Listing_Photo_Database_2026-05-14/</code>
+        <p>Use for public listing realism, menu references, and proof that the food/outlet exists in the local map ecosystem.</p>
+      </div>
+      <div class="asset">
+        <h3>Outlet and ambience</h3>
+        <code class="path">/Users/nihaf/Desktop/HE_Ambience_Outlet_Local_Expanded_2026-05-14/</code>
+        <p>Use final selected exterior, counter, dine-in floor, neon wall, and local outlet context for trust reset statics.</p>
+      </div>
+      <div class="asset">
+        <h3>Interior trust proof</h3>
+        <code class="path">/Users/nihaf/Desktop/HE_Enhanced_Internal_Ambience_Only_2026-05-15/</code>
+        <p>Use for family comfort, clean counter, staff, seating, and the new-format experience layer.</p>
+      </div>
+      <div class="asset">
+        <h3>Exterior night proof</h3>
+        <code class="path">/Users/nihaf/Desktop/HE_Enhanced_External_Ambience_Only_2026-05-15/</code>
+        <p>Use for late evening, night visibility, directions, and reminder statics after map/direction intent.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="timing" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Timing Map For Static Retargeting</h2>
+        <p>Once static creatives are built, timing decides whether the same person sees lunch proof, parcel proof, family proof, or late-night proof.</p>
+      </div>
+    </div>
+    <div class="timing-grid">
+      <div class="time-card">
+        <div class="window">11:30-15:00</div>
+        <h3>Lunch intent</h3>
+        <ul>
+          <li>Ghee Rice + Kabab</li>
+          <li>Chicken Biryani</li>
+          <li>Fast decision copy</li>
+          <li>CTA: Get Directions</li>
+        </ul>
+      </div>
+      <div class="time-card">
+        <div class="window">16:00-20:00</div>
+        <h3>Parcel and shop crowd</h3>
+        <ul>
+          <li>Counter handover</li>
+          <li>Rolls, Kabab, Ghee Rice</li>
+          <li>Easy takeaway proof</li>
+          <li>CTA: Call or Send Message</li>
+        </ul>
+      </div>
+      <div class="time-card">
+        <div class="window">19:00-23:00</div>
+        <h3>Dinner and family</h3>
+        <ul>
+          <li>Seating and full spread</li>
+          <li>Biryani, Tandoori, Naan</li>
+          <li>Comfort without losing HKP food seriousness</li>
+          <li>CTA: Get Directions</li>
+        </ul>
+      </div>
+      <div class="time-card">
+        <div class="window">23:00-02:30</div>
+        <h3>Late-night heavy eater</h3>
+        <ul>
+          <li>Brain Dry, Kabab, Ghee Rice</li>
+          <li>Exterior night board</li>
+          <li>Serious non-veg proof</li>
+          <li>CTA: Get Directions</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="launch" class="section">
+    <div class="section-head">
+      <div>
+        <h2>Launch Decision Checklist</h2>
+        <p>These are the one-by-one decisions to lock before opening Ads Manager for the first Bucket 1 campaign.</p>
+      </div>
+    </div>
+    <div class="decision-list">
+      <div class="decision"><div class="n">01</div><div><h3>Objective</h3><p>Choose whether initial campaign optimizes for awareness/video engagement or traffic/direction intent.</p></div></div>
+      <div class="decision"><div class="n">02</div><div><h3>Destination</h3><p>Decide direct Maps link vs trackable HE action page that then offers map, menu, and WhatsApp.</p></div></div>
+      <div class="decision"><div class="n">03</div><div><h3>Location radius</h3><p>Set initial HKP/Shivajinagar radius. Do not start too wide before local signal quality is known.</p></div></div>
+      <div class="decision"><div class="n">04</div><div><h3>Age and gender</h3><p>Include the older loyalist and family decision layer; do not repeat the narrow old CTWA audience.</p></div></div>
+      <div class="decision"><div class="n">05</div><div><h3>Creative upload</h3><p>Use one primary video first. If two videos exist, A/B test one variable only.</p></div></div>
+      <div class="decision"><div class="n">06</div><div><h3>Audience naming</h3><p>Create exact naming convention for 25%, 50%, 75%, engagers, direction clickers, and WhatsApp clickers.</p></div></div>
+      <div class="decision"><div class="n">07</div><div><h3>Reporting columns</h3><p>Prepare columns for video depth, cost per warm viewer, frequency, directions, profile visits, and messages.</p></div></div>
+      <div class="decision"><div class="n">08</div><div><h3>Static design trigger</h3><p>Do not design every static now. Design when first 24-72 hour data shows which pools are forming.</p></div></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="qa">
+      <div class="callout">
+        <strong>Answer to the current execution question:</strong> the initial configuration does not require final retargeting static creatives. It requires the video, CTA, destination, location, audience shells, and tracking logic.
+      </div>
+      <div class="callout">
+        <strong>Core static-layer rule:</strong> one warm signal gets one creative job. Do not show offer, map, family, parcel, and late-night proof in the same static.
+      </div>
+    </div>
+  </section>
+
+  <div class="footer-note mono">HN Hotels - Hamza Express Meta campaign configuration map - static HTML, no build step</div>
+</div>
+
+<script>
+const chips = Array.from(document.querySelectorAll("[data-filter]"));
+const rows = Array.from(document.querySelectorAll("#configTable tbody tr"));
+chips.forEach((chip) => {
+  chip.addEventListener("click", () => {
+    const filter = chip.dataset.filter;
+    chips.forEach((c) => c.classList.toggle("active", c === chip));
+    rows.forEach((row) => {
+      row.style.display = filter === "all" || row.dataset.state === filter ? "" : "none";
+    });
+  });
+});
+</script>
+</body>
+</html>
