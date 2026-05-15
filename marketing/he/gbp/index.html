@@ -125,6 +125,33 @@ html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans'
 .tip-row .body .d{font-size:11.5px;color:var(--text2);line-height:1.5}
 .tip-row .body .a{font-size:11px;font-weight:700;color:var(--brand);margin-top:4px;display:inline-block}
 
+/* ORGANIC INTELLIGENCE */
+.oi-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.oi-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px;min-width:0}
+.oi-card h3{font-size:11px;text-transform:uppercase;letter-spacing:.45px;color:var(--muted);margin-bottom:8px}
+.oi-kv{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid rgba(45,58,79,.45)}
+.oi-kv:last-child{border-bottom:none}
+.oi-kv span:first-child{color:var(--text2)}
+.oi-kv span:last-child{font-family:'JetBrains Mono',monospace;font-weight:700;text-align:right}
+.src-row,.bucket-row,.proof-row,.owner-row{background:rgba(10,15,26,.55);border:1px solid rgba(45,58,79,.65);border-radius:7px;padding:8px;margin-bottom:6px}
+.src-row .top,.bucket-row .top,.proof-row .top,.owner-row .top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.src-row .name,.bucket-row .name,.proof-row .name,.owner-row .name{font-size:12px;font-weight:700;color:var(--text)}
+.src-row .detail,.bucket-row .detail,.proof-row .detail,.owner-row .detail{font-size:11px;line-height:1.45;color:var(--text2)}
+.status{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.45px;border-radius:999px;padding:2px 7px;font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.status.ok,.status.covered,.status.active,.status.has_evidence{color:var(--ggreen);background:rgba(52,168,83,.14)}
+.status.warn,.status.weak,.status.manual_only,.status.needs_data{color:var(--yellow);background:rgba(245,158,11,.14)}
+.status.error,.status.missing{color:var(--red);background:rgba(239,68,68,.14)}
+.status.not_requested{color:var(--muted);background:rgba(148,163,184,.12)}
+.bucket-score{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-top:5px}
+.query-pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.query-pills span{font-size:10px;color:var(--text2);background:rgba(249,115,22,.10);border:1px solid rgba(249,115,22,.22);border-radius:999px;padding:2px 7px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.comp-table{width:100%;border-collapse:collapse;font-size:11px}
+.comp-table th{text-align:left;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.45px;border-bottom:1px solid var(--border);padding:5px}
+.comp-table td{border-bottom:1px solid rgba(45,58,79,.45);padding:6px 5px;vertical-align:top}
+.comp-table tr:last-child td{border-bottom:none}
+.comp-table .own{color:var(--brand);font-weight:800}
+.oi-note{font-size:11px;color:var(--muted);line-height:1.5;margin-top:6px}
+
 /* HERO FUNNEL */
 .hero{display:grid;grid-template-columns:1fr;gap:8px}
 .funnel-step{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;position:relative;overflow:hidden}
@@ -244,10 +271,12 @@ html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans'
   .hero{grid-template-columns:repeat(2,1fr)}
   .subm{grid-template-columns:repeat(3,1fr)}
   .cmpr-grid{grid-template-columns:repeat(4,1fr)}
+  .oi-grid{grid-template-columns:repeat(2,1fr)}
 }
 @media(min-width:960px){
   .hero{grid-template-columns:repeat(4,1fr)}
   .subm{grid-template-columns:repeat(7,1fr)}
+  .oi-grid.three{grid-template-columns:repeat(3,1fr)}
   .container{padding:18px 18px 80px}
 }
 @media(min-width:1200px){
@@ -321,6 +350,48 @@ html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans'
       <span id="aqSummary" class="tip"></span>
     </div>
     <div id="actionQueue"></div>
+  </div>
+
+  <!-- ORGANIC INTELLIGENCE — API-readable proof layer -->
+  <div class="section" id="organicIntelSection" style="display:none">
+    <div class="section-h">
+      <h2>Organic intelligence <span class="tip">— Google Maps/Search signals mapped to eater buckets</span></h2>
+      <span id="oiSummary" class="tip"></span>
+    </div>
+    <div class="oi-grid three">
+      <div class="oi-card">
+        <h3>Data source health</h3>
+        <div id="oiSources"></div>
+      </div>
+      <div class="oi-card">
+        <h3>Menu URL health</h3>
+        <div id="oiMenu"></div>
+      </div>
+      <div class="oi-card">
+        <h3>Organic funnel read</h3>
+        <div id="oiFunnel"></div>
+      </div>
+    </div>
+    <div class="oi-grid" style="margin-top:8px">
+      <div class="oi-card">
+        <h3>Query buckets</h3>
+        <div id="oiBuckets"></div>
+      </div>
+      <div class="oi-card">
+        <h3>Photo proof inventory</h3>
+        <div id="oiPhotos"></div>
+      </div>
+    </div>
+    <div class="oi-grid" style="margin-top:8px">
+      <div class="oi-card">
+        <h3>Competitor benchmark</h3>
+        <div id="oiCompetitors"></div>
+      </div>
+      <div class="oi-card">
+        <h3>Action split</h3>
+        <div id="oiActions"></div>
+      </div>
+    </div>
   </div>
 
   <!-- HERO FUNNEL -->
@@ -447,6 +518,8 @@ const BRAND_TITLE = 'Hamza Express';
 const OTHER_BRAND = 'nch';
 const OTHER_TITLE = 'Nawabi Chai House';
 const API = '/api/gbp-cockpit';
+const BASE_INCLUDE = 'summary,daily,keywords,profile,reviews,health,media,qanda,actionQueue,algorithmTips';
+const FULL_INCLUDE = `${BASE_INCLUDE},organicIntelligence`;
 
 // ─── State ────────────────────────────────────────────────────────────────
 let currentPeriod = '28d';
@@ -455,6 +528,7 @@ let currentChartMetric = 'impressions';
 let currentKwTab = 'this';
 let lastData = null;
 let otherData = null;
+let lastOrganicIntel = null;
 let customFrom = null;
 let customTo   = null;
 
@@ -539,19 +613,21 @@ document.getElementById('kwSearch').addEventListener('input', () => {
 });
 
 // ─── Data fetch ───────────────────────────────────────────────────────────
-function buildApiUrl(extra = '') {
+function buildApiUrl(extra = '', withOrganic = true) {
   // Custom date range wins over preset period.
-  const base = `${API}?brand=${BRAND}&compare=${currentCompare}${extra}`;
+  const includeSet = withOrganic ? FULL_INCLUDE : BASE_INCLUDE;
+  const include = extra.includes('include=') ? '' : `&include=${encodeURIComponent(includeSet)}`;
+  const base = `${API}?brand=${BRAND}&compare=${currentCompare}${include}${extra}`;
   return (customFrom && customTo)
     ? `${base}&from=${customFrom}&to=${customTo}`
     : `${base}&period=${currentPeriod}`;
 }
 
-async function load(force) {
+async function load(force, withOrganic = true) {
   document.getElementById('refreshBtn').classList.add('loading');
   document.getElementById('freshTxt').textContent = 'Loading…';
   try {
-    const url = buildApiUrl();
+    const url = buildApiUrl('', withOrganic);
     const r = await fetch(url, { cache: force ? 'no-store' : 'default' });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || 'API error');
@@ -619,6 +695,7 @@ function renderAll(d) {
   renderPhotos(d);
   renderQandA(d);
   renderTips(d);
+  renderOrganicIntelligence(d);
   renderHealth(d);
   renderAlerts(d);
 }
@@ -732,6 +809,123 @@ function renderTips(d) {
       </div>
     </div>
   `).join('');
+}
+
+function renderOrganicIntelligence(d) {
+  const oi = d.organicIntelligence || lastOrganicIntel;
+  const sec = document.getElementById('organicIntelSection');
+  if (!oi) { sec.style.display = 'none'; return; }
+  if (d.organicIntelligence) lastOrganicIntel = d.organicIntelligence;
+  sec.style.display = '';
+
+  const funnel = oi.funnel || {};
+  document.getElementById('oiSummary').textContent =
+    `${fmt(funnel.mapsImpressions || 0)} Maps · ${fmt(funnel.searchImpressions || 0)} Search · ${funnel.actionRate || 0}% action rate`;
+
+  const sourceRows = (oi.dataSources || []).map(src => `
+    <div class="src-row">
+      <div class="top">
+        <span class="name">${escapeHtml(src.label)}</span>
+        <span class="status ${escapeHtml(src.status)}">${escapeHtml(src.status)}</span>
+      </div>
+      <div class="detail">${escapeHtml(src.freshness || '')}</div>
+      <div class="detail">${escapeHtml((src.powers || []).join(' · '))}</div>
+      ${src.note ? `<div class="oi-note">${escapeHtml(src.note)}</div>` : ''}
+    </div>
+  `).join('');
+  document.getElementById('oiSources').innerHTML = sourceRows || '<div class="empty">No source health returned.</div>';
+
+  const menu = oi.menuHealth || {};
+  const primary = menu.primary || {};
+  document.getElementById('oiMenu').innerHTML = `
+    <div class="oi-kv"><span>Status</span><span class="status ${escapeHtml(menu.status || 'not_requested')}">${escapeHtml(menu.status || 'not requested')}</span></div>
+    <div class="oi-kv"><span>HTTP</span><span>${primary.status || '—'}</span></div>
+    <div class="oi-kv"><span>Latency</span><span>${primary.latencyMs != null ? primary.latencyMs + 'ms' : '—'}</span></div>
+    <div class="oi-kv"><span>Menu text</span><span>${primary.hasMenuSignals ? 'yes' : 'no'}</span></div>
+    <div class="oi-note">${escapeHtml(menu.ownerRead || '')}</div>
+  `;
+
+  document.getElementById('oiFunnel').innerHTML = `
+    <div class="oi-kv"><span>GBP impressions</span><span>${fmt(funnel.impressions || 0)}</span></div>
+    <div class="oi-kv"><span>Customer actions</span><span>${fmt(funnel.actions || 0)}</span></div>
+    <div class="oi-kv"><span>Action rate</span><span>${funnel.actionRate || 0}%</span></div>
+    <div class="oi-kv"><span>Strongest action</span><span>${escapeHtml(funnel.strongestAction?.type || '—')} ${fmt(funnel.strongestAction?.value || 0)}</span></div>
+    <div class="oi-note">${escapeHtml(funnel.ownerRead || '')}</div>
+  `;
+
+  const buckets = (oi.queryBuckets || []).slice(0, 7).map(b => {
+    const e = b.evidence || {};
+    const samples = (e.sampleQueries || []).slice(0, 5).map(q =>
+      `<span title="GBP ${q.gbpImpressions || 0} · Search ${q.searchImpressions || 0} · Clicks ${q.clicks || 0}">${escapeHtml(q.query)}</span>`
+    ).join('');
+    return `
+      <div class="bucket-row">
+        <div class="top">
+          <span class="name">${escapeHtml(b.label)}</span>
+          <span class="status ${escapeHtml(b.status)}">${escapeHtml(b.status.replace(/_/g, ' '))}</span>
+        </div>
+        <div class="detail">${escapeHtml(b.intent)}</div>
+        <div class="bucket-score">GBP ${fmt(e.gbpImpressions || 0)} · Search ${fmt(e.searchImpressions || 0)} · Clicks ${fmt(e.clicks || 0)}</div>
+        ${samples ? `<div class="query-pills">${samples}</div>` : ''}
+        <div class="oi-note">${escapeHtml(b.ownerRead)}</div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('oiBuckets').innerHTML = buckets || '<div class="empty">No query bucket evidence yet.</div>';
+
+  const proof = oi.photoProof || {};
+  document.getElementById('oiPhotos').innerHTML = `
+    <div class="oi-kv"><span>Total media</span><span>${fmt(proof.total || 0)}</span></div>
+    <div class="oi-kv"><span>Recent 30d</span><span>${fmt(proof.recent30d || 0)}</span></div>
+    ${(proof.categories || []).map(cat => `
+      <div class="proof-row">
+        <div class="top">
+          <span class="name">${escapeHtml(cat.label)}</span>
+          <span class="status ${escapeHtml(cat.status)}">${escapeHtml(cat.status)}</span>
+        </div>
+        <div class="detail">Seen ${fmt(cat.count || 0)} / target ${fmt(cat.target || 0)}</div>
+        <div class="oi-note">${escapeHtml(cat.detail)}</div>
+      </div>
+    `).join('')}
+    <div class="oi-note">${escapeHtml(proof.ownerRead || '')}</div>
+  `;
+
+  const comp = oi.competitorBenchmark || {};
+  const compRows = (comp.items || []).slice(0, 8).map(p => `
+    <tr>
+      <td class="${p.isOwnListing ? 'own' : ''}">${escapeHtml(p.name)}</td>
+      <td class="mono">${p.rating || '—'}</td>
+      <td class="mono">${fmt(p.reviews || 0)}</td>
+      <td class="mono">${p.distanceMeters != null ? Math.round(p.distanceMeters) + 'm' : '—'}</td>
+    </tr>
+  `).join('');
+  document.getElementById('oiCompetitors').innerHTML = comp.status === 'ok' ? `
+    <table class="comp-table">
+      <thead><tr><th>Place</th><th>Rating</th><th>Reviews</th><th>Dist</th></tr></thead>
+      <tbody>${compRows}</tbody>
+    </table>
+    <div class="oi-note">${escapeHtml(comp.ownerRead || '')}</div>
+  ` : `<div class="empty">Competitor scan unavailable: ${escapeHtml(comp.error || comp.status || 'unknown')}</div>`;
+
+  const split = oi.actionSplit || {};
+  const api = (split.apiActions || []).map(a => `
+    <div class="owner-row">
+      <div class="top"><span class="name">${escapeHtml(a.title)}</span><span class="status ${escapeHtml(a.status || 'active')}">${escapeHtml(a.status || 'active')}</span></div>
+      <div class="detail">${escapeHtml(a.detail)}</div>
+    </div>
+  `).join('');
+  const owner = (split.ownerActions || []).slice(0, 10).map(a => `
+    <div class="owner-row">
+      <div class="top"><span class="name">${escapeHtml(a.title)}</span><span class="status warn">${escapeHtml(a.channel || 'owner')}</span></div>
+      <div class="detail">${escapeHtml(a.detail)}</div>
+    </div>
+  `).join('');
+  document.getElementById('oiActions').innerHTML = `
+    <div class="oi-note" style="margin:0 0 8px">API-readable work</div>
+    ${api || '<div class="empty">No API actions.</div>'}
+    <div class="oi-note" style="margin:10px 0 8px">Owner/browser work</div>
+    ${owner || '<div class="empty">No owner actions.</div>'}
+  `;
 }
 
 function escapeHtml(s) {
@@ -1117,8 +1311,8 @@ function escape(s) {
 }
 
 // kick off
-load();
-setInterval(() => load(false), 5 * 60 * 1000);
+load(false, true);
+setInterval(() => load(false, false), 5 * 60 * 1000);
 </script>
 </body>
 </html>
