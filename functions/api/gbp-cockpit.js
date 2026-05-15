@@ -1,9 +1,11 @@
 // HN Hotels — Google Business Profile Cockpit API
 // GET /api/gbp-cockpit?brand=he|nch&period=7d|28d|90d&compare=prior|yoy|off
-//   &include=summary,daily,keywords,profile,reviews,health,media,qanda,actionQueue,algorithmTips
+//   &include=summary,daily,keywords,profile,reviews,health,media,qanda,actionQueue,algorithmTips,organicIntelligence
 //
 // Default include set covers the operations layer: summary,daily,keywords,
 // profile,reviews,health,media,qanda,actionQueue,algorithmTips
+// organicIntelligence is opt-in because competitor scans use billable Places
+// Text Search calls.
 //
 // Powers the dual-brand organic dashboards at:
 //   - hnhotels.in/marketing/he/gbp/
@@ -42,6 +44,17 @@ const BRANDS = {
     domain:   'hamzaexpress.in',
     siteUrl:  'sc-domain:hamzaexpress.in',
     other:    'nch',
+    center:   { lat: 12.98475, lng: 77.60291 },
+    menuUrls: ['https://hamzaexpress.in/menu/', 'https://hamzaexpress.in/menu'],
+    competitorQueries: [
+      'Hamza Hotel HKP Road Shivajinagar Bengaluru',
+      'Empire Restaurant Shivajinagar Bengaluru',
+      'Valima Ki Biryani Shivajinagar Bengaluru',
+      'New Hilal Restaurant Shivajinagar Bengaluru',
+      'New Royal Restaurant Shivajinagar Bengaluru',
+      'Persian Majlis Shivajinagar Bengaluru',
+      'Prince Restaurant Shivajinagar Bengaluru',
+    ],
   },
   nch: {
     account:  'accounts/112047111046090890635',
@@ -52,7 +65,105 @@ const BRANDS = {
     domain:   'nawabichaihouse.com',
     siteUrl:  'sc-domain:nawabichaihouse.com',
     other:    'he',
+    center:   { lat: 12.98475, lng: 77.60291 },
+    menuUrls: ['https://nawabichaihouse.com/menu/', 'https://nawabichaihouse.com/menu'],
+    competitorQueries: [
+      'Nawabi Chai House Shivajinagar Bengaluru',
+      'Irani chai Shivajinagar Bengaluru',
+      'tea cafe Shivajinagar Bengaluru',
+      'haleem Shivajinagar Bengaluru',
+      'Empire Restaurant Shivajinagar Bengaluru',
+    ],
   },
+};
+
+const DEFAULT_INCLUDE = 'summary,daily,keywords,profile,reviews,health,media,qanda,actionQueue,algorithmTips';
+
+const PERSONA_BUCKETS = {
+  he: [
+    {
+      id: 'brand_loyalist',
+      label: 'Hamza brand / loyalist',
+      persona: 'legacy_hamza_loyalist',
+      intent: 'Already has Hamza/HKP Road memory; organic job is to prove this is the same food memory in the Express outlet.',
+      patterns: ['hamza', 'hamza hotel', 'hamza express', 'hkp'],
+      ownerRead: 'High-conversion. Protect with correct listing, reviews, photos, and paid branded coverage when needed.',
+    },
+    {
+      id: 'late_night',
+      label: 'Late-night heavy eater',
+      persona: 'late_night_heavy_non_veg',
+      intent: 'Open-now, nearby, serious non-veg food decision between 8 PM and 3 AM.',
+      patterns: ['late night', 'open now', 'open', 'night', 'near me', '3am', '2am', 'kabab', 'biryani', 'ghee rice', 'non veg'],
+      ownerRead: 'Highest Maps/Search surgical layer. Needs hours, night photos, dishes, and ad schedule alignment.',
+    },
+    {
+      id: 'dish_nonveg',
+      label: 'Dish-led non-veg seeker',
+      persona: 'dish_nonveg_seeker',
+      intent: 'Search starts from the dish, not the brand.',
+      patterns: ['biryani', 'ghee rice', 'kabab', 'kebab', 'tandoori', 'mutton', 'chicken', 'brain', 'naan', 'grill', 'hyderabadi', 'mughlai'],
+      ownerRead: 'Profile category, menu, photos, and reviews must repeat the hero dishes.',
+    },
+    {
+      id: 'local_explorer',
+      label: 'Shivajinagar food explorer',
+      persona: 'shivajinagar_food_explorer',
+      intent: 'Visitor around Commercial Street/MG Road/Shivajinagar choosing a real food stop.',
+      patterns: ['shivajinagar', 'commercial street', 'mg road', 'russell market', 'infantry road', 'best', 'food near'],
+      ownerRead: 'Needs exterior/HKP proof, directions, reviews, and local heritage signal.',
+    },
+    {
+      id: 'family_diner',
+      label: 'Family comfort diner',
+      persona: 'family_comfort_diner',
+      intent: 'Family wants safe seating, halal/non-veg comfort, and clean restaurant proof.',
+      patterns: ['family', 'seating', 'dine', 'restaurant', 'dinner', 'lunch'],
+      ownerRead: 'Needs interior seating, table spread, family-safe review language.',
+    },
+    {
+      id: 'parcel_pickup',
+      label: 'Fast parcel / pickup',
+      persona: 'fast_parcel_pickup',
+      intent: 'Local worker/shop owner wants phone, menu, directions, or quick takeaway.',
+      patterns: ['parcel', 'takeaway', 'take away', 'pickup', 'menu', 'phone', 'contact', 'order'],
+      ownerRead: 'Needs menu health, phone accuracy, parcel counter proof, quick directions.',
+    },
+    {
+      id: 'halal_muslim_quarter',
+      label: 'Halal / Muslim-quarter filter',
+      persona: 'halal_local_filter',
+      intent: 'Customer filters by halal, Muslim-area trust, Dakhni/Hyderabadi food.',
+      patterns: ['halal', 'muslim', 'dakhni', 'hyderabadi', 'mughlai', 'non veg'],
+      ownerRead: 'Needs Halal category, description coverage, and review/photo proof.',
+    },
+  ],
+  nch: [
+    {
+      id: 'irani_chai',
+      label: 'Irani chai seeker',
+      persona: 'irani_chai_core',
+      intent: 'Direct chai/snack search around Shivajinagar.',
+      patterns: ['irani chai', 'chai', 'tea', 'osmania'],
+      ownerRead: 'Keep chai identity and freshness proof visible.',
+    },
+    {
+      id: 'haleem',
+      label: 'Haleem seeker',
+      persona: 'haleem_demand',
+      intent: 'Food-led search for haleem/snack heavy item.',
+      patterns: ['haleem', 'mutton', 'chicken'],
+      ownerRead: 'Seasonal posts/photos and menu proof matter.',
+    },
+    {
+      id: 'local_explorer',
+      label: 'Shivajinagar cafe explorer',
+      persona: 'local_explorer',
+      intent: 'Nearby cafe/snack decision.',
+      patterns: ['shivajinagar', 'near me', 'cafe', 'snacks', 'commercial street'],
+      ownerRead: 'Maps freshness and review language matter.',
+    },
+  ],
 };
 
 // All daily metrics published by the GBP Performance API. Note the prefix
@@ -108,8 +219,9 @@ export async function onRequest(context) {
   // (~18 months back, T-2 days forward). Caller-side validation in UI.
   const customFrom = url.searchParams.get('from');
   const customTo   = url.searchParams.get('to');
-  const include = (url.searchParams.get('include') || 'summary,daily,keywords,profile,reviews,health,media,qanda,actionQueue,algorithmTips')
+  const include = (url.searchParams.get('include') || DEFAULT_INCLUDE)
     .split(',').map(s => s.trim()).filter(Boolean);
+  const wantsOrganic = include.includes('organicIntelligence');
 
   // GBP Performance API data lags 1-2 days. Use today-2 as endDate to ensure data exists.
   const period = resolvePeriod(periodKey, compareMode, customFrom, customTo);
@@ -118,28 +230,33 @@ export async function onRequest(context) {
     const token = await getAccessToken(env);
 
     const tasks = {};
-    if (include.includes('summary') || include.includes('daily')) {
+    if (include.includes('summary') || include.includes('daily') || wantsOrganic) {
       tasks.perf = fetchPerformance(token, brand.location, period.startDate, period.endDate);
       if (compareMode !== 'off') {
         tasks.perfPrior = fetchPerformance(token, brand.location, period.compareStart, period.compareEnd);
       }
     }
-    if (include.includes('keywords')) {
+    if (include.includes('keywords') || wantsOrganic) {
       tasks.kwThis = fetchKeywords(token, brand.location, period.thisMonth);
       tasks.kwPrev = fetchKeywords(token, brand.location, period.lastMonth);
     }
     if (include.includes('profile') || include.includes('health') ||
-        include.includes('actionQueue') || include.includes('algorithmTips')) {
+        include.includes('actionQueue') || include.includes('algorithmTips') || wantsOrganic) {
       tasks.profile = fetchProfile(token, brand.location);
     }
-    if (include.includes('reviews') || include.includes('profile') || include.includes('actionQueue')) {
+    if (include.includes('reviews') || include.includes('profile') || include.includes('actionQueue') || wantsOrganic) {
       tasks.places = fetchPlaceDetails(env, brand.placeId);
     }
-    if (include.includes('media') || include.includes('actionQueue')) {
+    if (include.includes('media') || include.includes('actionQueue') || wantsOrganic) {
       tasks.media = fetchMedia(token, brand.location);
     }
-    if (include.includes('qanda') || include.includes('actionQueue')) {
+    if (include.includes('qanda') || include.includes('actionQueue') || wantsOrganic) {
       tasks.qanda = fetchQandA(token, brand.location);
+    }
+    if (wantsOrganic) {
+      tasks.searchConsole = fetchSearchConsole(token, brand.siteUrl, period.startDate, period.endDate);
+      tasks.menuHealth = fetchMenuHealth(brand);
+      tasks.competitors = fetchCompetitorBenchmark(env, brand);
     }
 
     const results = await runAll(tasks);
@@ -177,9 +294,11 @@ export async function onRequest(context) {
       },
     };
 
-    if (results.perf) {
+    if (results.perf && !results.perf.error) {
       out.summary = buildSummary(results.perf, results.perfPrior);
       if (include.includes('daily')) out.daily = buildDaily(results.perf);
+    } else if (results.perf?.error) {
+      out.performanceError = results.perf.error;
     }
     if (results.kwThis !== undefined) {
       out.keywords = buildKeywords(results.kwThis, results.kwPrev);
@@ -231,6 +350,22 @@ export async function onRequest(context) {
         builtProfile: out.profile,        // built (additionalCategories as strings)
         media: out.media,
         qanda: out.qanda,
+      });
+    }
+    if (wantsOrganic) {
+      out.organicIntelligence = buildOrganicIntelligence({
+        brandKey,
+        brand,
+        period: out.period,
+        include,
+        results,
+        summary: out.summary,
+        keywords: out.keywords,
+        profile: out.profile,
+        reviews: out.reviews,
+        media: out.media,
+        qanda: out.qanda,
+        actionQueue: out.actionQueue || [],
       });
     }
 
@@ -409,6 +544,148 @@ async function fetchPlaceDetails(env, placeId) {
   const d = await r.json();
   if (!r.ok) return { error: d.error?.message || `Places ${r.status}` };
   return { value: d };
+}
+
+// ─── Search Console — organic website query layer ────────────────────────
+async function fetchSearchConsole(token, siteUrl, startDate, endDate) {
+  const body = {
+    startDate: startDate.iso,
+    endDate: endDate.iso,
+    dimensions: ['query'],
+    rowLimit: 250,
+    aggregationType: 'auto',
+  };
+  const r = await fetch(
+    `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    }
+  );
+  const d = await r.json();
+  if (!r.ok) return { error: `Search Console ${r.status}: ${d.error?.message || 'unknown'}`, rows: [] };
+  return {
+    rows: (d.rows || []).map(row => ({
+      query: row.keys?.[0] || '',
+      clicks: row.clicks || 0,
+      impressions: row.impressions || 0,
+      ctr: row.ctr || 0,
+      position: row.position || null,
+    })),
+  };
+}
+
+// ─── Menu URL health — checks the public menu path, not GBP write fields ──
+async function fetchMenuHealth(brand) {
+  const candidates = brand.menuUrls || [`https://${brand.domain}/menu/`];
+  const checks = await Promise.all(candidates.map(async url => {
+    const started = Date.now();
+    try {
+      const r = await fetch(url, {
+        method: 'GET',
+        redirect: 'follow',
+        headers: { 'User-Agent': 'HN-Google-Organic-Cockpit/1.0' },
+      });
+      const contentType = r.headers.get('content-type') || '';
+      const text = contentType.includes('text/html') ? await r.text() : '';
+      const bodySample = text.slice(0, 4000).toLowerCase();
+      return {
+        url,
+        finalUrl: r.url || url,
+        ok: r.ok,
+        status: r.status,
+        latencyMs: Date.now() - started,
+        contentType,
+        hasMenuSignals: /menu|biryani|ghee rice|kabab|kebab|chai|haleem|order/.test(bodySample),
+      };
+    } catch (err) {
+      return {
+        url,
+        ok: false,
+        status: 0,
+        latencyMs: Date.now() - started,
+        error: err.message,
+      };
+    }
+  }));
+  const winner = checks.find(c => c.ok && c.hasMenuSignals) || checks.find(c => c.ok) || checks[0] || null;
+  return {
+    ok: !!(winner && winner.ok && winner.hasMenuSignals),
+    primary: winner,
+    candidates: checks,
+  };
+}
+
+// ─── Places Text Search — local competitor benchmark layer ───────────────
+async function fetchCompetitorBenchmark(env, brand) {
+  if (!env.GOOGLE_PLACES_API_KEY) {
+    return { error: 'GOOGLE_PLACES_API_KEY not set', items: [] };
+  }
+  const fieldMask = [
+    'places.id',
+    'places.displayName',
+    'places.formattedAddress',
+    'places.location',
+    'places.rating',
+    'places.userRatingCount',
+    'places.primaryType',
+    'places.types',
+    'places.googleMapsUri',
+    'places.regularOpeningHours.openNow',
+    'places.photos',
+  ].join(',');
+  const queries = (brand.competitorQueries || []).slice(0, 8);
+  const items = await Promise.all(queries.map(async q => {
+    try {
+      const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': env.GOOGLE_PLACES_API_KEY,
+          'X-Goog-FieldMask': fieldMask,
+        },
+        body: JSON.stringify({
+          textQuery: q,
+          maxResultCount: 1,
+          locationBias: {
+            circle: {
+              center: { latitude: brand.center.lat, longitude: brand.center.lng },
+              radius: 2500,
+            },
+          },
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        return { query: q, error: d.error?.message || `Places Text Search ${r.status}` };
+      }
+      const p = (d.places || [])[0];
+      if (!p) {
+        return { query: q, error: 'No place returned' };
+      }
+      return {
+        query: q,
+        placeId: p.id || null,
+        name: p.displayName?.text || q,
+        address: p.formattedAddress || null,
+        rating: p.rating || null,
+        reviews: p.userRatingCount || 0,
+        primaryType: p.primaryType || null,
+        types: p.types || [],
+        openNow: p.regularOpeningHours?.openNow ?? null,
+        mapsUri: p.googleMapsUri || null,
+        photoCount: (p.photos || []).length,
+        distanceMeters: p.location ? Math.round(distanceMeters(brand.center.lat, brand.center.lng, p.location.latitude, p.location.longitude)) : null,
+      };
+    } catch (err) {
+      return { query: q, error: err.message };
+    }
+  }));
+  return { items };
 }
 
 // ─── Build helpers ───────────────────────────────────────────────────────
@@ -941,6 +1218,369 @@ function buildAlgorithmTips({ brand, profile, builtProfile, media, qanda }) {
   const order = { high: 0, medium: 1, low: 2 };
   tips.sort((a, b) => order[a.level] - order[b.level]);
   return tips;
+}
+
+// ─── Build helpers — Organic Intelligence ───────────────────────────────
+function buildOrganicIntelligence(ctx) {
+  const { brandKey, brand, period, include, results, summary, keywords, profile, reviews, media, qanda, actionQueue } = ctx;
+  const searchConsole = buildSearchConsoleSummary(results.searchConsole);
+  const keywordRows = [
+    ...((keywords?.thisMonth || []).map(k => ({ source: 'GBP this month', query: k.keyword, impressions: k.impressions || 0, clicks: 0, position: null }))),
+    ...((keywords?.lastMonth || []).map(k => ({ source: 'GBP last month', query: k.keyword, impressions: k.impressions || 0, clicks: 0, position: null }))),
+    ...(searchConsole.rows || []).map(k => ({ source: 'Search Console', query: k.query, impressions: k.impressions || 0, clicks: k.clicks || 0, position: k.position || null })),
+  ];
+  const queryBuckets = buildQueryBuckets(brandKey, keywordRows);
+  const menuHealth = buildMenuHealth(results.menuHealth);
+  const photoProof = buildPhotoProofInventory(brandKey, media);
+  const competitorBenchmark = buildCompetitorSummary(brand, results.competitors, reviews);
+  const dataSources = buildDataSourceHealth({ include, results, summary, keywords, profile, reviews, media, qanda, searchConsole, menuHealth, competitorBenchmark });
+  const actionSplit = buildOrganicActionSplit({ brandKey, profile, media, qanda, menuHealth, photoProof, queryBuckets, competitorBenchmark, actionQueue });
+
+  return {
+    version: '2026-05-15.organic-intelligence.v1',
+    objective: 'Increase organic Google Maps/Search footfall by mapping each visible signal to an owner action.',
+    dataSources,
+    funnel: {
+      impressions: summary?.impressions?.total || 0,
+      mapsImpressions: summary?.impressions?.maps || 0,
+      searchImpressions: summary?.impressions?.search || 0,
+      actions: summary?.actions?.total || 0,
+      actionRate: summary?.actionRate || 0,
+      strongestAction: strongestAction(summary?.actions || {}),
+      ownerRead: 'If impressions rise but action rate falls, fix conversion proof: menu, photos, hours, reviews, and Q&A.',
+    },
+    searchConsole,
+    queryBuckets,
+    menuHealth,
+    competitorBenchmark,
+    photoProof,
+    actionSplit,
+    explainers: [
+      {
+        id: 'maps_vs_search',
+        title: 'Maps vs Search',
+        detail: 'Maps impressions are high-intent local discovery. Search impressions are broader Google Search visibility. HE footfall depends more on Maps + directions than website clicks.',
+      },
+      {
+        id: 'category_eater_static_vs_google_dynamic',
+        title: 'Persona intelligence vs Google behavior',
+        detail: 'The eater buckets are static local intelligence. Google behavior tells which bucket is actively using Search/Maps today, so budget and profile work should follow bucket evidence instead of equal importance.',
+      },
+      {
+        id: 'owner_vs_api',
+        title: 'What API can and cannot do',
+        detail: 'The API can read performance, keywords, website queries, Places competitors, menu reachability, and media inventory. Owner/browser action is still required for photos, Q&A, category edits, review replies, and sensitive profile writes.',
+      },
+    ],
+    period,
+    generatedAt: nowIstIso(),
+  };
+}
+
+function buildSearchConsoleSummary(res) {
+  if (!res || res.error) {
+    return {
+      status: res?.error ? 'error' : 'not_requested',
+      error: res?.error || null,
+      rows: [],
+      totals: { clicks: 0, impressions: 0, ctr: 0, avgPosition: null },
+    };
+  }
+  const rows = (res.rows || []).filter(r => r.query).slice(0, 250);
+  const clicks = rows.reduce((s, r) => s + (r.clicks || 0), 0);
+  const impressions = rows.reduce((s, r) => s + (r.impressions || 0), 0);
+  const weightedPosition = rows.reduce((s, r) => s + ((r.position || 0) * (r.impressions || 0)), 0);
+  return {
+    status: 'ok',
+    rows: rows.slice(0, 50),
+    totals: {
+      clicks,
+      impressions,
+      ctr: impressions ? +(clicks / impressions).toFixed(4) : 0,
+      avgPosition: impressions ? +(weightedPosition / impressions).toFixed(1) : null,
+    },
+  };
+}
+
+function buildQueryBuckets(brandKey, rows) {
+  const defs = PERSONA_BUCKETS[brandKey] || PERSONA_BUCKETS.he;
+  return defs.map(def => {
+    const matched = rows.filter(r => matchesBucket(r.query, def.patterns));
+    const byQuery = new Map();
+    for (const row of matched) {
+      const key = row.query.toLowerCase();
+      const cur = byQuery.get(key) || { query: row.query, gbpImpressions: 0, scImpressions: 0, clicks: 0, weightedPosition: 0, posWeight: 0, sources: new Set() };
+      if (/^GBP/.test(row.source)) cur.gbpImpressions += row.impressions || 0;
+      if (row.source === 'Search Console') {
+        cur.scImpressions += row.impressions || 0;
+        cur.clicks += row.clicks || 0;
+        if (row.position && row.impressions) {
+          cur.weightedPosition += row.position * row.impressions;
+          cur.posWeight += row.impressions;
+        }
+      }
+      cur.sources.add(row.source);
+      byQuery.set(key, cur);
+    }
+    const samples = [...byQuery.values()]
+      .map(q => ({
+        query: q.query,
+        gbpImpressions: q.gbpImpressions,
+        searchImpressions: q.scImpressions,
+        clicks: q.clicks,
+        avgPosition: q.posWeight ? +(q.weightedPosition / q.posWeight).toFixed(1) : null,
+        sources: [...q.sources],
+      }))
+      .sort((a, b) => (b.gbpImpressions + b.searchImpressions) - (a.gbpImpressions + a.searchImpressions))
+      .slice(0, 8);
+    const gbpImpressions = samples.reduce((s, q) => s + q.gbpImpressions, 0);
+    const searchImpressions = samples.reduce((s, q) => s + q.searchImpressions, 0);
+    const clicks = samples.reduce((s, q) => s + q.clicks, 0);
+    return {
+      id: def.id,
+      label: def.label,
+      persona: def.persona,
+      intent: def.intent,
+      ownerRead: def.ownerRead,
+      evidence: {
+        gbpImpressions,
+        searchImpressions,
+        clicks,
+        score: gbpImpressions + searchImpressions + clicks * 5,
+        sampleQueries: samples,
+      },
+      status: samples.length ? 'has_evidence' : 'needs_data',
+    };
+  }).sort((a, b) => b.evidence.score - a.evidence.score);
+}
+
+function matchesBucket(query, patterns) {
+  const q = String(query || '').toLowerCase();
+  return patterns.some(p => q.includes(String(p).toLowerCase()));
+}
+
+function buildMenuHealth(menu) {
+  if (!menu) return { status: 'not_requested', ok: false, candidates: [] };
+  if (menu.error) return { status: 'error', ok: false, error: menu.error, candidates: [] };
+  const primary = menu.primary || null;
+  return {
+    status: menu.ok ? 'ok' : 'warn',
+    ok: !!menu.ok,
+    primary,
+    candidates: menu.candidates || [],
+    ownerRead: menu.ok
+      ? 'Public menu path is reachable and contains menu/dish signals.'
+      : 'Public menu path did not return both HTTP success and menu/dish text. Verify GBP menu link and mobile menu page.',
+  };
+}
+
+function buildPhotoProofInventory(brandKey, media) {
+  const byCategory = media?.byCategory || {};
+  const total = media?.total || 0;
+  const food = (byCategory.FOOD_AND_DRINK || 0) + (byCategory.MENU || 0);
+  const exterior = (byCategory.EXTERIOR || 0) + (byCategory.COVER || 0) + (byCategory.PROFILE || 0);
+  const interior = byCategory.INTERIOR || 0;
+  const recent = media?.recent30d || 0;
+  const defs = brandKey === 'nch'
+    ? [
+        ['chai_hero', 'Irani chai / haleem proof', food, 12, 'API category can verify food volume; choose hero chai/haleem assets manually.'],
+        ['exterior_local', 'Exterior / Shivajinagar proof', exterior, 4, 'Needs storefront/street proof so Maps users trust the location.'],
+        ['interior_seating', 'Interior seating proof', interior, 4, 'Needed for family/cafe comfort decisions.'],
+        ['freshness', 'Recent upload cadence', recent, 8, 'Target 3-5 uploads/week during optimization.'],
+      ]
+    : [
+        ['hero_food', 'Hero food proof', food, 20, 'Ghee rice, kabab, biryani, tandoori, brain dry, naan/gravy must be visually obvious.'],
+        ['night_exterior', 'Night exterior / board proof', exterior, 5, 'Needed for late-night Maps trust and open-now searches.'],
+        ['family_seating', 'Interior / family seating proof', interior, 5, 'Needed for family comfort diner conversion.'],
+        ['parcel_counter', 'Parcel / pickup proof', 0, 4, 'Google media API cannot classify this yet; owner/Gemini asset tagging needed.'],
+        ['hkp_context', 'HKP Road street context', 0, 4, 'Google media API cannot classify street context yet; upload selected exterior/local-pulse assets.'],
+        ['freshness', 'Recent upload cadence', recent, 8, 'Target 3-5 uploads/week during optimization.'],
+      ];
+  return {
+    total,
+    recent30d: recent,
+    byGoogleCategory: byCategory,
+    categories: defs.map(([id, label, count, target, detail]) => ({
+      id,
+      label,
+      count,
+      target,
+      status: count >= target ? 'covered' : count > 0 ? 'weak' : 'missing',
+      detail,
+    })),
+    ownerRead: 'Google media categories are too coarse. This inventory translates them into eater-proof categories; parcel/street/late-night proof still needs manual or Gemini visual tagging.',
+  };
+}
+
+function buildCompetitorSummary(brand, res, reviews) {
+  if (!res || res.error) return { status: res?.error ? 'error' : 'not_requested', error: res?.error || null, items: [] };
+  const own = {
+    name: brand.title,
+    placeId: brand.placeId,
+    rating: reviews?.rating || null,
+    reviews: reviews?.count || 0,
+    distanceMeters: 0,
+    isOwnListing: true,
+  };
+  const items = [own, ...((res.items || []).filter(x => !x.error).map(x => ({
+    name: x.name,
+    placeId: x.placeId,
+    rating: x.rating,
+    reviews: x.reviews || 0,
+    openNow: x.openNow,
+    distanceMeters: x.distanceMeters,
+    primaryType: x.primaryType,
+    photoCount: x.photoCount,
+    mapsUri: x.mapsUri,
+    isOwnListing: x.placeId === brand.placeId || /hamza express/i.test(x.name || '') && /hamza-express/i.test(brand.slug),
+  })))].filter(x => x.name);
+  const sorted = items.sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.reviews || 0) - (a.reviews || 0));
+  const ownRank = sorted.findIndex(x => x.isOwnListing) + 1;
+  return {
+    status: 'ok',
+    ownRank: ownRank || null,
+    items: sorted.slice(0, 10),
+    errors: (res.items || []).filter(x => x.error).map(x => ({ query: x.query, error: x.error })).slice(0, 5),
+    ownerRead: 'This is not Google local-pack rank. It is a Places API competitor proof scan: rating, review depth, distance, open state, and category surface.',
+  };
+}
+
+function buildDataSourceHealth(ctx) {
+  const statusOf = (obj, okWhenEmpty = true) => {
+    if (!obj) return 'not_requested';
+    if (obj.error) return 'error';
+    if (!okWhenEmpty && Array.isArray(obj) && obj.length === 0) return 'empty';
+    return 'ok';
+  };
+  return [
+    {
+      id: 'gbp_performance',
+      label: 'GBP Performance API',
+      status: statusOf(ctx.results.perf),
+      freshness: 'T-2 days',
+      powers: ['impressions', 'calls', 'directions', 'website clicks', 'menu clicks', 'action rate'],
+      note: ctx.summary ? `${ctx.summary.impressions.total || 0} impressions, ${ctx.summary.actions.total || 0} actions` : ctx.results.perf?.error || null,
+    },
+    {
+      id: 'gbp_keywords',
+      label: 'GBP Search Keywords',
+      status: ctx.keywords?.thisError && ctx.keywords?.prevError ? 'error' : 'ok',
+      freshness: 'monthly bucket',
+      powers: ['Google Search/Maps terms that found the profile'],
+      note: `${(ctx.keywords?.thisMonth || []).length} current rows, ${(ctx.keywords?.lastMonth || []).length} prior rows`,
+    },
+    {
+      id: 'business_information',
+      label: 'Business Information API',
+      status: statusOf(ctx.results.profile),
+      freshness: 'live',
+      powers: ['category', 'hours', 'phone', 'website', 'description', 'special hours'],
+      note: ctx.profile?.primaryCategory || ctx.results.profile?.error || null,
+    },
+    {
+      id: 'places_details',
+      label: 'Places API Place Details',
+      status: statusOf(ctx.results.places),
+      freshness: 'live',
+      powers: ['rating', 'review count', 'recent public review sample', 'open now', 'photo sample'],
+      note: ctx.reviews?.rating ? `${ctx.reviews.rating} rating, ${ctx.reviews.count} reviews` : ctx.results.places?.error || null,
+    },
+    {
+      id: 'media',
+      label: 'Business Profile media API',
+      status: statusOf(ctx.results.media),
+      freshness: 'live-ish owner media list',
+      powers: ['photo count', 'recent uploads', 'Google media categories'],
+      note: ctx.media ? `${ctx.media.total || 0} media, ${ctx.media.recent30d || 0} in 30d` : ctx.results.media?.error || null,
+    },
+    {
+      id: 'search_console',
+      label: 'Search Console API',
+      status: ctx.searchConsole.status,
+      freshness: 'organic web search',
+      powers: ['website queries', 'clicks', 'impressions', 'CTR', 'average position'],
+      note: ctx.searchConsole.error || `${ctx.searchConsole.totals.impressions} impressions, ${ctx.searchConsole.totals.clicks} clicks`,
+    },
+    {
+      id: 'competitor_places',
+      label: 'Places API Text Search',
+      status: ctx.competitorBenchmark.status,
+      freshness: 'live',
+      powers: ['competitor rating/review/distance/open benchmark'],
+      note: ctx.competitorBenchmark.error || `${(ctx.competitorBenchmark.items || []).length} places scanned`,
+    },
+    {
+      id: 'menu_health',
+      label: 'Public menu URL fetch',
+      status: ctx.menuHealth.status,
+      freshness: 'live HTTP check',
+      powers: ['menu reachability', 'menu text signal'],
+      note: ctx.menuHealth.primary ? `${ctx.menuHealth.primary.status} ${ctx.menuHealth.primary.finalUrl || ctx.menuHealth.primary.url}` : ctx.menuHealth.error || null,
+    },
+    {
+      id: 'qanda',
+      label: 'Q&A API',
+      status: ctx.qanda?.deprecated ? 'manual_only' : statusOf(ctx.results.qanda),
+      freshness: ctx.qanda?.deprecated ? 'retired API' : 'live',
+      powers: ['manual Q&A action reminder'],
+      note: ctx.qanda?.message || ctx.results.qanda?.error || null,
+    },
+  ];
+}
+
+function buildOrganicActionSplit(ctx) {
+  const ownerActions = [];
+  const apiActions = [];
+  const approvalRequiredApiWrites = [];
+
+  apiActions.push({ id: 'query_bucket_monitor', title: 'Keep query buckets live', status: 'active', detail: 'GBP keywords + Search Console are classified into persona buckets automatically.' });
+  apiActions.push({ id: 'competitor_scan', title: 'Competitor Places benchmark', status: ctx.competitorBenchmark.status, detail: 'Uses Places API Text Search to compare rating, review depth, distance, category, and open state.' });
+  apiActions.push({ id: 'menu_health', title: 'Menu URL health check', status: ctx.menuHealth.status, detail: ctx.menuHealth.ownerRead });
+  apiActions.push({ id: 'photo_inventory', title: 'Photo proof inventory', status: 'active', detail: ctx.photoProof.ownerRead });
+
+  if (/^Restaurant$/i.test(ctx.profile?.primaryCategory || '') && ctx.brandKey === 'he') {
+    ownerActions.push({ id: 'primary_category', title: 'Change primary category from Restaurant', channel: 'browser', detail: 'Use Business Profile UI to switch to a stronger food-specific category if Google offers it, likely Biryani restaurant.' });
+    approvalRequiredApiWrites.push({ id: 'patch_primary_category', title: 'Patch primary category by API', risk: 'Profile write; owner approval required before mutation.' });
+  }
+  for (const cat of ctx.photoProof.categories || []) {
+    if (cat.status !== 'covered') {
+      ownerActions.push({ id: `photo_${cat.id}`, title: `Upload ${cat.label}`, channel: 'browser/assets', detail: cat.detail });
+    }
+  }
+  if (!ctx.menuHealth.ok) {
+    ownerActions.push({ id: 'menu_link_verify', title: 'Verify GBP menu link and mobile menu page', channel: 'browser', detail: 'Menu clicks are a leading footfall intent signal. Fix the listing/menu page before adding spend.' });
+  }
+  if (ctx.qanda?.deprecated) {
+    ownerActions.push({ id: 'qanda_seed', title: 'Seed and answer Q&A manually', channel: 'Google Maps app / Business Profile', detail: 'API is unavailable. Add halal, late-night, parking, family seating, specialty dishes, parcel, and directions Q&As manually.' });
+  }
+  for (const q of ctx.actionQueue || []) {
+    if (q.id === 'bakrid_special_hours') {
+      ownerActions.push({ id: q.id, title: q.title, channel: 'browser', detail: q.detail });
+      approvalRequiredApiWrites.push({ id: 'patch_special_hours', title: 'Patch special hours by API', risk: 'Profile hours write; owner approval required before mutation.' });
+    }
+  }
+
+  return { apiActions, ownerActions, approvalRequiredApiWrites };
+}
+
+function strongestAction(actions) {
+  const rows = [
+    ['directions', actions.directions || 0],
+    ['calls', actions.calls || 0],
+    ['menu', actions.menu || 0],
+    ['website', actions.website || 0],
+  ].sort((a, b) => b[1] - a[1]);
+  return { type: rows[0]?.[0] || null, value: rows[0]?.[1] || 0 };
+}
+
+function distanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────
