@@ -201,8 +201,14 @@ async function sendDailyDigest(env, digest) {
   ].map(v => compact(v, 900));
 
   const result = await sendWaba(env, { brand: wabaBrand(env), phone, template, vars });
+  const fallback = {};
+  if (!result.ok) {
+    const message = vars.join('\n');
+    try { fallback.sms = await sendSms(env, { phone, message }); }
+    catch (e) { fallback.sms_error = e.message; }
+  }
   await recordSuppression(env, 'dine_daily_digest', result.ok ? 'info' : 'warn');
-  return { sent: result.ok, result, template, vars };
+  return { sent: result.ok || fallback.sms?.ok === true, result, fallback, template, vars };
 }
 
 async function fireBookingAlert(env, target, { current, previous, delta, captured_at }) {
