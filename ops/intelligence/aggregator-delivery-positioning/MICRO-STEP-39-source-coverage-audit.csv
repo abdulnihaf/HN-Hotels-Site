@@ -1,0 +1,106 @@
+audit_dimension,source,value,count,interpretation
+raw_rows,POS / Odoo,active saleable POS SKUs,170,Execution base menu; every final recommendation must map back to one of these or be explicitly new SKU.
+raw_rows,Swiggy DATA.xlsx,all rows,4787,Raw market demand rows across listed Bangalore areas.
+raw_rows,Swiggy DATA.xlsx,Central Bangalore rows,3354,Correct cluster filter for HE Shivajinagar/MG Road demand context.
+aggregated_rows,Swiggy DATA.xlsx,Central Bangalore item-price-taxonomy groups,3216,"Rows after grouping by item, price, cuisine/dish/category/veg/combo dimensions."
+raw_rows,Zomato MG Road workbook,MG Road rank-price rows,183,"All Zomato rows are MG Road locality; signal is rank, not line-item order count."
+execution_mapping_gate,Micro-Step 38 output,HIGHER_PAY_PRICE_SUPPORTED_REVIEW_PORTION,56,Mapping gate
+execution_mapping_gate,Micro-Step 38 output,USABLE_WITH_OPERATOR_REVIEW,30,Mapping gate
+execution_mapping_gate,Micro-Step 38 output,DIRECT_EQUIVALENT_PRICE_DIVERGENCE_REVIEW,28,Mapping gate
+execution_mapping_gate,Micro-Step 38 output,NO_EXTERNAL_CONTEXT,20,Mapping gate
+execution_mapping_gate,Micro-Step 38 output,WEAK_MAPPING_DO_NOT_PRICE_FROM_THIS,19,Mapping gate
+execution_mapping_gate,Micro-Step 38 output,PORTION_OR_OFFER_GATE_REQUIRED,9,Mapping gate
+execution_mapping_gate,Micro-Step 38 output,DIRECT_EQUIVALENT_READY_FOR_OFFER_LAYER,8,Mapping gate
+price_action_read,Micro-Step 38 output,AGGREGATOR_CAN_SUPPORT_HIGHER_PAY_PRICE_THAN_POS,83,Price action read
+price_action_read,Micro-Step 38 output,NEAR_POS_VOLUME_PRICE,50,Price action read
+price_action_read,Micro-Step 38 output,NO_EXTERNAL_PRICE_PROOF,20,Price action read
+price_action_read,Micro-Step 38 output,MARKET_VOLUME_PRICE_BELOW_POS_CREATE_SMALLER_PORTION_OR_OFFER_PAY_PRICE,17,Price action read
+price_derivation_source,Micro-Step 38 output,swiggy_weighted_median_plus_zomato_rank_adjusted,129,Price derivation
+price_derivation_source,Micro-Step 38 output,swiggy_weighted_median_only,21,Price derivation
+price_derivation_source,Micro-Step 38 output,no_reliable_external_price,20,Price derivation
+swiggy_match_confidence,Micro-Step 38 output,HIGH,98,Swiggy confidence
+swiggy_match_confidence,Micro-Step 38 output,MEDIUM,33,Swiggy confidence
+swiggy_match_confidence,Micro-Step 38 output,WEAK,24,Swiggy confidence
+swiggy_match_confidence,Micro-Step 38 output,LOW,15,Swiggy confidence
+zomato_match_confidence,Micro-Step 38 output,HIGH,55,Zomato confidence
+zomato_match_confidence,Micro-Step 38 output,MEDIUM,55,Zomato confidence
+zomato_match_confidence,Micro-Step 38 output,WEAK,45,Zomato confidence
+zomato_match_confidence,Micro-Step 38 output,LOW,15,Zomato confidence
+sku_family,Micro-Step 38 output,other,69,POS SKU family
+sku_family,Micro-Step 38 output,combo,18,POS SKU family
+sku_family,Micro-Step 38 output,dry_starter_kabab,12,POS SKU family
+sku_family,Micro-Step 38 output,bread,9,POS SKU family
+sku_family,Micro-Step 38 output,chicken_gravy,9,POS SKU family
+sku_family,Micro-Step 38 output,combo_rice_curry,9,POS SKU family
+sku_family,Micro-Step 38 output,roll_shawarma,8,POS SKU family
+sku_family,Micro-Step 38 output,chinese_rice_noodles,6,POS SKU family
+sku_family,Micro-Step 38 output,veg_gravy,4,POS SKU family
+sku_family,Micro-Step 38 output,grill_tandoor,4,POS SKU family
+sku_family,Micro-Step 38 output,dry_starter_tikka,4,POS SKU family
+sku_family,Micro-Step 38 output,mutton_gravy,4,POS SKU family
+sku_family,Micro-Step 38 output,rice,3,POS SKU family
+sku_family,Micro-Step 38 output,biryani,3,POS SKU family
+sku_family,Micro-Step 38 output,combo_biryani_kabab,2,POS SKU family
+sku_family,Micro-Step 38 output,veg_gravy_dal,2,POS SKU family
+sku_family,Micro-Step 38 output,biryani_chicken_boneless,1,POS SKU family
+sku_family,Micro-Step 38 output,biryani_chicken,1,POS SKU family
+sku_family,Micro-Step 38 output,biryani_mutton,1,POS SKU family
+sku_family,Micro-Step 38 output,dry_starter_lollipop,1,POS SKU family
+source_distribution,Swiggy AREA,Central Bangalore,3354,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy AREA,R.T. Nagar,494,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy AREA,Koramangala,481,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy AREA,"Sanjay Nagar, New BEL Road",249,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy AREA,Malleshwaram,208,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy AREA,,1,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy PRIMARY_CUISINE,North Indian,3046,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy PRIMARY_CUISINE,Biryani,1430,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy PRIMARY_CUISINE,Mughlai,310,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy PRIMARY_CUISINE,,1,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy CG_CUISINE,North Indian,3170,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy CG_CUISINE,Biryani,891,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy CG_CUISINE,South Indian,397,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy CG_CUISINE,Coastal/Seafood,106,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy CG_CUISINE,,78,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy CG_CUISINE,Chaat/Street Food/Mithai,48,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy CG_CUISINE,Chinese/Pan-Asian,43,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy CG_CUISINE,Arabic/Middleeast/Mediterranean,37,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy CG_CUISINE,Burgers/American,17,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,CURRY,867,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,OTHER DRY STARTERS,575,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,BIRYANI,443,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,OTHER RICE VARIETIES,187,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,KEBAB,163,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,TIKKA,111,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,ROTI,109,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,ROLL,94,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,NAAN,91,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,FRIED RICE,89,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,PARATHA,86,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,THALI,85,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,SWEETS,78,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,SHAKE,70,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy DISH_FAMILY,PAROTTA,69,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,main course,278,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,starters,231,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,desserts,121,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,indian breads,92,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,beverages,87,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,indian,72,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,south indian,70,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,eat,65,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,north indian,65,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,ipl combos,60,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,starter,55,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,nandhini super hit starters,54,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,north indian gravys,52,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,breads,52,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_CATEGORY,fresh fruit juices & coolers,51,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_VEG_FLAG,1.0,2988,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_VEG_FLAG,,1759,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy ITEM_VEG_FLAG,2.0,40,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Swiggy IS_COMBO,,4787,Source dimension preserved/audited; high-cardinality fields truncated to top 15.
+source_distribution,Zomato Locality Name,MG Road,183,Zomato source dimension audited.
+source_distribution,Zomato Primary Cuisine,Mughlai,51,Zomato source dimension audited.
+source_distribution,Zomato Primary Cuisine,Biryani,51,Zomato source dimension audited.
+source_distribution,Zomato Primary Cuisine,North Indian,50,Zomato source dimension audited.
+source_distribution,Zomato Primary Cuisine,Hyderabadi,31,Zomato source dimension audited.
