@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Hamza Express Paid Influencer Shortlist</title>
+<style>
+:root {
+  --bg: #0f1012;
+  --panel: #17191d;
+  --panel-2: #20242a;
+  --line: #2d323a;
+  --text: #f8f1e8;
+  --muted: #a8a096;
+  --gold: #d4a84f;
+  --green: #43c784;
+  --blue: #7bb7ff;
+  --red: #ef6b73;
+  --amber: #f2a93b;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #101113f5;
+  border-bottom: 1px solid var(--line);
+  padding: 14px 16px;
+}
+h1 { margin: 0; font-size: 19px; letter-spacing: 0; }
+.sub { margin-top: 4px; color: var(--muted); font-size: 12px; max-width: 1040px; }
+main { max-width: 1680px; margin: 0 auto; padding: 14px; }
+.notice {
+  border: 1px solid #5b4724;
+  background: #1c1710;
+  color: #f6ddb1;
+  border-radius: 8px;
+  padding: 11px 12px;
+  margin-bottom: 12px;
+}
+.tabs, .controls, .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.tabs { margin-bottom: 12px; }
+button, a.btn, input, select, textarea {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 9px 11px;
+  font: inherit;
+}
+button, a.btn {
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+button.active, button.primary, a.primary { background: var(--gold); border-color: var(--gold); color: #181109; }
+button.green { background: var(--green); border-color: var(--green); color: #05120b; }
+button.blue, a.blue { background: #183a5d; border-color: #2b5a91; color: #d7ebff; }
+button.red { background: #3a181b; border-color: #71282e; color: #ffd8dc; }
+button.ghost { background: #111318; color: var(--muted); }
+input, select { min-width: 170px; }
+textarea { width: 100%; min-height: 68px; resize: vertical; }
+.cards {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.card, .profile {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.card { padding: 12px; }
+.k {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.v { margin-top: 3px; font-size: 25px; font-weight: 820; }
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.profile { padding: 12px; display: grid; gap: 10px; }
+.profile h2 { margin: 0; font-size: 17px; }
+.meta { color: var(--muted); font-size: 12px; }
+.signals { display: grid; gap: 6px; }
+.signal {
+  border-left: 3px solid var(--line);
+  padding-left: 8px;
+  color: #ded5ca;
+}
+.signal b { color: var(--text); }
+.pill {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 8px;
+  margin: 2px 3px 2px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.pill.hot { border-color: #7a5d24; color: #f2d28a; }
+.pill.green { border-color: #226946; color: #89e0b3; }
+.pill.blue { border-color: #2d5c8f; color: #a5d0ff; }
+.decision { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.shortlist { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.selected { outline: 2px solid var(--gold); }
+.relevant-yes { border-color: #245f42; }
+.relevant-no { opacity: .58; }
+.relevant-maybe { border-color: #694e1e; }
+.hidden { display: none; }
+.table-wrap {
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+table { width: 100%; min-width: 1260px; border-collapse: collapse; }
+th, td { border-bottom: 1px solid var(--line); padding: 9px 10px; text-align: left; vertical-align: top; }
+th {
+  position: sticky;
+  top: 73px;
+  z-index: 2;
+  background: #14161a;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.mini { max-width: 360px; max-height: 92px; overflow: auto; color: #d8d0c6; white-space: pre-wrap; }
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  max-width: 460px;
+  background: #0d0f11;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: .18s;
+  box-shadow: 0 16px 50px #0009;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+@media (max-width: 1100px) {
+  .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 740px) {
+  header { padding: 12px; }
+  h1 { font-size: 17px; }
+  main { padding: 10px; }
+  .cards, .profile-grid { grid-template-columns: 1fr; }
+  input, select, button, a.btn { width: 100%; }
+  .decision, .shortlist { grid-template-columns: 1fr; }
+  th { top: 93px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Hamza Express Paid Influencer Shortlist</h1>
+  <div class="sub">First pass: judge relevance only. Second pass: compress the list into paid anchors, paid mids, barter/test, and reject. All decisions save in this browser only until exported.</div>
+</header>
+<main>
+  <section class="notice">
+    Score only public content signals: Bangalore locality, Urdu/Hindustani/Dakhni language in public content, biryani/kabab/non-veg/HKP Road food content, reel reach, and collaboration fit. Do not classify people by private identity.
+  </section>
+
+  <nav class="tabs">
+    <button id="tabCards" class="active" type="button" onclick="showTab('cards')">1. Profile Shortlist</button>
+    <button id="tabNarrow" type="button" onclick="showTab('narrow')">2. Narrow List</button>
+    <button id="tabTable" type="button" onclick="showTab('table')">Full Table</button>
+  </nav>
+
+  <section id="kpis" class="cards"></section>
+
+  <section class="controls">
+    <input id="search" placeholder="Search username, signal, bucket">
+    <select id="sourceFilter"><option value="">All sources</option></select>
+    <select id="relevanceFilter">
+      <option value="">All relevance</option>
+      <option value="unreviewed">Unreviewed</option>
+      <option value="yes">Relevant</option>
+      <option value="maybe">Maybe</option>
+      <option value="no">Not relevant</option>
+    </select>
+    <select id="tierFilter">
+      <option value="">All tiers</option>
+      <option value="A_paid_anchor">A paid anchor</option>
+      <option value="B_paid_mid">B paid/mid</option>
+      <option value="C_barter_test">C barter/test</option>
+      <option value="hold">Hold</option>
+      <option value="reject">Reject</option>
+    </select>
+    <button class="green" type="button" onclick="exportSelectedCsv()">Export shortlist CSV</button>
+    <button type="button" onclick="copySelectedHandles()">Copy selected handles</button>
+    <button class="ghost" type="button" onclick="clearLocalState()">Clear local decisions</button>
+  </section>
+
+  <section id="cardsPane">
+    <div id="profileGrid" class="profile-grid"></div>
+  </section>
+
+  <section id="narrowPane" class="hidden">
+    <div id="narrowGrid" class="profile-grid"></div>
+  </section>
+
+  <section id="tablePane" class="hidden">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Creator</th>
+            <th>Signals</th>
+            <th>Why / Evidence</th>
+            <th>Profile</th>
+            <th>Relevance</th>
+            <th>Tier</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="tableRows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<div id="toast" class="toast"></div>
+<script>
+const CANDIDATE_JSON = "./candidates.json";
+const STORE = "he_paid_influencer_shortlist_2026_05_17_v1";
+
+const seedCandidates = [
+  {
+    username: "Travel with Tausif",
+    profile_url: "https://www.youtube.com/watch?v=XCI0pJbki6M",
+    full_name: "Travel with Tausif",
+    followers: "3.9K YouTube subs",
+    source: "paid_push_seed",
+    bucket_label: "Dakhni Urdu Bangalore creator",
+    language_signal: "Public YouTube description says Bangalore travel, food, lifestyle vlogs in Dakhni Urdu.",
+    locality_signal: "Bangalore-based public channel signal.",
+    food_signal: "Food and travel/lifestyle vlog signal.",
+    why: "Potentially strongest language-crowd fit for explaining Hamza Express in the right tone. Needs Instagram handle verification.",
+    suggested_budget: "₹5K-₹12K if reel reach is usable; otherwise barter/token."
+  },
+  {
+    username: "beyondmyvillage",
+    profile_url: "https://www.instagram.com/beyondmyvillage/",
+    full_name: "Beyond My Village",
+    followers: "108K YouTube subs",
+    source: "paid_push_seed",
+    bucket_label: "Shivajinagar non-veg food vlog",
+    language_signal: "Public family/travel/food creator signal; verify spoken language in recent reels.",
+    locality_signal: "Has public Shivajinagar food content.",
+    food_signal: "Covered Valima Ki Biryani / Shivajinagar biryani and kebab content.",
+    why: "Very strong for the exact local food belt. Good candidate for paid anchor if audience quality is Bangalore-heavy.",
+    suggested_budget: "₹15K-₹30K depending on deliverables and reel views."
+  },
+  {
+    username: "bengalurubiryaniclub",
+    profile_url: "https://www.instagram.com/bengalurubiryaniclub/",
+    full_name: "Bengaluru Biryani Club",
+    followers: "35K+ public-list signal",
+    source: "paid_push_seed",
+    bucket_label: "Biryani-first Bangalore page",
+    language_signal: "Verify public reel language.",
+    locality_signal: "Bangalore food/biryani page.",
+    food_signal: "Biryani-specific page, directly aligned to Ghee Rice/Kabab/Biryani hook.",
+    why: "High product-fit account. Strong for misconception reset if they accept a specific HKP Road story brief.",
+    suggested_budget: "₹8K-₹20K."
+  },
+  {
+    username: "eat_in_bangalore",
+    profile_url: "https://www.instagram.com/eat_in_bangalore/",
+    full_name: "Eat in Bangalore",
+    followers: "54K+ public-list signal",
+    source: "paid_push_seed",
+    bucket_label: "Bangalore food discovery",
+    language_signal: "Verify public reel language.",
+    locality_signal: "Bangalore restaurant discovery.",
+    food_signal: "General food-joint discovery; needs non-veg/HKP validation.",
+    why: "Good reach seed. Keep only if recent content has local street-food/non-veg relevance.",
+    suggested_budget: "₹10K-₹25K."
+  },
+  {
+    username: "bangalorefoodiee",
+    profile_url: "https://www.instagram.com/bangalorefoodiee/",
+    full_name: "Bangalore Foodie",
+    followers: "50K+ public-list signal",
+    source: "paid_push_seed",
+    bucket_label: "Bangalore food/lifestyle",
+    language_signal: "Verify public reel language.",
+    locality_signal: "Bangalore food/lifestyle page.",
+    food_signal: "General food review page; validate non-veg/local fit.",
+    why: "Useful mid/anchor candidate if recent reels are not cafe/pub-heavy.",
+    suggested_budget: "₹8K-₹20K."
+  },
+  {
+    username: "food_affairs_bangalore",
+    profile_url: "https://www.instagram.com/food_affairs_bangalore/",
+    full_name: "Food Affairs Bangalore",
+    followers: "22K in local master",
+    source: "paid_push_seed",
+    bucket_label: "Bangalore food explorer",
+    language_signal: "Verify reel language.",
+    locality_signal: "Bangalore food creator signal.",
+    food_signal: "Food/travel/lifestyle creator; already appears in prior master.",
+    why: "Good paid-mid candidate. Needs manual relevance check against HKP/non-veg angle.",
+    suggested_budget: "₹5K-₹12K."
+  },
+  {
+    username: "foodtalkbangalore",
+    profile_url: "https://www.instagram.com/foodtalkbangalore/",
+    full_name: "FoodTalk Bangalore",
+    followers: "6K public-list signal",
+    source: "paid_push_seed",
+    bucket_label: "Bangalore repost/community food",
+    language_signal: "Verify public language.",
+    locality_signal: "Bangalore food page.",
+    food_signal: "Food community/repost page; useful for micro amplification.",
+    why: "Could be cheap and relevant if audience is local. Better for supporting wave than anchor.",
+    suggested_budget: "₹1K-₹5K or barter/token."
+  },
+  {
+    username: "connectwithmjs",
+    profile_url: "https://www.instagram.com/connectwithmjs/",
+    full_name: "ConnectWith MJ",
+    followers: "16K public-list signal",
+    source: "paid_push_seed",
+    bucket_label: "Bangalore vlog / food / cooking",
+    language_signal: "Verify public language.",
+    locality_signal: "Bangalore bio signal.",
+    food_signal: "Routine vlogs, food, cooking.",
+    why: "Possible bridge between food and everyday Bangalore audience. Needs manual reel check.",
+    suggested_budget: "₹3K-₹8K."
+  },
+  {
+    username: "hungry_passportz",
+    profile_url: "https://www.instagram.com/hungry_passportz/",
+    full_name: "Hungry Passportz",
+    followers: "23K public-list signal",
+    source: "paid_push_seed",
+    bucket_label: "Food/travel discovery",
+    language_signal: "Verify public language.",
+    locality_signal: "Mangalore/Udupi/Bangalore signal in public list.",
+    food_signal: "Street food to skyline views, food/travel.",
+    why: "Useful discovery creator if recent Bangalore content is strong.",
+    suggested_budget: "₹5K-₹12K."
+  },
+  {
+    username: "bangaloreepicure",
+    profile_url: "https://www.instagram.com/bangaloreepicure/",
+    full_name: "Bangalore Epicure",
+    followers: "220K+ public-list signal",
+    source: "paid_push_seed",
+    bucket_label: "Large Bangalore food authority",
+    language_signal: "Likely English-led; verify.",
+    locality_signal: "Bangalore food authority.",
+    food_signal: "Street food, fine dining, breakfast joints.",
+    why: "High authority but not automatically hyper-local. Use only if brief/control is strong.",
+    suggested_budget: "₹25K-₹60K."
+  },
+  {
+    username: "rumana_nazar_ali",
+    profile_url: "https://www.instagram.com/rumana_nazar_ali/",
+    full_name: "Rumana Nazar Ali",
+    followers: "210K+ public-list signal",
+    source: "paid_push_seed",
+    bucket_label: "Large Bangalore food/lifestyle",
+    language_signal: "Verify public language and audience.",
+    locality_signal: "Bangalore food/lifestyle public-list signal.",
+    food_signal: "Food/lifestyle; may skew premium.",
+    why: "Potential anchor if the content plan can be made Hamza/HKP and not generic premium dining.",
+    suggested_budget: "₹25K-₹60K."
+  }
+];
+
+let allRows = [];
+let activeTab = "cards";
+let state = loadState();
+
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORE)) || {}; }
+  catch (error) { return {}; }
+}
+function saveState() { localStorage.setItem(STORE, JSON.stringify(state)); }
+function rowKey(row) { return String(row.username || row.profile_url || "").toLowerCase(); }
+function rowState(row) {
+  const key = rowKey(row);
+  if (!state[key]) state[key] = { relevance: "unreviewed", tier: "", selected: false, notes: "" };
+  return state[key];
+}
+function h(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+  }[char]));
+}
+function toast(message) {
+  const node = document.getElementById("toast");
+  node.textContent = message;
+  node.classList.add("show");
+  setTimeout(() => node.classList.remove("show"), 1700);
+}
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cell = "", inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i + 1];
+    if (c === '"' && inQuotes && n === '"') { cell += '"'; i++; continue; }
+    if (c === '"') { inQuotes = !inQuotes; continue; }
+    if (c === "," && !inQuotes) { row.push(cell); cell = ""; continue; }
+    if ((c === "\n" || c === "\r") && !inQuotes) {
+      if (c === "\r" && n === "\n") i++;
+      row.push(cell); cell = "";
+      if (row.some(v => v !== "")) rows.push(row);
+      row = [];
+      continue;
+    }
+    cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  const headers = rows.shift() || [];
+  return rows.map(values => Object.fromEntries(headers.map((key, i) => [key, values[i] || ""])));
+}
+function normalizeMaster(row) {
+  const score = Number(row.score || 0);
+  return {
+    username: row.username,
+    profile_url: row.instagram_url || `https://www.instagram.com/${row.username}/`,
+    full_name: row.full_name || row.username,
+    followers: row.followers || "",
+    source: "prior_review_master",
+    bucket_label: row.bucket_label || row.bucket || row.primary_bucket || "",
+    language_signal: "Manual check required from reels/captions.",
+    locality_signal: row.location_status || row.location_evidence || "",
+    food_signal: row.bucket_label || row.manual_review_reason || "",
+    why: row.manual_review_reason || row.location_evidence || row.bio || "",
+    suggested_budget: budgetFromScore(score, Number(row.followers || 0)),
+    score,
+    bio: row.bio || "",
+    evidence: row.location_evidence || row.post_location_names || "",
+    contact_route: row.contact_route || "",
+    email: row.emails || "",
+    phone: row.phones || ""
+  };
+}
+function budgetFromScore(score, followers) {
+  if (followers >= 80000 || score >= 295) return "Owner review: paid anchor if profile fit holds.";
+  if (followers >= 20000 || score >= 260) return "₹5K-₹15K or paid/barter.";
+  if (followers >= 8000 || score >= 220) return "₹2K-₹8K or barter/token.";
+  return "Barter/token unless manually strong.";
+}
+function sourcePriority(row) {
+  if (row.source === "paid_push_seed") return 0;
+  if (row.score >= 260) return 1;
+  if (row.score >= 220) return 2;
+  return 3;
+}
+function filteredRows(baseRows = allRows) {
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const source = document.getElementById("sourceFilter").value;
+  const relevance = document.getElementById("relevanceFilter").value;
+  const tier = document.getElementById("tierFilter").value;
+  return baseRows.filter(row => {
+    const rs = rowState(row);
+    const haystack = [
+      row.username, row.full_name, row.bucket_label, row.language_signal, row.locality_signal,
+      row.food_signal, row.why, row.bio, row.evidence, row.source
+    ].join(" ").toLowerCase();
+    return (!source || row.source === source)
+      && (!relevance || rs.relevance === relevance)
+      && (!tier || rs.tier === tier)
+      && (!q || haystack.includes(q));
+  });
+}
+function relevanceClass(row) {
+  const value = rowState(row).relevance;
+  if (value === "yes") return " relevant-yes";
+  if (value === "no") return " relevant-no";
+  if (value === "maybe") return " relevant-maybe";
+  return "";
+}
+function profileCard(row, compact = false) {
+  const rs = rowState(row);
+  return `<article class="profile${relevanceClass(row)}${rs.selected ? " selected" : ""}">
+    <div>
+      <h2>@${h(row.username)}</h2>
+      <div class="meta">${h(row.full_name)} · ${h(row.followers)} · ${h(row.source)}</div>
+      <div>
+        <span class="pill hot">${h(row.bucket_label || "needs bucket")}</span>
+        <span class="pill green">${h(rs.relevance)}</span>
+        ${rs.tier ? `<span class="pill blue">${h(rs.tier)}</span>` : ""}
+      </div>
+    </div>
+    <div class="signals">
+      <div class="signal"><b>Language</b><br>${h(row.language_signal || "Manual check required")}</div>
+      <div class="signal"><b>Locality</b><br>${h(row.locality_signal || "Manual check required")}</div>
+      <div class="signal"><b>Food</b><br>${h(row.food_signal || "Manual check required")}</div>
+      ${compact ? "" : `<div class="signal"><b>Why</b><br>${h(row.why || row.bio || "Open profile and judge fit.")}</div>`}
+    </div>
+    <div class="row-actions">
+      <a class="btn primary" target="_blank" rel="noopener" href="${h(row.profile_url)}">View profile</a>
+      <button type="button" class="green" onclick="setRelevance('${h(rowKey(row))}','yes')">Relevant</button>
+      <button type="button" onclick="setRelevance('${h(rowKey(row))}','maybe')">Maybe</button>
+      <button type="button" class="red" onclick="setRelevance('${h(rowKey(row))}','no')">Not relevant</button>
+    </div>
+    <div class="shortlist">
+      <button type="button" class="${rs.tier === "A_paid_anchor" ? "active" : ""}" onclick="setTier('${h(rowKey(row))}','A_paid_anchor')">A paid</button>
+      <button type="button" class="${rs.tier === "B_paid_mid" ? "active" : ""}" onclick="setTier('${h(rowKey(row))}','B_paid_mid')">B mid</button>
+      <button type="button" class="${rs.tier === "C_barter_test" ? "active" : ""}" onclick="setTier('${h(rowKey(row))}','C_barter_test')">C test</button>
+      <button type="button" class="${rs.tier === "hold" ? "active" : ""}" onclick="setTier('${h(rowKey(row))}','hold')">Hold</button>
+    </div>
+    <div class="meta"><b>Budget:</b> ${h(row.suggested_budget || "")}</div>
+    <textarea placeholder="Owner notes" oninput="setNotes('${h(rowKey(row))}', this.value)">${h(rs.notes || "")}</textarea>
+  </article>`;
+}
+function renderCards() {
+  const rows = filteredRows().slice(0, 50);
+  document.getElementById("profileGrid").innerHTML = rows.map(row => profileCard(row)).join("");
+}
+function renderNarrow() {
+  const rows = filteredRows(allRows.filter(row => {
+    const rs = rowState(row);
+    return rs.relevance === "yes" || rs.relevance === "maybe" || rs.tier;
+  })).slice(0, 80);
+  document.getElementById("narrowGrid").innerHTML = rows.length
+    ? rows.map(row => profileCard(row, true)).join("")
+    : `<div class="notice">No narrowed rows yet. Mark creators as Relevant or Maybe in step 1.</div>`;
+}
+function renderTable() {
+  const rows = filteredRows().slice(0, 160);
+  document.getElementById("tableRows").innerHTML = rows.map(row => {
+    const rs = rowState(row);
+    return `<tr>
+      <td><b>@${h(row.username)}</b><br><span class="meta">${h(row.full_name)} · ${h(row.followers)}</span><br><span class="pill">${h(row.source)}</span></td>
+      <td><div class="mini"><b>Language:</b> ${h(row.language_signal)}<br><b>Locality:</b> ${h(row.locality_signal)}<br><b>Food:</b> ${h(row.food_signal)}</div></td>
+      <td><div class="mini">${h(row.why || row.bio || row.evidence || "")}</div></td>
+      <td><a class="btn primary" target="_blank" rel="noopener" href="${h(row.profile_url)}">View profile</a></td>
+      <td>
+        <select onchange="setRelevance('${h(rowKey(row))}', this.value)">
+          ${["unreviewed", "yes", "maybe", "no"].map(v => `<option value="${v}" ${rs.relevance === v ? "selected" : ""}>${v}</option>`).join("")}
+        </select>
+      </td>
+      <td>
+        <select onchange="setTier('${h(rowKey(row))}', this.value)">
+          ${["", "A_paid_anchor", "B_paid_mid", "C_barter_test", "hold", "reject"].map(v => `<option value="${v}" ${rs.tier === v ? "selected" : ""}>${v || "unset"}</option>`).join("")}
+        </select>
+      </td>
+      <td><textarea oninput="setNotes('${h(rowKey(row))}', this.value)">${h(rs.notes || "")}</textarea></td>
+    </tr>`;
+  }).join("");
+}
+function renderKpis() {
+  const relevant = allRows.filter(row => rowState(row).relevance === "yes").length;
+  const maybe = allRows.filter(row => rowState(row).relevance === "maybe").length;
+  const no = allRows.filter(row => rowState(row).relevance === "no").length;
+  const paidA = allRows.filter(row => rowState(row).tier === "A_paid_anchor").length;
+  const paidB = allRows.filter(row => rowState(row).tier === "B_paid_mid").length;
+  const testC = allRows.filter(row => rowState(row).tier === "C_barter_test").length;
+  const shown = filteredRows().length;
+  const items = [
+    ["Profiles loaded", allRows.length],
+    ["Shown", shown],
+    ["Relevant", relevant],
+    ["Maybe", maybe],
+    ["Not relevant", no],
+    ["A paid", paidA],
+    ["B mid", paidB],
+    ["C test", testC]
+  ];
+  document.getElementById("kpis").innerHTML = items.map(([k, v]) => `<div class="card"><div class="k">${h(k)}</div><div class="v">${h(v)}</div></div>`).join("");
+}
+function renderAll() {
+  renderKpis();
+  renderCards();
+  renderNarrow();
+  renderTable();
+}
+function showTab(tab) {
+  activeTab = tab;
+  document.getElementById("cardsPane").classList.toggle("hidden", tab !== "cards");
+  document.getElementById("narrowPane").classList.toggle("hidden", tab !== "narrow");
+  document.getElementById("tablePane").classList.toggle("hidden", tab !== "table");
+  document.getElementById("tabCards").classList.toggle("active", tab === "cards");
+  document.getElementById("tabNarrow").classList.toggle("active", tab === "narrow");
+  document.getElementById("tabTable").classList.toggle("active", tab === "table");
+}
+function setRelevance(key, value) {
+  if (!state[key]) state[key] = { relevance: "unreviewed", tier: "", selected: false, notes: "" };
+  state[key].relevance = value;
+  if (value === "yes") state[key].selected = true;
+  if (value === "no" && !state[key].tier) state[key].tier = "reject";
+  saveState();
+  renderAll();
+}
+function setTier(key, value) {
+  if (!state[key]) state[key] = { relevance: "unreviewed", tier: "", selected: false, notes: "" };
+  state[key].tier = value;
+  state[key].selected = Boolean(value && value !== "reject" && value !== "hold");
+  if (value && state[key].relevance === "unreviewed") state[key].relevance = value === "reject" ? "no" : "yes";
+  saveState();
+  renderAll();
+}
+function setNotes(key, value) {
+  if (!state[key]) state[key] = { relevance: "unreviewed", tier: "", selected: false, notes: "" };
+  state[key].notes = value;
+  saveState();
+}
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+function shortlistRows() {
+  return allRows.filter(row => {
+    const rs = rowState(row);
+    return rs.selected || ["A_paid_anchor", "B_paid_mid", "C_barter_test"].includes(rs.tier);
+  });
+}
+function exportSelectedCsv() {
+  const rows = shortlistRows();
+  const cols = [
+    ["username", r => r.username],
+    ["profile_url", r => r.profile_url],
+    ["full_name", r => r.full_name],
+    ["followers", r => r.followers],
+    ["source", r => r.source],
+    ["bucket", r => r.bucket_label],
+    ["relevance", r => rowState(r).relevance],
+    ["tier", r => rowState(r).tier],
+    ["suggested_budget", r => r.suggested_budget],
+    ["language_signal", r => r.language_signal],
+    ["locality_signal", r => r.locality_signal],
+    ["food_signal", r => r.food_signal],
+    ["why", r => r.why],
+    ["notes", r => rowState(r).notes]
+  ];
+  const csv = [cols.map(([name]) => name).join(",")]
+    .concat(rows.map(row => cols.map(([, getter]) => csvCell(getter(row))).join(",")))
+    .join("\n") + "\n";
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "hamza-express-paid-influencer-shortlist.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast(`Exported ${rows.length} shortlisted creators`);
+}
+async function copySelectedHandles() {
+  const text = shortlistRows().map(row => `@${row.username} ${row.profile_url}`).join("\n");
+  if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
+  else {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+  toast("Copied shortlisted handles");
+}
+function clearLocalState() {
+  if (!confirm("Clear all local shortlist decisions in this browser?")) return;
+  state = {};
+  saveState();
+  renderAll();
+}
+function fillFilters() {
+  const sourceSelect = document.getElementById("sourceFilter");
+  const sources = [...new Set(allRows.map(row => row.source))].sort();
+  sourceSelect.innerHTML = `<option value="">All sources</option>` + sources.map(source => `<option value="${h(source)}">${h(source)}</option>`).join("");
+}
+async function init() {
+  let master = [];
+  try {
+    const res = await fetch(CANDIDATE_JSON, { cache: "no-store" });
+    if (res.ok) master = await res.json();
+  } catch (error) {
+    console.warn("Could not load candidate JSON", error);
+  }
+  const seen = new Set();
+  allRows = seedCandidates.concat(master)
+    .filter(row => {
+      const key = rowKey(row);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => sourcePriority(a) - sourcePriority(b) || Number(b.score || 0) - Number(a.score || 0));
+  fillFilters();
+  ["search", "sourceFilter", "relevanceFilter", "tierFilter"].forEach(id => {
+    document.getElementById(id).addEventListener("input", renderAll);
+  });
+  renderAll();
+}
+init();
+</script>
+</body>
+</html>
