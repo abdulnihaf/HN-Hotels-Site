@@ -63,17 +63,18 @@
     "priority": "A1 direct paid anchor",
     "score": 92,
     "segment": "Bangalore Dakhni/local travel-food; strong Ramzan food proof",
-    "instagramHandle": "",
+    "instagramHandle": "__faaiz____",
     "youtubeUrl": "https://www.youtube.com/@Bangalorefaaiz/videos",
     "followerSignal": "Public channel result shows strong views including 195K on Shivajinagar Ramzan food mela",
     "languageProof": "Dakhni/Bangalore creator signal; verify recent spoken language.",
     "bangaloreProof": "Public videos include Bangalore markets, Chamrajpet, Frazer Town, HBR, Shivajinagar, Koramangala.",
     "foodProof": "Public videos include Shivajinagar Ramzan Food Mela, Frazer Town Food Mela, HBR Food Mela.",
     "whyTarget": "Highly relevant for paid push if Instagram handle is found; old Ramzan food videos show the right crowd.",
-    "risk": "Food may be seasonal; verify current activity and Instagram handle.",
+    "risk": "Food may be seasonal; verify current activity and Instagram handle. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Paid creator: HE as permanent post-Ramzan HKP Road food stop.",
     "sourceUrls": [
-      "https://www.youtube.com/@Bangalorefaaiz/videos"
+      "https://www.youtube.com/@Bangalorefaaiz/videos",
+      "https://www.instagram.com/__faaiz____/"
     ]
   },
   {
@@ -97,63 +98,6 @@
     ]
   },
   {
-    "id": "dakhnilifestylevlogs",
-    "name": "Dakhni Lifestyle Vlogs",
-    "priority": "A1 direct paid anchor",
-    "score": 91,
-    "segment": "Authentic Dakhni Urdu food/lifestyle/cooking",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/@dakhnilifestylevlogs",
-    "followerSignal": "Public YouTube channel result; reach needs manual check",
-    "languageProof": "Public description says authentic Dakhni Urdu.",
-    "bangaloreProof": "Bangalore relevance needs profile/video confirmation; language/food fit is direct.",
-    "foodProof": "Public description says food, lifestyle, cooking, and daily adventures.",
-    "whyTarget": "Language-food fit is excellent; use if Bangalore location and active Instagram can be verified.",
-    "risk": "Location proof weaker than language proof.",
-    "offerAngle": "Micro/paid test: family-friendly food story in authentic Dakhni Urdu.",
-    "sourceUrls": [
-      "https://www.youtube.com/@dakhnilifestylevlogs"
-    ]
-  },
-  {
-    "id": "bangalore-vlogs-by-sarah",
-    "name": "Bangalore Vlogs By Sarah",
-    "priority": "A1 direct paid anchor",
-    "score": 89,
-    "segment": "English + Dakhni Bangalore food/lifestyle guide",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/@bangalore.vlogs.official",
-    "followerSignal": "573 YouTube subscribers; exactness higher than reach",
-    "languageProof": "Public channel says English and Dakhni vlogs.",
-    "bangaloreProof": "Public channel says guide to food, lifestyle, shopping, travel and recreation in Namma Bengaluru.",
-    "foodProof": "Public videos/shorts include street food near Commercial Street, biryani, Shivajinagar/Frazer Town paan, Koramangala food.",
-    "whyTarget": "Small but high-context; can feel like a community recommendation.",
-    "risk": "Very small reach; use as local authenticity seed only.",
-    "offerAngle": "Barter plus token: local guide reel and three story frames; natural walkthrough.",
-    "sourceUrls": [
-      "https://www.youtube.com/@bangalore.vlogs.official"
-    ]
-  },
-  {
-    "id": "aafu-bangalore-vlogs",
-    "name": "Aafu Bangalore Vlogs",
-    "priority": "A2 direct micro",
-    "score": 86,
-    "segment": "Dakhni Bangalore family/local places/restaurant review",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/watch?v=SOXDGBb87hI",
-    "followerSignal": "462 YouTube subscribers in public video result",
-    "languageProof": "Public video metadata says Dakhni language vlog and Dakhni lifestyle.",
-    "bangaloreProof": "Public video says Bangalore/Namma Bengaluru and local places.",
-    "foodProof": "Public description says new food places, restaurant reviews and local street food reviews.",
-    "whyTarget": "Exact voice and geography; good if content should feel like community recommendation.",
-    "risk": "Low reach; not a paid anchor.",
-    "offerAngle": "Barter/token: family-friendly HE visit with one reel in Dakhni style.",
-    "sourceUrls": [
-      "https://www.youtube.com/watch?v=SOXDGBb87hI"
-    ]
-  },
-  {
     "id": "rihana-hussain",
     "name": "Rihana Hussain",
     "priority": "A2 direct micro",
@@ -173,98 +117,23 @@
     ]
   },
   {
-    "id": "bangalore-wale-hamain",
-    "name": "Bangalore wale hamain",
-    "priority": "A2 direct micro",
-    "score": 84,
-    "segment": "Bangalore Urdu recipes and vlogs",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/@Bangalorewalehamain",
-    "followerSignal": "Public YouTube channel result; reach needs review",
-    "languageProof": "Public description says authentic Bangalore recipes in Bangalore Urdu.",
-    "bangaloreProof": "Bangalore Urdu and Bangalore recipe positioning.",
-    "foodProof": "Recipe-first content; fit for food heritage and Dakhni cuisine explanation.",
-    "whyTarget": "Excellent language-food fit for Dakhni food lineage; activity must be checked.",
-    "risk": "Recipe-first rather than restaurant-review creator.",
-    "offerAngle": "Soft invite: HE menu story around ghee rice/kabab/biryani and 1918 Hamza lineage.",
-    "sourceUrls": [
-      "https://www.youtube.com/@Bangalorewalehamain"
-    ]
-  },
-  {
-    "id": "dakhni-life",
-    "name": "Dakhni Life",
-    "priority": "A2 direct micro",
-    "score": 82,
-    "segment": "Dakhni lifestyle plus food/biryani/chai",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/@DakhniLife",
-    "followerSignal": "Public channel result; reach needs review",
-    "languageProof": "Public description says Dakhni lifestyle and culture.",
-    "bangaloreProof": "Public description says Banglore lifestyle.",
-    "foodProof": "Public description mentions food, biryani, chai, old city vibes.",
-    "whyTarget": "Very close language-food category; good exact-crowd test if active.",
-    "risk": "Small/new channel possible; verify recent frequency.",
-    "offerAngle": "Barter/token: biryani, chai and old-city vibes framing.",
-    "sourceUrls": [
-      "https://www.youtube.com/@DakhniLife"
-    ]
-  },
-  {
-    "id": "indianvlog-22",
-    "name": "Indianvlog_22",
-    "priority": "A2 direct micro",
-    "score": 80,
-    "segment": "Shivajinagar Ramzan food vlog seed",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/watch?v=MCxgdVwdmKs",
-    "followerSignal": "1.12K YouTube subscribers in public video result",
-    "languageProof": "Language needs manual check.",
-    "bangaloreProof": "Public video is Shivajinagar, Bengaluru.",
-    "foodProof": "Public video covers haleem, kebabs, shawarma, pathar ka gosht and Bangalore street food.",
-    "whyTarget": "Food/locality exact. Add after checking if Instagram is active enough.",
-    "risk": "Low reach; exactness depends on current activity.",
-    "offerAngle": "Micro invite: post-Ramzan permanent HKP Road food stop.",
-    "sourceUrls": [
-      "https://www.youtube.com/watch?v=MCxgdVwdmKs"
-    ]
-  },
-  {
     "id": "rocking-rasheed",
     "name": "Rocking Rasheed",
     "priority": "A2 direct paid/mid",
     "score": 79,
     "segment": "Shivajinagar/Frazer Town Ramzan food audience",
-    "instagramHandle": "",
+    "instagramHandle": "rocking_rasheed__",
     "youtubeUrl": "https://www.youtube.com/watch?v=ahVwOdDOMRc",
     "followerSignal": "72.4K YouTube subscribers shown in public result for Shivajinagar video",
     "languageProof": "Language needs manual check.",
     "bangaloreProof": "Public result focuses on Shivajinagar/Russell Market/Frazer Town Ramadan food.",
     "foodProof": "Public result lists samosas, kebabs, haleem, phirni and other Ramzan food items.",
     "whyTarget": "Strong reach and locality if accessible; useful for paid seasonal audience.",
-    "risk": "May be broader travel/food page; check current engagement and Instagram.",
+    "risk": "May be broader travel/food page; check current engagement and Instagram. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Paid mid if current reach is real; HE as everyday version of the Ramzan food lane.",
     "sourceUrls": [
-      "https://www.youtube.com/watch?v=ahVwOdDOMRc"
-    ]
-  },
-  {
-    "id": "dakhni-vlogs-official",
-    "name": "DAKHNI VLOGS",
-    "priority": "A2 direct creator",
-    "score": 78,
-    "segment": "Bangalore Dakhni digital creator; paid promotions open",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/@DAKHNIVLOGSOFFICIAL",
-    "followerSignal": "Public channel result; reach needs review",
-    "languageProof": "Channel naming and public result indicate Dakhni creator.",
-    "bangaloreProof": "Public result says Bangalore, India.",
-    "foodProof": "Not food-first; useful for language audience and offer explanation.",
-    "whyTarget": "Good language fit if creator can make a clean food brief.",
-    "risk": "Food relevance weaker; shortlist only if tone fits HE.",
-    "offerAngle": "Paid/test: one Dakhni reel explaining HE offer and lineage in creator voice.",
-    "sourceUrls": [
-      "https://www.youtube.com/@DAKHNIVLOGSOFFICIAL"
+      "https://www.youtube.com/watch?v=ahVwOdDOMRc",
+      "https://www.instagram.com/rocking_rasheed__/"
     ]
   },
   {
@@ -273,17 +142,18 @@
     "priority": "A2 exact-local seed",
     "score": 76,
     "segment": "Shivajinagar midnight food micro creator",
-    "instagramHandle": "",
+    "instagramHandle": "zayn_ibrahim07",
     "youtubeUrl": "https://www.youtube.com/watch?v=zib9yG0H1kc",
     "followerSignal": "133 YouTube subscribers; exact-local seed only",
     "languageProof": "Public video starts with local greeting; language needs full check.",
     "bangaloreProof": "Public video is Shivajinagar, Bangalore at midnight.",
     "foodProof": "Public video says late-night cravings, street food, Bangalore food and midnight food.",
     "whyTarget": "Tiny but exact; useful as seed for finding similar creators and hashtags.",
-    "risk": "Not paid unless Instagram reach is much higher.",
+    "risk": "Not paid unless Instagram reach is much higher. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Barter-only unless Instagram has reach; use as prospecting seed.",
     "sourceUrls": [
-      "https://www.youtube.com/watch?v=zib9yG0H1kc"
+      "https://www.youtube.com/watch?v=zib9yG0H1kc",
+      "https://www.instagram.com/zayn_ibrahim07/"
     ]
   },
   {
@@ -292,36 +162,18 @@
     "priority": "A2 exact-local seed",
     "score": 75,
     "segment": "Shivajinagar Ramzan food micro channel with Instagram hint",
-    "instagramHandle": "",
+    "instagramHandle": "ikramulhussin12",
     "youtubeUrl": "https://www.youtube.com/watch?v=SjZQKGRSDqg",
     "followerSignal": "1.46K YouTube subscribers in public video result",
     "languageProof": "Language needs manual check.",
     "bangaloreProof": "Public video is Bangalore Shivajinagar Ramzan Food Mela.",
     "foodProof": "Food mela content; local food proof direct.",
     "whyTarget": "Worth checking because local food proof is exact and Instagram may be linked from YouTube description.",
-    "risk": "Micro channel and Instagram handle not fully visible in search result.",
+    "risk": "Micro channel and Instagram handle not fully visible in search result. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Barter/token if active; seed for local creator discovery.",
     "sourceUrls": [
-      "https://www.youtube.com/watch?v=SjZQKGRSDqg"
-    ]
-  },
-  {
-    "id": "haseena-taj",
-    "name": "Haseena Taj",
-    "priority": "A2 direct food-language seed",
-    "score": 75,
-    "segment": "Dakhni food blogger based in Bangalore",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/watch?v=HIctTBsAiio",
-    "followerSignal": "Public podcast/video reference; direct profile needs manual discovery",
-    "languageProof": "Public video title/description identifies her as a Dakhni food blogger.",
-    "bangaloreProof": "Public video title/description says based in Bangalore.",
-    "foodProof": "Public video title/description says food blogger.",
-    "whyTarget": "Potentially one of the cleanest exact matches if Instagram profile can be found.",
-    "risk": "Needs manual profile discovery before outreach.",
-    "offerAngle": "Priority manual search: if active, offer paid/barter with strong heritage brief.",
-    "sourceUrls": [
-      "https://www.youtube.com/watch?v=HIctTBsAiio"
+      "https://www.youtube.com/watch?v=SjZQKGRSDqg",
+      "https://www.instagram.com/ikramulhussin12/"
     ]
   },
   {
@@ -330,17 +182,18 @@
     "priority": "B1 language/community reach",
     "score": 74,
     "segment": "Dakhni podcast/community channel",
-    "instagramHandle": "",
+    "instagramHandle": "shaabu_and_hani",
     "youtubeUrl": "https://www.youtube.com/watch?v=mqEgWSaBoL0",
     "followerSignal": "2K+ YouTube subscriber public signal in search result",
     "languageProof": "Public podcast content is explicitly Dakhni.",
     "bangaloreProof": "Public result tags Bangalore/Dakhni creator conversations.",
     "foodProof": "Not food-first; use for culture/language reach only.",
     "whyTarget": "Useful to explain Hamza Express as Dakhni/local culture, not just food review.",
-    "risk": "Food conversion weaker; not first outreach unless they accept food brief.",
+    "risk": "Food conversion weaker; not first outreach unless they accept food brief. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Paid/community content only if they can anchor the 1918-to-new-format story.",
     "sourceUrls": [
-      "https://www.youtube.com/watch?v=mqEgWSaBoL0"
+      "https://www.youtube.com/watch?v=mqEgWSaBoL0",
+      "https://www.instagram.com/shaabu_and_hani/"
     ]
   },
   {
@@ -369,18 +222,19 @@
     "priority": "B1 language/community reach",
     "score": 72,
     "segment": "Bengaluru Dakhni creator; cultural fit, not food-first",
-    "instagramHandle": "",
+    "instagramHandle": "nehal__pasha",
     "youtubeUrl": "https://www.youtube.com/watch?v=mqEgWSaBoL0",
     "followerSignal": "Public articles identify him as a Bengaluru Dakhni star; exact handle/reach needs manual check",
     "languageProof": "Public article says his videos are in Bengaluru Dakhni.",
     "bangaloreProof": "Public article says Bengaluru doctor/Dakhni creator.",
     "foodProof": "Not food-first.",
     "whyTarget": "Strong cultural voice for misconception reset, less direct for food discovery.",
-    "risk": "Outside food category; use only as paid strategic creator.",
+    "risk": "Outside food category; use only as paid strategic creator. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Paid strategic brief: creator explains Hamza Express story in local Dakhni tone.",
     "sourceUrls": [
       "https://www.indulgexpress.com/entertainment/celebs/2025/Nov/20/25-yo-bengaluru-doctor-who-is-also-a-dakhni-star-is-all-set-to-launch-a-medical-relief-campaign",
-      "https://www.youtube.com/watch?v=mqEgWSaBoL0"
+      "https://www.youtube.com/watch?v=mqEgWSaBoL0",
+      "https://www.instagram.com/nehal__pasha/"
     ]
   },
   {
@@ -389,17 +243,18 @@
     "priority": "B1 language/community reach",
     "score": 71,
     "segment": "Bangalore comedy/reel audience with some food/biryani content",
-    "instagramHandle": "",
+    "instagramHandle": "shavezpasha004",
     "youtubeUrl": "https://www.youtube.com/@halluhasso/videos",
     "followerSignal": "70.1K YouTube subscribers in public channel result",
     "languageProof": "Dakhni/local comedy signal to be manually checked in current content.",
     "bangaloreProof": "Public videos repeatedly reference Bangalore.",
     "foodProof": "Public result includes Aunty ki Biryani Chori Ho Gai and Bangalore prank/local content.",
     "whyTarget": "Good community entertainment reach if HE ask feels funny and local.",
-    "risk": "Comedy/prank tone may not match respectful food heritage.",
+    "risk": "Comedy/prank tone may not match respectful food heritage. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Paid only if concept is controlled and respectful; no forced barter copy.",
     "sourceUrls": [
-      "https://www.youtube.com/@halluhasso/videos"
+      "https://www.youtube.com/@halluhasso/videos",
+      "https://www.instagram.com/shavezpasha004/"
     ]
   },
   {
@@ -408,18 +263,19 @@
     "priority": "B1 cultural anchor",
     "score": 70,
     "segment": "Bengaluru Dakhni cultural/hip-hop authority",
-    "instagramHandle": "",
+    "instagramHandle": "pasha.bhai_",
     "youtubeUrl": "https://www.youtube.com/watch?v=tteWIN9kFB8",
     "followerSignal": "Cultural authority; reach must be checked per platform",
     "languageProof": "Public sources describe Bengaluru Dakhni rap and the group reclaiming Dakhni.",
     "bangaloreProof": "Public source places group in Bengaluru/Neelasandra.",
     "foodProof": "Not food-first; cultural fit only.",
     "whyTarget": "Use for paid strategic list, not daily barter. Strong for Dakhni authenticity.",
-    "risk": "Audience may not be food-conversion first; concept must be respectful.",
+    "risk": "Audience may not be food-conversion first; concept must be respectful. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Strategic paid collaboration: heritage/culture story, not menu review.",
     "sourceUrls": [
       "https://www.thenewsminute.com/karnataka/dismantling-dakhni-s-broken-dialect-myth-one-track-time-181038",
-      "https://www.youtube.com/watch?v=tteWIN9kFB8"
+      "https://www.youtube.com/watch?v=tteWIN9kFB8",
+      "https://www.instagram.com/pasha.bhai_/"
     ]
   },
   {
@@ -428,18 +284,19 @@
     "priority": "B1 cultural anchor",
     "score": 69,
     "segment": "Bengaluru humour/storytelling creator with community lens",
-    "instagramHandle": "",
+    "instagramHandle": "musalmancomix",
     "youtubeUrl": "",
     "followerSignal": "Public press coverage; social reach needs manual lookup",
     "languageProof": "Community/storytelling fit, not verified Dakhni content from result.",
     "bangaloreProof": "Public articles identify him as Bengaluru-based.",
     "foodProof": "Not food-first.",
     "whyTarget": "High-value strategic voice for smart cultural storytelling around Hamza name and identity.",
-    "risk": "May not suit direct restaurant promo; approach as paid concept collaboration only.",
+    "risk": "May not suit direct restaurant promo; approach as paid concept collaboration only. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Paid creative brief: culture/history story. Not a barter food-review ask.",
     "sourceUrls": [
       "https://homegrown.co.in/homegrown-creators/musalman-indias-first-muslim-superhero-finally-gets-his-own-graphic-novel",
-      "https://indianexpress.com/article/cities/bangalore/bengaluru-comic-author-falah-faisal-books-9918050/"
+      "https://indianexpress.com/article/cities/bangalore/bengaluru-comic-author-falah-faisal-books-9918050/",
+      "https://www.instagram.com/musalmancomix/"
     ]
   },
   {
@@ -448,17 +305,18 @@
     "priority": "B1 cultural/language page",
     "score": 68,
     "segment": "Dakhni culture Instagram initiative",
-    "instagramHandle": "",
+    "instagramHandle": "hallubol",
     "youtubeUrl": "",
     "followerSignal": "Public article; Instagram profile needs direct lookup",
     "languageProof": "Public article says HalluBol raises awareness about Dakhni language and culture.",
     "bangaloreProof": "Dakhni community/culture source; local relevance likely but needs profile check.",
     "foodProof": "Not food-first.",
     "whyTarget": "Good for cultural language audience discovery and possible cross-promotion if tone fits.",
-    "risk": "Not food-conversion direct; cultural amplification only.",
+    "risk": "Not food-conversion direct; cultural amplification only. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Message only after profile review: heritage story angle, not menu discount angle.",
     "sourceUrls": [
-      "https://thesouthfirst.com/featured/this-new-instagram-page-represents-dakhni-culture/"
+      "https://thesouthfirst.com/featured/this-new-instagram-page-represents-dakhni-culture/",
+      "https://www.instagram.com/hallubol/"
     ]
   },
   {
@@ -467,17 +325,18 @@
     "priority": "B2 language creator",
     "score": 67,
     "segment": "Bangalore Dakhni/dubbing creator",
-    "instagramHandle": "",
+    "instagramHandle": "trendwithindianarab",
     "youtubeUrl": "https://www.youtube.com/watch?v=K0n7nneQ3Yk",
     "followerSignal": "Public videos; reach needs manual check",
     "languageProof": "Public result identifies Dakhni vlog and Bangalore creator Shafi Khan.",
     "bangaloreProof": "Public result says creator from Bangalore.",
     "foodProof": "Not food-first from available result.",
     "whyTarget": "Language fit; include for manual review, not automatic outreach.",
-    "risk": "Food relevance weak.",
+    "risk": "Food relevance weak. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "If shortlisted, ask for story-led Dakhni reel rather than food review.",
     "sourceUrls": [
-      "https://www.youtube.com/watch?v=K0n7nneQ3Yk"
+      "https://www.youtube.com/watch?v=K0n7nneQ3Yk",
+      "https://www.instagram.com/trendwithindianarab/"
     ]
   },
   {
@@ -486,17 +345,18 @@
     "priority": "B2 micro language seed",
     "score": 65,
     "segment": "Dakhni vlog micro seed",
-    "instagramHandle": "",
+    "instagramHandle": "md_x_zain",
     "youtubeUrl": "https://www.youtube.com/watch?v=iU3DJVpbsDc",
     "followerSignal": "1.99K YouTube subscribers in public video result",
     "languageProof": "Public result says Dakhni vlog.",
     "bangaloreProof": "Bangalore needs manual check.",
     "foodProof": "Food relevance not proven.",
     "whyTarget": "Use as seed to discover connected Dakhni creators, not first paid target.",
-    "risk": "Weak food/local proof.",
+    "risk": "Weak food/local proof. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Hold until profile confirms Bangalore and food relevance.",
     "sourceUrls": [
-      "https://www.youtube.com/watch?v=iU3DJVpbsDc"
+      "https://www.youtube.com/watch?v=iU3DJVpbsDc",
+      "https://www.instagram.com/md_x_zain/"
     ]
   },
   {
@@ -505,36 +365,18 @@
     "priority": "B2 micro language seed",
     "score": 63,
     "segment": "Bengaluru Dakhni/Ramzan vlog micro seed",
-    "instagramHandle": "",
+    "instagramHandle": "00__the_doctor",
     "youtubeUrl": "https://www.youtube.com/watch?v=ejWwOMLPvQk",
     "followerSignal": "2.25K YouTube subscribers in public video result",
     "languageProof": "Public result says Dakhni vlog.",
     "bangaloreProof": "Public video result location is Bengaluru.",
     "foodProof": "Ramzan routine context; food relevance needs manual check.",
     "whyTarget": "Useful seed profile for connected accounts, not direct paid anchor.",
-    "risk": "Weak food proof.",
+    "risk": "Weak food proof. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Hold until current IG and food relevance are confirmed.",
     "sourceUrls": [
-      "https://www.youtube.com/watch?v=ejWwOMLPvQk"
-    ]
-  },
-  {
-    "id": "dakhni-vlogs-channel",
-    "name": "DakHNi vlog's",
-    "priority": "B2 micro language seed",
-    "score": 62,
-    "segment": "Dakhni vlog channel seed",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/@DakHNivlogs",
-    "followerSignal": "Public channel result; no reach details in snippet",
-    "languageProof": "Channel name indicates Dakhni vlogs; manual check required.",
-    "bangaloreProof": "Bangalore proof needs manual check.",
-    "foodProof": "Food proof needs manual check.",
-    "whyTarget": "Seed only; useful for related-channel mining.",
-    "risk": "Too little proof from public result.",
-    "offerAngle": "Research seed, not outreach until verified.",
-    "sourceUrls": [
-      "https://www.youtube.com/@DakHNivlogs"
+      "https://www.youtube.com/watch?v=ejWwOMLPvQk",
+      "https://www.instagram.com/00__the_doctor/"
     ]
   },
   {
@@ -749,25 +591,6 @@
     ]
   },
   {
-    "id": "arman-and-shaik-bangalore-vlogs",
-    "name": "Arman And Shaik Bangalore Vlogs",
-    "priority": "B2 verify local food seed",
-    "score": 74,
-    "segment": "Bangalore Hindustani/local-food vlog seed; useful for City Market/Shivajinagar-style audience adjacency",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/watch?v=zSlvzdzg7y4",
-    "followerSignal": "2.66K YouTube subscribers shown in public result; below paid-anchor range but useful for network expansion",
-    "languageProof": "Public title/description uses Hindustani phrasing around Bangalore City Market food.",
-    "bangaloreProof": "Public result is Bangalore City Market/Sri Krishnarajendra Market focused.",
-    "foodProof": "Public result covers falooda, kunafa and traditional food products/mixes.",
-    "whyTarget": "Small but very local; can surface adjacent creators around City Market, Commercial Street, Shivajinagar and Muslim-food retail.",
-    "risk": "Needs Instagram mapping and recent-view check before paid outreach.",
-    "offerAngle": "Local market-food story: Hamza Express as a nearby heritage-food stop for ghee rice, kabab and biryani after market/shopping content.",
-    "sourceUrls": [
-      "https://www.youtube.com/watch?v=zSlvzdzg7y4"
-    ]
-  },
-  {
     "id": "kaif-explorers",
     "name": "Kaif Explorer's",
     "priority": "B2 verify Shivajinagar seed",
@@ -787,98 +610,23 @@
     ]
   },
   {
-    "id": "chupu-vlogs",
-    "name": "Chupu Vlogs",
-    "priority": "B2 verify Ramzan food seed",
-    "score": 68,
-    "segment": "Small Shivajinagar/Ramzan food-street creator; exact locality seed",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/watch?v=IZT5sTTtLcc",
-    "followerSignal": "1.88K YouTube subscribers in public result; small but exact topic fit",
-    "languageProof": "Public result is Ramzan/Iftar context; verify spoken language before outreach.",
-    "bangaloreProof": "Public result is explicitly Shivajinagar Bangalore.",
-    "foodProof": "Public result lists haleem, seekh kebab, shawarma, biryani, rolls and Ramzan street food.",
-    "whyTarget": "Very exact product/location seed for finding related creators and shorts around Shivajinagar food.",
-    "risk": "Very small engagement; use as discovery seed or low-cost invite only.",
-    "offerAngle": "Ramzan/night-food angle: Hamza Express as an all-season HKP Road non-veg stop beyond the seasonal food mela.",
-    "sourceUrls": [
-      "https://www.youtube.com/watch?v=IZT5sTTtLcc"
-    ]
-  },
-  {
-    "id": "travelling-diaries-raj-biswas",
-    "name": "Travelling Diaries By Raj Biswas",
-    "priority": "C1 exact food backup",
-    "score": 66,
-    "segment": "Bangalore/Shivajinagar street-food backup; not Urdu-first but exact food location fit",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/watch?v=4i_oUbFYEMY",
-    "followerSignal": "2.93K YouTube subscribers in public result; backup micro creator",
-    "languageProof": "No strong Dakhni/Urdu proof in public result; keep as food/location backup only.",
-    "bangaloreProof": "Public result covers Shivajinagar, Bangalore.",
-    "foodProof": "Public result covers Ramzan food tour, Iftar street food, haleem, kebabs and shawarma.",
-    "whyTarget": "Useful if the campaign needs broader Bangalore food creators who already understand Shivajinagar food-street visuals.",
-    "risk": "Not community-language specific; lower priority for paid push.",
-    "offerAngle": "Street-food guide angle: position Hamza Express as a cleaner, everyday HKP Road destination for biryani, ghee rice and kabab.",
-    "sourceUrls": [
-      "https://www.youtube.com/watch?v=4i_oUbFYEMY"
-    ]
-  },
-  {
-    "id": "phirtee-raho-bengaluru-ke-chokree",
-    "name": "PHIRTEE RAHO / Bengaluru ke Chokree",
-    "priority": "B2 verify local food seed",
-    "score": 67,
-    "segment": "Very small Bengaluru food-review seed; possible Dakhni/local young audience route",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/live/GphBHGsXfhU",
-    "followerSignal": "215 YouTube subscribers in public result; use as seed, not paid creator",
-    "languageProof": "Public result names “Bengaluru ke Chokree”; verify voice/language and IG before outreach.",
-    "bangaloreProof": "Public result is a Bengaluru restaurant food review.",
-    "foodProof": "Public result is Al Zara Mandi Arabic food review in Bengaluru.",
-    "whyTarget": "Good search seed for “Bengaluru ke/ki Chokree” style Dakhni/local youth creator graph.",
-    "risk": "Audience may be too small; needs manual verification.",
-    "offerAngle": "Young local-food review angle: try Hamza Express as a heritage-backed but convenient new-format HKP Road outlet.",
-    "sourceUrls": [
-      "https://www.youtube.com/live/GphBHGsXfhU"
-    ]
-  },
-  {
     "id": "dakhni-zaiqa-mf",
     "name": "Dakhni Zaiqa",
     "priority": "B2 verify cuisine-language seed",
     "score": 65,
     "segment": "Dakhni/South Indian Muslim cuisine seed; strong cuisine fit, weak Bangalore proof until verified",
-    "instagramHandle": "",
+    "instagramHandle": "dakhni_zaiqa",
     "youtubeUrl": "https://www.youtube.com/@dakhnizaiqaMF",
     "followerSignal": "Public channel result; follower count and location need verification",
     "languageProof": "Public result describes Dakhni Zaika and South Indian Muslim cuisine.",
     "bangaloreProof": "No confirmed Bangalore proof in public result; use only as cuisine/discovery seed.",
     "foodProof": "Public result mentions Dum Biryani and South Indian Muslim cuisine.",
     "whyTarget": "Good cuisine-language seed for discovering adjacent Dakhni food accounts even if not directly outreach-ready.",
-    "risk": "Do not outreach until Bangalore/local audience is confirmed.",
+    "risk": "Do not outreach until Bangalore/local audience is confirmed. Instagram handle mapped from public creator/search evidence; verify profile visually before paid outreach.",
     "offerAngle": "Dakhni cuisine story: Hamza Express as Bangalore’s 1918-lineage outlet carrying ghee rice, kabab and biryani into a new format.",
     "sourceUrls": [
-      "https://www.youtube.com/@dakhnizaiqaMF"
-    ]
-  },
-  {
-    "id": "real-life-journal-shivajinagar",
-    "name": "Real Life Journal",
-    "priority": "C1 exact locality backup",
-    "score": 61,
-    "segment": "Tiny Shivajinagar city/food/history vlog seed; exact locality but very early audience",
-    "instagramHandle": "",
-    "youtubeUrl": "https://www.youtube.com/watch?v=sxO8pAyYnao",
-    "followerSignal": "72 YouTube subscribers in public result; discovery seed only",
-    "languageProof": "No strong Dakhni/Urdu proof; keep as locality seed.",
-    "bangaloreProof": "Public result covers Shivajinagar, Bangalore, Russell Market and local history.",
-    "foodProof": "Public result covers restaurants and street food during Ramzan.",
-    "whyTarget": "Can help discover exact Shivajinagar/Russell Market creator graph and local hashtags.",
-    "risk": "Too small for paid push; do not prioritize for outreach unless manual review finds strong reels elsewhere.",
-    "offerAngle": "Local-history angle: connect Hamza Express to HKP Road, Shivajinagar and the Hamza food lineage since 1918.",
-    "sourceUrls": [
-      "https://www.youtube.com/watch?v=sxO8pAyYnao"
+      "https://www.youtube.com/@dakhnizaiqaMF",
+      "https://www.instagram.com/dakhni_zaiqa/"
     ]
   }
 ]
