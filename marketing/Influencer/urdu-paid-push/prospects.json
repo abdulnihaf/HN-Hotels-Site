@@ -728,5 +728,157 @@
     "sourceUrls": [
       "https://hashfame.com/find-influencers/top-food-influencers-bangalore"
     ]
+  },
+  {
+    "id": "sogra-23",
+    "name": "Sogra_23",
+    "priority": "B2 verify Dakhni micro",
+    "score": 72,
+    "segment": "Bangalore Dakhni micro short-form creator; verify active IG/reel quality before outreach",
+    "instagramHandle": "sogra_23",
+    "youtubeUrl": "https://www.youtube.com/shorts/CPGxP9oj5-k",
+    "followerSignal": "Micro creator; public short result shows handle-level discovery, follower count needs IG verification",
+    "languageProof": "Public YouTube short result includes #dakhni and Bangalore vlog tags.",
+    "bangaloreProof": "Public result includes #bangalore, #bangalorevlogs and location Bengaluru.",
+    "foodProof": "Public result includes #food in the short metadata.",
+    "whyTarget": "Exact language/locality seed for finding more Dakhni Bangalore micro creators through related shorts and tagged accounts.",
+    "risk": "Single short evidence only; keep as verify seed until profile grid confirms repeated food/local content.",
+    "offerAngle": "Micro Dakhni/Bangalore reel: quick local-food invite around Hamza Express as a familiar HKP Road stop from the Hamza lineage.",
+    "sourceUrls": [
+      "https://www.youtube.com/shorts/CPGxP9oj5-k"
+    ]
+  },
+  {
+    "id": "arman-and-shaik-bangalore-vlogs",
+    "name": "Arman And Shaik Bangalore Vlogs",
+    "priority": "B2 verify local food seed",
+    "score": 74,
+    "segment": "Bangalore Hindustani/local-food vlog seed; useful for City Market/Shivajinagar-style audience adjacency",
+    "instagramHandle": "",
+    "youtubeUrl": "https://www.youtube.com/watch?v=zSlvzdzg7y4",
+    "followerSignal": "2.66K YouTube subscribers shown in public result; below paid-anchor range but useful for network expansion",
+    "languageProof": "Public title/description uses Hindustani phrasing around Bangalore City Market food.",
+    "bangaloreProof": "Public result is Bangalore City Market/Sri Krishnarajendra Market focused.",
+    "foodProof": "Public result covers falooda, kunafa and traditional food products/mixes.",
+    "whyTarget": "Small but very local; can surface adjacent creators around City Market, Commercial Street, Shivajinagar and Muslim-food retail.",
+    "risk": "Needs Instagram mapping and recent-view check before paid outreach.",
+    "offerAngle": "Local market-food story: Hamza Express as a nearby heritage-food stop for ghee rice, kabab and biryani after market/shopping content.",
+    "sourceUrls": [
+      "https://www.youtube.com/watch?v=zSlvzdzg7y4"
+    ]
+  },
+  {
+    "id": "kaif-explorers",
+    "name": "Kaif Explorer's",
+    "priority": "B2 verify Shivajinagar seed",
+    "score": 73,
+    "segment": "Bangalore travel/food micro creator with Ramzan food + Commercial Street/Eid shopping adjacency",
+    "instagramHandle": "_mr.kaif_4u",
+    "youtubeUrl": "https://www.youtube.com/watch?v=L1vA-3vkudU",
+    "followerSignal": "2.04K YouTube subscribers in public result; good exact-local seed, not a paid anchor yet",
+    "languageProof": "Public result uses Hindustani/Ramzan/Eid context; verify spoken language in recent videos.",
+    "bangaloreProof": "Public result covers Shivajinagar and Commercial Street, Bangalore.",
+    "foodProof": "Public result covers Ramzan food street, kebabs, shawarma and street-food vlog content.",
+    "whyTarget": "Exact HKP Road-adjacent audience route: Shivajinagar food plus Commercial Street shopping flow.",
+    "risk": "Small channel; use for barter/seed or for discovering tagged collaborators, not primary paid push.",
+    "offerAngle": "Shivajinagar + Commercial Street route: invite him to show Hamza Express as the convenient post-shopping HKP Road food stop.",
+    "sourceUrls": [
+      "https://www.youtube.com/watch?v=L1vA-3vkudU"
+    ]
+  },
+  {
+    "id": "chupu-vlogs",
+    "name": "Chupu Vlogs",
+    "priority": "B2 verify Ramzan food seed",
+    "score": 68,
+    "segment": "Small Shivajinagar/Ramzan food-street creator; exact locality seed",
+    "instagramHandle": "",
+    "youtubeUrl": "https://www.youtube.com/watch?v=IZT5sTTtLcc",
+    "followerSignal": "1.88K YouTube subscribers in public result; small but exact topic fit",
+    "languageProof": "Public result is Ramzan/Iftar context; verify spoken language before outreach.",
+    "bangaloreProof": "Public result is explicitly Shivajinagar Bangalore.",
+    "foodProof": "Public result lists haleem, seekh kebab, shawarma, biryani, rolls and Ramzan street food.",
+    "whyTarget": "Very exact product/location seed for finding related creators and shorts around Shivajinagar food.",
+    "risk": "Very small engagement; use as discovery seed or low-cost invite only.",
+    "offerAngle": "Ramzan/night-food angle: Hamza Express as an all-season HKP Road non-veg stop beyond the seasonal food mela.",
+    "sourceUrls": [
+      "https://www.youtube.com/watch?v=IZT5sTTtLcc"
+    ]
+  },
+  {
+    "id": "travelling-diaries-raj-biswas",
+    "name": "Travelling Diaries By Raj Biswas",
+    "priority": "C1 exact food backup",
+    "score": 66,
+    "segment": "Bangalore/Shivajinagar street-food backup; not Urdu-first but exact food location fit",
+    "instagramHandle": "",
+    "youtubeUrl": "https://www.youtube.com/watch?v=4i_oUbFYEMY",
+    "followerSignal": "2.93K YouTube subscribers in public result; backup micro creator",
+    "languageProof": "No strong Dakhni/Urdu proof in public result; keep as food/location backup only.",
+    "bangaloreProof": "Public result covers Shivajinagar, Bangalore.",
+    "foodProof": "Public result covers Ramzan food tour, Iftar street food, haleem, kebabs and shawarma.",
+    "whyTarget": "Useful if the campaign needs broader Bangalore food creators who already understand Shivajinagar food-street visuals.",
+    "risk": "Not community-language specific; lower priority for paid push.",
+    "offerAngle": "Street-food guide angle: position Hamza Express as a cleaner, everyday HKP Road destination for biryani, ghee rice and kabab.",
+    "sourceUrls": [
+      "https://www.youtube.com/watch?v=4i_oUbFYEMY"
+    ]
+  },
+  {
+    "id": "phirtee-raho-bengaluru-ke-chokree",
+    "name": "PHIRTEE RAHO / Bengaluru ke Chokree",
+    "priority": "B2 verify local food seed",
+    "score": 67,
+    "segment": "Very small Bengaluru food-review seed; possible Dakhni/local young audience route",
+    "instagramHandle": "",
+    "youtubeUrl": "https://www.youtube.com/live/GphBHGsXfhU",
+    "followerSignal": "215 YouTube subscribers in public result; use as seed, not paid creator",
+    "languageProof": "Public result names “Bengaluru ke Chokree”; verify voice/language and IG before outreach.",
+    "bangaloreProof": "Public result is a Bengaluru restaurant food review.",
+    "foodProof": "Public result is Al Zara Mandi Arabic food review in Bengaluru.",
+    "whyTarget": "Good search seed for “Bengaluru ke/ki Chokree” style Dakhni/local youth creator graph.",
+    "risk": "Audience may be too small; needs manual verification.",
+    "offerAngle": "Young local-food review angle: try Hamza Express as a heritage-backed but convenient new-format HKP Road outlet.",
+    "sourceUrls": [
+      "https://www.youtube.com/live/GphBHGsXfhU"
+    ]
+  },
+  {
+    "id": "dakhni-zaiqa-mf",
+    "name": "Dakhni Zaiqa",
+    "priority": "B2 verify cuisine-language seed",
+    "score": 65,
+    "segment": "Dakhni/South Indian Muslim cuisine seed; strong cuisine fit, weak Bangalore proof until verified",
+    "instagramHandle": "",
+    "youtubeUrl": "https://www.youtube.com/@dakhnizaiqaMF",
+    "followerSignal": "Public channel result; follower count and location need verification",
+    "languageProof": "Public result describes Dakhni Zaika and South Indian Muslim cuisine.",
+    "bangaloreProof": "No confirmed Bangalore proof in public result; use only as cuisine/discovery seed.",
+    "foodProof": "Public result mentions Dum Biryani and South Indian Muslim cuisine.",
+    "whyTarget": "Good cuisine-language seed for discovering adjacent Dakhni food accounts even if not directly outreach-ready.",
+    "risk": "Do not outreach until Bangalore/local audience is confirmed.",
+    "offerAngle": "Dakhni cuisine story: Hamza Express as Bangalore’s 1918-lineage outlet carrying ghee rice, kabab and biryani into a new format.",
+    "sourceUrls": [
+      "https://www.youtube.com/@dakhnizaiqaMF"
+    ]
+  },
+  {
+    "id": "real-life-journal-shivajinagar",
+    "name": "Real Life Journal",
+    "priority": "C1 exact locality backup",
+    "score": 61,
+    "segment": "Tiny Shivajinagar city/food/history vlog seed; exact locality but very early audience",
+    "instagramHandle": "",
+    "youtubeUrl": "https://www.youtube.com/watch?v=sxO8pAyYnao",
+    "followerSignal": "72 YouTube subscribers in public result; discovery seed only",
+    "languageProof": "No strong Dakhni/Urdu proof; keep as locality seed.",
+    "bangaloreProof": "Public result covers Shivajinagar, Bangalore, Russell Market and local history.",
+    "foodProof": "Public result covers restaurants and street food during Ramzan.",
+    "whyTarget": "Can help discover exact Shivajinagar/Russell Market creator graph and local hashtags.",
+    "risk": "Too small for paid push; do not prioritize for outreach unless manual review finds strong reels elsewhere.",
+    "offerAngle": "Local-history angle: connect Hamza Express to HKP Road, Shivajinagar and the Hamza food lineage since 1918.",
+    "sourceUrls": [
+      "https://www.youtube.com/watch?v=sxO8pAyYnao"
+    ]
   }
 ]
