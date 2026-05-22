@@ -158,6 +158,7 @@ export async function onRequest(context) {
 
       if (action === 'save-price')      return await savePrice(body, user, pin, DB, env);
       if (action === 'set-gst')         return await setGst(body, user, pin, DB);
+      if (action === 'upsert-line')     return await upsertLine(body, user, pin, DB);
       if (action === 'backfill-ledger') {
         if (user.role !== 'admin') return err('Backfill requires admin PIN', 403);
         return await backfillLedger(body, user, pin, DB, env);
@@ -324,6 +325,61 @@ async function trustCheck(url, DB, env) {
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * WRITE ACTIONS
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+// Upsert a (date, cut) line — edits existing qty/price OR creates a new row if missing.
+// Body: { date, cut, purchased_kg?, price_per_kg?, gst_inclusive? }
+// Used by the price-entry UI to (a) edit a wrong qty from Odoo or (b) add a cut that wasn't ordered through Odoo.
+async function upsertLine(body, user, pin, DB) {
+  const { date, cut } = body;
+  if (!date || !cut) return err('Missing date or cut');
+  if (!CUTS.includes(cut)) return err(`Invalid cut: ${cut}. Must be one of ${CUTS.join(', ')}`);
+
+  const existing = await DB.prepare(
+    `SELECT id, purchased_kg, price_per_kg_paise, recipe_consumed_g FROM chicken_daily_ledger
+     WHERE brand='HE' AND business_date=? AND cut=?`
+  ).bind(date, cut).first();
+
+  let purchasedKg = existing?.purchased_kg ?? null;
+  if (body.purchased_kg !== undefined && body.purchased_kg !== null && body.purchased_kg !== '') {
+    purchasedKg = Number(body.purchased_kg);
+  }
+
+  let pricePaise = existing?.price_per_kg_paise ?? null;
+  if (body.price_per_kg !== undefined && body.price_per_kg !== null && body.price_per_kg !== '') {
+    pricePaise = Math.round(Number(body.price_per_kg) * 100);
+  }
+
+  const costPaise = (purchasedKg && pricePaise) ? Math.round(purchasedKg * pricePaise) : null;
+
+  // Recompute variance using existing recipe_consumed_g
+  let variancePct = null;
+  const recipeG = existing?.recipe_consumed_g || 0;
+  if (purchasedKg && recipeG > 0) {
+    variancePct = Math.round(((purchasedKg * 1000 - recipeG) / recipeG) * 100 * 100) / 100;
+  }
+
+  if (existing) {
+    await DB.prepare(`
+      UPDATE chicken_daily_ledger
+      SET purchased_kg = ?, price_per_kg_paise = ?, cost_paise = ?, variance_pct = ?,
+          price_entered_by_pin = COALESCE(?, price_entered_by_pin),
+          price_entered_at = CASE WHEN ? IS NOT NULL THEN datetime('now') ELSE price_entered_at END,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(purchasedKg, pricePaise, costPaise, variancePct,
+            body.price_per_kg ? pin : null, body.price_per_kg ? '1' : null, existing.id).run();
+  } else {
+    await DB.prepare(`
+      INSERT INTO chicken_daily_ledger
+        (business_date, brand, cut, purchased_kg, price_per_kg_paise, cost_paise, variance_pct,
+         price_entered_by_pin, price_entered_at, updated_at)
+      VALUES (?, 'HE', ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).bind(date, cut, purchasedKg, pricePaise, costPaise, variancePct, pin).run();
+  }
+
+  await logEvent(DB, 'upsert_line', pin, { date, cut, purchased_kg: purchasedKg, price_per_kg: pricePaise ? pricePaise/100 : null, was_new: !existing });
+  return json({ success: true, was_new: !existing, purchased_kg: purchasedKg, price_per_kg_paise: pricePaise, cost_paise: costPaise });
+}
 
 async function setGst(body, user, pin, DB) {
   const vendorId = body.vendor_id || MN_BROILERS_VENDOR_ID;

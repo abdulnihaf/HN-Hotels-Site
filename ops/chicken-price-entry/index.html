@@ -66,11 +66,20 @@ body{font-family:-apple-system,'Inter',sans-serif;background:var(--bg);color:var
 .line.tangdi .cut::before{background:#a855f7}
 .line.lollipop .cut::before{background:#06b6d4}
 .line.wings .cut::before{background:#84cc16}
-.line .kg{font-size:11px;color:var(--text2);font-variant-numeric:tabular-nums;text-align:right}
+.line .kg{font-variant-numeric:tabular-nums}
+.line .kg input{width:100%;padding:8px;font-size:13px;text-align:right;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:inherit;min-height:38px;font-variant-numeric:tabular-nums}
+.line .kg input:focus{outline:none;border-color:var(--accent);background:rgba(99,102,241,.08)}
 .line .price{display:flex;align-items:center;gap:4px}
 .line .price input{flex:1;padding:8px 8px;font-size:14px;text-align:right;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:inherit;min-height:38px;width:100%;font-variant-numeric:tabular-nums}
 .line .price input:focus{outline:none;border-color:var(--accent);background:rgba(99,102,241,.08)}
 .line .price .pre{color:var(--text2);font-size:11px}
+
+.add-row{display:grid;grid-template-columns:1fr 70px 90px 40px;gap:6px;align-items:center;padding:10px 0;border-top:1px dashed var(--border);margin-top:6px}
+.add-row select, .add-row input{padding:8px;font-size:12px;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:inherit;min-height:38px}
+.add-row select{cursor:pointer}
+.add-row input{text-align:right}
+.add-btn{background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:18px;font-weight:700;cursor:pointer;min-height:38px}
+.add-btn:hover{opacity:.85}
 
 .day-actions{display:flex;gap:8px;margin-top:12px}
 .day-actions button{flex:1;padding:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:12px;font-weight:600;border-radius:8px;cursor:pointer;font-family:inherit;min-height:40px}
@@ -104,6 +113,7 @@ body{font-family:-apple-system,'Inter',sans-serif;background:var(--bg);color:var
 
 <script>
 const API = '/api/chicken-ops';
+const CUTS = ['boneless','shawarma','kebab','tandoori','grill','tangdi','lollipop'];
 let PIN = sessionStorage.getItem('chickenPriceEntryPIN') || '';
 let DATA = null;
 let GST_INCLUSIVE = null;
@@ -193,18 +203,36 @@ function renderDay(day, openByDefault) {
   const badgeText = isComplete ? '✓ done' : `${total - filled} pending`;
   const badgeCls = isComplete ? 'badge done' : 'badge';
 
+  const usedCuts = day.lines.map(l => l.cut);
+  const availableCuts = CUTS.filter(c => !usedCuts.includes(c));
+
   const lineRows = day.lines.map(line => {
     const priceR = line.price_per_kg_paise ? (line.price_per_kg_paise / 100).toFixed(0) : '';
+    const kgVal = line.purchased_kg ?? '';
     return `<div class="line ${line.cut}">
       <span class="cut">${line.cut}</span>
-      <span class="kg">${(line.purchased_kg || 0).toFixed(1)} kg</span>
+      <span class="kg">
+        <input type="number" inputmode="decimal" class="kg-input" value="${kgVal}" placeholder="kg"
+               data-date="${day.date}" data-cut="${line.cut}" min="0" step="0.1">
+      </span>
       <span class="price">
         <span class="pre">₹</span>
-        <input type="number" inputmode="decimal" placeholder="—" value="${priceR}"
+        <input type="number" inputmode="decimal" class="price-input" placeholder="—" value="${priceR}"
                data-date="${day.date}" data-cut="${line.cut}" min="0" step="1">
       </span>
     </div>`;
   }).join('');
+
+  const addRow = availableCuts.length > 0 ? `
+    <div class="add-row">
+      <select class="add-cut-sel" id="add-${day.date}">
+        <option value="">+ Add cut…</option>
+        ${availableCuts.map(c => `<option value="${c}">${c}</option>`).join('')}
+      </select>
+      <input type="number" inputmode="decimal" class="add-kg" id="addkg-${day.date}" placeholder="kg" min="0" step="0.1">
+      <input type="number" inputmode="decimal" class="add-price" id="addpr-${day.date}" placeholder="₹/kg" min="0" step="1">
+      <button class="add-btn" onclick="addCut('${day.date}')">+</button>
+    </div>` : '';
 
   return `<div class="day ${openCls} ${completeCls}" data-date="${day.date}">
     <div class="head" onclick="this.parentElement.classList.toggle('open')">
@@ -213,6 +241,7 @@ function renderDay(day, openByDefault) {
     </div>
     <div class="body">
       ${lineRows}
+      ${addRow}
       <div class="day-actions">
         ${!isComplete ? `<button onclick="copyYesterday('${day.date}')">Copy yesterday</button>` : ''}
         <button class="primary" onclick="saveDay('${day.date}')">Save Day</button>
@@ -263,31 +292,55 @@ window.copyYesterday = function(date) {
 };
 
 window.saveDay = async function(date) {
-  const inputs = document.querySelectorAll(`input[data-date="${date}"]`);
-  const saves = [];
-  for (const inp of inputs) {
-    const val = inp.value.trim();
-    if (!val) continue;
-    const cut = inp.dataset.cut;
-    saves.push({cut, price_per_kg: Number(val)});
-  }
-  if (saves.length === 0) return showMsg(date, 'err', 'No prices to save');
+  // Collect both kg and price per cut
+  const byCut = {};
+  document.querySelectorAll(`input.kg-input[data-date="${date}"]`).forEach(inp => {
+    const v = inp.value.trim();
+    if (v) (byCut[inp.dataset.cut] = byCut[inp.dataset.cut] || {}).purchased_kg = Number(v);
+  });
+  document.querySelectorAll(`input.price-input[data-date="${date}"]`).forEach(inp => {
+    const v = inp.value.trim();
+    if (v) (byCut[inp.dataset.cut] = byCut[inp.dataset.cut] || {}).price_per_kg = Number(v);
+  });
+  const saves = Object.entries(byCut).map(([cut, vals]) => ({ cut, ...vals }));
+  if (saves.length === 0) return showMsg(date, 'err', 'Nothing to save');
 
   showMsg(date, 'ok', `Saving ${saves.length}…`);
   let ok = 0, fail = 0;
   for (const s of saves) {
     try {
-      const r = await fetch(`${API}?action=save-price&pin=${PIN}`, {
+      const r = await fetch(`${API}?action=upsert-line&pin=${PIN}`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({date, cut: s.cut, price_per_kg: s.price_per_kg}),
+        body: JSON.stringify({ date, cut: s.cut, purchased_kg: s.purchased_kg, price_per_kg: s.price_per_kg }),
       }).then(x => x.json());
-      if (r.success) ok += 1;
-      else fail += 1;
+      if (r.success) ok += 1; else fail += 1;
     } catch { fail += 1; }
   }
   showMsg(date, fail === 0 ? 'ok' : 'err', `Saved ${ok}/${saves.length}${fail > 0 ? ` (${fail} failed)` : ''}`);
   setTimeout(loadQueue, 1500);
+};
+
+window.addCut = async function(date) {
+  const cutSel = document.getElementById(`add-${date}`);
+  const kgIn = document.getElementById(`addkg-${date}`);
+  const prIn = document.getElementById(`addpr-${date}`);
+  const cut = cutSel.value;
+  const kg = kgIn.value.trim();
+  if (!cut) return showMsg(date, 'err', 'Pick a cut to add');
+  if (!kg) return showMsg(date, 'err', 'Enter the kg');
+  const body = { date, cut, purchased_kg: Number(kg) };
+  if (prIn.value.trim()) body.price_per_kg = Number(prIn.value.trim());
+  try {
+    const r = await fetch(`${API}?action=upsert-line&pin=${PIN}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'add failed');
+    showMsg(date, 'ok', `Added ${cut} ${kg} kg`);
+    setTimeout(loadQueue, 800);
+  } catch (e) { showMsg(date, 'err', 'Add failed: ' + e.message); }
 };
 
 function shiftDate(s, d) {
