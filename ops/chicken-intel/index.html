@@ -137,10 +137,10 @@ body{font-family:-apple-system,'Inter',sans-serif;background:var(--bg);color:var
 <script>
 const API = '/api/chicken-ops';
 const BRAND = 'HE';
-const CUTS = ['shawarma','boneless','kebab','grill','tandoori','tangdi','lollipop','wings'];
+const CUTS = ['shawarma','boneless','kebab','grill','tandoori','tangdi','lollipop'];
 const DISCREPANCY_CUTS = ['grill','tandoori','lollipop','tangdi'];
-const VARIANCE_CUTS = ['boneless','shawarma','kebab','wings'];
-const CUT_COLOR = {shawarma:'#f59e0b',boneless:'#6366f1',grill:'#ef4444',kebab:'#22c55e',tandoori:'#ec4899',tangdi:'#a855f7',lollipop:'#06b6d4',wings:'#84cc16'};
+const VARIANCE_CUTS = ['boneless','shawarma','kebab'];
+const CUT_COLOR = {shawarma:'#f59e0b',boneless:'#6366f1',grill:'#ef4444',kebab:'#22c55e',tandoori:'#ec4899',tangdi:'#a855f7',lollipop:'#06b6d4'};
 
 const params = new URLSearchParams(location.search);
 const ROLE = params.get('role') || 'owner';

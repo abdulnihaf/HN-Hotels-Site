@@ -34,16 +34,17 @@ const BRAND_CFG = {
   NCH: { company_id: 3, pos_configs: [27, 28] },
 };
 
-const CUTS = ['boneless','shawarma','kebab','tandoori','grill','tangdi','lollipop','wings'];
+// 7 canonical cuts (wings merged into lollipop — same physical product at MN Broilers)
+const CUTS = ['boneless','shawarma','kebab','tandoori','grill','tangdi','lollipop'];
 
 // Map MN Broilers product names (as stored in Odoo product master) → canonical cut
 const PRODUCT_TO_CUT = {
   'Boneless chicken': 'boneless',
   'Chicken lollipop': 'lollipop',
-  'Chicken wings': 'wings',
+  'Chicken wings': 'lollipop',                          // wings merged with lollipop (same vendor product)
   'Grill chicken': 'grill',
   'Kebab chicken': 'kebab',
-  'Shawarama chicken': 'shawarma',  // typo preserved in Odoo product master
+  'Shawarama chicken': 'shawarma',                      // typo preserved in Odoo product master
   'Tangdi chicken (Chicken drumstick)': 'tangdi',
   '[HN-RM-073] Chicken Tandoori Cut': 'tandoori',
 };
