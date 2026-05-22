@@ -63,6 +63,7 @@ const USERS = {
   '8523': { name: 'Basheer', role: 'manager' },
   '4040': { name: 'Haneef',  role: 'viewer' },
   '5050': { name: 'Nisar',   role: 'viewer' },
+  '1111': { name: 'Shared',  role: 'manager' },       // one-off PIN for chicken price collection
 };
 
 /* ━━━ Helpers ━━━ */
