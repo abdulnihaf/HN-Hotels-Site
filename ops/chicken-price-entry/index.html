@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MN Broilers — Daily Price Entry</title>
+<style>
+:root{
+  --bg:#0a0a0f;--card:#14141f;--card2:#1a1a2e;--border:#2a2a3e;
+  --text:#e0e0f0;--text2:#8888aa;--text3:#5a5a72;
+  --accent:#6366f1;--green:#22c55e;--red:#ef4444;--orange:#f59e0b;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+.ctr{max-width:520px;margin:0 auto;padding:12px}
+
+.hdr{padding:10px 0 14px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.hdr h1{font-size:18px;font-weight:700;margin-bottom:2px}
+.hdr .sub{font-size:11px;color:var(--text2)}
+
+/* PIN gate */
+.pin-gate{padding:40px 20px;text-align:center}
+.pin-gate input{font-size:24px;text-align:center;width:160px;padding:12px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-family:inherit;letter-spacing:8px;min-height:44px}
+.pin-gate button{margin-top:14px;background:var(--accent);color:#fff;border:none;padding:12px 32px;font-size:14px;font-weight:600;border-radius:8px;cursor:pointer;font-family:inherit;min-height:44px}
+.pin-gate .err{color:var(--red);margin-top:10px;font-size:12px}
+
+/* Progress strip */
+.progress{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px}
+.progress .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.progress .stat{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+.progress .stat .done{color:var(--green)}
+.progress .stat .pending{color:var(--orange)}
+.progress .bar{height:6px;background:var(--card2);border-radius:3px;overflow:hidden}
+.progress .bar .fill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));transition:width .3s}
+
+/* GST toggle */
+.gst{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px}
+.gst .label{font-size:11px;text-transform:uppercase;color:var(--text2);letter-spacing:1px;margin-bottom:8px}
+.gst .options{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.gst .opt{padding:10px;background:var(--card2);border:1px solid var(--border);border-radius:8px;text-align:center;font-size:13px;font-weight:600;cursor:pointer;color:var(--text2)}
+.gst .opt.a{background:rgba(99,102,241,.15);border-color:var(--accent);color:var(--text)}
+.gst .note{font-size:10px;color:var(--text3);margin-top:6px}
+
+/* Day cards */
+.day{background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden;transition:border .15s}
+.day.complete{border-color:rgba(34,197,94,.4)}
+.day .head{padding:12px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.day .head:hover{background:rgba(255,255,255,.02)}
+.day .head .label{font-size:14px;font-weight:700}
+.day .head .label .day-name{color:var(--text2);font-weight:400;font-size:12px;margin-left:8px}
+.day .head .badge{font-size:11px;padding:3px 8px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--orange);font-weight:600}
+.day .head .badge.done{background:rgba(34,197,94,.15);color:var(--green)}
+.day .head::after{content:'▾';font-size:10px;color:var(--text2);margin-left:8px;transition:transform .15s}
+.day.open .head::after{transform:rotate(180deg)}
+.day .body{display:none;padding:0 14px 14px;border-top:1px solid var(--border)}
+.day.open .body{display:block}
+
+.line{display:grid;grid-template-columns:1fr 80px 100px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.line:last-child{border-bottom:none}
+.line .cut{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;text-transform:capitalize}
+.line .cut::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--text2)}
+.line.shawarma .cut::before{background:#f59e0b}
+.line.boneless .cut::before{background:#6366f1}
+.line.grill .cut::before{background:#ef4444}
+.line.kebab .cut::before{background:#22c55e}
+.line.tandoori .cut::before{background:#ec4899}
+.line.tangdi .cut::before{background:#a855f7}
+.line.lollipop .cut::before{background:#06b6d4}
+.line.wings .cut::before{background:#84cc16}
+.line .kg{font-size:11px;color:var(--text2);font-variant-numeric:tabular-nums;text-align:right}
+.line .price{display:flex;align-items:center;gap:4px}
+.line .price input{flex:1;padding:8px 8px;font-size:14px;text-align:right;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:inherit;min-height:38px;width:100%;font-variant-numeric:tabular-nums}
+.line .price input:focus{outline:none;border-color:var(--accent);background:rgba(99,102,241,.08)}
+.line .price .pre{color:var(--text2);font-size:11px}
+
+.day-actions{display:flex;gap:8px;margin-top:12px}
+.day-actions button{flex:1;padding:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:12px;font-weight:600;border-radius:8px;cursor:pointer;font-family:inherit;min-height:40px}
+.day-actions button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.day-actions button:hover{opacity:.9}
+.day-actions button:disabled{opacity:.5;cursor:not-allowed}
+
+.banner{padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:12px;font-weight:500}
+.banner.ok{background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.banner.err{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+
+.loading{text-align:center;padding:40px;color:var(--text2);font-size:13px}
+
+@media(max-width:480px){
+  .line{grid-template-columns:1fr 70px 90px;gap:6px}
+}
+</style>
+</head><body>
+<div class="ctr">
+
+<div class="hdr">
+  <h1>MN Broilers — Daily Price Entry</h1>
+  <div class="sub">Hamza Express · Basheer</div>
+</div>
+
+<div id="app">
+  <div class="loading">Loading…</div>
+</div>
+
+</div>
+
+<script>
+const API = '/api/chicken-ops';
+let PIN = sessionStorage.getItem('chickenPriceEntryPIN') || '';
+let DATA = null;
+let GST_INCLUSIVE = null;
+
+async function init() {
+  if (!PIN) return renderPinGate();
+  await loadQueue();
+}
+
+function renderPinGate(err = '') {
+  document.getElementById('app').innerHTML = `
+    <div class="pin-gate">
+      <h2 style="font-size:14px;margin-bottom:14px;color:var(--text2)">Enter your PIN</h2>
+      <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="pinIn" autofocus>
+      <br>
+      <button onclick="trySubmitPin()">Continue</button>
+      ${err ? `<div class="err">${err}</div>` : ''}
+    </div>
+  `;
+  document.getElementById('pinIn').addEventListener('keydown', e => {
+    if (e.key === 'Enter') trySubmitPin();
+  });
+}
+
+window.trySubmitPin = function() {
+  const pin = document.getElementById('pinIn').value;
+  if (pin.length !== 4) return renderPinGate('PIN must be 4 digits');
+  PIN = pin;
+  sessionStorage.setItem('chickenPriceEntryPIN', pin);
+  loadQueue();
+};
+
+async function loadQueue() {
+  try {
+    const r = await fetch(`${API}?action=price-backfill-queue&brand=HE`);
+    DATA = await r.json();
+    if (!DATA.success) throw new Error(DATA.error || 'Load failed');
+    GST_INCLUSIVE = DATA.gst ? !!DATA.gst.gst_inclusive : null;
+    renderApp();
+  } catch (e) {
+    document.getElementById('app').innerHTML = `<div class="banner err">Could not load: ${e.message}</div>`;
+  }
+}
+
+function renderApp() {
+  const days = DATA.days || [];
+  const totalLines = days.reduce((s, d) => s + d.lines.length, 0);
+  const filledLines = days.reduce((s, d) => s + d.lines.filter(l => l.price_per_kg_paise).length, 0);
+  const pendingDays = days.filter(d => !d.complete).length;
+  const pct = totalLines > 0 ? Math.round(filledLines / totalLines * 100) : 0;
+
+  let html = '';
+
+  html += `<div class="progress">
+    <div class="top">
+      <div class="stat"><span class="done">${filledLines}</span><span style="color:var(--text3)">/${totalLines}</span> prices filled</div>
+      <div style="font-size:11px;color:var(--text2)">${pendingDays} days pending</div>
+    </div>
+    <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
+  </div>`;
+
+  // GST toggle (one-time, persistent)
+  const inclActive = GST_INCLUSIVE === true ? 'a' : '';
+  const exclActive = GST_INCLUSIVE === false ? 'a' : '';
+  html += `<div class="gst">
+    <div class="label">MN Broilers prices: GST treatment</div>
+    <div class="options">
+      <div class="opt ${inclActive}" onclick="setGst(true)">⚪ Include GST</div>
+      <div class="opt ${exclActive}" onclick="setGst(false)">⚪ Exclude GST</div>
+    </div>
+    <div class="note">${GST_INCLUSIVE === null ? 'Tap once to confirm — applies to all entries' : 'Confirmed. Tap to change.'}</div>
+  </div>`;
+
+  // Day cards
+  html += days.map((d, idx) => renderDay(d, idx === 0)).join('');
+
+  document.getElementById('app').innerHTML = html;
+}
+
+function renderDay(day, openByDefault) {
+  const dayLabel = formatDateLabel(day.date);
+  const filled = day.lines.filter(l => l.price_per_kg_paise).length;
+  const total = day.lines.length;
+  const isComplete = day.complete;
+  const openCls = openByDefault && !isComplete ? 'open' : '';
+  const completeCls = isComplete ? 'complete' : '';
+  const badgeText = isComplete ? '✓ done' : `${total - filled} pending`;
+  const badgeCls = isComplete ? 'badge done' : 'badge';
+
+  const lineRows = day.lines.map(line => {
+    const priceR = line.price_per_kg_paise ? (line.price_per_kg_paise / 100).toFixed(0) : '';
+    return `<div class="line ${line.cut}">
+      <span class="cut">${line.cut}</span>
+      <span class="kg">${(line.purchased_kg || 0).toFixed(1)} kg</span>
+      <span class="price">
+        <span class="pre">₹</span>
+        <input type="number" inputmode="decimal" placeholder="—" value="${priceR}"
+               data-date="${day.date}" data-cut="${line.cut}" min="0" step="1">
+      </span>
+    </div>`;
+  }).join('');
+
+  return `<div class="day ${openCls} ${completeCls}" data-date="${day.date}">
+    <div class="head" onclick="this.parentElement.classList.toggle('open')">
+      <div class="label">${dayLabel} <span class="day-name">${day.lines.length} cut${day.lines.length === 1 ? '' : 's'}</span></div>
+      <div class="${badgeCls}">${badgeText}</div>
+    </div>
+    <div class="body">
+      ${lineRows}
+      <div class="day-actions">
+        ${!isComplete ? `<button onclick="copyYesterday('${day.date}')">Copy yesterday</button>` : ''}
+        <button class="primary" onclick="saveDay('${day.date}')">Save Day</button>
+      </div>
+      <div id="msg-${day.date}"></div>
+    </div>
+  </div>`;
+}
+
+function formatDateLabel(s) {
+  const d = new Date(s + 'T12:00:00');
+  return d.toLocaleDateString('en-IN', {weekday:'short', day:'numeric', month:'short'});
+}
+
+window.setGst = async function(inclusive) {
+  try {
+    const r = await fetch(`${API}?action=set-gst&pin=${PIN}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({gst_inclusive: inclusive ? 1 : 0, gst_rate_pct: 0}),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error);
+    GST_INCLUSIVE = inclusive;
+    renderApp();
+  } catch (e) { alert('GST save failed: ' + e.message); }
+};
+
+window.copyYesterday = function(date) {
+  const today = DATA.days.find(d => d.date === date);
+  if (!today) return;
+  // Find the previous day's data (one calendar day before)
+  const prev = shiftDate(date, -1);
+  const yest = DATA.days.find(d => d.date === prev);
+  if (!yest) { alert('No previous day data to copy'); return; }
+  // For each cut today, find matching cut yesterday and copy price
+  let copied = 0;
+  for (const ln of today.lines) {
+    const match = yest.lines.find(l => l.cut === ln.cut);
+    if (match?.price_per_kg_paise) {
+      const input = document.querySelector(`input[data-date="${date}"][data-cut="${ln.cut}"]`);
+      if (input) {
+        input.value = (match.price_per_kg_paise / 100).toFixed(0);
+        copied += 1;
+      }
+    }
+  }
+  showMsg(date, 'ok', `Copied ${copied} prices from ${formatDateLabel(prev)}`);
+};
+
+window.saveDay = async function(date) {
+  const inputs = document.querySelectorAll(`input[data-date="${date}"]`);
+  const saves = [];
+  for (const inp of inputs) {
+    const val = inp.value.trim();
+    if (!val) continue;
+    const cut = inp.dataset.cut;
+    saves.push({cut, price_per_kg: Number(val)});
+  }
+  if (saves.length === 0) return showMsg(date, 'err', 'No prices to save');
+
+  showMsg(date, 'ok', `Saving ${saves.length}…`);
+  let ok = 0, fail = 0;
+  for (const s of saves) {
+    try {
+      const r = await fetch(`${API}?action=save-price&pin=${PIN}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({date, cut: s.cut, price_per_kg: s.price_per_kg}),
+      }).then(x => x.json());
+      if (r.success) ok += 1;
+      else fail += 1;
+    } catch { fail += 1; }
+  }
+  showMsg(date, fail === 0 ? 'ok' : 'err', `Saved ${ok}/${saves.length}${fail > 0 ? ` (${fail} failed)` : ''}`);
+  setTimeout(loadQueue, 1500);
+};
+
+function shiftDate(s, d) {
+  const dt = new Date(s + 'T12:00:00Z');
+  dt.setUTCDate(dt.getUTCDate() + d);
+  return dt.toISOString().slice(0, 10);
+}
+
+function showMsg(date, type, text) {
+  const el = document.getElementById('msg-' + date);
+  if (el) el.innerHTML = `<div class="banner ${type}" style="margin-top:10px;margin-bottom:0">${text}</div>`;
+}
+
+init();
+</script>
+</body></html>
