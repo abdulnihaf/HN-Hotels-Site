@@ -174,7 +174,7 @@ function fmt(n, decimals = 0) {
   return n.toLocaleString('en-IN', {minimumFractionDigits: decimals, maximumFractionDigits: decimals});
 }
 
-function fmt₹(p) {
+function fmtRupee(p) {
   const r = paiseToRupees(p);
   if (r == null) return '—';
   return '₹' + fmt(r);
@@ -331,7 +331,7 @@ function describeStockHealth(t) {
 function renderQStats(dayT, monthT) {
   const cards = [
     {l: 'This month lost', v: monthT.lost_paise > 0 ? '₹' + fmt(paiseToRupees(monthT.lost_paise)) : '—', s: monthT.worst_day ? `worst: ${formatDateLabel(monthT.worst_day)}` : ''},
-    {l: 'Chicken bought today', v: fmt(dayT.purchased_kg, 1) + ' kg', s: fmt₹(dayT.cost_paise)},
+    {l: 'Chicken bought today', v: fmt(dayT.purchased_kg, 1) + ' kg', s: fmtRupee(dayT.cost_paise)},
     {l: 'Recipe says use', v: fmt(dayT.recipe_consumed_g / 1000, 1) + ' kg', s: dayT.avg_variance != null ? `${(dayT.avg_variance > 0 ? '+' : '') + dayT.avg_variance.toFixed(0)}%` : ''},
   ];
   return `<div class="qstats">${cards.map(c => `
@@ -472,7 +472,7 @@ function renderTables(rows, dayT) {
     const v = r.variance_pct;
     const cls = v == null ? '' : v < 10 ? 'g' : v < 25 ? 'o' : 'r';
     const recipeKg = (r.recipe_consumed_g || 0) / 1000;
-    const cost = r.cost_paise ? fmt₹(r.cost_paise) : '—';
+    const cost = r.cost_paise ? fmtRupee(r.cost_paise) : '—';
     varianceRows += `<tr>
       <td><span class="ck ${cut}">${cut}</span></td>
       <td class="num">${fmt(r.purchased_kg, 1)} kg</td>
