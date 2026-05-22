@@ -159,6 +159,7 @@ export async function onRequest(context) {
       if (action === 'save-price')      return await savePrice(body, user, pin, DB, env);
       if (action === 'set-gst')         return await setGst(body, user, pin, DB);
       if (action === 'upsert-line')     return await upsertLine(body, user, pin, DB);
+      if (action === 'save-day-prices') return await saveDayPrices(body, user, pin, DB);
       if (action === 'backfill-ledger') {
         if (user.role !== 'admin') return err('Backfill requires admin PIN', 403);
         return await backfillLedger(body, user, pin, DB, env);
@@ -232,8 +233,8 @@ async function getPriceBackfillQueue(url, DB) {
   const brand = (url.searchParams.get('brand') || 'HE').toUpperCase();
   // Rows where we have purchased_kg but no price_per_kg_paise yet
   const res = await DB.prepare(`
-    SELECT business_date, cut, purchased_kg, purchased_units, po_odoo_id,
-           price_per_kg_paise, bill_attachment_url
+    SELECT business_date, cut, purchased_kg, delivered_kg, purchased_units, po_odoo_id,
+           price_per_kg_paise, daily_rate_paise, cost_paise, bill_attachment_url
     FROM chicken_daily_ledger
     WHERE brand = ? AND purchased_kg IS NOT NULL AND purchased_kg > 0
     ORDER BY business_date DESC, cut ASC
@@ -242,9 +243,13 @@ async function getPriceBackfillQueue(url, DB) {
   const rows = res.results || [];
   const byDate = {};
   for (const r of rows) {
-    if (!byDate[r.business_date]) byDate[r.business_date] = { date: r.business_date, lines: [], complete: true };
+    if (!byDate[r.business_date]) byDate[r.business_date] = { date: r.business_date, lines: [], complete: true, daily_rate_paise: null };
     byDate[r.business_date].lines.push(r);
-    if (!r.price_per_kg_paise) byDate[r.business_date].complete = false;
+    // Track daily rate (any row with it has it for the whole day)
+    if (r.daily_rate_paise && !byDate[r.business_date].daily_rate_paise) {
+      byDate[r.business_date].daily_rate_paise = r.daily_rate_paise;
+    }
+    if (!r.daily_rate_paise || !r.delivered_kg) byDate[r.business_date].complete = false;
   }
 
   // GST treatment for MN Broilers
@@ -379,6 +384,73 @@ async function upsertLine(body, user, pin, DB) {
 
   await logEvent(DB, 'upsert_line', pin, { date, cut, purchased_kg: purchasedKg, price_per_kg: pricePaise ? pricePaise/100 : null, was_new: !existing });
   return json({ success: true, was_new: !existing, purchased_kg: purchasedKg, price_per_kg_paise: pricePaise, cost_paise: costPaise });
+}
+
+// One-shot save for a full day's price entry.
+// Body: { date, daily_rate, cuts: [{cut, yielded_kg?, delivered_kg}] }
+// Backend computes:
+//   cost_paise = round(delivered_kg × daily_rate × 100)
+//   price_per_kg_paise (effective ₹/kg of yielded meat) = round(cost_paise / yielded_kg)
+//   variance_pct = (yielded_kg × 1000 − recipe_consumed_g) / recipe_consumed_g × 100
+async function saveDayPrices(body, user, pin, DB) {
+  const { date, daily_rate, cuts } = body;
+  if (!date || !daily_rate || !Array.isArray(cuts)) return err('Need date, daily_rate, cuts[]');
+  const dailyRatePaise = Math.round(Number(daily_rate) * 100);
+  if (!(dailyRatePaise > 0)) return err('Invalid daily_rate');
+
+  const results = [];
+  for (const c of cuts) {
+    if (!c.cut || !CUTS.includes(c.cut)) { results.push({cut: c.cut, ok: false, error: 'invalid cut'}); continue; }
+    if (!c.delivered_kg || Number(c.delivered_kg) <= 0) { results.push({cut: c.cut, ok: false, error: 'delivered_kg required'}); continue; }
+    const deliveredKg = Number(c.delivered_kg);
+
+    // Load existing row (yielded kg may already be set from Odoo)
+    const existing = await DB.prepare(
+      `SELECT id, purchased_kg, recipe_consumed_g FROM chicken_daily_ledger
+       WHERE brand='HE' AND business_date=? AND cut=?`
+    ).bind(date, c.cut).first();
+
+    let yieldedKg = existing?.purchased_kg ?? null;
+    if (c.yielded_kg !== undefined && c.yielded_kg !== null && c.yielded_kg !== '') {
+      yieldedKg = Number(c.yielded_kg);
+    }
+    if (!yieldedKg || yieldedKg <= 0) {
+      results.push({cut: c.cut, ok: false, error: 'yielded_kg unknown — provide it for this new cut'});
+      continue;
+    }
+
+    const costPaise = Math.round(deliveredKg * dailyRatePaise);
+    const effectivePricePaise = Math.round(costPaise / yieldedKg);
+
+    const recipeG = existing?.recipe_consumed_g || 0;
+    let variancePct = null;
+    if (recipeG > 0) {
+      variancePct = Math.round(((yieldedKg * 1000 - recipeG) / recipeG) * 100 * 100) / 100;
+    }
+
+    if (existing) {
+      await DB.prepare(`
+        UPDATE chicken_daily_ledger
+        SET purchased_kg = ?, delivered_kg = ?, daily_rate_paise = ?,
+            price_per_kg_paise = ?, cost_paise = ?, variance_pct = ?,
+            price_entered_by_pin = ?, price_entered_at = datetime('now'),
+            updated_at = datetime('now')
+        WHERE id = ?
+      `).bind(yieldedKg, deliveredKg, dailyRatePaise, effectivePricePaise, costPaise, variancePct, pin, existing.id).run();
+    } else {
+      await DB.prepare(`
+        INSERT INTO chicken_daily_ledger
+          (business_date, brand, cut, purchased_kg, delivered_kg, daily_rate_paise,
+           price_per_kg_paise, cost_paise, variance_pct, price_entered_by_pin, price_entered_at, updated_at)
+        VALUES (?, 'HE', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      `).bind(date, c.cut, yieldedKg, deliveredKg, dailyRatePaise, effectivePricePaise, costPaise, variancePct, pin).run();
+    }
+
+    results.push({cut: c.cut, ok: true, yielded_kg: yieldedKg, delivered_kg: deliveredKg, cost_paise: costPaise, effective_paise_per_kg: effectivePricePaise});
+  }
+
+  await logEvent(DB, 'save_day_prices', pin, { date, daily_rate, cuts_count: cuts.length, ok_count: results.filter(r=>r.ok).length });
+  return json({ success: true, date, daily_rate, results });
 }
 
 async function setGst(body, user, pin, DB) {
