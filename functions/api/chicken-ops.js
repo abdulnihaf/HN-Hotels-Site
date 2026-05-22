@@ -620,3 +620,4 @@ async function logEvent(DB, type, pin, payload) {
       .bind(type, pin, JSON.stringify(payload)).run();
   } catch (e) { console.error('event log fail:', e.message); }
 }
+
