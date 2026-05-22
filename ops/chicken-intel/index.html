@@ -193,19 +193,30 @@ async function loadData() {
   const lastDay = new Date(y, m, 0).getDate();
   const monthTo = `${month}-${String(lastDay).padStart(2, '0')}`;
 
-  try {
-    const [ledger, dayDetail, heatmap, trust] = await Promise.all([
-      fetchJSON(`${API}?action=ledger&from=${monthFrom}&to=${monthTo}&brand=${BRAND}`),
-      fetchJSON(`${API}?action=day-detail&date=${SELECTED_DATE}&brand=${BRAND}`),
-      fetchJSON(`${API}?action=heatmap&month=${month}&brand=${BRAND}&metric=cost`),
-      fetchJSON(`${API}?action=trust-check&from=${monthFrom}&to=${monthTo}&brand=${BRAND}`),
-    ]);
+  // Each endpoint is independent — don't let one failure kill the whole dashboard
+  const safe = async (label, p) => {
+    try { return await p; }
+    catch (e) { console.warn(`${label} failed:`, e.message); return null; }
+  };
 
-    render({ledger: ledger.rows || [], day: dayDetail.rows || [], heatmap: heatmap.days || [], trust});
-  } catch (e) {
-    document.getElementById('app').innerHTML = `<div class="error-banner">Could not load data: ${e.message}</div>`;
-    console.error(e);
+  const [ledger, dayDetail, heatmap, trust] = await Promise.all([
+    safe('ledger',     fetchJSON(`${API}?action=ledger&from=${monthFrom}&to=${monthTo}&brand=${BRAND}`)),
+    safe('day-detail', fetchJSON(`${API}?action=day-detail&date=${SELECTED_DATE}&brand=${BRAND}`)),
+    safe('heatmap',    fetchJSON(`${API}?action=heatmap&month=${month}&brand=${BRAND}&metric=cost`)),
+    safe('trust',      fetchJSON(`${API}?action=trust-check&from=${monthFrom}&to=${monthTo}&brand=${BRAND}`)),
+  ]);
+
+  if (!ledger && !dayDetail) {
+    document.getElementById('app').innerHTML = `<div class="error-banner">Could not load any data. Check API status.</div>`;
+    return;
   }
+
+  render({
+    ledger: ledger?.rows || [],
+    day: dayDetail?.rows || [],
+    heatmap: heatmap?.days || [],
+    trust: trust || null,
+  });
 }
 
 function render({ledger, day, heatmap, trust}) {

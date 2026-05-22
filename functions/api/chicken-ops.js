@@ -141,11 +141,11 @@ export async function onRequest(context) {
 
   try {
     if (request.method === 'GET') {
-      if (action === 'ledger')               return getLedger(url, DB);
-      if (action === 'heatmap')              return getHeatmap(url, DB);
-      if (action === 'day-detail')           return getDayDetail(url, DB);
-      if (action === 'trust-check')          return trustCheck(url, DB, env);
-      if (action === 'price-backfill-queue') return getPriceBackfillQueue(url, DB);
+      if (action === 'ledger')               return await getLedger(url, DB);
+      if (action === 'heatmap')              return await getHeatmap(url, DB);
+      if (action === 'day-detail')           return await getDayDetail(url, DB);
+      if (action === 'trust-check')          return await trustCheck(url, DB, env);
+      if (action === 'price-backfill-queue') return await getPriceBackfillQueue(url, DB);
     }
 
     if (request.method === 'POST') {
@@ -154,11 +154,11 @@ export async function onRequest(context) {
       if (!user) return err('Invalid PIN', 401);
       const body = await request.json().catch(() => ({}));
 
-      if (action === 'save-price')      return savePrice(body, user, pin, DB, env);
-      if (action === 'set-gst')         return setGst(body, user, pin, DB);
+      if (action === 'save-price')      return await savePrice(body, user, pin, DB, env);
+      if (action === 'set-gst')         return await setGst(body, user, pin, DB);
       if (action === 'backfill-ledger') {
         if (user.role !== 'admin') return err('Backfill requires admin PIN', 403);
-        return backfillLedger(body, user, pin, DB, env);
+        return await backfillLedger(body, user, pin, DB, env);
       }
     }
 
