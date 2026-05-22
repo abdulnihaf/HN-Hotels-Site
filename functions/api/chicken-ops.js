@@ -621,3 +621,4 @@ async function logEvent(DB, type, pin, payload) {
   } catch (e) { console.error('event log fail:', e.message); }
 }
 
+
