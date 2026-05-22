@@ -70,11 +70,12 @@ body{font-family:-apple-system,'Inter',sans-serif;background:var(--bg);color:var
 .line.tandoori .cut::before{background:#ec4899}
 .line.tangdi .cut::before{background:#a855f7}
 .line.lollipop .cut::before{background:#06b6d4}
-.line .yielded-disp{font-size:11px;color:var(--text3);text-align:right}
-.line .yielded-disp .v{color:var(--text2);font-weight:600;font-variant-numeric:tabular-nums}
+.line .kg-pair{display:flex;flex-direction:column;align-items:stretch;gap:2px}
+.line .kg-pair .kg-label{font-size:9px;color:var(--text3);text-align:center;text-transform:uppercase;letter-spacing:.4px}
 .line input{padding:7px 8px;font-size:13px;text-align:right;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:inherit;min-height:36px;width:100%;font-variant-numeric:tabular-nums}
 .line input:focus{outline:none;border-color:var(--accent);background:rgba(99,102,241,.08)}
-.line input.kg-yielded{background:transparent;border-color:transparent;color:var(--text2);text-align:right;font-weight:600}
+.line input.yielded-input{color:var(--text2)}
+.line input.yielded-input:focus{color:var(--text)}
 
 /* Add-cut row */
 .add-row{background:rgba(255,255,255,.02);border:1px dashed var(--border);border-radius:8px;padding:10px;margin-top:12px}
@@ -205,17 +206,27 @@ function renderDay(day, openByDefault) {
   const badgeCls = isComplete ? 'badge done' : 'badge';
 
   const lineRows = day.lines.map(line => {
-    const yielded = (line.purchased_kg || 0).toFixed(2);
+    const yieldedVal = line.purchased_kg ?? '';
     const deliveredVal = line.delivered_kg ?? '';
     const cost = line.cost_paise ? Math.round(line.cost_paise/100) : null;
     const effective = line.price_per_kg_paise ? Math.round(line.price_per_kg_paise/100) : null;
     return `<div class="line ${line.cut}" data-cut="${line.cut}">
       <div class="row1">
         <span class="cut">${line.cut}</span>
-        <span class="yielded-disp">yielded<br><span class="v">${yielded} kg</span></span>
-        <input type="number" inputmode="decimal" class="delivered-input"
-               placeholder="delivered" value="${deliveredVal}"
-               data-date="${day.date}" data-cut="${line.cut}" min="0" step="0.1">
+        <span class="kg-pair">
+          <input type="number" inputmode="decimal" class="yielded-input"
+                 placeholder="yielded" value="${yieldedVal}"
+                 data-date="${day.date}" data-cut="${line.cut}" min="0" step="0.1"
+                 title="usable kg (what kitchen cooks)">
+          <span class="kg-label">yielded</span>
+        </span>
+        <span class="kg-pair">
+          <input type="number" inputmode="decimal" class="delivered-input"
+                 placeholder="delivered" value="${deliveredVal}"
+                 data-date="${day.date}" data-cut="${line.cut}" min="0" step="0.1"
+                 title="raw kg from MN bill">
+          <span class="kg-label">delivered</span>
+        </span>
       </div>
       <div class="row2" id="calc-${day.date}-${line.cut}">
         <span>Cost: <span class="effective">${cost!==null ? '₹'+cost : '—'}</span></span>
@@ -277,7 +288,7 @@ function formatDateLabel(s) {
 
 // Live-update the per-cut cost/effective display as user types
 document.addEventListener('input', e => {
-  if (!e.target.matches('.delivered-input, input[id^="rate-"]')) return;
+  if (!e.target.matches('.delivered-input, .yielded-input, input[id^="rate-"]')) return;
   const date = e.target.dataset.date || e.target.id.replace('rate-', '');
   recomputeDay(date);
 });
@@ -290,8 +301,9 @@ function recomputeDay(date) {
   let totalCost = 0, totalKg = 0;
   for (const line of day.lines) {
     const delInp = document.querySelector(`.delivered-input[data-date="${date}"][data-cut="${line.cut}"]`);
+    const yldInp = document.querySelector(`.yielded-input[data-date="${date}"][data-cut="${line.cut}"]`);
     const delivered = parseFloat(delInp?.value || 0);
-    const yielded = line.purchased_kg || 0;
+    const yielded = parseFloat(yldInp?.value || line.purchased_kg || 0);
     const calcEl = document.getElementById(`calc-${date}-${line.cut}`);
     if (rate > 0 && delivered > 0 && yielded > 0) {
       const cost = delivered * rate;
@@ -347,10 +359,10 @@ window.saveDay = async function(date) {
   const cuts = [];
   for (const line of day.lines) {
     const delInp = document.querySelector(`.delivered-input[data-date="${date}"][data-cut="${line.cut}"]`);
+    const yldInp = document.querySelector(`.yielded-input[data-date="${date}"][data-cut="${line.cut}"]`);
     const delivered = parseFloat(delInp?.value || 0);
-    // Include yielded if it was staged (new cut) — backend uses existing yielded otherwise
-    const yielded = line.purchased_kg;
-    if (delivered > 0) {
+    const yielded = parseFloat(yldInp?.value || line.purchased_kg || 0);
+    if (delivered > 0 && yielded > 0) {
       cuts.push({ cut: line.cut, yielded_kg: yielded, delivered_kg: delivered });
     }
   }
