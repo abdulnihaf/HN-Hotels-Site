@@ -252,6 +252,30 @@ async function getPriceBackfillQueue(url, DB) {
     if (!r.daily_rate_paise || !r.delivered_kg) byDate[r.business_date].complete = false;
   }
 
+  // Always surface TODAY (IST) as a queue row so the UI is the live entry
+  // point for the day — even if Odoo hasn't created any chicken_daily_ledger
+  // rows for today yet. Empty placeholder lines per cut, ready to capture.
+  const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  if (!byDate[todayIST]) {
+    byDate[todayIST] = {
+      date: todayIST,
+      lines: CUTS.map(cut => ({
+        business_date: todayIST,
+        cut,
+        purchased_kg: null,
+        delivered_kg: null,
+        purchased_units: null,
+        po_odoo_id: null,
+        price_per_kg_paise: null,
+        daily_rate_paise: null,
+        cost_paise: null,
+        bill_attachment_url: null,
+      })),
+      complete: false,
+      daily_rate_paise: null,
+    };
+  }
+
   // GST treatment for MN Broilers
   const gstRes = await DB.prepare(`SELECT * FROM vendor_gst_treatment WHERE vendor_id = ?`)
     .bind(MN_BROILERS_VENDOR_ID).first();
