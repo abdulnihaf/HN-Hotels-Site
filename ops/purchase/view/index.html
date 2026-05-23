@@ -61,6 +61,7 @@
   .chip.kind-PO       { background: rgba(124,86,247,0.15); color: #c4b5fd; }
   .chip.kind-Expense  { background: rgba(245,158,11,0.15); color: #fbbf24; }
   .chip.kind-Bill     { background: rgba(16,185,129,0.15); color: #34d399; }
+  .chip.kind-Chicken  { background: rgba(239,68,68,0.15); color: #fca5a5; }
   .chip.brand-HE      { background: rgba(239,68,68,0.15);  color: #f87171; }
   .chip.brand-NCH     { background: rgba(212,164,76,0.15); color: #fbbf24; }
   .chip.brand-HQ      { background: rgba(59,130,246,0.15); color: #60a5fa; }
@@ -68,11 +69,14 @@
   .chip.bill-no       { background: rgba(239,68,68,0.15);  color: #f87171; }
   .chip.state-draft, .chip.state-opex, .chip.state-not_paid  { background: rgba(148,163,184,0.15); color: #cbd5e1; }
   .chip.state-purchase, .chip.state-done, .chip.state-paid, .chip.state-in_payment { background: rgba(16,185,129,0.15); color: #34d399; }
+  .chip.state-priced  { background: rgba(16,185,129,0.15); color: #34d399; }
+  .chip.state-pending { background: rgba(245,158,11,0.15); color: #fbbf24; }
   .chip.state-capex   { background: rgba(124,86,247,0.15); color: #c4b5fd; }
 
   .cam-btn { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.35); color: #34d399;
     padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
   .cam-btn.has-bill { background: rgba(148,163,184,0.08); border-color: var(--border); color: var(--text-dim); }
+  .cam-btn.locked { background: rgba(148,163,184,0.08); border-color: var(--border); color: var(--text-dim); cursor: default; }
 
   .vendor-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ref-cell    { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -229,6 +233,7 @@
               <option value="PO">Purchase Orders</option>
               <option value="Expense">Direct Expenses</option>
               <option value="Bill">Vendor Bills</option>
+              <option value="Chicken">Chicken Entry</option>
             </select>
           </div>
           <div class="filter-group">
@@ -683,6 +688,11 @@ function rowHTML(r, idx) {
   const vendorCellAttr = vendorName
     ? `class="vendor-cell click-filter" title="Click to filter by ${esc(vendorName)}" onclick="event.stopPropagation(); setVendorFilter('${esc(vendorName).replace(/'/g, "\\'")}')"`
     : `class="vendor-cell"`;
+  const canUploadBill = r.can_upload_bill !== false;
+  const actionLabel = canUploadBill ? (r.has_attachment ? '+' : 'Add bill') : 'D1';
+  const actionTitle = canUploadBill
+    ? (r.has_attachment ? 'Add another bill' : 'Upload bill')
+    : 'Chicken entry source row';
   return `
     <tr data-idx="${idx}" data-odoo-id="${r.odoo_id}" data-kind="${r.kind}"
         tabindex="0" role="button"
@@ -700,10 +710,11 @@ function rowHTML(r, idx) {
             ? `<span class="chip bill-yes" aria-label="Bill attached">✓${r.attachment_count > 1 ? ' ' + r.attachment_count : ''}</span>`
             : `<span class="chip bill-no" aria-label="No bill attached">No bill</span>`}</td>
       <td style="text-align:right;">
-        <button class="cam-btn${r.has_attachment ? ' has-bill' : ''}"
-                aria-label="${r.has_attachment ? 'Add another bill' : 'Upload bill'}"
-                onclick="event.stopPropagation(); quickUpload(${idx})">
-          ${r.has_attachment ? '+' : 'Add bill'}
+        <button class="cam-btn${r.has_attachment ? ' has-bill' : ''}${canUploadBill ? '' : ' locked'}"
+                aria-label="${esc(actionTitle)}"
+                title="${esc(actionTitle)}"
+                ${canUploadBill ? `onclick="event.stopPropagation(); quickUpload(${idx})"` : 'disabled'}>
+          ${actionLabel}
         </button>
       </td>
     </tr>`;
@@ -864,8 +875,16 @@ function openDrawer(idx) {
   document.getElementById('d-sub').textContent = subParts.join(' · ');
 
   const modelSlug = { PO: 'purchase.order', Expense: 'hr.expense', Bill: 'account.move' }[r.kind];
+  const isOdooBacked = !!modelSlug && r.can_upload_bill !== false;
   // Odoo classic web URL — works regardless of menu structure
-  document.getElementById('d-odoo-link').href = `${ODOO_BASE}/web#id=${r.odoo_id}&model=${modelSlug}&view_type=form`;
+  const odooLink = document.getElementById('d-odoo-link');
+  if (isOdooBacked) {
+    odooLink.href = `${ODOO_BASE}/web#id=${r.odoo_id}&model=${modelSlug}&view_type=form`;
+    odooLink.style.display = 'flex';
+  } else {
+    odooLink.href = '#';
+    odooLink.style.display = 'none';
+  }
 
   document.getElementById('d-kv').innerHTML = `
     <div class="k">Kind</div>      <div class="v"><span class="chip kind-${r.kind}">${r.kind}</span></div>

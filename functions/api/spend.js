@@ -2307,6 +2307,29 @@ export async function onRequest(context) {
         } catch (e) { console.error('D1 bill_attachments fetch fail:', e.message); }
       }
 
+      // Step 3c — D1 chicken daily ledger projection.
+      // Chicken entry is intentionally not pushed into Odoo. Its own capture
+      // table is the source of truth; this endpoint is the unified read layer.
+      let chickenLedger = [];
+      if (DB && (brandFilter === 'ALL' || brandFilter === 'HE')) {
+        try {
+          const chickenRes = await DB.prepare(`
+            SELECT id, business_date, brand, cut,
+                   purchased_kg, delivered_kg, daily_rate_paise,
+                   price_per_kg_paise, cost_paise,
+                   price_entered_by_pin, price_entered_at,
+                   bill_attachment_url, updated_at
+              FROM chicken_daily_ledger
+             WHERE brand = 'HE'
+               AND business_date BETWEEN ? AND ?
+             ORDER BY business_date DESC, cut ASC
+          `).bind(from, to).all();
+          chickenLedger = chickenRes?.results || [];
+        } catch (e) {
+          console.error('D1 chicken_daily_ledger fetch fail:', e.message);
+        }
+      }
+
       // Phase 4 — load PO lifecycle (received_at, received_by) from D1 once
       // and merge into PO rows below. Pure read; no behaviour change for
       // non-PO rows.
@@ -2352,6 +2375,13 @@ export async function onRequest(context) {
           notes: base.notes || '',
           bill_ref: base.bill_ref || '',
         };
+      };
+      const cutLabel = (cut) => String(cut || '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, ch => ch.toUpperCase()) || 'Chicken';
+      const kgText = (value) => {
+        const n = Number(value || 0);
+        return n > 0 ? `${Math.round(n * 100) / 100} kg` : '—';
       };
 
       const rows = [
@@ -2399,6 +2429,49 @@ export async function onRequest(context) {
           bill_ref: b.ref || '',
           // narration for Bill goes to Odoo chatter — not inline editable in this v1
         }, billAtts)),
+        ...chickenLedger.map(c => {
+          const dailyRate = c.daily_rate_paise ? Math.round(c.daily_rate_paise / 100) : null;
+          const effectiveRate = c.price_per_kg_paise ? Math.round(c.price_per_kg_paise / 100) : null;
+          const amount = c.cost_paise ? c.cost_paise / 100 : 0;
+          const billUrl = c.bill_attachment_url || null;
+          const itemBits = [
+            `MN Chicken · ${cutLabel(c.cut)}`,
+            `delivered ${kgText(c.delivered_kg)}`,
+            `yielded ${kgText(c.purchased_kg)}`,
+            dailyRate ? `rate ₹${dailyRate}/kg` : null,
+            effectiveRate ? `effective ₹${effectiveRate}/kg` : null,
+          ].filter(Boolean);
+          return {
+            kind: 'Chicken',
+            odoo_id: `chicken-${c.id}`,
+            source: 'chicken_daily_ledger',
+            source_id: c.id,
+            date: c.business_date,
+            vendor: { id: 33, name: 'MN Broilers' },
+            item_or_ref: itemBits.join(' · '),
+            brand: c.brand || 'HE',
+            amount,
+            state: c.cost_paise ? 'priced' : 'pending',
+            has_attachment: !!billUrl,
+            attachment_count: billUrl ? 1 : 0,
+            attachments: billUrl ? [{
+              id: null,
+              drive_url: billUrl,
+              filename: `MN chicken bill · ${c.business_date}`,
+              uploaded_by: resolveUser(c.price_entered_by_pin)?.name || null,
+              uploaded_by_pin: c.price_entered_by_pin || null,
+              uploaded_at: c.price_entered_at || c.updated_at || null,
+            }] : [],
+            odoo_only_count: 0,
+            recorded_by_user_id: null,
+            recorded_by_name: resolveUser(c.price_entered_by_pin)?.name || null,
+            recorded_by_pin: c.price_entered_by_pin || null,
+            notes: 'Captured in chicken-price-entry. D1 source row, not an Odoo record.',
+            bill_ref: '',
+            can_upload_bill: false,
+            can_edit_notes: false,
+          };
+        }),
       ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
       const totals = {
@@ -2410,6 +2483,7 @@ export async function onRequest(context) {
           PO:      rows.filter(r => r.kind === 'PO').length,
           Expense: rows.filter(r => r.kind === 'Expense').length,
           Bill:    rows.filter(r => r.kind === 'Bill').length,
+          Chicken: rows.filter(r => r.kind === 'Chicken').length,
         },
       };
       return json({ success: true, rows, totals, from, to, brand: brandFilter });
