@@ -133,12 +133,39 @@
     background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 4px; }
   @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+  /* Group rows (group-by toggle) */
+  tr.group-header td { background: rgba(212,164,76,0.08); border-bottom: 1px solid rgba(212,164,76,0.25);
+    cursor: pointer; user-select: none; font-weight: 700; }
+  tr.group-header td .gh-toggle { display: inline-block; width: 14px; color: var(--text-dim); }
+  tr.group-header.collapsed td .gh-toggle { transform: rotate(-90deg); }
+  tr.group-header td .gh-meta { color: var(--text-dim); font-weight: 500; font-size: 11px; margin-left: 8px; }
+  tr.group-header td .gh-total { float: right; font-variant-numeric: tabular-nums; }
+  tr.group-child.collapsed { display: none; }
+
+  /* Inline filterable cells — show clickable affordance on hover */
+  td.click-filter { cursor: pointer; }
+  td.click-filter:hover { color: #fbbf24; text-decoration: underline dotted rgba(212,164,76,0.5); }
+  .chip.click-filter { cursor: pointer; }
+  .chip.click-filter:hover { filter: brightness(1.2); }
+
+  /* Active filter pill (shows currently applied filters above table) */
+  .active-filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 10px; min-height: 0; }
+  .active-filters:empty { margin: 0; }
+  .af-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+    background: rgba(212,164,76,0.12); border: 1px solid rgba(212,164,76,0.4); border-radius: 999px;
+    font-size: 11px; color: #fbbf24; font-weight: 600; }
+  .af-pill button { background: none; border: none; color: #fbbf24; cursor: pointer; padding: 0;
+    font-size: 14px; line-height: 1; }
+
+  /* Vendor + sort selects same shape as other selects */
+  .filter-group select.wide { min-width: 180px; }
+
   @media (max-width: 700px) {
     .ledger-wrap { padding: 10px; }
-    /* Rely on horizontal scroll in .tbl-wrap rather than hiding columns —
-       bill status / action button are the most important columns. */
     table.ledger { font-size: 12px; }
     table.ledger th, table.ledger td { padding: 8px 8px; }
+    .filter-group select, .filter-group input { min-width: 100px; }
+    .filter-group select.wide { min-width: 140px; }
   }
 </style>
 </head>
@@ -204,20 +231,66 @@
               <option value="Bill">Vendor Bills</option>
             </select>
           </div>
+          <div class="filter-group">
+            <label>Vendor</label>
+            <select id="f-vendor" class="wide" onchange="render()">
+              <option value="ALL">All vendors</option>
+            </select>
+          </div>
           <div class="filter-group" style="flex: 1; min-width: 180px;">
             <label>Search (vendor, ref, notes)</label>
             <input type="search" id="f-search" placeholder="Type to filter…" oninput="render()">
           </div>
         </div>
+        <div class="filter-row" style="margin-bottom: 8px;">
+          <div class="filter-group">
+            <label>Group by</label>
+            <select id="f-group" onchange="render()">
+              <option value="none">None (flat list)</option>
+              <option value="vendor">Vendor</option>
+              <option value="day">Day</option>
+              <option value="kind">Kind</option>
+              <option value="brand">Brand</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Sort</label>
+            <select id="f-sort" onchange="render()">
+              <option value="date-desc">Date — newest first</option>
+              <option value="date-asc">Date — oldest first</option>
+              <option value="amount-desc">Amount — highest first</option>
+              <option value="amount-asc">Amount — lowest first</option>
+              <option value="vendor-asc">Vendor A→Z</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Min amount ₹</label>
+            <input type="number" inputmode="numeric" id="f-min" placeholder="0" style="min-width: 90px;" oninput="render()">
+          </div>
+          <div class="filter-group">
+            <label>Bill state</label>
+            <select id="f-bill" onchange="render()">
+              <option value="all">All</option>
+              <option value="missing">⚠ Missing bill</option>
+              <option value="with">✓ With bill</option>
+            </select>
+          </div>
+          <span style="flex:1"></span>
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()" title="Download filtered view as CSV">⬇ CSV</button>
+        </div>
         <div class="filter-row">
-          <span class="quick-chip" id="chip-30d"  onclick="setRangeDays(30)">Last 30 days</span>
-          <span class="quick-chip" id="chip-7d"   onclick="setRangeDays(7)">Last 7 days</span>
-          <span class="quick-chip" id="chip-apr1" onclick="setRangeApr1()">Since Apr 1</span>
-          <span class="quick-chip warn" id="chip-missing" onclick="toggleMissing()">⚠ Missing bill only</span>
+          <span class="quick-chip" id="chip-today" onclick="setRangeToday()">Today</span>
+          <span class="quick-chip" id="chip-yest"  onclick="setRangeYesterday()">Yesterday</span>
+          <span class="quick-chip" id="chip-7d"    onclick="setRangeDays(7)">Last 7d</span>
+          <span class="quick-chip" id="chip-30d"   onclick="setRangeDays(30)">Last 30d</span>
+          <span class="quick-chip" id="chip-tmonth" onclick="setRangeThisMonth()">This month</span>
+          <span class="quick-chip" id="chip-lmonth" onclick="setRangeLastMonth()">Last month</span>
+          <span class="quick-chip" id="chip-apr1"  onclick="setRangeApr1()">Since Apr 1</span>
           <span style="flex:1"></span>
           <button class="btn btn-ghost btn-sm" onclick="resetFilters()">Reset</button>
           <button class="btn btn-ghost btn-sm" id="btn-refresh" onclick="load()" title="Refresh">↻</button>
         </div>
+        <div class="active-filters" id="active-filters"></div>
       </div>
 
       <!-- KPI strip -->
@@ -329,7 +402,7 @@
 // ── State ──────────────────────────────────────────────────────
 const API = '/api/spend';
 const ODOO_BASE = 'https://odoo.hnhotels.in';
-const FRESH_STATE = () => ({ rows: [], totals: null, missingOnly: false, withBillOnly: false, currentRow: null, quickUploadMode: false, isLoading: false, lastFocusedRow: null });
+const FRESH_STATE = () => ({ rows: [], totals: null, missingOnly: false, withBillOnly: false, currentRow: null, quickUploadMode: false, isLoading: false, lastFocusedRow: null, collapsedGroups: new Set() });
 let PIN = '';
 let USER = null;
 let STATE = FRESH_STATE();
@@ -401,34 +474,97 @@ function setRangeApr1() {
   updateChipActive();
   load();
 }
+function setRangeToday() {
+  document.getElementById('f-from').value = todayISO();
+  document.getElementById('f-to').value   = todayISO();
+  updateChipActive(); load();
+}
+function setRangeYesterday() {
+  const y = isoDaysAgo(1);
+  document.getElementById('f-from').value = y;
+  document.getElementById('f-to').value   = y;
+  updateChipActive(); load();
+}
+function setRangeThisMonth() {
+  const t = todayISO();
+  document.getElementById('f-from').value = t.slice(0, 8) + '01';
+  document.getElementById('f-to').value   = t;
+  updateChipActive(); load();
+}
+function setRangeLastMonth() {
+  const t = todayISO();
+  const y = parseInt(t.slice(0, 4), 10);
+  const m = parseInt(t.slice(5, 7), 10);
+  const lm = m === 1 ? 12 : m - 1;
+  const ly = m === 1 ? y - 1 : y;
+  const lastDay = new Date(ly, lm, 0).getDate();
+  const mm = String(lm).padStart(2, '0');
+  document.getElementById('f-from').value = `${ly}-${mm}-01`;
+  document.getElementById('f-to').value   = `${ly}-${mm}-${String(lastDay).padStart(2,'0')}`;
+  updateChipActive(); load();
+}
 function updateChipActive() {
   const from = document.getElementById('f-from').value;
   const to = document.getElementById('f-to').value;
+  const today = todayISO();
+  // simple presets that end at today
   const chips = { 'chip-30d': isoDaysAgo(30), 'chip-7d': isoDaysAgo(7), 'chip-apr1': '2026-04-01' };
   Object.entries(chips).forEach(([id, expFrom]) => {
-    document.getElementById(id).classList.toggle('active', from === expFrom && to === todayISO());
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', from === expFrom && to === today);
   });
-  document.getElementById('chip-missing').classList.toggle('active', STATE.missingOnly);
+  // today / yesterday
+  document.getElementById('chip-today')?.classList.toggle('active', from === today && to === today);
+  const y = isoDaysAgo(1);
+  document.getElementById('chip-yest')?.classList.toggle('active', from === y && to === y);
+  // this month
+  const tm = today.slice(0, 8) + '01';
+  document.getElementById('chip-tmonth')?.classList.toggle('active', from === tm && to === today);
 }
-function toggleMissing() {
-  STATE.missingOnly = !STATE.missingOnly;
-  if (STATE.missingOnly) STATE.withBillOnly = false;  // mutually exclusive
-  updateChipActive();
-  render();
-}
-function toggleWithBill() {
-  STATE.withBillOnly = !STATE.withBillOnly;
-  if (STATE.withBillOnly) STATE.missingOnly = false;  // mutually exclusive
-  updateChipActive();
-  render();
+function syncBillFilterFromSelect() {
+  const v = document.getElementById('f-bill').value;
+  STATE.missingOnly  = v === 'missing';
+  STATE.withBillOnly = v === 'with';
 }
 function resetFilters() {
-  document.getElementById('f-brand').value = 'ALL';
-  document.getElementById('f-kind').value  = 'ALL';
+  document.getElementById('f-brand').value  = 'ALL';
+  document.getElementById('f-kind').value   = 'ALL';
+  document.getElementById('f-vendor').value = 'ALL';
   document.getElementById('f-search').value = '';
+  document.getElementById('f-group').value  = 'none';
+  document.getElementById('f-sort').value   = 'date-desc';
+  document.getElementById('f-min').value    = '';
+  document.getElementById('f-bill').value   = 'all';
   STATE.missingOnly = false;
   STATE.withBillOnly = false;
+  STATE.collapsedGroups.clear();
   setRangeDays(30);
+}
+function clearFilter(key) {
+  const map = { brand: 'f-brand', kind: 'f-kind', vendor: 'f-vendor', search: 'f-search', min: 'f-min', bill: 'f-bill' };
+  const el = document.getElementById(map[key]);
+  if (el) el.value = (key === 'search' || key === 'min') ? '' : (key === 'bill' ? 'all' : 'ALL');
+  if (key === 'bill') { STATE.missingOnly = false; STATE.withBillOnly = false; }
+  render();
+}
+function setVendorFilter(name) {
+  if (!name) return;
+  const sel = document.getElementById('f-vendor');
+  // Find matching option; if not present (vendor not in current rows because no data yet), add one
+  if (![...sel.options].some(o => o.value === name)) {
+    const opt = document.createElement('option'); opt.value = name; opt.textContent = name;
+    sel.appendChild(opt);
+  }
+  sel.value = name; render();
+}
+function setBrandFilter(brand) {
+  document.getElementById('f-brand').value = brand;
+  render();
+}
+function toggleGroup(key) {
+  if (STATE.collapsedGroups.has(key)) STATE.collapsedGroups.delete(key);
+  else STATE.collapsedGroups.add(key);
+  render();
 }
 
 // ── Load from API ──────────────────────────────────────────────
@@ -468,103 +604,234 @@ async function load() {
   }
   STATE.rows = r.rows || [];
   STATE.totals = r.totals;
+  populateVendorFilter();
   render();
+}
+
+function populateVendorFilter() {
+  const sel = document.getElementById('f-vendor');
+  if (!sel) return;
+  const prev = sel.value || 'ALL';
+  // Aggregate ₹ per vendor name for sorting (biggest first → easier to pick)
+  const byName = new Map();
+  for (const r of STATE.rows) {
+    const name = r.vendor?.name;
+    if (!name) continue;
+    byName.set(name, (byName.get(name) || 0) + (r.amount || 0));
+  }
+  const names = [...byName.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+  sel.innerHTML = `<option value="ALL">All vendors (${names.length})</option>`
+    + names.map(n => `<option value="${esc(n)}">${esc(n)} · ₹${fmtINR(byName.get(n))}</option>`).join('');
+  // Restore prior selection if still present
+  if (prev !== 'ALL' && names.includes(prev)) sel.value = prev;
+}
+
+// ── Centralised filter pipeline ───────────────────────────────
+// Returns { kind, brand, vendor, search, min, billState } from the DOM.
+function getActiveFilters() {
+  return {
+    kind:   document.getElementById('f-kind').value,
+    brand:  document.getElementById('f-brand').value,
+    vendor: document.getElementById('f-vendor').value,
+    search: document.getElementById('f-search').value.trim().toLowerCase(),
+    min:    parseFloat(document.getElementById('f-min').value) || 0,
+    bill:   document.getElementById('f-bill').value,
+  };
+}
+function applyFilters(rows, f, skip = {}) {
+  if (!skip.kind   && f.kind   !== 'ALL') rows = rows.filter(r => r.kind === f.kind);
+  if (!skip.brand  && f.brand  !== 'ALL') rows = rows.filter(r => r.brand === f.brand);
+  if (!skip.vendor && f.vendor !== 'ALL') rows = rows.filter(r => (r.vendor?.name || '') === f.vendor);
+  if (!skip.min    && f.min    > 0)       rows = rows.filter(r => (r.amount || 0) >= f.min);
+  if (!skip.bill   && f.bill   === 'missing') rows = rows.filter(r => !r.has_attachment);
+  if (!skip.bill   && f.bill   === 'with')    rows = rows.filter(r =>  r.has_attachment);
+  if (!skip.search && f.search) rows = rows.filter(r => {
+    const hay = [r.vendor?.name, r.item_or_ref, r.recorded_by_name, r.notes].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(f.search);
+  });
+  return rows;
+}
+function sortRows(rows, sortKey) {
+  const arr = rows.slice();
+  switch (sortKey) {
+    case 'date-asc':    arr.sort((a, b) => String(a.date).localeCompare(String(b.date))); break;
+    case 'amount-desc': arr.sort((a, b) => (b.amount || 0) - (a.amount || 0)); break;
+    case 'amount-asc':  arr.sort((a, b) => (a.amount || 0) - (b.amount || 0)); break;
+    case 'vendor-asc':  arr.sort((a, b) => (a.vendor?.name || 'zzz').localeCompare(b.vendor?.name || 'zzz')); break;
+    case 'date-desc':
+    default:            arr.sort((a, b) => String(b.date).localeCompare(String(a.date))); break;
+  }
+  return arr;
+}
+function groupKeyForRow(r, groupBy) {
+  switch (groupBy) {
+    case 'vendor': return r.vendor?.name || '— No vendor —';
+    case 'day':    return r.date || '— Undated —';
+    case 'kind':   return r.kind;
+    case 'brand':  return r.brand || '?';
+    default: return null;
+  }
+}
+
+function rowHTML(r, idx) {
+  const vendorName = r.vendor?.name || '';
+  const vendorText = vendorName
+    ? `<span class="vname" title="${esc(vendorName)}">${esc(vendorName)}</span>`
+    : (r.recorded_by_name ? `<span class="recorded-by">by ${esc(r.recorded_by_name)}</span>` : '—');
+  const recordedByLine = r.recorded_by_name && vendorName
+    ? `<div class="recorded-by">by ${esc(r.recorded_by_name)}</div>` : '';
+  const vendorCellAttr = vendorName
+    ? `class="vendor-cell click-filter" title="Click to filter by ${esc(vendorName)}" onclick="event.stopPropagation(); setVendorFilter('${esc(vendorName).replace(/'/g, "\\'")}')"`
+    : `class="vendor-cell"`;
+  return `
+    <tr data-idx="${idx}" data-odoo-id="${r.odoo_id}" data-kind="${r.kind}"
+        tabindex="0" role="button"
+        onclick="openDrawer(${idx})"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDrawer(${idx});}">
+      <td>${fmtDate(r.date)}</td>
+      <td><span class="chip kind-${r.kind}">${r.kind}</span></td>
+      <td ${vendorCellAttr}>${vendorText}${recordedByLine}</td>
+      <td class="ref-cell" title="${esc(r.item_or_ref)}">${esc(r.item_or_ref)}</td>
+      <td><span class="chip brand-${r.brand} click-filter" title="Click to filter brand ${r.brand}"
+                onclick="event.stopPropagation(); setBrandFilter('${r.brand}')">${r.brand}</span></td>
+      <td class="amount-cell">${fmtINR(r.amount)}</td>
+      <td><span class="chip state-${esc(r.state || 'na')}">${esc(r.state || '—')}</span></td>
+      <td>${r.has_attachment
+            ? `<span class="chip bill-yes" aria-label="Bill attached">✓${r.attachment_count > 1 ? ' ' + r.attachment_count : ''}</span>`
+            : `<span class="chip bill-no" aria-label="No bill attached">No bill</span>`}</td>
+      <td style="text-align:right;">
+        <button class="cam-btn${r.has_attachment ? ' has-bill' : ''}"
+                aria-label="${r.has_attachment ? 'Add another bill' : 'Upload bill'}"
+                onclick="event.stopPropagation(); quickUpload(${idx})">
+          ${r.has_attachment ? '+' : 'Add bill'}
+        </button>
+      </td>
+    </tr>`;
 }
 
 // ── Render ─────────────────────────────────────────────────────
 function render() {
-  const kind   = document.getElementById('f-kind').value;
-  const brand  = document.getElementById('f-brand').value;
-  const search = document.getElementById('f-search').value.trim().toLowerCase();
+  const f = getActiveFilters();
+  // Keep STATE flags in sync with the new bill dropdown (used by other code paths)
+  STATE.missingOnly  = (f.bill === 'missing');
+  STATE.withBillOnly = (f.bill === 'with');
 
-  let rows = STATE.rows;
-  if (kind  !== 'ALL') rows = rows.filter(r => r.kind === kind);
-  if (brand !== 'ALL') rows = rows.filter(r => r.brand === brand);
-  if (STATE.missingOnly)  rows = rows.filter(r => !r.has_attachment);
-  if (STATE.withBillOnly) rows = rows.filter(r =>  r.has_attachment);
-  if (search) {
-    rows = rows.filter(r => {
-      const hay = [r.vendor?.name, r.item_or_ref, r.recorded_by_name, r.notes].filter(Boolean).join(' ').toLowerCase();
-      return hay.includes(search);
-    });
+  const groupBy = document.getElementById('f-group').value;
+  const sortKey = document.getElementById('f-sort').value;
+
+  let rows = applyFilters(STATE.rows, f);
+  rows = sortRows(rows, sortKey);
+
+  // ── KPIs ──────────────────────────────────────────────────────
+  // Base set for bill-state counts is "everything except the bill filter" so
+  // the With/Without numbers always reflect the broader context.
+  const baseForBill = applyFilters(STATE.rows, f, { bill: true });
+  const vendors = new Set();
+  const byVendor = new Map();
+  for (const r of rows) {
+    const n = r.vendor?.name;
+    if (n) {
+      vendors.add(n);
+      byVendor.set(n, (byVendor.get(n) || 0) + (r.amount || 0));
+    }
   }
+  let topVendorName = '', topVendorAmt = 0;
+  for (const [n, a] of byVendor) if (a > topVendorAmt) { topVendorName = n; topVendorAmt = a; }
 
-  // KPIs — the "Without Bill" / "With Bill" tiles are interactive filters.
-  // Counts are computed against the pre-bill-filter pool so the numbers
-  // stay meaningful (otherwise e.g. "With Bill" would always show 0 when
-  // the Missing filter is active).
-  const baseForBillCounts = (() => {
-    let s = STATE.rows;
-    if (kind  !== 'ALL') s = s.filter(r => r.kind === kind);
-    if (brand !== 'ALL') s = s.filter(r => r.brand === brand);
-    if (search) s = s.filter(r => {
-      const hay = [r.vendor?.name, r.item_or_ref, r.recorded_by_name, r.notes].filter(Boolean).join(' ').toLowerCase();
-      return hay.includes(search);
-    });
-    return s;
-  })();
   const totals = {
-    count: rows.length,
-    amount: rows.reduce((s, r) => s + (r.amount || 0), 0),
-    missing: baseForBillCounts.filter(r => !r.has_attachment).length,
-    withBill: baseForBillCounts.filter(r => r.has_attachment).length,
+    count:    rows.length,
+    amount:   rows.reduce((s, r) => s + (r.amount || 0), 0),
+    vendors:  vendors.size,
+    missing:  baseForBill.filter(r => !r.has_attachment).length,
+    withBill: baseForBill.filter(r =>  r.has_attachment).length,
   };
   const kpiBox = document.getElementById('kpi-strip');
   kpiBox.innerHTML = `
     <div class="kpi"><div class="v">${totals.count}</div><div class="l">Entries</div></div>
-    <div class="kpi"><div class="v">${fmtINR(totals.amount)}</div><div class="l">Total ₹</div></div>
-    <div class="kpi warn clickable ${STATE.missingOnly ? 'active' : ''}"
-         role="button" tabindex="0" aria-pressed="${STATE.missingOnly}"
-         title="Click to ${STATE.missingOnly ? 'clear' : 'show only'} entries without a bill"
-         onclick="toggleMissing()"
-         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMissing();}">
+    <div class="kpi"><div class="v">₹${fmtINR(totals.amount)}</div><div class="l">Total</div></div>
+    <div class="kpi"><div class="v">${totals.vendors}</div><div class="l">Vendors</div></div>
+    <div class="kpi clickable ${topVendorName ? '' : 'mute'}"
+         role="button" tabindex="0"
+         title="${topVendorName ? 'Click to filter by ' + topVendorName : ''}"
+         onclick="${topVendorName ? `setVendorFilter('${topVendorName.replace(/'/g, "\\'")}')` : ''}">
+      <div class="v" style="font-size:14px; line-height:1.2;">${esc(topVendorName || '—')}</div>
+      <div class="l">Top vendor · ₹${fmtINR(topVendorAmt)}</div></div>
+    <div class="kpi warn clickable ${f.bill === 'missing' ? 'active' : ''}"
+         role="button" tabindex="0" aria-pressed="${f.bill === 'missing'}"
+         title="Click to ${f.bill === 'missing' ? 'clear' : 'show only'} entries without a bill"
+         onclick="document.getElementById('f-bill').value='${f.bill === 'missing' ? 'all' : 'missing'}'; render();">
       <div class="v">${totals.missing}</div><div class="l">⚠ Without Bill</div></div>
-    <div class="kpi good clickable ${STATE.withBillOnly ? 'active' : ''}"
-         role="button" tabindex="0" aria-pressed="${STATE.withBillOnly}"
-         title="Click to ${STATE.withBillOnly ? 'clear' : 'show only'} entries with a bill"
-         onclick="toggleWithBill()"
-         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleWithBill();}">
+    <div class="kpi good clickable ${f.bill === 'with' ? 'active' : ''}"
+         role="button" tabindex="0" aria-pressed="${f.bill === 'with'}"
+         title="Click to ${f.bill === 'with' ? 'clear' : 'show only'} entries with a bill"
+         onclick="document.getElementById('f-bill').value='${f.bill === 'with' ? 'all' : 'with'}'; render();">
       <div class="v">${totals.withBill}</div><div class="l">✓ With Bill</div></div>
   `;
 
-  // Table
+  // ── Active-filter pills ──────────────────────────────────────
+  renderActiveFilters(f);
+
+  // ── Table ────────────────────────────────────────────────────
   const body = document.getElementById('ledger-body');
   if (!rows.length) {
     body.innerHTML = `<tr><td colspan="${COL_COUNT}" class="empty-state">No entries match these filters.</td></tr>`;
     document.getElementById('footer-meta').textContent = '';
     return;
   }
-  body.innerHTML = rows.map((r, i) => {
-    const vendorName = r.vendor?.name || '';
-    const vendorText = vendorName
-      ? `<div title="${esc(vendorName)}">${esc(vendorName)}</div>`
-      : (r.recorded_by_name ? `<span class="recorded-by">by ${esc(r.recorded_by_name)}</span>` : '—');
-    const recordedByLine = r.recorded_by_name && vendorName
-      ? `<div class="recorded-by">by ${esc(r.recorded_by_name)}</div>` : '';
-    return `
-      <tr data-idx="${i}" data-odoo-id="${r.odoo_id}" data-kind="${r.kind}"
-          tabindex="0" role="button"
-          onclick="openDrawer(${i})"
-          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDrawer(${i});}">
-        <td>${fmtDate(r.date)}</td>
-        <td><span class="chip kind-${r.kind}">${r.kind}</span></td>
-        <td class="vendor-cell">${vendorText}${recordedByLine}</td>
-        <td class="ref-cell" title="${esc(r.item_or_ref)}">${esc(r.item_or_ref)}</td>
-        <td><span class="chip brand-${r.brand}">${r.brand}</span></td>
-        <td class="amount-cell">${fmtINR(r.amount)}</td>
-        <td><span class="chip state-${esc(r.state || 'na')}">${esc(r.state || '—')}</span></td>
-        <td>${r.has_attachment
-              ? `<span class="chip bill-yes" aria-label="Bill attached">✓${r.attachment_count > 1 ? ' ' + r.attachment_count : ''}</span>`
-              : `<span class="chip bill-no" aria-label="No bill attached">No bill</span>`}</td>
-        <td style="text-align:right;">
-          <button class="cam-btn${r.has_attachment ? ' has-bill' : ''}"
-                  aria-label="${r.has_attachment ? 'Add another bill' : 'Upload bill'}"
-                  onclick="event.stopPropagation(); quickUpload(${i})">
-            ${r.has_attachment ? '+' : 'Add bill'}
-          </button>
-        </td>
-      </tr>`;
-  }).join('');
+
+  if (groupBy === 'none') {
+    body.innerHTML = rows.map((r, i) => rowHTML(r, i)).join('');
+  } else {
+    // Group rows by key while preserving sort order within each group.
+    const groups = new Map();
+    rows.forEach((r, i) => {
+      const k = groupKeyForRow(r, groupBy);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push({ r, i });
+    });
+    // Order groups by total ₹ desc (most useful for vendor/kind/brand) — except
+    // for "day" where chronological order matches the sort selection
+    let ordered;
+    if (groupBy === 'day') {
+      ordered = [...groups.entries()].sort((a, b) =>
+        sortKey === 'date-asc'
+          ? String(a[0]).localeCompare(String(b[0]))
+          : String(b[0]).localeCompare(String(a[0])));
+    } else {
+      ordered = [...groups.entries()].sort((a, b) => {
+        const sa = a[1].reduce((s, x) => s + (x.r.amount || 0), 0);
+        const sb = b[1].reduce((s, x) => s + (x.r.amount || 0), 0);
+        return sb - sa;
+      });
+    }
+    body.innerHTML = ordered.map(([key, items]) => {
+      const total = items.reduce((s, x) => s + (x.r.amount || 0), 0);
+      const withBill = items.filter(x => x.r.has_attachment).length;
+      const missing = items.length - withBill;
+      const collapsed = STATE.collapsedGroups.has(`${groupBy}::${key}`);
+      const headerLabel = groupBy === 'day' ? fmtDate(key) : key;
+      const meta = `${items.length} ${items.length === 1 ? 'entry' : 'entries'}`;
+      const bills = missing > 0
+        ? `<span class="gh-bills">⚠ ${missing} no bill · ✓ ${withBill}</span>`
+        : `<span class="gh-bills">✓ all billed</span>`;
+      const groupKey = `${groupBy}::${key}`;
+      return `
+        <tr class="group-header ${collapsed ? 'collapsed' : ''}"
+            onclick="toggleGroup('${esc(groupKey).replace(/'/g, "\\'")}')">
+          <td colspan="${COL_COUNT}">
+            <span class="gh-toggle">▾</span>
+            <span>${esc(headerLabel)}</span>
+            <span class="gh-meta">· ${meta}</span>
+            ${bills}
+            <span class="gh-total">₹${fmtINR(total)}</span>
+          </td>
+        </tr>
+        ${items.map(({ r, i }) =>
+          rowHTML(r, i).replace('<tr ', `<tr class="group-child ${collapsed ? 'collapsed' : ''}" `)
+        ).join('')}
+      `;
+    }).join('');
+  }
 
   // Pagination warning: backend limit is 500 per model — if any kind hit exactly 500, warn
   const atLimit = STATE.totals && (STATE.totals.by_kind?.PO === 500 || STATE.totals.by_kind?.Expense === 500 || STATE.totals.by_kind?.Bill === 500);
@@ -975,19 +1242,49 @@ document.addEventListener('keydown', (e) => {
   }
 });
 function getFilteredRows() {
-  const kind   = document.getElementById('f-kind').value;
-  const brand  = document.getElementById('f-brand').value;
-  const search = document.getElementById('f-search').value.trim().toLowerCase();
-  let rows = STATE.rows;
-  if (kind  !== 'ALL') rows = rows.filter(r => r.kind === kind);
-  if (brand !== 'ALL') rows = rows.filter(r => r.brand === brand);
-  if (STATE.missingOnly)  rows = rows.filter(r => !r.has_attachment);
-  if (STATE.withBillOnly) rows = rows.filter(r =>  r.has_attachment);
-  if (search) rows = rows.filter(r => {
-    const hay = [r.vendor?.name, r.item_or_ref, r.recorded_by_name, r.notes].filter(Boolean).join(' ').toLowerCase();
-    return hay.includes(search);
-  });
-  return rows;
+  const f = getActiveFilters();
+  return sortRows(applyFilters(STATE.rows, f), document.getElementById('f-sort').value);
+}
+
+function renderActiveFilters(f) {
+  const box = document.getElementById('active-filters');
+  if (!box) return;
+  const pills = [];
+  if (f.brand  !== 'ALL') pills.push({ k: 'brand',  label: 'Brand: ' + f.brand });
+  if (f.kind   !== 'ALL') pills.push({ k: 'kind',   label: 'Kind: ' + f.kind });
+  if (f.vendor !== 'ALL') pills.push({ k: 'vendor', label: 'Vendor: ' + f.vendor });
+  if (f.search)           pills.push({ k: 'search', label: 'Search: ' + f.search });
+  if (f.min > 0)          pills.push({ k: 'min',    label: 'Min ₹' + f.min });
+  if (f.bill === 'missing') pills.push({ k: 'bill', label: '⚠ Missing bill' });
+  if (f.bill === 'with')    pills.push({ k: 'bill', label: '✓ With bill' });
+  box.innerHTML = pills.map(p =>
+    `<span class="af-pill">${esc(p.label)}<button title="Clear" onclick="clearFilter('${p.k}')">×</button></span>`
+  ).join('');
+}
+
+function exportCSV() {
+  const rows = getFilteredRows();
+  if (!rows.length) { alert('No entries to export.'); return; }
+  const header = ['Date','Kind','Vendor','Item/Ref','Brand','Amount','State','Has Bill','Recorded by','Notes'];
+  const csvLine = (vals) => vals.map(v => {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(',');
+  const lines = [csvLine(header)];
+  for (const r of rows) {
+    lines.push(csvLine([
+      r.date || '', r.kind, r.vendor?.name || '', r.item_or_ref || '', r.brand || '',
+      r.amount || 0, r.state || '', r.has_attachment ? 'yes' : 'no',
+      r.recorded_by_name || '', r.notes || '',
+    ]));
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = todayISO().replace(/-/g, '');
+  a.href = url; a.download = `purchase-ledger-${stamp}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ── Upload bill (drawer + inline quick upload) ────────────────
