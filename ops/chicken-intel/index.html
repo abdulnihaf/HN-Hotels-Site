@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<!-- HE Chicken Intelligence — Phase 1 build 2026-05-22-r2 -->
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>HE Chicken Intelligence</title>
+<style>
+:root{
+  --bg:#0a0a0f;--card:#14141f;--card2:#1a1a2e;--border:#2a2a3e;
+  --text:#e0e0f0;--text2:#8888aa;--text3:#5a5a72;
+  --accent:#6366f1;--green:#22c55e;--red:#ef4444;--orange:#f59e0b;--cyan:#06b6d4;--pink:#ec4899;
+  --shawarma:#f59e0b;--boneless:#6366f1;--grill:#ef4444;--kebab:#22c55e;
+  --tandoori:#ec4899;--tangdi:#a855f7;--lollipop:#06b6d4;--wings:#84cc16;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+.ctr{max-width:960px;margin:0 auto;padding:12px}
+
+/* Header */
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:10px 0 14px;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.hdr h1{font-size:16px;font-weight:700}.hdr h1 .emoji{margin-right:6px}
+.hdr .role-switch{display:flex;gap:0;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:2px}
+.hdr .role-switch a{padding:6px 10px;font-size:11px;font-weight:600;color:var(--text2);text-decoration:none;border-radius:6px}
+.hdr .role-switch a.a{background:var(--accent);color:#fff}
+
+/* Headline (the one big number) */
+.headline{background:linear-gradient(135deg,var(--card) 0%,var(--card2) 100%);border:1px solid var(--border);border-radius:12px;padding:18px 16px;margin-bottom:12px;position:relative;overflow:hidden}
+.headline .date-lbl{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.headline .big{font-size:36px;font-weight:800;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;line-height:1.05}
+.headline .big.green{color:var(--green)}
+.headline .big.orange{color:var(--orange)}
+.headline .big.red{color:var(--red)}
+.headline .sub{font-size:13px;color:var(--text2);margin-top:6px;line-height:1.4}
+
+/* Three quick stats */
+.qstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.qstats .box{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+.qstats .box .l{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:4px}
+.qstats .box .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.qstats .box .s{font-size:10px;color:var(--text3);margin-top:2px}
+
+/* Data trust panel */
+.trust{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.trust.y{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.3)}
+.trust.r{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3)}
+.trust .lbl{font-weight:600}
+.trust .body{display:none;margin-top:8px;font-size:11px;color:var(--text2)}
+.trust.open .body{display:block}
+.trust .body .gap-row{padding:3px 0;color:var(--orange)}
+
+/* Date controls */
+.dctrl{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.dctrl .nav{display:flex;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.dctrl .nav button{background:transparent;border:none;color:var(--text);padding:8px 12px;cursor:pointer;font-size:14px;min-height:36px;font-family:inherit}
+.dctrl .nav button:hover{background:rgba(99,102,241,.15)}
+.dctrl .nav .label{padding:0 12px;font-size:13px;font-weight:600;min-width:120px;text-align:center}
+.dctrl .vsw{display:flex;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:2px}
+.dctrl .vsw button{background:transparent;border:none;color:var(--text2);padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;border-radius:6px;font-family:inherit;min-height:32px}
+.dctrl .vsw button.a{background:var(--accent);color:#fff}
+.dctrl input[type=date]{background:var(--card);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px;font-family:inherit;font-size:12px;min-height:36px}
+
+/* Heatmap */
+.heatmap{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px}
+.heatmap .title{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px}
+.heatmap .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.heatmap .day{aspect-ratio:1;border-radius:5px;display:flex;align-items:flex-end;justify-content:flex-start;padding:3px 4px;font-size:10px;font-weight:600;color:var(--text);background:rgba(255,255,255,0.03);cursor:pointer;position:relative;border:1px solid transparent}
+.heatmap .day.empty{background:transparent;cursor:default;color:var(--text3)}
+.heatmap .day.green{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.3)}
+.heatmap .day.orange{background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4)}
+.heatmap .day.red{background:rgba(239,68,68,.25);border-color:rgba(239,68,68,.5)}
+.heatmap .day.today{outline:2px solid var(--accent)}
+.heatmap .day:hover:not(.empty){transform:scale(1.05)}
+.heatmap .legend{display:flex;gap:8px;font-size:10px;color:var(--text2);margin-top:8px;justify-content:flex-end}
+.heatmap .legend span{display:flex;align-items:center;gap:4px}
+.heatmap .legend span i{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+/* Two tables (discrepancy + variance) */
+.section{background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden}
+.section h3{padding:10px 14px;font-size:12px;font-weight:700;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.section h3 .badge{font-size:9px;color:var(--text2);font-weight:500;padding:2px 6px;border-radius:10px;background:rgba(255,255,255,0.05)}
+.cuts-tbl{width:100%;font-size:12px}
+.cuts-tbl tr td{padding:8px 14px;border-top:1px solid rgba(255,255,255,0.03)}
+.cuts-tbl tr:first-child td{border-top:none}
+.cuts-tbl .ck{display:flex;align-items:center;gap:6px;font-weight:600;text-transform:uppercase;font-size:10px}
+.cuts-tbl .ck::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--text2)}
+.cuts-tbl .ck.shawarma::before{background:var(--shawarma)}
+.cuts-tbl .ck.boneless::before{background:var(--boneless)}
+.cuts-tbl .ck.kebab::before{background:var(--kebab)}
+.cuts-tbl .ck.grill::before{background:var(--grill)}
+.cuts-tbl .ck.tandoori::before{background:var(--tandoori)}
+.cuts-tbl .ck.tangdi::before{background:var(--tangdi)}
+.cuts-tbl .ck.lollipop::before{background:var(--lollipop)}
+.cuts-tbl .ck.wings::before{background:var(--wings)}
+.cuts-tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.cuts-tbl .pct{font-weight:700;font-variant-numeric:tabular-nums}
+.cuts-tbl .pct.g{color:var(--green)}.cuts-tbl .pct.o{color:var(--orange)}.cuts-tbl .pct.r{color:var(--red)}
+.cuts-tbl .empty{text-align:center;color:var(--text3);font-style:italic;font-size:11px;padding:14px}
+
+/* Dish breakdown (collapsible) */
+.dishes{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px}
+.dishes .toggle{padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.dishes .toggle:hover{background:rgba(255,255,255,0.02)}
+.dishes .toggle::after{content:'▾';font-size:10px;color:var(--text2);transition:transform .15s}
+.dishes.open .toggle::after{transform:rotate(180deg)}
+.dishes .body{display:none;border-top:1px solid var(--border);padding:10px 14px;font-size:11px}
+.dishes.open .body{display:block}
+
+/* Loading & empty states */
+.loading{text-align:center;padding:40px;color:var(--text2);font-size:13px}
+.error-banner{background:rgba(239,68,68,.1);border:1px solid var(--red);color:var(--red);padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:12px}
+
+@media(max-width:600px){
+  .qstats{grid-template-columns:1fr 1fr 1fr}
+  .qstats .box .v{font-size:14px}
+  .headline .big{font-size:28px}
+  .heatmap .day{font-size:9px}
+}
+</style>
+</head><body>
+<div class="ctr">
+
+<div class="hdr">
+  <h1><span class="emoji">🍗</span>HE Chicken Intelligence</h1>
+  <div class="role-switch">
+    <a href="?role=owner" data-r="owner" class="a">Owner</a>
+    <a href="?role=manager" data-r="manager">Manager</a>
+    <a href="?role=chef" data-r="chef">Chef</a>
+  </div>
+</div>
+
+<div id="app">
+  <div class="loading">Loading chicken data…</div>
+</div>
+
+</div>
+
+<script>
+const API = '/api/chicken-ops';
+const BRAND = 'HE';
+const CUTS = ['shawarma','boneless','kebab','grill','tandoori','tangdi','lollipop'];
+const DISCREPANCY_CUTS = ['grill','tandoori','lollipop','tangdi'];
+const VARIANCE_CUTS = ['boneless','shawarma','kebab'];
+const CUT_COLOR = {shawarma:'#f59e0b',boneless:'#6366f1',grill:'#ef4444',kebab:'#22c55e',tandoori:'#ec4899',tangdi:'#a855f7',lollipop:'#06b6d4'};
+
+const params = new URLSearchParams(location.search);
+const ROLE = params.get('role') || 'owner';
+let SELECTED_DATE = params.get('date') || yesterdayBusinessDay();
+
+document.querySelectorAll('.role-switch a').forEach(a => {
+  a.classList.toggle('a', a.dataset.r === ROLE);
+});
+
+function yesterdayBusinessDay() {
+  // Business day rolls over at 3 AM IST. So if it's currently 2 AM IST, "yesterday's business day" = 2 days ago.
+  const nowUtc = new Date();
+  const ist = new Date(nowUtc.getTime() + 5.5 * 3600000);
+  // If IST hour < 12, we're in the "no-business-day" zone (closed); show yesterday
+  // If IST hour >= 12, today's business day has started; show yesterday's
+  const cutoff = new Date(ist.getTime() - 86400000);
+  return cutoff.toISOString().slice(0, 10);
+}
+
+function formatDateLabel(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-IN', {weekday:'short', day:'numeric', month:'short'});
+}
+
+function paiseToRupees(p) {
+  if (p == null) return null;
+  return Math.round(p / 100);
+}
+
+function fmt(n, decimals = 0) {
+  if (n == null) return '—';
+  return n.toLocaleString('en-IN', {minimumFractionDigits: decimals, maximumFractionDigits: decimals});
+}
+
+function fmtRupee(p) {
+  const r = paiseToRupees(p);
+  if (r == null) return '—';
+  return '₹' + fmt(r);
+}
+
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+async function loadData() {
+  const month = SELECTED_DATE.slice(0, 7);
+  const monthFrom = month + '-01';
+  const [y, m] = month.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const monthTo = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+  // Each endpoint is independent — don't let one failure kill the whole dashboard
+  const safe = async (label, p) => {
+    try { return await p; }
+    catch (e) { console.warn(`${label} failed:`, e.message); return null; }
+  };
+
+  const [ledger, dayDetail, heatmap, trust] = await Promise.all([
+    safe('ledger',     fetchJSON(`${API}?action=ledger&from=${monthFrom}&to=${monthTo}&brand=${BRAND}`)),
+    safe('day-detail', fetchJSON(`${API}?action=day-detail&date=${SELECTED_DATE}&brand=${BRAND}`)),
+    safe('heatmap',    fetchJSON(`${API}?action=heatmap&month=${month}&brand=${BRAND}&metric=cost`)),
+    safe('trust',      fetchJSON(`${API}?action=trust-check&from=${monthFrom}&to=${monthTo}&brand=${BRAND}`)),
+  ]);
+
+  if (!ledger && !dayDetail) {
+    document.getElementById('app').innerHTML = `<div class="error-banner">Could not load any data. Check API status.</div>`;
+    return;
+  }
+
+  render({
+    ledger: ledger?.rows || [],
+    day: dayDetail?.rows || [],
+    heatmap: heatmap?.days || [],
+    trust: trust || null,
+  });
+}
+
+function render({ledger, day, heatmap, trust}) {
+  const app = document.getElementById('app');
+
+  // Compute totals for selected day
+  const dayTotals = computeDayTotals(day);
+  // Month-to-date totals
+  const monthTotals = computeMonthTotals(ledger);
+
+  let html = '';
+  html += renderHeadline(dayTotals, monthTotals);
+  html += renderQStats(dayTotals, monthTotals);
+  html += renderTrust(trust);
+  html += renderDateControls();
+  html += renderHeatmap(heatmap);
+  html += renderTables(day, dayTotals);
+  html += renderDishes(day);
+
+  app.innerHTML = html;
+  attachHandlers();
+}
+
+function computeDayTotals(rows) {
+  const t = {
+    cost_paise: 0, variance_sum: 0, variance_count: 0,
+    discrepancy_units: 0, purchased_kg: 0, recipe_consumed_g: 0,
+    cuts_with_data: 0, lost_paise: 0,
+  };
+  for (const r of rows) {
+    if (r.cost_paise != null) t.cost_paise += r.cost_paise;
+    if (r.variance_pct != null) { t.variance_sum += r.variance_pct; t.variance_count += 1; }
+    if (r.discrepancy_units) t.discrepancy_units += r.discrepancy_units;
+    if (r.purchased_kg) t.purchased_kg += r.purchased_kg;
+    if (r.recipe_consumed_g) t.recipe_consumed_g += r.recipe_consumed_g;
+    if (r.purchased_kg || r.recipe_consumed_g) t.cuts_with_data += 1;
+    // Lost ₹ = variance kg × cost per kg
+    if (r.variance_pct && r.cost_paise && r.recipe_consumed_g > 0) {
+      const recipeKg = r.recipe_consumed_g / 1000;
+      const overKg = (r.purchased_kg || 0) - recipeKg;
+      if (overKg > 0 && r.price_per_kg_paise) {
+        t.lost_paise += overKg * r.price_per_kg_paise;
+      }
+    }
+  }
+  t.avg_variance = t.variance_count > 0 ? t.variance_sum / t.variance_count : null;
+  return t;
+}
+
+function computeMonthTotals(rows) {
+  const t = {cost_paise: 0, lost_paise: 0, worst_day: null, worst_lost: 0};
+  const dayBuckets = {};
+  for (const r of rows) {
+    if (r.cost_paise) t.cost_paise += r.cost_paise;
+    if (r.variance_pct && r.recipe_consumed_g > 0 && r.price_per_kg_paise) {
+      const overKg = (r.purchased_kg || 0) - r.recipe_consumed_g / 1000;
+      if (overKg > 0) {
+        const lost = overKg * r.price_per_kg_paise;
+        t.lost_paise += lost;
+        if (!dayBuckets[r.business_date]) dayBuckets[r.business_date] = 0;
+        dayBuckets[r.business_date] += lost;
+      }
+    }
+  }
+  for (const [d, p] of Object.entries(dayBuckets)) {
+    if (p > t.worst_lost) { t.worst_lost = p; t.worst_day = d; }
+  }
+  return t;
+}
+
+function renderHeadline(dayT, monthT) {
+  if (ROLE === 'chef') {
+    const v = dayT.avg_variance;
+    const colorClass = v == null ? '' : v < 10 ? 'green' : v < 25 ? 'orange' : 'red';
+    return `<div class="headline">
+      <div class="date-lbl">${formatDateLabel(SELECTED_DATE)} — kitchen discipline</div>
+      <div class="big ${colorClass}">${v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1) + '% over recipe'}</div>
+      <div class="sub">${describeVariance(dayT)}</div>
+    </div>`;
+  }
+  if (ROLE === 'manager') {
+    const d = dayT.discrepancy_units;
+    const colorClass = d === 0 ? 'green' : 'red';
+    return `<div class="headline">
+      <div class="date-lbl">${formatDateLabel(SELECTED_DATE)} — stock health</div>
+      <div class="big ${colorClass}">${d > 0 ? d + ' units missing' : 'No discrepancies'}</div>
+      <div class="sub">${describeStockHealth(dayT)}</div>
+    </div>`;
+  }
+  // Owner default
+  const lostR = paiseToRupees(dayT.lost_paise);
+  const colorClass = lostR == null ? '' : lostR < 500 ? 'green' : lostR < 2000 ? 'orange' : 'red';
+  const big = lostR == null ? 'No price data yet' : '₹' + fmt(lostR) + ' lost to inefficiency';
+  return `<div class="headline">
+    <div class="date-lbl">${formatDateLabel(SELECTED_DATE)}</div>
+    <div class="big ${colorClass}">${big}</div>
+    <div class="sub">${describeOwner(dayT)}</div>
+  </div>`;
+}
+
+function describeOwner(t) {
+  if (t.cuts_with_data === 0) return 'No data for this day yet.';
+  if (t.avg_variance == null) return `${fmt(t.purchased_kg, 1)} kg purchased. Awaiting price entry.`;
+  const v = t.avg_variance;
+  if (v < 10) return `Kitchen at recipe (+${v.toFixed(0)}%). Tight day.`;
+  if (v < 25) return `${fmt(t.purchased_kg, 1)} kg bought — kitchen +${v.toFixed(0)}% over recipe.`;
+  return `Significant overshoot — kitchen +${v.toFixed(0)}% over recipe. Drill in.`;
+}
+
+function describeVariance(t) {
+  if (t.avg_variance == null) return 'No data yet.';
+  if (t.avg_variance < 10) return 'Within target band — keep doing what you\'re doing.';
+  if (t.avg_variance < 25) return 'Slight drift — check portions on top dishes.';
+  return 'Heavy over-portion. Check marinade weight + serving size.';
+}
+
+function describeStockHealth(t) {
+  if (t.cuts_with_data === 0) return 'No purchase data for this day.';
+  if (t.discrepancy_units === 0) return `${fmt(t.purchased_kg, 1)} kg bought, all accounted.`;
+  return `Stock missing across multiple cuts. Investigate.`;
+}
+
+function renderQStats(dayT, monthT) {
+  const cards = [
+    {l: 'This month lost', v: monthT.lost_paise > 0 ? '₹' + fmt(paiseToRupees(monthT.lost_paise)) : '—', s: monthT.worst_day ? `worst: ${formatDateLabel(monthT.worst_day)}` : ''},
+    {l: 'Chicken bought today', v: fmt(dayT.purchased_kg, 1) + ' kg', s: fmtRupee(dayT.cost_paise)},
+    {l: 'Recipe says use', v: fmt(dayT.recipe_consumed_g / 1000, 1) + ' kg', s: dayT.avg_variance != null ? `${(dayT.avg_variance > 0 ? '+' : '') + dayT.avg_variance.toFixed(0)}%` : ''},
+  ];
+  return `<div class="qstats">${cards.map(c => `
+    <div class="box"><div class="l">${c.l}</div><div class="v">${c.v}</div><div class="s">${c.s}</div></div>
+  `).join('')}</div>`;
+}
+
+function renderTrust(trust) {
+  if (!trust || !trust.success) return '';
+  const status = trust.status || 'green';
+  const gaps = trust.gaps || [];
+  const cls = status === 'green' ? '' : status === 'yellow' ? 'y' : 'r';
+  const icon = status === 'green' ? '✓' : status === 'yellow' ? '⚠' : '✗';
+  const summary = gaps.length === 0
+    ? `Data trust: All sources agree (${trust.ledger_days} days in ledger, ${trust.odoo_days} in Odoo)`
+    : `Data trust: ${gaps.length} gap${gaps.length === 1 ? '' : 's'} detected — tap to view`;
+  return `<div class="trust ${cls}" onclick="this.classList.toggle('open')">
+    <span class="lbl">${icon} ${summary}</span>
+    <span>${gaps.length > 0 ? '▾' : '✓'}</span>
+    <div class="body">${gaps.map(g => `<div class="gap-row">${g.date} — ${g.type} (ledger:${g.ledger_cuts || 0}, odoo:${g.odoo_lines || 0})</div>`).join('')}</div>
+  </div>`;
+}
+
+function renderDateControls() {
+  const prev = shiftDate(SELECTED_DATE, -1);
+  const next = shiftDate(SELECTED_DATE, +1);
+  return `<div class="dctrl">
+    <div class="nav">
+      <button onclick="navigate('${prev}')">‹</button>
+      <span class="label">${formatDateLabel(SELECTED_DATE)}</span>
+      <button onclick="navigate('${next}')">›</button>
+    </div>
+    <input type="date" value="${SELECTED_DATE}" onchange="navigate(this.value)" max="${todayDate()}">
+  </div>`;
+}
+
+function shiftDate(s, d) {
+  const dt = new Date(s + 'T12:00:00Z');
+  dt.setUTCDate(dt.getUTCDate() + d);
+  return dt.toISOString().slice(0, 10);
+}
+
+function todayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+window.navigate = function(date) {
+  const params = new URLSearchParams(location.search);
+  params.set('date', date);
+  history.replaceState({}, '', '?' + params.toString());
+  SELECTED_DATE = date;
+  loadData();
+};
+
+function renderHeatmap(days) {
+  const month = SELECTED_DATE.slice(0, 7);
+  const [y, m] = month.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const firstDow = new Date(`${month}-01T12:00:00`).getDay(); // 0 = Sun
+
+  const dayMap = {};
+  let maxLost = 0;
+  for (const d of days) {
+    // Compute lost paise from variance × cost
+    // The heatmap action returns cost_paise per day (aggregated)
+    // For now we color by cost magnitude; in v6 add variance-derived loss
+    dayMap[d.business_date] = d;
+    if (d.cost_paise > maxLost) maxLost = d.cost_paise;
+  }
+
+  let cells = '';
+  // Pad leading
+  for (let i = 0; i < firstDow; i++) cells += `<div class="day empty"></div>`;
+  for (let day = 1; day <= lastDay; day++) {
+    const ds = `${month}-${String(day).padStart(2, '0')}`;
+    const d = dayMap[ds];
+    let cls = 'empty';
+    if (d) {
+      // Heuristic: color by avg variance
+      const v = d.avg_variance || 0;
+      cls = v < 10 ? 'green' : v < 25 ? 'orange' : 'red';
+    }
+    const todayCls = ds === SELECTED_DATE ? ' today' : '';
+    cells += `<div class="day ${cls}${todayCls}" onclick="navigate('${ds}')" title="${ds}">${day}</div>`;
+  }
+
+  return `<div class="heatmap">
+    <div class="title">${new Date(month + '-15').toLocaleDateString('en-IN', {month: 'long', year: 'numeric'})} — chicken health</div>
+    <div class="grid">${cells}</div>
+    <div class="legend">
+      <span><i style="background:rgba(34,197,94,.3)"></i>OK</span>
+      <span><i style="background:rgba(245,158,11,.4)"></i>Drift</span>
+      <span><i style="background:rgba(239,68,68,.5)"></i>High variance</span>
+    </div>
+  </div>`;
+}
+
+function renderTables(rows, dayT) {
+  const byCut = {};
+  for (const r of rows) byCut[r.cut] = r;
+
+  // Discrepancy table
+  let discrepancyRows = '';
+  let anyDiscrepancyData = false;
+  for (const cut of DISCREPANCY_CUTS) {
+    const r = byCut[cut];
+    if (!r) continue;
+    anyDiscrepancyData = true;
+    const hasClosing = r.closing_kg != null || r.closing_units != null;
+    const discrepancy = r.discrepancy_units;
+    if (hasClosing && discrepancy != null) {
+      const cls = discrepancy === 0 ? 'g' : 'r';
+      discrepancyRows += `<tr>
+        <td><span class="ck ${cut}">${cut}</span></td>
+        <td class="num">${fmt(r.purchased_kg, 1)} kg</td>
+        <td class="num">${fmt(r.unit_sales_count, 0)} sold</td>
+        <td class="num pct ${cls}">${discrepancy === 0 ? '0 ✓' : '−' + discrepancy + ' units'}</td>
+      </tr>`;
+    } else {
+      discrepancyRows += `<tr>
+        <td><span class="ck ${cut}">${cut}</span></td>
+        <td class="num">${fmt(r.purchased_kg, 1)} kg</td>
+        <td class="num">${fmt(r.unit_sales_count, 0)} sold</td>
+        <td class="num" style="color:var(--text3);font-size:11px">— pending closing count —</td>
+      </tr>`;
+    }
+  }
+  if (!discrepancyRows) {
+    discrepancyRows = `<tr><td colspan="4" class="empty">No purchase data for discrepancy cuts on this day</td></tr>`;
+  }
+
+  // Variance table
+  let varianceRows = '';
+  for (const cut of CUTS) {
+    if (DISCREPANCY_CUTS.includes(cut) && cut !== 'tandoori') continue;
+    const r = byCut[cut];
+    if (!r || (!r.purchased_kg && !r.recipe_consumed_g)) continue;
+    const v = r.variance_pct;
+    const cls = v == null ? '' : v < 10 ? 'g' : v < 25 ? 'o' : 'r';
+    const recipeKg = (r.recipe_consumed_g || 0) / 1000;
+    const cost = r.cost_paise ? fmtRupee(r.cost_paise) : '—';
+    varianceRows += `<tr>
+      <td><span class="ck ${cut}">${cut}</span></td>
+      <td class="num">${fmt(r.purchased_kg, 1)} kg</td>
+      <td class="num">${fmt(recipeKg, 1)} kg</td>
+      <td class="num pct ${cls}">${v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(0) + '%'}</td>
+      <td class="num">${cost}</td>
+    </tr>`;
+  }
+  if (!varianceRows) {
+    varianceRows = `<tr><td colspan="5" class="empty">No purchase or sales data for this day</td></tr>`;
+  }
+
+  return `
+    <div class="section">
+      <h3>Discrepancy — units missing <span class="badge">grill · tandoori · lollipop · tangdi</span></h3>
+      <table class="cuts-tbl"><tbody>${discrepancyRows}</tbody></table>
+    </div>
+    <div class="section">
+      <h3>Variance — over recipe <span class="badge">boneless · shawarma · kebab</span></h3>
+      <table class="cuts-tbl"><tbody>${varianceRows}</tbody></table>
+    </div>
+  `;
+}
+
+function renderDishes(rows) {
+  let dishes = {};
+  let total = 0;
+  for (const r of rows) {
+    if (!r.dishes_sold_json) continue;
+    try {
+      const d = JSON.parse(r.dishes_sold_json);
+      for (const [name, qty] of Object.entries(d)) {
+        dishes[name] = (dishes[name] || 0) + qty;
+        total += qty;
+      }
+    } catch {}
+  }
+  const sorted = Object.entries(dishes).sort((a, b) => b[1] - a[1]);
+  const dishRows = sorted.map(([name, qty]) => `<tr>
+    <td>${name}</td><td class="num">${qty}</td>
+  </tr>`).join('');
+
+  return `<div class="dishes">
+    <div class="toggle" onclick="this.parentElement.classList.toggle('open')">
+      Dish breakdown — ${sorted.length} dishes, ${total} sold
+    </div>
+    <div class="body">
+      <table class="cuts-tbl"><tbody>${dishRows || '<tr><td class="empty">No dish data for this day</td></tr>'}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function attachHandlers() { /* handlers wired inline via onclick */ }
+
+loadData();
+</script>
+</body></html>
