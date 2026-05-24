@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-24T22:38:23+0530",
-  "published_at": "2026-05-24T22:38:23+0530",
+  "updated_at": "2026-05-24T22:48:44+0530",
+  "published_at": "2026-05-24T22:48:44+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -15,7 +15,9 @@
     "mutation_status": "blocked until live account verification",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads"
   },
+  "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
+  "writeback_required": true,
   "recent_events": [
     {
       "id": "2026-05-24-control-room-v2",

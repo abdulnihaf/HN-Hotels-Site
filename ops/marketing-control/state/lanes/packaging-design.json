@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-24T22:38:23+0530",
-  "published_at": "2026-05-24T22:38:23+0530",
+  "updated_at": "2026-05-24T22:48:44+0530",
+  "published_at": "2026-05-24T22:48:44+0530",
   "source": "github-main-static-json",
   "lane_slug": "packaging-design",
   "lane": {
@@ -13,9 +13,11 @@
     "last_summary": "Seeded from actual Claude execution: May HE/NCH packaging intelligence, April NCH flask origin, and April rejection/correction trail.",
     "next_action": "Continue HE Cheap-Bold correction or NCH flask panel work panel-by-panel.",
     "mutation_status": "no bulk automation",
-    "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Packaging_Design_Codex_2026-05-24/open_packaging_design_codex.command"
+    "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design"
   },
+  "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Packaging_Design_Codex_2026-05-24/prompts/10-packaging-design.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/packaging-design.md",
+  "writeback_required": false,
   "recent_events": [
     {
       "id": "2026-05-24-control-room-v2",

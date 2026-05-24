@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-24T22:38:23+0530",
-  "published_at": "2026-05-24T22:38:23+0530",
+  "updated_at": "2026-05-24T22:48:44+0530",
+  "published_at": "2026-05-24T22:48:44+0530",
   "source": "github-main-static-json",
   "lane_slug": "pos-write",
   "lane": {
@@ -15,7 +15,9 @@
     "mutation_status": "blocked until root cause is reported",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pos-write"
   },
+  "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/09-pos-write.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/pos-write.md",
+  "writeback_required": true,
   "recent_events": [
     {
       "id": "2026-05-24-pos-write-launcher-fix",
