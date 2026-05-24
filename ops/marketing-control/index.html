@@ -73,8 +73,8 @@
   </div>
 
   <section class="summary-grid" aria-label="Marketing execution summary">
-    <div class="summary"><div class="v">9</div><div class="l">Execution lanes</div></div>
-    <div class="summary"><div class="v">10</div><div class="l">Codex terminals</div></div>
+    <div class="summary"><div class="v">10</div><div class="l">Execution lanes</div></div>
+    <div class="summary"><div class="v">11</div><div class="l">Codex terminals</div></div>
     <div class="summary"><div class="v">HE/NCH</div><div class="l">Brand scope</div></div>
     <div class="summary"><div class="v">Live</div><div class="l">Cloudflare-first</div></div>
   </section>
@@ -97,6 +97,7 @@
 <script>
 const BASE = '/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24';
 const OPEN_ONE = `${BASE}/open_lane.command`;
+const PACKAGING_OPEN = '/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Packaging_Design_Codex_2026-05-24/open_packaging_design_codex.command';
 const lanes = [
   {
     slug: 'master',
@@ -219,8 +220,8 @@ const lanes = [
     brand: 'HE/NCH',
     status: ['creative'],
     tags: ['creative'],
-    current: 'HE flyer/facade/menu/QR assets and NCH flask carton work exist across repo, Desktop, Downloads, and archive paths.',
-    next: 'Open for physical flyer, menu PDF, QR, packaging, facade, or print-ready output work.',
+    current: 'HE flyer/facade/menu/QR assets exist across repo, Desktop, Downloads, and archive paths.',
+    next: 'Open for physical flyer, menu PDF, QR, facade, or print-ready non-packaging output work.',
     guardrail: 'Verify dimensions, resolution, QR decode, text, and export format before final print use.',
     links: [
       ['Marketing index', '/marketing/'],
@@ -261,14 +262,29 @@ const lanes = [
       ['Cash/Ground menu', 'https://hamzaexpress.in/menu/'],
       ['Captain menu', 'https://hamzaexpress.in/menu/captain/']
     ]
+  },
+  {
+    slug: 'packaging-design',
+    title: '10 Packaging Design',
+    scope: 'HE/NCH packaging doctrine, SKU collapse, NCH flask/tuck execution, render control, and vendor handoff.',
+    brand: 'HE/NCH',
+    status: ['creative', 'gated'],
+    tags: ['creative', 'gated'],
+    command: PACKAGING_OPEN,
+    current: 'Codex lane seeded from actual Claude execution: May 19 HE+NCH packaging intelligence, April NCH flask origin, and April rejection/correction trail.',
+    next: 'Open for HE Cheap-Bold render correction, NCH flask panel continuation, tuck-box planning, packaging material decisions, or vendor-ready packaging packs.',
+    guardrail: 'No bulk panel automation. Read the execution digest and raw Claude trail, then continue panel-by-panel with cost and supplier checks.',
+    links: [
+      ['Marketing index', '/marketing/']
+    ]
   }
 ];
 
 const grid = document.getElementById('lane-grid');
 const toast = document.getElementById('toast');
 
-function commandFor(slug) {
-  return `${OPEN_ONE} ${slug}`;
+function commandFor(lane) {
+  return lane.command || `${OPEN_ONE} ${lane.slug}`;
 }
 
 function showToast(text) {
@@ -328,10 +344,10 @@ function render(filter = 'all') {
             <div class="fact"><div class="k">Guardrail</div><div class="v">${lane.guardrail}</div></div>
           </div>
           <div class="links">
-            <button class="primary-link" data-copy="${commandFor(lane.slug)}">Copy terminal command</button>
+            <button class="primary-link" data-copy="${commandFor(lane)}">Copy terminal command</button>
             ${lane.links.map(([label, href]) => `<a href="${href}" ${href.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>${label}</a>`).join('')}
           </div>
-          <div class="command"><code>${commandFor(lane.slug)}</code></div>
+          <div class="command"><code>${commandFor(lane)}</code></div>
         </div>
       `;
       grid.appendChild(article);
