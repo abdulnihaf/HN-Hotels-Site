@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operations Control — HN Hotels</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+        colors: { brand: { 400:'#f0a944',500:'#e8930c',600:'#c97508' } }
+      } }
+    }
+  </script>
+  <style>
+    *{box-sizing:border-box} body{background:#0c0c14;color:#e4e4ed}
+    .glass{background:rgba(22,22,31,.7);border:1px solid rgba(255,255,255,.05);backdrop-filter:blur(20px)}
+    .card:hover{border-color:rgba(232,147,12,.35);background:rgba(28,28,39,.85);transform:translateY(-1px)}
+    .card{transition:all .15s ease;cursor:pointer;min-height:44px}
+    .badge{font-size:.6rem;padding:2px 8px;border-radius:999px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+    .scroll-y{overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.08) transparent}
+    .scroll-y::-webkit-scrollbar{width:4px}.scroll-y::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
+    .overlay{background:rgba(0,0,0,.6);backdrop-filter:blur(6px)}
+    .btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;font-weight:600;transition:all .15s}
+    .btn-primary{background:#e8930c;color:#0c0c14}.btn-primary:hover{background:#f0a944}
+    .btn-ghost{background:rgba(255,255,255,.05);color:rgba(255,255,255,.65)}.btn-ghost:hover{background:rgba(255,255,255,.1)}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}} .live{animation:pulse 1.6s ease-in-out infinite}
+    a{color:#f0a944}
+  </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+<nav class="sticky top-0 z-40 glass border-b border-white/[.04] px-4 sm:px-6 py-3 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <div class="w-9 h-9 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-400 font-extrabold">OC</div>
+    <div>
+      <h1 class="text-sm font-bold leading-none">Operations Control</h1>
+      <p class="text-[10px] text-white/30 leading-none mt-1">HN Hotels — Claude operations engine · <span id="version">…</span></p>
+    </div>
+  </div>
+  <button onclick="load()" class="btn btn-ghost text-xs px-3">↻ Refresh</button>
+</nav>
+
+<div class="max-w-[1500px] mx-auto px-4 sm:px-6 py-5">
+
+  <!-- rollup -->
+  <section id="rollup" class="grid grid-cols-3 sm:grid-cols-6 gap-2.5 mb-4"></section>
+
+  <!-- legend + principle -->
+  <div class="glass rounded-xl px-4 py-3 mb-5 text-[11px] text-white/50 leading-relaxed">
+    <div id="principle" class="mb-2 text-white/40"></div>
+    <div class="flex flex-wrap gap-x-5 gap-y-1.5">
+      <span><b class="text-emerald-400">LOAD</b> rich context now</span>
+      <span><b class="text-amber-400">SEED</b> partial</span>
+      <span><b class="text-white/40">LIVE</b> built by operating</span>
+      <span class="text-white/20">·</span>
+      <span><b class="text-sky-400">Demand</b> you open it</span>
+      <span><b class="text-amber-300">Watch</b> it flags you</span>
+      <span><b class="text-violet-400">Synthesis</b> rolls up</span>
+    </div>
+  </div>
+
+  <!-- latest writeback activity -->
+  <section class="glass rounded-xl mb-6 overflow-hidden">
+    <div class="px-4 py-2.5 border-b border-white/[.05] flex items-center gap-2">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 live"></span>
+      <span class="text-xs font-semibold text-white/70">Latest writeback</span>
+      <span class="text-[10px] text-white/25">— each lane appends one line here after it executes</span>
+    </div>
+    <div id="activity" class="px-4 py-2 text-[11px] text-white/55 scroll-y max-h-32"></div>
+  </section>
+
+  <!-- the graph -->
+  <main id="graph"></main>
+  <div id="error" class="hidden glass rounded-xl p-6 text-center text-sm text-white/50"></div>
+</div>
+
+<!-- detail modal -->
+<div id="modal" class="fixed inset-0 z-50 hidden overlay flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <div class="glass w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[88vh] rounded-t-2xl sm:rounded-2xl flex flex-col">
+    <div class="flex items-start justify-between px-5 py-4 border-b border-white/[.05]">
+      <div><h2 id="m-title" class="text-base font-bold"></h2><div id="m-path" class="text-[11px] text-white/35 mt-0.5"></div></div>
+      <button onclick="closeModal()" class="btn btn-ghost w-9 h-9 text-lg shrink-0">×</button>
+    </div>
+    <div class="p-5 scroll-y flex-1 space-y-4" id="m-body"></div>
+  </div>
+</div>
+
+<script>
+const GRAPH_URL = './graph.json';
+const STATE_URL = './state.jsonl';
+let GRAPH = null, STATE = {};
+
+const esc = s => { const d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; };
+const stateColor = s => ({LOAD:'bg-emerald-500/15 text-emerald-400',SEED:'bg-amber-500/15 text-amber-400',LIVE:'bg-white/10 text-white/45'}[s]||'bg-white/10 text-white/45');
+const modeColor  = m => ({Demand:'bg-sky-500/15 text-sky-400',Watch:'bg-amber-500/10 text-amber-300',Synthesis:'bg-violet-500/15 text-violet-400'}[m]||'bg-white/10 text-white/45');
+const riskColor  = r => /mutation|money|statutory|cash/i.test(r||'') ? 'text-red-400' : 'text-white/40';
+
+async function load(){
+  try {
+    const g = await fetch(GRAPH_URL,{cache:'no-store'});
+    if(!g.ok) throw new Error('graph fetch '+g.status);
+    GRAPH = await g.json();
+    try { const s = await fetch(STATE_URL,{cache:'no-store'}); if(s.ok) parseState(await s.text()); } catch(e){}
+    render();
+  } catch(e){
+    document.getElementById('graph').innerHTML='';
+    const el = document.getElementById('error'); el.classList.remove('hidden');
+    el.innerHTML = `Could not load <code class="text-brand-400">graph.json</code> (${esc(e.message)}).<br><br>`+
+      `If you opened this file directly, browsers block local <code>fetch()</code>. Serve it instead:<br>`+
+      `<code class="text-brand-400 block mt-2">cd ~/Documents/Tech/HN-Hotels-Site &amp;&amp; python3 -m http.server 8787</code>`+
+      `<span class="block mt-1">then open <a href="http://localhost:8787/ops/ops-control/">localhost:8787/ops/ops-control/</a></span>`;
+  }
+}
+
+function parseState(txt){
+  STATE = {};
+  txt.trim().split('\n').forEach(line=>{ if(!line.trim())return; try{ const o=JSON.parse(line); STATE[o.lane]=o; }catch(e){} });
+}
+
+function render(){
+  document.getElementById('error').classList.add('hidden');
+  document.getElementById('version').textContent = GRAPH.version||'';
+  document.getElementById('principle').textContent = GRAPH.principle||'';
+  const lanes = GRAPH.lanes||[];
+
+  // rollup
+  const by = (k,v)=>lanes.filter(l=>l[k]===v).length;
+  const cells = [
+    {l:'Lanes', v:lanes.length, c:'text-white'},
+    {l:'LOAD', v:by('context_state','LOAD'), c:'text-emerald-400'},
+    {l:'SEED', v:by('context_state','SEED'), c:'text-amber-400'},
+    {l:'LIVE', v:by('context_state','LIVE'), c:'text-white/50'},
+    {l:'Demand', v:by('mode','Demand'), c:'text-sky-400'},
+    {l:'Watch', v:by('mode','Watch'), c:'text-amber-300'},
+  ];
+  document.getElementById('rollup').innerHTML = cells.map(m=>`
+    <div class="glass rounded-xl px-3 py-2.5"><p class="text-[10px] text-white/25 uppercase tracking-wider">${m.l}</p>
+    <p class="text-xl font-bold ${m.c}">${m.v}</p></div>`).join('');
+
+  // activity feed
+  const acts = Object.values(STATE).sort((a,b)=>(b.ts||'').localeCompare(a.ts||''));
+  document.getElementById('activity').innerHTML = acts.length ? acts.map(a=>`
+    <div class="py-1 border-b border-white/[.03] last:border-0">
+      <span class="text-white/30">${esc((a.ts||'').slice(0,16).replace('T',' '))}</span>
+      <span class="text-brand-400 font-semibold ml-2">${esc(a.lane)}</span>
+      <span class="text-white/30 ml-1">(${esc(a.tool||'')})</span>
+      <span class="ml-2">${esc(a.event||'')}</span>
+      ${a.note?`<span class="text-white/40 ml-1">— ${esc(a.note)}</span>`:''}
+    </div>`).join('') : '<div class="py-2 text-white/25">No executions logged yet.</div>';
+
+  // grouped board
+  const groups = GRAPH.groups || [...new Set(lanes.map(l=>l.group))].map(n=>({name:n,subgroups:[...new Set(lanes.filter(l=>l.group===n).map(l=>l.subgroup))]}));
+  let html = '';
+  for(const grp of groups){
+    const glanes = lanes.filter(l=>l.group===grp.name);
+    if(!glanes.length) continue;
+    html += `<section class="mb-7"><h2 class="text-xs font-bold uppercase tracking-widest text-brand-400/80 mb-3 flex items-center gap-2">
+      <span class="w-1 h-4 bg-brand-500/60 rounded"></span>${esc(grp.name)}<span class="text-white/20 font-normal normal-case tracking-normal">· ${glanes.length}</span></h2>`;
+    for(const sub of (grp.subgroups||[])){
+      const slanes = glanes.filter(l=>l.subgroup===sub).sort((a,b)=>a.code.localeCompare(b.code));
+      if(!slanes.length) continue;
+      html += `<div class="mb-3"><p class="text-[10px] uppercase tracking-wider text-white/30 mb-2 ml-0.5">${esc(sub)}</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">`;
+      for(const l of slanes){
+        const st = STATE[l.slug];
+        html += `<div class="card glass rounded-xl p-3.5" onclick='openModal(${JSON.stringify(l.slug)})'>
+          <div class="flex items-start justify-between gap-2 mb-1.5">
+            <div class="font-semibold text-sm text-white/85 leading-tight">${esc(l.title)}</div>
+            <span class="badge ${stateColor(l.context_state)} shrink-0">${esc(l.context_state)}</span>
+          </div>
+          <div class="flex flex-wrap gap-1.5 mb-2">
+            <span class="badge ${modeColor(l.mode)}">${esc(l.mode)}</span>
+            <span class="badge bg-white/5 ${riskColor(l.risk)}">${esc(l.risk)}</span>
+          </div>
+          <p class="text-[11px] text-white/45 leading-snug line-clamp-3">${esc(l.summary)}</p>
+          ${st?`<p class="text-[10px] text-emerald-400/70 mt-2">● ${esc((st.ts||'').slice(0,10))} ${esc(st.event||'')}</p>`:''}
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+    html += `</section>`;
+  }
+  document.getElementById('graph').innerHTML = html;
+}
+
+function fullCommand(l){
+  const u = GRAPH.unified_command||'';
+  const base = u.slice(0, u.lastIndexOf('/'));
+  return (base?base+'/':'') + (l.command||'');
+}
+
+function openModal(slug){
+  const l = (GRAPH.lanes||[]).find(x=>x.slug===slug); if(!l) return;
+  document.getElementById('m-title').textContent = l.title;
+  document.getElementById('m-path').textContent = `${l.group} › ${l.subgroup} › ${l.mode} · owner: ${l.tool_owner}`;
+  const cmd = fullCommand(l);
+  const st = STATE[l.slug];
+  const link = u => /^https?:/.test(u) ? u : ('https://hnhotels.in'+(u.startsWith('/')?u:'/'+u));
+  document.getElementById('m-body').innerHTML = `
+    <div class="flex flex-wrap gap-2">
+      <span class="badge ${stateColor(l.context_state)}">${esc(l.context_state)}</span>
+      <span class="badge ${modeColor(l.mode)}">${esc(l.mode)}</span>
+      <span class="badge bg-white/5 ${riskColor(l.risk)}">risk: ${esc(l.risk)}</span>
+      <span class="badge bg-white/5 text-white/45">status: ${esc(l.status)}</span>
+    </div>
+    <div><p class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Summary</p>
+      <p class="text-sm text-white/70 leading-relaxed">${esc(l.summary)}</p></div>
+    <div><p class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Pending next action</p>
+      <p class="text-sm text-brand-400">${esc(l.next_action)}</p></div>
+    <div><p class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Terminal command</p>
+      <div class="flex items-center gap-2">
+        <code class="flex-1 text-[11px] text-emerald-300 bg-black/30 rounded-lg px-3 py-2 break-all">${esc(cmd)}</code>
+        <button onclick="copyCmd(this,${JSON.stringify(cmd)})" class="btn btn-primary text-xs px-3 shrink-0">Copy</button>
+      </div></div>
+    ${(l.live_urls&&l.live_urls.length)?`<div><p class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Live URLs</p>
+      <div class="flex flex-wrap gap-2">${l.live_urls.map(u=>`<a href="${esc(link(u))}" target="_blank" class="btn btn-ghost text-xs px-3">${esc(u.replace(/^https?:\/\/[^/]+/,''))||esc(u)} ↗</a>`).join('')}</div></div>`:''}
+    ${(l.context_files&&l.context_files.length)?`<div><p class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Source context files</p>
+      <ul class="text-[11px] text-white/45 space-y-1">${l.context_files.map(f=>`<li class="break-all">• ${esc(f)}</li>`).join('')}</ul></div>`:''}
+    <div><p class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Context pack (prompt)</p>
+      <code class="text-[11px] text-white/40 break-all">${esc(l.prompt)}</code></div>
+    ${st?`<div class="border-t border-white/[.05] pt-3"><p class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Last writeback</p>
+      <p class="text-[11px] text-white/50">${esc(st.ts)} — ${esc(st.event)}${st.note?' — '+esc(st.note):''}</p></div>`:''}
+  `;
+  document.getElementById('modal').classList.remove('hidden');
+}
+function closeModal(){ document.getElementById('modal').classList.add('hidden'); }
+function copyCmd(btn,txt){ navigator.clipboard.writeText(txt).then(()=>{ const t=btn.textContent; btn.textContent='Copied ✓'; setTimeout(()=>btn.textContent=t,1400); }); }
+document.getElementById('modal').addEventListener('click',e=>{ if(e.target.id==='modal') closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+
+load();
+</script>
+</body>
+</html>

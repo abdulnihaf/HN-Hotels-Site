@@ -1,0 +1,573 @@
+{
+  "version": "2026-05-24.v2",
+  "group": "Operations",
+  "principle": "Each lane is a deep-execution cockpit; the graph keeps collective context coherent. Every lane is one point in a 3-axis space: Domain x Mode x Aspect. The UI only renders this file. Nothing here is end-to-end automation — it is structured human-in-the-loop execution.",
+  "owner_tool_default": "Claude",
+  "boundary": "Operations = Claude (single-writer). Marketing = Codex (see _context/Marketing_Unified_Control_2026-05-24/marketing-execution-graph.json). Shared assets (WhatsApp number, FB login, Odoo, hn-winpc) are read-coordinated, never co-written.",
+  "global_context": [
+    "/Users/nihaf/Documents/Tech/HN-Hotels-Site/CLAUDE.md",
+    "/Users/nihaf/Documents/Tech/HN-Hotels-Site/docs/COA-Doctrine.md",
+    "/Users/nihaf/.claude/projects/-Users-nihaf-Documents-Tech-HN-Hotels-Site/memory/MEMORY.md",
+    "/Users/nihaf/.ai-coordination/claude-decisions.log"
+  ],
+  "state_ledger": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/ops/ops-control/state.jsonl",
+  "state_log": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/ops/ops-control/state.jsonl",
+  "unified_command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Operations_Execution_Graph_2026-05-24/open_ops_lane.command",
+  "context_state_legend": {
+    "LOAD": "Rich context already exists (memory + repo + D1) - ingest now.",
+    "SEED": "Partial context exists - seed and grow.",
+    "LIVE": "Greenfield - context is built by operating; the chat is the instrument."
+  },
+  "groups": [
+    {
+      "name": "Control",
+      "subgroups": [
+        "Control"
+      ]
+    },
+    {
+      "name": "Sales & POS Truth",
+      "subgroups": [
+        "Transactions",
+        "Integrity"
+      ]
+    },
+    {
+      "name": "Money",
+      "subgroups": [
+        "Disbursement",
+        "Reconciliation"
+      ]
+    },
+    {
+      "name": "Supply & COGS",
+      "subgroups": [
+        "Procurement",
+        "Stock Truth"
+      ]
+    },
+    {
+      "name": "Workforce",
+      "subgroups": [
+        "Talent",
+        "Administration"
+      ]
+    },
+    {
+      "name": "Watch",
+      "subgroups": [
+        "Eyes"
+      ]
+    },
+    {
+      "name": "Outcome",
+      "subgroups": [
+        "Synthesis"
+      ]
+    }
+  ],
+  "lanes": [
+    {
+      "code": "00",
+      "slug": "master",
+      "title": "00 Operations Master Control",
+      "group": "Control",
+      "subgroup": "Control",
+      "mode": "Synthesis",
+      "tool_owner": "Claude",
+      "risk": "routing",
+      "context_state": "LOAD",
+      "status": "scaffolding",
+      "summary": "Front door: exception inbox + money-in-motion + data-freshness boards + lane index. Owns COA grammar/entity-rings, comms-core escalation, fleet/winpc health, AI-budget.",
+      "command": "open_ops_lane.command master",
+      "prompt": "prompts/00-master.md",
+      "context_files": [
+        "CLAUDE.md",
+        "docs/COA-Doctrine.md",
+        "memory/MEMORY.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/ops-control/"
+      ],
+      "next_action": "Scaffold spine; grow Vendor Payment as the first deep leaf."
+    },
+    {
+      "code": "01",
+      "slug": "pos-order-edits",
+      "title": "01 POS Order Edits",
+      "group": "Sales & POS Truth",
+      "subgroup": "Transactions",
+      "mode": "Demand",
+      "tool_owner": "Claude",
+      "risk": "Odoo/POS transaction mutation",
+      "context_state": "SEED",
+      "status": "partial-built",
+      "summary": "Void/comp/correct a specific order. Transaction-level corrections + audit log. NOT catalog config (that is Codex 03).",
+      "command": "open_ops_lane.command pos-order-edits",
+      "prompt": "prompts/01-pos-order-edits.md",
+      "context_files": [
+        "memory/reference_nch_pos_catalog.md",
+        "functions/api/pos-products.js"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/pos-editor/",
+        "https://hnhotels.in/ops/he-counter-live/"
+      ],
+      "next_action": "Define correction grammar (void/comp/qty-fix) + audit write target."
+    },
+    {
+      "code": "02",
+      "slug": "sale-discrepancy",
+      "title": "02 Sale Discrepancy",
+      "group": "Sales & POS Truth",
+      "subgroup": "Integrity",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "read / reconcile",
+      "context_state": "SEED",
+      "status": "nch-branched-he-greenfield",
+      "summary": "POS sales vs recorded vs expected. NCH token-issue recon branched (nch-sales-recon-slice-a/b/c); HE side not yet built.",
+      "command": "open_ops_lane.command sale-discrepancy",
+      "prompt": "prompts/02-sale-discrepancy.md",
+      "context_files": [
+        "memory/reference_nch_pos_catalog.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/sales/"
+      ],
+      "next_action": "Land NCH recon slices; scope HE sale-vs-cash recon."
+    },
+    {
+      "code": "06",
+      "slug": "pos-anomalies",
+      "title": "06 POS Anomalies",
+      "group": "Sales & POS Truth",
+      "subgroup": "Integrity",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "read",
+      "context_state": "LIVE",
+      "status": "greenfield",
+      "summary": "Outlier detection on orders/sessions - voids, discount spikes, odd patterns. Built by observing real POS behavior.",
+      "command": "open_ops_lane.command pos-anomalies",
+      "prompt": "prompts/06-pos-anomalies.md",
+      "context_files": [
+        "memory/reference_nch_pos_catalog.md"
+      ],
+      "live_urls": [],
+      "next_action": "Watch first: capture what an anomaly actually looks like before coding rules."
+    },
+    {
+      "code": "12",
+      "slug": "prep-time",
+      "title": "12 Prep Time",
+      "group": "Sales & POS Truth",
+      "subgroup": "Integrity",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "read (KDS)",
+      "context_state": "LIVE",
+      "status": "greenfield",
+      "summary": "KDS bump-to-serve timing per item/station. Reads KDS; writes timing metrics. Unknown how kitchen uses KDS yet - learn first.",
+      "command": "open_ops_lane.command prep-time",
+      "prompt": "prompts/12-prep-time.md",
+      "context_files": [],
+      "live_urls": [],
+      "next_action": "Observe real KDS usage by kitchen staff; record the pattern."
+    },
+    {
+      "code": "13",
+      "slug": "item-sold-no-rm",
+      "title": "13 Item-Sold-Despite-No-RM",
+      "group": "Sales & POS Truth",
+      "subgroup": "Integrity",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "read",
+      "context_state": "LIVE",
+      "status": "greenfield",
+      "summary": "Orders accepted while raw material was out - lost-sale + stockout truth. Cross-references RM stock vs POS sales.",
+      "command": "open_ops_lane.command item-sold-no-rm",
+      "prompt": "prompts/13-item-sold-no-rm.md",
+      "context_files": [],
+      "live_urls": [],
+      "next_action": "Define stockout event from RM closing-zero + continued POS sale."
+    },
+    {
+      "code": "10",
+      "slug": "vendor-payment",
+      "title": "10 Vendor Payment",
+      "group": "Money",
+      "subgroup": "Disbursement",
+      "mode": "Demand",
+      "tool_owner": "Claude",
+      "risk": "money mutation (APPROVAL-GATED)",
+      "context_state": "LOAD",
+      "status": "built-loadable",
+      "summary": "Record + schedule + reconcile vendor bills/payments against POs. Direct-1:1 cash vs vendor-due credit. Writes rm_vendor_bills + payments. Richest context - first leaf to grow deep.",
+      "command": "open_ops_lane.command vendor-payment",
+      "prompt": "prompts/10-vendor-payment.md",
+      "context_files": [
+        "memory/project_purchase_module_live.md",
+        "memory/reference_contracts.md",
+        "docs/vendor-intel/hamza-express-coa-context-2026-05-23/INDEX.md",
+        "functions/api/vendors.js"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/purchase/",
+        "https://hnhotels.in/ops/vendor/"
+      ],
+      "next_action": "Grow deep pack: vendor-intel dossiers + rm_vendor_bills schema + approval gate."
+    },
+    {
+      "code": "09",
+      "slug": "salary",
+      "title": "09 Salary",
+      "group": "Money",
+      "subgroup": "Disbursement",
+      "mode": "Demand",
+      "tool_owner": "Claude",
+      "risk": "money mutation + labour law (APPROVAL-GATED)",
+      "context_state": "LOAD",
+      "status": "built-loadable",
+      "summary": "Payable from attendance + advances ledger. Writes hr_payroll_snapshots + hr_advances. Reads Workforce/Attendance. Labour-law constrained.",
+      "command": "open_ops_lane.command salary",
+      "prompt": "prompts/09-salary.md",
+      "context_files": [
+        "memory/reference_hr_payroll.md",
+        "memory/project_labour_compliance_2026.md",
+        "memory/reference_legal_workarounds.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/hr/"
+      ],
+      "next_action": "Wire payable = attendance (CAMS) minus advances; gate release on approval."
+    },
+    {
+      "code": "14",
+      "slug": "upi",
+      "title": "14 UPI Build & Context",
+      "group": "Money",
+      "subgroup": "Disbursement",
+      "mode": "Demand",
+      "tool_owner": "Claude",
+      "risk": "payment-rail config",
+      "context_state": "LOAD",
+      "status": "in-flight",
+      "summary": "Counter UPI rail build + payment context (Paytm/Razorpay). HE UPI transition in flight.",
+      "command": "open_ops_lane.command upi",
+      "prompt": "prompts/14-upi.md",
+      "context_files": [
+        "docs/HE-UPI-TRANSITION-CONTEXT.md",
+        "memory/reference_odoo_banking.md"
+      ],
+      "live_urls": [],
+      "next_action": "Finish HE UPI transition mapping; tie UPI rail to bank recon (#20)."
+    },
+    {
+      "code": "03",
+      "slug": "cash-discrepancy",
+      "title": "03 Cash Discrepancy",
+      "group": "Money",
+      "subgroup": "Reconciliation",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "cash",
+      "context_state": "SEED",
+      "status": "partial-built",
+      "summary": "Counter cash counted vs POS cash-sales vs deposits, incl. Basheer's opening float + cash purchases. Writes cash-variance.",
+      "command": "open_ops_lane.command cash-discrepancy",
+      "prompt": "prompts/03-cash-discrepancy.md",
+      "context_files": [
+        "memory/reference_odoo_banking.md",
+        "data/bank/backfill-hdfc-4680-20260425.sql"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/cash/"
+      ],
+      "next_action": "Define float + cash-purchase capture; reconcile to POS cash tender."
+    },
+    {
+      "code": "20",
+      "slug": "bank-treasury-recon",
+      "title": "20 Bank / Treasury Recon",
+      "group": "Money",
+      "subgroup": "Reconciliation",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "reconcile",
+      "context_state": "SEED",
+      "status": "partial-built",
+      "summary": "HDFC / Federal / Razorpay / Paytm statements vs Odoo. Broader than counter-cash; UPI (#14) is a subset.",
+      "command": "open_ops_lane.command bank-treasury-recon",
+      "prompt": "prompts/20-bank-treasury-recon.md",
+      "context_files": [
+        "memory/reference_odoo_banking.md",
+        "functions/api/bank-feed.js"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/bank/"
+      ],
+      "next_action": "Statement-to-Odoo matcher per account; flag unmatched."
+    },
+    {
+      "code": "19",
+      "slug": "aggregator-payout-recon",
+      "title": "19 Aggregator Payout Recon",
+      "group": "Money",
+      "subgroup": "Reconciliation",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "reconcile",
+      "context_state": "LOAD",
+      "status": "built-loadable",
+      "summary": "Swiggy/Zomato payouts vs orders vs commission leakage. Reads aggregator-pulse finance. Revenue-side; distinct from POS sale discrepancy.",
+      "command": "open_ops_lane.command aggregator-payout-recon",
+      "prompt": "prompts/19-aggregator-payout-recon.md",
+      "context_files": [
+        "memory/reference_aggregator_pulse_history.md",
+        "memory/reference_contracts.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/aggregator/"
+      ],
+      "next_action": "Compare payout vs expected (orders x (1-commission)); flag shortfall."
+    },
+    {
+      "code": "07",
+      "slug": "cogs-purchase",
+      "title": "07 COGS Purchase (track/predict/place)",
+      "group": "Supply & COGS",
+      "subgroup": "Procurement",
+      "mode": "Demand",
+      "tool_owner": "Claude",
+      "risk": "PO / money (APPROVAL-GATED)",
+      "context_state": "LOAD",
+      "status": "active-this-week",
+      "summary": "Purchase ledger + consumption-based prediction + PO placement. Chicken/buns ledger live this week. Zoya's lane. Feeds discrepancy (#4/#5).",
+      "command": "open_ops_lane.command cogs-purchase",
+      "prompt": "prompts/07-cogs-purchase.md",
+      "context_files": [
+        "memory/project_purchase_module_live.md",
+        "docs/vendor-intel/hamza-express-coa-context-2026-05-23/INDEX.md",
+        "functions/api/rm-ops.js",
+        "functions/api/ledger.js"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/purchase/",
+        "https://hnhotels.in/ops/ledger/",
+        "https://hnhotels.in/ops/chicken-price-entry/"
+      ],
+      "next_action": "Wire consumption-rate predictor off purchase ledger + recipe map."
+    },
+    {
+      "code": "08",
+      "slug": "price-intelligence",
+      "title": "08 Price Intelligence",
+      "group": "Supply & COGS",
+      "subgroup": "Procurement",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "read",
+      "context_state": "LOAD",
+      "status": "active-this-week",
+      "summary": "Vendor price tracking/benchmarking. Chicken + buns intel live. Surfaces effective-rate drift feeding variance value in #4.",
+      "command": "open_ops_lane.command price-intelligence",
+      "prompt": "prompts/08-price-intelligence.md",
+      "context_files": [
+        "functions/api/spend-intel.js",
+        "docs/vendor-intel/hamza-express-coa-context-2026-05-23/INDEX.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/chicken-intel/",
+        "https://hnhotels.in/ops/buns-intel/"
+      ],
+      "next_action": "Generalize chicken/buns intel pattern to top COGS SKUs."
+    },
+    {
+      "code": "05",
+      "slug": "inventory-discrepancy",
+      "title": "05 Inventory Discrepancy",
+      "group": "Supply & COGS",
+      "subgroup": "Stock Truth",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "reconcile",
+      "context_state": "SEED",
+      "status": "spec-from-vendor-intel",
+      "summary": "DIRECT_1_TO_1 stock reconciliation: opening + purchased - sold/issued = physical closing. Water/soft-drinks/buns/packaging (Nazeer, Ganga, Deepak). Home of Codex-04 'direct discrepancy'. Spec exists; engine not built.",
+      "command": "open_ops_lane.command inventory-discrepancy",
+      "prompt": "prompts/05-inventory-discrepancy.md",
+      "context_files": [
+        "docs/vendor-intel/hamza-express-coa-context-2026-05-23/INDEX.md",
+        "docs/vendor-intel/hamza-express-coa-context-2026-05-23/nazeer-nadeem.md",
+        "docs/vendor-intel/hamza-express-coa-context-2026-05-23/ganga-bakery.md"
+      ],
+      "live_urls": [],
+      "next_action": "Implement direct-1:1 settlement for Nazeer water/drinks + Ganga buns (least recipe complexity)."
+    },
+    {
+      "code": "04",
+      "slug": "wastage-variance",
+      "title": "04 Wastage / Variance",
+      "group": "Supply & COGS",
+      "subgroup": "Stock Truth",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "reconcile",
+      "context_state": "SEED",
+      "status": "spec-from-vendor-intel",
+      "summary": "VARIANCE/yield discrepancy: actual_used (opening+purchase-closing) vs expected_used (sum POS qty x recipe). Chicken (M.N. Broilers) is the prototype. Detects unrecorded wastage/yield-loss. Depends on recipe map (entity-ring).",
+      "command": "open_ops_lane.command wastage-variance",
+      "prompt": "prompts/04-wastage-variance.md",
+      "context_files": [
+        "docs/vendor-intel/hamza-express-coa-context-2026-05-23/INDEX.md",
+        "docs/vendor-intel/hamza-express-coa-context-2026-05-23/m-n-broilers-syed-ahmedulla.md"
+      ],
+      "live_urls": [],
+      "next_action": "Build M.N. Broilers variance-yield prototype; requires recipe-grams map first."
+    },
+    {
+      "code": "22",
+      "slug": "hiring",
+      "title": "22 Hiring",
+      "group": "Workforce",
+      "subgroup": "Talent",
+      "mode": "Demand",
+      "tool_owner": "Claude",
+      "risk": "external outreach + comms (shared WhatsApp/FB)",
+      "context_state": "SEED",
+      "status": "3-systems-built",
+      "summary": "Recruitment funnel: source -> enrich -> outreach -> shortlist -> hand to Onboarding (#18). Built: /hiring/enrich (Gemini 21-role classifier), /hiring/waba (campaign+inbox), /hiring/fb (group-posting control plane). Greenfield: Apna, WorkIndia, the FB-posting .gs executor (owner to upload).",
+      "command": "open_ops_lane.command hiring",
+      "prompt": "prompts/22-hiring.md",
+      "context_files": [
+        "functions/api/hiring.js",
+        "functions/api/fb-posting.js",
+        "memory/project_hr_staffing_live.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/hiring/enrich/",
+        "https://hnhotels.in/hiring/waba/",
+        "https://hnhotels.in/hiring/fb/"
+      ],
+      "next_action": "Upload FB-posting .gs + Apna/WorkIndia mechanics; decide executor (AppScript vs Claude-in-Chrome on winpc)."
+    },
+    {
+      "code": "18",
+      "slug": "onboarding-exit",
+      "title": "18 Onboarding / Exit",
+      "group": "Workforce",
+      "subgroup": "Talent",
+      "mode": "Demand",
+      "tool_owner": "Claude",
+      "risk": "HR data",
+      "context_state": "SEED",
+      "status": "partial-built",
+      "summary": "Joiner/leaver lifecycle + probation. Writes hr_exits, hr_probation. Receives hires from #22; hands attendance to #16. Barcode HN{BRAND}{BIO} on hr.employee + res.partner.",
+      "command": "open_ops_lane.command onboarding-exit",
+      "prompt": "prompts/18-onboarding-exit.md",
+      "context_files": [
+        "memory/project_hr_staffing_live.md",
+        "memory/reference_ops_hr_unified.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/hr/"
+      ],
+      "next_action": "Confirm joiner->Odoo+barcode+Drive-docs flow; wire exit/probation."
+    },
+    {
+      "code": "16",
+      "slug": "attendance-roster",
+      "title": "16 Attendance & Roster",
+      "group": "Workforce",
+      "subgroup": "Administration",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "read / HR",
+      "context_state": "LOAD",
+      "status": "built-loadable",
+      "summary": "CAMS biometric attendance, roster truth, ghost-PIN audit, kitchen headcount. Feeds Salary (#9). ~26-29 realistically active vs 31 on paper.",
+      "command": "open_ops_lane.command attendance-roster",
+      "prompt": "prompts/16-attendance-roster.md",
+      "context_files": [
+        "memory/project_cams_biometric_setup.md",
+        "memory/feedback_attendance_audit_2026_05_08.md",
+        "memory/reference_hr_automation.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/hr/",
+        "https://hnhotels.in/ops/attendance-audit/"
+      ],
+      "next_action": "Resolve ghost PINs (11/22/42/45/46) vs roster before next payroll."
+    },
+    {
+      "code": "17",
+      "slug": "labour-compliance",
+      "title": "17 Labour Compliance",
+      "group": "Workforce",
+      "subgroup": "Administration",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "statutory",
+      "context_state": "LOAD",
+      "status": "built-loadable",
+      "summary": "ESI/S&E, contracts/eSign (Leegality), statutory deadlines. Option C ESI pass-through, 31 employees. Labour-law hard limits apply.",
+      "command": "open_ops_lane.command labour-compliance",
+      "prompt": "prompts/17-labour-compliance.md",
+      "context_files": [
+        "memory/project_labour_compliance_2026.md",
+        "memory/feedback_labour_law_constraints.md",
+        "memory/reference_legal_workarounds.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/hr/"
+      ],
+      "next_action": "Track ESIC + S&E registration to closure; deadline calendar."
+    },
+    {
+      "code": "11",
+      "slug": "cctv",
+      "title": "11 CCTV",
+      "group": "Watch",
+      "subgroup": "Eyes",
+      "mode": "Watch",
+      "tool_owner": "Claude",
+      "risk": "winpc/fleet (CLAUDE-ONLY)",
+      "context_state": "SEED",
+      "status": "codex-05-migrating-in",
+      "summary": "Frigate eyes layer feeding the truth lanes + cash-counter video bridge. Runs on hn-winpc - Claude-only per doctrine. Absorbs Codex 05 CCTV WinPC Bridge.",
+      "command": "open_ops_lane.command cctv",
+      "prompt": "prompts/11-cctv.md",
+      "context_files": [
+        "fleet/MULTI-TENANT-WINPC.md",
+        "memory/reference_fleet_bridge.md"
+      ],
+      "live_urls": [],
+      "next_action": "Migrate Codex-05 context in; confirm Frigate + winpc footing."
+    },
+    {
+      "code": "21",
+      "slug": "cost-truth-pl",
+      "title": "21 Cost-Truth / P&L",
+      "group": "Outcome",
+      "subgroup": "Synthesis",
+      "mode": "Synthesis",
+      "tool_owner": "Claude",
+      "risk": "read",
+      "context_state": "LIVE",
+      "status": "greenfield",
+      "summary": "Rolls COGS% / labour% / wastage% / cash+payout variance into margin. Executes nothing; reads every lane. The outcome layer - answers 'is leakage down, is margin up'.",
+      "command": "open_ops_lane.command cost-truth-pl",
+      "prompt": "prompts/21-cost-truth-pl.md",
+      "context_files": [
+        "memory/reference_odoo_finance_architecture.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/finance/"
+      ],
+      "next_action": "Aggregate the four cost lines into one weekly margin view once feeders emit."
+    }
+  ],
+  "served": "ops/ops-control/ (PIN-gated, co-located with UI; not exposed via /_context/)"
+}
