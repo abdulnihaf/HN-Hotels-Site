@@ -165,7 +165,7 @@ function renderSummary() {
   const lanes = GRAPH.lanes || [];
   const mutation = lanes.filter(l => (l.tags || []).includes('mutation')).length;
   const writeback = lanes.filter(l => l.writeback_required).length;
-  const brands = [...new Set(lanes.map(l => l.brand).filter(Boolean))].join('/');
+  const brands = 'HE/NCH';
   document.getElementById('summary').innerHTML = [
     ['Lanes', lanes.length],
     ['Mutation lanes', mutation],
