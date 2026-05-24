@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T05:27:23+0530",
-  "published_at": "2026-05-25T05:27:23+0530",
+  "updated_at": "2026-05-25T05:28:57+0530",
+  "published_at": "2026-05-25T05:28:57+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -76,11 +76,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Meta CTWA, retargeting, creative analytics, adset state.",
-      "last_summary": "Dedicated Codex lane exists.",
-      "next_action": "Verify campaign/adset/ad IDs and budget before mutation.",
-      "mutation_status": "blocked until live account verification",
-      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads"
+      "last_task": "Initialize Meta Ads lane and live read",
+      "last_summary": "Read lane/control memory, decisions log, Meta lane history, live CTWA cockpit/API, and directions page. Current operational source is /api/ctwa-analytics, not stale /api/meta-status. Live payload shows active primary Maps campaign 120246002668360505 and retargeting campaign 120246050386040505 with spend/click/map bridge metrics; old April CTWA 120243729366800505 is archived. No Meta mutation performed.",
+      "next_action": "Before mutation, verify direct Meta Graph object reads for account act_634959029638544, campaign/adset/ad IDs, budgets, creative, objective, and delivery; then choose pause/tune/creative action with rollback.",
+      "mutation_status": "blocked until direct live Meta account verification; read-only cockpit/API verification only",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
+      "last_run_at": "2026-05-25T05:28:57+0530"
     },
     "flyers": {
       "title": "07 Flyers",
@@ -130,6 +131,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525052857-meta-ads",
+      "at": "2026-05-25T05:28:57+0530",
+      "lane": "meta-ads",
+      "task": "Initialize Meta Ads lane and live read",
+      "status": "ready",
+      "summary": "Read lane/control memory, decisions log, Meta lane history, live CTWA cockpit/API, and directions page. Current operational source is /api/ctwa-analytics, not stale /api/meta-status. Live payload shows active primary Maps campaign 120246002668360505 and retargeting campaign 120246050386040505 with spend/click/map bridge metrics; old April CTWA 120243729366800505 is archived. No Meta mutation performed.",
+      "next_action": "Before mutation, verify direct Meta Graph object reads for account act_634959029638544, campaign/adset/ad IDs, budgets, creative, objective, and delivery; then choose pause/tune/creative action with rollback.",
+      "mutation_status": "blocked until direct live Meta account verification; read-only cockpit/API verification only"
+    },
     {
       "id": "20260525052723-packaging-design",
       "at": "2026-05-25T05:27:23+0530",
