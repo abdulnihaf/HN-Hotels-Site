@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T02:23:57+0530",
-  "published_at": "2026-05-25T02:23:57+0530",
+  "updated_at": "2026-05-25T02:42:59+0530",
+  "published_at": "2026-05-25T02:42:59+0530",
   "source": "github-main-static-json",
   "lane_slug": "pos-write",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "POS/Pricing",
     "risk": "Odoo/POS mutation",
     "status": "completed",
-    "last_task": "Audit whether Captain POS session-expired order was recorded",
-    "last_summary": "Ran read-only HE Odoo JSON-RPC audits on test.hamzahotel.com for tablet photos at 2026-05-25 02:05-02:09 IST. Config 6 is HE - Captain, current session 269 opened, default pricelist 40, available [40,45], payment methods [19,52,57,58]. No pos.order found for exact total ₹746.35 in 2026-05-24 19:45-21:15 UTC, no photo-like order lines, no pos.payment around ₹746.35, and recent Captain backend orders stop at 2026-05-24 17:50:33 UTC (23:20 IST). Conclusion: suspected order was not recorded as a backend POS sale/payment; it likely remained only in the tablet browser because payment validation failed after Odoo web session expiry.",
-    "next_action": "Recover/recreate from the tablet order screen if still visible; hard refresh/reopen Captain POS/login, then validate again. If UPI was already collected externally, enter the recovered/recreated order with HE UPI and note the incident; do not assume backend sale exists.",
-    "mutation_status": "No Odoo mutation. Read-only pos.order/pos.payment/pos.session audit only.",
+    "last_task": "Deep debug Captain-only POS session-expired outage",
+    "last_summary": "Read-only HE Odoo audit confirmed issue is Captain-only, not all POS and not server-wide. Cash Counter and Ground Floor continued creating pos.order/pos.payment and KDS prep records after Captain stopped. Captain config 6/session 269 is still opened and correctly configured with default pricelist 40 and available [40,45]; V2 orders were successfully recorded after the pricelist switch (e.g. Captain paid orders 7994/8001/8003 on pricelist 45), proving deployment did not break config 6. After Captain latest paid order 7994 at 2026-05-24 17:50:33 UTC (23:20 IST), there are no Captain pos.order, pos.payment, or prep/KDS records for the repeated failed attempts. Repeated same error means staff kept re-entering inside the same stale/expired Captain browser auth session; frontend can render POS from local browser state, but backend rejects validation with Session expired.",
+    "next_action": "Recover Captain by preserving tablet local POS data first: do not clear site data initially; login fresh to test.hamzahotel.com in same Chrome/profile, return/refresh Captain POS and sync/recover pending orders. If still blocked, open Captain POS config 6 on a different fresh browser/device for live service and quarantine the stale tablet until unsynced orders are reconciled/cancelled to avoid duplicate later sync.",
+    "mutation_status": "No Odoo mutation. Read-only pos.order/pos.payment/pos.session/pos.prep audit only.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pos-write",
-    "last_run_at": "2026-05-25T02:23:57+0530"
+    "last_run_at": "2026-05-25T02:42:59+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/09-pos-write.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/pos-write.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525024259-pos-write",
+      "at": "2026-05-25T02:42:59+0530",
+      "lane": "pos-write",
+      "task": "Deep debug Captain-only POS session-expired outage",
+      "status": "completed",
+      "summary": "Read-only HE Odoo audit confirmed issue is Captain-only, not all POS and not server-wide. Cash Counter and Ground Floor continued creating pos.order/pos.payment and KDS prep records after Captain stopped. Captain config 6/session 269 is still opened and correctly configured with default pricelist 40 and available [40,45]; V2 orders were successfully recorded after the pricelist switch (e.g. Captain paid orders 7994/8001/8003 on pricelist 45), proving deployment did not break config 6. After Captain latest paid order 7994 at 2026-05-24 17:50:33 UTC (23:20 IST), there are no Captain pos.order, pos.payment, or prep/KDS records for the repeated failed attempts. Repeated same error means staff kept re-entering inside the same stale/expired Captain browser auth session; frontend can render POS from local browser state, but backend rejects validation with Session expired.",
+      "next_action": "Recover Captain by preserving tablet local POS data first: do not clear site data initially; login fresh to test.hamzahotel.com in same Chrome/profile, return/refresh Captain POS and sync/recover pending orders. If still blocked, open Captain POS config 6 on a different fresh browser/device for live service and quarantine the stale tablet until unsynced orders are reconciled/cancelled to avoid duplicate later sync.",
+      "mutation_status": "No Odoo mutation. Read-only pos.order/pos.payment/pos.session/pos.prep audit only."
+    },
     {
       "id": "20260525022357-pos-write",
       "at": "2026-05-25T02:23:57+0530",
