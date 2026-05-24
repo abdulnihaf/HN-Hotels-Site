@@ -100,20 +100,21 @@
       "mode": "Demand",
       "tool_owner": "Claude",
       "risk": "Odoo/POS transaction mutation",
-      "context_state": "SEED",
-      "status": "partial-built",
+      "context_state": "LOAD",
+      "status": "live — grammar E1-E6 locked; 7 HE bills corrected 2026-05-25 (net -INR 1489.36 phantom revenue removed)",
       "summary": "Void/comp/correct a specific order. Transaction-level corrections + audit log. NOT catalog config (that is Codex 03).",
       "command": "open_ops_lane.command pos-order-edits",
       "prompt": "prompts/01-pos-order-edits.md",
       "context_files": [
+        "functions/api/pos-products.js",
         "memory/reference_nch_pos_catalog.md",
-        "functions/api/pos-products.js"
+        "memory/reference_pos_bill_edit_grammar.md"
       ],
       "live_urls": [
         "https://hnhotels.in/ops/pos-editor/",
         "https://hnhotels.in/ops/he-counter-live/"
       ],
-      "next_action": "Define correction grammar (void/comp/qty-fix) + audit write target."
+      "next_action": "Build /ops/pos-editor surfacing E1-E6 as the only edit entry points; fill open extension points (qty-fix, product-swap, customer-attribute, tax-bucket-fix, closed-session-correction) as encountered."
     },
     {
       "code": "02",
