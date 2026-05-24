@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<title>HN Marketing Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  body { min-height: 100vh; }
+  .wrap { max-width: 1480px; margin: 0 auto; padding: 16px 14px 72px; }
+  .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .titleblock h1 { font-size: 23px; font-weight: 800; margin-bottom: 2px; }
+  .titleblock .sub { max-width: 720px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn { border-radius: 8px; }
+  .btn-code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .summary { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 12px; min-height: 74px; }
+  .summary .v { font-size: 22px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .summary .l { margin-top: 5px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; }
+  .toolbar { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0 12px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter { border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); min-height: 44px; padding: 9px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .filter.active { background: var(--brand); border-color: var(--brand); color: #0c0c14; }
+  .updated { font-size: 12px; color: var(--text-mute); }
+  .lane-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .lane { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; display: grid; gap: 12px; }
+  .lane-head { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
+  .lane-title { min-width: 0; }
+  .lane-title h2 { font-size: 16px; line-height: 1.2; margin-bottom: 4px; }
+  .lane-title .scope { color: var(--text-dim); font-size: 12px; line-height: 1.4; }
+  .lane-badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+  .badge { border-radius: 999px; }
+  .badge-ready { background: rgba(16,185,129,0.14); color: #34d399; }
+  .badge-gated { background: rgba(245,158,11,0.14); color: #fbbf24; }
+  .badge-live { background: rgba(59,130,246,0.14); color: #60a5fa; }
+  .badge-risk { background: rgba(239,68,68,0.14); color: #f87171; }
+  .lane-main { display: grid; gap: 10px; }
+  .facts { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .fact { border: 1px solid var(--border); background: rgba(255,255,255,0.025); border-radius: 8px; padding: 10px; }
+  .fact .k { color: var(--text-mute); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 800; margin-bottom: 4px; }
+  .fact .v { color: var(--text); font-size: 13px; line-height: 1.45; }
+  .links { display: flex; flex-wrap: wrap; gap: 6px; }
+  .links a, .links button { min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); padding: 10px 11px; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; }
+  .links a:hover, .links button:hover { border-color: var(--brand-ring); }
+  .links .primary-link { background: var(--brand); color: #0c0c14; border-color: var(--brand); }
+  .command { border: 1px solid var(--border); background: #101018; border-radius: 8px; padding: 10px; display: grid; gap: 8px; }
+  .command code { display: block; color: #cbd5e1; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  .toast { position: fixed; left: 50%; bottom: calc(18px + var(--safe-bottom)); transform: translateX(-50%); padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; display: none; z-index: 20; }
+  @media (min-width: 720px) {
+    .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (min-width: 1080px) {
+    .lane-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lane-master { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="topbar">
+    <div class="titleblock">
+      <h1>Marketing Control</h1>
+      <div class="sub">Execution cockpit for HE/NCH marketing lanes, live UIs, and Codex terminal routing.</div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary btn-code" data-copy="/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_hn_marketing_codex_terminals.command">Copy open-all command</button>
+      <a class="btn btn-ghost" href="/marketing/">Marketing index</a>
+    </div>
+  </div>
+
+  <section class="summary-grid" aria-label="Marketing execution summary">
+    <div class="summary"><div class="v">9</div><div class="l">Execution lanes</div></div>
+    <div class="summary"><div class="v">10</div><div class="l">Codex terminals</div></div>
+    <div class="summary"><div class="v">HE/NCH</div><div class="l">Brand scope</div></div>
+    <div class="summary"><div class="v">Live</div><div class="l">Cloudflare-first</div></div>
+  </section>
+
+  <div class="toolbar">
+    <div class="filters" role="tablist" aria-label="Lane filters">
+      <button class="filter active" data-filter="all">All</button>
+      <button class="filter" data-filter="live">Live</button>
+      <button class="filter" data-filter="gated">Gated</button>
+      <button class="filter" data-filter="creative">Creative</button>
+      <button class="filter" data-filter="mutation">Mutation risk</button>
+    </div>
+    <div class="updated">Source pack: 2026-05-24</div>
+  </div>
+
+  <section id="lane-grid" class="lane-grid"></section>
+</main>
+<div id="toast" class="toast"></div>
+
+<script>
+const BASE = '/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24';
+const OPEN_ONE = `${BASE}/open_lane.command`;
+const lanes = [
+  {
+    slug: 'master',
+    title: '00 Marketing Master Control',
+    scope: 'Routes demands across the nine execution lanes and checks ownership before action.',
+    brand: 'HN',
+    status: ['live'],
+    tags: ['live'],
+    current: 'Use when the demand is unclear or spans multiple channels.',
+    next: 'Classify the demand, identify the owning lane, then hand execution to that terminal.',
+    guardrail: 'No channel mutation from master unless explicitly requested and live state is verified.',
+    links: [
+      ['Marketing index', '/marketing/']
+    ]
+  },
+  {
+    slug: 'influencer',
+    title: '01 Influencer',
+    scope: 'Creator discovery, shortlist, outreach, applications, bookings, and conversion proof.',
+    brand: 'HE',
+    status: ['live'],
+    tags: ['live'],
+    current: 'May 15 campaign, paid shortlist, Urdu paid push, creator outreach, apply flow, approvals, bookings are known surfaces.',
+    next: 'Open when the task involves creator profile selection, DM/email/WABA outreach, approval, or booking proof.',
+    guardrail: 'Verify template/send gates and live application state before outreach or approval actions.',
+    links: [
+      ['Paid shortlist', '/marketing/Influencer/paid-shortlist/'],
+      ['Urdu paid push', '/marketing/Influencer/urdu-paid-push/'],
+      ['Applications', '/ops/influencer-applications/'],
+      ['Bookings', '/ops/influencer-bookings/'],
+      ['HE outreach', 'https://hamzaexpress.in/ops/creator-outreach/']
+    ]
+  },
+  {
+    slug: 'google-ads',
+    title: '02 Google Ads',
+    scope: 'Search, PMax, paid landing CTA, Google cockpit, budget/negative keyword work, Maps proof.',
+    brand: 'HE',
+    status: ['live', 'mutation'],
+    tags: ['live', 'mutation'],
+    current: 'HE Google cockpit and day-wise paid stack analytics are live; Maps/directions proof chain exists.',
+    next: 'Open when changing budgets, negatives, campaign status, paid landing, or Maps/directions measurement.',
+    guardrail: 'Verify account, campaign IDs, budget, delivery state, and cockpit payload before mutation.',
+    links: [
+      ['Google cockpit', 'https://hamzaexpress.in/ops/google-cockpit/'],
+      ['HE GBP', '/marketing/he/gbp/'],
+      ['NCH GBP', '/marketing/nch/gbp/'],
+      ['Directions', 'https://hamzaexpress.in/directions/']
+    ]
+  },
+  {
+    slug: 'delivery-aggregator',
+    title: '03 Delivery Aggregator',
+    scope: 'Zomato/Swiggy delivery positioning, offer readiness, margin gates, menu/photo evidence.',
+    brand: 'HE/NCH',
+    status: ['gated', 'mutation'],
+    tags: ['gated', 'mutation'],
+    current: 'Deep P0 row intelligence exists, but portal execution stays gated by proof and margin evidence.',
+    next: 'Open for Zomato/Swiggy offer, price, menu, listing, proof pack, or team-upload packet work.',
+    guardrail: 'No blind portal execution. Verify latest platform state, BOM/margin, owner decisions, and proof rows.',
+    links: [
+      ['Aggregator cockpit', '/ops/aggregator/'],
+      ['Delivery positioning', '/ops/intelligence/aggregator-delivery-positioning/'],
+      ['HE Zomato', '/ops/aggregator/he/zomato/'],
+      ['HE Swiggy', '/ops/aggregator/he/swiggy/']
+    ]
+  },
+  {
+    slug: 'dine-in-aggregator',
+    title: '04 Dine-In Aggregator',
+    scope: 'GBP, dine-in aggregator, ambience proof, local trust, reservation/payment attribution.',
+    brand: 'HE/NCH',
+    status: ['live', 'gated'],
+    tags: ['live', 'gated'],
+    current: 'GBP and dine-in ambience surfaces exist; aggregator platform state must be verified live.',
+    next: 'Open for ambience, EazyDiner/Zomato Dining/Swiggy Dine-Out, GBP, rating, or KAM action.',
+    guardrail: 'Check OTP/login blockers, scraper status, and attribution payload before marking any layer live.',
+    links: [
+      ['HE GBP', '/marketing/he/gbp/'],
+      ['NCH GBP', '/marketing/nch/gbp/'],
+      ['Dine playbook', '/ops/intelligence/dine-in-aggregator-playbook/'],
+      ['HE ambience', 'https://hamzaexpress.in/marketing/photos/dine-in-ambience/']
+    ]
+  },
+  {
+    slug: 'pisignage',
+    title: '05 PiSignage',
+    scope: 'TV choreography, playlists, upload-ready creative mapping, contact sheets, screen loops.',
+    brand: 'HE',
+    status: ['live', 'creative', 'mutation'],
+    tags: ['live', 'creative', 'mutation'],
+    current: 'TV V2 choreography UI has 7 groups, 28 playlists, 113 asset map, and contact sheets.',
+    next: 'Open for TV asset correction, upload packet, screen fit, playlist review, or PiSignage mutation.',
+    guardrail: 'Live PiSignage mutation is approval-gated; verify dimensions and target screen before upload.',
+    links: [
+      ['TV choreography', 'https://hamzaexpress.in/ops/tv-mission-control/choreography/'],
+      ['TV mission control', 'https://hamzaexpress.in/ops/tv-mission-control/']
+    ]
+  },
+  {
+    slug: 'meta-ads',
+    title: '06 Meta Ads',
+    scope: 'Meta CTWA campaigns, retargeting, creative analytics, Maps bridge, adset state.',
+    brand: 'HE',
+    status: ['live', 'mutation'],
+    tags: ['live', 'mutation'],
+    current: 'CTWA cockpit, Meta-to-Maps bridge, and Hamza Loyalist campaign context exist.',
+    next: 'Open for campaign budget/status, creative performance, retargeting, Maps bridge, or ad diagnostics.',
+    guardrail: 'Verify campaign/adset/ad IDs, delivery, budget, objective, and live cockpit payload before mutation.',
+    links: [
+      ['CTWA cockpit', 'https://hamzaexpress.in/ops/ctwa-cockpit/'],
+      ['Meta map', '/marketing/he/meta-campaign-map/'],
+      ['Directions', 'https://hamzaexpress.in/directions/']
+    ]
+  },
+  {
+    slug: 'flyers',
+    title: '07 Flyers',
+    scope: 'A4 flyers, print assets, menu sheets, facade creative, QR design, deterministic design QA.',
+    brand: 'HE/NCH',
+    status: ['creative'],
+    tags: ['creative'],
+    current: 'HE flyer/facade/menu/QR assets and NCH flask carton work exist across repo, Desktop, Downloads, and archive paths.',
+    next: 'Open for physical flyer, menu PDF, QR, packaging, facade, or print-ready output work.',
+    guardrail: 'Verify dimensions, resolution, QR decode, text, and export format before final print use.',
+    links: [
+      ['Marketing index', '/marketing/'],
+      ['HE menu', 'https://hamzaexpress.in/menu/'],
+      ['Captain menu', 'https://hamzaexpress.in/menu/captain/']
+    ]
+  },
+  {
+    slug: 'waba-outreach',
+    title: '08 WABA Outreach',
+    scope: 'WhatsApp outreach, inbox, QR/payment/voucher journey, templates, KDS/payment proof.',
+    brand: 'HE',
+    status: ['live', 'mutation'],
+    tags: ['live', 'mutation'],
+    current: 'HE WABA QR/payment/KDS flow was live-tested; inbox, dashboard, leads, and message architecture surfaces exist.',
+    next: 'Open for WABA sends, templates, QR flows, voucher journey, payment callback, or KDS message proof.',
+    guardrail: 'Verify template status, webhook/payment state, D1/Odoo order state, and test-number exemptions before real sends.',
+    links: [
+      ['WABA dashboard', 'https://hamzaexpress.in/ops/waba-dashboard/'],
+      ['Inbox', 'https://hamzaexpress.in/ops/inbox/'],
+      ['Leads', 'https://hamzaexpress.in/ops/leads/'],
+      ['Message architecture', 'https://hamzaexpress.in/ops/message-architecture/']
+    ]
+  },
+  {
+    slug: 'pos-write',
+    title: '09 POS Write',
+    scope: 'Odoo POS price writes, menu/portion matrix, pricelists, offer templates, KDS/category routing.',
+    brand: 'HE',
+    status: ['live', 'mutation'],
+    tags: ['live', 'mutation'],
+    current: 'HE prices verified 771/771 rows; Cash Counter offer is 20%; Captain and Ground Floor remain 10%; protected rows stay guarded.',
+    next: 'Open for Odoo price/menu/offer/category/KDS changes or verification after POS state changes.',
+    guardrail: 'Verify target instance, company/config IDs, sessions, open orders, exact row whitelist, and rollback path before write.',
+    links: [
+      ['Pricing intelligence', 'https://hamzaexpress.in/ops/pricing-intelligence/'],
+      ['Cash pricing', 'https://hamzaexpress.in/ops/pricing/cash-counter/'],
+      ['Cash/Ground menu', 'https://hamzaexpress.in/menu/'],
+      ['Captain menu', 'https://hamzaexpress.in/menu/captain/']
+    ]
+  }
+];
+
+const grid = document.getElementById('lane-grid');
+const toast = document.getElementById('toast');
+
+function commandFor(slug) {
+  return `${OPEN_ONE} ${slug}`;
+}
+
+function showToast(text) {
+  toast.textContent = text;
+  toast.style.display = 'block';
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => { toast.style.display = 'none'; }, 2200);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Copied');
+  } catch (err) {
+    const area = document.createElement('textarea');
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+    showToast('Copied');
+  }
+}
+
+function badgeFor(tag) {
+  const label = {
+    live: 'Live UI',
+    gated: 'Gated',
+    creative: 'Creative',
+    mutation: 'Mutation risk'
+  }[tag] || tag;
+  return `<span class="badge badge-${tag}">${label}</span>`;
+}
+
+function render(filter = 'all') {
+  grid.innerHTML = '';
+  lanes
+    .filter(lane => filter === 'all' || lane.tags.includes(filter))
+    .forEach(lane => {
+      const article = document.createElement('article');
+      article.className = `lane ${lane.slug === 'master' ? 'lane-master' : ''}`;
+      article.innerHTML = `
+        <div class="lane-head">
+          <div class="lane-title">
+            <h2>${lane.title}</h2>
+            <div class="scope">${lane.scope}</div>
+          </div>
+          <div class="lane-badges">
+            <span class="badge badge-neutral">${lane.brand}</span>
+            ${lane.status.map(badgeFor).join('')}
+          </div>
+        </div>
+        <div class="lane-main">
+          <div class="facts">
+            <div class="fact"><div class="k">Current state</div><div class="v">${lane.current}</div></div>
+            <div class="fact"><div class="k">Open this when</div><div class="v">${lane.next}</div></div>
+            <div class="fact"><div class="k">Guardrail</div><div class="v">${lane.guardrail}</div></div>
+          </div>
+          <div class="links">
+            <button class="primary-link" data-copy="${commandFor(lane.slug)}">Copy terminal command</button>
+            ${lane.links.map(([label, href]) => `<a href="${href}" ${href.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>${label}</a>`).join('')}
+          </div>
+          <div class="command"><code>${commandFor(lane.slug)}</code></div>
+        </div>
+      `;
+      grid.appendChild(article);
+    });
+}
+
+document.addEventListener('click', event => {
+  const copyTarget = event.target.closest('[data-copy]');
+  if (copyTarget) copyText(copyTarget.dataset.copy);
+  const filterTarget = event.target.closest('[data-filter]');
+  if (filterTarget) {
+    document.querySelectorAll('.filter').forEach(button => button.classList.remove('active'));
+    filterTarget.classList.add('active');
+    render(filterTarget.dataset.filter);
+  }
+});
+
+render();
+</script>
+</body>
+</html>
