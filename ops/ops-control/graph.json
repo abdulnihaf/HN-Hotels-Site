@@ -78,7 +78,7 @@
       "risk": "routing",
       "context_state": "LOAD",
       "status": "scaffolding",
-      "summary": "Front door: exception inbox + money-in-motion + data-freshness boards + lane index. Owns COA grammar/entity-rings, comms-core escalation, fleet/winpc health, AI-budget.",
+      "summary": "Front door + CATCH-ALL: exception inbox · money-in-motion · data-freshness boards · lane index · and the home for ANY operation that fits no lane — accepts it, routes it, extends the graph so reality is never forced into a stale lane. Owns COA grammar/entity-rings, comms-core, fleet/winpc health, AI-budget.",
       "command": "open_ops_lane.command master",
       "prompt": "prompts/00-master.md",
       "context_files": [
@@ -89,7 +89,7 @@
       "live_urls": [
         "https://hnhotels.in/ops/ops-control/"
       ],
-      "next_action": "Scaffold spine; grow Vendor Payment as the first deep leaf."
+      "next_action": "Accept unclassified demands; add new points to graph.json as reality reveals them (productive failure, never silent)."
     },
     {
       "code": "01",
