@@ -273,7 +273,7 @@
       "summary": "Codex lane seeded from actual Claude execution: May HE+NCH packaging intelligence, April NCH flask origin, and April rejection/correction trail.",
       "next_action": "Open for HE Cheap-Bold render correction, NCH flask panel continuation, tuck-box planning, packaging material decisions, or vendor-ready packaging packs.",
       "guardrail": "No bulk panel automation. Read the execution digest and raw Claude trail, then continue panel-by-panel with cost and supplier checks.",
-      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Packaging_Design_Codex_2026-05-24/open_packaging_design_codex.command",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Packaging_Design_Codex_2026-05-24/prompts/10-packaging-design.md",
       "writeback_required": false,
       "links": [["Marketing index", "/marketing/"]]
