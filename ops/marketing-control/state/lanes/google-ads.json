@@ -1,0 +1,30 @@
+{
+  "version": "execution-memory-v1",
+  "updated_at": "2026-05-24T21:47:45+0530",
+  "published_at": "2026-05-24T21:47:45+0530",
+  "source": "github-main-static-json",
+  "lane_slug": "google-ads",
+  "lane": {
+    "title": "02 Google Ads",
+    "subgroup": "Acquisition",
+    "risk": "money mutation",
+    "status": "ready",
+    "last_task": "Google Ads, GBP, paid landing, negatives, budgets.",
+    "last_summary": "Dedicated Codex lane exists.",
+    "next_action": "Verify account/campaign IDs and current delivery before any mutation.",
+    "mutation_status": "blocked until live account verification",
+    "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads"
+  },
+  "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
+  "recent_events": [
+    {
+      "id": "2026-05-24-control-room-v2",
+      "at": "2026-05-24T20:54:08+0530",
+      "lane": "unified-control",
+      "task": "Deploy unified marketing control graph",
+      "status": "completed",
+      "summary": "Deployed /ops/marketing-control/ with one unified brain above 11 deep terminals.",
+      "next_action": "Add durable execution memory and live state reader."
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "version": "execution-memory-v1",
+  "updated_at": "2026-05-24T21:47:45+0530",
+  "published_at": "2026-05-24T21:47:45+0530",
+  "source": "github-main-static-json",
+  "lane_slug": "pos-write",
+  "lane": {
+    "title": "09 POS Write",
+    "subgroup": "POS/Pricing",
+    "risk": "Odoo/POS mutation",
+    "status": "active",
+    "last_task": "HE POS discount/offer error diagnosis.",
+    "last_summary": "POS Write terminal opened after launcher fix. Context: test.hamzahotel.com is HE production POS; Captain POS should use 10 percent offer logic; Cash/Ground should use 20 percent offer logic.",
+    "next_action": "Diagnose exact live state before writing: config, pricelist, product rows, session/cache/UI mismatch, and rollback path.",
+    "mutation_status": "blocked until root cause is reported",
+    "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pos-write"
+  },
+  "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/pos-write.md",
+  "recent_events": [
+    {
+      "id": "2026-05-24-pos-write-launcher-fix",
+      "at": "2026-05-24T21:35:00+0530",
+      "lane": "pos-write",
+      "task": "Fix POS Write terminal launcher",
+      "status": "completed",
+      "summary": "Moved lane launcher to stable ~/.local/bin path and symlinked UI command path to it so dataless iCloud files do not block lane opening.",
+      "next_action": "Use pos-write terminal to diagnose HE POS discount/offer issue before mutation."
+    },
+    {
+      "id": "2026-05-24-control-room-v2",
+      "at": "2026-05-24T20:54:08+0530",
+      "lane": "unified-control",
+      "task": "Deploy unified marketing control graph",
+      "status": "completed",
+      "summary": "Deployed /ops/marketing-control/ with one unified brain above 11 deep terminals.",
+      "next_action": "Add durable execution memory and live state reader."
+    }
+  ]
+}
