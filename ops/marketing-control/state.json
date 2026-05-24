@@ -1,0 +1,149 @@
+{
+  "version": "execution-memory-v1",
+  "updated_at": "2026-05-24T21:41:08+0530",
+  "published_at": "2026-05-24T21:41:08+0530",
+  "source": "github-main-static-json",
+  "lanes": {
+    "master": {
+      "title": "00 Marketing Master Control",
+      "subgroup": "Control",
+      "risk": "routing",
+      "status": "ready",
+      "last_task": "Routes marketing demands to the correct execution lane.",
+      "last_summary": "Use Unified Marketing Control for whole-engine view and this lane for direct routing.",
+      "next_action": "Route unclear marketing requests to owning lane.",
+      "mutation_status": "blocked until lane verification",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command master"
+    },
+    "influencer": {
+      "title": "01 Influencer",
+      "subgroup": "Acquisition",
+      "risk": "external outreach",
+      "status": "ready",
+      "last_task": "Creator discovery/outreach/applications/bookings lane.",
+      "last_summary": "Dedicated Codex lane exists.",
+      "next_action": "Open when influencer execution is required.",
+      "mutation_status": "verify send gates before outreach",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command influencer"
+    },
+    "google-ads": {
+      "title": "02 Google Ads",
+      "subgroup": "Acquisition",
+      "risk": "money mutation",
+      "status": "ready",
+      "last_task": "Google Ads, GBP, paid landing, negatives, budgets.",
+      "last_summary": "Dedicated Codex lane exists.",
+      "next_action": "Verify account/campaign IDs and current delivery before any mutation.",
+      "mutation_status": "blocked until live account verification",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads"
+    },
+    "delivery-aggregator": {
+      "title": "03 Delivery Aggregator",
+      "subgroup": "Aggregators",
+      "risk": "platform and margin mutation",
+      "status": "ready",
+      "last_task": "Zomato/Swiggy delivery positioning, offers, margin proof.",
+      "last_summary": "Dedicated Codex lane exists.",
+      "next_action": "Verify platform state and margin proof before portal action.",
+      "mutation_status": "blocked until platform proof",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator"
+    },
+    "dine-in-aggregator": {
+      "title": "04 Dine-In Aggregator",
+      "subgroup": "Aggregators",
+      "risk": "platform mutation",
+      "status": "ready",
+      "last_task": "Dine-in aggregator, GBP, ambience proof, local trust.",
+      "last_summary": "Dedicated Codex lane exists.",
+      "next_action": "Verify live platform/login state before execution.",
+      "mutation_status": "blocked until platform verification",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command dine-in-aggregator"
+    },
+    "pisignage": {
+      "title": "05 PiSignage",
+      "subgroup": "Creative Surface",
+      "risk": "screen mutation",
+      "status": "ready",
+      "last_task": "TV choreography, playlists, screen creative mapping.",
+      "last_summary": "Dedicated Codex lane exists.",
+      "next_action": "Verify asset dimensions and target screen before playlist mutation.",
+      "mutation_status": "approval gated",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pisignage"
+    },
+    "meta-ads": {
+      "title": "06 Meta Ads",
+      "subgroup": "Acquisition",
+      "risk": "money mutation",
+      "status": "ready",
+      "last_task": "Meta CTWA, retargeting, creative analytics, adset state.",
+      "last_summary": "Dedicated Codex lane exists.",
+      "next_action": "Verify campaign/adset/ad IDs and budget before mutation.",
+      "mutation_status": "blocked until live account verification",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads"
+    },
+    "flyers": {
+      "title": "07 Flyers",
+      "subgroup": "Creative Surface",
+      "risk": "print quality",
+      "status": "ready",
+      "last_task": "Flyers, menu PDFs, QR, facade, non-packaging print output.",
+      "last_summary": "Dedicated Codex lane exists.",
+      "next_action": "Verify dimensions, QR decode, copy, and output format before print.",
+      "mutation_status": "creative approval gated",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command flyers"
+    },
+    "waba-outreach": {
+      "title": "08 WABA Outreach",
+      "subgroup": "Owned Conversion",
+      "risk": "customer communication mutation",
+      "status": "ready",
+      "last_task": "WhatsApp outreach, inbox, QR/payment/voucher journey, templates.",
+      "last_summary": "Dedicated Codex lane exists.",
+      "next_action": "Verify template status, webhook/payment state, and test-number exemptions before send.",
+      "mutation_status": "blocked until send gates pass",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command waba-outreach"
+    },
+    "pos-write": {
+      "title": "09 POS Write",
+      "subgroup": "POS/Pricing",
+      "risk": "Odoo/POS mutation",
+      "status": "active",
+      "last_task": "HE POS discount/offer error diagnosis.",
+      "last_summary": "POS Write terminal opened after launcher fix. Context: test.hamzahotel.com is HE production POS; Captain POS should use 10 percent offer logic; Cash/Ground should use 20 percent offer logic.",
+      "next_action": "Diagnose exact live state before writing: config, pricelist, product rows, session/cache/UI mismatch, and rollback path.",
+      "mutation_status": "blocked until root cause is reported",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pos-write"
+    },
+    "packaging-design": {
+      "title": "10 Packaging Design",
+      "subgroup": "Creative Surface",
+      "risk": "print/vendor handoff",
+      "status": "ready",
+      "last_task": "HE/NCH packaging design lane.",
+      "last_summary": "Seeded from actual Claude execution: May HE/NCH packaging intelligence, April NCH flask origin, and April rejection/correction trail.",
+      "next_action": "Continue HE Cheap-Bold correction or NCH flask panel work panel-by-panel.",
+      "mutation_status": "no bulk automation",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Packaging_Design_Codex_2026-05-24/open_packaging_design_codex.command"
+    }
+  },
+  "events": [
+    {
+      "id": "2026-05-24-pos-write-launcher-fix",
+      "at": "2026-05-24T21:35:00+0530",
+      "lane": "pos-write",
+      "task": "Fix POS Write terminal launcher",
+      "status": "completed",
+      "summary": "Moved lane launcher to stable ~/.local/bin path and symlinked UI command path to it so dataless iCloud files do not block lane opening.",
+      "next_action": "Use pos-write terminal to diagnose HE POS discount/offer issue before mutation."
+    },
+    {
+      "id": "2026-05-24-control-room-v2",
+      "at": "2026-05-24T20:54:08+0530",
+      "lane": "unified-control",
+      "task": "Deploy unified marketing control graph",
+      "status": "completed",
+      "summary": "Deployed /ops/marketing-control/ with one unified brain above 11 deep terminals.",
+      "next_action": "Add durable execution memory and live state reader."
+    }
+  ]
+}
