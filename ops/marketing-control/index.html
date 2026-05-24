@@ -6,45 +6,287 @@
 <meta name="theme-color" content="#0c0c14">
 <title>HN Marketing Control</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}body{min-height:100vh;background:#0c0c14;color:#f8fafc;font-family:Inter,system-ui,sans-serif;line-height:1.45}.wrap{max-width:1480px;margin:0 auto;padding:16px 14px 72px}.topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}h1{font-size:23px;font-weight:800;margin-bottom:2px}.sub{max-width:820px;color:#9ca3af;font-size:13px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn,.links a,.links button{min-height:44px;border-radius:8px;border:1px solid #2a2a38;background:#171722;color:#f8fafc;padding:10px 12px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;cursor:pointer}.btn-primary,.links .primary-link{background:#fbbf24;color:#111827;border-color:#fbbf24}.summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:14px}.summary{border:1px solid #2a2a38;background:#171722;border-radius:8px;padding:12px;min-height:74px}.summary .v{font-size:22px;font-weight:800;line-height:1.1}.summary .l{margin-top:5px;color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}.unified{border:1px solid #fbbf24;background:#18140b;border-radius:8px;padding:14px;margin-bottom:12px;display:grid;gap:12px}.memory-strip{border-color:#2a2a38;background:#101018}.memory-list{display:grid;gap:8px}.memory-row{border:1px solid #2a2a38;background:#171722;border-radius:8px;padding:10px}.memory-row strong{display:block;font-size:12px}.memory-row span{display:block;color:#9ca3af;font-size:12px;margin-top:3px}.memory-meta{color:#9ca3af;font-size:12px}.toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 12px}.filters{display:flex;gap:6px;flex-wrap:wrap}.filter{border:1px solid #2a2a38;background:#171722;color:#9ca3af;min-height:44px;padding:9px 12px;border-radius:999px;font-size:13px;font-weight:700;cursor:pointer}.filter.active{background:#fbbf24;border-color:#fbbf24;color:#111827}.updated{font-size:12px;color:#6b7280}.lane-grid{display:grid;grid-template-columns:1fr;gap:10px}.lane{background:#171722;border:1px solid #2a2a38;border-radius:8px;padding:14px;display:grid;gap:12px}.lane-head{display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}.lane-title h2,.unified h2{font-size:16px;line-height:1.2;margin-bottom:4px}.scope{color:#9ca3af;font-size:12px}.badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.badge{border-radius:999px;background:#242433;color:#d1d5db;padding:5px 8px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.35px}.live{background:rgba(59,130,246,.16);color:#93c5fd}.gated{background:rgba(245,158,11,.16);color:#fbbf24}.creative{background:rgba(16,185,129,.14);color:#34d399}.mutation{background:rgba(239,68,68,.14);color:#f87171}.control{background:rgba(251,191,36,.16);color:#fbbf24}.facts{display:grid;grid-template-columns:1fr;gap:8px}.fact{border:1px solid #2a2a38;background:#101018;border-radius:8px;padding:10px}.fact .k{color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-weight:800;margin-bottom:4px}.fact .v{font-size:13px}.links{display:flex;flex-wrap:wrap;gap:6px}.command{border:1px solid #2a2a38;background:#101018;border-radius:8px;padding:10px}.command code{display:block;color:#cbd5e1;font-size:11px;line-height:1.45;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:10px 14px;background:#171722;border:1px solid #2a2a38;border-radius:8px;color:#f8fafc;font-size:13px;display:none;z-index:20}@media(min-width:720px){.summary-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.facts{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(min-width:1080px){.lane-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.lane.master{grid-column:1/-1}}
+  body { min-height: 100vh; }
+  .wrap { max-width: 1480px; margin: 0 auto; padding: 16px 14px 72px; }
+  .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .titleblock h1 { font-size: 23px; font-weight: 800; margin-bottom: 2px; }
+  .titleblock .sub { max-width: 780px; }
+  .actions, .links, .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn, .links a, .links button, .filter { min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); padding: 10px 12px; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; }
+  .btn-primary, .links .primary-link, .filter.active { background: var(--brand); color: #0c0c14; border-color: var(--brand); }
+  .btn-code, .command code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .summary, .memory, .lane, .activity { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; }
+  .summary { padding: 12px; min-height: 74px; }
+  .summary .v { font-size: 22px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .summary .l { margin-top: 5px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; }
+  .memory, .activity { margin-bottom: 12px; padding: 13px; }
+  .memory-head, .lane-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+  .memory h2, .lane h2 { font-size: 16px; line-height: 1.2; margin-bottom: 4px; }
+  .scope, .updated, .activity-row { color: var(--text-dim); font-size: 12px; line-height: 1.45; }
+  .memory-list { display: grid; gap: 8px; margin-top: 10px; }
+  .memory-row { border: 1px solid var(--border); background: rgba(255,255,255,0.025); border-radius: 8px; padding: 10px; }
+  .memory-row strong { display: block; font-size: 12px; }
+  .memory-row span { display: block; color: var(--text-dim); font-size: 12px; margin-top: 3px; }
+  .toolbar { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0 12px; }
+  .filter { color: var(--text-dim); border-radius: 999px; }
+  .lane-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .lane { padding: 14px; display: grid; gap: 12px; }
+  .lane-title { min-width: 0; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .badge { border-radius: 999px; background: rgba(255,255,255,0.07); color: var(--text-dim); padding: 5px 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.35px; }
+  .badge-live { background: rgba(59,130,246,0.16); color: #93c5fd; }
+  .badge-gated { background: rgba(245,158,11,0.16); color: #fbbf24; }
+  .badge-creative { background: rgba(16,185,129,0.14); color: #34d399; }
+  .badge-mutation, .badge-required { background: rgba(239,68,68,0.14); color: #f87171; }
+  .badge-control { background: rgba(251,191,36,0.16); color: #fbbf24; }
+  .facts { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .fact { border: 1px solid var(--border); background: rgba(255,255,255,0.025); border-radius: 8px; padding: 10px; }
+  .fact .k { color: var(--text-mute); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 800; margin-bottom: 4px; }
+  .fact .v { color: var(--text); font-size: 13px; line-height: 1.45; }
+  .command { border: 1px solid var(--border); background: #101018; border-radius: 8px; padding: 10px; }
+  .command code { display: block; color: #cbd5e1; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+  .toast { position: fixed; left: 50%; bottom: calc(18px + var(--safe-bottom)); transform: translateX(-50%); padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; display: none; z-index: 20; }
+  @media (min-width: 720px) {
+    .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (min-width: 1080px) {
+    .lane-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lane-master { grid-column: 1 / -1; }
+  }
 </style>
 </head>
 <body>
 <main class="wrap">
-  <div class="topbar"><div><h1>Marketing Control</h1><div class="sub">One deployed view for the whole HE/NCH marketing execution graph: unified control above deep lane terminals.</div></div><div class="actions"><button class="btn btn-primary" data-copy="/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Unified_Control_2026-05-24/open_unified_marketing_control.command">Copy unified command</button><button class="btn" data-copy="/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_hn_marketing_codex_terminals.command">Copy open-all lanes</button><a class="btn" href="/marketing/">Marketing index</a></div></div>
-  <section class="summary-grid" aria-label="Marketing execution summary"><div class="summary"><div class="v">1</div><div class="l">Unified brain</div></div><div class="summary"><div class="v">11</div><div class="l">Deep terminals</div></div><div class="summary"><div class="v">5</div><div class="l">Subgroups</div></div><div class="summary"><div class="v">Live</div><div class="l">Command router</div></div></section>
-  <section id="memory-strip" class="unified memory-strip"><div class="lane-head"><div><h2>Execution Memory</h2><div class="scope">Loading lane state from deployed state.json...</div></div><div class="badges"><span class="badge control">Memory</span></div></div></section>
-  <section class="unified"><div class="lane-head"><div><h2>00 Unified Marketing Control</h2><div class="scope">View all terminals as one graph, sequence cross-lane work, then hand off to the right deep execution lane.</div></div><div class="badges"><span class="badge control">Control</span><span class="badge live">Live UI</span></div></div><div class="facts"><div class="fact"><div class="k">Use first when</div><div class="v">The task is unclear, multi-lane, or you want whole-engine context before execution.</div></div><div class="fact"><div class="k">How it stays accurate</div><div class="v">Reads the graph, latest-state ledger, lane prompts, packaging digest, and codex decision log.</div></div><div class="fact"><div class="k">Guardrail</div><div class="v">It does not pretend chats share memory automatically. Shared state is written back after execution.</div></div></div><div class="links"><button class="primary-link" data-copy="/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Unified_Control_2026-05-24/open_unified_marketing_control.command">Copy unified terminal command</button></div><div class="command"><code>/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Unified_Control_2026-05-24/open_unified_marketing_control.command</code></div></section>
-  <div class="toolbar"><div class="filters"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="Acquisition">Acquisition</button><button class="filter" data-filter="Aggregators">Aggregators</button><button class="filter" data-filter="Creative Surface">Creative</button><button class="filter" data-filter="Owned Conversion">Owned</button><button class="filter" data-filter="POS/Pricing">POS</button><button class="filter" data-filter="mutation">Mutation risk</button></div><div class="updated">V2 graph: 2026-05-24</div></div>
+  <div class="topbar">
+    <div class="titleblock">
+      <h1>Marketing Control</h1>
+      <div class="sub">Graph-rendered execution cockpit for HE/NCH marketing lanes, live UIs, Codex terminal routing, and latest lane memory.</div>
+    </div>
+    <div class="actions">
+      <button id="open-all" class="btn btn-primary btn-code">Copy open-all command</button>
+      <a class="btn" href="/marketing/">Marketing index</a>
+    </div>
+  </div>
+
+  <section id="summary" class="summary-grid" aria-label="Marketing execution summary"></section>
+  <section id="memory" class="memory"></section>
+  <section id="activity" class="activity"></section>
+
+  <div class="toolbar">
+    <div class="filters" role="tablist" aria-label="Lane filters">
+      <button class="filter active" data-filter="all">All</button>
+      <button class="filter" data-filter="live">Live</button>
+      <button class="filter" data-filter="gated">Gated</button>
+      <button class="filter" data-filter="creative">Creative</button>
+      <button class="filter" data-filter="mutation">Mutation risk</button>
+      <button class="filter" data-filter="writeback">Writeback required</button>
+    </div>
+    <div id="source" class="updated">Loading graph...</div>
+  </div>
+
   <section id="lane-grid" class="lane-grid"></section>
-</main><div id="toast" class="toast"></div>
+</main>
+<div id="toast" class="toast"></div>
+
 <script>
-const OPEN_ONE='/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command';
-const PACKAGING_OPEN='/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Packaging_Design_Codex_2026-05-24/open_packaging_design_codex.command';
-const lanes=[
-{slug:'master',title:'00 Marketing Master Control',subgroup:'Control',brand:'HN',status:['live'],tags:['live'],scope:'Lane router. Unified Control is the whole-engine view above it.',current:'Use when a single marketing demand needs ownership classification.',next:'Classify lane ownership and hand off.',guardrail:'No mutation from master without live verification.',links:[['Marketing index','/marketing/']]},
-{slug:'influencer',title:'01 Influencer',subgroup:'Acquisition',brand:'HE',status:['live'],tags:['live'],scope:'Creator discovery, outreach, applications, bookings, and proof.',current:'Creator campaign/applications/booking surfaces exist.',next:'Creator selection, outreach, approval, or booking proof.',guardrail:'Verify send gates and application state before outreach.',links:[['Paid shortlist','/marketing/Influencer/paid-shortlist/'],['Applications','/ops/influencer-applications/'],['Bookings','/ops/influencer-bookings/']]},
-{slug:'google-ads',title:'02 Google Ads',subgroup:'Acquisition',brand:'HE',status:['live','mutation'],tags:['live','mutation'],scope:'Search, PMax, Google cockpit, budget, negatives, and Maps proof.',current:'Google cockpit and paid analytics are live.',next:'Budget, negatives, campaign state, landing, Maps proof.',guardrail:'Verify account, campaign IDs, budget, and delivery before mutation.',links:[['Google cockpit','https://hamzaexpress.in/ops/google-cockpit/'],['HE GBP','/marketing/he/gbp/']]},
-{slug:'delivery-aggregator',title:'03 Delivery Aggregator',subgroup:'Aggregators',brand:'HE/NCH',status:['gated','mutation'],tags:['gated','mutation'],scope:'Zomato/Swiggy delivery positioning, offers, margin gates, menu and photo evidence.',current:'Portal execution remains proof and margin gated.',next:'Delivery offer, price, menu, listing, proof pack, upload packet.',guardrail:'No blind portal execution.',links:[['Aggregator cockpit','/ops/aggregator/'],['Delivery positioning','/ops/intelligence/aggregator-delivery-positioning/']]},
-{slug:'dine-in-aggregator',title:'04 Dine-In Aggregator',subgroup:'Aggregators',brand:'HE/NCH',status:['live','gated'],tags:['live','gated'],scope:'GBP, dine-in aggregator, ambience proof, local trust and attribution.',current:'GBP and ambience surfaces exist; platform state must be verified.',next:'Dine aggregator, GBP, rating, ambience, KAM action.',guardrail:'Check login blockers, scraper state, and attribution.',links:[['HE GBP','/marketing/he/gbp/'],['NCH GBP','/marketing/nch/gbp/'],['Dine playbook','/ops/intelligence/dine-in-aggregator-playbook/']]},
-{slug:'pisignage',title:'05 PiSignage',subgroup:'Creative Surface',brand:'HE',status:['live','creative','mutation'],tags:['live','creative','mutation'],scope:'TV choreography, playlists, contact sheets, screen loops.',current:'TV choreography and mission control surfaces exist.',next:'TV asset correction, upload packet, screen fit, playlist review.',guardrail:'PiSignage mutation is approval gated.',links:[['TV choreography','https://hamzaexpress.in/ops/tv-mission-control/choreography/']]},
-{slug:'meta-ads',title:'06 Meta Ads',subgroup:'Acquisition',brand:'HE',status:['live','mutation'],tags:['live','mutation'],scope:'Meta CTWA, retargeting, creative analytics, Maps bridge, adset state.',current:'CTWA cockpit and Meta campaign map exist.',next:'Campaign budget/status, creative performance, retargeting, diagnostics.',guardrail:'Verify campaign/adset/ad IDs and budget before mutation.',links:[['CTWA cockpit','https://hamzaexpress.in/ops/ctwa-cockpit/'],['Meta map','/marketing/he/meta-campaign-map/']]},
-{slug:'flyers',title:'07 Flyers',subgroup:'Creative Surface',brand:'HE/NCH',status:['creative'],tags:['creative'],scope:'A4 flyers, menu sheets, facade creative, QR design.',current:'Non-packaging physical design lane.',next:'Flyer, menu PDF, QR, facade, print-ready output.',guardrail:'Verify dimensions, resolution, QR decode, text, export format.',links:[['Marketing index','/marketing/'],['HE menu','https://hamzaexpress.in/menu/']]},
-{slug:'waba-outreach',title:'08 WABA Outreach',subgroup:'Owned Conversion',brand:'HE',status:['live','mutation'],tags:['live','mutation'],scope:'WhatsApp outreach, inbox, QR/payment/voucher, templates, KDS proof.',current:'WABA dashboard/inbox/leads surfaces exist.',next:'Sends, templates, QR flows, voucher journey, payment callback.',guardrail:'Verify template status, webhook/payment state, and test-number exemptions.',links:[['WABA dashboard','https://hamzaexpress.in/ops/waba-dashboard/'],['Inbox','https://hamzaexpress.in/ops/inbox/'],['Leads','https://hamzaexpress.in/ops/leads/']]},
-{slug:'pos-write',title:'09 POS Write',subgroup:'POS/Pricing',brand:'HE',status:['live','mutation'],tags:['live','mutation'],scope:'Odoo POS price writes, menus, offer templates, KDS/category routing.',current:'POS write lane exists with protected-row guardrails.',next:'Odoo price, menu, offer, category, KDS change or verification.',guardrail:'Verify instance, company/config IDs, sessions, whitelist, rollback.',links:[['Pricing intelligence','https://hamzaexpress.in/ops/pricing-intelligence/'],['Menu','https://hamzaexpress.in/menu/']]},
-{slug:'packaging-design',title:'10 Packaging Design',subgroup:'Creative Surface',brand:'HE/NCH',status:['creative','gated'],tags:['creative','gated'],command:PACKAGING_OPEN,scope:'Packaging doctrine, SKU collapse, NCH flask/tuck execution, render control, vendor handoff.',current:'Seeded from actual Claude execution, not only docs.',next:'HE Cheap-Bold correction, NCH flask panel continuation, tuck-box planning, vendor pack.',guardrail:'No bulk panel automation. Continue panel-by-panel with cost/supplier checks.',links:[['Marketing index','/marketing/']]}
-];
-let currentFilter='all';
-function applyMemory(state){
-  if(!state||!state.lanes)return;
-  lanes.forEach(l=>{const m=state.lanes[l.slug];if(m){l.current=m.last_summary||l.current;l.next=m.next_action||l.next;l.guardrail=m.mutation_status||l.guardrail;l.memoryStatus=m.status||'';}});
-  const strip=document.getElementById('memory-strip');
-  const events=(state.events||[]).slice(0,4);
-  strip.innerHTML='<div class="lane-head"><div><h2>Execution Memory</h2><div class="scope">Live state loaded from /ops/marketing-control/state.json</div><div class="memory-meta">Updated: '+(state.updated_at||'unknown')+' · Published: '+(state.published_at||'local only')+'</div></div><div class="badges"><span class="badge control">Memory</span></div></div><div class="memory-list">'+events.map(e=>'<div class="memory-row"><strong>'+e.lane+' · '+e.status+'</strong><span>'+e.task+' — '+e.summary+'</span></div>').join('')+'</div>';
+const GRAPH_URL = './graph.json';
+const STATE_URL = './state.json';
+const STATE_LOG_URL = './state.jsonl';
+let GRAPH = null;
+let STATE = null;
+let STATE_LOG = [];
+let currentFilter = 'all';
+
+const grid = document.getElementById('lane-grid');
+const toast = document.getElementById('toast');
+const esc = value => {
+  const div = document.createElement('div');
+  div.textContent = value == null ? '' : String(value);
+  return div.innerHTML;
+};
+
+function showToast(text) {
+  toast.textContent = text;
+  toast.style.display = 'block';
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => { toast.style.display = 'none'; }, 2200);
 }
-async function loadMemory(){try{const res=await fetch('/ops/marketing-control/state.json?v='+Date.now(),{cache:'no-store'});if(!res.ok)throw new Error('state http '+res.status);const state=await res.json();applyMemory(state);render(currentFilter);}catch(err){const strip=document.getElementById('memory-strip');strip.innerHTML='<div class="lane-head"><div><h2>Execution Memory</h2><div class="scope">State JSON not available yet. Terminal commands still work from embedded lane graph.</div></div><div class="badges"><span class="badge gated">Fallback</span></div></div>';}}
-function commandFor(lane){return lane.command||OPEN_ONE+' '+lane.slug}function badge(tag){return '<span class="badge '+tag+'">'+tag.replace('-', ' ')+'</span>'}function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.style.display='none',2200)}async function copy(text){try{await navigator.clipboard.writeText(text);toast('Copied')}catch(e){const a=document.createElement('textarea');a.value=text;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();toast('Copied')}}function render(filter){currentFilter=filter;const grid=document.getElementById('lane-grid');grid.innerHTML='';lanes.filter(l=>filter==='all'||l.subgroup===filter||l.tags.includes(filter)).forEach(l=>{const card=document.createElement('article');card.className='lane '+(l.slug==='master'?'master':'');card.innerHTML='<div class="lane-head"><div class="lane-title"><h2>'+l.title+'</h2><div class="scope">'+l.subgroup+' · '+l.scope+'</div></div><div class="badges"><span class="badge">'+l.brand+'</span>'+l.status.map(badge).join('')+'</div></div><div class="facts"><div class="fact"><div class="k">Current state</div><div class="v">'+l.current+'</div></div><div class="fact"><div class="k">Open this when</div><div class="v">'+l.next+'</div></div><div class="fact"><div class="k">Guardrail</div><div class="v">'+l.guardrail+'</div></div></div><div class="links"><button class="primary-link" data-copy="'+commandFor(l)+'">Copy terminal command</button>'+l.links.map(x=>'<a href="'+x[1]+'" '+(x[1].startsWith('http')?'target="_blank" rel="noopener"':'')+'>'+x[0]+'</a>').join('')+'</div><div class="command"><code>'+commandFor(l)+'</code></div>';grid.appendChild(card)})}document.addEventListener('click',e=>{const c=e.target.closest('[data-copy]');if(c)copy(c.dataset.copy);const f=e.target.closest('[data-filter]');if(f){document.querySelectorAll('.filter').forEach(b=>b.classList.remove('active'));f.classList.add('active');render(f.dataset.filter)}});render('all');loadMemory();
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    const area = document.createElement('textarea');
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  }
+  showToast('Copied');
+}
+
+function badgeFor(tag) {
+  const label = {
+    live: 'Live UI',
+    gated: 'Gated',
+    creative: 'Creative',
+    mutation: 'Mutation risk',
+    writeback: 'Writeback'
+  }[tag] || tag;
+  return `<span class="badge badge-${esc(tag)}">${esc(label)}</span>`;
+}
+
+function stateFor(slug) {
+  return STATE && STATE.lanes ? STATE.lanes[slug] : null;
+}
+
+function latestLogFor(slug) {
+  return STATE_LOG.find(row => row.lane === slug);
+}
+
+function laneView(lane) {
+  const state = stateFor(lane.slug);
+  const latest = latestLogFor(lane.slug);
+  return {
+    current: state ? state.last_summary : lane.summary,
+    next: state ? state.next_action : lane.next_action,
+    guardrail: state ? state.mutation_status : lane.guardrail,
+    status: state ? state.status : lane.status,
+    latest
+  };
+}
+
+function renderSummary() {
+  const lanes = GRAPH.lanes || [];
+  const mutation = lanes.filter(l => (l.tags || []).includes('mutation')).length;
+  const writeback = lanes.filter(l => l.writeback_required).length;
+  const brands = [...new Set(lanes.map(l => l.brand).filter(Boolean))].join('/');
+  document.getElementById('summary').innerHTML = [
+    ['Lanes', lanes.length],
+    ['Mutation lanes', mutation],
+    ['Writeback required', writeback],
+    ['Brand scope', brands || 'HE/NCH']
+  ].map(([label, value]) => `<div class="summary"><div class="v">${esc(value)}</div><div class="l">${esc(label)}</div></div>`).join('');
+}
+
+function renderMemory() {
+  const events = (STATE && STATE.events ? STATE.events : []).slice(0, 4);
+  document.getElementById('memory').innerHTML = `
+    <div class="memory-head">
+      <div>
+        <h2>Execution Memory</h2>
+        <div class="scope">${STATE ? 'Live state loaded from /ops/marketing-control/state.json' : 'State JSON not available yet. Graph still controls lane mapping.'}</div>
+        <div class="updated">Graph: ${esc(GRAPH.version || 'unknown')} · State: ${esc(STATE && STATE.updated_at ? STATE.updated_at : 'not loaded')}</div>
+      </div>
+      <div class="badges"><span class="badge badge-control">Memory</span></div>
+    </div>
+    <div class="memory-list">
+      ${events.length ? events.map(e => `<div class="memory-row"><strong>${esc(e.lane)} · ${esc(e.status)}</strong><span>${esc(e.task)} - ${esc(e.summary)}</span></div>`).join('') : '<div class="memory-row"><strong>No state events yet</strong><span>Terminal commands still open from graph.json.</span></div>'}
+    </div>`;
+}
+
+function renderActivity() {
+  document.getElementById('activity').innerHTML = `
+    <div class="memory-head">
+      <div>
+        <h2>Latest Writeback</h2>
+        <div class="scope">Append-only execution trail from /ops/marketing-control/state.jsonl.</div>
+      </div>
+      <div class="badges"><span class="badge badge-required">Audit</span></div>
+    </div>
+    <div class="memory-list">
+      ${STATE_LOG.length ? STATE_LOG.slice(0, 5).map(row => `<div class="activity-row"><strong>${esc((row.ts || '').slice(0, 16).replace('T', ' '))} · ${esc(row.lane)}</strong> ${esc(row.event || '')}${row.note ? ' - ' + esc(row.note) : ''}</div>`).join('') : '<div class="activity-row">No writeback rows loaded yet.</div>'}
+    </div>`;
+}
+
+function renderLanes() {
+  const lanes = (GRAPH.lanes || []).filter(lane => {
+    if (currentFilter === 'all') return true;
+    if (currentFilter === 'writeback') return lane.writeback_required;
+    return (lane.tags || []).includes(currentFilter);
+  });
+  grid.innerHTML = lanes.map(lane => {
+    const view = laneView(lane);
+    const tags = [...(lane.tags || []), ...(lane.writeback_required ? ['writeback'] : [])];
+    return `<article class="lane ${lane.slug === 'master' ? 'lane-master' : ''}">
+      <div class="lane-head">
+        <div class="lane-title">
+          <h2>${esc(lane.title)}</h2>
+          <div class="scope">${esc(lane.group)} · ${esc(lane.subgroup)} · ${esc(lane.scope)}</div>
+        </div>
+        <div class="badges">
+          <span class="badge">${esc(lane.brand)}</span>
+          ${tags.map(badgeFor).join('')}
+        </div>
+      </div>
+      <div class="facts">
+        <div class="fact"><div class="k">Current state</div><div class="v">${esc(view.current)}</div></div>
+        <div class="fact"><div class="k">Open this when</div><div class="v">${esc(view.next)}</div></div>
+        <div class="fact"><div class="k">Guardrail</div><div class="v">${esc(view.guardrail)}</div></div>
+      </div>
+      ${view.latest ? `<div class="activity-row">Last writeback: ${esc(view.latest.event || '')}${view.latest.note ? ' - ' + esc(view.latest.note) : ''}</div>` : ''}
+      <div class="links">
+        <button class="primary-link" data-copy="${esc(lane.command)}">Copy terminal command</button>
+        ${(lane.links || []).map(([label, href]) => `<a href="${esc(href)}" ${String(href).startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>${esc(label)}</a>`).join('')}
+      </div>
+      <div class="command"><code>${esc(lane.command)}</code></div>
+    </article>`;
+  }).join('');
+}
+
+function render() {
+  renderSummary();
+  renderMemory();
+  renderActivity();
+  renderLanes();
+  document.getElementById('source').textContent = `Source: graph.json · ${GRAPH.version || 'unknown'}`;
+  document.getElementById('open-all').dataset.copy = GRAPH.open_all_command || '';
+}
+
+function parseLog(text) {
+  return text.trim().split('\n').filter(Boolean).map(line => {
+    try { return JSON.parse(line); } catch (err) { return null; }
+  }).filter(Boolean).sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+}
+
+async function load() {
+  try {
+    const graphRes = await fetch(`${GRAPH_URL}?v=${Date.now()}`, { cache: 'no-store' });
+    if (!graphRes.ok) throw new Error(`graph ${graphRes.status}`);
+    GRAPH = await graphRes.json();
+    try {
+      const stateRes = await fetch(`${STATE_URL}?v=${Date.now()}`, { cache: 'no-store' });
+      if (stateRes.ok) STATE = await stateRes.json();
+    } catch (err) {}
+    try {
+      const logRes = await fetch(`${STATE_LOG_URL}?v=${Date.now()}`, { cache: 'no-store' });
+      if (logRes.ok) STATE_LOG = parseLog(await logRes.text());
+    } catch (err) {}
+    render();
+  } catch (err) {
+    document.getElementById('source').textContent = `Could not load graph.json: ${err.message}`;
+    grid.innerHTML = '<article class="lane"><h2>Marketing Control unavailable</h2><div class="scope">graph.json could not be loaded. Terminal commands are intentionally not hardcoded here.</div></article>';
+  }
+}
+
+document.addEventListener('click', event => {
+  const copyTarget = event.target.closest('[data-copy]');
+  if (copyTarget) copyText(copyTarget.dataset.copy);
+  const filterTarget = event.target.closest('[data-filter]');
+  if (filterTarget) {
+    currentFilter = filterTarget.dataset.filter;
+    document.querySelectorAll('.filter').forEach(button => button.classList.remove('active'));
+    filterTarget.classList.add('active');
+    renderLanes();
+  }
+});
+
+load();
 </script>
 </body>
 </html>
