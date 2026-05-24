@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-24T22:53:42+0530",
-  "published_at": "2026-05-24T22:53:42+0530",
+  "updated_at": "2026-05-25T02:13:45+0530",
+  "published_at": "2026-05-25T02:13:45+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -108,12 +108,12 @@
       "subgroup": "POS/Pricing",
       "risk": "Odoo/POS mutation",
       "status": "completed",
-      "last_task": "HE Captain POS 10% offer V2 fix",
-      "last_summary": "Diagnosed Captain POS offer bug on test.hamzahotel.com: old offer 44 chained through Captain base pricelist 40 and dropped portion attribute extras, causing apparent 45-55% discounts. Created pricelist 45 HE Captain AC 10% Offer V2 - 2026-05-24 with 168 non-chained rules, switched only Captain config 6 from [40,44] to [40,45], verified Cash [41,42] and Ground [41,43] unchanged, and post-switch exhaustive variant audit passed 252 cases with 0 anomalies.",
-      "next_action": "Staff should reload Captain POS and select HE Captain AC 10% Offer V2 - 2026-05-24 for new Captain offer orders; verify tablet canaries Chicken Kabab Half about ₹198.60, Chicken Kabab Full about ₹400.30, Irani Chicken Full about ₹522.34. Rollback if needed: restore Captain config 6 available pricelists to [40,44].",
-      "mutation_status": "Odoo/POS production mutation completed on HE test.hamzahotel.com: created detached pricelist 45 + 168 rules, then updated only pos.config 6 available_pricelist_ids to [40,45]. No product/tax/category/KDS/session/Cash/Ground writes. Backups: /private/tmp/he_captain_offer_v2_write_backup_20260524.json and /private/tmp/he_captain_v2_live_switch_backup_20260524.json.",
+      "last_task": "Diagnose Captain POS session expired tablet error",
+      "last_summary": "Analyzed tablet photos from HE Captain POS after V2 pricelist switch. The visible Chicken Kabab Half price ₹198.60 matches the expected V2 canary, so pricing/pricelist deployment is behaving. The failure shown is Odoo Server Error: Session expired during payment validation, which points to browser/Odoo auth/session expiry or stale POS tab, not the last pricelist/config deployment. No Odoo mutation performed.",
+      "next_action": "Staff should press OK, refresh/reopen Captain POS, recover the draft order from table/orders if present, then validate again. If repeated, run read-only live session/payment audit before any write.",
+      "mutation_status": "No mutation. Read-only image-based diagnosis only; last Odoo mutation remains Captain config 6 [40,45] and pricelist 45 from 2026-05-24.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pos-write",
-      "last_run_at": "2026-05-24T22:53:42+0530"
+      "last_run_at": "2026-05-25T02:13:45+0530"
     },
     "packaging-design": {
       "title": "10 Packaging Design",
@@ -128,6 +128,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525021345-pos-write",
+      "at": "2026-05-25T02:13:45+0530",
+      "lane": "pos-write",
+      "task": "Diagnose Captain POS session expired tablet error",
+      "status": "completed",
+      "summary": "Analyzed tablet photos from HE Captain POS after V2 pricelist switch. The visible Chicken Kabab Half price ₹198.60 matches the expected V2 canary, so pricing/pricelist deployment is behaving. The failure shown is Odoo Server Error: Session expired during payment validation, which points to browser/Odoo auth/session expiry or stale POS tab, not the last pricelist/config deployment. No Odoo mutation performed.",
+      "next_action": "Staff should press OK, refresh/reopen Captain POS, recover the draft order from table/orders if present, then validate again. If repeated, run read-only live session/payment audit before any write.",
+      "mutation_status": "No mutation. Read-only image-based diagnosis only; last Odoo mutation remains Captain config 6 [40,45] and pricelist 45 from 2026-05-24."
+    },
     {
       "id": "20260524225342-pos-write",
       "at": "2026-05-24T22:53:42+0530",
