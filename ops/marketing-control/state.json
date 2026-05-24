@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T05:26:11+0530",
-  "published_at": "2026-05-25T05:26:11+0530",
+  "updated_at": "2026-05-25T05:26:17+0530",
+  "published_at": "2026-05-25T05:26:17+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,11 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Google Ads, GBP, paid landing, negatives, budgets.",
-      "last_summary": "Dedicated Codex lane exists.",
-      "next_action": "Verify account/campaign IDs and current delivery before any mutation.",
-      "mutation_status": "blocked until live account verification",
-      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads"
+      "last_task": "Verify Google Ads live account and delivery state",
+      "last_summary": "Read lane memory/control graph and live HE Google Ads APIs. Verified account customer 368-171-0084 via hamzaexpress.in API; active Search campaigns are Late Night 23854158442 ₹300/day, Dinner 23855561197 ₹150/day, Brand 23845870050 ₹50/day, all ENABLED/SERVING; PMax 23834053403 remains PAUSED at ₹300/day. 7d cockpit shows ₹2301.14 spend and 70 clicks, almost entirely Late Night; Dinner/Brand enabled but not materially delivering. Campaign criteria show HE pin proximity only: Late Night 7km, Dinner 3km, Brand 5km, PMax 2km; no city LOCATION criteria. Directions proof endpoint live with today's page_view/maps_auto_open events, currently from Meta UTMs rather than Google gclid. No ad mutation performed.",
+      "next_action": "Before any mutation, verify the specific target campaign/ad group/keyword IDs and decide whether to tune Late Night negatives/bids, fix Dinner/Brand delivery, or resume PMax; preserve rollback plan and current budgets.",
+      "mutation_status": "blocked until explicit live mutation approval; read-only verification only",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
+      "last_run_at": "2026-05-25T05:26:17+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -129,6 +130,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525052617-google-ads",
+      "at": "2026-05-25T05:26:17+0530",
+      "lane": "google-ads",
+      "task": "Verify Google Ads live account and delivery state",
+      "status": "ready",
+      "summary": "Read lane memory/control graph and live HE Google Ads APIs. Verified account customer 368-171-0084 via hamzaexpress.in API; active Search campaigns are Late Night 23854158442 ₹300/day, Dinner 23855561197 ₹150/day, Brand 23845870050 ₹50/day, all ENABLED/SERVING; PMax 23834053403 remains PAUSED at ₹300/day. 7d cockpit shows ₹2301.14 spend and 70 clicks, almost entirely Late Night; Dinner/Brand enabled but not materially delivering. Campaign criteria show HE pin proximity only: Late Night 7km, Dinner 3km, Brand 5km, PMax 2km; no city LOCATION criteria. Directions proof endpoint live with today's page_view/maps_auto_open events, currently from Meta UTMs rather than Google gclid. No ad mutation performed.",
+      "next_action": "Before any mutation, verify the specific target campaign/ad group/keyword IDs and decide whether to tune Late Night negatives/bids, fix Dinner/Brand delivery, or resume PMax; preserve rollback plan and current budgets.",
+      "mutation_status": "blocked until explicit live mutation approval; read-only verification only"
+    },
     {
       "id": "20260525052611-packaging-design",
       "at": "2026-05-25T05:26:11+0530",
