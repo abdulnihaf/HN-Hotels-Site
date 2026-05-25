@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T06:58:09+0530",
-  "published_at": "2026-05-25T06:58:09+0530",
+  "updated_at": "2026-05-25T07:04:10+0530",
+  "published_at": "2026-05-25T07:04:10+0530",
   "source": "github-main-static-json",
   "lane_slug": "meta-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Initialize Meta Ads lane and live read",
-    "last_summary": "Read lane/control memory, decisions log, Meta lane history, live CTWA cockpit/API, and directions page. Current operational source is /api/ctwa-analytics, not stale /api/meta-status. Live payload shows active primary Maps campaign 120246002668360505 and retargeting campaign 120246050386040505 with spend/click/map bridge metrics; old April CTWA 120243729366800505 is archived. No Meta mutation performed.",
-    "next_action": "Before mutation, verify direct Meta Graph object reads for account act_634959029638544, campaign/adset/ad IDs, budgets, creative, objective, and delivery; then choose pause/tune/creative action with rollback.",
-    "mutation_status": "blocked until direct live Meta account verification; read-only cockpit/API verification only",
+    "last_task": "Plan Meta to WABA voucher retargeting funnel and package creatives",
+    "last_summary": "Verified current deployed WABA voucher flow from GitHub main whatsapp.js SHA 166b38102d7d42f86baa517211c1f2169a687146: trigger phrase 'Hi Hamza, send my WhatsApp voucher' maps to source meta_rt_voucher, creates/reuses wa_voucher_claims code HE-xxxxx, then routes to Full Menu, Voucher Offers, Open Maps, Combos, Shawarma/Kathi, or Dine-in. Created funnel spec at _context/Meta_WABA_Voucher_Retargeting_2026-05-25/FUNNEL_SPEC.md and Desktop creative pack Hamza_Meta_WABA_Voucher_Final_2026-05-25 with final A voucher-first and B food-first 9:16/4:5 PNGs plus contact sheet. No Meta or WABA send mutation.",
+    "next_action": "Before launch, live-test owner/test-number WABA trigger phrase, verify voucher claim row creation/readout, then create Meta messages campaign HE_RT_WABA_VOUCHER_CLAIM_20260525 using WhatsApp destination and exact prefill text; do not route this campaign to /directions.",
+    "mutation_status": "creative/planning output only; money mutation still blocked until direct Meta campaign creation approval and live WABA test passes",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-    "last_run_at": "2026-05-25T05:28:57+0530"
+    "last_run_at": "2026-05-25T07:04:10+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/06-meta-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/meta-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525070410-meta-ads",
+      "at": "2026-05-25T07:04:10+0530",
+      "lane": "meta-ads",
+      "task": "Plan Meta to WABA voucher retargeting funnel and package creatives",
+      "status": "ready",
+      "summary": "Verified current deployed WABA voucher flow from GitHub main whatsapp.js SHA 166b38102d7d42f86baa517211c1f2169a687146: trigger phrase 'Hi Hamza, send my WhatsApp voucher' maps to source meta_rt_voucher, creates/reuses wa_voucher_claims code HE-xxxxx, then routes to Full Menu, Voucher Offers, Open Maps, Combos, Shawarma/Kathi, or Dine-in. Created funnel spec at _context/Meta_WABA_Voucher_Retargeting_2026-05-25/FUNNEL_SPEC.md and Desktop creative pack Hamza_Meta_WABA_Voucher_Final_2026-05-25 with final A voucher-first and B food-first 9:16/4:5 PNGs plus contact sheet. No Meta or WABA send mutation.",
+      "next_action": "Before launch, live-test owner/test-number WABA trigger phrase, verify voucher claim row creation/readout, then create Meta messages campaign HE_RT_WABA_VOUCHER_CLAIM_20260525 using WhatsApp destination and exact prefill text; do not route this campaign to /directions.",
+      "mutation_status": "creative/planning output only; money mutation still blocked until direct Meta campaign creation approval and live WABA test passes"
+    },
     {
       "id": "20260525052857-meta-ads",
       "at": "2026-05-25T05:28:57+0530",
