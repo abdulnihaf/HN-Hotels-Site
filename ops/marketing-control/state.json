@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T11:07:20+0530",
-  "published_at": "2026-05-25T11:07:20+0530",
+  "updated_at": "2026-05-25T11:37:00+0530",
+  "published_at": "2026-05-25T11:37:00+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Define Hamza brand vs competitor conquest targeting structure",
-      "last_summary": "Recommended separating Hamza Hotel brand capture from competitor conquest. Hamza Hotel/Express searches should run active at 5km because intent is warm and connected to Hamza memory. Competitor terms such as Empire Central Street, Imperial Restaurant, Taj Shivajinagar, New Hilal, and New North Indian should be a separate 2km conquest test, preferably paused or low-budget, using competitor names only as exact/phrase keywords and not in ad copy to avoid trademark/misleading ad risk. Visible ad should remain Hamza Express craving/late-night/offer focused.",
-      "next_action": "If owner approves conquest layer, build separate paused 2km competitor Search campaign/ad groups and keep primary Rs500 Hamza brand test clean first.",
-      "mutation_status": "No live Google Ads mutation. Targeting strategy guidance only.",
+      "last_task": "Create and enable Hamza Hotel late-night brand campaign",
+      "last_summary": "Deployed Hamza Express Ads endpoint and /go/google-night landing; created HE — Hamza Hotel Late Night Brand Capture — v2 campaign 23877692297 at Rs500/day, 5km presence-only radius, 22:00-03:00 schedule, Hamza Hotel/Express keywords, craving-first copy with 10% dine-in; enabled v2 and paused old Brand v1, generic Late Night v1, Dinner v1, with PMax remaining paused. Saved execution record to _context/Google_Ads_Hamza_Brand_2026-05-25/10-live-execution-record.md.",
+      "next_action": "Monitor next full 22:00-03:00 window: search terms must stay Hamza/Hamza Express intent, compare landing pageview-to-directions/call/menu actions, and ask outlet if late-night customers mention Google/Hamza Express.",
+      "mutation_status": "LIVE Google Ads money mutation completed: campaign 23877692297 ENABLED at Rs500/day; campaigns 23845870050, 23854158442, 23855561197 PAUSED; 23834053403 remains PAUSED; Cloudflare Pages production updated for Ads endpoint and landing page.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T10:57:44+0530"
+      "last_run_at": "2026-05-25T11:37:00+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525113700-google-ads",
+      "at": "2026-05-25T11:37:00+0530",
+      "lane": "google-ads",
+      "task": "Create and enable Hamza Hotel late-night brand campaign",
+      "status": "ready",
+      "summary": "Deployed Hamza Express Ads endpoint and /go/google-night landing; created HE — Hamza Hotel Late Night Brand Capture — v2 campaign 23877692297 at Rs500/day, 5km presence-only radius, 22:00-03:00 schedule, Hamza Hotel/Express keywords, craving-first copy with 10% dine-in; enabled v2 and paused old Brand v1, generic Late Night v1, Dinner v1, with PMax remaining paused. Saved execution record to _context/Google_Ads_Hamza_Brand_2026-05-25/10-live-execution-record.md.",
+      "next_action": "Monitor next full 22:00-03:00 window: search terms must stay Hamza/Hamza Express intent, compare landing pageview-to-directions/call/menu actions, and ask outlet if late-night customers mention Google/Hamza Express.",
+      "mutation_status": "LIVE Google Ads money mutation completed: campaign 23877692297 ENABLED at Rs500/day; campaigns 23845870050, 23854158442, 23855561197 PAUSED; 23834053403 remains PAUSED; Cloudflare Pages production updated for Ads endpoint and landing page."
+    },
     {
       "id": "20260525110720-delivery-aggregator",
       "at": "2026-05-25T11:07:20+0530",
