@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T19:01:55+0530",
-  "published_at": "2026-05-25T19:01:55+0530",
+  "updated_at": "2026-05-25T19:26:40+0530",
+  "published_at": "2026-05-25T19:26:40+0530",
   "source": "github-main-static-json",
   "lane_slug": "reel-making",
   "lane": {
@@ -19,16 +19,5 @@
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/11-reel-making.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/reel-making.md",
   "writeback_required": true,
-  "recent_events": [
-    {
-      "id": "20260525064257-reel-making",
-      "at": "2026-05-25T06:42:57+0530",
-      "lane": "reel-making",
-      "task": "Initialize Reel Making lane and classify May 25 batch",
-      "status": "ready",
-      "summary": "Created the dedicated Reel Making marketing lane and classified the 38-clip May 25 Hanin batch. Batch adds safe plated tandoori chicken, red chicken tikka, table-spread, roti/rumali roti, venue/counter, and takeaway packaging footage. Ghee rice has candidates needing Nihaf confirmation; Butter Chicken, Dal Fry, Butter Naan, Brain Dry, Mutton Biryani, Chicken Lollipop, Shawarma, Fried Rice, and Noodles remain unsafe for exact claims.",
-      "next_action": "Open this lane from Marketing Control for any reel brief, new footage classification, footage readiness decision, or repeatable reel-system build. First confirm whether IMG_0435, IMG_0449, and IMG_0476 are ghee rice before using them in exact ghee-rice offer reels.",
-      "mutation_status": "Creative memory and classification only; no reel posted, no ad spend, no POS/Odoo, WABA, aggregator, PiSignage, or customer-facing mutation."
-    }
-  ]
+  "recent_events": []
 }

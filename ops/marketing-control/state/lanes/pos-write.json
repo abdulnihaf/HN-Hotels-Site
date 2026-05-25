@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T19:01:55+0530",
-  "published_at": "2026-05-25T19:01:55+0530",
+  "updated_at": "2026-05-25T19:26:40+0530",
+  "published_at": "2026-05-25T19:26:40+0530",
   "source": "github-main-static-json",
   "lane_slug": "pos-write",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "POS/Pricing",
     "risk": "Odoo/POS mutation",
     "status": "completed",
-    "last_task": "Fix Captain MRP protection for cold drinks",
-    "last_summary": "After HE POS cold-drink category cleanup, Captain POS screenshot showed Bane Marie soft drinks pricing at ₹50 instead of MRP. Audited Captain pricelists and found only Water 1L/500ml had V2 MRP-protection rules; the rest of the water/cold-drink universe was falling through Captain pricing. Added product-specific formula base=list_price, zero-discount, zero-surcharge rules on Captain base pricelist 40 and Captain V2 offer pricelist 45 for templates 1389,1390,1398,1437,1438,1439,1440,1441,1442,1443,1444,1445. Verification readback shows 24 expected rules across pricelists 40/45, all no-discount list_price.",
-    "next_action": "Hard refresh/reopen Captain POS or remove and re-add items in the local cart so prices recalculate from server cache. Follow-up settlement PR should use the new SKU IDs and aliases; keep MRP protected drinks out of discount/offer rule changes.",
-    "mutation_status": "HE Captain pricelist item mutation only: created no-discount MRP-protection rules ids 877-898 plus existing water V2 rules 875-876; no Cash/Ground/WABA pricelist, no offer percent, no POS config, no NCH, no refund, no WABA/ad/code mutation. Backup: /private/tmp/he_cold_drink_captain_mrp_fix_backup_20260525130932.json.",
+    "last_task": "Complete HE purchased cold-drink POS SKU universe + Captain MRP protection",
+    "last_summary": "Executed HE-only POS catalog foundation on test.hamzahotel.com for the direct settlement engine. Derived purchased resale-drink universe from finance Odoo HE company_id 2 Nazeer/Nadeem partners 16/37/114, then wrote HE POS live company id 1. Created missing purchased SKUs in Bane Marie id 28: Bisleri Water (1L) template 1442, Kinley Water (1L) template 1443, Coke (200ml) Glass template 1444, Thums Up (200ml) Glass template 1445. Archived generic/orphan cold-drink placeholders 1373, 1392, 1393, 1394. Re-categorised existing purchased soft-drink SKUs Sprite 750 1398, Thums Up 250 1437, Sprite 250 1438, Coke 250 1439, Thums Up 750 1440, Coke 750 1441 from Extras id 76 to Bane Marie id 28. Existing Water 1 Liter 1389 and Water 500ml 1390 already remained in Bane Marie. After Captain POS screenshot showed ₹50 pricing, added Captain MRP-protection product rules on pricelists 40 and 45 for templates 1389, 1390, 1398, 1437, 1438, 1439, 1440, 1441, 1442, 1443, 1444, 1445; verification shows all use formula base=list_price with zero discount/surcharge.",
+    "next_action": "Staff should hard refresh/reopen Captain, Cash, Ground, and WABA POS sessions or remove/re-add local cart items so browser cache reloads new SKU/category/pricelist data. Follow-up settlement PR should add DIRECT_ITEMS aliases for Bisleri 1L, Kinley 1L, Coke 200ml Glass, Thums Up 200ml Glass, Coke/Sprite/Thums Up 250/750, and Water 500ml using purchase aliases from finance Odoo. Keep these MRP-protected drink SKUs out of discount/offer rule changes.",
+    "mutation_status": "HE POS/Odoo mutation completed on test.hamzahotel.com only: 4 product.template creates, 4 generic product archives, 6 existing product pos_categ_ids changes, and Captain pricelist MRP-protection item creates on pricelists 40/45. No NCH, no Cash/Ground/WABA pricelist mutation, no offer percent change, no POS config change, no refund, no customer/WABA/ad/Cloudflare code mutation. Backups: /private/tmp/he_cold_drink_purchase_universe_write_backup_20260525124151.json and /private/tmp/he_cold_drink_captain_mrp_fix_backup_20260525130932.json.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pos-write",
-    "last_run_at": "2026-05-25T19:01:55+0530"
+    "last_run_at": "2026-05-25T19:26:40+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/09-pos-write.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/pos-write.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525192640-pos-write",
+      "at": "2026-05-25T19:26:40+0530",
+      "lane": "pos-write",
+      "task": "Complete HE purchased cold-drink POS SKU universe + Captain MRP protection",
+      "status": "completed",
+      "summary": "Executed HE-only POS catalog foundation on test.hamzahotel.com for the direct settlement engine. Derived purchased resale-drink universe from finance Odoo HE company_id 2 Nazeer/Nadeem partners 16/37/114, then wrote HE POS live company id 1. Created missing purchased SKUs in Bane Marie id 28: Bisleri Water (1L) template 1442, Kinley Water (1L) template 1443, Coke (200ml) Glass template 1444, Thums Up (200ml) Glass template 1445. Archived generic/orphan cold-drink placeholders 1373, 1392, 1393, 1394. Re-categorised existing purchased soft-drink SKUs Sprite 750 1398, Thums Up 250 1437, Sprite 250 1438, Coke 250 1439, Thums Up 750 1440, Coke 750 1441 from Extras id 76 to Bane Marie id 28. Existing Water 1 Liter 1389 and Water 500ml 1390 already remained in Bane Marie. After Captain POS screenshot showed ₹50 pricing, added Captain MRP-protection product rules on pricelists 40 and 45 for templates 1389, 1390, 1398, 1437, 1438, 1439, 1440, 1441, 1442, 1443, 1444, 1445; verification shows all use formula base=list_price with zero discount/surcharge.",
+      "next_action": "Staff should hard refresh/reopen Captain, Cash, Ground, and WABA POS sessions or remove/re-add local cart items so browser cache reloads new SKU/category/pricelist data. Follow-up settlement PR should add DIRECT_ITEMS aliases for Bisleri 1L, Kinley 1L, Coke 200ml Glass, Thums Up 200ml Glass, Coke/Sprite/Thums Up 250/750, and Water 500ml using purchase aliases from finance Odoo. Keep these MRP-protected drink SKUs out of discount/offer rule changes.",
+      "mutation_status": "HE POS/Odoo mutation completed on test.hamzahotel.com only: 4 product.template creates, 4 generic product archives, 6 existing product pos_categ_ids changes, and Captain pricelist MRP-protection item creates on pricelists 40/45. No NCH, no Cash/Ground/WABA pricelist mutation, no offer percent change, no POS config change, no refund, no customer/WABA/ad/Cloudflare code mutation. Backups: /private/tmp/he_cold_drink_purchase_universe_write_backup_20260525124151.json and /private/tmp/he_cold_drink_captain_mrp_fix_backup_20260525130932.json."
+    },
     {
       "id": "20260525190155-pos-write",
       "at": "2026-05-25T19:01:55+0530",
