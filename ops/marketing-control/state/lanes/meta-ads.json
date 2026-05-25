@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:09:17+0530",
-  "published_at": "2026-05-25T12:09:17+0530",
+  "updated_at": "2026-05-25T12:15:59+0530",
+  "published_at": "2026-05-25T12:15:59+0530",
   "source": "github-main-static-json",
   "lane_slug": "meta-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Create Figma control frame for Hamza Express Meta Ads retargeting creatives",
-    "last_summary": "Created editable Figma frame 'Hamza Express Meta Ads - Retargeting Workspace' in creative control file RlpVhTqTghVyfp7vWt1Isz on page 00 README. Frame ID 19:2 includes audience buckets, reference asset slots, generation notes, final creative slots, export matrix, and live audience IDs. No Gemini/API generation, Meta spend, adset, ad, or WhatsApp mutation performed.",
-    "next_action": "Shortlist canonical asset references from HN Creative Asset Library, then inspect selected references visually before assembling/generating retargeting creatives in this Figma workspace.",
-    "mutation_status": "Figma design mutation only: created workspace frame 19:2; no Meta/WABA money/customer mutation",
+    "last_task": "Place Hamza Express Meta Ads workspace on correct Figma page",
+    "last_summary": "Confirmed Figma page 06 Meta + WABA Ads is node 1:7 and source index frame is 1:89. Created Hamza Express Meta Ads - Retargeting Workspace on that page as frame 20:2 at x=1680,y=0. Removed the mistaken earlier workspace frame 19:2 from 00 README. Local asset library control confirmed from README/context/meta-ads index; no Gemini generation, Meta mutation, WABA mutation, or spend mutation.",
+    "next_action": "Use frame 20:2 on page 06 Meta + WABA Ads as the control layer for asset shortlist, visual inspection, and final editable retargeting creative assembly.",
+    "mutation_status": "Figma design mutation only: created frame 20:2 on correct page and removed mistaken frame 19:2; no money/customer mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-    "last_run_at": "2026-05-25T12:09:17+0530"
+    "last_run_at": "2026-05-25T12:15:59+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/06-meta-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/meta-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525121559-meta-ads",
+      "at": "2026-05-25T12:15:59+0530",
+      "lane": "meta-ads",
+      "task": "Place Hamza Express Meta Ads workspace on correct Figma page",
+      "status": "ready",
+      "summary": "Confirmed Figma page 06 Meta + WABA Ads is node 1:7 and source index frame is 1:89. Created Hamza Express Meta Ads - Retargeting Workspace on that page as frame 20:2 at x=1680,y=0. Removed the mistaken earlier workspace frame 19:2 from 00 README. Local asset library control confirmed from README/context/meta-ads index; no Gemini generation, Meta mutation, WABA mutation, or spend mutation.",
+      "next_action": "Use frame 20:2 on page 06 Meta + WABA Ads as the control layer for asset shortlist, visual inspection, and final editable retargeting creative assembly.",
+      "mutation_status": "Figma design mutation only: created frame 20:2 on correct page and removed mistaken frame 19:2; no money/customer mutation"
+    },
     {
       "id": "20260525120917-meta-ads",
       "at": "2026-05-25T12:09:17+0530",
