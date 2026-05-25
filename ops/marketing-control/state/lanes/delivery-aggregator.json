@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:29:39+0530",
-  "published_at": "2026-05-25T12:29:39+0530",
+  "updated_at": "2026-05-25T12:30:45+0530",
+  "published_at": "2026-05-25T12:30:45+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Create WABA aggregator session alert template",
-    "last_summary": "Submitted WhatsApp Business utility template aggregator_session_expired_alert_v1 through existing HN Meta/WABA template API. Meta accepted template id 1250650277143457 with status PENDING, category UTILITY, rejected_reason NONE. Template alerts when a Swiggy/Zomato session for HE/NCH is failing and asks owner to refresh partner API cURL session.",
-    "next_action": "Poll template until APPROVED; after approval wire aggregator health failure detection to send this template to Nihaf when direct API replay returns 401/403 or stale-session state.",
-    "mutation_status": "WABA template creation mutation only; no message sends, no partner portal/POS/Odoo/ad/price/offer mutation",
+    "last_task": "Verify WABA approval and aggregator live status",
+    "last_summary": "Verified Meta template aggregator_session_expired_alert_v1 is APPROVED. Verified no deployed end-to-end failure alert wiring exists yet for aggregator session expiry. Live aggregator health endpoint reports status down with Swiggy/Zomato snapshots stale since 2026-05-24 and order rows stale by hours. Direct CTO cURL replay still works in dry-run for Swiggy and Zomato, but it is not running as scheduled ingest.",
+    "next_action": "Wire approved WABA template into aggregator health failure detection and scheduled direct API ingest; then verify by non-sending dry-run, controlled test alert, and live dashboard freshness.",
+    "mutation_status": "read-only verification only; no WhatsApp send, no partner portal/POS/Odoo/ad/price/offer mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-25T11:52:57+0530"
+    "last_run_at": "2026-05-25T12:30:45+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525123045-delivery-aggregator",
+      "at": "2026-05-25T12:30:45+0530",
+      "lane": "delivery-aggregator",
+      "task": "Verify WABA approval and aggregator live status",
+      "status": "ready",
+      "summary": "Verified Meta template aggregator_session_expired_alert_v1 is APPROVED. Verified no deployed end-to-end failure alert wiring exists yet for aggregator session expiry. Live aggregator health endpoint reports status down with Swiggy/Zomato snapshots stale since 2026-05-24 and order rows stale by hours. Direct CTO cURL replay still works in dry-run for Swiggy and Zomato, but it is not running as scheduled ingest.",
+      "next_action": "Wire approved WABA template into aggregator health failure detection and scheduled direct API ingest; then verify by non-sending dry-run, controlled test alert, and live dashboard freshness.",
+      "mutation_status": "read-only verification only; no WhatsApp send, no partner portal/POS/Odoo/ad/price/offer mutation"
+    },
     {
       "id": "20260525115257-delivery-aggregator",
       "at": "2026-05-25T11:52:57+0530",
@@ -209,16 +219,6 @@
       "summary": "Saved pasted Zomato partner cURL to Downloads/zomato-curl.txt and dry-ran direct partner puller. Swiggy replay remained HTTP 200 with current NCH orders; Zomato replay still returned HTTP 401, so no ingest/deploy/mutation was performed.",
       "next_action": "Capture a fresh Zomato get-all-v2 request via DevTools Network using Copy as cURL, preferably directly to file instead of chat, then rerun dry-run before enabling ingest.",
       "mutation_status": "none - saved local auth cURL and dry-run only; no platform/order/offer/margin mutation"
-    },
-    {
-      "id": "20260525055647-delivery-aggregator",
-      "at": "2026-05-25T05:56:47+0530",
-      "lane": "delivery-aggregator",
-      "task": "Analyze direct Swiggy/Zomato partner API scrape files",
-      "status": "ready",
-      "summary": "Analyzed /Users/nihaf/Downloads/swiggy-curl.json, swiggy-orders.json, zomato-curl.txt, and zomato-orders.json without printing secrets. Swiggy direct API path is proven: POST https://rms.swiggy.com/orders/v1/fetchOrders replays successfully with access_token/accesstoken headers and no cookie, returning live data; latest replay showed 1342887=NCH and 1342888=HE, confirming HE Swiggy ID 1342888. Zomato cURL path is not yet proven: POST https://api.zomato.com/merchant-gw/web/order/history/get-all-v2 returns HTTP 401 from the saved headers, while zomato-orders.json proves rich order-detail shape only. Locally patched functions/api/aggregator-pulse.js to fix inverted parsed Swiggy constants and add raw swiggy_fetch_orders/zomato_order_detail ingestion normalizers, plus added scripts/aggregator-direct-partner-pull.mjs dry-run puller. Dry-run verified Swiggy 200 and Zomato 401. No live D1 ingest or deploy performed.",
-      "next_action": "Capture a fresh replayable Zomato cURL including all required auth/session material; then deploy the exact aggregator-pulse.js ingestion fix from a clean branch/worktree and run the direct puller in ingest mode with HN_AGGREGATOR_API_KEY. Keep offer/combo portal actions blocked; this work only replaces the capture layer.",
-      "mutation_status": "Local code/context changes only: functions/api/aggregator-pulse.js, scripts/aggregator-direct-partner-pull.mjs, and ignored _context analysis. No Swiggy/Zomato portal mutation, no Odoo/POS mutation, no WABA/ad mutation, no live D1 ingest, no production deploy."
     }
   ]
 }
