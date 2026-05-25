@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:31:46+0530",
-  "published_at": "2026-05-25T12:31:46+0530",
+  "updated_at": "2026-05-25T12:42:29+0530",
+  "published_at": "2026-05-25T12:42:29+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Deep audit split late-night Google Ads campaigns",
-      "last_summary": "Audited live Hamza intent campaign 23877692297 and 2km dish campaign 23882183242 down to budget, network settings, geo mode, criteria, ad groups, keywords, ads, review status, search terms, landing alignment, and prior-leak guardrails. Found no budget/radius/schedule/network error. Corrected one conversion-risk issue: dish campaign landing now switches to dish-specific copy via utm_campaign instead of saying 'Searched Hamza Hotel'. Added exact negatives to dish campaign for previous generic leak terms: restaurants near me, restaurant near me, food near me, food near me open now, restaurants open now near me, open restaurant near me, food places near me open now. Dish ads remain under Google review; Hamza ads approved. Saved audit at _context/Google_Ads_Hamza_Brand_2026-05-25/12-deep-audit-and-self-learning-2026-05-25.md.",
-      "next_action": "Before tonight's 23:00 window, recheck dish campaign ad review status. After the full 23:00-02:00 window, inspect search terms: Hamza campaign must stay Hamza/Hamza Hotel/Hamza Express; dish campaign must stay biryani/kabab/ghee rice/non-veg/open-now/Shivajinagar. If generic terms recur, remove broader restaurant keywords before increasing budget.",
-      "mutation_status": "LIVE correction after audit: Cloudflare Pages updated for campaign-specific landing copy; Google Ads dish campaign 23882183242 received 7 exact negative keywords blocking prior generic leakage. No budget/radius/schedule changes beyond prior split.",
+      "last_task": "Update Hamza Express Google cockpit for live two-campaign late-night split",
+      "last_summary": "Deployed /ops/google-cockpit/ update so the cockpit now reflects the active Google Ads state: Hamza Hotel Late Night Brand Capture v2 at 5km Rs250/day plus Dish Late Night 2km Search v1 at Rs250/day, both 11 PM-2 AM; removed stale PMax/7km/dinner-facing cockpit wording and verified production HTML.",
+      "next_action": "Monitor first 11 PM-2 AM delivery for the two enabled campaigns: Hamza v2 should capture Hamza Hotel intent in 5km, Dish v1 should capture biryani/ghee rice/kabab/open-now intent in 2km; watch Dish ad review status and first search terms.",
+      "mutation_status": "Cloudflare Pages production UI mutation only; no additional Google Ads money mutation in this step; previous live Google Ads state remains two enabled Search campaigns at Rs250/day each.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T12:29:39+0530"
+      "last_run_at": "2026-05-25T12:42:29+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525124229-google-ads",
+      "at": "2026-05-25T12:42:29+0530",
+      "lane": "google-ads",
+      "task": "Update Hamza Express Google cockpit for live two-campaign late-night split",
+      "status": "ready",
+      "summary": "Deployed /ops/google-cockpit/ update so the cockpit now reflects the active Google Ads state: Hamza Hotel Late Night Brand Capture v2 at 5km Rs250/day plus Dish Late Night 2km Search v1 at Rs250/day, both 11 PM-2 AM; removed stale PMax/7km/dinner-facing cockpit wording and verified production HTML.",
+      "next_action": "Monitor first 11 PM-2 AM delivery for the two enabled campaigns: Hamza v2 should capture Hamza Hotel intent in 5km, Dish v1 should capture biryani/ghee rice/kabab/open-now intent in 2km; watch Dish ad review status and first search terms.",
+      "mutation_status": "Cloudflare Pages production UI mutation only; no additional Google Ads money mutation in this step; previous live Google Ads state remains two enabled Search campaigns at Rs250/day each."
+    },
     {
       "id": "20260525123146-meta-ads",
       "at": "2026-05-25T12:31:46+0530",
