@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T18:13:11+0530",
-  "published_at": "2026-05-25T18:13:11+0530",
+  "updated_at": "2026-05-25T19:01:55+0530",
+  "published_at": "2026-05-25T19:01:55+0530",
   "source": "github-main-static-json",
   "lane_slug": "pos-write",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "POS/Pricing",
     "risk": "Odoo/POS mutation",
     "status": "completed",
-    "last_task": "Execute HE purchased cold-drink POS SKU universe",
-    "last_summary": "Executed HE-only POS catalog write on test.hamzahotel.com using the finance-Odoo purchase universe for Nazeer/Nadeem partner ids 16/37/114 under HE finance company_id 2, mapped to HE POS live company id 1. Created purchased missing SKUs in Bane Marie id 28: Bisleri Water (1L) id 1442, Kinley Water (1L) id 1443, Coke (200ml) Glass id 1444, Thums Up (200ml) Glass id 1445. Re-categorised existing HE-SOFT SKUs Sprite 750 id 1398, Thums Up 250 id 1437, Sprite 250 id 1438, Coke 250 id 1439, Thums Up 750 id 1440, Coke 750 id 1441 from Extras id 76 to Bane Marie id 28. Archived orphan generic cold-drink SKUs 1373, 1392, 1393, 1394. Existing Water 1 Liter id 1389 and Water 500ml id 1390 already remained in Bane Marie. Backup saved before write.",
-    "next_action": "Staff must hard-refresh/reopen HE POS sessions 5 Cash, 6 Captain, 10 WABA, and 32 Ground to see new SKUs/categories. Follow-up settlement PR should add DIRECT_ITEMS alias entries for Bisleri 1L, Kinley 1L, Coke 200ml Glass, Thums Up 200ml Glass, plus existing Coke/Sprite/Thums 250/750 and Water 500ml aliases from finance purchase names. Do not touch pricelists/offers for MRP-protected items.",
-    "mutation_status": "HE POS product.template mutation only on test.hamzahotel.com: created 4 SKU rows, archived 4 generic rows, changed pos_categ_ids only on 6 existing cold-drink rows. No NCH, no pricelist 40/41/42/43/44/45, no POS config, no refund, no WABA, no ad, no Cloudflare code mutation. Backup: /private/tmp/he_cold_drink_purchase_universe_write_backup_20260525124151.json.",
+    "last_task": "Fix Captain MRP protection for cold drinks",
+    "last_summary": "After HE POS cold-drink category cleanup, Captain POS screenshot showed Bane Marie soft drinks pricing at ₹50 instead of MRP. Audited Captain pricelists and found only Water 1L/500ml had V2 MRP-protection rules; the rest of the water/cold-drink universe was falling through Captain pricing. Added product-specific formula base=list_price, zero-discount, zero-surcharge rules on Captain base pricelist 40 and Captain V2 offer pricelist 45 for templates 1389,1390,1398,1437,1438,1439,1440,1441,1442,1443,1444,1445. Verification readback shows 24 expected rules across pricelists 40/45, all no-discount list_price.",
+    "next_action": "Hard refresh/reopen Captain POS or remove and re-add items in the local cart so prices recalculate from server cache. Follow-up settlement PR should use the new SKU IDs and aliases; keep MRP protected drinks out of discount/offer rule changes.",
+    "mutation_status": "HE Captain pricelist item mutation only: created no-discount MRP-protection rules ids 877-898 plus existing water V2 rules 875-876; no Cash/Ground/WABA pricelist, no offer percent, no POS config, no NCH, no refund, no WABA/ad/code mutation. Backup: /private/tmp/he_cold_drink_captain_mrp_fix_backup_20260525130932.json.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pos-write",
-    "last_run_at": "2026-05-25T18:13:11+0530"
+    "last_run_at": "2026-05-25T19:01:55+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/09-pos-write.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/pos-write.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525190155-pos-write",
+      "at": "2026-05-25T19:01:55+0530",
+      "lane": "pos-write",
+      "task": "Fix Captain MRP protection for cold drinks",
+      "status": "completed",
+      "summary": "After HE POS cold-drink category cleanup, Captain POS screenshot showed Bane Marie soft drinks pricing at ₹50 instead of MRP. Audited Captain pricelists and found only Water 1L/500ml had V2 MRP-protection rules; the rest of the water/cold-drink universe was falling through Captain pricing. Added product-specific formula base=list_price, zero-discount, zero-surcharge rules on Captain base pricelist 40 and Captain V2 offer pricelist 45 for templates 1389,1390,1398,1437,1438,1439,1440,1441,1442,1443,1444,1445. Verification readback shows 24 expected rules across pricelists 40/45, all no-discount list_price.",
+      "next_action": "Hard refresh/reopen Captain POS or remove and re-add items in the local cart so prices recalculate from server cache. Follow-up settlement PR should use the new SKU IDs and aliases; keep MRP protected drinks out of discount/offer rule changes.",
+      "mutation_status": "HE Captain pricelist item mutation only: created no-discount MRP-protection rules ids 877-898 plus existing water V2 rules 875-876; no Cash/Ground/WABA pricelist, no offer percent, no POS config, no NCH, no refund, no WABA/ad/code mutation. Backup: /private/tmp/he_cold_drink_captain_mrp_fix_backup_20260525130932.json."
+    },
     {
       "id": "20260525181311-pos-write",
       "at": "2026-05-25T18:13:11+0530",
