@@ -598,35 +598,50 @@
   "money_model": {
     "as_of": "2026-05-25",
     "ledger": "ops/ops-control/ledger.jsonl",
-    "rule": "Balances are DERIVED by summing delta_paise per account across ledger.jsonl. NEVER store a mutable balance (that is how /ops/bank drifted to Rs 1,375.24). Money in paise.",
+    "controller": "Nihaf - single finance writer from 2026-05-25. Zoya enters purchases (POs) in /ops/purchase + /ops/rm; ALL payment/finance updates flow through Nihaf via the money-ledger chat.",
+    "rule": "Balances DERIVED by summing delta_paise per account across ledger.jsonl. NEVER store a mutable balance. Money in paise.",
     "accounts": {
       "cash": {
         "balance_paise": 20000000,
-        "desc": "Physical cash float Nihaf holds. Tranche 1 of Rs 7.5L external funding."
+        "source": "External funding + daily outlet cash (HE+NCH) collected by Nihaf from today.",
+        "desc": "Physical cash float."
       },
       "bank4680": {
         "balance_paise": 133038,
-        "desc": "HN Hotels HDFC ·4680 business account. Statement close 25-May Rs 1,330.38."
+        "source": "Outlet online/UPI/card settlements (Paytm/Razorpay) land here.",
+        "desc": "HN Hotels HDFC ·4680 business account."
       },
       "owed_to_nihaf": {
         "balance_paise": 20994087,
-        "desc": "Company owes Nihaf for personal-account business spend: Rs 1,94,940.87 (16-23 May, 11 txns) + Rs 15,000 (24 May, standing tables)."
+        "claim_status": "DEFERRED - not a current claim. Company running negative on profitability; Nihaf reimburses only when funds exist. Do NOT net against cash, do NOT treat as deployable.",
+        "desc": "Rs 1,94,940.87 (16-23 May, 11 txns) + Rs 15,000 (24 May standing tables)."
       }
     },
     "funding": {
       "external_committed_paise": 75000000,
       "external_received_paise": 20000000,
-      "external_pending_paise": 55000000,
-      "note": "Rs 7.5L external; Rs 2L received as cash, Rs 5.5L in tranches."
+      "external_expected_today_paise": 20000000,
+      "external_pending_after_today_paise": 35000000,
+      "note": "Rs 7.5L external. Rs 2L received (in cash). +Rs 2L expected TODAY (log to cash on receipt - NOT yet added). Rs 3.5L remaining in tranches."
     },
     "personal_reserve_paise": 80000000,
-    "personal_reserve_note": "Nihaf's own Rs 8L reserve - a draw-down source, not company cash. Each injection: funded account up + owed_to_nihaf up.",
+    "personal_reserve_note": "Nihaf's own Rs 8L reserve - draw-down source, not company cash. Each injection: funded account up + owed_to_nihaf up.",
     "daily_inflow_estimate_paise": 5500000,
-    "daily_inflow_note": "Outlet cash+bank HE+NCH ~Rs 50-60k/day, collected by Nihaf from today (Basheer no longer collects).",
+    "daily_inflow_note": "Outlet collection HE+NCH ~Rs 50-60k/day from today: CASH to Nihaf's hand, online/UPI/card to ·4680. Basheer no longer collects.",
+    "vendor_payables": {
+      "odoo_formal_ap_paise": 1916000,
+      "odoo_formal_ap_note": "Only Rs 19,160 across 2 posted bills (HE Rs 18,160 + NCH Rs 1,000) - Odoo AP essentially unused.",
+      "open_po_volume_paise": 97933000,
+      "open_po_volume_note": "946 open POs = Rs 9,79,330 purchase VOLUME 31Mar-24May (HE Rs 2.87L + NCH Rs 6.87L), all invoice_status=no. This is what was BOUGHT, not what is owed - Basheer cash-cleared most outside Odoo.",
+      "real_opening_paise": null,
+      "real_opening_status": "TO BE SET MANUALLY by Nihaf from Basheer handover - cannot be auto-derived (cash-cleared outside Odoo). Once set: every vendor payment = cash/bank down + vendor_payable down."
+    },
+    "old_regime_closeout": "Basheer's cash collected up to 2026-05-24 clears OLD vendor dues. Fresh float starts clean from 2026-05-25.",
     "open_reconciliations": [
-      "Rs 69,000 of owed_to_nihaf (4 transfers into ·4680) also appears as ·4680 DEPOSITS - net out when ingesting the statement, else double-counted.",
-      "Is the Rs 2L cash the company settling part of what it owes Nihaf (-> owed_to_nihaf down), or independent external funding (-> stays)? Append a settlement entry when known.",
-      "/ops/bank Rs 1,375.24 vs statement Rs 1,330.38 = +Rs 44.86 drift; pin exact cause on bank ingest."
+      "VENDOR PAYABLE OPENING: set manually - Odoo can't tell us (POs are a log, not AP; cash-cleared by Basheer).",
+      "+Rs 2L external funding expected today - log to cash on receipt.",
+      "Rs 69,000 of owed_to_nihaf (4 transfers into ·4680) also appears as ·4680 deposits - net out on bank ingest.",
+      "/ops/bank Rs 1,375.24 vs statement Rs 1,330.38 = +Rs 44.86 drift; pin on bank ingest."
     ]
   }
 }
