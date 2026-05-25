@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T08:04:04+0530",
-  "published_at": "2026-05-25T08:04:04+0530",
+  "updated_at": "2026-05-25T08:05:51+0530",
+  "published_at": "2026-05-25T08:05:51+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Verify GBP hours and prepare GBP-aligned Hamza Hotel ad text",
-    "last_summary": "Live GBP cockpit/API readback shows Hamza Express GBP regular hours already configured as daily 00:00-03:00 plus 14:00-24:00, profile description says Open 2pm to 3am. No GBP hours mutation was needed. Found mismatch remains on hamzaexpress.in homepage/schema, which says 11:00-23:00 / 11AM-11PM, and google-night landing does not visibly say open till 3 AM. Created _context/Google_Ads_Hamza_Brand_2026-05-25/08-gbp-verified-text-assets-for-confirmation.md with GBP-aligned text assets: Afternoon/Late Lunch, Dinner, Late Night; recommends replacing Lunch with Afternoon unless real opening time is earlier than 2 PM.",
-    "next_action": "Get Nihaf confirmation on real opening time and approved wording; then create three ad visual mockups and only after that align site/landing hours before live Ads mutation.",
-    "mutation_status": "none-gbp-readonly-no-hours-change-needed",
+    "last_task": "Add dine-in and takeaway offer copy to Hamza Hotel ad text assets",
+    "last_summary": "Updated GBP-verified Hamza Hotel text asset doc to include offer messaging: 10% off dine-in and 20% off takeaway across Afternoon/Late Lunch, Dinner, and Late Night variants. Added guardrail that POS/landing proof must be verified before the offer appears in live ads. No Google Ads, GBP, POS, or landing mutation made.",
+    "next_action": "Confirm real opening time and verify discount proof on POS/landing; then create three visual mockups for approval before live campaign creation.",
+    "mutation_status": "none-copy-doc-only",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-    "last_run_at": "2026-05-25T08:04:04+0530"
+    "last_run_at": "2026-05-25T08:05:51+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525080551-google-ads",
+      "at": "2026-05-25T08:05:51+0530",
+      "lane": "google-ads",
+      "task": "Add dine-in and takeaway offer copy to Hamza Hotel ad text assets",
+      "status": "ready",
+      "summary": "Updated GBP-verified Hamza Hotel text asset doc to include offer messaging: 10% off dine-in and 20% off takeaway across Afternoon/Late Lunch, Dinner, and Late Night variants. Added guardrail that POS/landing proof must be verified before the offer appears in live ads. No Google Ads, GBP, POS, or landing mutation made.",
+      "next_action": "Confirm real opening time and verify discount proof on POS/landing; then create three visual mockups for approval before live campaign creation.",
+      "mutation_status": "none-copy-doc-only"
+    },
     {
       "id": "20260525080404-google-ads",
       "at": "2026-05-25T08:04:04+0530",
