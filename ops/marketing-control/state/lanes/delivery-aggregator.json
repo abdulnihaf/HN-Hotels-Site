@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T10:57:44+0530",
-  "published_at": "2026-05-25T10:57:44+0530",
+  "updated_at": "2026-05-25T11:07:20+0530",
+  "published_at": "2026-05-25T11:07:20+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Live update architecture inspection",
-    "last_summary": "Inspected HN Aggregator Pulse extension, aggregator-pulse API, HE Swiggy auto-push, HE assembly API, and HE POS bridge read-only control plane. Found existing aggregator extension already keeps Swiggy/Zomato tabs warm, captures cookies/Swiggy Accesstoken, polls APIs every 5 min, queues data to hnhotels.in/api/aggregator-pulse, and API upserts idempotently. KDS/POS bridge pattern is browser-appliance plus cloud heartbeat/command/snapshot; assembly API is separate write path and must not be reused for analytics ingestion.",
-    "next_action": "Implement read-only live updater: extend Aggregator Pulse service worker or Mac runner to poll Zomato get-all-v2 and Swiggy history/fetchOrders for both HE/NCH, add per-platform health/last-success UI, and keep POS/KDS write endpoints isolated.",
-    "mutation_status": "read-only code/config inspection only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
+    "last_task": "Explain live updater host dependency",
+    "last_summary": "Verified aggregator-pulse health live. Current live API reports order rows updated today but platform snapshots are stale since 2026-05-24, so the always-on extension polling path is not currently healthy. Explained that current/manual cURL/script updates run from the machine executing them; background live updates require a logged-in Chrome appliance on laptop or win PC, and stop when that machine/browser is off unless moved to an always-on host.",
+    "next_action": "Set up one always-on aggregator appliance, preferably win PC or dedicated Mac LaunchAgent/Chrome extension, with health visible on HE/NCH dashboards and no dependency on manual cURL.",
+    "mutation_status": "read-only health check and architecture explanation only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-25T10:40:19+0530"
+    "last_run_at": "2026-05-25T11:07:20+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525110720-delivery-aggregator",
+      "at": "2026-05-25T11:07:20+0530",
+      "lane": "delivery-aggregator",
+      "task": "Explain live updater host dependency",
+      "status": "ready",
+      "summary": "Verified aggregator-pulse health live. Current live API reports order rows updated today but platform snapshots are stale since 2026-05-24, so the always-on extension polling path is not currently healthy. Explained that current/manual cURL/script updates run from the machine executing them; background live updates require a logged-in Chrome appliance on laptop or win PC, and stop when that machine/browser is off unless moved to an always-on host.",
+      "next_action": "Set up one always-on aggregator appliance, preferably win PC or dedicated Mac LaunchAgent/Chrome extension, with health visible on HE/NCH dashboards and no dependency on manual cURL.",
+      "mutation_status": "read-only health check and architecture explanation only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
+    },
     {
       "id": "20260525104019-delivery-aggregator",
       "at": "2026-05-25T10:40:19+0530",
