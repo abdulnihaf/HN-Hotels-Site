@@ -97,6 +97,7 @@ async function loadOrders() {
 
 function renderAll(summary) {
   renderMetrics(summary);
+  renderPlatformBoard();
   renderDataCoverage();
   renderTopItems();
   renderDemandSlots();
@@ -140,11 +141,12 @@ function renderDataCoverage() {
   const orders = state.orders;
   const z = orders.filter(o => o.platform === 'zomato');
   const s = orders.filter(o => o.platform === 'swiggy');
-  const detail = orders.filter(o => o.detail_available).length;
+  const detail = z.filter(o => o.detail_available).length;
+  const swFees = s.filter(o => o.fees).length;
   $('coverageBody').innerHTML = [
-    coverageRow('Zomato order history', z.length, 'May 1-now backfilled; day-window scrape works.'),
-    coverageRow('Swiggy current feed', s.length, 'Current/live fetch only until historical endpoint/export is captured.'),
-    coverageRow('Discount/detail proof', detail, 'Only order-detail payloads expose discount and customer-order count reliably.'),
+    coverageRow('Zomato', z.length, `${detail} rich detail rows; customer names available on list history.`),
+    coverageRow('Swiggy', s.length, `${swFees} fee/discount rows from historical endpoint; customer names not exposed.`),
+    coverageRow('Offer proof', orders.filter(o => o.discount_total != null).length, 'Use discount-known rows only for offer decisions.'),
   ].join('');
 }
 
@@ -194,22 +196,91 @@ function renderOfferProof() {
   $('offerProof').innerHTML = header + (byItem.length ? byItem.map(i => `<div class="row"><div class="row-main"><div class="row-title">${escapeHtml(i.name)}</div><div class="row-sub">${i.orders} discounted rows</div></div><div class="row-val">${i.qty}</div></div>`).join('') : '');
 }
 
+function renderPlatformBoard() {
+  const platforms = ['zomato', 'swiggy'];
+  const visible = state.platform === 'all' ? platforms : platforms.filter(p => p === state.platform);
+  $('platformBoard').innerHTML = visible.map(platform => platformCard(platform, platformStats(platform))).join('');
+}
+
+function platformStats(platform) {
+  const rows = state.orders.filter(o => o.platform === platform);
+  const delivered = rows.filter(o => o.status_group === 'delivered');
+  const exceptions = rows.filter(o => ['rejected', 'missed', 'cancelled'].includes(o.status_group));
+  const issueRows = rows.filter(o => o.issues);
+  const discountRows = rows.filter(o => o.discount_total != null && o.discount_total > 0);
+  const revenue = delivered.reduce((s, o) => s + num(o.order_value), 0);
+  const discount = discountRows.reduce((s, o) => s + num(o.discount_total), 0);
+  return {
+    platform,
+    rows,
+    delivered,
+    exceptions,
+    issueRows,
+    discountRows,
+    revenue,
+    aov: delivered.length ? revenue / delivered.length : 0,
+    discount,
+    topItems: itemStats(rows).slice(0, 4),
+  };
+}
+
+function platformCard(platform, stats) {
+  const exceptionRate = stats.rows.length ? Math.round(stats.exceptions.length / stats.rows.length * 100) : 0;
+  const issueRate = stats.rows.length ? Math.round(stats.issueRows.length / stats.rows.length * 100) : 0;
+  const detailNote = platform === 'zomato'
+    ? `${stats.rows.filter(o => o.customer_name).length} customer names · ${stats.rows.filter(o => o.detail_available).length} details`
+    : `${stats.rows.filter(o => o.fees).length} fee rows · handover/food-ready signals`;
+  const actionRows = stats.exceptions.concat(stats.issueRows.filter(o => !stats.exceptions.includes(o))).slice(0, 4);
+  return `
+    <article class="platform-card ${platform}">
+      <div class="platform-head">
+        <div>
+          <div class="platform-name"><span class="tag ${platform}">${labelPlatform(platform)}</span><span>${platform === 'zomato' ? 'Customer and offer lens' : 'Ops and fee lens'}</span></div>
+          <div class="platform-sub">${detailNote}</div>
+        </div>
+        <div class="platform-state">${stats.rows.length} orders<br>${stats.delivered.length} delivered</div>
+      </div>
+      <div class="platform-kpis">
+        ${platformKpi('Revenue', rupee(stats.revenue), 'Delivered only', 'green')}
+        ${platformKpi('AOV', rupee(stats.aov), 'Delivered ticket', '')}
+        ${platformKpi('Exceptions', stats.exceptions.length, `${exceptionRate}% of rows`, stats.exceptions.length ? 'red' : 'green')}
+        ${platformKpi('Offer Proof', stats.discountRows.length, rupee(stats.discount), stats.discountRows.length ? 'amber' : '')}
+      </div>
+      <div class="platform-body">
+        <div class="mini-list">
+          <div class="mini-title">Top items</div>
+          ${stats.topItems.length ? stats.topItems.map(i => `<div class="mini-row"><div><div class="mini-main">${escapeHtml(i.name)}</div><div class="mini-note">${i.orders} orders · ${rupee(i.revenue)}</div></div><div class="mini-val">${i.qty}</div></div>`).join('') : empty('No items')}
+        </div>
+        <div class="mini-list">
+          <div class="mini-title">Needs control</div>
+          ${actionRows.length ? actionRows.map(o => `<div class="mini-row"><div><div class="mini-main">${escapeHtml(o.items || o.order_id)}</div><div class="mini-note">${escapeHtml(o.rejection_reason || o.issues || o.status || '')}</div></div><div class="mini-val">${rupee(o.order_value || 0)}</div></div>`).join('') : `<div class="mini-row"><div class="mini-main">No exception rows</div><div class="mini-val green">${issueRate}%</div></div>`}
+        </div>
+      </div>
+    </article>`;
+}
+
+function platformKpi(label, value, note, tone) {
+  return `<div class="platform-kpi"><div class="k-label">${escapeHtml(label)}</div><div class="k-value ${tone || ''}">${escapeHtml(value)}</div><div class="k-note">${escapeHtml(note)}</div></div>`;
+}
+
 function renderPlatformMix() {
   const platforms = ['zomato', 'swiggy'].map(platform => {
     const rows = state.orders.filter(o => o.platform === platform);
     const delivered = rows.filter(o => o.status_group === 'delivered');
     const revenue = delivered.reduce((s, o) => s + num(o.order_value), 0);
-    return { platform, rows, delivered, revenue };
+    const discount = rows.filter(o => o.discount_total != null).reduce((sum, o) => sum + num(o.discount_total), 0);
+    const exceptions = rows.filter(o => ['rejected', 'missed', 'cancelled'].includes(o.status_group));
+    return { platform, rows, delivered, revenue, discount, exceptions };
   });
-  const max = Math.max(...platforms.map(x => x.rows.length), 1);
+  const max = Math.max(...platforms.map(x => x.revenue), 1);
   $('platformMix').innerHTML = platforms.map(p => `
     <div class="row">
       <div class="row-main">
         <div class="row-title">${labelPlatform(p.platform)}</div>
-        <div class="row-sub">${p.delivered.length} delivered · ${rupee(p.revenue)}</div>
-        <div class="bar-track"><div class="bar-fill ${p.platform === 'zomato' ? 'zm' : 'sw'}" style="width:${Math.max(4, p.rows.length / max * 100)}%"></div></div>
+        <div class="row-sub">${p.delivered.length} delivered · ${p.exceptions.length} exception · ${rupee(p.discount)} discount proof</div>
+        <div class="bar-track"><div class="bar-fill ${p.platform === 'zomato' ? 'zm' : 'sw'}" style="width:${Math.max(4, p.revenue / max * 100)}%"></div></div>
       </div>
-      <div class="row-val">${p.rows.length}</div>
+      <div class="row-val">${rupee(p.revenue)}</div>
     </div>`).join('');
 }
 

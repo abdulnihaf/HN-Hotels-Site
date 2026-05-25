@@ -36,8 +36,8 @@
 
   <section class="health-row">
     <div class="health-card"><div class="hc-label">Capture Health</div><div class="hc-value" id="healthState">Checking</div><div class="hc-note" id="healthNote">Direct partner API capture status.</div></div>
-    <div class="health-card"><div class="hc-label">Zomato Method</div><div class="hc-value">Day-window backfill</div><div class="hc-note">May history available. Detail fields are partial.</div></div>
-    <div class="health-card"><div class="hc-label">Swiggy Method</div><div class="hc-value">Current fetch</div><div class="hc-note">Historical endpoint/export still needed.</div></div>
+    <div class="health-card"><div class="hc-label">Zomato Method</div><div class="hc-value">Day-window history</div><div class="hc-note">May history loaded. Rich details are partial.</div></div>
+    <div class="health-card"><div class="hc-label">Swiggy Method</div><div class="hc-value">Historical endpoint</div><div class="hc-note">May history loaded with fees, discounts, and ops signals.</div></div>
   </section>
 
   <section class="metrics">
@@ -50,12 +50,14 @@
     <div class="metric"><div class="label">Offer Proof</div><div class="value amber" id="mDiscount">0</div><div class="sub" id="sDiscount"></div></div>
   </section>
 
+  <section class="platform-board" id="platformBoard" aria-label="Separated platform control"></section>
+
   <section class="grid">
     <article class="panel"><div class="panel-head"><div class="panel-title">Top Demand Items</div><div class="panel-meta">Quantity signal</div></div><div class="panel-body" id="topItems"></div></article>
     <article class="panel"><div class="panel-head"><div class="panel-title">Demand Slots</div><div class="panel-meta">Time-band behavior</div></div><div class="panel-body" id="demandSlots"></div></article>
     <article class="panel"><div class="panel-head"><div class="panel-title">Data Coverage</div><div class="panel-meta">What can be trusted</div></div><div class="panel-body" id="coverageBody"></div></article>
     <article class="panel"><div class="panel-head"><div class="panel-title">Offer Proof</div><div class="panel-meta">Discount-bearing rows</div></div><div class="panel-body" id="offerProof"></div></article>
-    <article class="panel"><div class="panel-head"><div class="panel-title">Platform Mix</div><div class="panel-meta">Zomato vs Swiggy</div></div><div class="panel-body" id="platformMix"></div></article>
+    <article class="panel"><div class="panel-head"><div class="panel-title">Revenue Control</div><div class="panel-meta">Platform leakage</div></div><div class="panel-body" id="platformMix"></div></article>
     <article class="panel"><div class="panel-head"><div class="panel-title">Algorithm Notes</div><div class="panel-meta">Execution rule</div></div><div class="panel-body"><div class="row"><div class="row-main"><div class="row-title">No price/offer change without proof</div><div class="row-sub">Use top demand + missed/rejected + discount-known rows to decide. Swiggy historical is not yet complete.</div></div></div></div></article>
   </section>
 

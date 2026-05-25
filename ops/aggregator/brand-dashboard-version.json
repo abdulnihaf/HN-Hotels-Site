@@ -1,9 +1,9 @@
 {
-  "version": "2026-05-25-brand-split-v1",
+  "version": "2026-05-25-platform-separated-v2",
   "routes": [
     "/ops/he/aggregator/",
     "/ops/nch/aggregator/",
     "/ops/aggregator/"
   ],
-  "purpose": "Brand-specific read-only aggregator algorithm dashboards for HE and NCH."
+  "purpose": "Brand-specific read-only aggregator algorithm dashboards with separated Swiggy/Zomato control lanes."
 }
