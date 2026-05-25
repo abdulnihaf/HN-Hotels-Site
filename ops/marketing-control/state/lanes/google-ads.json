@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T08:08:27+0530",
-  "published_at": "2026-05-25T08:08:27+0530",
+  "updated_at": "2026-05-25T08:11:36+0530",
+  "published_at": "2026-05-25T08:11:36+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Correct Hamza Hotel ad positioning from cold messaging to intent conversion",
-    "last_summary": "Updated text asset doc with positioning correction: Hamza Hotel searchers are warm/high-intent, not cold. Recommended ad frame is recognition -> food/offer -> directions: 'Hamza Hotel search kiya? Hamza Express, HKP Road - Ghee Rice, Kabab, Biryani. 10% dine-in, 20% takeaway. Tap directions.' Reframed Wahi Hamza naam as a trust bridge, not the main sale line. No live Ads/GBP/POS mutation.",
-    "next_action": "Use the intent-conversion frame in mockup visuals after Nihaf confirms opening time and discount proof.",
+    "last_task": "Add 12 PM lunch Hamza Hotel copy candidate",
+    "last_summary": "Added Nihaf's proposed lunch copy as a 12 PM candidate in the GBP-verified text asset doc. Flagged that live GBP currently says 2 PM-3 AM, so Open From 12 PM should only go live after GBP/site/landing hours are changed and verified. Recommended RSA headline split: Lunch At Hamza Hotel? / Come To Hamza Express / Open From 12 PM / Wahi Hamza Naam / Naya Zaiqa Naya Andaaz / Ghee Rice & Kabab / 10% Dine-In Offer / 20% Takeaway Offer / Get Directions. Suggested safer description uses Famous Ghee Rice and Kabab unless owner wants the stronger Bangalore's best claim.",
+    "next_action": "Confirm whether real opening is 12 PM or 2 PM; then update GBP/site/landing hours consistently before creating mockup visuals or live ads.",
     "mutation_status": "none-copy-doc-only",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-    "last_run_at": "2026-05-25T08:08:27+0530"
+    "last_run_at": "2026-05-25T08:11:36+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525081136-google-ads",
+      "at": "2026-05-25T08:11:36+0530",
+      "lane": "google-ads",
+      "task": "Add 12 PM lunch Hamza Hotel copy candidate",
+      "status": "ready",
+      "summary": "Added Nihaf's proposed lunch copy as a 12 PM candidate in the GBP-verified text asset doc. Flagged that live GBP currently says 2 PM-3 AM, so Open From 12 PM should only go live after GBP/site/landing hours are changed and verified. Recommended RSA headline split: Lunch At Hamza Hotel? / Come To Hamza Express / Open From 12 PM / Wahi Hamza Naam / Naya Zaiqa Naya Andaaz / Ghee Rice & Kabab / 10% Dine-In Offer / 20% Takeaway Offer / Get Directions. Suggested safer description uses Famous Ghee Rice and Kabab unless owner wants the stronger Bangalore's best claim.",
+      "next_action": "Confirm whether real opening is 12 PM or 2 PM; then update GBP/site/landing hours consistently before creating mockup visuals or live ads.",
+      "mutation_status": "none-copy-doc-only"
+    },
     {
       "id": "20260525080827-google-ads",
       "at": "2026-05-25T08:08:27+0530",
