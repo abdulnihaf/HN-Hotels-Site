@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T13:32:13+0530",
-  "published_at": "2026-05-25T13:32:13+0530",
+  "updated_at": "2026-05-25T13:47:35+0530",
+  "published_at": "2026-05-25T13:47:35+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Execute COA Ring 2 aggregator action layer",
-      "last_summary": "Deployed Ring 2 direct-pull action layer to hnhotels.in. Added D1 action ledger/attempt/coordinate-health schema, /api/aggregator-pulse POST type=coa_ring2_pull, GET action=coa-actions, direct Swiggy/Zomato cURL replay from Cloudflare Pages secrets, session/coordinate health transitions, WABA failure-alert hook with notify=true, and health endpoint using Ring 2 direct-pull freshness. Loaded current Swiggy and Zomato cURL artifacts as Cloudflare production secrets. Wired existing aggregator-health-watcher 5-minute cron to run Ring 2 pull before health checks. Verified cron-triggered run agg-ring2-1779696059689-shdh1p status ok: 8 attempts, 6 ok/empty, 14 orders seen/upserted; owner-orders for 2026-05-25 returns 9 unique orders, 6 delivered, 1 active, 1 rejected, 1 cancelled, delivered revenue 1808.01. Health endpoint now status ok with direct pull age about 1 minute.",
-      "next_action": "Ring 3: event/intelligence layer for missed/rejected/cancelled/order-ready issues, price/offer candidate gates, dashboard controls for session refresh, and Zomato order-detail enrichment capture. Keep price/offer portal actions blocked until margin proof.",
-      "mutation_status": "HN Cloudflare Pages/API, D1 order/action/health rows, Cloudflare Pages secrets, and existing Cloudflare cron wiring only; no Swiggy/Zomato portal mutation, no POS/Odoo mutation, no ad mutation, no price/offer change, no WABA send during verification.",
+      "last_task": "Execute COA Ring 3 aggregator event intelligence",
+      "last_summary": "Deployed Ring 3 event layer for aggregator control: coa_ring3_analyze and coa-events live, event/candidate D1 schema active, health-watcher cron now runs Ring2 pull then Ring3 analysis. Manual proof for 2026-05-25 scanned 9 orders, upserted 12 events, 16 item-level candidates, 2 critical events, estimated loss 1165.10; all price/offer candidates gated as data_gathering.",
+      "next_action": "Build owner UI panels over coa-events: critical events, rejected/cancelled loss, discount exposure, and proof-gated item candidates by HE/NCH and Swiggy/Zomato. Keep offer/price execution blocked until margin proof.",
+      "mutation_status": "HN Cloudflare Pages/D1 intelligence mutation only; no Swiggy/Zomato portal, POS, Odoo, ad, WABA send, price, or offer mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-25T13:32:13+0530"
+      "last_run_at": "2026-05-25T13:47:17+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -78,12 +78,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Create separate individual Figma creative frames for Meta WABA retargeting",
-      "last_summary": "After user clarified the production board was not the actual creative, created separate top-level Figma creative frames on page 06 Meta + WABA Ads, placed to the right of the board: HE Meta WABA A1-A5 in both 9:16 1080x1920 and 4:5 1080x1350. Each frame is an editable professional shell with brand chip, heritage chip, image placeholder, bucket label, headline/subline, voucher module, WhatsApp CTA, and format note. Fixed compressed 4:5 geometry and screenshot-validated A1 9:16 and A1 4:5. No asset upload, Gemini generation, Meta/WABA/Google spend, or customer mutation.",
-      "next_action": "Use Shift+2 on selected A1/A2/etc frame in Figma to view individual creatives. Next execution: shortlist and visually inspect canonical assets, then replace placeholders with approved food/outlet/voucher references in each creative frame.",
-      "mutation_status": "Figma design mutation only: created 10 individual creative frames and fixed 4:5 spacing; no paid media, WABA send, Google Ads, GBP, POS, Odoo, or customer mutation",
+      "last_task": "Rebuild Hamza Express Figma retargeting creative frames around hero imagery and import HE brand assets",
+      "last_summary": "Corrected the Figma work from board-style planning into separate individual Meta ad frames on HN Creative Asset Library v1 page 06 Meta + WABA Ads. Imported HE brand marks including full logo, icon/founder mark, emblem, text logo, wordmark, dark/light/no-bg/brown variants into brand reference board node 48:2. Analyzed PiSignage TV visual language from Hamza Express TV mission control: dark brown/gold base, 1918 heritage, Wahi Hamza Naam/Naya Zaiqa/Naya Andaaz, large food proof, compact voucher/action. Replaced temporary PiSignage contact-sheet placeholders in 10 creative frames with locked HE food hero assets: Ghee Rice + Dal Fry + Kebab, Ghee Rice + Butter Chicken + Kebab, full spread, Chicken Biryani + Kebab, Mutton Biryani + Kebab. Cleaned export issues: hid internal source notes, fixed CTA clipping, validated A1 9:16 render.",
+      "next_action": "Use these hero-first Figma frames as the editable control layer; next step is Gemini/multimodal inspection of selected canonical visual references and then final copy/variant polish before export. No Meta spend or WABA mutation yet.",
+      "mutation_status": "Figma design mutation only; no Meta campaign/adset/ad, WABA, POS, Odoo, or budget mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-      "last_run_at": "2026-05-25T13:26:25+0530"
+      "last_run_at": "2026-05-25T13:47:35+0530"
     },
     "flyers": {
       "title": "07 Flyers",
@@ -146,6 +146,26 @@
     }
   },
   "events": [
+    {
+      "id": "20260525134735-meta-ads",
+      "at": "2026-05-25T13:47:35+0530",
+      "lane": "meta-ads",
+      "task": "Rebuild Hamza Express Figma retargeting creative frames around hero imagery and import HE brand assets",
+      "status": "ready",
+      "summary": "Corrected the Figma work from board-style planning into separate individual Meta ad frames on HN Creative Asset Library v1 page 06 Meta + WABA Ads. Imported HE brand marks including full logo, icon/founder mark, emblem, text logo, wordmark, dark/light/no-bg/brown variants into brand reference board node 48:2. Analyzed PiSignage TV visual language from Hamza Express TV mission control: dark brown/gold base, 1918 heritage, Wahi Hamza Naam/Naya Zaiqa/Naya Andaaz, large food proof, compact voucher/action. Replaced temporary PiSignage contact-sheet placeholders in 10 creative frames with locked HE food hero assets: Ghee Rice + Dal Fry + Kebab, Ghee Rice + Butter Chicken + Kebab, full spread, Chicken Biryani + Kebab, Mutton Biryani + Kebab. Cleaned export issues: hid internal source notes, fixed CTA clipping, validated A1 9:16 render.",
+      "next_action": "Use these hero-first Figma frames as the editable control layer; next step is Gemini/multimodal inspection of selected canonical visual references and then final copy/variant polish before export. No Meta spend or WABA mutation yet.",
+      "mutation_status": "Figma design mutation only; no Meta campaign/adset/ad, WABA, POS, Odoo, or budget mutation."
+    },
+    {
+      "id": "20260525134717-delivery-aggregator",
+      "at": "2026-05-25T13:47:17+0530",
+      "lane": "delivery-aggregator",
+      "task": "Execute COA Ring 3 aggregator event intelligence",
+      "status": "ready",
+      "summary": "Deployed Ring 3 event layer for aggregator control: coa_ring3_analyze and coa-events live, event/candidate D1 schema active, health-watcher cron now runs Ring2 pull then Ring3 analysis. Manual proof for 2026-05-25 scanned 9 orders, upserted 12 events, 16 item-level candidates, 2 critical events, estimated loss 1165.10; all price/offer candidates gated as data_gathering.",
+      "next_action": "Build owner UI panels over coa-events: critical events, rejected/cancelled loss, discount exposure, and proof-gated item candidates by HE/NCH and Swiggy/Zomato. Keep offer/price execution blocked until margin proof.",
+      "mutation_status": "HN Cloudflare Pages/D1 intelligence mutation only; no Swiggy/Zomato portal, POS, Odoo, ad, WABA send, price, or offer mutation."
+    },
     {
       "id": "20260525133213-delivery-aggregator",
       "at": "2026-05-25T13:32:13+0530",
@@ -925,26 +945,6 @@
       "summary": "Deep-audited Captain POS operational issue on HE production test.hamzahotel.com after tablet showed Odoo Server Error / Session expired during payment validation. Verified this was Captain-only: Cash and Ground POS sales continued, Captain config/session/pricelists/payment methods remained healthy, and V2 Captain offer pricing itself was correct. Found Captain backend sequence 2670-6 had local/server save gaps after repeated stale-tab payment attempts: user water test saved as 2670-6-000006, photographed ₹746.35 order was later re-entered and saved as 2670-6-000005 with matching lines/table/payment, leaving only 2670-6-000004 unresolved. May 1-current Captain sequence audit found historical missing 2662-6-000127 between 20 May 2026 03:05:54 IST and 14:38:26 IST, likely around previous-day closing/new-session transition. Read-only audited refund order 8059: HE - Captain - 000035 REFUND is currently a paid negative refund for -₹125 at 25 May 2026 03:03 IST, linked to original order 7731 from 22 May 2026; user explicitly stopped any correction, so no write was performed.",
       "next_action": "Do not mutate refund order 8059 unless Nihaf explicitly resumes and confirms. Operationally, staff must confirm whether 2670-6-000004 was a real second bill or just a failed duplicate local slot; if real, re-enter that bill from staff/KDS/payment evidence. For Captain tablets, close stale POS tabs, reload/login fresh before payment validation, then verify new Captain order sequence saves in backend.",
       "mutation_status": "No new mutation in this follow-up. Read-only Odoo/POS audits only; previous V2 pricelist mutation remains unchanged. Refund 8059 was not modified because user said wait/don't do anything."
-    },
-    {
-      "id": "20260525030136-pos-write",
-      "at": "2026-05-25T03:01:36+0530",
-      "lane": "pos-write",
-      "task": "Verify re-entry status for two missing Captain orders",
-      "status": "completed",
-      "summary": "Read-only HE Odoo check after staff/user action shows the photographed ₹746.35 Captain bill has now been entered and paid as backend order id 8055, reference 2670-6-000005, table First Floor Dine-In 6, pricelist 45, payment HE UPI ₹746.35 at 2026-05-25 02:55:45 IST, with exact photo lines. Current 2670-6 backend sequence present [1,2,3,5,6]; only 2670-6-000004 remains missing. Therefore one of the two missing sequence slots is reconciled; the remaining slot may be a duplicate failed attempt or another real missed bill and needs staff confirmation.",
-      "next_action": "Ask staff whether there was any second real Captain bill after 23:20 IST besides the ₹746.35 bill and water test. If no, mark 2670-6-000004 as failed duplicate/local retry only; if yes, re-enter that second bill.",
-      "mutation_status": "No Odoo mutation by Codex. Staff/user re-entered ₹746.35 bill as 2670-6-000005."
-    },
-    {
-      "id": "20260525025428-pos-write",
-      "at": "2026-05-25T02:54:28+0530",
-      "lane": "pos-write",
-      "task": "May Captain POS sequence gap audit",
-      "status": "completed",
-      "summary": "Read-only HE Odoo sequence audit from 2026-05-01 UTC through current time found 352 backend Captain orders across 10 Captain reference groups. Only two Captain reference groups have backend sequence gaps: historical 2662-6 missing 000127 between 000126 on 2026-05-19 21:35:54 UTC and 000128 on 2026-05-20 09:08:26 UTC; current 2670-6 missing 000004 and 000005 between 000003 at 2026-05-24 17:48:25 UTC and test water order 000006 at 2026-05-24 21:19:08 UTC. Current incident therefore accounts for exactly two missing Captain sequence slots; total Captain missing sequence slots since May 1 within backend-seen ranges is three.",
-      "next_action": "Reconcile current 2670-6-000004/000005 from staff/UPI/KDS/table memory; optionally separately investigate historical 2662-6-000127 around 2026-05-20 morning if finance wants full May exception cleanup.",
-      "mutation_status": "No Odoo mutation. Read-only sequence audit only."
     }
   ]
 }
