@@ -73,6 +73,9 @@
     <div id="activity" class="px-4 py-2 text-[11px] text-white/55 scroll-y max-h-32"></div>
   </section>
 
+  <!-- money / treasury -->
+  <section id="money" class="mb-6"></section>
+
   <!-- the graph -->
   <main id="graph"></main>
   <div id="error" class="hidden glass rounded-xl p-6 text-center text-sm text-white/50"></div>
@@ -92,7 +95,8 @@
 <script>
 const GRAPH_URL = './graph.json';
 const STATE_URL = './state.jsonl';
-let GRAPH = null, STATE = {};
+const LEDGER_URL = './ledger.jsonl';
+let GRAPH = null, STATE = {}, LEDGER = [];
 
 const esc = s => { const d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; };
 const stateColor = s => ({LOAD:'bg-emerald-500/15 text-emerald-400',SEED:'bg-amber-500/15 text-amber-400',LIVE:'bg-white/10 text-white/45'}[s]||'bg-white/10 text-white/45');
@@ -105,6 +109,7 @@ async function load(){
     if(!g.ok) throw new Error('graph fetch '+g.status);
     GRAPH = await g.json();
     try { const s = await fetch(STATE_URL,{cache:'no-store'}); if(s.ok) parseState(await s.text()); } catch(e){}
+    try { const d = await fetch(LEDGER_URL,{cache:'no-store'}); if(d.ok) parseLedger(await d.text()); } catch(e){}
     render();
   } catch(e){
     document.getElementById('graph').innerHTML='';
@@ -119,6 +124,61 @@ async function load(){
 function parseState(txt){
   STATE = {};
   txt.trim().split('\n').forEach(line=>{ if(!line.trim())return; try{ const o=JSON.parse(line); STATE[o.lane]=o; }catch(e){} });
+}
+function parseLedger(txt){
+  LEDGER = [];
+  txt.trim().split('\n').forEach(line=>{ if(!line.trim())return; try{ LEDGER.push(JSON.parse(line)); }catch(e){} });
+}
+const inr = p => '₹'+(Math.round(p)/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function renderMoney(){
+  const el = document.getElementById('money'); const mm = GRAPH.money_model;
+  if(!mm){ el.innerHTML=''; return; }
+  const bal={}; LEDGER.forEach(e=>{ bal[e.account]=(bal[e.account]||0)+(e.delta_paise||0); });
+  const cash=bal.cash||0, bank=bal.bank4680||0, owed=bal.owed_to_nihaf||0;
+  const f=mm.funding||{}, vp=mm.vendor_payables||{};
+  const recv=f.external_received_paise||0, comm=f.external_committed_paise||1, pct=Math.min(100,Math.round(recv/comm*100));
+  const recent=[...LEDGER].sort((a,b)=>(b.ts||'').localeCompare(a.ts||'')).slice(0,6);
+  const accCol = a => ({cash:'text-emerald-400',bank4680:'text-sky-400',owed_to_nihaf:'text-amber-300',vendor_payable:'text-red-400'}[a]||'text-white/60');
+  const lc = (GRAPH.lanes||[]).find(l=>l.slug==='money-ledger'); const cmdFull = lc?fullCommand(lc):'';
+  el.innerHTML = `
+  <div class="glass rounded-xl overflow-hidden">
+    <div class="px-4 py-2.5 border-b border-white/[.05] flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2"><span class="text-brand-400 font-bold">₹</span>
+        <span class="text-xs font-semibold text-white/70">Money · Treasury</span>
+        <span class="text-[10px] text-white/25">— derived live from ledger.jsonl · ${esc(mm.as_of||'')}</span></div>
+      ${cmdFull?`<button onclick="copyCmd(this,${JSON.stringify(cmdFull)})" class="btn btn-ghost text-[10px] px-2.5">Copy ledger cmd</button>`:''}
+    </div>
+    <div class="p-4 space-y-3">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <div class="glass rounded-lg px-3.5 py-3"><p class="text-[10px] uppercase tracking-wider text-white/30">Cash in hand</p>
+          <p class="text-2xl font-bold text-emerald-400 mt-0.5">${inr(cash)}</p><p class="text-[10px] text-white/35 mt-0.5">deployable float</p></div>
+        <div class="glass rounded-lg px-3.5 py-3"><p class="text-[10px] uppercase tracking-wider text-white/30">Bank · HDFC ·4680</p>
+          <p class="text-2xl font-bold text-sky-400 mt-0.5">${inr(bank)}</p><p class="text-[10px] text-white/35 mt-0.5">online/UPI settlements</p></div>
+        <div class="glass rounded-lg px-3.5 py-3"><div class="flex items-center justify-between"><p class="text-[10px] uppercase tracking-wider text-white/30">Company owes you</p>
+          <span class="badge bg-amber-500/15 text-amber-300">deferred</span></div>
+          <p class="text-2xl font-bold text-amber-300 mt-0.5">${inr(owed)}</p><p class="text-[10px] text-white/35 mt-0.5">reimburse when funds exist</p></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px]">
+        <div class="glass rounded-lg px-3.5 py-2.5"><p class="text-white/40 mb-1">External funding</p>
+          <div class="h-1.5 rounded-full bg-white/10 overflow-hidden"><div class="h-full bg-brand-500" style="width:${pct}%"></div></div>
+          <p class="text-white/55 mt-1.5">${inr(recv)} of ${inr(comm)} in${f.external_expected_today_paise?` · <span class="text-brand-400">+${inr(f.external_expected_today_paise)} today</span>`:''}</p></div>
+        <div class="glass rounded-lg px-3.5 py-2.5"><p class="text-white/40 mb-1">Daily outlet inflow</p>
+          <p class="text-white/70 text-base font-semibold">~${inr(mm.daily_inflow_estimate_paise||0)}/day</p><p class="text-white/35">cash → you · online → ·4680</p></div>
+        <div class="glass rounded-lg px-3.5 py-2.5"><div class="flex items-center justify-between"><p class="text-white/40 mb-1">Vendor payables</p>${vp.real_opening_paise==null?`<span class="badge bg-red-500/15 text-red-400">set manually</span>`:''}</div>
+          <p class="text-white/70 text-base font-semibold">${vp.real_opening_paise!=null?inr(vp.real_opening_paise):'— not set —'}</p><p class="text-white/35">Odoo formal AP only ${inr(vp.odoo_formal_ap_paise||0)}</p></div>
+      </div>
+      <div><p class="text-[10px] uppercase tracking-wider text-white/30 mb-1.5">Recent ledger entries</p>
+        <div class="space-y-1">${recent.map(e=>`<div class="flex items-center gap-2 text-[11px] py-1 border-b border-white/[.03] last:border-0">
+          <span class="text-white/30 w-[74px] shrink-0">${esc((e.ts||'').slice(0,10))}</span>
+          <span class="badge bg-white/5 ${accCol(e.account)} shrink-0">${esc(e.account)}</span>
+          <span class="font-semibold ${(e.delta_paise||0)<0?'text-red-400':'text-emerald-400'} w-[104px] text-right shrink-0">${(e.delta_paise||0)<0?'−':'+'}${inr(Math.abs(e.delta_paise||0))}</span>
+          <span class="text-white/55 truncate">${esc(e.counterparty||e.category||'')}</span></div>`).join('')||'<div class="text-white/25 py-1">No entries.</div>'}</div></div>
+      ${(mm.open_reconciliations&&mm.open_reconciliations.length)?`<div class="border-t border-white/[.05] pt-2">
+        <p class="text-[10px] uppercase tracking-wider text-amber-400/70 mb-1">Open reconciliations · ${mm.open_reconciliations.length}</p>
+        <ul class="text-[10px] text-white/45 space-y-0.5">${mm.open_reconciliations.map(r=>`<li>• ${esc(r)}</li>`).join('')}</ul></div>`:''}
+    </div>
+  </div>`;
 }
 
 function render(){
@@ -151,6 +211,8 @@ function render(){
       <span class="ml-2">${esc(a.event||'')}</span>
       ${a.note?`<span class="text-white/40 ml-1">— ${esc(a.note)}</span>`:''}
     </div>`).join('') : '<div class="py-2 text-white/25">No executions logged yet.</div>';
+
+  renderMoney();
 
   // grouped board
   const groups = GRAPH.groups || [...new Set(lanes.map(l=>l.group))].map(n=>({name:n,subgroups:[...new Set(lanes.filter(l=>l.group===n).map(l=>l.subgroup))]}));
