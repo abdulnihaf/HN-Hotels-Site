@@ -609,9 +609,9 @@
     "rule": "Balances DERIVED by summing delta_paise per account across ledger.jsonl. NEVER store a mutable balance. Money in paise.",
     "accounts": {
       "cash": {
-        "balance_paise": 20000000,
+        "balance_paise": 40000000,
         "source": "External funding + daily outlet cash (HE+NCH) collected by Nihaf from today.",
-        "desc": "Fresh float Rs 2L to SEED via cash.js external_capital_in -> cash_nihaf pile (+Rs 2L expected today)."
+        "desc": "Fresh float Rs 4,00,000 now in hand (Rs 2L + Rs 2L received 25-May). To SEED into cash.js external_capital_in -> cash_nihaf. NOT yet recorded in the live cash ledger."
       },
       "bank4680": {
         "balance_paise": 133038,
@@ -626,10 +626,10 @@
     },
     "funding": {
       "external_committed_paise": 75000000,
-      "external_received_paise": 20000000,
-      "external_expected_today_paise": 20000000,
+      "external_received_paise": 40000000,
+      "external_expected_today_paise": 0,
       "external_pending_after_today_paise": 35000000,
-      "note": "Rs 7.5L external. Rs 2L received (in cash). +Rs 2L expected TODAY (log to cash on receipt - NOT yet added). Rs 3.5L remaining in tranches."
+      "note": "Rs 7.5L external. Rs 4L received (Rs 2L + Rs 2L on 25-May), now in hand as cash. Rs 3.5L remaining in tranches."
     },
     "personal_reserve_paise": 80000000,
     "personal_reserve_note": "Nihaf's own Rs 8L reserve - draw-down source, not company cash. Each injection: funded account up + owed_to_nihaf up.",
@@ -645,8 +645,8 @@
     },
     "old_regime_closeout": "Basheer's cash collected up to 2026-05-24 clears OLD vendor dues. Fresh float starts clean from 2026-05-25.",
     "open_reconciliations": [
+      "Rs 4L cash in hand - SEED into live cash ledger (cash_nihaf) via the lane chat / /ops/cash external-capital-in; not yet recorded live.",
       "VENDOR PAYABLE OPENING: set manually - Odoo can't tell us (POs are a log, not AP; cash-cleared by Basheer).",
-      "+Rs 2L external funding expected today - log to cash on receipt.",
       "Rs 69,000 of owed_to_nihaf (4 transfers into ·4680) also appears as ·4680 deposits - net out on bank ingest.",
       "/ops/bank Rs 1,375.24 vs statement Rs 1,330.38 = +Rs 44.86 drift; pin on bank ingest."
     ],
@@ -678,7 +678,8 @@
       "owed_to_nihaf Rs 2,09,940.87 - NOT modeled in cash_events/money_events. Needs an owner-equity/loan running balance (new cash_events kind owner_loan or a small table). Deferred liability.",
       "vendor payables as a local D1 number (today Odoo read-only).",
       "single unified view incl payables + owed (money.js cash-position omits both).",
-      "Claude/chat two-way write door over the existing PIN endpoints."
+      "Claude/chat two-way write door over the existing PIN endpoints.",
+      "money.js cash-position 'cash' = OUTLET petty+in-transit (cockpit-export feeds), NOT Nihaf's deployable float. The Rs 4L float must be seeded into cash_events (cash_nihaf) AND the unified view extended to include it - else no live view shows the float. Also: the read APIs require a PIN, so ops-control cannot pull them anonymously."
     ]
   }
 }
