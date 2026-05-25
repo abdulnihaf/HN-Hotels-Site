@@ -1430,7 +1430,7 @@ function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
 const AGGREGATOR_COA_RING1_VERSION = '2026-05-25-ring1-v1';
 const AGGREGATOR_COA_RING2_VERSION = '2026-05-25-ring2-v1';
 const AGGREGATOR_COA_RING3_VERSION = '2026-05-25-ring3-v1';
-const AGGREGATOR_DAILY_REPORT_VERSION = '2026-05-25-daily-report-v1';
+const AGGREGATOR_DAILY_REPORT_VERSION = '2026-05-25-daily-report-v2';
 const AGGREGATOR_DAILY_REPORT_TEMPLATE = 'aggregator_daily_owner_report_v1';
 const ANTHROPIC_VERSION = '2023-06-01';
 
