@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:57:12+0530",
-  "published_at": "2026-05-25T12:57:12+0530",
+  "updated_at": "2026-05-25T13:02:31+0530",
+  "published_at": "2026-05-25T13:02:31+0530",
   "source": "github-main-static-json",
   "lane_slug": "meta-ads",
   "lane": {
@@ -109,15 +109,6 @@
       "summary": "Read lane/control memory, decisions log, Meta lane history, live CTWA cockpit/API, and directions page. Current operational source is /api/ctwa-analytics, not stale /api/meta-status. Live payload shows active primary Maps campaign 120246002668360505 and retargeting campaign 120246050386040505 with spend/click/map bridge metrics; old April CTWA 120243729366800505 is archived. No Meta mutation performed.",
       "next_action": "Before mutation, verify direct Meta Graph object reads for account act_634959029638544, campaign/adset/ad IDs, budgets, creative, objective, and delivery; then choose pause/tune/creative action with rollback.",
       "mutation_status": "blocked until direct live Meta account verification; read-only cockpit/API verification only"
-    },
-    {
-      "id": "2026-05-24-control-room-v2",
-      "at": "2026-05-24T20:54:08+0530",
-      "lane": "unified-control",
-      "task": "Deploy unified marketing control graph",
-      "status": "completed",
-      "summary": "Deployed /ops/marketing-control/ with one unified brain above 11 deep terminals.",
-      "next_action": "Add durable execution memory and live state reader."
     }
   ]
 }

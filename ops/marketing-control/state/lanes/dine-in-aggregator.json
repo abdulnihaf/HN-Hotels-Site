@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:57:12+0530",
-  "published_at": "2026-05-25T12:57:12+0530",
+  "updated_at": "2026-05-25T13:02:31+0530",
+  "published_at": "2026-05-25T13:02:31+0530",
   "source": "github-main-static-json",
   "lane_slug": "dine-in-aggregator",
   "lane": {
@@ -18,15 +18,5 @@
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/04-dine-in-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/dine-in-aggregator.md",
   "writeback_required": true,
-  "recent_events": [
-    {
-      "id": "2026-05-24-control-room-v2",
-      "at": "2026-05-24T20:54:08+0530",
-      "lane": "unified-control",
-      "task": "Deploy unified marketing control graph",
-      "status": "completed",
-      "summary": "Deployed /ops/marketing-control/ with one unified brain above 11 deep terminals.",
-      "next_action": "Add durable execution memory and live state reader."
-    }
-  ]
+  "recent_events": []
 }

@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:57:12+0530",
-  "published_at": "2026-05-25T12:57:12+0530",
+  "updated_at": "2026-05-25T13:02:31+0530",
+  "published_at": "2026-05-25T13:02:31+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Update Hamza Express Google cockpit for live two-campaign late-night split",
-      "last_summary": "Deployed /ops/google-cockpit/ update so the cockpit now reflects the active Google Ads state: Hamza Hotel Late Night Brand Capture v2 at 5km Rs250/day plus Dish Late Night 2km Search v1 at Rs250/day, both 11 PM-2 AM; removed stale PMax/7km/dinner-facing cockpit wording and verified production HTML.",
-      "next_action": "Monitor first 11 PM-2 AM delivery for the two enabled campaigns: Hamza v2 should capture Hamza Hotel intent in 5km, Dish v1 should capture biryani/ghee rice/kabab/open-now intent in 2km; watch Dish ad review status and first search terms.",
-      "mutation_status": "Cloudflare Pages production UI mutation only; no additional Google Ads money mutation in this step; previous live Google Ads state remains two enabled Search campaigns at Rs250/day each.",
+      "last_task": "Bridge Google late-night landing to WABA voucher secondary CTA",
+      "last_summary": "Verified live Google Ads/cockpit state before mutation: Hamza v2 23877692297 and Dish 2km 23882183242 remain enabled Search campaigns at Rs250/day each, presence-only 5km/2km, 23:00-02:00; old Rs195.87/6-click spend remains attributed to paused generic Late Night v1. Verified landing variants and WABA voucher trigger text in deployed WhatsApp flow. Deployed safe landing-only bridge: primary CTA remains Get Directions To Hamza Express, secondary WhatsApp CTA is now Get WhatsApp Voucher Before You Come with exact prefill 'Hi Hamza, send my WhatsApp voucher'. Updated landing tracker allow-list so pageview/maps/call/menu/whatsapp_voucher preserve he_brand_late_night_5km vs he_dish_late_night_2km. No Google Ads, Meta, WABA send/template, GBP, POS, or Odoo mutation.",
+      "next_action": "After first complete 23:00-02:00 window, inspect Google search terms and landing event split by campaign: maps/call/menu/whatsapp_voucher. Keep Maps as primary unless voucher clicks add capture without hurting directions.",
+      "mutation_status": "Cloudflare Pages landing/tracking mutation only: functions/go/google-night.js and functions/api/google-ads-landing-event.js deployed to hamzaexpress.in via Pages preview c05a7a1a. Google Ads money state unchanged.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T12:42:29+0530"
+      "last_run_at": "2026-05-25T13:02:31+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525130231-google-ads",
+      "at": "2026-05-25T13:02:31+0530",
+      "lane": "google-ads",
+      "task": "Bridge Google late-night landing to WABA voucher secondary CTA",
+      "status": "ready",
+      "summary": "Verified live Google Ads/cockpit state before mutation: Hamza v2 23877692297 and Dish 2km 23882183242 remain enabled Search campaigns at Rs250/day each, presence-only 5km/2km, 23:00-02:00; old Rs195.87/6-click spend remains attributed to paused generic Late Night v1. Verified landing variants and WABA voucher trigger text in deployed WhatsApp flow. Deployed safe landing-only bridge: primary CTA remains Get Directions To Hamza Express, secondary WhatsApp CTA is now Get WhatsApp Voucher Before You Come with exact prefill 'Hi Hamza, send my WhatsApp voucher'. Updated landing tracker allow-list so pageview/maps/call/menu/whatsapp_voucher preserve he_brand_late_night_5km vs he_dish_late_night_2km. No Google Ads, Meta, WABA send/template, GBP, POS, or Odoo mutation.",
+      "next_action": "After first complete 23:00-02:00 window, inspect Google search terms and landing event split by campaign: maps/call/menu/whatsapp_voucher. Keep Maps as primary unless voucher clicks add capture without hurting directions.",
+      "mutation_status": "Cloudflare Pages landing/tracking mutation only: functions/go/google-night.js and functions/api/google-ads-landing-event.js deployed to hamzaexpress.in via Pages preview c05a7a1a. Google Ads money state unchanged."
+    },
     {
       "id": "20260525125712-delivery-aggregator",
       "at": "2026-05-25T12:57:12+0530",
@@ -934,15 +944,6 @@
       "status": "completed",
       "summary": "Moved lane launcher to stable ~/.local/bin path and symlinked UI command path to it so dataless iCloud files do not block lane opening.",
       "next_action": "Use pos-write terminal to diagnose HE POS discount/offer issue before mutation."
-    },
-    {
-      "id": "2026-05-24-control-room-v2",
-      "at": "2026-05-24T20:54:08+0530",
-      "lane": "unified-control",
-      "task": "Deploy unified marketing control graph",
-      "status": "completed",
-      "summary": "Deployed /ops/marketing-control/ with one unified brain above 11 deep terminals.",
-      "next_action": "Add durable execution memory and live state reader."
     }
   ]
 }
