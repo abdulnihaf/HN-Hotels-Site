@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T16:25:29+0530",
-  "published_at": "2026-05-25T16:25:29+0530",
+  "updated_at": "2026-05-25T18:13:11+0530",
+  "published_at": "2026-05-25T18:13:11+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -113,12 +113,12 @@
       "subgroup": "POS/Pricing",
       "risk": "Odoo/POS mutation",
       "status": "completed",
-      "last_task": "Phase 1 HE 200ml glass cold-drink SKU diagnostic",
-      "last_summary": "Ran read-only Phase 1 on HE production test.hamzahotel.com for Coke/Thums Up 200ml glass SKU request. Mutation gates blocked Phase 2: requested allowed_company_ids [2] is invalid/unauthorized on this Odoo; live companies are id 1 HN Hotels Pvt Ltd and id 10 Nawabi Chai House. Exact pos.category name ilike 'bain' returned zero rows; diagnostic category lookup found id 28 spelled 'Bane Marie'. No existing Coke/Thums/Thumps/Sprite/Glass 200ml product.template or product.product conflicts found. Active generic/orphan candidates found: Soft Drink id 1373 already unavailable/sale_off but still active, and active generic Cold drink - 250ml/500ml/1Litre ids 1392/1393/1394 in Bane Marie id 28; combo rows 1351-1354 match text but are ambiguous/protected, not archive candidates without owner confirmation. Existing HE-SOFT cold-drink SKUs 1398/1437/1438/1439/1440/1441 are in Extras id 76, not Bane Marie id 28. No mutation performed.",
-      "next_action": "Wait for Nihaf to confirm Phase 2 fills and resolve gates: use live company id 1 or provide correct company 2 access, confirm whether 'Bane Marie' id 28 is the intended Bain Marie label/category, retail price for Coke 200ml Glass, Sprite decision, and MRP-protection confirmation. Then rerun backup/write only after proceed.",
-      "mutation_status": "Read-only Odoo JSON-RPC diagnostics only; no product, category, POS config, pricelist, refund, session, repo, Cloudflare, WABA, ad, or customer mutation.",
+      "last_task": "Execute HE purchased cold-drink POS SKU universe",
+      "last_summary": "Executed HE-only POS catalog write on test.hamzahotel.com using the finance-Odoo purchase universe for Nazeer/Nadeem partner ids 16/37/114 under HE finance company_id 2, mapped to HE POS live company id 1. Created purchased missing SKUs in Bane Marie id 28: Bisleri Water (1L) id 1442, Kinley Water (1L) id 1443, Coke (200ml) Glass id 1444, Thums Up (200ml) Glass id 1445. Re-categorised existing HE-SOFT SKUs Sprite 750 id 1398, Thums Up 250 id 1437, Sprite 250 id 1438, Coke 250 id 1439, Thums Up 750 id 1440, Coke 750 id 1441 from Extras id 76 to Bane Marie id 28. Archived orphan generic cold-drink SKUs 1373, 1392, 1393, 1394. Existing Water 1 Liter id 1389 and Water 500ml id 1390 already remained in Bane Marie. Backup saved before write.",
+      "next_action": "Staff must hard-refresh/reopen HE POS sessions 5 Cash, 6 Captain, 10 WABA, and 32 Ground to see new SKUs/categories. Follow-up settlement PR should add DIRECT_ITEMS alias entries for Bisleri 1L, Kinley 1L, Coke 200ml Glass, Thums Up 200ml Glass, plus existing Coke/Sprite/Thums 250/750 and Water 500ml aliases from finance purchase names. Do not touch pricelists/offers for MRP-protected items.",
+      "mutation_status": "HE POS product.template mutation only on test.hamzahotel.com: created 4 SKU rows, archived 4 generic rows, changed pos_categ_ids only on 6 existing cold-drink rows. No NCH, no pricelist 40/41/42/43/44/45, no POS config, no refund, no WABA, no ad, no Cloudflare code mutation. Backup: /private/tmp/he_cold_drink_purchase_universe_write_backup_20260525124151.json.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pos-write",
-      "last_run_at": "2026-05-25T16:25:29+0530"
+      "last_run_at": "2026-05-25T18:13:11+0530"
     },
     "packaging-design": {
       "title": "10 Packaging Design",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525181311-pos-write",
+      "at": "2026-05-25T18:13:11+0530",
+      "lane": "pos-write",
+      "task": "Execute HE purchased cold-drink POS SKU universe",
+      "status": "completed",
+      "summary": "Executed HE-only POS catalog write on test.hamzahotel.com using the finance-Odoo purchase universe for Nazeer/Nadeem partner ids 16/37/114 under HE finance company_id 2, mapped to HE POS live company id 1. Created purchased missing SKUs in Bane Marie id 28: Bisleri Water (1L) id 1442, Kinley Water (1L) id 1443, Coke (200ml) Glass id 1444, Thums Up (200ml) Glass id 1445. Re-categorised existing HE-SOFT SKUs Sprite 750 id 1398, Thums Up 250 id 1437, Sprite 250 id 1438, Coke 250 id 1439, Thums Up 750 id 1440, Coke 750 id 1441 from Extras id 76 to Bane Marie id 28. Archived orphan generic cold-drink SKUs 1373, 1392, 1393, 1394. Existing Water 1 Liter id 1389 and Water 500ml id 1390 already remained in Bane Marie. Backup saved before write.",
+      "next_action": "Staff must hard-refresh/reopen HE POS sessions 5 Cash, 6 Captain, 10 WABA, and 32 Ground to see new SKUs/categories. Follow-up settlement PR should add DIRECT_ITEMS alias entries for Bisleri 1L, Kinley 1L, Coke 200ml Glass, Thums Up 200ml Glass, plus existing Coke/Sprite/Thums 250/750 and Water 500ml aliases from finance purchase names. Do not touch pricelists/offers for MRP-protected items.",
+      "mutation_status": "HE POS product.template mutation only on test.hamzahotel.com: created 4 SKU rows, archived 4 generic rows, changed pos_categ_ids only on 6 existing cold-drink rows. No NCH, no pricelist 40/41/42/43/44/45, no POS config, no refund, no WABA, no ad, no Cloudflare code mutation. Backup: /private/tmp/he_cold_drink_purchase_universe_write_backup_20260525124151.json."
+    },
     {
       "id": "20260525162529-pos-write",
       "at": "2026-05-25T16:25:29+0530",
@@ -935,16 +945,6 @@
       "summary": "Verified saved Lane 03 context exists in raw Codex session/trail files and in ops/intelligence/aggregator-delivery-positioning with micro-step artifacts through MS39, core decision chain through MS35. Corrected the direct API analysis note so it reflects the post-debug truth: Zomato get-all-v2 replays HTTP 200 when cURL -b/--cookie is parsed; Swiggy and Zomato direct partner API capture are both proven in dry-run. No ingest/deploy/platform mutation performed.",
       "next_action": "Use MS35 final intelligence as the offer/price gate and the corrected direct API note as the capture-layer gate. Next execution should either package a clean direct-ingest deployment from a clean branch or audit before/after proof for the 8 Zomato price-only rows; no offers/combo edits without margin proof.",
       "mutation_status": "none - context verification and ignored context-note correction only; no partner portal, D1 ingest, Odoo/POS, ad, WABA, or pricing mutation"
-    },
-    {
-      "id": "20260525063632-delivery-aggregator",
-      "at": "2026-05-25T06:36:32+0530",
-      "lane": "delivery-aggregator",
-      "task": "Debug Zomato direct cURL replay",
-      "status": "ready",
-      "summary": "Root cause was local parser error: the direct puller parsed -H headers but ignored cURL -b/--cookie, so Zomato CSRF headers were replayed without browser cookies and returned 401. Patched scripts/aggregator-direct-partner-pull.mjs to include -b cookies and added safe Zomato history summaries. Dry-run now returns Zomato HTTP 200 with 10 snippets and hasMore=true; no ingest/deploy/mutation performed.",
-      "next_action": "Use Copy as cURL exactly as captured; direct puller can now replay Zomato get-all-v2 from saved Downloads/zomato-curl.txt. Next gate is optional ingest dry-run review, then controlled API ingest only after approval.",
-      "mutation_status": "none - local parser fix and read-only dry-run replay only"
     }
   ]
 }
