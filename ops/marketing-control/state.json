@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T15:12:19+0530",
-  "published_at": "2026-05-25T15:12:19+0530",
+  "updated_at": "2026-05-25T16:25:29+0530",
+  "published_at": "2026-05-25T16:25:29+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -113,12 +113,12 @@
       "subgroup": "POS/Pricing",
       "risk": "Odoo/POS mutation",
       "status": "completed",
-      "last_task": "Captain POS session-expired gap + refund audit",
-      "last_summary": "Deep-audited Captain POS operational issue on HE production test.hamzahotel.com after tablet showed Odoo Server Error / Session expired during payment validation. Verified this was Captain-only: Cash and Ground POS sales continued, Captain config/session/pricelists/payment methods remained healthy, and V2 Captain offer pricing itself was correct. Found Captain backend sequence 2670-6 had local/server save gaps after repeated stale-tab payment attempts: user water test saved as 2670-6-000006, photographed ₹746.35 order was later re-entered and saved as 2670-6-000005 with matching lines/table/payment, leaving only 2670-6-000004 unresolved. May 1-current Captain sequence audit found historical missing 2662-6-000127 between 20 May 2026 03:05:54 IST and 14:38:26 IST, likely around previous-day closing/new-session transition. Read-only audited refund order 8059: HE - Captain - 000035 REFUND is currently a paid negative refund for -₹125 at 25 May 2026 03:03 IST, linked to original order 7731 from 22 May 2026; user explicitly stopped any correction, so no write was performed.",
-      "next_action": "Do not mutate refund order 8059 unless Nihaf explicitly resumes and confirms. Operationally, staff must confirm whether 2670-6-000004 was a real second bill or just a failed duplicate local slot; if real, re-enter that bill from staff/KDS/payment evidence. For Captain tablets, close stale POS tabs, reload/login fresh before payment validation, then verify new Captain order sequence saves in backend.",
-      "mutation_status": "No new mutation in this follow-up. Read-only Odoo/POS audits only; previous V2 pricelist mutation remains unchanged. Refund 8059 was not modified because user said wait/don't do anything.",
+      "last_task": "Phase 1 HE 200ml glass cold-drink SKU diagnostic",
+      "last_summary": "Ran read-only Phase 1 on HE production test.hamzahotel.com for Coke/Thums Up 200ml glass SKU request. Mutation gates blocked Phase 2: requested allowed_company_ids [2] is invalid/unauthorized on this Odoo; live companies are id 1 HN Hotels Pvt Ltd and id 10 Nawabi Chai House. Exact pos.category name ilike 'bain' returned zero rows; diagnostic category lookup found id 28 spelled 'Bane Marie'. No existing Coke/Thums/Thumps/Sprite/Glass 200ml product.template or product.product conflicts found. Active generic/orphan candidates found: Soft Drink id 1373 already unavailable/sale_off but still active, and active generic Cold drink - 250ml/500ml/1Litre ids 1392/1393/1394 in Bane Marie id 28; combo rows 1351-1354 match text but are ambiguous/protected, not archive candidates without owner confirmation. Existing HE-SOFT cold-drink SKUs 1398/1437/1438/1439/1440/1441 are in Extras id 76, not Bane Marie id 28. No mutation performed.",
+      "next_action": "Wait for Nihaf to confirm Phase 2 fills and resolve gates: use live company id 1 or provide correct company 2 access, confirm whether 'Bane Marie' id 28 is the intended Bain Marie label/category, retail price for Coke 200ml Glass, Sprite decision, and MRP-protection confirmation. Then rerun backup/write only after proceed.",
+      "mutation_status": "Read-only Odoo JSON-RPC diagnostics only; no product, category, POS config, pricelist, refund, session, repo, Cloudflare, WABA, ad, or customer mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pos-write",
-      "last_run_at": "2026-05-25T03:22:43+0530"
+      "last_run_at": "2026-05-25T16:25:29+0530"
     },
     "packaging-design": {
       "title": "10 Packaging Design",
@@ -146,6 +146,36 @@
     }
   },
   "events": [
+    {
+      "id": "20260525162529-pos-write",
+      "at": "2026-05-25T16:25:29+0530",
+      "lane": "pos-write",
+      "task": "Phase 1 HE 200ml glass cold-drink SKU diagnostic",
+      "status": "completed",
+      "summary": "Ran read-only Phase 1 on HE production test.hamzahotel.com for Coke/Thums Up 200ml glass SKU request. Mutation gates blocked Phase 2: requested allowed_company_ids [2] is invalid/unauthorized on this Odoo; live companies are id 1 HN Hotels Pvt Ltd and id 10 Nawabi Chai House. Exact pos.category name ilike 'bain' returned zero rows; diagnostic category lookup found id 28 spelled 'Bane Marie'. No existing Coke/Thums/Thumps/Sprite/Glass 200ml product.template or product.product conflicts found. Active generic/orphan candidates found: Soft Drink id 1373 already unavailable/sale_off but still active, and active generic Cold drink - 250ml/500ml/1Litre ids 1392/1393/1394 in Bane Marie id 28; combo rows 1351-1354 match text but are ambiguous/protected, not archive candidates without owner confirmation. Existing HE-SOFT cold-drink SKUs 1398/1437/1438/1439/1440/1441 are in Extras id 76, not Bane Marie id 28. No mutation performed.",
+      "next_action": "Wait for Nihaf to confirm Phase 2 fills and resolve gates: use live company id 1 or provide correct company 2 access, confirm whether 'Bane Marie' id 28 is the intended Bain Marie label/category, retail price for Coke 200ml Glass, Sprite decision, and MRP-protection confirmation. Then rerun backup/write only after proceed.",
+      "mutation_status": "Read-only Odoo JSON-RPC diagnostics only; no product, category, POS config, pricelist, refund, session, repo, Cloudflare, WABA, ad, or customer mutation."
+    },
+    {
+      "id": "20260525161355-pos-write",
+      "at": "2026-05-25T16:13:55+0530",
+      "lane": "pos-write",
+      "task": "Initialize POS Write lane read-only",
+      "status": "completed",
+      "summary": "Initialized 09 POS Write lane from current memory, coordination graph, unified state, asset registry, and recent POS decision log. No Odoo/POS mutation was performed. Current guardrail remains: HE production POS is test.hamzahotel.com; Captain V2 offer pricelist id 45 remains live on config 6 with base pricelist 40 default, Cash offer id 42 remains 20 percent, Ground offer id 43 remains 10 percent, protected BOGO/combo/MRP rows remain guarded, refund order 8059 must not be modified unless Nihaf explicitly resumes and confirms.",
+      "next_action": "For any next POS task, first verify live Odoo instance/config/session/open orders/current pricelist rules and exact rollback path. Do not mutate refund 8059 without explicit fresh confirmation; resolve Captain sequence 2670-6-000004 only after staff/KDS/payment evidence confirms it was a real bill.",
+      "mutation_status": "Read-only lane initialization and memory sync only; no Odoo, POS, refund, price, pricelist, repo checkout, Cloudflare, WABA, ad, or customer mutation."
+    },
+    {
+      "id": "20260525161316-pos-write",
+      "at": "2026-05-25T16:13:16+0530",
+      "lane": "pos-write",
+      "task": "Initialize POS Write lane read-only",
+      "status": "completed",
+      "summary": "Initialized 09 POS Write lane from current memory, coordination graph, unified state, asset registry, and recent POS decision log. No Odoo/POS mutation was performed. Current guardrail remains: HE production POS is test.hamzahotel.com; Captain V2 offer pricelist id 45 remains live on config 6 with base pricelist 40 default, Cash offer id 42 remains 20 percent, Ground offer id 43 remains 10 percent, protected BOGO/combo/MRP rows remain guarded, refund order 8059 must not be modified unless Nihaf explicitly resumes and confirms.",
+      "next_action": "For any next POS task, first verify live Odoo instance/config/session/open orders/current pricelist rules and exact rollback path. Do not mutate refund 8059 without explicit fresh confirmation; resolve Captain sequence 2670-6-000004 only after staff/KDS/payment evidence confirms it was a real bill.",
+      "mutation_status": "Read-only lane initialization and memory sync only; no Odoo, POS, refund, price, pricelist, repo checkout, Cloudflare, WABA, ad, or customer mutation."
+    },
     {
       "id": "20260525151219-meta-ads",
       "at": "2026-05-25T15:12:19+0530",
@@ -915,36 +945,6 @@
       "summary": "Root cause was local parser error: the direct puller parsed -H headers but ignored cURL -b/--cookie, so Zomato CSRF headers were replayed without browser cookies and returned 401. Patched scripts/aggregator-direct-partner-pull.mjs to include -b cookies and added safe Zomato history summaries. Dry-run now returns Zomato HTTP 200 with 10 snippets and hasMore=true; no ingest/deploy/mutation performed.",
       "next_action": "Use Copy as cURL exactly as captured; direct puller can now replay Zomato get-all-v2 from saved Downloads/zomato-curl.txt. Next gate is optional ingest dry-run review, then controlled API ingest only after approval.",
       "mutation_status": "none - local parser fix and read-only dry-run replay only"
-    },
-    {
-      "id": "20260525062642-packaging-design",
-      "at": "2026-05-25T06:26:42+0530",
-      "lane": "packaging-design",
-      "task": "Make NCH flask front production-friendly",
-      "status": "ready",
-      "summary": "Converted the supplied exact NCH 250ml front SVG into a clean production-friendly front panel without redesigning it. Extracted the embedded high-resolution artwork, removed the malformed Figma/base64 wrapper plus measurement labels/crop marks/colored guide strokes, and rebuilt valid 136mm x 216mm front-panel SVG/PDF for 130x210mm trim plus 3mm bleed. Verified PDF page size is 385.512 x 612.283 pt and qpdf reports no syntax/stream errors. Copied production pack to /Users/nihaf/Downloads/NCH_Flask_Front_Production_2026-05-25.",
-      "next_action": "Use the clean front panel as the locked approved front. Next build the matching 250ml back panel from the same visual system, but first confirm legal copy, FSSAI, phone, ingredients, and /go/flask QR redirect target. After front/back approval, build spines/gables and assemble onto the unfolded dieline.",
-      "mutation_status": "Created local print assets only: production PDF/SVG, extracted JPG, preview PNG, proof-with-guides, manifest and README. No website, POS/Odoo, ad, WABA, aggregator, or vendor send mutation."
-    },
-    {
-      "id": "20260525062455-delivery-aggregator",
-      "at": "2026-05-25T06:24:55+0530",
-      "lane": "delivery-aggregator",
-      "task": "Save and dry-run updated Zomato partner cURL",
-      "status": "ready",
-      "summary": "Saved pasted Zomato partner cURL to Downloads/zomato-curl.txt and dry-ran direct partner puller. Swiggy replay remained HTTP 200 with current NCH orders; Zomato replay still returned HTTP 401, so no ingest/deploy/mutation was performed.",
-      "next_action": "Capture a fresh Zomato get-all-v2 request via DevTools Network using Copy as cURL, preferably directly to file instead of chat, then rerun dry-run before enabling ingest.",
-      "mutation_status": "none - saved local auth cURL and dry-run only; no platform/order/offer/margin mutation"
-    },
-    {
-      "id": "20260525061429-packaging-design",
-      "at": "2026-05-25T06:14:29+0530",
-      "lane": "packaging-design",
-      "task": "Analyze NCH flask execution path",
-      "status": "ready",
-      "summary": "Analyzed NCH flask macro objective and current source files. The project objective is vendor-printable flat unfolded carton PDFs for 250ml and 500ml, not generative mockups. Current supplied front SVG is 9.9MB Figma-style SVG with embedded raster artwork plus visible measurement/dieline marks; rsvg-convert fails XML parse on it, so it must be normalized/extracted before production use. Dieline zip contains two compact unfolded dieline SVGs. Existing _flask_bg assets include locked 2748x4096 front/back bases, vector wordmark/filigree/endcap, QR SVG, deterministic scripts, and reference-match output PDFs that qpdf validates but still carry placeholder legal/QR decisions.",
-      "next_action": "Exact next step: build a canonical NCH flask production board by normalizing the new 250ml front SVG and dieline zip into clean panel assets, then produce one approval proof for the 250ml front panel only: no measurement marks, no printed kraft texture, brand artwork aligned to 130x210mm plus 3mm bleed. Use Figma MCP only for visual approval/canvas if helpful; use deterministic Python/rsvg/PDF tools for final vendor files. Gemini API can generate mockups/review previews, not final print panels.",
-      "mutation_status": "Read-only analysis and memory sync only. No artwork, vendor output, website, POS, ad, WABA, or aggregator mutation."
     }
   ]
 }
