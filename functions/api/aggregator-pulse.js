@@ -363,6 +363,41 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
+  // --- COA ENTITIES: Ring 1 closed coordinate space for aggregator operations ---
+  if (action === 'coa-entities') {
+    await ensureAggregatorCoaRing1(db);
+    const entities = await readAggregatorCoaRing1(db);
+    return new Response(JSON.stringify({
+      ok: true,
+      action: 'coa-entities',
+      doctrine: 'COA Ring 1 - Entity. Closed sets only; no free-text operational state.',
+      seed_version: AGGREGATOR_COA_RING1_VERSION,
+      generated_at: new Date().toISOString(),
+      entities,
+      cardinality: {
+        brands: entities.brands.length,
+        outlets: entities.outlets.length,
+        platforms: entities.platforms.length,
+        platform_outlets: entities.platform_outlets.length,
+        pull_sources: entities.pull_sources.length,
+        valid_platform_outlet_pull_pairs: validPlatformOutletPullPairs(entities).length,
+        health_states: entities.health_states.length,
+        issue_codes: entities.issue_codes.length,
+        session_slots: entities.session_slots.length,
+      },
+      valid_platform_outlet_pull_pairs: validPlatformOutletPullPairs(entities),
+      constraints: [
+        'Only he/nch brands are valid in this ring.',
+        'Only swiggy/zomato delivery platforms are valid in this ring.',
+        'Swiggy outlet ids are fixed: HE=1342888, NCH=1342887.',
+        'Zomato outlet ids are fixed: HE=22632449, NCH=22632430.',
+        'Partner auth secrets are not stored in Ring 1 tables.',
+        'A session slot can be expired/stale/valid, but the secret material lives outside D1.',
+        'Price/offer/POS/Odoo mutation is outside this ring.',
+      ],
+    }), { headers });
+  }
+
   // --- FINANCE: Swiggy payout summary ---
   if (action === 'finance') {
     const { results } = await db.prepare(`
@@ -1217,10 +1252,256 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
-  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'latest', 'stats', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
+  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'owner-orders', 'latest', 'stats', 'coa-entities', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'day-orders', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
+
+const AGGREGATOR_COA_RING1_VERSION = '2026-05-25-ring1-v1';
+
+const AGGREGATOR_COA_RING1_SEED = {
+  brands: [
+    ['he', 'HN-BRAND-HE', 'Hamza Express', 'HN Hotels Private Limited'],
+    ['nch', 'HN-BRAND-NCH', 'Nawabi Chai House', 'HN Hotels Private Limited'],
+  ],
+  outlets: [
+    ['he_shivajinagar', 'he', 'HN-OUTLET-HE-SHIVAJINAGAR', 'Hamza Express Shivajinagar', 'Shivajinagar', 'test.hamzahotel.com'],
+    ['nch_shivajinagar', 'nch', 'HN-OUTLET-NCH-SHIVAJINAGAR', 'Nawabi Chai House Shivajinagar', 'Shivajinagar', 'ops.hamzahotel.com'],
+  ],
+  platforms: [
+    ['swiggy', 'AGG-PLATFORM-SWIGGY', 'Swiggy Partner', 'access_token'],
+    ['zomato', 'AGG-PLATFORM-ZOMATO', 'Zomato Merchant', 'cookie_csrf'],
+  ],
+  platform_outlets: [
+    ['swiggy_he_1342888', 'AGG-OUTLET-SWIGGY-HE-1342888', 'he', 'he_shivajinagar', 'swiggy', '1342888', 'Hamza Express'],
+    ['swiggy_nch_1342887', 'AGG-OUTLET-SWIGGY-NCH-1342887', 'nch', 'nch_shivajinagar', 'swiggy', '1342887', 'Nawabi Chai House'],
+    ['zomato_he_22632449', 'AGG-OUTLET-ZOMATO-HE-22632449', 'he', 'he_shivajinagar', 'zomato', '22632449', 'Hamza Express'],
+    ['zomato_nch_22632430', 'AGG-OUTLET-ZOMATO-NCH-22632430', 'nch', 'nch_shivajinagar', 'zomato', '22632430', 'Nawabi Chai House'],
+  ],
+  pull_sources: [
+    ['swiggy_fetch_orders', 'AGG-PULL-SWIGGY-FETCH-ORDERS', 'swiggy', 'current_orders', 'POST', 'rms.swiggy.com/orders/v1/fetchOrders', 2],
+    ['swiggy_history', 'AGG-PULL-SWIGGY-HISTORY', 'swiggy', 'history_orders', 'GET', 'rms.swiggy.com/orders/v1/history', 10],
+    ['zomato_history_v2', 'AGG-PULL-ZOMATO-HISTORY-V2', 'zomato', 'history_orders', 'POST', 'api.zomato.com/merchant-gw/web/order/history/get-all-v2', 10],
+    ['zomato_order_detail', 'AGG-PULL-ZOMATO-ORDER-DETAIL', 'zomato', 'order_detail', 'GET', 'zomato merchant order detail payload', 60],
+  ],
+  health_states: [
+    ['ok', 'AGG-HEALTH-OK', 'ok', 1, 0, 'Last pull succeeded within SLA.'],
+    ['not_configured', 'AGG-HEALTH-NOT-CONFIGURED', 'warn', 1, 0, 'Session slot exists but no validated auth material is configured.'],
+    ['stale', 'AGG-HEALTH-STALE', 'warn', 1, 1, 'Last successful pull exceeded freshness SLA.'],
+    ['unauthorized', 'AGG-HEALTH-UNAUTHORIZED', 'critical', 1, 1, 'Partner API returned unauthorized or forbidden. Session refresh required.'],
+    ['parser_failed', 'AGG-HEALTH-PARSER-FAILED', 'critical', 1, 1, 'Partner payload shape changed or normalization failed.'],
+    ['empty_response', 'AGG-HEALTH-EMPTY-RESPONSE', 'warn', 1, 0, 'Partner API returned no orders/data for the requested coordinate.'],
+    ['partial', 'AGG-HEALTH-PARTIAL', 'warn', 1, 1, 'At least one platform/outlet/source coordinate failed while another succeeded.'],
+  ],
+  issue_codes: [
+    ['missed_acceptance', 'AGG-ISSUE-MISSED-ACCEPTANCE', 'critical', null, 1, 'Order was not accepted before timeout.'],
+    ['rejected_by_restaurant', 'AGG-ISSUE-REJECTED-BY-RESTAURANT', 'critical', null, 1, 'Restaurant rejected the order.'],
+    ['cancelled', 'AGG-ISSUE-CANCELLED', 'warn', null, 1, 'Order was cancelled.'],
+    ['order_ready_not_marked', 'AGG-ISSUE-ORDER-READY-NOT-MARKED', 'warn', 'zomato', 1, 'Food was ready but not marked ready in partner portal.'],
+    ['handover_delay', 'AGG-ISSUE-HANDOVER-DELAY', 'warn', null, 1, 'Rider handover exceeded expected time.'],
+    ['food_prep_delay', 'AGG-ISSUE-FOOD-PREP-DELAY', 'warn', null, 1, 'Food preparation was delayed.'],
+    ['session_expired', 'AGG-ISSUE-SESSION-EXPIRED', 'critical', null, 1, 'Partner API session expired. Refresh cURL required.'],
+  ],
+  session_slots: [
+    ['swiggy_partner_session', 'AGG-SESSION-SWIGGY-PARTNER', 'swiggy', 'access_token', 'cloudflare_secret', 'not_configured', 'Swiggy frontend API access token slot.'],
+    ['zomato_partner_session', 'AGG-SESSION-ZOMATO-PARTNER', 'zomato', 'cookie_csrf', 'cloudflare_secret', 'not_configured', 'Zomato cookie plus CSRF session slot.'],
+  ],
+};
+
+async function ensureAggregatorCoaRing1(db) {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_brand (
+      code TEXT PRIMARY KEY CHECK (code IN ('he', 'nch')),
+      canonical_code TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      legal_entity TEXT NOT NULL DEFAULT 'HN Hotels Private Limited',
+      active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_outlet (
+      code TEXT PRIMARY KEY,
+      brand_code TEXT NOT NULL REFERENCES aggregator_coa_brand(code),
+      canonical_code TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      locality TEXT NOT NULL,
+      production_pos_host TEXT,
+      active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_platform (
+      code TEXT PRIMARY KEY CHECK (code IN ('swiggy', 'zomato')),
+      canonical_code TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      auth_shape TEXT NOT NULL CHECK (auth_shape IN ('access_token', 'cookie_csrf')),
+      active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_platform_outlet (
+      code TEXT PRIMARY KEY,
+      canonical_code TEXT NOT NULL UNIQUE,
+      brand_code TEXT NOT NULL REFERENCES aggregator_coa_brand(code),
+      outlet_code TEXT NOT NULL REFERENCES aggregator_coa_outlet(code),
+      platform_code TEXT NOT NULL REFERENCES aggregator_coa_platform(code),
+      partner_outlet_id TEXT NOT NULL,
+      partner_outlet_name TEXT NOT NULL,
+      production_role TEXT NOT NULL DEFAULT 'delivery_orders',
+      active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(platform_code, partner_outlet_id),
+      CHECK (code IN ('swiggy_he_1342888','swiggy_nch_1342887','zomato_he_22632449','zomato_nch_22632430'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_pull_source (
+      code TEXT PRIMARY KEY,
+      canonical_code TEXT NOT NULL UNIQUE,
+      platform_code TEXT NOT NULL REFERENCES aggregator_coa_platform(code),
+      source_kind TEXT NOT NULL CHECK (source_kind IN ('current_orders', 'history_orders', 'order_detail')),
+      method TEXT NOT NULL CHECK (method IN ('GET', 'POST')),
+      endpoint_family TEXT NOT NULL,
+      replayable INTEGER NOT NULL DEFAULT 1 CHECK (replayable IN (0, 1)),
+      freshness_sla_minutes INTEGER NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_health_state (
+      code TEXT PRIMARY KEY,
+      canonical_code TEXT NOT NULL UNIQUE,
+      severity TEXT NOT NULL CHECK (severity IN ('ok', 'warn', 'critical')),
+      owner_visible INTEGER NOT NULL DEFAULT 1 CHECK (owner_visible IN (0, 1)),
+      waba_alert_allowed INTEGER NOT NULL DEFAULT 0 CHECK (waba_alert_allowed IN (0, 1)),
+      description TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_issue_code (
+      code TEXT PRIMARY KEY,
+      canonical_code TEXT NOT NULL UNIQUE,
+      severity TEXT NOT NULL CHECK (severity IN ('info', 'warn', 'critical')),
+      platform_code TEXT REFERENCES aggregator_coa_platform(code),
+      owner_visible INTEGER NOT NULL DEFAULT 1 CHECK (owner_visible IN (0, 1)),
+      description TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_session_slot (
+      code TEXT PRIMARY KEY,
+      canonical_code TEXT NOT NULL UNIQUE,
+      platform_code TEXT NOT NULL REFERENCES aggregator_coa_platform(code),
+      auth_shape TEXT NOT NULL CHECK (auth_shape IN ('access_token', 'cookie_csrf')),
+      secret_storage TEXT NOT NULL CHECK (secret_storage IN ('cloudflare_secret', 'local_curl_file', 'manual_refresh_only')),
+      state_code TEXT NOT NULL DEFAULT 'not_configured' REFERENCES aggregator_coa_health_state(code),
+      last_validated_at TEXT,
+      expires_at TEXT,
+      notes TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_agg_coa_platform_outlet_brand ON aggregator_coa_platform_outlet(brand_code, platform_code)`,
+    `CREATE INDEX IF NOT EXISTS idx_agg_coa_pull_platform ON aggregator_coa_pull_source(platform_code, source_kind)`,
+  ];
+
+  for (const sql of statements) await db.prepare(sql).run();
+  await seedAggregatorCoaRing1(db);
+}
+
+async function seedAggregatorCoaRing1(db) {
+  for (const row of AGGREGATOR_COA_RING1_SEED.brands) {
+    await db.prepare(`
+      INSERT INTO aggregator_coa_brand (code, canonical_code, display_name, legal_entity)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(code) DO UPDATE SET canonical_code=excluded.canonical_code, display_name=excluded.display_name, legal_entity=excluded.legal_entity, active=1
+    `).bind(...row).run();
+  }
+  for (const row of AGGREGATOR_COA_RING1_SEED.outlets) {
+    await db.prepare(`
+      INSERT INTO aggregator_coa_outlet (code, brand_code, canonical_code, display_name, locality, production_pos_host)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(code) DO UPDATE SET brand_code=excluded.brand_code, canonical_code=excluded.canonical_code, display_name=excluded.display_name, locality=excluded.locality, production_pos_host=excluded.production_pos_host, active=1
+    `).bind(...row).run();
+  }
+  for (const row of AGGREGATOR_COA_RING1_SEED.platforms) {
+    await db.prepare(`
+      INSERT INTO aggregator_coa_platform (code, canonical_code, display_name, auth_shape)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(code) DO UPDATE SET canonical_code=excluded.canonical_code, display_name=excluded.display_name, auth_shape=excluded.auth_shape, active=1
+    `).bind(...row).run();
+  }
+  for (const row of AGGREGATOR_COA_RING1_SEED.platform_outlets) {
+    await db.prepare(`
+      INSERT INTO aggregator_coa_platform_outlet (code, canonical_code, brand_code, outlet_code, platform_code, partner_outlet_id, partner_outlet_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(code) DO UPDATE SET canonical_code=excluded.canonical_code, brand_code=excluded.brand_code, outlet_code=excluded.outlet_code, platform_code=excluded.platform_code, partner_outlet_id=excluded.partner_outlet_id, partner_outlet_name=excluded.partner_outlet_name, active=1
+    `).bind(...row).run();
+  }
+  for (const row of AGGREGATOR_COA_RING1_SEED.pull_sources) {
+    await db.prepare(`
+      INSERT INTO aggregator_coa_pull_source (code, canonical_code, platform_code, source_kind, method, endpoint_family, freshness_sla_minutes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(code) DO UPDATE SET canonical_code=excluded.canonical_code, platform_code=excluded.platform_code, source_kind=excluded.source_kind, method=excluded.method, endpoint_family=excluded.endpoint_family, freshness_sla_minutes=excluded.freshness_sla_minutes, active=1
+    `).bind(...row).run();
+  }
+  for (const row of AGGREGATOR_COA_RING1_SEED.health_states) {
+    await db.prepare(`
+      INSERT INTO aggregator_coa_health_state (code, canonical_code, severity, owner_visible, waba_alert_allowed, description)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(code) DO UPDATE SET canonical_code=excluded.canonical_code, severity=excluded.severity, owner_visible=excluded.owner_visible, waba_alert_allowed=excluded.waba_alert_allowed, description=excluded.description
+    `).bind(...row).run();
+  }
+  for (const row of AGGREGATOR_COA_RING1_SEED.issue_codes) {
+    await db.prepare(`
+      INSERT INTO aggregator_coa_issue_code (code, canonical_code, severity, platform_code, owner_visible, description)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(code) DO UPDATE SET canonical_code=excluded.canonical_code, severity=excluded.severity, platform_code=excluded.platform_code, owner_visible=excluded.owner_visible, description=excluded.description
+    `).bind(...row).run();
+  }
+  for (const row of AGGREGATOR_COA_RING1_SEED.session_slots) {
+    await db.prepare(`
+      INSERT INTO aggregator_coa_session_slot (code, canonical_code, platform_code, auth_shape, secret_storage, state_code, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(code) DO UPDATE SET canonical_code=excluded.canonical_code, platform_code=excluded.platform_code, auth_shape=excluded.auth_shape, secret_storage=excluded.secret_storage, notes=excluded.notes, updated_at=datetime('now')
+    `).bind(...row).run();
+  }
+}
+
+async function readAggregatorCoaRing1(db) {
+  const [
+    brands, outlets, platforms, platformOutlets, pullSources,
+    healthStates, issueCodes, sessionSlots,
+  ] = await Promise.all([
+    db.prepare(`SELECT * FROM aggregator_coa_brand ORDER BY code`).all(),
+    db.prepare(`SELECT * FROM aggregator_coa_outlet ORDER BY code`).all(),
+    db.prepare(`SELECT * FROM aggregator_coa_platform ORDER BY code`).all(),
+    db.prepare(`SELECT * FROM aggregator_coa_platform_outlet ORDER BY platform_code, brand_code`).all(),
+    db.prepare(`SELECT * FROM aggregator_coa_pull_source ORDER BY platform_code, source_kind, code`).all(),
+    db.prepare(`SELECT * FROM aggregator_coa_health_state ORDER BY severity, code`).all(),
+    db.prepare(`SELECT * FROM aggregator_coa_issue_code ORDER BY severity, code`).all(),
+    db.prepare(`SELECT * FROM aggregator_coa_session_slot ORDER BY platform_code, code`).all(),
+  ]);
+  return {
+    brands: brands.results || [],
+    outlets: outlets.results || [],
+    platforms: platforms.results || [],
+    platform_outlets: platformOutlets.results || [],
+    pull_sources: pullSources.results || [],
+    health_states: healthStates.results || [],
+    issue_codes: issueCodes.results || [],
+    session_slots: sessionSlots.results || [],
+  };
+}
+
+function validPlatformOutletPullPairs(entities) {
+  const pairs = [];
+  for (const po of entities.platform_outlets || []) {
+    for (const src of entities.pull_sources || []) {
+      if (src.platform_code !== po.platform_code) continue;
+      pairs.push({
+        coordinate: `${po.canonical_code}/${src.canonical_code}`,
+        platform_outlet_code: po.code,
+        pull_source_code: src.code,
+        brand_code: po.brand_code,
+        platform_code: po.platform_code,
+        partner_outlet_id: po.partner_outlet_id,
+        source_kind: src.source_kind,
+        freshness_sla_minutes: src.freshness_sla_minutes,
+      });
+    }
+  }
+  return pairs;
+}
 
 const DIRECT_SWIGGY_OUTLETS = {
   '1342888': { brand: 'he', outlet_name: 'Hamza Express' },
