@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T15:10:19+0530",
-  "published_at": "2026-05-25T15:10:19+0530",
+  "updated_at": "2026-05-25T15:12:19+0530",
+  "published_at": "2026-05-25T15:12:19+0530",
   "source": "github-main-static-json",
   "lane_slug": "meta-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Correct HE retargeting Figma creatives for food visibility",
-    "last_summary": "User flagged that food was not visible enough in the HE Meta WABA retargeting frames. Inspected A1 layer structure and found the issue: dark overlay at roughly 56 percent, bottom readability panel starting too high, and copy/voucher stack covering the food zone. Updated all 10 individual creative frames on Figma page 06 Meta + WABA Ads: panned hero image rectangles toward the food, reduced global overlay opacity, lowered the bottom readability overlay, compressed headline/subline/voucher/CTA sizing, and reduced voucher card height. Verified A1 9x16, A1 4x5, and A5 9x16 renders; food is now visibly dominant with the WhatsApp voucher module secondary.",
-    "next_action": "Continue from the corrected hero-food-first Figma frames; next QA should inspect all 10 variants together, then refine copy/CTA and export only after final approval. No Gemini generation yet unless explicitly requested.",
-    "mutation_status": "Figma design mutation only; no Meta campaign/adset/ad, WABA, POS, Odoo, or budget mutation.",
+    "last_task": "Correct Hamza Express Meta retargeting Figma creatives for visible food-first hero composition",
+    "last_summary": "Executed a Figma-only correction pass on the Hamza Express Meta + WABA retargeting creatives after review showed the food was not visible enough. Inspected the A1 frame structure and identified the causes: heavy global dark overlay, bottom readability panel covering the food zone, oversized headline/voucher/card/CTA stack, and hero image crop not centered on food. Updated all 10 individual Figma creative frames on page 06 Meta + WABA Ads by panning hero image rectangles toward the food, reducing overlay strength, lowering and lightening the readability layer, compressing headline/subline/voucher/CTA sizing, shrinking the voucher card, and keeping HE logo/emblem/1918 brand marks. Verified A1 9x16, A1 4x5, and A5 9x16 renders; food is now the dominant visual proof and WhatsApp voucher UI is secondary.",
+    "next_action": "Review all 10 corrected frames together in Figma, then do final copy/CTA polish and export only after approval. If further creative generation is required, first run Gemini/multimodal inspection on the canonical food references; do not mutate Meta spend or WABA flows without live verification.",
+    "mutation_status": "Figma design mutation only; no Meta campaign/adset/ad, WABA, POS, Odoo, budget, or customer-data mutation.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-    "last_run_at": "2026-05-25T14:02:40+0530"
+    "last_run_at": "2026-05-25T15:12:19+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/06-meta-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/meta-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525151219-meta-ads",
+      "at": "2026-05-25T15:12:19+0530",
+      "lane": "meta-ads",
+      "task": "Correct Hamza Express Meta retargeting Figma creatives for visible food-first hero composition",
+      "status": "ready",
+      "summary": "Executed a Figma-only correction pass on the Hamza Express Meta + WABA retargeting creatives after review showed the food was not visible enough. Inspected the A1 frame structure and identified the causes: heavy global dark overlay, bottom readability panel covering the food zone, oversized headline/voucher/card/CTA stack, and hero image crop not centered on food. Updated all 10 individual Figma creative frames on page 06 Meta + WABA Ads by panning hero image rectangles toward the food, reducing overlay strength, lowering and lightening the readability layer, compressing headline/subline/voucher/CTA sizing, shrinking the voucher card, and keeping HE logo/emblem/1918 brand marks. Verified A1 9x16, A1 4x5, and A5 9x16 renders; food is now the dominant visual proof and WhatsApp voucher UI is secondary.",
+      "next_action": "Review all 10 corrected frames together in Figma, then do final copy/CTA polish and export only after approval. If further creative generation is required, first run Gemini/multimodal inspection on the canonical food references; do not mutate Meta spend or WABA flows without live verification.",
+      "mutation_status": "Figma design mutation only; no Meta campaign/adset/ad, WABA, POS, Odoo, budget, or customer-data mutation."
+    },
     {
       "id": "20260525140240-meta-ads",
       "at": "2026-05-25T14:02:40+0530",
