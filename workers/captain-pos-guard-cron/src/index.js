@@ -5,7 +5,7 @@
 const PAGES_BASE = 'https://hnhotels.in';
 
 async function hit(env, action) {
-  const token = env.CRON_TOKEN || '';
+  const token = env.POS_GUARD_CRON_TOKEN || env.CRON_TOKEN || '';
   const url = `${PAGES_BASE}/api/captain-pos-guard?action=${action}&token=${encodeURIComponent(token)}`;
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'x-cron-token': token } });
