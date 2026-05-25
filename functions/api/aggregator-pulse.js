@@ -479,10 +479,18 @@ async function handleGet(db, url, headers) {
 
   // --- v6.0 HEALTH: silence detection + pipeline status ---
   if (action === 'health') {
-    const [swiggyOrder, zomatoOrder, snapshots] = await Promise.all([
+    const [swiggyOrder, zomatoOrder, snapshots, ring2Health] = await Promise.all([
       db.prepare(`SELECT MAX(captured_at) as last FROM aggregator_orders WHERE platform='swiggy'`).first(),
       db.prepare(`SELECT MAX(captured_at) as last FROM aggregator_orders WHERE platform='zomato'`).first(),
       db.prepare(`SELECT platform, metric_type, MAX(captured_at) as last FROM aggregator_snapshots WHERE platform IN ('swiggy','zomato') GROUP BY platform, metric_type`).all(),
+      db.prepare(`
+        SELECT platform_code AS platform, MAX(last_success_at) AS last
+        FROM aggregator_coa_coordinate_health
+        WHERE platform_code IN ('swiggy','zomato')
+          AND pull_source_code IN ('swiggy_fetch_orders','swiggy_history','zomato_history_v2')
+          AND status_code IN ('ok','empty_response')
+        GROUP BY platform_code
+      `).all().catch(() => ({ results: [] })),
     ]);
 
     const now = Date.now();
@@ -494,6 +502,10 @@ async function handleGet(db, url, headers) {
     for (const r of (snapshots.results || [])) {
       const prev = lastSnapByPlatform[r.platform];
       if (!prev || r.last > prev) lastSnapByPlatform[r.platform] = r.last;
+    }
+    const lastDirectByPlatform = {};
+    for (const r of (ring2Health.results || [])) {
+      if (r.platform && r.last) lastDirectByPlatform[r.platform] = r.last;
     }
 
     // Business hours = 12pm IST to 1am IST next day. During those hours we require
@@ -507,14 +519,18 @@ async function handleGet(db, url, headers) {
     const zomatoAge = ageMin(lastZomatoOrderAt);
     const swiggySnapAge = ageMin(lastSnapByPlatform.swiggy);
     const zomatoSnapAge = ageMin(lastSnapByPlatform.zomato);
+    const swiggyDirectAge = ageMin(lastDirectByPlatform.swiggy);
+    const zomatoDirectAge = ageMin(lastDirectByPlatform.zomato);
+    const swiggyEffectiveAge = swiggyDirectAge ?? swiggySnapAge;
+    const zomatoEffectiveAge = zomatoDirectAge ?? zomatoSnapAge;
 
     let status = 'ok';
     const issues = [];
-    if (swiggySnapAge !== null && swiggySnapAge > 30) { status = 'degraded'; issues.push(`swiggy snapshots silent ${swiggySnapAge}min`); }
-    if (zomatoBusiness && zomatoSnapAge !== null && zomatoSnapAge > 30) { status = 'degraded'; issues.push(`zomato snapshots silent ${zomatoSnapAge}min`); }
-    if (swiggySnapAge !== null && swiggySnapAge > 60) { status = 'down'; }
-    if (zomatoBusiness && zomatoSnapAge !== null && zomatoSnapAge > 60) { status = 'down'; }
-    if (swiggySnapAge === null && zomatoSnapAge === null) { status = 'down'; issues.push('no snapshots ever'); }
+    if (swiggyEffectiveAge !== null && swiggyEffectiveAge > 30) { status = 'degraded'; issues.push(`swiggy direct pull silent ${swiggyEffectiveAge}min`); }
+    if (zomatoBusiness && zomatoEffectiveAge !== null && zomatoEffectiveAge > 30) { status = 'degraded'; issues.push(`zomato direct pull silent ${zomatoEffectiveAge}min`); }
+    if (swiggyEffectiveAge !== null && swiggyEffectiveAge > 60) { status = 'down'; }
+    if (zomatoBusiness && zomatoEffectiveAge !== null && zomatoEffectiveAge > 60) { status = 'down'; }
+    if (swiggyEffectiveAge === null && zomatoEffectiveAge === null) { status = 'down'; issues.push('no direct pulls or snapshots ever'); }
 
     return new Response(JSON.stringify({
       ok: true,
@@ -522,9 +538,11 @@ async function handleGet(db, url, headers) {
       issues,
       last_swiggy_order_at: lastSwiggyOrderAt,
       last_zomato_order_at: lastZomatoOrderAt,
+      last_direct_pull_at: lastDirectByPlatform,
       last_snapshot_at: lastSnapByPlatform,
       age_minutes: {
         swiggy_order: swiggyAge, zomato_order: zomatoAge,
+        swiggy_direct: swiggyDirectAge, zomato_direct: zomatoDirectAge,
         swiggy_snap: swiggySnapAge, zomato_snap: zomatoSnapAge,
       },
       zomato_business_hours: zomatoBusiness,
