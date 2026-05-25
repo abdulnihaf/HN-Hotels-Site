@@ -14,6 +14,7 @@ const apiBase = args.get('--api') || 'https://hnhotels.in/api/aggregator-pulse';
 const apiKey = args.get('--key') || process.env.HN_AGGREGATOR_API_KEY || process.env.HE_CLOUDFLARE_SECRETS_DASHBOARD_API_KEY;
 const mode = args.get('--mode') || 'dry-run';
 const skipSwiggy = args.get('--skip-swiggy') === 'true';
+const skipZomato = args.get('--skip-zomato') === 'true';
 const swiggyHistory = args.get('--swiggy-history') === 'true';
 const swiggyFrom = args.get('--swiggy-from') || null;
 const swiggyTo = args.get('--swiggy-to') || null;
@@ -326,27 +327,29 @@ if (!skipSwiggy) {
   out.swiggy = { skipped: true };
 }
 
-try {
-  if (zomatoBackfill) {
-    if (!zomatoFrom || !zomatoTo) throw new Error('Pass --zomato-from YYYY-MM-DD --zomato-to YYYY-MM-DD for backfill. --zomato-to is exclusive.');
-    out.zomato = {
-      backfill: await backfillZomatoHistory(zomatoCurlPath, zomatoFrom, zomatoTo),
-    };
-  } else {
-    const zomato = await replayCurl(zomatoCurlPath);
-    out.zomato = {
-      replay_http_status: zomato.http_status,
-      replay_top_keys: Object.keys(zomato.payload || {}),
-      replay_status: zomato.payload?.status || null,
-      replay_summary: summarizeZomatoHistory(zomato.payload),
-      ingest: zomato.http_status === 200 ? await postIngest('zomato_order_history', zomato.payload) : null,
-    };
+if (skipZomato) {
+  out.zomato = { skipped: true };
+} else try {
+    if (zomatoBackfill) {
+      if (!zomatoFrom || !zomatoTo) throw new Error('Pass --zomato-from YYYY-MM-DD --zomato-to YYYY-MM-DD for backfill. --zomato-to is exclusive.');
+      out.zomato = {
+        backfill: await backfillZomatoHistory(zomatoCurlPath, zomatoFrom, zomatoTo),
+      };
+    } else {
+      const zomato = await replayCurl(zomatoCurlPath);
+      out.zomato = {
+        replay_http_status: zomato.http_status,
+        replay_top_keys: Object.keys(zomato.payload || {}),
+        replay_status: zomato.payload?.status || null,
+        replay_summary: summarizeZomatoHistory(zomato.payload),
+        ingest: zomato.http_status === 200 ? await postIngest('zomato_order_history', zomato.payload) : null,
+      };
+    }
+  } catch (err) {
+    out.zomato = { replay_error: err.message };
   }
-} catch (err) {
-  out.zomato = { replay_error: err.message };
-}
 
-if (fs.existsSync(zomatoOrderPath)) {
+if (!skipZomato && fs.existsSync(zomatoOrderPath)) {
   const savedOrder = JSON.parse(fs.readFileSync(zomatoOrderPath, 'utf8'));
   out.zomato.saved_order_summary = summarizeZomato(savedOrder);
   out.zomato.saved_order_ingest = await postIngest('zomato_order_detail', savedOrder);
