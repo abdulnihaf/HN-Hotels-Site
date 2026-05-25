@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T10:40:19+0530",
-  "published_at": "2026-05-25T10:40:19+0530",
+  "updated_at": "2026-05-25T10:57:44+0530",
+  "published_at": "2026-05-25T10:57:44+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Shift late-night Hamza ad to craving-first hero",
-      "last_summary": "Updated the late-night Brand conveyance per Nihaf direction to personalize for late-night customer craving: pinned hero now starts with 'Hamza Ghee Rice & Kabab', second headline 'Try Hamza Express', third headline '10% Dine-In Tonight'. Description carries Wahi Hamza naam / naya zaiqa / open till 3 AM and Hamza Hotel search bridge. Verified all headline and description lengths within Google RSA limits. No live mutation.",
-      "next_action": "If approved, use this craving-first hero stack in landing and live RSA setup, with Hamza Hotel search bridge in description/landing subcopy.",
-      "mutation_status": "No live Google Ads mutation. Local docs/mockup only.",
+      "last_task": "Define Hamza brand vs competitor conquest targeting structure",
+      "last_summary": "Recommended separating Hamza Hotel brand capture from competitor conquest. Hamza Hotel/Express searches should run active at 5km because intent is warm and connected to Hamza memory. Competitor terms such as Empire Central Street, Imperial Restaurant, Taj Shivajinagar, New Hilal, and New North Indian should be a separate 2km conquest test, preferably paused or low-budget, using competitor names only as exact/phrase keywords and not in ad copy to avoid trademark/misleading ad risk. Visible ad should remain Hamza Express craving/late-night/offer focused.",
+      "next_action": "If owner approves conquest layer, build separate paused 2km competitor Search campaign/ad groups and keep primary Rs500 Hamza brand test clean first.",
+      "mutation_status": "No live Google Ads mutation. Targeting strategy guidance only.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T10:33:54+0530"
+      "last_run_at": "2026-05-25T10:57:44+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525105744-google-ads",
+      "at": "2026-05-25T10:57:44+0530",
+      "lane": "google-ads",
+      "task": "Define Hamza brand vs competitor conquest targeting structure",
+      "status": "ready",
+      "summary": "Recommended separating Hamza Hotel brand capture from competitor conquest. Hamza Hotel/Express searches should run active at 5km because intent is warm and connected to Hamza memory. Competitor terms such as Empire Central Street, Imperial Restaurant, Taj Shivajinagar, New Hilal, and New North Indian should be a separate 2km conquest test, preferably paused or low-budget, using competitor names only as exact/phrase keywords and not in ad copy to avoid trademark/misleading ad risk. Visible ad should remain Hamza Express craving/late-night/offer focused.",
+      "next_action": "If owner approves conquest layer, build separate paused 2km competitor Search campaign/ad groups and keep primary Rs500 Hamza brand test clean first.",
+      "mutation_status": "No live Google Ads mutation. Targeting strategy guidance only."
+    },
     {
       "id": "20260525104019-delivery-aggregator",
       "at": "2026-05-25T10:40:19+0530",
