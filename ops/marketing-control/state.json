@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T11:37:00+0530",
-  "published_at": "2026-05-25T11:37:00+0530",
+  "updated_at": "2026-05-25T11:46:07+0530",
+  "published_at": "2026-05-25T11:46:07+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Explain live updater host dependency",
-      "last_summary": "Verified aggregator-pulse health live. Current live API reports order rows updated today but platform snapshots are stale since 2026-05-24, so the always-on extension polling path is not currently healthy. Explained that current/manual cURL/script updates run from the machine executing them; background live updates require a logged-in Chrome appliance on laptop or win PC, and stop when that machine/browser is off unless moved to an always-on host.",
-      "next_action": "Set up one always-on aggregator appliance, preferably win PC or dedicated Mac LaunchAgent/Chrome extension, with health visible on HE/NCH dashboards and no dependency on manual cURL.",
-      "mutation_status": "read-only health check and architecture explanation only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
+      "last_task": "Analyze CTO direct frontend API files",
+      "last_summary": "Deep-inspected /Users/nihaf/Downloads Swiggy/Zomato cURL and response files plus local direct partner puller. Confirmed CTO method is direct frontend API replay, not DOM scraping: Swiggy fetchOrders uses RMS API with access token and both outlet IDs; Zomato get-all-v2 uses merchant gateway API with cookie/CSRF headers. Dry-run replay currently returns HTTP 200 for both. Swiggy file is current/live fetch, not full historical; Zomato orders file is single rich detail payload, separate from history list.",
+      "next_action": "Build Cloudflare/Mac scheduled direct API updater with stored session material, pagination, health, and manual session-refresh path; capture Zomato detail endpoint if full per-order discount enrichment is required.",
+      "mutation_status": "read-only file/API analysis and dry-run replay only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-25T11:07:20+0530"
+      "last_run_at": "2026-05-25T11:46:07+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525114607-delivery-aggregator",
+      "at": "2026-05-25T11:46:07+0530",
+      "lane": "delivery-aggregator",
+      "task": "Analyze CTO direct frontend API files",
+      "status": "ready",
+      "summary": "Deep-inspected /Users/nihaf/Downloads Swiggy/Zomato cURL and response files plus local direct partner puller. Confirmed CTO method is direct frontend API replay, not DOM scraping: Swiggy fetchOrders uses RMS API with access token and both outlet IDs; Zomato get-all-v2 uses merchant gateway API with cookie/CSRF headers. Dry-run replay currently returns HTTP 200 for both. Swiggy file is current/live fetch, not full historical; Zomato orders file is single rich detail payload, separate from history list.",
+      "next_action": "Build Cloudflare/Mac scheduled direct API updater with stored session material, pagination, health, and manual session-refresh path; capture Zomato detail endpoint if full per-order discount enrichment is required.",
+      "mutation_status": "read-only file/API analysis and dry-run replay only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
+    },
     {
       "id": "20260525113700-google-ads",
       "at": "2026-05-25T11:37:00+0530",
