@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NCH Aggregator Algorithm — HN Hotels</title>
+<link rel="stylesheet" href="/ops/aggregator/brand-dashboard.css">
+</head>
+<body data-brand="nch" data-brand-name="Nawabi Chai House" data-brand-short="NCH" data-other-url="/ops/he/aggregator/">
+<main class="app">
+  <header class="top">
+    <div>
+      <div class="brandline"><h1 id="brandName">Nawabi Chai House</h1><span id="brandPill" class="brand-pill nch">NCH</span></div>
+      <p class="subtitle" id="subtitle"></p>
+    </div>
+    <div class="top-actions">
+      <a class="linkbtn" href="/ops/aggregator/">Group Orders</a>
+      <a class="linkbtn" id="otherBrand" href="/ops/he/aggregator/">Open HE</a>
+      <button class="btn" id="refresh" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Platform tabs">
+    <button class="tab active" data-platform="all" type="button">Unified</button>
+    <button class="tab" data-platform="zomato" type="button">Zomato</button>
+    <button class="tab" data-platform="swiggy" type="button">Swiggy</button>
+  </nav>
+
+  <section class="filters">
+    <div class="field"><label for="period">Period</label><select id="period"><option value="may_mtd">May MTD</option><option value="today">Today</option><option value="week">7 days</option><option value="month">30 days</option><option value="all">All time</option><option value="custom">Custom</option></select></div>
+    <div class="field"><label for="status">Status</label><select id="status"><option value="all">All</option><option value="delivered">Delivered</option><option value="rejected">Rejected</option><option value="missed">Missed</option><option value="cancelled">Cancelled</option><option value="active">Active</option></select></div>
+    <div class="field"><label for="fromDate">From</label><input id="fromDate" type="date"></div>
+    <div class="field"><label for="toDate">To</label><input id="toDate" type="date"></div>
+    <div class="field"><label>Last Load</label><div class="health-card" style="min-height:36px;padding:8px 10px"><strong id="updated">Not loaded</strong></div></div>
+  </section>
+
+  <section class="health-row">
+    <div class="health-card"><div class="hc-label">Capture Health</div><div class="hc-value" id="healthState">Checking</div><div class="hc-note" id="healthNote">Direct partner API capture status.</div></div>
+    <div class="health-card"><div class="hc-label">Zomato Method</div><div class="hc-value">Day-window backfill</div><div class="hc-note">May history available. Detail fields are partial.</div></div>
+    <div class="health-card"><div class="hc-label">Swiggy Method</div><div class="hc-value">Current fetch</div><div class="hc-note">Historical endpoint/export still needed.</div></div>
+  </section>
+
+  <section class="metrics">
+    <div class="metric"><div class="label">Orders</div><div class="value" id="mOrders">0</div><div class="sub" id="sOrders"></div></div>
+    <div class="metric"><div class="label">Delivered Revenue</div><div class="value green" id="mRevenue">₹0</div><div class="sub" id="sRevenue"></div></div>
+    <div class="metric"><div class="label">Delivered AOV</div><div class="value" id="mAov">₹0</div><div class="sub" id="sAov"></div></div>
+    <div class="metric"><div class="label">Rejected</div><div class="value red" id="mRejected">0</div><div class="sub" id="sRejected"></div></div>
+    <div class="metric"><div class="label">Missed</div><div class="value red" id="mMissed">0</div><div class="sub" id="sMissed"></div></div>
+    <div class="metric"><div class="label">Issue Rate</div><div class="value amber" id="mIssues">0%</div><div class="sub" id="sIssues"></div></div>
+    <div class="metric"><div class="label">Offer Proof</div><div class="value amber" id="mDiscount">0</div><div class="sub" id="sDiscount"></div></div>
+  </section>
+
+  <section class="grid">
+    <article class="panel"><div class="panel-head"><div class="panel-title">Top Demand Items</div><div class="panel-meta">Quantity signal</div></div><div class="panel-body" id="topItems"></div></article>
+    <article class="panel"><div class="panel-head"><div class="panel-title">Demand Slots</div><div class="panel-meta">Time-band behavior</div></div><div class="panel-body" id="demandSlots"></div></article>
+    <article class="panel"><div class="panel-head"><div class="panel-title">Data Coverage</div><div class="panel-meta">What can be trusted</div></div><div class="panel-body" id="coverageBody"></div></article>
+    <article class="panel"><div class="panel-head"><div class="panel-title">Offer Proof</div><div class="panel-meta">Discount-bearing rows</div></div><div class="panel-body" id="offerProof"></div></article>
+    <article class="panel"><div class="panel-head"><div class="panel-title">Platform Mix</div><div class="panel-meta">Zomato vs Swiggy</div></div><div class="panel-body" id="platformMix"></div></article>
+    <article class="panel"><div class="panel-head"><div class="panel-title">Algorithm Notes</div><div class="panel-meta">Execution rule</div></div><div class="panel-body"><div class="row"><div class="row-main"><div class="row-title">No price/offer change without proof</div><div class="row-sub">Use top demand + missed/rejected + discount-known rows to decide. Swiggy historical is not yet complete.</div></div></div></div></article>
+  </section>
+
+  <section class="issue-list">
+    <article class="issue-card"><div class="panel-head"><div class="panel-title">Rejected / Missed</div><div class="panel-meta">Hard algorithm blockers</div></div><div class="panel-body" id="hardFailures"></div></article>
+    <article class="issue-card"><div class="panel-head"><div class="panel-title">Ops Issues</div><div class="panel-meta">Delay, handover, prep markers</div></div><div class="panel-body" id="opsIssues"></div></article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><div class="panel-title">Order Ledger</div><div class="panel-meta" id="tableMeta">Loading</div></div>
+    <div class="table-shell"><div class="table-scroll"><table><thead><tr><th>Time</th><th>Platform</th><th>Status</th><th>Order</th><th>Customer</th><th>Items</th><th>Value</th><th>Discount</th><th>Rating</th><th>Issue / Reason</th><th>Captured</th></tr></thead><tbody id="tableBody"></tbody></table></div></div>
+  </section>
+  <div class="footnote">Built for delivery algorithm execution: demand, offer proof, rejection/missed acceptance, and capture quality. This page reads data only.</div>
+</main>
+<script src="/ops/aggregator/brand-dashboard.js"></script>
+</body>
+</html>
