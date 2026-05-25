@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T07:32:05+0530",
-  "published_at": "2026-05-25T07:32:05+0530",
+  "updated_at": "2026-05-25T07:38:21+0530",
+  "published_at": "2026-05-25T07:38:21+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Refine Hamza Hotel brand ad message",
-      "last_summary": "Nihaf chose the Brand/Legacy message direction for Hamza Hotel searchers: Searching for Hamza Hotel? Come to Hamza Express on HKP Road. Wahi Hamza Naam, Naya Zaiqa, Naya Andaaz. Best Ghee Rice and Kabab. Recommended making this compact for Google Search visible copy with brand bridge + directions intent.",
-      "next_action": "Before mutation, apply compact RSA copy to Brand/Legacy Hamza Search campaign with ₹500/day and 2km radius only after exact ad asset/budget/proximity write endpoints are verified.",
-      "mutation_status": "none-copy-direction-only",
+      "last_task": "Build Hamza Hotel ad visual and five-bucket Google targeting context",
+      "last_summary": "Created local context pack at _context/Google_Ads_Hamza_Brand_2026-05-25 with a Google mobile search ad visual mockup, five HE bucket docs, and a Google Ads targeting menu. Buckets captured from prior intelligence: Hamza Loyalist/Legacy Memory, Late-Night Heavy Non-Veg, Family Comfort Diner, Fast Parcel/Shop Staff/Office Pickup, and Shivajinagar/HKP Road Food Explorer. Recommended current Rs 500/day test remains Brand/Legacy Hamza Hotel searchers in 2km radius with exact/phrase keywords, lodging negatives, Maps-first landing, and Open till 3 AM only after GBP/site/outlet hours are verified.",
+      "next_action": "If approved for live mutation, verify ad group/ad asset IDs plus GBP/site hours, save rollback values, then change Brand campaign 23845870050 to Rs 500/day and 2km radius with pinned brand bridge copy.",
+      "mutation_status": "none-context-and-visual-only",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T07:25:18+0530"
+      "last_run_at": "2026-05-25T07:38:21+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525073821-google-ads",
+      "at": "2026-05-25T07:38:21+0530",
+      "lane": "google-ads",
+      "task": "Build Hamza Hotel ad visual and five-bucket Google targeting context",
+      "status": "ready",
+      "summary": "Created local context pack at _context/Google_Ads_Hamza_Brand_2026-05-25 with a Google mobile search ad visual mockup, five HE bucket docs, and a Google Ads targeting menu. Buckets captured from prior intelligence: Hamza Loyalist/Legacy Memory, Late-Night Heavy Non-Veg, Family Comfort Diner, Fast Parcel/Shop Staff/Office Pickup, and Shivajinagar/HKP Road Food Explorer. Recommended current Rs 500/day test remains Brand/Legacy Hamza Hotel searchers in 2km radius with exact/phrase keywords, lodging negatives, Maps-first landing, and Open till 3 AM only after GBP/site/outlet hours are verified.",
+      "next_action": "If approved for live mutation, verify ad group/ad asset IDs plus GBP/site hours, save rollback values, then change Brand campaign 23845870050 to Rs 500/day and 2km radius with pinned brand bridge copy.",
+      "mutation_status": "none-context-and-visual-only"
+    },
     {
       "id": "20260525073205-delivery-aggregator",
       "at": "2026-05-25T07:32:05+0530",
