@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T13:26:25+0530",
-  "published_at": "2026-05-25T13:26:25+0530",
+  "updated_at": "2026-05-25T13:29:40+0530",
+  "published_at": "2026-05-25T13:29:40+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Rotate Claude API key for future Ads report reasoning",
-      "last_summary": "Saved one canonical ANTHROPIC_API_KEY in ~/.hn-assets.env for Claude/Anthropic API use and removed the two stale Anthropic key exports from the file. Did not print the key. File permissions remain 600. Live API call was not retried successfully because this environment previously had DNS/connectivity failures to api.anthropic.com.",
-      "next_action": "Use ANTHROPIC_API_KEY as the only Claude API env var when building the 4 AM Google Ads report analysis layer; keep WABA/template/report automation gated until explicitly approved after landing bridge data arrives.",
-      "mutation_status": "Local secret rotation only; no Google Ads, Meta, WABA send/template, GBP, POS, Odoo, or Cloudflare production mutation.",
+      "last_task": "Define COA Google Ads 4 AM PDF report layout",
+      "last_summary": "Created COA-based daily Google Ads report architecture plus print-ready visual wireframe and sample PDF under _context/Google_Ads_Daily_Report_2026-05-25. Report is structured as owner verdict, COA action funnel, search intent diagnostic, campaign coordinate cards, outlet reality layer, and learning/correction log.",
+      "next_action": "Build the automated 4 AM generator using Google Ads metrics, landing action events, and later GBP/POS signals; submit WABA utility template only after the report link/attachment path is confirmed.",
+      "mutation_status": "No live ad/WABA/GBP/POS/Odoo/Cloudflare mutation; local ignored report spec and PDF artifact only.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T13:10:35+0530"
+      "last_run_at": "2026-05-25T13:29:40+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525132940-google-ads",
+      "at": "2026-05-25T13:29:40+0530",
+      "lane": "google-ads",
+      "task": "Define COA Google Ads 4 AM PDF report layout",
+      "status": "ready",
+      "summary": "Created COA-based daily Google Ads report architecture plus print-ready visual wireframe and sample PDF under _context/Google_Ads_Daily_Report_2026-05-25. Report is structured as owner verdict, COA action funnel, search intent diagnostic, campaign coordinate cards, outlet reality layer, and learning/correction log.",
+      "next_action": "Build the automated 4 AM generator using Google Ads metrics, landing action events, and later GBP/POS signals; submit WABA utility template only after the report link/attachment path is confirmed.",
+      "mutation_status": "No live ad/WABA/GBP/POS/Odoo/Cloudflare mutation; local ignored report spec and PDF artifact only."
+    },
     {
       "id": "20260525132625-meta-ads",
       "at": "2026-05-25T13:26:25+0530",
@@ -935,16 +945,6 @@
       "summary": "After user placed a live Captain water test order paid by UPI, read-only HE Odoo check shows it saved as pos.order id 8052, reference 2670-6-000006, total ₹20.01, table First Floor Dine-In 4, pricelist 40. Backend sequence group 2670-6 now has 000001, 000002, 000003, 000006 with missing references 000004 and 000005. Therefore two Captain local POS sequence slots were consumed but not recorded in backend pos.order/payment/KDS. At least one is the photographed ₹746.35 failed order; the second may be either another real missed bill or a duplicate failed re-entry attempt for the same bill, requiring staff/UPI/KDS/table confirmation.",
       "next_action": "Ask staff to reconcile exactly two missing Captain sequence slots: identify what orders 2670-6-000004 and 2670-6-000005 corresponded to after 23:20 IST, using memory, UPI history, table served, and kitchen/KDS. Do not clear remaining Captain site data until reconciliation is complete.",
       "mutation_status": "No Odoo mutation by Codex. User-created live test order 2670-6-000006 confirmed backend sync recovered."
-    },
-    {
-      "id": "20260525024259-pos-write",
-      "at": "2026-05-25T02:42:59+0530",
-      "lane": "pos-write",
-      "task": "Deep debug Captain-only POS session-expired outage",
-      "status": "completed",
-      "summary": "Read-only HE Odoo audit confirmed issue is Captain-only, not all POS and not server-wide. Cash Counter and Ground Floor continued creating pos.order/pos.payment and KDS prep records after Captain stopped. Captain config 6/session 269 is still opened and correctly configured with default pricelist 40 and available [40,45]; V2 orders were successfully recorded after the pricelist switch (e.g. Captain paid orders 7994/8001/8003 on pricelist 45), proving deployment did not break config 6. After Captain latest paid order 7994 at 2026-05-24 17:50:33 UTC (23:20 IST), there are no Captain pos.order, pos.payment, or prep/KDS records for the repeated failed attempts. Repeated same error means staff kept re-entering inside the same stale/expired Captain browser auth session; frontend can render POS from local browser state, but backend rejects validation with Session expired.",
-      "next_action": "Recover Captain by preserving tablet local POS data first: do not clear site data initially; login fresh to test.hamzahotel.com in same Chrome/profile, return/refresh Captain POS and sync/recover pending orders. If still blocked, open Captain POS config 6 on a different fresh browser/device for live service and quarantine the stale tablet until unsynced orders are reconciled/cancelled to avoid duplicate later sync.",
-      "mutation_status": "No Odoo mutation. Read-only pos.order/pos.payment/pos.session/pos.prep audit only."
     }
   ]
 }
