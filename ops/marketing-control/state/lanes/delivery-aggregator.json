@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T10:12:35+0530",
-  "published_at": "2026-05-25T10:12:35+0530",
+  "updated_at": "2026-05-25T10:14:51+0530",
+  "published_at": "2026-05-25T10:14:51+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "HE Swiggy historical backfill",
-    "last_summary": "Confirmed Curl 2 was correct for Hamza Express because it used restaurant_id=1342888 and May 1-25 date range; Curl 1 was only May 25. Ran HE Swiggy history backfill May 1-25: 20 rows upserted. Verified HE May owner-orders now 152 total: 132 Zomato + 20 Swiggy, 140 delivered, 8 rejected, 2 missed, 2 active, delivered revenue 50459, discount-known 28. NCH remains 55 total: 35 Zomato + 20 Swiggy.",
-    "next_action": "Use HE/NCH brand dashboards to compare top demand, slots, discount-known rows, rejected/missed orders; do not execute offer/price changes until margin proof is mapped.",
-    "mutation_status": "read-only Swiggy data ingestion; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
+    "last_task": "Aggregator data coverage confirmation",
+    "last_summary": "Verified live owner-orders coverage for May 1-25 across both outlets and platforms. HE: 152 orders = 132 Zomato + 20 Swiggy; delivered revenue 50459; discount-known 28. NCH: 55 orders = 35 Zomato + 20 Swiggy; delivered revenue 10357.11; discount-known 9. Normalized dashboard emits 24 fields per order; consistently populated core fields include platform, brand, order id, status/status_group, date/time, items, order value, captured_at. Swiggy history adds fee/discount/food-ready/handover signals but no customer name; Zomato history adds customer name and some detail/discount proof when order-detail captures exist.",
+    "next_action": "Design next dashboard layer around exception control, revenue leakage, offer proof, and demand-to-price decisions before any platform/POS offer mutation.",
+    "mutation_status": "verification/read-only analysis only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-25T10:07:14+0530"
+    "last_run_at": "2026-05-25T10:14:51+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525101451-delivery-aggregator",
+      "at": "2026-05-25T10:14:51+0530",
+      "lane": "delivery-aggregator",
+      "task": "Aggregator data coverage confirmation",
+      "status": "ready",
+      "summary": "Verified live owner-orders coverage for May 1-25 across both outlets and platforms. HE: 152 orders = 132 Zomato + 20 Swiggy; delivered revenue 50459; discount-known 28. NCH: 55 orders = 35 Zomato + 20 Swiggy; delivered revenue 10357.11; discount-known 9. Normalized dashboard emits 24 fields per order; consistently populated core fields include platform, brand, order id, status/status_group, date/time, items, order value, captured_at. Swiggy history adds fee/discount/food-ready/handover signals but no customer name; Zomato history adds customer name and some detail/discount proof when order-detail captures exist.",
+      "next_action": "Design next dashboard layer around exception control, revenue leakage, offer proof, and demand-to-price decisions before any platform/POS offer mutation.",
+      "mutation_status": "verification/read-only analysis only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
+    },
     {
       "id": "20260525100714-delivery-aggregator",
       "at": "2026-05-25T10:07:14+0530",
