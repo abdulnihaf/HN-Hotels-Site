@@ -45,6 +45,24 @@ async function handlePost(db, request, headers, env) {
     return storeOrders(db, body.orders, headers);
   }
 
+  // Direct partner API ingestion. These routes let a Mac/Worker poller replay
+  // authenticated Swiggy/Zomato partner API calls and write the same order table
+  // without relying on Chrome extension DOM scraping or hn-winpc tab state.
+  if (body.type === 'swiggy_fetch_orders' && body.payload) {
+    const orders = normalizeSwiggyFetchOrders(body.payload);
+    return storeOrders(db, orders, headers);
+  }
+
+  if (body.type === 'zomato_order_history' && body.payload) {
+    const orders = normalizeZomatoOrderHistory(body.payload);
+    return storeOrders(db, orders, headers);
+  }
+
+  if (body.type === 'zomato_order_detail' && (body.payload || body.order)) {
+    const order = normalizeZomatoOrderDetail(body.payload || { order: body.order });
+    return storeOrders(db, order ? [order] : [], headers);
+  }
+
   // Session posts: retired Apr 19 2026. v6.0 extension is appliance-mode and
   // polls Swiggy directly from Chrome; cron's Swiggy path is disabled so no
   // server-side consumer of KV sessions remains. We accept and discard the
@@ -206,6 +224,94 @@ async function handleGet(db, url, headers) {
       total_payout: Math.round(totalPayout * 100) / 100,
       by_outlet: Object.values(byOutlet),
       orders: results,
+    }), { headers });
+  }
+
+  // --- OWNER-ORDERS: clean order-history view for owner dashboard ---
+  // This is intentionally narrower than the old all-in-one dashboard API. It
+  // returns order rows enriched with Zomato detail captures when present, so the
+  // UI can focus on accepted/delivered/rejected/missed orders before any offer
+  // or price-positioning mutation.
+  if (action === 'owner-orders') {
+    const date = url.searchParams.get('date') || 'today';
+    const brand = url.searchParams.get('brand');
+    const platform = url.searchParams.get('platform');
+    const status = url.searchParams.get('status');
+    const fromParam = url.searchParams.get('from');
+    const toParam = url.searchParams.get('to');
+
+    const IST = "'+5 hours', '+30 minutes'";
+    const EFFECTIVE_DATE = `COALESCE(NULLIF(order_date, ''), date(captured_at, ${IST}))`;
+    let dateWhere;
+    const params = [];
+
+    if (fromParam && toParam && /^\d{4}-\d{2}-\d{2}$/.test(fromParam) && /^\d{4}-\d{2}-\d{2}$/.test(toParam)) {
+      dateWhere = `${EFFECTIVE_DATE} >= ? AND ${EFFECTIVE_DATE} <= ?`;
+      params.push(fromParam, toParam);
+    } else switch (date) {
+      case 'today':     dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST})`; break;
+      case 'yesterday': dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST}, '-1 day')`; break;
+      case 'week':      dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, '-7 days')`; break;
+      case 'month':     dateWhere = `${EFFECTIVE_DATE} >= date('now', ${IST}, '-30 days')`; break;
+      case 'all':       dateWhere = `1=1`; break;
+      default:          dateWhere = `${EFFECTIVE_DATE} = date('now', ${IST})`;
+    }
+
+    let sql = `SELECT * FROM aggregator_orders WHERE ${dateWhere}`;
+    if (brand && brand !== 'all') { sql += ' AND brand = ?'; params.push(brand); }
+    if (platform && platform !== 'all') { sql += ' AND platform = ?'; params.push(platform); }
+    sql += ' ORDER BY order_date DESC, order_time DESC, captured_at DESC LIMIT 500';
+
+    const { results } = await db.prepare(sql).bind(...params).all();
+    const detailMap = await latestZomatoDetailMap(db);
+    const baseRows = results || [];
+    const seen = new Set(baseRows.map(r => `${r.platform}:${r.order_id}`));
+
+    const enriched = baseRows.map(row => enrichOwnerOrder(row, detailMap.get(String(row.order_id))));
+
+    // Include rich detail rows even if the base table missed the list-history
+    // row. This happens when only an order detail API call was captured.
+    for (const detail of detailMap.values()) {
+      const key = `zomato:${detail.order_id}`;
+      if (seen.has(key)) continue;
+      if (platform && platform !== 'all' && platform !== 'zomato') continue;
+      if (brand && brand !== 'all' && detail.brand !== brand) continue;
+      const d = detail.order_date || (detail.created_at ? extractIstDate(detail.created_at) : null);
+      if (!dateMatchesFilter(d, detail.captured_at, { date, fromParam, toParam })) continue;
+      enriched.push(enrichOwnerOrder({
+        platform: 'zomato',
+        brand: detail.brand,
+        order_id: detail.order_id,
+        status: detail.status,
+        order_time: detail.order_time,
+        order_date: detail.order_date,
+        customer_name: detail.customer_name,
+        items: detail.items,
+        order_value: detail.order_value,
+        net_payout: null,
+        fees: null,
+        issues: detail.issues,
+        rating: null,
+        outlet_name: detail.outlet_name,
+        captured_at: detail.captured_at,
+      }, detail));
+    }
+
+    let orders = enriched.sort(compareOwnerOrders);
+    if (status && status !== 'all') orders = orders.filter(o => o.status_group === status);
+
+    const summary = ownerOrderSummary(orders);
+    return new Response(JSON.stringify({
+      ok: true,
+      action: 'owner-orders',
+      date_filter: date,
+      generated_at: new Date().toISOString(),
+      summary,
+      orders,
+      data_notes: {
+        discount: 'Populated when a Zomato order-detail response has been captured. List history alone usually does not expose discount lines.',
+        rating: 'Order-level star rating is shown only when the partner API exposes it. Aggregate outlet ratings are separate from order history.',
+      },
     }), { headers });
   }
 
@@ -501,8 +607,8 @@ async function handleGet(db, url, headers) {
     const brand = url.searchParams.get('brand');     // 'he' | 'nch'
     const platform = url.searchParams.get('platform'); // 'swiggy' | 'zomato'
     const period = url.searchParams.get('period') || 'today'; // today|yesterday|thisweek|lastweek|month
-    const HE_OUTLET_SWIGGY = '1342887';
-    const NCH_OUTLET_SWIGGY = '1342888';
+    const HE_OUTLET_SWIGGY = '1342888';
+    const NCH_OUTLET_SWIGGY = '1342887';
     const HE_OUTLET_ZOMATO = '22632449';
     const NCH_OUTLET_ZOMATO = '22632430';
     const targetSwiggyOutlet = brand === 'he' ? HE_OUTLET_SWIGGY : NCH_OUTLET_SWIGGY;
@@ -1111,6 +1217,418 @@ async function handleGet(db, url, headers) {
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
+
+const DIRECT_SWIGGY_OUTLETS = {
+  '1342888': { brand: 'he', outlet_name: 'Hamza Express' },
+  '1342887': { brand: 'nch', outlet_name: 'Nawabi Chai House' },
+};
+
+const DIRECT_ZOMATO_OUTLETS = {
+  '22632449': { brand: 'he', outlet_name: 'Hamza Express' },
+  '22632430': { brand: 'nch', outlet_name: 'Nawabi Chai House' },
+};
+
+function normalizeSwiggyFetchOrders(payload) {
+  const rows = [];
+  for (const restaurant of (payload?.restaurantData || [])) {
+    const outlet = DIRECT_SWIGGY_OUTLETS[String(restaurant.restaurantId)] || { brand: 'unknown', outlet_name: null };
+    for (const order of (restaurant.orders || [])) {
+      const orderedAt = order.status?.ordered_time || order.status?.placed_time || order.last_updated_time || null;
+      rows.push({
+        platform: 'swiggy',
+        brand: outlet.brand,
+        order_id: String(order.order_id || ''),
+        status: order.status?.order_status || order.status?.placed_status || null,
+        order_time: extractLocalTime(orderedAt),
+        order_date: extractLocalDate(orderedAt),
+        customer_name: order.customer?.name || null,
+        items: summarizeSwiggyItems(order.cart?.items || []),
+        order_value: numberOrNull(order.bill ?? order.final_gp_price ?? order.cart?.total),
+        net_payout: null,
+        fees: null,
+        issues: summarizeSwiggyIssues(order),
+        rating: null,
+        outlet_name: outlet.outlet_name || order.restaurant_details?.name || null,
+        captured_at: new Date().toISOString(),
+      });
+    }
+  }
+  return rows.filter(o => o.order_id);
+}
+
+function normalizeZomatoOrderDetail(payload) {
+  const order = payload?.order || payload;
+  if (!order?.id) return null;
+  const outlet = DIRECT_ZOMATO_OUTLETS[String(order.resId || '')] || { brand: 'unknown', outlet_name: null };
+  const dishes = order.cartDetails?.items?.dishes || [];
+  const createdAt = order.createdAt || order.actionedAt || order.updatedAt || null;
+  return {
+    platform: 'zomato',
+    brand: outlet.brand,
+    order_id: String(order.id),
+    status: order.state || null,
+    order_time: extractIstTime(createdAt),
+    order_date: extractIstDate(createdAt),
+    customer_name: order.creator?.name || null,
+    items: dishes.map(d => `${d.quantity || 1} x ${d.name || 'Unknown item'}`).join(', '),
+    order_value: numberOrNull(order.cartDetails?.total?.amountDetails?.totalCost)
+      ?? numberOrNull(order.cartDetails?.total)
+      ?? sumNumbers(dishes.map(d => d.totalCost)),
+    net_payout: null,
+    fees: null,
+    issues: summarizeZomatoIssues(order),
+    rating: null,
+    outlet_name: outlet.outlet_name,
+    captured_at: new Date().toISOString(),
+  };
+}
+
+function normalizeZomatoOrderHistory(payload) {
+  const snippets = Array.isArray(payload?.snippets) ? payload.snippets : [];
+  const capturedAt = new Date().toISOString();
+  return snippets.map(snippet => {
+    const text = collectPlainStrings(snippet, 80).map(stripZomatoText).filter(Boolean);
+    const joined = text.join(' | ');
+    const id = firstMatch(joined, /\bID:\s*(\d{5,})\b/i)
+      || firstDeepValue(snippet, /^(orderId|order_id|displayId|id)$/i, v => /^\d{5,}$/.test(String(v)));
+    if (!id) return null;
+
+    const status = detectZomatoHistoryStatus(text);
+    const dateText = text.find(t => /\d{1,2}:\d{2}\s*(AM|PM)\s*\|\s*\d{1,2}\s+[A-Za-z]{3,}/i.test(t)) || '';
+    const orderDateTime = parseZomatoHistoryDateTime(dateText);
+    const items = text.filter(t => /^\d+\s*x\s+/i.test(t)).join(', ') || null;
+    const valueText = text.find(t => /₹\s*[\d,.]+/.test(t)) || '';
+    const issue = detectZomatoHistoryIssue(text, status);
+
+    return {
+      platform: 'zomato',
+      brand: 'unknown',
+      order_id: String(id),
+      status,
+      order_time: orderDateTime.time,
+      order_date: orderDateTime.date,
+      customer_name: firstMatch(joined, /\bBy\s+([^|]+?)(?:\s*\||$)/i),
+      items,
+      order_value: numberOrNull(valueText),
+      net_payout: null,
+      fees: null,
+      issues: issue,
+      rating: extractPossibleRating(text),
+      outlet_name: null,
+      captured_at: capturedAt,
+    };
+  }).filter(Boolean);
+}
+
+function summarizeSwiggyItems(items) {
+  return (items || []).map(i => `${i.quantity || i.qty || 1} x ${i.name || i.item_name || i.itemName || 'Unknown item'}`).join(', ');
+}
+
+function summarizeSwiggyIssues(order) {
+  const status = order.status || {};
+  const parts = [];
+  if (/cancel|reject|out_of_stock/i.test(`${status.order_status || ''} ${status.placed_status || ''} ${status.placingState || ''}`)) {
+    parts.push(status.placed_status || status.placingState || 'cancelled');
+  }
+  if (status.hand_over_delayed) parts.push('handover delayed');
+  if (order.customer_comment) parts.push(`customer note: ${String(order.customer_comment).slice(0, 120)}`);
+  return parts.join('; ') || null;
+}
+
+function summarizeZomatoIssues(order) {
+  const parts = [];
+  if (/reject|timeout|cancel/i.test(order.state || '')) parts.push(order.state);
+  const delays = order.delayInfo?.stateMachine || [];
+  const activeDelay = delays.find(d => /DELAY/i.test(d.state || '') && !/NO_DELAY/i.test(d.state || ''));
+  if (activeDelay) parts.push(activeDelay.state);
+  return parts.join('; ') || null;
+}
+
+function numberOrNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(String(v).replace(/[^\d.-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function sumNumbers(values) {
+  const n = values.reduce((s, v) => s + (numberOrNull(v) || 0), 0);
+  return n || null;
+}
+
+function extractLocalDate(value) {
+  if (!value) return null;
+  const m = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
+function extractLocalTime(value) {
+  if (!value) return null;
+  const m = String(value).match(/T(\d{2}:\d{2})/);
+  return m ? m[1] : null;
+}
+
+function extractIstDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return extractLocalDate(value);
+  return new Date(d.getTime() + 330 * 60000).toISOString().slice(0, 10);
+}
+
+function extractIstTime(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return extractLocalTime(value);
+  return new Date(d.getTime() + 330 * 60000).toISOString().slice(11, 16);
+}
+
+function collectPlainStrings(value, limit = 80, out = []) {
+  if (out.length >= limit || value == null) return out;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const s = String(value).trim();
+    if (s) out.push(s);
+    return out;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectPlainStrings(item, limit, out);
+    return out;
+  }
+  if (typeof value === 'object') {
+    for (const child of Object.values(value)) {
+      collectPlainStrings(child, limit, out);
+      if (out.length >= limit) break;
+    }
+  }
+  return out;
+}
+
+function stripZomatoText(value) {
+  let s = String(value || '').replace(/\u00a0/g, ' ').trim();
+  for (let i = 0; i < 4; i++) {
+    s = s.replace(/<[^|<>]+\|\{[^|{}]+\|([^{}<>]*)\}>/g, '$1');
+    s = s.replace(/\{[^|{}]+\|([^{}<>]*)\}/g, '$1');
+  }
+  return s.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function firstMatch(text, regex) {
+  const m = String(text || '').match(regex);
+  return m ? m[1].trim() : null;
+}
+
+function firstDeepValue(value, keyRegex, valuePredicate) {
+  if (value == null) return null;
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      const found = firstDeepValue(child, keyRegex, valuePredicate);
+      if (found != null) return found;
+    }
+    return null;
+  }
+  if (typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      if (keyRegex.test(key) && valuePredicate(child)) return child;
+      const found = firstDeepValue(child, keyRegex, valuePredicate);
+      if (found != null) return found;
+    }
+  }
+  return null;
+}
+
+function detectZomatoHistoryStatus(text) {
+  const hay = text.join(' ').toUpperCase();
+  if (/REJECTED/.test(hay)) return 'REJECTED';
+  if (/TIME\s*OUT|TIMED\s*OUT|MISSED/.test(hay)) return 'TIMED_OUT';
+  if (/CANCELLED|CANCELED/.test(hay)) return 'CANCELLED';
+  if (/DELIVERED/.test(hay)) return 'DELIVERED';
+  if (/READY/.test(hay)) return 'READY';
+  if (/PREPAR/.test(hay)) return 'PREPARING';
+  if (/ACCEPT/.test(hay)) return 'ACCEPTED';
+  return null;
+}
+
+function detectZomatoHistoryIssue(text, status) {
+  const issueLines = text.filter(t => /reject|cancel|missed|timed?\s*out|delay|handover|complaint|not accepted/i.test(t));
+  if (issueLines.length) return Array.from(new Set(issueLines)).join('; ');
+  if (/REJECT/i.test(status || '')) return 'Rejected by restaurant';
+  if (/TIME|MISS/i.test(status || '')) return 'Missed acceptance / timed out';
+  if (/CANCEL/i.test(status || '')) return 'Cancelled';
+  return null;
+}
+
+function parseZomatoHistoryDateTime(value) {
+  const m = String(value || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)\s*\|\s*(\d{1,2})\s+([A-Za-z]{3,})/i);
+  if (!m) return { date: null, time: null };
+  let hour = parseInt(m[1], 10);
+  const min = m[2];
+  const ap = m[3].toUpperCase();
+  if (ap === 'PM' && hour !== 12) hour += 12;
+  if (ap === 'AM' && hour === 12) hour = 0;
+  const monthName = m[5].slice(0, 3).toLowerCase();
+  const month = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' }[monthName];
+  const year = new Date(Date.now() + 330 * 60000).getUTCFullYear();
+  return {
+    date: month ? `${year}-${month}-${String(parseInt(m[4], 10)).padStart(2, '0')}` : null,
+    time: `${String(hour).padStart(2, '0')}:${min}`,
+  };
+}
+
+function extractPossibleRating(text) {
+  const candidates = text
+    .map(t => String(t).trim())
+    .filter(t => /^[1-5](?:\.0)?$/.test(t));
+  return candidates.length === 1 ? Number(candidates[0]) : null;
+}
+
+async function latestZomatoDetailMap(db) {
+  const { results } = await db.prepare(`
+    SELECT * FROM aggregator_snapshots
+    WHERE platform='zomato' AND metric_type='api_orders'
+    ORDER BY captured_at DESC LIMIT 500
+  `).all();
+  const map = new Map();
+  for (const row of (results || [])) {
+    const payload = safeJsonParse(row.data);
+    const order = payload?.order || payload;
+    if (!order?.id || map.has(String(order.id))) continue;
+    const normalized = normalizeZomatoOrderDetail({ order });
+    if (!normalized) continue;
+    const discount = extractZomatoDiscount(order);
+    map.set(String(order.id), {
+      ...normalized,
+      order_id: String(order.id),
+      display_id: order.displayId || null,
+      created_at: order.createdAt || null,
+      captured_at: row.captured_at,
+      customer_order_count: order.creator?.orderCount ?? null,
+      customer_order_count_label: order.creator?.orderCountDisplay || null,
+      payment_method: order.paymentMethod || order.paymentDetails?.paymentType || null,
+      discount_total: discount.total,
+      discount_lines: discount.lines,
+      detail_available: true,
+    });
+  }
+  return map;
+}
+
+function extractZomatoDiscount(order) {
+  const lines = [];
+  const dishes = order?.cartDetails?.items?.dishes || [];
+  for (const dish of dishes) {
+    for (const calc of (dish.calculations || [])) {
+      const amount = numberOrNull(calc.amount ?? calc.value ?? calc.totalCost ?? calc.cost);
+      lines.push({
+        item: dish.name || null,
+        name: calc.name || calc.title || 'discount',
+        amount,
+        is_percentage: calc.isPercentage ?? null,
+      });
+    }
+  }
+  const total = lines.reduce((sum, line) => sum + (line.amount || 0), 0);
+  return { total: lines.length ? Math.round(total * 100) / 100 : null, lines };
+}
+
+function enrichOwnerOrder(row, detail) {
+  const merged = { ...row };
+  if (detail) {
+    merged.brand = row.brand && row.brand !== 'unknown' ? row.brand : detail.brand;
+    merged.outlet_name = row.outlet_name || detail.outlet_name;
+    merged.customer_name = row.customer_name || detail.customer_name;
+    merged.items = row.items || detail.items;
+    merged.order_value = row.order_value ?? detail.order_value;
+    merged.order_date = row.order_date || detail.order_date;
+    merged.order_time = row.order_time || detail.order_time;
+    merged.issues = row.issues || detail.issues;
+  }
+  const discountTotal = detail?.discount_total ?? null;
+  const rating = row.rating ?? detail?.rating ?? null;
+  const issues = row.issues || detail?.issues || null;
+  const statusGroup = ownerStatusGroup(row.status || detail?.status, issues);
+  return {
+    platform: row.platform,
+    brand: merged.brand || 'unknown',
+    outlet_name: merged.outlet_name || null,
+    order_id: String(row.order_id || detail?.order_id || ''),
+    display_id: detail?.display_id || null,
+    status: row.status || detail?.status || null,
+    status_group: statusGroup,
+    order_date: merged.order_date || null,
+    order_time: merged.order_time || null,
+    customer_name: merged.customer_name || null,
+    customer_order_count: detail?.customer_order_count ?? null,
+    customer_order_count_label: detail?.customer_order_count_label || null,
+    rating,
+    items: merged.items || null,
+    order_value: merged.order_value ?? null,
+    net_payout: row.net_payout ?? null,
+    fees: row.fees ?? null,
+    discount_total: discountTotal,
+    discount_lines: detail?.discount_lines || [],
+    payment_method: detail?.payment_method || null,
+    issues,
+    rejection_reason: /reject|cancel|time|miss/i.test(`${row.status || ''} ${issues || ''}`) ? issues || row.status : null,
+    detail_available: Boolean(detail?.detail_available),
+    captured_at: row.captured_at || detail?.captured_at || null,
+  };
+}
+
+function ownerStatusGroup(status, issues) {
+  const hay = `${status || ''} ${issues || ''}`.toLowerCase();
+  if (/miss|timed?\s*out|not accepted/.test(hay)) return 'missed';
+  if (/reject/.test(hay)) return 'rejected';
+  if (/cancel/.test(hay)) return 'cancelled';
+  if (/deliver/.test(hay)) return 'delivered';
+  if (/accept|prepar|ready|placed|ordered|picked|dispatch/.test(hay)) return 'active';
+  return 'other';
+}
+
+function compareOwnerOrders(a, b) {
+  const ad = `${a.order_date || ''}T${a.order_time || '00:00'}`;
+  const bd = `${b.order_date || ''}T${b.order_time || '00:00'}`;
+  if (ad !== bd) return bd.localeCompare(ad);
+  return String(b.captured_at || '').localeCompare(String(a.captured_at || ''));
+}
+
+function ownerOrderSummary(orders) {
+  const byStatus = {};
+  const byPlatform = {};
+  let deliveredRevenue = 0;
+  let discountKnown = 0;
+  for (const order of orders) {
+    byStatus[order.status_group] = (byStatus[order.status_group] || 0) + 1;
+    byPlatform[order.platform] = (byPlatform[order.platform] || 0) + 1;
+    if (order.status_group === 'delivered') deliveredRevenue += order.order_value || 0;
+    if (order.discount_total != null) discountKnown++;
+  }
+  return {
+    total_orders: orders.length,
+    delivered_orders: byStatus.delivered || 0,
+    active_orders: byStatus.active || 0,
+    rejected_orders: byStatus.rejected || 0,
+    missed_orders: byStatus.missed || 0,
+    cancelled_orders: byStatus.cancelled || 0,
+    issue_orders: orders.filter(o => o.issues).length,
+    delivered_revenue: Math.round(deliveredRevenue * 100) / 100,
+    discount_known_orders: discountKnown,
+    by_status: byStatus,
+    by_platform: byPlatform,
+  };
+}
+
+function dateMatchesFilter(orderDate, capturedAt, { date, fromParam, toParam }) {
+  const effective = orderDate || extractIstDate(capturedAt);
+  if (!effective) return date === 'all';
+  if (fromParam && toParam) return effective >= fromParam && effective <= toParam;
+  const now = new Date(Date.now() + 330 * 60000);
+  const today = now.toISOString().slice(0, 10);
+  const oneDay = 24 * 60 * 60 * 1000;
+  if (date === 'all') return true;
+  if (date === 'today') return effective === today;
+  if (date === 'yesterday') return effective === new Date(now.getTime() - oneDay).toISOString().slice(0, 10);
+  if (date === 'week') return effective >= new Date(now.getTime() - 7 * oneDay).toISOString().slice(0, 10);
+  if (date === 'month') return effective >= new Date(now.getTime() - 30 * oneDay).toISOString().slice(0, 10);
+  return effective === today;
+}
 
 // v6.0: Classify URL into a metric_type. For Zomato per-outlet endpoints we include
 // the res_id so HE and NCH captures don't collide in the 10-min dedup window.
