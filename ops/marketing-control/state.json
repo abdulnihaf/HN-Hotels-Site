@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T10:02:34+0530",
-  "published_at": "2026-05-25T10:02:34+0530",
+  "updated_at": "2026-05-25T10:04:01+0530",
+  "published_at": "2026-05-25T10:04:01+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Add curiosity-led new Hamza face ad conveyance",
-      "last_summary": "Revised the late-night Hamza Hotel ad psychology again after Nihaf feedback. Moved from plain bridge to memory-plus-curiosity: 'Hamza Hotel Yaad Hai? | Hamza Express: Naya Andaaz' with description 'HKP Road ka new Hamza face. Wahi Hamza naam. Open till 3 AM. 10% dine-in.' Updated exact config, copy doc, and visual mockup to position Hamza Express as the new face/new andaaz of remembered Hamza rather than a forced redirect.",
-      "next_action": "Use this curiosity-led continuity copy for landing/RSA if approved; verify Google headline length and landing proof before live mutation.",
-      "mutation_status": "No live Google Ads mutation. Local copy/spec/mockup updated only.",
+      "last_task": "Anchor Hamza Hotel ad copy on exact search action",
+      "last_summary": "Adjusted the late-night Brand copy to reflect the core intelligence that the person actively searched Hamza Hotel. Final frame now starts with 'Hamza Hotel Search Kiya?' then opens curiosity with 'Hamza Express: Naya Andaaz', followed by HKP Road/new Hamza face, Wahi Hamza naam, Open till 3 AM, and 10% dine-in. Updated config, copy doc, and mockup; removed blunt action wording.",
+      "next_action": "If approved, use this search-mirroring curiosity copy for landing/RSA pins before live campaign mutation.",
+      "mutation_status": "No live Google Ads mutation. Local docs/mockup only.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T09:04:31+0530"
+      "last_run_at": "2026-05-25T10:04:01+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525100401-google-ads",
+      "at": "2026-05-25T10:04:01+0530",
+      "lane": "google-ads",
+      "task": "Anchor Hamza Hotel ad copy on exact search action",
+      "status": "ready",
+      "summary": "Adjusted the late-night Brand copy to reflect the core intelligence that the person actively searched Hamza Hotel. Final frame now starts with 'Hamza Hotel Search Kiya?' then opens curiosity with 'Hamza Express: Naya Andaaz', followed by HKP Road/new Hamza face, Wahi Hamza naam, Open till 3 AM, and 10% dine-in. Updated config, copy doc, and mockup; removed blunt action wording.",
+      "next_action": "If approved, use this search-mirroring curiosity copy for landing/RSA pins before live campaign mutation.",
+      "mutation_status": "No live Google Ads mutation. Local docs/mockup only."
+    },
     {
       "id": "20260525100234-delivery-aggregator",
       "at": "2026-05-25T10:02:34+0530",
