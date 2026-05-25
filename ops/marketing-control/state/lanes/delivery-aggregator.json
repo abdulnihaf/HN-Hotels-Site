@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:42:29+0530",
-  "published_at": "2026-05-25T12:42:29+0530",
+  "updated_at": "2026-05-25T12:44:48+0530",
+  "published_at": "2026-05-25T12:44:48+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Verify WABA approval and aggregator live status",
-    "last_summary": "Verified Meta template aggregator_session_expired_alert_v1 is APPROVED. Verified no deployed end-to-end failure alert wiring exists yet for aggregator session expiry. Live aggregator health endpoint reports status down with Swiggy/Zomato snapshots stale since 2026-05-24 and order rows stale by hours. Direct CTO cURL replay still works in dry-run for Swiggy and Zomato, but it is not running as scheduled ingest.",
-    "next_action": "Wire approved WABA template into aggregator health failure detection and scheduled direct API ingest; then verify by non-sending dry-run, controlled test alert, and live dashboard freshness.",
-    "mutation_status": "read-only verification only; no WhatsApp send, no partner portal/POS/Odoo/ad/price/offer mutation",
+    "last_task": "Plan COA aggregator live architecture",
+    "last_summary": "Read COA doctrine page and mapped aggregator dashboard/live-ingest into COA rings. Planned architecture from Entity ring (Brand, Outlet, Platform, PartnerSession, PullRequest, PartnerOrder, OrderLine, OfferExposure, HealthState) to Action ring (refresh session, poll current, backfill history, normalize, reconcile, alert, owner decision) to Event ring (session expired, order missed/rejected, offer anomaly, revenue-control opportunity). Current state remains template approved and CTO cURL replay valid, but live scheduled ingest/alert loop still needs implementation.",
+    "next_action": "Implement aggregator COA foundation: D1 session/pull/health tables, direct poller cron/manual refresh API, WABA alert wiring, and dashboard freshness controls before any price/offer mutation.",
+    "mutation_status": "architecture planning only; no partner portal, POS, Odoo, ad, WABA send, price, or offer mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-25T12:30:45+0530"
+    "last_run_at": "2026-05-25T12:44:48+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525124448-delivery-aggregator",
+      "at": "2026-05-25T12:44:48+0530",
+      "lane": "delivery-aggregator",
+      "task": "Plan COA aggregator live architecture",
+      "status": "ready",
+      "summary": "Read COA doctrine page and mapped aggregator dashboard/live-ingest into COA rings. Planned architecture from Entity ring (Brand, Outlet, Platform, PartnerSession, PullRequest, PartnerOrder, OrderLine, OfferExposure, HealthState) to Action ring (refresh session, poll current, backfill history, normalize, reconcile, alert, owner decision) to Event ring (session expired, order missed/rejected, offer anomaly, revenue-control opportunity). Current state remains template approved and CTO cURL replay valid, but live scheduled ingest/alert loop still needs implementation.",
+      "next_action": "Implement aggregator COA foundation: D1 session/pull/health tables, direct poller cron/manual refresh API, WABA alert wiring, and dashboard freshness controls before any price/offer mutation.",
+      "mutation_status": "architecture planning only; no partner portal, POS, Odoo, ad, WABA send, price, or offer mutation"
+    },
     {
       "id": "20260525123045-delivery-aggregator",
       "at": "2026-05-25T12:30:45+0530",
@@ -209,16 +219,6 @@
       "summary": "Root cause was local parser error: the direct puller parsed -H headers but ignored cURL -b/--cookie, so Zomato CSRF headers were replayed without browser cookies and returned 401. Patched scripts/aggregator-direct-partner-pull.mjs to include -b cookies and added safe Zomato history summaries. Dry-run now returns Zomato HTTP 200 with 10 snippets and hasMore=true; no ingest/deploy/mutation performed.",
       "next_action": "Use Copy as cURL exactly as captured; direct puller can now replay Zomato get-all-v2 from saved Downloads/zomato-curl.txt. Next gate is optional ingest dry-run review, then controlled API ingest only after approval.",
       "mutation_status": "none - local parser fix and read-only dry-run replay only"
-    },
-    {
-      "id": "20260525062455-delivery-aggregator",
-      "at": "2026-05-25T06:24:55+0530",
-      "lane": "delivery-aggregator",
-      "task": "Save and dry-run updated Zomato partner cURL",
-      "status": "ready",
-      "summary": "Saved pasted Zomato partner cURL to Downloads/zomato-curl.txt and dry-ran direct partner puller. Swiggy replay remained HTTP 200 with current NCH orders; Zomato replay still returned HTTP 401, so no ingest/deploy/mutation was performed.",
-      "next_action": "Capture a fresh Zomato get-all-v2 request via DevTools Network using Copy as cURL, preferably directly to file instead of chat, then rerun dry-run before enabling ingest.",
-      "mutation_status": "none - saved local auth cURL and dry-run only; no platform/order/offer/margin mutation"
     }
   ]
 }
