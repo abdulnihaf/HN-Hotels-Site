@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T09:04:31+0530",
-  "published_at": "2026-05-25T09:04:31+0530",
+  "updated_at": "2026-05-25T09:22:46+0530",
+  "published_at": "2026-05-25T09:22:46+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -125,12 +125,12 @@
       "subgroup": "Creative Surface",
       "risk": "print/vendor handoff",
       "status": "ready",
-      "last_task": "Construct NCH 250ml flask back panel from finalized front reference",
-      "last_summary": "Built a scratch v2 back-panel production pack using the finalized front kraft/border system and supplied back reference: matched background fill, NCH emblem, gift message, QR, WhatsApp phone, and legal copy; exported 136x216mm PDF/SVG plus preview/proof files in /Users/nihaf/Downloads/NCH_Flask_Back_Production_2026-05-25; qpdf and pdfinfo checks passed.",
-      "next_action": "Review the back v2 preview/proof, confirm legal copy and QR destination, then assemble front+back+side/tuck dieline vendor handoff.",
-      "mutation_status": "Created local print/proof assets only; no POS/Odoo/ad/vendor mutation.",
+      "last_task": "Refine NCH 250ml flask back aesthetic with Gemini-guided dual QR system",
+      "last_summary": "Built v5 Gemini-refined NCH 250ml flask back production candidate at /Users/nihaf/Downloads/NCH_Flask_Back_Production_2026-05-25_v5_GeminiRefined: larger NCH emblem, simplified premium hierarchy, WhatsApp dynamic QR plus Google review QR, Instagram identity line, dark sepia legal footer, front-matched kraft/border system, and Gemini nano-banana-pro-preview concept reference. Verified qpdf, PDF page size 136x216mm, and zbar decoding of both QRs.",
+      "next_action": "Confirm phone/legal/FSSAI and live /go/flask redirect, then assemble front+back into full 250ml vendor dieline with side/gable panels.",
+      "mutation_status": "Created local print/proof assets and Gemini concept only; no POS/Odoo/ad/vendor mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-      "last_run_at": "2026-05-25T06:44:09+0530"
+      "last_run_at": "2026-05-25T09:22:46+0530"
     },
     "reel-making": {
       "title": "11 Reel Making",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525092246-packaging-design",
+      "at": "2026-05-25T09:22:46+0530",
+      "lane": "packaging-design",
+      "task": "Refine NCH 250ml flask back aesthetic with Gemini-guided dual QR system",
+      "status": "ready",
+      "summary": "Built v5 Gemini-refined NCH 250ml flask back production candidate at /Users/nihaf/Downloads/NCH_Flask_Back_Production_2026-05-25_v5_GeminiRefined: larger NCH emblem, simplified premium hierarchy, WhatsApp dynamic QR plus Google review QR, Instagram identity line, dark sepia legal footer, front-matched kraft/border system, and Gemini nano-banana-pro-preview concept reference. Verified qpdf, PDF page size 136x216mm, and zbar decoding of both QRs.",
+      "next_action": "Confirm phone/legal/FSSAI and live /go/flask redirect, then assemble front+back into full 250ml vendor dieline with side/gable panels.",
+      "mutation_status": "Created local print/proof assets and Gemini concept only; no POS/Odoo/ad/vendor mutation."
+    },
     {
       "id": "20260525090431-google-ads",
       "at": "2026-05-25T09:04:31+0530",
