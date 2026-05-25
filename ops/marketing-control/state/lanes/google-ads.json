@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T08:47:31+0530",
-  "published_at": "2026-05-25T08:47:31+0530",
+  "updated_at": "2026-05-25T08:49:33+0530",
+  "published_at": "2026-05-25T08:49:33+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Explain Google Ads targeting controls for Hamza Hotel late-night setup",
-    "last_summary": "Explained location mode, Search partners, Display, bidding, and audiences from scratch for the Hamza Express late-night Hamza Hotel campaign. Recommended presence-only, Google Search only, Display off, manual CPC initially, and audiences as observation only because the keyword/location/schedule combination is the real targeting brain for physical footfall.",
-    "next_action": "Use these settings when applying the live Brand campaign setup after landing proof and ad asset/keyword/schedule mutation path are ready.",
-    "mutation_status": "No live Google Ads mutation. Explanation and platform guidance only.",
+    "last_task": "Confirm readiness for Hamza Hotel late-night campaign configuration",
+    "last_summary": "Readiness answer prepared: strategy is finalized for late-night Hamza Hotel intent capture with Rs500/day, 5km presence-only, 10PM-3AM, Search-only, manual CPC, exact/phrase Hamza keywords, 10% dine-in offer, and Maps-first CTA. Remaining execution caveat: do not only mutate budget; live setup must also apply keywords, RSA copy, schedule, assets, and landing proof.",
+    "next_action": "On explicit approval, implement/apply exact campaign setup via purpose-built endpoint or Google Ads UI, verify readback, then enable with rollback plan.",
+    "mutation_status": "No live mutation. Readiness and final configuration confirmation only.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-    "last_run_at": "2026-05-25T08:37:34+0530"
+    "last_run_at": "2026-05-25T08:49:33+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525084933-google-ads",
+      "at": "2026-05-25T08:49:33+0530",
+      "lane": "google-ads",
+      "task": "Confirm readiness for Hamza Hotel late-night campaign configuration",
+      "status": "ready",
+      "summary": "Readiness answer prepared: strategy is finalized for late-night Hamza Hotel intent capture with Rs500/day, 5km presence-only, 10PM-3AM, Search-only, manual CPC, exact/phrase Hamza keywords, 10% dine-in offer, and Maps-first CTA. Remaining execution caveat: do not only mutate budget; live setup must also apply keywords, RSA copy, schedule, assets, and landing proof.",
+      "next_action": "On explicit approval, implement/apply exact campaign setup via purpose-built endpoint or Google Ads UI, verify readback, then enable with rollback plan.",
+      "mutation_status": "No live mutation. Readiness and final configuration confirmation only."
+    },
     {
       "id": "20260525083734-google-ads",
       "at": "2026-05-25T08:37:34+0530",
