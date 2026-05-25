@@ -78,6 +78,15 @@ async function handlePost(db, request, headers, env) {
     return new Response(JSON.stringify(result), { headers });
   }
 
+  // COA Ring 3 event/intelligence builder. This reads normalized order rows
+  // written by Ring 2 and creates proof rows for ops leaks and price/offer
+  // candidates. It does not mutate aggregator portals, POS, Odoo, ads, prices,
+  // or offers.
+  if ((body.type === 'coa_ring3_analyze' || body.action === 'coa_ring3_analyze')) {
+    const result = await executeAggregatorCoaRing3Analyze(db, body);
+    return new Response(JSON.stringify(result), { headers });
+  }
+
   // Session posts: retired Apr 19 2026. v6.0 extension is appliance-mode and
   // polls Swiggy directly from Chrome; cron's Swiggy path is disabled so no
   // server-side consumer of KV sessions remains. We accept and discard the
@@ -455,6 +464,59 @@ async function handleGet(db, url, headers) {
         'No POS/Odoo/ad/price/offer mutation is possible from this action.',
         'Partner session material must live in Cloudflare secrets, not D1.',
         'WABA owner alert sends only when notify=true and a critical session/parser failure is detected.',
+      ],
+    }), { headers });
+  }
+
+  // --- COA EVENTS: Ring 3 event/intelligence layer over Ring 2 order actions ---
+  if (action === 'coa-events') {
+    await ensureAggregatorCoaRing3(db);
+    const fromParam = validIsoDate(url.searchParams.get('from')) ? url.searchParams.get('from') : todayIstDate();
+    const toParam = validIsoDate(url.searchParams.get('to')) ? url.searchParams.get('to') : fromParam;
+    const brand = url.searchParams.get('brand');
+    const platform = url.searchParams.get('platform');
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '200', 10), 500);
+    let eventSql = `
+      SELECT * FROM aggregator_coa_event
+      WHERE order_date >= ? AND order_date <= ?
+    `;
+    const eventParams = [fromParam, toParam];
+    if (brand && brand !== 'all') { eventSql += ` AND brand_code = ?`; eventParams.push(brand); }
+    if (platform && platform !== 'all') { eventSql += ` AND platform_code = ?`; eventParams.push(platform); }
+    eventSql += ` ORDER BY severity DESC, order_date DESC, order_time DESC, last_seen_at DESC LIMIT ?`;
+    eventParams.push(limit);
+
+    let candidateSql = `
+      SELECT * FROM aggregator_coa_price_offer_candidate
+      WHERE window_from = ? AND window_to = ?
+    `;
+    const candidateParams = [fromParam, toParam];
+    if (brand && brand !== 'all') { candidateSql += ` AND brand_code = ?`; candidateParams.push(brand); }
+    if (platform && platform !== 'all') { candidateSql += ` AND platform_code = ?`; candidateParams.push(platform); }
+    candidateSql += ` ORDER BY orders_count DESC, delivered_revenue DESC LIMIT ?`;
+    candidateParams.push(limit);
+
+    const [events, candidates] = await Promise.all([
+      db.prepare(eventSql).bind(...eventParams).all(),
+      db.prepare(candidateSql).bind(...candidateParams).all(),
+    ]);
+    const parsedEvents = (events.results || []).map(parseRing3JsonColumns);
+    const parsedCandidates = (candidates.results || []).map(parseRing3JsonColumns);
+    return new Response(JSON.stringify({
+      ok: true,
+      action: 'coa-events',
+      doctrine: 'COA Ring 3 - Event. Events are composed from Ring 2 pull actions and Ring 1 coordinates.',
+      seed_version: AGGREGATOR_COA_RING3_VERSION,
+      window: { from: fromParam, to: toParam },
+      generated_at: new Date().toISOString(),
+      summary: ring3Summary(parsedEvents, parsedCandidates),
+      events: parsedEvents,
+      price_offer_candidates: parsedCandidates,
+      constraints: [
+        'Ring 3 creates proof/intelligence rows only.',
+        'Price/offer candidates are gates, not portal instructions.',
+        'No Swiggy/Zomato portal, POS, Odoo, ad, price, or offer mutation is possible here.',
+        'Every event must link to a platform/order coordinate or an item aggregate.',
       ],
     }), { headers });
   }
@@ -1331,13 +1393,14 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
-  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'owner-orders', 'latest', 'stats', 'coa-entities', 'coa-actions', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'day-orders', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
+  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'owner-orders', 'latest', 'stats', 'coa-entities', 'coa-actions', 'coa-events', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'day-orders', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
 
 const AGGREGATOR_COA_RING1_VERSION = '2026-05-25-ring1-v1';
 const AGGREGATOR_COA_RING2_VERSION = '2026-05-25-ring2-v1';
+const AGGREGATOR_COA_RING3_VERSION = '2026-05-25-ring3-v1';
 
 const AGGREGATOR_COA_RING1_SEED = {
   brands: [
@@ -2017,6 +2080,388 @@ async function pullZomatoHistoryCoordinate(env, pair, opts) {
     if (!payload.hasMore || !postback) break;
   }
   return { status_code: rows.length ? 'ok' : 'empty_response', http_status: lastHttp, rows_seen: rows.length, rows };
+}
+
+async function ensureAggregatorCoaRing3(db) {
+  await ensureAggregatorCoaRing2(db);
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_event (
+      event_key TEXT PRIMARY KEY,
+      event_code TEXT NOT NULL,
+      severity TEXT NOT NULL CHECK (severity IN ('info', 'warn', 'critical')),
+      platform_code TEXT NOT NULL,
+      brand_code TEXT NOT NULL,
+      order_id TEXT NOT NULL,
+      order_date TEXT,
+      order_time TEXT,
+      order_value REAL,
+      estimated_loss REAL NOT NULL DEFAULT 0,
+      status_code TEXT,
+      item_summary TEXT,
+      evidence_json TEXT,
+      source_run_id TEXT,
+      first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+      resolution_state TEXT NOT NULL DEFAULT 'open' CHECK (resolution_state IN ('open', 'watching', 'resolved', 'ignored'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_price_offer_candidate (
+      candidate_key TEXT PRIMARY KEY,
+      brand_code TEXT NOT NULL,
+      platform_code TEXT NOT NULL,
+      item_key TEXT NOT NULL,
+      item_name TEXT NOT NULL,
+      window_from TEXT NOT NULL,
+      window_to TEXT NOT NULL,
+      orders_count INTEGER NOT NULL DEFAULT 0,
+      delivered_count INTEGER NOT NULL DEFAULT 0,
+      rejected_count INTEGER NOT NULL DEFAULT 0,
+      cancelled_count INTEGER NOT NULL DEFAULT 0,
+      missed_count INTEGER NOT NULL DEFAULT 0,
+      active_count INTEGER NOT NULL DEFAULT 0,
+      delivered_revenue REAL NOT NULL DEFAULT 0,
+      cancelled_rejected_loss REAL NOT NULL DEFAULT 0,
+      discount_known_orders INTEGER NOT NULL DEFAULT 0,
+      discount_total REAL NOT NULL DEFAULT 0,
+      issue_count INTEGER NOT NULL DEFAULT 0,
+      aov REAL NOT NULL DEFAULT 0,
+      confidence TEXT NOT NULL CHECK (confidence IN ('low', 'medium', 'high')),
+      gate_status TEXT NOT NULL CHECK (gate_status IN ('data_gathering', 'proof_review', 'margin_required', 'ready_for_owner_review')),
+      evidence_json TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_agg_coa_event_window ON aggregator_coa_event(order_date, brand_code, platform_code, event_code)`,
+    `CREATE INDEX IF NOT EXISTS idx_agg_coa_event_code ON aggregator_coa_event(event_code, severity, last_seen_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_agg_coa_candidate_window ON aggregator_coa_price_offer_candidate(window_from, window_to, brand_code, platform_code)`,
+  ];
+  for (const sql of statements) await db.prepare(sql).run();
+}
+
+async function executeAggregatorCoaRing3Analyze(db, body = {}) {
+  await ensureAggregatorCoaRing3(db);
+  const from = validIsoDate(body.from) ? body.from : todayIstDate();
+  const to = validIsoDate(body.to) ? body.to : from;
+  const brand = body.brand && body.brand !== 'all' ? String(body.brand) : null;
+  const platform = body.platform && body.platform !== 'all' ? String(body.platform) : null;
+  const runId = body.run_id || body.source_run_id || null;
+
+  const IST = "'+5 hours', '+30 minutes'";
+  const EFFECTIVE_DATE = `COALESCE(NULLIF(order_date, ''), date(captured_at, ${IST}))`;
+  let sql = `SELECT * FROM aggregator_orders WHERE ${EFFECTIVE_DATE} >= ? AND ${EFFECTIVE_DATE} <= ?`;
+  const params = [from, to];
+  if (brand) { sql += ` AND brand = ?`; params.push(brand); }
+  if (platform) { sql += ` AND platform = ?`; params.push(platform); }
+  sql += ` ORDER BY ${EFFECTIVE_DATE} DESC, order_time DESC, captured_at DESC LIMIT 1000`;
+  const { results } = await db.prepare(sql).bind(...params).all();
+  const orders = results || [];
+
+  const events = [];
+  const candidateMap = new Map();
+  for (const row of orders) {
+    const rowEvents = ring3EventsForOrder(row);
+    for (const event of rowEvents) {
+      events.push(event);
+      await upsertRing3Event(db, event, runId);
+    }
+    accumulateRing3Candidates(candidateMap, row, { from, to });
+  }
+
+  const candidates = Array.from(candidateMap.values()).map(finalizeRing3Candidate);
+  for (const candidate of candidates) await upsertRing3Candidate(db, candidate);
+
+  const summary = ring3Summary(events, candidates);
+  return {
+    ok: true,
+    action: 'coa_ring3_analyze',
+    doctrine: 'COA Ring 3 - Event. Composes Ring 2 order actions into operational events and proof-gated price/offer candidates.',
+    seed_version: AGGREGATOR_COA_RING3_VERSION,
+    window: { from, to },
+    orders_scanned: orders.length,
+    events_upserted: events.length,
+    candidates_upserted: candidates.length,
+    summary,
+    top_events: events.slice(0, 20),
+    top_candidates: candidates
+      .sort((a, b) => b.orders_count - a.orders_count || b.delivered_revenue - a.delivered_revenue)
+      .slice(0, 20),
+    mutation_boundary: 'HN D1 event/intelligence rows only. No partner portal, POS, Odoo, price, offer, ad, or WABA send mutation.',
+  };
+}
+
+function ring3EventsForOrder(row) {
+  const out = [];
+  const issues = String(row.issues || '');
+  const statusGroup = ownerStatusGroup(row.status, issues);
+  const base = {
+    platform_code: row.platform || 'unknown',
+    brand_code: row.brand || 'unknown',
+    order_id: String(row.order_id || ''),
+    order_date: row.order_date || extractIstDate(row.captured_at),
+    order_time: row.order_time || null,
+    order_value: numberOrNull(row.order_value) || 0,
+    status_code: row.status || null,
+    item_summary: row.items || null,
+  };
+  const add = (eventCode, severity, estimatedLoss, evidence = {}) => {
+    if (!base.order_id || !base.platform_code) return;
+    out.push({
+      event_key: `${eventCode}:${base.platform_code}:${base.order_id}`,
+      event_code: eventCode,
+      severity,
+      estimated_loss: Math.round((estimatedLoss || 0) * 100) / 100,
+      evidence_json: {
+        status_group: statusGroup,
+        status: row.status || null,
+        issues: row.issues || null,
+        captured_at: row.captured_at || null,
+        ...evidence,
+      },
+      ...base,
+    });
+  };
+
+  if (statusGroup === 'rejected') add('rejected_by_restaurant', 'critical', base.order_value);
+  if (statusGroup === 'cancelled') add('cancelled_order', 'warn', base.order_value);
+  if (statusGroup === 'missed') add('missed_acceptance', 'critical', base.order_value);
+  if (statusGroup === 'active') add('active_order_exposure', 'info', 0);
+  if (/handover\s*delayed|handover delay/i.test(issues)) add('handover_delay', 'warn', 0);
+  if (/food ready pressed early/i.test(issues)) add('food_ready_pressed_early', 'warn', 0);
+  if (/food ready not pressed|not marked ready|ready not/i.test(issues)) add('order_ready_not_marked', 'warn', statusGroup === 'cancelled' ? base.order_value : 0);
+  if (/out of stock/i.test(issues)) add('out_of_stock_cancel', 'critical', base.order_value);
+  const discount = extractStoredDiscount(row);
+  if (discount && discount > 0) add('discount_exposure_known', 'info', 0, { discount_total: discount });
+  return out;
+}
+
+async function upsertRing3Event(db, event, runId) {
+  await db.prepare(`
+    INSERT INTO aggregator_coa_event
+      (event_key, event_code, severity, platform_code, brand_code, order_id, order_date, order_time,
+       order_value, estimated_loss, status_code, item_summary, evidence_json, source_run_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(event_key) DO UPDATE SET
+      severity=excluded.severity,
+      order_date=excluded.order_date,
+      order_time=excluded.order_time,
+      order_value=excluded.order_value,
+      estimated_loss=excluded.estimated_loss,
+      status_code=excluded.status_code,
+      item_summary=excluded.item_summary,
+      evidence_json=excluded.evidence_json,
+      source_run_id=COALESCE(excluded.source_run_id, source_run_id),
+      last_seen_at=datetime('now')
+  `).bind(
+    event.event_key,
+    event.event_code,
+    event.severity,
+    event.platform_code,
+    event.brand_code,
+    event.order_id,
+    event.order_date,
+    event.order_time,
+    event.order_value,
+    event.estimated_loss,
+    event.status_code,
+    event.item_summary,
+    JSON.stringify(event.evidence_json || {}),
+    runId
+  ).run();
+}
+
+function accumulateRing3Candidates(map, row, { from, to }) {
+  const platform = row.platform || 'unknown';
+  const brand = row.brand || 'unknown';
+  const items = parseOrderItems(row.items);
+  if (!items.length) return;
+  const statusGroup = ownerStatusGroup(row.status, row.issues);
+  const orderValue = numberOrNull(row.order_value) || 0;
+  const discount = extractStoredDiscount(row) || 0;
+  const totalQty = items.reduce((sum, item) => sum + item.qty, 0) || items.length;
+  for (const item of items) {
+    const itemKey = normalizeItemKey(item.name);
+    const key = `${brand}:${platform}:${itemKey}:${from}:${to}`;
+    const share = item.qty / totalQty;
+    if (!map.has(key)) {
+      map.set(key, {
+        candidate_key: key,
+        brand_code: brand,
+        platform_code: platform,
+        item_key: itemKey,
+        item_name: item.name,
+        window_from: from,
+        window_to: to,
+        orders_count: 0,
+        delivered_count: 0,
+        rejected_count: 0,
+        cancelled_count: 0,
+        missed_count: 0,
+        active_count: 0,
+        delivered_revenue: 0,
+        cancelled_rejected_loss: 0,
+        discount_known_orders: 0,
+        discount_total: 0,
+        issue_count: 0,
+        evidence_orders: [],
+      });
+    }
+    const c = map.get(key);
+    c.orders_count += 1;
+    if (statusGroup === 'delivered') {
+      c.delivered_count += 1;
+      c.delivered_revenue += orderValue * share;
+    } else if (statusGroup === 'rejected') {
+      c.rejected_count += 1;
+      c.cancelled_rejected_loss += orderValue * share;
+    } else if (statusGroup === 'cancelled') {
+      c.cancelled_count += 1;
+      c.cancelled_rejected_loss += orderValue * share;
+    } else if (statusGroup === 'missed') {
+      c.missed_count += 1;
+      c.cancelled_rejected_loss += orderValue * share;
+    } else if (statusGroup === 'active') {
+      c.active_count += 1;
+    }
+    if (discount > 0) {
+      c.discount_known_orders += 1;
+      c.discount_total += discount * share;
+    }
+    if (row.issues) c.issue_count += 1;
+    if (c.evidence_orders.length < 8) {
+      c.evidence_orders.push({
+        order_id: row.order_id,
+        status: row.status,
+        status_group: statusGroup,
+        order_value: orderValue,
+        discount_total: discount || null,
+        issues: row.issues || null,
+      });
+    }
+  }
+}
+
+function finalizeRing3Candidate(c) {
+  const revenue = Math.round(c.delivered_revenue * 100) / 100;
+  const loss = Math.round(c.cancelled_rejected_loss * 100) / 100;
+  const discountTotal = Math.round(c.discount_total * 100) / 100;
+  const aov = c.delivered_count ? Math.round(revenue / c.delivered_count * 100) / 100 : 0;
+  const confidence = c.orders_count >= 10 ? 'high' : c.orders_count >= 3 ? 'medium' : 'low';
+  let gateStatus = 'data_gathering';
+  if (c.orders_count >= 3 && (c.discount_known_orders > 0 || c.rejected_count + c.cancelled_count + c.missed_count > 0 || c.issue_count > 0)) {
+    gateStatus = 'proof_review';
+  }
+  if (c.orders_count >= 5 && c.delivered_count >= 3 && c.discount_known_orders > 0) {
+    gateStatus = 'margin_required';
+  }
+  return {
+    ...c,
+    delivered_revenue: revenue,
+    cancelled_rejected_loss: loss,
+    discount_total: discountTotal,
+    aov,
+    confidence,
+    gate_status: gateStatus,
+    evidence_json: {
+      evidence_orders: c.evidence_orders,
+      interpretation: gateStatus === 'margin_required'
+        ? 'Demand plus discount proof exists. Margin proof is required before any offer/price mutation.'
+        : gateStatus === 'proof_review'
+          ? 'Operational/discount signal exists. Needs more proof or owner review before action.'
+          : 'Insufficient volume/signals. Continue collecting data.',
+    },
+  };
+}
+
+async function upsertRing3Candidate(db, candidate) {
+  await db.prepare(`
+    INSERT INTO aggregator_coa_price_offer_candidate
+      (candidate_key, brand_code, platform_code, item_key, item_name, window_from, window_to,
+       orders_count, delivered_count, rejected_count, cancelled_count, missed_count, active_count,
+       delivered_revenue, cancelled_rejected_loss, discount_known_orders, discount_total, issue_count,
+       aov, confidence, gate_status, evidence_json, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(candidate_key) DO UPDATE SET
+      item_name=excluded.item_name,
+      orders_count=excluded.orders_count,
+      delivered_count=excluded.delivered_count,
+      rejected_count=excluded.rejected_count,
+      cancelled_count=excluded.cancelled_count,
+      missed_count=excluded.missed_count,
+      active_count=excluded.active_count,
+      delivered_revenue=excluded.delivered_revenue,
+      cancelled_rejected_loss=excluded.cancelled_rejected_loss,
+      discount_known_orders=excluded.discount_known_orders,
+      discount_total=excluded.discount_total,
+      issue_count=excluded.issue_count,
+      aov=excluded.aov,
+      confidence=excluded.confidence,
+      gate_status=excluded.gate_status,
+      evidence_json=excluded.evidence_json,
+      updated_at=datetime('now')
+  `).bind(
+    candidate.candidate_key,
+    candidate.brand_code,
+    candidate.platform_code,
+    candidate.item_key,
+    candidate.item_name,
+    candidate.window_from,
+    candidate.window_to,
+    candidate.orders_count,
+    candidate.delivered_count,
+    candidate.rejected_count,
+    candidate.cancelled_count,
+    candidate.missed_count,
+    candidate.active_count,
+    candidate.delivered_revenue,
+    candidate.cancelled_rejected_loss,
+    candidate.discount_known_orders,
+    candidate.discount_total,
+    candidate.issue_count,
+    candidate.aov,
+    candidate.confidence,
+    candidate.gate_status,
+    JSON.stringify(candidate.evidence_json || {})
+  ).run();
+}
+
+function parseRing3JsonColumns(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    evidence_json: row.evidence_json ? safeJsonParse(row.evidence_json) : row.evidence_json,
+  };
+}
+
+function ring3Summary(events, candidates) {
+  const byEvent = countBy(events, 'event_code');
+  const byGate = countBy(candidates, 'gate_status');
+  const estimatedLoss = events.reduce((sum, e) => sum + (numberOrNull(e.estimated_loss) || 0), 0);
+  return {
+    total_events: events.length,
+    critical_events: events.filter(e => e.severity === 'critical').length,
+    estimated_loss: Math.round(estimatedLoss * 100) / 100,
+    by_event: byEvent,
+    total_candidates: candidates.length,
+    by_gate: byGate,
+    margin_required_candidates: candidates.filter(c => c.gate_status === 'margin_required').length,
+    proof_review_candidates: candidates.filter(c => c.gate_status === 'proof_review').length,
+  };
+}
+
+function parseOrderItems(itemsText) {
+  const text = String(itemsText || '').trim();
+  if (!text) return [];
+  return text.split(/\s*,\s*/).map(part => {
+    const m = part.match(/^\s*(\d+(?:\.\d+)?)\s*x\s*(.+?)\s*$/i);
+    if (m) return { qty: Number(m[1]) || 1, name: cleanItemName(m[2]) };
+    return { qty: 1, name: cleanItemName(part) };
+  }).filter(item => item.name);
+}
+
+function cleanItemName(name) {
+  return String(name || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeItemKey(name) {
+  return cleanItemName(name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 96) || 'unknown';
 }
 
 async function parsePartnerJson(res) {
