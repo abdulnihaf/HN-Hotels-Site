@@ -146,11 +146,46 @@
   <!-- Tabs -->
   <div class="px-3 py-3 flex gap-1 overflow-x-auto border-b border-white/[.03]">
     <button onclick="setTab('roster')"      data-tab="roster"      class="tab-btn flex-shrink-0">Roster</button>
+    <button onclick="setTab('hours')"       data-tab="hours"       class="tab-btn flex-shrink-0">Hours</button>
     <button onclick="setTab('attendance')"  data-tab="attendance"  class="tab-btn flex-shrink-0">Attendance</button>
     <button onclick="setTab('deductions')"  data-tab="deductions"  class="tab-btn flex-shrink-0">Deductions</button>
     <button onclick="setTab('cams')"        data-tab="cams"        class="tab-btn flex-shrink-0">CAMS</button>
     <button onclick="setTab('sync')"        data-tab="sync"        class="tab-btn flex-shrink-0">Sync</button>
     <button onclick="setTab('messaging')"   data-tab="messaging"   class="tab-btn flex-shrink-0">Messaging</button>
+  </div>
+
+  <!-- ═══ HOURS TAB — monthly per-day grid, no inference ═══ -->
+  <div id="tab-hours" class="tab-content hidden px-3 py-4">
+    <div class="flex flex-wrap gap-2 items-center mb-3">
+      <input id="hoursMonth" type="month" class="px-2 py-1.5 rounded text-sm"
+        style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)"
+        onchange="loadHours()">
+      <select id="hoursBrand" class="px-2 py-1.5 rounded text-sm"
+        style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)"
+        onchange="loadHours()">
+        <option value="all">All brands</option>
+        <option value="HE">Hamza Express</option>
+        <option value="NCH">Nawabi Chai House</option>
+        <option value="HQ">HN HQ</option>
+      </select>
+      <button onclick="loadHours()" class="btn btn-ghost btn-sm">Refresh</button>
+      <div class="text-[11px] text-white/40 ml-auto">
+        Cells are raw CAMS data · ? = single punch (needs your confirmation) · — = no data · gray = future
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3" id="hoursStats">
+      <div class="stat-tile"><div class="stat-num" id="hStatEmps">–</div><div class="stat-label">Employees</div></div>
+      <div class="stat-tile"><div class="stat-num text-emerald-400" id="hStatHours">–</div><div class="stat-label">Total hrs (elapsed)</div></div>
+      <div class="stat-tile"><div class="stat-num text-amber-400" id="hStatAmbig">–</div><div class="stat-label">Ambiguous cells</div></div>
+      <div class="stat-tile"><div class="stat-num text-rose-400" id="hStatAbsent">–</div><div class="stat-label">Absent days</div></div>
+      <div class="stat-tile"><div class="stat-num text-purple-400" id="hStatGhost">–</div><div class="stat-label">Ghost days</div></div>
+      <div class="stat-tile"><div class="stat-num text-blue-400" id="hStatAdv">–</div><div class="stat-label">Advances ₹</div></div>
+    </div>
+
+    <div id="hoursGridWrap" style="overflow-x:auto;overflow-y:visible">
+      <div id="hoursGrid" class="text-xs"></div>
+    </div>
   </div>
 
   <!-- ═══ ROSTER TAB ═══ -->
@@ -596,10 +631,164 @@ function setTab(t) {
   document.getElementById('tab-' + t).classList.remove('hidden');
   document.querySelectorAll('[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
   if (t === 'roster') loadRoster();
+  if (t === 'hours') loadHours();
   if (t === 'attendance') loadAttendance();
   if (t === 'deductions') loadDeductions();
   if (t === 'cams') loadCamsDevices();
   if (t === 'sync') loadSyncLog();
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* HOURS TAB — monthly per-staff-per-day grid.                                 */
+/* Mirrors /ops/attendance-audit display philosophy: show raw ingest output,   */
+/* no client-side inference. Ambiguous cells (is_single_punch=1) are flagged   */
+/* with ? for manual confirmation. ₹ Advance column reuses the Roster modal.   */
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+const hoursState = { month: null, brand: 'all', data: null };
+
+async function loadHours() {
+  const monthInput = document.getElementById('hoursMonth');
+  if (!monthInput.value) {
+    monthInput.value = new Date().toISOString().slice(0, 7);
+  }
+  const month = monthInput.value;
+  const brand = document.getElementById('hoursBrand').value;
+  hoursState.month = month;
+  hoursState.brand = brand;
+
+  document.getElementById('hoursGrid').innerHTML = '<div class="text-white/40 py-8 text-center">Loading…</div>';
+  try {
+    const r = await apiGet('attendance-month-grid', { month, brand });
+    hoursState.data = r;
+    renderHoursGrid();
+  } catch (e) {
+    document.getElementById('hoursGrid').innerHTML = `<div class="text-rose-400 py-4">Failed: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderHoursGrid() {
+  const d = hoursState.data;
+  if (!d || !d.employees) return;
+  const daysIn = d.days_in_month;
+  const today = d.today;
+  const month = d.month;
+
+  // Roll-up KPIs
+  let totalHrs = 0, totalAmbig = 0, totalAbsent = 0, totalGhost = 0, totalAdv = 0;
+  for (const e of d.employees) {
+    totalHrs += e.elapsed_total_hours || 0;
+    totalAmbig += e.elapsed_ambiguous || 0;
+    totalAbsent += e.elapsed_absent || 0;
+    totalGhost += e.elapsed_ghost || 0;
+    totalAdv += e.advances_this_month_total || 0;
+  }
+  document.getElementById('hStatEmps').textContent = d.employees.length;
+  document.getElementById('hStatHours').textContent = totalHrs.toFixed(0);
+  document.getElementById('hStatAmbig').textContent = totalAmbig;
+  document.getElementById('hStatAbsent').textContent = totalAbsent;
+  document.getElementById('hStatGhost').textContent = totalGhost;
+  document.getElementById('hStatAdv').textContent = '₹' + totalAdv.toLocaleString('en-IN');
+
+  // Build column headers — date + weekday
+  const monthDate = new Date(month + '-01T12:00:00');
+  const dayHeaders = [];
+  for (let i = 1; i <= daysIn; i++) {
+    const dt = new Date(monthDate.getFullYear(), monthDate.getMonth(), i);
+    const wd = ['S','M','T','W','T','F','S'][dt.getDay()];
+    const iso = `${month}-${String(i).padStart(2,'0')}`;
+    const isToday = iso === today;
+    const isWeekend = dt.getDay() === 0 || dt.getDay() === 6;
+    dayHeaders.push(`<th style="min-width:34px;text-align:center;padding:4px 2px;background:${isToday ? 'rgba(59,130,246,0.18)' : isWeekend ? 'rgba(255,255,255,0.03)' : 'transparent'};border-bottom:1px solid rgba(255,255,255,0.08)">
+      <div style="font-size:10px;color:#9ca3af">${wd}</div>
+      <div style="font-size:11px;font-weight:600">${i}</div>
+    </th>`);
+  }
+
+  // Body rows
+  const isAdmin = state.role === 'admin';
+  const rows = d.employees.map(e => {
+    const cells = e.days.map(day => {
+      // Cell rules — render raw state, no inference
+      let bg = 'transparent', fg = '#e5e7eb', label = '—', title = '';
+      if (day.is_future) {
+        bg = 'rgba(255,255,255,0.02)'; fg = '#4b5563'; label = ''; title = 'Future';
+      } else if (day.is_single_punch) {
+        bg = 'rgba(239,68,68,0.20)'; fg = '#fca5a5'; label = '?';
+        title = `Single punch (no OUT): IN ${(day.first_in_at||'').slice(11,16)}. Needs your confirmation.`;
+      } else if (day.status === 'week_off') {
+        bg = 'rgba(107,114,128,0.20)'; fg = '#9ca3af'; label = 'WO'; title = 'Week off';
+      } else if (day.status === 'leave') {
+        bg = 'rgba(59,130,246,0.20)'; fg = '#93c5fd'; label = 'L'; title = 'Approved leave';
+      } else if (day.status === 'ghost') {
+        bg = 'rgba(168,85,247,0.22)'; fg = '#d8b4fe'; label = 'G';
+        title = `Ghost: ${day.punch_count} punches, no roster match`;
+      } else if (day.status === 'absent') {
+        bg = 'rgba(244,63,94,0.15)'; fg = '#fb7185'; label = '·'; title = 'Absent (0 punches)';
+      } else if (day.status === 'half') {
+        bg = 'rgba(245,158,11,0.20)'; fg = '#fcd34d';
+        label = day.total_hours != null ? (day.total_hours.toFixed(1) + '½') : '½';
+        title = `Half-day · IN ${(day.first_in_at||'').slice(11,16)} OUT ${(day.last_out_at||'').slice(11,16)}`;
+      } else if (day.status === 'present') {
+        bg = 'rgba(16,185,129,0.18)'; fg = '#6ee7b7';
+        label = day.total_hours != null ? day.total_hours.toFixed(1) : '✓';
+        title = `Present · IN ${(day.first_in_at||'').slice(11,16)} OUT ${(day.last_out_at||'').slice(11,16)}`;
+      } else if (day.status === 'pending') {
+        bg = 'rgba(245,158,11,0.12)'; fg = '#fbbf24'; label = '⋯';
+        title = `Pending — shift not closed yet`;
+      } else if (day.status === 'no-data') {
+        label = '—'; fg = '#4b5563'; title = 'No CAMS row for this date';
+      }
+      return `<td title="${escapeHtml(title)}" style="min-width:34px;text-align:center;padding:3px 2px;background:${bg};color:${fg};font-size:11px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.04)">${label}</td>`;
+    }).join('');
+
+    const displayName = e.name + (e.known_as && e.known_as !== e.name ? ` (${e.known_as})` : '');
+    const advBtn = isAdmin
+      ? `<button onclick="event.stopPropagation();openAdvanceModal(${e.id})" class="badge" style="background:rgba(34,197,94,0.18);color:#4ade80;border:none;cursor:pointer;padding:3px 6px;font-weight:600;font-size:10px" title="Record advance">₹</button>`
+      : '';
+    const phoneEsc = (e.phone || '').replace(/'/g, "\\'");
+    const nameEsc = (e.name || '').replace(/'/g, "\\'");
+    const shareBtn = isAdmin
+      ? `<button onclick="event.stopPropagation();shareEmployeeUrl(${e.id},'${escapeHtml(nameEsc)}','${escapeHtml(phoneEsc)}')" class="badge" style="background:rgba(59,130,246,0.18);color:#60a5fa;border:none;cursor:pointer;padding:3px 6px;font-weight:600;font-size:10px" title="Get this employee's personal share link">🔗</button>`
+      : '';
+    const advTotal = e.advances_this_month_total
+      ? `<span style="color:#86efac;font-weight:600">₹${Number(e.advances_this_month_total).toLocaleString('en-IN')}</span>`
+      : `<span style="color:#4b5563">—</span>`;
+
+    return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+      <td style="position:sticky;left:0;background:#0f1115;padding:6px 8px;white-space:nowrap;min-width:170px;border-right:1px solid rgba(255,255,255,0.08)">
+        <div style="font-size:12px;font-weight:600">${escapeHtml(displayName)}</div>
+        <div style="font-size:10px;color:#6b7280">${e.brand_label} · PIN ${e.pin || '–'} · ${e.pay_type}</div>
+      </td>
+      ${cells}
+      <td style="text-align:center;padding:4px 6px;background:rgba(16,185,129,0.06);font-size:11px;font-weight:600;min-width:50px" title="Worked = present + 0.5×half (elapsed only)">${e.elapsed_present + 0.5 * e.elapsed_half}</td>
+      <td style="text-align:center;padding:4px 6px;font-size:11px;font-weight:600;min-width:55px" title="Total hours elapsed-only">${e.elapsed_total_hours.toFixed(1)}</td>
+      <td style="text-align:center;padding:4px 6px;font-size:11px" title="Single-punch days needing confirmation">
+        ${e.elapsed_ambiguous ? `<span style="color:#fca5a5;font-weight:700">⚠ ${e.elapsed_ambiguous}</span>` : `<span style="color:#4b5563">0</span>`}
+      </td>
+      <td style="text-align:center;padding:4px 8px;font-size:11px;min-width:80px">${advTotal}</td>
+      <td style="text-align:center;padding:4px 8px;min-width:34px">${advBtn}</td>
+      <td style="text-align:center;padding:4px 8px;min-width:34px">${shareBtn}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('hoursGrid').innerHTML = `
+    <table style="border-collapse:collapse;width:auto;min-width:100%">
+      <thead>
+        <tr style="background:#0f1115;position:sticky;top:0;z-index:2">
+          <th style="position:sticky;left:0;background:#0f1115;text-align:left;padding:6px 8px;min-width:170px;border-right:1px solid rgba(255,255,255,0.08);border-bottom:1px solid rgba(255,255,255,0.08);font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af">Employee</th>
+          ${dayHeaders.join('')}
+          <th style="text-align:center;padding:6px 4px;background:rgba(16,185,129,0.10);font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Days</th>
+          <th style="text-align:center;padding:6px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Hours</th>
+          <th style="text-align:center;padding:6px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Fix?</th>
+          <th style="text-align:center;padding:6px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Adv</th>
+          <th style="text-align:center;padding:6px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Pay</th>
+          <th style="text-align:center;padding:6px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Share</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
 }
 
 /* ━━━ Refresh ━━━
@@ -742,6 +931,7 @@ function renderRoster() {
         </div>
         <div class="text-right flex flex-col items-end gap-1.5">
           ${state.viewFinancials ? `<div class="text-sm font-bold">₹${(e.monthly_salary || 0).toLocaleString('en-IN')}</div>` : ''}
+          ${state.role === 'admin' ? `<button onclick="event.stopPropagation();openAdvanceModal(${e.id})" class="badge" style="background:rgba(34,197,94,0.18);color:#4ade80;border:none;cursor:pointer;padding:3px 8px;font-weight:600" title="Record cash/UPI advance for ${escapeHtml(displayName)}">₹ Advance</button>` : ''}
           ${phoneActions(e.phone, displayName)}
           <div>${syncBadge(e.sync_status)}</div>
         </div>
@@ -2044,6 +2234,388 @@ async function wipeLeegalityOrphans(ids) {
   const data = await r.json();
   alert(r.ok ? `Marked ${data.updated} as wiped. Run local cleanup script to delete from Leegality.` : 'Failed: ' + (data.error || ''));
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* Salary advance modal — direct entry to hr_advances ledger.                  */
+/* One row per cash/UPI handover. Read by /api/hr-payroll compute-payable at   */
+/* month-end and netted against monthly salary automatically.                   */
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+const advState = { employeeId: null, employee: null, recent: [] };
+
+function getDashboardKey() {
+  let dk = localStorage.getItem('hn_msg_dk');
+  if (!dk) {
+    dk = prompt('Enter x-dashboard-key (saved locally for next time):');
+    if (dk) localStorage.setItem('hn_msg_dk', dk.trim());
+  }
+  return dk ? dk.trim() : null;
+}
+
+async function openAdvanceModal(employeeId) {
+  const dk = getDashboardKey();
+  if (!dk) { toast('Dashboard key required', 'error'); return; }
+
+  advState.employeeId = employeeId;
+  advState.employee = state.employees.find(x => x.id === employeeId) || {};
+  advState.recent = [];
+
+  document.getElementById('advanceModalTitle').textContent =
+    `Record advance · ${advState.employee.name || ''}`;
+  document.getElementById('advanceModal').classList.remove('hidden');
+  renderAdvanceModal();
+
+  // Load this month's existing advances for the employee (informational)
+  try {
+    const month = new Date().toISOString().slice(0, 7);
+    const r = await fetch(`/api/hr-payroll?action=list-advances&employee_id=${employeeId}&month=${month}`, {
+      headers: { 'x-dashboard-key': dk },
+    });
+    const data = await r.json();
+    advState.recent = data.rows || data.advances || [];
+    renderAdvanceModal();
+  } catch (e) {
+    // non-fatal — just leaves recent empty
+  }
+}
+
+function closeAdvanceModal() {
+  document.getElementById('advanceModal').classList.add('hidden');
+  advState.employeeId = null;
+  advState.employee = null;
+  advState.recent = [];
+}
+
+function renderAdvanceModal() {
+  const e = advState.employee || {};
+  const today = new Date().toISOString().slice(0, 10);
+  const baseLabel = e.pay_type === 'Contract'
+    ? `Daily ₹${(e.daily_rate || 0).toLocaleString('en-IN')}`
+    : `Monthly ₹${(e.monthly_salary || 0).toLocaleString('en-IN')}`;
+  const month = today.slice(0, 7);
+  const monthAdv = advState.recent.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const monthCount = advState.recent.length;
+
+  const recentRows = advState.recent.length
+    ? advState.recent.map(r => `
+        <div class="flex items-center justify-between text-[11px] py-1 border-b border-white/5">
+          <span class="text-white/50 font-mono">${(r.advance_date || '').slice(0, 10)}</span>
+          <span class="text-white/40 flex-1 px-2">${escapeHtml(r.reason || '—')}</span>
+          <span class="text-white/60">${(r.paid_via || 'cash').toUpperCase()}</span>
+          <span class="font-bold text-emerald-400 ml-2">₹${Number(r.amount || 0).toLocaleString('en-IN')}</span>
+        </div>`).join('')
+    : '<div class="text-white/30 text-[11px] py-2">No advances recorded this month.</div>';
+
+  document.getElementById('advanceModalBody').innerHTML = `
+    <div class="mb-3 p-3 rounded" style="background:rgba(255,255,255,0.04)">
+      <div class="text-[11px] text-white/40 uppercase tracking-wide mb-1">${e.brand_label || ''} · ${e.pay_type || 'Monthly'} · ${baseLabel}</div>
+      <div class="text-[11px] text-white/50">
+        Already advanced in ${month}: <span class="font-bold text-emerald-400">₹${monthAdv.toLocaleString('en-IN')}</span> · ${monthCount} ${monthCount === 1 ? 'entry' : 'entries'}
+      </div>
+    </div>
+
+    <div class="space-y-3">
+      <div>
+        <label class="text-[11px] text-white/60 uppercase tracking-wide">Amount (₹)</label>
+        <input id="advAmount" type="number" min="1" step="1" inputmode="numeric"
+          class="w-full mt-1 px-3 py-2 rounded text-lg font-bold"
+          style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)"
+          placeholder="e.g. 5000" autofocus>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[11px] text-white/60 uppercase tracking-wide">Date</label>
+          <input id="advDate" type="date" value="${today}"
+            class="w-full mt-1 px-3 py-2 rounded"
+            style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)">
+        </div>
+        <div>
+          <label class="text-[11px] text-white/60 uppercase tracking-wide">Paid via</label>
+          <select id="advPaidVia"
+            class="w-full mt-1 px-3 py-2 rounded"
+            style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)">
+            <option value="cash" selected>Cash</option>
+            <option value="upi">UPI</option>
+            <option value="bank">Bank transfer</option>
+            <option value="razorpay">Razorpay</option>
+            <option value="paytm">Paytm</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="text-[11px] text-white/60 uppercase tracking-wide">Reason</label>
+        <select id="advReason"
+          class="w-full mt-1 px-3 py-2 rounded"
+          style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)"
+          onchange="document.getElementById('advReasonCustom').style.display=this.value==='custom'?'block':'none'">
+          <option value="eid_advance" selected>Eid advance</option>
+          <option value="advance">Regular advance</option>
+          <option value="medical">Medical</option>
+          <option value="travel">Travel home</option>
+          <option value="festival">Festival</option>
+          <option value="loan">Loan</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <input id="advReasonCustom" type="text" placeholder="Custom reason"
+          class="w-full mt-2 px-3 py-2 rounded text-sm"
+          style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1);display:none">
+      </div>
+
+      <div>
+        <label class="text-[11px] text-white/60 uppercase tracking-wide">Reference / Notes (optional)</label>
+        <input id="advNotes" type="text" placeholder="UTR, witness, or any note"
+          class="w-full mt-1 px-3 py-2 rounded text-sm"
+          style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)">
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="submitAdvance()" id="advSaveBtn"
+          class="btn btn-primary flex-1" style="background:#22c55e;color:#000;font-weight:700">
+          Record advance
+        </button>
+        <button onclick="closeAdvanceModal()" class="btn btn-ghost">Cancel</button>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <div class="text-[11px] text-white/40 uppercase tracking-wide mb-1">This month's entries</div>
+      ${recentRows}
+    </div>
+  `;
+}
+
+async function submitAdvance() {
+  const dk = getDashboardKey();
+  if (!dk) { toast('Dashboard key required', 'error'); return; }
+
+  const amount = parseFloat(document.getElementById('advAmount').value);
+  const date = document.getElementById('advDate').value;
+  const paidVia = document.getElementById('advPaidVia').value;
+  const reasonSel = document.getElementById('advReason').value;
+  const reason = reasonSel === 'custom'
+    ? (document.getElementById('advReasonCustom').value.trim() || 'other')
+    : reasonSel;
+  const notes = document.getElementById('advNotes').value.trim();
+
+  if (!amount || amount <= 0) { toast('Amount required', 'error'); return; }
+  if (!date) { toast('Date required', 'error'); return; }
+
+  const btn = document.getElementById('advSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Recording…';
+
+  try {
+    const r = await fetch('/api/hr-payroll?action=record-advance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({
+        employee_id: advState.employeeId,
+        advance_date: date,
+        amount,
+        paid_via: paidVia,
+        reason,
+        notes: notes || null,
+        source: 'manual',
+        recorded_by: state.user || state.pin,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'failed');
+    toast(`✓ ₹${amount.toLocaleString('en-IN')} recorded for ${advState.employee.name}`);
+    // Fire WABA template hr_advance_paid_v1 (approved on HE WABA, all brands route through HE)
+    const wabaResult = await fireAdvanceWaba({ amount, date, paidVia, dk });
+    renderAdvanceConfirmation({ amount, date, paidVia, reason, wabaResult });
+  } catch (e) {
+    toast('Failed: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Record advance';
+  }
+}
+
+async function fireAdvanceWaba({ amount, date, paidVia, dk }) {
+  const e = advState.employee || {};
+  const phone10 = normalizePhone10(e.phone);
+  if (!phone10) return { ok: false, reason: 'no_phone' };
+  const displayName = e.known_as || e.name || '';
+  const paidViaLabel = paidVia.charAt(0).toUpperCase() + paidVia.slice(1);
+  try {
+    const r = await fetch('/api/comms?action=send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({
+        channel: 'waba',
+        brand: 'he',
+        phone: phone10,
+        template: 'hr_advance_paid_v1',
+        language: 'en',
+        vars: [displayName, String(amount), date, paidViaLabel],
+        tier: 'info',
+        alert_id: `hr_advance_${e.id}_${date}`,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) return { ok: false, reason: data.error || ('http_' + r.status) };
+    return { ok: true, provider_msg_id: data.provider_msg_id, outbox_id: data.outbox_id };
+  } catch (err) {
+    return { ok: false, reason: err.message };
+  }
+}
+
+// After a successful record, replace the modal body with a confirmation view.
+// Primary: auto-fired WABA template hr_advance_paid_v1 (status shown). Fallback:
+// wa.me deep link so owner can re-send manually if WABA failed or staff has no
+// WhatsApp Business reachability.
+function renderAdvanceConfirmation({ amount, date, paidVia, reason, wabaResult }) {
+  const e = advState.employee || {};
+  const phone10 = normalizePhone10(e.phone);
+  const isEid = reason === 'eid_advance';
+  const firstName = (e.known_as || e.name || 'Bhai').split(' ')[0];
+  const amtFmt = `₹${Number(amount).toLocaleString('en-IN')}`;
+  const dateFmt = date;
+  const via = paidVia === 'cash' ? 'Cash' : paidVia.toUpperCase();
+
+  // Bilingual receipt — Hindi/Roman + English, fits most NCH/HE staff
+  const msg = isEid
+    ? `Assalamualaikum ${firstName} bhai,\n\nEid advance received:\n• Amount: ${amtFmt}\n• Date: ${dateFmt}\n• Paid via: ${via}\n\nIs raashi ko aapke ${new Date(date).toLocaleString('en-IN',{month:'long'})} ki salary se kaata jaayega.\n\nEid Mubarak!\n- HN Hotels`
+    : `${firstName} bhai,\n\nAdvance received:\n• Amount: ${amtFmt}\n• Date: ${dateFmt}\n• Paid via: ${via}\n• Reason: ${reason}\n\nThis will be adjusted in your ${new Date(date).toLocaleString('en-IN',{month:'long'})} salary.\n\n- HN Hotels`;
+
+  const waUrl = phone10
+    ? `https://wa.me/91${phone10}?text=${encodeURIComponent(msg)}`
+    : null;
+
+  document.getElementById('advanceModalBody').innerHTML = `
+    <div class="p-4 rounded mb-4" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3)">
+      <div class="flex items-center gap-2 mb-2">
+        <span style="font-size:18px">✓</span>
+        <span class="font-bold text-emerald-400">Advance recorded</span>
+      </div>
+      <div class="text-sm">
+        <div><span class="text-white/50">Employee:</span> <span class="font-semibold">${escapeHtml(e.name || '')}</span></div>
+        <div><span class="text-white/50">Amount:</span> <span class="font-bold">${amtFmt}</span></div>
+        <div><span class="text-white/50">Date:</span> ${dateFmt}</div>
+        <div><span class="text-white/50">Via:</span> ${via}</div>
+        <div><span class="text-white/50">Reason:</span> ${reason}</div>
+      </div>
+    </div>
+
+    <div class="mb-2 text-[11px] text-white/40 uppercase tracking-wide">WhatsApp notification</div>
+    ${wabaResult && wabaResult.ok ? `
+      <div class="p-3 rounded mb-3" style="background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.25)">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-emerald-400">✓</span>
+          <span class="text-emerald-400 font-semibold text-sm">WABA template hr_advance_paid_v1 sent</span>
+        </div>
+        <div class="text-[10px] text-white/50 font-mono">wamid: ${escapeHtml(wabaResult.provider_msg_id || '?')}</div>
+        <div class="text-[10px] text-white/50">outbox row #${wabaResult.outbox_id || '?'} · sender +91 80080 02049</div>
+      </div>
+    ` : wabaResult && wabaResult.reason === 'no_phone' ? `
+      <div class="p-3 rounded mb-3 text-amber-400 text-sm" style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25)">
+        ⚠ No phone on file — automated WABA skipped.
+      </div>
+    ` : wabaResult ? `
+      <div class="p-3 rounded mb-3" style="background:rgba(244,63,94,0.10);border:1px solid rgba(244,63,94,0.25)">
+        <div class="text-rose-400 text-sm font-semibold mb-1">⚠ WABA send failed</div>
+        <div class="text-[11px] text-white/60">${escapeHtml(wabaResult.reason || 'unknown')}</div>
+        <div class="text-[10px] text-white/40 mt-1">Use the manual WhatsApp link below as fallback.</div>
+      </div>
+    ` : ''}
+
+    ${phone10 ? `
+      <div class="p-3 rounded mb-3" style="background:rgba(255,255,255,0.04)">
+        <div class="text-[11px] text-white/50 mb-2">Manual fallback — pre-filled WhatsApp message:</div>
+        <pre style="white-space:pre-wrap;font-family:inherit;font-size:11px;color:#e5e7eb;background:rgba(0,0,0,0.2);padding:8px;border-radius:4px;margin:0">${escapeHtml(msg)}</pre>
+      </div>
+      <div class="flex gap-2 mb-2">
+        <a href="${waUrl}" target="_blank"
+          class="btn btn-ghost flex-1"
+          style="text-decoration:none;text-align:center">
+          💬 Manual send (fallback)
+        </a>
+        <button onclick="shareEmployeeUrl(${advState.employeeId},'${escapeHtml((e.name||'').replace(/'/g,"\\'"))}','${escapeHtml((e.phone||'').replace(/'/g,"\\'"))}')" class="btn btn-ghost" title="Send their full attendance + advance history link">🔗 Share record</button>
+        <button onclick="closeAdvanceModal()" class="btn btn-primary">Done</button>
+      </div>
+    ` : `
+      <div class="flex gap-2">
+        <button onclick="shareEmployeeUrl(${advState.employeeId},'${escapeHtml((e.name||'').replace(/'/g,"\\'"))}','${escapeHtml((e.phone||'').replace(/'/g,"\\'"))}')" class="btn btn-ghost flex-1">🔗 Share record link</button>
+        <button onclick="closeAdvanceModal()" class="btn btn-primary">Done</button>
+      </div>
+    `}
+  `;
+}
+
+function normalizePhone10(p) {
+  if (!p) return null;
+  const d = String(p).replace(/\D/g, '');
+  if (!d) return null;
+  let n = d;
+  if (n.length > 10 && n.startsWith('91')) n = n.slice(-10);
+  if (n.length > 10) n = n.slice(-10);
+  return n.length === 10 ? n : null;
+}
+
+/* ━━━ Staff self-view URL cache ━━━
+ * One HMAC-token mint per employee per session. Same URL is permanent unless
+ * the worker secret changes, so we can share + bookmark it.
+ */
+const _staffUrlCache = {};
+async function getStaffShareUrl(employeeId) {
+  if (_staffUrlCache[employeeId]) return _staffUrlCache[employeeId];
+  try {
+    const r = await fetch(`/api/hr-admin?action=staff-token&pin=${encodeURIComponent(state.pin)}&employee_id=${employeeId}`);
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (data.url) _staffUrlCache[employeeId] = data.url;
+    return data.url || null;
+  } catch (e) { return null; }
+}
+
+async function shareEmployeeUrl(employeeId, employeeName, phone) {
+  const url = await getStaffShareUrl(employeeId);
+  if (!url) { toast('Could not generate share link', 'error'); return; }
+  const phone10 = normalizePhone10(phone);
+  const firstName = (employeeName || '').split(' ')[0] || 'bhai';
+  const msg = `${firstName} bhai, yahan aap apni HN Hotels attendance + advance record dekh sakte ho. Bookmark kar lo:\n\n${url}`;
+  const waUrl = phone10 ? `https://wa.me/91${phone10}?text=${encodeURIComponent(msg)}` : null;
+
+  // Overlay
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.style.zIndex = '9999';
+  ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = `
+    <div class="modal-card" style="max-width:480px">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-bold">${escapeHtml(employeeName)}'s share link</h2>
+        <button onclick="this.closest('.modal-overlay').remove()" class="text-white/60 hover:text-white text-2xl leading-none">×</button>
+      </div>
+      <div class="p-3 rounded mb-3" style="background:rgba(255,255,255,0.04)">
+        <div class="text-[11px] text-white/50 mb-1">URL (permanent — bookmark-able)</div>
+        <div style="word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#86efac;background:rgba(0,0,0,0.25);padding:8px;border-radius:4px">${escapeHtml(url)}</div>
+        <button onclick="navigator.clipboard.writeText('${url}').then(()=>this.textContent='✓ Copied')" class="btn btn-ghost btn-sm mt-2">Copy URL</button>
+      </div>
+      <div class="p-3 rounded mb-3" style="background:rgba(255,255,255,0.04)">
+        <div class="text-[11px] text-white/50 mb-2">Pre-filled WhatsApp message:</div>
+        <pre style="white-space:pre-wrap;font-family:inherit;font-size:11px;color:#e5e7eb;background:rgba(0,0,0,0.25);padding:8px;border-radius:4px;margin:0">${escapeHtml(msg)}</pre>
+      </div>
+      ${phone10 ? `
+        <div class="flex gap-2">
+          <a href="${waUrl}" target="_blank" class="btn btn-primary flex-1"
+             style="background:#25d366;color:#000;font-weight:700;text-decoration:none;text-align:center">
+            💬 Send to ${escapeHtml(firstName)} on WhatsApp
+          </a>
+          <a href="${url}" target="_blank" class="btn btn-ghost">Preview</a>
+        </div>
+      ` : `
+        <div class="text-amber-400 text-sm mb-2">⚠ No phone on file — share URL manually.</div>
+        <a href="${url}" target="_blank" class="btn btn-primary w-full">Preview as ${escapeHtml(firstName)}</a>
+      `}
+    </div>
+  `;
+  document.body.appendChild(ov);
+}
 </script>
 
 <!-- Contract management modal -->
@@ -2054,6 +2626,19 @@ async function wipeLeegalityOrphans(ids) {
       <button onclick="closeContractModal()" class="text-white/60 hover:text-white text-2xl leading-none">×</button>
     </div>
     <div id="contractModalBody"></div>
+  </div>
+</div>
+
+<!-- Salary advance modal — records to hr_advances ledger -->
+<div id="advanceModal" class="modal-overlay hidden" onclick="if(event.target===this)closeAdvanceModal()">
+  <div class="modal-card" style="max-width:520px">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-bold" id="advanceModalTitle">Record advance</h2>
+      <button onclick="closeAdvanceModal()" class="text-white/60 hover:text-white text-2xl leading-none">×</button>
+    </div>
+    <div id="advanceModalBody">
+      <div class="text-white/60 text-sm">Loading…</div>
+    </div>
   </div>
 </div>
 

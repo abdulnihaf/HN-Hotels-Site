@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>My Attendance — HN Hotels</title>
+<link rel="icon" href="/ops/hr/icon-192.png">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1115; --surface: #16181f; --border: rgba(255,255,255,0.08);
+    --text: #e5e7eb; --muted: #9ca3af; --dim: #6b7280;
+    --green: #34d399; --green-bg: rgba(16,185,129,0.15);
+    --amber: #fbbf24; --amber-bg: rgba(245,158,11,0.18);
+    --rose: #fb7185; --rose-bg: rgba(244,63,94,0.18);
+    --blue: #60a5fa; --blue-bg: rgba(59,130,246,0.18);
+    --purple: #c084fc; --purple-bg: rgba(168,85,247,0.18);
+    --gray-bg: rgba(255,255,255,0.04);
+  }
+  html, body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  body { padding: 16px 16px 32px; max-width: 540px; margin: 0 auto; }
+  .header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 14px;
+    margin-bottom: 14px;
+  }
+  .header .avatar {
+    width: 48px; height: 48px; border-radius: 24px;
+    background: linear-gradient(135deg, #6366f1, #ec4899);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 18px; color: #fff;
+  }
+  .header .name { font-size: 18px; font-weight: 700; }
+  .header .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .month-pick {
+    width: 100%; padding: 12px 14px; min-height: 44px;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 12px;
+    font-size: 15px; margin-bottom: 14px;
+    font-family: inherit;
+  }
+
+  .stat-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px;
+  }
+  .stat-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
+    color: var(--muted); margin-bottom: 4px;
+  }
+  .stat-value { font-size: 22px; font-weight: 700; }
+  .stat-value.green { color: var(--green); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.rose { color: var(--rose); }
+  .stat-value.blue { color: var(--blue); }
+
+  .section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px; margin-bottom: 14px;
+  }
+  .section-title {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .4px;
+    color: var(--muted); margin-bottom: 10px; font-weight: 600;
+  }
+
+  /* Day list — vertical timeline */
+  .day-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 4px; border-bottom: 1px solid var(--border);
+    min-height: 44px;
+  }
+  .day-row:last-child { border-bottom: none; }
+  .day-row.future { opacity: 0.35; }
+  .day-row .date {
+    display: flex; flex-direction: column; align-items: center;
+    min-width: 48px;
+  }
+  .day-row .date .num {
+    font-size: 18px; font-weight: 700; line-height: 1;
+  }
+  .day-row .date .wd {
+    font-size: 10px; color: var(--muted); text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .day-row .info { flex: 1; min-width: 0; }
+  .day-row .status-line { font-size: 14px; font-weight: 600; }
+  .day-row .detail-line { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .day-row .chip {
+    font-size: 11px; padding: 4px 9px; border-radius: 12px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .chip-green  { background: var(--green-bg);  color: var(--green); }
+  .chip-amber  { background: var(--amber-bg);  color: var(--amber); }
+  .chip-rose   { background: var(--rose-bg);   color: var(--rose); }
+  .chip-blue   { background: var(--blue-bg);   color: var(--blue); }
+  .chip-purple { background: var(--purple-bg); color: var(--purple); }
+  .chip-gray   { background: var(--gray-bg);   color: var(--dim); }
+
+  /* Advance list */
+  .advance-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .advance-row:last-child { border-bottom: none; }
+  .advance-row .amount { font-size: 18px; font-weight: 700; color: var(--green); min-width: 90px; }
+  .advance-row .meta { flex: 1; font-size: 12px; }
+  .advance-row .meta .top { color: var(--text); }
+  .advance-row .meta .bot { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+  .footer {
+    margin-top: 22px; padding: 14px; text-align: center;
+    font-size: 12px; color: var(--muted);
+    background: var(--surface); border-radius: 12px; border: 1px solid var(--border);
+  }
+  .footer .contact { color: var(--blue); text-decoration: none; }
+
+  .error-box {
+    background: rgba(244,63,94,0.10); border: 1px solid rgba(244,63,94,0.30);
+    border-radius: 12px; padding: 20px; color: var(--rose);
+    text-align: center; font-size: 14px;
+  }
+  .loading {
+    text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px;
+  }
+
+  @media (max-width: 380px) {
+    body { padding: 12px 10px; }
+    .stat-grid { gap: 8px; }
+    .stat-value { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="root">
+  <div class="loading">Loading your record…</div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const employeeId = params.get('id');
+const token = params.get('t');
+let monthState = params.get('month') || todayIST().slice(0, 7);
+
+function todayIST() {
+  return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function initials(name) {
+  return String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0].toUpperCase()).join('') || '?';
+}
+
+function fmtTime(ts) {
+  if (!ts) return '—';
+  return ts.slice(11, 16);
+}
+
+const WD_FULL = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function dayCardHtml(day) {
+  const dt = new Date(day.date + 'T12:00:00');
+  const num = dt.getDate();
+  const wd = WD_FULL[dt.getDay()];
+
+  let chipClass = 'chip-gray', chipLabel = '—', statusLine = '', detailLine = '';
+
+  if (day.is_future) {
+    chipLabel = 'Future';
+    statusLine = '—';
+  } else if (day.is_single_punch) {
+    chipClass = 'chip-amber'; chipLabel = 'Confirm';
+    statusLine = 'Punch needs confirmation';
+    detailLine = `IN ${fmtTime(day.first_in_at)} — no OUT recorded. Please tell Basheer your finish time.`;
+  } else if (day.status === 'present') {
+    chipClass = 'chip-green'; chipLabel = 'Present';
+    const hrs = day.total_hours != null ? day.total_hours.toFixed(1) : '?';
+    statusLine = `${hrs} hours worked`;
+    detailLine = `IN ${fmtTime(day.first_in_at)} → OUT ${fmtTime(day.last_out_at)}`;
+  } else if (day.status === 'half') {
+    chipClass = 'chip-amber'; chipLabel = 'Half-day';
+    const hrs = day.total_hours != null ? day.total_hours.toFixed(1) : '?';
+    statusLine = `${hrs} hours (half-day)`;
+    detailLine = `IN ${fmtTime(day.first_in_at)} → OUT ${fmtTime(day.last_out_at)}`;
+  } else if (day.status === 'absent') {
+    chipClass = 'chip-rose'; chipLabel = 'Absent';
+    statusLine = 'No attendance recorded';
+    detailLine = 'Will be classified during month-end settlement.';
+  } else if (day.status === 'leave') {
+    chipClass = 'chip-blue'; chipLabel = 'Leave';
+    statusLine = 'Approved leave';
+  } else if (day.status === 'week_off') {
+    chipClass = 'chip-gray'; chipLabel = 'Off';
+    statusLine = 'Week off';
+  } else if (day.status === 'ghost') {
+    chipClass = 'chip-purple'; chipLabel = 'Ghost';
+    statusLine = 'Punches without roster match';
+    detailLine = 'If this was you, ask Basheer to correct your PIN.';
+  } else if (day.status === 'pending') {
+    chipClass = 'chip-amber'; chipLabel = 'Pending';
+    statusLine = 'Shift in progress';
+  } else if (day.status === 'no-data') {
+    chipLabel = '—';
+    statusLine = 'No data recorded';
+  }
+
+  return `
+    <div class="day-row ${day.is_future ? 'future' : ''}">
+      <div class="date">
+        <div class="num">${num}</div>
+        <div class="wd">${wd}</div>
+      </div>
+      <div class="info">
+        <div class="status-line">${escapeHtml(statusLine)}</div>
+        ${detailLine ? `<div class="detail-line">${escapeHtml(detailLine)}</div>` : ''}
+      </div>
+      <span class="chip ${chipClass}">${escapeHtml(chipLabel)}</span>
+    </div>`;
+}
+
+function advanceRowHtml(a) {
+  const reasonLabels = {
+    eid_advance: 'Eid advance',
+    advance: 'Advance',
+    medical: 'Medical',
+    travel: 'Travel home',
+    festival: 'Festival',
+    loan: 'Loan',
+  };
+  const r = reasonLabels[a.reason] || (a.reason ? a.reason : 'Advance');
+  const dt = new Date(a.advance_date + 'T12:00:00');
+  return `
+    <div class="advance-row">
+      <div class="amount">₹${Number(a.amount).toLocaleString('en-IN')}</div>
+      <div class="meta">
+        <div class="top">${escapeHtml(r)} · ${(a.paid_via || 'cash').toUpperCase()}</div>
+        <div class="bot">${dt.getDate()} ${MONTH_FULL[dt.getMonth()]} ${dt.getFullYear()}</div>
+      </div>
+    </div>`;
+}
+
+async function loadSelf() {
+  if (!employeeId || !token) {
+    document.getElementById('root').innerHTML = `
+      <div class="error-box">
+        Invalid link. Ask Basheer or your manager to share your link again.
+      </div>`;
+    return;
+  }
+  try {
+    const r = await fetch(`/api/hr-admin?action=staff-self&id=${employeeId}&t=${encodeURIComponent(token)}&month=${monthState}`);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      document.getElementById('root').innerHTML = `
+        <div class="error-box">
+          ${escapeHtml(err.error === 'invalid token' ? 'This link is no longer valid. Please ask Basheer for a fresh link.' : (err.error || 'Could not load your record. Please try again.'))}
+        </div>`;
+      return;
+    }
+    const data = await r.json();
+    render(data);
+  } catch (e) {
+    document.getElementById('root').innerHTML = `
+      <div class="error-box">
+        Network problem — check WhatsApp / internet and try again.
+      </div>`;
+  }
+}
+
+function render(data) {
+  const e = data.employee;
+  const s = data.summary;
+  const monthLabel = MONTH_FULL[parseInt(data.month.split('-')[1]) - 1] + ' ' + data.month.split('-')[0];
+  const displayName = e.known_as || e.name;
+  const brandName = { HE: 'Hamza Express', NCH: 'Nawabi Chai House', HQ: 'HN Hotels HQ' }[e.brand_label] || e.brand_label;
+
+  // Month picker — show last 6 months only (don't allow future)
+  const today = todayIST();
+  const monthOpts = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(today + 'T12:00:00');
+    d.setMonth(d.getMonth() - i);
+    const mo = d.toISOString().slice(0, 7);
+    const label = MONTH_FULL[d.getMonth()] + ' ' + d.getFullYear();
+    monthOpts.push(`<option value="${mo}" ${mo === data.month ? 'selected' : ''}>${label}</option>`);
+  }
+
+  const advancesHtml = data.advances.length
+    ? data.advances.map(advanceRowHtml).join('')
+    : '<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px 0">No advances received in ' + monthLabel + '.</div>';
+
+  document.getElementById('root').innerHTML = `
+    <div class="header">
+      <div class="avatar">${escapeHtml(initials(displayName))}</div>
+      <div style="flex:1;min-width:0">
+        <div class="name">${escapeHtml(displayName)}</div>
+        <div class="sub">${escapeHtml(brandName)} · ${escapeHtml(e.job_name || '')}</div>
+      </div>
+    </div>
+
+    <select class="month-pick" onchange="monthState=this.value;loadSelf()">
+      ${monthOpts.join('')}
+    </select>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Days worked</div>
+        <div class="stat-value green">${s.worked_days}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total hours</div>
+        <div class="stat-value">${s.elapsed_total_hours}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Absent</div>
+        <div class="stat-value rose">${s.elapsed_absent}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Advances received</div>
+        <div class="stat-value blue">₹${Number(s.advances_total).toLocaleString('en-IN')}</div>
+      </div>
+    </div>
+
+    ${s.elapsed_ambiguous ? `
+      <div class="section" style="background:rgba(245,158,11,0.10);border-color:rgba(245,158,11,0.35)">
+        <div class="section-title" style="color:var(--amber)">⚠ ${s.elapsed_ambiguous} day(s) need confirmation</div>
+        <div style="font-size:13px;color:var(--text)">
+          You punched IN but not OUT on these days. Please tell Basheer your finish time so we can mark them correctly.
+        </div>
+      </div>` : ''
+    }
+
+    <div class="section">
+      <div class="section-title">Advances received in ${escapeHtml(monthLabel)}</div>
+      ${advancesHtml}
+    </div>
+
+    <div class="section">
+      <div class="section-title">${escapeHtml(monthLabel)} — day by day</div>
+      ${data.days.map(dayCardHtml).join('')}
+    </div>
+
+    <div class="section" style="background:transparent;border-style:dashed">
+      <div class="section-title">Your salary will be settled on the 7th of next month</div>
+      <div style="font-size:13px;color:var(--muted)">
+        Base ${e.pay_type === 'Contract' ? `Rs.${Number(e.daily_rate).toLocaleString('en-IN')}/day` : `Rs.${Number(e.monthly_salary).toLocaleString('en-IN')}/month`}.
+        Final amount = your worked days + leaves − advances. The total will be confirmed during the month-end settlement.
+      </div>
+    </div>
+
+    <div class="footer">
+      Questions? Message <a href="https://wa.me/919061906916" class="contact">Basheer bhai</a>.<br>
+      <span style="font-size:11px">HN Hotels Pvt Ltd · Hamza Express · Nawabi Chai House</span>
+    </div>
+  `;
+}
+
+loadSelf();
+</script>
+</body>
+</html>
