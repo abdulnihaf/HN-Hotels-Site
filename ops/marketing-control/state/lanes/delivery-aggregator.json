@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T09:22:46+0530",
-  "published_at": "2026-05-25T09:22:46+0530",
+  "updated_at": "2026-05-25T09:40:39+0530",
+  "published_at": "2026-05-25T09:40:39+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Backfill May aggregator order history",
-    "last_summary": "Backfilled Zomato order history from 2026-05-01 through 2026-05-25 using day-by-day get-all-v2 windows with pagination: 166 snippets, 166 upserted, zero failed windows. Production owner-orders explicit May 1-25 now returns 171 rows: 166 Zomato plus 5 Swiggy current rows, with 154 delivered, 11 rejected, 4 missed, 1 cancelled, 57 issue rows, 21 discount-known rows. Updated /ops/aggregator UI default to May MTD and pushed reusable scripts/aggregator-direct-partner-pull.mjs backfill support to GitHub main. Swiggy current cURL endpoint has no date-range/history fields; Swiggy historical needs separate endpoint/export before it can be fully backfilled.",
-    "next_action": "Find/prove Swiggy historical order endpoint or partner export, then add scheduled authenticated refresh/backfill and brand correction from Zomato resId detail before using data for price/offer execution.",
-    "mutation_status": "production D1 order-history ingestion and dashboard UI/script deploy only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
+    "last_task": "Brand-specific aggregator algorithm dashboards",
+    "last_summary": "Deployed read-only HE and NCH aggregator dashboards at /ops/he/aggregator/ and /ops/nch/aggregator/ with Unified/Zomato/Swiggy tabs, demand slots, top items, offer proof, rejected/missed orders, ops issues, platform mix, and order ledger fed by owner-orders API. Verified May 1-25 production data split: HE 132 orders all Zomato; NCH 40 orders across Zomato/Swiggy. No partner portal/POS/Odoo/ad/WABA/price/offer mutation performed.",
+    "next_action": "Capture Swiggy historical/export endpoint cURL; then schedule local runner for Zomato day-window backfill and Swiggy current feed before any price/offer execution.",
+    "mutation_status": "dashboard/API read-only deploy; platform proof only; no aggregator portal, POS, Odoo, ad, WABA, price, or offer mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-25T08:56:45+0530"
+    "last_run_at": "2026-05-25T09:40:39+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525094039-delivery-aggregator",
+      "at": "2026-05-25T09:40:39+0530",
+      "lane": "delivery-aggregator",
+      "task": "Brand-specific aggregator algorithm dashboards",
+      "status": "ready",
+      "summary": "Deployed read-only HE and NCH aggregator dashboards at /ops/he/aggregator/ and /ops/nch/aggregator/ with Unified/Zomato/Swiggy tabs, demand slots, top items, offer proof, rejected/missed orders, ops issues, platform mix, and order ledger fed by owner-orders API. Verified May 1-25 production data split: HE 132 orders all Zomato; NCH 40 orders across Zomato/Swiggy. No partner portal/POS/Odoo/ad/WABA/price/offer mutation performed.",
+      "next_action": "Capture Swiggy historical/export endpoint cURL; then schedule local runner for Zomato day-window backfill and Swiggy current feed before any price/offer execution.",
+      "mutation_status": "dashboard/API read-only deploy; platform proof only; no aggregator portal, POS, Odoo, ad, WABA, price, or offer mutation"
+    },
     {
       "id": "20260525085645-delivery-aggregator",
       "at": "2026-05-25T08:56:45+0530",
