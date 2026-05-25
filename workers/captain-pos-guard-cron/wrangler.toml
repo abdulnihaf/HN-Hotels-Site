@@ -1,0 +1,11 @@
+name = "hn-captain-pos-guard-cron"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# Cron: every 3 min. Fires reconcile (prove captures became bills) + heartbeat
+# (POS-silent check). Open-hours gating + dedup live in the Pages Function.
+[triggers]
+crons = ["*/3 * * * *"]
+
+# Secret (set via `wrangler secret put CRON_TOKEN`):
+#   CRON_TOKEN — must match hnhotels.in Pages env CRON_TOKEN

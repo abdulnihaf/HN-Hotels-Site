@@ -1,0 +1,25 @@
+{
+  "manifest_version": 2,
+  "name": "Captain POS Guard",
+  "version": "1.0.0",
+  "description": "Zero-leakage local capture for the HE Captain POS. Logs every rung order to durable on-device storage before any network call, then auto-syncs to the backend when internet returns.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "*://test.hamzahotel.com/*",
+    "*://hnhotels.in/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["*://test.hamzahotel.com/pos/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": ["inject.js"],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  }
+}
