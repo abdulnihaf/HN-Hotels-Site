@@ -2236,12 +2236,82 @@ async function submitAdvance() {
     const data = await r.json();
     if (!r.ok || data.error) throw new Error(data.error || 'failed');
     toast(`✓ ₹${amount.toLocaleString('en-IN')} recorded for ${advState.employee.name}`);
-    closeAdvanceModal();
+    renderAdvanceConfirmation({ amount, date, paidVia, reason });
   } catch (e) {
     toast('Failed: ' + e.message, 'error');
     btn.disabled = false;
     btn.textContent = 'Record advance';
   }
+}
+
+// After a successful record, replace the modal body with a confirmation view
+// that has a WhatsApp deep-link to the employee. Owner taps "Send WhatsApp" →
+// WA opens with pre-filled receipt. Zero infra dependency, works today.
+function renderAdvanceConfirmation({ amount, date, paidVia, reason }) {
+  const e = advState.employee || {};
+  const phone10 = normalizePhone10(e.phone);
+  const isEid = reason === 'eid_advance';
+  const firstName = (e.known_as || e.name || 'Bhai').split(' ')[0];
+  const amtFmt = `₹${Number(amount).toLocaleString('en-IN')}`;
+  const dateFmt = date;
+  const via = paidVia === 'cash' ? 'Cash' : paidVia.toUpperCase();
+
+  // Bilingual receipt — Hindi/Roman + English, fits most NCH/HE staff
+  const msg = isEid
+    ? `Assalamualaikum ${firstName} bhai,\n\nEid advance received:\n• Amount: ${amtFmt}\n• Date: ${dateFmt}\n• Paid via: ${via}\n\nIs raashi ko aapke ${new Date(date).toLocaleString('en-IN',{month:'long'})} ki salary se kaata jaayega.\n\nEid Mubarak!\n- HN Hotels`
+    : `${firstName} bhai,\n\nAdvance received:\n• Amount: ${amtFmt}\n• Date: ${dateFmt}\n• Paid via: ${via}\n• Reason: ${reason}\n\nThis will be adjusted in your ${new Date(date).toLocaleString('en-IN',{month:'long'})} salary.\n\n- HN Hotels`;
+
+  const waUrl = phone10
+    ? `https://wa.me/91${phone10}?text=${encodeURIComponent(msg)}`
+    : null;
+
+  document.getElementById('advanceModalBody').innerHTML = `
+    <div class="p-4 rounded mb-4" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3)">
+      <div class="flex items-center gap-2 mb-2">
+        <span style="font-size:18px">✓</span>
+        <span class="font-bold text-emerald-400">Advance recorded</span>
+      </div>
+      <div class="text-sm">
+        <div><span class="text-white/50">Employee:</span> <span class="font-semibold">${escapeHtml(e.name || '')}</span></div>
+        <div><span class="text-white/50">Amount:</span> <span class="font-bold">${amtFmt}</span></div>
+        <div><span class="text-white/50">Date:</span> ${dateFmt}</div>
+        <div><span class="text-white/50">Via:</span> ${via}</div>
+        <div><span class="text-white/50">Reason:</span> ${reason}</div>
+      </div>
+    </div>
+
+    <div class="mb-2 text-[11px] text-white/40 uppercase tracking-wide">Notify employee</div>
+    ${phone10 ? `
+      <div class="p-3 rounded mb-3" style="background:rgba(255,255,255,0.04)">
+        <div class="text-[11px] text-white/50 mb-2">Pre-filled WhatsApp message:</div>
+        <pre style="white-space:pre-wrap;font-family:inherit;font-size:11px;color:#e5e7eb;background:rgba(0,0,0,0.2);padding:8px;border-radius:4px;margin:0">${escapeHtml(msg)}</pre>
+      </div>
+      <div class="flex gap-2">
+        <a href="${waUrl}" target="_blank"
+          class="btn btn-primary flex-1"
+          style="background:#25d366;color:#000;font-weight:700;text-decoration:none;text-align:center">
+          💬 Send WhatsApp to ${escapeHtml(firstName)}
+        </a>
+        <button onclick="closeAdvanceModal()" class="btn btn-ghost">Done</button>
+      </div>
+      <div class="text-[10px] text-white/30 mt-2">
+        Opens WhatsApp pre-filled. You tap send. (BSNL DLT SMS notify will auto-fire once hr_advance_paid template is approved — currently pending on BSNL portal.)
+      </div>
+    ` : `
+      <div class="text-amber-400 text-sm mb-3">⚠ No phone number on file for this employee — cannot send confirmation. Update phone in the employee modal.</div>
+      <button onclick="closeAdvanceModal()" class="btn btn-primary w-full">Done</button>
+    `}
+  `;
+}
+
+function normalizePhone10(p) {
+  if (!p) return null;
+  const d = String(p).replace(/\D/g, '');
+  if (!d) return null;
+  let n = d;
+  if (n.length > 10 && n.startsWith('91')) n = n.slice(-10);
+  if (n.length > 10) n = n.slice(-10);
+  return n.length === 10 ? n : null;
 }
 </script>
 
