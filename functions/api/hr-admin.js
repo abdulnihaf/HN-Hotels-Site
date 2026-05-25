@@ -83,6 +83,48 @@ function istDate(d = new Date()) {
   return ist.toISOString().slice(0, 10);
 }
 
+/* ━━━ Staff-self-view HMAC token ━━━
+ *
+ * Stateless per-employee link token used by the /hr/me/ public page.
+ *   token = first-16-hex-chars of HMAC-SHA256(secret, "staff:" + employee_id)
+ * Secret order of preference: env.STAFF_LINK_SECRET → env.DASHBOARD_KEY → "fallback"
+ * (Use DASHBOARD_KEY for tonight; rotate to a dedicated STAFF_LINK_SECRET later.)
+ *
+ * Token is permanent per employee unless the secret changes. Same employee →
+ * same URL → can be shared via WABA, bookmarked, or pasted manually.
+ */
+async function staffToken(env, employeeId) {
+  const secret = env.STAFF_LINK_SECRET || env.DASHBOARD_KEY || 'fallback';
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`staff:${employeeId}`)
+  );
+  const hex = Array.from(new Uint8Array(sig))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  return hex.slice(0, 16);
+}
+
+async function verifyStaffToken(env, employeeId, providedToken) {
+  if (!providedToken || !employeeId) return false;
+  const expected = await staffToken(env, employeeId);
+  // constant-time-ish compare (length is fixed 16)
+  if (expected.length !== providedToken.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) {
+    diff |= expected.charCodeAt(i) ^ providedToken.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 function parseDate(s) {
   if (!s) return null;
   if (s instanceof Date) return s;
@@ -615,6 +657,132 @@ async function handleGet(url, env) {
       today: todayIso,
       employees,
       count: employees.length,
+    });
+  }
+
+  // --- Mint a staff-self-view URL token (admin/onboarding-only) ---
+  //   GET ?action=staff-token&pin=ADMIN&employee_id=N
+  //   Returns { url, token, employee }.
+  if (action === 'staff-token') {
+    const viewerPin = url.searchParams.get('pin');
+    const viewer = viewerPin && checkPin(viewerPin, 'onboarding');
+    if (!viewer) return json({ error: 'admin/onboarding pin required' }, 401);
+    const empId = parseInt(url.searchParams.get('employee_id'));
+    if (!empId) return json({ error: 'employee_id required' }, 400);
+    const emp = await db.prepare('SELECT id, name, pin, brand_label FROM hr_employees WHERE id=?').bind(empId).first();
+    if (!emp) return json({ error: 'employee not found' }, 404);
+    const tok = await staffToken(env, empId);
+    const origin = new URL(request.url).origin;
+    return json({
+      url: `${origin}/hr/me/?id=${empId}&t=${tok}`,
+      token: tok,
+      employee: emp,
+    });
+  }
+
+  // --- Staff-self-view (PUBLIC, HMAC-token-gated) ---
+  //   GET ?action=staff-self&id=N&t=TOKEN&month=YYYY-MM
+  //   No PIN. Verified via per-employee HMAC token.
+  //   Returns friendly subset of fields — no financials of other employees,
+  //   no roster-wide aggregates, no salary deductions math (NO INFERENCE rule).
+  if (action === 'staff-self') {
+    const empId = parseInt(url.searchParams.get('id'));
+    const tok = url.searchParams.get('t');
+    if (!empId || !tok) return json({ error: 'id and t required' }, 400);
+    const valid = await verifyStaffToken(env, empId, tok);
+    if (!valid) return json({ error: 'invalid token' }, 403);
+
+    const emp = await db.prepare(
+      `SELECT id, name, known_as, brand_label, pay_type, monthly_salary, daily_rate,
+              job_name, department_name, phone, start_date
+         FROM hr_employees
+        WHERE id = ? AND is_active = 1`
+    ).bind(empId).first();
+    if (!emp) return json({ error: 'employee not found or inactive' }, 404);
+
+    const month = url.searchParams.get('month') || istDate().slice(0, 7);
+    const [y, m] = month.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const monthStart = `${month}-01`;
+    const monthEnd = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+    const todayIso = istDate();
+
+    const attRows = (await db.prepare(
+      `SELECT date, status, first_in_at, last_out_at, total_hours,
+              punch_count, is_single_punch
+         FROM hr_attendance_daily
+        WHERE employee_id = ? AND date BETWEEN ? AND ?
+        ORDER BY date`
+    ).bind(empId, monthStart, monthEnd).all()).results || [];
+    const attByDate = {};
+    for (const r of attRows) attByDate[r.date] = r;
+
+    const days = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateIso = `${month}-${String(d).padStart(2, '0')}`;
+      const a = attByDate[dateIso];
+      const isFuture = dateIso > todayIso;
+      days.push({
+        date: dateIso,
+        is_future: isFuture ? 1 : 0,
+        status: a?.status || (isFuture ? null : 'no-data'),
+        first_in_at: a?.first_in_at || null,
+        last_out_at: a?.last_out_at || null,
+        total_hours: a?.total_hours != null ? Number(a.total_hours) : null,
+        is_single_punch: a?.is_single_punch || 0,
+      });
+    }
+
+    const advances = (await db.prepare(
+      `SELECT id, advance_date, amount, paid_via, reason, notes
+         FROM hr_advances
+        WHERE employee_id = ? AND advance_date BETWEEN ? AND ?
+        ORDER BY advance_date DESC, id DESC`
+    ).bind(empId, monthStart, monthEnd).all()).results || [];
+
+    let p = 0, h = 0, abs = 0, lv = 0, wo = 0, amb = 0, hrs = 0;
+    for (const dd of days) {
+      if (dd.is_future) continue;
+      if (dd.status === 'present') p++;
+      else if (dd.status === 'half') h++;
+      else if (dd.status === 'absent') abs++;
+      else if (dd.status === 'leave') lv++;
+      else if (dd.status === 'week_off') wo++;
+      if (dd.is_single_punch) amb++;
+      if (dd.total_hours) hrs += Number(dd.total_hours);
+    }
+    const advancesTotal = advances.reduce((s, r) => s + Number(r.amount || 0), 0);
+
+    return json({
+      month,
+      days_in_month: daysInMonth,
+      today: todayIso,
+      employee: {
+        id: emp.id,
+        name: emp.name,
+        known_as: emp.known_as,
+        brand_label: emp.brand_label,
+        pay_type: emp.pay_type,
+        monthly_salary: emp.monthly_salary,
+        daily_rate: emp.daily_rate,
+        job_name: emp.job_name,
+        department_name: emp.department_name,
+        start_date: emp.start_date,
+      },
+      days,
+      advances,
+      summary: {
+        elapsed_present: p,
+        elapsed_half: h,
+        elapsed_absent: abs,
+        elapsed_leave: lv,
+        elapsed_week_off: wo,
+        elapsed_ambiguous: amb,
+        elapsed_total_hours: Math.round(hrs * 10) / 10,
+        worked_days: p + 0.5 * h,
+        advances_total: advancesTotal,
+        advances_count: advances.length,
+      },
     });
   }
 

@@ -746,6 +746,11 @@ function renderHoursGrid() {
     const advBtn = isAdmin
       ? `<button onclick="event.stopPropagation();openAdvanceModal(${e.id})" class="badge" style="background:rgba(34,197,94,0.18);color:#4ade80;border:none;cursor:pointer;padding:3px 6px;font-weight:600;font-size:10px" title="Record advance">₹</button>`
       : '';
+    const phoneEsc = (e.phone || '').replace(/'/g, "\\'");
+    const nameEsc = (e.name || '').replace(/'/g, "\\'");
+    const shareBtn = isAdmin
+      ? `<button onclick="event.stopPropagation();shareEmployeeUrl(${e.id},'${escapeHtml(nameEsc)}','${escapeHtml(phoneEsc)}')" class="badge" style="background:rgba(59,130,246,0.18);color:#60a5fa;border:none;cursor:pointer;padding:3px 6px;font-weight:600;font-size:10px" title="Get this employee's personal share link">🔗</button>`
+      : '';
     const advTotal = e.advances_this_month_total
       ? `<span style="color:#86efac;font-weight:600">₹${Number(e.advances_this_month_total).toLocaleString('en-IN')}</span>`
       : `<span style="color:#4b5563">—</span>`;
@@ -763,6 +768,7 @@ function renderHoursGrid() {
       </td>
       <td style="text-align:center;padding:4px 8px;font-size:11px;min-width:80px">${advTotal}</td>
       <td style="text-align:center;padding:4px 8px;min-width:34px">${advBtn}</td>
+      <td style="text-align:center;padding:4px 8px;min-width:34px">${shareBtn}</td>
     </tr>`;
   }).join('');
 
@@ -777,6 +783,7 @@ function renderHoursGrid() {
           <th style="text-align:center;padding:6px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Fix?</th>
           <th style="text-align:center;padding:6px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Adv</th>
           <th style="text-align:center;padding:6px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Pay</th>
+          <th style="text-align:center;padding:6px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Share</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -2521,16 +2528,20 @@ function renderAdvanceConfirmation({ amount, date, paidVia, reason, wabaResult }
         <div class="text-[11px] text-white/50 mb-2">Manual fallback — pre-filled WhatsApp message:</div>
         <pre style="white-space:pre-wrap;font-family:inherit;font-size:11px;color:#e5e7eb;background:rgba(0,0,0,0.2);padding:8px;border-radius:4px;margin:0">${escapeHtml(msg)}</pre>
       </div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 mb-2">
         <a href="${waUrl}" target="_blank"
           class="btn btn-ghost flex-1"
           style="text-decoration:none;text-align:center">
           💬 Manual send (fallback)
         </a>
+        <button onclick="shareEmployeeUrl(${advState.employeeId},'${escapeHtml((e.name||'').replace(/'/g,"\\'"))}','${escapeHtml((e.phone||'').replace(/'/g,"\\'"))}')" class="btn btn-ghost" title="Send their full attendance + advance history link">🔗 Share record</button>
         <button onclick="closeAdvanceModal()" class="btn btn-primary">Done</button>
       </div>
     ` : `
-      <button onclick="closeAdvanceModal()" class="btn btn-primary w-full">Done</button>
+      <div class="flex gap-2">
+        <button onclick="shareEmployeeUrl(${advState.employeeId},'${escapeHtml((e.name||'').replace(/'/g,"\\'"))}','${escapeHtml((e.phone||'').replace(/'/g,"\\'"))}')" class="btn btn-ghost flex-1">🔗 Share record link</button>
+        <button onclick="closeAdvanceModal()" class="btn btn-primary">Done</button>
+      </div>
     `}
   `;
 }
@@ -2543,6 +2554,67 @@ function normalizePhone10(p) {
   if (n.length > 10 && n.startsWith('91')) n = n.slice(-10);
   if (n.length > 10) n = n.slice(-10);
   return n.length === 10 ? n : null;
+}
+
+/* ━━━ Staff self-view URL cache ━━━
+ * One HMAC-token mint per employee per session. Same URL is permanent unless
+ * the worker secret changes, so we can share + bookmark it.
+ */
+const _staffUrlCache = {};
+async function getStaffShareUrl(employeeId) {
+  if (_staffUrlCache[employeeId]) return _staffUrlCache[employeeId];
+  try {
+    const r = await fetch(`/api/hr-admin?action=staff-token&pin=${encodeURIComponent(state.pin)}&employee_id=${employeeId}`);
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (data.url) _staffUrlCache[employeeId] = data.url;
+    return data.url || null;
+  } catch (e) { return null; }
+}
+
+async function shareEmployeeUrl(employeeId, employeeName, phone) {
+  const url = await getStaffShareUrl(employeeId);
+  if (!url) { toast('Could not generate share link', 'error'); return; }
+  const phone10 = normalizePhone10(phone);
+  const firstName = (employeeName || '').split(' ')[0] || 'bhai';
+  const msg = `${firstName} bhai, yahan aap apni HN Hotels attendance + advance record dekh sakte ho. Bookmark kar lo:\n\n${url}`;
+  const waUrl = phone10 ? `https://wa.me/91${phone10}?text=${encodeURIComponent(msg)}` : null;
+
+  // Overlay
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.style.zIndex = '9999';
+  ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = `
+    <div class="modal-card" style="max-width:480px">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-bold">${escapeHtml(employeeName)}'s share link</h2>
+        <button onclick="this.closest('.modal-overlay').remove()" class="text-white/60 hover:text-white text-2xl leading-none">×</button>
+      </div>
+      <div class="p-3 rounded mb-3" style="background:rgba(255,255,255,0.04)">
+        <div class="text-[11px] text-white/50 mb-1">URL (permanent — bookmark-able)</div>
+        <div style="word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#86efac;background:rgba(0,0,0,0.25);padding:8px;border-radius:4px">${escapeHtml(url)}</div>
+        <button onclick="navigator.clipboard.writeText('${url}').then(()=>this.textContent='✓ Copied')" class="btn btn-ghost btn-sm mt-2">Copy URL</button>
+      </div>
+      <div class="p-3 rounded mb-3" style="background:rgba(255,255,255,0.04)">
+        <div class="text-[11px] text-white/50 mb-2">Pre-filled WhatsApp message:</div>
+        <pre style="white-space:pre-wrap;font-family:inherit;font-size:11px;color:#e5e7eb;background:rgba(0,0,0,0.25);padding:8px;border-radius:4px;margin:0">${escapeHtml(msg)}</pre>
+      </div>
+      ${phone10 ? `
+        <div class="flex gap-2">
+          <a href="${waUrl}" target="_blank" class="btn btn-primary flex-1"
+             style="background:#25d366;color:#000;font-weight:700;text-decoration:none;text-align:center">
+            💬 Send to ${escapeHtml(firstName)} on WhatsApp
+          </a>
+          <a href="${url}" target="_blank" class="btn btn-ghost">Preview</a>
+        </div>
+      ` : `
+        <div class="text-amber-400 text-sm mb-2">⚠ No phone on file — share URL manually.</div>
+        <a href="${url}" target="_blank" class="btn btn-primary w-full">Preview as ${escapeHtml(firstName)}</a>
+      `}
+    </div>
+  `;
+  document.body.appendChild(ov);
 }
 </script>
 
