@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T13:47:35+0530",
-  "published_at": "2026-05-25T13:47:35+0530",
+  "updated_at": "2026-05-25T13:47:49+0530",
+  "published_at": "2026-05-25T13:47:49+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Execute COA Ring 3 aggregator event intelligence",
-    "last_summary": "Deployed Ring 3 event layer for aggregator control: coa_ring3_analyze and coa-events live, event/candidate D1 schema active, health-watcher cron now runs Ring2 pull then Ring3 analysis. Manual proof for 2026-05-25 scanned 9 orders, upserted 12 events, 16 item-level candidates, 2 critical events, estimated loss 1165.10; all price/offer candidates gated as data_gathering.",
-    "next_action": "Build owner UI panels over coa-events: critical events, rejected/cancelled loss, discount exposure, and proof-gated item candidates by HE/NCH and Swiggy/Zomato. Keep offer/price execution blocked until margin proof.",
-    "mutation_status": "HN Cloudflare Pages/D1 intelligence mutation only; no Swiggy/Zomato portal, POS, Odoo, ad, WABA send, price, or offer mutation.",
+    "last_task": "Ring 3 aggregator events",
+    "last_summary": "Ring 3 deployed live: coa_ring3_analyze and coa-events, D1 event/candidate schema, cron analysis. Proof 2026-05-25: 9 orders, 12 events, 16 candidates, 2 critical, loss 1165.10, all candidates data_gathering.",
+    "next_action": "Expose coa-events in owner UI by brand/platform with critical loss, rejects/cancels, discount exposure, and gated item candidates. Keep price/offer blocked until margin proof.",
+    "mutation_status": "HN D1 intelligence only; no portal/POS/Odoo/ad/WABA/price/offer mutation.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-25T13:47:17+0530"
+    "last_run_at": "2026-05-25T13:47:49+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525134749-delivery-aggregator",
+      "at": "2026-05-25T13:47:49+0530",
+      "lane": "delivery-aggregator",
+      "task": "Ring 3 aggregator events",
+      "status": "ready",
+      "summary": "Ring 3 deployed live: coa_ring3_analyze and coa-events, D1 event/candidate schema, cron analysis. Proof 2026-05-25: 9 orders, 12 events, 16 candidates, 2 critical, loss 1165.10, all candidates data_gathering.",
+      "next_action": "Expose coa-events in owner UI by brand/platform with critical loss, rejects/cancels, discount exposure, and gated item candidates. Keep price/offer blocked until margin proof.",
+      "mutation_status": "HN D1 intelligence only; no portal/POS/Odoo/ad/WABA/price/offer mutation."
+    },
     {
       "id": "20260525134717-delivery-aggregator",
       "at": "2026-05-25T13:47:17+0530",
@@ -209,16 +219,6 @@
       "summary": "Built local aggregator owner order-history focus: added direct Zomato history ingest path, owner-orders API with status/issue/discount/rating fields, direct-pull ingest wiring, and replaced cluttered ops/aggregator UI with order-history console. Verified saved Swiggy and Zomato cURLs both replay HTTP 200 in dry-run; no portal/POS/Odoo/ad mutation or live deploy.",
       "next_action": "Deploy API/UI after review, then run controlled ingest with current partner cURLs and verify hnhotels.in/ops/aggregator shows delivered/rejected/missed order rows before any price or offer execution.",
       "mutation_status": "local code/context only; no live platform, POS, Odoo, ad, WABA, or aggregator portal mutation"
-    },
-    {
-      "id": "20260525071555-delivery-aggregator",
-      "at": "2026-05-25T07:15:55+0530",
-      "lane": "delivery-aggregator",
-      "task": "Audit Azure Codex micro-step trail against price and offer objectives",
-      "status": "ready",
-      "summary": "Read raw Azure Codex session 019e1fac-d077-71a2-848f-995342f830e7 and source micro-step artifacts MS01-MS39. User's original objective in the trail is accurate price positioning plus accurate offer placing, not SEO/menu polish. Confirmed source roles: Swiggy DATA is order-volume demand; Zomato MG Road is rank-price perception; HE menu workbook is platform surface; POS is SKU universe; playbook is offer mechanic library. Found main drift: MS35 over-corrected toward no-offer as final strategy, while MS36 corrected that offers are mandatory but role-based/proof-gated. MS39 corrected context-collapse risks: missing Swiggy units/AOV, missing taxonomy, and direct-name price divergence. Saved audit note at _context/Delivery_Aggregator_Direct_API_2026-05-25/azure-session-019e1fac-microstep-context-audit.md. No portal/D1/POS/Odoo mutation.",
-      "next_action": "Build the next price-plus-offer design table from MS38/MS39: current portal card, target customer-paying price, base price, offer mechanic, effective price, commission/margin, stack/MOV/daypart proof, and execution gate per SKU.",
-      "mutation_status": "none - read-only raw session/artifact audit and ignored context note only"
     }
   ]
 }
