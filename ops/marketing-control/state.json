@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T08:11:36+0530",
-  "published_at": "2026-05-25T08:11:36+0530",
+  "updated_at": "2026-05-25T08:17:47+0530",
+  "published_at": "2026-05-25T08:17:47+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Add 12 PM lunch Hamza Hotel copy candidate",
-      "last_summary": "Added Nihaf's proposed lunch copy as a 12 PM candidate in the GBP-verified text asset doc. Flagged that live GBP currently says 2 PM-3 AM, so Open From 12 PM should only go live after GBP/site/landing hours are changed and verified. Recommended RSA headline split: Lunch At Hamza Hotel? / Come To Hamza Express / Open From 12 PM / Wahi Hamza Naam / Naya Zaiqa Naya Andaaz / Ghee Rice & Kabab / 10% Dine-In Offer / 20% Takeaway Offer / Get Directions. Suggested safer description uses Famous Ghee Rice and Kabab unless owner wants the stronger Bangalore's best claim.",
-      "next_action": "Confirm whether real opening is 12 PM or 2 PM; then update GBP/site/landing hours consistently before creating mockup visuals or live ads.",
-      "mutation_status": "none-copy-doc-only",
+      "last_task": "Late-night Hamza Hotel brand-capture ad setup",
+      "last_summary": "Set local Google Ads lane docs/mockup for late-night Hamza Hotel search capture: Rs 500/day proposed for 5km brand campaign, 2km biryani/ghee-rice fallback kept paused, late-night copy uses Open Till 3 AM, Bangalore's best Ghee Rice/Kabab, 10% dine-in only.",
+      "next_action": "Confirm late-night mockup/copy, verify 10% dine-in proof and landing/site hours, then live-verify Google Ads account before any campaign or budget mutation.",
+      "mutation_status": "No live Google Ads/GBP/POS mutation. Local _context docs and HTML mockup updated only.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T08:11:36+0530"
+      "last_run_at": "2026-05-25T08:17:47+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525081747-google-ads",
+      "at": "2026-05-25T08:17:47+0530",
+      "lane": "google-ads",
+      "task": "Late-night Hamza Hotel brand-capture ad setup",
+      "status": "ready",
+      "summary": "Set local Google Ads lane docs/mockup for late-night Hamza Hotel search capture: Rs 500/day proposed for 5km brand campaign, 2km biryani/ghee-rice fallback kept paused, late-night copy uses Open Till 3 AM, Bangalore's best Ghee Rice/Kabab, 10% dine-in only.",
+      "next_action": "Confirm late-night mockup/copy, verify 10% dine-in proof and landing/site hours, then live-verify Google Ads account before any campaign or budget mutation.",
+      "mutation_status": "No live Google Ads/GBP/POS mutation. Local _context docs and HTML mockup updated only."
+    },
     {
       "id": "20260525081136-google-ads",
       "at": "2026-05-25T08:11:36+0530",
