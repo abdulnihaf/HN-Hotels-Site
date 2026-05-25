@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T10:27:33+0530",
-  "published_at": "2026-05-25T10:27:33+0530",
+  "updated_at": "2026-05-25T10:28:23+0530",
+  "published_at": "2026-05-25T10:28:23+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Improve Hamza Hotel ad with conversion trial impulse",
-      "last_summary": "Reframed late-night Brand conveyance from generic curiosity to conversion-oriented trial impulse. New preferred visible copy: 'Searching Hamza Hotel? | Try Hamza Express' with description 'HKP Road's new Hamza face. Wahi Hamza naam. Ghee Rice & Kabab till 3 AM. 10% dine-in.' Verified Google headline/description character limits. Updated exact config, copy doc, and mockup. No live mutation.",
-      "next_action": "If approved, use this trial-impulse copy in landing and RSA pins, then apply full Google Ads setup via safe endpoint/UI readback.",
-      "mutation_status": "No live Google Ads mutation. Local docs/mockup only.",
+      "last_task": "Zoom-out macro objective for Hamza Hotel search ad headline",
+      "last_summary": "Paused live execution and reframed the campaign objective from copy tweaking to macro consumer psychology: intercept the exact Hamza Hotel search, reduce confusion about Hamza Express being the current HKP Road face, create a low-friction trial impulse, then convert to directions/dine-in using late-night hours and 10% offer. No live mutation.",
+      "next_action": "Finalize the 30-character headline stack around search mirroring + trial impulse + late-night reason before any landing/RSA mutation.",
+      "mutation_status": "No live Google Ads mutation. Strategy clarification only.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T10:12:35+0530"
+      "last_run_at": "2026-05-25T10:28:23+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525102823-google-ads",
+      "at": "2026-05-25T10:28:23+0530",
+      "lane": "google-ads",
+      "task": "Zoom-out macro objective for Hamza Hotel search ad headline",
+      "status": "ready",
+      "summary": "Paused live execution and reframed the campaign objective from copy tweaking to macro consumer psychology: intercept the exact Hamza Hotel search, reduce confusion about Hamza Express being the current HKP Road face, create a low-friction trial impulse, then convert to directions/dine-in using late-night hours and 10% offer. No live mutation.",
+      "next_action": "Finalize the 30-character headline stack around search mirroring + trial impulse + late-night reason before any landing/RSA mutation.",
+      "mutation_status": "No live Google Ads mutation. Strategy clarification only."
+    },
     {
       "id": "20260525102733-packaging-design",
       "at": "2026-05-25T10:27:33+0530",
