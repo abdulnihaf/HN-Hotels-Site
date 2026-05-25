@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T10:07:14+0530",
-  "published_at": "2026-05-25T10:07:14+0530",
+  "updated_at": "2026-05-25T10:12:35+0530",
+  "published_at": "2026-05-25T10:12:35+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Anchor Hamza Hotel ad copy on exact search action",
-      "last_summary": "Adjusted the late-night Brand copy to reflect the core intelligence that the person actively searched Hamza Hotel. Final frame now starts with 'Hamza Hotel Search Kiya?' then opens curiosity with 'Hamza Express: Naya Andaaz', followed by HKP Road/new Hamza face, Wahi Hamza naam, Open till 3 AM, and 10% dine-in. Updated config, copy doc, and mockup; removed blunt action wording.",
-      "next_action": "If approved, use this search-mirroring curiosity copy for landing/RSA pins before live campaign mutation.",
+      "last_task": "Improve Hamza Hotel ad with conversion trial impulse",
+      "last_summary": "Reframed late-night Brand conveyance from generic curiosity to conversion-oriented trial impulse. New preferred visible copy: 'Searching Hamza Hotel? | Try Hamza Express' with description 'HKP Road's new Hamza face. Wahi Hamza naam. Ghee Rice & Kabab till 3 AM. 10% dine-in.' Verified Google headline/description character limits. Updated exact config, copy doc, and mockup. No live mutation.",
+      "next_action": "If approved, use this trial-impulse copy in landing and RSA pins, then apply full Google Ads setup via safe endpoint/UI readback.",
       "mutation_status": "No live Google Ads mutation. Local docs/mockup only.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T10:04:01+0530"
+      "last_run_at": "2026-05-25T10:12:35+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525101235-google-ads",
+      "at": "2026-05-25T10:12:35+0530",
+      "lane": "google-ads",
+      "task": "Improve Hamza Hotel ad with conversion trial impulse",
+      "status": "ready",
+      "summary": "Reframed late-night Brand conveyance from generic curiosity to conversion-oriented trial impulse. New preferred visible copy: 'Searching Hamza Hotel? | Try Hamza Express' with description 'HKP Road's new Hamza face. Wahi Hamza naam. Ghee Rice & Kabab till 3 AM. 10% dine-in.' Verified Google headline/description character limits. Updated exact config, copy doc, and mockup. No live mutation.",
+      "next_action": "If approved, use this trial-impulse copy in landing and RSA pins, then apply full Google Ads setup via safe endpoint/UI readback.",
+      "mutation_status": "No live Google Ads mutation. Local docs/mockup only."
+    },
     {
       "id": "20260525100714-delivery-aggregator",
       "at": "2026-05-25T10:07:14+0530",
