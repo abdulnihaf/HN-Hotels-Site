@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T14:59:03+0530",
-  "published_at": "2026-05-25T14:59:03+0530",
+  "updated_at": "2026-05-25T14:59:50+0530",
+  "published_at": "2026-05-25T14:59:50+0530",
   "source": "github-main-static-json",
   "lane_slug": "packaging-design",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Creative Surface",
     "risk": "print/vendor handoff",
     "status": "ready",
-    "last_task": "Audit Figma MCP control for NCH flask file",
-    "last_summary": "Confirmed existing Figma flask file cNkjzNFs4Xb1bdJUBB0Xey is accessible and writable: metadata read for node 1:7, created Codex MCP Control Test page/nodes, uploaded a PNG as a new Figma image node, exported screenshots and downloaded them. New blank file creation failed earlier due invalid planKey; direct upload-to-existing-node fill did not apply, but upload-as-new-node works and can be positioned/resized by use_figma.",
-    "next_action": "Build final front/back editable panels inside existing NCH flask Figma file using existing page/node 1:7; use supported Figma fonts like Cinzel/Cormorant/Inter and upload raster references as new image nodes.",
-    "mutation_status": "Figma test page and uploaded test image node only; no POS/Odoo/ad/vendor mutation.",
+    "last_task": "Build NCH flask front/back editable Figma review board",
+    "last_summary": "Ingested updated packaging-design context and built a self-contained Figma approval page in existing file cNkjzNFs4Xb1bdJUBB0Xey. Locked approved front reference and v5 back reference are nested into their frames. Editable back v6 frame now contains matched embroidered background, larger emblem, dual QR cards, Instagram/website/phone/statutory text, divider, and dark footer band. Source front/back PDFs still qpdf pass at 136x216mm; source QR PNGs decode to /go/flask and Google review. No final vendor dieline bulk generation done before approval.",
+    "next_action": "Have Nihaf review page 'Codex Final 250ml Front Back Editable' in Figma, adjust editable back placements if needed, then run deterministic SVG/PDF/QR/bleed/dieline vendor checks after panel approval.",
+    "mutation_status": "Existing Figma file mutation only; no POS/Odoo/ad/WABA/vendor final file mutation; no bulk final dielines generated.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-    "last_run_at": "2026-05-25T10:27:33+0530"
+    "last_run_at": "2026-05-25T14:59:50+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Packaging_Design_Codex_2026-05-24/prompts/10-packaging-design.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/packaging-design.md",
   "writeback_required": false,
   "recent_events": [
+    {
+      "id": "20260525145950-packaging-design",
+      "at": "2026-05-25T14:59:50+0530",
+      "lane": "packaging-design",
+      "task": "Build NCH flask front/back editable Figma review board",
+      "status": "ready",
+      "summary": "Ingested updated packaging-design context and built a self-contained Figma approval page in existing file cNkjzNFs4Xb1bdJUBB0Xey. Locked approved front reference and v5 back reference are nested into their frames. Editable back v6 frame now contains matched embroidered background, larger emblem, dual QR cards, Instagram/website/phone/statutory text, divider, and dark footer band. Source front/back PDFs still qpdf pass at 136x216mm; source QR PNGs decode to /go/flask and Google review. No final vendor dieline bulk generation done before approval.",
+      "next_action": "Have Nihaf review page 'Codex Final 250ml Front Back Editable' in Figma, adjust editable back placements if needed, then run deterministic SVG/PDF/QR/bleed/dieline vendor checks after panel approval.",
+      "mutation_status": "Existing Figma file mutation only; no POS/Odoo/ad/WABA/vendor final file mutation; no bulk final dielines generated."
+    },
     {
       "id": "20260525102733-packaging-design",
       "at": "2026-05-25T10:27:33+0530",
