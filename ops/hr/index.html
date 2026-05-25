@@ -149,6 +149,7 @@
     <button onclick="setTab('hours')"       data-tab="hours"       class="tab-btn flex-shrink-0">Hours</button>
     <button onclick="setTab('attendance')"  data-tab="attendance"  class="tab-btn flex-shrink-0">Attendance</button>
     <button onclick="setTab('deductions')"  data-tab="deductions"  class="tab-btn flex-shrink-0">Deductions</button>
+    <button onclick="setTab('settlement')"  data-tab="settlement"  class="tab-btn flex-shrink-0" data-admin-only>Settlement</button>
     <button onclick="setTab('cams')"        data-tab="cams"        class="tab-btn flex-shrink-0">CAMS</button>
     <button onclick="setTab('sync')"        data-tab="sync"        class="tab-btn flex-shrink-0">Sync</button>
     <button onclick="setTab('messaging')"   data-tab="messaging"   class="tab-btn flex-shrink-0">Messaging</button>
@@ -185,6 +186,43 @@
 
     <div id="hoursGridWrap" style="overflow-x:auto;overflow-y:visible">
       <div id="hoursGrid" class="text-xs"></div>
+    </div>
+  </div>
+
+  <!-- ═══ SETTLEMENT TAB — monthly payroll, owner-overridable net ═══ -->
+  <div id="tab-settlement" class="tab-content hidden px-3 py-4">
+    <div class="flex flex-wrap gap-2 items-center mb-3">
+      <input id="setlMonth" type="month" class="px-2 py-1.5 rounded text-sm"
+        style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)"
+        onchange="loadSettlement()">
+      <select id="setlBrand" class="px-2 py-1.5 rounded text-sm"
+        style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)"
+        onchange="renderSettlement()">
+        <option value="all">All brands</option>
+        <option value="HE">Hamza Express</option>
+        <option value="NCH">Nawabi Chai House</option>
+        <option value="HQ">HN HQ</option>
+      </select>
+      <button onclick="computeSettlement()" id="setlComputeBtn" class="btn btn-ghost btn-sm" title="Pull computed net from CAMS attendance + advances for every active staff. Opens after month-end.">↻ Compute from attendance</button>
+      <button onclick="loadSettlement()" class="btn btn-ghost btn-sm">Refresh</button>
+    </div>
+
+    <div id="setlGate" class="mb-3"></div>
+
+    <div class="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
+      <div class="stat-tile"><div class="stat-num" id="setlStaff">–</div><div class="stat-label">Staff</div></div>
+      <div class="stat-tile"><div class="stat-num text-blue-400" id="setlAdvances">–</div><div class="stat-label">Advances ₹</div></div>
+      <div class="stat-tile"><div class="stat-num text-amber-400" id="setlOverridden">–</div><div class="stat-label">Overridden</div></div>
+      <div class="stat-tile"><div class="stat-num text-emerald-400" id="setlDue">–</div><div class="stat-label">Due ₹</div></div>
+      <div class="stat-tile"><div class="stat-num text-white/70" id="setlPaid">–</div><div class="stat-label">Paid ₹</div></div>
+    </div>
+
+    <div class="text-[11px] text-white/40 mb-2">
+      Computed net is from CAMS + advances. Type a <b>Final ₹</b> to override it (your number wins) — used when attendance wasn't logged cleanly. Computed figure is kept for audit. Leaves classified + settled <b>7th of next month</b>, never before.
+    </div>
+
+    <div id="setlWrap" style="overflow-x:auto">
+      <div id="setlTable" class="text-xs"></div>
     </div>
   </div>
 
@@ -609,7 +647,7 @@ function applyRoleVisibility() {
   // Tabs visible to non-admin: Roster (view), Attendance
   document.querySelectorAll('[data-tab]').forEach(el => {
     const t = el.dataset.tab;
-    if (t === 'deductions' || t === 'cams' || t === 'sync') {
+    if (t === 'deductions' || t === 'settlement' || t === 'cams' || t === 'sync') {
       el.style.display = isAdmin ? '' : 'none';
     }
   });
@@ -634,6 +672,7 @@ function setTab(t) {
   if (t === 'hours') loadHours();
   if (t === 'attendance') loadAttendance();
   if (t === 'deductions') loadDeductions();
+  if (t === 'settlement') loadSettlement();
   if (t === 'cams') loadCamsDevices();
   if (t === 'sync') loadSyncLog();
 }
@@ -2226,6 +2265,238 @@ async function wipeLeegalityOrphans(ids) {
   });
   const data = await r.json();
   alert(r.ok ? `Marked ${data.updated} as wiped. Run local cleanup script to delete from Leegality.` : 'Failed: ' + (data.error || ''));
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* SETTLEMENT TAB — monthly payroll with owner-overridable net.                 */
+/* Computed net comes from /api/hr-payroll list-payable (CAMS + advances).      */
+/* Owner types a Final ₹ that wins (set-override). Computed figure is kept for  */
+/* audit. compute-payable is gated to after month-end (settle on the 7th).      */
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+const setlState = { period: null, rows: [], totals: null };
+
+function setlMonthEnd(period) {
+  const [y, m] = period.split('-').map(Number);
+  const dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${period}-${String(dim).padStart(2, '0')}`;
+}
+function setlPeriodEnded(period) {
+  const istToday = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+  return istToday > setlMonthEnd(period);
+}
+function setlDefaultMonth() {
+  // Default to the previous calendar month (the one being settled on the 7th).
+  const ist = new Date(Date.now() + 5.5 * 3600 * 1000);
+  const d = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), 1));
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  return d.toISOString().slice(0, 7);
+}
+function setlBrandMatch(r, brand) {
+  if (brand === 'all') return true;
+  const b = (r.brand_label || '').toLowerCase();
+  if (brand === 'HE') return b.includes('hamza');
+  if (brand === 'NCH') return b.includes('nawabi') || b.includes('chai');
+  if (brand === 'HQ') return b.includes('hq') || b.includes('hn ');
+  return true;
+}
+function setlPeriodLabel(period) {
+  const [y, m] = period.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+async function loadSettlement() {
+  const dk = getDashboardKey();
+  if (!dk) { toast('Dashboard key required', 'error'); return; }
+  const inp = document.getElementById('setlMonth');
+  if (!inp.value) inp.value = setlDefaultMonth();
+  const period = inp.value;
+  setlState.period = period;
+
+  const ended = setlPeriodEnded(period);
+  const gate = document.getElementById('setlGate');
+  const btn = document.getElementById('setlComputeBtn');
+  if (!ended) {
+    gate.innerHTML = `<div class="p-3 rounded text-sm" style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.3);color:#fcd34d">⏳ ${setlPeriodLabel(period)} hasn't ended yet. Settlement opens after month-end (settle on the 7th of next month). Computing now would treat future days as absent. You can still review + override any existing rows.</div>`;
+    btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed';
+  } else {
+    gate.innerHTML = '';
+    btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = '';
+  }
+
+  document.getElementById('setlTable').innerHTML = '<div class="text-white/40 py-8 text-center">Loading…</div>';
+  try {
+    const r = await fetch(`/api/hr-payroll?action=list-payable&pay_period=${period}`, { headers: { 'x-dashboard-key': dk } });
+    const data = await r.json();
+    setlState.rows = data.rows || [];
+    setlState.totals = data.totals || null;
+    renderSettlement();
+  } catch (e) {
+    document.getElementById('setlTable').innerHTML = `<div class="text-rose-400 py-8 text-center">Load failed: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function computeSettlement() {
+  const dk = getDashboardKey();
+  if (!dk) return;
+  const period = setlState.period;
+  if (!setlPeriodEnded(period)) { toast('Settlement opens after month-end', 'error'); return; }
+  if (!confirm(`Compute net payable for ALL active staff for ${setlPeriodLabel(period)}?\n\nThis (re)snapshots computed figures from CAMS + advances. Your existing manual overrides are preserved.`)) return;
+  document.getElementById('setlTable').innerHTML = '<div class="text-white/40 py-8 text-center">Computing…</div>';
+  try {
+    const r = await fetch(`/api/hr-payroll?action=compute-payable`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({ pay_period: period }),
+    });
+    const data = await r.json();
+    if (!r.ok) toast(data.error || 'compute failed', 'error');
+    await loadSettlement();
+  } catch (e) { toast('compute failed: ' + e.message, 'error'); }
+}
+
+function renderSettlement() {
+  const brand = document.getElementById('setlBrand').value;
+  const rows = setlState.rows.filter(r => setlBrandMatch(r, brand));
+
+  // Stats from the brand-filtered rows
+  const s = rows.reduce((a, r) => {
+    a.advances += Number(r.advances_total || 0);
+    a.overridden += r.is_overridden ? 1 : 0;
+    a.due += r.status !== 'paid' ? Number(r.effective_net || 0) : 0;
+    a.paid += r.status === 'paid' ? Number(r.effective_net || 0) : 0;
+    return a;
+  }, { advances: 0, overridden: 0, due: 0, paid: 0 });
+  const inr = n => '₹' + Math.round(Number(n || 0)).toLocaleString('en-IN');
+  document.getElementById('setlStaff').textContent = rows.length;
+  document.getElementById('setlAdvances').textContent = inr(s.advances);
+  document.getElementById('setlOverridden').textContent = s.overridden;
+  document.getElementById('setlDue').textContent = inr(s.due);
+  document.getElementById('setlPaid').textContent = inr(s.paid);
+
+  if (!rows.length) {
+    document.getElementById('setlTable').innerHTML = `<div class="text-white/40 py-8 text-center">No snapshots for ${escapeHtml(setlPeriodLabel(setlState.period))} yet. ${setlPeriodEnded(setlState.period) ? 'Tap “Compute from attendance” to generate them.' : 'They generate after month-end.'}</div>`;
+    return;
+  }
+
+  const statusChip = st => {
+    const map = { computed: ['#9ca3af', 'computed'], approved: ['#60a5fa', 'approved'], paid: ['#4ade80', 'paid'] };
+    const [c, t] = map[st] || ['#9ca3af', st || '—'];
+    return `<span style="color:${c};font-weight:600;font-size:10px;text-transform:uppercase">${t}</span>`;
+  };
+
+  const body = rows.map(r => {
+    const computed = Number(r.net_payable || 0);
+    const eff = Number(r.effective_net || 0);
+    const isPaid = r.status === 'paid';
+    const ovVal = r.is_overridden ? Math.round(Number(r.manual_net_override)) : '';
+    const name = escapeHtml(r.employee_known_as || r.employee_name || ('#' + r.employee_id));
+    const sub = `${escapeHtml(r.brand_label || '')} · ${r.emp_pay_type || ''}`;
+    return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+      <td style="padding:6px 8px;min-width:150px">
+        <div style="font-size:12px;font-weight:600">${name}</div>
+        <div style="font-size:10px;color:#6b7280">${sub}${r.is_overridden ? ` · <span style="color:#fbbf24" title="${escapeHtml(r.override_reason || '')}">override</span>` : ''}</div>
+      </td>
+      <td style="text-align:right;padding:6px 8px;font-size:11px;color:#9ca3af" title="Days worked / days in month">${r.days_worked ?? '–'}/${r.days_in_month ?? '–'}</td>
+      <td style="text-align:right;padding:6px 8px;font-size:11px;color:#93c5fd">₹${Math.round(Number(r.advances_total||0)).toLocaleString('en-IN')}</td>
+      <td style="text-align:right;padding:6px 8px;font-size:11px;color:#9ca3af" title="System computed from attendance">₹${Math.round(computed).toLocaleString('en-IN')}</td>
+      <td style="padding:6px 8px;text-align:right">
+        <input id="ov_${r.id}" type="number" min="0" step="1" inputmode="numeric"
+          ${isPaid ? 'disabled' : ''} value="${ovVal}" placeholder="${Math.round(computed)}"
+          style="width:92px;text-align:right;padding:4px 6px;border-radius:4px;background:${isPaid ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)'};color:${r.is_overridden ? '#fbbf24' : '#fff'};border:1px solid rgba(255,255,255,0.12);font-weight:700">
+      </td>
+      <td style="text-align:right;padding:6px 8px;font-size:12px;font-weight:700;color:#4ade80">₹${Math.round(eff).toLocaleString('en-IN')}</td>
+      <td style="text-align:center;padding:6px 8px">${statusChip(r.status)}</td>
+      <td style="padding:6px 8px;white-space:nowrap;text-align:right">
+        ${isPaid ? '' : `<button onclick="saveOverride(${r.id})" class="badge" style="background:rgba(245,158,11,0.18);color:#fbbf24;border:none;cursor:pointer;padding:3px 7px;font-weight:600;font-size:10px">Save ₹</button>`}
+        ${(!isPaid) ? `<button onclick="markPaidRow(${r.id})" class="badge" style="background:rgba(34,197,94,0.18);color:#4ade80;border:none;cursor:pointer;padding:3px 7px;font-weight:600;font-size:10px;margin-left:4px">Mark paid</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('setlTable').innerHTML = `
+    <table style="border-collapse:collapse;width:100%;min-width:720px">
+      <thead><tr style="background:#0f1115">
+        <th style="text-align:left;padding:6px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Employee</th>
+        <th style="text-align:right;padding:6px 8px;font-size:9px;text-transform:uppercase;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Days</th>
+        <th style="text-align:right;padding:6px 8px;font-size:9px;text-transform:uppercase;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Adv</th>
+        <th style="text-align:right;padding:6px 8px;font-size:9px;text-transform:uppercase;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Computed</th>
+        <th style="text-align:right;padding:6px 8px;font-size:9px;text-transform:uppercase;color:#fbbf24;border-bottom:1px solid rgba(255,255,255,0.08)">Final ₹</th>
+        <th style="text-align:right;padding:6px 8px;font-size:9px;text-transform:uppercase;color:#4ade80;border-bottom:1px solid rgba(255,255,255,0.08)">Net pay</th>
+        <th style="text-align:center;padding:6px 8px;font-size:9px;text-transform:uppercase;color:#9ca3af;border-bottom:1px solid rgba(255,255,255,0.08)">Status</th>
+        <th style="border-bottom:1px solid rgba(255,255,255,0.08)"></th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table>`;
+}
+
+async function saveOverride(snapshotId) {
+  const dk = getDashboardKey();
+  if (!dk) return;
+  const inp = document.getElementById('ov_' + snapshotId);
+  const raw = (inp.value || '').trim();
+  const clearing = raw === '';
+  let reason = null;
+  if (!clearing) {
+    reason = prompt('Reason for overriding the computed salary (e.g. "attendance not logged, agreed ₹X"):', '');
+    if (reason === null) return; // cancelled
+  }
+  try {
+    const r = await fetch('/api/hr-payroll?action=set-override', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({ snapshot_id: snapshotId, override_amount: clearing ? null : Number(raw), reason, by: 'Nihaf' }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'failed');
+    toast(clearing ? 'Override cleared — back to computed' : `Final ₹${Number(raw).toLocaleString('en-IN')} saved`);
+    await loadSettlement();
+  } catch (e) { toast('Save failed: ' + e.message, 'error'); }
+}
+
+async function markPaidRow(snapshotId) {
+  const dk = getDashboardKey();
+  if (!dk) return;
+  const row = setlState.rows.find(x => x.id === snapshotId);
+  if (!row) return;
+  const net = Math.round(Number(row.effective_net || 0));
+  const ref = prompt(`Mark ${row.employee_known_as || row.employee_name} PAID — net ₹${net.toLocaleString('en-IN')}.\n\nPayment reference (UTR / txn id):`, '');
+  if (ref === null || !ref.trim()) { if (ref !== null) toast('Reference required', 'error'); return; }
+  const paidVia = (prompt('Paid via? (cash / bank / upi / razorpay / paytm)', 'bank') || 'bank').trim().toLowerCase();
+  try {
+    const r = await fetch('/api/hr-payroll?action=mark-paid', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({ snapshot_id: snapshotId, payment_reference: ref.trim() }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'failed');
+    toast(`✓ Marked paid · ₹${net.toLocaleString('en-IN')}`);
+    // Notify staff via approved WABA salary template (HE WABA routes all brands).
+    const w = await fireSalaryWaba(row, net, paidVia, ref.trim(), dk);
+    if (w.ok) toast('WhatsApp salary receipt sent');
+    else if (w.reason !== 'no_phone') toast('WABA not sent: ' + w.reason, 'error');
+    await loadSettlement();
+  } catch (e) { toast('Mark-paid failed: ' + e.message, 'error'); }
+}
+
+async function fireSalaryWaba(row, net, paidVia, reference, dk) {
+  const phone10 = normalizePhone10(row.phone);
+  if (!phone10) return { ok: false, reason: 'no_phone' };
+  const name = row.employee_known_as || row.employee_name || '';
+  const periodLabel = setlPeriodLabel(row.pay_period);
+  const paidViaLabel = paidVia.charAt(0).toUpperCase() + paidVia.slice(1);
+  try {
+    const r = await fetch('/api/comms?action=send', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({
+        channel: 'waba', brand: 'he', phone: phone10,
+        template: 'hr_salary_paid_v1', language: 'en',
+        vars: [name, periodLabel, String(net), paidViaLabel, reference],
+        tier: 'info', alert_id: `hr_salary_${row.employee_id}_${row.pay_period}`,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) return { ok: false, reason: data.error || ('http_' + r.status) };
+    return { ok: true, provider_msg_id: data.provider_msg_id };
+  } catch (err) { return { ok: false, reason: err.message }; }
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */

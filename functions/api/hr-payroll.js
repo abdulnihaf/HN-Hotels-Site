@@ -369,9 +369,24 @@ export async function onRequest({ request, env }) {
 
   // ─── Compute / list / approve / mark-paid payable ───────────────────────
   if (action === 'compute-payable' && method === 'POST') {
-    const { pay_period, employee_id } = body;
+    const { pay_period, employee_id, force } = body;
     if (!pay_period || !/^\d{4}-\d{2}$/.test(pay_period)) {
       return json({ error: 'pay_period (YYYY-MM) required' }, 400);
+    }
+    // Settlement-timing rule (locked 2026-05-25): leaves are classified + salary
+    // settled only AFTER the month ends (May → 7 June). Computing mid-month treats
+    // future days as LOP and over-deducts. Refuse a not-yet-ended period unless the
+    // caller explicitly forces it.
+    if (!force) {
+      const { end } = monthBounds(pay_period);
+      const todayIST = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+      if (todayIST <= end) {
+        return json({
+          error: `pay_period ${pay_period} has not ended yet (today IST ${todayIST}, month ends ${end}). Settlement runs after month-end — pass force:true only to override.`,
+          settlement_locked: true,
+          month_ends: end,
+        }, 409);
+      }
     }
     const targets = employee_id
       ? [{ id: employee_id }]
@@ -402,22 +417,30 @@ export async function onRequest({ request, env }) {
     if (!period) return json({ error: 'pay_period required' }, 400);
     const rs = await db.prepare(`
       SELECT s.*, e.name AS employee_name, e.known_as AS employee_known_as,
-             e.brand_label, e.pin, e.pay_type AS emp_pay_type
+             e.brand_label, e.pin, e.phone, e.pay_type AS emp_pay_type
         FROM hr_payroll_snapshots s
         LEFT JOIN hr_employees e ON e.id = s.employee_id
        WHERE s.pay_period = ?
        ORDER BY e.brand_label, e.name
     `).bind(period).all();
-    const rows = rs.results || [];
+    const rows = (rs.results || []).map(r => {
+      const overridden = r.manual_net_override !== null && r.manual_net_override !== undefined;
+      const effective_net = overridden ? Number(r.manual_net_override) : Number(r.net_payable || 0);
+      return { ...r, is_overridden: overridden ? 1 : 0, effective_net: Math.round(effective_net * 100) / 100 };
+    });
+    // Totals use effective_net (override wins) so the settlement sheet reflects
+    // what will actually be paid, not the raw computed figure.
     const totals = rows.reduce((acc, r) => {
       acc.base_pay += Number(r.base_pay || 0);
       acc.advances_total += Number(r.advances_total || 0);
       acc.unpaid_leave_deduction += Number(r.unpaid_leave_deduction || 0);
       acc.net_payable += Number(r.net_payable || 0);
-      acc.paid += r.status === 'paid' ? Number(r.net_payable || 0) : 0;
-      acc.due += r.status !== 'paid' ? Number(r.net_payable || 0) : 0;
+      acc.effective_net += Number(r.effective_net || 0);
+      acc.overridden_count += r.is_overridden ? 1 : 0;
+      acc.paid += r.status === 'paid' ? Number(r.effective_net || 0) : 0;
+      acc.due += r.status !== 'paid' ? Number(r.effective_net || 0) : 0;
       return acc;
-    }, { base_pay: 0, advances_total: 0, unpaid_leave_deduction: 0, net_payable: 0, paid: 0, due: 0 });
+    }, { base_pay: 0, advances_total: 0, unpaid_leave_deduction: 0, net_payable: 0, effective_net: 0, overridden_count: 0, paid: 0, due: 0 });
     return json({ pay_period: period, rows, totals });
   }
 
@@ -433,6 +456,36 @@ export async function onRequest({ request, env }) {
        WHERE ${where} AND status = 'computed'
     `).bind(approved_by, ...binds).run();
     return json({ ok: true, changes: r.meta?.changes || 0 });
+  }
+
+  // ─── Manual final-amount override (Salary lane 09) ──────────────────────
+  //   POST { snapshot_id | (pay_period + employee_id), override_amount, reason, by }
+  //   override_amount: number → owner-typed final ₹ that wins over computed net.
+  //                    null / '' → clears the override (revert to computed).
+  // Computed net_payable is never mutated — the override sits beside it for audit.
+  // Blocked once status = 'paid' (the payout already went out).
+  if (action === 'set-override' && method === 'POST') {
+    const { snapshot_id, pay_period, employee_id, override_amount, reason = null, by = null } = body;
+    let where = ''; let binds = [];
+    if (snapshot_id) { where = 'id = ?'; binds = [snapshot_id]; }
+    else if (pay_period && employee_id) { where = 'pay_period = ? AND employee_id = ?'; binds = [pay_period, employee_id]; }
+    else return json({ error: 'snapshot_id OR (pay_period + employee_id) required' }, 400);
+
+    const clearing = override_amount === null || override_amount === undefined || override_amount === '';
+    let amt = null;
+    if (!clearing) {
+      amt = Number(override_amount);
+      if (!Number.isFinite(amt) || amt < 0) return json({ error: 'override_amount must be a non-negative number, or null to clear' }, 400);
+      amt = Math.round(amt * 100) / 100;
+    }
+    const r = await db.prepare(`
+      UPDATE hr_payroll_snapshots
+         SET manual_net_override = ?, override_reason = ?, override_by = ?,
+             override_at = ${clearing ? 'NULL' : "datetime('now')"}
+       WHERE ${where} AND status != 'paid'
+    `).bind(amt, clearing ? null : reason, clearing ? null : by, ...binds).run();
+    if (!(r.meta?.changes)) return json({ error: 'no matching unpaid snapshot (compute it first, or it is already paid)' }, 404);
+    return json({ ok: true, changes: r.meta.changes, cleared: clearing, override_amount: amt });
   }
 
   if (action === 'mark-paid' && method === 'POST') {
