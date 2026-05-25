@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T10:33:54+0530",
-  "published_at": "2026-05-25T10:33:54+0530",
+  "updated_at": "2026-05-25T10:40:19+0530",
+  "published_at": "2026-05-25T10:40:19+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Separated Swiggy/Zomato dashboard UI",
-      "last_summary": "Redesigned HE/NCH aggregator dashboards to separate Swiggy and Zomato clearly. Added first-screen platform control lanes with Zomato customer/offer lens and Swiggy ops/fee lens; each lane shows orders, delivered revenue, AOV, exceptions, offer proof, top items, and needs-control rows. Updated revenue control and data coverage copy to reflect May 1-25 coverage for both platforms. Deployed cache-busted assets to /ops/he/aggregator/ and /ops/nch/aggregator/ and verified live HTML/JS contain platformBoard and v2 asset URLs.",
-      "next_action": "Use separated lanes to build exception/revenue action queue for price positioning and offer placement; keep mutation blocked until margin proof is mapped.",
-      "mutation_status": "dashboard UI deploy only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
+      "last_task": "Live update architecture inspection",
+      "last_summary": "Inspected HN Aggregator Pulse extension, aggregator-pulse API, HE Swiggy auto-push, HE assembly API, and HE POS bridge read-only control plane. Found existing aggregator extension already keeps Swiggy/Zomato tabs warm, captures cookies/Swiggy Accesstoken, polls APIs every 5 min, queues data to hnhotels.in/api/aggregator-pulse, and API upserts idempotently. KDS/POS bridge pattern is browser-appliance plus cloud heartbeat/command/snapshot; assembly API is separate write path and must not be reused for analytics ingestion.",
+      "next_action": "Implement read-only live updater: extend Aggregator Pulse service worker or Mac runner to poll Zomato get-all-v2 and Swiggy history/fetchOrders for both HE/NCH, add per-platform health/last-success UI, and keep POS/KDS write endpoints isolated.",
+      "mutation_status": "read-only code/config inspection only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-25T10:26:23+0530"
+      "last_run_at": "2026-05-25T10:40:19+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525104019-delivery-aggregator",
+      "at": "2026-05-25T10:40:19+0530",
+      "lane": "delivery-aggregator",
+      "task": "Live update architecture inspection",
+      "status": "ready",
+      "summary": "Inspected HN Aggregator Pulse extension, aggregator-pulse API, HE Swiggy auto-push, HE assembly API, and HE POS bridge read-only control plane. Found existing aggregator extension already keeps Swiggy/Zomato tabs warm, captures cookies/Swiggy Accesstoken, polls APIs every 5 min, queues data to hnhotels.in/api/aggregator-pulse, and API upserts idempotently. KDS/POS bridge pattern is browser-appliance plus cloud heartbeat/command/snapshot; assembly API is separate write path and must not be reused for analytics ingestion.",
+      "next_action": "Implement read-only live updater: extend Aggregator Pulse service worker or Mac runner to poll Zomato get-all-v2 and Swiggy history/fetchOrders for both HE/NCH, add per-platform health/last-success UI, and keep POS/KDS write endpoints isolated.",
+      "mutation_status": "read-only code/config inspection only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
+    },
     {
       "id": "20260525103354-google-ads",
       "at": "2026-05-25T10:33:54+0530",
