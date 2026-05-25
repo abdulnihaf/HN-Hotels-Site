@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T11:48:38+0530",
-  "published_at": "2026-05-25T11:48:38+0530",
+  "updated_at": "2026-05-25T11:50:25+0530",
+  "published_at": "2026-05-25T11:50:25+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Clarify aggregator OTP/password auth strategy",
-    "last_summary": "Explained that direct frontend API polling removes DOM/extension scraping but does not remove partner authentication. Recommended verifying whether Swiggy/Zomato partner logins support password login, but not building OTP bypass. Best architecture remains manual/authorized session refresh after OTP, storing only session material securely with expiry health and direct API polling afterward.",
-    "next_action": "Create a safe session-refresh flow for CTO cURL method: paste fresh Swiggy/Zomato cURL after login, validate replay, store token/cookie/CSRF securely, show expiry/health, then Cloudflare/Mac cron polls direct APIs.",
-    "mutation_status": "architecture/auth guidance only; no partner portal login automation, no POS/Odoo/ad/WABA/price/offer mutation",
+    "last_task": "Define expired aggregator session UX",
+    "last_summary": "Defined safest UX for Swiggy/Zomato direct API session expiry: cron detects 401/403 or bad status, marks platform session expired, dashboard keeps last good data visible with stale badge, owner gets a refresh action to paste/upload fresh cURL, backend validates replay before replacing stored token/cookie/CSRF, then cron resumes automatically.",
+    "next_action": "Implement session health model and refresh-cURL admin panel for HE/NCH aggregator dashboards before relying on fully automated direct API polling.",
+    "mutation_status": "UX/architecture guidance only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-25T11:48:38+0530"
+    "last_run_at": "2026-05-25T11:50:25+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525115025-delivery-aggregator",
+      "at": "2026-05-25T11:50:25+0530",
+      "lane": "delivery-aggregator",
+      "task": "Define expired aggregator session UX",
+      "status": "ready",
+      "summary": "Defined safest UX for Swiggy/Zomato direct API session expiry: cron detects 401/403 or bad status, marks platform session expired, dashboard keeps last good data visible with stale badge, owner gets a refresh action to paste/upload fresh cURL, backend validates replay before replacing stored token/cookie/CSRF, then cron resumes automatically.",
+      "next_action": "Implement session health model and refresh-cURL admin panel for HE/NCH aggregator dashboards before relying on fully automated direct API polling.",
+      "mutation_status": "UX/architecture guidance only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
+    },
     {
       "id": "20260525114838-delivery-aggregator",
       "at": "2026-05-25T11:48:38+0530",
@@ -209,15 +219,6 @@
       "summary": "Read lane memory, unified graph, prior aggregator trail, live authenticated aggregator APIs, and MS25-MS35 proof artifacts. Live health now reports delivery status down because Swiggy snapshots are silent ~962min; Zomato HE order capture is current through 2026-05-24 with 93 month orders, 83 delivered, Rs24542 delivered revenue, 72% discount usage in order-detail sample, and 6.5% cancellation. Swiggy HE remains sparse/stale: last per-order capture 2026-04-17 and parsed month shows 0 current orders. Margin/proof gate remains unchanged: only Zomato 8 price-only rows are team-safe; no offers, no combo/value edits, no Swiggy packet, and C003/Ghee Rice + Butter Chicken remains blocked by full combo recipe/packaging/visual proof.",
       "next_action": "Either audit whether the 8 Zomato price-only rows were manually executed with before/after proof, or build a Swiggy readiness repair packet; do not launch offers or combo edits until platform proof, active offer-stack proof, and food+packaging margin proof close.",
       "mutation_status": "Read-only verification and memory writeback only. No Zomato/Swiggy portal, Odoo/POS, ad, WABA, pricing, or repo UI mutation."
-    },
-    {
-      "id": "2026-05-24-control-room-v2",
-      "at": "2026-05-24T20:54:08+0530",
-      "lane": "unified-control",
-      "task": "Deploy unified marketing control graph",
-      "status": "completed",
-      "summary": "Deployed /ops/marketing-control/ with one unified brain above 11 deep terminals.",
-      "next_action": "Add durable execution memory and live state reader."
     }
   ]
 }

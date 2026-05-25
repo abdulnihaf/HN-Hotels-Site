@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T11:48:38+0530",
-  "published_at": "2026-05-25T11:48:38+0530",
+  "updated_at": "2026-05-25T11:50:25+0530",
+  "published_at": "2026-05-25T11:50:25+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Clarify aggregator OTP/password auth strategy",
-      "last_summary": "Explained that direct frontend API polling removes DOM/extension scraping but does not remove partner authentication. Recommended verifying whether Swiggy/Zomato partner logins support password login, but not building OTP bypass. Best architecture remains manual/authorized session refresh after OTP, storing only session material securely with expiry health and direct API polling afterward.",
-      "next_action": "Create a safe session-refresh flow for CTO cURL method: paste fresh Swiggy/Zomato cURL after login, validate replay, store token/cookie/CSRF securely, show expiry/health, then Cloudflare/Mac cron polls direct APIs.",
-      "mutation_status": "architecture/auth guidance only; no partner portal login automation, no POS/Odoo/ad/WABA/price/offer mutation",
+      "last_task": "Define expired aggregator session UX",
+      "last_summary": "Defined safest UX for Swiggy/Zomato direct API session expiry: cron detects 401/403 or bad status, marks platform session expired, dashboard keeps last good data visible with stale badge, owner gets a refresh action to paste/upload fresh cURL, backend validates replay before replacing stored token/cookie/CSRF, then cron resumes automatically.",
+      "next_action": "Implement session health model and refresh-cURL admin panel for HE/NCH aggregator dashboards before relying on fully automated direct API polling.",
+      "mutation_status": "UX/architecture guidance only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-25T11:48:38+0530"
+      "last_run_at": "2026-05-25T11:50:25+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525115025-delivery-aggregator",
+      "at": "2026-05-25T11:50:25+0530",
+      "lane": "delivery-aggregator",
+      "task": "Define expired aggregator session UX",
+      "status": "ready",
+      "summary": "Defined safest UX for Swiggy/Zomato direct API session expiry: cron detects 401/403 or bad status, marks platform session expired, dashboard keeps last good data visible with stale badge, owner gets a refresh action to paste/upload fresh cURL, backend validates replay before replacing stored token/cookie/CSRF, then cron resumes automatically.",
+      "next_action": "Implement session health model and refresh-cURL admin panel for HE/NCH aggregator dashboards before relying on fully automated direct API polling.",
+      "mutation_status": "UX/architecture guidance only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
+    },
     {
       "id": "20260525114838-delivery-aggregator",
       "at": "2026-05-25T11:48:38+0530",
