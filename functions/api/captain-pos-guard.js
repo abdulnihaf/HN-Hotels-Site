@@ -313,7 +313,8 @@ export async function onRequest(context) {
   // cron-protected actions
   if (action === 'reconcile' || action === 'heartbeat') {
     const tok = request.headers.get('x-cron-token') || url.searchParams.get('token');
-    if (!env.CRON_TOKEN || tok !== env.CRON_TOKEN) return json({ ok: false, error: 'unauthorized' }, 401);
+    const expected = env.POS_GUARD_CRON_TOKEN || env.CRON_TOKEN;
+    if (!expected || tok !== expected) return json({ ok: false, error: 'unauthorized' }, 401);
     return action === 'reconcile' ? reconcile(env) : heartbeat(env);
   }
   if (action === 'ingest') return ingest(env, request, body);
