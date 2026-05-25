@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T13:47:49+0530",
-  "published_at": "2026-05-25T13:47:49+0530",
+  "updated_at": "2026-05-25T14:02:40+0530",
+  "published_at": "2026-05-25T14:02:40+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -78,12 +78,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Rebuild Hamza Express Figma retargeting creative frames around hero imagery and import HE brand assets",
-      "last_summary": "Corrected the Figma work from board-style planning into separate individual Meta ad frames on HN Creative Asset Library v1 page 06 Meta + WABA Ads. Imported HE brand marks including full logo, icon/founder mark, emblem, text logo, wordmark, dark/light/no-bg/brown variants into brand reference board node 48:2. Analyzed PiSignage TV visual language from Hamza Express TV mission control: dark brown/gold base, 1918 heritage, Wahi Hamza Naam/Naya Zaiqa/Naya Andaaz, large food proof, compact voucher/action. Replaced temporary PiSignage contact-sheet placeholders in 10 creative frames with locked HE food hero assets: Ghee Rice + Dal Fry + Kebab, Ghee Rice + Butter Chicken + Kebab, full spread, Chicken Biryani + Kebab, Mutton Biryani + Kebab. Cleaned export issues: hid internal source notes, fixed CTA clipping, validated A1 9:16 render.",
-      "next_action": "Use these hero-first Figma frames as the editable control layer; next step is Gemini/multimodal inspection of selected canonical visual references and then final copy/variant polish before export. No Meta spend or WABA mutation yet.",
+      "last_task": "Correct HE retargeting Figma creatives for food visibility",
+      "last_summary": "User flagged that food was not visible enough in the HE Meta WABA retargeting frames. Inspected A1 layer structure and found the issue: dark overlay at roughly 56 percent, bottom readability panel starting too high, and copy/voucher stack covering the food zone. Updated all 10 individual creative frames on Figma page 06 Meta + WABA Ads: panned hero image rectangles toward the food, reduced global overlay opacity, lowered the bottom readability overlay, compressed headline/subline/voucher/CTA sizing, and reduced voucher card height. Verified A1 9x16, A1 4x5, and A5 9x16 renders; food is now visibly dominant with the WhatsApp voucher module secondary.",
+      "next_action": "Continue from the corrected hero-food-first Figma frames; next QA should inspect all 10 variants together, then refine copy/CTA and export only after final approval. No Gemini generation yet unless explicitly requested.",
       "mutation_status": "Figma design mutation only; no Meta campaign/adset/ad, WABA, POS, Odoo, or budget mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-      "last_run_at": "2026-05-25T13:47:35+0530"
+      "last_run_at": "2026-05-25T14:02:40+0530"
     },
     "flyers": {
       "title": "07 Flyers",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525140240-meta-ads",
+      "at": "2026-05-25T14:02:40+0530",
+      "lane": "meta-ads",
+      "task": "Correct HE retargeting Figma creatives for food visibility",
+      "status": "ready",
+      "summary": "User flagged that food was not visible enough in the HE Meta WABA retargeting frames. Inspected A1 layer structure and found the issue: dark overlay at roughly 56 percent, bottom readability panel starting too high, and copy/voucher stack covering the food zone. Updated all 10 individual creative frames on Figma page 06 Meta + WABA Ads: panned hero image rectangles toward the food, reduced global overlay opacity, lowered the bottom readability overlay, compressed headline/subline/voucher/CTA sizing, and reduced voucher card height. Verified A1 9x16, A1 4x5, and A5 9x16 renders; food is now visibly dominant with the WhatsApp voucher module secondary.",
+      "next_action": "Continue from the corrected hero-food-first Figma frames; next QA should inspect all 10 variants together, then refine copy/CTA and export only after final approval. No Gemini generation yet unless explicitly requested.",
+      "mutation_status": "Figma design mutation only; no Meta campaign/adset/ad, WABA, POS, Odoo, or budget mutation."
+    },
     {
       "id": "20260525134749-delivery-aggregator",
       "at": "2026-05-25T13:47:49+0530",
@@ -935,16 +945,6 @@
       "summary": "Read lane memory/control graph and live HE Google Ads APIs. Verified account customer 368-171-0084 via hamzaexpress.in API; active Search campaigns are Late Night 23854158442 ₹300/day, Dinner 23855561197 ₹150/day, Brand 23845870050 ₹50/day, all ENABLED/SERVING; PMax 23834053403 remains PAUSED at ₹300/day. 7d cockpit shows ₹2301.14 spend and 70 clicks, almost entirely Late Night; Dinner/Brand enabled but not materially delivering. Campaign criteria show HE pin proximity only: Late Night 7km, Dinner 3km, Brand 5km, PMax 2km; no city LOCATION criteria. Directions proof endpoint live with today's page_view/maps_auto_open events, currently from Meta UTMs rather than Google gclid. No ad mutation performed.",
       "next_action": "Before any mutation, verify the specific target campaign/ad group/keyword IDs and decide whether to tune Late Night negatives/bids, fix Dinner/Brand delivery, or resume PMax; preserve rollback plan and current budgets.",
       "mutation_status": "blocked until explicit live mutation approval; read-only verification only"
-    },
-    {
-      "id": "20260525052611-packaging-design",
-      "at": "2026-05-25T05:26:11+0530",
-      "lane": "packaging-design",
-      "task": "Initialize Packaging Design lane",
-      "status": "ready",
-      "summary": "Initialized lane from live memory, packaging prompt, unified control graph, packaging Claude digest, HE Cheap-Bold doctrine, NCH flask Codex handoff, and local asset state. Packaging scope remains creative/vendor handoff only. HE current open work is corrected Cheap-Bold v2 renders: heritage burgundy direct-print pouches, kraft single-burgundy boxes/sleeves, unchanged cups with small lid sticker, tote as large brand surface; no foil/gold/emboss/photo-print/premium traps. NCH flask current open work is panel-by-panel continuation from approved front/back references and Downloads/_flask_bg locked bases; April automated vendor pack remains rejected, and final output must not use bulk SVG visible-art automation or generative panels.",
-      "next_action": "When Nihaf gives the target, either regenerate one HE Cheap-Bold corrected render/state at a time, or continue NCH flask one approved panel at a time. For NCH, first confirm legal text/phone/FSSAI/ingredients and the /go/flask QR redirect before print handoff; use rsvg-convert/Python only for dieline, QR, bleed, and PDF assembly.",
-      "mutation_status": "No artwork, repo, Odoo, ad, WABA, aggregator, or vendor mutation. Read-only lane initialization and memory sync only."
     }
   ]
 }
