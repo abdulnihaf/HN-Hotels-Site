@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T05:28:57+0530",
-  "published_at": "2026-05-25T05:28:57+0530",
+  "updated_at": "2026-05-25T05:39:09+0530",
+  "published_at": "2026-05-25T05:39:09+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,16 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Zomato/Swiggy delivery positioning, offers, margin proof.",
-    "last_summary": "Dedicated Codex lane exists.",
-    "next_action": "Verify platform state and margin proof before portal action.",
-    "mutation_status": "blocked until platform proof",
-    "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator"
+    "last_task": "Initialize Delivery Aggregator lane and verify platform/margin gate",
+    "last_summary": "Read lane memory, unified graph, prior aggregator trail, live authenticated aggregator APIs, and MS25-MS35 proof artifacts. Live health now reports delivery status down because Swiggy snapshots are silent ~962min; Zomato HE order capture is current through 2026-05-24 with 93 month orders, 83 delivered, Rs24542 delivered revenue, 72% discount usage in order-detail sample, and 6.5% cancellation. Swiggy HE remains sparse/stale: last per-order capture 2026-04-17 and parsed month shows 0 current orders. Margin/proof gate remains unchanged: only Zomato 8 price-only rows are team-safe; no offers, no combo/value edits, no Swiggy packet, and C003/Ghee Rice + Butter Chicken remains blocked by full combo recipe/packaging/visual proof.",
+    "next_action": "Either audit whether the 8 Zomato price-only rows were manually executed with before/after proof, or build a Swiggy readiness repair packet; do not launch offers or combo edits until platform proof, active offer-stack proof, and food+packaging margin proof close.",
+    "mutation_status": "Read-only verification and memory writeback only. No Zomato/Swiggy portal, Odoo/POS, ad, WABA, pricing, or repo UI mutation.",
+    "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
+    "last_run_at": "2026-05-25T05:39:09+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525053909-delivery-aggregator",
+      "at": "2026-05-25T05:39:09+0530",
+      "lane": "delivery-aggregator",
+      "task": "Initialize Delivery Aggregator lane and verify platform/margin gate",
+      "status": "ready",
+      "summary": "Read lane memory, unified graph, prior aggregator trail, live authenticated aggregator APIs, and MS25-MS35 proof artifacts. Live health now reports delivery status down because Swiggy snapshots are silent ~962min; Zomato HE order capture is current through 2026-05-24 with 93 month orders, 83 delivered, Rs24542 delivered revenue, 72% discount usage in order-detail sample, and 6.5% cancellation. Swiggy HE remains sparse/stale: last per-order capture 2026-04-17 and parsed month shows 0 current orders. Margin/proof gate remains unchanged: only Zomato 8 price-only rows are team-safe; no offers, no combo/value edits, no Swiggy packet, and C003/Ghee Rice + Butter Chicken remains blocked by full combo recipe/packaging/visual proof.",
+      "next_action": "Either audit whether the 8 Zomato price-only rows were manually executed with before/after proof, or build a Swiggy readiness repair packet; do not launch offers or combo edits until platform proof, active offer-stack proof, and food+packaging margin proof close.",
+      "mutation_status": "Read-only verification and memory writeback only. No Zomato/Swiggy portal, Odoo/POS, ad, WABA, pricing, or repo UI mutation."
+    },
     {
       "id": "2026-05-24-control-room-v2",
       "at": "2026-05-24T20:54:08+0530",
