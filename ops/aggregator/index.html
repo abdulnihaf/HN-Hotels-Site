@@ -209,6 +209,7 @@ tr:hover td{background:rgba(255,255,255,.025)}
     <div class="field">
       <label for="dateFilter">Period</label>
       <select id="dateFilter">
+        <option value="may_mtd">May MTD</option>
         <option value="today">Today</option>
         <option value="yesterday">Yesterday</option>
         <option value="week">7 days</option>
@@ -302,7 +303,8 @@ tr:hover td{background:rgba(255,255,255,.025)}
 <script>
 const API = '/api/aggregator-pulse';
 const KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
-const LS = 'hn_owner_aggregator_orders_v1';
+const LS = 'hn_owner_aggregator_orders_v2';
+const MAY_START = '2026-05-01';
 
 const els = {
   date: document.getElementById('dateFilter'),
@@ -341,7 +343,11 @@ function qs(){
   if (els.platform.value !== 'all') p.set('platform', els.platform.value);
   if (els.brand.value !== 'all') p.set('brand', els.brand.value);
   if (els.status.value !== 'all') p.set('status', els.status.value);
-  if (els.date.value === 'custom' && els.from.value && els.to.value) {
+  if (els.date.value === 'may_mtd') {
+    p.set('date', 'custom');
+    p.set('from', MAY_START);
+    p.set('to', todayIst());
+  } else if (els.date.value === 'custom' && els.from.value && els.to.value) {
     p.set('from', els.from.value);
     p.set('to', els.to.value);
   }
@@ -391,7 +397,11 @@ async function loadFallback(err){
     const p = new URLSearchParams({ action:'orders', key:KEY, date:els.date.value });
     if (els.platform.value !== 'all') p.set('platform', els.platform.value);
     if (els.brand.value !== 'all') p.set('brand', els.brand.value);
-    if (els.date.value === 'custom' && els.from.value && els.to.value) {
+    if (els.date.value === 'may_mtd') {
+      p.set('date', 'custom');
+      p.set('from', MAY_START);
+      p.set('to', todayIst());
+    } else if (els.date.value === 'custom' && els.from.value && els.to.value) {
       p.set('from', els.from.value);
       p.set('to', els.to.value);
     }
@@ -439,7 +449,8 @@ function renderSummary(s){
   document.getElementById('mRevenue').textContent = `${rupee(s.delivered_revenue || 0)} revenue`;
   const bp = s.by_platform || {};
   const platformParts = Object.entries(bp).map(([k,v]) => `${labelPlatform(k)} ${v}`);
-  document.getElementById('mPlatforms').textContent = platformParts.length ? platformParts.join(' · ') : 'No rows';
+  const prefix = els.date.value === 'may_mtd' ? 'May 1-now · ' : '';
+  document.getElementById('mPlatforms').textContent = platformParts.length ? prefix + platformParts.join(' · ') : 'No rows';
 }
 
 function renderRows(orders){
@@ -509,6 +520,10 @@ function groupStatus(status, issues){
 function rupee(v){
   const n = Number(v || 0);
   return '₹' + Math.round(n).toLocaleString('en-IN');
+}
+
+function todayIst(){
+  return new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 }
 
 function ago(iso){
