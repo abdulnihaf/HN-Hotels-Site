@@ -1,0 +1,17 @@
+_context/
+.git/
+node_modules/
+.wrangler/
+.DS_Store
+*.zip
+*.dmg
+*.iso
+*.pkg
+*.pdf
+*.xlsx
+*.log
+.env
+.env.*
+.dev.vars
+.claude/
+.aider*
