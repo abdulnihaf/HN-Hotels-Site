@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T07:17:37+0530",
-  "published_at": "2026-05-25T07:17:37+0530",
+  "updated_at": "2026-05-25T07:25:18+0530",
+  "published_at": "2026-05-25T07:25:18+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Google Ads 2km radius and Hamza Hotel keyword intent audit",
-    "last_summary": "Read-only keyword-volume audit found Hamza Hotel brand demand is meaningful in Bangalore: hamza hotel avg 6600 monthly searches, Apr 2026 bucket 5400; hamza hotel shivaji nagar avg 590, Apr 880; hamza express avg 110, Apr 590. High-intent food terms include biryani near me open now avg 1900/Apr 1900, kabab near me avg 1300/Apr 1600, late night food near me avg 320/Apr 480, midnight food near me avg 320/Apr 390, non veg restaurant near me open now avg 320/Apr 390. No mutations made.",
-    "next_action": "Use 2km radius for easy-conversion search campaigns; split Hamza Hotel brand capture from late-night non-brand; add lodging/OYO/international negatives before any budget shift.",
-    "mutation_status": "none-readonly",
+    "last_task": "Refine Hamza Hotel brand ad message",
+    "last_summary": "Nihaf chose the Brand/Legacy message direction for Hamza Hotel searchers: Searching for Hamza Hotel? Come to Hamza Express on HKP Road. Wahi Hamza Naam, Naya Zaiqa, Naya Andaaz. Best Ghee Rice and Kabab. Recommended making this compact for Google Search visible copy with brand bridge + directions intent.",
+    "next_action": "Before mutation, apply compact RSA copy to Brand/Legacy Hamza Search campaign with ₹500/day and 2km radius only after exact ad asset/budget/proximity write endpoints are verified.",
+    "mutation_status": "none-copy-direction-only",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-    "last_run_at": "2026-05-25T07:17:37+0530"
+    "last_run_at": "2026-05-25T07:25:18+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525072518-google-ads",
+      "at": "2026-05-25T07:25:18+0530",
+      "lane": "google-ads",
+      "task": "Refine Hamza Hotel brand ad message",
+      "status": "ready",
+      "summary": "Nihaf chose the Brand/Legacy message direction for Hamza Hotel searchers: Searching for Hamza Hotel? Come to Hamza Express on HKP Road. Wahi Hamza Naam, Naya Zaiqa, Naya Andaaz. Best Ghee Rice and Kabab. Recommended making this compact for Google Search visible copy with brand bridge + directions intent.",
+      "next_action": "Before mutation, apply compact RSA copy to Brand/Legacy Hamza Search campaign with ₹500/day and 2km radius only after exact ad asset/budget/proximity write endpoints are verified.",
+      "mutation_status": "none-copy-direction-only"
+    },
     {
       "id": "20260525071737-google-ads",
       "at": "2026-05-25T07:17:37+0530",
