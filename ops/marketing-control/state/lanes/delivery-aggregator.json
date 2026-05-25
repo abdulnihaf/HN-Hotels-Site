@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T11:46:07+0530",
-  "published_at": "2026-05-25T11:46:07+0530",
+  "updated_at": "2026-05-25T11:48:38+0530",
+  "published_at": "2026-05-25T11:48:38+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Analyze CTO direct frontend API files",
-    "last_summary": "Deep-inspected /Users/nihaf/Downloads Swiggy/Zomato cURL and response files plus local direct partner puller. Confirmed CTO method is direct frontend API replay, not DOM scraping: Swiggy fetchOrders uses RMS API with access token and both outlet IDs; Zomato get-all-v2 uses merchant gateway API with cookie/CSRF headers. Dry-run replay currently returns HTTP 200 for both. Swiggy file is current/live fetch, not full historical; Zomato orders file is single rich detail payload, separate from history list.",
-    "next_action": "Build Cloudflare/Mac scheduled direct API updater with stored session material, pagination, health, and manual session-refresh path; capture Zomato detail endpoint if full per-order discount enrichment is required.",
-    "mutation_status": "read-only file/API analysis and dry-run replay only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation",
+    "last_task": "Clarify aggregator OTP/password auth strategy",
+    "last_summary": "Explained that direct frontend API polling removes DOM/extension scraping but does not remove partner authentication. Recommended verifying whether Swiggy/Zomato partner logins support password login, but not building OTP bypass. Best architecture remains manual/authorized session refresh after OTP, storing only session material securely with expiry health and direct API polling afterward.",
+    "next_action": "Create a safe session-refresh flow for CTO cURL method: paste fresh Swiggy/Zomato cURL after login, validate replay, store token/cookie/CSRF securely, show expiry/health, then Cloudflare/Mac cron polls direct APIs.",
+    "mutation_status": "architecture/auth guidance only; no partner portal login automation, no POS/Odoo/ad/WABA/price/offer mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-25T11:46:07+0530"
+    "last_run_at": "2026-05-25T11:48:38+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525114838-delivery-aggregator",
+      "at": "2026-05-25T11:48:38+0530",
+      "lane": "delivery-aggregator",
+      "task": "Clarify aggregator OTP/password auth strategy",
+      "status": "ready",
+      "summary": "Explained that direct frontend API polling removes DOM/extension scraping but does not remove partner authentication. Recommended verifying whether Swiggy/Zomato partner logins support password login, but not building OTP bypass. Best architecture remains manual/authorized session refresh after OTP, storing only session material securely with expiry health and direct API polling afterward.",
+      "next_action": "Create a safe session-refresh flow for CTO cURL method: paste fresh Swiggy/Zomato cURL after login, validate replay, store token/cookie/CSRF securely, show expiry/health, then Cloudflare/Mac cron polls direct APIs.",
+      "mutation_status": "architecture/auth guidance only; no partner portal login automation, no POS/Odoo/ad/WABA/price/offer mutation"
+    },
     {
       "id": "20260525114607-delivery-aggregator",
       "at": "2026-05-25T11:46:07+0530",
