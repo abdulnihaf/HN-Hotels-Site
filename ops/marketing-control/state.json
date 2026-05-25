@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T14:59:50+0530",
-  "published_at": "2026-05-25T14:59:50+0530",
+  "updated_at": "2026-05-25T15:09:45+0530",
+  "published_at": "2026-05-25T15:09:45+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Execute 3 AM Claude WABA aggregator owner reports",
-      "last_summary": "Built and deployed daily_owner_report pipeline: Cloudflare cron trigger in aggregator-health-watcher, aggregator-pulse Claude analysis, D1 report storage, WABA template guard, and report readback. Meta template aggregator_daily_owner_report_v1 is APPROVED. Rotated production ANTHROPIC_API_KEY from local latest key, forced GitHub-backed Pages refresh, verified model claude-opus-4-7. Manual proof for 2026-05-25 sent both HE and NCH WABA reports to Nihaf with provider message IDs.",
-      "next_action": "Let the 3 AM IST cron run automatically after outlet close; then add UI rendering for stored daily-owner-report rows inside /ops/he/aggregator/ and /ops/nch/aggregator/.",
+      "last_task": "Finalize 3 AM Claude WABA aggregator owner report execution",
+      "last_summary": "Executed and verified the 3 AM aggregator owner-report pipeline. Cloudflare cron now triggers daily_owner_report only during 03:00-03:14 IST; aggregator-pulse pulls Swiggy/Zomato, runs Ring 3 events, resolves latest Claude via Anthropic Models API, stores HE/NCH reports in D1, and sends approved WABA summaries to Nihaf. Template aggregator_daily_owner_report_v1 is APPROVED. Rotated production ANTHROPIC_API_KEY from latest local .hn-assets.env key and refreshed Pages runtime. Manual proof for 2026-05-25 sent both reports successfully using claude-opus-4-7; health endpoint remained ok.",
+      "next_action": "Let the next 3 AM IST cron run automatically after outlet close; then add UI rendering for stored daily-owner-report rows inside /ops/he/aggregator/ and /ops/nch/aggregator/ so the full Claude markdown is visible from the dashboards.",
       "mutation_status": "HN Cloudflare/D1/WABA owner-report send only; no Swiggy/Zomato portal, POS, Odoo, ad, price, offer, or menu mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-25T14:59:03+0530"
+      "last_run_at": "2026-05-25T15:09:45+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525150945-delivery-aggregator",
+      "at": "2026-05-25T15:09:45+0530",
+      "lane": "delivery-aggregator",
+      "task": "Finalize 3 AM Claude WABA aggregator owner report execution",
+      "status": "ready",
+      "summary": "Executed and verified the 3 AM aggregator owner-report pipeline. Cloudflare cron now triggers daily_owner_report only during 03:00-03:14 IST; aggregator-pulse pulls Swiggy/Zomato, runs Ring 3 events, resolves latest Claude via Anthropic Models API, stores HE/NCH reports in D1, and sends approved WABA summaries to Nihaf. Template aggregator_daily_owner_report_v1 is APPROVED. Rotated production ANTHROPIC_API_KEY from latest local .hn-assets.env key and refreshed Pages runtime. Manual proof for 2026-05-25 sent both reports successfully using claude-opus-4-7; health endpoint remained ok.",
+      "next_action": "Let the next 3 AM IST cron run automatically after outlet close; then add UI rendering for stored daily-owner-report rows inside /ops/he/aggregator/ and /ops/nch/aggregator/ so the full Claude markdown is visible from the dashboards.",
+      "mutation_status": "HN Cloudflare/D1/WABA owner-report send only; no Swiggy/Zomato portal, POS, Odoo, ad, price, offer, or menu mutation."
+    },
     {
       "id": "20260525145950-packaging-design",
       "at": "2026-05-25T14:59:50+0530",
@@ -935,16 +945,6 @@
       "summary": "Read lane memory/control graph/unified context/TV history and verified current HE TV choreography state. Source-of-truth is hamza-express-site ops/tv-mission-control/choreography/preview-data.json generated 2026-05-18 with 7 groups, 28 playlists, 113 listed assets and 28 contact sheets. Old JSON source_root points to Desktop, now missing after cleanup; relocated upload packet exists at /Users/nihaf/Documents/2026-05_Working-Files/Creative/HamzaExpress_TV_Copies_2026-05-16/_ORGANIZED_BY_TIMESLOT. All 113 listed files are present there; dimension audit checked 100 files as 1920x1080 with zero mismatches, while 13 PNGs need re-export/repair/probe review before any upload because image probes failed or hung. Live choreography page HTTP 200; no PiSignage/API/screen mutation performed.",
       "next_action": "Before playlist mutation, repair or re-export the 13 probe-failing PNGs, then verify live PiSignage player/group state for the exact target screen: 7 V2 choreography groups versus legacy 6-TV fleet registry, confirm outdoor facade H2 assignment, and prepare rollback to previous playlists/groups before upload.",
       "mutation_status": "No PiSignage playlist, asset upload, repo, Cloudflare, Odoo, ad, WABA, aggregator, or screen mutation. Read-only lane initialization plus local asset/location/dimension verification only."
-    },
-    {
-      "id": "20260525053909-delivery-aggregator",
-      "at": "2026-05-25T05:39:09+0530",
-      "lane": "delivery-aggregator",
-      "task": "Initialize Delivery Aggregator lane and verify platform/margin gate",
-      "status": "ready",
-      "summary": "Read lane memory, unified graph, prior aggregator trail, live authenticated aggregator APIs, and MS25-MS35 proof artifacts. Live health now reports delivery status down because Swiggy snapshots are silent ~962min; Zomato HE order capture is current through 2026-05-24 with 93 month orders, 83 delivered, Rs24542 delivered revenue, 72% discount usage in order-detail sample, and 6.5% cancellation. Swiggy HE remains sparse/stale: last per-order capture 2026-04-17 and parsed month shows 0 current orders. Margin/proof gate remains unchanged: only Zomato 8 price-only rows are team-safe; no offers, no combo/value edits, no Swiggy packet, and C003/Ghee Rice + Butter Chicken remains blocked by full combo recipe/packaging/visual proof.",
-      "next_action": "Either audit whether the 8 Zomato price-only rows were manually executed with before/after proof, or build a Swiggy readiness repair packet; do not launch offers or combo edits until platform proof, active offer-stack proof, and food+packaging margin proof close.",
-      "mutation_status": "Read-only verification and memory writeback only. No Zomato/Swiggy portal, Odoo/POS, ad, WABA, pricing, or repo UI mutation."
     }
   ]
 }
