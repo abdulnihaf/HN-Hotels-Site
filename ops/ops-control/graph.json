@@ -36,7 +36,8 @@
       "name": "Money",
       "subgroups": [
         "Disbursement",
-        "Reconciliation"
+        "Reconciliation",
+        "Treasury"
       ]
     },
     {
@@ -202,7 +203,7 @@
       "subgroup": "Disbursement",
       "mode": "Demand",
       "tool_owner": "Claude",
-      "risk": "money mutation (APPROVAL-GATED)",
+      "risk": "money mutation — surface irreversible to Nihaf",
       "context_state": "LOAD",
       "status": "built-loadable",
       "summary": "Record + schedule + reconcile vendor bills/payments against POs. Direct-1:1 cash vs vendor-due credit. Writes rm_vendor_bills + payments. Richest context - first leaf to grow deep.",
@@ -568,7 +569,64 @@
         "https://hnhotels.in/ops/finance/"
       ],
       "next_action": "Aggregate the four cost lines into one weekly margin view once feeders emit."
+    },
+    {
+      "code": "23",
+      "slug": "money-ledger",
+      "title": "23 Money Ledger",
+      "group": "Money",
+      "subgroup": "Treasury",
+      "mode": "Demand",
+      "tool_owner": "Claude",
+      "risk": "money truth — surface irreversible to Nihaf",
+      "context_state": "LIVE",
+      "status": "built-loadable",
+      "summary": "Universal cash + bank·4680 + company-owes-Nihaf ledger. Append-only money spine (ledger.jsonl); balances DERIVED by summing delta_paise per account, never stored. Every money-touching lane reads it on open + appends on spend. Opening: cash ₹2,00,000 · bank ₹1,330.38 · owed-to-Nihaf ₹2,09,940.87.",
+      "command": "open_ops_lane.command money-ledger",
+      "prompt": "prompts/23-money-ledger.md",
+      "context_files": [
+        "ops/ops-control/ledger.jsonl",
+        "memory/reference_odoo_banking.md"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/ops/ops-control/"
+      ],
+      "next_action": "Wire per-transaction bank-confirmation UI (284 ·4680 raw-narration txns -> vendor/category). Net out ₹69k double-count on bank ingest. Add Expenses & Bills capture (rent/utility/statutory)."
     }
   ],
-  "served": "ops/ops-control/ (PIN-gated, co-located with UI; not exposed via /_context/)"
+  "served": "ops/ops-control/ (PIN-gated, co-located with UI; not exposed via /_context/)",
+  "money_model": {
+    "as_of": "2026-05-25",
+    "ledger": "ops/ops-control/ledger.jsonl",
+    "rule": "Balances are DERIVED by summing delta_paise per account across ledger.jsonl. NEVER store a mutable balance (that is how /ops/bank drifted to Rs 1,375.24). Money in paise.",
+    "accounts": {
+      "cash": {
+        "balance_paise": 20000000,
+        "desc": "Physical cash float Nihaf holds. Tranche 1 of Rs 7.5L external funding."
+      },
+      "bank4680": {
+        "balance_paise": 133038,
+        "desc": "HN Hotels HDFC ·4680 business account. Statement close 25-May Rs 1,330.38."
+      },
+      "owed_to_nihaf": {
+        "balance_paise": 20994087,
+        "desc": "Company owes Nihaf for personal-account business spend: Rs 1,94,940.87 (16-23 May, 11 txns) + Rs 15,000 (24 May, standing tables)."
+      }
+    },
+    "funding": {
+      "external_committed_paise": 75000000,
+      "external_received_paise": 20000000,
+      "external_pending_paise": 55000000,
+      "note": "Rs 7.5L external; Rs 2L received as cash, Rs 5.5L in tranches."
+    },
+    "personal_reserve_paise": 80000000,
+    "personal_reserve_note": "Nihaf's own Rs 8L reserve - a draw-down source, not company cash. Each injection: funded account up + owed_to_nihaf up.",
+    "daily_inflow_estimate_paise": 5500000,
+    "daily_inflow_note": "Outlet cash+bank HE+NCH ~Rs 50-60k/day, collected by Nihaf from today (Basheer no longer collects).",
+    "open_reconciliations": [
+      "Rs 69,000 of owed_to_nihaf (4 transfers into ·4680) also appears as ·4680 DEPOSITS - net out when ingesting the statement, else double-counted.",
+      "Is the Rs 2L cash the company settling part of what it owes Nihaf (-> owed_to_nihaf down), or independent external funding (-> stays)? Append a settlement entry when known.",
+      "/ops/bank Rs 1,375.24 vs statement Rs 1,330.38 = +Rs 44.86 drift; pin exact cause on bank ingest."
+    ]
+  }
 }
