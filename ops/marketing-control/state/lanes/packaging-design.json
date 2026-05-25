@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T06:24:55+0530",
-  "published_at": "2026-05-25T06:24:55+0530",
+  "updated_at": "2026-05-25T06:26:42+0530",
+  "published_at": "2026-05-25T06:26:42+0530",
   "source": "github-main-static-json",
   "lane_slug": "packaging-design",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Creative Surface",
     "risk": "print/vendor handoff",
     "status": "ready",
-    "last_task": "Analyze NCH flask execution path",
-    "last_summary": "Analyzed NCH flask macro objective and current source files. The project objective is vendor-printable flat unfolded carton PDFs for 250ml and 500ml, not generative mockups. Current supplied front SVG is 9.9MB Figma-style SVG with embedded raster artwork plus visible measurement/dieline marks; rsvg-convert fails XML parse on it, so it must be normalized/extracted before production use. Dieline zip contains two compact unfolded dieline SVGs. Existing _flask_bg assets include locked 2748x4096 front/back bases, vector wordmark/filigree/endcap, QR SVG, deterministic scripts, and reference-match output PDFs that qpdf validates but still carry placeholder legal/QR decisions.",
-    "next_action": "Exact next step: build a canonical NCH flask production board by normalizing the new 250ml front SVG and dieline zip into clean panel assets, then produce one approval proof for the 250ml front panel only: no measurement marks, no printed kraft texture, brand artwork aligned to 130x210mm plus 3mm bleed. Use Figma MCP only for visual approval/canvas if helpful; use deterministic Python/rsvg/PDF tools for final vendor files. Gemini API can generate mockups/review previews, not final print panels.",
-    "mutation_status": "Read-only analysis and memory sync only. No artwork, vendor output, website, POS, ad, WABA, or aggregator mutation.",
+    "last_task": "Make NCH flask front production-friendly",
+    "last_summary": "Converted the supplied exact NCH 250ml front SVG into a clean production-friendly front panel without redesigning it. Extracted the embedded high-resolution artwork, removed the malformed Figma/base64 wrapper plus measurement labels/crop marks/colored guide strokes, and rebuilt valid 136mm x 216mm front-panel SVG/PDF for 130x210mm trim plus 3mm bleed. Verified PDF page size is 385.512 x 612.283 pt and qpdf reports no syntax/stream errors. Copied production pack to /Users/nihaf/Downloads/NCH_Flask_Front_Production_2026-05-25.",
+    "next_action": "Use the clean front panel as the locked approved front. Next build the matching 250ml back panel from the same visual system, but first confirm legal copy, FSSAI, phone, ingredients, and /go/flask QR redirect target. After front/back approval, build spines/gables and assemble onto the unfolded dieline.",
+    "mutation_status": "Created local print assets only: production PDF/SVG, extracted JPG, preview PNG, proof-with-guides, manifest and README. No website, POS/Odoo, ad, WABA, aggregator, or vendor send mutation.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-    "last_run_at": "2026-05-25T06:14:29+0530"
+    "last_run_at": "2026-05-25T06:26:42+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Packaging_Design_Codex_2026-05-24/prompts/10-packaging-design.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/packaging-design.md",
   "writeback_required": false,
   "recent_events": [
+    {
+      "id": "20260525062642-packaging-design",
+      "at": "2026-05-25T06:26:42+0530",
+      "lane": "packaging-design",
+      "task": "Make NCH flask front production-friendly",
+      "status": "ready",
+      "summary": "Converted the supplied exact NCH 250ml front SVG into a clean production-friendly front panel without redesigning it. Extracted the embedded high-resolution artwork, removed the malformed Figma/base64 wrapper plus measurement labels/crop marks/colored guide strokes, and rebuilt valid 136mm x 216mm front-panel SVG/PDF for 130x210mm trim plus 3mm bleed. Verified PDF page size is 385.512 x 612.283 pt and qpdf reports no syntax/stream errors. Copied production pack to /Users/nihaf/Downloads/NCH_Flask_Front_Production_2026-05-25.",
+      "next_action": "Use the clean front panel as the locked approved front. Next build the matching 250ml back panel from the same visual system, but first confirm legal copy, FSSAI, phone, ingredients, and /go/flask QR redirect target. After front/back approval, build spines/gables and assemble onto the unfolded dieline.",
+      "mutation_status": "Created local print assets only: production PDF/SVG, extracted JPG, preview PNG, proof-with-guides, manifest and README. No website, POS/Odoo, ad, WABA, aggregator, or vendor send mutation."
+    },
     {
       "id": "20260525061429-packaging-design",
       "at": "2026-05-25T06:14:29+0530",
