@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T08:27:52+0530",
-  "published_at": "2026-05-25T08:27:52+0530",
+  "updated_at": "2026-05-25T08:30:02+0530",
+  "published_at": "2026-05-25T08:30:02+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Late-night Hamza Hotel brand-capture ad setup",
-    "last_summary": "Set local Google Ads lane docs/mockup for late-night Hamza Hotel search capture: Rs 500/day proposed for 5km brand campaign, 2km biryani/ghee-rice fallback kept paused, late-night copy uses Open Till 3 AM, Bangalore's best Ghee Rice/Kabab, 10% dine-in only.",
-    "next_action": "Confirm late-night mockup/copy, verify 10% dine-in proof and landing/site hours, then live-verify Google Ads account before any campaign or budget mutation.",
-    "mutation_status": "No live Google Ads/GBP/POS mutation. Local _context docs and HTML mockup updated only.",
+    "last_task": "Exact Google Ads platform configuration for Hamza Hotel late-night campaign",
+    "last_summary": "Verified live Google Ads account/campaign state and current API surface. Brand campaign 23845870050 is enabled, Rs50/day, 5km presence proximity, 0 delivery; Late Night 23854158442 is enabled, Rs300/day, 7km, spending on generic open-now searches. Created exact configuration doc for active Rs500/day Hamza Hotel late-night 5km Search campaign plus paused 2km biryani/ghee-rice fallback, including location, schedule, keywords, negatives, device, audiences, assets, text conveyance, landing CTA, conversion measurement, and kill criteria. Found current live mutation endpoint can change budget/status/bids/negatives but cannot safely apply Brand keywords/RSA/schedule/assets.",
+    "next_action": "Before live money mutation, update/verify /go/google-night landing message/tracking and either add a purpose-built Google Ads endpoint or apply exact Brand campaign setup in Google Ads UI; do not only raise Brand budget to Rs500 without keyword/RSA/schedule/asset readback.",
+    "mutation_status": "No live Google Ads mutation. Local exact configuration spec added under _context only.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-    "last_run_at": "2026-05-25T08:17:47+0530"
+    "last_run_at": "2026-05-25T08:30:02+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525083002-google-ads",
+      "at": "2026-05-25T08:30:02+0530",
+      "lane": "google-ads",
+      "task": "Exact Google Ads platform configuration for Hamza Hotel late-night campaign",
+      "status": "ready",
+      "summary": "Verified live Google Ads account/campaign state and current API surface. Brand campaign 23845870050 is enabled, Rs50/day, 5km presence proximity, 0 delivery; Late Night 23854158442 is enabled, Rs300/day, 7km, spending on generic open-now searches. Created exact configuration doc for active Rs500/day Hamza Hotel late-night 5km Search campaign plus paused 2km biryani/ghee-rice fallback, including location, schedule, keywords, negatives, device, audiences, assets, text conveyance, landing CTA, conversion measurement, and kill criteria. Found current live mutation endpoint can change budget/status/bids/negatives but cannot safely apply Brand keywords/RSA/schedule/assets.",
+      "next_action": "Before live money mutation, update/verify /go/google-night landing message/tracking and either add a purpose-built Google Ads endpoint or apply exact Brand campaign setup in Google Ads UI; do not only raise Brand budget to Rs500 without keyword/RSA/schedule/asset readback.",
+      "mutation_status": "No live Google Ads mutation. Local exact configuration spec added under _context only."
+    },
     {
       "id": "20260525081747-google-ads",
       "at": "2026-05-25T08:17:47+0530",
