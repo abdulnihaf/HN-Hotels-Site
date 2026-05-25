@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:15:59+0530",
-  "published_at": "2026-05-25T12:15:59+0530",
+  "updated_at": "2026-05-25T12:18:54+0530",
+  "published_at": "2026-05-25T12:18:54+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Create and enable Hamza Hotel late-night brand campaign",
-    "last_summary": "Deployed Hamza Express Ads endpoint and /go/google-night landing; created HE — Hamza Hotel Late Night Brand Capture — v2 campaign 23877692297 at Rs500/day, 5km presence-only radius, 22:00-03:00 schedule, Hamza Hotel/Express keywords, craving-first copy with 10% dine-in; enabled v2 and paused old Brand v1, generic Late Night v1, Dinner v1, with PMax remaining paused. Saved execution record to _context/Google_Ads_Hamza_Brand_2026-05-25/10-live-execution-record.md.",
-    "next_action": "Monitor next full 22:00-03:00 window: search terms must stay Hamza/Hamza Express intent, compare landing pageview-to-directions/call/menu actions, and ask outlet if late-night customers mention Google/Hamza Express.",
-    "mutation_status": "LIVE Google Ads money mutation completed: campaign 23877692297 ENABLED at Rs500/day; campaigns 23845870050, 23854158442, 23855561197 PAUSED; 23834053403 remains PAUSED; Cloudflare Pages production updated for Ads endpoint and landing page.",
+    "last_task": "Split late-night Search budget into Hamza intent and 2km dish intent",
+    "last_summary": "Changed active Hamza Hotel late-night campaign 23877692297 to Rs250/day and 23:00-02:00. Deployed Ads control endpoint support for budget/schedule changes. Created and enabled HE — Dish Late Night 2km Search — v1 campaign 23882183242 at Rs250/day, 2km presence-only radius, 23:00-02:00 schedule, 28 exact/phrase dish/open-now/Shivajinagar late-night keywords, direct /go/google-night landing, shared negatives attached. Final active Search budget is Rs500/day split Rs250 + Rs250; old Brand v1, Late Night v1, Dinner v1, and PMax remain paused. Saved execution record to _context/Google_Ads_Hamza_Brand_2026-05-25/11-live-split-budget-dish-2km-execution.md.",
+    "next_action": "After the next complete 23:00-02:00 window, compare search terms by campaign: Hamza intent must stay Hamza/Hamza Hotel/Hamza Express, dish campaign must stay biryani/kabab/ghee rice/non-veg/open-now/Shivajinagar; inspect landing direction/call/menu actions and outlet counter feedback.",
+    "mutation_status": "LIVE Google Ads money mutation completed: campaign 23877692297 ENABLED Rs250/day 5km 23:00-02:00; campaign 23882183242 CREATED+ENABLED Rs250/day 2km 23:00-02:00; prior campaigns 23845870050, 23854158442, 23855561197 and 23834053403 PAUSED; Cloudflare Pages production updated for Ads control endpoint.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-    "last_run_at": "2026-05-25T11:37:00+0530"
+    "last_run_at": "2026-05-25T12:18:54+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525121854-google-ads",
+      "at": "2026-05-25T12:18:54+0530",
+      "lane": "google-ads",
+      "task": "Split late-night Search budget into Hamza intent and 2km dish intent",
+      "status": "ready",
+      "summary": "Changed active Hamza Hotel late-night campaign 23877692297 to Rs250/day and 23:00-02:00. Deployed Ads control endpoint support for budget/schedule changes. Created and enabled HE — Dish Late Night 2km Search — v1 campaign 23882183242 at Rs250/day, 2km presence-only radius, 23:00-02:00 schedule, 28 exact/phrase dish/open-now/Shivajinagar late-night keywords, direct /go/google-night landing, shared negatives attached. Final active Search budget is Rs500/day split Rs250 + Rs250; old Brand v1, Late Night v1, Dinner v1, and PMax remain paused. Saved execution record to _context/Google_Ads_Hamza_Brand_2026-05-25/11-live-split-budget-dish-2km-execution.md.",
+      "next_action": "After the next complete 23:00-02:00 window, compare search terms by campaign: Hamza intent must stay Hamza/Hamza Hotel/Hamza Express, dish campaign must stay biryani/kabab/ghee rice/non-veg/open-now/Shivajinagar; inspect landing direction/call/menu actions and outlet counter feedback.",
+      "mutation_status": "LIVE Google Ads money mutation completed: campaign 23877692297 ENABLED Rs250/day 5km 23:00-02:00; campaign 23882183242 CREATED+ENABLED Rs250/day 2km 23:00-02:00; prior campaigns 23845870050, 23854158442, 23855561197 and 23834053403 PAUSED; Cloudflare Pages production updated for Ads control endpoint."
+    },
     {
       "id": "20260525113700-google-ads",
       "at": "2026-05-25T11:37:00+0530",
@@ -209,16 +219,6 @@
       "summary": "Created local context pack at _context/Google_Ads_Hamza_Brand_2026-05-25 with a Google mobile search ad visual mockup, five HE bucket docs, and a Google Ads targeting menu. Buckets captured from prior intelligence: Hamza Loyalist/Legacy Memory, Late-Night Heavy Non-Veg, Family Comfort Diner, Fast Parcel/Shop Staff/Office Pickup, and Shivajinagar/HKP Road Food Explorer. Recommended current Rs 500/day test remains Brand/Legacy Hamza Hotel searchers in 2km radius with exact/phrase keywords, lodging negatives, Maps-first landing, and Open till 3 AM only after GBP/site/outlet hours are verified.",
       "next_action": "If approved for live mutation, verify ad group/ad asset IDs plus GBP/site hours, save rollback values, then change Brand campaign 23845870050 to Rs 500/day and 2km radius with pinned brand bridge copy.",
       "mutation_status": "none-context-and-visual-only"
-    },
-    {
-      "id": "20260525072518-google-ads",
-      "at": "2026-05-25T07:25:18+0530",
-      "lane": "google-ads",
-      "task": "Refine Hamza Hotel brand ad message",
-      "status": "ready",
-      "summary": "Nihaf chose the Brand/Legacy message direction for Hamza Hotel searchers: Searching for Hamza Hotel? Come to Hamza Express on HKP Road. Wahi Hamza Naam, Naya Zaiqa, Naya Andaaz. Best Ghee Rice and Kabab. Recommended making this compact for Google Search visible copy with brand bridge + directions intent.",
-      "next_action": "Before mutation, apply compact RSA copy to Brand/Legacy Hamza Search campaign with ₹500/day and 2km radius only after exact ad asset/budget/proximity write endpoints are verified.",
-      "mutation_status": "none-copy-direction-only"
     }
   ]
 }
