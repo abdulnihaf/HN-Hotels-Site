@@ -742,6 +742,7 @@ function renderRoster() {
         </div>
         <div class="text-right flex flex-col items-end gap-1.5">
           ${state.viewFinancials ? `<div class="text-sm font-bold">₹${(e.monthly_salary || 0).toLocaleString('en-IN')}</div>` : ''}
+          ${state.role === 'admin' ? `<button onclick="event.stopPropagation();openAdvanceModal(${e.id})" class="badge" style="background:rgba(34,197,94,0.18);color:#4ade80;border:none;cursor:pointer;padding:3px 8px;font-weight:600" title="Record cash/UPI advance for ${escapeHtml(displayName)}">₹ Advance</button>` : ''}
           ${phoneActions(e.phone, displayName)}
           <div>${syncBadge(e.sync_status)}</div>
         </div>
@@ -2044,6 +2045,204 @@ async function wipeLeegalityOrphans(ids) {
   const data = await r.json();
   alert(r.ok ? `Marked ${data.updated} as wiped. Run local cleanup script to delete from Leegality.` : 'Failed: ' + (data.error || ''));
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* Salary advance modal — direct entry to hr_advances ledger.                  */
+/* One row per cash/UPI handover. Read by /api/hr-payroll compute-payable at   */
+/* month-end and netted against monthly salary automatically.                   */
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+const advState = { employeeId: null, employee: null, recent: [] };
+
+function getDashboardKey() {
+  let dk = localStorage.getItem('hn_msg_dk');
+  if (!dk) {
+    dk = prompt('Enter x-dashboard-key (saved locally for next time):');
+    if (dk) localStorage.setItem('hn_msg_dk', dk.trim());
+  }
+  return dk ? dk.trim() : null;
+}
+
+async function openAdvanceModal(employeeId) {
+  const dk = getDashboardKey();
+  if (!dk) { toast('Dashboard key required', 'error'); return; }
+
+  advState.employeeId = employeeId;
+  advState.employee = state.employees.find(x => x.id === employeeId) || {};
+  advState.recent = [];
+
+  document.getElementById('advanceModalTitle').textContent =
+    `Record advance · ${advState.employee.name || ''}`;
+  document.getElementById('advanceModal').classList.remove('hidden');
+  renderAdvanceModal();
+
+  // Load this month's existing advances for the employee (informational)
+  try {
+    const month = new Date().toISOString().slice(0, 7);
+    const r = await fetch(`/api/hr-payroll?action=list-advances&employee_id=${employeeId}&month=${month}`, {
+      headers: { 'x-dashboard-key': dk },
+    });
+    const data = await r.json();
+    advState.recent = data.rows || data.advances || [];
+    renderAdvanceModal();
+  } catch (e) {
+    // non-fatal — just leaves recent empty
+  }
+}
+
+function closeAdvanceModal() {
+  document.getElementById('advanceModal').classList.add('hidden');
+  advState.employeeId = null;
+  advState.employee = null;
+  advState.recent = [];
+}
+
+function renderAdvanceModal() {
+  const e = advState.employee || {};
+  const today = new Date().toISOString().slice(0, 10);
+  const baseLabel = e.pay_type === 'Contract'
+    ? `Daily ₹${(e.daily_rate || 0).toLocaleString('en-IN')}`
+    : `Monthly ₹${(e.monthly_salary || 0).toLocaleString('en-IN')}`;
+  const month = today.slice(0, 7);
+  const monthAdv = advState.recent.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const monthCount = advState.recent.length;
+
+  const recentRows = advState.recent.length
+    ? advState.recent.map(r => `
+        <div class="flex items-center justify-between text-[11px] py-1 border-b border-white/5">
+          <span class="text-white/50 font-mono">${(r.advance_date || '').slice(0, 10)}</span>
+          <span class="text-white/40 flex-1 px-2">${escapeHtml(r.reason || '—')}</span>
+          <span class="text-white/60">${(r.paid_via || 'cash').toUpperCase()}</span>
+          <span class="font-bold text-emerald-400 ml-2">₹${Number(r.amount || 0).toLocaleString('en-IN')}</span>
+        </div>`).join('')
+    : '<div class="text-white/30 text-[11px] py-2">No advances recorded this month.</div>';
+
+  document.getElementById('advanceModalBody').innerHTML = `
+    <div class="mb-3 p-3 rounded" style="background:rgba(255,255,255,0.04)">
+      <div class="text-[11px] text-white/40 uppercase tracking-wide mb-1">${e.brand_label || ''} · ${e.pay_type || 'Monthly'} · ${baseLabel}</div>
+      <div class="text-[11px] text-white/50">
+        Already advanced in ${month}: <span class="font-bold text-emerald-400">₹${monthAdv.toLocaleString('en-IN')}</span> · ${monthCount} ${monthCount === 1 ? 'entry' : 'entries'}
+      </div>
+    </div>
+
+    <div class="space-y-3">
+      <div>
+        <label class="text-[11px] text-white/60 uppercase tracking-wide">Amount (₹)</label>
+        <input id="advAmount" type="number" min="1" step="1" inputmode="numeric"
+          class="w-full mt-1 px-3 py-2 rounded text-lg font-bold"
+          style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)"
+          placeholder="e.g. 5000" autofocus>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[11px] text-white/60 uppercase tracking-wide">Date</label>
+          <input id="advDate" type="date" value="${today}"
+            class="w-full mt-1 px-3 py-2 rounded"
+            style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)">
+        </div>
+        <div>
+          <label class="text-[11px] text-white/60 uppercase tracking-wide">Paid via</label>
+          <select id="advPaidVia"
+            class="w-full mt-1 px-3 py-2 rounded"
+            style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)">
+            <option value="cash" selected>Cash</option>
+            <option value="upi">UPI</option>
+            <option value="bank">Bank transfer</option>
+            <option value="razorpay">Razorpay</option>
+            <option value="paytm">Paytm</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="text-[11px] text-white/60 uppercase tracking-wide">Reason</label>
+        <select id="advReason"
+          class="w-full mt-1 px-3 py-2 rounded"
+          style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)"
+          onchange="document.getElementById('advReasonCustom').style.display=this.value==='custom'?'block':'none'">
+          <option value="eid_advance" selected>Eid advance</option>
+          <option value="advance">Regular advance</option>
+          <option value="medical">Medical</option>
+          <option value="travel">Travel home</option>
+          <option value="festival">Festival</option>
+          <option value="loan">Loan</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <input id="advReasonCustom" type="text" placeholder="Custom reason"
+          class="w-full mt-2 px-3 py-2 rounded text-sm"
+          style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1);display:none">
+      </div>
+
+      <div>
+        <label class="text-[11px] text-white/60 uppercase tracking-wide">Reference / Notes (optional)</label>
+        <input id="advNotes" type="text" placeholder="UTR, witness, or any note"
+          class="w-full mt-1 px-3 py-2 rounded text-sm"
+          style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)">
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="submitAdvance()" id="advSaveBtn"
+          class="btn btn-primary flex-1" style="background:#22c55e;color:#000;font-weight:700">
+          Record advance
+        </button>
+        <button onclick="closeAdvanceModal()" class="btn btn-ghost">Cancel</button>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <div class="text-[11px] text-white/40 uppercase tracking-wide mb-1">This month's entries</div>
+      ${recentRows}
+    </div>
+  `;
+}
+
+async function submitAdvance() {
+  const dk = getDashboardKey();
+  if (!dk) { toast('Dashboard key required', 'error'); return; }
+
+  const amount = parseFloat(document.getElementById('advAmount').value);
+  const date = document.getElementById('advDate').value;
+  const paidVia = document.getElementById('advPaidVia').value;
+  const reasonSel = document.getElementById('advReason').value;
+  const reason = reasonSel === 'custom'
+    ? (document.getElementById('advReasonCustom').value.trim() || 'other')
+    : reasonSel;
+  const notes = document.getElementById('advNotes').value.trim();
+
+  if (!amount || amount <= 0) { toast('Amount required', 'error'); return; }
+  if (!date) { toast('Date required', 'error'); return; }
+
+  const btn = document.getElementById('advSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Recording…';
+
+  try {
+    const r = await fetch('/api/hr-payroll?action=record-advance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({
+        employee_id: advState.employeeId,
+        advance_date: date,
+        amount,
+        paid_via: paidVia,
+        reason,
+        notes: notes || null,
+        source: 'manual',
+        recorded_by: state.user || state.pin,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'failed');
+    toast(`✓ ₹${amount.toLocaleString('en-IN')} recorded for ${advState.employee.name}`);
+    closeAdvanceModal();
+  } catch (e) {
+    toast('Failed: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Record advance';
+  }
+}
 </script>
 
 <!-- Contract management modal -->
@@ -2054,6 +2253,19 @@ async function wipeLeegalityOrphans(ids) {
       <button onclick="closeContractModal()" class="text-white/60 hover:text-white text-2xl leading-none">×</button>
     </div>
     <div id="contractModalBody"></div>
+  </div>
+</div>
+
+<!-- Salary advance modal — records to hr_advances ledger -->
+<div id="advanceModal" class="modal-overlay hidden" onclick="if(event.target===this)closeAdvanceModal()">
+  <div class="modal-card" style="max-width:520px">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-bold" id="advanceModalTitle">Record advance</h2>
+      <button onclick="closeAdvanceModal()" class="text-white/60 hover:text-white text-2xl leading-none">×</button>
+    </div>
+    <div id="advanceModalBody">
+      <div class="text-white/60 text-sm">Loading…</div>
+    </div>
   </div>
 </div>
 
