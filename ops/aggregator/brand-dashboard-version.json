@@ -1,0 +1,9 @@
+{
+  "version": "2026-05-25-brand-split-v1",
+  "routes": [
+    "/ops/he/aggregator/",
+    "/ops/nch/aggregator/",
+    "/ops/aggregator/"
+  ],
+  "purpose": "Brand-specific read-only aggregator algorithm dashboards for HE and NCH."
+}
