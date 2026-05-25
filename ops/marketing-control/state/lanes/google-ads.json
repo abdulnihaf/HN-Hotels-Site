@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T06:44:09+0530",
-  "published_at": "2026-05-25T06:44:09+0530",
+  "updated_at": "2026-05-25T06:49:10+0530",
+  "published_at": "2026-05-25T06:49:10+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Verify Google Ads live account and delivery state",
-    "last_summary": "Read lane memory/control graph and live HE Google Ads APIs. Verified account customer 368-171-0084 via hamzaexpress.in API; active Search campaigns are Late Night 23854158442 ₹300/day, Dinner 23855561197 ₹150/day, Brand 23845870050 ₹50/day, all ENABLED/SERVING; PMax 23834053403 remains PAUSED at ₹300/day. 7d cockpit shows ₹2301.14 spend and 70 clicks, almost entirely Late Night; Dinner/Brand enabled but not materially delivering. Campaign criteria show HE pin proximity only: Late Night 7km, Dinner 3km, Brand 5km, PMax 2km; no city LOCATION criteria. Directions proof endpoint live with today's page_view/maps_auto_open events, currently from Meta UTMs rather than Google gclid. No ad mutation performed.",
-    "next_action": "Before any mutation, verify the specific target campaign/ad group/keyword IDs and decide whether to tune Late Night negatives/bids, fix Dinner/Brand delivery, or resume PMax; preserve rollback plan and current budgets.",
-    "mutation_status": "blocked until explicit live mutation approval; read-only verification only",
+    "last_task": "Extract live campaign age and campaign stats",
+    "last_summary": "Read-only live extraction from hamzaexpress.in Google cockpit period=all as of 2026-05-25. Stack totals since 2026-04-14: 10,170 impressions, 954 clicks, ₹4,161.11 spend, 0 conversions. Current enabled/serving Search campaigns: Late Night 23854158442 ₹300/day has 1,678 impressions, 96 clicks, ₹3,168.83 spend, active metric dates 2026-05-15 to 2026-05-25; Dinner 23855561197 ₹150/day has 24 impressions, 0 clicks, ₹0 spend, metric dates 2026-05-15 to 2026-05-24; Brand 23845870050 ₹50/day has 0 impressions/clicks/spend. PMax 23834053403 is paused, last metric date 2026-05-15, totals 8,468 impressions, 858 clicks, ₹992.28 spend, 0 conversions. If counting from latest Search activation/first metric on 2026-05-15 to 2026-05-25, elapsed is 10 days / 11 reporting dates inclusive; if asking days since active delivery, Late Night is active today = 0 days.",
+    "next_action": "Decide whether to fix non-delivery for Dinner/Brand or tune Late Night negatives/bids before any money mutation.",
+    "mutation_status": "read-only stats extraction; no Ads mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-    "last_run_at": "2026-05-25T05:26:17+0530"
+    "last_run_at": "2026-05-25T06:49:10+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525064910-google-ads",
+      "at": "2026-05-25T06:49:10+0530",
+      "lane": "google-ads",
+      "task": "Extract live campaign age and campaign stats",
+      "status": "ready",
+      "summary": "Read-only live extraction from hamzaexpress.in Google cockpit period=all as of 2026-05-25. Stack totals since 2026-04-14: 10,170 impressions, 954 clicks, ₹4,161.11 spend, 0 conversions. Current enabled/serving Search campaigns: Late Night 23854158442 ₹300/day has 1,678 impressions, 96 clicks, ₹3,168.83 spend, active metric dates 2026-05-15 to 2026-05-25; Dinner 23855561197 ₹150/day has 24 impressions, 0 clicks, ₹0 spend, metric dates 2026-05-15 to 2026-05-24; Brand 23845870050 ₹50/day has 0 impressions/clicks/spend. PMax 23834053403 is paused, last metric date 2026-05-15, totals 8,468 impressions, 858 clicks, ₹992.28 spend, 0 conversions. If counting from latest Search activation/first metric on 2026-05-15 to 2026-05-25, elapsed is 10 days / 11 reporting dates inclusive; if asking days since active delivery, Late Night is active today = 0 days.",
+      "next_action": "Decide whether to fix non-delivery for Dinner/Brand or tune Late Night negatives/bids before any money mutation.",
+      "mutation_status": "read-only stats extraction; no Ads mutation"
+    },
     {
       "id": "20260525052617-google-ads",
       "at": "2026-05-25T05:26:17+0530",
