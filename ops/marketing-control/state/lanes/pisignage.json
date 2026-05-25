@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T05:39:09+0530",
-  "published_at": "2026-05-25T05:39:09+0530",
+  "updated_at": "2026-05-25T05:44:16+0530",
+  "published_at": "2026-05-25T05:44:16+0530",
   "source": "github-main-static-json",
   "lane_slug": "pisignage",
   "lane": {
@@ -9,16 +9,27 @@
     "subgroup": "Creative Surface",
     "risk": "screen mutation",
     "status": "ready",
-    "last_task": "TV choreography, playlists, screen creative mapping.",
-    "last_summary": "Dedicated Codex lane exists.",
-    "next_action": "Verify asset dimensions and target screen before playlist mutation.",
-    "mutation_status": "approval gated",
-    "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pisignage"
+    "last_task": "Initialize PiSignage lane and verify TV upload packet",
+    "last_summary": "Read lane memory/control graph/unified context/TV history and verified current HE TV choreography state. Source-of-truth is hamza-express-site ops/tv-mission-control/choreography/preview-data.json generated 2026-05-18 with 7 groups, 28 playlists, 113 listed assets and 28 contact sheets. Old JSON source_root points to Desktop, now missing after cleanup; relocated upload packet exists at /Users/nihaf/Documents/2026-05_Working-Files/Creative/HamzaExpress_TV_Copies_2026-05-16/_ORGANIZED_BY_TIMESLOT. All 113 listed files are present there; dimension audit checked 100 files as 1920x1080 with zero mismatches, while 13 PNGs need re-export/repair/probe review before any upload because image probes failed or hung. Live choreography page HTTP 200; no PiSignage/API/screen mutation performed.",
+    "next_action": "Before playlist mutation, repair or re-export the 13 probe-failing PNGs, then verify live PiSignage player/group state for the exact target screen: 7 V2 choreography groups versus legacy 6-TV fleet registry, confirm outdoor facade H2 assignment, and prepare rollback to previous playlists/groups before upload.",
+    "mutation_status": "No PiSignage playlist, asset upload, repo, Cloudflare, Odoo, ad, WABA, aggregator, or screen mutation. Read-only lane initialization plus local asset/location/dimension verification only.",
+    "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pisignage",
+    "last_run_at": "2026-05-25T05:44:16+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/05-pisignage.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/pisignage.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525054416-pisignage",
+      "at": "2026-05-25T05:44:16+0530",
+      "lane": "pisignage",
+      "task": "Initialize PiSignage lane and verify TV upload packet",
+      "status": "ready",
+      "summary": "Read lane memory/control graph/unified context/TV history and verified current HE TV choreography state. Source-of-truth is hamza-express-site ops/tv-mission-control/choreography/preview-data.json generated 2026-05-18 with 7 groups, 28 playlists, 113 listed assets and 28 contact sheets. Old JSON source_root points to Desktop, now missing after cleanup; relocated upload packet exists at /Users/nihaf/Documents/2026-05_Working-Files/Creative/HamzaExpress_TV_Copies_2026-05-16/_ORGANIZED_BY_TIMESLOT. All 113 listed files are present there; dimension audit checked 100 files as 1920x1080 with zero mismatches, while 13 PNGs need re-export/repair/probe review before any upload because image probes failed or hung. Live choreography page HTTP 200; no PiSignage/API/screen mutation performed.",
+      "next_action": "Before playlist mutation, repair or re-export the 13 probe-failing PNGs, then verify live PiSignage player/group state for the exact target screen: 7 V2 choreography groups versus legacy 6-TV fleet registry, confirm outdoor facade H2 assignment, and prepare rollback to previous playlists/groups before upload.",
+      "mutation_status": "No PiSignage playlist, asset upload, repo, Cloudflare, Odoo, ad, WABA, aggregator, or screen mutation. Read-only lane initialization plus local asset/location/dimension verification only."
+    },
     {
       "id": "2026-05-24-control-room-v2",
       "at": "2026-05-24T20:54:08+0530",
