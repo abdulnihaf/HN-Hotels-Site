@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:47:50+0530",
-  "published_at": "2026-05-25T12:47:50+0530",
+  "updated_at": "2026-05-25T12:56:25+0530",
+  "published_at": "2026-05-25T12:56:25+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -78,12 +78,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Analyze current Google Ads campaigns against WABA voucher retargeting objective",
-      "last_summary": "Live-read Google Ads and cockpit state while working from Meta/WABA retargeting context. Confirmed two enabled Google Search campaigns: 23877692297 Hamza Hotel Late Night Brand Capture v2 at Rs250/day, 5km presence-only, 23:00-02:00, brand/Hamza intent; and 23882183242 Dish Late Night 2km Search v1 at Rs250/day, 2km presence-only, 23:00-02:00, dish/open-now/Shivajinagar intent. Both are Search footfall/directions campaigns, not WABA voucher-retargeting campaigns. Current Google landing already has WhatsApp as secondary, but primary action remains Maps/directions. Recommendation: do not mutate these existing campaigns into WhatsApp-first; keep them as clean late-night demand-capture tests and only add/measure WABA as secondary. Create a separate Google WABA/voucher capture campaign only if we explicitly allocate budget or later divert budget after first full 23:00-02:00 search-term readback.",
-      "next_action": "After tonight's full 23:00-02:00 window, inspect search terms and landing action events by campaign. If building Google-to-WABA capture, create a separate small voucher/WhatsApp campaign or landing variant instead of contaminating the current two footfall tests.",
-      "mutation_status": "read-only live verification and strategy; no Google Ads, Meta, WABA, GBP, POS, or landing mutation",
+      "last_task": "Return to Meta WABA retargeting creative intelligence",
+      "last_summary": "Re-read HN Creative Asset Library README/context and meta-ads lane index. Confirmed 245 Meta-relevant canonical assets across HE brand core, Meta/WABA historical creatives, hero/dish assets, and outlet/product photos. Current creative intelligence direction: do not use old Meta creatives as proof of current offer/pricing; use them as layout/history only. Build new retargeting creative strategy around WABA voucher capture with primary buckets: hot click/directions visitors, warm page engagers, video viewers once audience creation is solved, nearby dine-in privacy/couples, family dine-in, daily takeaway breakers, and weekend Commercial Street visitors. Next execution should shortlist exact canonical asset paths for each bucket, visually inspect selected references, then assemble editable concepts in Figma frame 20:2 without generation until approved.",
+      "next_action": "Shortlist 8-12 canonical reference assets by bucket, inspect visually, then map each to copy angle and Figma creative slot before any image generation or Meta mutation.",
+      "mutation_status": "creative intelligence/read-only asset context only; no generation, no Figma mutation in this step, no Meta/WABA/Google spend or customer mutation",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-      "last_run_at": "2026-05-25T12:47:50+0530"
+      "last_run_at": "2026-05-25T12:56:25+0530"
     },
     "flyers": {
       "title": "07 Flyers",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525125625-meta-ads",
+      "at": "2026-05-25T12:56:25+0530",
+      "lane": "meta-ads",
+      "task": "Return to Meta WABA retargeting creative intelligence",
+      "status": "ready",
+      "summary": "Re-read HN Creative Asset Library README/context and meta-ads lane index. Confirmed 245 Meta-relevant canonical assets across HE brand core, Meta/WABA historical creatives, hero/dish assets, and outlet/product photos. Current creative intelligence direction: do not use old Meta creatives as proof of current offer/pricing; use them as layout/history only. Build new retargeting creative strategy around WABA voucher capture with primary buckets: hot click/directions visitors, warm page engagers, video viewers once audience creation is solved, nearby dine-in privacy/couples, family dine-in, daily takeaway breakers, and weekend Commercial Street visitors. Next execution should shortlist exact canonical asset paths for each bucket, visually inspect selected references, then assemble editable concepts in Figma frame 20:2 without generation until approved.",
+      "next_action": "Shortlist 8-12 canonical reference assets by bucket, inspect visually, then map each to copy angle and Figma creative slot before any image generation or Meta mutation.",
+      "mutation_status": "creative intelligence/read-only asset context only; no generation, no Figma mutation in this step, no Meta/WABA/Google spend or customer mutation"
+    },
     {
       "id": "20260525124750-meta-ads",
       "at": "2026-05-25T12:47:50+0530",
