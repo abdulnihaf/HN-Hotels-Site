@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T13:05:05+0530",
-  "published_at": "2026-05-25T13:05:05+0530",
+  "updated_at": "2026-05-25T13:10:35+0530",
+  "published_at": "2026-05-25T13:10:35+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Bridge Google late-night landing to WABA voucher secondary CTA",
-    "last_summary": "Verified live Google Ads/cockpit state before mutation: Hamza v2 23877692297 and Dish 2km 23882183242 remain enabled Search campaigns at Rs250/day each, presence-only 5km/2km, 23:00-02:00; old Rs195.87/6-click spend remains attributed to paused generic Late Night v1. Verified landing variants and WABA voucher trigger text in deployed WhatsApp flow. Deployed safe landing-only bridge: primary CTA remains Get Directions To Hamza Express, secondary WhatsApp CTA is now Get WhatsApp Voucher Before You Come with exact prefill 'Hi Hamza, send my WhatsApp voucher'. Updated landing tracker allow-list so pageview/maps/call/menu/whatsapp_voucher preserve he_brand_late_night_5km vs he_dish_late_night_2km. No Google Ads, Meta, WABA send/template, GBP, POS, or Odoo mutation.",
-    "next_action": "After first complete 23:00-02:00 window, inspect Google search terms and landing event split by campaign: maps/call/menu/whatsapp_voucher. Keep Maps as primary unless voucher clicks add capture without hurting directions.",
-    "mutation_status": "Cloudflare Pages landing/tracking mutation only: functions/go/google-night.js and functions/api/google-ads-landing-event.js deployed to hamzaexpress.in via Pages preview c05a7a1a. Google Ads money state unchanged.",
+    "last_task": "Rotate Claude API key for future Ads report reasoning",
+    "last_summary": "Saved one canonical ANTHROPIC_API_KEY in ~/.hn-assets.env for Claude/Anthropic API use and removed the two stale Anthropic key exports from the file. Did not print the key. File permissions remain 600. Live API call was not retried successfully because this environment previously had DNS/connectivity failures to api.anthropic.com.",
+    "next_action": "Use ANTHROPIC_API_KEY as the only Claude API env var when building the 4 AM Google Ads report analysis layer; keep WABA/template/report automation gated until explicitly approved after landing bridge data arrives.",
+    "mutation_status": "Local secret rotation only; no Google Ads, Meta, WABA send/template, GBP, POS, Odoo, or Cloudflare production mutation.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-    "last_run_at": "2026-05-25T13:02:31+0530"
+    "last_run_at": "2026-05-25T13:10:35+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525131035-google-ads",
+      "at": "2026-05-25T13:10:35+0530",
+      "lane": "google-ads",
+      "task": "Rotate Claude API key for future Ads report reasoning",
+      "status": "ready",
+      "summary": "Saved one canonical ANTHROPIC_API_KEY in ~/.hn-assets.env for Claude/Anthropic API use and removed the two stale Anthropic key exports from the file. Did not print the key. File permissions remain 600. Live API call was not retried successfully because this environment previously had DNS/connectivity failures to api.anthropic.com.",
+      "next_action": "Use ANTHROPIC_API_KEY as the only Claude API env var when building the 4 AM Google Ads report analysis layer; keep WABA/template/report automation gated until explicitly approved after landing bridge data arrives.",
+      "mutation_status": "Local secret rotation only; no Google Ads, Meta, WABA send/template, GBP, POS, Odoo, or Cloudflare production mutation."
+    },
     {
       "id": "20260525130231-google-ads",
       "at": "2026-05-25T13:02:31+0530",
@@ -208,16 +218,6 @@
       "status": "ready",
       "summary": "Updated text asset doc with positioning correction: Hamza Hotel searchers are warm/high-intent, not cold. Recommended ad frame is recognition -> food/offer -> directions: 'Hamza Hotel search kiya? Hamza Express, HKP Road - Ghee Rice, Kabab, Biryani. 10% dine-in, 20% takeaway. Tap directions.' Reframed Wahi Hamza naam as a trust bridge, not the main sale line. No live Ads/GBP/POS mutation.",
       "next_action": "Use the intent-conversion frame in mockup visuals after Nihaf confirms opening time and discount proof.",
-      "mutation_status": "none-copy-doc-only"
-    },
-    {
-      "id": "20260525080551-google-ads",
-      "at": "2026-05-25T08:05:51+0530",
-      "lane": "google-ads",
-      "task": "Add dine-in and takeaway offer copy to Hamza Hotel ad text assets",
-      "status": "ready",
-      "summary": "Updated GBP-verified Hamza Hotel text asset doc to include offer messaging: 10% off dine-in and 20% off takeaway across Afternoon/Late Lunch, Dinner, and Late Night variants. Added guardrail that POS/landing proof must be verified before the offer appears in live ads. No Google Ads, GBP, POS, or landing mutation made.",
-      "next_action": "Confirm real opening time and verify discount proof on POS/landing; then create three visual mockups for approval before live campaign creation.",
       "mutation_status": "none-copy-doc-only"
     }
   ]

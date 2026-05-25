@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T13:05:05+0530",
-  "published_at": "2026-05-25T13:05:05+0530",
+  "updated_at": "2026-05-25T13:10:35+0530",
+  "published_at": "2026-05-25T13:10:35+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Bridge Google late-night landing to WABA voucher secondary CTA",
-      "last_summary": "Verified live Google Ads/cockpit state before mutation: Hamza v2 23877692297 and Dish 2km 23882183242 remain enabled Search campaigns at Rs250/day each, presence-only 5km/2km, 23:00-02:00; old Rs195.87/6-click spend remains attributed to paused generic Late Night v1. Verified landing variants and WABA voucher trigger text in deployed WhatsApp flow. Deployed safe landing-only bridge: primary CTA remains Get Directions To Hamza Express, secondary WhatsApp CTA is now Get WhatsApp Voucher Before You Come with exact prefill 'Hi Hamza, send my WhatsApp voucher'. Updated landing tracker allow-list so pageview/maps/call/menu/whatsapp_voucher preserve he_brand_late_night_5km vs he_dish_late_night_2km. No Google Ads, Meta, WABA send/template, GBP, POS, or Odoo mutation.",
-      "next_action": "After first complete 23:00-02:00 window, inspect Google search terms and landing event split by campaign: maps/call/menu/whatsapp_voucher. Keep Maps as primary unless voucher clicks add capture without hurting directions.",
-      "mutation_status": "Cloudflare Pages landing/tracking mutation only: functions/go/google-night.js and functions/api/google-ads-landing-event.js deployed to hamzaexpress.in via Pages preview c05a7a1a. Google Ads money state unchanged.",
+      "last_task": "Rotate Claude API key for future Ads report reasoning",
+      "last_summary": "Saved one canonical ANTHROPIC_API_KEY in ~/.hn-assets.env for Claude/Anthropic API use and removed the two stale Anthropic key exports from the file. Did not print the key. File permissions remain 600. Live API call was not retried successfully because this environment previously had DNS/connectivity failures to api.anthropic.com.",
+      "next_action": "Use ANTHROPIC_API_KEY as the only Claude API env var when building the 4 AM Google Ads report analysis layer; keep WABA/template/report automation gated until explicitly approved after landing bridge data arrives.",
+      "mutation_status": "Local secret rotation only; no Google Ads, Meta, WABA send/template, GBP, POS, Odoo, or Cloudflare production mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T13:02:31+0530"
+      "last_run_at": "2026-05-25T13:10:35+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525131035-google-ads",
+      "at": "2026-05-25T13:10:35+0530",
+      "lane": "google-ads",
+      "task": "Rotate Claude API key for future Ads report reasoning",
+      "status": "ready",
+      "summary": "Saved one canonical ANTHROPIC_API_KEY in ~/.hn-assets.env for Claude/Anthropic API use and removed the two stale Anthropic key exports from the file. Did not print the key. File permissions remain 600. Live API call was not retried successfully because this environment previously had DNS/connectivity failures to api.anthropic.com.",
+      "next_action": "Use ANTHROPIC_API_KEY as the only Claude API env var when building the 4 AM Google Ads report analysis layer; keep WABA/template/report automation gated until explicitly approved after landing bridge data arrives.",
+      "mutation_status": "Local secret rotation only; no Google Ads, Meta, WABA send/template, GBP, POS, Odoo, or Cloudflare production mutation."
+    },
     {
       "id": "20260525130505-meta-ads",
       "at": "2026-05-25T13:05:05+0530",
@@ -935,16 +945,6 @@
       "summary": "Analyzed tablet photos from HE Captain POS after V2 pricelist switch. The visible Chicken Kabab Half price ₹198.60 matches the expected V2 canary, so pricing/pricelist deployment is behaving. The failure shown is Odoo Server Error: Session expired during payment validation, which points to browser/Odoo auth/session expiry or stale POS tab, not the last pricelist/config deployment. No Odoo mutation performed.",
       "next_action": "Staff should press OK, refresh/reopen Captain POS, recover the draft order from table/orders if present, then validate again. If repeated, run read-only live session/payment audit before any write.",
       "mutation_status": "No mutation. Read-only image-based diagnosis only; last Odoo mutation remains Captain config 6 [40,45] and pricelist 45 from 2026-05-24."
-    },
-    {
-      "id": "20260524225342-pos-write",
-      "at": "2026-05-24T22:53:42+0530",
-      "lane": "pos-write",
-      "task": "HE Captain POS 10% offer V2 fix",
-      "status": "completed",
-      "summary": "Diagnosed Captain POS offer bug on test.hamzahotel.com: old offer 44 chained through Captain base pricelist 40 and dropped portion attribute extras, causing apparent 45-55% discounts. Created pricelist 45 HE Captain AC 10% Offer V2 - 2026-05-24 with 168 non-chained rules, switched only Captain config 6 from [40,44] to [40,45], verified Cash [41,42] and Ground [41,43] unchanged, and post-switch exhaustive variant audit passed 252 cases with 0 anomalies.",
-      "next_action": "Staff should reload Captain POS and select HE Captain AC 10% Offer V2 - 2026-05-24 for new Captain offer orders; verify tablet canaries Chicken Kabab Half about ₹198.60, Chicken Kabab Full about ₹400.30, Irani Chicken Full about ₹522.34. Rollback if needed: restore Captain config 6 available pricelists to [40,44].",
-      "mutation_status": "Odoo/POS production mutation completed on HE test.hamzahotel.com: created detached pricelist 45 + 168 rules, then updated only pos.config 6 available_pricelist_ids to [40,45]. No product/tax/category/KDS/session/Cash/Ground writes. Backups: /private/tmp/he_captain_offer_v2_write_backup_20260524.json and /private/tmp/he_captain_v2_live_switch_backup_20260524.json."
     }
   ]
 }
