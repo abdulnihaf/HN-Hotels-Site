@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T05:44:16+0530",
-  "published_at": "2026-05-25T05:44:16+0530",
+  "updated_at": "2026-05-25T05:56:47+0530",
+  "published_at": "2026-05-25T05:56:47+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Initialize Delivery Aggregator lane and verify platform/margin gate",
-    "last_summary": "Read lane memory, unified graph, prior aggregator trail, live authenticated aggregator APIs, and MS25-MS35 proof artifacts. Live health now reports delivery status down because Swiggy snapshots are silent ~962min; Zomato HE order capture is current through 2026-05-24 with 93 month orders, 83 delivered, Rs24542 delivered revenue, 72% discount usage in order-detail sample, and 6.5% cancellation. Swiggy HE remains sparse/stale: last per-order capture 2026-04-17 and parsed month shows 0 current orders. Margin/proof gate remains unchanged: only Zomato 8 price-only rows are team-safe; no offers, no combo/value edits, no Swiggy packet, and C003/Ghee Rice + Butter Chicken remains blocked by full combo recipe/packaging/visual proof.",
-    "next_action": "Either audit whether the 8 Zomato price-only rows were manually executed with before/after proof, or build a Swiggy readiness repair packet; do not launch offers or combo edits until platform proof, active offer-stack proof, and food+packaging margin proof close.",
-    "mutation_status": "Read-only verification and memory writeback only. No Zomato/Swiggy portal, Odoo/POS, ad, WABA, pricing, or repo UI mutation.",
+    "last_task": "Analyze direct Swiggy/Zomato partner API scrape files",
+    "last_summary": "Analyzed /Users/nihaf/Downloads/swiggy-curl.json, swiggy-orders.json, zomato-curl.txt, and zomato-orders.json without printing secrets. Swiggy direct API path is proven: POST https://rms.swiggy.com/orders/v1/fetchOrders replays successfully with access_token/accesstoken headers and no cookie, returning live data; latest replay showed 1342887=NCH and 1342888=HE, confirming HE Swiggy ID 1342888. Zomato cURL path is not yet proven: POST https://api.zomato.com/merchant-gw/web/order/history/get-all-v2 returns HTTP 401 from the saved headers, while zomato-orders.json proves rich order-detail shape only. Locally patched functions/api/aggregator-pulse.js to fix inverted parsed Swiggy constants and add raw swiggy_fetch_orders/zomato_order_detail ingestion normalizers, plus added scripts/aggregator-direct-partner-pull.mjs dry-run puller. Dry-run verified Swiggy 200 and Zomato 401. No live D1 ingest or deploy performed.",
+    "next_action": "Capture a fresh replayable Zomato cURL including all required auth/session material; then deploy the exact aggregator-pulse.js ingestion fix from a clean branch/worktree and run the direct puller in ingest mode with HN_AGGREGATOR_API_KEY. Keep offer/combo portal actions blocked; this work only replaces the capture layer.",
+    "mutation_status": "Local code/context changes only: functions/api/aggregator-pulse.js, scripts/aggregator-direct-partner-pull.mjs, and ignored _context analysis. No Swiggy/Zomato portal mutation, no Odoo/POS mutation, no WABA/ad mutation, no live D1 ingest, no production deploy.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-25T05:39:09+0530"
+    "last_run_at": "2026-05-25T05:56:47+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525055647-delivery-aggregator",
+      "at": "2026-05-25T05:56:47+0530",
+      "lane": "delivery-aggregator",
+      "task": "Analyze direct Swiggy/Zomato partner API scrape files",
+      "status": "ready",
+      "summary": "Analyzed /Users/nihaf/Downloads/swiggy-curl.json, swiggy-orders.json, zomato-curl.txt, and zomato-orders.json without printing secrets. Swiggy direct API path is proven: POST https://rms.swiggy.com/orders/v1/fetchOrders replays successfully with access_token/accesstoken headers and no cookie, returning live data; latest replay showed 1342887=NCH and 1342888=HE, confirming HE Swiggy ID 1342888. Zomato cURL path is not yet proven: POST https://api.zomato.com/merchant-gw/web/order/history/get-all-v2 returns HTTP 401 from the saved headers, while zomato-orders.json proves rich order-detail shape only. Locally patched functions/api/aggregator-pulse.js to fix inverted parsed Swiggy constants and add raw swiggy_fetch_orders/zomato_order_detail ingestion normalizers, plus added scripts/aggregator-direct-partner-pull.mjs dry-run puller. Dry-run verified Swiggy 200 and Zomato 401. No live D1 ingest or deploy performed.",
+      "next_action": "Capture a fresh replayable Zomato cURL including all required auth/session material; then deploy the exact aggregator-pulse.js ingestion fix from a clean branch/worktree and run the direct puller in ingest mode with HN_AGGREGATOR_API_KEY. Keep offer/combo portal actions blocked; this work only replaces the capture layer.",
+      "mutation_status": "Local code/context changes only: functions/api/aggregator-pulse.js, scripts/aggregator-direct-partner-pull.mjs, and ignored _context analysis. No Swiggy/Zomato portal mutation, no Odoo/POS mutation, no WABA/ad mutation, no live D1 ingest, no production deploy."
+    },
     {
       "id": "20260525053909-delivery-aggregator",
       "at": "2026-05-25T05:39:09+0530",
