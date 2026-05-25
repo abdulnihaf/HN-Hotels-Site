@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:56:25+0530",
-  "published_at": "2026-05-25T12:56:25+0530",
+  "updated_at": "2026-05-25T12:57:12+0530",
+  "published_at": "2026-05-25T12:57:12+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Plan COA aggregator live architecture",
-      "last_summary": "Read COA doctrine page and mapped aggregator dashboard/live-ingest into COA rings. Planned architecture from Entity ring (Brand, Outlet, Platform, PartnerSession, PullRequest, PartnerOrder, OrderLine, OfferExposure, HealthState) to Action ring (refresh session, poll current, backfill history, normalize, reconcile, alert, owner decision) to Event ring (session expired, order missed/rejected, offer anomaly, revenue-control opportunity). Current state remains template approved and CTO cURL replay valid, but live scheduled ingest/alert loop still needs implementation.",
-      "next_action": "Implement aggregator COA foundation: D1 session/pull/health tables, direct poller cron/manual refresh API, WABA alert wiring, and dashboard freshness controls before any price/offer mutation.",
-      "mutation_status": "architecture planning only; no partner portal, POS, Odoo, ad, WABA send, price, or offer mutation",
+      "last_task": "Execute COA Ring 1 aggregator entity foundation",
+      "last_summary": "Deployed aggregator COA Ring 1 to hnhotels.in: D1 closed entity schema/seeds plus /api/aggregator-pulse?action=coa-entities. Verified live seed_version 2026-05-25-ring1-v1 with 2 brands, 2 outlets, 2 platforms, 4 platform outlets, 4 pull sources, 8 valid platform-outlet-source coordinates, 7 health states, 7 issue codes, 2 session slots. Existing health endpoint still works and correctly reports ingest stale/down.",
+      "next_action": "Ring 2: implement scheduled pull actions over the 8 valid coordinates, session health transitions, owner WABA expiry/failure alert wiring, and dashboard consumption without any price/offer/POS/Odoo mutation.",
+      "mutation_status": "HN dashboard/API and D1 foundation mutation only; no Swiggy/Zomato portal mutation, no POS/Odoo mutation, no price/offer change.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-25T12:44:48+0530"
+      "last_run_at": "2026-05-25T12:57:12+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525125712-delivery-aggregator",
+      "at": "2026-05-25T12:57:12+0530",
+      "lane": "delivery-aggregator",
+      "task": "Execute COA Ring 1 aggregator entity foundation",
+      "status": "ready",
+      "summary": "Deployed aggregator COA Ring 1 to hnhotels.in: D1 closed entity schema/seeds plus /api/aggregator-pulse?action=coa-entities. Verified live seed_version 2026-05-25-ring1-v1 with 2 brands, 2 outlets, 2 platforms, 4 platform outlets, 4 pull sources, 8 valid platform-outlet-source coordinates, 7 health states, 7 issue codes, 2 session slots. Existing health endpoint still works and correctly reports ingest stale/down.",
+      "next_action": "Ring 2: implement scheduled pull actions over the 8 valid coordinates, session health transitions, owner WABA expiry/failure alert wiring, and dashboard consumption without any price/offer/POS/Odoo mutation.",
+      "mutation_status": "HN dashboard/API and D1 foundation mutation only; no Swiggy/Zomato portal mutation, no POS/Odoo mutation, no price/offer change."
+    },
     {
       "id": "20260525125625-meta-ads",
       "at": "2026-05-25T12:56:25+0530",
