@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T06:14:29+0530",
-  "published_at": "2026-05-25T06:14:29+0530",
+  "updated_at": "2026-05-25T06:24:55+0530",
+  "published_at": "2026-05-25T06:24:55+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Analyze direct Swiggy/Zomato partner API scrape files",
-      "last_summary": "Analyzed /Users/nihaf/Downloads/swiggy-curl.json, swiggy-orders.json, zomato-curl.txt, and zomato-orders.json without printing secrets. Swiggy direct API path is proven: POST https://rms.swiggy.com/orders/v1/fetchOrders replays successfully with access_token/accesstoken headers and no cookie, returning live data; latest replay showed 1342887=NCH and 1342888=HE, confirming HE Swiggy ID 1342888. Zomato cURL path is not yet proven: POST https://api.zomato.com/merchant-gw/web/order/history/get-all-v2 returns HTTP 401 from the saved headers, while zomato-orders.json proves rich order-detail shape only. Locally patched functions/api/aggregator-pulse.js to fix inverted parsed Swiggy constants and add raw swiggy_fetch_orders/zomato_order_detail ingestion normalizers, plus added scripts/aggregator-direct-partner-pull.mjs dry-run puller. Dry-run verified Swiggy 200 and Zomato 401. No live D1 ingest or deploy performed.",
-      "next_action": "Capture a fresh replayable Zomato cURL including all required auth/session material; then deploy the exact aggregator-pulse.js ingestion fix from a clean branch/worktree and run the direct puller in ingest mode with HN_AGGREGATOR_API_KEY. Keep offer/combo portal actions blocked; this work only replaces the capture layer.",
-      "mutation_status": "Local code/context changes only: functions/api/aggregator-pulse.js, scripts/aggregator-direct-partner-pull.mjs, and ignored _context analysis. No Swiggy/Zomato portal mutation, no Odoo/POS mutation, no WABA/ad mutation, no live D1 ingest, no production deploy.",
+      "last_task": "Save and dry-run updated Zomato partner cURL",
+      "last_summary": "Saved pasted Zomato partner cURL to Downloads/zomato-curl.txt and dry-ran direct partner puller. Swiggy replay remained HTTP 200 with current NCH orders; Zomato replay still returned HTTP 401, so no ingest/deploy/mutation was performed.",
+      "next_action": "Capture a fresh Zomato get-all-v2 request via DevTools Network using Copy as cURL, preferably directly to file instead of chat, then rerun dry-run before enabling ingest.",
+      "mutation_status": "none - saved local auth cURL and dry-run only; no platform/order/offer/margin mutation",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-25T05:56:47+0530"
+      "last_run_at": "2026-05-25T06:24:55+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -133,6 +133,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525062455-delivery-aggregator",
+      "at": "2026-05-25T06:24:55+0530",
+      "lane": "delivery-aggregator",
+      "task": "Save and dry-run updated Zomato partner cURL",
+      "status": "ready",
+      "summary": "Saved pasted Zomato partner cURL to Downloads/zomato-curl.txt and dry-ran direct partner puller. Swiggy replay remained HTTP 200 with current NCH orders; Zomato replay still returned HTTP 401, so no ingest/deploy/mutation was performed.",
+      "next_action": "Capture a fresh Zomato get-all-v2 request via DevTools Network using Copy as cURL, preferably directly to file instead of chat, then rerun dry-run before enabling ingest.",
+      "mutation_status": "none - saved local auth cURL and dry-run only; no platform/order/offer/margin mutation"
+    },
     {
       "id": "20260525061429-packaging-design",
       "at": "2026-05-25T06:14:29+0530",
