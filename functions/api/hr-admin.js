@@ -508,6 +508,116 @@ async function handleGet(url, env) {
     return json({ month, rows: rows.results, count: rows.results.length });
   }
 
+  // --- Monthly attendance grid (per-employee × per-day) for /ops/hr Hours tab ---
+  //   GET ?action=attendance-month-grid&month=YYYY-MM&brand=HE|NCH|HQ|all
+  //   Returns the raw CAMS-derived attendance rows for the whole month, joined
+  //   to roster + advance totals. NO INFERENCE on the server — caller renders
+  //   exactly what the ingest computed. Single-punch days are flagged via the
+  //   existing is_single_punch column; future-dated days are returned as
+  //   empty rows (not absent) so the UI can render them as 'future' not 'LOP'.
+  if (action === 'attendance-month-grid') {
+    const month = url.searchParams.get('month') || istDate().slice(0, 7);
+    const brand = url.searchParams.get('brand');
+    const [y, m] = month.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const monthStart = `${month}-01`;
+    const monthEnd = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+    const todayIso = istDate();
+
+    let q = `SELECT id, pin, name, known_as, brand_label, pay_type, monthly_salary,
+                    daily_rate, job_name, department_name, row_no
+               FROM hr_employees
+              WHERE is_active = 1`;
+    const params = [];
+    if (brand && brand !== 'all') { q += ' AND brand_label = ?'; params.push(brand); }
+    q += ' ORDER BY brand_label, row_no, name';
+    const emps = (await db.prepare(q).bind(...params).all()).results || [];
+
+    // Pull all attendance rows for the month, grouped by employee_id in JS
+    const attRows = (await db.prepare(
+      `SELECT employee_id, date, status, first_in_at, last_out_at,
+              total_hours, punch_count, is_single_punch, expected_hours,
+              deducted_amount, deduction_reason, raw_punches_json
+         FROM hr_attendance_daily
+        WHERE date BETWEEN ? AND ?`
+    ).bind(monthStart, monthEnd).all()).results || [];
+
+    // Pull all advances for the month, summed per employee
+    const advRows = (await db.prepare(
+      `SELECT employee_id, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS total
+         FROM hr_advances
+        WHERE advance_date BETWEEN ? AND ?
+        GROUP BY employee_id`
+    ).bind(monthStart, monthEnd).all()).results || [];
+    const advByEmp = {};
+    for (const r of advRows) advByEmp[r.employee_id] = r;
+
+    // Index attendance by (employee_id, date)
+    const attByKey = {};
+    for (const r of attRows) attByKey[`${r.employee_id}|${r.date}`] = r;
+
+    const employees = emps.map(e => {
+      const days = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateIso = `${month}-${String(d).padStart(2, '0')}`;
+        const isFuture = dateIso > todayIso;
+        const a = attByKey[`${e.id}|${dateIso}`];
+        days.push({
+          date: dateIso,
+          is_future: isFuture ? 1 : 0,
+          status: a?.status || (isFuture ? null : 'no-data'),
+          first_in_at: a?.first_in_at || null,
+          last_out_at: a?.last_out_at || null,
+          total_hours: a?.total_hours != null ? Number(a.total_hours) : null,
+          punch_count: a?.punch_count || 0,
+          is_single_punch: a?.is_single_punch || 0,
+          expected_hours: a?.expected_hours || null,
+          deducted_amount: a?.deducted_amount || 0,
+          deduction_reason: a?.deduction_reason || null,
+        });
+      }
+      const adv = advByEmp[e.id];
+      // Elapsed-only roll-ups — never count future days
+      let p = 0, h = 0, abs = 0, gh = 0, lv = 0, wo = 0, pend = 0, ambig = 0, hrs = 0;
+      for (const d of days) {
+        if (d.is_future) continue;
+        if (d.status === 'present') p++;
+        else if (d.status === 'half') h++;
+        else if (d.status === 'absent') abs++;
+        else if (d.status === 'ghost') gh++;
+        else if (d.status === 'leave') lv++;
+        else if (d.status === 'week_off') wo++;
+        else if (d.status === 'pending') pend++;
+        if (d.is_single_punch) ambig++;
+        if (d.total_hours) hrs += Number(d.total_hours);
+      }
+      return {
+        ...e,
+        days,
+        elapsed_present: p,
+        elapsed_half: h,
+        elapsed_absent: abs,
+        elapsed_ghost: gh,
+        elapsed_leave: lv,
+        elapsed_week_off: wo,
+        elapsed_pending: pend,
+        elapsed_ambiguous: ambig,
+        elapsed_total_hours: Math.round(hrs * 10) / 10,
+        advances_this_month_total: Number(adv?.total || 0),
+        advances_this_month_count: Number(adv?.cnt || 0),
+      };
+    });
+
+    return json({
+      month,
+      brand: brand || 'all',
+      days_in_month: daysInMonth,
+      today: todayIso,
+      employees,
+      count: employees.length,
+    });
+  }
+
   // --- Leaves ---
   if (action === 'leaves') {
     const pin = url.searchParams.get('pin');
