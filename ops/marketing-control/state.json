@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T14:02:40+0530",
-  "published_at": "2026-05-25T14:02:40+0530",
+  "updated_at": "2026-05-25T14:27:21+0530",
+  "published_at": "2026-05-25T14:27:21+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Ring 3 aggregator events",
-      "last_summary": "Ring 3 deployed live: coa_ring3_analyze and coa-events, D1 event/candidate schema, cron analysis. Proof 2026-05-25: 9 orders, 12 events, 16 candidates, 2 critical, loss 1165.10, all candidates data_gathering.",
-      "next_action": "Expose coa-events in owner UI by brand/platform with critical loss, rejects/cancels, discount exposure, and gated item candidates. Keep price/offer blocked until margin proof.",
-      "mutation_status": "HN D1 intelligence only; no portal/POS/Odoo/ad/WABA/price/offer mutation.",
+      "last_task": "Create WABA template for 3 AM aggregator reports",
+      "last_summary": "Added locked comms endpoint to submit/check aggregator_daily_owner_report_v1. Submitted HE-accessible WABA Utility template successfully; Meta status is PENDING, id 839936862064050. Initial draft was rejected for variable ratio and corrected. NCH WABA template-management attempt failed because current token lacks permission on NCH WABA id, so owner reports should use the accessible HE/HN WABA unless NCH token is fixed.",
+      "next_action": "After Meta approves template, wire 3 AM IST owner report cron: pull last 24h orders/events, use ANTHROPIC_API_KEY for concise COA analysis, send two WABA messages to Nihaf with HE and NCH summaries plus dashboard links. Add status guard so pending/rejected template does not silently fail.",
+      "mutation_status": "Meta WABA template submission only via HN comms endpoint; no customer sends, no portal/POS/Odoo/ad/price/offer mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-25T13:47:49+0530"
+      "last_run_at": "2026-05-25T14:27:21+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525142721-delivery-aggregator",
+      "at": "2026-05-25T14:27:21+0530",
+      "lane": "delivery-aggregator",
+      "task": "Create WABA template for 3 AM aggregator reports",
+      "status": "ready",
+      "summary": "Added locked comms endpoint to submit/check aggregator_daily_owner_report_v1. Submitted HE-accessible WABA Utility template successfully; Meta status is PENDING, id 839936862064050. Initial draft was rejected for variable ratio and corrected. NCH WABA template-management attempt failed because current token lacks permission on NCH WABA id, so owner reports should use the accessible HE/HN WABA unless NCH token is fixed.",
+      "next_action": "After Meta approves template, wire 3 AM IST owner report cron: pull last 24h orders/events, use ANTHROPIC_API_KEY for concise COA analysis, send two WABA messages to Nihaf with HE and NCH summaries plus dashboard links. Add status guard so pending/rejected template does not silently fail.",
+      "mutation_status": "Meta WABA template submission only via HN comms endpoint; no customer sends, no portal/POS/Odoo/ad/price/offer mutation."
+    },
     {
       "id": "20260525140240-meta-ads",
       "at": "2026-05-25T14:02:40+0530",
@@ -935,16 +945,6 @@
       "summary": "Initialized lane from live memory, packaging prompt, unified control graph, packaging Claude digest, HE Cheap-Bold doctrine, NCH flask Codex handoff, and local asset state. Packaging scope remains creative/vendor handoff only. HE current open work is corrected Cheap-Bold v2 renders: heritage burgundy direct-print pouches, kraft single-burgundy boxes/sleeves, unchanged cups with small lid sticker, tote as large brand surface; no foil/gold/emboss/photo-print/premium traps. NCH flask current open work is panel-by-panel continuation from approved front/back references and Downloads/_flask_bg locked bases; April automated vendor pack remains rejected, and final output must not use bulk SVG visible-art automation or generative panels.",
       "next_action": "When Nihaf gives the target, either regenerate one HE Cheap-Bold corrected render/state at a time, or continue NCH flask one approved panel at a time. For NCH, first confirm legal text/phone/FSSAI/ingredients and the /go/flask QR redirect before print handoff; use rsvg-convert/Python only for dieline, QR, bleed, and PDF assembly.",
       "mutation_status": "No artwork, Odoo, ad, WABA, aggregator, vendor, or customer-facing packaging mutation. Only packaging-design execution memory was updated and synced to ops/marketing-control/state.json."
-    },
-    {
-      "id": "20260525052617-google-ads",
-      "at": "2026-05-25T05:26:17+0530",
-      "lane": "google-ads",
-      "task": "Verify Google Ads live account and delivery state",
-      "status": "ready",
-      "summary": "Read lane memory/control graph and live HE Google Ads APIs. Verified account customer 368-171-0084 via hamzaexpress.in API; active Search campaigns are Late Night 23854158442 ₹300/day, Dinner 23855561197 ₹150/day, Brand 23845870050 ₹50/day, all ENABLED/SERVING; PMax 23834053403 remains PAUSED at ₹300/day. 7d cockpit shows ₹2301.14 spend and 70 clicks, almost entirely Late Night; Dinner/Brand enabled but not materially delivering. Campaign criteria show HE pin proximity only: Late Night 7km, Dinner 3km, Brand 5km, PMax 2km; no city LOCATION criteria. Directions proof endpoint live with today's page_view/maps_auto_open events, currently from Meta UTMs rather than Google gclid. No ad mutation performed.",
-      "next_action": "Before any mutation, verify the specific target campaign/ad group/keyword IDs and decide whether to tune Late Night negatives/bids, fix Dinner/Brand delivery, or resume PMax; preserve rollback plan and current budgets.",
-      "mutation_status": "blocked until explicit live mutation approval; read-only verification only"
     }
   ]
 }

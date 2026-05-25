@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T14:02:40+0530",
-  "published_at": "2026-05-25T14:02:40+0530",
+  "updated_at": "2026-05-25T14:27:21+0530",
+  "published_at": "2026-05-25T14:27:21+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Ring 3 aggregator events",
-    "last_summary": "Ring 3 deployed live: coa_ring3_analyze and coa-events, D1 event/candidate schema, cron analysis. Proof 2026-05-25: 9 orders, 12 events, 16 candidates, 2 critical, loss 1165.10, all candidates data_gathering.",
-    "next_action": "Expose coa-events in owner UI by brand/platform with critical loss, rejects/cancels, discount exposure, and gated item candidates. Keep price/offer blocked until margin proof.",
-    "mutation_status": "HN D1 intelligence only; no portal/POS/Odoo/ad/WABA/price/offer mutation.",
+    "last_task": "Create WABA template for 3 AM aggregator reports",
+    "last_summary": "Added locked comms endpoint to submit/check aggregator_daily_owner_report_v1. Submitted HE-accessible WABA Utility template successfully; Meta status is PENDING, id 839936862064050. Initial draft was rejected for variable ratio and corrected. NCH WABA template-management attempt failed because current token lacks permission on NCH WABA id, so owner reports should use the accessible HE/HN WABA unless NCH token is fixed.",
+    "next_action": "After Meta approves template, wire 3 AM IST owner report cron: pull last 24h orders/events, use ANTHROPIC_API_KEY for concise COA analysis, send two WABA messages to Nihaf with HE and NCH summaries plus dashboard links. Add status guard so pending/rejected template does not silently fail.",
+    "mutation_status": "Meta WABA template submission only via HN comms endpoint; no customer sends, no portal/POS/Odoo/ad/price/offer mutation.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-25T13:47:49+0530"
+    "last_run_at": "2026-05-25T14:27:21+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525142721-delivery-aggregator",
+      "at": "2026-05-25T14:27:21+0530",
+      "lane": "delivery-aggregator",
+      "task": "Create WABA template for 3 AM aggregator reports",
+      "status": "ready",
+      "summary": "Added locked comms endpoint to submit/check aggregator_daily_owner_report_v1. Submitted HE-accessible WABA Utility template successfully; Meta status is PENDING, id 839936862064050. Initial draft was rejected for variable ratio and corrected. NCH WABA template-management attempt failed because current token lacks permission on NCH WABA id, so owner reports should use the accessible HE/HN WABA unless NCH token is fixed.",
+      "next_action": "After Meta approves template, wire 3 AM IST owner report cron: pull last 24h orders/events, use ANTHROPIC_API_KEY for concise COA analysis, send two WABA messages to Nihaf with HE and NCH summaries plus dashboard links. Add status guard so pending/rejected template does not silently fail.",
+      "mutation_status": "Meta WABA template submission only via HN comms endpoint; no customer sends, no portal/POS/Odoo/ad/price/offer mutation."
+    },
     {
       "id": "20260525134749-delivery-aggregator",
       "at": "2026-05-25T13:47:49+0530",
@@ -209,16 +219,6 @@
       "summary": "Deployed /ops/aggregator owner order-history dashboard and aggregator-pulse owner-orders API to Cloudflare production via GitHub main commits d57d552/19a2f20 after direct Pages deploy was overwritten by GitHub auto-deploy. Ran one controlled direct partner cURL ingest: Swiggy HTTP 200 upserted 5, Zomato history HTTP 200 upserted 10, saved Zomato detail upserted 1. Verified hnhotels.in/ops/aggregator serves Aggregator Orders and owner-orders API returns today total 8 with delivered/rejected/cancelled rows plus week rejected/missed filters.",
       "next_action": "Turn this into a scheduled refresh path: refresh authenticated partner cURLs/session safely, run ingest periodically, and add brand/outlet correction for Zomato list rows where only detail payload can prove resId before using the data for price/offer execution.",
       "mutation_status": "production Cloudflare Pages/API deploy plus D1 order-history ingest only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
-    },
-    {
-      "id": "20260525073205-delivery-aggregator",
-      "at": "2026-05-25T07:32:05+0530",
-      "lane": "delivery-aggregator",
-      "task": "Owner dashboard direct partner order-history foundation",
-      "status": "ready",
-      "summary": "Built local aggregator owner order-history focus: added direct Zomato history ingest path, owner-orders API with status/issue/discount/rating fields, direct-pull ingest wiring, and replaced cluttered ops/aggregator UI with order-history console. Verified saved Swiggy and Zomato cURLs both replay HTTP 200 in dry-run; no portal/POS/Odoo/ad mutation or live deploy.",
-      "next_action": "Deploy API/UI after review, then run controlled ingest with current partner cURLs and verify hnhotels.in/ops/aggregator shows delivered/rejected/missed order rows before any price or offer execution.",
-      "mutation_status": "local code/context only; no live platform, POS, Odoo, ad, WABA, or aggregator portal mutation"
     }
   ]
 }
