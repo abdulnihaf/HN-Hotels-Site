@@ -579,19 +579,26 @@
       "mode": "Demand",
       "tool_owner": "Claude",
       "risk": "money truth — surface irreversible to Nihaf",
-      "context_state": "LIVE",
-      "status": "built-loadable",
-      "summary": "Universal cash + bank·4680 + company-owes-Nihaf ledger. Append-only money spine (ledger.jsonl); balances DERIVED by summing delta_paise per account, never stored. Every money-touching lane reads it on open + appends on spend. Opening: cash ₹2,00,000 · bank ₹1,330.38 · owed-to-Nihaf ₹2,09,940.87.",
+      "context_state": "LOAD",
+      "status": "context-ingested; cockpit ready",
+      "summary": "Cockpit over the EXISTING cash+bank treasury (cash.js/bank-feed.js/money.js) — NOT a new ledger. Runs cash_events (cash) + money_events (bank), seeds the fresh float via external_capital_in, reconciles, and fills the gaps (owed-to-Nihaf, vendor-payable, unified view, chat-write door). Opening: cash ₹2L to seed · bank ₹1,330.38 live · owed-to-Nihaf ₹2,09,940.87 deferred.",
       "command": "open_ops_lane.command money-ledger",
       "prompt": "prompts/23-money-ledger.md",
       "context_files": [
-        "ops/ops-control/ledger.jsonl",
-        "memory/reference_odoo_banking.md"
+        "functions/api/cash.js",
+        "schema-cash-events.sql",
+        "functions/api/bank-feed.js",
+        "schema-money-events.sql",
+        "functions/api/money.js",
+        "ops/ops-control/ledger.jsonl"
       ],
       "live_urls": [
+        "https://hnhotels.in/ops/cash/",
+        "https://hnhotels.in/ops/bank/",
+        "https://hnhotels.in/ops/money/",
         "https://hnhotels.in/ops/ops-control/"
       ],
-      "next_action": "Wire per-transaction bank-confirmation UI (284 ·4680 raw-narration txns -> vendor/category). Net out ₹69k double-count on bank ingest. Add Expenses & Bills capture (rent/utility/statutory)."
+      "next_action": "OPERATE (in the lane chat, real-time): seed ₹2L via cash.js external_capital_in→cash_nihaf; reconcile ₹44.86 bank drift; model owner-owed ₹2.09L; set vendor-payable from Basheer handover."
     }
   ],
   "served": "ops/ops-control/ (PIN-gated, co-located with UI; not exposed via /_context/)",
@@ -604,17 +611,17 @@
       "cash": {
         "balance_paise": 20000000,
         "source": "External funding + daily outlet cash (HE+NCH) collected by Nihaf from today.",
-        "desc": "Physical cash float."
+        "desc": "Fresh float Rs 2L to SEED via cash.js external_capital_in -> cash_nihaf pile (+Rs 2L expected today)."
       },
       "bank4680": {
         "balance_paise": 133038,
         "source": "Outlet online/UPI/card settlements (Paytm/Razorpay) land here.",
-        "desc": "HN Hotels HDFC ·4680 business account."
+        "desc": "HDFC ·4680 - LIVE in /ops/bank (money_events). Statement Rs 1,330.38 vs /ops/bank Rs 1,375.24 = reconcile Rs 44.86."
       },
       "owed_to_nihaf": {
         "balance_paise": 20994087,
         "claim_status": "DEFERRED - not a current claim. Company running negative on profitability; Nihaf reimburses only when funds exist. Do NOT net against cash, do NOT treat as deployable.",
-        "desc": "Rs 1,94,940.87 (16-23 May, 11 txns) + Rs 15,000 (24 May standing tables)."
+        "desc": "Rs 1,94,940.87 (16-23 May) + Rs 15,000 (24 May Tasmiya standing tables). DEFERRED; NOT modeled in any live table yet (gap #1)."
       }
     },
     "funding": {
@@ -642,6 +649,36 @@
       "+Rs 2L external funding expected today - log to cash on receipt.",
       "Rs 69,000 of owed_to_nihaf (4 transfers into ·4680) also appears as ·4680 deposits - net out on bank ingest.",
       "/ops/bank Rs 1,375.24 vs statement Rs 1,330.38 = +Rs 44.86 drift; pin on bank ingest."
+    ],
+    "engines": {
+      "cash": {
+        "api": "functions/api/cash.js",
+        "ui": "/ops/cash/",
+        "table": "cash_events",
+        "does": "running cash balance, piles (pos_counter_he/nch, cash_basheer, cash_nihaf), anchor+delta. Actions: balance/trail/sync-status/external_capital_in/transfer/deposit-to-bank/reconcile/sync. PIN-gated.",
+        "status": "built; barely seeded - ready for the real float"
+      },
+      "bank": {
+        "api": "functions/api/bank-feed.js",
+        "ui": "/ops/bank/",
+        "table": "money_events",
+        "does": "running bank balance HDFC ·4680 + Federal, per-txn reconcile.",
+        "status": "LIVE - shows ~Rs 1,375.24"
+      },
+      "unified": {
+        "api": "functions/api/money.js",
+        "ui": "/ops/money/",
+        "does": "cash-position merges cash+bank into one grand_total",
+        "status": "built"
+      }
+    },
+    "ops_control_role": "ops-control Money panel = launchpad + opening context only. Live balances live in /ops/cash, /ops/bank, /ops/money. NOT a duplicate ledger.",
+    "superseded": "ops/ops-control/ledger.jsonl (the 4 jsonl rows) is SUPERSEDED by the live treasury — kept only as the audit of the owed-to-Nihaf opening + Rs 15k Tasmiya entry until owner-owed is modeled.",
+    "gaps": [
+      "owed_to_nihaf Rs 2,09,940.87 - NOT modeled in cash_events/money_events. Needs an owner-equity/loan running balance (new cash_events kind owner_loan or a small table). Deferred liability.",
+      "vendor payables as a local D1 number (today Odoo read-only).",
+      "single unified view incl payables + owed (money.js cash-position omits both).",
+      "Claude/chat two-way write door over the existing PIN endpoints."
     ]
   }
 }
