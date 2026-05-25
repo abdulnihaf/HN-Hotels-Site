@@ -7,12 +7,18 @@ for (let i = 2; i < process.argv.length; i += 2) {
 }
 
 const swiggyCurlPath = args.get('--swiggy-curl') || '/Users/nihaf/Downloads/swiggy-curl.json';
+const swiggyHistoryCurlPath = args.get('--swiggy-history-curl') || '/Users/nihaf/Downloads/swiggy-history-curl.txt';
 const zomatoCurlPath = args.get('--zomato-curl') || '/Users/nihaf/Downloads/zomato-curl.txt';
 const zomatoOrderPath = args.get('--zomato-order') || '/Users/nihaf/Downloads/zomato-orders.json';
 const apiBase = args.get('--api') || 'https://hnhotels.in/api/aggregator-pulse';
 const apiKey = args.get('--key') || process.env.HN_AGGREGATOR_API_KEY || process.env.HE_CLOUDFLARE_SECRETS_DASHBOARD_API_KEY;
 const mode = args.get('--mode') || 'dry-run';
 const skipSwiggy = args.get('--skip-swiggy') === 'true';
+const swiggyHistory = args.get('--swiggy-history') === 'true';
+const swiggyFrom = args.get('--swiggy-from') || null;
+const swiggyTo = args.get('--swiggy-to') || null;
+const swiggyLimit = Number(args.get('--swiggy-limit') || 20);
+const swiggyMaxPages = Number(args.get('--swiggy-max-pages') || 100);
 const zomatoBackfill = args.get('--zomato-backfill') === 'true';
 const zomatoFrom = args.get('--zomato-from') || null;
 const zomatoTo = args.get('--zomato-to') || null;
@@ -86,6 +92,27 @@ function summarizeSwiggy(payload) {
       placed: o.status?.ordered_time,
       bill: o.bill,
       items: (o.cart?.items || []).map(i => `${i.quantity || 1} x ${i.name}`),
+    })),
+  }));
+}
+
+function summarizeSwiggyHistory(payload) {
+  const blocks = Array.isArray(payload?.data) ? payload.data : [];
+  return blocks.map(block => ({
+    restId: block.restId || block.restaurantId,
+    total_count: block.data?.meta?.total_count ?? null,
+    offset: block.data?.meta?.offset ?? null,
+    limit: block.data?.meta?.limit ?? null,
+    count: Array.isArray(block.data?.objects) ? block.data.objects.length : 0,
+    next: block.data?.meta?.next ?? null,
+    orders: (block.data?.objects || []).slice(0, 5).map(o => ({
+      order_id: o.order_id,
+      status: o.status?.order_status,
+      ordered_time: o.status?.ordered_time,
+      bill: o.bill,
+      offer_discount: o.restaurant_offers_discount,
+      items: (o.cart?.items || []).map(i => `${i.quantity || 1} x ${i.name}`),
+      issue: o.mfrAccuracy?.message || null,
     })),
   }));
 }
@@ -180,6 +207,64 @@ async function backfillZomatoHistory(path, from, toExclusive) {
   return out;
 }
 
+function updateUrlParam(rawUrl, key, value) {
+  const url = new URL(rawUrl);
+  url.searchParams.set(key, String(value));
+  return url.toString();
+}
+
+async function fetchSwiggyHistoryPage(req, offset) {
+  let url = updateUrlParam(req.url, 'offset', offset);
+  url = updateUrlParam(url, 'limit', swiggyLimit);
+  if (swiggyFrom) url = updateUrlParam(url, 'ordered_time__gte', swiggyFrom);
+  if (swiggyTo) url = updateUrlParam(url, 'ordered_time__lte', swiggyTo);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: req.headers,
+  });
+  const text = await response.text();
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    payload = { parse_error: true, sample: text.slice(0, 300) };
+  }
+  return { http_status: response.status, payload, url };
+}
+
+async function backfillSwiggyHistory(path) {
+  const req = parseCurl(path);
+  const out = {
+    restaurant_id: new URL(req.url).searchParams.get('restaurant_id'),
+    from: swiggyFrom || new URL(req.url).searchParams.get('ordered_time__gte'),
+    to: swiggyTo || new URL(req.url).searchParams.get('ordered_time__lte'),
+    pages: [],
+    total_objects: 0,
+    total_upserted: 0,
+    failed_pages: [],
+  };
+
+  for (let page = 0; page < swiggyMaxPages; page++) {
+    const offset = page * swiggyLimit;
+    const res = await fetchSwiggyHistoryPage(req, offset);
+    if (res.http_status !== 200) {
+      out.failed_pages.push({ offset, http_status: res.http_status, keys: Object.keys(res.payload || {}) });
+      break;
+    }
+    const blocks = Array.isArray(res.payload?.data) ? res.payload.data : [];
+    const count = blocks.reduce((sum, block) => sum + (Array.isArray(block.data?.objects) ? block.data.objects.length : 0), 0);
+    const totalCount = blocks.reduce((sum, block) => sum + Number(block.data?.meta?.total_count || 0), 0);
+    const ingest = count ? await postIngest('swiggy_order_history', res.payload) : { skipped: true, reason: 'no objects' };
+    const upserted = ingest?.body?.upserted || 0;
+    out.pages.push({ offset, count, total_count: totalCount || null, upserted });
+    out.total_objects += count;
+    out.total_upserted += upserted;
+    if (!count || count < swiggyLimit || (totalCount && offset + count >= totalCount)) break;
+  }
+
+  return out;
+}
+
 function collectDeep(value, predicate, limit = 20, out = []) {
   if (out.length >= limit || value == null) return out;
   if (Array.isArray(value)) {
@@ -224,12 +309,19 @@ function summarizeZomatoHistory(payload) {
 const out = { mode, swiggy: null, zomato: null };
 
 if (!skipSwiggy) {
-  const swiggy = await replayCurl(swiggyCurlPath);
-  out.swiggy = {
-    replay_http_status: swiggy.http_status,
-    summary: summarizeSwiggy(swiggy.payload),
-    ingest: await postIngest('swiggy_fetch_orders', swiggy.payload),
-  };
+  if (swiggyHistory) {
+    out.swiggy = {
+      history_backfill: await backfillSwiggyHistory(swiggyHistoryCurlPath),
+    };
+  } else {
+    const swiggy = await replayCurl(swiggyCurlPath);
+    out.swiggy = {
+      replay_http_status: swiggy.http_status,
+      summary: summarizeSwiggy(swiggy.payload),
+      history_summary_if_applicable: summarizeSwiggyHistory(swiggy.payload),
+      ingest: await postIngest('swiggy_fetch_orders', swiggy.payload),
+    };
+  }
 } else {
   out.swiggy = { skipped: true };
 }

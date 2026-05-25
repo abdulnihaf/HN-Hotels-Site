@@ -52,6 +52,10 @@ async function handlePost(db, request, headers, env) {
     const orders = normalizeSwiggyFetchOrders(body.payload);
     return storeOrders(db, orders, headers);
   }
+  if (body.type === 'swiggy_order_history' && body.payload) {
+    const orders = normalizeSwiggyHistory(body.payload);
+    return storeOrders(db, orders, headers);
+  }
 
   if (body.type === 'zomato_order_history' && body.payload) {
     const orders = normalizeZomatoOrderHistory(body.payload);
@@ -1256,6 +1260,46 @@ function normalizeSwiggyFetchOrders(payload) {
   return rows.filter(o => o.order_id);
 }
 
+function normalizeSwiggyHistory(payload) {
+  const rows = [];
+  const capturedAt = new Date().toISOString();
+  for (const restaurant of (payload?.data || [])) {
+    const restaurantId = String(restaurant.restId || restaurant.restaurantId || '');
+    const objects = restaurant?.data?.objects || restaurant?.objects || [];
+    for (const order of objects) {
+      const restId = String(order.meta_info?.rest_id || restaurantId || '');
+      const outlet = DIRECT_SWIGGY_OUTLETS[restId] || { brand: 'unknown', outlet_name: null };
+      const orderedAt = order.status?.ordered_time || order.status?.placed_time || null;
+      rows.push({
+        platform: 'swiggy',
+        brand: outlet.brand,
+        order_id: String(order.order_id || order.meta_info?.order_id || ''),
+        status: order.status?.order_status || order.status?.placed_status || null,
+        order_time: extractLocalTime(orderedAt),
+        order_date: extractLocalDate(orderedAt),
+        customer_name: null,
+        items: summarizeSwiggyItems(order.cart?.items || []),
+        order_value: numberOrNull(order.bill ?? order.cart?.total),
+        net_payout: null,
+        fees: JSON.stringify({
+          restaurant_trade_discount: numberOrNull(order.restaurant_trade_discount),
+          restaurant_offers_discount: numberOrNull(order.restaurant_offers_discount),
+          discount: numberOrNull(order.discount),
+          spending: numberOrNull(order.spending),
+          gst: numberOrNull(order.gst),
+          packing_charge: numberOrNull(order.cart?.charges?.packing_charge),
+          delivery_charge: numberOrNull(order.cart?.charges?.delivery_charge),
+        }),
+        issues: summarizeSwiggyIssues(order),
+        rating: null,
+        outlet_name: outlet.outlet_name,
+        captured_at: capturedAt,
+      });
+    }
+  }
+  return rows.filter(o => o.order_id);
+}
+
 function normalizeZomatoOrderDetail(payload) {
   const order = payload?.order || payload;
   if (!order?.id) return null;
@@ -1326,11 +1370,13 @@ function summarizeSwiggyItems(items) {
 
 function summarizeSwiggyIssues(order) {
   const status = order.status || {};
+  const detail = order.meta_info?.details || {};
   const parts = [];
-  if (/cancel|reject|out_of_stock/i.test(`${status.order_status || ''} ${status.placed_status || ''} ${status.placingState || ''}`)) {
-    parts.push(status.placed_status || status.placingState || 'cancelled');
+  if (/cancel|reject|out_of_stock/i.test(`${status.order_status || ''} ${status.placed_status || ''} ${status.placingState || ''} ${status.cancel_reason || ''}`)) {
+    parts.push(status.cancel_reason || status.placed_status || status.placingState || 'cancelled');
   }
-  if (status.hand_over_delayed) parts.push('handover delayed');
+  if (status.hand_over_delayed || detail.hand_over_delayed) parts.push('handover delayed');
+  if (order.mfrAccuracy?.message) parts.push(order.mfrAccuracy.message);
   if (order.customer_comment) parts.push(`customer note: ${String(order.customer_comment).slice(0, 120)}`);
   return parts.join('; ') || null;
 }
@@ -1363,7 +1409,7 @@ function extractLocalDate(value) {
 
 function extractLocalTime(value) {
   if (!value) return null;
-  const m = String(value).match(/T(\d{2}:\d{2})/);
+  const m = String(value).match(/[T ](\d{2}:\d{2})/);
   return m ? m[1] : null;
 }
 
@@ -1540,7 +1586,7 @@ function enrichOwnerOrder(row, detail) {
     merged.order_time = row.order_time || detail.order_time;
     merged.issues = row.issues || detail.issues;
   }
-  const discountTotal = detail?.discount_total ?? null;
+  const discountTotal = detail?.discount_total ?? extractStoredDiscount(row);
   const rating = row.rating ?? detail?.rating ?? null;
   const issues = row.issues || detail?.issues || null;
   const statusGroup = ownerStatusGroup(row.status || detail?.status, issues);
@@ -1570,6 +1616,19 @@ function enrichOwnerOrder(row, detail) {
     detail_available: Boolean(detail?.detail_available),
     captured_at: row.captured_at || detail?.captured_at || null,
   };
+}
+
+function extractStoredDiscount(row) {
+  if (row?.platform !== 'swiggy' || !row?.fees) return null;
+  const fees = safeJsonParse(row.fees);
+  if (!fees || typeof fees !== 'object') return null;
+  const values = [
+    fees.restaurant_offers_discount,
+    fees.restaurant_trade_discount,
+    fees.discount,
+  ].map(numberOrNull).filter(v => v && v > 0);
+  if (!values.length) return null;
+  return Math.round(values.reduce((sum, v) => sum + v, 0) * 100) / 100;
 }
 
 function ownerStatusGroup(status, issues) {
