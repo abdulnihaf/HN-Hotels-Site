@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T05:56:47+0530",
-  "published_at": "2026-05-25T05:56:47+0530",
+  "updated_at": "2026-05-25T06:14:29+0530",
+  "published_at": "2026-05-25T06:14:29+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -124,15 +124,25 @@
       "subgroup": "Creative Surface",
       "risk": "print/vendor handoff",
       "status": "ready",
-      "last_task": "Initialize Packaging Design lane",
-      "last_summary": "Initialized lane from live memory, packaging prompt, unified control graph, packaging Claude digest, HE Cheap-Bold doctrine, NCH flask Codex handoff, and local asset state. Packaging scope remains creative/vendor handoff only. HE current open work is corrected Cheap-Bold v2 renders: heritage burgundy direct-print pouches, kraft single-burgundy boxes/sleeves, unchanged cups with small lid sticker, tote as large brand surface; no foil/gold/emboss/photo-print/premium traps. NCH flask current open work is panel-by-panel continuation from approved front/back references and Downloads/_flask_bg locked bases; April automated vendor pack remains rejected, and final output must not use bulk SVG visible-art automation or generative panels.",
-      "next_action": "When Nihaf gives the target, either regenerate one HE Cheap-Bold corrected render/state at a time, or continue NCH flask one approved panel at a time. For NCH, first confirm legal text/phone/FSSAI/ingredients and the /go/flask QR redirect before print handoff; use rsvg-convert/Python only for dieline, QR, bleed, and PDF assembly.",
-      "mutation_status": "No artwork, Odoo, ad, WABA, aggregator, vendor, or customer-facing packaging mutation. Only packaging-design execution memory was updated and synced to ops/marketing-control/state.json.",
+      "last_task": "Analyze NCH flask execution path",
+      "last_summary": "Analyzed NCH flask macro objective and current source files. The project objective is vendor-printable flat unfolded carton PDFs for 250ml and 500ml, not generative mockups. Current supplied front SVG is 9.9MB Figma-style SVG with embedded raster artwork plus visible measurement/dieline marks; rsvg-convert fails XML parse on it, so it must be normalized/extracted before production use. Dieline zip contains two compact unfolded dieline SVGs. Existing _flask_bg assets include locked 2748x4096 front/back bases, vector wordmark/filigree/endcap, QR SVG, deterministic scripts, and reference-match output PDFs that qpdf validates but still carry placeholder legal/QR decisions.",
+      "next_action": "Exact next step: build a canonical NCH flask production board by normalizing the new 250ml front SVG and dieline zip into clean panel assets, then produce one approval proof for the 250ml front panel only: no measurement marks, no printed kraft texture, brand artwork aligned to 130x210mm plus 3mm bleed. Use Figma MCP only for visual approval/canvas if helpful; use deterministic Python/rsvg/PDF tools for final vendor files. Gemini API can generate mockups/review previews, not final print panels.",
+      "mutation_status": "Read-only analysis and memory sync only. No artwork, vendor output, website, POS, ad, WABA, or aggregator mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-      "last_run_at": "2026-05-25T05:27:23+0530"
+      "last_run_at": "2026-05-25T06:14:29+0530"
     }
   },
   "events": [
+    {
+      "id": "20260525061429-packaging-design",
+      "at": "2026-05-25T06:14:29+0530",
+      "lane": "packaging-design",
+      "task": "Analyze NCH flask execution path",
+      "status": "ready",
+      "summary": "Analyzed NCH flask macro objective and current source files. The project objective is vendor-printable flat unfolded carton PDFs for 250ml and 500ml, not generative mockups. Current supplied front SVG is 9.9MB Figma-style SVG with embedded raster artwork plus visible measurement/dieline marks; rsvg-convert fails XML parse on it, so it must be normalized/extracted before production use. Dieline zip contains two compact unfolded dieline SVGs. Existing _flask_bg assets include locked 2748x4096 front/back bases, vector wordmark/filigree/endcap, QR SVG, deterministic scripts, and reference-match output PDFs that qpdf validates but still carry placeholder legal/QR decisions.",
+      "next_action": "Exact next step: build a canonical NCH flask production board by normalizing the new 250ml front SVG and dieline zip into clean panel assets, then produce one approval proof for the 250ml front panel only: no measurement marks, no printed kraft texture, brand artwork aligned to 130x210mm plus 3mm bleed. Use Figma MCP only for visual approval/canvas if helpful; use deterministic Python/rsvg/PDF tools for final vendor files. Gemini API can generate mockups/review previews, not final print panels.",
+      "mutation_status": "Read-only analysis and memory sync only. No artwork, vendor output, website, POS, ad, WABA, or aggregator mutation."
+    },
     {
       "id": "20260525055647-delivery-aggregator",
       "at": "2026-05-25T05:56:47+0530",
