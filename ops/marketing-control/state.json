@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T10:28:23+0530",
-  "published_at": "2026-05-25T10:28:23+0530",
+  "updated_at": "2026-05-25T10:33:54+0530",
+  "published_at": "2026-05-25T10:33:54+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Zoom-out macro objective for Hamza Hotel search ad headline",
-      "last_summary": "Paused live execution and reframed the campaign objective from copy tweaking to macro consumer psychology: intercept the exact Hamza Hotel search, reduce confusion about Hamza Express being the current HKP Road face, create a low-friction trial impulse, then convert to directions/dine-in using late-night hours and 10% offer. No live mutation.",
-      "next_action": "Finalize the 30-character headline stack around search mirroring + trial impulse + late-night reason before any landing/RSA mutation.",
-      "mutation_status": "No live Google Ads mutation. Strategy clarification only.",
+      "last_task": "Shift late-night Hamza ad to craving-first hero",
+      "last_summary": "Updated the late-night Brand conveyance per Nihaf direction to personalize for late-night customer craving: pinned hero now starts with 'Hamza Ghee Rice & Kabab', second headline 'Try Hamza Express', third headline '10% Dine-In Tonight'. Description carries Wahi Hamza naam / naya zaiqa / open till 3 AM and Hamza Hotel search bridge. Verified all headline and description lengths within Google RSA limits. No live mutation.",
+      "next_action": "If approved, use this craving-first hero stack in landing and live RSA setup, with Hamza Hotel search bridge in description/landing subcopy.",
+      "mutation_status": "No live Google Ads mutation. Local docs/mockup only.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T10:28:23+0530"
+      "last_run_at": "2026-05-25T10:33:54+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525103354-google-ads",
+      "at": "2026-05-25T10:33:54+0530",
+      "lane": "google-ads",
+      "task": "Shift late-night Hamza ad to craving-first hero",
+      "status": "ready",
+      "summary": "Updated the late-night Brand conveyance per Nihaf direction to personalize for late-night customer craving: pinned hero now starts with 'Hamza Ghee Rice & Kabab', second headline 'Try Hamza Express', third headline '10% Dine-In Tonight'. Description carries Wahi Hamza naam / naya zaiqa / open till 3 AM and Hamza Hotel search bridge. Verified all headline and description lengths within Google RSA limits. No live mutation.",
+      "next_action": "If approved, use this craving-first hero stack in landing and live RSA setup, with Hamza Hotel search bridge in description/landing subcopy.",
+      "mutation_status": "No live Google Ads mutation. Local docs/mockup only."
+    },
     {
       "id": "20260525102823-google-ads",
       "at": "2026-05-25T10:28:23+0530",

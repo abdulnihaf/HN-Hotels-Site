@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T10:28:23+0530",
-  "published_at": "2026-05-25T10:28:23+0530",
+  "updated_at": "2026-05-25T10:33:54+0530",
+  "published_at": "2026-05-25T10:33:54+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Zoom-out macro objective for Hamza Hotel search ad headline",
-    "last_summary": "Paused live execution and reframed the campaign objective from copy tweaking to macro consumer psychology: intercept the exact Hamza Hotel search, reduce confusion about Hamza Express being the current HKP Road face, create a low-friction trial impulse, then convert to directions/dine-in using late-night hours and 10% offer. No live mutation.",
-    "next_action": "Finalize the 30-character headline stack around search mirroring + trial impulse + late-night reason before any landing/RSA mutation.",
-    "mutation_status": "No live Google Ads mutation. Strategy clarification only.",
+    "last_task": "Shift late-night Hamza ad to craving-first hero",
+    "last_summary": "Updated the late-night Brand conveyance per Nihaf direction to personalize for late-night customer craving: pinned hero now starts with 'Hamza Ghee Rice & Kabab', second headline 'Try Hamza Express', third headline '10% Dine-In Tonight'. Description carries Wahi Hamza naam / naya zaiqa / open till 3 AM and Hamza Hotel search bridge. Verified all headline and description lengths within Google RSA limits. No live mutation.",
+    "next_action": "If approved, use this craving-first hero stack in landing and live RSA setup, with Hamza Hotel search bridge in description/landing subcopy.",
+    "mutation_status": "No live Google Ads mutation. Local docs/mockup only.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-    "last_run_at": "2026-05-25T10:28:23+0530"
+    "last_run_at": "2026-05-25T10:33:54+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/google-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525103354-google-ads",
+      "at": "2026-05-25T10:33:54+0530",
+      "lane": "google-ads",
+      "task": "Shift late-night Hamza ad to craving-first hero",
+      "status": "ready",
+      "summary": "Updated the late-night Brand conveyance per Nihaf direction to personalize for late-night customer craving: pinned hero now starts with 'Hamza Ghee Rice & Kabab', second headline 'Try Hamza Express', third headline '10% Dine-In Tonight'. Description carries Wahi Hamza naam / naya zaiqa / open till 3 AM and Hamza Hotel search bridge. Verified all headline and description lengths within Google RSA limits. No live mutation.",
+      "next_action": "If approved, use this craving-first hero stack in landing and live RSA setup, with Hamza Hotel search bridge in description/landing subcopy.",
+      "mutation_status": "No live Google Ads mutation. Local docs/mockup only."
+    },
     {
       "id": "20260525102823-google-ads",
       "at": "2026-05-25T10:28:23+0530",
@@ -209,16 +219,6 @@
       "summary": "Read-only deep audit of Late Night campaign 23854158442 before any budget mutation. Live all-period stats: 1,678 impressions, 96 clicks, ₹3,168.82 spend, avg CPC ₹33.01, 0 Google conversions. Click concentration: Open Now Near Me ad group took 81/96 clicks and ₹2,764.50 spend; Biryani/Kabab took 10 clicks/₹292.26; Late Night Bangalore took 4 clicks/₹87.53; Non Veg Halal took 1 click/₹24.54. Top keyword was exact 'restaurants near me open now' with 35 clicks/₹1,178.96 and Quality Score 1/below-average landing + predicted CTR. Top reported search term was 'restaurants nearby' with 21 clicks/₹694.71; reported search terms explain only 39/96 clicks, so Google withholds many query details. Landing proof: /go/google-night is a 200 HTML landing page with buttons, not a direct Maps redirect. /api/google-ads-landing-event shows 66 pageviews, 15 maps clicks, 3 calls, 1 WhatsApp, 1 menu over 30d; therefore only about 15.6% of Google clicks became Maps taps and only 1% became WhatsApp. Root issue: broad generic near-me restaurant demand + non-direct landing funnel, not enough high-intent Maps/dish conversion.",
       "next_action": "Do not move all budget blindly. Recommended correction before/with budget move: tighten Late Night toward dish/open-now intent, reduce generic near-me spend or force direct directions landing, and add measurement for gclid/source on directions; then reallocate Dinner/Brand budget only after rollback-safe budget readback.",
       "mutation_status": "read-only audit only; no budget or keyword mutation"
-    },
-    {
-      "id": "20260525064910-google-ads",
-      "at": "2026-05-25T06:49:10+0530",
-      "lane": "google-ads",
-      "task": "Extract live campaign age and campaign stats",
-      "status": "ready",
-      "summary": "Read-only live extraction from hamzaexpress.in Google cockpit period=all as of 2026-05-25. Stack totals since 2026-04-14: 10,170 impressions, 954 clicks, ₹4,161.11 spend, 0 conversions. Current enabled/serving Search campaigns: Late Night 23854158442 ₹300/day has 1,678 impressions, 96 clicks, ₹3,168.83 spend, active metric dates 2026-05-15 to 2026-05-25; Dinner 23855561197 ₹150/day has 24 impressions, 0 clicks, ₹0 spend, metric dates 2026-05-15 to 2026-05-24; Brand 23845870050 ₹50/day has 0 impressions/clicks/spend. PMax 23834053403 is paused, last metric date 2026-05-15, totals 8,468 impressions, 858 clicks, ₹992.28 spend, 0 conversions. If counting from latest Search activation/first metric on 2026-05-15 to 2026-05-25, elapsed is 10 days / 11 reporting dates inclusive; if asking days since active delivery, Late Night is active today = 0 days.",
-      "next_action": "Decide whether to fix non-delivery for Dinner/Brand or tune Late Night negatives/bids before any money mutation.",
-      "mutation_status": "read-only stats extraction; no Ads mutation"
     }
   ]
 }
