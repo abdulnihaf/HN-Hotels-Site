@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T13:02:31+0530",
-  "published_at": "2026-05-25T13:02:31+0530",
+  "updated_at": "2026-05-25T13:05:05+0530",
+  "published_at": "2026-05-25T13:05:05+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -78,12 +78,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Return to Meta WABA retargeting creative intelligence",
-      "last_summary": "Re-read HN Creative Asset Library README/context and meta-ads lane index. Confirmed 245 Meta-relevant canonical assets across HE brand core, Meta/WABA historical creatives, hero/dish assets, and outlet/product photos. Current creative intelligence direction: do not use old Meta creatives as proof of current offer/pricing; use them as layout/history only. Build new retargeting creative strategy around WABA voucher capture with primary buckets: hot click/directions visitors, warm page engagers, video viewers once audience creation is solved, nearby dine-in privacy/couples, family dine-in, daily takeaway breakers, and weekend Commercial Street visitors. Next execution should shortlist exact canonical asset paths for each bucket, visually inspect selected references, then assemble editable concepts in Figma frame 20:2 without generation until approved.",
-      "next_action": "Shortlist 8-12 canonical reference assets by bucket, inspect visually, then map each to copy angle and Figma creative slot before any image generation or Meta mutation.",
-      "mutation_status": "creative intelligence/read-only asset context only; no generation, no Figma mutation in this step, no Meta/WABA/Google spend or customer mutation",
+      "last_task": "Define professional Figma plus Gemini creative execution approach",
+      "last_summary": "Recommended a Figma-led creative production workflow for HE Meta/WABA retargeting: keep Figma as final editable design/control layer, use Gemini/multimodal only for reference inspection and selective image material generation, then assemble typography, hierarchy, voucher UI, brand marks, and export variants manually in Figma. Avoid treating Gemini output as finished ad design because final professional quality depends on layout system, copy hierarchy, spacing, contrast, proof/copy accuracy, and variant control.",
+      "next_action": "Build or refine the Figma production board under frame 20:2 with sections for audience buckets, canonical asset references, inspected visual notes, concept directions, final 9:16 and 4:5 layouts, and export checklist before any generation.",
+      "mutation_status": "strategy only; no creative generation, Figma mutation, Meta/WABA spend, Google Ads, POS, Odoo, or customer mutation",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-      "last_run_at": "2026-05-25T12:56:25+0530"
+      "last_run_at": "2026-05-25T13:05:05+0530"
     },
     "flyers": {
       "title": "07 Flyers",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525130505-meta-ads",
+      "at": "2026-05-25T13:05:05+0530",
+      "lane": "meta-ads",
+      "task": "Define professional Figma plus Gemini creative execution approach",
+      "status": "ready",
+      "summary": "Recommended a Figma-led creative production workflow for HE Meta/WABA retargeting: keep Figma as final editable design/control layer, use Gemini/multimodal only for reference inspection and selective image material generation, then assemble typography, hierarchy, voucher UI, brand marks, and export variants manually in Figma. Avoid treating Gemini output as finished ad design because final professional quality depends on layout system, copy hierarchy, spacing, contrast, proof/copy accuracy, and variant control.",
+      "next_action": "Build or refine the Figma production board under frame 20:2 with sections for audience buckets, canonical asset references, inspected visual notes, concept directions, final 9:16 and 4:5 layouts, and export checklist before any generation.",
+      "mutation_status": "strategy only; no creative generation, Figma mutation, Meta/WABA spend, Google Ads, POS, Odoo, or customer mutation"
+    },
     {
       "id": "20260525130231-google-ads",
       "at": "2026-05-25T13:02:31+0530",
@@ -935,15 +945,6 @@
       "summary": "Diagnosed Captain POS offer bug on test.hamzahotel.com: old offer 44 chained through Captain base pricelist 40 and dropped portion attribute extras, causing apparent 45-55% discounts. Created pricelist 45 HE Captain AC 10% Offer V2 - 2026-05-24 with 168 non-chained rules, switched only Captain config 6 from [40,44] to [40,45], verified Cash [41,42] and Ground [41,43] unchanged, and post-switch exhaustive variant audit passed 252 cases with 0 anomalies.",
       "next_action": "Staff should reload Captain POS and select HE Captain AC 10% Offer V2 - 2026-05-24 for new Captain offer orders; verify tablet canaries Chicken Kabab Half about ₹198.60, Chicken Kabab Full about ₹400.30, Irani Chicken Full about ₹522.34. Rollback if needed: restore Captain config 6 available pricelists to [40,44].",
       "mutation_status": "Odoo/POS production mutation completed on HE test.hamzahotel.com: created detached pricelist 45 + 168 rules, then updated only pos.config 6 available_pricelist_ids to [40,45]. No product/tax/category/KDS/session/Cash/Ground writes. Backups: /private/tmp/he_captain_offer_v2_write_backup_20260524.json and /private/tmp/he_captain_v2_live_switch_backup_20260524.json."
-    },
-    {
-      "id": "2026-05-24-pos-write-launcher-fix",
-      "at": "2026-05-24T21:35:00+0530",
-      "lane": "pos-write",
-      "task": "Fix POS Write terminal launcher",
-      "status": "completed",
-      "summary": "Moved lane launcher to stable ~/.local/bin path and symlinked UI command path to it so dataless iCloud files do not block lane opening.",
-      "next_action": "Use pos-write terminal to diagnose HE POS discount/offer issue before mutation."
     }
   ]
 }

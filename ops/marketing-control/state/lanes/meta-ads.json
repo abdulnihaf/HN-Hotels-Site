@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T13:02:31+0530",
-  "published_at": "2026-05-25T13:02:31+0530",
+  "updated_at": "2026-05-25T13:05:05+0530",
+  "published_at": "2026-05-25T13:05:05+0530",
   "source": "github-main-static-json",
   "lane_slug": "meta-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Return to Meta WABA retargeting creative intelligence",
-    "last_summary": "Re-read HN Creative Asset Library README/context and meta-ads lane index. Confirmed 245 Meta-relevant canonical assets across HE brand core, Meta/WABA historical creatives, hero/dish assets, and outlet/product photos. Current creative intelligence direction: do not use old Meta creatives as proof of current offer/pricing; use them as layout/history only. Build new retargeting creative strategy around WABA voucher capture with primary buckets: hot click/directions visitors, warm page engagers, video viewers once audience creation is solved, nearby dine-in privacy/couples, family dine-in, daily takeaway breakers, and weekend Commercial Street visitors. Next execution should shortlist exact canonical asset paths for each bucket, visually inspect selected references, then assemble editable concepts in Figma frame 20:2 without generation until approved.",
-    "next_action": "Shortlist 8-12 canonical reference assets by bucket, inspect visually, then map each to copy angle and Figma creative slot before any image generation or Meta mutation.",
-    "mutation_status": "creative intelligence/read-only asset context only; no generation, no Figma mutation in this step, no Meta/WABA/Google spend or customer mutation",
+    "last_task": "Define professional Figma plus Gemini creative execution approach",
+    "last_summary": "Recommended a Figma-led creative production workflow for HE Meta/WABA retargeting: keep Figma as final editable design/control layer, use Gemini/multimodal only for reference inspection and selective image material generation, then assemble typography, hierarchy, voucher UI, brand marks, and export variants manually in Figma. Avoid treating Gemini output as finished ad design because final professional quality depends on layout system, copy hierarchy, spacing, contrast, proof/copy accuracy, and variant control.",
+    "next_action": "Build or refine the Figma production board under frame 20:2 with sections for audience buckets, canonical asset references, inspected visual notes, concept directions, final 9:16 and 4:5 layouts, and export checklist before any generation.",
+    "mutation_status": "strategy only; no creative generation, Figma mutation, Meta/WABA spend, Google Ads, POS, Odoo, or customer mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-    "last_run_at": "2026-05-25T12:56:25+0530"
+    "last_run_at": "2026-05-25T13:05:05+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/06-meta-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/meta-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525130505-meta-ads",
+      "at": "2026-05-25T13:05:05+0530",
+      "lane": "meta-ads",
+      "task": "Define professional Figma plus Gemini creative execution approach",
+      "status": "ready",
+      "summary": "Recommended a Figma-led creative production workflow for HE Meta/WABA retargeting: keep Figma as final editable design/control layer, use Gemini/multimodal only for reference inspection and selective image material generation, then assemble typography, hierarchy, voucher UI, brand marks, and export variants manually in Figma. Avoid treating Gemini output as finished ad design because final professional quality depends on layout system, copy hierarchy, spacing, contrast, proof/copy accuracy, and variant control.",
+      "next_action": "Build or refine the Figma production board under frame 20:2 with sections for audience buckets, canonical asset references, inspected visual notes, concept directions, final 9:16 and 4:5 layouts, and export checklist before any generation.",
+      "mutation_status": "strategy only; no creative generation, Figma mutation, Meta/WABA spend, Google Ads, POS, Odoo, or customer mutation"
+    },
     {
       "id": "20260525125625-meta-ads",
       "at": "2026-05-25T12:56:25+0530",
