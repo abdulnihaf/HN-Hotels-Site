@@ -38,6 +38,37 @@ async function probeJson(env, action) {
   } catch (e) { return { ok: false, error: e.message }; }
 }
 
+function todayIstDate() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+async function runRing2Pull(env) {
+  const key = env.DASHBOARD_KEY || env.DASHBOARD_API_KEY;
+  if (!key) return { ok: false, error: 'DASHBOARD_KEY missing' };
+  const today = todayIstDate();
+  try {
+    const res = await fetch(`${PAGES_BASE}/api/aggregator-pulse?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'coa_ring2_pull',
+        mode: 'live',
+        triggered_by: 'aggregator-health-watcher-cron',
+        from: today,
+        to: today,
+        max_pages: 1,
+        notify: true,
+      }),
+    });
+    const text = await res.text();
+    let body = null;
+    try { body = JSON.parse(text); } catch { body = { raw: text.slice(0, 500) }; }
+    return { ok: res.ok && body?.ok !== false, status: res.status, body };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 async function probeDashboard() {
   try {
     const res = await fetch(`${PAGES_BASE}/ops/aggregator/`);
@@ -98,6 +129,11 @@ export async function onRequest(context) {
 
   if (action === 'tick') {
     const out = { checked_at_ist: nowIST().toISOString(), alerts: [], probes: {} };
+
+    // Ring 2 direct API pull runs before health checks. This is the actual
+    // laptop-independent order updater: Cloudflare cron → Pages Function →
+    // partner frontend API replay → D1 order rows + coordinate health.
+    out.probes.ring2_pull = await runRing2Pull(env);
 
     // A. Delivery health
     const delivery = await probeJson(env, 'health');
