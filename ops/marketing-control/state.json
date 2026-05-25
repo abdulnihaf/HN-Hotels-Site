@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:44:48+0530",
-  "published_at": "2026-05-25T12:44:48+0530",
+  "updated_at": "2026-05-25T12:47:50+0530",
+  "published_at": "2026-05-25T12:47:50+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -78,12 +78,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Analyze Meta-Google-GBP bridge relevance for WABA retargeting",
-      "last_summary": "Explained that Meta, Google Ads, and GBP cannot directly share anonymous platform audiences. The practical bridge is first-party identity: Meta/Google/GBP drive users into owned WhatsApp/site flows, WABA captures phone numbers, then consented customer lists can be uploaded separately to Meta Custom Audiences and Google Ads Customer Match. GBP is useful for offer posts, profile trust, and performance signals, not user-level retargeting.",
-      "next_action": "If bridging is pursued, build one canonical HN audience ledger from WABA voucher claims and owned-site events, then sync consented phone/email audiences into Meta and Google Ads separately while using GBP posts/performance as local-intent support.",
-      "mutation_status": "strategy/read-only; no Google/Meta/GBP/WABA mutation",
+      "last_task": "Analyze current Google Ads campaigns against WABA voucher retargeting objective",
+      "last_summary": "Live-read Google Ads and cockpit state while working from Meta/WABA retargeting context. Confirmed two enabled Google Search campaigns: 23877692297 Hamza Hotel Late Night Brand Capture v2 at Rs250/day, 5km presence-only, 23:00-02:00, brand/Hamza intent; and 23882183242 Dish Late Night 2km Search v1 at Rs250/day, 2km presence-only, 23:00-02:00, dish/open-now/Shivajinagar intent. Both are Search footfall/directions campaigns, not WABA voucher-retargeting campaigns. Current Google landing already has WhatsApp as secondary, but primary action remains Maps/directions. Recommendation: do not mutate these existing campaigns into WhatsApp-first; keep them as clean late-night demand-capture tests and only add/measure WABA as secondary. Create a separate Google WABA/voucher capture campaign only if we explicitly allocate budget or later divert budget after first full 23:00-02:00 search-term readback.",
+      "next_action": "After tonight's full 23:00-02:00 window, inspect search terms and landing action events by campaign. If building Google-to-WABA capture, create a separate small voucher/WhatsApp campaign or landing variant instead of contaminating the current two footfall tests.",
+      "mutation_status": "read-only live verification and strategy; no Google Ads, Meta, WABA, GBP, POS, or landing mutation",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-      "last_run_at": "2026-05-25T12:31:46+0530"
+      "last_run_at": "2026-05-25T12:47:50+0530"
     },
     "flyers": {
       "title": "07 Flyers",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525124750-meta-ads",
+      "at": "2026-05-25T12:47:50+0530",
+      "lane": "meta-ads",
+      "task": "Analyze current Google Ads campaigns against WABA voucher retargeting objective",
+      "status": "ready",
+      "summary": "Live-read Google Ads and cockpit state while working from Meta/WABA retargeting context. Confirmed two enabled Google Search campaigns: 23877692297 Hamza Hotel Late Night Brand Capture v2 at Rs250/day, 5km presence-only, 23:00-02:00, brand/Hamza intent; and 23882183242 Dish Late Night 2km Search v1 at Rs250/day, 2km presence-only, 23:00-02:00, dish/open-now/Shivajinagar intent. Both are Search footfall/directions campaigns, not WABA voucher-retargeting campaigns. Current Google landing already has WhatsApp as secondary, but primary action remains Maps/directions. Recommendation: do not mutate these existing campaigns into WhatsApp-first; keep them as clean late-night demand-capture tests and only add/measure WABA as secondary. Create a separate Google WABA/voucher capture campaign only if we explicitly allocate budget or later divert budget after first full 23:00-02:00 search-term readback.",
+      "next_action": "After tonight's full 23:00-02:00 window, inspect search terms and landing action events by campaign. If building Google-to-WABA capture, create a separate small voucher/WhatsApp campaign or landing variant instead of contaminating the current two footfall tests.",
+      "mutation_status": "read-only live verification and strategy; no Google Ads, Meta, WABA, GBP, POS, or landing mutation"
+    },
     {
       "id": "20260525124448-delivery-aggregator",
       "at": "2026-05-25T12:44:48+0530",
