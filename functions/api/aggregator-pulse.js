@@ -87,6 +87,15 @@ async function handlePost(db, request, headers, env) {
     return new Response(JSON.stringify(result), { headers });
   }
 
+  // Daily owner close report. This composes Ring 2 + Ring 3 into a Claude
+  // analysis and sends only an approved WABA template summary to Nihaf.
+  // It is idempotent per brand/report_date and does not mutate any partner,
+  // POS, Odoo, price, offer, ad, or menu state.
+  if ((body.type === 'daily_owner_report' || body.action === 'daily_owner_report')) {
+    const result = await executeAggregatorDailyOwnerReport(db, env, body);
+    return new Response(JSON.stringify(result), { headers });
+  }
+
   // Session posts: retired Apr 19 2026. v6.0 extension is appliance-mode and
   // polls Swiggy directly from Chrome; cron's Swiggy path is disabled so no
   // server-side consumer of KV sessions remains. We accept and discard the
@@ -518,6 +527,26 @@ async function handleGet(db, url, headers) {
         'No Swiggy/Zomato portal, POS, Odoo, ad, price, or offer mutation is possible here.',
         'Every event must link to a platform/order coordinate or an item aggregate.',
       ],
+    }), { headers });
+  }
+
+  // --- DAILY OWNER REPORT: stored Claude close reports + WABA send state ---
+  if (action === 'daily-owner-report') {
+    await ensureAggregatorDailyReportTables(db);
+    const reportDate = validIsoDate(url.searchParams.get('report_date'))
+      ? url.searchParams.get('report_date')
+      : todayIstDate();
+    const brand = url.searchParams.get('brand');
+    let sql = `SELECT * FROM aggregator_daily_owner_report WHERE report_date = ?`;
+    const params = [reportDate];
+    if (brand && brand !== 'all') { sql += ` AND brand_code = ?`; params.push(brand); }
+    sql += ` ORDER BY brand_code ASC, updated_at DESC`;
+    const rows = await db.prepare(sql).bind(...params).all();
+    return new Response(JSON.stringify({
+      ok: true,
+      action: 'daily-owner-report',
+      report_date: reportDate,
+      reports: (rows.results || []).map(parseDailyReportJsonColumns),
     }), { headers });
   }
 
@@ -1393,7 +1422,7 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
-  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'owner-orders', 'latest', 'stats', 'coa-entities', 'coa-actions', 'coa-events', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'day-orders', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
+  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'owner-orders', 'latest', 'stats', 'coa-entities', 'coa-actions', 'coa-events', 'daily-owner-report', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'day-orders', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
@@ -1401,6 +1430,9 @@ function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
 const AGGREGATOR_COA_RING1_VERSION = '2026-05-25-ring1-v1';
 const AGGREGATOR_COA_RING2_VERSION = '2026-05-25-ring2-v1';
 const AGGREGATOR_COA_RING3_VERSION = '2026-05-25-ring3-v1';
+const AGGREGATOR_DAILY_REPORT_VERSION = '2026-05-25-daily-report-v1';
+const AGGREGATOR_DAILY_REPORT_TEMPLATE = 'aggregator_daily_owner_report_v1';
+const ANTHROPIC_VERSION = '2023-06-01';
 
 const AGGREGATOR_COA_RING1_SEED = {
   brands: [
@@ -2462,6 +2494,422 @@ function cleanItemName(name) {
 
 function normalizeItemKey(name) {
   return cleanItemName(name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 96) || 'unknown';
+}
+
+async function ensureAggregatorDailyReportTables(db) {
+  await ensureAggregatorCoaRing3(db);
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS aggregator_daily_owner_report (
+      report_key TEXT PRIMARY KEY,
+      report_date TEXT NOT NULL,
+      window_from TEXT NOT NULL,
+      window_to TEXT NOT NULL,
+      brand_code TEXT NOT NULL,
+      status_code TEXT NOT NULL,
+      template_name TEXT NOT NULL,
+      template_status TEXT,
+      model_id TEXT,
+      orders_json TEXT,
+      events_json TEXT,
+      candidates_json TEXT,
+      report_json TEXT,
+      whatsapp_json TEXT,
+      provider_msg_id TEXT,
+      error_text TEXT,
+      sent_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_agg_daily_report_date ON aggregator_daily_owner_report(report_date, brand_code, status_code)`).run();
+}
+
+async function executeAggregatorDailyOwnerReport(db, env, body = {}) {
+  await ensureAggregatorDailyReportTables(db);
+  const today = todayIstDate();
+  const reportDate = validIsoDate(body.report_date) ? body.report_date : addIsoDays(today, -1);
+  const from = validIsoDate(body.from) ? body.from : reportDate;
+  const to = validIsoDate(body.to) ? body.to : today;
+  const brands = Array.isArray(body.brands) && body.brands.length
+    ? body.brands.filter(b => ['he', 'nch'].includes(b))
+    : (body.brand && body.brand !== 'all' ? [body.brand] : ['he', 'nch']);
+  const force = Boolean(body.force);
+  const send = body.send !== false;
+
+  // Pull and compose fresh data before analysis. This remains D1-only.
+  const pull = await executeAggregatorCoaRing2Pull(db, env, {
+    type: 'coa_ring2_pull',
+    mode: 'live',
+    triggered_by: body.triggered_by || 'daily-owner-report',
+    from,
+    to,
+    max_pages: Math.min(Number(body.max_pages || 3), 8),
+    notify: false,
+  });
+  const ring3 = await executeAggregatorCoaRing3Analyze(db, { from, to });
+
+  const template = send ? await getAggregatorReportTemplateStatus(env, env.AGG_REPORT_WABA_BRAND || 'he') : { status: 'DRY_RUN' };
+  const model = await resolveAnthropicModel(env);
+  const reports = [];
+  for (const brand of brands) {
+    reports.push(await generateOneDailyOwnerReport(db, env, {
+      brand,
+      reportDate,
+      from,
+      to,
+      model,
+      template,
+      force,
+      send,
+    }));
+  }
+
+  return {
+    ok: reports.every(r => r.ok),
+    action: 'daily_owner_report',
+    seed_version: AGGREGATOR_DAILY_REPORT_VERSION,
+    report_date: reportDate,
+    window: { from, to },
+    model_id: model.id,
+    template: { name: AGGREGATOR_DAILY_REPORT_TEMPLATE, status: template.status || null },
+    pull: { ok: pull.ok, run_id: pull.run_id || null, summary: pull.summary || null },
+    ring3: { ok: ring3.ok, summary: ring3.summary || null },
+    reports,
+    mutation_boundary: 'Claude analysis + HN D1 report rows + approved WABA template send only. No partner portal, POS, Odoo, ad, price, offer, or menu mutation.',
+  };
+}
+
+async function generateOneDailyOwnerReport(db, env, opts) {
+  const reportKey = `${opts.brand}:${opts.reportDate}`;
+  const existing = await db.prepare(`SELECT * FROM aggregator_daily_owner_report WHERE report_key = ?`).bind(reportKey).first();
+  if (existing?.status_code === 'sent' && !opts.force) {
+    return { ok: true, brand: opts.brand, status_code: 'skipped_duplicate', provider_msg_id: existing.provider_msg_id || null };
+  }
+
+  const orders = await loadDailyReportOrders(db, opts.brand, opts.from, opts.to);
+  const events = await loadDailyReportEvents(db, opts.brand, opts.from, opts.to);
+  const candidates = await loadDailyReportCandidates(db, opts.brand, opts.from, opts.to);
+  const deterministic = buildDeterministicDailyReport(opts.brand, opts.reportDate, opts.from, opts.to, orders, events, candidates);
+  const claude = await runClaudeDailyReport(env, opts.model.id, deterministic);
+  const report = claude.ok ? claude.report : fallbackDailyReport(deterministic, claude.error);
+  const whatsapp = buildDailyReportWhatsapp(opts.brand, opts.reportDate, deterministic, report);
+  let statusCode = claude.ok ? 'generated' : 'claude_failed';
+  let providerMsgId = null;
+  let errorText = claude.ok ? null : claude.error;
+  let sentAt = null;
+
+  if (opts.send) {
+    const templateStatus = opts.template?.status || 'UNKNOWN';
+    if (templateStatus !== 'APPROVED') {
+      statusCode = 'template_pending';
+      errorText = `WABA template ${AGGREGATOR_DAILY_REPORT_TEMPLATE} status is ${templateStatus}`;
+    } else if (!claude.ok) {
+      statusCode = 'claude_failed';
+    } else {
+      const to = env.AGG_REPORT_OWNER_PHONE || env.ALERT_PHONE || env.OWNER_PHONE || '917010426808';
+      const sendResult = await sendWaba(env, {
+        brand: env.AGG_REPORT_WABA_BRAND || 'he',
+        phone: to,
+        template: AGGREGATOR_DAILY_REPORT_TEMPLATE,
+        language: 'en',
+        vars: [whatsapp.brand_day, whatsapp.snapshot, whatsapp.focus, whatsapp.link],
+      });
+      if (sendResult.ok) {
+        statusCode = 'sent';
+        providerMsgId = sendResult.provider_msg_id || null;
+        sentAt = new Date().toISOString();
+      } else {
+        statusCode = 'send_failed';
+        errorText = JSON.stringify(sendResult.response || sendResult);
+      }
+    }
+  }
+
+  await upsertDailyOwnerReport(db, {
+    report_key: reportKey,
+    report_date: opts.reportDate,
+    window_from: opts.from,
+    window_to: opts.to,
+    brand_code: opts.brand,
+    status_code: statusCode,
+    template_name: AGGREGATOR_DAILY_REPORT_TEMPLATE,
+    template_status: opts.template?.status || null,
+    model_id: opts.model.id,
+    orders_json: JSON.stringify(orders),
+    events_json: JSON.stringify(events),
+    candidates_json: JSON.stringify(candidates),
+    report_json: JSON.stringify({ deterministic, claude: report, usage: claude.usage || null }),
+    whatsapp_json: JSON.stringify(whatsapp),
+    provider_msg_id: providerMsgId,
+    error_text: errorText,
+    sent_at: sentAt,
+  });
+
+  return {
+    ok: !['send_failed'].includes(statusCode),
+    brand: opts.brand,
+    status_code: statusCode,
+    orders: deterministic.summary.total_orders,
+    events: events.length,
+    candidates: candidates.length,
+    provider_msg_id: providerMsgId,
+    error: errorText,
+  };
+}
+
+async function loadDailyReportOrders(db, brand, from, to) {
+  const detailMap = await latestZomatoDetailMap(db);
+  const IST = "'+5 hours', '+30 minutes'";
+  const EFFECTIVE_DATE = `COALESCE(NULLIF(order_date, ''), date(captured_at, ${IST}))`;
+  const { results } = await db.prepare(`
+    SELECT * FROM aggregator_orders
+    WHERE ${EFFECTIVE_DATE} >= ? AND ${EFFECTIVE_DATE} <= ? AND brand = ?
+    ORDER BY ${EFFECTIVE_DATE} ASC, order_time ASC, captured_at ASC
+    LIMIT 1000
+  `).bind(from, to, brand).all();
+  return (results || []).map(row => enrichOwnerOrder(row, detailMap.get(String(row.order_id))));
+}
+
+async function loadDailyReportEvents(db, brand, from, to) {
+  const { results } = await db.prepare(`
+    SELECT * FROM aggregator_coa_event
+    WHERE order_date >= ? AND order_date <= ? AND brand_code = ?
+    ORDER BY severity DESC, order_date ASC, order_time ASC
+    LIMIT 500
+  `).bind(from, to, brand).all();
+  return (results || []).map(parseRing3JsonColumns);
+}
+
+async function loadDailyReportCandidates(db, brand, from, to) {
+  const { results } = await db.prepare(`
+    SELECT * FROM aggregator_coa_price_offer_candidate
+    WHERE window_from = ? AND window_to = ? AND brand_code = ?
+    ORDER BY gate_status DESC, orders_count DESC, delivered_revenue DESC
+    LIMIT 100
+  `).bind(from, to, brand).all();
+  return (results || []).map(parseRing3JsonColumns);
+}
+
+function buildDeterministicDailyReport(brand, reportDate, from, to, orders, events, candidates) {
+  const summary = ownerOrderSummary(orders);
+  const byPlatform = {};
+  for (const order of orders) {
+    const key = order.platform || 'unknown';
+    if (!byPlatform[key]) byPlatform[key] = { orders: 0, delivered: 0, rejected: 0, cancelled: 0, missed: 0, active: 0, revenue: 0, discount_known: 0 };
+    const p = byPlatform[key];
+    p.orders += 1;
+    if (order.status_group === 'delivered') { p.delivered += 1; p.revenue += order.order_value || 0; }
+    if (order.status_group === 'rejected') p.rejected += 1;
+    if (order.status_group === 'cancelled') p.cancelled += 1;
+    if (order.status_group === 'missed') p.missed += 1;
+    if (order.status_group === 'active') p.active += 1;
+    if (order.discount_total != null) p.discount_known += 1;
+  }
+  for (const p of Object.values(byPlatform)) p.revenue = Math.round(p.revenue * 100) / 100;
+
+  return {
+    brand,
+    brand_name: brand === 'he' ? 'Hamza Express' : 'Nawabi Chai House',
+    report_date: reportDate,
+    window: { from, to },
+    summary,
+    by_platform: byPlatform,
+    events_summary: ring3Summary(events, candidates),
+    critical_events: events.filter(e => e.severity === 'critical').slice(0, 12),
+    warning_events: events.filter(e => e.severity === 'warn').slice(0, 12),
+    discount_events: events.filter(e => e.event_code === 'discount_exposure_known').slice(0, 12),
+    price_offer_candidates: candidates.slice(0, 20),
+    orders: orders.map(o => ({
+      platform: o.platform,
+      order_id: o.order_id,
+      status: o.status,
+      status_group: o.status_group,
+      order_date: o.order_date,
+      order_time: o.order_time,
+      customer_name: o.customer_name,
+      customer_order_count_label: o.customer_order_count_label,
+      rating: o.rating,
+      items: o.items,
+      order_value: o.order_value,
+      discount_total: o.discount_total,
+      issues: o.issues,
+      rejection_reason: o.rejection_reason,
+    })),
+    constraints: [
+      'Do not advise portal/POS/Odoo price or offer mutation unless gate_status says margin_required or ready_for_owner_review and margin proof exists.',
+      'Rejected/cancelled/missed orders are operational corrections before marketing corrections.',
+      'Discount exposure is proof input, not automatic offer instruction.',
+    ],
+  };
+}
+
+async function runClaudeDailyReport(env, modelId, deterministic) {
+  if (!env.ANTHROPIC_API_KEY) return { ok: false, error: 'ANTHROPIC_API_KEY missing' };
+  const prompt = [
+    'You are HN Hotels COA daily close analyst.',
+    'Analyze the supplied Swiggy/Zomato order data for one outlet.',
+    'Return JSON only with keys: brand_day, snapshot, focus, report_markdown.',
+    'snapshot must be one short owner-readable line under 220 chars.',
+    'focus must be one action line under 260 chars.',
+    'report_markdown must deeply explain every order, what went wrong, revenue, discount exposure, rejected/cancelled/missed orders, customer signals, and exact next corrections.',
+    'Do not recommend changing price/discount/offer unless the provided proof gates and margin constraints justify it.',
+  ].join('\n');
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': ANTHROPIC_VERSION,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: modelId,
+        max_tokens: 4500,
+        system: prompt,
+        messages: [{ role: 'user', content: JSON.stringify(deterministic) }],
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: `Anthropic HTTP ${res.status}: ${JSON.stringify(data).slice(0, 500)}` };
+    const text = (data.content || []).map(p => p.text || '').join('\n').trim();
+    const parsed = parseFirstJsonObject(text);
+    if (!parsed) return { ok: false, error: 'Claude did not return parseable JSON.' };
+    return { ok: true, report: parsed, usage: data.usage || null };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+async function resolveAnthropicModel(env) {
+  if (env.ANTHROPIC_MODEL) return { id: env.ANTHROPIC_MODEL, source: 'env' };
+  if (!env.ANTHROPIC_API_KEY) return { id: 'claude-opus-4-7', source: 'fallback_no_key' };
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/models', {
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': ANTHROPIC_VERSION,
+      },
+    });
+    const data = await res.json();
+    const model = (data.data || []).find(m => /^claude-/.test(m.id));
+    return { id: model?.id || 'claude-opus-4-7', source: model ? 'models_api' : 'fallback_empty' };
+  } catch {
+    return { id: 'claude-opus-4-7', source: 'fallback_error' };
+  }
+}
+
+async function getAggregatorReportTemplateStatus(env, brand = 'he') {
+  const cfg = wabaReportConfig(env, brand);
+  if (!cfg.wabaId || !cfg.token) return { ok: false, status: 'NOT_CONFIGURED', error: 'WABA id/token missing' };
+  const url = new URL(`https://graph.facebook.com/v24.0/${cfg.wabaId}/message_templates`);
+  url.searchParams.set('fields', 'id,name,status,category,language,rejected_reason');
+  url.searchParams.set('name', AGGREGATOR_DAILY_REPORT_TEMPLATE);
+  url.searchParams.set('limit', '5');
+  try {
+    const res = await fetch(url.toString(), { headers: { authorization: `Bearer ${cfg.token}` } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, status: 'ERROR', error: JSON.stringify(data).slice(0, 500) };
+    const template = (data.data || []).find(t => t.name === AGGREGATOR_DAILY_REPORT_TEMPLATE);
+    return { ok: true, status: template?.status || 'NOT_FOUND', template: template || null };
+  } catch (e) {
+    return { ok: false, status: 'ERROR', error: e.message };
+  }
+}
+
+function wabaReportConfig(env, brand) {
+  const b = brand || 'he';
+  if (b === 'nch') return { wabaId: env.WA_NCH_WABA_ID, token: env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN };
+  if (b === 'sparksol') return { wabaId: env.WA_SPARKSOL_WABA_ID || env.WABA_ID, token: env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN };
+  return { wabaId: env.WA_HE_WABA_ID, token: env.WA_HE_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN };
+}
+
+function buildDailyReportWhatsapp(brand, reportDate, deterministic, report) {
+  const brandName = deterministic.brand_name;
+  const s = deterministic.summary;
+  const loss = deterministic.events_summary?.estimated_loss || 0;
+  return {
+    brand_day: String(report.brand_day || `${brandName} on ${reportDate}`).slice(0, 120),
+    snapshot: String(report.snapshot || `${s.total_orders} orders; ${s.delivered_orders} delivered; ${s.rejected_orders + s.cancelled_orders + s.missed_orders} rejected/cancelled/missed; Rs ${Math.round(s.delivered_revenue).toLocaleString('en-IN')} delivered; Rs ${Math.round(loss).toLocaleString('en-IN')} at risk.`).slice(0, 320),
+    focus: String(report.focus || 'Fix rejected, cancelled, missed, stock, and food-ready issues before changing price or offers.').slice(0, 360),
+    link: `https://hnhotels.in/ops/${brand}/aggregator/?report=${encodeURIComponent(reportDate)}`,
+  };
+}
+
+function fallbackDailyReport(deterministic, error) {
+  const s = deterministic.summary;
+  return {
+    brand_day: `${deterministic.brand_name} on ${deterministic.report_date}`,
+    snapshot: `${s.total_orders} orders; ${s.delivered_orders} delivered; delivered revenue Rs ${Math.round(s.delivered_revenue).toLocaleString('en-IN')}.`,
+    focus: 'Claude analysis failed. Review order/event rows before changing price, offer, stock, or platform availability.',
+    report_markdown: `# ${deterministic.brand_name} aggregator close\n\nClaude analysis failed: ${error}\n\nOrders: ${s.total_orders}\nDelivered: ${s.delivered_orders}\nRejected: ${s.rejected_orders}\nCancelled: ${s.cancelled_orders}\nMissed: ${s.missed_orders}\nDelivered revenue: Rs ${s.delivered_revenue}`,
+  };
+}
+
+async function upsertDailyOwnerReport(db, row) {
+  await db.prepare(`
+    INSERT INTO aggregator_daily_owner_report
+      (report_key, report_date, window_from, window_to, brand_code, status_code, template_name,
+       template_status, model_id, orders_json, events_json, candidates_json, report_json,
+       whatsapp_json, provider_msg_id, error_text, sent_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(report_key) DO UPDATE SET
+      window_from=excluded.window_from,
+      window_to=excluded.window_to,
+      status_code=excluded.status_code,
+      template_name=excluded.template_name,
+      template_status=excluded.template_status,
+      model_id=excluded.model_id,
+      orders_json=excluded.orders_json,
+      events_json=excluded.events_json,
+      candidates_json=excluded.candidates_json,
+      report_json=excluded.report_json,
+      whatsapp_json=excluded.whatsapp_json,
+      provider_msg_id=COALESCE(excluded.provider_msg_id, provider_msg_id),
+      error_text=excluded.error_text,
+      sent_at=COALESCE(excluded.sent_at, sent_at),
+      updated_at=datetime('now')
+  `).bind(
+    row.report_key,
+    row.report_date,
+    row.window_from,
+    row.window_to,
+    row.brand_code,
+    row.status_code,
+    row.template_name,
+    row.template_status,
+    row.model_id,
+    row.orders_json,
+    row.events_json,
+    row.candidates_json,
+    row.report_json,
+    row.whatsapp_json,
+    row.provider_msg_id,
+    row.error_text,
+    row.sent_at
+  ).run();
+}
+
+function parseDailyReportJsonColumns(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    orders_json: row.orders_json ? safeJsonParse(row.orders_json) : null,
+    events_json: row.events_json ? safeJsonParse(row.events_json) : null,
+    candidates_json: row.candidates_json ? safeJsonParse(row.candidates_json) : null,
+    report_json: row.report_json ? safeJsonParse(row.report_json) : null,
+    whatsapp_json: row.whatsapp_json ? safeJsonParse(row.whatsapp_json) : null,
+  };
+}
+
+function parseFirstJsonObject(text) {
+  const raw = String(text || '').trim();
+  try { return JSON.parse(raw); } catch {}
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    try { return JSON.parse(raw.slice(start, end + 1)); } catch {}
+  }
+  return null;
 }
 
 async function parsePartnerJson(res) {
