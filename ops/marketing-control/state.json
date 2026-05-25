@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T12:18:54+0530",
-  "published_at": "2026-05-25T12:18:54+0530",
+  "updated_at": "2026-05-25T12:29:39+0530",
+  "published_at": "2026-05-25T12:29:39+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Split late-night Search budget into Hamza intent and 2km dish intent",
-      "last_summary": "Changed active Hamza Hotel late-night campaign 23877692297 to Rs250/day and 23:00-02:00. Deployed Ads control endpoint support for budget/schedule changes. Created and enabled HE — Dish Late Night 2km Search — v1 campaign 23882183242 at Rs250/day, 2km presence-only radius, 23:00-02:00 schedule, 28 exact/phrase dish/open-now/Shivajinagar late-night keywords, direct /go/google-night landing, shared negatives attached. Final active Search budget is Rs500/day split Rs250 + Rs250; old Brand v1, Late Night v1, Dinner v1, and PMax remain paused. Saved execution record to _context/Google_Ads_Hamza_Brand_2026-05-25/11-live-split-budget-dish-2km-execution.md.",
-      "next_action": "After the next complete 23:00-02:00 window, compare search terms by campaign: Hamza intent must stay Hamza/Hamza Hotel/Hamza Express, dish campaign must stay biryani/kabab/ghee rice/non-veg/open-now/Shivajinagar; inspect landing direction/call/menu actions and outlet counter feedback.",
-      "mutation_status": "LIVE Google Ads money mutation completed: campaign 23877692297 ENABLED Rs250/day 5km 23:00-02:00; campaign 23882183242 CREATED+ENABLED Rs250/day 2km 23:00-02:00; prior campaigns 23845870050, 23854158442, 23855561197 and 23834053403 PAUSED; Cloudflare Pages production updated for Ads control endpoint.",
+      "last_task": "Deep audit split late-night Google Ads campaigns",
+      "last_summary": "Audited live Hamza intent campaign 23877692297 and 2km dish campaign 23882183242 down to budget, network settings, geo mode, criteria, ad groups, keywords, ads, review status, search terms, landing alignment, and prior-leak guardrails. Found no budget/radius/schedule/network error. Corrected one conversion-risk issue: dish campaign landing now switches to dish-specific copy via utm_campaign instead of saying 'Searched Hamza Hotel'. Added exact negatives to dish campaign for previous generic leak terms: restaurants near me, restaurant near me, food near me, food near me open now, restaurants open now near me, open restaurant near me, food places near me open now. Dish ads remain under Google review; Hamza ads approved. Saved audit at _context/Google_Ads_Hamza_Brand_2026-05-25/12-deep-audit-and-self-learning-2026-05-25.md.",
+      "next_action": "Before tonight's 23:00 window, recheck dish campaign ad review status. After the full 23:00-02:00 window, inspect search terms: Hamza campaign must stay Hamza/Hamza Hotel/Hamza Express; dish campaign must stay biryani/kabab/ghee rice/non-veg/open-now/Shivajinagar. If generic terms recur, remove broader restaurant keywords before increasing budget.",
+      "mutation_status": "LIVE correction after audit: Cloudflare Pages updated for campaign-specific landing copy; Google Ads dish campaign 23882183242 received 7 exact negative keywords blocking prior generic leakage. No budget/radius/schedule changes beyond prior split.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T12:18:54+0530"
+      "last_run_at": "2026-05-25T12:29:39+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525122939-google-ads",
+      "at": "2026-05-25T12:29:39+0530",
+      "lane": "google-ads",
+      "task": "Deep audit split late-night Google Ads campaigns",
+      "status": "ready",
+      "summary": "Audited live Hamza intent campaign 23877692297 and 2km dish campaign 23882183242 down to budget, network settings, geo mode, criteria, ad groups, keywords, ads, review status, search terms, landing alignment, and prior-leak guardrails. Found no budget/radius/schedule/network error. Corrected one conversion-risk issue: dish campaign landing now switches to dish-specific copy via utm_campaign instead of saying 'Searched Hamza Hotel'. Added exact negatives to dish campaign for previous generic leak terms: restaurants near me, restaurant near me, food near me, food near me open now, restaurants open now near me, open restaurant near me, food places near me open now. Dish ads remain under Google review; Hamza ads approved. Saved audit at _context/Google_Ads_Hamza_Brand_2026-05-25/12-deep-audit-and-self-learning-2026-05-25.md.",
+      "next_action": "Before tonight's 23:00 window, recheck dish campaign ad review status. After the full 23:00-02:00 window, inspect search terms: Hamza campaign must stay Hamza/Hamza Hotel/Hamza Express; dish campaign must stay biryani/kabab/ghee rice/non-veg/open-now/Shivajinagar. If generic terms recur, remove broader restaurant keywords before increasing budget.",
+      "mutation_status": "LIVE correction after audit: Cloudflare Pages updated for campaign-specific landing copy; Google Ads dish campaign 23882183242 received 7 exact negative keywords blocking prior generic leakage. No budget/radius/schedule changes beyond prior split."
+    },
     {
       "id": "20260525121854-google-ads",
       "at": "2026-05-25T12:18:54+0530",
