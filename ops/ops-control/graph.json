@@ -231,19 +231,20 @@
       "tool_owner": "Claude",
       "risk": "money mutation + labour law (APPROVAL-GATED)",
       "context_state": "LOAD",
-      "status": "built-loadable",
+      "status": "prior session crashed (1052-entry long-session -> 400 role:system); context SAVED, reopen reads it",
       "summary": "Payable from attendance + advances ledger. Writes hr_payroll_snapshots + hr_advances. Reads Workforce/Attendance. Labour-law constrained.",
       "command": "open_ops_lane.command salary",
       "prompt": "prompts/09-salary.md",
       "context_files": [
         "memory/reference_hr_payroll.md",
         "memory/project_labour_compliance_2026.md",
-        "memory/reference_legal_workarounds.md"
+        "memory/reference_legal_workarounds.md",
+        "_context/Operations_Execution_Graph_2026-05-24/09-salary-SAVED-2026-05-25.md"
       ],
       "live_urls": [
         "https://hnhotels.in/ops/hr/"
       ],
-      "next_action": "Wire payable = attendance (CAMS) minus advances; gate release on approval."
+      "next_action": "Reopen lane -> read 09-salary-SAVED-2026-05-25.md. Build: pay-advance + settle option; advance paid -> INSTANT WABA msg; MANUAL salary over-write (attendance gaps this month); easy owner-entered calc; NO share-link."
     },
     {
       "code": "14",
