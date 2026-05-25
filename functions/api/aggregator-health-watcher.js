@@ -69,6 +69,30 @@ async function runRing2Pull(env) {
   }
 }
 
+async function runRing3Analyze(env) {
+  const key = env.DASHBOARD_KEY || env.DASHBOARD_API_KEY;
+  if (!key) return { ok: false, error: 'DASHBOARD_KEY missing' };
+  const today = todayIstDate();
+  try {
+    const res = await fetch(`${PAGES_BASE}/api/aggregator-pulse?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'coa_ring3_analyze',
+        triggered_by: 'aggregator-health-watcher-cron',
+        from: today,
+        to: today,
+      }),
+    });
+    const text = await res.text();
+    let body = null;
+    try { body = JSON.parse(text); } catch { body = { raw: text.slice(0, 500) }; }
+    return { ok: res.ok && body?.ok !== false, status: res.status, body };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 async function probeDashboard() {
   try {
     const res = await fetch(`${PAGES_BASE}/ops/aggregator/`);
@@ -134,6 +158,7 @@ export async function onRequest(context) {
     // laptop-independent order updater: Cloudflare cron → Pages Function →
     // partner frontend API replay → D1 order rows + coordinate health.
     out.probes.ring2_pull = await runRing2Pull(env);
+    out.probes.ring3_analyze = await runRing3Analyze(env);
 
     // A. Delivery health
     const delivery = await probeJson(env, 'health');
