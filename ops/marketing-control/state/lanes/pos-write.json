@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T13:29:40+0530",
-  "published_at": "2026-05-25T13:29:40+0530",
+  "updated_at": "2026-05-25T13:32:13+0530",
+  "published_at": "2026-05-25T13:32:13+0530",
   "source": "github-main-static-json",
   "lane_slug": "pos-write",
   "lane": {
@@ -49,16 +49,6 @@
       "summary": "Read-only HE Odoo sequence audit from 2026-05-01 UTC through current time found 352 backend Captain orders across 10 Captain reference groups. Only two Captain reference groups have backend sequence gaps: historical 2662-6 missing 000127 between 000126 on 2026-05-19 21:35:54 UTC and 000128 on 2026-05-20 09:08:26 UTC; current 2670-6 missing 000004 and 000005 between 000003 at 2026-05-24 17:48:25 UTC and test water order 000006 at 2026-05-24 21:19:08 UTC. Current incident therefore accounts for exactly two missing Captain sequence slots; total Captain missing sequence slots since May 1 within backend-seen ranges is three.",
       "next_action": "Reconcile current 2670-6-000004/000005 from staff/UPI/KDS/table memory; optionally separately investigate historical 2662-6-000127 around 2026-05-20 morning if finance wants full May exception cleanup.",
       "mutation_status": "No Odoo mutation. Read-only sequence audit only."
-    },
-    {
-      "id": "20260525024952-pos-write",
-      "at": "2026-05-25T02:49:52+0530",
-      "lane": "pos-write",
-      "task": "Count missing Captain POS sequences after test order",
-      "status": "completed",
-      "summary": "After user placed a live Captain water test order paid by UPI, read-only HE Odoo check shows it saved as pos.order id 8052, reference 2670-6-000006, total ₹20.01, table First Floor Dine-In 4, pricelist 40. Backend sequence group 2670-6 now has 000001, 000002, 000003, 000006 with missing references 000004 and 000005. Therefore two Captain local POS sequence slots were consumed but not recorded in backend pos.order/payment/KDS. At least one is the photographed ₹746.35 failed order; the second may be either another real missed bill or a duplicate failed re-entry attempt for the same bill, requiring staff/UPI/KDS/table confirmation.",
-      "next_action": "Ask staff to reconcile exactly two missing Captain sequence slots: identify what orders 2670-6-000004 and 2670-6-000005 corresponded to after 23:20 IST, using memory, UPI history, table served, and kitchen/KDS. Do not clear remaining Captain site data until reconciliation is complete.",
-      "mutation_status": "No Odoo mutation by Codex. User-created live test order 2670-6-000006 confirmed backend sync recovered."
     }
   ]
 }
