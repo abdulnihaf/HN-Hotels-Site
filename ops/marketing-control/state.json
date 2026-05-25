@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T15:09:45+0530",
-  "published_at": "2026-05-25T15:09:45+0530",
+  "updated_at": "2026-05-25T15:10:19+0530",
+  "published_at": "2026-05-25T15:10:19+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -31,12 +31,12 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Define COA Google Ads 4 AM PDF report layout",
-      "last_summary": "Created COA-based daily Google Ads report architecture plus print-ready visual wireframe and sample PDF under _context/Google_Ads_Daily_Report_2026-05-25. Report is structured as owner verdict, COA action funnel, search intent diagnostic, campaign coordinate cards, outlet reality layer, and learning/correction log.",
-      "next_action": "Build the automated 4 AM generator using Google Ads metrics, landing action events, and later GBP/POS signals; submit WABA utility template only after the report link/attachment path is confirmed.",
-      "mutation_status": "No live ad/WABA/GBP/POS/Odoo/Cloudflare mutation; local ignored report spec and PDF artifact only.",
+      "last_task": "Close COA Google Ads 4 AM report flow explanation",
+      "last_summary": "Explained the daily Google Ads PDF report flow in simple terms: 4 AM reads the 23:00-02:00 window, verifies spend/radius/schedule/search-only configuration, classifies actual search intent, reads landing actions, interprets what happened, and outputs one next-day decision. Existing COA report spec, visual HTML wireframe, and sample PDF remain saved under _context/Google_Ads_Daily_Report_2026-05-25.",
+      "next_action": "Build the automated report generator that fills the defined PDF with live Google Ads metrics and landing action events, then wire WABA delivery only after the PDF link/attachment path is confirmed.",
+      "mutation_status": "No live ad/WABA/GBP/POS/Odoo/Cloudflare mutation; memory sync only.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command google-ads",
-      "last_run_at": "2026-05-25T13:29:40+0530"
+      "last_run_at": "2026-05-25T15:10:19+0530"
     },
     "delivery-aggregator": {
       "title": "03 Delivery Aggregator",
@@ -146,6 +146,16 @@
     }
   },
   "events": [
+    {
+      "id": "20260525151019-google-ads",
+      "at": "2026-05-25T15:10:19+0530",
+      "lane": "google-ads",
+      "task": "Close COA Google Ads 4 AM report flow explanation",
+      "status": "ready",
+      "summary": "Explained the daily Google Ads PDF report flow in simple terms: 4 AM reads the 23:00-02:00 window, verifies spend/radius/schedule/search-only configuration, classifies actual search intent, reads landing actions, interprets what happened, and outputs one next-day decision. Existing COA report spec, visual HTML wireframe, and sample PDF remain saved under _context/Google_Ads_Daily_Report_2026-05-25.",
+      "next_action": "Build the automated report generator that fills the defined PDF with live Google Ads metrics and landing action events, then wire WABA delivery only after the PDF link/attachment path is confirmed.",
+      "mutation_status": "No live ad/WABA/GBP/POS/Odoo/Cloudflare mutation; memory sync only."
+    },
     {
       "id": "20260525150945-delivery-aggregator",
       "at": "2026-05-25T15:09:45+0530",
@@ -935,16 +945,6 @@
       "summary": "Analyzed /Users/nihaf/Downloads/swiggy-curl.json, swiggy-orders.json, zomato-curl.txt, and zomato-orders.json without printing secrets. Swiggy direct API path is proven: POST https://rms.swiggy.com/orders/v1/fetchOrders replays successfully with access_token/accesstoken headers and no cookie, returning live data; latest replay showed 1342887=NCH and 1342888=HE, confirming HE Swiggy ID 1342888. Zomato cURL path is not yet proven: POST https://api.zomato.com/merchant-gw/web/order/history/get-all-v2 returns HTTP 401 from the saved headers, while zomato-orders.json proves rich order-detail shape only. Locally patched functions/api/aggregator-pulse.js to fix inverted parsed Swiggy constants and add raw swiggy_fetch_orders/zomato_order_detail ingestion normalizers, plus added scripts/aggregator-direct-partner-pull.mjs dry-run puller. Dry-run verified Swiggy 200 and Zomato 401. No live D1 ingest or deploy performed.",
       "next_action": "Capture a fresh replayable Zomato cURL including all required auth/session material; then deploy the exact aggregator-pulse.js ingestion fix from a clean branch/worktree and run the direct puller in ingest mode with HN_AGGREGATOR_API_KEY. Keep offer/combo portal actions blocked; this work only replaces the capture layer.",
       "mutation_status": "Local code/context changes only: functions/api/aggregator-pulse.js, scripts/aggregator-direct-partner-pull.mjs, and ignored _context analysis. No Swiggy/Zomato portal mutation, no Odoo/POS mutation, no WABA/ad mutation, no live D1 ingest, no production deploy."
-    },
-    {
-      "id": "20260525054416-pisignage",
-      "at": "2026-05-25T05:44:16+0530",
-      "lane": "pisignage",
-      "task": "Initialize PiSignage lane and verify TV upload packet",
-      "status": "ready",
-      "summary": "Read lane memory/control graph/unified context/TV history and verified current HE TV choreography state. Source-of-truth is hamza-express-site ops/tv-mission-control/choreography/preview-data.json generated 2026-05-18 with 7 groups, 28 playlists, 113 listed assets and 28 contact sheets. Old JSON source_root points to Desktop, now missing after cleanup; relocated upload packet exists at /Users/nihaf/Documents/2026-05_Working-Files/Creative/HamzaExpress_TV_Copies_2026-05-16/_ORGANIZED_BY_TIMESLOT. All 113 listed files are present there; dimension audit checked 100 files as 1920x1080 with zero mismatches, while 13 PNGs need re-export/repair/probe review before any upload because image probes failed or hung. Live choreography page HTTP 200; no PiSignage/API/screen mutation performed.",
-      "next_action": "Before playlist mutation, repair or re-export the 13 probe-failing PNGs, then verify live PiSignage player/group state for the exact target screen: 7 V2 choreography groups versus legacy 6-TV fleet registry, confirm outdoor facade H2 assignment, and prepare rollback to previous playlists/groups before upload.",
-      "mutation_status": "No PiSignage playlist, asset upload, repo, Cloudflare, Odoo, ad, WABA, aggregator, or screen mutation. Read-only lane initialization plus local asset/location/dimension verification only."
     }
   ]
 }
