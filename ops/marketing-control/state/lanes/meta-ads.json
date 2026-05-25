@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T13:14:16+0530",
-  "published_at": "2026-05-25T13:14:16+0530",
+  "updated_at": "2026-05-25T13:26:25+0530",
+  "published_at": "2026-05-25T13:26:25+0530",
   "source": "github-main-static-json",
   "lane_slug": "meta-ads",
   "lane": {
@@ -9,17 +9,27 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Execute first Figma production-board step for Meta WABA creative intelligence",
-    "last_summary": "Mutated Figma file RlpVhTqTghVyfp7vWt1Isz on page 06 Meta + WABA Ads. Rebuilt workspace frame 20:2 as 'Hamza Express Meta Ads - Retargeting Workspace / Production Board' at 2400x1720 with a professional Figma-led workflow: locked strategy, 6-step execution spine, retargeting bucket matrix, reference-control/Gemini inspection panel, editable creative output slots A1-A5, and QA checklist. Performed screenshot validation and fixed heading/body overlap. No Gemini generation, no asset upload, no Meta/WABA/Google spend/customer mutation.",
-    "next_action": "Shortlist 8-12 canonical assets into the production board buckets, visually inspect selected references, then create final Figma ad layouts A1-A5 in 9:16 and 4:5 after copy/asset approval.",
-    "mutation_status": "Figma design mutation only: rebuilt and validated frame 20:2 production board; no paid media, WABA send, Google Ads, GBP, POS, Odoo, or customer mutation",
+    "last_task": "Create separate individual Figma creative frames for Meta WABA retargeting",
+    "last_summary": "After user clarified the production board was not the actual creative, created separate top-level Figma creative frames on page 06 Meta + WABA Ads, placed to the right of the board: HE Meta WABA A1-A5 in both 9:16 1080x1920 and 4:5 1080x1350. Each frame is an editable professional shell with brand chip, heritage chip, image placeholder, bucket label, headline/subline, voucher module, WhatsApp CTA, and format note. Fixed compressed 4:5 geometry and screenshot-validated A1 9:16 and A1 4:5. No asset upload, Gemini generation, Meta/WABA/Google spend, or customer mutation.",
+    "next_action": "Use Shift+2 on selected A1/A2/etc frame in Figma to view individual creatives. Next execution: shortlist and visually inspect canonical assets, then replace placeholders with approved food/outlet/voucher references in each creative frame.",
+    "mutation_status": "Figma design mutation only: created 10 individual creative frames and fixed 4:5 spacing; no paid media, WABA send, Google Ads, GBP, POS, Odoo, or customer mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-    "last_run_at": "2026-05-25T13:14:16+0530"
+    "last_run_at": "2026-05-25T13:26:25+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/06-meta-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/meta-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260525132625-meta-ads",
+      "at": "2026-05-25T13:26:25+0530",
+      "lane": "meta-ads",
+      "task": "Create separate individual Figma creative frames for Meta WABA retargeting",
+      "status": "ready",
+      "summary": "After user clarified the production board was not the actual creative, created separate top-level Figma creative frames on page 06 Meta + WABA Ads, placed to the right of the board: HE Meta WABA A1-A5 in both 9:16 1080x1920 and 4:5 1080x1350. Each frame is an editable professional shell with brand chip, heritage chip, image placeholder, bucket label, headline/subline, voucher module, WhatsApp CTA, and format note. Fixed compressed 4:5 geometry and screenshot-validated A1 9:16 and A1 4:5. No asset upload, Gemini generation, Meta/WABA/Google spend, or customer mutation.",
+      "next_action": "Use Shift+2 on selected A1/A2/etc frame in Figma to view individual creatives. Next execution: shortlist and visually inspect canonical assets, then replace placeholders with approved food/outlet/voucher references in each creative frame.",
+      "mutation_status": "Figma design mutation only: created 10 individual creative frames and fixed 4:5 spacing; no paid media, WABA send, Google Ads, GBP, POS, Odoo, or customer mutation"
+    },
     {
       "id": "20260525131416-meta-ads",
       "at": "2026-05-25T13:14:16+0530",
