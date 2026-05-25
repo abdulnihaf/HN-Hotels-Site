@@ -42,6 +42,19 @@ function todayIstDate() {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function yesterdayIstDate() {
+  const d = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function withinDailyReportWindow() {
+  const d = nowIST();
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  return h === 3 && m < 15;
+}
+
 async function runRing2Pull(env) {
   const key = env.DASHBOARD_KEY || env.DASHBOARD_API_KEY;
   if (!key) return { ok: false, error: 'DASHBOARD_KEY missing' };
@@ -58,6 +71,36 @@ async function runRing2Pull(env) {
         to: today,
         max_pages: 1,
         notify: true,
+      }),
+    });
+    const text = await res.text();
+    let body = null;
+    try { body = JSON.parse(text); } catch { body = { raw: text.slice(0, 500) }; }
+    return { ok: res.ok && body?.ok !== false, status: res.status, body };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+async function runDailyOwnerReport(env) {
+  if (!withinDailyReportWindow()) return { skipped: true, reason: 'outside_0300_0314_ist' };
+  const key = env.DASHBOARD_KEY || env.DASHBOARD_API_KEY;
+  if (!key) return { ok: false, error: 'DASHBOARD_KEY missing' };
+  const today = todayIstDate();
+  const reportDate = yesterdayIstDate();
+  try {
+    const res = await fetch(`${PAGES_BASE}/api/aggregator-pulse?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'daily_owner_report',
+        triggered_by: 'aggregator-health-watcher-cron',
+        report_date: reportDate,
+        from: reportDate,
+        to: today,
+        brands: ['he', 'nch'],
+        max_pages: 4,
+        send: true,
       }),
     });
     const text = await res.text();
@@ -159,6 +202,7 @@ export async function onRequest(context) {
     // partner frontend API replay → D1 order rows + coordinate health.
     out.probes.ring2_pull = await runRing2Pull(env);
     out.probes.ring3_analyze = await runRing3Analyze(env);
+    out.probes.daily_owner_report = await runDailyOwnerReport(env);
 
     // A. Delivery health
     const delivery = await probeJson(env, 'health');
