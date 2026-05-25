@@ -433,6 +433,7 @@ async function handleGet(db, url, headers) {
       ok: true,
       action: 'coa-actions',
       doctrine: 'COA Ring 2 - Action. Every pull attempt is a trajectory over a closed Ring 1 coordinate.',
+      seed_version: AGGREGATOR_COA_RING2_VERSION,
       generated_at: new Date().toISOString(),
       latest_runs: (runs.results || []).map(parseRing2JsonColumns),
       latest_attempts: (attempts.results || []).map(parseRing2JsonColumns),
@@ -1318,6 +1319,7 @@ async function handleGet(db, url, headers) {
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
 
 const AGGREGATOR_COA_RING1_VERSION = '2026-05-25-ring1-v1';
+const AGGREGATOR_COA_RING2_VERSION = '2026-05-25-ring2-v1';
 
 const AGGREGATOR_COA_RING1_SEED = {
   brands: [
@@ -1712,6 +1714,7 @@ async function executeAggregatorCoaRing2Pull(db, env, body = {}) {
     ok: critical.length === 0,
     action: 'coa_ring2_pull',
     doctrine: 'COA Ring 2 - Action. Pull attempts over Ring 1 coordinates.',
+    seed_version: AGGREGATOR_COA_RING2_VERSION,
     run_id: runId,
     mode,
     requested_from: from,
