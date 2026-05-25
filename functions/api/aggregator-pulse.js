@@ -6,6 +6,8 @@
 //   - Orders supports custom from/to date range (IST) in addition to presets
 //   - Health endpoint returns status = ok | degraded | down based on silence gaps
 
+import { sendWaba } from './_lib/comms-core.js';
+
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -67,6 +69,15 @@ async function handlePost(db, request, headers, env) {
     return storeOrders(db, order ? [order] : [], headers);
   }
 
+  // COA Ring 2 action runner. This is the cron/manual-safe direct partner API
+  // pull path over the Ring 1 coordinate set. It does not mutate partner
+  // portals, POS, Odoo, prices, or offers; it only replays authenticated
+  // frontend order APIs, normalizes rows, and records per-coordinate health.
+  if ((body.type === 'coa_ring2_pull' || body.action === 'coa_ring2_pull')) {
+    const result = await executeAggregatorCoaRing2Pull(db, env, body);
+    return new Response(JSON.stringify(result), { headers });
+  }
+
   // Session posts: retired Apr 19 2026. v6.0 extension is appliance-mode and
   // polls Swiggy directly from Chrome; cron's Swiggy path is disabled so no
   // server-side consumer of KV sessions remains. We accept and discard the
@@ -122,8 +133,12 @@ async function handlePost(db, request, headers, env) {
 }
 
 async function storeOrders(db, orders, headers) {
-  let upserted = 0;
+  const upserted = await upsertOrders(db, orders);
+  return new Response(JSON.stringify({ ok: true, upserted }), { headers });
+}
 
+async function upsertOrders(db, orders) {
+  let upserted = 0;
   for (const o of orders) {
     if (!o.order_id || !o.platform) continue;
 
@@ -156,7 +171,7 @@ async function storeOrders(db, orders, headers) {
     upserted++;
   }
 
-  return new Response(JSON.stringify({ ok: true, upserted }), { headers });
+  return upserted;
 }
 
 // ========= GET =========
@@ -394,6 +409,51 @@ async function handleGet(db, url, headers) {
         'Partner auth secrets are not stored in Ring 1 tables.',
         'A session slot can be expired/stale/valid, but the secret material lives outside D1.',
         'Price/offer/POS/Odoo mutation is outside this ring.',
+      ],
+    }), { headers });
+  }
+
+  // --- COA ACTIONS: Ring 2 pull/health ledger over the Ring 1 coordinate space ---
+  if (action === 'coa-actions') {
+    await ensureAggregatorCoaRing2(db);
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 100);
+    const [runs, attempts, health] = await Promise.all([
+      db.prepare(`SELECT * FROM aggregator_coa_pull_run ORDER BY started_at DESC LIMIT ?`).bind(limit).all(),
+      db.prepare(`SELECT * FROM aggregator_coa_pull_attempt ORDER BY started_at DESC LIMIT ?`).bind(limit * 4).all(),
+      db.prepare(`
+        SELECT h.*, po.canonical_code AS platform_outlet_canonical, ps.canonical_code AS pull_source_canonical,
+               po.partner_outlet_name, ps.source_kind, ps.freshness_sla_minutes
+        FROM aggregator_coa_coordinate_health h
+        LEFT JOIN aggregator_coa_platform_outlet po ON po.code = h.platform_outlet_code
+        LEFT JOIN aggregator_coa_pull_source ps ON ps.code = h.pull_source_code
+        ORDER BY h.platform_code, h.brand_code, h.pull_source_code
+      `).all(),
+    ]);
+    return new Response(JSON.stringify({
+      ok: true,
+      action: 'coa-actions',
+      doctrine: 'COA Ring 2 - Action. Every pull attempt is a trajectory over a closed Ring 1 coordinate.',
+      generated_at: new Date().toISOString(),
+      latest_runs: (runs.results || []).map(parseRing2JsonColumns),
+      latest_attempts: (attempts.results || []).map(parseRing2JsonColumns),
+      coordinate_health: (health.results || []).map(parseRing2JsonColumns),
+      trigger: {
+        method: 'POST',
+        body: {
+          type: 'coa_ring2_pull',
+          mode: 'live',
+          from: 'YYYY-MM-DD',
+          to: 'YYYY-MM-DD',
+          max_pages: 3,
+          notify: false,
+        },
+      },
+      constraints: [
+        'Ring 2 writes only HN D1 order/health/action rows.',
+        'No Swiggy/Zomato portal configuration is changed.',
+        'No POS/Odoo/ad/price/offer mutation is possible from this action.',
+        'Partner session material must live in Cloudflare secrets, not D1.',
+        'WABA owner alert sends only when notify=true and a critical session/parser failure is detected.',
       ],
     }), { headers });
   }
@@ -1252,7 +1312,7 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
-  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'owner-orders', 'latest', 'stats', 'coa-entities', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'day-orders', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
+  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'owner-orders', 'latest', 'stats', 'coa-entities', 'coa-actions', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'day-orders', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
@@ -1502,6 +1562,491 @@ function validPlatformOutletPullPairs(entities) {
   }
   return pairs;
 }
+
+async function ensureAggregatorCoaRing2(db) {
+  await ensureAggregatorCoaRing1(db);
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_pull_run (
+      run_id TEXT PRIMARY KEY,
+      mode TEXT NOT NULL CHECK (mode IN ('dry_run', 'live', 'backfill')),
+      triggered_by TEXT NOT NULL DEFAULT 'manual',
+      requested_from TEXT,
+      requested_to TEXT,
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      status_code TEXT NOT NULL REFERENCES aggregator_coa_health_state(code),
+      attempts_total INTEGER NOT NULL DEFAULT 0,
+      attempts_ok INTEGER NOT NULL DEFAULT 0,
+      orders_seen INTEGER NOT NULL DEFAULT 0,
+      orders_upserted INTEGER NOT NULL DEFAULT 0,
+      summary_json TEXT,
+      error TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_pull_attempt (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id TEXT NOT NULL REFERENCES aggregator_coa_pull_run(run_id),
+      coordinate TEXT NOT NULL,
+      platform_outlet_code TEXT NOT NULL REFERENCES aggregator_coa_platform_outlet(code),
+      pull_source_code TEXT NOT NULL REFERENCES aggregator_coa_pull_source(code),
+      platform_code TEXT NOT NULL,
+      brand_code TEXT NOT NULL,
+      partner_outlet_id TEXT NOT NULL,
+      status_code TEXT NOT NULL REFERENCES aggregator_coa_health_state(code),
+      http_status INTEGER,
+      rows_seen INTEGER NOT NULL DEFAULT 0,
+      rows_upserted INTEGER NOT NULL DEFAULT 0,
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      error TEXT,
+      response_sample TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS aggregator_coa_coordinate_health (
+      platform_outlet_code TEXT NOT NULL REFERENCES aggregator_coa_platform_outlet(code),
+      pull_source_code TEXT NOT NULL REFERENCES aggregator_coa_pull_source(code),
+      coordinate TEXT NOT NULL,
+      platform_code TEXT NOT NULL,
+      brand_code TEXT NOT NULL,
+      partner_outlet_id TEXT NOT NULL,
+      status_code TEXT NOT NULL REFERENCES aggregator_coa_health_state(code),
+      last_attempt_at TEXT,
+      last_success_at TEXT,
+      last_http_status INTEGER,
+      consecutive_failures INTEGER NOT NULL DEFAULT 0,
+      last_rows_seen INTEGER NOT NULL DEFAULT 0,
+      last_rows_upserted INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      waba_alert_last_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (platform_outlet_code, pull_source_code)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_agg_coa_attempt_run ON aggregator_coa_pull_attempt(run_id, started_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_agg_coa_attempt_coord ON aggregator_coa_pull_attempt(platform_outlet_code, pull_source_code, started_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_agg_coa_health_status ON aggregator_coa_coordinate_health(status_code, updated_at DESC)`,
+  ];
+  for (const sql of statements) await db.prepare(sql).run();
+
+  const entities = await readAggregatorCoaRing1(db);
+  for (const pair of validPlatformOutletPullPairs(entities)) {
+    await db.prepare(`
+      INSERT INTO aggregator_coa_coordinate_health
+        (platform_outlet_code, pull_source_code, coordinate, platform_code, brand_code, partner_outlet_id, status_code, last_error)
+      VALUES (?, ?, ?, ?, ?, ?, 'not_configured', 'No pull attempt has run for this coordinate yet.')
+      ON CONFLICT(platform_outlet_code, pull_source_code) DO UPDATE SET
+        coordinate=excluded.coordinate,
+        platform_code=excluded.platform_code,
+        brand_code=excluded.brand_code,
+        partner_outlet_id=excluded.partner_outlet_id,
+        updated_at=datetime('now')
+    `).bind(
+      pair.platform_outlet_code,
+      pair.pull_source_code,
+      pair.coordinate,
+      pair.platform_code,
+      pair.brand_code,
+      pair.partner_outlet_id
+    ).run();
+  }
+}
+
+function parseRing2JsonColumns(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    summary_json: row.summary_json ? safeJsonParse(row.summary_json) : row.summary_json,
+    response_sample: row.response_sample ? safeJsonParse(row.response_sample) : row.response_sample,
+  };
+}
+
+async function executeAggregatorCoaRing2Pull(db, env, body = {}) {
+  await ensureAggregatorCoaRing2(db);
+  const entities = await readAggregatorCoaRing1(db);
+  const pairs = validPlatformOutletPullPairs(entities);
+  const mode = body.mode === 'backfill' ? 'backfill' : body.mode === 'dry_run' ? 'dry_run' : 'live';
+  const from = validIsoDate(body.from) ? body.from : todayIstDate();
+  const to = validIsoDate(body.to) ? body.to : from;
+  const maxPages = Math.max(1, Math.min(parseInt(body.max_pages || '3', 10) || 3, 10));
+  const limit = Math.max(1, Math.min(parseInt(body.limit || '50', 10) || 50, 100));
+  const runId = `agg-ring2-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const startedAt = new Date().toISOString();
+
+  await db.prepare(`
+    INSERT INTO aggregator_coa_pull_run
+      (run_id, mode, triggered_by, requested_from, requested_to, started_at, status_code)
+    VALUES (?, ?, ?, ?, ?, ?, 'stale')
+  `).bind(runId, mode, body.triggered_by || 'manual', from, to, startedAt).run();
+
+  const filterPlatform = body.platform && body.platform !== 'all' ? String(body.platform) : null;
+  const filterBrand = body.brand && body.brand !== 'all' ? String(body.brand) : null;
+  const filterSource = body.source && body.source !== 'all' ? String(body.source) : null;
+  const attempts = [];
+
+  for (const pair of pairs) {
+    if (filterPlatform && pair.platform_code !== filterPlatform) continue;
+    if (filterBrand && pair.brand_code !== filterBrand) continue;
+    if (filterSource && pair.pull_source_code !== filterSource && pair.source_kind !== filterSource) continue;
+    attempts.push(await runAggregatorPullAttempt(db, env, pair, { runId, mode, from, to, maxPages, limit, notify: body.notify === true }));
+  }
+
+  const attemptsOk = attempts.filter(a => a.status_code === 'ok' || a.status_code === 'empty_response').length;
+  const critical = attempts.filter(a => ['unauthorized', 'parser_failed'].includes(a.status_code));
+  const runnable = attempts.filter(a => a.status_code !== 'not_configured');
+  const statusCode = critical.length ? 'partial' : runnable.length && attemptsOk === runnable.length ? 'ok' : 'partial';
+  const ordersSeen = attempts.reduce((sum, a) => sum + (a.rows_seen || 0), 0);
+  const ordersUpserted = attempts.reduce((sum, a) => sum + (a.rows_upserted || 0), 0);
+  const completedAt = new Date().toISOString();
+  const summary = {
+    pairs_requested: attempts.length,
+    attempts_ok: attemptsOk,
+    critical_failures: critical.length,
+    not_configured: attempts.filter(a => a.status_code === 'not_configured').length,
+    source_status_counts: countBy(attempts, 'status_code'),
+  };
+
+  await db.prepare(`
+    UPDATE aggregator_coa_pull_run
+    SET completed_at=?, status_code=?, attempts_total=?, attempts_ok=?, orders_seen=?, orders_upserted=?, summary_json=?
+    WHERE run_id=?
+  `).bind(completedAt, statusCode, attempts.length, attemptsOk, ordersSeen, ordersUpserted, JSON.stringify(summary), runId).run();
+
+  return {
+    ok: critical.length === 0,
+    action: 'coa_ring2_pull',
+    doctrine: 'COA Ring 2 - Action. Pull attempts over Ring 1 coordinates.',
+    run_id: runId,
+    mode,
+    requested_from: from,
+    requested_to: to,
+    status_code: statusCode,
+    summary,
+    attempts,
+    mutation_boundary: 'HN D1 order/action/health rows only. No partner portal, POS, Odoo, price, or offer mutation.',
+  };
+}
+
+async function runAggregatorPullAttempt(db, env, pair, opts) {
+  const startedAt = new Date().toISOString();
+  let result;
+  try {
+    if (pair.platform_code === 'swiggy' && pair.pull_source_code === 'swiggy_history') {
+      result = await pullSwiggyHistoryCoordinate(env, pair, opts);
+    } else if (pair.platform_code === 'swiggy' && pair.pull_source_code === 'swiggy_fetch_orders') {
+      result = await pullSwiggyFetchCoordinate(env, pair);
+    } else if (pair.platform_code === 'zomato' && pair.pull_source_code === 'zomato_history_v2') {
+      result = await pullZomatoHistoryCoordinate(env, pair, opts);
+    } else {
+      result = {
+        status_code: 'not_configured',
+        rows_seen: 0,
+        rows: [],
+        error: `${pair.pull_source_code} is defined in Ring 1 but automatic pull is not configured in Ring 2 yet.`,
+      };
+    }
+  } catch (err) {
+    result = { status_code: 'parser_failed', rows_seen: 0, rows: [], error: err.message };
+  }
+
+  if (result.rows?.length && opts.mode !== 'dry_run') {
+    result.rows_upserted = await upsertOrders(db, result.rows);
+  } else {
+    result.rows_upserted = 0;
+  }
+
+  const completedAt = new Date().toISOString();
+  const sample = result.sample || (result.rows?.length ? result.rows.slice(0, 3).map(r => ({
+    order_id: r.order_id, status: r.status, order_date: r.order_date, order_value: r.order_value,
+  })) : null);
+
+  await db.prepare(`
+    INSERT INTO aggregator_coa_pull_attempt
+      (run_id, coordinate, platform_outlet_code, pull_source_code, platform_code, brand_code, partner_outlet_id,
+       status_code, http_status, rows_seen, rows_upserted, started_at, completed_at, error, response_sample)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    opts.runId,
+    pair.coordinate,
+    pair.platform_outlet_code,
+    pair.pull_source_code,
+    pair.platform_code,
+    pair.brand_code,
+    pair.partner_outlet_id,
+    result.status_code,
+    result.http_status || null,
+    result.rows_seen || 0,
+    result.rows_upserted || 0,
+    startedAt,
+    completedAt,
+    result.error || null,
+    sample ? JSON.stringify(sample).slice(0, 2000) : null
+  ).run();
+
+  await updateCoordinateHealth(db, pair, result, completedAt);
+
+  const alert = await maybeSendAggregatorSessionAlert(db, env, pair, result, opts);
+  return {
+    coordinate: pair.coordinate,
+    platform_outlet_code: pair.platform_outlet_code,
+    pull_source_code: pair.pull_source_code,
+    platform: pair.platform_code,
+    brand: pair.brand_code,
+    partner_outlet_id: pair.partner_outlet_id,
+    status_code: result.status_code,
+    http_status: result.http_status || null,
+    rows_seen: result.rows_seen || 0,
+    rows_upserted: result.rows_upserted || 0,
+    error: result.error || null,
+    alert,
+  };
+}
+
+async function updateCoordinateHealth(db, pair, result, atIso) {
+  const ok = result.status_code === 'ok' || result.status_code === 'empty_response';
+  await db.prepare(`
+    INSERT INTO aggregator_coa_coordinate_health
+      (platform_outlet_code, pull_source_code, coordinate, platform_code, brand_code, partner_outlet_id,
+       status_code, last_attempt_at, last_success_at, last_http_status, consecutive_failures,
+       last_rows_seen, last_rows_upserted, last_error, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(platform_outlet_code, pull_source_code) DO UPDATE SET
+      coordinate=excluded.coordinate,
+      platform_code=excluded.platform_code,
+      brand_code=excluded.brand_code,
+      partner_outlet_id=excluded.partner_outlet_id,
+      status_code=excluded.status_code,
+      last_attempt_at=excluded.last_attempt_at,
+      last_success_at=CASE WHEN excluded.last_success_at IS NOT NULL THEN excluded.last_success_at ELSE last_success_at END,
+      last_http_status=excluded.last_http_status,
+      consecutive_failures=CASE WHEN excluded.last_success_at IS NOT NULL THEN 0 ELSE consecutive_failures + 1 END,
+      last_rows_seen=excluded.last_rows_seen,
+      last_rows_upserted=excluded.last_rows_upserted,
+      last_error=excluded.last_error,
+      updated_at=datetime('now')
+  `).bind(
+    pair.platform_outlet_code,
+    pair.pull_source_code,
+    pair.coordinate,
+    pair.platform_code,
+    pair.brand_code,
+    pair.partner_outlet_id,
+    result.status_code,
+    atIso,
+    ok ? atIso : null,
+    result.http_status || null,
+    ok ? 0 : 1,
+    result.rows_seen || 0,
+    result.rows_upserted || 0,
+    result.error || null
+  ).run();
+
+  const sessionCode = pair.platform_code === 'swiggy' ? 'swiggy_partner_session' : 'zomato_partner_session';
+  const sessionState = ['unauthorized', 'parser_failed'].includes(result.status_code)
+    ? result.status_code
+    : (ok ? 'ok' : null);
+  if (sessionState) {
+    await db.prepare(`
+      UPDATE aggregator_coa_session_slot
+      SET state_code=?, last_validated_at=CASE WHEN ?='ok' THEN ? ELSE last_validated_at END, updated_at=datetime('now')
+      WHERE code=?
+    `).bind(sessionState, sessionState, atIso, sessionCode).run();
+  }
+}
+
+async function maybeSendAggregatorSessionAlert(db, env, pair, result, opts) {
+  if (!opts.notify) return { skipped: true, reason: 'notify_false' };
+  if (!['unauthorized', 'parser_failed'].includes(result.status_code)) return { skipped: true, reason: 'not_critical' };
+  if (!env.ALERT_PHONE) return { skipped: true, reason: 'no_ALERT_PHONE' };
+
+  const row = await db.prepare(`
+    SELECT waba_alert_last_at
+    FROM aggregator_coa_coordinate_health
+    WHERE platform_outlet_code=? AND pull_source_code=?
+  `).bind(pair.platform_outlet_code, pair.pull_source_code).first();
+  if (row?.waba_alert_last_at && Date.now() - new Date(row.waba_alert_last_at).getTime() < 30 * 60_000) {
+    return { skipped: true, reason: 'suppressed_30m' };
+  }
+
+  const resultSend = await sendWaba(env, {
+    brand: 'sparksol',
+    phone: env.ALERT_PHONE,
+    template: 'aggregator_session_expired_alert_v1',
+    language: 'en',
+    vars: [
+      pair.platform_code.toUpperCase(),
+      `${pair.brand_code.toUpperCase()} ${pair.partner_outlet_id}`,
+      result.status_code,
+      'Refresh partner cURL/session in aggregator dashboard',
+    ],
+  });
+  await db.prepare(`
+    UPDATE aggregator_coa_coordinate_health
+    SET waba_alert_last_at=?, updated_at=datetime('now')
+    WHERE platform_outlet_code=? AND pull_source_code=?
+  `).bind(new Date().toISOString(), pair.platform_outlet_code, pair.pull_source_code).run();
+  return { sent: resultSend.ok, status: resultSend.status, provider_msg_id: resultSend.provider_msg_id || null };
+}
+
+async function pullSwiggyHistoryCoordinate(env, pair, opts) {
+  const token = env.AGG_SWIGGY_ACCESS_TOKEN
+    || parseCurlText(env.AGG_SWIGGY_FETCH_CURL || env.AGG_SWIGGY_HISTORY_CURL || '')?.headers?.accesstoken;
+  if (!token) return { status_code: 'not_configured', rows_seen: 0, rows: [], error: 'Missing AGG_SWIGGY_ACCESS_TOKEN or Swiggy cURL secret.' };
+
+  const rows = [];
+  let lastHttp = null;
+  for (let page = 0; page < opts.maxPages; page++) {
+    const offset = page * 20;
+    const url = new URL('https://rms.swiggy.com/orders/v1/history');
+    url.searchParams.set('limit', '20');
+    url.searchParams.set('offset', String(offset));
+    url.searchParams.set('ordered_time__gte', opts.from);
+    url.searchParams.set('ordered_time__lte', opts.to);
+    url.searchParams.set('restaurant_id', pair.partner_outlet_id);
+    const res = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        accept: '*/*',
+        'content-type': 'application/json',
+        origin: 'https://partner.swiggy.com',
+        referer: 'https://partner.swiggy.com/',
+        'user-agent': DEFAULT_PARTNER_UA,
+        accesstoken: token,
+      },
+    });
+    lastHttp = res.status;
+    const payload = await parsePartnerJson(res);
+    if (res.status === 401 || res.status === 403) return { status_code: 'unauthorized', http_status: res.status, rows_seen: 0, rows: [], error: 'Swiggy token unauthorized/expired.' };
+    if (!res.ok) return { status_code: 'parser_failed', http_status: res.status, rows_seen: 0, rows: [], error: `Swiggy history HTTP ${res.status}`, sample: payload.sample || null };
+    if (payload.parse_error) return { status_code: 'parser_failed', http_status: res.status, rows_seen: 0, rows: [], error: 'Swiggy history JSON parse failed.', sample: payload.sample };
+    const pageRows = normalizeSwiggyHistory(payload).map(row => ({
+      ...row,
+      brand: pair.brand_code,
+      outlet_name: DIRECT_SWIGGY_OUTLETS[pair.partner_outlet_id]?.outlet_name || row.outlet_name,
+    }));
+    rows.push(...pageRows);
+    const count = pageRows.length;
+    const totalCount = (payload.data || []).reduce((sum, block) => sum + Number(block.data?.meta?.total_count || 0), 0);
+    if (!count || count < 20 || (totalCount && offset + count >= totalCount)) break;
+  }
+  return {
+    status_code: rows.length ? 'ok' : 'empty_response',
+    http_status: lastHttp,
+    rows_seen: rows.length,
+    rows,
+  };
+}
+
+async function pullSwiggyFetchCoordinate(env, pair) {
+  const parsed = parseCurlText(env.AGG_SWIGGY_FETCH_CURL || '');
+  const token = env.AGG_SWIGGY_ACCESS_TOKEN || parsed?.headers?.accesstoken;
+  if (!token) return { status_code: 'not_configured', rows_seen: 0, rows: [], error: 'Missing AGG_SWIGGY_FETCH_CURL or AGG_SWIGGY_ACCESS_TOKEN.' };
+  const body = parsed?.body || JSON.stringify({ restaurantIds: [Number(pair.partner_outlet_id)] });
+  const headers = {
+    ...(parsed?.headers || {}),
+    accept: '*/*',
+    'content-type': 'application/json',
+    origin: 'https://partner.swiggy.com',
+    referer: 'https://partner.swiggy.com/',
+    'user-agent': DEFAULT_PARTNER_UA,
+    accesstoken: token,
+  };
+  cleanReplayHeaders(headers);
+  const res = await fetch('https://rms.swiggy.com/orders/v1/fetchOrders', { method: 'POST', headers, body });
+  const payload = await parsePartnerJson(res);
+  if (res.status === 401 || res.status === 403) return { status_code: 'unauthorized', http_status: res.status, rows_seen: 0, rows: [], error: 'Swiggy fetch token unauthorized/expired.' };
+  if (!res.ok || payload.parse_error) return { status_code: 'parser_failed', http_status: res.status, rows_seen: 0, rows: [], error: payload.parse_error ? 'Swiggy fetch JSON parse failed.' : `Swiggy fetch HTTP ${res.status}`, sample: payload.sample || null };
+  const rows = normalizeSwiggyFetchOrders(payload)
+    .filter(row => row.brand === pair.brand_code || row.outlet_name === DIRECT_SWIGGY_OUTLETS[pair.partner_outlet_id]?.outlet_name);
+  return { status_code: rows.length ? 'ok' : 'empty_response', http_status: res.status, rows_seen: rows.length, rows };
+}
+
+async function pullZomatoHistoryCoordinate(env, pair, opts) {
+  const parsed = parseCurlText(env.AGG_ZOMATO_HISTORY_CURL || '');
+  if (!parsed?.url || !parsed?.headers) return { status_code: 'not_configured', rows_seen: 0, rows: [], error: 'Missing AGG_ZOMATO_HISTORY_CURL secret.' };
+  const rows = [];
+  const baseBody = parsed.body ? safeJsonParse(parsed.body) : {};
+  if (!baseBody || typeof baseBody !== 'object') return { status_code: 'parser_failed', rows_seen: 0, rows: [], error: 'AGG_ZOMATO_HISTORY_CURL body is not JSON.' };
+  const headers = { ...parsed.headers, accept: 'application/json, text/plain, */*', 'content-type': 'application/json' };
+  cleanReplayHeaders(headers);
+  let postback = '';
+  let lastHttp = null;
+  for (let page = 0; page < opts.maxPages; page++) {
+    const body = {
+      ...baseBody,
+      res_Id: pair.partner_outlet_id,
+      limit: opts.limit,
+      created_at: `${opts.from},${addIsoDays(opts.to, 1)}`,
+      postback_params: postback || '',
+      get_filters: postback ? false : true,
+    };
+    const res = await fetch('https://api.zomato.com/merchant-gw/web/order/history/get-all-v2', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    lastHttp = res.status;
+    const payload = await parsePartnerJson(res);
+    if (res.status === 401 || res.status === 403) return { status_code: 'unauthorized', http_status: res.status, rows_seen: rows.length, rows, error: 'Zomato cookie/CSRF unauthorized/expired.' };
+    if (!res.ok) return { status_code: 'parser_failed', http_status: res.status, rows_seen: rows.length, rows, error: `Zomato history HTTP ${res.status}`, sample: payload.sample || null };
+    if (payload.parse_error) return { status_code: 'parser_failed', http_status: res.status, rows_seen: rows.length, rows, error: 'Zomato history JSON parse failed.', sample: payload.sample };
+    const pageRows = normalizeZomatoOrderHistory(payload).map(row => ({
+      ...row,
+      brand: pair.brand_code,
+      outlet_name: DIRECT_ZOMATO_OUTLETS[pair.partner_outlet_id]?.outlet_name || row.outlet_name,
+    }));
+    rows.push(...pageRows);
+    postback = payload.postbackParams || payload.postback_params || '';
+    if (!payload.hasMore || !postback) break;
+  }
+  return { status_code: rows.length ? 'ok' : 'empty_response', http_status: lastHttp, rows_seen: rows.length, rows };
+}
+
+async function parsePartnerJson(res) {
+  const text = await res.text();
+  try { return JSON.parse(text); }
+  catch { return { parse_error: true, sample: text.slice(0, 300) }; }
+}
+
+function parseCurlText(text) {
+  if (!text || typeof text !== 'string') return null;
+  const url = text.match(/https?:\/\/[^\s'"]+/)?.[0]?.replace(/\\$/, '');
+  const headers = {};
+  for (const match of text.matchAll(/(?:-H|--header)\s+['"]([^:'"]+):\s*([^'"]*)['"]/g)) {
+    headers[match[1].toLowerCase()] = match[2];
+  }
+  const cookieMatch = text.match(/(?:-b|--cookie)\s+\$?'([^']*)'/s)
+    || text.match(/(?:-b|--cookie)\s+"([\s\S]*?)"/s);
+  if (cookieMatch && !headers.cookie) headers.cookie = cookieMatch[1].replace(/\\\n/g, '').replace(/\\'/g, "'");
+  const dataMatch = text.match(/--data(?:-raw|-binary)?\s+\$?'([^']*)'/s)
+    || text.match(/--data(?:-raw|-binary)?\s+"([\s\S]*?)"/s);
+  const body = dataMatch ? dataMatch[1].replace(/\\\n/g, '').replace(/\\'/g, "'") : undefined;
+  return { url, headers, body };
+}
+
+function cleanReplayHeaders(headers) {
+  for (const key of Object.keys(headers)) {
+    if (/^(host|content-length|connection|accept-encoding)$/i.test(key)) delete headers[key];
+  }
+}
+
+function todayIstDate() {
+  return new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+}
+
+function validIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
+
+function addIsoDays(yyyyMmDd, days) {
+  const d = new Date(`${yyyyMmDd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function countBy(rows, key) {
+  const out = {};
+  for (const row of rows || []) out[row[key]] = (out[row[key]] || 0) + 1;
+  return out;
+}
+
+const DEFAULT_PARTNER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36';
 
 const DIRECT_SWIGGY_OUTLETS = {
   '1342888': { brand: 'he', outlet_name: 'Hamza Express' },
