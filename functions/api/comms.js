@@ -18,9 +18,127 @@ const json = (data, status = 200) =>
     headers: { 'content-type': 'application/json' },
   });
 
+const META_GRAPH_VERSION = 'v24.0';
+const AGGREGATOR_DAILY_REPORT_TEMPLATE = {
+  name: 'aggregator_daily_owner_report_v1',
+  language: 'en',
+  category: 'UTILITY',
+  components: [
+    {
+      type: 'HEADER',
+      format: 'TEXT',
+      text: 'Daily aggregator report',
+    },
+    {
+      type: 'BODY',
+      text: [
+        '{{1}} report for {{2}} is ready.',
+        '',
+        'Orders: {{3}}',
+        'Revenue: {{4}}',
+        'Issues: {{5}}',
+        'Priority action: {{6}}',
+        '',
+        'Full report: {{7}}',
+      ].join('\n'),
+      example: {
+        body_text: [[
+          'Hamza Express',
+          '25 May 2026',
+          '9 total, 6 delivered, 2 rejected/cancelled, 1 active',
+          'Rs 1,808 delivered, Rs 1,165 at risk',
+          'Rejected order and out-of-stock cancellation found',
+          'Fix stock/session acceptance before changing offers',
+          'https://hnhotels.in/ops/he/aggregator/',
+        ]],
+      },
+    },
+    {
+      type: 'FOOTER',
+      text: 'HN Hotels COA daily close',
+    },
+  ],
+};
+
 function authOk(request, env, body) {
   const key = request.headers.get('x-dashboard-key') || body?.dashboard_key;
   return key && key === env.DASHBOARD_KEY;
+}
+
+function wabaConfigForBrand(env, brand) {
+  const b = brand || 'he';
+  if (b === 'nch') {
+    return {
+      brand: b,
+      wabaId: env.WA_NCH_WABA_ID,
+      token: env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN,
+    };
+  }
+  if (b === 'he') {
+    return {
+      brand: b,
+      wabaId: env.WA_HE_WABA_ID,
+      token: env.WA_HE_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN,
+    };
+  }
+  if (b === 'sparksol') {
+    return {
+      brand: b,
+      wabaId: env.WA_SPARKSOL_WABA_ID || env.WABA_ID,
+      token: env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN,
+    };
+  }
+  return { brand: b, error: 'unsupported_brand' };
+}
+
+async function graphJson(url, token, init = {}) {
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      ...(init.headers || {}),
+    },
+  });
+  const text = await res.text();
+  let body = null;
+  try { body = JSON.parse(text); } catch { body = { raw: text.slice(0, 500) }; }
+  return { ok: res.ok, status: res.status, body };
+}
+
+async function getWabaTemplate(env, brand, name = AGGREGATOR_DAILY_REPORT_TEMPLATE.name) {
+  const cfg = wabaConfigForBrand(env, brand);
+  if (cfg.error) return { ok: false, brand, error: cfg.error };
+  if (!cfg.wabaId || !cfg.token) return { ok: false, brand, error: 'waba_id_or_token_missing' };
+
+  const url = new URL(`https://graph.facebook.com/${META_GRAPH_VERSION}/${cfg.wabaId}/message_templates`);
+  url.searchParams.set('fields', 'id,name,status,category,language,rejected_reason');
+  url.searchParams.set('name', name);
+  url.searchParams.set('limit', '10');
+  const r = await graphJson(url.toString(), cfg.token);
+  if (!r.ok) return { ok: false, brand, status: r.status, response: r.body };
+  const found = (r.body?.data || []).find(t => t.name === name);
+  return { ok: true, brand, template: found || null };
+}
+
+async function ensureAggregatorDailyReportTemplate(env, brand) {
+  const existing = await getWabaTemplate(env, brand);
+  if (!existing.ok) return existing;
+  if (existing.template) return { ...existing, created: false };
+
+  const cfg = wabaConfigForBrand(env, brand);
+  const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${cfg.wabaId}/message_templates`;
+  const created = await graphJson(url, cfg.token, {
+    method: 'POST',
+    body: JSON.stringify(AGGREGATOR_DAILY_REPORT_TEMPLATE),
+  });
+  return {
+    ok: created.ok,
+    brand,
+    created: created.ok,
+    status: created.status,
+    response: created.body,
+  };
 }
 
 export async function onRequest(context) {
@@ -65,6 +183,36 @@ export async function onRequest(context) {
   try { body = await request.json(); } catch { return json({ error: 'invalid JSON' }, 400); }
 
   if (!authOk(request, env, body)) return json({ error: 'unauthorized' }, 401);
+
+  if (action === 'ensure-aggregator-report-template') {
+    const brands = Array.isArray(body.brands) && body.brands.length
+      ? body.brands
+      : [body.brand || 'he'];
+    const results = [];
+    for (const brand of brands) {
+      results.push(await ensureAggregatorDailyReportTemplate(env, brand));
+    }
+    return json({
+      ok: results.every(r => r.ok),
+      template: AGGREGATOR_DAILY_REPORT_TEMPLATE.name,
+      results,
+    }, results.every(r => r.ok) ? 200 : 500);
+  }
+
+  if (action === 'aggregator-report-template-status') {
+    const brands = Array.isArray(body.brands) && body.brands.length
+      ? body.brands
+      : [body.brand || 'he'];
+    const results = [];
+    for (const brand of brands) {
+      results.push(await getWabaTemplate(env, brand));
+    }
+    return json({
+      ok: results.every(r => r.ok),
+      template: AGGREGATOR_DAILY_REPORT_TEMPLATE.name,
+      results,
+    }, results.every(r => r.ok) ? 200 : 500);
+  }
 
   if (action === 'send') {
     const {
