@@ -1,5 +1,5 @@
 {
-  "version": "2026-05-24.v3",
+  "version": "2026-05-25.v4",
   "group": "Marketing",
   "principle": "Marketing Control is a graph-rendered execution cockpit. The UI renders this file; lane memory overlays from state.json and append-only execution trail overlays from state.jsonl.",
   "owner_tool_default": "Codex",
@@ -8,12 +8,47 @@
   "open_all_command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_hn_marketing_codex_terminals.command",
   "unified_command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Unified_Control_2026-05-24/open_unified_marketing_control.command",
   "groups": [
-    { "name": "Control", "subgroups": ["Control"] },
-    { "name": "Acquisition", "subgroups": ["Paid", "Creator"] },
-    { "name": "Aggregators", "subgroups": ["Delivery", "Dine-In"] },
-    { "name": "Creative Surface", "subgroups": ["Screen", "Print", "Packaging"] },
-    { "name": "Owned Conversion", "subgroups": ["WhatsApp"] },
-    { "name": "POS/Pricing", "subgroups": ["Odoo POS"] }
+    {
+      "name": "Control",
+      "subgroups": [
+        "Control"
+      ]
+    },
+    {
+      "name": "Acquisition",
+      "subgroups": [
+        "Paid",
+        "Creator"
+      ]
+    },
+    {
+      "name": "Aggregators",
+      "subgroups": [
+        "Delivery",
+        "Dine-In"
+      ]
+    },
+    {
+      "name": "Creative Surface",
+      "subgroups": [
+        "Screen",
+        "Print",
+        "Packaging",
+        "Reels"
+      ]
+    },
+    {
+      "name": "Owned Conversion",
+      "subgroups": [
+        "WhatsApp"
+      ]
+    },
+    {
+      "name": "POS/Pricing",
+      "subgroups": [
+        "Odoo POS"
+      ]
+    }
   ],
   "lanes": [
     {
@@ -26,7 +61,9 @@
       "tool_owner": "Codex",
       "risk": "routing",
       "status": "ready",
-      "tags": ["live"],
+      "tags": [
+        "live"
+      ],
       "scope": "Routes marketing demands across execution lanes and checks ownership before action.",
       "summary": "Use when the demand is unclear or spans multiple marketing channels.",
       "next_action": "Classify the demand, identify the owning lane, then hand execution to that terminal.",
@@ -34,7 +71,12 @@
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command master",
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/00-marketing-master-control.md",
       "writeback_required": false,
-      "links": [["Marketing index", "/marketing/"]]
+      "links": [
+        [
+          "Marketing index",
+          "/marketing/"
+        ]
+      ]
     },
     {
       "code": "01",
@@ -46,7 +88,9 @@
       "tool_owner": "Codex",
       "risk": "external outreach",
       "status": "ready",
-      "tags": ["live"],
+      "tags": [
+        "live"
+      ],
       "scope": "Creator discovery, shortlist, outreach, applications, bookings, and conversion proof.",
       "summary": "May campaign, paid shortlist, Urdu paid push, creator outreach, apply flow, approvals, and bookings are known surfaces.",
       "next_action": "Open for creator profile selection, DM/email/WABA outreach, approval, or booking proof.",
@@ -55,11 +99,26 @@
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/01-influencer.md",
       "writeback_required": false,
       "links": [
-        ["Paid shortlist", "/marketing/Influencer/paid-shortlist/"],
-        ["Urdu paid push", "/marketing/Influencer/urdu-paid-push/"],
-        ["Applications", "/ops/influencer-applications/"],
-        ["Bookings", "/ops/influencer-bookings/"],
-        ["HE outreach", "https://hamzaexpress.in/ops/creator-outreach/"]
+        [
+          "Paid shortlist",
+          "/marketing/Influencer/paid-shortlist/"
+        ],
+        [
+          "Urdu paid push",
+          "/marketing/Influencer/urdu-paid-push/"
+        ],
+        [
+          "Applications",
+          "/ops/influencer-applications/"
+        ],
+        [
+          "Bookings",
+          "/ops/influencer-bookings/"
+        ],
+        [
+          "HE outreach",
+          "https://hamzaexpress.in/ops/creator-outreach/"
+        ]
       ]
     },
     {
@@ -72,7 +131,10 @@
       "tool_owner": "Codex",
       "risk": "money mutation",
       "status": "ready",
-      "tags": ["live", "mutation"],
+      "tags": [
+        "live",
+        "mutation"
+      ],
       "scope": "Search, PMax, paid landing CTA, Google cockpit, budget/negative keyword work, Maps proof.",
       "summary": "HE Google cockpit and day-wise paid stack analytics are live; Maps/directions proof chain exists.",
       "next_action": "Open when changing budgets, negatives, campaign status, paid landing, or Maps/directions measurement.",
@@ -81,10 +143,22 @@
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/02-google-ads.md",
       "writeback_required": true,
       "links": [
-        ["Google cockpit", "https://hamzaexpress.in/ops/google-cockpit/"],
-        ["HE GBP", "/marketing/he/gbp/"],
-        ["NCH GBP", "/marketing/nch/gbp/"],
-        ["Directions", "https://hamzaexpress.in/directions/"]
+        [
+          "Google cockpit",
+          "https://hamzaexpress.in/ops/google-cockpit/"
+        ],
+        [
+          "HE GBP",
+          "/marketing/he/gbp/"
+        ],
+        [
+          "NCH GBP",
+          "/marketing/nch/gbp/"
+        ],
+        [
+          "Directions",
+          "https://hamzaexpress.in/directions/"
+        ]
       ]
     },
     {
@@ -97,7 +171,10 @@
       "tool_owner": "Codex",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "tags": ["gated", "mutation"],
+      "tags": [
+        "gated",
+        "mutation"
+      ],
       "scope": "Zomato/Swiggy delivery positioning, offer readiness, margin gates, menu/photo evidence.",
       "summary": "Deep P0 row intelligence exists, but portal execution stays gated by proof and margin evidence.",
       "next_action": "Open for Zomato/Swiggy offer, price, menu, listing, proof pack, or team-upload packet work.",
@@ -106,10 +183,22 @@
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
       "writeback_required": true,
       "links": [
-        ["Aggregator cockpit", "/ops/aggregator/"],
-        ["Delivery positioning", "/ops/intelligence/aggregator-delivery-positioning/"],
-        ["HE Zomato", "/ops/aggregator/he/zomato/"],
-        ["HE Swiggy", "/ops/aggregator/he/swiggy/"]
+        [
+          "Aggregator cockpit",
+          "/ops/aggregator/"
+        ],
+        [
+          "Delivery positioning",
+          "/ops/intelligence/aggregator-delivery-positioning/"
+        ],
+        [
+          "HE Zomato",
+          "/ops/aggregator/he/zomato/"
+        ],
+        [
+          "HE Swiggy",
+          "/ops/aggregator/he/swiggy/"
+        ]
       ]
     },
     {
@@ -122,7 +211,11 @@
       "tool_owner": "Codex",
       "risk": "platform mutation",
       "status": "ready",
-      "tags": ["live", "gated", "mutation"],
+      "tags": [
+        "live",
+        "gated",
+        "mutation"
+      ],
       "scope": "GBP, dine-in aggregator, ambience proof, local trust, reservation/payment attribution.",
       "summary": "GBP and dine-in ambience surfaces exist; aggregator platform state must be verified live.",
       "next_action": "Open for ambience, EazyDiner/Zomato Dining/Swiggy Dine-Out, GBP, rating, or KAM action.",
@@ -131,10 +224,22 @@
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/04-dine-in-aggregator.md",
       "writeback_required": true,
       "links": [
-        ["HE GBP", "/marketing/he/gbp/"],
-        ["NCH GBP", "/marketing/nch/gbp/"],
-        ["Dine playbook", "/ops/intelligence/dine-in-aggregator-playbook/"],
-        ["HE ambience", "https://hamzaexpress.in/marketing/photos/dine-in-ambience/"]
+        [
+          "HE GBP",
+          "/marketing/he/gbp/"
+        ],
+        [
+          "NCH GBP",
+          "/marketing/nch/gbp/"
+        ],
+        [
+          "Dine playbook",
+          "/ops/intelligence/dine-in-aggregator-playbook/"
+        ],
+        [
+          "HE ambience",
+          "https://hamzaexpress.in/marketing/photos/dine-in-ambience/"
+        ]
       ]
     },
     {
@@ -147,7 +252,11 @@
       "tool_owner": "Codex",
       "risk": "screen mutation",
       "status": "ready",
-      "tags": ["live", "creative", "mutation"],
+      "tags": [
+        "live",
+        "creative",
+        "mutation"
+      ],
       "scope": "TV choreography, playlists, upload-ready creative mapping, contact sheets, screen loops.",
       "summary": "TV V2 choreography UI has 7 groups, 28 playlists, 113 asset map, and contact sheets.",
       "next_action": "Open for TV asset correction, upload packet, screen fit, playlist review, or PiSignage mutation.",
@@ -156,8 +265,14 @@
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/05-pisignage.md",
       "writeback_required": true,
       "links": [
-        ["TV choreography", "https://hamzaexpress.in/ops/tv-mission-control/choreography/"],
-        ["TV mission control", "https://hamzaexpress.in/ops/tv-mission-control/"]
+        [
+          "TV choreography",
+          "https://hamzaexpress.in/ops/tv-mission-control/choreography/"
+        ],
+        [
+          "TV mission control",
+          "https://hamzaexpress.in/ops/tv-mission-control/"
+        ]
       ]
     },
     {
@@ -170,7 +285,10 @@
       "tool_owner": "Codex",
       "risk": "money mutation",
       "status": "ready",
-      "tags": ["live", "mutation"],
+      "tags": [
+        "live",
+        "mutation"
+      ],
       "scope": "Meta CTWA campaigns, retargeting, creative analytics, Maps bridge, adset state.",
       "summary": "CTWA cockpit, Meta-to-Maps bridge, and Hamza Loyalist campaign context exist.",
       "next_action": "Open for campaign budget/status, creative performance, retargeting, Maps bridge, or ad diagnostics.",
@@ -179,9 +297,18 @@
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/06-meta-ads.md",
       "writeback_required": true,
       "links": [
-        ["CTWA cockpit", "https://hamzaexpress.in/ops/ctwa-cockpit/"],
-        ["Meta map", "/marketing/he/meta-campaign-map/"],
-        ["Directions", "https://hamzaexpress.in/directions/"]
+        [
+          "CTWA cockpit",
+          "https://hamzaexpress.in/ops/ctwa-cockpit/"
+        ],
+        [
+          "Meta map",
+          "/marketing/he/meta-campaign-map/"
+        ],
+        [
+          "Directions",
+          "https://hamzaexpress.in/directions/"
+        ]
       ]
     },
     {
@@ -194,7 +321,9 @@
       "tool_owner": "Codex",
       "risk": "print quality",
       "status": "ready",
-      "tags": ["creative"],
+      "tags": [
+        "creative"
+      ],
       "scope": "A4 flyers, print assets, menu sheets, facade creative, QR design, deterministic design QA.",
       "summary": "HE flyer/facade/menu/QR assets exist across repo, Desktop, Downloads, and archive paths.",
       "next_action": "Open for physical flyer, menu PDF, QR, facade, or print-ready non-packaging output work.",
@@ -203,9 +332,18 @@
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/07-flyers.md",
       "writeback_required": false,
       "links": [
-        ["Marketing index", "/marketing/"],
-        ["HE menu", "https://hamzaexpress.in/menu/"],
-        ["Captain menu", "https://hamzaexpress.in/menu/captain/"]
+        [
+          "Marketing index",
+          "/marketing/"
+        ],
+        [
+          "HE menu",
+          "https://hamzaexpress.in/menu/"
+        ],
+        [
+          "Captain menu",
+          "https://hamzaexpress.in/menu/captain/"
+        ]
       ]
     },
     {
@@ -218,7 +356,10 @@
       "tool_owner": "Codex",
       "risk": "customer communication mutation",
       "status": "ready",
-      "tags": ["live", "mutation"],
+      "tags": [
+        "live",
+        "mutation"
+      ],
       "scope": "WhatsApp outreach, inbox, QR/payment/voucher journey, templates, KDS/payment proof.",
       "summary": "HE WABA QR/payment/KDS flow was live-tested; inbox, dashboard, leads, and message architecture surfaces exist.",
       "next_action": "Open for WABA sends, templates, QR flows, voucher journey, payment callback, or KDS message proof.",
@@ -227,10 +368,22 @@
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/08-waba-outreach.md",
       "writeback_required": true,
       "links": [
-        ["WABA dashboard", "https://hamzaexpress.in/ops/waba-dashboard/"],
-        ["Inbox", "https://hamzaexpress.in/ops/inbox/"],
-        ["Leads", "https://hamzaexpress.in/ops/leads/"],
-        ["Message architecture", "https://hamzaexpress.in/ops/message-architecture/"]
+        [
+          "WABA dashboard",
+          "https://hamzaexpress.in/ops/waba-dashboard/"
+        ],
+        [
+          "Inbox",
+          "https://hamzaexpress.in/ops/inbox/"
+        ],
+        [
+          "Leads",
+          "https://hamzaexpress.in/ops/leads/"
+        ],
+        [
+          "Message architecture",
+          "https://hamzaexpress.in/ops/message-architecture/"
+        ]
       ]
     },
     {
@@ -243,7 +396,10 @@
       "tool_owner": "Codex",
       "risk": "Odoo/POS mutation",
       "status": "active",
-      "tags": ["live", "mutation"],
+      "tags": [
+        "live",
+        "mutation"
+      ],
       "scope": "Odoo POS price writes, menu/portion matrix, pricelists, offer templates, KDS/category routing.",
       "summary": "HE prices verified 771/771 rows; Cash Counter offer is 20%; Captain and Ground Floor remain 10%; protected rows stay guarded.",
       "next_action": "Open for Odoo price/menu/offer/category/KDS changes or verification after POS state changes.",
@@ -252,10 +408,22 @@
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/09-pos-write.md",
       "writeback_required": true,
       "links": [
-        ["Pricing intelligence", "https://hamzaexpress.in/ops/pricing-intelligence/"],
-        ["Cash pricing", "https://hamzaexpress.in/ops/pricing/cash-counter/"],
-        ["Cash/Ground menu", "https://hamzaexpress.in/menu/"],
-        ["Captain menu", "https://hamzaexpress.in/menu/captain/"]
+        [
+          "Pricing intelligence",
+          "https://hamzaexpress.in/ops/pricing-intelligence/"
+        ],
+        [
+          "Cash pricing",
+          "https://hamzaexpress.in/ops/pricing/cash-counter/"
+        ],
+        [
+          "Cash/Ground menu",
+          "https://hamzaexpress.in/menu/"
+        ],
+        [
+          "Captain menu",
+          "https://hamzaexpress.in/menu/captain/"
+        ]
       ]
     },
     {
@@ -268,7 +436,10 @@
       "tool_owner": "Codex",
       "risk": "print/vendor handoff",
       "status": "ready",
-      "tags": ["creative", "gated"],
+      "tags": [
+        "creative",
+        "gated"
+      ],
       "scope": "HE/NCH packaging doctrine, SKU collapse, NCH flask/tuck execution, render control, and vendor handoff.",
       "summary": "Codex lane seeded from actual Claude execution: May HE+NCH packaging intelligence, April NCH flask origin, and April rejection/correction trail.",
       "next_action": "Open for HE Cheap-Bold render correction, NCH flask panel continuation, tuck-box planning, packaging material decisions, or vendor-ready packaging packs.",
@@ -276,7 +447,48 @@
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
       "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Packaging_Design_Codex_2026-05-24/prompts/10-packaging-design.md",
       "writeback_required": false,
-      "links": [["Marketing index", "/marketing/"]]
+      "links": [
+        [
+          "Marketing index",
+          "/marketing/"
+        ]
+      ]
+    },
+    {
+      "code": "11",
+      "slug": "reel-making",
+      "title": "11 Reel Making",
+      "group": "Creative Surface",
+      "subgroup": "Reels",
+      "brand": "HE/NCH",
+      "tool_owner": "Codex",
+      "risk": "creative publishing and claim accuracy",
+      "status": "ready",
+      "tags": [
+        "creative",
+        "gated"
+      ],
+      "scope": "Raw clip classification, reel briefs, footage readiness, storyboarding, FFmpeg/Remotion/VN-ready exports, and reel system memory.",
+      "summary": "Dedicated reel lane seeded with HE video engine context and the May 25 38-clip classification batch.",
+      "next_action": "Open for reel making, clip readiness, new footage classification, or repeatable reel-system building.",
+      "guardrail": "No wrong-food substitution. Exact dish/combo reels use only Tier 1 exact clips plus ambience; candidate clips need Nihaf confirmation before exact claims.",
+      "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command reel-making",
+      "prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/11-reel-making.md",
+      "writeback_required": true,
+      "links": [
+        [
+          "Clip intelligence",
+          "local:/Users/nihaf/Documents/HE-Raw-Clips/CLIP-INTELLIGENCE.md"
+        ],
+        [
+          "May 25 batch classification",
+          "local:/Users/nihaf/Documents/HE-Raw-Clips/NEW-BATCH-2026-05-25-CLASSIFICATION.md"
+        ],
+        [
+          "Video engine",
+          "local:/Users/nihaf/Documents/Tech/he-video-engine/"
+        ]
+      ]
     }
   ]
 }
