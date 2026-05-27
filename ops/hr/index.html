@@ -2234,7 +2234,7 @@ async function wipeLeegalityOrphans(ids) {
 /* month-end and netted against monthly salary automatically.                   */
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-const advState = { employeeId: null, employee: null, recent: [] };
+const advState = { employeeId: null, employee: null, recent: [], editingId: null };
 
 function getDashboardKey() {
   let dk = localStorage.getItem('hn_msg_dk');
@@ -2290,13 +2290,7 @@ function renderAdvanceModal() {
   const monthCount = advState.recent.length;
 
   const recentRows = advState.recent.length
-    ? advState.recent.map(r => `
-        <div class="flex items-center justify-between text-[11px] py-1 border-b border-white/5">
-          <span class="text-white/50 font-mono">${(r.advance_date || '').slice(0, 10)}</span>
-          <span class="text-white/40 flex-1 px-2">${escapeHtml(r.reason || '—')}</span>
-          <span class="text-white/60">${(r.paid_via || 'cash').toUpperCase()}</span>
-          <span class="font-bold text-emerald-400 ml-2">₹${Number(r.amount || 0).toLocaleString('en-IN')}</span>
-        </div>`).join('')
+    ? advState.recent.map(r => renderAdvanceRow(r)).join('')
     : '<div class="text-white/30 text-[11px] py-2">No advances recorded this month.</div>';
 
   document.getElementById('advanceModalBody').innerHTML = `
@@ -2535,6 +2529,141 @@ function renderAdvanceConfirmation({ amount, date, paidVia, reason, wabaResult }
       </div>
     `}
   `;
+}
+
+// ─── This-month advance rows: view / edit / delete / manual WhatsApp ──────────
+// Admin-only actions. Edit + Delete hit /api/hr-payroll (update-advance /
+// delete-advance). Send WA re-fires the approved hr_advance_paid_v1 template via
+// /api/comms for THIS row's amount/date — used when the auto-fire was skipped
+// (e.g. advance was recorded by curl before the modal existed, or send failed).
+const ADV_PAID_VIA = ['cash', 'upi', 'bank', 'razorpay', 'paytm', 'other'];
+const ADV_REASONS = ['eid_advance', 'advance', 'medical', 'travel', 'festival', 'loan'];
+
+function renderAdvanceRow(r) {
+  const isAdmin = state.role === 'admin';
+  const amt = `₹${Number(r.amount || 0).toLocaleString('en-IN')}`;
+  const date = (r.advance_date || '').slice(0, 10);
+  const via = (r.paid_via || 'cash').toUpperCase();
+
+  if (advState.editingId === r.id) {
+    const viaOpts = ADV_PAID_VIA.map(v => `<option value="${v}" ${v === (r.paid_via || 'cash') ? 'selected' : ''}>${v.toUpperCase()}</option>`).join('');
+    const reasonOpts = ADV_REASONS.map(v => `<option value="${v}" ${v === r.reason ? 'selected' : ''}>${v}</option>`).join('')
+      + (ADV_REASONS.includes(r.reason) ? '' : `<option value="${escapeHtml(r.reason || '')}" selected>${escapeHtml(r.reason || '—')}</option>`);
+    return `
+      <div class="py-2 border-b border-white/5" style="background:rgba(59,130,246,0.06)">
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <input id="edAmt_${r.id}" type="number" min="1" value="${Number(r.amount || 0)}"
+            class="px-2 py-1 rounded text-sm font-bold" style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)">
+          <input id="edDate_${r.id}" type="date" value="${date}"
+            class="px-2 py-1 rounded text-sm" style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)">
+          <select id="edVia_${r.id}" class="px-2 py-1 rounded text-sm" style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)">${viaOpts}</select>
+          <select id="edReason_${r.id}" class="px-2 py-1 rounded text-sm" style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)">${reasonOpts}</select>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="saveEditAdvance(${r.id})" class="btn btn-primary flex-1" style="background:#3b82f6;color:#fff;font-weight:600;padding:4px 8px;font-size:12px">Save</button>
+          <button onclick="cancelEditAdvance()" class="btn btn-ghost" style="padding:4px 8px;font-size:12px">Cancel</button>
+        </div>
+      </div>`;
+  }
+
+  const actions = isAdmin ? `
+    <button onclick="sendAdvanceWabaRow(${r.id})" title="Send WhatsApp receipt" class="badge" style="background:rgba(16,185,129,0.18);color:#34d399;border:none;cursor:pointer;padding:2px 6px;font-size:11px">💬</button>
+    <button onclick="startEditAdvance(${r.id})" title="Edit advance" class="badge" style="background:rgba(59,130,246,0.18);color:#60a5fa;border:none;cursor:pointer;padding:2px 6px;font-size:11px">✏️</button>
+    <button onclick="deleteAdvanceRow(${r.id})" title="Delete advance" class="badge" style="background:rgba(244,63,94,0.18);color:#fb7185;border:none;cursor:pointer;padding:2px 6px;font-size:11px">🗑️</button>
+  ` : '';
+
+  return `
+    <div class="flex items-center justify-between text-[11px] py-1.5 border-b border-white/5">
+      <span class="text-white/50 font-mono">${date}</span>
+      <span class="text-white/40 flex-1 px-2">${escapeHtml(r.reason || '—')}</span>
+      <span class="text-white/60">${via}</span>
+      <span class="font-bold text-emerald-400 ml-2 mr-2">${amt}</span>
+      <span class="flex gap-1">${actions}</span>
+    </div>`;
+}
+
+async function reloadAdvanceRecent() {
+  const dk = getDashboardKey();
+  if (!dk || !advState.employeeId) return;
+  try {
+    const month = new Date().toISOString().slice(0, 7);
+    const r = await fetch(`/api/hr-payroll?action=list-advances&employee_id=${advState.employeeId}&month=${month}`, { headers: { 'x-dashboard-key': dk } });
+    const data = await r.json();
+    advState.recent = data.rows || data.advances || [];
+  } catch (e) { /* non-fatal */ }
+  renderAdvanceModal();
+}
+
+function startEditAdvance(id) { advState.editingId = id; renderAdvanceModal(); }
+function cancelEditAdvance() { advState.editingId = null; renderAdvanceModal(); }
+
+async function saveEditAdvance(id) {
+  const dk = getDashboardKey();
+  if (!dk) { toast('Dashboard key required', 'error'); return; }
+  const amount = parseFloat(document.getElementById(`edAmt_${id}`).value);
+  const advance_date = document.getElementById(`edDate_${id}`).value;
+  const paid_via = document.getElementById(`edVia_${id}`).value;
+  const reason = document.getElementById(`edReason_${id}`).value;
+  if (!amount || amount <= 0) { toast('Amount required', 'error'); return; }
+  try {
+    const r = await fetch('/api/hr-payroll?action=update-advance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({ id, amount, advance_date, paid_via, reason }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'failed');
+    advState.editingId = null;
+    toast('✓ Advance updated');
+    await reloadAdvanceRecent();
+  } catch (e) { toast('Update failed: ' + e.message, 'error'); }
+}
+
+async function deleteAdvanceRow(id) {
+  const dk = getDashboardKey();
+  if (!dk) { toast('Dashboard key required', 'error'); return; }
+  const row = advState.recent.find(x => x.id === id) || {};
+  if (!confirm(`Delete advance of ₹${Number(row.amount || 0).toLocaleString('en-IN')} dated ${(row.advance_date || '').slice(0, 10)}? This removes the ledger row permanently.`)) return;
+  try {
+    const r = await fetch('/api/hr-payroll?action=delete-advance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({ id }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'failed');
+    toast('✓ Advance deleted');
+    await reloadAdvanceRecent();
+  } catch (e) { toast('Delete failed: ' + e.message, 'error'); }
+}
+
+async function sendAdvanceWabaRow(id) {
+  const dk = getDashboardKey();
+  if (!dk) { toast('Dashboard key required', 'error'); return; }
+  const row = advState.recent.find(x => x.id === id);
+  if (!row) { toast('Advance not found', 'error'); return; }
+  const e = advState.employee || {};
+  const phone10 = normalizePhone10(e.phone);
+  if (!phone10) { toast(`No phone on file for ${e.name || 'this employee'} — cannot send`, 'error'); return; }
+  const displayName = e.known_as || e.name || '';
+  const date = (row.advance_date || '').slice(0, 10);
+  const paidViaLabel = (row.paid_via || 'cash').charAt(0).toUpperCase() + (row.paid_via || 'cash').slice(1);
+  toast('Sending WhatsApp…');
+  try {
+    const r = await fetch('/api/comms?action=send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-dashboard-key': dk },
+      body: JSON.stringify({
+        channel: 'waba', brand: 'he', phone: phone10,
+        template: 'hr_advance_paid_v1', language: 'en',
+        vars: [displayName, String(row.amount), date, paidViaLabel],
+        tier: 'info', alert_id: `hr_advance_${e.id}_${date}_manual`,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || ('http_' + r.status));
+    toast(`✓ WhatsApp sent to ${displayName} (outbox #${data.outbox_id || '?'})`);
+  } catch (err) { toast('WhatsApp failed: ' + err.message, 'error'); }
 }
 
 function normalizePhone10(p) {
