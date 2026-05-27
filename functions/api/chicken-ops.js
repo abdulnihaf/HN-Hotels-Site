@@ -252,28 +252,41 @@ async function getPriceBackfillQueue(url, DB) {
     if (!r.daily_rate_paise || !r.delivered_kg) byDate[r.business_date].complete = false;
   }
 
-  // Always surface TODAY (IST) as a queue row so the UI is the live entry
-  // point for the day — even if Odoo hasn't created any chicken_daily_ledger
-  // rows for today yet. Empty placeholder lines per cut, ready to capture.
-  const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  if (!byDate[todayIST]) {
-    byDate[todayIST] = {
-      date: todayIST,
-      lines: CUTS.map(cut => ({
-        business_date: todayIST,
-        cut,
-        purchased_kg: null,
-        delivered_kg: null,
-        purchased_units: null,
-        po_odoo_id: null,
-        price_per_kg_paise: null,
-        daily_rate_paise: null,
-        cost_paise: null,
-        bill_attachment_url: null,
-      })),
-      complete: false,
+  // ── Continuous calendar spine ──
+  // The queue must show EVERY business day from the earliest captured day
+  // through today (IST) — NOT only days that happen to have Odoo-sourced
+  // ledger rows. MN Broilers POs are entered manually in Odoo and some days
+  // have none (vendor cash bill never keyed), so without a spine the UI jumps
+  // e.g. 23rd → 27th and a gap day can never be entered. Each missing day gets
+  // empty placeholder lines (all 7 cuts) ready for manual rate + delivered-kg
+  // capture, and past days never disappear when a new day rolls in.
+  const emptyDay = (date) => ({
+    date,
+    lines: CUTS.map(cut => ({
+      business_date: date,
+      cut,
+      purchased_kg: null,
+      delivered_kg: null,
+      purchased_units: null,
+      po_odoo_id: null,
+      price_per_kg_paise: null,
       daily_rate_paise: null,
-    };
+      cost_paise: null,
+      bill_attachment_url: null,
+    })),
+    complete: false,
+    daily_rate_paise: null,
+  });
+
+  const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  // Start at the earliest captured day, but floor the lookback to 60 days so
+  // the list stays bounded as months accumulate (recent days are never hidden).
+  const earliestCaptured = rows.length ? rows[rows.length - 1].business_date : todayIST;
+  const floorDate = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+  const startDate = earliestCaptured < floorDate ? floorDate : earliestCaptured;
+  const spineStart = startDate < todayIST ? startDate : todayIST;
+  for (const date of listDates(spineStart, todayIST)) {
+    if (!byDate[date]) byDate[date] = emptyDay(date);
   }
 
   // GST treatment for MN Broilers
