@@ -537,17 +537,18 @@
       "mode": "Watch",
       "tool_owner": "Claude",
       "risk": "winpc/fleet (CLAUDE-ONLY)",
-      "context_state": "SEED",
-      "status": "codex-05-migrating-in",
-      "summary": "Frigate eyes layer feeding the truth lanes + cash-counter video bridge. Runs on hn-winpc - Claude-only per doctrine. Absorbs Codex 05 CCTV WinPC Bridge.",
+      "context_state": "LOAD",
+      "status": "NVR mapped+reordered 2026-05-25; DISK FAULT (0GB, not recording) - HDD swap 26 May; channel-names + pw-rotation pending",
+      "summary": "CP Plus CP-UNR-4K2162-V3 16-ch 4K NVR @192.168.31.53 covering BOTH HE+NCH. Channel map locked (CH01=HE cash cam, CH10=NCH token cam = the video truth-sources for cash/sale recon). Dahua-CGI digest-auth API control. Flat JioFiber LAN; remote via Tailscale/hn-winpc.",
       "command": "open_ops_lane.command cctv",
       "prompt": "prompts/11-cctv.md",
       "context_files": [
+        "memory/project_cctv_nvr_system.md",
         "fleet/MULTI-TENANT-WINPC.md",
         "memory/reference_fleet_bridge.md"
       ],
       "live_urls": [],
-      "next_action": "Migrate Codex-05 context in; confirm Frigate + winpc footing."
+      "next_action": "After 26-May HDD swap: confirm recording starts; write channel names; ROTATE leaked NVR admin pw (hn-save CCTV_NVR_ADMIN_PW); wire CH01/CH10 money-cams into cash(03)/sale(02) recon."
     },
     {
       "code": "21",
