@@ -2253,6 +2253,24 @@ async function openAdvanceModal(employeeId) {
   advState.employee = state.employees.find(x => x.id === employeeId) || {};
   advState.recent = [];
 
+  // Resilient employee/phone resolution. This modal can be opened from the Hours
+  // tab (rows come from the attendance grid) before the Roster tab has populated
+  // state.employees — or for staff not in the loaded list (e.g. HQ). In that case
+  // the employee object is empty, the title shows no name, and the WABA auto-fire
+  // wrongly reports "No phone on file" even though the number IS in the DB.
+  // On any miss (no record, or record without a phone), reload the roster and
+  // re-resolve so the phone is always found when it exists.
+  if (!advState.employee.phone) {
+    try {
+      const rr = await apiGet('employees', { active: '1' });
+      if (rr && rr.employees && rr.employees.length) {
+        state.employees = rr.employees;
+        const found = rr.employees.find(x => x.id === employeeId);
+        if (found) advState.employee = found;
+      }
+    } catch (e) { /* non-fatal — advance still records; WABA may skip if truly no phone */ }
+  }
+
   document.getElementById('advanceModalTitle').textContent =
     `Record advance · ${advState.employee.name || ''}`;
   document.getElementById('advanceModal').classList.remove('hidden');
