@@ -616,9 +616,10 @@
         "desc": "Fresh float Rs 4,00,000 now in hand (Rs 2L + Rs 2L received 25-May). To SEED into cash.js external_capital_in -> cash_nihaf. NOT yet recorded in the live cash ledger."
       },
       "bank4680": {
-        "balance_paise": 133038,
+        "balance_paise": 2838533,
+        "balance_as_of": "2026-05-27",
         "source": "Outlet online/UPI/card settlements (Paytm/Razorpay) land here.",
-        "desc": "HDFC ·4680 - LIVE in /ops/bank (money_events). Statement Rs 1,330.38 vs /ops/bank Rs 1,375.24 = reconcile Rs 44.86."
+        "desc": "HDFC ·4680 - LIVE feed (money_events, HDFC email alerts). Static value here is an opening snapshot only; ops-control overlays the real-time balance from /api/bank-feed when a PIN is present. Accuracy note: charges/GST/interest are not email-alerted - re-anchor to monthly e-statement."
       },
       "owed_to_nihaf": {
         "balance_paise": 20994087,
