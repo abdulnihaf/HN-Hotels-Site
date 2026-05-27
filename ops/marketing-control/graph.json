@@ -1,7 +1,7 @@
 {
-  "version": "2026-05-25.v4",
+  "version": "2026-05-27.v1",
   "group": "Marketing",
-  "principle": "Marketing Control is a graph-rendered execution cockpit. The UI renders this file; lane memory overlays from state.json and append-only execution trail overlays from state.jsonl.",
+  "principle": "Marketing Control is a graph-rendered execution cockpit. graph.json owns lane mapping, state.json/state.jsonl own execution memory, and operating modes tell each lane how to investigate, plan, execute, verify, and save memory without creating extra terminals.",
   "owner_tool_default": "Codex",
   "state_json": "/ops/marketing-control/state.json",
   "state_log": "/ops/marketing-control/state.jsonl",
@@ -490,5 +490,83 @@
         ]
       ]
     }
-  ]
+  ],
+  "operating_modes_version": "2026-05-27.v1",
+  "operating_modes": [
+    {
+      "id": "investigate",
+      "label": "Investigate",
+      "intent": "Understand the issue before action. No mutation.",
+      "instructions": [
+        "Read this lane memory, latest writeback, graph ownership, and relevant live platform state.",
+        "Identify root cause, exact entity IDs, evidence, unknowns, and whether this belongs to this lane or another lane.",
+        "Do not mutate POS, ads, WABA, aggregator, PiSignage, Figma, repo, or customer-facing output."
+      ],
+      "output": "State root cause, evidence, unknowns, owner lane, mutation risk, and the first safe next action."
+    },
+    {
+      "id": "plan",
+      "label": "Plan",
+      "intent": "Convert the investigation into a safe execution path.",
+      "instructions": [
+        "Define the exact entities, files, platform IDs, assets, and live checks required before execution.",
+        "Sequence the work in the smallest reversible steps with backup, proof, and rollback points.",
+        "For creative lanes, include source assets, Figma assembly path, Gemini/reference review, export checks, and claim-risk checks."
+      ],
+      "output": "Return the step plan, gates, proof expected, rollback path, and what will be saved to memory."
+    },
+    {
+      "id": "execute",
+      "label": "Execute",
+      "intent": "Do the approved lane work after gates are clear.",
+      "instructions": [
+        "Verify live state immediately before mutation when this touches money, POS, WABA, aggregators, PiSignage, or public creative output.",
+        "Execute only inside this lane scope. Stop if IDs, current state, owner intent, or rollback path conflict.",
+        "Capture proof as IDs, screenshots, file paths, Figma links, backup paths, live URLs, or before/after reads."
+      ],
+      "output": "Report exactly what changed, what did not change, proof, backups, and remaining action."
+    },
+    {
+      "id": "verify",
+      "label": "Verify",
+      "intent": "Confirm the result after execution.",
+      "instructions": [
+        "Check the live UI, platform, exported asset, Figma frame, Odoo/POS readback, ad state, WABA state, or generated file as relevant.",
+        "Compare actual result against intended result and call out any mismatch, stale data, or cache/session issue.",
+        "Record proof and rollback readiness before declaring the execution complete."
+      ],
+      "output": "Return pass/fail, proof, unresolved risk, data freshness, and whether memory can be saved."
+    },
+    {
+      "id": "save-memory",
+      "label": "Save Memory",
+      "intent": "Persist what actually happened so tomorrow resumes accurately.",
+      "instructions": [
+        "Summarize the real execution, not the plan.",
+        "Include next action, mutation status, proof, artifact paths, live IDs, rollback, and freshness when available.",
+        "Run hn-mkt-memory update for the current lane with --sync so the deployed control room reflects the latest state."
+      ],
+      "output": "Save the lane memory and confirm the published sync result."
+    }
+  ],
+  "mode_policy": {
+    "use_same_terminal": true,
+    "terminal_rule": "Modes are prompts pasted into the existing lane terminal. Do not create separate terminals for modes.",
+    "mutation_lanes_require_verify_before_execute": [
+      "google-ads",
+      "delivery-aggregator",
+      "dine-in-aggregator",
+      "pisignage",
+      "meta-ads",
+      "waba-outreach",
+      "pos-write"
+    ],
+    "creative_lanes_require_asset_and_claim_checks": [
+      "flyers",
+      "packaging-design",
+      "reel-making",
+      "meta-ads",
+      "pisignage"
+    ]
+  }
 }

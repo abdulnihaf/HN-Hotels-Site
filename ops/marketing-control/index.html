@@ -30,6 +30,11 @@
   .memory-row { border: 1px solid var(--border); background: rgba(255,255,255,0.025); border-radius: 8px; padding: 10px; }
   .memory-row strong { display: block; font-size: 12px; }
   .memory-row span { display: block; color: var(--text-dim); font-size: 12px; margin-top: 3px; }
+  .mode-panel { margin-bottom: 12px; padding: 13px; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; }
+  .mode-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
+  .mode-card { border: 1px solid var(--border); background: rgba(255,255,255,0.025); border-radius: 8px; padding: 10px; }
+  .mode-card strong { display: block; font-size: 12px; }
+  .mode-card span { display: block; color: var(--text-dim); font-size: 12px; line-height: 1.45; margin-top: 3px; }
   .toolbar { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0 12px; }
   .filter { color: var(--text-dim); border-radius: 999px; }
   .lane-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
@@ -46,12 +51,19 @@
   .fact { border: 1px solid var(--border); background: rgba(255,255,255,0.025); border-radius: 8px; padding: 10px; }
   .fact .k { color: var(--text-mute); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 800; margin-bottom: 4px; }
   .fact .v { color: var(--text); font-size: 13px; line-height: 1.45; }
+  .mode-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .mode-actions button { min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.035); color: var(--text); padding: 9px 10px; font-size: 12px; font-weight: 800; cursor: pointer; text-align: left; }
+  .mode-actions .save-mode { border-color: rgba(251,191,36,0.42); color: #fbbf24; }
+  .evidence { border: 1px solid var(--border); background: rgba(16,185,129,0.06); border-radius: 8px; padding: 10px; color: var(--text-dim); font-size: 12px; line-height: 1.45; }
+  .evidence strong { color: var(--text); display: block; margin-bottom: 4px; }
   .command { border: 1px solid var(--border); background: #101018; border-radius: 8px; padding: 10px; }
   .command code { display: block; color: #cbd5e1; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
   .toast { position: fixed; left: 50%; bottom: calc(18px + var(--safe-bottom)); transform: translateX(-50%); padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; display: none; z-index: 20; }
   @media (min-width: 720px) {
     .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .mode-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .mode-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   }
   @media (min-width: 1080px) {
     .lane-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -75,6 +87,7 @@
   <section id="summary" class="summary-grid" aria-label="Marketing execution summary"></section>
   <section id="memory" class="memory"></section>
   <section id="activity" class="activity"></section>
+  <section id="modes" class="mode-panel"></section>
 
   <div class="toolbar">
     <div class="filters" role="tablist" aria-label="Lane filters">
@@ -149,6 +162,25 @@ function latestLogFor(slug) {
   return STATE_LOG.find(row => row.lane === slug);
 }
 
+function modeList() {
+  return GRAPH.operating_modes || [];
+}
+
+function laneBySlug(slug) {
+  return (GRAPH.lanes || []).find(lane => lane.slug === slug);
+}
+
+function modeById(id) {
+  return modeList().find(mode => mode.id === id);
+}
+
+function asList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean).map(String);
+  if (typeof value === 'object') return Object.entries(value).map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`);
+  return String(value).split('|').map(item => item.trim()).filter(Boolean);
+}
+
 function laneView(lane) {
   const state = stateFor(lane.slug);
   const latest = latestLogFor(lane.slug);
@@ -157,6 +189,11 @@ function laneView(lane) {
     next: state ? state.next_action : lane.next_action,
     guardrail: state ? state.mutation_status : lane.guardrail,
     status: state ? state.status : lane.status,
+    proof: state ? state.proof : null,
+    artifacts: state ? state.artifacts : null,
+    liveIds: state ? state.live_ids : null,
+    rollback: state ? state.rollback : null,
+    freshness: state ? state.data_freshness : null,
     latest
   };
 }
@@ -165,12 +202,11 @@ function renderSummary() {
   const lanes = GRAPH.lanes || [];
   const mutation = lanes.filter(l => (l.tags || []).includes('mutation')).length;
   const writeback = lanes.filter(l => l.writeback_required).length;
-  const brands = 'HE/NCH';
   document.getElementById('summary').innerHTML = [
     ['Lanes', lanes.length],
     ['Mutation lanes', mutation],
     ['Writeback required', writeback],
-    ['Brand scope', brands || 'HE/NCH']
+    ['Modes', modeList().length || '5']
   ].map(([label, value]) => `<div class="summary"><div class="v">${esc(value)}</div><div class="l">${esc(label)}</div></div>`).join('');
 }
 
@@ -204,6 +240,70 @@ function renderActivity() {
     </div>`;
 }
 
+function renderModes() {
+  const modes = modeList();
+  document.getElementById('modes').innerHTML = `
+    <div class="memory-head">
+      <div>
+        <h2>Operating Modes</h2>
+        <div class="scope">Use these inside the same lane terminal. They copy prompts; they do not create extra chats.</div>
+        <div class="updated">Mode set: ${esc(GRAPH.operating_modes_version || GRAPH.version || 'graph')}</div>
+      </div>
+      <div class="badges"><span class="badge badge-control">GStack pattern adapted</span></div>
+    </div>
+    <div class="mode-grid">
+      ${modes.map(mode => `<div class="mode-card"><strong>${esc(mode.label)}</strong><span>${esc(mode.intent)}</span></div>`).join('')}
+    </div>`;
+}
+
+function renderEvidence(view) {
+  const items = [
+    ...asList(view.proof).map(item => `Proof: ${item}`),
+    ...asList(view.artifacts).map(item => `Artifact: ${item}`),
+    ...asList(view.liveIds).map(item => `Live ID: ${item}`),
+    ...asList(view.rollback).map(item => `Rollback: ${item}`),
+    ...asList(view.freshness).map(item => `Freshness: ${item}`)
+  ];
+  if (!items.length) return '';
+  return `<div class="evidence"><strong>Latest proof spine</strong>${items.slice(0, 5).map(item => `<div>${esc(item)}</div>`).join('')}</div>`;
+}
+
+function renderLink(link) {
+  const [label, href] = link;
+  const target = String(href || '');
+  if (target.startsWith('local:')) {
+    return `<button data-copy="${esc(target.slice(6))}">${esc(label)}</button>`;
+  }
+  return `<a href="${esc(target)}" ${target.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>${esc(label)}</a>`;
+}
+
+function modePrompt(lane, mode) {
+  const view = laneView(lane);
+  const rules = (mode.instructions || []).map(rule => `- ${rule}`).join('\n');
+  if (mode.id === 'save-memory') {
+    return `Save this execution to this lane's memory. Use hn-mkt-memory update ${lane.slug} with the correct --task, --summary, --next, --mutation, and --sync. If proof, artifact paths, live IDs, rollback, or data freshness exist, include them with --proof, --artifacts, --live-ids, --rollback, and --freshness. Save what actually happened, not what was planned.`;
+  }
+  return `Run ${mode.label.toUpperCase()} mode for ${lane.title} (${lane.slug}).
+
+Lane ownership:
+- Scope: ${lane.scope}
+- Risk: ${lane.risk}
+- Current state: ${view.current}
+- Next action: ${view.next}
+- Guardrail: ${view.guardrail}
+
+Mode rules:
+${rules}
+
+Before acting:
+- Use this same lane terminal; do not create a separate mode terminal.
+- Read the latest lane memory and live state relevant to this task.
+- If current live state conflicts with memory, pause and explain the root cause before continuing.
+
+Expected output:
+${mode.output}`;
+}
+
 function renderLanes() {
   const lanes = (GRAPH.lanes || []).filter(lane => {
     if (currentFilter === 'all') return true;
@@ -213,6 +313,7 @@ function renderLanes() {
   grid.innerHTML = lanes.map(lane => {
     const view = laneView(lane);
     const tags = [...(lane.tags || []), ...(lane.writeback_required ? ['writeback'] : [])];
+    const modes = modeList();
     return `<article class="lane ${lane.slug === 'master' ? 'lane-master' : ''}">
       <div class="lane-head">
         <div class="lane-title">
@@ -230,9 +331,13 @@ function renderLanes() {
         <div class="fact"><div class="k">Guardrail</div><div class="v">${esc(view.guardrail)}</div></div>
       </div>
       ${view.latest ? `<div class="activity-row">Last writeback: ${esc(view.latest.event || '')}${view.latest.note ? ' - ' + esc(view.latest.note) : ''}</div>` : ''}
+      ${renderEvidence(view)}
+      <div class="mode-actions">
+        ${modes.map(mode => `<button class="${mode.id === 'save-memory' ? 'save-mode' : ''}" data-mode="${esc(mode.id)}" data-lane="${esc(lane.slug)}">${esc(mode.label)}</button>`).join('')}
+      </div>
       <div class="links">
         <button class="primary-link" data-copy="${esc(lane.command)}">Copy terminal command</button>
-        ${(lane.links || []).map(([label, href]) => `<a href="${esc(href)}" ${String(href).startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>${esc(label)}</a>`).join('')}
+        ${(lane.links || []).map(renderLink).join('')}
       </div>
       <div class="command"><code>${esc(lane.command)}</code></div>
     </article>`;
@@ -243,6 +348,7 @@ function render() {
   renderSummary();
   renderMemory();
   renderActivity();
+  renderModes();
   renderLanes();
   document.getElementById('source').textContent = `Source: graph.json · ${GRAPH.version || 'unknown'}`;
   document.getElementById('open-all').dataset.copy = GRAPH.open_all_command || '';
@@ -275,6 +381,13 @@ async function load() {
 }
 
 document.addEventListener('click', event => {
+  const modeTarget = event.target.closest('[data-mode]');
+  if (modeTarget) {
+    const lane = laneBySlug(modeTarget.dataset.lane);
+    const mode = modeById(modeTarget.dataset.mode);
+    if (lane && mode) copyText(modePrompt(lane, mode));
+    return;
+  }
   const copyTarget = event.target.closest('[data-copy]');
   if (copyTarget) copyText(copyTarget.dataset.copy);
   const filterTarget = event.target.closest('[data-filter]');
