@@ -1,0 +1,273 @@
+{
+  "generated": "2026-05-27",
+  "source": "NVR RemoteDevice table (live) + verified session data",
+  "note": "No credentials in this file \u2014 they live in the vault (~/.hn-assets.env).",
+  "nvr": {
+    "name": "Office NVR",
+    "model": "CP-UNR-4K2162-V3 (Dahua DHI-NVR2216-4KS3)",
+    "ip": "192.168.31.53",
+    "mac": "f8:20:97:8f:ce:f1",
+    "serial": "ULKL3H2Y6C9E4YQX",
+    "firmware": "1.00.14.00.R",
+    "channels": 16,
+    "poe": "none (external switches)",
+    "disk": "~2TB, recording",
+    "ip_mode": "STATIC",
+    "ntp": "in.pool.ntp.org / IST",
+    "login_ref": "vault: HN_CCTV_NVR_OFFICE_ADMIN_*"
+  },
+  "cameras": [
+    {
+      "ch": 1,
+      "ip": "192.168.31.7",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "5c:35:48:db:e7:45",
+      "serial": "LMK7Z1BOZZKAAZCC",
+      "brand": "HE",
+      "operation": "Cash Counter",
+      "detect_priority": true
+    },
+    {
+      "ch": 2,
+      "ip": "192.168.31.5",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "f8:20:97:1c:f7:a4",
+      "serial": "23H1JPA39RQI5BZC",
+      "brand": "HE",
+      "operation": "Ground Floor Dine-in",
+      "detect_priority": false
+    },
+    {
+      "ch": 3,
+      "ip": "192.168.31.58",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "5c:35:48:db:e7:4f",
+      "serial": "E6ZR99JTIM35456C",
+      "brand": "HE",
+      "operation": "First Floor Dine-in",
+      "detect_priority": false
+    },
+    {
+      "ch": 4,
+      "ip": "192.168.31.16",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "f8:20:97:1c:f7:9c",
+      "serial": "7AZVQZIOOXCM3VNH",
+      "brand": "HE",
+      "operation": "Kitchen Pass",
+      "detect_priority": false
+    },
+    {
+      "ch": 5,
+      "ip": "192.168.31.13",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "f8:20:97:59:3e:e0",
+      "serial": "ERXERHYQ3V8H10EZ",
+      "brand": "HE",
+      "operation": "Main Kitchen (Door)",
+      "detect_priority": false
+    },
+    {
+      "ch": 6,
+      "ip": "192.168.31.10",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "f8:20:97:59:3e:c9",
+      "serial": "N3DMWZ49STU4ZS0R",
+      "brand": "HE",
+      "operation": "Main Kitchen 2",
+      "detect_priority": false
+    },
+    {
+      "ch": 7,
+      "ip": "192.168.31.8",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "f8:20:97:1c:f7:a6",
+      "serial": "0SDVP8BJ4CRLVAAG",
+      "brand": "HE",
+      "operation": "Fried Chicken Kitchen",
+      "detect_priority": false
+    },
+    {
+      "ch": 8,
+      "ip": "192.168.31.3",
+      "type": "bullet",
+      "model": "CP-UNC-TA21L3C-LQ",
+      "mac": "5c:35:48:e1:77:fd",
+      "serial": "BEAONJPPTTNIWE5R",
+      "brand": "HE",
+      "operation": "Outdoor",
+      "detect_priority": false
+    },
+    {
+      "ch": 9,
+      "ip": "192.168.31.9",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "5c:35:48:db:e7:48",
+      "serial": "GIHVNBEC8Y6U7S9A",
+      "brand": "HE",
+      "operation": "Outdoor 2",
+      "detect_priority": false
+    },
+    {
+      "ch": 10,
+      "ip": "192.168.31.15",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "f8:20:97:1c:f7:93",
+      "serial": "4FOVDOP5BJ4QICF1",
+      "brand": "NCH",
+      "operation": "Cash Counter",
+      "detect_priority": true
+    },
+    {
+      "ch": 11,
+      "ip": "192.168.31.6",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "f8:20:97:1c:f7:b1",
+      "serial": "VWB6JYFVRK51XQG0",
+      "brand": "NCH",
+      "operation": "Full Outlet",
+      "detect_priority": false
+    },
+    {
+      "ch": 12,
+      "ip": "192.168.31.17",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "f8:20:97:1c:f7:a0",
+      "serial": "2EZJY0JA5FCGDO1M",
+      "brand": "NCH",
+      "operation": "Full Outlet (Entrance)",
+      "detect_priority": false
+    },
+    {
+      "ch": 13,
+      "ip": "192.168.31.14",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "f8:20:97:1c:eb:64",
+      "serial": "247NOSU8AJ34XIH1",
+      "brand": "NCH",
+      "operation": "Chai Counter",
+      "detect_priority": false
+    },
+    {
+      "ch": 14,
+      "ip": "192.168.31.11",
+      "type": "dome",
+      "model": "CP-UNC-DA21L3C-LQ",
+      "mac": "f8:20:97:59:3e:d8",
+      "serial": "K08MOZ7MWPVXZNJO",
+      "brand": "NCH",
+      "operation": "Kitchen",
+      "detect_priority": false
+    },
+    {
+      "ch": 15,
+      "ip": "192.168.31.80",
+      "type": "bullet",
+      "model": "CP-UNC-TA21L3C-LQ",
+      "mac": "5c:35:48:cb:86:b8",
+      "serial": "CNIIIVD5O5GF6OTT",
+      "brand": "NCH",
+      "operation": "Outdoor (Chai)",
+      "detect_priority": false
+    },
+    {
+      "ch": 16,
+      "ip": "192.168.31.12",
+      "type": "bullet",
+      "model": "CP-UNC-TA21L3C-LQ",
+      "mac": "5c:35:48:e1:66:3d",
+      "serial": "45LGIESPAPOG5MTZ",
+      "brand": "NCH",
+      "operation": "Outdoor 2",
+      "detect_priority": false
+    }
+  ],
+  "switches": [
+    {
+      "location": "Office",
+      "model": "CP Plus Gigabit PoE Switch (~6-port: 4 PoE + 2 GbE)",
+      "note": "NVR + JioFiber router here; Default/VLAN/Extend slider",
+      "model_confirmed": false
+    },
+    {
+      "location": "Hamza Express",
+      "model": "8-port PoE switch",
+      "model_confirmed": false
+    },
+    {
+      "location": "Nawabi Chai House",
+      "model": "8-port PoE switch",
+      "model_confirmed": false
+    }
+  ],
+  "networks": [
+    {
+      "name": "Camera / Office LAN",
+      "cidr": "192.168.31.0/24",
+      "gateway": "192.168.31.1 (JioFiber)",
+      "dhcp": true,
+      "holds": "NVR + all 16 cameras + office switch + Frigate NUC"
+    },
+    {
+      "name": "NCH Cash-Counter LAN",
+      "cidr": "192.168.100.0/24",
+      "gateway": "192.168.100.1 (USB dongle)",
+      "dhcp": true,
+      "holds": "hn-winpc + NCH receipt printer"
+    }
+  ],
+  "printers": [
+    {
+      "name": "NCH Cash Counter (Epson ePOS)",
+      "ip": "192.168.100.196",
+      "network": "192.168.100.x",
+      "note": "Odoo POS 27; corrected 27-May from dead .197"
+    },
+    {
+      "name": "HE printers (Odoo pos.printer)",
+      "ip": "192.168.31.68 / .163",
+      "network": "192.168.31.x"
+    }
+  ],
+  "compute": [
+    {
+      "name": "Frigate NUC",
+      "model": "Intel NUC7i5BNH (i5-7260U, Iris 640, 16GB)",
+      "role": "CCTV eyes/AI box",
+      "status": "PENDING \u2014 wipe\u2192Ubuntu 24.04.4+Docker+Frigate",
+      "target_net": "192.168.31.x",
+      "tailnet": "desktop-nt76bcp / 100.104.245.67"
+    },
+    {
+      "name": "hn-winpc",
+      "model": "HP EliteDesk 800 G3 DM (i3-6100T, 8GB)",
+      "role": "NCH cash counter POS + aggregator-pulse + modash + dine",
+      "tailnet": "100.65.7.61",
+      "lan": "192.168.100.36"
+    },
+    {
+      "name": "Backup PC",
+      "model": "winpc-spec (i3/8GB)",
+      "role": "hot spare for cash counter",
+      "status": "on shelf"
+    }
+  ],
+  "risks": [
+    "DHCP drift (camera/printer IPs move on reboot) \u2192 pin static by MAC",
+    "NVR channel-name labels scrambled, need rewrite",
+    "switch model #s to confirm",
+    "camera shared pw value unknown (masked in NVR)"
+  ]
+}
