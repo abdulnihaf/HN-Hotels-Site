@@ -1,0 +1,36 @@
+name: Deploy to Cloudflare Pages
+
+# WHY THIS EXISTS
+# Cloudflare's GitHub integration intermittently fails to fire a PRODUCTION
+# build on pushes to main (confirmed 2026-05-27: merges #222 and #223 produced
+# zero production deployment records while branch pushes still built previews).
+# This workflow makes production deploys deterministic: GitHub Actions fires on
+# every push to main and deploys the clean git checkout via wrangler — no
+# reliance on Cloudflare's webhook. The checkout contains only tracked files,
+# so the heavy untracked artifacts in the working tree (_context/ zip, raw
+# jsonl) can never poison a direct upload.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # manual re-run from the Actions tab if ever needed
+
+concurrency:
+  group: cf-pages-deploy
+  cancel-in-progress: false   # never abort a deploy mid-flight
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Deploy to Cloudflare Pages (production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy . --project-name=hn-hotels-site --branch=main
