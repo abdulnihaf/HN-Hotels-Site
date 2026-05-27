@@ -22,7 +22,8 @@
     {
       "name": "Control",
       "subgroups": [
-        "Control"
+        "Control",
+        "Fleet"
       ]
     },
     {
@@ -601,6 +602,35 @@
         "https://hnhotels.in/ops/ops-control/"
       ],
       "next_action": "OPERATE (in the lane chat, real-time): seed ₹2L via cash.js external_capital_in→cash_nihaf; reconcile ₹44.86 bank drift; model owner-owed ₹2.09L; set vendor-payable from Basheer handover."
+    },
+    {
+      "code": "24",
+      "slug": "device-fleet",
+      "title": "24 Device Fleet & Endpoints",
+      "group": "Control",
+      "subgroup": "Fleet",
+      "mode": "Demand",
+      "tool_owner": "Claude",
+      "risk": "endpoint/device config — winpc/fleet CLAUDE-ONLY",
+      "context_state": "LOAD",
+      "status": "live endpoint state captured 2026-05-27; winpc=NCH cash POS; printer .196; NUC->Frigate pending",
+      "summary": "Device-level control of every endpoint across HE+NCH — POS PCs (NCH cash=winpc, NCH runner, HE cash), POS-bridge extensions + pos-health beacons, receipt printers (Epson IPs), Tailscale fleet, Chrome profiles/policies, the winpc multi-tenant appliance + Frigate NUC. The physical/endpoint control plane. NOT transaction edits (01), NOT CCTV eyes (11).",
+      "command": "open_ops_lane.command device-fleet",
+      "prompt": "prompts/24-device-fleet.md",
+      "context_files": [
+        "memory/project_device_fleet_state.md",
+        "fleet/MULTI-TENANT-WINPC.md",
+        "memory/reference_winpc_protocol.md",
+        "memory/reference_fleet_bridge.md",
+        "memory/project_captain_pos_network_and_printer.md",
+        "memory/project_cctv_winpc_pc_swap.md",
+        "memory/project_cctv_nvr_system.md"
+      ],
+      "live_urls": [
+        "https://nawabichaihouse.com/api/pos-health/status",
+        "https://hnhotels.in/ops/ops-control/"
+      ],
+      "next_action": "Static-reserve NCH printer .196 on dongle router; rotate NVR admin pw (hn-save); upgrade winpc pos-bridge ext v1.2.0->v1.2.2; NUC->Frigate build (gated on NCH POS stability)."
     }
   ],
   "served": "ops/ops-control/ (PIN-gated, co-located with UI; not exposed via /_context/)",
