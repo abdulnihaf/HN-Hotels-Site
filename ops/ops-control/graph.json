@@ -23,7 +23,8 @@
       "name": "Control",
       "subgroups": [
         "Control",
-        "Fleet"
+        "Fleet",
+        "Comms"
       ]
     },
     {
@@ -80,7 +81,7 @@
       "risk": "routing",
       "context_state": "LOAD",
       "status": "scaffolding",
-      "summary": "Front door + CATCH-ALL: exception inbox · money-in-motion · data-freshness boards · lane index · and the home for ANY operation that fits no lane — accepts it, routes it, extends the graph so reality is never forced into a stale lane. Owns COA grammar/entity-rings, comms-core, fleet/winpc health, AI-budget.",
+      "summary": "Front door + CATCH-ALL: exception inbox · money-in-motion · data-freshness boards · lane index · and the home for ANY operation that fits no lane — accepts it, routes it, extends the graph so reality is never forced into a stale lane. Owns COA grammar/entity-rings + AI-budget; guards the control-plane lanes — device-fleet (24)=endpoints, comms-rails (25)=comms channels — + fleet/winpc health.",
       "command": "open_ops_lane.command master",
       "prompt": "prompts/00-master.md",
       "context_files": [
@@ -631,6 +632,35 @@
         "https://hnhotels.in/ops/ops-control/"
       ],
       "next_action": "Static-reserve NCH printer .196 on dongle router; rotate NVR admin pw (hn-save); upgrade winpc pos-bridge ext v1.2.0->v1.2.2; NUC->Frigate build (gated on NCH POS stability)."
+    },
+    {
+      "code": "25",
+      "slug": "comms-rails",
+      "title": "25 Comms Rails (WABA · SMS · Voice)",
+      "group": "Control",
+      "subgroup": "Comms",
+      "mode": "Demand",
+      "tool_owner": "Claude",
+      "risk": "comms config + credentials — DLT/Meta approvals portal-only; Claude-owned",
+      "context_state": "LOAD",
+      "status": "audit done 2026-05-27; WABA HE live / NCH token-blocked; SMS-DLT verified live; dlt_manual code gap open",
+      "summary": "Owns the 3 comms channels as CONFIGURED RAILS — credentials, sender IDs, template registry + approval state, channel health (WABA Meta · SMS BSNL-DLT/Fast2SMS · Exotel voice). comms-core.js is the code SoT; this lane is the config cockpit + approval tracker. NOT the business logic that triggers a message (stays in Salary-09/HR/alert lanes).",
+      "command": "open_ops_lane.command comms-rails",
+      "prompt": "prompts/25-comms-rails.md",
+      "context_files": [
+        "memory/project_comms_rails_state.md",
+        "functions/api/_lib/comms-core.js",
+        "functions/api/comms.js",
+        "functions/api/comms-webhook.js",
+        "memory/project_bsnl_dlt_registration.md",
+        "memory/reference_comms_hub.md",
+        "schema-comms-channels.sql"
+      ],
+      "live_urls": [
+        "https://hnhotels.in/api/comms?action=health",
+        "https://hnhotels.in/ops/ops-control/"
+      ],
+      "next_action": "Close the dlt_manual code gap (sendFast2SmsSms -> route=dlt_manual + entity_id + template_id; comms.js send forwards them; fix stale BL- fallback) so business lanes auto-fire logged SMS. Then: unblock NCH WABA token; enable Fast2SMS DLT delivery webhook."
     }
   ],
   "served": "ops/ops-control/ (PIN-gated, co-located with UI; not exposed via /_context/)",
