@@ -98,6 +98,61 @@ const STATE_URL = './state.jsonl';
 const LEDGER_URL = './ledger.jsonl';
 let GRAPH = null, STATE = {}, LEDGER = [];
 
+// ── Live balances ──────────────────────────────────────────────
+// The Money panel's static numbers come from graph.json (opening
+// context, captured once). When an ops PIN is present we ALSO pull
+// the real-time balances from the PIN-gated APIs so the panel shows
+// truth, not a frozen label. PIN is reused from the /ops/bank cockpit
+// (sessionStorage 'hn-bank-pin') — never embedded in source.
+let LIVE = null;
+let LIVE_PIN = (() => { try { return sessionStorage.getItem('hn-bank-pin') || ''; } catch { return ''; } })();
+const agoStr = iso => {
+  if (!iso) return '';
+  const m = Math.floor((Date.now() - Date.parse(iso)) / 60000);
+  if (isNaN(m)) return '';
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+};
+
+async function fetchLiveBalances() {
+  if (!LIVE_PIN) { renderMoney(); return; }
+  try {
+    const [bankR, cashR] = await Promise.all([
+      fetch(`/api/bank-feed?action=summary&pin=${encodeURIComponent(LIVE_PIN)}`).then(r => r.status === 401 ? '401' : (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`/api/cash?action=balance&pin=${encodeURIComponent(LIVE_PIN)}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    if (bankR === '401') { LIVE_PIN = ''; try { sessionStorage.removeItem('hn-bank-pin'); } catch {} LIVE = null; }
+    else LIVE = { bank: bankR, cash: cashR, fetched_at: Date.now() };
+  } catch (e) { LIVE = null; }
+  renderMoney();
+}
+
+async function promptLivePin() {
+  const p = (window.prompt('Enter ops PIN to show live bank balance:') || '').trim();
+  if (!/^\d{4}$/.test(p)) return;
+  const r = await fetch(`/api/bank-feed?action=summary&pin=${encodeURIComponent(p)}`).catch(() => null);
+  if (!r || r.status === 401) { alert('Invalid PIN.'); return; }
+  LIVE_PIN = p;
+  try { sessionStorage.setItem('hn-bank-pin', p); } catch {}
+  fetchLiveBalances();
+}
+
+function liveBank() {
+  if (!LIVE || !LIVE.bank || LIVE.bank.ok !== true) return null;
+  const b = (LIVE.bank.balances || []).find(x => x.instrument === 'hdfc_ca_4680');
+  if (!b) return null;
+  return {
+    paise: Math.round((b.balance_rupees || 0) * 100),
+    as_of: b.as_of,
+    stale: LIVE.bank.any_source_stale === true,
+    last_ingest: LIVE.bank.last_ingest_at,
+    health: (LIVE.bank.source_health || []).find(h => h.source === 'hdfc') || null,
+  };
+}
+
 const esc = s => { const d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; };
 const stateColor = s => ({LOAD:'bg-emerald-500/15 text-emerald-400',SEED:'bg-amber-500/15 text-amber-400',LIVE:'bg-white/10 text-white/45'}[s]||'bg-white/10 text-white/45');
 const modeColor  = m => ({Demand:'bg-sky-500/15 text-sky-400',Watch:'bg-amber-500/10 text-amber-300',Synthesis:'bg-violet-500/15 text-violet-400'}[m]||'bg-white/10 text-white/45');
@@ -111,6 +166,7 @@ async function load(){
     try { const s = await fetch(STATE_URL,{cache:'no-store'}); if(s.ok) parseState(await s.text()); } catch(e){}
     try { const d = await fetch(LEDGER_URL,{cache:'no-store'}); if(d.ok) parseLedger(await d.text()); } catch(e){}
     render();
+    fetchLiveBalances();   // overlays real-time bank balance when a PIN is present
   } catch(e){
     document.getElementById('graph').innerHTML='';
     const el = document.getElementById('error'); el.classList.remove('hidden');
@@ -138,20 +194,30 @@ function renderMoney(){
   const cash=(A.cash||{}).balance_paise||0, bank=(A.bank4680||{}).balance_paise||0, owed=(A.owed_to_nihaf||{}).balance_paise||0;
   const lc=(GRAPH.lanes||[]).find(l=>l.slug==='money-ledger'); const cmdFull=lc?fullCommand(lc):'';
   const lk=(href,label)=>`<a href="${href}" target="_blank" class="btn btn-ghost text-[11px] px-3">${label} ↗</a>`;
+  const lb = liveBank();
+  const liveOn = !!LIVE_PIN;
+  const headTag = lb
+    ? `<span class="badge bg-emerald-500/15 text-emerald-400">● live · bank updated ${esc(agoStr(lb.last_ingest))}</span>`
+    : (liveOn
+        ? `<span class="badge bg-amber-500/15 text-amber-300">live feed unavailable</span>`
+        : `<button onclick="promptLivePin()" class="btn btn-ghost text-[10px] px-2.5">🔓 Show live balance</button>`);
   el.innerHTML = `
   <div class="glass rounded-xl overflow-hidden">
     <div class="px-4 py-2.5 border-b border-white/[.05] flex items-center justify-between gap-2 flex-wrap">
       <div class="flex items-center gap-2"><span class="text-brand-400 font-bold">₹</span>
         <span class="text-xs font-semibold text-white/70">Money · Treasury</span>
-        <span class="text-[10px] text-white/25">— opening context (NOT live) · tap a cockpit below for live balances</span></div>
+        ${headTag}</div>
+      <div class="flex items-center gap-2">
       ${cmdFull?`<button onclick="copyCmd(this,${JSON.stringify(cmdFull)})" class="btn btn-ghost text-[10px] px-2.5">Copy ledger-chat cmd</button>`:''}
+      </div>
     </div>
     <div class="p-4 space-y-3">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
         <div class="glass rounded-lg px-3.5 py-3"><p class="text-[10px] uppercase tracking-wider text-white/30">Cash float · to seed</p>
           <p class="text-2xl font-bold text-emerald-400 mt-0.5">${inr(cash)}</p><p class="text-[10px] text-white/35 mt-0.5">received in hand · seed into cash_nihaf via /ops/cash</p></div>
-        <div class="glass rounded-lg px-3.5 py-3"><p class="text-[10px] uppercase tracking-wider text-white/30">Bank · ·4680</p>
-          <p class="text-2xl font-bold text-sky-400 mt-0.5">${inr(bank)}</p><p class="text-[10px] text-white/35 mt-0.5">statement close · /ops/bank = live</p></div>
+        <div class="glass rounded-lg px-3.5 py-3"><div class="flex items-center justify-between"><p class="text-[10px] uppercase tracking-wider text-white/30">Bank · ·4680</p>${lb?`<span class="badge ${lb.stale?'bg-amber-500/15 text-amber-300':'bg-emerald-500/15 text-emerald-400'}">${lb.stale?'⚠ stale':'live'}</span>`:''}</div>
+          <p class="text-2xl font-bold text-sky-400 mt-0.5">${lb?inr(lb.paise):inr(bank)}</p>
+          <p class="text-[10px] text-white/35 mt-0.5">${lb?`HDFC alert feed · ${esc(agoStr(lb.last_ingest))} · /ops/bank`:'opening label · tap “Show live balance”'}</p></div>
         <div class="glass rounded-lg px-3.5 py-3"><div class="flex items-center justify-between"><p class="text-[10px] uppercase tracking-wider text-white/30">Owes you</p><span class="badge bg-amber-500/15 text-amber-300">deferred · new</span></div>
           <p class="text-2xl font-bold text-amber-300 mt-0.5">${inr(owed)}</p><p class="text-[10px] text-white/35 mt-0.5">not yet in any system</p></div>
         <div class="glass rounded-lg px-3.5 py-3"><div class="flex items-center justify-between"><p class="text-[10px] uppercase tracking-wider text-white/30">Vendor payable</p>${vp.real_opening_paise==null?`<span class="badge bg-red-500/15 text-red-400">manual</span>`:''}</div>
@@ -161,6 +227,14 @@ function renderMoney(){
         <span class="text-[10px] uppercase tracking-wider text-white/30 mr-1">Live cockpits:</span>
         ${lk('https://hnhotels.in/ops/cash/','Cash')}${lk('https://hnhotels.in/ops/bank/','Bank')}${lk('https://hnhotels.in/ops/money/','Money · cash+bank')}
       </div>
+      ${lb?`<div class="border-t border-white/[.05] pt-2">
+        <p class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Bank accuracy</p>
+        <ul class="text-[10px] text-white/45 space-y-0.5">
+          <li>• ·4680 balance is the live HDFC email-alert feed (real-time, &lt;60s/txn).</li>
+          <li>• Charges / GST / interest / some auto-debits are <b>not</b> alerted by HDFC — re-anchor to the monthly e-statement (XLS backfill) to stay exact.</li>
+          ${(LIVE&&LIVE.bank&&LIVE.bank.parse_health&&LIVE.bank.parse_health.partial)?`<li>• ${esc(LIVE.bank.parse_health.partial)} alert rows unparsed (excluded from balance) — run worker ?mode=reparse to recover.</li>`:''}
+          ${(LIVE&&LIVE.bank&&(LIVE.bank.source_health||[]).some(h=>h.source==='federal'&&h.live_status==='silent'))?`<li>• Federal ·4510 feed is silent — no events ingested.</li>`:''}
+        </ul></div>`:''}
       ${(mm.gaps&&mm.gaps.length)?`<div class="border-t border-white/[.05] pt-2"><p class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Gaps to fill (in the ledger chat)</p>
         <ul class="text-[10px] text-white/45 space-y-0.5">${mm.gaps.map(x=>`<li>• ${esc(x)}</li>`).join('')}</ul></div>`:''}
       ${(mm.open_reconciliations&&mm.open_reconciliations.length)?`<div class="border-t border-white/[.05] pt-2">
