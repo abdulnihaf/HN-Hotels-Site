@@ -185,6 +185,55 @@
       gap: 12px;
       margin-top: 12px;
     }
+    .workflow-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .workflow-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .workflow-step {
+      min-height: 76px;
+      display: grid;
+      align-content: start;
+      gap: 6px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.035);
+    }
+    .workflow-step.active {
+      border-color: rgba(251,191,36,.42);
+      background: rgba(251,191,36,.08);
+    }
+    .workflow-step.done {
+      border-color: rgba(52,211,153,.35);
+      background: rgba(52,211,153,.07);
+    }
+    .workflow-step.warn {
+      border-color: rgba(248,113,113,.38);
+      background: rgba(248,113,113,.08);
+    }
+    .workflow-kicker {
+      color: var(--text-mute);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+    .workflow-title {
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .workflow-copy {
+      color: var(--text-dim);
+      font-size: 11px;
+      line-height: 1.35;
+    }
     .quote-head {
       display: grid;
       gap: 10px;
@@ -257,6 +306,10 @@
       border-color: rgba(52,211,153,.45);
       background: rgba(52,211,153,.08);
     }
+    .quote-cell.recommended {
+      border-color: rgba(96,165,250,.5);
+      background: rgba(96,165,250,.08);
+    }
     .quote-price {
       font-size: 15px;
       font-weight: 800;
@@ -278,6 +331,55 @@
     .quote-status.quoted { color: var(--pc-green); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
     .quote-status.pending { color: var(--pc-yellow); border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
     .quote-status.bad { color: var(--pc-red); border-color: rgba(248,113,113,.34); background: rgba(248,113,113,.08); }
+    .rule-pill {
+      width: max-content;
+      max-width: 100%;
+      min-height: 24px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--pc-line);
+      color: var(--text-dim);
+      background: rgba(255,255,255,.04);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .rule-pill.exact { color: var(--pc-blue); border-color: rgba(96,165,250,.38); background: rgba(96,165,250,.08); }
+    .rule-pill.generic { color: var(--pc-green); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.07); }
+    .rule-pill.substitute { color: var(--pc-yellow); border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
+    .rule-pill.quality { color: #fda4af; border-color: rgba(251,113,133,.36); background: rgba(251,113,133,.08); }
+    .decision-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .decision-card {
+      min-width: 0;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(0,0,0,.14);
+    }
+    .decision-card.primary {
+      border-color: rgba(96,165,250,.42);
+      background: rgba(96,165,250,.08);
+    }
+    .decision-label {
+      color: var(--text-mute);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .3px;
+    }
+    .decision-value {
+      margin-top: 3px;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
     .session-panel {
       display: grid;
       gap: 12px;
@@ -537,8 +639,10 @@
       .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .run-grid { grid-template-columns: minmax(0, 1fr) 180px 190px 220px; }
       .quote-head { grid-template-columns: minmax(0, 1fr) 250px; align-items: end; }
+      .workflow-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .quote-source-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .quote-cells { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .decision-row { grid-template-columns: 1.1fr 1fr 1fr 1fr; }
       .session-head { grid-template-columns: minmax(0, 1fr) 180px; align-items: end; }
       .session-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .control-row { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.4fr); align-items: center; }
@@ -632,15 +736,23 @@
           <div id="portalSessions" class="session-grid"></div>
         </section>
 
+        <section class="card workflow-panel">
+          <div>
+            <h2>Purchase Flow</h2>
+            <p id="workflowMeta" class="sub" style="margin:4px 0 0;">Add raw materials, then run one live price comparison.</p>
+          </div>
+          <div id="workflowGrid" class="workflow-grid"></div>
+        </section>
+
         <section class="card quote-panel">
           <div class="quote-head">
             <div>
-              <h2>Quote Engine</h2>
-              <p id="quoteMeta" class="sub" style="margin:4px 0 0;">No quote batch for this run.</p>
+              <h2>Live Price Decisions</h2>
+              <p id="quoteMeta" class="sub" style="margin:4px 0 0;">Add items, then click Get live prices.</p>
             </div>
             <div class="quote-actions">
-              <button id="requestQuotesBtn" class="btn btn-primary" type="button">Get quotes</button>
-              <button id="refreshQuotesBtn" class="btn btn-ghost" type="button">Refresh quotes</button>
+              <button id="requestQuotesBtn" class="btn btn-primary" type="button">Get live prices</button>
+              <button id="refreshQuotesBtn" class="btn btn-ghost" type="button">Refresh prices</button>
             </div>
           </div>
           <div id="quoteSourceStatus" class="quote-source-grid"></div>
@@ -718,10 +830,37 @@
       URGENT_FILL: 'Urgent fill',
     };
     const MATCH_LABELS = {
-      EXACT_ONLY: 'Exact only',
-      EQUIVALENT_ALLOWED: 'Equivalent allowed',
-      COMMODITY_EQUIVALENT: 'Commodity equivalent',
-      SUBSTITUTE_APPROVAL: 'Substitute needs approval',
+      EXACT_ONLY: 'Exact SKU only',
+      EQUIVALENT_ALLOWED: 'Flexible equivalent',
+      COMMODITY_EQUIVALENT: 'Scout cheapest acceptable',
+      SUBSTITUTE_APPROVAL: 'Show substitutes for approval',
+      QUALITY_LOCKED: 'Quality/source locked',
+    };
+    const BUYING_RULES = {
+      EXACT_SKU: {
+        label: 'Exact SKU',
+        tone: 'exact',
+        match_rule: 'EXACT_ONLY',
+        description: 'Same brand, same pack, same use case.',
+      },
+      GENERIC_COMMODITY: {
+        label: 'Scout cheapest',
+        tone: 'generic',
+        match_rule: 'COMMODITY_EQUIVALENT',
+        description: 'Compare normalized unit rate across acceptable fresh stock.',
+      },
+      APPROVED_SUBSTITUTE: {
+        label: 'Substitute review',
+        tone: 'substitute',
+        match_rule: 'SUBSTITUTE_APPROVAL',
+        description: 'Show alternatives, but make the substitute visible before buying.',
+      },
+      QUALITY_LOCKED: {
+        label: 'Quality locked',
+        tone: 'quality',
+        match_rule: 'QUALITY_LOCKED',
+        description: 'Quality/source matters more than lowest price.',
+      },
     };
     const QUOTE_SOURCE_ORDER = ['LOCAL_VENDOR', 'HYPERPURE', 'ZEPTO', 'FLIPKART_MINUTES', 'INSTAMART', 'BLINKIT', 'AMAZON_NOW', 'BIGBASKET', 'JIOMART'];
     const PORTAL_SOURCE_KEYS = QUOTE_SOURCE_ORDER.filter((key) => key !== 'LOCAL_VENDOR');
@@ -786,6 +925,8 @@
       refreshQuotesBtn: document.getElementById('refreshQuotesBtn'),
       quoteSourceStatus: document.getElementById('quoteSourceStatus'),
       quoteMatrix: document.getElementById('quoteMatrix'),
+      workflowMeta: document.getElementById('workflowMeta'),
+      workflowGrid: document.getElementById('workflowGrid'),
       portalMeta: document.getElementById('portalMeta'),
       portalSessions: document.getElementById('portalSessions'),
       validateSessionsBtn: document.getElementById('validateSessionsBtn'),
@@ -1056,6 +1197,7 @@
         loading: false,
       };
       renderQuotePanel();
+      renderWorkflowPanel();
       renderCart();
     }
 
@@ -1063,6 +1205,7 @@
       if (!runId || state.run?.local_only) {
         state.quote = { batch: null, batches: [], quotes: [], summary: null, loading: false };
         renderQuotePanel();
+        renderWorkflowPanel();
         return;
       }
       state.quote.loading = true;
@@ -1073,6 +1216,7 @@
       } catch (error) {
         state.quote.loading = false;
         renderQuotePanel();
+        renderWorkflowPanel();
         toast(error.message || 'Quote refresh failed');
       }
     }
@@ -1081,7 +1225,7 @@
       if (!state.run) await startRun();
       if (!state.run) return;
       if (!state.cart.length) {
-        toast('Add items before requesting quotes');
+        toast('Add raw materials before getting live prices');
         return;
       }
       await loadPortalHealth(true);
@@ -1104,10 +1248,11 @@
         applyRun(data.run);
         applyQuoteData(data);
         await loadPortalHealth();
-        toast('Quote batch created');
+        toast('Live price run created');
       } catch (error) {
         state.quote.loading = false;
         renderQuotePanel();
+        renderWorkflowPanel();
         toast(error.message || 'Quote request failed');
       } finally {
         els.requestQuotesBtn.disabled = false;
@@ -1167,6 +1312,7 @@
       if (!state.data) return;
       renderRunPanel();
       renderPortalSessions();
+      renderWorkflowPanel();
       renderQuotePanel();
       renderKpis();
       renderSources();
@@ -1247,6 +1393,71 @@
       `).join('');
     }
 
+    function quoteCounts() {
+      const summary = state.quote?.summary || {};
+      return {
+        quoted: Number(summary.quoted_count || 0),
+        pending: Number(summary.pending_count || 0),
+        unavailable: Number(summary.unavailable_count || 0),
+        errors: Number(summary.error_count || 0),
+      };
+    }
+
+    function nextBuyerAction() {
+      if (!state.run) return 'Start a purchase run for HE, NCH, or Both.';
+      if (!state.cart.length) return 'Add today’s raw materials to the order tray.';
+      if (!state.quote?.batch) return 'Click Get live prices to create one comparison batch.';
+      const counts = quoteCounts();
+      if (counts.pending > 0) return 'Open each portal tab and click Run live quotes from the extension.';
+      if (counts.quoted > 0) return 'Review the recommended source for each raw material.';
+      return 'No live prices found yet. Refresh prices or adjust the buying spec.';
+    }
+
+    function renderWorkflowPanel() {
+      if (!els.workflowGrid) return;
+      const counts = quoteCounts();
+      const ready = (state.portalSessions || []).filter((session) => session.status === 'READY').length;
+      const hasRun = !!state.run;
+      const hasCart = state.cart.length > 0;
+      const hasBatch = !!state.quote?.batch;
+      const hasPending = counts.pending > 0;
+      const hasPrices = counts.quoted > 0;
+      const steps = [
+        {
+          kicker: 'Step 1',
+          title: hasCart ? `${state.cart.length} items in tray` : 'Build purchase tray',
+          copy: hasCart ? 'Quantities are ready for live pricing.' : 'Add raw materials and required quantities.',
+          state: hasCart ? 'done' : hasRun ? 'active' : '',
+        },
+        {
+          kicker: 'Step 2',
+          title: hasBatch ? 'Live price run created' : 'Get live prices',
+          copy: hasBatch ? `${counts.quoted} prices found, ${counts.pending} searches waiting.` : 'Creates one batch across all ready portals.',
+          state: hasBatch ? 'done' : hasCart ? 'active' : '',
+        },
+        {
+          kicker: 'Step 3',
+          title: hasPending ? 'Run portal tabs' : 'Portal scans',
+          copy: hasPending ? `${counts.pending} portal searches still need the extension.` : `${ready}/${PORTAL_SOURCE_KEYS.length} logins ready.`,
+          state: hasPending ? 'active' : hasBatch ? 'done' : '',
+        },
+        {
+          kicker: 'Step 4',
+          title: hasPrices ? 'Review source split' : 'Choose winners',
+          copy: hasPrices ? 'Use recommended source, cheapest, and fastest delivery per item.' : 'Recommendations appear after prices return.',
+          state: hasPrices && !hasPending ? 'active' : hasPrices ? 'done' : '',
+        },
+      ];
+      els.workflowMeta.textContent = nextBuyerAction();
+      els.workflowGrid.innerHTML = steps.map((step) => `
+        <div class="workflow-step ${step.state}">
+          <div class="workflow-kicker">${escapeHtml(step.kicker)}</div>
+          <div class="workflow-title">${escapeHtml(step.title)}</div>
+          <div class="workflow-copy">${escapeHtml(step.copy)}</div>
+        </div>
+      `).join('');
+    }
+
     function quoteStatusClass(status) {
       if (status === 'QUOTED') return 'quoted';
       if (status === 'PENDING_ADAPTER') return 'pending';
@@ -1259,40 +1470,135 @@
       return money(n / 100);
     }
 
+    function parsePackQuantity(packText, baseUnit) {
+      const text = String(packText || '').toLowerCase().replace(/,/g, ' ');
+      const match = text.match(/\b(\d+(?:\.\d+)?)\s?(kg|kgs|kilogram|kilograms|g|gm|gram|grams|ml|millilitre|milliliter|l|ltr|litre|liter|litres|liters|pc|pcs|piece|pieces|pack|packs|carton|tin|bottle|bottles|nos|unit|units)\b/);
+      if (!match) return 0;
+      const value = Number(match[1]);
+      if (!Number.isFinite(value) || value <= 0) return 0;
+      const unit = match[2];
+      const base = String(baseUnit || 'unit').toLowerCase();
+      if (base === 'kg') {
+        if (unit.startsWith('kg') || unit.startsWith('kilogram')) return value;
+        if (unit === 'g' || unit === 'gm' || unit.startsWith('gram')) return value / 1000;
+      }
+      if (base === 'gram') {
+        if (unit.startsWith('kg') || unit.startsWith('kilogram')) return value * 1000;
+        if (unit === 'g' || unit === 'gm' || unit.startsWith('gram')) return value;
+      }
+      if (base === 'litre') {
+        if (unit === 'l' || unit === 'ltr' || unit.startsWith('lit')) return value;
+        if (unit === 'ml' || unit.startsWith('milli')) return value / 1000;
+      }
+      if (['pc', 'pcs', 'piece', 'pieces', 'pack', 'packs', 'carton', 'tin', 'bottle', 'bottles', 'nos', 'unit', 'units'].includes(unit)) {
+        return value;
+      }
+      return 0;
+    }
+
+    function ruleFromMatchRule(matchRule) {
+      if (matchRule === 'QUALITY_LOCKED') return BUYING_RULES.QUALITY_LOCKED;
+      if (matchRule === 'EXACT_ONLY') return BUYING_RULES.EXACT_SKU;
+      if (matchRule === 'COMMODITY_EQUIVALENT') return BUYING_RULES.GENERIC_COMMODITY;
+      if (matchRule === 'SUBSTITUTE_APPROVAL') return BUYING_RULES.APPROVED_SUBSTITUTE;
+      return BUYING_RULES.APPROVED_SUBSTITUTE;
+    }
+
+    function buyingRuleForLine(line) {
+      return ruleFromMatchRule(line?.buying_spec?.match_rule || line?.match_rule || '');
+    }
+
+    function comparablePricePaise(quote, line) {
+      const price = Number(quote?.unit_price_paise || quote?.price_paise || 0);
+      if (!Number.isFinite(price) || price <= 0) return 0;
+      const rule = buyingRuleForLine(line);
+      if (rule === BUYING_RULES.EXACT_SKU) return price;
+      const baseUnit = line?.buying_spec?.base_unit || baseUnitFor(line || {});
+      const packQty = parsePackQuantity(`${quote?.pack_size || ''} ${quote?.sku_title || ''}`, baseUnit);
+      return packQty > 0 ? Math.round(price / packQty) : price;
+    }
+
+    function unitRateText(quote, line) {
+      const comparable = comparablePricePaise(quote, line);
+      const price = Number(quote?.unit_price_paise || quote?.price_paise || 0);
+      if (!comparable || comparable === price) return 'quoted pack';
+      return `${quoteMoney(comparable)}/${line?.buying_spec?.base_unit || baseUnitFor(line || {})}`;
+    }
+
+    function quotedForLine(line) {
+      return (state.quote.quotes || [])
+        .filter((quote) => quote.cart_id === line.cart_id && quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0);
+    }
+
     function quoteFor(line, sourceKey) {
       return (state.quote.quotes || []).find((quote) => quote.cart_id === line.cart_id && quote.source_key === sourceKey) || null;
     }
 
     function bestQuoteFor(line) {
-      return (state.quote.quotes || [])
-        .filter((quote) => quote.cart_id === line.cart_id && quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0)
-        .sort((a, b) => a.unit_price_paise - b.unit_price_paise)[0] || null;
+      return quotedForLine(line)
+        .sort((a, b) => comparablePricePaise(a, line) - comparablePricePaise(b, line))[0] || null;
+    }
+
+    function fastestQuoteFor(line) {
+      return quotedForLine(line)
+        .filter((quote) => Number(quote.eta_minutes || 0) > 0)
+        .sort((a, b) => Number(a.eta_minutes || 0) - Number(b.eta_minutes || 0))[0] || null;
+    }
+
+    function recommendedQuoteFor(line) {
+      const best = bestQuoteFor(line);
+      const fastest = fastestQuoteFor(line);
+      const rule = buyingRuleForLine(line);
+      if (!best) return null;
+      if (state.run?.run_type === 'URGENT_FILL' && fastest) {
+        const bestComparable = comparablePricePaise(best, line);
+        const fastComparable = comparablePricePaise(fastest, line);
+        if (!bestComparable || !fastComparable || fastComparable <= bestComparable * 1.12) return fastest;
+      }
+      if (rule === BUYING_RULES.QUALITY_LOCKED) {
+        return quotedForLine(line)
+          .sort((a, b) => Number(b.match_confidence || 0) - Number(a.match_confidence || 0) || comparablePricePaise(a, line) - comparablePricePaise(b, line))[0] || best;
+      }
+      return best;
+    }
+
+    function recommendationNote(line, recommended) {
+      if (!recommended) {
+        if (!state.quote?.batch) return 'Click Get live prices';
+        const pending = (state.quote.quotes || []).some((quote) => quote.cart_id === line.cart_id && quote.stock_status === 'PENDING_ADAPTER');
+        return pending ? 'Run portal tabs' : 'No buyable quote yet';
+      }
+      const rule = buyingRuleForLine(line);
+      if (rule === BUYING_RULES.EXACT_SKU && Number(recommended.match_confidence || 0) < 70) return 'Review exact SKU match';
+      if (rule === BUYING_RULES.QUALITY_LOCKED) return 'Check quality before ordering';
+      return recommended.id === bestQuoteFor(line)?.id ? 'Lowest comparable rate' : 'Fastest acceptable option';
     }
 
     function renderQuotePanel() {
       if (!els.quoteMeta) return;
       const run = state.run;
       const quote = state.quote || {};
-      els.requestQuotesBtn.disabled = !run || !state.cart.length || quote.loading;
+      els.requestQuotesBtn.disabled = !state.cart.length || quote.loading;
       els.refreshQuotesBtn.disabled = !run || quote.loading;
 
       if (!run) {
-        els.quoteMeta.textContent = 'Start a purchase run first.';
+        els.quoteMeta.textContent = 'Start a purchase run, then add raw materials.';
         els.quoteSourceStatus.innerHTML = '';
-        els.quoteMatrix.innerHTML = `<div class="empty">No active run</div>`;
+        els.quoteMatrix.innerHTML = `<div class="empty">Start a purchase run</div>`;
+        renderWorkflowPanel();
         return;
       }
 
       if (quote.loading) {
-        els.quoteMeta.textContent = 'Refreshing quote snapshot...';
+        els.quoteMeta.textContent = 'Preparing live price board...';
       } else if (quote.batch) {
         const updated = quote.batch.updated_at ? new Date(quote.batch.updated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'now';
         const summary = quote.summary || {};
-        els.quoteMeta.textContent = `${quote.batch.id} - ${summary.quoted_count || 0} quoted, ${summary.pending_count || 0} pending, ${summary.unavailable_count || 0} unavailable - ${updated}`;
+        els.quoteMeta.textContent = `${quote.batch.id} - ${summary.quoted_count || 0} prices found, ${summary.pending_count || 0} portal searches waiting, ${summary.unavailable_count || 0} unavailable - ${updated}`;
       } else {
         els.quoteMeta.textContent = state.cart.length
-          ? 'No quote batch for this run.'
-          : 'Add items to the tray before requesting quotes.';
+          ? 'Click Get live prices to compare this tray across all ready portals.'
+          : 'Add raw materials to the tray before getting live prices.';
       }
 
       const statuses = quote.summary?.source_statuses?.length
@@ -1302,11 +1608,11 @@
         .filter((source) => QUOTE_SOURCE_ORDER.includes(source.key))
         .sort((a, b) => QUOTE_SOURCE_ORDER.indexOf(a.key) - QUOTE_SOURCE_ORDER.indexOf(b.key))
         .map((source) => {
-          const stateText = source.quoted_count ? `${source.quoted_count} quoted`
-            : source.pending_count ? `${source.pending_count} pending`
+          const stateText = source.quoted_count ? `${source.quoted_count} prices found`
+            : source.pending_count ? `${source.pending_count} searches waiting`
               : source.error_count ? `${source.error_count} error`
                 : source.unavailable_count ? `${source.unavailable_count} unavailable`
-                  : 'No batch';
+                  : 'Ready for price run';
           return `
             <div class="quote-source-card">
               <div class="quote-source-name">${escapeHtml(source.label || SOURCE_LABELS[source.key] || source.key)}</div>
@@ -1316,53 +1622,84 @@
         }).join('');
 
       if (!state.cart.length) {
-        els.quoteMatrix.innerHTML = `<div class="empty">Add items to the tray</div>`;
+        els.quoteMatrix.innerHTML = `<div class="empty">Add raw materials to the tray</div>`;
+        renderWorkflowPanel();
         return;
       }
 
       els.quoteMatrix.innerHTML = state.cart.map((line) => {
         const best = bestQuoteFor(line);
+        const fastest = fastestQuoteFor(line);
+        const recommended = recommendedQuoteFor(line);
+        const rule = buyingRuleForLine(line);
+        const note = recommendationNote(line, recommended);
         return `
           <div class="quote-line">
             <div class="quote-line-head">
               <div class="quote-line-name">${escapeHtml(line.name)}</div>
+              <span class="rule-pill ${escapeHtml(rule.tone)}">${escapeHtml(rule.label)}</span>
               <div class="quote-line-meta">
                 ${escapeHtml(line.qty)} ${escapeHtml(line.uom || 'unit')} - ${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)}
-                ${best ? ` - best ${escapeHtml(best.source_label)} ${quoteMoney(best.unit_price_paise)}` : ''}
+              </div>
+              <div class="decision-row">
+                ${renderDecisionCard('Recommended', recommended ? `${recommended.source_label} ${quoteMoney(recommended.unit_price_paise)}` : note, true)}
+                ${renderDecisionCard('Why', note)}
+                ${renderDecisionCard('Cheapest', best ? `${best.source_label} ${unitRateText(best, line)}` : 'Waiting')}
+                ${renderDecisionCard('Fastest', fastest ? `${fastest.source_label} ${fastest.eta_label || `${fastest.eta_minutes} min`}` : 'No ETA yet')}
               </div>
             </div>
             <div class="quote-cells">
-              ${QUOTE_SOURCE_ORDER.map((sourceKey) => renderQuoteCell(line, sourceKey, best)).join('')}
+              ${QUOTE_SOURCE_ORDER.map((sourceKey) => renderQuoteCell(line, sourceKey, best, recommended)).join('')}
             </div>
           </div>
         `;
       }).join('');
+      renderWorkflowPanel();
     }
 
-    function renderQuoteCell(line, sourceKey, best) {
+    function renderDecisionCard(label, value, primary = false) {
+      return `
+        <div class="decision-card ${primary ? 'primary' : ''}">
+          <div class="decision-label">${escapeHtml(label)}</div>
+          <div class="decision-value">${escapeHtml(value)}</div>
+        </div>
+      `;
+    }
+
+    function buyerStatusLabel(status) {
+      if (status === 'QUOTED') return 'Price found';
+      if (status === 'PENDING_ADAPTER') return 'Run portal tab';
+      if (status === 'OUT_OF_STOCK') return 'No stock';
+      if (status === 'UNAVAILABLE') return 'Not available';
+      if (status === 'ERROR') return 'Check portal';
+      return STOCK_LABELS[status] || status;
+    }
+
+    function renderQuoteCell(line, sourceKey, best, recommended) {
       const quote = quoteFor(line, sourceKey);
       const sourceLabel = SOURCE_LABELS[sourceKey] || sourceKey;
       if (!quote) {
         return `
           <div class="quote-cell">
             <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
-            <span class="quote-status pending">No batch</span>
-            <div class="quote-cell-meta">Request quote</div>
+            <span class="quote-status pending">${state.quote?.batch ? 'Not selected' : 'Get prices'}</span>
+            <div class="quote-cell-meta">${state.quote?.batch ? 'This source was not in the batch' : 'Click Get live prices'}</div>
           </div>
         `;
       }
       const status = quote.stock_status || 'PENDING_ADAPTER';
       const isBest = best && best.id === quote.id;
-      const sku = quote.sku_title || (status === 'PENDING_ADAPTER' ? 'Awaiting adapter' : 'No SKU');
+      const isRecommended = recommended && recommended.id === quote.id;
+      const sku = quote.sku_title || (status === 'PENDING_ADAPTER' ? `Waiting for ${sourceLabel}` : 'No SKU');
       const eta = quote.eta_label || (quote.eta_minutes ? `${quote.eta_minutes} min` : '');
       const confidence = quote.match_confidence ? `${quote.match_confidence}% match` : '';
       return `
-        <div class="quote-cell ${isBest ? 'best' : ''}">
+        <div class="quote-cell ${isRecommended ? 'recommended' : isBest ? 'best' : ''}">
           <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
-          <span class="quote-status ${quoteStatusClass(status)}">${escapeHtml(STOCK_LABELS[status] || status)}</span>
+          <span class="quote-status ${quoteStatusClass(status)}">${escapeHtml(buyerStatusLabel(status))}</span>
           <div class="quote-price">${quoteMoney(quote.unit_price_paise || quote.price_paise)}</div>
           <div class="quote-cell-meta">${escapeHtml(sku)}</div>
-          <div class="quote-cell-meta">${escapeHtml([eta, confidence].filter(Boolean).join(' - ') || quote.match_notes || '')}</div>
+          <div class="quote-cell-meta">${escapeHtml([unitRateText(quote, line), eta, confidence].filter(Boolean).join(' - ') || quote.match_notes || '')}</div>
         </div>
       `;
     }
@@ -1443,11 +1780,19 @@
     }
 
     function matchRuleFor(item) {
-      if (['Dairy & Eggs', 'Oils & Fats', 'Packaging & Disposables', 'Beverage Inputs', 'Sauces & Condiments', 'Cleaning & Non-Food', 'Water'].includes(item.category)) {
+      const text = `${item.name || ''} ${item.search_query || ''}`.toLowerCase();
+      const branded = /\b(amul|nandini|heritage|president|maggi|veeba|golden crown|tata|bru|red label|taj mahal|aashirvaad|fortune|saffola|sunpure|parle|britannia|paper boat|bisleri|kinley|coca|pepsi|sprite|thums|lays|oreo)\b/i.test(text);
+      if (item.category === 'Meat & Poultry' || /\b(chicken|mutton|meat|keema|kheema|fish)\b/i.test(text)) {
+        return 'QUALITY_LOCKED';
+      }
+      if (branded || ['Dairy & Eggs', 'Oils & Fats', 'Packaging & Disposables', 'Beverage Inputs', 'Cleaning & Non-Food', 'Water'].includes(item.category)) {
         return 'EXACT_ONLY';
       }
-      if (['Fresh Vegetables & Produce', 'Meat & Poultry'].includes(item.category)) {
+      if (['Fresh Vegetables & Produce'].includes(item.category)) {
         return 'COMMODITY_EQUIVALENT';
+      }
+      if (['Sauces & Condiments', 'Spices & Masalas', 'Dry Groceries'].includes(item.category)) {
+        return 'SUBSTITUTE_APPROVAL';
       }
       return 'EQUIVALENT_ALLOWED';
     }
@@ -1484,6 +1829,7 @@
       const productId = item.product_ids_by_brand?.[state.brand] || '';
       const canPo = state.brand !== 'BOTH' && !!productId;
       const spec = defaultBuyingSpec(item);
+      const rule = ruleFromMatchRule(spec.match_rule);
       return `
         <article class="card material-card ${escapeHtml(String(item.priority_hint || '').toLowerCase())}">
           <div class="material-main">
@@ -1504,8 +1850,10 @@
               <div class="stat"><div class="label">Frequency</div><div class="value">${escapeHtml(item.times_ordered || 0)}x</div></div>
             </div>
             <div class="badge-row">
+              <span class="rule-pill ${escapeHtml(rule.tone)}">${escapeHtml(rule.label)}</span>
               ${(item.source_keys || []).slice(0, 8).map((key) => `<span class="badge badge-neutral">${escapeHtml(SOURCE_LABELS[key] || key)}</span>`).join('')}
             </div>
+            <div class="spec-line">${escapeHtml(rule.description)}</div>
           </div>
           <div class="item-actions">
             <div class="order-form">
@@ -1584,6 +1932,7 @@
     function renderCartLine(line) {
       const vendorChoices = vendorOptionsForLine(line);
       const best = bestQuoteFor(line);
+      const recommended = recommendedQuoteFor(line);
       const vendorSelect = line.source_key === 'LOCAL_VENDOR'
         ? `<select data-cart-vendor="${escapeHtml(line.cart_id)}" aria-label="Vendor">${vendorChoices}</select>`
         : `<button class="btn btn-ghost btn-full" type="button" data-open-source="${escapeHtml(line.source_key)}">Open ${escapeHtml(line.source_label)}</button>`;
@@ -1595,7 +1944,7 @@
               <div class="cart-name">${escapeHtml(line.name)}</div>
               <div class="cart-meta">${escapeHtml(line.qty)} ${escapeHtml(line.uom || 'unit')} - ${escapeHtml(line.source_label)} - ${money(line.price_unit)}</div>
               <div class="spec-line">${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)} - ${escapeHtml(MATCH_LABELS[line.buying_spec?.match_rule] || line.buying_spec?.match_rule || 'Equivalent allowed')}</div>
-              ${best ? `<div class="spec-line">Best quote: ${escapeHtml(best.source_label)} ${quoteMoney(best.unit_price_paise)}</div>` : ''}
+              ${recommended ? `<div class="spec-line">Recommended: ${escapeHtml(recommended.source_label)} ${quoteMoney(recommended.unit_price_paise)} (${escapeHtml(recommendationNote(line, recommended))})</div>` : best ? `<div class="spec-line">Cheapest quote: ${escapeHtml(best.source_label)} ${quoteMoney(best.unit_price_paise)}</div>` : ''}
             </div>
             <button class="icon-btn" type="button" data-remove-line="${escapeHtml(line.cart_id)}" aria-label="Remove">X</button>
           </div>
