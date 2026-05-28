@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-28T17:10:56+0530",
-  "published_at": "2026-05-28T17:10:56+0530",
+  "updated_at": "2026-05-28T17:20:23+0530",
+  "published_at": "2026-05-28T17:20:23+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -130,17 +130,17 @@
       "subgroup": "Creative Surface",
       "risk": "print/vendor handoff",
       "status": "ready",
-      "last_task": "Align six 250ml NCH flask production master frames",
-      "last_summary": "On Figma page 226:2 in file cNkjzNFs4Xb1bdJUBB0Xey, normalized only the six 250ml production frame positions after user size refinements. Preserved frame sizes exactly: front/back 385.5118x612.2834, left/right spine 215.4331x612.2834, gable front/back 385.5118x144.5669. Set top row y=295 for front/back/left spine/right spine, exact 60-unit horizontal gaps, and gables y=947.2834 with 40-unit gap below panels; gable front x matches front x=80 and gable back x matches back x=525.5118. 500ml not refined in this pass.",
-      "next_action": "Have Nihaf review and approve the aligned 250ml set on page 226:2; after approval, repeat the same disciplined alignment/design pass for 500ml only.",
-      "mutation_status": "Existing Figma file mutation only; 250ml frame positions and labels adjusted, sizes/artwork dimensions preserved; no 500ml production refinement and no vendor files/live routes changed.",
+      "last_task": "Align six 500ml NCH flask production master frames",
+      "last_summary": "Applied the same alignment-only grid correction to the six 500ml frames on Figma page 226:2 in file cNkjzNFs4Xb1bdJUBB0Xey. Preserved current 500ml frame sizes exactly: front/back 385.5118x697.3228, left/right spine 215.4331x697.3228, gable front/back 385.5118x158.7402. Set top row y=1330 for front/back/left spine/right spine, exact 60-unit horizontal gaps, and gables y=2067.3228 with 40-unit gap below panels; gable front x matches front x=80 and gable back x matches back x=525.5118. 250ml was not changed in this pass.",
+      "next_action": "Have Nihaf review page 226:2 for 500ml alignment approval; after approval, proceed to final visual/content refinement or vendor export/preflight.",
+      "mutation_status": "Existing Figma file mutation only; 500ml frame positions and labels adjusted, sizes/artwork dimensions preserved; no vendor files/live routes changed.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-      "last_run_at": "2026-05-28T17:10:56+0530",
-      "proof": "Figma readback confirmed top row same y and same bottom baseline, front-to-back gap 60.0000, back-to-left-spine gap 60.0000, left-spine-to-right-spine gap 60.0000, gable gap 40, gablesSameY true, frontGableSameX true, backGableSameX true. Screenshot downloaded to /private/tmp/nch_250_alignment_after_grid.png.",
-      "artifacts": "/private/tmp/nch_250_alignment_after_grid.png",
-      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; 250ml frame nodes 226:15, 226:18, 226:39, 226:58, 226:77, 226:95.",
+      "last_run_at": "2026-05-28T17:20:23+0530",
+      "proof": "Figma readback confirmed 500ml top row same y and same bottom baseline, front-to-back gap 60.0000, back-to-left-spine gap 60.0000, left-spine-to-right-spine gap 60.0000, gable gap 39.9999, gablesSameY true, frontGableSameX true, backGableSameX true. Screenshot downloaded to /private/tmp/nch_500_alignment_after_grid.png.",
+      "artifacts": "/private/tmp/nch_500_alignment_after_grid.png",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; 500ml frame nodes 226:131, 226:134, 226:155, 226:174, 226:193, 226:211.",
       "data_freshness": "2026-05-28 Figma MCP alignment mutation, screenshot, and geometry readback verification.",
-      "rollback": "Restore previous 250ml positions if needed: front 80,295; back 525,295; left spine 970,295; right spine 1225,295; gables 80,950 and 525,950. Original source pages remain intact."
+      "rollback": "Restore previous 500ml positions if needed: front 80,1330; back 525,1330; left spine 970,1330; right spine 1225,1330; gables 80,2070 and 525,2070. Original source pages remain intact."
     },
     "reel-making": {
       "title": "11 Reel Making",
@@ -156,6 +156,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260528172023-packaging-design",
+      "at": "2026-05-28T17:20:23+0530",
+      "lane": "packaging-design",
+      "task": "Align six 500ml NCH flask production master frames",
+      "status": "ready",
+      "summary": "Applied the same alignment-only grid correction to the six 500ml frames on Figma page 226:2 in file cNkjzNFs4Xb1bdJUBB0Xey. Preserved current 500ml frame sizes exactly: front/back 385.5118x697.3228, left/right spine 215.4331x697.3228, gable front/back 385.5118x158.7402. Set top row y=1330 for front/back/left spine/right spine, exact 60-unit horizontal gaps, and gables y=2067.3228 with 40-unit gap below panels; gable front x matches front x=80 and gable back x matches back x=525.5118. 250ml was not changed in this pass.",
+      "next_action": "Have Nihaf review page 226:2 for 500ml alignment approval; after approval, proceed to final visual/content refinement or vendor export/preflight.",
+      "mutation_status": "Existing Figma file mutation only; 500ml frame positions and labels adjusted, sizes/artwork dimensions preserved; no vendor files/live routes changed.",
+      "proof": "Figma readback confirmed 500ml top row same y and same bottom baseline, front-to-back gap 60.0000, back-to-left-spine gap 60.0000, left-spine-to-right-spine gap 60.0000, gable gap 39.9999, gablesSameY true, frontGableSameX true, backGableSameX true. Screenshot downloaded to /private/tmp/nch_500_alignment_after_grid.png.",
+      "artifacts": "/private/tmp/nch_500_alignment_after_grid.png",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; 500ml frame nodes 226:131, 226:134, 226:155, 226:174, 226:193, 226:211.",
+      "rollback": "Restore previous 500ml positions if needed: front 80,1330; back 525,1330; left spine 970,1330; right spine 1225,1330; gables 80,2070 and 525,2070. Original source pages remain intact.",
+      "data_freshness": "2026-05-28 Figma MCP alignment mutation, screenshot, and geometry readback verification."
+    },
     {
       "id": "20260528171056-packaging-design",
       "at": "2026-05-28T17:10:56+0530",
@@ -970,16 +985,6 @@
       "summary": "Read raw Azure Codex session 019e1fac-d077-71a2-848f-995342f830e7 and source micro-step artifacts MS01-MS39. User's original objective in the trail is accurate price positioning plus accurate offer placing, not SEO/menu polish. Confirmed source roles: Swiggy DATA is order-volume demand; Zomato MG Road is rank-price perception; HE menu workbook is platform surface; POS is SKU universe; playbook is offer mechanic library. Found main drift: MS35 over-corrected toward no-offer as final strategy, while MS36 corrected that offers are mandatory but role-based/proof-gated. MS39 corrected context-collapse risks: missing Swiggy units/AOV, missing taxonomy, and direct-name price divergence. Saved audit note at _context/Delivery_Aggregator_Direct_API_2026-05-25/azure-session-019e1fac-microstep-context-audit.md. No portal/D1/POS/Odoo mutation.",
       "next_action": "Build the next price-plus-offer design table from MS38/MS39: current portal card, target customer-paying price, base price, offer mechanic, effective price, commission/margin, stack/MOV/daypart proof, and execution gate per SKU.",
       "mutation_status": "none - read-only raw session/artifact audit and ignored context note only"
-    },
-    {
-      "id": "20260525070830-delivery-aggregator",
-      "at": "2026-05-25T07:08:30+0530",
-      "lane": "delivery-aggregator",
-      "task": "Read source demand workbooks and micro-step intelligence context",
-      "status": "ready",
-      "summary": "Inspected the uploaded source zip drive-download-20260525T013325Z-3-001.zip: DATA.xlsx has 4,787 rows with 90,681 total order-count signal; MG Road rank-price workbook has 183 locality/cuisine/item rows. Re-read canonical FULL-INTELLIGENCE-MAPPING and MS35 final context/output. Core context confirmed: Swiggy DATA supplies actual demand-volume families; Zomato MG Road workbook supplies local rank-price perception corridors; HE menu workbook supplies executable SKU rows; playbook supplies offer mechanics only; proof/margin gates decide release. Highest demand families include biryani, dry starters, curries, rice, kebab, and breads. Final safe output remains 8 Zomato price-only rows; no offers/combo/Swiggy packet without proof.",
-      "next_action": "If continuing, produce a compact CTO-facing one-page explanation of the micro-step chain and data logic, or build the clean direct-ingest deployment branch; keep offer/combo execution blocked until proof/margin gates close.",
-      "mutation_status": "none - read-only workbook/context analysis and memory writeback only"
     }
   ]
 }
