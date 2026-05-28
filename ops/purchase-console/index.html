@@ -1349,9 +1349,14 @@
       const fn = PORTAL_SEARCH_URL[sk];
       return fn ? fn(q || '') : '';
     }
+    // Always-search policy: tap any portal button → search the portal's
+    // app for the raw material name, strictly. Scout-captured product
+    // URLs are kept as informational metadata on the card (price + SKU
+    // title + image) but are not the tap target, because a captured URL
+    // can be a wrong match (butter → butter paper). Search lets the
+    // owner see the portal's actual options for the material and pick.
+    // Source argument kept for forward-compat (callers pass it).
     function bestUrlFor(source, materialQuery) {
-      const raw = cleanUrl(source?.sku_url || source?.raw?.sku_url || '');
-      if (/^https?:\/\//i.test(raw)) return raw;
       return portalSearchUrlFor(source?.source_key, materialQuery);
     }
 
