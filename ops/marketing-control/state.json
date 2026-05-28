@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-25T19:26:40+0530",
-  "published_at": "2026-05-25T19:26:40+0530",
+  "updated_at": "2026-05-28T15:47:10+0530",
+  "published_at": "2026-05-28T15:47:10+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -125,12 +125,16 @@
       "subgroup": "Creative Surface",
       "risk": "print/vendor handoff",
       "status": "ready",
-      "last_task": "Build NCH flask front/back editable Figma review board",
-      "last_summary": "Ingested updated packaging-design context and built a self-contained Figma approval page in existing file cNkjzNFs4Xb1bdJUBB0Xey. Locked approved front reference and v5 back reference are nested into their frames. Editable back v6 frame now contains matched embroidered background, larger emblem, dual QR cards, Instagram/website/phone/statutory text, divider, and dark footer band. Source front/back PDFs still qpdf pass at 136x216mm; source QR PNGs decode to /go/flask and Google review. No final vendor dieline bulk generation done before approval.",
-      "next_action": "Have Nihaf review page 'Codex Final 250ml Front Back Editable' in Figma, adjust editable back placements if needed, then run deterministic SVG/PDF/QR/bleed/dieline vendor checks after panel approval.",
-      "mutation_status": "Existing Figma file mutation only; no POS/Odoo/ad/WABA/vendor final file mutation; no bulk final dielines generated.",
+      "last_task": "Initialize lane and verify NCH flask review state",
+      "last_summary": "Re-read packaging-design lane memory, packaging prompt, Claude execution digest, marketing graph state, creative asset library registry, and decisions log. Confirmed repo checkout is on claude/captain-pos-guard with unrelated dirty tracked work, so no repo edit/stage is safe from this lane. Figma file cNkjzNFs4Xb1bdJUBB0Xey is readable/writable through use_figma and contains page 197:2 'Codex Final 250ml Front Back Editable' with locked front, locked back v5, editable back v6, and Gemini concept frames. Downloaded/visually inspected review screenshot at /private/tmp/nch_figma_review_page_20260528.png. Source front and back v5 PDFs qpdf-clean and both page size 385.512 x 612.283 pt (136x216mm). QR PNGs decode: WhatsApp dynamic to https://nawabichaihouse.com/go/flask and Google review to https://g.page/r/CQozT6UxiKIGEBM/review. Live check shows /go/flask currently returns the NCH homepage, not a dedicated flask/claim WhatsApp redirect, and homepage links point to wa.me/918008002045 while print art says +91 74832 70215.",
+      "next_action": "Before vendor-final output, either fix/verify the /go/flask route to the intended flask claim WhatsApp destination and confirm phone/legal/FSSAI text, or have Nihaf explicitly approve keeping the homepage route. After approval, adjust editable back v6 placements if needed, then run final deterministic SVG/PDF/QR/bleed/dieline vendor checks.",
+      "mutation_status": "Read-only verification and memory writeback only; no Figma mutation, no repo mutation, no POS/Odoo/ad/WABA/vendor final file mutation, no bulk dielines.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-      "last_run_at": "2026-05-25T14:59:50+0530"
+      "last_run_at": "2026-05-28T15:47:10+0530",
+      "proof": "Figma page 197:2 verified via use_figma; screenshot /private/tmp/nch_figma_review_page_20260528.png; qpdf/pdfinfo passed for front and back v5 print PDFs; zbarimg decoded both QR PNGs; curl -I -L confirmed Google review resolves to write-review page and /go/flask returns 200 homepage.",
+      "artifacts": "/Users/nihaf/Downloads/NCH_Flask_Front_Production_2026-05-25; /Users/nihaf/Downloads/NCH_Flask_Back_Production_2026-05-25_v5_GeminiRefined; /private/tmp/nch_figma_review_page_20260528.png; /private/tmp/nch_go_flask_20260528.html",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; review page 197:2; locked front frame 197:5; locked back v5 frame 197:6; editable back v6 frame 197:7; Gemini reference frame 197:8; NCH /go/flask URL; Google review URL g.page/r/CQozT6UxiKIGEBM/review",
+      "data_freshness": "Verified 2026-05-28 IST from local files, Figma MCP, qpdf/pdfinfo/zbarimg, and curl live checks."
     },
     "reel-making": {
       "title": "11 Reel Making",
@@ -146,6 +150,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260528154710-packaging-design",
+      "at": "2026-05-28T15:47:10+0530",
+      "lane": "packaging-design",
+      "task": "Initialize lane and verify NCH flask review state",
+      "status": "ready",
+      "summary": "Re-read packaging-design lane memory, packaging prompt, Claude execution digest, marketing graph state, creative asset library registry, and decisions log. Confirmed repo checkout is on claude/captain-pos-guard with unrelated dirty tracked work, so no repo edit/stage is safe from this lane. Figma file cNkjzNFs4Xb1bdJUBB0Xey is readable/writable through use_figma and contains page 197:2 'Codex Final 250ml Front Back Editable' with locked front, locked back v5, editable back v6, and Gemini concept frames. Downloaded/visually inspected review screenshot at /private/tmp/nch_figma_review_page_20260528.png. Source front and back v5 PDFs qpdf-clean and both page size 385.512 x 612.283 pt (136x216mm). QR PNGs decode: WhatsApp dynamic to https://nawabichaihouse.com/go/flask and Google review to https://g.page/r/CQozT6UxiKIGEBM/review. Live check shows /go/flask currently returns the NCH homepage, not a dedicated flask/claim WhatsApp redirect, and homepage links point to wa.me/918008002045 while print art says +91 74832 70215.",
+      "next_action": "Before vendor-final output, either fix/verify the /go/flask route to the intended flask claim WhatsApp destination and confirm phone/legal/FSSAI text, or have Nihaf explicitly approve keeping the homepage route. After approval, adjust editable back v6 placements if needed, then run final deterministic SVG/PDF/QR/bleed/dieline vendor checks.",
+      "mutation_status": "Read-only verification and memory writeback only; no Figma mutation, no repo mutation, no POS/Odoo/ad/WABA/vendor final file mutation, no bulk dielines.",
+      "proof": "Figma page 197:2 verified via use_figma; screenshot /private/tmp/nch_figma_review_page_20260528.png; qpdf/pdfinfo passed for front and back v5 print PDFs; zbarimg decoded both QR PNGs; curl -I -L confirmed Google review resolves to write-review page and /go/flask returns 200 homepage.",
+      "artifacts": "/Users/nihaf/Downloads/NCH_Flask_Front_Production_2026-05-25; /Users/nihaf/Downloads/NCH_Flask_Back_Production_2026-05-25_v5_GeminiRefined; /private/tmp/nch_figma_review_page_20260528.png; /private/tmp/nch_go_flask_20260528.html",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; review page 197:2; locked front frame 197:5; locked back v5 frame 197:6; editable back v6 frame 197:7; Gemini reference frame 197:8; NCH /go/flask URL; Google review URL g.page/r/CQozT6UxiKIGEBM/review",
+      "rollback": "",
+      "data_freshness": "Verified 2026-05-28 IST from local files, Figma MCP, qpdf/pdfinfo/zbarimg, and curl live checks."
+    },
     {
       "id": "20260525192640-pos-write",
       "at": "2026-05-25T19:26:40+0530",
@@ -935,16 +954,6 @@
       "summary": "Read-only live extraction from hamzaexpress.in Google cockpit period=all as of 2026-05-25. Stack totals since 2026-04-14: 10,170 impressions, 954 clicks, ₹4,161.11 spend, 0 conversions. Current enabled/serving Search campaigns: Late Night 23854158442 ₹300/day has 1,678 impressions, 96 clicks, ₹3,168.83 spend, active metric dates 2026-05-15 to 2026-05-25; Dinner 23855561197 ₹150/day has 24 impressions, 0 clicks, ₹0 spend, metric dates 2026-05-15 to 2026-05-24; Brand 23845870050 ₹50/day has 0 impressions/clicks/spend. PMax 23834053403 is paused, last metric date 2026-05-15, totals 8,468 impressions, 858 clicks, ₹992.28 spend, 0 conversions. If counting from latest Search activation/first metric on 2026-05-15 to 2026-05-25, elapsed is 10 days / 11 reporting dates inclusive; if asking days since active delivery, Late Night is active today = 0 days.",
       "next_action": "Decide whether to fix non-delivery for Dinner/Brand or tune Late Night negatives/bids before any money mutation.",
       "mutation_status": "read-only stats extraction; no Ads mutation"
-    },
-    {
-      "id": "20260525064409-packaging-design",
-      "at": "2026-05-25T06:44:09+0530",
-      "lane": "packaging-design",
-      "task": "Construct NCH 250ml flask back panel from finalized front reference",
-      "status": "ready",
-      "summary": "Built a scratch v2 back-panel production pack using the finalized front kraft/border system and supplied back reference: matched background fill, NCH emblem, gift message, QR, WhatsApp phone, and legal copy; exported 136x216mm PDF/SVG plus preview/proof files in /Users/nihaf/Downloads/NCH_Flask_Back_Production_2026-05-25; qpdf and pdfinfo checks passed.",
-      "next_action": "Review the back v2 preview/proof, confirm legal copy and QR destination, then assemble front+back+side/tuck dieline vendor handoff.",
-      "mutation_status": "Created local print/proof assets only; no POS/Odoo/ad/vendor mutation."
     }
   ]
 }
