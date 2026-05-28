@@ -1908,11 +1908,6 @@ async function requestQuotes(body, user, env) {
       } else {
         const health = portalHealth.get(sourceKey);
         const ready = health?.status === 'READY';
-        if (sourceKey === 'HYPERPURE' && ready) {
-          const quote = await hyperpureLiveQuote(line, env, expiresAt);
-          await insertQuoteLine(DB, batchId, run.id, line, sourceKey, quote, now);
-          continue;
-        }
         await insertQuoteLine(DB, batchId, run.id, line, sourceKey, {
           stock_status: ready ? 'PENDING_ADAPTER' : 'UNAVAILABLE',
           match_rule: line.buying_spec?.match_rule || line.match_rule || '',
