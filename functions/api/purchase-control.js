@@ -460,7 +460,13 @@ function isPlausibleProductUrl(url, sourceKey) {
     if (path === '/' || path === '') return false;
     if (/^\/(cart|login|signin|signup|help|about|contact|support|policy|terms|privacy)/i.test(path)) return false;
     const prefixes = VALID_PRODUCT_PATH_PREFIXES[sourceKey];
-    if (prefixes) return prefixes.some((p) => path.startsWith(p));
+    if (prefixes) {
+      // includes() not startsWith() — Amazon's canonical product URLs are
+      // `/<seo-slug>/dp/<asin>` (slug precedes `/dp/`), and BB/FK wrap the
+      // product id with a leading slug too. The earlier startsWith check
+      // dropped every valid Amazon Now URL (128 of them) on 2026-05-29.
+      return prefixes.some((p) => path.includes(p));
+    }
     return true;
   } catch (_) {
     return false;
