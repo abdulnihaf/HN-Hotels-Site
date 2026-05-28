@@ -1,0 +1,18 @@
+name = "hn-purchase-daily-scout-cron"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 03:30 UTC = 09:00 IST every day. Fires the morning snapshot loop over
+# Fresh Vegetables & Produce materials, one POST refresh-material per
+# material with a small stagger to avoid hammering the VPS.
+[triggers]
+crons = ["30 3 * * *"]
+
+[vars]
+HN_API_BASE = "https://hnhotels.in"
+DEFAULT_SCOPE = "Fresh Vegetables & Produce"
+DEFAULT_PIN = "0305"  # Nihaf admin — Worker-only call, not exposed externally.
+DEFAULT_SOURCES = "HYPERPURE,BIGBASKET,JIOMART,BLINKIT,FLIPKART_MINUTES"
+STAGGER_MS = "1000"
+MAX_MATERIALS = "60"
