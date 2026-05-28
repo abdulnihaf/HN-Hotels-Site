@@ -266,6 +266,162 @@
     .quote-source-card.bridge-running { border-color: rgba(96,165,250,.5); }
     .quote-source-card.bridge-error { border-color: rgba(248,113,113,.45); }
     .quote-source-card.bridge-done { border-color: rgba(52,211,153,.45); }
+    .snapshot-board { margin-bottom: 12px; }
+    .snapshot-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .snapshot-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .snapshot-actions select {
+      min-height: 36px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--pc-soft);
+      color: var(--text);
+      font-weight: 700;
+    }
+    .snapshot-grid {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 10px;
+    }
+    .snapshot-card {
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.04);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .snapshot-card-head {
+      display: grid;
+      gap: 2px;
+    }
+    .snapshot-card-name {
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .snapshot-card-meta {
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+    .snapshot-card-baseline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(255,255,255,.05);
+      font-size: 11px;
+      color: var(--text-dim);
+      width: max-content;
+    }
+    .snapshot-card-baseline strong { color: var(--text); }
+    .portal-chips {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .portal-chip {
+      display: grid;
+      grid-template-columns: 22px 1fr auto;
+      gap: 6px;
+      align-items: center;
+      padding: 6px 8px;
+      border: 1px solid var(--pc-line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.025);
+      font-size: 11px;
+      min-height: 36px;
+    }
+    .portal-chip.has-quote { background: rgba(52,211,153,.06); border-color: rgba(52,211,153,.2); }
+    .portal-chip.unavailable { opacity: .55; }
+    .portal-chip.error { opacity: .55; border-color: rgba(248,113,113,.3); }
+    .portal-chip.no-adapter { opacity: .4; border-style: dashed; }
+    .portal-logo {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 900;
+      color: white;
+      text-shadow: 0 1px 1px rgba(0,0,0,.4);
+    }
+    .portal-logo.hp { background: #dc2c2e; }
+    .portal-logo.bb { background: #82bc18; }
+    .portal-logo.bk { background: #ffcc28; color: #1a1300; text-shadow: none; }
+    .portal-logo.jm { background: #0079c8; }
+    .portal-logo.fm { background: #2874f0; }
+    .portal-logo.zp { background: #c81e85; }
+    .portal-logo.is { background: #fc8019; }
+    .portal-logo.an { background: #ff9900; }
+    .portal-logo.lv { background: rgba(255,255,255,.15); color: var(--text); text-shadow: none; }
+    .portal-chip-body { display: grid; gap: 1px; min-width: 0; }
+    .portal-chip-name {
+      font-weight: 700;
+      font-size: 11px;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .portal-chip-sub {
+      font-size: 10px;
+      color: var(--text-dim);
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .portal-chip-price {
+      font-weight: 800;
+      font-size: 12px;
+      text-align: right;
+    }
+    .portal-chip-delta {
+      font-size: 10px;
+      font-weight: 700;
+      text-align: right;
+    }
+    .portal-chip-delta.up { color: var(--pc-red); }
+    .portal-chip-delta.down { color: var(--pc-green); }
+    .portal-chip-delta.flat { color: var(--text-dim); }
+    .snapshot-card-actions {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px;
+      align-items: center;
+    }
+    .snapshot-card-fresh {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-align: right;
+    }
+    .btn-refresh-mat {
+      background: var(--pc-soft);
+      border: 1px solid var(--pc-line);
+      color: var(--text);
+      font-weight: 800;
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      min-height: 32px;
+    }
+    .btn-refresh-mat:hover { background: var(--pc-soft-2); }
+    .btn-refresh-mat:disabled { opacity: .5; cursor: wait; }
     .quote-source-card,
     .quote-line {
       border: 1px solid var(--pc-line);
@@ -787,6 +943,23 @@
           <div id="portalSessions" class="session-grid"></div>
         </section>
 
+        <section class="card snapshot-board">
+          <div class="snapshot-head">
+            <div>
+              <h2>Today's Price Board</h2>
+              <p id="snapshotMeta" class="sub" style="margin:4px 0 0;">Loading daily snapshot...</p>
+            </div>
+            <div class="snapshot-actions">
+              <select id="snapshotCategory" aria-label="Category">
+                <option value="Fresh Vegetables &amp; Produce">Fresh Vegetables &amp; Produce</option>
+                <option value="">All categories</option>
+              </select>
+              <button id="snapshotReloadBtn" class="btn btn-ghost btn-sm" type="button">Reload</button>
+            </div>
+          </div>
+          <div id="snapshotGrid" class="snapshot-grid"></div>
+        </section>
+
         <section class="card workflow-panel">
           <div>
             <h2>Purchase Flow</h2>
@@ -965,6 +1138,13 @@
         lastSummary: null,
         lastError: '',
       },
+      snapshot: {
+        date: '',
+        category: localStorage.getItem('purchaseSnapshotCategory') || 'Fresh Vegetables & Produce',
+        materials: [],
+        loading: false,
+        refreshing: new Set(),
+      },
     };
 
     const els = {
@@ -989,6 +1169,10 @@
       quoteSourceStatus: document.getElementById('quoteSourceStatus'),
       extensionStatus: document.getElementById('extensionStatus'),
       quoteMatrix: document.getElementById('quoteMatrix'),
+      snapshotMeta: document.getElementById('snapshotMeta'),
+      snapshotGrid: document.getElementById('snapshotGrid'),
+      snapshotCategory: document.getElementById('snapshotCategory'),
+      snapshotReloadBtn: document.getElementById('snapshotReloadBtn'),
       workflowMeta: document.getElementById('workflowMeta'),
       workflowGrid: document.getElementById('workflowGrid'),
       portalMeta: document.getElementById('portalMeta'),
@@ -1075,12 +1259,231 @@
         await loadMaterials();
         await loadRuns();
         await loadPortalHealth();
+        loadDailySnapshot();
       } catch (error) {
         els.pinError.textContent = error.message || 'Invalid PIN.';
         els.pinError.classList.remove('hide');
       } finally {
         els.unlockBtn.disabled = false;
       }
+    }
+
+    // ━━━ Daily Price Board (Phase Y) ━━━━━━━━━━━━━━━━━━━━━━━
+    // Reads /api/purchase-control?action=daily-snapshot (today's morning cron
+    // output, last refresh per material × portal), renders one card per
+    // material with Local Vendor baseline + portal chips with delta-vs-baseline
+    // framing + a 🔄 button that POSTs refresh-material and re-renders inline.
+
+    const PORTAL_LOGO_CLASS = {
+      HYPERPURE: 'hp',
+      BIGBASKET: 'bb',
+      BLINKIT: 'bk',
+      JIOMART: 'jm',
+      FLIPKART_MINUTES: 'fm',
+      ZEPTO: 'zp',
+      INSTAMART: 'is',
+      AMAZON_NOW: 'an',
+      LOCAL_VENDOR: 'lv',
+    };
+    const PORTAL_LOGO_LETTER = {
+      HYPERPURE: 'H',
+      BIGBASKET: 'BB',
+      BLINKIT: 'B',
+      JIOMART: 'J',
+      FLIPKART_MINUTES: 'FM',
+      ZEPTO: 'Z',
+      INSTAMART: 'I',
+      AMAZON_NOW: 'A',
+      LOCAL_VENDOR: 'LV',
+    };
+
+    function findMaterialMeta(materialId) {
+      const items = state.data?.items || [];
+      return items.find((it) => {
+        const code = (it.product_code || '').toString();
+        if (code === materialId) return true;
+        if ((it.item_id || '').toString().replace(/^code:/, '') === materialId) return true;
+        return String(it.id || '') === materialId;
+      }) || null;
+    }
+
+    async function loadDailySnapshot() {
+      if (!state.pin) return;
+      state.snapshot.loading = true;
+      renderSnapshotBoard();
+      try {
+        const cat = state.snapshot.category || '';
+        const path = `/api/purchase-control?action=daily-snapshot&pin=${encodeURIComponent(state.pin)}&brand=BOTH${cat ? `&category=${encodeURIComponent(cat)}` : ''}`;
+        const data = await fetchJson(path);
+        state.snapshot.date = data.date;
+        state.snapshot.materials = data.materials || [];
+      } catch (err) {
+        state.snapshot.materials = [];
+        toast(err.message || 'Snapshot load failed');
+      } finally {
+        state.snapshot.loading = false;
+        renderSnapshotBoard();
+      }
+    }
+
+    async function refreshOneMaterial(materialId) {
+      if (!state.pin || state.snapshot.refreshing.has(materialId)) return;
+      state.snapshot.refreshing.add(materialId);
+      renderSnapshotBoard();
+      try {
+        const data = await fetchJson('/api/purchase-control?action=refresh-material', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pin: state.pin,
+            material_id: materialId,
+            sources: PORTAL_SOURCE_KEYS,
+          }),
+        });
+        // Merge the returned snapshot rows into state.snapshot.materials.
+        const updated = data.snapshot || [];
+        const existing = state.snapshot.materials.find((m) => m.material_id === data.material_id);
+        if (existing) {
+          existing.sources = updated;
+        } else {
+          state.snapshot.materials.push({
+            material_id: data.material_id,
+            name: data.material_name,
+            uom: '',
+            category: state.snapshot.category,
+            brand: '',
+            sources: updated,
+          });
+        }
+        const c = data.counts || {};
+        toast(`Refreshed ${data.material_name}: ${c.ok || 0} ok / ${c.error || 0} err of ${c.requested || 0}`);
+      } catch (err) {
+        toast(err.message || 'Refresh failed');
+      } finally {
+        state.snapshot.refreshing.delete(materialId);
+        renderSnapshotBoard();
+      }
+    }
+
+    function deltaVsBase(unitPaise, basePaise) {
+      const u = Number(unitPaise || 0);
+      const b = Number(basePaise || 0);
+      if (!u || !b) return null;
+      return Math.round(((u - b) / b) * 100);
+    }
+
+    function freshnessLabel(capturedAt) {
+      if (!capturedAt) return '';
+      try {
+        const d = new Date(capturedAt);
+        const now = new Date();
+        const ageMs = now - d;
+        if (ageMs < 60000) return 'just now';
+        if (ageMs < 3600000) return `${Math.round(ageMs / 60000)} min ago`;
+        if (ageMs < 86400000) return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+      } catch (_) { return ''; }
+    }
+
+    function portalChipHtml(source, basePaise) {
+      const key = source.source_key;
+      const logoCls = PORTAL_LOGO_CLASS[key] || 'lv';
+      const letter = PORTAL_LOGO_LETTER[key] || '?';
+      const label = source.source_label || SOURCE_LABELS[key] || key;
+      const status = String(source.stock_status || '').toUpperCase();
+      const price = Number(source.unit_price_paise || source.price_paise || 0);
+      const isQuoted = status === 'QUOTED' && price > 0;
+      const delta = isQuoted ? deltaVsBase(price, basePaise) : null;
+      const chipCls = isQuoted ? 'has-quote' : status === 'ERROR' ? 'error' : 'unavailable';
+      let deltaHtml = '';
+      if (delta !== null) {
+        const cls = delta > 2 ? 'up' : delta < -2 ? 'down' : 'flat';
+        const sign = delta > 0 ? '+' : '';
+        deltaHtml = `<div class="portal-chip-delta ${cls}">${sign}${delta}%</div>`;
+      }
+      const subText = isQuoted
+        ? escapeHtml((source.sku_title || '').slice(0, 40))
+        : status === 'ERROR'
+          ? 'error'
+          : status === 'NO_ADAPTER'
+            ? 'pending'
+            : 'no match';
+      const priceText = isQuoted ? quoteMoney(price) : '—';
+      return `
+        <div class="portal-chip ${chipCls}" title="${escapeAttr((source.match_notes || '').slice(0, 240))}">
+          <div class="portal-logo ${logoCls}">${escapeHtml(letter)}</div>
+          <div class="portal-chip-body">
+            <div class="portal-chip-name">${escapeHtml(label)}</div>
+            <div class="portal-chip-sub">${subText}</div>
+          </div>
+          <div>
+            <div class="portal-chip-price">${priceText}</div>
+            ${deltaHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    function snapshotCardHtml(material) {
+      const sources = material.sources || [];
+      const local = sources.find((s) => s.source_key === 'LOCAL_VENDOR');
+      const meta = findMaterialMeta(material.material_id);
+      const basePaise = local
+        ? Number(local.unit_price_paise || local.price_paise || 0)
+        : Math.round(Number(meta?.last_vendor_price || 0) * 100);
+      const baselineName = local?.sku_title
+        || meta?.last_vendor_name
+        || (meta?.vendors || [])[0]?.name
+        || 'Local Vendor';
+      const uom = material.uom || meta?.uom || 'unit';
+      const baselineHtml = basePaise > 0
+        ? `<div class="snapshot-card-baseline"><span class="portal-logo lv">LV</span><span>${escapeHtml(baselineName)} <strong>${escapeHtml(quoteMoney(basePaise))}/${escapeHtml(uom)}</strong></span></div>`
+        : `<div class="snapshot-card-baseline"><span class="portal-logo lv">LV</span><span>No vendor baseline</span></div>`;
+      const portalOrder = PORTAL_SOURCE_KEYS;
+      const portalChips = portalOrder.map((key) => {
+        const src = sources.find((s) => s.source_key === key) || { source_key: key, stock_status: 'NO_ADAPTER' };
+        return portalChipHtml(src, basePaise);
+      }).join('');
+      const isRefreshing = state.snapshot.refreshing.has(material.material_id);
+      const lastCaptured = sources.map((s) => s.captured_at).filter(Boolean).sort().pop();
+      return `
+        <div class="snapshot-card" data-material-id="${escapeAttr(material.material_id)}">
+          <div class="snapshot-card-head">
+            <div class="snapshot-card-name">${escapeHtml(material.name)}</div>
+            <div class="snapshot-card-meta">${escapeHtml(material.category || '')} · ${escapeHtml(uom)}</div>
+          </div>
+          ${baselineHtml}
+          <div class="portal-chips">${portalChips}</div>
+          <div class="snapshot-card-actions">
+            <button class="btn-refresh-mat" data-refresh-mat="${escapeAttr(material.material_id)}" type="button" ${isRefreshing ? 'disabled' : ''}>
+              ${isRefreshing ? 'Refreshing…' : '🔄 Refresh'}
+            </button>
+            <div class="snapshot-card-fresh">${lastCaptured ? `Last priced ${escapeHtml(freshnessLabel(lastCaptured))}` : ''}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSnapshotBoard() {
+      if (!els.snapshotGrid) return;
+      const mats = state.snapshot.materials || [];
+      if (state.snapshot.loading) {
+        els.snapshotMeta.textContent = 'Loading daily snapshot...';
+        els.snapshotGrid.innerHTML = `<div class="empty">Loading...</div>`;
+        return;
+      }
+      if (!mats.length) {
+        els.snapshotMeta.textContent = `No snapshot yet for ${state.snapshot.date || 'today'} in ${state.snapshot.category || 'all categories'}. Cron fires at 09:00 IST.`;
+        els.snapshotGrid.innerHTML = `<div class="empty">No daily snapshot yet — tomorrow 09:00 IST, or 🔄 Refresh on any tray item to populate now.</div>`;
+        return;
+      }
+      const totalSources = mats.reduce((sum, m) => sum + (m.sources?.length || 0), 0);
+      const quotedSources = mats.reduce((sum, m) => sum + (m.sources?.filter((s) => s.stock_status === 'QUOTED').length || 0), 0);
+      els.snapshotMeta.textContent = `${state.snapshot.date} · ${mats.length} materials · ${quotedSources}/${totalSources} portal quotes ready`;
+      els.snapshotGrid.innerHTML = mats
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        .map(snapshotCardHtml)
+        .join('');
     }
 
     async function loadMaterials() {
@@ -2483,6 +2886,9 @@
           toast('Run loaded');
         }
       }
+
+      const refreshMat = event.target.closest('[data-refresh-mat]')?.dataset.refreshMat;
+      if (refreshMat) refreshOneMaterial(refreshMat);
     });
 
     document.addEventListener('change', (event) => {
@@ -2508,6 +2914,13 @@
     els.trayRequestQuotesBtn.addEventListener('click', requestQuotes);
     els.refreshQuotesBtn.addEventListener('click', () => loadQuoteSummary());
     els.validateSessionsBtn.addEventListener('click', () => loadPortalHealth(true));
+    els.snapshotReloadBtn.addEventListener('click', () => loadDailySnapshot());
+    els.snapshotCategory.value = state.snapshot.category;
+    els.snapshotCategory.addEventListener('change', (event) => {
+      state.snapshot.category = event.target.value;
+      localStorage.setItem('purchaseSnapshotCategory', state.snapshot.category);
+      loadDailySnapshot();
+    });
     els.runStatusSelect.addEventListener('change', () => {
       if (state.run) saveRun({ status: els.runStatusSelect.value });
     });
