@@ -1,0 +1,30 @@
+name: Deploy purchase-daily-scout-cron worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/purchase-daily-scout-cron/**'
+      - '.github/workflows/deploy-purchase-scout-cron.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: cf-worker-purchase-daily-scout-cron
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Deploy worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/purchase-daily-scout-cron
+          command: deploy
