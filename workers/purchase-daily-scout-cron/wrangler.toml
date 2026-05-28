@@ -3,23 +3,35 @@ main = "src/index.js"
 compatibility_date = "2024-09-01"
 compatibility_flags = ["nodejs_compat"]
 
-# 03:30 UTC = 09:00 IST every day (production schedule). Single fire only —
-# the */5 test trigger from PR #242 was reverted after overlapping fires
-# crushed the VPS (5-min interval < 9-min loop length → 2-3 concurrent
-# scheduled() invocations OOMed Chromium).
+# 01:00 UTC = 06:30 IST every day. Owner refreshes portal session cookies
+# overnight (Chrome extension on hn-winpc) so they're live before this fires.
+# The full scout pass runs at 06:30 IST and the result (entire materials
+# universe × every wired portal) lands in daily_price_snapshots by ~07:00 IST,
+# ready for the morning BuyList run on iPhone.
+#
+# Single fire only — the */5 test trigger from PR #242 was reverted after
+# overlapping fires crushed the VPS (5-min interval < 9-min loop length
+# → 2-3 concurrent scheduled() invocations OOMed Chromium).
 [triggers]
-crons = ["30 3 * * *"]
+crons = ["0 1 * * *"]
 
 [vars]
 HN_API_BASE = "https://hnhotels.in"
-# Empty scope = all categories. Cron now covers every RM with an Odoo product_code.
+# Empty scope = all categories. Cron covers every RM with an Odoo product_code.
 DEFAULT_SCOPE = ""
 DEFAULT_PIN = "0305"  # Nihaf admin — Worker-only call, not exposed externally.
-DEFAULT_SOURCES = "HYPERPURE,BIGBASKET,JIOMART,BLINKIT,FLIPKART_MINUTES"
-# Concurrency 2: each refresh-material call internally spawns 5 parallel VPS
-# Playwright contexts (~100MB each). Concurrency 3 OOMed the VPS earlier today;
-# 2 holds peak memory at ~750MB. 76 materials at concurrency 2 take ~10 min,
-# fits CF's 15-min scheduled-event budget.
+# Every portal with a live VPS adapter. INSTAMART adapter not yet built so
+# it's intentionally excluded — adding it before the adapter ships would
+# generate NO_ADAPTER rows that pollute the morning batch summary.
+DEFAULT_SOURCES = "HYPERPURE,BIGBASKET,BLINKIT,ZEPTO,FLIPKART_MINUTES,AMAZON_NOW,JIOMART"
+# Concurrency 2: each refresh-material call internally spawns 7 parallel VPS
+# Playwright contexts (~100MB each). Concurrency 3 OOMed the VPS earlier;
+# 2 holds peak memory at ~750MB. ~220 materials at concurrency 2 take
+# ~25 min, fits CF's 30-min scheduled-event budget (via ctx.waitUntil).
 DEFAULT_CONCURRENCY = "2"
 STAGGER_MS = "0"
-MAX_MATERIALS = "200"
+# Cap to the full 365d-purchased universe + headroom for custom materials.
+MAX_MATERIALS = "300"
+# Window for the materials query. 1095 days = 3 years — mirrors the BuyList
+# UI so the morning scout covers the same universe the owner browses.
+MATERIALS_DAYS = "1095"
