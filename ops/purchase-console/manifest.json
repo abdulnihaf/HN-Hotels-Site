@@ -1,0 +1,27 @@
+{
+  "name": "BuyList · HN Hotels",
+  "short_name": "BuyList",
+  "description": "Cross-portal raw material price intelligence for HN Hotels — find the cheapest source across Hyperpure, BigBasket, Blinkit, Zepto, Flipkart Minutes, Amazon Now and JioMart.",
+  "start_url": "/ops/purchase-console/",
+  "scope": "/ops/purchase-console/",
+  "display": "standalone",
+  "background_color": "#0a0a10",
+  "theme_color": "#0a0a10",
+  "orientation": "portrait",
+  "lang": "en-IN",
+  "categories": ["business", "productivity", "shopping"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

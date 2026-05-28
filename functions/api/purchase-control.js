@@ -417,20 +417,73 @@ function availabilityFromProduct(product) {
   return 'AVAILABLE';
 }
 
+// Decode HTML entities once. Some adapters (notably Amazon) capture URLs from
+// rendered HTML where `&` is already entity-encoded as `&amp;`. The UI then
+// runs escapeAttr() on render which re-encodes to `&amp;amp;`, the browser
+// decodes that to literal `amp;` and Amazon rejects the URL → Universal-Link
+// handoff to the iOS app dies. Decode at the API boundary so the stored URL
+// is canonical and round-trips cleanly through escapeAttr() exactly once.
+function decodeHtmlEntities(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#x2F;/gi, '/')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+}
+
+// Reject footer/help/nav anchors that adapters sometimes pick up as the
+// "product URL" when the search-result card selector misses. Each portal has
+// its own valid path prefixes.
+const VALID_PRODUCT_PATH_PREFIXES = {
+  HYPERPURE: ['/in/products/', '/products/', '/in/p/', '/in/category/'],
+  BIGBASKET: ['/pd/', '/pc/', '/cl/'],
+  BLINKIT: ['/prn/', '/cn/', '/s/'],
+  ZEPTO: ['/pn/', '/cn/', '/p/'],
+  FLIPKART_MINUTES: ['/p/', '/itm/'],
+  AMAZON_NOW: ['/dp/', '/gp/product/'],
+  JIOMART: ['/p/'],
+  INSTAMART: ['/instamart/item/', '/instamart/'],
+};
+
+function isPlausibleProductUrl(url, sourceKey) {
+  if (!url) return false;
+  if (url.startsWith('mailto:') || url.startsWith('tel:') || url.startsWith('javascript:')) return false;
+  if (url.startsWith('#') || url.includes('#how-it-works') || url.includes('#footer')) return false;
+  try {
+    const u = new URL(url);
+    const path = u.pathname;
+    if (path === '/' || path === '') return false;
+    if (/^\/(cart|login|signin|signup|help|about|contact|support|policy|terms|privacy)/i.test(path)) return false;
+    const prefixes = VALID_PRODUCT_PATH_PREFIXES[sourceKey];
+    if (prefixes) return prefixes.some((p) => path.startsWith(p));
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function productUrlFromProduct(product, query, sourceKey = 'HYPERPURE') {
-  const raw = cleanText(deepFieldValue(product, ['productUrl', 'product_url', 'webUrl', 'web_url', 'url', 'deeplink']), 320);
-  if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
+  const raw = decodeHtmlEntities(cleanText(deepFieldValue(product, ['productUrl', 'product_url', 'webUrl', 'web_url', 'url', 'deeplink']), 320));
   const source = SOURCE_BY_KEY[sourceKey] || SOURCE_BY_KEY.HYPERPURE;
-  if (raw.startsWith('/')) {
+  let candidate = '';
+  if (raw.startsWith('https://') || raw.startsWith('http://')) {
+    candidate = raw;
+  } else if (raw.startsWith('/')) {
     try {
-      return new URL(raw, source?.url || 'https://www.hyperpure.com/').toString();
+      candidate = new URL(raw, source?.url || 'https://www.hyperpure.com/').toString();
     } catch (_) {
-      return raw;
+      candidate = '';
     }
   }
-  const id = productIdFromProduct(product);
-  if (id && sourceKey === 'HYPERPURE') return `https://www.hyperpure.com/search?query=${encodeURIComponent(query || id)}`;
-  return source?.url || SOURCE_URLS.HYPERPURE;
+  if (candidate && isPlausibleProductUrl(candidate, sourceKey)) return candidate;
+  // No usable product URL — return empty so the UI falls back to the portal
+  // search-URL builder (which guarantees a Universal-Link-compatible path).
+  return '';
 }
 
 function etaFromProduct(product, sourceKey) {
@@ -2777,6 +2830,13 @@ async function upsertDailySnapshot(DB, row) {
 
 function publicSnapshotRow(row) {
   if (!row) return null;
+  // Decode HTML entities in stored sku_url so the UI receives a canonical
+  // URL. Some adapters (notably Amazon) wrote `&amp;` into the DB; without
+  // decoding here the UI's escapeAttr() re-encodes to `&amp;amp;` and the
+  // resulting href is broken. Re-validate against the per-portal prefix
+  // allowlist so old garbage rows (mailto:, #how-it-works) get dropped.
+  const decodedUrl = decodeHtmlEntities(row.sku_url || '');
+  const cleanUrl = isPlausibleProductUrl(decodedUrl, row.source_key) ? decodedUrl : '';
   return {
     snapshot_date: row.snapshot_date,
     material_id: row.material_id,
@@ -2787,7 +2847,7 @@ function publicSnapshotRow(row) {
     uom: row.uom || '',
     brand: row.brand || '',
     sku_title: row.sku_title || '',
-    sku_url: row.sku_url || '',
+    sku_url: cleanUrl,
     pack_size: row.pack_size || '',
     price_paise: row.price_paise || 0,
     unit_price_paise: row.unit_price_paise || 0,
