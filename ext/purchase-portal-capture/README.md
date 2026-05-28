@@ -1,0 +1,45 @@
+# HN Purchase Portal Capture
+
+Chrome extension for Phase 5 of the HN Hotels purchase console.
+
+It captures the currently logged-in browser session for one purchase portal and sends it to the existing purchase-console session vault through:
+
+`https://hnhotels.in/api/purchase-control?action=upsert-portal-session`
+
+The popup never prints cookie values, tokens, or storage values. It only shows capture counts and vault health.
+
+## Install
+
+1. Open `chrome://extensions`.
+2. Enable `Developer mode`.
+3. Click `Load unpacked`.
+4. Select this folder:
+
+`/tmp/hn-hotels-purchase-console/ext/purchase-portal-capture`
+
+After this phase is merged into the main repo, the permanent folder will be:
+
+`/Users/nihaf/Documents/Tech/HN-Hotels-Site/ext/purchase-portal-capture`
+
+## Capture Flow
+
+1. Open one portal in Chrome and make sure you are logged in.
+2. Click the `HN Purchase Portal Capture` extension.
+3. Select the portal, enter the purchase-console PIN, location, pincode, and expiry hours.
+4. Click `Capture current tab`.
+5. Repeat for all 8 portals:
+   - Hyperpure
+   - Zepto
+   - Flipkart Minutes
+   - Instamart
+   - Blinkit
+   - Amazon Now
+   - BigBasket
+   - JioMart
+6. Open `/ops/purchase-console/` and check `Portal Sessions`.
+
+## When Login Expires
+
+If a portal shows `MISSING`, `EXPIRED`, or `ACTION_REQUIRED`, open that portal, log in again, and capture the current tab again.
+
+Phase 5 only captures and refreshes sessions. Exact SKU live quote adapters are the next execution layer.

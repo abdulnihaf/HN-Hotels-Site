@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Portal Capture - Purchase Control</title>
+  <meta name="theme-color" content="#0c0c14">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/ops-ui.css">
+  <style>
+    :root {
+      --line: rgba(255,255,255,.09);
+      --soft: rgba(255,255,255,.045);
+      --green: #34d399;
+      --yellow: #fbbf24;
+    }
+
+    body { min-height: 100vh; }
+    .shell {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 5vw, 44px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 720px;
+      margin: 10px 0 0;
+      color: var(--text-dim);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .grid {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .steps {
+      counter-reset: step;
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .steps li {
+      counter-increment: step;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+    }
+
+    .steps li::before {
+      content: counter(step);
+      width: 34px;
+      height: 34px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--brand);
+      color: #0c0c14;
+      font-weight: 900;
+    }
+
+    .steps strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .steps span {
+      color: var(--text-dim);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .portal-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .portal {
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      font-weight: 800;
+    }
+
+    code {
+      overflow-wrap: anywhere;
+      color: var(--brand-hover);
+      font-size: 12px;
+    }
+
+    .note-box {
+      padding: 12px;
+      border: 1px solid rgba(251,191,36,.3);
+      border-radius: 8px;
+      background: rgba(251,191,36,.07);
+    }
+
+    @media (min-width: 760px) {
+      .grid { grid-template-columns: 1.1fr .9fr; }
+      .portal-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="top">
+      <div>
+        <h1>Portal Session Capture</h1>
+        <p class="lead">This is the login bridge for live purchase pricing. Capture each logged-in portal once, then the purchase console can use those sessions for quote adapters.</p>
+      </div>
+      <a class="btn btn-ghost btn-sm" href="/ops/purchase-console/">Back</a>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Install in Chrome</h2>
+        <ol class="steps" style="margin-top:12px;">
+          <li>
+            <div>
+              <strong>Open Chrome extensions</strong>
+              <span>Go to <code>chrome://extensions</code> and enable Developer mode.</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Load unpacked</strong>
+              <span>Select <code>/tmp/hn-hotels-purchase-console/ext/purchase-portal-capture</code>.</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Open each portal tab</strong>
+              <span>Use your already logged-in Chrome tabs for Hyperpure, Zepto, Flipkart Minutes, Instamart, Blinkit, Amazon Now, BigBasket, and JioMart.</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Capture current tab</strong>
+              <span>Enter the purchase-console PIN and click capture. The popup sends the session to the secure vault and shows only counts/status.</span>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="card">
+        <h2>8 portals</h2>
+        <div class="portal-grid" style="margin-top:12px;">
+          <div class="portal">Hyperpure</div>
+          <div class="portal">Zepto</div>
+          <div class="portal">Flipkart Minutes</div>
+          <div class="portal">Instamart</div>
+          <div class="portal">Blinkit</div>
+          <div class="portal">Amazon Now</div>
+          <div class="portal">BigBasket</div>
+          <div class="portal">JioMart</div>
+        </div>
+
+        <div class="note-box" style="margin-top:12px;">
+          <h3 style="margin:0 0 6px;">What Phase 5 does</h3>
+          <p class="sub" style="margin:0;">It solves the login/token layer. It does not yet claim exact live SKU prices. Once sessions show READY, the next phase wires portal-specific quote adapters against these sessions.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
