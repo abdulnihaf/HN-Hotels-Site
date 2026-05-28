@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-28T16:09:26+0530",
-  "published_at": "2026-05-28T16:09:26+0530",
+  "updated_at": "2026-05-28T16:25:58+0530",
+  "published_at": "2026-05-28T16:25:58+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -78,12 +78,17 @@
       "subgroup": "Acquisition",
       "risk": "money mutation",
       "status": "ready",
-      "last_task": "Correct Hamza Express Meta retargeting Figma creatives for visible food-first hero composition",
-      "last_summary": "Executed a Figma-only correction pass on the Hamza Express Meta + WABA retargeting creatives after review showed the food was not visible enough. Inspected the A1 frame structure and identified the causes: heavy global dark overlay, bottom readability panel covering the food zone, oversized headline/voucher/card/CTA stack, and hero image crop not centered on food. Updated all 10 individual Figma creative frames on page 06 Meta + WABA Ads by panning hero image rectangles toward the food, reducing overlay strength, lowering and lightening the readability layer, compressing headline/subline/voucher/CTA sizing, shrinking the voucher card, and keeping HE logo/emblem/1918 brand marks. Verified A1 9x16, A1 4x5, and A5 9x16 renders; food is now the dominant visual proof and WhatsApp voucher UI is secondary.",
-      "next_action": "Review all 10 corrected frames together in Figma, then do final copy/CTA polish and export only after approval. If further creative generation is required, first run Gemini/multimodal inspection on the canonical food references; do not mutate Meta spend or WABA flows without live verification.",
-      "mutation_status": "Figma design mutation only; no Meta campaign/adset/ad, WABA, POS, Odoo, budget, or customer-data mutation.",
+      "last_task": "Extract current Meta campaign analytics for video and retargeting static campaigns",
+      "last_summary": "Read-only extracted live Meta/CTWA cockpit analytics from https://hamzaexpress.in/api/ctwa-analytics?period=all at 2026-05-28T16:25:11+0530. Current active campaigns: primary video Maps campaign 120246002668360505 with 168350 impressions, 126689 reach, Rs2985.86 spend, 5369 link/outbound clicks, 2630 landing page views, CTR 3.78022, CPC Rs0.46918, CPM Rs17.736026, 31217 25pct video views, 16385 50pct, 9679 75pct, 5863 95pct, 15114 thruplays; static retargeting campaign 120246050386040505 with 43917 impressions, 36228 reach, Rs492.60 spend, 523 link clicks, 522 outbound clicks, 191 landing page views, CTR 1.530159, CPC Rs0.733036, CPM Rs11.216613. Directions bridge all-period readback: 3790 page views, 2856 unique visitors, 1647 total map opens. Archived April CTWA meta-status endpoint still points to 120243729366800505 archived, so current analysis used ctwa-analytics active-campaign payload.",
+      "next_action": "Use these exact current numbers for Meta readback. If deeper daily/adset export is needed, query Meta Graph directly or extend ctwa endpoint to expose retargeting daily trend; do not mutate campaigns/spend without fresh live verification.",
+      "mutation_status": "read-only analytics extraction; no Meta campaign/adset/ad, WABA, POS, Odoo, budget, customer-data, repo, or Figma mutation",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-      "last_run_at": "2026-05-25T15:12:19+0530"
+      "last_run_at": "2026-05-28T16:25:58+0530",
+      "proof": "Live production API https://hamzaexpress.in/api/ctwa-analytics?period=all and https://hamzaexpress.in/api/meta-status queried successfully; raw responses saved locally at /private/tmp/he_meta_ctwa_analytics_all_20260528.json and /private/tmp/he_meta_status_20260528.json",
+      "artifacts": "/private/tmp/he_meta_ctwa_analytics_all_20260528.json; /private/tmp/he_meta_status_20260528.json",
+      "live_ids": "primary campaign 120246002668360505; primary adset 120246002762660505; primary ad 120246003033080505; retargeting campaign 120246050386040505; retargeting adsets 120246051099560505,120246052671060505,120246052814420505,120246054839720505,120246054881370505; archived old CTWA campaign 120243729366800505",
+      "rollback": "not applicable: read-only extraction",
+      "data_freshness": "captured 2026-05-28T16:25:11+0530 IST from live production API"
     },
     "flyers": {
       "title": "07 Flyers",
@@ -151,6 +156,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260528162558-meta-ads",
+      "at": "2026-05-28T16:25:58+0530",
+      "lane": "meta-ads",
+      "task": "Extract current Meta campaign analytics for video and retargeting static campaigns",
+      "status": "ready",
+      "summary": "Read-only extracted live Meta/CTWA cockpit analytics from https://hamzaexpress.in/api/ctwa-analytics?period=all at 2026-05-28T16:25:11+0530. Current active campaigns: primary video Maps campaign 120246002668360505 with 168350 impressions, 126689 reach, Rs2985.86 spend, 5369 link/outbound clicks, 2630 landing page views, CTR 3.78022, CPC Rs0.46918, CPM Rs17.736026, 31217 25pct video views, 16385 50pct, 9679 75pct, 5863 95pct, 15114 thruplays; static retargeting campaign 120246050386040505 with 43917 impressions, 36228 reach, Rs492.60 spend, 523 link clicks, 522 outbound clicks, 191 landing page views, CTR 1.530159, CPC Rs0.733036, CPM Rs11.216613. Directions bridge all-period readback: 3790 page views, 2856 unique visitors, 1647 total map opens. Archived April CTWA meta-status endpoint still points to 120243729366800505 archived, so current analysis used ctwa-analytics active-campaign payload.",
+      "next_action": "Use these exact current numbers for Meta readback. If deeper daily/adset export is needed, query Meta Graph directly or extend ctwa endpoint to expose retargeting daily trend; do not mutate campaigns/spend without fresh live verification.",
+      "mutation_status": "read-only analytics extraction; no Meta campaign/adset/ad, WABA, POS, Odoo, budget, customer-data, repo, or Figma mutation",
+      "proof": "Live production API https://hamzaexpress.in/api/ctwa-analytics?period=all and https://hamzaexpress.in/api/meta-status queried successfully; raw responses saved locally at /private/tmp/he_meta_ctwa_analytics_all_20260528.json and /private/tmp/he_meta_status_20260528.json",
+      "artifacts": "/private/tmp/he_meta_ctwa_analytics_all_20260528.json; /private/tmp/he_meta_status_20260528.json",
+      "live_ids": "primary campaign 120246002668360505; primary adset 120246002762660505; primary ad 120246003033080505; retargeting campaign 120246050386040505; retargeting adsets 120246051099560505,120246052671060505,120246052814420505,120246054839720505,120246054881370505; archived old CTWA campaign 120243729366800505",
+      "rollback": "not applicable: read-only extraction",
+      "data_freshness": "captured 2026-05-28T16:25:11+0530 IST from live production API"
+    },
     {
       "id": "20260528160926-packaging-design",
       "at": "2026-05-28T16:09:26+0530",
@@ -950,16 +970,6 @@
       "summary": "Verified current deployed WABA voucher flow from GitHub main whatsapp.js SHA 166b38102d7d42f86baa517211c1f2169a687146: trigger phrase 'Hi Hamza, send my WhatsApp voucher' maps to source meta_rt_voucher, creates/reuses wa_voucher_claims code HE-xxxxx, then routes to Full Menu, Voucher Offers, Open Maps, Combos, Shawarma/Kathi, or Dine-in. Created funnel spec at _context/Meta_WABA_Voucher_Retargeting_2026-05-25/FUNNEL_SPEC.md and Desktop creative pack Hamza_Meta_WABA_Voucher_Final_2026-05-25 with final A voucher-first and B food-first 9:16/4:5 PNGs plus contact sheet. No Meta or WABA send mutation.",
       "next_action": "Before launch, live-test owner/test-number WABA trigger phrase, verify voucher claim row creation/readout, then create Meta messages campaign HE_RT_WABA_VOUCHER_CLAIM_20260525 using WhatsApp destination and exact prefill text; do not route this campaign to /directions.",
       "mutation_status": "creative/planning output only; money mutation still blocked until direct Meta campaign creation approval and live WABA test passes"
-    },
-    {
-      "id": "20260525065809-google-ads",
-      "at": "2026-05-25T06:58:09+0530",
-      "lane": "google-ads",
-      "task": "Audit Late Night campaign 96-click leak before budget move",
-      "status": "ready",
-      "summary": "Read-only deep audit of Late Night campaign 23854158442 before any budget mutation. Live all-period stats: 1,678 impressions, 96 clicks, ₹3,168.82 spend, avg CPC ₹33.01, 0 Google conversions. Click concentration: Open Now Near Me ad group took 81/96 clicks and ₹2,764.50 spend; Biryani/Kabab took 10 clicks/₹292.26; Late Night Bangalore took 4 clicks/₹87.53; Non Veg Halal took 1 click/₹24.54. Top keyword was exact 'restaurants near me open now' with 35 clicks/₹1,178.96 and Quality Score 1/below-average landing + predicted CTR. Top reported search term was 'restaurants nearby' with 21 clicks/₹694.71; reported search terms explain only 39/96 clicks, so Google withholds many query details. Landing proof: /go/google-night is a 200 HTML landing page with buttons, not a direct Maps redirect. /api/google-ads-landing-event shows 66 pageviews, 15 maps clicks, 3 calls, 1 WhatsApp, 1 menu over 30d; therefore only about 15.6% of Google clicks became Maps taps and only 1% became WhatsApp. Root issue: broad generic near-me restaurant demand + non-direct landing funnel, not enough high-intent Maps/dish conversion.",
-      "next_action": "Do not move all budget blindly. Recommended correction before/with budget move: tighten Late Night toward dish/open-now intent, reduce generic near-me spend or force direct directions landing, and add measurement for gclid/source on directions; then reallocate Dinner/Brand budget only after rollback-safe budget readback.",
-      "mutation_status": "read-only audit only; no budget or keyword mutation"
     }
   ]
 }
