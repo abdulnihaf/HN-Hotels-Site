@@ -124,7 +124,7 @@ async function captureCurrent(message) {
   const cookies = await readCookies(tab.url, portal.domains);
   const expiresAt = expiryFromCookies(cookies, Number(message.expiryHours || 6));
   const payload = {
-    capture_version: '1.0.0',
+    capture_version: '1.1.0',
     source_key: sourceKey,
     captured_url: tab.url,
     captured_title: tab.title || pageState.title || '',
@@ -133,6 +133,7 @@ async function captureCurrent(message) {
     local_storage: pageState.localStorage,
     session_storage: pageState.sessionStorage,
     visible_cookie_names: pageState.cookieNames,
+    visible_cookies: pageState.visibleCookies,
     storage_limits: pageState.limits,
   };
 
@@ -169,6 +170,7 @@ async function captureCurrent(message) {
     sourceKey,
     sourceLabel: portal.label,
     cookieCount: cookies.length,
+    visibleCookieCount: Object.keys(pageState.visibleCookies || {}).length,
     localStorageCount: Object.keys(pageState.localStorage).length,
     sessionStorageCount: Object.keys(pageState.sessionStorage).length,
     expiresAt,
@@ -226,6 +228,7 @@ async function readPageState(tabId) {
     localStorage: {},
     sessionStorage: {},
     cookieNames: [],
+    visibleCookies: {},
     limits: { error: 'No page state returned' },
   };
 }
@@ -256,14 +259,31 @@ function collectPageState() {
     return output;
   }
 
+  function readVisibleCookies() {
+    const output = {};
+    const text = document.cookie || '';
+    if (!text) return output;
+    for (const part of text.split(';')) {
+      const eq = part.indexOf('=');
+      const key = (eq >= 0 ? part.slice(0, eq) : part).trim();
+      if (!key) continue;
+      const raw = eq >= 0 ? part.slice(eq + 1) : '';
+      output[key] = raw.length > MAX_VALUE_CHARS
+        ? `${raw.slice(0, MAX_VALUE_CHARS)}...[truncated:${raw.length}]`
+        : raw;
+    }
+    return output;
+  }
+
+  const visibleCookies = readVisibleCookies();
+
   return {
     title: document.title || '',
     userAgent: navigator.userAgent || '',
     localStorage: readStorage(window.localStorage),
     sessionStorage: readStorage(window.sessionStorage),
-    cookieNames: document.cookie
-      ? document.cookie.split(';').map((part) => part.split('=')[0].trim()).filter(Boolean)
-      : [],
+    cookieNames: Object.keys(visibleCookies),
+    visibleCookies,
     limits: {
       maxKeys: MAX_KEYS,
       maxValueChars: MAX_VALUE_CHARS,

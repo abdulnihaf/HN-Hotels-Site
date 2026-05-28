@@ -114,8 +114,9 @@ async function captureCurrent() {
   try {
     const data = await send({ type: 'CAPTURE_CURRENT', ...payload });
     if (!data.ok) throw new Error(data.error || 'Capture failed');
+    const totalCookies = (data.cookieCount || 0) + (data.visibleCookieCount || 0);
     setStatus(
-      `Captured ${data.sourceLabel}: ${data.cookieCount} cookies, ${data.localStorageCount + data.sessionStorageCount} storage keys. Vault ready: ${data.readyCount ?? '-'} of 8.`,
+      `Captured ${data.sourceLabel}: ${totalCookies} cookies, ${data.localStorageCount + data.sessionStorageCount} storage keys. Vault ready: ${data.readyCount ?? '-'} of 8.`,
       'good',
     );
     if (data.health) renderHealth([data.health]);

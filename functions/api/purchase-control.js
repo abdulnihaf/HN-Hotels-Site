@@ -235,7 +235,11 @@ function isPastIso(value) {
 }
 
 function countCookies(payload) {
-  if (Array.isArray(payload?.cookies)) return payload.cookies.length;
+  const storedCount = Array.isArray(payload?.cookies) ? payload.cookies.length : 0;
+  const visibleCount = payload?.visible_cookies && typeof payload.visible_cookies === 'object'
+    ? Object.keys(payload.visible_cookies).length
+    : 0;
+  if (storedCount || visibleCount) return storedCount + visibleCount;
   if (Array.isArray(payload?.storage_state?.cookies)) return payload.storage_state.cookies.length;
   return 0;
 }
@@ -252,6 +256,395 @@ function browserHint(value) {
   if (text.includes('Safari')) return 'Safari';
   if (text.includes('Firefox')) return 'Firefox';
   return text.slice(0, 32);
+}
+
+function cleanText(value, max = 240) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function asObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function fieldValue(object, names) {
+  const obj = asObject(object);
+  const lowerMap = new Map(Object.keys(obj).map((key) => [key.toLowerCase(), key]));
+  for (const name of names) {
+    const key = lowerMap.get(String(name).toLowerCase());
+    if (key && obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key];
+  }
+  return '';
+}
+
+function deepFieldValue(value, names, depth = 0, seen = new Set()) {
+  if (!value || typeof value !== 'object' || depth > 3 || seen.has(value)) return '';
+  seen.add(value);
+  const direct = fieldValue(value, names);
+  if (direct !== '') return direct;
+  for (const child of Object.values(value)) {
+    if (!child || typeof child !== 'object') continue;
+    const nested = deepFieldValue(child, names, depth + 1, seen);
+    if (nested !== '') return nested;
+  }
+  return '';
+}
+
+function parsePricePaise(value, fieldName = '') {
+  if (value && typeof value === 'object') {
+    const nested = fieldValue(value, ['value', 'amount', 'price', 'sellingPrice', 'rupees', 'displayValue']);
+    if (nested !== '') return parsePricePaise(nested, fieldName);
+  }
+  const text = String(value ?? '').replace(/,/g, '').trim();
+  if (!text) return 0;
+  const match = text.match(/-?\d+(?:\.\d+)?/);
+  if (!match) return 0;
+  const n = Number(match[0]);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const key = String(fieldName || '').toLowerCase();
+  if (key.includes('paise') || key.includes('paisa') || key.includes('cents')) return Math.round(n);
+  return n > 10000 ? Math.round(n) : Math.round(n * 100);
+}
+
+function priceFromProduct(product) {
+  const fields = [
+    'sellingPrice',
+    'selling_price',
+    'discountedPrice',
+    'discounted_price',
+    'finalPrice',
+    'final_price',
+    'offerPrice',
+    'offer_price',
+    'price',
+    'unitPrice',
+    'unit_price',
+    'pricePerUnit',
+    'price_per_unit',
+    'mrp',
+    'MRP',
+  ];
+  for (const field of fields) {
+    const value = deepFieldValue(product, [field]);
+    const paise = parsePricePaise(value, field);
+    if (paise > 0) return { paise, field };
+  }
+  return { paise: 0, field: '' };
+}
+
+function titleFromProduct(product) {
+  return cleanText(deepFieldValue(product, [
+    'name',
+    'productName',
+    'product_name',
+    'displayName',
+    'display_name',
+    'title',
+    'skuName',
+    'sku_name',
+    'itemName',
+    'item_name',
+    'productTitle',
+  ]), 180);
+}
+
+function packFromProduct(product) {
+  const pack = cleanText(deepFieldValue(product, [
+    'packSize',
+    'pack_size',
+    'pack',
+    'quantity',
+    'quantityText',
+    'quantity_text',
+    'unit',
+    'unitText',
+    'unit_text',
+    'uom',
+    'weight',
+    'size',
+    'variantName',
+    'variant_name',
+  ]), 80);
+  if (pack) return pack;
+  const title = titleFromProduct(product);
+  const match = title.match(/\b\d+(?:\.\d+)?\s?(?:kg|g|gm|ml|l|ltr|litre|pcs|pc|pack|carton|tin|bottle|nos)\b/i);
+  return match ? match[0] : '';
+}
+
+function productIdFromProduct(product) {
+  return cleanText(deepFieldValue(product, [
+    'productId',
+    'product_id',
+    'id',
+    'skuId',
+    'sku_id',
+    'productNumber',
+    'product_number',
+    'catalogueId',
+    'catalogue_id',
+  ]), 96);
+}
+
+function productUrlFromProduct(product, query) {
+  const raw = cleanText(deepFieldValue(product, ['productUrl', 'product_url', 'webUrl', 'web_url', 'url', 'deeplink']), 320);
+  if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
+  if (raw.startsWith('/')) return `https://www.hyperpure.com${raw}`;
+  const id = productIdFromProduct(product);
+  if (id) return `https://www.hyperpure.com/search?query=${encodeURIComponent(query || id)}`;
+  return `https://www.hyperpure.com/`;
+}
+
+function searchableTokens(value) {
+  return cleanText(value, 240).toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length > 2);
+}
+
+function matchConfidence(query, title) {
+  const tokens = searchableTokens(query);
+  if (!tokens.length) return 50;
+  const titleText = cleanText(title, 240).toLowerCase();
+  if (!titleText) return 0;
+  const cleanQuery = cleanText(query, 240).toLowerCase();
+  if (cleanQuery && titleText.includes(cleanQuery)) return 96;
+  const hits = tokens.filter((token) => titleText.includes(token)).length;
+  if (!hits) return 25;
+  return Math.max(45, Math.min(92, Math.round(40 + (hits / tokens.length) * 52)));
+}
+
+function extractProductsFromPayload(payload) {
+  const products = [];
+  const seen = new Set();
+  const visited = new Set();
+
+  function visit(value, depth = 0) {
+    if (!value || products.length >= 80 || depth > 8) return;
+    if (typeof value !== 'object') return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+      return;
+    }
+
+    const title = titleFromProduct(value);
+    const id = productIdFromProduct(value);
+    const price = priceFromProduct(value).paise;
+    if (title && (price > 0 || id)) {
+      const key = `${id || title}|${price}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        products.push(value);
+      }
+    }
+
+    for (const child of Object.values(value)) {
+      if (child && typeof child === 'object') visit(child, depth + 1);
+    }
+  }
+
+  visit(payload);
+  return products;
+}
+
+function sessionPayload(session) {
+  return asObject(session?.payload || session?.session || session);
+}
+
+function cookieMapFromSessionPayload(payload) {
+  const map = {};
+  const visible = asObject(payload.visible_cookies || payload.visibleCookies);
+  for (const [key, value] of Object.entries(visible)) {
+    if (value !== undefined && value !== null && value !== '') map[key] = String(value);
+  }
+  const cookies = Array.isArray(payload.cookies)
+    ? payload.cookies
+    : Array.isArray(payload.storage_state?.cookies)
+      ? payload.storage_state.cookies
+      : [];
+  for (const cookie of cookies) {
+    if (cookie?.name && cookie.value !== undefined && cookie.value !== null && cookie.value !== '') {
+      map[cookie.name] = String(cookie.value);
+    }
+  }
+  return map;
+}
+
+function cookieHeader(cookieMap, extra = {}) {
+  const merged = { ...cookieMap, ...extra };
+  return Object.entries(merged)
+    .filter(([key, value]) => key && value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join('; ');
+}
+
+async function getPortalSessionSecret(env, sourceKey) {
+  if (!env.SESSIONS) return null;
+  const raw = await env.SESSIONS.get(portalSessionKey(sourceKey));
+  return raw ? safeJson(raw, null) : null;
+}
+
+function hyperpureAuth(session) {
+  const payload = sessionPayload(session);
+  const cookies = cookieMapFromSessionPayload(payload);
+  const local = asObject(payload.local_storage || payload.localStorage);
+  const token = cleanText(cookies.token || local.token || local.authToken || local.accessToken, 6000);
+  const outletId = cleanText(cookies.outletId || local.outletId || local.selectedOutletId || session?.outlet_id, 120);
+  const deviceId = cleanText(cookies.deviceId || local.deviceId || local.device_id || payload.deviceId, 240);
+  const apiVersion = cleanText(cookies.apiVersion || local.apiVersion || '12.1', 24);
+  const appMode = cleanText(cookies.appMode || local.appMode || 'partner_web', 64);
+  const headerCookies = cookieHeader(cookies, {
+    deviceId,
+    outletId,
+    apiVersion,
+    appMode,
+  });
+  return {
+    token,
+    outletId,
+    deviceId,
+    apiVersion,
+    appMode,
+    cookieHeader: headerCookies,
+    userAgent: cleanText(session?.user_agent || payload.user_agent || payload.userAgent, 320),
+  };
+}
+
+function hyperpureHeaders(auth) {
+  const headers = {
+    accept: 'application/json, text/plain, */*',
+    'accept-language': 'en-IN,en;q=0.9',
+    origin: 'https://www.hyperpure.com',
+    referer: 'https://www.hyperpure.com/',
+    'user-agent': auth.userAgent || 'Mozilla/5.0 Chrome HN-Purchase-Console',
+    APIVersion: auth.apiVersion || '12.1',
+    AppType: 'HYPERPURE_WEB',
+    'X-client': 'partner_web',
+    'x-appmode': auth.appMode || 'partner_web',
+    DeviceName: 'Chrome',
+  };
+  if (auth.deviceId) headers.DeviceId = auth.deviceId;
+  if (auth.outletId) headers['X-OutletId'] = auth.outletId;
+  if (auth.cookieHeader) headers.Cookie = auth.cookieHeader;
+  if (auth.token) headers.Authorization = /^bearer\s/i.test(auth.token) ? auth.token : `Bearer ${auth.token}`;
+  return headers;
+}
+
+function quoteSearchQuery(line) {
+  const spec = asObject(line.buying_spec);
+  return cleanText(spec.approved_name || spec.search_query || line.search_query || line.name, 160);
+}
+
+function hyperpureErrorQuote(line, message, expiresAt, raw = {}) {
+  return {
+    stock_status: 'ERROR',
+    match_rule: line.buying_spec?.match_rule || line.match_rule || '',
+    match_confidence: 0,
+    match_notes: message,
+    expires_at: expiresAt,
+    raw: { source: 'HYPERPURE', ...raw },
+  };
+}
+
+function hyperpureQuoteFromProduct(line, product, query, expiresAt, responseStatus) {
+  const title = titleFromProduct(product);
+  const price = priceFromProduct(product);
+  const pack = packFromProduct(product);
+  const confidence = matchConfidence(query, title);
+  return {
+    sku_title: title,
+    sku_url: productUrlFromProduct(product, query),
+    pack_size: pack,
+    price_paise: price.paise,
+    unit_price_paise: price.paise,
+    eta_minutes: 1440,
+    eta_label: 'Hyperpure scheduled',
+    stock_status: price.paise > 0 ? 'QUOTED' : 'OUT_OF_STOCK',
+    match_rule: line.buying_spec?.match_rule || line.match_rule || '',
+    match_confidence: confidence,
+    match_notes: `Live Hyperpure search: ${query}`,
+    captured_at: new Date().toISOString(),
+    expires_at: expiresAt,
+    raw: {
+      source: 'HYPERPURE',
+      response_status: responseStatus,
+      product_id: productIdFromProduct(product),
+      price_field: price.field,
+      title,
+      pack,
+    },
+  };
+}
+
+async function hyperpureLiveQuote(line, env, expiresAt) {
+  const session = await getPortalSessionSecret(env, 'HYPERPURE');
+  if (!session) {
+    return hyperpureErrorQuote(line, 'Hyperpure session is not in the vault. Capture Hyperpure again from Chrome.', expiresAt, { issue: 'NO_SESSION' });
+  }
+  const auth = hyperpureAuth(session);
+  if (!auth.token || !auth.outletId) {
+    return hyperpureErrorQuote(
+      line,
+      'Hyperpure needs recapture after reloading the Chrome extension; the old capture has cookie names but not token/outletId values.',
+      expiresAt,
+      { issue: 'RECAPTURE_REQUIRED', has_token: !!auth.token, has_outlet_id: !!auth.outletId }
+    );
+  }
+
+  const query = quoteSearchQuery(line);
+  const url = new URL('https://api.hyperpure.com/consumer/v2/search');
+  url.searchParams.set('query', query);
+  url.searchParams.set('outletId', auth.outletId);
+  url.searchParams.set('pageNo', '1');
+  url.searchParams.set('fetchThroughV2', 'true');
+  url.searchParams.set('searchDebugFlag', 'false');
+
+  let response;
+  let data;
+  try {
+    response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: hyperpureHeaders(auth),
+    });
+    const text = await response.text();
+    data = safeJson(text, null);
+    if (!data) {
+      return hyperpureErrorQuote(line, `Hyperpure returned non-JSON response (${response.status})`, expiresAt, {
+        status: response.status,
+        body_preview: text.slice(0, 180),
+      });
+    }
+  } catch (error) {
+    return hyperpureErrorQuote(line, `Hyperpure live search failed: ${error.message || 'network error'}`, expiresAt, { issue: 'FETCH_FAILED' });
+  }
+
+  if (!response.ok) {
+    return hyperpureErrorQuote(line, `Hyperpure API rejected live search (${response.status})`, expiresAt, {
+      status: response.status,
+      code: data?.code || data?.errorCode || data?.message || '',
+    });
+  }
+
+  const products = extractProductsFromPayload(data)
+    .map((product) => ({ product, title: titleFromProduct(product), price: priceFromProduct(product).paise }))
+    .filter((item) => item.title)
+    .sort((a, b) => {
+      const scoreDiff = matchConfidence(query, b.title) - matchConfidence(query, a.title);
+      if (scoreDiff) return scoreDiff;
+      return (a.price || 999999999) - (b.price || 999999999);
+    });
+
+  const best = products.find((item) => item.price > 0) || products[0];
+  if (!best) {
+    return {
+      stock_status: 'UNAVAILABLE',
+      match_rule: line.buying_spec?.match_rule || line.match_rule || '',
+      match_confidence: 0,
+      match_notes: `Hyperpure returned no SKU for ${query}`,
+      expires_at: expiresAt,
+      raw: { source: 'HYPERPURE', response_status: response.status, product_count: 0 },
+    };
+  }
+
+  return hyperpureQuoteFromProduct(line, best.product, query, expiresAt, response.status);
 }
 
 function categoryFor(name, code, odooCategory) {
@@ -1417,6 +1810,11 @@ async function requestQuotes(body, user, env) {
       } else {
         const health = portalHealth.get(sourceKey);
         const ready = health?.status === 'READY';
+        if (sourceKey === 'HYPERPURE' && ready) {
+          const quote = await hyperpureLiveQuote(line, env, expiresAt);
+          await insertQuoteLine(DB, batchId, run.id, line, sourceKey, quote, now);
+          continue;
+        }
         await insertQuoteLine(DB, batchId, run.id, line, sourceKey, {
           stock_status: ready ? 'PENDING_ADAPTER' : 'UNAVAILABLE',
           match_rule: line.buying_spec?.match_rule || line.match_rule || '',

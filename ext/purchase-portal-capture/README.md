@@ -42,4 +42,6 @@ After this phase is merged into the main repo, the permanent folder will be:
 
 If a portal shows `MISSING`, `EXPIRED`, or `ACTION_REQUIRED`, open that portal, log in again, and capture the current tab again.
 
-Phase 5 only captures and refreshes sessions. Exact SKU live quote adapters are the next execution layer.
+If the extension has been updated, reload it once from `chrome://extensions` before recapturing. Hyperpure requires this because its usable `token` and `outletId` can be visible browser cookies rather than cookies returned by the Chrome cookies API.
+
+Phase 6 starts attaching exact SKU live quote adapters to the captured sessions.
