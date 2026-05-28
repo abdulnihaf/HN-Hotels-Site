@@ -515,6 +515,12 @@ const COMMODITY_BLOCK_TOKENS = [
   'cubes', 'seasoning', 'pickle', 'chutney', 'ketchup',
   'granules', 'sachet', 'syrup', 'dried', 'frozen',
   'roasted', 'fried', 'instant', 'ready',
+  // Bakery / dessert / processed-snack tokens — added after Amazon Now's
+  // "Carrot Walnut Cake" matched scout queries at conf 96. None of these
+  // are valid fresh-commodity SKUs for a kitchen-restock context.
+  'cake', 'cookies', 'cookie', 'muffin', 'biscuit', 'biscuits',
+  'cracker', 'crackers', 'wafer', 'wafers', 'noodles', 'pasta',
+  'soup', 'jam', 'jelly', 'spread',
 ];
 
 function commodityBlockedTitle(query, title) {
