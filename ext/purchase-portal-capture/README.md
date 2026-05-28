@@ -47,6 +47,8 @@ After this phase is merged into the main repo, the permanent folder will be:
 
 For Hyperpure, v1.2 uses the live website search UI instead of guessing API headers. It temporarily watches the page's own search network response, types the queued raw-material query into Hyperpure's real search box, and ingests the returned SKU/price payload.
 
+Hyperpure v1.3 adds a DOM fallback: if the network response is blocked or hidden, the extension opens Hyperpure's `/in/search/...` result page and extracts visible product cards, prices, pack sizes, and out-of-stock state from the rendered page.
+
 ## When Login Expires
 
 If a portal shows `MISSING`, `EXPIRED`, or `ACTION_REQUIRED`, open that portal, log in again, and capture the current tab again.
