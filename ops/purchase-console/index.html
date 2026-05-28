@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Purchase Console - HN Hotels</title>
+  <meta name="theme-color" content="#0c0c14">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/ops-ui.css">
+  <style>
+    :root {
+      --console-bg: #0c0c14;
+      --console-line: rgba(255,255,255,0.08);
+      --console-faint: rgba(255,255,255,0.04);
+      --console-green: #34d399;
+      --console-red: #f87171;
+      --console-blue: #60a5fa;
+      --console-yellow: #fbbf24;
+    }
+
+    body { min-height: 100vh; }
+    .shell { width: min(1180px, 100%); margin: 0 auto; padding: 14px; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(12,12,20,0.92);
+      border-bottom: 1px solid var(--console-line);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+    .bar-inner {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      min-height: 58px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      justify-content: space-between;
+    }
+    .title-block { min-width: 0; }
+    .title-block h1 { font-size: 17px; letter-spacing: 0; }
+    .title-block p { margin: 2px 0 0; color: var(--text-dim); font-size: 12px; }
+    .brand-row, .tab-row, .toolbar-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .brand-row::-webkit-scrollbar, .tab-row::-webkit-scrollbar, .toolbar-row::-webkit-scrollbar { display: none; }
+    .seg {
+      min-height: 44px;
+      border: 1px solid var(--console-line);
+      background: rgba(255,255,255,0.04);
+      color: var(--text-dim);
+      border-radius: 8px;
+      padding: 0 14px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .seg.active {
+      color: #0c0c14;
+      background: var(--brand);
+      border-color: var(--brand);
+    }
+    .tabs {
+      position: sticky;
+      top: 58px;
+      z-index: 15;
+      background: rgba(12,12,20,0.92);
+      border-bottom: 1px solid var(--console-line);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+    .tab-row { width: min(1180px, 100%); margin: 0 auto; padding: 10px 14px; }
+    .tab {
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-dim);
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab.active {
+      background: var(--brand-soft);
+      color: var(--brand-hover);
+      border-color: var(--brand-ring);
+    }
+    .grid { display: grid; gap: 10px; }
+    .kpis { grid-template-columns: repeat(2, minmax(0,1fr)); margin: 12px 0; }
+    .kpi {
+      min-height: 92px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .kpi .label { color: var(--text-dim); font-size: 12px; font-weight: 700; }
+    .kpi .value { font-size: 24px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .kpi .note { color: var(--text-mute); font-size: 11px; }
+    .split { display: grid; gap: 12px; }
+    .side-panel { display: grid; gap: 10px; align-content: start; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .list { display: grid; gap: 8px; }
+    .decision {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      border-left: 3px solid transparent;
+    }
+    .decision.switch { border-left-color: var(--console-green); }
+    .decision.watch { border-left-color: var(--console-blue); }
+    .decision.local { border-left-color: var(--brand); }
+    .decision.recheck { border-left-color: var(--console-red); }
+    .item-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .item-name { font-weight: 800; line-height: 1.2; }
+    .item-meta { color: var(--text-dim); font-size: 12px; margin-top: 4px; }
+    .price-strip {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 8px;
+    }
+    .price-box {
+      background: rgba(255,255,255,0.035);
+      border: 1px solid var(--console-line);
+      border-radius: 8px;
+      padding: 10px;
+      min-width: 0;
+    }
+    .price-box .label { color: var(--text-mute); font-size: 10px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.4px; }
+    .price-box .amount { margin-top: 3px; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .source-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 8px;
+    }
+    .source-cell {
+      min-height: 58px;
+      border-radius: 8px;
+      border: 1px solid var(--console-line);
+      background: rgba(255,255,255,0.03);
+      padding: 9px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .source-cell.best { border-color: rgba(52,211,153,0.55); background: rgba(52,211,153,0.07); }
+    .source-cell.empty { opacity: 0.38; }
+    .source-cell .source-label { font-size: 10px; color: var(--text-mute); font-weight: 800; text-transform: uppercase; }
+    .source-cell .source-price { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .confidence-high { background: rgba(16,185,129,0.15); color: #34d399; }
+    .confidence-medium { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .confidence-low { background: rgba(239,68,68,0.15); color: #f87171; }
+    .matrix-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--console-line); }
+    table { width: 100%; border-collapse: collapse; min-width: 1240px; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--console-line); text-align: left; font-size: 12px; vertical-align: top; }
+    th { color: var(--text-mute); font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(255,255,255,0.025); }
+    td { color: var(--text); }
+    tr:last-child td { border-bottom: 0; }
+    .pack-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .pack-card { display: grid; gap: 10px; }
+    .pack-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .adapter-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .adapter {
+      display: grid;
+      gap: 10px;
+      min-height: 158px;
+    }
+    .adapter-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .tiny { font-size: 11px; color: var(--text-mute); }
+    .searchbar {
+      position: relative;
+      margin: 12px 0;
+    }
+    .searchbar input { padding-left: 14px; }
+    .empty {
+      min-height: 220px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--text-dim);
+    }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      z-index: 50;
+      background: var(--surface-2);
+      border: 1px solid var(--console-line);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 13px;
+      box-shadow: 0 16px 42px rgba(0,0,0,.35);
+    }
+    .pin-wrap {
+      min-height: calc(100vh - 58px);
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+    .pin-card { width: min(360px, 100%); }
+    .pin-input {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 0.42em;
+      padding-left: 22px;
+      font-variant-numeric: tabular-nums;
+    }
+    .hide { display: none !important; }
+
+    @media (min-width: 760px) {
+      .kpis { grid-template-columns: repeat(5, minmax(0,1fr)); }
+      .split { grid-template-columns: minmax(0, 1fr) 320px; }
+      .decision { grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); align-items: start; }
+      .price-strip { grid-template-columns: repeat(4, minmax(0,1fr)); }
+      .source-grid { grid-template-columns: repeat(5, minmax(0,1fr)); }
+      .pack-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .adapter-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="bar-inner">
+      <div class="title-block">
+        <h1>Purchase Console</h1>
+        <p id="subtitle">One daily control panel for raw-material buying</p>
+      </div>
+      <div class="toolbar-row">
+        <a class="btn btn-ghost btn-sm" href="/ops/purchase/">PO entry</a>
+        <a class="btn btn-ghost btn-sm" href="/ops/is/">Price intel</a>
+        <button class="btn btn-ghost btn-sm hide" id="refreshBtn" type="button">Refresh</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="pinGate" class="pin-wrap">
+      <div class="card pin-card">
+        <h2>Enter PIN</h2>
+        <p class="sub" style="margin:6px 0 16px;">Purchase, admin, and viewer PINs can open this console.</p>
+        <input id="pinInput" class="pin-input" type="password" maxlength="4" inputmode="numeric" autocomplete="one-time-code" placeholder="----">
+        <button id="unlockBtn" class="btn btn-primary btn-full" type="button" style="margin-top:12px;">Unlock console</button>
+        <p id="pinError" class="mute hide" style="margin-top:10px;color:#f87171;">Invalid PIN.</p>
+      </div>
+    </section>
+
+    <section id="app" class="hide">
+      <div class="tabs">
+        <div class="tab-row">
+          <button class="tab active" type="button" data-tab="today">Today</button>
+          <button class="tab" type="button" data-tab="matrix">Price matrix</button>
+          <button class="tab" type="button" data-tab="packs">Cart packs</button>
+          <button class="tab" type="button" data-tab="sources">Sources</button>
+        </div>
+      </div>
+
+      <div class="shell">
+        <div class="brand-row">
+          <button class="seg active" type="button" data-brand="HE">Hamza Express</button>
+          <button class="seg" type="button" data-brand="NCH">Nawabi Chai House</button>
+          <button class="seg" type="button" data-brand="BOTH">Both brands</button>
+        </div>
+
+        <div class="grid kpis" id="kpis"></div>
+
+        <div class="searchbar">
+          <input id="searchInput" type="search" placeholder="Search item, vendor, category, source...">
+        </div>
+
+        <section id="screen-today" class="screen active">
+          <div class="split">
+            <div>
+              <div class="item-head" style="margin-bottom:8px;">
+                <div>
+                  <h2>Daily buy decisions</h2>
+                  <p class="sub" id="todayHint">Loading purchase intelligence...</p>
+                </div>
+                <button class="btn btn-ghost btn-sm" type="button" id="copyTodayBtn">Copy top list</button>
+              </div>
+              <div id="todayList" class="list"></div>
+            </div>
+            <aside class="side-panel">
+              <div class="card">
+                <h3>Simple objective</h3>
+      <p class="sub" style="margin:0;">Every raw material gets one clean decision: buy local, buy Hyperpure, compare quick-commerce, or recheck the unit.</p>
+              </div>
+              <div class="card">
+                <h3>Why confidence matters</h3>
+                <p class="sub" style="margin:0;">A cheap price is not always a real saving. Butter at kg vs pack price, stale vendor prices, and missing UOMs must be flagged before buying.</p>
+              </div>
+              <div class="card">
+                <h3>Next data layer</h3>
+                <p class="sub" style="margin:0;">Once quick-commerce adapters are connected, this same screen becomes cheapest-live-source selection for the full daily order.</p>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section id="screen-matrix" class="screen">
+          <div class="item-head" style="margin-bottom:8px;">
+            <div>
+              <h2>Source price matrix</h2>
+              <p class="sub">Local vendor, Hyperpure, and quick-commerce columns side by side.</p>
+            </div>
+          </div>
+          <div class="matrix-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Local</th>
+                  <th>Hyperpure</th>
+                <th>Zepto</th>
+                <th>Flipkart Minutes</th>
+                <th>Instamart</th>
+                <th>Blinkit</th>
+                <th>Amazon Now</th>
+                <th>BigBasket</th>
+                <th>JioMart</th>
+                <th>Decision</th>
+                <th>Confidence</th>
+                </tr>
+              </thead>
+              <tbody id="matrixRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="screen-packs" class="screen">
+          <div class="item-head" style="margin-bottom:8px;">
+            <div>
+              <h2>Daily cart packs</h2>
+              <p class="sub">Grouped into the place you should buy from first.</p>
+            </div>
+          </div>
+          <div id="packGrid" class="pack-grid"></div>
+        </section>
+
+        <section id="screen-sources" class="screen">
+          <div class="item-head" style="margin-bottom:8px;">
+            <div>
+              <h2>Source adapters</h2>
+              <p class="sub">The Swiggy/Zomato browser API pattern becomes this layer for Hyperpure and quick-commerce price capture.</p>
+            </div>
+          </div>
+          <div id="adapterGrid" class="adapter-grid"></div>
+          <div class="card" style="margin-top:10px;">
+            <h3>Adapter rule</h3>
+            <p class="sub" style="margin:0;">Each source must produce the same normalized output: item name, pack size, UOM, price in paise, stock status, captured time, and confidence. The console should never care which portal the data came from.</p>
+          </div>
+        </section>
+
+        <div id="emptyState" class="card empty hide">
+          <div>
+            <h2>No matching items</h2>
+            <p class="sub">Clear the search or refresh the dashboard.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      pin: localStorage.getItem('purchaseConsolePin') || '',
+      user: null,
+      brand: localStorage.getItem('purchaseConsoleBrand') || 'HE',
+      tab: 'today',
+      data: null,
+      query: '',
+    };
+
+    const els = {
+      pinGate: document.getElementById('pinGate'),
+      app: document.getElementById('app'),
+      pinInput: document.getElementById('pinInput'),
+      pinError: document.getElementById('pinError'),
+      unlockBtn: document.getElementById('unlockBtn'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      subtitle: document.getElementById('subtitle'),
+      kpis: document.getElementById('kpis'),
+      todayList: document.getElementById('todayList'),
+      todayHint: document.getElementById('todayHint'),
+      matrixRows: document.getElementById('matrixRows'),
+      packGrid: document.getElementById('packGrid'),
+      adapterGrid: document.getElementById('adapterGrid'),
+      searchInput: document.getElementById('searchInput'),
+      emptyState: document.getElementById('emptyState'),
+      copyTodayBtn: document.getElementById('copyTodayBtn'),
+    };
+
+    function money(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) return '-';
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: n >= 100 ? 0 : 2,
+      }).format(n);
+    }
+
+    function pct(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return '-';
+      return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      }[char]));
+    }
+
+    function toast(text) {
+      const node = document.createElement('div');
+      node.className = 'toast';
+      node.textContent = text;
+      document.body.appendChild(node);
+      setTimeout(() => node.remove(), 2200);
+    }
+
+    async function api(path) {
+      const res = await fetch(path);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    async function verifyPin() {
+      const pin = els.pinInput.value.trim() || state.pin;
+      if (!pin || pin.length !== 4) {
+        els.pinError.classList.remove('hide');
+        return;
+      }
+      els.unlockBtn.disabled = true;
+      try {
+        const data = await api(`/api/purchase-console?action=verify-pin&pin=${encodeURIComponent(pin)}`);
+        state.pin = pin;
+        state.user = data.user;
+        localStorage.setItem('purchaseConsolePin', pin);
+        els.pinGate.classList.add('hide');
+        els.app.classList.remove('hide');
+        els.refreshBtn.classList.remove('hide');
+        els.subtitle.textContent = `${data.user.name} - ${data.user.role}`;
+        setBrand(state.brand, false);
+        await loadDashboard();
+      } catch (error) {
+        els.pinError.textContent = error.message || 'Invalid PIN.';
+        els.pinError.classList.remove('hide');
+      } finally {
+        els.unlockBtn.disabled = false;
+      }
+    }
+
+    async function loadDashboard() {
+      els.todayList.innerHTML = loadingCard('Loading purchase decisions...');
+      els.matrixRows.innerHTML = '';
+      els.packGrid.innerHTML = loadingCard('Loading cart packs...');
+      els.adapterGrid.innerHTML = loadingCard('Loading source adapters...');
+      try {
+        state.data = await api(`/api/purchase-console?action=dashboard&pin=${encodeURIComponent(state.pin)}&brand=${encodeURIComponent(state.brand)}`);
+        render();
+      } catch (error) {
+        els.todayList.innerHTML = `<div class="card"><h2>Could not load</h2><p class="sub">${escapeHtml(error.message)}</p></div>`;
+      }
+    }
+
+    function loadingCard(text) {
+      return `<div class="card"><p class="sub" style="margin:0;">${escapeHtml(text)}</p></div>`;
+    }
+
+    function setBrand(brand, reload = true) {
+      state.brand = brand;
+      localStorage.setItem('purchaseConsoleBrand', brand);
+      document.querySelectorAll('[data-brand]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.brand === brand);
+      });
+      if (reload && state.pin) loadDashboard();
+    }
+
+    function setTab(tab) {
+      state.tab = tab;
+      document.querySelectorAll('.tab').forEach((button) => {
+        button.classList.toggle('active', button.dataset.tab === tab);
+      });
+      document.querySelectorAll('.screen').forEach((screen) => {
+        screen.classList.toggle('active', screen.id === `screen-${tab}`);
+      });
+      render();
+    }
+
+    function filteredItems() {
+      const data = state.data;
+      if (!data) return [];
+      const q = state.query.trim().toLowerCase();
+      if (!q) return data.items || [];
+      return (data.items || []).filter((item) => {
+        const haystack = [
+          item.name,
+          item.product_code,
+          item.category,
+          item.vendor_name,
+          item.cheapest_platform,
+          item.decision?.label,
+        ].join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+
+    function render() {
+      if (!state.data) return;
+      const items = filteredItems();
+      renderKpis(state.data.summary);
+      renderToday(items);
+      renderMatrix(items);
+      renderPacks(state.data.packs || []);
+      renderAdapters(state.data.sources || []);
+      const hasItems = items.length > 0;
+      els.emptyState.classList.toggle('hide', hasItems || state.tab === 'sources' || state.tab === 'packs');
+    }
+
+    function renderKpis(summary) {
+      const cards = [
+        ['Items', summary.item_count, 'Decision rows'],
+        ['Switch now', summary.switch_now, 'External source cheaper'],
+        ['Recheck', summary.recheck_count, 'Unit, stale, or missing price'],
+        ['Local gaps', summary.local_price_gaps, 'No reliable vendor price'],
+        ['Possible save', money(summary.possible_saving_rupees), 'Per unit, not quantity weighted'],
+      ];
+      els.kpis.innerHTML = cards.map(([label, value, note]) => `
+        <div class="card kpi">
+          <div class="label">${escapeHtml(label)}</div>
+          <div class="value">${escapeHtml(value)}</div>
+          <div class="note">${escapeHtml(note)}</div>
+        </div>
+      `).join('');
+    }
+
+    function decisionClass(item) {
+      const action = item.decision?.action;
+      if (action === 'SWITCH') return 'switch';
+      if (action === 'WATCH' || action === 'TRY_MARKET') return 'watch';
+      if (action === 'RECHECK') return 'recheck';
+      return 'local';
+    }
+
+    function decisionBadge(item) {
+      const cls = {
+        SWITCH: 'badge-success',
+        WATCH: 'badge-info',
+        TRY_MARKET: 'badge-info',
+        LOCAL: 'badge',
+        RECHECK: 'badge-danger',
+      }[item.decision?.action] || 'badge-neutral';
+      return `<span class="badge ${cls}">${escapeHtml(item.decision?.label || 'Review')}</span>`;
+    }
+
+    function confidenceBadge(item) {
+      return `<span class="badge confidence-${escapeHtml(item.confidence || 'medium')}">${escapeHtml(item.confidence || 'medium')}</span>`;
+    }
+
+    function renderToday(items) {
+      const priority = items
+        .filter((item) => ['SWITCH', 'TRY_MARKET', 'RECHECK', 'WATCH'].includes(item.decision?.action))
+        .slice(0, 80);
+      els.todayHint.textContent = `${priority.length} priority rows from ${items.length} visible items`;
+      if (!priority.length) {
+        els.todayList.innerHTML = loadingCard('No priority rows match this search.');
+        return;
+      }
+      els.todayList.innerHTML = priority.map((item) => `
+        <article class="card decision ${decisionClass(item)}">
+          <div>
+            <div class="item-head">
+              <div>
+                <div class="item-name">${escapeHtml(item.name)}</div>
+                <div class="item-meta">${escapeHtml(item.product_code)} - ${escapeHtml(item.category)} - ${escapeHtml(item.uom || 'unit')}</div>
+              </div>
+              <div class="badge-row">${decisionBadge(item)}${confidenceBadge(item)}</div>
+            </div>
+            <div class="price-strip" style="margin-top:10px;">
+              <div class="price-box">
+                <div class="label">Local</div>
+                <div class="amount">${money(item.local_price)}</div>
+              </div>
+              <div class="price-box">
+                <div class="label">${escapeHtml(item.cheapest_platform || 'Market')}</div>
+                <div class="amount">${money(item.cheapest_price)}</div>
+              </div>
+              <div class="price-box">
+                <div class="label">Saving</div>
+                <div class="amount">${pct(item.savings_pct)}</div>
+              </div>
+              <div class="price-box">
+                <div class="label">Vendor</div>
+                <div class="amount" style="font-size:13px;">${escapeHtml(item.vendor_name || '-')}</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="source-grid">${sourceCells(item)}</div>
+            <div class="badge-row" style="margin-top:10px;">
+              ${(item.confidence_reasons || []).slice(0, 3).map((reason) => `<span class="badge badge-neutral">${escapeHtml(reason)}</span>`).join('')}
+            </div>
+            <div class="toolbar-row" style="margin-top:10px;">
+              <button class="btn btn-ghost btn-sm" type="button" data-copy-line="${escapeHtml(item.product_code)}">Copy line</button>
+              <a class="btn btn-ghost btn-sm" href="/ops/purchase/">Open PO</a>
+            </div>
+          </div>
+        </article>
+      `).join('');
+    }
+
+    function sourceCells(item) {
+      const sources = [
+        ['LOCAL_VENDOR', 'LOCAL', item.local_price],
+        ['HYPERPURE', 'HYPERPURE', item.price_hyperpure],
+        ['ZEPTO', 'ZEPTO', item.price_zepto],
+        ['FLIPKART_MINUTES', 'FLIPKART MIN', item.price_flipkart_minutes],
+        ['INSTAMART', 'INSTAMART', item.price_instamart],
+        ['BLINKIT', 'BLINKIT', item.price_blinkit],
+        ['AMAZON_NOW', 'AMAZON NOW', item.price_amazon_now],
+        ['BIGBASKET', 'BIGBASKET', item.price_bigbasket],
+        ['JIOMART', 'JIOMART', item.price_jiomart],
+      ];
+      return sources.map(([key, label, value]) => {
+        const isBest = item.cheapest_platform && key === String(item.cheapest_platform).toUpperCase();
+        const empty = !value || value <= 0;
+        return `
+          <div class="source-cell ${isBest ? 'best' : ''} ${empty ? 'empty' : ''}">
+            <div class="source-label">${escapeHtml(label)}</div>
+            <div class="source-price">${money(value)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMatrix(items) {
+      els.matrixRows.innerHTML = items.map((item) => `
+        <tr>
+          <td><strong>${escapeHtml(item.name)}</strong><br><span class="tiny">${escapeHtml(item.product_code)} - ${escapeHtml(item.uom || '')}</span></td>
+          <td>${money(item.local_price)}<br><span class="tiny">${escapeHtml(item.vendor_name || '')}</span></td>
+          <td>${money(item.price_hyperpure)}</td>
+          <td>${money(item.price_zepto)}</td>
+          <td>${money(item.price_flipkart_minutes)}</td>
+          <td>${money(item.price_instamart)}</td>
+          <td>${money(item.price_blinkit)}</td>
+          <td>${money(item.price_amazon_now)}</td>
+          <td>${money(item.price_bigbasket)}</td>
+          <td>${money(item.price_jiomart)}</td>
+          <td>${decisionBadge(item)}<br><span class="tiny">${pct(item.savings_pct)}</span></td>
+          <td>${confidenceBadge(item)}<br><span class="tiny">${escapeHtml((item.confidence_reasons || [])[0] || '')}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    function renderPacks(packs) {
+      els.packGrid.innerHTML = packs.map((pack) => `
+        <article class="card pack-card">
+          <div class="pack-title">
+            <div>
+              <h2>${escapeHtml(pack.label)}</h2>
+              <p class="sub" style="margin:4px 0 0;">${escapeHtml(pack.intent)}</p>
+            </div>
+            <span class="badge">${escapeHtml(pack.count)} items</span>
+          </div>
+          <div class="price-box">
+            <div class="label">Possible per-unit saving</div>
+            <div class="amount">${money((pack.possible_saving_paise || 0) / 100)}</div>
+          </div>
+          <div class="list">
+            ${(pack.top_items || []).slice(0, 8).map((item) => `
+              <div class="entry" style="margin-bottom:0;">
+                <div class="primary">
+                  <strong>${escapeHtml(item.name)}</strong>
+                  <div class="mute">${escapeHtml(item.uom || '')} - ${escapeHtml(item.vendor_name || item.cheapest_platform || '')}</div>
+                </div>
+                <div class="amount">${money(item.cheapest_price || item.local_price)}</div>
+              </div>
+            `).join('') || '<p class="sub" style="margin:0;">No items in this pack.</p>'}
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" data-copy-pack="${escapeHtml(pack.key)}">Copy pack</button>
+        </article>
+      `).join('');
+    }
+
+    function renderAdapters(sources) {
+      els.adapterGrid.innerHTML = sources.map((source) => {
+        const statusClass = source.status === 'live' ? 'badge-success' : source.status === 'error' ? 'badge-danger' : 'badge-warn';
+        const coverage = source.coverage ? `${source.coverage.count}/${source.coverage.total} items` : 'Not a price source yet';
+        return `
+          <article class="card adapter">
+            <div class="adapter-head">
+              <div>
+                <h2>${escapeHtml(source.label)}</h2>
+                <p class="sub" style="margin:4px 0 0;">${escapeHtml(source.role || '')}</p>
+              </div>
+              <span class="badge ${statusClass}">${escapeHtml(source.status)}</span>
+            </div>
+            <div class="price-strip">
+              <div class="price-box">
+                <div class="label">Mode</div>
+                <div class="amount" style="font-size:13px;">${escapeHtml(source.authMode || source.auth_mode || '-')}</div>
+              </div>
+              <div class="price-box">
+                <div class="label">Coverage</div>
+                <div class="amount" style="font-size:13px;">${escapeHtml(coverage)}</div>
+              </div>
+            </div>
+            <p class="tiny" style="margin:0;">Last success: ${escapeHtml(source.last_success_at || 'not captured')}</p>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function itemLine(item) {
+      const source = item.decision?.source_key === 'LOCAL_VENDOR'
+        ? (item.vendor_name || 'Local vendor')
+        : (item.cheapest_platform || item.decision?.source_key || 'Market');
+      return `${item.name} | ${item.uom || 'unit'} | ${source} | local ${money(item.local_price)} | target ${money(item.cheapest_price)} | ${pct(item.savings_pct)} | ${item.confidence}`;
+    }
+
+    async function copyText(text) {
+      await navigator.clipboard.writeText(text);
+      toast('Copied');
+    }
+
+    document.addEventListener('click', (event) => {
+      const brand = event.target.closest('[data-brand]')?.dataset.brand;
+      if (brand) setBrand(brand);
+
+      const tab = event.target.closest('[data-tab]')?.dataset.tab;
+      if (tab) setTab(tab);
+
+      const productCode = event.target.closest('[data-copy-line]')?.dataset.copyLine;
+      if (productCode && state.data) {
+        const item = state.data.items.find((row) => row.product_code === productCode);
+        if (item) copyText(itemLine(item));
+      }
+
+      const packKey = event.target.closest('[data-copy-pack]')?.dataset.copyPack;
+      if (packKey && state.data) {
+        const pack = (state.data.packs || []).find((row) => row.key === packKey);
+        const lines = (pack?.top_items || []).map(itemLine);
+        copyText([pack?.label || packKey, ...lines].join('\n'));
+      }
+    });
+
+    els.unlockBtn.addEventListener('click', verifyPin);
+    els.pinInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') verifyPin();
+    });
+    els.refreshBtn.addEventListener('click', loadDashboard);
+    els.searchInput.addEventListener('input', (event) => {
+      state.query = event.target.value;
+      render();
+    });
+    els.copyTodayBtn.addEventListener('click', () => {
+      const lines = filteredItems()
+        .filter((item) => ['SWITCH', 'TRY_MARKET', 'RECHECK', 'WATCH'].includes(item.decision?.action))
+        .slice(0, 25)
+        .map(itemLine);
+      copyText(lines.join('\n'));
+    });
+
+    if (state.pin) {
+      els.pinInput.value = state.pin;
+      verifyPin();
+    }
+  </script>
+</body>
+</html>
