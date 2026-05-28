@@ -399,13 +399,52 @@ function availabilityFromProduct(product) {
   return 'AVAILABLE';
 }
 
-function productUrlFromProduct(product, query) {
+function productUrlFromProduct(product, query, sourceKey = 'HYPERPURE') {
   const raw = cleanText(deepFieldValue(product, ['productUrl', 'product_url', 'webUrl', 'web_url', 'url', 'deeplink']), 320);
   if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
-  if (raw.startsWith('/')) return `https://www.hyperpure.com${raw}`;
+  const source = SOURCE_BY_KEY[sourceKey] || SOURCE_BY_KEY.HYPERPURE;
+  if (raw.startsWith('/')) {
+    try {
+      return new URL(raw, source?.url || 'https://www.hyperpure.com/').toString();
+    } catch (_) {
+      return raw;
+    }
+  }
   const id = productIdFromProduct(product);
-  if (id) return `https://www.hyperpure.com/search?query=${encodeURIComponent(query || id)}`;
-  return `https://www.hyperpure.com/`;
+  if (id && sourceKey === 'HYPERPURE') return `https://www.hyperpure.com/search?query=${encodeURIComponent(query || id)}`;
+  return source?.url || SOURCE_URLS.HYPERPURE;
+}
+
+function etaFromProduct(product, sourceKey) {
+  const source = SOURCE_BY_KEY[sourceKey] || SOURCE_BY_KEY.HYPERPURE;
+  const explicitMinutes = Number(deepFieldValue(product, ['etaMinutes', 'eta_minutes', 'deliveryMinutes', 'delivery_minutes']));
+  const label = cleanText(deepFieldValue(product, [
+    'etaLabel',
+    'eta_label',
+    'deliveryLabel',
+    'delivery_label',
+    'deliveryTime',
+    'delivery_time',
+    'delivery',
+    'promise',
+  ]), 120);
+  if (Number.isFinite(explicitMinutes) && explicitMinutes > 0) {
+    return { minutes: Math.round(explicitMinutes), label: label || `${Math.round(explicitMinutes)} min` };
+  }
+  const match = label.match(/\b(?:in\s*)?(\d{1,3})\s?(min|mins|minute|minutes|hr|hrs|hour|hours|day|days)\b/i);
+  if (match) {
+    const value = Number(match[1]);
+    const unit = match[2].toLowerCase();
+    const minutes = unit.startsWith('hr') || unit.startsWith('hour')
+      ? value * 60
+      : unit.startsWith('day')
+        ? value * 1440
+        : value;
+    return { minutes, label };
+  }
+  if (/tomorrow/i.test(label)) return { minutes: 1440, label };
+  if (sourceKey === 'HYPERPURE') return { minutes: 1440, label: 'Hyperpure scheduled' };
+  return { minutes: 0, label: label || source?.delivery_band || 'Portal live' };
 }
 
 function searchableTokens(value) {
@@ -548,39 +587,45 @@ function quoteSearchQuery(line) {
   return cleanText(spec.approved_name || spec.search_query || line.search_query || line.name, 160);
 }
 
-function hyperpureErrorQuote(line, message, expiresAt, raw = {}) {
+function portalErrorQuote(line, sourceKey, message, expiresAt, raw = {}) {
   return {
     stock_status: 'ERROR',
     match_rule: line.buying_spec?.match_rule || line.match_rule || '',
     match_confidence: 0,
     match_notes: message,
     expires_at: expiresAt,
-    raw: { source: 'HYPERPURE', ...raw },
+    raw: { source: sourceKey, ...raw },
   };
 }
 
-function hyperpureQuoteFromProduct(line, product, query, expiresAt, responseStatus) {
+function hyperpureErrorQuote(line, message, expiresAt, raw = {}) {
+  return portalErrorQuote(line, 'HYPERPURE', message, expiresAt, raw);
+}
+
+function portalQuoteFromProduct(line, product, query, expiresAt, sourceKey, responseStatus) {
+  const source = SOURCE_BY_KEY[sourceKey] || SOURCE_BY_KEY.HYPERPURE;
   const title = titleFromProduct(product);
   const price = priceFromProduct(product);
   const pack = packFromProduct(product);
   const availability = availabilityFromProduct(product);
   const confidence = matchConfidence(query, title);
+  const eta = etaFromProduct(product, sourceKey);
   return {
     sku_title: title,
-    sku_url: productUrlFromProduct(product, query),
+    sku_url: productUrlFromProduct(product, query, sourceKey),
     pack_size: pack,
     price_paise: price.paise,
     unit_price_paise: price.paise,
-    eta_minutes: 1440,
-    eta_label: 'Hyperpure scheduled',
+    eta_minutes: eta.minutes,
+    eta_label: eta.label,
     stock_status: availability === 'OUT_OF_STOCK' ? 'OUT_OF_STOCK' : (price.paise > 0 ? 'QUOTED' : 'OUT_OF_STOCK'),
     match_rule: line.buying_spec?.match_rule || line.match_rule || '',
     match_confidence: confidence,
-    match_notes: `Live Hyperpure search: ${query}`,
+    match_notes: `Live ${source.label} search: ${query}`,
     captured_at: new Date().toISOString(),
     expires_at: expiresAt,
     raw: {
-      source: 'HYPERPURE',
+      source: sourceKey,
       response_status: responseStatus,
       product_id: productIdFromProduct(product),
       price_field: price.field,
@@ -589,6 +634,10 @@ function hyperpureQuoteFromProduct(line, product, query, expiresAt, responseStat
       pack,
     },
   };
+}
+
+function hyperpureQuoteFromProduct(line, product, query, expiresAt, responseStatus) {
+  return portalQuoteFromProduct(line, product, query, expiresAt, 'HYPERPURE', responseStatus);
 }
 
 async function hyperpureLiveQuote(line, env, expiresAt) {
@@ -2029,45 +2078,47 @@ async function ingestBrowserSearchResults(body, user, DB) {
       },
     };
 
+    const source = SOURCE_BY_KEY[sourceKey] || { label: sourceKey };
+    const status = parseInt(result.status || 0, 10) || 0;
     let quote;
     if (result.error) {
-      quote = hyperpureErrorQuote(line, cleanText(result.error, 240), expiresAt, {
+      quote = portalErrorQuote(line, sourceKey, cleanText(result.error, 240), expiresAt, {
         source: sourceKey,
         browser_status: result.status || 0,
       });
-    } else if (sourceKey === 'HYPERPURE') {
-      const status = parseInt(result.status || 0, 10) || 0;
-      if (status && status >= 400) {
-        quote = hyperpureErrorQuote(line, `Hyperpure browser search rejected (${status})`, expiresAt, {
-          source: sourceKey,
-          browser_status: status,
-          body_preview: cleanText(result.body_preview || '', 180),
-        });
-      } else {
-        const products = extractProductsFromPayload(result.data)
-          .map((product) => ({ product, title: titleFromProduct(product), price: priceFromProduct(product).paise, available: availabilityFromProduct(product) !== 'OUT_OF_STOCK' }))
-          .filter((item) => item.title)
-          .sort((a, b) => {
-            const query = result.query || line.name;
-            if (a.available !== b.available) return a.available ? -1 : 1;
-            const scoreDiff = matchConfidence(query, b.title) - matchConfidence(query, a.title);
-            if (scoreDiff) return scoreDiff;
-            return (a.price || 999999999) - (b.price || 999999999);
-          });
-        const best = products.find((item) => item.price > 0 && item.available) || products.find((item) => item.price > 0) || products[0];
-        quote = best
-          ? hyperpureQuoteFromProduct(line, best.product, result.query || line.name, expiresAt, status || 200)
-          : {
-            stock_status: 'UNAVAILABLE',
-            match_rule: existing.match_rule || '',
-            match_confidence: 0,
-            match_notes: `Hyperpure returned no SKU for ${result.query || line.name}`,
-            expires_at: expiresAt,
-            raw: { source: sourceKey, browser_status: status || 200, product_count: 0 },
-          };
-      }
+    } else if (status && status >= 400) {
+      quote = portalErrorQuote(line, sourceKey, `${source.label} browser search rejected (${status})`, expiresAt, {
+        source: sourceKey,
+        browser_status: status,
+        body_preview: cleanText(result.body_preview || '', 180),
+      });
     } else {
-      quote = hyperpureErrorQuote(line, `${sourceKey} browser adapter is not implemented yet`, expiresAt, { source: sourceKey });
+      const query = result.query || line.name;
+      const products = extractProductsFromPayload(result.data)
+        .map((product) => ({
+          product,
+          title: titleFromProduct(product),
+          price: priceFromProduct(product).paise,
+          available: availabilityFromProduct(product) !== 'OUT_OF_STOCK',
+        }))
+        .filter((item) => item.title)
+        .sort((a, b) => {
+          if (a.available !== b.available) return a.available ? -1 : 1;
+          const scoreDiff = matchConfidence(query, b.title) - matchConfidence(query, a.title);
+          if (scoreDiff) return scoreDiff;
+          return (a.price || 999999999) - (b.price || 999999999);
+        });
+      const best = products.find((item) => item.price > 0 && item.available) || products.find((item) => item.price > 0) || products[0];
+      quote = best
+        ? portalQuoteFromProduct(line, best.product, query, expiresAt, sourceKey, status || 200)
+        : {
+          stock_status: 'UNAVAILABLE',
+          match_rule: existing.match_rule || '',
+          match_confidence: 0,
+          match_notes: `${source.label} returned no SKU for ${query}`,
+          expires_at: expiresAt,
+          raw: { source: sourceKey, browser_status: status || 200, product_count: 0 },
+        };
     }
 
     await insertQuoteLine(DB, batchId, run.id, line, sourceKey, quote, now);

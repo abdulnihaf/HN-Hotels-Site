@@ -5,41 +5,57 @@ const PORTALS = {
     label: 'Hyperpure',
     startUrl: 'https://www.hyperpure.com/',
     domains: ['hyperpure.com'],
+    searchUrl: hyperpureSearchUrl,
+    searchDelayMs: 2200,
   },
   ZEPTO: {
     label: 'Zepto',
     startUrl: 'https://www.zepto.com/',
     domains: ['zepto.com', 'zeptonow.com'],
+    searchUrl: (query) => `https://www.zepto.com/search?query=${encodeURIComponent(query)}`,
+    searchDelayMs: 3200,
   },
   FLIPKART_MINUTES: {
     label: 'Flipkart Minutes',
     startUrl: 'https://www.flipkart.com/flipkart-minutes-store?marketplace=HYPERLOCAL',
     domains: ['flipkart.com'],
+    searchUrl: (query) => `https://www.flipkart.com/search?q=${encodeURIComponent(query)}&marketplace=HYPERLOCAL`,
+    searchDelayMs: 3200,
   },
   INSTAMART: {
     label: 'Instamart',
     startUrl: 'https://www.swiggy.com/stores/instamart/',
     domains: ['swiggy.com'],
+    searchUrl: (query) => `https://www.swiggy.com/stores/instamart/search?custom_back=true&query=${encodeURIComponent(query)}`,
+    searchDelayMs: 3800,
   },
   BLINKIT: {
     label: 'Blinkit',
     startUrl: 'https://blinkit.com/',
     domains: ['blinkit.com'],
+    searchUrl: (query) => `https://blinkit.com/s/?q=${encodeURIComponent(query)}`,
+    searchDelayMs: 3200,
   },
   AMAZON_NOW: {
     label: 'Amazon Now',
     startUrl: 'https://www.amazon.in/',
     domains: ['amazon.in'],
+    searchUrl: (query) => `https://www.amazon.in/s?k=${encodeURIComponent(query)}&i=nowstore`,
+    searchDelayMs: 3400,
   },
   BIGBASKET: {
     label: 'BigBasket',
     startUrl: 'https://www.bigbasket.com/',
     domains: ['bigbasket.com'],
+    searchUrl: (query) => `https://www.bigbasket.com/ps/?q=${encodeURIComponent(query)}`,
+    searchDelayMs: 3200,
   },
   JIOMART: {
     label: 'JioMart',
     startUrl: 'https://www.jiomart.com/',
     domains: ['jiomart.com'],
+    searchUrl: (query) => `https://www.jiomart.com/search/${encodeURIComponent(query)}`,
+    searchDelayMs: 3600,
   },
 };
 
@@ -128,7 +144,7 @@ async function captureCurrent(message) {
   const cookies = await readCookies(tab.url, portal.domains);
   const expiresAt = expiryFromCookies(cookies, Number(message.expiryHours || 6));
   const payload = {
-    capture_version: '1.1.0',
+    capture_version: '1.4.0',
     source_key: sourceKey,
     captured_url: tab.url,
     captured_title: tab.title || pageState.title || '',
@@ -326,7 +342,6 @@ async function runBrowserQuotes(message) {
   const portal = PORTALS[sourceKey];
   if (!portal) throw new Error('Choose one of the 8 purchase portals');
   if (detected !== sourceKey) throw new Error(`Open the logged-in ${portal.label} tab before running live quotes`);
-  if (sourceKey !== 'HYPERPURE') throw new Error(`${portal.label} live quote runner is not wired yet`);
 
   const jobsUrl = `${ENDPOINT}?action=browser-quote-jobs&pin=${encodeURIComponent(pin)}&source_key=${encodeURIComponent(sourceKey)}`;
   const jobsResponse = await fetch(jobsUrl);
@@ -347,10 +362,13 @@ async function runBrowserQuotes(message) {
 
   const results = [];
   for (const job of jobs.slice(0, 20)) {
-    const result = await runHyperpureSearch(tab.id, job.query || job.name);
+    const query = job.query || job.name;
+    const result = sourceKey === 'HYPERPURE'
+      ? await runHyperpureSearch(tab.id, query)
+      : await runGenericPortalSearch(tab.id, sourceKey, query);
     results.push({
       cart_id: job.cart_id,
-      query: job.query || job.name,
+      query,
       ...result,
     });
   }
@@ -392,6 +410,23 @@ async function runHyperpureSearch(tabId, query) {
   const fallback = await runHyperpureSearchPageFallback(tabId, query);
   if (hasUsableHyperpureResult(fallback)) return fallback;
   return fallback || result?.result || { error: 'No browser search result returned' };
+}
+
+async function runGenericPortalSearch(tabId, sourceKey, query) {
+  const portal = PORTALS[sourceKey];
+  if (!portal?.searchUrl) return { error: `${portal?.label || sourceKey} does not have a search URL configured` };
+
+  const targetUrl = portal.searchUrl(query);
+  await chrome.tabs.update(tabId, { url: targetUrl });
+  await waitForTabLoad(tabId, 14000);
+  await sleep(portal.searchDelayMs || 3200);
+
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: genericScrapeSearchResults,
+    args: [query, sourceKey, portal.label],
+  });
+  return result?.result || { error: `${portal.label} search page scrape returned no result` };
 }
 
 function hasUsableHyperpureResult(result) {
@@ -723,6 +758,184 @@ function hyperpureScrapeSearchResults(query) {
     status: 200,
     data: {
       source: 'HYPERPURE_DOM_SEARCH',
+      query,
+      url: location.href,
+      products,
+    },
+    raw_observation: {
+      transport: 'dom',
+      url_path: location.pathname,
+      product_count: products.length,
+    },
+  };
+}
+
+function genericScrapeSearchResults(query, sourceKey, sourceLabel) {
+  function cleanText(value, limit = 240) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    return text.length > limit ? `${text.slice(0, limit)}...[truncated:${text.length}]` : text;
+  }
+
+  function parseRupees(text) {
+    const normalized = String(text || '').replace(/,/g, '');
+    const matches = [...normalized.matchAll(/₹\s*(\d+(?:\.\d+)?)/g)]
+      .map((match) => Number(match[1]))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (!matches.length) return 0;
+    return Math.min(...matches);
+  }
+
+  function packFromText(text) {
+    const match = cleanText(text, 900).match(/\b\d+(?:\.\d+)?\s?(?:kg|kgs|g|gm|grams|ml|l|ltr|litre|litres|pcs|pc|pieces|pack|packs|carton|tin|bottle|bottles|nos|unit|units)\b/i);
+    return match ? match[0] : '';
+  }
+
+  function deliveryFromText(text) {
+    const normalized = cleanText(text, 900);
+    const match = normalized.match(/\b(?:in\s*)?(\d{1,3})\s?(min|mins|minute|minutes|hr|hrs|hour|hours|day|days)\b/i);
+    if (match) {
+      const value = Number(match[1]);
+      const unit = match[2].toLowerCase();
+      const minutes = unit.startsWith('hr') || unit.startsWith('hour')
+        ? value * 60
+        : unit.startsWith('day')
+          ? value * 1440
+          : value;
+      return { etaMinutes: minutes, etaLabel: match[0] };
+    }
+    if (/tomorrow/i.test(normalized)) return { etaMinutes: 1440, etaLabel: 'Delivery tomorrow' };
+    if (/today|same day/i.test(normalized)) return { etaMinutes: 720, etaLabel: 'Same day' };
+    return { etaMinutes: 0, etaLabel: '' };
+  }
+
+  function normalizeTitle(lines, priceIndex) {
+    const blocked = /^(add|add item|\+|cart|buy now|notify me|view similar|out of stock|sold out|unavailable|high in demand|best rate|offers?|mrp|price|free delivery|sponsored|ad|rated|rating|ratings?|reviews?|veg|non veg|brand|all|new|login|sign in|deliver(?:y)?|minutes?|mins?|today|tomorrow)$/i;
+    const badFragment = /off mrp|best rate|recent buyers|save ₹|inclusive of|delivery|cashback|bank offer|terms|sponsored/i;
+    const rating = /^[0-9.]+\s*(?:\(\d+\))?$/;
+    const windowStart = priceIndex >= 0 ? Math.max(0, priceIndex - 10) : 0;
+    const windowEnd = priceIndex >= 0 ? Math.min(lines.length, priceIndex + 8) : Math.min(lines.length, 16);
+    const candidates = lines
+      .slice(windowStart, windowEnd)
+      .map((line) => cleanText(line, 140))
+      .filter((line) => line && /[a-z]/i.test(line))
+      .filter((line) => !blocked.test(line))
+      .filter((line) => !rating.test(line))
+      .filter((line) => !/^₹/.test(line))
+      .filter((line) => !/^\d+(?:\.\d+)?\s?(?:kg|g|gm|ml|l|pc|pcs|pack)$/i.test(line))
+      .filter((line) => !badFragment.test(line));
+    const scored = candidates
+      .map((line, index) => ({
+        line,
+        index,
+        score:
+          (line.length >= 12 ? 4 : 0) +
+          (line.length >= 24 ? 2 : 0) +
+          (/\b(?:amul|heritage|nandini|president|milk|butter|rice|oil|paneer|chicken|mutton|onion|tomato|masala|container|foil|box|bag|powder|sauce|atta|maida|sugar)\b/i.test(line) ? 3 : 0) -
+          (/\d{1,3}%|₹|\bmin\b|\bdelivery\b/i.test(line) ? 5 : 0),
+      }))
+      .sort((a, b) => b.score - a.score || b.index - a.index);
+    return cleanText(scored[0]?.line || candidates[0] || '', 180);
+  }
+
+  function productUrlFromElement(el) {
+    const link = el.closest('a[href]') || el.querySelector?.('a[href]');
+    const href = link?.getAttribute('href') || '';
+    if (!href) return location.href;
+    try {
+      return new URL(href, location.origin).toString();
+    } catch (_) {
+      return location.href;
+    }
+  }
+
+  function productFromElement(el) {
+    const raw = el.innerText || '';
+    if (!raw.includes('₹')) return null;
+    if (raw.length < 16 || raw.length > 1400) return null;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 96 || rect.height < 48) return null;
+    if (rect.bottom < 0 || rect.right < 0) return null;
+
+    const lines = raw.split('\n').map((line) => line.trim()).filter(Boolean);
+    const priceIndex = lines.findIndex((line) => /₹\s*[\d,]+(?:\.\d+)?/.test(line));
+    const priceText = lines.filter((line) => /₹/.test(line) && !/off|save|cashback|bank offer|coupon/i.test(line)).join('\n') || raw;
+    const price = parseRupees(priceText);
+    if (!price) return null;
+    const title = normalizeTitle(lines, priceIndex);
+    if (!title || title.length < 3) return null;
+
+    const statusText = /out\s*of\s*stock|notify me|view similar|sold\s*out|unavailable/i.test(raw)
+      ? 'OUT_OF_STOCK'
+      : 'AVAILABLE';
+    const delivery = deliveryFromText(raw);
+
+    return {
+      name: title,
+      productName: title,
+      title,
+      sellingPrice: price,
+      price,
+      packSize: packFromText(raw),
+      stockStatus: statusText,
+      availability: statusText,
+      deliveryLabel: delivery.etaLabel,
+      etaMinutes: delivery.etaMinutes,
+      buttonText: /(^|\n|\s)(add|add item|buy now)(\s|\n|$)/i.test(raw) ? 'ADD' : '',
+      productUrl: productUrlFromElement(el),
+      source: `${sourceKey}_DOM_SEARCH`,
+      sourceLabel,
+      rawText: cleanText(raw, 520),
+      cardArea: Math.round(rect.width * rect.height),
+    };
+  }
+
+  const selectors = [
+    '[data-testid*="product" i]',
+    '[data-test-id*="product" i]',
+    '[class*="product" i]',
+    '[class*="Product" i]',
+    '[class*="item" i]',
+    '[class*="Item" i]',
+    'article',
+    'li',
+    'section',
+    'a',
+    'div',
+  ];
+  const elements = Array.from(new Set(selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)))));
+  const candidates = elements
+    .map(productFromElement)
+    .filter(Boolean)
+    .sort((a, b) => a.cardArea - b.cardArea);
+
+  const seen = new Set();
+  const products = [];
+  for (const product of candidates) {
+    const key = `${product.title.toLowerCase()}|${product.price}|${product.packSize}|${product.stockStatus}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    products.push(product);
+    if (products.length >= 40) break;
+  }
+
+  if (!products.length) {
+    return {
+      status: 0,
+      error: `${sourceLabel} search page loaded but no price cards were detected`,
+      body_preview: cleanText(document.body?.innerText || '', 360),
+      data: {
+        source: `${sourceKey}_DOM_SEARCH`,
+        query,
+        url: location.href,
+        products: [],
+      },
+    };
+  }
+
+  return {
+    status: 200,
+    data: {
+      source: `${sourceKey}_DOM_SEARCH`,
       query,
       url: location.href,
       products,
