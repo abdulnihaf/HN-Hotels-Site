@@ -383,66 +383,188 @@ async function runBrowserQuotes(message) {
 async function runHyperpureSearch(tabId, query) {
   const [result] = await chrome.scripting.executeScript({
     target: { tabId },
-    func: hyperpureSearchInPage,
+    world: 'MAIN',
+    func: hyperpureNativeSearchInPage,
     args: [query],
   });
   return result?.result || { error: 'No browser search result returned' };
 }
 
-async function hyperpureSearchInPage(query) {
-  function cookieValue(name) {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
-    return match ? decodeURIComponent(match[1]) : '';
+async function hyperpureNativeSearchInPage(query) {
+  const observed = [];
+  const startedAt = Date.now();
+  const originalFetch = window.fetch;
+  const originalOpen = window.XMLHttpRequest?.prototype?.open;
+  const originalSend = window.XMLHttpRequest?.prototype?.send;
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+
+  function compactText(value, limit = 320) {
+    const text = String(value || '');
+    return text.length > limit ? `${text.slice(0, limit)}...[truncated:${text.length}]` : text;
   }
 
-  function storageValue(...keys) {
-    for (const key of keys) {
-      try {
-        const value = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
-        if (value) return value;
-      } catch (_) {}
+  function isRelevant(url, body) {
+    const haystack = `${url || ''} ${body || ''}`.toLowerCase();
+    const normalizedQuery = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+    if (haystack.includes('search')) return true;
+    return normalizedQuery.some((part) => part.length > 3 && haystack.includes(part));
+  }
+
+  function parseBody(text) {
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      return null;
     }
-    return '';
   }
 
-  const outletId = cookieValue('outletId') || storageValue('outletId', 'selectedOutletId');
-  const deviceId = cookieValue('deviceId') || storageValue('deviceId', 'device_id');
-  const token = cookieValue('token') || storageValue('token', 'authToken', 'accessToken');
-  const apiVersion = cookieValue('apiVersion') || storageValue('apiVersion') || '12.1';
-  const appMode = cookieValue('appMode') || storageValue('appMode') || 'partner_web';
-  const url = new URL('https://api.hyperpure.com/consumer/v2/search');
-  url.searchParams.set('query', query);
-  if (outletId) url.searchParams.set('outletId', outletId);
-  url.searchParams.set('pageNo', '1');
-  url.searchParams.set('fetchThroughV2', 'true');
-  url.searchParams.set('searchDebugFlag', 'false');
+  function remember(entry) {
+    observed.push({
+      ...entry,
+      captured_at_ms: Date.now() - startedAt,
+    });
+    if (observed.length > 20) observed.shift();
+  }
 
-  const headers = {
-    accept: 'application/json, text/plain, */*',
-    APIVersion: apiVersion,
-    AppType: 'HYPERPURE_WEB',
-    'X-client': 'partner_web',
-    'x-appmode': appMode,
-    DeviceName: 'Chrome',
-  };
-  if (deviceId) headers.DeviceId = deviceId;
-  if (outletId) headers['X-OutletId'] = outletId;
-  if (token) headers.Authorization = /^bearer\s/i.test(token) ? token : `Bearer ${token}`;
+  function patchFetch() {
+    if (typeof originalFetch !== 'function') return;
+    window.fetch = async function patchedFetch(input, init = {}) {
+      const requestUrl = typeof input === 'string' ? input : input?.url || '';
+      const requestBody = init?.body || '';
+      const response = await originalFetch.apply(this, arguments);
+      if (isRelevant(requestUrl, requestBody)) {
+        response.clone().text().then((text) => {
+          remember({
+            transport: 'fetch',
+            url: requestUrl,
+            method: init?.method || (typeof input === 'object' && input?.method) || 'GET',
+            status: response.status,
+            ok: response.ok,
+            data: parseBody(text),
+            body_preview: compactText(text),
+          });
+        }).catch(() => {});
+      }
+      return response;
+    };
+  }
+
+  function patchXhr() {
+    if (!originalOpen || !originalSend) return;
+    window.XMLHttpRequest.prototype.open = function patchedOpen(method, url) {
+      this.__hnRequest = { method, url };
+      return originalOpen.apply(this, arguments);
+    };
+    window.XMLHttpRequest.prototype.send = function patchedSend(body) {
+      const request = this.__hnRequest || {};
+      if (isRelevant(request.url, body)) {
+        this.addEventListener('loadend', () => {
+          remember({
+            transport: 'xhr',
+            url: request.url || '',
+            method: request.method || 'GET',
+            status: this.status,
+            ok: this.status >= 200 && this.status < 300,
+            data: parseBody(this.responseText),
+            body_preview: compactText(this.responseText),
+          });
+        });
+      }
+      return originalSend.apply(this, arguments);
+    };
+  }
+
+  function visibleInputScore(input) {
+    const rect = input.getBoundingClientRect();
+    const text = [
+      input.placeholder,
+      input.getAttribute('aria-label'),
+      input.getAttribute('name'),
+      input.getAttribute('type'),
+      input.className,
+      input.id,
+    ].join(' ').toLowerCase();
+    let score = 0;
+    if (rect.width > 180 && rect.height > 20) score += 3;
+    if (text.includes('search')) score += 8;
+    if (text.includes('product')) score += 3;
+    if (text.includes('english cucumber')) score += 4;
+    if (input.offsetParent !== null) score += 3;
+    return score;
+  }
+
+  function findSearchInput() {
+    return Array.from(document.querySelectorAll('input, textarea'))
+      .map((input) => ({ input, score: visibleInputScore(input) }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)[0]?.input || null;
+  }
+
+  function driveInput(input) {
+    input.scrollIntoView({ block: 'center', inline: 'center' });
+    input.focus();
+    if (nativeInputValueSetter && input instanceof window.HTMLInputElement) {
+      nativeInputValueSetter.call(input, '');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      nativeInputValueSetter.call(input, query);
+    } else {
+      input.value = query;
+    }
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true }));
+  }
+
+  function restore() {
+    if (typeof originalFetch === 'function') window.fetch = originalFetch;
+    if (originalOpen) window.XMLHttpRequest.prototype.open = originalOpen;
+    if (originalSend) window.XMLHttpRequest.prototype.send = originalSend;
+  }
+
+  patchFetch();
+  patchXhr();
 
   try {
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers,
-      credentials: 'include',
-    });
-    const text = await response.text();
-    try {
-      return { status: response.status, data: JSON.parse(text) };
-    } catch (_) {
-      return { status: response.status, body_preview: text.slice(0, 240) };
+    const input = findSearchInput();
+    if (!input) return { error: 'Hyperpure search input was not found on this page' };
+    driveInput(input);
+
+    const deadline = Date.now() + 7000;
+    while (Date.now() < deadline) {
+      const successful = observed.find((entry) => entry.ok && entry.data);
+      if (successful) return { status: successful.status, data: successful.data, raw_observation: {
+        transport: successful.transport,
+        url_path: (() => {
+          try {
+            const url = new URL(successful.url, location.origin);
+            return `${url.origin}${url.pathname}`;
+          } catch (_) {
+            return compactText(successful.url, 180);
+          }
+        })(),
+      } };
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
+
+    const last = observed[observed.length - 1];
+    if (last) {
+      return {
+        status: last.status || 0,
+        data: last.data || null,
+        body_preview: last.body_preview || '',
+        raw_observation: {
+          transport: last.transport,
+          observed_count: observed.length,
+          last_status: last.status || 0,
+        },
+      };
+    }
+    return { error: 'Hyperpure did not issue a visible search request after typing into its search box' };
   } catch (error) {
-    return { error: error.message || 'Browser fetch failed' };
+    return { error: error.message || 'Hyperpure native UI search failed' };
+  } finally {
+    restore();
   }
 }
