@@ -822,6 +822,7 @@
               </div>
               <span class="tray-count" id="cartCount">0</span>
             </div>
+            <button id="trayRequestQuotesBtn" class="btn btn-primary btn-full" type="button">Get live prices</button>
             <div id="cartLines" class="cart-lines"></div>
             <div class="checkout-block">
               <button id="createPoBtn" class="btn btn-primary btn-full" type="button">Create Odoo PO</button>
@@ -975,6 +976,7 @@
       cartLines: document.getElementById('cartLines'),
       trayMeta: document.getElementById('trayMeta'),
       cartCount: document.getElementById('cartCount'),
+      trayRequestQuotesBtn: document.getElementById('trayRequestQuotesBtn'),
       createPoBtn: document.getElementById('createPoBtn'),
       clearCartBtn: document.getElementById('clearCartBtn'),
       sourceGroups: document.getElementById('sourceGroups'),
@@ -1429,8 +1431,11 @@
 
     function quoteCounts() {
       const summary = state.quote?.summary || {};
+      const quotes = state.quote?.quotes || [];
       return {
         quoted: Number(summary.quoted_count || 0),
+        portalQuoted: quotes.filter((quote) => quote.source_key !== 'LOCAL_VENDOR' && quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0).length,
+        localQuoted: quotes.filter((quote) => quote.source_key === 'LOCAL_VENDOR' && quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0).length,
         pending: Number(summary.pending_count || 0),
         unavailable: Number(summary.unavailable_count || 0),
         errors: Number(summary.error_count || 0),
@@ -1442,8 +1447,8 @@
       if (!state.cart.length) return 'Add today’s raw materials to the order tray.';
       if (!state.quote?.batch) return 'Click Get live prices to create one comparison batch.';
       const counts = quoteCounts();
-      if (counts.pending > 0) return 'Open each portal tab and click Run live quotes from the extension.';
-      if (counts.quoted > 0) return 'Review the recommended source for each raw material.';
+      if (counts.pending > 0) return 'Run the pending portal tabs so live SKU prices can come back.';
+      if (counts.portalQuoted > 0) return 'Review the recommended source for each raw material.';
       return 'No live prices found yet. Refresh prices or adjust the buying spec.';
     }
 
@@ -1455,18 +1460,18 @@
       const hasCart = state.cart.length > 0;
       const hasBatch = !!state.quote?.batch;
       const hasPending = counts.pending > 0;
-      const hasPrices = counts.quoted > 0;
+      const hasPrices = counts.portalQuoted > 0;
       const steps = [
         {
           kicker: 'Step 1',
           title: hasCart ? `${state.cart.length} items in tray` : 'Build purchase tray',
-          copy: hasCart ? 'Quantities are ready for live pricing.' : 'Add raw materials and required quantities.',
+          copy: hasCart ? 'Quantity can wait until pack size and price are visible.' : 'Add raw materials to scout.',
           state: hasCart ? 'done' : hasRun ? 'active' : '',
         },
         {
           kicker: 'Step 2',
           title: hasBatch ? 'Live price run created' : 'Get live prices',
-          copy: hasBatch ? `${counts.quoted} prices found, ${counts.pending} searches waiting.` : 'Creates one batch across all ready portals.',
+          copy: hasBatch ? `${counts.portalQuoted} portal prices, ${counts.localQuoted} baselines, ${counts.pending} searches waiting.` : 'Creates one batch across all ready portals.',
           state: hasBatch ? 'done' : hasCart ? 'active' : '',
         },
         {
@@ -1564,17 +1569,43 @@
         .filter((quote) => quote.cart_id === line.cart_id && quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0);
     }
 
+    function isScoutLine(line) {
+      return line?.source_key === 'AUTO_COMPARE' || buyingRuleForLine(line) === BUYING_RULES.GENERIC_COMMODITY;
+    }
+
+    function localBaselineForLine(line) {
+      return quotedForLine(line).find((quote) => quote.source_key === 'LOCAL_VENDOR') || null;
+    }
+
+    function portalQuotedForLine(line) {
+      return quotedForLine(line).filter((quote) => quote.source_key !== 'LOCAL_VENDOR');
+    }
+
+    function pendingPortalQuotesForLine(line) {
+      return (state.quote.quotes || [])
+        .filter((quote) => quote.cart_id === line.cart_id && quote.source_key !== 'LOCAL_VENDOR' && quote.stock_status === 'PENDING_ADAPTER');
+    }
+
+    function decisionQuotesForLine(line) {
+      const portalQuotes = portalQuotedForLine(line);
+      if (!isScoutLine(line)) return quotedForLine(line);
+      if (portalQuotes.length) return portalQuotes;
+      if (pendingPortalQuotesForLine(line).length) return [];
+      const local = localBaselineForLine(line);
+      return local ? [local] : [];
+    }
+
     function quoteFor(line, sourceKey) {
       return (state.quote.quotes || []).find((quote) => quote.cart_id === line.cart_id && quote.source_key === sourceKey) || null;
     }
 
     function bestQuoteFor(line) {
-      return quotedForLine(line)
+      return decisionQuotesForLine(line)
         .sort((a, b) => comparablePricePaise(a, line) - comparablePricePaise(b, line))[0] || null;
     }
 
     function fastestQuoteFor(line) {
-      return quotedForLine(line)
+      return decisionQuotesForLine(line)
         .filter((quote) => Number(quote.eta_minutes || 0) > 0)
         .sort((a, b) => Number(a.eta_minutes || 0) - Number(b.eta_minutes || 0))[0] || null;
     }
@@ -1590,7 +1621,7 @@
         if (!bestComparable || !fastComparable || fastComparable <= bestComparable * 1.12) return fastest;
       }
       if (rule === BUYING_RULES.QUALITY_LOCKED) {
-        return quotedForLine(line)
+        return decisionQuotesForLine(line)
           .sort((a, b) => Number(b.match_confidence || 0) - Number(a.match_confidence || 0) || comparablePricePaise(a, line) - comparablePricePaise(b, line))[0] || best;
       }
       return best;
@@ -1599,12 +1630,14 @@
     function recommendationNote(line, recommended) {
       if (!recommended) {
         if (!state.quote?.batch) return 'Click Get live prices';
-        const pending = (state.quote.quotes || []).some((quote) => quote.cart_id === line.cart_id && quote.stock_status === 'PENDING_ADAPTER');
-        return pending ? 'Run portal tabs' : 'No buyable quote yet';
+        if (pendingPortalQuotesForLine(line).length) return 'Waiting for portal prices';
+        if (localBaselineForLine(line)) return 'No portal price yet; local is baseline only';
+        return 'No buyable quote yet';
       }
       const rule = buyingRuleForLine(line);
       if (rule === BUYING_RULES.EXACT_SKU && Number(recommended.match_confidence || 0) < 70) return 'Review exact SKU match';
       if (rule === BUYING_RULES.QUALITY_LOCKED) return 'Check quality before ordering';
+      if (isScoutLine(line) && recommended.source_key === 'LOCAL_VENDOR') return 'No portal price found; local fallback';
       return recommended.id === bestQuoteFor(line)?.id ? 'Lowest comparable rate' : 'Fastest acceptable option';
     }
 
@@ -1628,7 +1661,8 @@
       } else if (quote.batch) {
         const updated = quote.batch.updated_at ? new Date(quote.batch.updated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'now';
         const summary = quote.summary || {};
-        els.quoteMeta.textContent = `${quote.batch.id} - ${summary.quoted_count || 0} prices found, ${summary.pending_count || 0} portal searches waiting, ${summary.unavailable_count || 0} unavailable - ${updated}`;
+        const counts = quoteCounts();
+        els.quoteMeta.textContent = `${quote.batch.id} - ${counts.portalQuoted} portal prices, ${counts.localQuoted} local baselines, ${summary.pending_count || 0} portal searches waiting, ${summary.unavailable_count || 0} unavailable - ${updated}`;
       } else {
         els.quoteMeta.textContent = state.cart.length
           ? 'Click Get live prices to compare this tray across all ready portals.'
@@ -1665,6 +1699,8 @@
         const best = bestQuoteFor(line);
         const fastest = fastestQuoteFor(line);
         const recommended = recommendedQuoteFor(line);
+        const localBaseline = localBaselineForLine(line);
+        const pendingPortals = pendingPortalQuotesForLine(line).length;
         const rule = buyingRuleForLine(line);
         const note = recommendationNote(line, recommended);
         return `
@@ -1677,9 +1713,9 @@
               </div>
               <div class="decision-row">
                 ${renderDecisionCard('Recommended', recommended ? `${recommended.source_label} ${quoteMoney(recommended.unit_price_paise)}` : note, true)}
-                ${renderDecisionCard('Why', note)}
-                ${renderDecisionCard('Cheapest', best ? `${best.source_label} ${unitRateText(best, line)}` : 'Waiting')}
-                ${renderDecisionCard('Fastest', fastest ? `${fastest.source_label} ${fastest.eta_label || `${fastest.eta_minutes} min`}` : 'No ETA yet')}
+                ${renderDecisionCard('Baseline', localBaseline ? `Local Vendor ${quoteMoney(localBaseline.unit_price_paise)}/${line.uom || 'unit'}` : 'No local baseline')}
+                ${renderDecisionCard('Cheapest', best ? `${best.source_label} ${unitRateText(best, line)}` : pendingPortals ? 'Waiting for portals' : 'No portal price')}
+                ${renderDecisionCard('Fastest', fastest ? `${fastest.source_label} ${fastest.eta_label || `${fastest.eta_minutes} min`}` : pendingPortals ? 'Waiting for ETA' : 'No ETA yet')}
               </div>
             </div>
             <div class="quote-cells">
@@ -1700,7 +1736,8 @@
       `;
     }
 
-    function buyerStatusLabel(status) {
+    function buyerStatusLabel(status, sourceKey) {
+      if (sourceKey === 'LOCAL_VENDOR' && status === 'QUOTED') return 'Baseline';
       if (status === 'QUOTED') return 'Price found';
       if (status === 'PENDING_ADAPTER') return 'Run portal tab';
       if (status === 'OUT_OF_STOCK') return 'No stock';
@@ -1728,18 +1765,21 @@
       const eta = quote.eta_label || (quote.eta_minutes ? `${quote.eta_minutes} min` : '');
       const confidence = quote.match_confidence ? `${quote.match_confidence}% match` : '';
       const imageUrl = quoteImageUrl(quote);
+      const rateText = sourceKey === 'LOCAL_VENDOR'
+        ? `baseline ${quoteMoney(quote.unit_price_paise || quote.price_paise)}/${line.uom || baseUnitFor(line || {})}`
+        : unitRateText(quote, line);
       return `
         <div class="quote-cell ${isRecommended ? 'recommended' : isBest ? 'best' : ''}">
           <div class="quote-card-top">
             ${imageUrl ? `<img class="quote-thumb" src="${escapeAttr(imageUrl)}" alt="">` : `<div class="quote-thumb placeholder">SKU</div>`}
             <div>
               <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
-              <span class="quote-status ${quoteStatusClass(status)}">${escapeHtml(buyerStatusLabel(status))}</span>
+              <span class="quote-status ${quoteStatusClass(status)}">${escapeHtml(buyerStatusLabel(status, sourceKey))}</span>
             </div>
           </div>
           <div class="quote-price">${quoteMoney(quote.unit_price_paise || quote.price_paise)}</div>
           <div class="quote-cell-meta">${escapeHtml(sku)}</div>
-          <div class="quote-cell-meta">${escapeHtml([unitRateText(quote, line), eta, confidence].filter(Boolean).join(' - ') || quote.match_notes || '')}</div>
+          <div class="quote-cell-meta">${escapeHtml([rateText, eta, confidence].filter(Boolean).join(' - ') || quote.match_notes || '')}</div>
         </div>
       `;
     }
@@ -1960,9 +2000,16 @@
       const plannedLines = plannedOrderLines();
       const localLines = state.cart.filter((line) => line.source_key === 'LOCAL_VENDOR' && !line.qty_pending);
       const undecidedLines = state.cart.filter((line) => !recommendedQuoteFor(line));
+      const count = state.cart.length;
       els.trayMeta.textContent = state.cart.length
         ? `${state.cart.length} scouting, ${undecidedLines.length} waiting`
         : 'No cart lines';
+      els.trayRequestQuotesBtn.disabled = !count || state.quote.loading;
+      els.trayRequestQuotesBtn.textContent = state.quote.loading
+        ? 'Getting live prices...'
+        : count
+          ? `Get live prices for ${count} item${count === 1 ? '' : 's'}`
+          : 'Get live prices';
 
       if (!state.cart.length) {
         els.cartLines.innerHTML = `<div class="empty">Add materials from the catalogue</div>`;
@@ -1978,28 +2025,30 @@
       const vendorChoices = vendorOptionsForLine(line);
       const best = bestQuoteFor(line);
       const recommended = recommendedQuoteFor(line);
+      const localBaseline = localBaselineForLine(line);
+      const pendingPortals = pendingPortalQuotesForLine(line).length;
       const plannedSource = recommended?.source_key || line.source_key;
       const qtyText = line.qty_pending ? 'Qty after price' : `${line.qty} ${line.uom || 'unit'}`;
       const vendorSelect = plannedSource === 'LOCAL_VENDOR' && !line.qty_pending
         ? `<select data-cart-vendor="${escapeHtml(line.cart_id)}" aria-label="Vendor">${vendorChoices}</select>`
         : plannedSource && plannedSource !== 'AUTO_COMPARE'
           ? `<button class="btn btn-ghost btn-full" type="button" data-open-source="${escapeHtml(plannedSource)}">Open ${escapeHtml(SOURCE_LABELS[plannedSource] || plannedSource)}</button>`
-          : `<div class="compare-banner">Run live prices to choose source</div>`;
+          : `<div class="compare-banner">${pendingPortals ? 'Waiting for portal prices' : 'Run live prices to choose source'}</div>`;
 
       return `
         <div class="cart-line">
           <div class="cart-line-head">
             <div>
               <div class="cart-name">${escapeHtml(line.name)}</div>
-              <div class="cart-meta">${escapeHtml(qtyText)} - ${escapeHtml(recommended?.source_label || 'compare all portals')} - last ${money(line.price_unit)}</div>
+              <div class="cart-meta">${escapeHtml(qtyText)} - ${escapeHtml(recommended?.source_label || 'compare portals')} - baseline ${money(line.price_unit)}</div>
               <div class="spec-line">${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)} - ${escapeHtml(MATCH_LABELS[line.buying_spec?.match_rule] || line.buying_spec?.match_rule || 'Equivalent allowed')}</div>
-              ${recommended ? `<div class="spec-line">Recommended: ${escapeHtml(recommended.source_label)} ${quoteMoney(recommended.unit_price_paise)} (${escapeHtml(recommendationNote(line, recommended))})</div>` : best ? `<div class="spec-line">Cheapest quote: ${escapeHtml(best.source_label)} ${quoteMoney(best.unit_price_paise)}</div>` : ''}
+              ${recommended ? `<div class="spec-line">Recommended: ${escapeHtml(recommended.source_label)} ${quoteMoney(recommended.unit_price_paise)} (${escapeHtml(recommendationNote(line, recommended))})</div>` : localBaseline ? `<div class="spec-line">Local baseline: ${quoteMoney(localBaseline.unit_price_paise)}/${escapeHtml(line.uom || 'unit')} - ${escapeHtml(pendingPortals ? 'waiting for portal prices' : 'portal price not found')}</div>` : ''}
             </div>
             <button class="icon-btn" type="button" data-remove-line="${escapeHtml(line.cart_id)}" aria-label="Remove">X</button>
           </div>
           <div class="order-form">
             <input data-cart-qty="${escapeHtml(line.cart_id)}" type="number" min="0.01" step="0.01" value="${escapeHtml(line.qty_pending ? '' : line.qty)}" placeholder="Qty after price" aria-label="Purchase quantity">
-            <div class="compare-banner">${escapeHtml(recommended ? `Chosen by prices: ${recommended.source_label}` : 'Source will be chosen after live prices')}</div>
+            <div class="compare-banner">${escapeHtml(recommended ? `Chosen by prices: ${recommended.source_label}` : pendingPortals ? 'Waiting for portal prices' : 'Source will be chosen after live prices')}</div>
           </div>
           ${vendorSelect}
         </div>
@@ -2253,6 +2302,7 @@
     els.startRunBtn.addEventListener('click', startRun);
     els.saveRunBtn.addEventListener('click', () => saveRun());
     els.requestQuotesBtn.addEventListener('click', requestQuotes);
+    els.trayRequestQuotesBtn.addEventListener('click', requestQuotes);
     els.refreshQuotesBtn.addEventListener('click', () => loadQuoteSummary());
     els.validateSessionsBtn.addEventListener('click', () => loadPortalHealth(true));
     els.runStatusSelect.addEventListener('change', () => {
