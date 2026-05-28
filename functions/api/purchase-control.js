@@ -2522,34 +2522,65 @@ function materialIdFromRow(row) {
   return '';
 }
 
-// Portal adapter dispatcher. Each adapter accepts a normalized material
-// descriptor and the env, returns a quote-shaped object. New portals add a
-// single entry to ADAPTER_BY_SOURCE. Phase X.1 wires Hyperpure only; X.2/X.3
-// add the rest.
-const ADAPTER_BY_SOURCE = {
-  HYPERPURE: hyperpureAdapter,
-};
+// Portal scout dispatcher — fans out to the VPS scout service at
+// SCOUT_VPS_URL one source per request, in parallel. The VPS runs real
+// Playwright Chromium against logged-in portal sessions and returns
+// normalized quotes. This replaces the per-portal inline adapters that
+// were getting 475 from CF Worker IPs.
 
-function adapterAvailable(sourceKey) {
-  return typeof ADAPTER_BY_SOURCE[sourceKey] === 'function';
+const VPS_PORTAL_TIMEOUT_MS = 22000;
+
+async function callVpsScoutForSource(material, sourceKey, env) {
+  if (!env.SCOUT_VPS_URL || !env.SCOUT_VPS_BEARER) {
+    return { stock_status: 'ERROR', match_confidence: 0, match_notes: 'Scout VPS not configured (SCOUT_VPS_URL / SCOUT_VPS_BEARER missing)', raw: { source: sourceKey, stage: 'config' } };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), VPS_PORTAL_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${env.SCOUT_VPS_URL}/scout`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${env.SCOUT_VPS_BEARER}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        material_id: material.material_id,
+        name: material.name,
+        search_query: material.search_query || material.name,
+        match_rule: material.match_rule || 'COMMODITY_EQUIVALENT',
+        sources: [sourceKey],
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { stock_status: 'ERROR', match_confidence: 0, match_notes: data.error || `VPS scout ${res.status}`, raw: { source: sourceKey, vps_status: res.status } };
+    }
+    const result = data.results?.[sourceKey];
+    if (!result) {
+      return { stock_status: 'ERROR', match_confidence: 0, match_notes: `VPS returned no result for ${sourceKey}`, raw: { source: sourceKey } };
+    }
+    // VPS quote shape already matches our adapter contract.
+    return result;
+  } catch (err) {
+    const aborted = err.name === 'AbortError';
+    return {
+      stock_status: 'ERROR',
+      match_confidence: 0,
+      match_notes: aborted ? `Scout VPS timeout after ${VPS_PORTAL_TIMEOUT_MS}ms` : `Scout VPS error: ${err.message}`,
+      raw: { source: sourceKey, stage: 'vps_call', aborted },
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-async function hyperpureAdapter(material, env) {
-  const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
-  const line = {
-    name: material.name,
-    category: material.category,
-    uom: material.uom,
-    product_code: material.product_code || material.material_id,
-    item_id: material.item_id || `code:${material.material_id}`,
-    qty: material.required_qty || 0,
-    match_rule: material.match_rule || 'COMMODITY_EQUIVALENT',
-    buying_spec: {
-      approved_name: material.search_query || material.name,
-      match_rule: material.match_rule || 'COMMODITY_EQUIVALENT',
-    },
-  };
-  return hyperpureLiveQuote(line, env, expiresAt);
+// Which portals have an adapter wired on the VPS. Kept in sync with
+// ADAPTERS in /home/hnscout/scout-service/src/portal-runner.js.
+const VPS_WIRED_SOURCES = new Set(['HYPERPURE', 'BIGBASKET', 'JIOMART', 'BLINKIT', 'FLIPKART_MINUTES']);
+
+function adapterAvailable(sourceKey) {
+  return VPS_WIRED_SOURCES.has(sourceKey);
 }
 
 async function upsertDailySnapshot(DB, row) {
@@ -2749,64 +2780,65 @@ async function refreshMaterialSnapshot(body, user, env) {
   let unavailable = 0;
   let errors = 0;
 
-  for (const sourceKey of requestedSources) {
-    if (!adapterAvailable(sourceKey)) {
-      perPortal[sourceKey] = { state: 'no_adapter' };
-      continue;
-    }
-    let quote;
-    try {
-      quote = await ADAPTER_BY_SOURCE[sourceKey](materialContext, env);
-    } catch (err) {
-      quote = {
-        stock_status: 'ERROR',
-        match_rule: materialContext.match_rule,
-        match_confidence: 0,
-        match_notes: err?.message || 'Adapter threw',
-        raw: { source: sourceKey, error: err?.message || 'unknown' },
-      };
-    }
+  // Fan-out: one VPS request per source in parallel. Each VPS call takes
+  // ~6-10s, all complete within ~10s wall-clock. Keeps the API endpoint
+  // under the 30s Cloudflare Pages Functions wall-clock budget.
+  const sourceQuotes = await Promise.all(
+    requestedSources.map(async (sourceKey) => {
+      if (!adapterAvailable(sourceKey)) {
+        return [sourceKey, { stock_status: 'NO_ADAPTER', match_confidence: 0, match_notes: `No VPS adapter wired for ${sourceKey}`, raw: { source: sourceKey } }];
+      }
+      const quote = await callVpsScoutForSource(materialContext, sourceKey, env);
+      return [sourceKey, quote];
+    })
+  );
 
+  for (const [sourceKey, quote] of sourceQuotes) {
     const status = String(quote.stock_status || '').toUpperCase();
     const isQuoted = status === 'QUOTED' && (quote.price_paise || 0) > 0;
     const isError = status === 'ERROR';
+    const isNoAdapter = status === 'NO_ADAPTER';
     if (isQuoted) ok += 1;
     else if (isError) errors += 1;
-    else unavailable += 1;
+    else if (!isNoAdapter) unavailable += 1;
 
-    await upsertDailySnapshot(DB, {
-      snapshot_date: snapshotDate,
-      material_id: materialContext.material_id,
-      source_key: sourceKey,
-      category: materialContext.category,
-      name: materialContext.name,
-      uom: materialContext.uom,
-      brand: materialContext.brand,
-      sku_title: quote.sku_title || '',
-      sku_url: quote.sku_url || '',
-      pack_size: quote.pack_size || '',
-      price_paise: quote.price_paise || 0,
-      unit_price_paise: quote.unit_price_paise || quote.price_paise || 0,
-      currency: quote.currency || 'INR',
-      eta_minutes: quote.eta_minutes || 0,
-      eta_label: quote.eta_label || '',
-      stock_status: status || 'UNAVAILABLE',
-      match_rule: quote.match_rule || materialContext.match_rule,
-      match_confidence: quote.match_confidence || 0,
-      match_notes: quote.match_notes || '',
-      captured_at: quote.captured_at || new Date().toISOString(),
-      source: 'on_demand_refresh',
-      batch_id: batchId,
-      raw: quote.raw || {},
-    });
+    if (!isNoAdapter) {
+      await upsertDailySnapshot(DB, {
+        snapshot_date: snapshotDate,
+        material_id: materialContext.material_id,
+        source_key: sourceKey,
+        category: materialContext.category,
+        name: materialContext.name,
+        uom: materialContext.uom,
+        brand: materialContext.brand,
+        sku_title: quote.sku_title || '',
+        sku_url: quote.sku_url || '',
+        pack_size: quote.pack_size || '',
+        price_paise: quote.price_paise || 0,
+        unit_price_paise: quote.unit_price_paise || quote.price_paise || 0,
+        currency: quote.currency || 'INR',
+        eta_minutes: quote.eta_minutes || 0,
+        eta_label: quote.eta_label || '',
+        stock_status: status || 'UNAVAILABLE',
+        match_rule: quote.match_rule || materialContext.match_rule,
+        match_confidence: quote.match_confidence || 0,
+        match_notes: quote.match_notes || '',
+        captured_at: quote.captured_at || new Date().toISOString(),
+        source: 'on_demand_refresh',
+        batch_id: batchId,
+        raw: quote.raw || {},
+      });
+    }
 
-    perPortal[sourceKey] = {
-      state: isQuoted ? 'ok' : isError ? 'error' : 'unavailable',
-      price_paise: quote.price_paise || 0,
-      sku_title: quote.sku_title || '',
-      match_confidence: quote.match_confidence || 0,
-      notes: quote.match_notes || '',
-    };
+    perPortal[sourceKey] = isNoAdapter
+      ? { state: 'no_adapter' }
+      : {
+          state: isQuoted ? 'ok' : isError ? 'error' : 'unavailable',
+          price_paise: quote.price_paise || 0,
+          sku_title: quote.sku_title || '',
+          match_confidence: quote.match_confidence || 0,
+          notes: quote.match_notes || '',
+        };
   }
 
   const completedAt = new Date().toISOString();
