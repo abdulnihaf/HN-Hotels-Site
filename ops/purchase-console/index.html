@@ -24,7 +24,6 @@
     body { min-height: 100vh; padding-bottom: 88px; }
     .shell { width: min(1280px, 100%); margin: 0 auto; padding: 10px 12px; }
 
-    /* ━━━ Header ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     .topbar {
       position: sticky; top: 0; z-index: 30;
       background: rgba(12,12,20,0.96);
@@ -38,14 +37,12 @@
     .title-block h1 { font-size: 16px; margin: 0; }
     .title-block p { margin: 2px 0 0; color: var(--text-dim); font-size: 11px; }
 
-    /* ━━━ PIN gate ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     .pin-wrap { display: flex; align-items: center; justify-content: center; min-height: 70vh; padding: 16px; }
     .pin-card { width: min(360px, 100%); padding: 24px; text-align: center; }
 
-    /* ━━━ Filter bar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     .filter-bar {
       display: grid;
-      grid-template-columns: 1fr auto auto auto;
+      grid-template-columns: 1fr auto auto auto auto;
       gap: 8px; align-items: center;
       padding: 10px 0;
       position: sticky; top: 62px; z-index: 20;
@@ -65,27 +62,39 @@
     .filter-bar input[type="search"] { width: 100%; }
     .filter-bar .stat {
       font-size: 11px; color: var(--text-dim); white-space: nowrap;
-      padding: 0 10px;
+      padding: 0 6px;
     }
     .btn-ghost-sm {
       min-height: 40px; padding: 0 12px;
       border: 1px solid var(--pc-line); background: var(--pc-soft);
       color: var(--text); font-weight: 700; font-size: 12px;
       border-radius: 8px; cursor: pointer;
+      white-space: nowrap;
     }
     .btn-ghost-sm:hover { background: var(--pc-soft-2); }
+    .btn-primary-sm {
+      min-height: 40px; padding: 0 14px;
+      background: rgba(52,211,153,.18); border: 1px solid rgba(52,211,153,.45);
+      color: var(--pc-green); font-weight: 800; font-size: 12px;
+      border-radius: 8px; cursor: pointer; white-space: nowrap;
+    }
+    .btn-primary-sm:hover { background: rgba(52,211,153,.28); }
 
-    /* ━━━ Category section ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    .cat-section { margin-bottom: 20px; }
+    .cat-section { margin-bottom: 18px; }
     .cat-head {
-      display: grid; grid-template-columns: 1fr auto; align-items: center;
+      display: grid; grid-template-columns: 1fr auto auto; align-items: center;
       gap: 8px; margin: 14px 0 8px;
       padding-bottom: 6px; border-bottom: 1px solid var(--pc-line);
     }
     .cat-head h2 { margin: 0; font-size: 13px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-dim); }
     .cat-head .cat-count { font-size: 11px; color: var(--text-dim); }
+    .cat-head .cat-add {
+      font-size: 11px; color: var(--pc-green);
+      background: transparent; border: 1px dashed rgba(52,211,153,.5);
+      border-radius: 6px; padding: 3px 10px; cursor: pointer; font-weight: 700;
+    }
+    .cat-head .cat-add:hover { background: rgba(52,211,153,.1); }
 
-    /* ━━━ Material row ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     .mat-row {
       border: 1px solid var(--pc-line);
       background: rgba(255,255,255,.03);
@@ -97,16 +106,37 @@
     }
     .mat-row.has-best { border-color: rgba(52,211,153,.15); }
     .mat-row.in-cart { border-color: rgba(96,165,250,.4); background: rgba(96,165,250,.05); }
+    .mat-row.custom { border-style: dashed; }
     .mat-row-head {
       display: grid;
-      grid-template-columns: 24px 1fr auto;
+      grid-template-columns: 56px 1fr auto;
       gap: 10px; align-items: center;
+    }
+    .mat-thumb {
+      width: 56px; height: 56px;
+      border-radius: 10px;
+      background: var(--pc-soft-2);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      border: 1px solid var(--pc-line);
+      flex-shrink: 0;
+    }
+    .mat-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .mat-thumb .mat-thumb-letter {
+      font-size: 20px; font-weight: 900; letter-spacing: -0.5px;
+      color: var(--text); opacity: 0.6;
     }
     .mat-row-name {
       font-size: 14px; font-weight: 800; line-height: 1.2;
     }
     .mat-row-meta {
       font-size: 11px; color: var(--text-dim); margin-top: 2px;
+    }
+    .mat-row-meta .pill-tiny {
+      display: inline-block; padding: 1px 6px;
+      border-radius: 8px; font-size: 9px; font-weight: 800;
+      background: rgba(167,139,250,.15); color: var(--pc-purple);
+      margin-left: 4px;
     }
     .mat-qty {
       display: inline-flex; align-items: center; gap: 4px;
@@ -127,7 +157,6 @@
     }
     .mat-qty .uom { font-size: 10px; color: var(--text-dim); padding: 0 4px; }
 
-    /* Best deal card */
     .best-deal {
       display: grid;
       grid-template-columns: 32px 1fr auto auto;
@@ -147,23 +176,15 @@
       font-size: 11px; font-weight: 900; color: white;
       text-shadow: 0 1px 1px rgba(0,0,0,.4);
     }
-    .best-deal-body {
-      display: grid; gap: 1px; min-width: 0;
-    }
+    .best-deal-body { display: grid; gap: 1px; min-width: 0; }
     .best-deal-portal { font-size: 12px; font-weight: 800; line-height: 1.2; }
     .best-deal-sku {
       font-size: 11px; color: var(--text-dim); line-height: 1.25;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .best-deal-price {
-      font-size: 15px; font-weight: 900; text-align: right;
-    }
-    .best-deal-rate {
-      font-size: 10px; color: var(--text-dim); text-align: right;
-    }
-    .best-deal-actions {
-      display: flex; gap: 6px;
-    }
+    .best-deal-price { font-size: 15px; font-weight: 900; text-align: right; }
+    .best-deal-rate { font-size: 10px; color: var(--text-dim); text-align: right; }
+    .best-deal-actions { display: flex; gap: 6px; }
     .action-btn {
       min-height: 32px; padding: 0 10px;
       border: 1px solid var(--pc-line); background: var(--pc-soft);
@@ -176,11 +197,7 @@
     .action-btn.add { background: rgba(52,211,153,.15); border-color: rgba(52,211,153,.4); color: var(--pc-green); }
     .action-btn.in-cart { background: rgba(96,165,250,.2); border-color: rgba(96,165,250,.5); color: var(--pc-blue); }
 
-    /* Alternatives row */
-    .alts-row {
-      display: flex; gap: 6px; flex-wrap: wrap;
-      padding-left: 34px;
-    }
+    .alts-row { display: flex; gap: 6px; flex-wrap: wrap; padding-left: 66px; }
     .alt-chip {
       display: inline-flex; align-items: center; gap: 5px;
       padding: 4px 8px;
@@ -199,16 +216,10 @@
     }
     .alt-chip-name { font-weight: 700; }
     .alt-chip-price { color: var(--text-dim); font-weight: 600; }
-    .alt-chip.lv { background: rgba(255,255,255,.06); }
 
-    /* Baseline line */
-    .baseline-line {
-      font-size: 11px; color: var(--text-dim);
-      padding-left: 34px;
-    }
+    .baseline-line { font-size: 11px; color: var(--text-dim); padding-left: 66px; }
     .baseline-line strong { color: var(--text); font-weight: 800; }
 
-    /* Refresh button per row */
     .row-refresh {
       width: 26px; height: 26px;
       border: 1px solid var(--pc-line); background: var(--pc-soft);
@@ -220,18 +231,13 @@
     .row-refresh:disabled { opacity: 0.4; cursor: wait; animation: pulse 1s infinite; }
     @keyframes pulse { 50% { opacity: 0.65; } }
 
-    /* Portal logos (CSS) */
-    .pl-hp { background: #dc2c2e; }
-    .pl-bb { background: #82bc18; }
+    .pl-hp { background: #dc2c2e; } .pl-bb { background: #82bc18; }
     .pl-bk { background: #ffcc28; color: #1a1300; text-shadow: none; }
-    .pl-jm { background: #0079c8; }
-    .pl-fm { background: #2874f0; }
-    .pl-zp { background: #c81e85; }
-    .pl-is { background: #fc8019; }
+    .pl-jm { background: #0079c8; } .pl-fm { background: #2874f0; }
+    .pl-zp { background: #c81e85; } .pl-is { background: #fc8019; }
     .pl-an { background: #ff9900; }
     .pl-lv { background: rgba(255,255,255,.18); color: var(--text); text-shadow: none; }
 
-    /* ━━━ Sticky cart bar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     .cart-bar {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: rgba(12,12,20,0.98);
@@ -264,7 +270,6 @@
     }
     .btn-view-carts:disabled { opacity: 0.5; background: var(--pc-soft); color: var(--text-dim); cursor: not-allowed; }
 
-    /* ━━━ Cart modal ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     .modal-backdrop {
       position: fixed; inset: 0; z-index: 50;
       background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
@@ -277,19 +282,27 @@
       background: #14141f; border: 1px solid var(--pc-line); border-radius: 12px;
       padding: 16px; display: grid; gap: 14px;
     }
-    .modal-head {
-      display: grid; grid-template-columns: 1fr auto; align-items: center;
-    }
+    .modal-head { display: grid; grid-template-columns: 1fr auto; align-items: center; }
     .modal-close {
       width: 36px; height: 36px;
       border: 1px solid var(--pc-line); background: var(--pc-soft);
       color: var(--text); border-radius: 8px;
       font-size: 16px; cursor: pointer;
     }
-    .cart-portal-section {
-      border: 1px solid var(--pc-line); border-radius: 8px;
-      padding: 12px;
+    .modal-form { display: grid; gap: 10px; }
+    .modal-form label { font-size: 12px; font-weight: 700; }
+    .modal-form input, .modal-form select {
+      width: 100%; min-height: 40px; padding: 0 12px;
+      border: 1px solid var(--pc-line); background: var(--pc-soft); color: var(--text);
+      border-radius: 8px; font-size: 13px; font-weight: 600;
     }
+    .modal-form .submit {
+      min-height: 44px; padding: 0 14px;
+      background: var(--pc-green); border: none; color: #0c0c14;
+      font-weight: 900; font-size: 13px; border-radius: 8px; cursor: pointer;
+    }
+
+    .cart-portal-section { border: 1px solid var(--pc-line); border-radius: 8px; padding: 12px; }
     .cart-portal-head {
       display: grid; grid-template-columns: 32px 1fr auto auto; gap: 10px;
       align-items: center; margin-bottom: 8px;
@@ -304,13 +317,22 @@
       display: inline-flex; align-items: center; gap: 4px;
     }
     .cart-line {
-      display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px;
+      display: grid; grid-template-columns: 36px 1fr auto auto auto auto; gap: 8px;
       align-items: center; padding: 6px 0; font-size: 12px;
       border-top: 1px dashed var(--pc-line);
     }
     .cart-line:first-of-type { border-top: none; }
+    .cart-line .mat-thumb { width: 36px; height: 36px; border-radius: 6px; }
+    .cart-line .mat-thumb-letter { font-size: 14px; }
     .cart-line-name { font-weight: 700; }
     .cart-line-meta { font-size: 10px; color: var(--text-dim); }
+    .cart-line-open {
+      min-height: 26px; padding: 0 8px;
+      background: var(--pc-soft); border: 1px solid var(--pc-line); color: var(--text);
+      font-size: 10px; font-weight: 700; border-radius: 5px;
+      text-decoration: none; display: inline-flex; align-items: center;
+    }
+    .cart-line-open:hover { background: var(--pc-soft-2); }
     .cart-line-price { font-weight: 800; }
     .cart-line-remove {
       width: 26px; height: 26px;
@@ -318,28 +340,18 @@
       color: var(--pc-red); border-radius: 6px;
       cursor: pointer; font-size: 12px;
     }
-    .empty-state {
-      text-align: center; padding: 28px 12px;
-      color: var(--text-dim); font-size: 13px;
-    }
-
-    /* ━━━ Custom SKU search results ━━━━━━━━━━━━━━━━━━━━ */
-    .custom-search-results {
-      padding: 12px; background: var(--pc-soft); border-radius: 8px;
-      border: 1px solid var(--pc-line); margin-bottom: 12px;
-    }
-    .custom-search-head {
-      display: grid; grid-template-columns: 1fr auto; align-items: center;
-      margin-bottom: 8px;
-    }
-    .custom-search-head h3 { margin: 0; font-size: 13px; }
+    .empty-state { text-align: center; padding: 28px 12px; color: var(--text-dim); font-size: 13px; }
 
     @media (max-width: 720px) {
-      .filter-bar { grid-template-columns: 1fr; }
+      .filter-bar { grid-template-columns: 1fr 1fr; }
+      .filter-bar input[type="search"] { grid-column: 1 / -1; }
       .filter-bar .stat { display: none; }
       .best-deal { grid-template-columns: 28px 1fr; row-gap: 6px; }
-      .best-deal-price, .best-deal-rate { grid-column: 1 / -1; text-align: left; padding-left: 0; }
+      .best-deal-price, .best-deal-rate { grid-column: 1 / -1; text-align: left; }
       .best-deal-actions { grid-column: 1 / -1; }
+      .alts-row, .baseline-line { padding-left: 0; }
+      .cart-line { grid-template-columns: 36px 1fr auto auto; row-gap: 4px; }
+      .cart-line .cart-line-open, .cart-line .mat-qty { grid-column: 2 / 4; justify-self: start; }
     }
 
     .hide { display: none !important; }
@@ -349,7 +361,9 @@
       padding: 10px 16px; border-radius: 8px;
       font-weight: 800; font-size: 12px;
       z-index: 60; box-shadow: 0 6px 20px rgba(0,0,0,.4);
+      animation: toastIn .15s ease-out;
     }
+    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
   </style>
 </head>
 <body class="bg">
@@ -357,7 +371,7 @@
     <div class="topbar-inner">
       <div class="title-block">
         <h1>Purchase Console</h1>
-        <p id="subtitle">Cheapest scout across 8 portals</p>
+        <p id="subtitle">Every actively purchased material · cheapest portal · cart per portal</p>
       </div>
       <div style="display:flex;gap:6px;align-items:center;">
         <a class="btn btn-ghost btn-sm" href="/ops/purchase/">PO ledger</a>
@@ -366,7 +380,6 @@
   </header>
 
   <main>
-    <!-- PIN gate -->
     <section id="pinGate" class="pin-wrap">
       <div class="card pin-card">
         <h2>Enter PIN</h2>
@@ -377,23 +390,18 @@
       </div>
     </section>
 
-    <!-- App -->
     <section id="app" class="hide">
       <div class="shell">
-
         <div class="filter-bar">
           <input id="searchInput" type="search" placeholder="🔎 Search material or SKU…" autocomplete="off">
+          <select id="brandFilter" aria-label="Brand">
+            <option value="BOTH">HE + NCH</option>
+            <option value="HE">Hamza Express</option>
+            <option value="NCH">Nawabi Chai House</option>
+          </select>
           <select id="categoryFilter" aria-label="Category"></select>
           <span id="stat" class="stat">— materials</span>
-          <button id="reloadBtn" class="btn-ghost-sm" type="button">↻ Refresh data</button>
-        </div>
-
-        <div id="customSearchPanel" class="hide custom-search-results">
-          <div class="custom-search-head">
-            <h3 id="customSearchTitle">Custom SKU search</h3>
-            <button id="customSearchClose" class="btn-ghost-sm" type="button">✕ Close</button>
-          </div>
-          <div id="customSearchGrid"></div>
+          <button id="addMatBtn" class="btn-primary-sm" type="button">+ Add material</button>
         </div>
 
         <div id="listGrid"></div>
@@ -401,20 +409,18 @@
     </section>
   </main>
 
-  <!-- Sticky cart bar -->
   <div id="cartBar" class="cart-bar empty hide">
     <div id="cartSummary" class="cart-summary"><span class="empty-msg">🛒 No items added yet</span></div>
     <button id="viewCartsBtn" class="btn-view-carts" type="button" disabled>View carts</button>
   </div>
 
-  <!-- Cart modal -->
   <div id="cartModal" class="modal-backdrop hide">
     <div class="modal-card">
       <div class="modal-head">
         <div>
           <h2 style="margin:0;font-size:18px;">My Carts</h2>
           <p class="sub" style="margin:4px 0 0;color:var(--text-dim);font-size:11px;">
-            Open each portal to add these items to its real cart. We track your selection here; the portals' cart API isn't public.
+            Open each portal to add these items to its real cart. Tap a product to jump to it on the portal.
           </p>
         </div>
         <button id="cartModalClose" class="modal-close" type="button">✕</button>
@@ -423,11 +429,34 @@
     </div>
   </div>
 
-  <script>
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Constants
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  <div id="addMatModal" class="modal-backdrop hide">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 style="margin:0;font-size:18px;">Add material</h2>
+        <button id="addMatClose" class="modal-close" type="button">✕</button>
+      </div>
+      <form id="addMatForm" class="modal-form" autocomplete="off">
+        <label>Name<input name="name" required placeholder="e.g. Whole Chicken with skin"></label>
+        <label>Category
+          <select name="category" id="addMatCategorySelect" required>
+            <option value="">— choose or add new —</option>
+          </select>
+        </label>
+        <label id="addMatNewCatWrap" class="hide">New category name<input name="new_category" id="addMatNewCat" placeholder="e.g. Frozen Items"></label>
+        <label>Unit (UOM)<input name="uom" placeholder="kg, litre, pack…" value="unit"></label>
+        <label>Brand
+          <select name="brand">
+            <option value="BOTH">Both (HE + NCH)</option>
+            <option value="HE">Hamza Express only</option>
+            <option value="NCH">Nawabi Chai House only</option>
+          </select>
+        </label>
+        <button type="submit" class="submit">Add to list</button>
+      </form>
+    </div>
+  </div>
 
+  <script>
     const PORTAL_ORDER = ['LOCAL_VENDOR', 'HYPERPURE', 'BIGBASKET', 'BLINKIT', 'ZEPTO', 'FLIPKART_MINUTES', 'AMAZON_NOW', 'JIOMART', 'INSTAMART'];
     const PORTAL_SOURCE_KEYS = PORTAL_ORDER.filter((k) => k !== 'LOCAL_VENDOR');
 
@@ -439,18 +468,15 @@
     };
     const SOURCE_SHORT = {
       LOCAL_VENDOR: 'LV', HYPERPURE: 'HP', BIGBASKET: 'BB', BLINKIT: 'BLK',
-      ZEPTO: 'ZPT', FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'AMZ',
-      JIOMART: 'JM', INSTAMART: 'IM',
+      ZEPTO: 'ZPT', FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'AMZ', JIOMART: 'JM', INSTAMART: 'IM',
     };
     const LOGO_CLASS = {
       LOCAL_VENDOR: 'pl-lv', HYPERPURE: 'pl-hp', BIGBASKET: 'pl-bb', BLINKIT: 'pl-bk',
-      ZEPTO: 'pl-zp', FLIPKART_MINUTES: 'pl-fm', AMAZON_NOW: 'pl-an',
-      JIOMART: 'pl-jm', INSTAMART: 'pl-is',
+      ZEPTO: 'pl-zp', FLIPKART_MINUTES: 'pl-fm', AMAZON_NOW: 'pl-an', JIOMART: 'pl-jm', INSTAMART: 'pl-is',
     };
     const LOGO_LETTER = {
       LOCAL_VENDOR: 'LV', HYPERPURE: 'H', BIGBASKET: 'BB', BLINKIT: 'B',
-      ZEPTO: 'Z', FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'A',
-      JIOMART: 'J', INSTAMART: 'I',
+      ZEPTO: 'Z', FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'A', JIOMART: 'J', INSTAMART: 'I',
     };
     const PORTAL_SEARCH_URL = {
       HYPERPURE: (q) => `https://www.hyperpure.com/in/search/${encodeURIComponent(String(q || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'search')}?type=SEARCH&query=${encodeURIComponent(q)}`,
@@ -473,22 +499,17 @@
       INSTAMART: 'https://www.swiggy.com/instamart/checkout',
     };
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // State
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
     const state = {
       pin: localStorage.getItem('purchaseConsolePin') || '',
       user: null,
-      snapshot: { date: '', materials: [], loading: false },
-      materialsMeta: {},  // material_id -> { last_vendor_price, last_vendor_name, uom, category, vendors }
+      materials: [],
+      snapshotMap: {},
       query: '',
       category: localStorage.getItem('purchaseConsoleCategory') || 'ALL',
+      brand: localStorage.getItem('purchaseConsoleBrand') || 'BOTH',
       refreshing: new Set(),
-      cart: JSON.parse(localStorage.getItem('purchaseConsoleCart') || '{}'),  // sourceKey -> [{material_id,name,qty,uom,price_paise,sku_url,sku_title,added_at}]
-      customSearchQuery: '',
-      customSearchResults: null,
-      customSearchRunning: false,
+      cart: JSON.parse(localStorage.getItem('purchaseConsoleCart') || '{}'),
+      loading: false,
     };
 
     const els = {
@@ -499,9 +520,10 @@
       app: document.getElementById('app'),
       subtitle: document.getElementById('subtitle'),
       searchInput: document.getElementById('searchInput'),
+      brandFilter: document.getElementById('brandFilter'),
       categoryFilter: document.getElementById('categoryFilter'),
       stat: document.getElementById('stat'),
-      reloadBtn: document.getElementById('reloadBtn'),
+      addMatBtn: document.getElementById('addMatBtn'),
       listGrid: document.getElementById('listGrid'),
       cartBar: document.getElementById('cartBar'),
       cartSummary: document.getElementById('cartSummary'),
@@ -509,15 +531,13 @@
       cartModal: document.getElementById('cartModal'),
       cartModalClose: document.getElementById('cartModalClose'),
       cartContent: document.getElementById('cartContent'),
-      customSearchPanel: document.getElementById('customSearchPanel'),
-      customSearchTitle: document.getElementById('customSearchTitle'),
-      customSearchClose: document.getElementById('customSearchClose'),
-      customSearchGrid: document.getElementById('customSearchGrid'),
+      addMatModal: document.getElementById('addMatModal'),
+      addMatClose: document.getElementById('addMatClose'),
+      addMatForm: document.getElementById('addMatForm'),
+      addMatCategorySelect: document.getElementById('addMatCategorySelect'),
+      addMatNewCatWrap: document.getElementById('addMatNewCatWrap'),
+      addMatNewCat: document.getElementById('addMatNewCat'),
     };
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Helpers
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     function escapeHtml(v) {
       return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -530,10 +550,8 @@
     }
     function moneyPaise(p) { return money(Number(p || 0) / 100); }
     function toast(msg, ms = 2200) {
-      const el = document.createElement('div');
-      el.className = 'toast'; el.textContent = msg;
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), ms);
+      const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+      document.body.appendChild(el); setTimeout(() => el.remove(), ms);
     }
     async function fetchJson(path, opts) {
       const res = await fetch(path, opts);
@@ -541,20 +559,7 @@
       if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
       return data;
     }
-    function persistCart() {
-      localStorage.setItem('purchaseConsoleCart', JSON.stringify(state.cart));
-    }
-    function freshnessLabel(iso) {
-      if (!iso) return '';
-      try {
-        const d = new Date(iso);
-        const ageMs = Date.now() - d.getTime();
-        if (ageMs < 60_000) return 'just now';
-        if (ageMs < 3_600_000) return `${Math.round(ageMs / 60_000)}m ago`;
-        if (ageMs < 86_400_000) return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-      } catch (_) { return ''; }
-    }
+    function persistCart() { localStorage.setItem('purchaseConsoleCart', JSON.stringify(state.cart)); }
     function portalSearchUrlFor(sourceKey, query) {
       const fn = PORTAL_SEARCH_URL[sourceKey];
       return fn ? fn(query || '') : '';
@@ -568,10 +573,7 @@
       return s && s.stock_status === 'QUOTED' && (Number(s.unit_price_paise) || Number(s.price_paise) || 0) > 0;
     }
     function sourcePrice(s) { return Number(s?.unit_price_paise || s?.price_paise || 0); }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Auth + data loading
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function materialId(mat) { return mat.product_code || mat.item_id || mat.id || ''; }
 
     async function verifyPin() {
       const pin = (els.pinInput.value || state.pin).trim();
@@ -581,159 +583,181 @@
         const d = await fetchJson(`/api/purchase-control?action=verify-pin&pin=${encodeURIComponent(pin)}`);
         state.pin = pin; state.user = d.user;
         localStorage.setItem('purchaseConsolePin', pin);
-        els.pinGate.classList.add('hide');
-        els.app.classList.remove('hide');
+        els.pinGate.classList.add('hide'); els.app.classList.remove('hide');
         els.subtitle.textContent = `${d.user.name} · ${d.user.role}`;
-        await Promise.all([loadMaterialsMeta(), loadSnapshot()]);
+        els.brandFilter.value = state.brand;
+        await loadAll();
         renderCartBar();
       } catch (e) {
         els.pinError.textContent = e.message || 'Invalid PIN.';
         els.pinError.classList.remove('hide');
-      } finally {
-        els.unlockBtn.disabled = false;
-      }
+      } finally { els.unlockBtn.disabled = false; }
     }
 
-    async function loadMaterialsMeta() {
+    async function loadAll() {
+      state.loading = true;
+      els.listGrid.innerHTML = `<div class="empty-state">Loading your full materials universe (last 365 days of HE + NCH purchases)…</div>`;
       try {
-        const d = await fetchJson(`/api/purchase-control?action=materials&pin=${encodeURIComponent(state.pin)}&brand=BOTH&days=30`);
-        const map = {};
-        for (const it of (d.items || [])) {
-          const id = (it.product_code || (it.item_id || '').replace(/^code:/, '') || '').toString();
-          if (!id) continue;
-          map[id] = {
-            name: it.name, uom: it.uom || 'unit', category: it.category || '—',
-            last_vendor_price: Number(it.last_vendor_price || 0),
-            last_vendor_name: it.last_vendor_name || (it.vendors || [])[0]?.name || '',
-          };
+        const m = await fetchJson(`/api/purchase-control?action=materials&pin=${encodeURIComponent(state.pin)}&brand=${state.brand}&days=365`);
+        state.materials = m.items || [];
+        const s = await fetchJson(`/api/purchase-control?action=daily-snapshot&pin=${encodeURIComponent(state.pin)}&brand=BOTH`);
+        const snap = {};
+        for (const mat of (s.materials || [])) {
+          snap[mat.material_id] = {};
+          for (const src of (mat.sources || [])) {
+            snap[mat.material_id][src.source_key] = src;
+          }
         }
-        state.materialsMeta = map;
-      } catch (_) {}
-    }
-
-    async function loadSnapshot() {
-      if (!state.pin) return;
-      state.snapshot.loading = true;
-      els.listGrid.innerHTML = `<div class="empty-state">Loading today's snapshot…</div>`;
-      try {
-        const d = await fetchJson(`/api/purchase-control?action=daily-snapshot&pin=${encodeURIComponent(state.pin)}&brand=BOTH`);
-        state.snapshot.date = d.date;
-        state.snapshot.materials = d.materials || [];
-        // Build category dropdown options based on the data we have
-        const cats = new Set(state.snapshot.materials.map((m) => m.category || '—').filter(Boolean));
-        const opts = ['<option value="ALL">All categories</option>',
-          ...[...cats].sort().map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`)];
-        els.categoryFilter.innerHTML = opts.join('');
-        if ([...cats].includes(state.category) || state.category === 'ALL') {
-          els.categoryFilter.value = state.category;
-        } else {
-          state.category = 'ALL'; els.categoryFilter.value = 'ALL';
-        }
+        state.snapshotMap = snap;
+        rebuildCategoryDropdown();
       } catch (err) {
-        toast(err.message || 'Snapshot load failed');
-      } finally {
-        state.snapshot.loading = false;
-        renderList();
+        toast(err.message || 'Load failed');
+      } finally { state.loading = false; renderList(); }
+    }
+
+    function rebuildCategoryDropdown() {
+      const cats = new Set(state.materials.map((m) => m.category || '—'));
+      const opts = ['<option value="ALL">All categories</option>',
+        ...[...cats].sort().map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`)];
+      els.categoryFilter.innerHTML = opts.join('');
+      if (state.category === 'ALL' || cats.has(state.category)) {
+        els.categoryFilter.value = state.category;
+      } else {
+        state.category = 'ALL'; els.categoryFilter.value = 'ALL';
       }
+      const addOpts = ['<option value="">— choose or add new —</option>',
+        ...[...cats].sort().map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`),
+        '<option value="__new__">+ Add new category</option>'];
+      els.addMatCategorySelect.innerHTML = addOpts.join('');
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Cart logic
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    function cartItemIndex(sourceKey, materialId) {
-      const lines = state.cart[sourceKey] || [];
-      return lines.findIndex((l) => l.material_id === materialId);
+    function sourcesFor(mat) {
+      const mid = materialId(mat);
+      const snap = state.snapshotMap[mid] || {};
+      const arr = [];
+      for (const sk of PORTAL_SOURCE_KEYS) {
+        const row = snap[sk];
+        if (row) arr.push({ ...row, source_key: sk });
+      }
+      return arr;
     }
-    function isInCart(sourceKey, materialId) { return cartItemIndex(sourceKey, materialId) >= 0; }
-    function addToCart(material, source, qty) {
-      const sourceKey = source.source_key;
-      if (!state.cart[sourceKey]) state.cart[sourceKey] = [];
+    // Sanity floor: a portal price below 30% of the local-vendor baseline is
+    // almost always a bad SKU match (butter scout returning "butter paper" or
+    // "biscuit"). Demote those out of "cheapest" — they still show as a chip
+    // with a ⚠️ flag so you can decide.
+    function isSanePortalPrice(source, mat) {
+      const price = sourcePrice(source);
+      if (!Number.isFinite(price) || price <= 0) return false;
+      const baseline = baselineFor(mat);
+      if (!baseline || !baseline.paise) return true; // No baseline = nothing to compare against
+      if (price < baseline.paise * 0.3) return false; // Too cheap → mismatch
+      if (price > baseline.paise * 8) return false;   // Too dear → wrong pack size
+      return true;
+    }
+    function bestSourceFor(mat) {
+      const portals = sourcesFor(mat).filter((s) => isPortalSourceQuoted(s) && isSanePortalPrice(s, mat));
+      portals.sort((a, b) => sourcePrice(a) - sourcePrice(b));
+      return portals[0] || null;
+    }
+    function baselineFor(mat) {
+      if (Number(mat.local_price) > 0) return { paise: Math.round(Number(mat.local_price) * 100), name: mat.last_vendor_name || 'Local Vendor' };
+      return null;
+    }
+    function deltaVsBase(price, base) {
+      if (!base || !base.paise) return '';
+      const d = Math.round(((price - base.paise) / base.paise) * 100);
+      if (!Number.isFinite(d)) return '';
+      const sign = d > 0 ? '+' : '';
+      const color = d > 2 ? 'color:var(--pc-red);' : d < -2 ? 'color:var(--pc-green);' : 'color:var(--text-dim);';
+      return `<span style="${color}font-size:10px;font-weight:700;">${sign}${d}%</span>`;
+    }
+
+    function cartItemIndex(sk, mid) {
+      const lines = state.cart[sk] || []; return lines.findIndex((l) => l.material_id === mid);
+    }
+    function isInCart(sk, mid) { return cartItemIndex(sk, mid) >= 0; }
+    function addToCart(mat, source, qty) {
+      const sk = source.source_key;
+      if (!state.cart[sk]) state.cart[sk] = [];
+      const mid = materialId(mat);
       const line = {
-        material_id: material.material_id,
-        name: material.name,
+        material_id: mid,
+        name: mat.name,
         qty: Number(qty) || 1,
-        uom: material.uom || state.materialsMeta[material.material_id]?.uom || 'unit',
+        uom: mat.uom || 'unit',
         price_paise: Number(source.unit_price_paise || source.price_paise || 0),
-        sku_url: bestUrlFor(source, material.name),
-        sku_title: source.sku_title || material.name,
-        portal_label: SOURCE_LABELS[sourceKey] || sourceKey,
+        sku_url: bestUrlFor(source, mat.name),
+        sku_title: source.sku_title || mat.name,
+        image_url: source.image_url || mat.image_url || '',
+        portal_label: SOURCE_LABELS[sk] || sk,
         added_at: new Date().toISOString(),
       };
-      const idx = cartItemIndex(sourceKey, material.material_id);
-      if (idx >= 0) { state.cart[sourceKey][idx] = line; } else { state.cart[sourceKey].push(line); }
-      persistCart();
-      renderCartBar(); renderList();
-      toast(`Added ${material.name} · ${line.portal_label}`);
+      const idx = cartItemIndex(sk, mid);
+      if (idx >= 0) state.cart[sk][idx] = line; else state.cart[sk].push(line);
+      persistCart(); renderCartBar(); renderList();
+      toast(`Added ${mat.name} · ${line.portal_label}`);
     }
-    function removeFromCart(sourceKey, materialId) {
-      const lines = state.cart[sourceKey] || [];
-      state.cart[sourceKey] = lines.filter((l) => l.material_id !== materialId);
-      if (!state.cart[sourceKey].length) delete state.cart[sourceKey];
-      persistCart();
-      renderCartBar(); renderCartModal(); renderList();
+    function removeFromCart(sk, mid) {
+      const lines = state.cart[sk] || [];
+      state.cart[sk] = lines.filter((l) => l.material_id !== mid);
+      if (!state.cart[sk].length) delete state.cart[sk];
+      persistCart(); renderCartBar(); renderCartModal(); renderList();
     }
-    function setCartQty(sourceKey, materialId, qty) {
-      const lines = state.cart[sourceKey] || [];
-      const line = lines.find((l) => l.material_id === materialId);
+    function setCartQty(sk, mid, qty) {
+      const line = (state.cart[sk] || []).find((l) => l.material_id === mid);
       if (line) { line.qty = Math.max(0.01, Number(qty) || 1); persistCart(); renderCartBar(); renderCartModal(); }
     }
-
     function cartTotals() {
-      const totals = {};
-      let grand = 0;
-      for (const [src, lines] of Object.entries(state.cart)) {
-        let portalTotal = 0; let portalCount = 0;
-        for (const l of lines) {
-          portalTotal += (l.price_paise / 100) * (l.qty || 1);
-          portalCount += 1;
-        }
-        totals[src] = { count: portalCount, total: portalTotal };
-        grand += portalTotal;
+      const byPortal = {}; let grand = 0;
+      for (const [sk, lines] of Object.entries(state.cart)) {
+        let pt = 0;
+        for (const l of lines) pt += (l.price_paise / 100) * (l.qty || 1);
+        byPortal[sk] = { count: lines.length, total: pt };
+        grand += pt;
       }
-      return { byPortal: totals, grand };
+      return { byPortal, grand };
     }
-
     function renderCartBar() {
       const { byPortal, grand } = cartTotals();
-      const portalKeys = Object.keys(byPortal);
+      const keys = Object.keys(byPortal);
       els.cartBar.classList.remove('hide');
-      if (!portalKeys.length) {
+      if (!keys.length) {
         els.cartBar.classList.add('empty');
         els.cartSummary.innerHTML = `<span class="empty-msg">🛒 No items added yet — tap [➕ Add] on any deal to start a cart</span>`;
-        els.viewCartsBtn.disabled = true;
-        return;
+        els.viewCartsBtn.disabled = true; return;
       }
       els.cartBar.classList.remove('empty');
-      const pills = portalKeys.sort().map((sk) => {
+      const pills = keys.sort().map((sk) => {
         const t = byPortal[sk];
-        return `<span class="portal-pill" title="${escapeAttr(SOURCE_LABELS[sk] || sk)}">
-          <span class="alt-chip-logo ${LOGO_CLASS[sk] || ''}">${escapeHtml(LOGO_LETTER[sk] || '?')}</span>
-          ${escapeHtml(SOURCE_SHORT[sk] || sk)}·${t.count}
-          <span class="pill-total">${money(t.total)}</span>
-        </span>`;
+        return `<span class="portal-pill"><span class="alt-chip-logo ${LOGO_CLASS[sk] || ''}">${escapeHtml(LOGO_LETTER[sk] || '?')}</span>${escapeHtml(SOURCE_SHORT[sk] || sk)}·${t.count}<span class="pill-total">${money(t.total)}</span></span>`;
       }).join('');
       els.cartSummary.innerHTML = `🛒 ${pills} <span class="pill-total" style="margin-left:8px;">Total ${money(grand)}</span>`;
       els.viewCartsBtn.disabled = false;
     }
-
     function renderCartModal() {
       const { byPortal, grand } = cartTotals();
-      const portalKeys = Object.keys(byPortal).sort();
-      if (!portalKeys.length) {
+      const keys = Object.keys(byPortal).sort();
+      if (!keys.length) {
         els.cartContent.innerHTML = `<div class="empty-state">Your carts are empty. Tap [➕ Add] on any best-deal card to start a cart.</div>`;
         return;
       }
-      const sections = portalKeys.map((sk) => {
+      const sections = keys.map((sk) => {
         const lines = state.cart[sk] || [];
         const t = byPortal[sk];
-        const linesHtml = lines.map((l) => `
+        const linesHtml = lines.map((l) => {
+          const initial = escapeHtml((l.name || '?')[0]);
+          const thumb = l.image_url
+            ? `<img src="${escapeAttr(l.image_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'mat-thumb-letter',textContent:'${initial}'}))">`
+            : `<span class="mat-thumb-letter">${initial}</span>`;
+          return `
           <div class="cart-line">
+            <div class="mat-thumb">${thumb}</div>
             <div>
               <div class="cart-line-name">${escapeHtml(l.name)}</div>
-              <div class="cart-line-meta">${escapeHtml(l.sku_title || '')}</div>
+              <div class="cart-line-meta">${escapeHtml((l.sku_title || '').slice(0, 70))}</div>
             </div>
-            <div class="mat-qty" style="border:1px solid var(--pc-line);">
+            ${l.sku_url ? `<a class="cart-line-open" href="${escapeAttr(l.sku_url)}" target="_blank" rel="noopener">Open ↗</a>` : ''}
+            <div class="mat-qty">
               <button type="button" data-qty-dec="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">−</button>
               <input type="number" min="0.01" step="0.25" value="${escapeAttr(l.qty)}" data-qty-input="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">
               <span class="uom">${escapeHtml(l.uom)}</span>
@@ -741,8 +765,8 @@
             </div>
             <div class="cart-line-price">${moneyPaise(l.price_paise * (l.qty || 1))}</div>
             <button class="cart-line-remove" type="button" data-cart-remove="${escapeAttr(sk)}|${escapeAttr(l.material_id)}" title="Remove">✕</button>
-          </div>
-        `).join('');
+          </div>`;
+        }).join('');
         const cartHref = PORTAL_CART_URL[sk] || portalSearchUrlFor(sk, '');
         return `
           <div class="cart-portal-section">
@@ -750,10 +774,10 @@
               <div class="best-portal-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</div>
               <div>
                 <div class="cart-portal-name">${escapeHtml(SOURCE_LABELS[sk])}</div>
-                <div class="cart-line-meta">${t.count} item${t.count === 1 ? '' : 's'}</div>
+                <div class="cart-line-meta">${t.count} item${t.count === 1 ? '' : 's'} · tap [Open ↗] per item to add to the real cart on the portal</div>
               </div>
               <div class="cart-portal-total">${money(t.total)}</div>
-              <a class="cart-portal-open" href="${escapeAttr(cartHref)}" target="_blank" rel="noopener">Open ${escapeHtml(SOURCE_SHORT[sk])} cart ↗</a>
+              <a class="cart-portal-open" href="${escapeAttr(cartHref)}" target="_blank" rel="noopener">${escapeHtml(SOURCE_SHORT[sk])} cart ↗</a>
             </div>
             ${linesHtml}
           </div>
@@ -763,59 +787,21 @@
       els.cartContent.innerHTML = sections + grandHtml;
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Material list rendering
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function renderMaterialRow(mat) {
+      const mid = materialId(mat);
+      const sources = sourcesFor(mat);
+      const best = bestSourceFor(mat);
+      const baseline = baselineFor(mat);
+      const qty = (mat._qty == null ? Math.max(1, Number(mat.suggested_qty || 1)) : mat._qty);
+      const uom = mat.uom || 'unit';
+      const inCartAnywhere = Object.entries(state.cart).some(([sk, lines]) => lines.some((l) => l.material_id === mid));
+      const rowCls = `mat-row ${best ? 'has-best' : ''} ${inCartAnywhere ? 'in-cart' : ''} ${mat.is_custom ? 'custom' : ''}`;
 
-    function bestSourceFor(material) {
-      const portals = (material.sources || []).filter((s) => s.source_key !== 'LOCAL_VENDOR' && isPortalSourceQuoted(s));
-      portals.sort((a, b) => sourcePrice(a) - sourcePrice(b));
-      return portals[0] || null;
-    }
-    function quotedSourcesSortedFor(material) {
-      const portals = (material.sources || []).filter((s) => s.source_key !== 'LOCAL_VENDOR' && isPortalSourceQuoted(s));
-      portals.sort((a, b) => sourcePrice(a) - sourcePrice(b));
-      return portals;
-    }
-    function baselineFor(material) {
-      const meta = state.materialsMeta[material.material_id] || {};
-      const lvSource = (material.sources || []).find((s) => s.source_key === 'LOCAL_VENDOR' && isPortalSourceQuoted(s));
-      if (lvSource) return { paise: sourcePrice(lvSource), name: lvSource.sku_title || meta.last_vendor_name || 'Local Vendor' };
-      if (meta.last_vendor_price > 0) return { paise: Math.round(meta.last_vendor_price * 100), name: meta.last_vendor_name || 'Local Vendor' };
-      return null;
-    }
-    function deltaVsBase(price, base) {
-      if (!base || !base.paise) return '';
-      const d = Math.round(((price - base.paise) / base.paise) * 100);
-      if (!Number.isFinite(d)) return '';
-      const sign = d > 0 ? '+' : '';
-      const cls = d > 2 ? 'up' : d < -2 ? 'down' : 'flat';
-      const color = cls === 'up' ? 'color:var(--pc-red);' : cls === 'down' ? 'color:var(--pc-green);' : 'color:var(--text-dim);';
-      return `<span style="${color}font-size:10px;font-weight:700;">${sign}${d}%</span>`;
-    }
-
-    function renderQuantityControl(material, currentQty) {
-      const uom = material.uom || state.materialsMeta[material.material_id]?.uom || 'unit';
-      return `
-        <div class="mat-qty">
-          <button type="button" data-mat-qty-dec="${escapeAttr(material.material_id)}">−</button>
-          <input type="number" min="0.01" step="0.25" value="${escapeAttr(currentQty)}" data-mat-qty-input="${escapeAttr(material.material_id)}">
-          <span class="uom">${escapeHtml(uom)}</span>
-          <button type="button" data-mat-qty-inc="${escapeAttr(material.material_id)}">+</button>
-        </div>
-      `;
-    }
-
-    function renderMaterialRow(material) {
-      const meta = state.materialsMeta[material.material_id] || {};
-      const uom = material.uom || meta.uom || 'unit';
-      const best = bestSourceFor(material);
-      const allQuoted = quotedSourcesSortedFor(material);
-      const baseline = baselineFor(material);
-      const qty = (material._qty == null ? 1 : material._qty);
-      const inCartSourceKey = best ? (isInCart(best.source_key, material.material_id) ? best.source_key : null) : null;
-      const inCartAnywhere = Object.entries(state.cart).some(([sk, lines]) => lines.some((l) => l.material_id === material.material_id));
-      const rowCls = `mat-row ${best ? 'has-best' : ''} ${inCartAnywhere ? 'in-cart' : ''}`;
+      const thumbImg = best?.image_url || mat.image_url || '';
+      const firstLetter = (mat.name || '?')[0];
+      const thumbHtml = thumbImg
+        ? `<img src="${escapeAttr(thumbImg)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'mat-thumb-letter',textContent:'${escapeHtml(firstLetter)}'}))">`
+        : `<span class="mat-thumb-letter">${escapeHtml(firstLetter)}</span>`;
 
       let bestHtml = '';
       if (best) {
@@ -823,11 +809,10 @@
         const sk = best.source_key;
         const sku = (best.sku_title || '').slice(0, 60);
         const delta = baseline ? deltaVsBase(price, baseline) : '';
-        const openHref = bestUrlFor(best, material.name);
-        const inCart = inCartSourceKey != null;
+        const openHref = bestUrlFor(best, mat.name);
+        const inCart = isInCart(sk, mid);
         const actionLabel = inCart ? '✓ In cart' : '➕ Add';
         const actionCls = inCart ? 'in-cart' : 'add';
-        const rateText = `${moneyPaise(price)}/${uom}`;
         bestHtml = `
           <div class="best-deal">
             <div class="best-portal-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</div>
@@ -837,11 +822,11 @@
             </div>
             <div>
               <div class="best-deal-price">${moneyPaise(price)}</div>
-              <div class="best-deal-rate">${rateText} ${delta}</div>
+              <div class="best-deal-rate">${moneyPaise(price)}/${escapeHtml(uom)} ${delta}</div>
             </div>
             <div class="best-deal-actions">
               <a class="action-btn" href="${escapeAttr(openHref)}" target="_blank" rel="noopener" title="Open ${escapeAttr(SOURCE_LABELS[sk])}">Open ↗</a>
-              <button class="action-btn ${actionCls}" type="button" data-add-mat="${escapeAttr(material.material_id)}" data-add-source="${escapeAttr(sk)}">${actionLabel}</button>
+              <button class="action-btn ${actionCls}" type="button" data-add-mat="${escapeAttr(mid)}" data-add-source="${escapeAttr(sk)}">${actionLabel}</button>
             </div>
           </div>
         `;
@@ -850,60 +835,59 @@
           <div class="best-deal no-best">
             <div class="best-portal-logo pl-lv">—</div>
             <div class="best-deal-body">
-              <div class="best-deal-portal" style="color:var(--text-dim);">No portal price available</div>
-              <div class="best-deal-sku">Tap 🔄 to rescout, or use Local Vendor</div>
+              <div class="best-deal-portal" style="color:var(--text-dim);">No portal price yet</div>
+              <div class="best-deal-sku">Tap 🔄 to scout, or use Local Vendor</div>
             </div>
             <div></div>
-            <div class="best-deal-actions"><button class="row-refresh" data-row-refresh="${escapeAttr(material.material_id)}" type="button" title="Rescout this material">🔄</button></div>
+            <div class="best-deal-actions"><button class="row-refresh" data-row-refresh="${escapeAttr(mid)}" type="button" title="Scout this material">🔄</button></div>
           </div>
         `;
       }
 
-      // Alternatives chips — all non-best portals (sorted by price asc, unavailable last)
       const altsHtml = PORTAL_SOURCE_KEYS.map((sk) => {
         if (best && sk === best.source_key) return '';
-        const s = (material.sources || []).find((x) => x.source_key === sk);
+        const s = sources.find((x) => x.source_key === sk);
         if (!s) {
-          // No row — show as unavailable but still allow click → portal search
-          const url = portalSearchUrlFor(sk, material.name);
-          return url
-            ? `<a class="alt-chip disabled" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="Search on ${escapeAttr(SOURCE_LABELS[sk])}">
-              <span class="alt-chip-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</span>
-              <span class="alt-chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span>
-              <span class="alt-chip-price">—</span>
-            </a>` : '';
+          const url = portalSearchUrlFor(sk, mat.name);
+          return url ? `<a class="alt-chip disabled" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="Search on ${escapeAttr(SOURCE_LABELS[sk])}"><span class="alt-chip-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</span><span class="alt-chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="alt-chip-price">—</span></a>` : '';
         }
         const quoted = isPortalSourceQuoted(s);
-        const url = bestUrlFor(s, material.name);
-        const price = quoted ? moneyPaise(sourcePrice(s)) : (s.stock_status === 'ERROR' ? 'err' : '—');
-        return `
-          <a class="alt-chip ${quoted ? '' : 'disabled'}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(s.sku_title || SOURCE_LABELS[sk])}">
-            <span class="alt-chip-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</span>
-            <span class="alt-chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span>
-            <span class="alt-chip-price">${escapeHtml(price)}</span>
-          </a>
-        `;
+        const sane = quoted && isSanePortalPrice(s, mat);
+        const url = bestUrlFor(s, mat.name);
+        const priceTxt = quoted ? moneyPaise(sourcePrice(s)) : (s.stock_status === 'ERROR' ? 'err' : '—');
+        const warn = quoted && !sane ? '⚠️' : '';
+        const titleAttr = quoted && !sane
+          ? `${s.sku_title || SOURCE_LABELS[sk]} — price looks wrong vs your local vendor; click to verify`
+          : (s.sku_title || SOURCE_LABELS[sk]);
+        const chipCls = quoted && !sane ? 'alt-chip' : (quoted ? 'alt-chip' : 'alt-chip disabled');
+        return `<a class="${chipCls}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(titleAttr)}"><span class="alt-chip-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</span><span class="alt-chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="alt-chip-price">${warn}${escapeHtml(priceTxt)}</span></a>`;
       }).filter(Boolean).join('');
 
-      // Local-vendor baseline line
-      let baselineHtml = '';
-      if (baseline) {
-        baselineHtml = `<div class="baseline-line">📍 Local Vendor (${escapeHtml(baseline.name)}): <strong>${moneyPaise(baseline.paise)}/${escapeHtml(uom)}</strong></div>`;
-      }
+      const baselineHtml = baseline
+        ? `<div class="baseline-line">📍 Local Vendor (${escapeHtml(baseline.name)}): <strong>${moneyPaise(baseline.paise)}/${escapeHtml(uom)}</strong> · last bought ${escapeHtml(mat.last_purchase_date || '—')} · ${mat.times_ordered || 0} POs</div>`
+        : '';
 
-      const refreshDisabled = state.refreshing.has(material.material_id);
+      const refreshDisabled = state.refreshing.has(mid);
+      const customPill = mat.is_custom ? `<span class="pill-tiny">CUSTOM</span>` : '';
+      const deleteBtn = mat.is_custom ? `<button class="row-refresh" type="button" data-del-mat="${escapeAttr(mid)}" title="Delete custom material" style="color:var(--pc-red);margin-left:4px;">🗑️</button>` : '';
 
       return `
-        <div class="${rowCls}" data-mat-id="${escapeAttr(material.material_id)}">
+        <div class="${rowCls}" data-mat-id="${escapeAttr(mid)}">
           <div class="mat-row-head">
-            <div></div>
+            <div class="mat-thumb">${thumbHtml}</div>
             <div>
-              <div class="mat-row-name">${escapeHtml(material.name)}</div>
-              <div class="mat-row-meta">${escapeHtml(meta.category || material.category || '—')} · ${escapeHtml(uom)}</div>
+              <div class="mat-row-name">${escapeHtml(mat.name)}${customPill}</div>
+              <div class="mat-row-meta">${escapeHtml(mat.category || '—')} · ${escapeHtml(uom)} ${mat.times_ordered ? `· ${mat.times_ordered} POs` : ''}</div>
             </div>
             <div style="display:flex;gap:6px;align-items:center;">
-              ${renderQuantityControl(material, qty)}
-              <button class="row-refresh" type="button" data-row-refresh="${escapeAttr(material.material_id)}" title="Rescout this material" ${refreshDisabled ? 'disabled' : ''}>${refreshDisabled ? '⟳' : '🔄'}</button>
+              <div class="mat-qty">
+                <button type="button" data-mat-qty-dec="${escapeAttr(mid)}">−</button>
+                <input type="number" min="0.25" step="0.25" value="${escapeAttr(qty)}" data-mat-qty-input="${escapeAttr(mid)}">
+                <span class="uom">${escapeHtml(uom)}</span>
+                <button type="button" data-mat-qty-inc="${escapeAttr(mid)}">+</button>
+              </div>
+              <button class="row-refresh" type="button" data-row-refresh="${escapeAttr(mid)}" title="Rescout this material" ${refreshDisabled ? 'disabled' : ''}>${refreshDisabled ? '⟳' : '🔄'}</button>
+              ${deleteBtn}
             </div>
           </div>
           ${bestHtml}
@@ -914,23 +898,18 @@
     }
 
     function renderList() {
-      const mats = state.snapshot.materials || [];
+      const mats = state.materials;
       const q = (state.query || '').trim().toLowerCase();
-      // Cross-reference materials meta to fill missing data
       const filtered = mats.filter((m) => {
         if (state.category !== 'ALL' && (m.category || '—') !== state.category) return false;
         if (!q) return true;
-        const meta = state.materialsMeta[m.material_id] || {};
-        const hay = (m.name + ' ' + (meta.category || '') + ' ' + (m.material_id || '')).toLowerCase();
+        const hay = (m.name + ' ' + (m.category || '') + ' ' + (m.product_code || '') + ' ' + (m.last_vendor_name || '')).toLowerCase();
         if (hay.includes(q)) return true;
-        // Also search inside SKU titles
-        for (const s of (m.sources || [])) {
-          if ((s.sku_title || '').toLowerCase().includes(q)) return true;
-        }
+        const sources = sourcesFor(m);
+        for (const s of sources) if ((s.sku_title || '').toLowerCase().includes(q)) return true;
         return false;
       });
 
-      // Group by category
       const groups = new Map();
       for (const m of filtered) {
         const c = m.category || '—';
@@ -938,100 +917,94 @@
         groups.get(c).push(m);
       }
 
-      // Update stat
-      const totalQuotes = filtered.reduce((acc, m) => acc + (m.sources || []).filter((s) => isPortalSourceQuoted(s)).length, 0);
-      els.stat.textContent = `${filtered.length} materials · ${totalQuotes} live quotes`;
+      const totalQuotes = filtered.reduce((acc, m) => acc + sourcesFor(m).filter(isPortalSourceQuoted).length, 0);
+      els.stat.textContent = `${filtered.length} of ${mats.length} · ${totalQuotes} quotes today`;
 
       if (!filtered.length) {
-        els.listGrid.innerHTML = `<div class="empty-state">${q ? `No materials match "${escapeHtml(q)}"` : 'No materials available'}</div>`;
+        els.listGrid.innerHTML = `<div class="empty-state">${q ? `No materials match "${escapeHtml(q)}"` : 'No materials loaded'}</div>`;
         return;
       }
 
       const ordered = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-      const html = ordered.map(([cat, items]) => {
-        items.sort((a, b) => a.name.localeCompare(b.name));
+      els.listGrid.innerHTML = ordered.map(([cat, items]) => {
+        items.sort((a, b) => {
+          if ((a.is_custom ? 1 : 0) !== (b.is_custom ? 1 : 0)) return (b.is_custom ? 1 : 0) - (a.is_custom ? 1 : 0);
+          if ((b.times_ordered || 0) !== (a.times_ordered || 0)) return (b.times_ordered || 0) - (a.times_ordered || 0);
+          return a.name.localeCompare(b.name);
+        });
         const rows = items.map(renderMaterialRow).join('');
         return `
           <section class="cat-section">
             <div class="cat-head">
               <h2>${escapeHtml(cat)}</h2>
               <span class="cat-count">${items.length} item${items.length === 1 ? '' : 's'}</span>
+              <button class="cat-add" type="button" data-cat-add="${escapeAttr(cat)}">+ Add to ${escapeHtml(cat)}</button>
             </div>
             ${rows}
           </section>
         `;
       }).join('');
-      els.listGrid.innerHTML = html;
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // On-demand refresh
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    async function refreshOneMaterial(materialId) {
-      if (!state.pin || state.refreshing.has(materialId)) return;
-      state.refreshing.add(materialId);
-      renderList();
+    async function refreshOneMaterial(mid) {
+      if (!state.pin || state.refreshing.has(mid)) return;
+      const mat = state.materials.find((m) => materialId(m) === mid);
+      if (!mat) return;
+      state.refreshing.add(mid); renderList();
       try {
+        const payload = { pin: state.pin, material_id: mid, sources: PORTAL_SOURCE_KEYS };
+        if (mat.is_custom || String(mid).startsWith('custom:')) {
+          payload.name = mat.name; payload.category = mat.category; payload.uom = mat.uom;
+          payload.brand = (mat.brands_seen || [])[0] || 'BOTH';
+        }
         const d = await fetchJson('/api/purchase-control?action=refresh-material', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: state.pin, material_id: materialId, sources: PORTAL_SOURCE_KEYS }),
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
         });
-        const updated = (d.snapshot || []);
-        const idx = state.snapshot.materials.findIndex((m) => m.material_id === d.material_id);
-        if (idx >= 0) state.snapshot.materials[idx].sources = updated;
+        const updated = d.snapshot || [];
+        const snapForMat = {};
+        for (const row of updated) snapForMat[row.source_key] = row;
+        state.snapshotMap[mid] = snapForMat;
         const c = d.counts || {};
         toast(`${d.material_name}: ${c.ok || 0} ok · ${c.error || 0} err`);
       } catch (err) {
         toast(err.message || 'Refresh failed');
-      } finally {
-        state.refreshing.delete(materialId);
-        renderList();
+      } finally { state.refreshing.delete(mid); renderList(); }
+    }
+
+    async function deleteCustomMaterial(mid) {
+      if (!confirm('Delete this custom material from the list?')) return;
+      try {
+        const slug = String(mid).replace(/^custom:/, '');
+        await fetchJson('/api/purchase-control?action=delete-custom-material', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: state.pin, slug }),
+        });
+        state.materials = state.materials.filter((m) => materialId(m) !== mid);
+        delete state.snapshotMap[mid];
+        renderList(); toast('Deleted');
+      } catch (e) { toast(e.message || 'Delete failed'); }
+    }
+
+    function openAddMatModal(prefillCategory) {
+      els.addMatForm.reset();
+      els.addMatNewCatWrap.classList.add('hide');
+      if (prefillCategory) {
+        const opt = [...els.addMatCategorySelect.options].find((o) => o.value === prefillCategory);
+        if (opt) els.addMatCategorySelect.value = prefillCategory;
       }
+      els.addMatModal.classList.remove('hide');
+      setTimeout(() => els.addMatForm.querySelector('[name="name"]').focus(), 50);
     }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Custom SKU search
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    async function runCustomSearch(rawQuery) {
-      const q = (rawQuery || '').trim();
-      if (!q) { els.customSearchPanel.classList.add('hide'); return; }
-      state.customSearchQuery = q;
-      state.customSearchRunning = true;
-      els.customSearchPanel.classList.remove('hide');
-      els.customSearchTitle.textContent = `Custom search: "${q}"`;
-      els.customSearchGrid.innerHTML = `<div class="empty-state">Scouting across 8 portals for "${escapeHtml(q)}"…</div>`;
-      // Use the first material's id as a placeholder; refresh-material requires a material_id.
-      // We fake a scoutable material by submitting via a special "search" path.
-      // We use the EXACT-SKU search via refresh-material on the first available material id, but custom query
-      // — actually we'll iterate through portal search URLs directly (open new tabs is the fallback).
-      // Simpler approach: present per-portal search links the user can open in new tabs.
-      const chips = PORTAL_SOURCE_KEYS.map((sk) => {
-        const url = portalSearchUrlFor(sk, q);
-        return `
-          <a class="alt-chip" href="${escapeAttr(url)}" target="_blank" rel="noopener" style="font-size:13px;padding:8px 12px;">
-            <span class="alt-chip-logo ${LOGO_CLASS[sk]}" style="width:22px;height:22px;font-size:10px;">${escapeHtml(LOGO_LETTER[sk])}</span>
-            <span class="alt-chip-name">${escapeHtml(SOURCE_LABELS[sk])} ↗</span>
-          </a>
-        `;
-      }).join('');
-      els.customSearchGrid.innerHTML = `
-        <div style="margin-bottom:8px;font-size:11px;color:var(--text-dim);">
-          Open this exact SKU on each portal. Compare manually — our scout works against materials in your purchase list, not arbitrary queries.
-        </div>
-        <div class="alts-row" style="padding-left:0;">${chips}</div>
-      `;
-      state.customSearchRunning = false;
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Event wiring
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function closeAddMatModal() { els.addMatModal.classList.add('hide'); }
 
     els.unlockBtn.addEventListener('click', verifyPin);
     els.pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyPin(); });
-    els.reloadBtn.addEventListener('click', loadSnapshot);
+
+    els.brandFilter.addEventListener('change', (e) => {
+      state.brand = e.target.value;
+      localStorage.setItem('purchaseConsoleBrand', state.brand);
+      loadAll();
+    });
     els.categoryFilter.addEventListener('change', (e) => {
       state.category = e.target.value;
       localStorage.setItem('purchaseConsoleCategory', state.category);
@@ -1042,62 +1015,83 @@
     els.searchInput.addEventListener('input', (e) => {
       state.query = e.target.value;
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
+      searchTimer = setTimeout(renderList, 200);
+    });
+
+    els.addMatBtn.addEventListener('click', () => openAddMatModal());
+    els.addMatClose.addEventListener('click', closeAddMatModal);
+    els.addMatModal.addEventListener('click', (e) => { if (e.target === els.addMatModal) closeAddMatModal(); });
+    els.addMatCategorySelect.addEventListener('change', (e) => {
+      if (e.target.value === '__new__') {
+        els.addMatNewCatWrap.classList.remove('hide');
+        setTimeout(() => els.addMatNewCat.focus(), 50);
+      } else {
+        els.addMatNewCatWrap.classList.add('hide');
+      }
+    });
+    els.addMatForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(els.addMatForm);
+      let category = fd.get('category');
+      if (category === '__new__') category = (fd.get('new_category') || '').trim();
+      const payload = {
+        pin: state.pin,
+        name: (fd.get('name') || '').trim(),
+        category: category,
+        uom: (fd.get('uom') || 'unit').trim() || 'unit',
+        brand: fd.get('brand') || 'BOTH',
+      };
+      if (!payload.name) { toast('Name required'); return; }
+      if (!payload.category) { toast('Category required'); return; }
+      try {
+        const d = await fetchJson('/api/purchase-control?action=add-custom-material', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        const m = d.material;
+        const newRow = {
+          id: m.material_id, product_code: m.material_id, item_id: m.material_id,
+          name: m.name, category: m.category, uom: m.uom,
+          brands_seen: [m.brand || 'BOTH'], product_ids_by_brand: {}, vendors: [],
+          times_ordered: 0, total_qty: 0, last_purchase_date: '', last_qty: 0,
+          suggested_qty: 1, po_count: 0, raw_name_variants: [],
+          priority_hint: 'Manual', source_keys: PORTAL_SOURCE_KEYS,
+          last_vendor_id: null, last_vendor_name: '',
+          is_custom: true, image_url: '', local_price: 0,
+        };
+        state.materials.push(newRow);
+        rebuildCategoryDropdown();
+        state.category = m.category; els.categoryFilter.value = m.category;
         renderList();
-        // If the query is 3+ chars and doesn't match anything, show custom search panel as a hint
-        const q = (state.query || '').trim();
-        if (q.length >= 3) {
-          const matches = (state.snapshot.materials || []).some((m) =>
-            (m.name || '').toLowerCase().includes(q.toLowerCase()) ||
-            (m.sources || []).some((s) => (s.sku_title || '').toLowerCase().includes(q.toLowerCase()))
-          );
-          if (!matches) runCustomSearch(q);
-          else els.customSearchPanel.classList.add('hide');
-        } else {
-          els.customSearchPanel.classList.add('hide');
-        }
-      }, 250);
+        closeAddMatModal();
+        toast(`Added ${m.name} to ${m.category}. Scouting now…`);
+        refreshOneMaterial(m.material_id);
+      } catch (err) { toast(err.message || 'Add failed'); }
     });
 
-    els.customSearchClose.addEventListener('click', () => {
-      els.customSearchPanel.classList.add('hide');
-    });
-
-    els.viewCartsBtn.addEventListener('click', () => {
-      renderCartModal();
-      els.cartModal.classList.remove('hide');
-    });
+    els.viewCartsBtn.addEventListener('click', () => { renderCartModal(); els.cartModal.classList.remove('hide'); });
     els.cartModalClose.addEventListener('click', () => els.cartModal.classList.add('hide'));
     els.cartModal.addEventListener('click', (e) => { if (e.target === els.cartModal) els.cartModal.classList.add('hide'); });
 
-    // Delegated row actions
     document.addEventListener('click', (event) => {
       const t = event.target;
       const addBtn = t.closest('[data-add-mat]');
       if (addBtn) {
-        const matId = addBtn.dataset.addMat;
-        const sourceKey = addBtn.dataset.addSource;
-        const material = state.snapshot.materials.find((m) => m.material_id === matId);
-        if (!material) return;
-        const source = (material.sources || []).find((s) => s.source_key === sourceKey);
-        if (!source) return;
-        const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${matId}"]`)?.value || '1') || 1;
-        // Toggle: if already in cart at this portal, remove
-        if (isInCart(sourceKey, matId)) {
-          removeFromCart(sourceKey, matId);
-          toast(`Removed ${material.name}`);
-        } else {
-          addToCart(material, source, qty);
-        }
+        const mid = addBtn.dataset.addMat;
+        const sk = addBtn.dataset.addSource;
+        const mat = state.materials.find((m) => materialId(m) === mid);
+        const src = (sourcesFor(mat) || []).find((s) => s.source_key === sk);
+        if (!mat || !src) return;
+        const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${mid}"]`)?.value || '1') || 1;
+        if (isInCart(sk, mid)) { removeFromCart(sk, mid); toast(`Removed ${mat.name}`); }
+        else addToCart(mat, src, qty);
         return;
       }
-
       const refBtn = t.closest('[data-row-refresh]');
-      if (refBtn) {
-        const matId = refBtn.dataset.rowRefresh;
-        refreshOneMaterial(matId);
-        return;
-      }
+      if (refBtn) { refreshOneMaterial(refBtn.dataset.rowRefresh); return; }
+      const delBtn = t.closest('[data-del-mat]');
+      if (delBtn) { deleteCustomMaterial(delBtn.dataset.delMat); return; }
+      const catAdd = t.closest('[data-cat-add]');
+      if (catAdd) { openAddMatModal(catAdd.dataset.catAdd); return; }
 
       const inc = t.closest('[data-mat-qty-inc]');
       if (inc) {
@@ -1114,7 +1108,6 @@
         return;
       }
 
-      // Cart modal quantity controls
       const cInc = t.closest('[data-qty-inc]');
       if (cInc) {
         const [sk, mid] = cInc.dataset.qtyInc.split('|');
@@ -1130,11 +1123,7 @@
         return;
       }
       const cRm = t.closest('[data-cart-remove]');
-      if (cRm) {
-        const [sk, mid] = cRm.dataset.cartRemove.split('|');
-        removeFromCart(sk, mid);
-        return;
-      }
+      if (cRm) { const [sk, mid] = cRm.dataset.cartRemove.split('|'); removeFromCart(sk, mid); return; }
     });
 
     document.addEventListener('change', (event) => {
@@ -1143,8 +1132,7 @@
         const id = inp.dataset.matQtyInput;
         const v = Math.max(0.25, parseFloat(inp.value) || 1);
         inp.value = v;
-        // Store qty on the material for next render
-        const mat = state.snapshot.materials.find((m) => m.material_id === id);
+        const mat = state.materials.find((m) => materialId(m) === id);
         if (mat) mat._qty = v;
         return;
       }
@@ -1157,11 +1145,7 @@
       }
     });
 
-    // Boot
-    if (state.pin) {
-      els.pinInput.value = state.pin;
-      verifyPin();
-    }
+    if (state.pin) { els.pinInput.value = state.pin; verifyPin(); }
   </script>
 </body>
 </html>
