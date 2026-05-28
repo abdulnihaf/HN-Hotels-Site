@@ -49,10 +49,12 @@ For Hyperpure, v1.2 uses the live website search UI instead of guessing API head
 
 Hyperpure v1.3 adds a DOM fallback: if the network response is blocked or hidden, the extension opens Hyperpure's `/in/search/...` result page and extracts visible product cards, prices, pack sizes, and out-of-stock state from the rendered page.
 
+Phase 7 v1.4 adds the same browser-driven live quote path for the other seven portals. For Zepto, Flipkart Minutes, Instamart, Blinkit, Amazon Now, BigBasket, and JioMart, the extension opens the logged-in portal search page for each queued item, reads visible product cards, and sends normalized SKU title, price, pack size, stock state, delivery text, and product URL back to the purchase console.
+
 ## When Login Expires
 
 If a portal shows `MISSING`, `EXPIRED`, or `ACTION_REQUIRED`, open that portal, log in again, and capture the current tab again.
 
 If the extension has been updated, reload it once from `chrome://extensions` before recapturing. Hyperpure requires this because its usable `token` and `outletId` can be visible browser cookies rather than cookies returned by the Chrome cookies API.
 
-Phase 6 starts attaching exact SKU live quote adapters to the captured sessions.
+If a portal loads but returns no quote, keep that portal tab active, search the same raw material once manually, and then run live quotes again. That gives Phase 7 a rendered search page to read while a portal-specific API adapter is added.
