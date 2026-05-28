@@ -1294,26 +1294,41 @@
     // ============================================================
     // Portals & URL handoff (lifted from PR #250 baseline)
     // ============================================================
-    const PORTAL_ORDER = ['HYPERPURE', 'BIGBASKET', 'BLINKIT', 'ZEPTO', 'FLIPKART_MINUTES', 'AMAZON_NOW', 'JIOMART', 'INSTAMART'];
+    const PORTAL_ORDER = [
+      'HYPERPURE', 'BIGBASKET', 'BLINKIT', 'ZEPTO', 'FLIPKART_MINUTES',
+      'AMAZON_NOW', 'AMAZON_FRESH', 'AMAZON_BUSINESS',
+      'JIOMART', 'INSTAMART', 'METRO', 'DMART',
+    ];
     const PORTAL_SOURCE_KEYS = PORTAL_ORDER.slice();
+    // Portals shown only when material is B2B-eligible (server-tagged
+    // `mat.b2b_eligible`). For non-eligible materials (fresh produce,
+    // poultry, eggs) these chips are hidden — wrong channel entirely.
+    const B2B_ONLY_PORTALS = new Set(['AMAZON_BUSINESS', 'METRO']);
     const SOURCE_LABELS = {
       HYPERPURE: 'Hyperpure', BIGBASKET: 'BigBasket', BLINKIT: 'Blinkit',
-      ZEPTO: 'Zepto', FLIPKART_MINUTES: 'Flipkart Minutes', AMAZON_NOW: 'Amazon Now',
+      ZEPTO: 'Zepto', FLIPKART_MINUTES: 'Flipkart Minutes',
+      AMAZON_NOW: 'Amazon Now', AMAZON_FRESH: 'Amazon Fresh', AMAZON_BUSINESS: 'Amazon Business',
       JIOMART: 'JioMart', INSTAMART: 'Instamart',
+      METRO: 'Metro', DMART: 'DMart',
     };
     const SOURCE_SHORT = {
       HYPERPURE: 'HP', BIGBASKET: 'BB', BLINKIT: 'Blinkit',
-      ZEPTO: 'Zepto', FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'Amazon',
+      ZEPTO: 'Zepto', FLIPKART_MINUTES: 'FK',
+      AMAZON_NOW: 'Amazon Now', AMAZON_FRESH: 'Amazon Fresh', AMAZON_BUSINESS: 'Amz Business',
       JIOMART: 'JioMart', INSTAMART: 'Instamart',
+      METRO: 'Metro', DMART: 'DMart',
     };
     const PORTAL_DOMAIN = {
       HYPERPURE: 'hyperpure.com', BIGBASKET: 'bigbasket.com', BLINKIT: 'blinkit.com',
-      ZEPTO: 'zepto.com', FLIPKART_MINUTES: 'flipkart.com', AMAZON_NOW: 'amazon.in',
+      ZEPTO: 'zepto.com', FLIPKART_MINUTES: 'flipkart.com',
+      AMAZON_NOW: 'amazon.in', AMAZON_FRESH: 'amazon.in', AMAZON_BUSINESS: 'amazon.in',
       JIOMART: 'jiomart.com', INSTAMART: 'swiggy.com',
+      METRO: 'metro.co.in', DMART: 'dmart.in',
     };
     const PORTAL_LETTER = {
       HYPERPURE: 'H', BIGBASKET: 'BB', BLINKIT: 'B', ZEPTO: 'Z',
-      FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'A', JIOMART: 'JM', INSTAMART: 'IM',
+      FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'A', AMAZON_FRESH: 'AF', AMAZON_BUSINESS: 'AB',
+      JIOMART: 'JM', INSTAMART: 'IM', METRO: 'M', DMART: 'D',
     };
     function portalFavicon(sk, size = 48, cls = 'portal-favicon') {
       const d = PORTAL_DOMAIN[sk];
@@ -1341,6 +1356,25 @@
       // sibling flag `almBrandId=ctnow` which routes inside the Amazon
       // app to the Now product detail.
       AMAZON_NOW: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}&i=nowstore`,
+      // Amazon Fresh = `i=amazonfresh` store filter on same amazon.in
+      // search path. Lands in the Fresh tile inside the Amazon iOS app.
+      // (Filter value best-guess; if iPhone test shows wrong tile, swap
+      // to `i=amazon-fresh` or `i=freshgrocery`.)
+      AMAZON_FRESH: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}&i=amazonfresh`,
+      // Amazon Business — same amazon.in domain (verified from owner's
+      // live account screenshot 2026-05-29: URL = amazon.in/b?...). No
+      // sub-store filter; Business context comes from the signed-in
+      // account inside the Amazon Shopping iOS app. Owner needs to be
+      // signed in as the HN HOTELS PVT LTD business account on iPhone.
+      AMAZON_BUSINESS: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}`,
+      // Metro Cash & Carry — B2B wholesale. NO AASA on metro.co.in
+      // (verified 2026-05-29), so iOS taps open Safari with the search
+      // page. Owner can browse on web or manually switch to the Metro
+      // India app.
+      METRO: (q) => `https://www.metro.co.in/search?q=${encodeURIComponent(q)}`,
+      // DMart — Avenue Supermarts retail. Also no AASA → Safari
+      // fallback. Search URL verified to return 200.
+      DMART: (q) => `https://www.dmart.in/search?q=${encodeURIComponent(q)}`,
       ZEPTO: (q) => `https://www.zepto.com/search?query=${encodeURIComponent(q)}`,
       JIOMART: (q) => `https://www.jiomart.com/search/${encodeURIComponent(q)}?q=${encodeURIComponent(q)}`,
       INSTAMART: (q) => `https://www.swiggy.com/instamart/search?custom_back=true&query=${encodeURIComponent(q)}`,
@@ -1687,10 +1721,19 @@
 
       const altsHtml = PORTAL_SOURCE_KEYS.map((sk) => {
         if (best && sk === best.source_key) return '';
+        // B2B-only portals (Amazon Business, IndiaMART when wired) only
+        // show for materials tagged b2b_eligible by the API. For fresh
+        // produce / poultry / eggs this hides the chip — wrong channel.
+        if (B2B_ONLY_PORTALS.has(sk) && !mat.b2b_eligible) return '';
         const s = sources.find((x) => x.source_key === sk);
         if (!s) {
           const url = portalSearchUrlFor(sk, mat.name);
-          return url ? `<a class="alt-chip disabled" href="${escapeAttr(url)}" target="_blank" rel="noopener">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">—</span></a>` : '';
+          // For B2B chips with no quote yet, show as active (not
+          // disabled) — the chip itself is the value-add, taps land in
+          // the app's B2B catalog for the material.
+          const chipCls = B2B_ONLY_PORTALS.has(sk) ? 'alt-chip' : 'alt-chip disabled';
+          const priceTxt = B2B_ONLY_PORTALS.has(sk) ? 'B2B ↗' : '—';
+          return url ? `<a class="${chipCls}" href="${escapeAttr(url)}" target="_blank" rel="noopener">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span></a>` : '';
         }
         const quoted = isPortalSourceQuoted(s);
         const sane = quoted && isSanePortalPrice(s, mat);
