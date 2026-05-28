@@ -1037,6 +1037,75 @@ async function ensurePurchaseRunSchema(DB) {
       updated_at TEXT NOT NULL
     )
   `).run();
+
+  // ━━━ Daily price snapshot ledger (Phase X) ━━━━━━━━━━━━━━━━
+  // One row per (date, material, portal). UPSERT pattern so the same day's
+  // morning cron + any number of on-demand refreshes converge to a single row
+  // per material × portal × day. Historical drift visible as a time-series.
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS daily_price_snapshots (
+      snapshot_date    TEXT NOT NULL,
+      material_id      TEXT NOT NULL,
+      source_key       TEXT NOT NULL,
+      category         TEXT,
+      name             TEXT,
+      uom              TEXT,
+      brand            TEXT,
+      sku_title        TEXT,
+      sku_url          TEXT,
+      pack_size        TEXT,
+      price_paise      INTEGER NOT NULL DEFAULT 0,
+      unit_price_paise INTEGER NOT NULL DEFAULT 0,
+      currency         TEXT NOT NULL DEFAULT 'INR',
+      eta_minutes      INTEGER DEFAULT 0,
+      eta_label        TEXT,
+      stock_status     TEXT NOT NULL DEFAULT 'PENDING',
+      match_rule       TEXT,
+      match_confidence INTEGER NOT NULL DEFAULT 0,
+      match_notes      TEXT,
+      captured_at      TEXT NOT NULL,
+      source           TEXT NOT NULL DEFAULT 'manual',
+      batch_id         TEXT,
+      raw_json         TEXT NOT NULL DEFAULT '{}',
+      PRIMARY KEY (snapshot_date, material_id, source_key)
+    )
+  `).run();
+
+  await DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_daily_snapshots_date_category
+    ON daily_price_snapshots(snapshot_date, category)
+  `).run();
+
+  await DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_daily_snapshots_material
+    ON daily_price_snapshots(material_id, snapshot_date)
+  `).run();
+
+  // Meta-row per cron / refresh batch. portal_results_json holds per-source
+  // counts so observability ('Hyperpure 28 ok / 2 err') is one query away.
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS daily_price_snapshot_batches (
+      id                   TEXT PRIMARY KEY,
+      batch_date           TEXT NOT NULL,
+      batch_kind           TEXT NOT NULL,
+      scope                TEXT,
+      status               TEXT NOT NULL DEFAULT 'RUNNING',
+      triggered_by         TEXT,
+      material_count       INTEGER NOT NULL DEFAULT 0,
+      ok_count             INTEGER NOT NULL DEFAULT 0,
+      unavailable_count    INTEGER NOT NULL DEFAULT 0,
+      error_count          INTEGER NOT NULL DEFAULT 0,
+      portal_results_json  TEXT NOT NULL DEFAULT '{}',
+      started_at           TEXT NOT NULL,
+      completed_at         TEXT,
+      notes                TEXT
+    )
+  `).run();
+
+  await DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_daily_batches_date_kind
+    ON daily_price_snapshot_batches(batch_date, batch_kind)
+  `).run();
 }
 
 function publicRun(row) {
@@ -1205,6 +1274,10 @@ async function handleGet(url, env) {
       ...data,
       user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
     });
+  }
+
+  if (action === 'daily-snapshot') {
+    return getDailySnapshot(url, user, env);
   }
 
   return json({ error: `Unknown GET action: ${action}` }, 400);
@@ -1447,6 +1520,8 @@ async function handlePost(context, env) {
       return validatePortalSessions(body, user, env);
     case 'create-local-po':
       return createLocalPO(body, user, env, context.env.DB);
+    case 'refresh-material':
+      return refreshMaterialSnapshot(body, user, env);
     default:
       return json({ error: `Unknown POST action: ${action}` }, 400);
   }
@@ -2357,5 +2432,341 @@ async function createLocalPO(body, user, env, DB) {
       state: created.state || 'purchase',
       odoo_url: `https://odoo.hnhotels.in/web#id=${created.id}&model=purchase.order&view_type=form`,
     },
+  });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase X — Daily price snapshot ledger
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function istDateYmd(d = new Date()) {
+  const ist = new Date(d.getTime() + 5.5 * 3600 * 1000);
+  return ist.toISOString().slice(0, 10);
+}
+
+function materialIdFromRow(row) {
+  if (!row) return '';
+  if (row.product_code) return String(row.product_code);
+  if (row.item_id) return String(row.item_id).replace(/^code:/, '');
+  if (row.id) return String(row.id);
+  return '';
+}
+
+// Portal adapter dispatcher. Each adapter accepts a normalized material
+// descriptor and the env, returns a quote-shaped object. New portals add a
+// single entry to ADAPTER_BY_SOURCE. Phase X.1 wires Hyperpure only; X.2/X.3
+// add the rest.
+const ADAPTER_BY_SOURCE = {
+  HYPERPURE: hyperpureAdapter,
+};
+
+function adapterAvailable(sourceKey) {
+  return typeof ADAPTER_BY_SOURCE[sourceKey] === 'function';
+}
+
+async function hyperpureAdapter(material, env) {
+  const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+  const line = {
+    name: material.name,
+    category: material.category,
+    uom: material.uom,
+    product_code: material.product_code || material.material_id,
+    item_id: material.item_id || `code:${material.material_id}`,
+    qty: material.required_qty || 0,
+    match_rule: material.match_rule || 'COMMODITY_EQUIVALENT',
+    buying_spec: {
+      approved_name: material.search_query || material.name,
+      match_rule: material.match_rule || 'COMMODITY_EQUIVALENT',
+    },
+  };
+  return hyperpureLiveQuote(line, env, expiresAt);
+}
+
+async function upsertDailySnapshot(DB, row) {
+  const now = new Date().toISOString();
+  await DB.prepare(`
+    INSERT INTO daily_price_snapshots
+      (snapshot_date, material_id, source_key, category, name, uom, brand,
+       sku_title, sku_url, pack_size, price_paise, unit_price_paise, currency,
+       eta_minutes, eta_label, stock_status, match_rule, match_confidence,
+       match_notes, captured_at, source, batch_id, raw_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(snapshot_date, material_id, source_key) DO UPDATE SET
+      category         = excluded.category,
+      name             = excluded.name,
+      uom              = excluded.uom,
+      brand            = excluded.brand,
+      sku_title        = excluded.sku_title,
+      sku_url          = excluded.sku_url,
+      pack_size        = excluded.pack_size,
+      price_paise      = excluded.price_paise,
+      unit_price_paise = excluded.unit_price_paise,
+      currency         = excluded.currency,
+      eta_minutes      = excluded.eta_minutes,
+      eta_label        = excluded.eta_label,
+      stock_status     = excluded.stock_status,
+      match_rule       = excluded.match_rule,
+      match_confidence = excluded.match_confidence,
+      match_notes      = excluded.match_notes,
+      captured_at      = excluded.captured_at,
+      source           = excluded.source,
+      batch_id         = excluded.batch_id,
+      raw_json         = excluded.raw_json
+  `).bind(
+    row.snapshot_date,
+    row.material_id,
+    row.source_key,
+    row.category || '',
+    row.name || '',
+    row.uom || '',
+    row.brand || '',
+    row.sku_title || '',
+    row.sku_url || '',
+    row.pack_size || '',
+    Math.max(0, parseInt(row.price_paise || 0, 10) || 0),
+    Math.max(0, parseInt(row.unit_price_paise || 0, 10) || 0),
+    row.currency || 'INR',
+    Math.max(0, parseInt(row.eta_minutes || 0, 10) || 0),
+    row.eta_label || '',
+    row.stock_status || 'PENDING',
+    row.match_rule || '',
+    Math.max(0, Math.min(100, parseInt(row.match_confidence || 0, 10) || 0)),
+    row.match_notes || '',
+    row.captured_at || now,
+    row.source || 'manual',
+    row.batch_id || null,
+    JSON.stringify(row.raw || {})
+  ).run();
+}
+
+function publicSnapshotRow(row) {
+  if (!row) return null;
+  return {
+    snapshot_date: row.snapshot_date,
+    material_id: row.material_id,
+    source_key: row.source_key,
+    source_label: SOURCE_BY_KEY[row.source_key]?.label || row.source_key,
+    category: row.category || '',
+    name: row.name || '',
+    uom: row.uom || '',
+    brand: row.brand || '',
+    sku_title: row.sku_title || '',
+    sku_url: row.sku_url || '',
+    pack_size: row.pack_size || '',
+    price_paise: row.price_paise || 0,
+    unit_price_paise: row.unit_price_paise || 0,
+    currency: row.currency || 'INR',
+    eta_minutes: row.eta_minutes || 0,
+    eta_label: row.eta_label || '',
+    stock_status: row.stock_status || 'PENDING',
+    match_rule: row.match_rule || '',
+    match_confidence: row.match_confidence || 0,
+    match_notes: row.match_notes || '',
+    captured_at: row.captured_at || '',
+    source: row.source || '',
+    batch_id: row.batch_id || '',
+  };
+}
+
+async function getDailySnapshot(url, user, env) {
+  const DB = env.DB;
+  await ensurePurchaseRunSchema(DB);
+  const date = url.searchParams.get('date') || istDateYmd();
+  const category = url.searchParams.get('category') || '';
+  const materialId = url.searchParams.get('material_id') || '';
+  const brand = cleanBrand(url.searchParams.get('brand') || 'BOTH');
+
+  const where = ['snapshot_date = ?'];
+  const bind = [date];
+  if (category) { where.push('category = ?'); bind.push(category); }
+  if (materialId) { where.push('material_id = ?'); bind.push(materialId); }
+  if (brand !== 'BOTH') {
+    where.push('(brand = ? OR brand = ? OR brand IS NULL OR brand = "")');
+    bind.push(brand, 'BOTH');
+  }
+
+  const rows = await DB.prepare(`
+    SELECT * FROM daily_price_snapshots
+    WHERE ${where.join(' AND ')}
+    ORDER BY material_id ASC, source_key ASC
+  `).bind(...bind).all();
+
+  const list = (rows.results || []).map(publicSnapshotRow);
+
+  // Group by material so the UI can render one card per material with its
+  // portal rows. Cheaper than the client doing it.
+  const grouped = new Map();
+  for (const row of list) {
+    if (!grouped.has(row.material_id)) {
+      grouped.set(row.material_id, {
+        material_id: row.material_id,
+        name: row.name,
+        uom: row.uom,
+        category: row.category,
+        brand: row.brand,
+        sources: [],
+      });
+    }
+    grouped.get(row.material_id).sources.push(row);
+  }
+
+  return json({
+    success: true,
+    date,
+    category,
+    brand,
+    material_count: grouped.size,
+    row_count: list.length,
+    materials: [...grouped.values()],
+    user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
+  });
+}
+
+async function refreshMaterialSnapshot(body, user, env) {
+  if (!canCreate(user)) return json({ error: 'Only admin or purchase PINs can trigger refresh' }, 403);
+  const DB = env.DB;
+  await ensurePurchaseRunSchema(DB);
+
+  const rawMaterialId = String(body.material_id || '').trim();
+  if (!rawMaterialId) return json({ error: 'Missing material_id' }, 400);
+  const materialId = rawMaterialId.replace(/^code:/, '');
+
+  // Resolve material context from the Odoo-backed material universe so we have
+  // category, uom, and brand even on a cold refresh.
+  const creds = getOdooCredentials({ odoo: 'system' }, env);
+  const universe = await loadMaterialUniverse(creds, 'BOTH', 30);
+  const material = (universe.items || []).find((item) => {
+    const code = (item.product_code || '').toString();
+    if (code === materialId) return true;
+    if ((item.item_id || '').toString().replace(/^code:/, '') === materialId) return true;
+    return String(item.id || '') === materialId;
+  });
+  if (!material) return json({ error: `Material ${materialId} not found in last 30d Odoo universe` }, 404);
+
+  const requestedSources = Array.isArray(body.sources) && body.sources.length
+    ? body.sources.map(cleanSourceKey).filter((s) => PORTAL_SOURCE_KEYS.includes(s))
+    : PORTAL_SOURCE_KEYS;
+
+  const snapshotDate = istDateYmd();
+  const batchId = makeId('PSR');
+  const startedAt = new Date().toISOString();
+
+  await DB.prepare(`
+    INSERT INTO daily_price_snapshot_batches
+      (id, batch_date, batch_kind, scope, status, triggered_by,
+       material_count, started_at, portal_results_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    batchId, snapshotDate, 'refresh', materialId, 'RUNNING',
+    `manual:${user.name}`, 1, startedAt, '{}'
+  ).run();
+
+  const materialContext = {
+    material_id: material.product_code || materialId,
+    item_id: material.item_id || `code:${material.product_code || materialId}`,
+    name: material.name,
+    category: material.category || '',
+    uom: material.uom || '',
+    brand: material.brand || '',
+    required_qty: 0,
+    search_query: material.name,
+    match_rule: material.match_rule || 'COMMODITY_EQUIVALENT',
+    product_code: material.product_code || materialId,
+  };
+
+  const perPortal = {};
+  let ok = 0;
+  let unavailable = 0;
+  let errors = 0;
+
+  for (const sourceKey of requestedSources) {
+    if (!adapterAvailable(sourceKey)) {
+      perPortal[sourceKey] = { state: 'no_adapter' };
+      continue;
+    }
+    let quote;
+    try {
+      quote = await ADAPTER_BY_SOURCE[sourceKey](materialContext, env);
+    } catch (err) {
+      quote = {
+        stock_status: 'ERROR',
+        match_rule: materialContext.match_rule,
+        match_confidence: 0,
+        match_notes: err?.message || 'Adapter threw',
+        raw: { source: sourceKey, error: err?.message || 'unknown' },
+      };
+    }
+
+    const status = String(quote.stock_status || '').toUpperCase();
+    const isQuoted = status === 'QUOTED' && (quote.price_paise || 0) > 0;
+    const isError = status === 'ERROR';
+    if (isQuoted) ok += 1;
+    else if (isError) errors += 1;
+    else unavailable += 1;
+
+    await upsertDailySnapshot(DB, {
+      snapshot_date: snapshotDate,
+      material_id: materialContext.material_id,
+      source_key: sourceKey,
+      category: materialContext.category,
+      name: materialContext.name,
+      uom: materialContext.uom,
+      brand: materialContext.brand,
+      sku_title: quote.sku_title || '',
+      sku_url: quote.sku_url || '',
+      pack_size: quote.pack_size || '',
+      price_paise: quote.price_paise || 0,
+      unit_price_paise: quote.unit_price_paise || quote.price_paise || 0,
+      currency: quote.currency || 'INR',
+      eta_minutes: quote.eta_minutes || 0,
+      eta_label: quote.eta_label || '',
+      stock_status: status || 'UNAVAILABLE',
+      match_rule: quote.match_rule || materialContext.match_rule,
+      match_confidence: quote.match_confidence || 0,
+      match_notes: quote.match_notes || '',
+      captured_at: quote.captured_at || new Date().toISOString(),
+      source: 'on_demand_refresh',
+      batch_id: batchId,
+      raw: quote.raw || {},
+    });
+
+    perPortal[sourceKey] = {
+      state: isQuoted ? 'ok' : isError ? 'error' : 'unavailable',
+      price_paise: quote.price_paise || 0,
+      sku_title: quote.sku_title || '',
+      match_confidence: quote.match_confidence || 0,
+      notes: quote.match_notes || '',
+    };
+  }
+
+  const completedAt = new Date().toISOString();
+  await DB.prepare(`
+    UPDATE daily_price_snapshot_batches
+    SET status = ?, ok_count = ?, unavailable_count = ?, error_count = ?,
+        portal_results_json = ?, completed_at = ?
+    WHERE id = ?
+  `).bind(
+    errors === requestedSources.length ? 'FAILED' : (ok ? 'COMPLETED' : 'PARTIAL'),
+    ok, unavailable, errors,
+    JSON.stringify(perPortal), completedAt, batchId
+  ).run();
+
+  // Return the refreshed snapshot for this material so the caller can render
+  // immediately without a second round-trip.
+  const after = await DB.prepare(`
+    SELECT * FROM daily_price_snapshots
+    WHERE snapshot_date = ? AND material_id = ?
+    ORDER BY source_key ASC
+  `).bind(snapshotDate, materialContext.material_id).all();
+
+  return json({
+    success: true,
+    batch_id: batchId,
+    snapshot_date: snapshotDate,
+    material_id: materialContext.material_id,
+    material_name: materialContext.name,
+    counts: { ok, unavailable, error: errors, requested: requestedSources.length },
+    portal_results: perPortal,
+    snapshot: (after.results || []).map(publicSnapshotRow),
   });
 }
