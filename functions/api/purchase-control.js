@@ -92,6 +92,7 @@ const RUN_TYPES = ['MORNING_PURCHASE', 'EVENING_TOPUP', 'URGENT_FILL'];
 const PORTAL_SOURCE_KEYS = SOURCES.map((source) => source.key).filter((key) => key !== 'LOCAL_VENDOR');
 const QUOTE_STOCK_STATUSES = ['QUOTED', 'PENDING_ADAPTER', 'OUT_OF_STOCK', 'UNAVAILABLE', 'ERROR'];
 const SOURCE_BY_KEY = Object.fromEntries(SOURCES.map((source) => [source.key, source]));
+const PORTAL_SESSION_STATUSES = ['READY', 'NOT_CONNECTED', 'EXPIRED', 'OTP_REQUIRED', 'CAPTCHA_REQUIRED', 'LOCATION_MISMATCH', 'RATE_LIMITED', 'BROKEN'];
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -217,6 +218,40 @@ function quoteLineId(batchId, sourceKey, line) {
     .replace(/[^a-zA-Z0-9_-]/g, '_')
     .slice(0, 80);
   return `PQL-${batchId}-${sourceKey}-${basis}`;
+}
+
+function portalSessionKey(sourceKey) {
+  return `purchase:portal-session:${sourceKey}`;
+}
+
+function cleanPortalSessionStatus(value) {
+  return PORTAL_SESSION_STATUSES.includes(value) ? value : 'NOT_CONNECTED';
+}
+
+function isPastIso(value) {
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) && time <= Date.now();
+}
+
+function countCookies(payload) {
+  if (Array.isArray(payload?.cookies)) return payload.cookies.length;
+  if (Array.isArray(payload?.storage_state?.cookies)) return payload.storage_state.cookies.length;
+  return 0;
+}
+
+function countTokens(payload) {
+  const tokenish = JSON.stringify(payload || {}).match(/token|auth|jwt|bearer|session/gi);
+  return tokenish ? tokenish.length : 0;
+}
+
+function browserHint(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (text.includes('Chrome')) return 'Chrome';
+  if (text.includes('Safari')) return 'Safari';
+  if (text.includes('Firefox')) return 'Firefox';
+  return text.slice(0, 32);
 }
 
 function categoryFor(name, code, odooCategory) {
@@ -403,6 +438,26 @@ async function ensurePurchaseRunSchema(DB) {
     CREATE INDEX IF NOT EXISTS idx_purchase_quote_lines_batch
     ON purchase_quote_lines(batch_id, cart_id, source_key)
   `).run();
+
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS purchase_portal_sessions (
+      source_key TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'NOT_CONNECTED',
+      account_label TEXT,
+      location_label TEXT,
+      pincode TEXT,
+      user_agent_hint TEXT,
+      cookie_count INTEGER NOT NULL DEFAULT 0,
+      token_count INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT,
+      last_captured_at TEXT,
+      last_validated_at TEXT,
+      issue_code TEXT,
+      issue_detail TEXT,
+      captured_by TEXT,
+      updated_at TEXT NOT NULL
+    )
+  `).run();
 }
 
 function publicRun(row) {
@@ -479,6 +534,34 @@ function publicQuoteLine(row) {
   };
 }
 
+function publicPortalSession(row, source, hasSecret) {
+  const storedStatus = cleanPortalSessionStatus(row?.status);
+  const expired = row?.expires_at ? isPastIso(row.expires_at) : false;
+  const status = !row || !hasSecret ? 'NOT_CONNECTED' : expired ? 'EXPIRED' : storedStatus;
+  return {
+    source_key: source.key,
+    source_label: source.label,
+    status,
+    is_ready: status === 'READY',
+    account_label: row?.account_label || '',
+    location_label: row?.location_label || '',
+    pincode: row?.pincode || '',
+    user_agent_hint: row?.user_agent_hint || '',
+    cookie_count: row?.cookie_count || 0,
+    token_count: row?.token_count || 0,
+    expires_at: row?.expires_at || '',
+    last_captured_at: row?.last_captured_at || '',
+    last_validated_at: row?.last_validated_at || '',
+    issue_code: status === 'EXPIRED' ? 'EXPIRED' : row?.issue_code || (status === 'NOT_CONNECTED' ? 'NO_SESSION' : ''),
+    issue_detail: status === 'EXPIRED'
+      ? 'Saved portal session has expired'
+      : row?.issue_detail || (status === 'NOT_CONNECTED' ? 'Reconnect this portal from Chrome capture' : ''),
+    can_capture: true,
+    url: source.url,
+    updated_at: row?.updated_at || '',
+  };
+}
+
 export async function onRequest(context) {
   if (context.request.method === 'OPTIONS') {
     return new Response(null, { headers: CORS });
@@ -523,6 +606,10 @@ async function handleGet(url, env) {
 
   if (action === 'quote-summary') {
     return getQuoteSummary(url, user, env.DB);
+  }
+
+  if (action === 'portal-health') {
+    return getPortalHealth(url, user, env);
   }
 
   if (action === 'materials') {
@@ -766,9 +853,13 @@ async function handlePost(context, env) {
     case 'update-run-status':
       return updateRunStatus(body, user, env.DB);
     case 'request-quotes':
-      return requestQuotes(body, user, env.DB);
+      return requestQuotes(body, user, env);
     case 'ingest-quotes':
       return ingestQuotes(body, user, env.DB);
+    case 'upsert-portal-session':
+      return upsertPortalSession(body, user, env);
+    case 'validate-portal-sessions':
+      return validatePortalSessions(body, user, env);
     case 'create-local-po':
       return createLocalPO(body, user, env, context.env.DB);
     default:
@@ -927,6 +1018,167 @@ async function updateRunStatus(body, user, DB) {
     run: publicRun(row),
     user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
   });
+}
+
+async function getPortalHealthRows(env) {
+  await ensurePurchaseRunSchema(env.DB);
+  const rows = await env.DB.prepare('SELECT * FROM purchase_portal_sessions').all();
+  const rowBySource = new Map((rows.results || []).map((row) => [row.source_key, row]));
+  const sessions = [];
+  for (const source of SOURCES.filter((item) => item.key !== 'LOCAL_VENDOR')) {
+    let hasSecret = false;
+    try {
+      hasSecret = !!(env.SESSIONS && await env.SESSIONS.get(portalSessionKey(source.key)));
+    } catch (_) {
+      hasSecret = false;
+    }
+    let session = publicPortalSession(rowBySource.get(source.key), source, hasSecret);
+    if (!env.SESSIONS) {
+      session = {
+        ...session,
+        status: 'BROKEN',
+        is_ready: false,
+        issue_code: 'KV_NOT_CONFIGURED',
+        issue_detail: 'SESSIONS KV binding is not configured',
+      };
+    }
+    sessions.push(session);
+  }
+  return sessions;
+}
+
+async function getPortalHealth(url, user, env) {
+  const sessions = await getPortalHealthRows(env);
+  return json({
+    success: true,
+    sessions,
+    ready_count: sessions.filter((session) => session.status === 'READY').length,
+    action_required_count: sessions.filter((session) => session.status !== 'READY').length,
+    user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
+  });
+}
+
+async function portalHealthMap(env) {
+  const rows = await getPortalHealthRows(env);
+  return new Map(rows.map((row) => [row.source_key, row]));
+}
+
+async function upsertPortalSession(body, user, env) {
+  if (!canCreate(user)) return json({ error: 'Only admin or purchase PINs can update portal sessions' }, 403);
+  await ensurePurchaseRunSchema(env.DB);
+  if (!env.SESSIONS) return json({ error: 'SESSIONS KV binding is not configured' }, 500);
+
+  const sourceKey = cleanSourceKey(body.source_key);
+  if (!PORTAL_SOURCE_KEYS.includes(sourceKey)) return json({ error: 'Choose one of the 8 portal sources' }, 400);
+
+  const payload = body.session || body.payload || body.storage_state || null;
+  const hasPayload = payload && typeof payload === 'object' && Object.keys(payload).length > 0;
+  const expiresAt = body.expires_at || payload?.expires_at || payload?.expiry || '';
+  const now = new Date().toISOString();
+  const status = cleanPortalSessionStatus(body.status || (hasPayload ? (isPastIso(expiresAt) ? 'EXPIRED' : 'READY') : 'NOT_CONNECTED'));
+  const kvValue = {
+    source_key: sourceKey,
+    captured_at: now,
+    captured_by: user.name,
+    account_label: body.account_label || '',
+    location_label: body.location_label || '',
+    pincode: body.pincode || '',
+    user_agent: body.user_agent || payload?.user_agent || '',
+    expires_at: expiresAt,
+    payload,
+  };
+
+  if (hasPayload) {
+    const ttl = expiresAt ? Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000) : 0;
+    if (ttl > 60) {
+      await env.SESSIONS.put(portalSessionKey(sourceKey), JSON.stringify(kvValue), { expirationTtl: ttl });
+    } else {
+      await env.SESSIONS.put(portalSessionKey(sourceKey), JSON.stringify(kvValue));
+    }
+  }
+
+  await env.DB.prepare(`
+    INSERT INTO purchase_portal_sessions
+      (source_key, status, account_label, location_label, pincode, user_agent_hint,
+       cookie_count, token_count, expires_at, last_captured_at, last_validated_at,
+       issue_code, issue_detail, captured_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(source_key) DO UPDATE SET
+      status = excluded.status,
+      account_label = excluded.account_label,
+      location_label = excluded.location_label,
+      pincode = excluded.pincode,
+      user_agent_hint = excluded.user_agent_hint,
+      cookie_count = excluded.cookie_count,
+      token_count = excluded.token_count,
+      expires_at = excluded.expires_at,
+      last_captured_at = excluded.last_captured_at,
+      last_validated_at = excluded.last_validated_at,
+      issue_code = excluded.issue_code,
+      issue_detail = excluded.issue_detail,
+      captured_by = excluded.captured_by,
+      updated_at = excluded.updated_at
+  `).bind(
+    sourceKey,
+    status,
+    body.account_label || '',
+    body.location_label || '',
+    body.pincode || '',
+    browserHint(body.user_agent || payload?.user_agent),
+    countCookies(payload),
+    countTokens(payload),
+    expiresAt || '',
+    hasPayload ? now : body.last_captured_at || '',
+    now,
+    body.issue_code || '',
+    body.issue_detail || '',
+    user.name,
+    now
+  ).run();
+
+  const sessions = await getPortalHealthRows(env);
+  return json({
+    success: true,
+    session: sessions.find((session) => session.source_key === sourceKey),
+    ready_count: sessions.filter((session) => session.status === 'READY').length,
+    action_required_count: sessions.filter((session) => session.status !== 'READY').length,
+  });
+}
+
+async function validatePortalSessions(body, user, env) {
+  if (!canCreate(user)) return json({ error: 'Only admin or purchase PINs can validate portal sessions' }, 403);
+  await ensurePurchaseRunSchema(env.DB);
+  const sourceKeys = Array.isArray(body.sources) && body.sources.length
+    ? body.sources.map(cleanSourceKey).filter((key) => PORTAL_SOURCE_KEYS.includes(key))
+    : PORTAL_SOURCE_KEYS;
+  const now = new Date().toISOString();
+  const health = await getPortalHealthRows(env);
+  const bySource = new Map(health.map((session) => [session.source_key, session]));
+
+  for (const sourceKey of sourceKeys) {
+    const session = bySource.get(sourceKey);
+    if (!session) continue;
+    await env.DB.prepare(`
+      INSERT INTO purchase_portal_sessions
+        (source_key, status, issue_code, issue_detail, last_validated_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source_key) DO UPDATE SET
+        status = excluded.status,
+        issue_code = excluded.issue_code,
+        issue_detail = excluded.issue_detail,
+        last_validated_at = excluded.last_validated_at,
+        updated_at = excluded.updated_at
+    `).bind(
+      sourceKey,
+      session.status,
+      session.issue_code || '',
+      session.issue_detail || '',
+      now,
+      now
+    ).run();
+  }
+
+  return getPortalHealth(new URL('https://internal.local/api/purchase-control?action=portal-health'), user, env);
 }
 
 async function latestQuoteBatch(DB, runId, batchId) {
@@ -1107,7 +1359,8 @@ async function insertQuoteLine(DB, batchId, runId, line, sourceKey, quote, now) 
   ).run();
 }
 
-async function requestQuotes(body, user, DB) {
+async function requestQuotes(body, user, env) {
+  const DB = env.DB;
   await ensurePurchaseRunSchema(DB);
   const runId = body.run_id;
   if (!runId) return json({ error: 'Missing run_id' }, 400);
@@ -1124,6 +1377,7 @@ async function requestQuotes(body, user, DB) {
   const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 15 * 60000).toISOString();
   const batchId = makeId('PQB');
+  const portalHealth = await portalHealthMap(env);
 
   await DB.prepare(`
     INSERT INTO purchase_quote_batches
@@ -1161,10 +1415,14 @@ async function requestQuotes(body, user, DB) {
           expires_at: expiresAt,
         }, now);
       } else {
+        const health = portalHealth.get(sourceKey);
+        const ready = health?.status === 'READY';
         await insertQuoteLine(DB, batchId, run.id, line, sourceKey, {
-          stock_status: 'PENDING_ADAPTER',
+          stock_status: ready ? 'PENDING_ADAPTER' : 'UNAVAILABLE',
           match_rule: line.buying_spec?.match_rule || line.match_rule || '',
-          match_notes: 'Awaiting live capture adapter',
+          match_notes: ready
+            ? 'Session ready; awaiting live capture adapter'
+            : `${health?.status || 'NOT_CONNECTED'}: ${health?.issue_detail || 'Reconnect portal session'}`,
           expires_at: expiresAt,
         }, now);
       }

@@ -278,6 +278,35 @@
     .quote-status.quoted { color: var(--pc-green); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
     .quote-status.pending { color: var(--pc-yellow); border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
     .quote-status.bad { color: var(--pc-red); border-color: rgba(248,113,113,.34); background: rgba(248,113,113,.08); }
+    .session-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .session-head {
+      display: grid;
+      gap: 10px;
+    }
+    .session-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .session-card {
+      min-height: 92px;
+      display: grid;
+      align-content: start;
+      gap: 6px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.035);
+    }
+    .session-card.ready { border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.06); }
+    .session-card.action { border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.06); }
+    .session-card.bad { border-color: rgba(248,113,113,.34); background: rgba(248,113,113,.06); }
+    .session-name { font-size: 12px; font-weight: 800; line-height: 1.25; }
+    .session-meta { color: var(--text-dim); font-size: 11px; line-height: 1.35; }
     .console-grid {
       display: grid;
       gap: 12px;
@@ -510,6 +539,8 @@
       .quote-head { grid-template-columns: minmax(0, 1fr) 250px; align-items: end; }
       .quote-source-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .quote-cells { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .session-head { grid-template-columns: minmax(0, 1fr) 180px; align-items: end; }
+      .session-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .control-row { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.4fr); align-items: center; }
       .catalog-grid { grid-template-columns: 230px minmax(0, 1fr); }
       .material-card { grid-template-columns: minmax(0, 1fr) 310px; align-items: start; }
@@ -587,6 +618,17 @@
           </div>
           <div id="runStatusBar" class="run-status-bar"></div>
           <div id="recentRuns" class="recent-runs"></div>
+        </section>
+
+        <section class="card session-panel">
+          <div class="session-head">
+            <div>
+              <h2>Portal Sessions</h2>
+              <p id="portalMeta" class="sub" style="margin:4px 0 0;">Checking login health...</p>
+            </div>
+            <button id="validateSessionsBtn" class="btn btn-ghost" type="button">Check logins</button>
+          </div>
+          <div id="portalSessions" class="session-grid"></div>
         </section>
 
         <section class="card quote-panel">
@@ -689,6 +731,16 @@
       UNAVAILABLE: 'Unavailable',
       ERROR: 'Error',
     };
+    const SESSION_LABELS = {
+      READY: 'Ready',
+      NOT_CONNECTED: 'Reconnect',
+      EXPIRED: 'Expired',
+      OTP_REQUIRED: 'OTP needed',
+      CAPTCHA_REQUIRED: 'Captcha',
+      LOCATION_MISMATCH: 'Location',
+      RATE_LIMITED: 'Rate limit',
+      BROKEN: 'Broken',
+    };
 
     const state = {
       pin: localStorage.getItem('purchaseControlPin') || '',
@@ -703,6 +755,8 @@
         summary: null,
         loading: false,
       },
+      portalSessions: [],
+      portalLoading: false,
       query: '',
       category: 'All',
       source: 'ALL',
@@ -731,6 +785,9 @@
       refreshQuotesBtn: document.getElementById('refreshQuotesBtn'),
       quoteSourceStatus: document.getElementById('quoteSourceStatus'),
       quoteMatrix: document.getElementById('quoteMatrix'),
+      portalMeta: document.getElementById('portalMeta'),
+      portalSessions: document.getElementById('portalSessions'),
+      validateSessionsBtn: document.getElementById('validateSessionsBtn'),
       kpis: document.getElementById('kpis'),
       searchInput: document.getElementById('searchInput'),
       sourceStrip: document.getElementById('sourceStrip'),
@@ -810,6 +867,7 @@
         setBrand(state.brand, false);
         await loadMaterials();
         await loadRuns();
+        await loadPortalHealth();
       } catch (error) {
         els.pinError.textContent = error.message || 'Invalid PIN.';
         els.pinError.classList.remove('hide');
@@ -843,6 +901,31 @@
         state.runs = [];
       }
       renderRunPanel();
+    }
+
+    async function loadPortalHealth(validate = false) {
+      if (!state.pin) return;
+      state.portalLoading = true;
+      renderPortalSessions();
+      try {
+        const data = validate
+          ? await fetchJson('/api/purchase-control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'validate-portal-sessions',
+              pin: state.pin,
+              sources: PORTAL_SOURCE_KEYS,
+            }),
+          })
+          : await fetchJson(`/api/purchase-control?action=portal-health&pin=${encodeURIComponent(state.pin)}`);
+        state.portalSessions = data.sessions || [];
+      } catch (error) {
+        toast(error.message || 'Portal health failed');
+      } finally {
+        state.portalLoading = false;
+        renderPortalSessions();
+      }
     }
 
     async function startRun() {
@@ -1000,6 +1083,7 @@
         toast('Add items before requesting quotes');
         return;
       }
+      await loadPortalHealth(true);
       await saveRun({ status: 'QUOTING', silent: true });
       els.requestQuotesBtn.disabled = true;
       state.quote.loading = true;
@@ -1018,6 +1102,7 @@
         });
         applyRun(data.run);
         applyQuoteData(data);
+        await loadPortalHealth();
         toast('Quote batch created');
       } catch (error) {
         state.quote.loading = false;
@@ -1080,6 +1165,7 @@
     function renderAll() {
       if (!state.data) return;
       renderRunPanel();
+      renderPortalSessions();
       renderQuotePanel();
       renderKpis();
       renderSources();
@@ -1113,6 +1199,50 @@
         <button class="run-chip ${run?.id === recent.id ? 'active' : ''}" type="button" data-load-run="${escapeHtml(recent.id)}">
           ${escapeHtml(recent.brand)} ${escapeHtml(RUN_LABELS[recent.status] || recent.status)}
         </button>
+      `).join('');
+    }
+
+    function sessionStatusClass(status) {
+      if (status === 'READY') return 'ready';
+      if (status === 'BROKEN' || status === 'CAPTCHA_REQUIRED' || status === 'RATE_LIMITED') return 'bad';
+      return 'action';
+    }
+
+    function sessionSubtitle(session) {
+      if (session.status === 'READY') {
+        const expiry = session.expires_at ? `expires ${new Date(session.expires_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}` : 'expiry unknown';
+        return [session.account_label, session.pincode, expiry].filter(Boolean).join(' - ');
+      }
+      return session.issue_detail || 'Reconnect from Chrome capture';
+    }
+
+    function renderPortalSessions() {
+      if (!els.portalSessions) return;
+      const sessions = state.portalSessions || [];
+      const ready = sessions.filter((session) => session.status === 'READY').length;
+      const total = PORTAL_SOURCE_KEYS.length;
+      els.validateSessionsBtn.disabled = state.portalLoading;
+      els.portalMeta.textContent = state.portalLoading
+        ? 'Checking portal login health...'
+        : `${ready}/${total} portal logins ready`;
+
+      const rows = sessions.length
+        ? sessions
+        : PORTAL_SOURCE_KEYS.map((key) => ({
+          source_key: key,
+          source_label: SOURCE_LABELS[key],
+          status: 'NOT_CONNECTED',
+          issue_detail: 'No saved session',
+          url: '',
+        }));
+
+      els.portalSessions.innerHTML = rows.map((session) => `
+        <div class="session-card ${sessionStatusClass(session.status)}">
+          <div class="session-name">${escapeHtml(session.source_label || SOURCE_LABELS[session.source_key] || session.source_key)}</div>
+          <span class="quote-status ${session.status === 'READY' ? 'quoted' : session.status === 'NOT_CONNECTED' || session.status === 'EXPIRED' ? 'pending' : 'bad'}">${escapeHtml(SESSION_LABELS[session.status] || session.status)}</span>
+          <div class="session-meta">${escapeHtml(sessionSubtitle(session))}</div>
+          <div class="session-meta">${escapeHtml(session.cookie_count || 0)} cookies - ${escapeHtml(session.token_count || 0)} token refs</div>
+        </div>
       `).join('');
     }
 
@@ -1157,7 +1287,7 @@
       } else if (quote.batch) {
         const updated = quote.batch.updated_at ? new Date(quote.batch.updated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'now';
         const summary = quote.summary || {};
-        els.quoteMeta.textContent = `${quote.batch.id} - ${summary.quoted_count || 0} quoted, ${summary.pending_count || 0} pending - ${updated}`;
+        els.quoteMeta.textContent = `${quote.batch.id} - ${summary.quoted_count || 0} quoted, ${summary.pending_count || 0} pending, ${summary.unavailable_count || 0} unavailable - ${updated}`;
       } else {
         els.quoteMeta.textContent = state.cart.length
           ? 'No quote batch for this run.'
@@ -1683,6 +1813,7 @@
     els.saveRunBtn.addEventListener('click', () => saveRun());
     els.requestQuotesBtn.addEventListener('click', requestQuotes);
     els.refreshQuotesBtn.addEventListener('click', () => loadQuoteSummary());
+    els.validateSessionsBtn.addEventListener('click', () => loadPortalHealth(true));
     els.runStatusSelect.addEventListener('change', () => {
       if (state.run) saveRun({ status: els.runStatusSelect.value });
     });
