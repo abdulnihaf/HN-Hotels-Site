@@ -686,7 +686,8 @@ function sleep(ms) {
 }
 
 async function hyperpureNativeSearchInPage(query) {
-  const observed = [];
+  let observed = [];
+  let inputDrivenAt = 0;
   const startedAt = Date.now();
   const originalFetch = window.fetch;
   const originalOpen = window.XMLHttpRequest?.prototype?.open;
@@ -698,11 +699,63 @@ async function hyperpureNativeSearchInPage(query) {
     return text.length > limit ? `${text.slice(0, limit)}...[truncated:${text.length}]` : text;
   }
 
+  const queryKeywords = String(query || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((part) => part && part.length > 3);
+
   function isRelevant(url, body) {
+    if (!queryKeywords.length) return false;
     const haystack = `${url || ''} ${body || ''}`.toLowerCase();
-    const normalizedQuery = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
-    if (haystack.includes('search')) return true;
-    return normalizedQuery.some((part) => part.length > 3 && haystack.includes(part));
+    return queryKeywords.some((part) => haystack.includes(part));
+  }
+
+  // Walk the parsed JSON payload looking for a product-like string field that
+  // contains a query keyword. Rejects stale responses where the URL says
+  // "search" but the body is from a different query (root cause of the
+  // "Coriander -> Kim's Noodles" bug — Hyperpure's autosuggest cache sometimes
+  // returned a prior unrelated search payload).
+  function payloadMatchesQuery(data) {
+    if (!queryKeywords.length) return true;
+    if (!data || typeof data !== 'object') return false;
+    const PRODUCT_FIELDS = new Set([
+      'name', 'productname', 'product_name', 'displayname', 'display_name',
+      'title', 'productdisplayname', 'item_name', 'sku_name',
+    ]);
+    const seen = new WeakSet();
+    let found = false;
+    function walk(node, depth) {
+      if (found || depth > 10 || !node || typeof node !== 'object') return;
+      if (seen.has(node)) return;
+      seen.add(node);
+      if (Array.isArray(node)) {
+        for (const child of node) {
+          if (found) return;
+          walk(child, depth + 1);
+        }
+        return;
+      }
+      for (const [k, v] of Object.entries(node)) {
+        if (found) return;
+        const kl = k.toLowerCase();
+        if (PRODUCT_FIELDS.has(kl) && typeof v === 'string') {
+          const text = v.toLowerCase();
+          if (queryKeywords.some((part) => text.includes(part))) {
+            found = true;
+            return;
+          }
+        }
+        if (v && typeof v === 'object') walk(v, depth + 1);
+      }
+    }
+    walk(data, 0);
+    return found;
+  }
+
+  function isFreshAndMatching(entry) {
+    if (!entry || !entry.ok || !entry.data) return false;
+    if (!inputDrivenAt || entry.captured_at_ms < (inputDrivenAt - startedAt)) return false;
+    return payloadMatchesQuery(entry.data);
   }
 
   function parseBody(text) {
@@ -824,11 +877,16 @@ async function hyperpureNativeSearchInPage(query) {
   try {
     const input = findSearchInput();
     if (!input) return { error: 'Hyperpure search input was not found on this page' };
+
+    // Drop anything captured before we typed — those are stale responses from
+    // prior tab activity / autosuggest cache.
+    observed = [];
+    inputDrivenAt = Date.now();
     driveInput(input);
 
-    const deadline = Date.now() + 7000;
+    const deadline = Date.now() + 9000;
     while (Date.now() < deadline) {
-      const successful = observed.find((entry) => entry.ok && entry.data);
+      const successful = observed.find(isFreshAndMatching);
       if (successful) return { status: successful.status, data: successful.data, raw_observation: {
         transport: successful.transport,
         url_path: (() => {
@@ -843,20 +901,22 @@ async function hyperpureNativeSearchInPage(query) {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
-    const last = observed[observed.length - 1];
-    if (last) {
-      return {
-        status: last.status || 0,
-        data: last.data || null,
-        body_preview: last.body_preview || '',
-        raw_observation: {
-          transport: last.transport,
-          observed_count: observed.length,
-          last_status: last.status || 0,
-        },
-      };
-    }
-    return { error: 'Hyperpure did not issue a visible search request after typing into its search box' };
+    // Deadline passed. Don't return a stale/non-matching response as a fallback
+    // — that's the bug that produced Coriander -> Kim's Noodles. Better to
+    // signal "no fresh result" and let the caller try the page fallback or
+    // mark unavailable.
+    const post = observed.filter((entry) => entry.captured_at_ms >= (inputDrivenAt - startedAt));
+    return {
+      status: 0,
+      error: 'Hyperpure search ran but no response matched the query',
+      body_preview: post[post.length - 1]?.body_preview || '',
+      raw_observation: {
+        transport: 'native',
+        observed_count: observed.length,
+        post_input_count: post.length,
+        had_query_match: false,
+      },
+    };
   } catch (error) {
     return { error: error.message || 'Hyperpure native UI search failed' };
   } finally {
