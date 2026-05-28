@@ -4,15 +4,21 @@ compatibility_date = "2024-09-01"
 compatibility_flags = ["nodejs_compat"]
 
 # 03:30 UTC = 09:00 IST every day. Fires the morning snapshot loop over
-# Fresh Vegetables & Produce materials, one POST refresh-material per
-# material with a small stagger to avoid hammering the VPS.
+# every RM with an Odoo product_code, one POST refresh-material per
+# material via a concurrency-2 worker pool.
 [triggers]
 crons = ["30 3 * * *"]
 
 [vars]
 HN_API_BASE = "https://hnhotels.in"
-DEFAULT_SCOPE = "Fresh Vegetables & Produce"
+# Empty scope = all categories. Cron now covers every RM with an Odoo product_code.
+DEFAULT_SCOPE = ""
 DEFAULT_PIN = "0305"  # Nihaf admin — Worker-only call, not exposed externally.
 DEFAULT_SOURCES = "HYPERPURE,BIGBASKET,JIOMART,BLINKIT,FLIPKART_MINUTES"
-STAGGER_MS = "1000"
-MAX_MATERIALS = "60"
+# Concurrency 2: each refresh-material call internally spawns 5 parallel VPS
+# Playwright contexts (~100MB each). Concurrency 3 OOMed the VPS earlier today;
+# 2 holds peak memory at ~750MB. 76 materials at concurrency 2 take ~10 min,
+# fits CF's 15-min scheduled-event budget.
+DEFAULT_CONCURRENCY = "2"
+STAGGER_MS = "0"
+MAX_MATERIALS = "200"
