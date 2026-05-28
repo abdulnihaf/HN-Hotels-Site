@@ -1087,6 +1087,24 @@ async function ensurePurchaseRunSchema(DB) {
     ON daily_price_snapshots(material_id, snapshot_date)
   `).run();
 
+  // image_url added 2026-05-29 — idempotent ALTER.
+  try { await DB.prepare(`ALTER TABLE daily_price_snapshots ADD COLUMN image_url TEXT NOT NULL DEFAULT ''`).run(); } catch (_) {}
+
+  // User-defined raw materials (not in Odoo PO history yet). Slug = stable id
+  // used by refresh-material when prefixed with "custom:".
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS rm_custom_materials (
+      slug        TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      category    TEXT NOT NULL,
+      uom         TEXT NOT NULL DEFAULT 'unit',
+      brand       TEXT NOT NULL DEFAULT 'BOTH',
+      image_url   TEXT NOT NULL DEFAULT '',
+      created_by  TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `).run();
+
   // Meta-row per cron / refresh batch. portal_results_json holds per-source
   // counts so observability ('Hyperpure 28 ok / 2 err') is one query away.
   await DB.prepare(`
@@ -1282,9 +1300,74 @@ async function handleGet(request, url, env) {
 
   if (action === 'materials') {
     const brand = cleanBrand(url.searchParams.get('brand') || 'BOTH');
-    const days = Math.max(1, Math.min(90, parseInt(url.searchParams.get('days') || '30', 10)));
+    const days = Math.max(1, Math.min(1095, parseInt(url.searchParams.get('days') || '90', 10)));
     const creds = getOdooCredentials({ odoo: 'system' }, env);
     const data = await loadMaterialUniverse(creds, brand, days);
+    // Layer in user-defined custom materials so the BuyList can show items the
+    // owner hasn't purchased via Odoo yet (e.g. tonight's chicken-cut tracker).
+    try {
+      await ensurePurchaseRunSchema(env.DB);
+      const customs = await env.DB.prepare(`
+        SELECT slug, name, category, uom, brand, image_url, created_at FROM rm_custom_materials
+        WHERE brand = 'BOTH' OR brand = ?
+        ORDER BY category ASC, name ASC
+      `).bind(brand === 'BOTH' ? 'BOTH' : brand).all();
+      const extra = (customs.results || []).map((row) => ({
+        id: `custom:${row.slug}`,
+        product_code: `custom:${row.slug}`,
+        item_id: `custom:${row.slug}`,
+        name: row.name,
+        search_query: row.name,
+        category: row.category || 'Custom',
+        uom: row.uom || 'unit',
+        brands_seen: [row.brand || 'BOTH'],
+        product_ids_by_brand: {},
+        vendors: [],
+        times_ordered: 0,
+        total_qty: 0,
+        known_amount: 0,
+        lines_without_amount: 0,
+        avg_unit_price: 0,
+        local_price: 0,
+        last_purchase_date: '',
+        last_qty: 0,
+        suggested_qty: 1,
+        po_count: 0,
+        raw_name_variants: [],
+        priority_hint: 'Manual',
+        source_keys: PORTAL_SOURCE_KEYS,
+        preferred_source: 'LOCAL_VENDOR',
+        last_vendor_id: null,
+        last_vendor_name: '',
+        confidence: 'manual',
+        confidence_reasons: ['Owner-added custom material'],
+        is_custom: true,
+        image_url: row.image_url || '',
+        created_at: row.created_at,
+      }));
+      if (extra.length) {
+        // Avoid duplicates if a custom slug shadows an Odoo product_code.
+        const known = new Set((data.items || []).map((it) => String(it.product_code || it.id || '')));
+        for (const row of extra) {
+          if (!known.has(row.product_code)) data.items.push(row);
+        }
+        // Re-derive category counts so the UI dropdown stays accurate.
+        const seen = new Set();
+        const cats = [];
+        for (const it of data.items) {
+          const c = it.category || 'Custom';
+          if (!seen.has(c)) { seen.add(c); cats.push({ name: c, count: 0 }); }
+          cats[cats.findIndex((x) => x.name === c)].count += 1;
+        }
+        data.categories = cats.sort((a, b) => a.name.localeCompare(b.name));
+        data.summary = data.summary || {};
+        data.summary.item_count = data.items.length;
+        data.summary.category_count = data.categories.length;
+        data.summary.custom_count = extra.length;
+      }
+    } catch (err) {
+      // Schema/D1 hiccup — fall back to Odoo-only universe.
+    }
     return json({
       success: true,
       ...data,
@@ -1598,9 +1681,53 @@ async function handlePost(context, env) {
       return createLocalPO(body, user, env, context.env.DB);
     case 'refresh-material':
       return refreshMaterialSnapshot(body, user, env);
+    case 'add-custom-material':
+      return addCustomMaterial(body, user, env);
+    case 'delete-custom-material':
+      return deleteCustomMaterial(body, user, env);
     default:
       return json({ error: `Unknown POST action: ${action}` }, 400);
   }
+}
+
+async function addCustomMaterial(body, user, env) {
+  if (!canCreate(user)) return json({ error: 'Only admin or purchase PINs can add materials' }, 403);
+  await ensurePurchaseRunSchema(env.DB);
+  const name = String(body.name || '').trim();
+  const category = String(body.category || '').trim();
+  const uom = String(body.uom || 'unit').trim() || 'unit';
+  const brand = cleanBrand(body.brand || 'BOTH');
+  const image_url = String(body.image_url || '').trim();
+  if (!name) return json({ error: 'name required' }, 400);
+  if (!category) return json({ error: 'category required' }, 400);
+  // Slug = stable, kebab-cased. Prefix with a 4-char nonce so two materials
+  // with the same name don't collide.
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  const nonce = Math.random().toString(36).slice(2, 6);
+  const slug = `${base}-${nonce}`;
+  await env.DB.prepare(`
+    INSERT INTO rm_custom_materials (slug, name, category, uom, brand, image_url, created_by, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `).bind(slug, name, category, uom, brand, image_url, user.name || 'system').run();
+  return json({
+    success: true,
+    material: {
+      slug,
+      material_id: `custom:${slug}`,
+      product_code: `custom:${slug}`,
+      name, category, uom, brand, image_url,
+      is_custom: true,
+    },
+  });
+}
+
+async function deleteCustomMaterial(body, user, env) {
+  if (!canCreate(user)) return json({ error: 'Only admin or purchase PINs can delete materials' }, 403);
+  await ensurePurchaseRunSchema(env.DB);
+  const slug = String(body.slug || '').trim() || String(body.material_id || '').replace(/^custom:/, '').trim();
+  if (!slug) return json({ error: 'slug or material_id required' }, 400);
+  const res = await env.DB.prepare(`DELETE FROM rm_custom_materials WHERE slug = ?`).bind(slug).run();
+  return json({ success: true, deleted: res.meta?.changes || 0 });
 }
 
 async function listRuns(url, user, DB) {
@@ -2596,8 +2723,8 @@ async function upsertDailySnapshot(DB, row) {
       (snapshot_date, material_id, source_key, category, name, uom, brand,
        sku_title, sku_url, pack_size, price_paise, unit_price_paise, currency,
        eta_minutes, eta_label, stock_status, match_rule, match_confidence,
-       match_notes, captured_at, source, batch_id, raw_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       match_notes, captured_at, source, batch_id, raw_json, image_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(snapshot_date, material_id, source_key) DO UPDATE SET
       category         = excluded.category,
       name             = excluded.name,
@@ -2618,7 +2745,8 @@ async function upsertDailySnapshot(DB, row) {
       captured_at      = excluded.captured_at,
       source           = excluded.source,
       batch_id         = excluded.batch_id,
-      raw_json         = excluded.raw_json
+      raw_json         = excluded.raw_json,
+      image_url        = excluded.image_url
   `).bind(
     row.snapshot_date,
     row.material_id,
@@ -2642,7 +2770,8 @@ async function upsertDailySnapshot(DB, row) {
     row.captured_at || now,
     row.source || 'manual',
     row.batch_id || null,
-    JSON.stringify(row.raw || {})
+    JSON.stringify(row.raw || {}),
+    String(row.image_url || row.raw?.image_url || '')
   ).run();
 }
 
@@ -2672,6 +2801,7 @@ function publicSnapshotRow(row) {
     captured_at: row.captured_at || '',
     source: row.source || '',
     batch_id: row.batch_id || '',
+    image_url: row.image_url || '',
   };
 }
 
@@ -2738,17 +2868,51 @@ async function refreshMaterialSnapshot(body, user, env) {
   if (!rawMaterialId) return json({ error: 'Missing material_id' }, 400);
   const materialId = rawMaterialId.replace(/^code:/, '');
 
-  // Resolve material context from the Odoo-backed material universe so we have
-  // category, uom, and brand even on a cold refresh.
-  const creds = getOdooCredentials({ odoo: 'system' }, env);
-  const universe = await loadMaterialUniverse(creds, 'BOTH', 30);
-  const material = (universe.items || []).find((item) => {
-    const code = (item.product_code || '').toString();
-    if (code === materialId) return true;
-    if ((item.item_id || '').toString().replace(/^code:/, '') === materialId) return true;
-    return String(item.id || '') === materialId;
-  });
-  if (!material) return json({ error: `Material ${materialId} not found in last 30d Odoo universe` }, 404);
+  // Custom materials (owner-added via add-custom-material): resolve from
+  // rm_custom_materials in D1; no Odoo lookup needed.
+  let material = null;
+  if (materialId.startsWith('custom:')) {
+    const slug = materialId.slice('custom:'.length);
+    const row = await env.DB.prepare(`
+      SELECT slug, name, category, uom, brand, image_url FROM rm_custom_materials WHERE slug = ?
+    `).bind(slug).first();
+    if (!row) return json({ error: `Custom material ${slug} not found` }, 404);
+    material = {
+      product_code: materialId,
+      item_id: materialId,
+      name: row.name,
+      category: row.category || 'Custom',
+      uom: row.uom || 'unit',
+      brand: row.brand || 'BOTH',
+      match_rule: 'COMMODITY_EQUIVALENT',
+    };
+  } else {
+    // Resolve material context from the Odoo-backed material universe so we have
+    // category, uom, and brand even on a cold refresh.
+    const creds = getOdooCredentials({ odoo: 'system' }, env);
+    const universe = await loadMaterialUniverse(creds, 'BOTH', 365);
+    material = (universe.items || []).find((item) => {
+      const code = (item.product_code || '').toString();
+      if (code === materialId) return true;
+      if ((item.item_id || '').toString().replace(/^code:/, '') === materialId) return true;
+      return String(item.id || '') === materialId;
+    });
+    // Fallback: caller can pass name + category in body for an ad-hoc rescout
+    // (used by the custom-SKU search panel and any UI that wants to scout an
+    // arbitrary string against the VPS).
+    if (!material && body.name) {
+      material = {
+        product_code: materialId,
+        item_id: materialId,
+        name: String(body.name).trim(),
+        category: String(body.category || 'Custom').trim(),
+        uom: String(body.uom || 'unit').trim(),
+        brand: cleanBrand(body.brand || 'BOTH'),
+        match_rule: 'COMMODITY_EQUIVALENT',
+      };
+    }
+    if (!material) return json({ error: `Material ${materialId} not found in last 365d Odoo universe` }, 404);
+  }
 
   const requestedSources = Array.isArray(body.sources) && body.sources.length
     ? body.sources.map(cleanSourceKey).filter((s) => PORTAL_SOURCE_KEYS.includes(s))
@@ -2833,6 +2997,7 @@ async function refreshMaterialSnapshot(body, user, env) {
         source: 'on_demand_refresh',
         batch_id: batchId,
         raw: quote.raw || {},
+        image_url: quote.image_url || quote.raw?.image_url || '',
       });
     }
 
