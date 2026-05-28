@@ -3,15 +3,12 @@ main = "src/index.js"
 compatibility_date = "2024-09-01"
 compatibility_flags = ["nodejs_compat"]
 
-# 03:30 UTC = 09:00 IST every day (production schedule).
-# Plus a temporary "every 5 minutes" entry so we can validate the
-# scheduled() code path TODAY without waiting for 09:00 IST tomorrow.
-# Free-tier scheduled events have a 15-minute wall-clock budget — plenty
-# for the 76-material × concurrency-2 loop (~10 min). The /trigger fetch
-# handler hit a 30-second waitUntil ceiling earlier; scheduled() does not.
-# REMOVE the "*/5 * * * *" entry after validation.
+# 03:30 UTC = 09:00 IST every day (production schedule). Single fire only —
+# the */5 test trigger from PR #242 was reverted after overlapping fires
+# crushed the VPS (5-min interval < 9-min loop length → 2-3 concurrent
+# scheduled() invocations OOMed Chromium).
 [triggers]
-crons = ["30 3 * * *", "*/5 * * * *"]
+crons = ["30 3 * * *"]
 
 [vars]
 HN_API_BASE = "https://hnhotels.in"
