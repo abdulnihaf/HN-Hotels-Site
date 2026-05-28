@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-28T19:24:22+0530",
-  "published_at": "2026-05-28T19:24:22+0530",
+  "updated_at": "2026-05-28T19:27:47+0530",
+  "published_at": "2026-05-28T19:27:47+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -130,17 +130,17 @@
       "subgroup": "Creative Surface",
       "risk": "print/vendor handoff",
       "status": "ready",
-      "last_task": "Match 500ml NCH flask back artwork to 250ml back sizing",
-      "last_summary": "Adjusted only the 500ml back editable artwork on Figma page 226:2 so its internal design element positions and sizes match the 250ml back: larger 150x150 emblem at x115/y25, QR cards and QR nodes at 250ml positions, divider/text/phone/IG/legal/footer stack all copied to 250ml back coordinates. Kept the 500ml back frame itself at the current dieline size 136x246mm.",
-      "next_action": "Nihaf review the 500ml back on Codex Production Master 250ml 500ml Consistent; Codex should not export or mutate further unless explicitly requested.",
+      "last_task": "Resize 500ml NCH flask back phone text to match 250ml",
+      "last_summary": "Corrected the 500ml back phone number text node 226:150 on Figma page 226:2. It was Cinzel Bold 15.5 while the 250ml back phone number node 226:34 was Cinzel Bold 30. Copied exact typography/color/alignment/box from 250ml phone to 500ml phone; screenshot proof saved.",
+      "next_action": "Nihaf review the 500ml back phone number visually in Figma; do not export or mutate further unless explicitly requested.",
       "mutation_status": "Existing Figma file mutation only; no export/vendor/live system mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-      "last_run_at": "2026-05-28T19:24:22+0530",
-      "proof": "Figma MCP readback changed 500ml back nodes 226:138,226:140-154 and 242:20-37 to 250ml back coordinates; screenshot proof /private/tmp/nch_500_back_matched_to_250_back.png.",
-      "artifacts": "/private/tmp/nch_500_back_matched_to_250_back.png",
-      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; 500ml back frame 226:134; updated nodes 226:138,226:140-154,242:20-37.",
-      "data_freshness": "2026-05-28 immediate Figma MCP edit after user correction.",
-      "rollback": "Use Figma version history or set 500ml back nodes back to the previous expanded 500ml positions if Nihaf prefers the taller layout."
+      "last_run_at": "2026-05-28T19:27:47+0530",
+      "proof": "Figma MCP before/after readback: 226:150 fontSize changed 15.5 to 30, Cinzel Bold, same fill/alignment as 226:34; screenshot /private/tmp/nch_500_back_phone_resized.png.",
+      "artifacts": "/private/tmp/nch_500_back_phone_resized.png",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; 250 phone source 226:34; 500 phone corrected 226:150.",
+      "data_freshness": "2026-05-28 immediate Figma MCP correction after user report.",
+      "rollback": "Set 226:150 fontSize back to 15.5 only if user wants the previous smaller phone text."
     },
     "reel-making": {
       "title": "11 Reel Making",
@@ -156,6 +156,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260528192747-packaging-design",
+      "at": "2026-05-28T19:27:47+0530",
+      "lane": "packaging-design",
+      "task": "Resize 500ml NCH flask back phone text to match 250ml",
+      "status": "ready",
+      "summary": "Corrected the 500ml back phone number text node 226:150 on Figma page 226:2. It was Cinzel Bold 15.5 while the 250ml back phone number node 226:34 was Cinzel Bold 30. Copied exact typography/color/alignment/box from 250ml phone to 500ml phone; screenshot proof saved.",
+      "next_action": "Nihaf review the 500ml back phone number visually in Figma; do not export or mutate further unless explicitly requested.",
+      "mutation_status": "Existing Figma file mutation only; no export/vendor/live system mutation.",
+      "proof": "Figma MCP before/after readback: 226:150 fontSize changed 15.5 to 30, Cinzel Bold, same fill/alignment as 226:34; screenshot /private/tmp/nch_500_back_phone_resized.png.",
+      "artifacts": "/private/tmp/nch_500_back_phone_resized.png",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; 250 phone source 226:34; 500 phone corrected 226:150.",
+      "rollback": "Set 226:150 fontSize back to 15.5 only if user wants the previous smaller phone text.",
+      "data_freshness": "2026-05-28 immediate Figma MCP correction after user report."
+    },
     {
       "id": "20260528192422-packaging-design",
       "at": "2026-05-28T19:24:22+0530",
@@ -1005,16 +1020,6 @@
       "summary": "Updated GBP-verified Hamza Hotel text asset doc to include offer messaging: 10% off dine-in and 20% off takeaway across Afternoon/Late Lunch, Dinner, and Late Night variants. Added guardrail that POS/landing proof must be verified before the offer appears in live ads. No Google Ads, GBP, POS, or landing mutation made.",
       "next_action": "Confirm real opening time and verify discount proof on POS/landing; then create three visual mockups for approval before live campaign creation.",
       "mutation_status": "none-copy-doc-only"
-    },
-    {
-      "id": "20260525080404-google-ads",
-      "at": "2026-05-25T08:04:04+0530",
-      "lane": "google-ads",
-      "task": "Verify GBP hours and prepare GBP-aligned Hamza Hotel ad text",
-      "status": "ready",
-      "summary": "Live GBP cockpit/API readback shows Hamza Express GBP regular hours already configured as daily 00:00-03:00 plus 14:00-24:00, profile description says Open 2pm to 3am. No GBP hours mutation was needed. Found mismatch remains on hamzaexpress.in homepage/schema, which says 11:00-23:00 / 11AM-11PM, and google-night landing does not visibly say open till 3 AM. Created _context/Google_Ads_Hamza_Brand_2026-05-25/08-gbp-verified-text-assets-for-confirmation.md with GBP-aligned text assets: Afternoon/Late Lunch, Dinner, Late Night; recommends replacing Lunch with Afternoon unless real opening time is earlier than 2 PM.",
-      "next_action": "Get Nihaf confirmation on real opening time and approved wording; then create three ad visual mockups and only after that align site/landing hours before live Ads mutation.",
-      "mutation_status": "none-gbp-readonly-no-hours-change-needed"
     }
   ]
 }
