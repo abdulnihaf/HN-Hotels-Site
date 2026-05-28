@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Purchase Control - HN Hotels</title>
+  <title>Purchase Console - HN Hotels</title>
   <meta name="theme-color" content="#0c0c14">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,873 +18,355 @@
       --pc-blue: #60a5fa;
       --pc-yellow: #fbbf24;
       --pc-red: #f87171;
+      --pc-purple: #a78bfa;
     }
+    * { box-sizing: border-box; }
+    body { min-height: 100vh; padding-bottom: 88px; }
+    .shell { width: min(1280px, 100%); margin: 0 auto; padding: 10px 12px; }
 
-    body { min-height: 100vh; }
-    .shell {
-      width: min(1400px, 100%);
-      margin: 0 auto;
-      padding: 12px;
-    }
+    /* ━━━ Header ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 30;
-      background: rgba(12,12,20,0.94);
+      position: sticky; top: 0; z-index: 30;
+      background: rgba(12,12,20,0.96);
       border-bottom: 1px solid var(--pc-line);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
     }
-    .bar-inner {
-      width: min(1400px, 100%);
-      min-height: 62px;
-      margin: 0 auto;
-      padding: 10px 12px;
+    .topbar-inner {
+      display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+      padding: 10px 12px; width: min(1280px, 100%); margin: 0 auto;
+    }
+    .title-block h1 { font-size: 16px; margin: 0; }
+    .title-block p { margin: 2px 0 0; color: var(--text-dim); font-size: 11px; }
+
+    /* ━━━ PIN gate ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .pin-wrap { display: flex; align-items: center; justify-content: center; min-height: 70vh; padding: 16px; }
+    .pin-card { width: min(360px, 100%); padding: 24px; text-align: center; }
+
+    /* ━━━ Filter bar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .filter-bar {
       display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: center;
-    }
-    .title-block { min-width: 0; }
-    .title-block h1 { font-size: 17px; letter-spacing: 0; }
-    .title-block p { margin: 2px 0 0; color: var(--text-dim); font-size: 12px; }
-    .bar-actions {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-    .bar-actions::-webkit-scrollbar { display: none; }
-    .brand-strip,
-    .source-strip {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      padding-bottom: 2px;
-    }
-    .brand-strip::-webkit-scrollbar,
-    .source-strip::-webkit-scrollbar { display: none; }
-    .seg {
-      min-height: 44px;
-      padding: 0 14px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: var(--pc-soft);
-      color: var(--text-dim);
-      font-weight: 800;
-      white-space: nowrap;
-      cursor: pointer;
-    }
-    .seg.active {
-      color: #0c0c14;
-      background: var(--brand);
-      border-color: var(--brand);
-    }
-    .mini-pill {
-      min-height: 34px;
-      padding: 0 10px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: var(--pc-soft);
-      color: var(--text-dim);
-      font-size: 12px;
-      font-weight: 800;
-      white-space: nowrap;
-    }
-    .mini-pill.active { color: var(--brand-hover); border-color: var(--brand-ring); background: var(--brand-soft); }
-    .kpis {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      margin: 12px 0;
-    }
-    .kpi {
-      min-height: 82px;
-      display: grid;
-      align-content: space-between;
-      gap: 8px;
-    }
-    .kpi .label { color: var(--text-dim); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
-    .kpi .value { font-size: 24px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
-    .kpi .note { color: var(--text-mute); font-size: 11px; }
-    .run-panel {
-      display: grid;
-      gap: 12px;
-      margin-top: 12px;
-    }
-    .run-grid {
-      display: grid;
-      gap: 10px;
-      align-items: end;
-    }
-    .run-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .run-status-bar {
-      display: flex;
-      gap: 6px;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-    .run-status-bar::-webkit-scrollbar { display: none; }
-    .status-step {
-      min-height: 30px;
-      display: inline-flex;
-      align-items: center;
-      padding: 0 9px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      color: var(--text-mute);
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-    .status-step.active {
-      color: #0c0c14;
-      border-color: var(--brand);
-      background: var(--brand);
-    }
-    .status-step.done {
-      color: var(--pc-green);
-      border-color: rgba(52,211,153,.35);
-      background: rgba(52,211,153,.08);
-    }
-    .recent-runs {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-    .recent-runs::-webkit-scrollbar { display: none; }
-    .run-chip {
-      min-height: 38px;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 0 10px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: rgba(255,255,255,.035);
-      color: var(--text);
-      font-size: 12px;
-      font-weight: 800;
-      white-space: nowrap;
-      cursor: pointer;
-    }
-    .run-chip.active { border-color: var(--brand-ring); background: var(--brand-soft); color: var(--brand-hover); }
-    .quote-panel {
-      display: grid;
-      gap: 12px;
-      margin-top: 12px;
-    }
-    .workflow-panel {
-      display: grid;
-      gap: 12px;
-      margin-top: 12px;
-    }
-    .workflow-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .workflow-step {
-      min-height: 76px;
-      display: grid;
-      align-content: start;
-      gap: 6px;
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: rgba(255,255,255,.035);
-    }
-    .workflow-step.active {
-      border-color: rgba(251,191,36,.42);
-      background: rgba(251,191,36,.08);
-    }
-    .workflow-step.done {
-      border-color: rgba(52,211,153,.35);
-      background: rgba(52,211,153,.07);
-    }
-    .workflow-step.warn {
-      border-color: rgba(248,113,113,.38);
-      background: rgba(248,113,113,.08);
-    }
-    .workflow-kicker {
-      color: var(--text-mute);
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .4px;
-    }
-    .workflow-title {
-      font-size: 13px;
-      font-weight: 800;
-      line-height: 1.2;
-    }
-    .workflow-copy {
-      color: var(--text-dim);
-      font-size: 11px;
-      line-height: 1.35;
-    }
-    .quote-head {
-      display: grid;
-      gap: 10px;
-    }
-    .quote-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .quote-source-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .extension-status {
-      margin: 6px 0 10px;
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: rgba(255,255,255,.035);
-      font-size: 12px;
-      color: var(--text-dim);
-      display: none;
-    }
-    .extension-status.show { display: block; }
-    .extension-status.ready { border-color: rgba(52,211,153,.35); color: var(--pc-green); }
-    .extension-status.running { border-color: rgba(96,165,250,.35); color: var(--pc-blue); }
-    .extension-status.error { border-color: rgba(248,113,113,.35); color: var(--pc-red); }
-    .extension-status.missing { border-color: rgba(251,191,36,.35); color: var(--pc-yellow); }
-    .quote-source-card.bridge-running { border-color: rgba(96,165,250,.5); }
-    .quote-source-card.bridge-error { border-color: rgba(248,113,113,.45); }
-    .quote-source-card.bridge-done { border-color: rgba(52,211,153,.45); }
-    .snapshot-board { margin-bottom: 12px; }
-    .snapshot-head {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: center;
-    }
-    .snapshot-actions {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    .snapshot-actions select {
-      min-height: 36px;
-      padding: 0 10px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: var(--pc-soft);
-      color: var(--text);
-      font-weight: 700;
-    }
-    .snapshot-grid {
-      margin-top: 12px;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 10px;
-    }
-    .snapshot-card {
-      border: 1px solid var(--pc-line);
-      background: rgba(255,255,255,.04);
-      border-radius: 10px;
-      padding: 10px;
-      display: grid;
-      gap: 8px;
-    }
-    .snapshot-card-head {
-      display: grid;
-      gap: 2px;
-    }
-    .snapshot-card-name {
-      font-size: 13px;
-      font-weight: 800;
-      line-height: 1.25;
-    }
-    .snapshot-card-meta {
-      color: var(--text-dim);
-      font-size: 11px;
-    }
-    .snapshot-card-baseline {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 8px;
-      border-radius: 6px;
-      background: rgba(255,255,255,.05);
-      font-size: 11px;
-      color: var(--text-dim);
-      width: max-content;
-    }
-    .snapshot-card-baseline strong { color: var(--text); }
-    .portal-chips {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 6px;
-    }
-    .portal-chip {
-      display: grid;
-      grid-template-columns: 22px 1fr auto;
-      gap: 6px;
-      align-items: center;
-      padding: 6px 8px;
-      border: 1px solid var(--pc-line);
-      border-radius: 8px;
-      background: rgba(255,255,255,.025);
-      font-size: 11px;
-      min-height: 36px;
-    }
-    .portal-chip.has-quote { background: rgba(52,211,153,.06); border-color: rgba(52,211,153,.2); }
-    .portal-chip.unavailable { opacity: .55; }
-    .portal-chip.error { opacity: .55; border-color: rgba(248,113,113,.3); }
-    .portal-chip.no-adapter { opacity: .4; border-style: dashed; }
-    .portal-logo {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      font-weight: 900;
-      color: white;
-      text-shadow: 0 1px 1px rgba(0,0,0,.4);
-    }
-    .portal-logo.hp { background: #dc2c2e; }
-    .portal-logo.bb { background: #82bc18; }
-    .portal-logo.bk { background: #ffcc28; color: #1a1300; text-shadow: none; }
-    .portal-logo.jm { background: #0079c8; }
-    .portal-logo.fm { background: #2874f0; }
-    .portal-logo.zp { background: #c81e85; }
-    .portal-logo.is { background: #fc8019; }
-    .portal-logo.an { background: #ff9900; }
-    .portal-logo.lv { background: rgba(255,255,255,.15); color: var(--text); text-shadow: none; }
-    .portal-chip-body { display: grid; gap: 1px; min-width: 0; }
-    .portal-chip-name {
-      font-weight: 700;
-      font-size: 11px;
-      line-height: 1.2;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .portal-chip-sub {
-      font-size: 10px;
-      color: var(--text-dim);
-      line-height: 1.2;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .portal-chip-price {
-      font-weight: 800;
-      font-size: 12px;
-      text-align: right;
-    }
-    .portal-chip-delta {
-      font-size: 10px;
-      font-weight: 700;
-      text-align: right;
-    }
-    .portal-chip-delta.up { color: var(--pc-red); }
-    .portal-chip-delta.down { color: var(--pc-green); }
-    .portal-chip-delta.flat { color: var(--text-dim); }
-    .snapshot-card-actions {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 6px;
-      align-items: center;
-    }
-    .snapshot-card-fresh {
-      font-size: 10px;
-      color: var(--text-dim);
-      text-align: right;
-    }
-    .btn-refresh-mat {
-      background: var(--pc-soft);
-      border: 1px solid var(--pc-line);
-      color: var(--text);
-      font-weight: 800;
-      font-size: 11px;
-      padding: 6px 10px;
-      border-radius: 8px;
-      cursor: pointer;
-      min-height: 32px;
-    }
-    .btn-refresh-mat:hover { background: var(--pc-soft-2); }
-    .btn-refresh-mat:disabled { opacity: .5; cursor: wait; }
-    .quote-source-card,
-    .quote-line {
-      border: 1px solid var(--pc-line);
-      background: rgba(255,255,255,.035);
-      border-radius: 8px;
-    }
-    .quote-source-card {
-      min-height: 58px;
-      padding: 9px;
-      display: grid;
-      gap: 5px;
-    }
-    .quote-source-name,
-    .quote-line-name,
-    .quote-cell-source {
-      font-size: 12px;
-      font-weight: 800;
-      line-height: 1.25;
-    }
-    .quote-source-meta,
-    .quote-line-meta,
-    .quote-cell-meta {
-      color: var(--text-dim);
-      font-size: 11px;
-      line-height: 1.35;
-    }
-    .quote-matrix {
-      display: grid;
-      gap: 8px;
-    }
-    .quote-line {
-      padding: 10px;
-      display: grid;
-      gap: 9px;
-    }
-    .quote-line-head {
-      display: grid;
-      gap: 4px;
-    }
-    .quote-cells {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .quote-cell {
-      min-height: 104px;
-      display: grid;
-      align-content: start;
-      gap: 5px;
-      padding: 9px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: rgba(0,0,0,.14);
-    }
-    .quote-card-top {
-      display: grid;
-      grid-template-columns: 46px minmax(0, 1fr);
-      gap: 8px;
-      align-items: start;
-    }
-    .quote-thumb {
-      width: 46px;
-      height: 46px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: rgba(255,255,255,.04);
-      object-fit: contain;
-    }
-    .quote-thumb.placeholder {
-      display: grid;
-      place-items: center;
-      color: var(--text-mute);
-      font-size: 10px;
-      font-weight: 800;
-    }
-    .quote-cell.best {
-      border-color: rgba(52,211,153,.45);
-      background: rgba(52,211,153,.08);
-    }
-    .quote-cell.recommended {
-      border-color: rgba(96,165,250,.5);
-      background: rgba(96,165,250,.08);
-    }
-    .quote-price {
-      font-size: 15px;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-    }
-    .quote-status {
-      width: max-content;
-      min-height: 22px;
-      display: inline-flex;
-      align-items: center;
-      padding: 0 7px;
-      border-radius: 999px;
-      border: 1px solid var(--pc-line);
-      color: var(--text-dim);
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-    }
-    .quote-status.quoted { color: var(--pc-green); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
-    .quote-status.pending { color: var(--pc-yellow); border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
-    .quote-status.bad { color: var(--pc-red); border-color: rgba(248,113,113,.34); background: rgba(248,113,113,.08); }
-    .rule-pill {
-      width: max-content;
-      max-width: 100%;
-      min-height: 24px;
-      display: inline-flex;
-      align-items: center;
-      padding: 0 8px;
-      border-radius: 999px;
-      border: 1px solid var(--pc-line);
-      color: var(--text-dim);
-      background: rgba(255,255,255,.04);
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-    }
-    .rule-pill.exact { color: var(--pc-blue); border-color: rgba(96,165,250,.38); background: rgba(96,165,250,.08); }
-    .rule-pill.generic { color: var(--pc-green); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.07); }
-    .rule-pill.substitute { color: var(--pc-yellow); border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
-    .rule-pill.quality { color: #fda4af; border-color: rgba(251,113,133,.36); background: rgba(251,113,133,.08); }
-    .compare-banner {
-      min-height: 44px;
-      display: grid;
-      align-items: center;
-      padding: 0 12px;
-      border-radius: 8px;
-      border: 1px solid rgba(96,165,250,.36);
-      background: rgba(96,165,250,.08);
-      color: #bfdbfe;
-      font-size: 13px;
-      font-weight: 800;
-    }
-    .decision-row {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .decision-card {
-      min-width: 0;
-      padding: 8px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: rgba(0,0,0,.14);
-    }
-    .decision-card.primary {
-      border-color: rgba(96,165,250,.42);
-      background: rgba(96,165,250,.08);
-    }
-    .decision-label {
-      color: var(--text-mute);
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .3px;
-    }
-    .decision-value {
-      margin-top: 3px;
-      font-size: 12px;
-      font-weight: 800;
-      line-height: 1.25;
-      overflow-wrap: anywhere;
-    }
-    .session-panel {
-      display: grid;
-      gap: 12px;
-      margin-top: 12px;
-    }
-    .session-head {
-      display: grid;
-      gap: 10px;
-    }
-    .session-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .session-card {
-      min-height: 92px;
-      display: grid;
-      align-content: start;
-      gap: 6px;
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: rgba(255,255,255,.035);
-    }
-    .session-card.ready { border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.06); }
-    .session-card.action { border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.06); }
-    .session-card.bad { border-color: rgba(248,113,113,.34); background: rgba(248,113,113,.06); }
-    .session-name { font-size: 12px; font-weight: 800; line-height: 1.25; }
-    .session-meta { color: var(--text-dim); font-size: 11px; line-height: 1.35; }
-    .console-grid {
-      display: grid;
-      gap: 12px;
-      align-items: start;
-    }
-    .catalog-grid {
-      display: grid;
-      gap: 12px;
-      min-width: 0;
-    }
-    .category-panel {
-      display: grid;
-      gap: 8px;
-      align-content: start;
-    }
-    .cat-btn {
-      min-height: 44px;
-      width: 100%;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-      align-items: center;
-      text-align: left;
-      padding: 9px 10px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: var(--surface);
-      color: var(--text);
-      cursor: pointer;
-    }
-    .cat-btn.active { border-color: var(--brand-ring); background: var(--brand-soft); color: var(--brand-hover); }
-    .cat-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 800; }
-    .cat-count { color: var(--text-mute); font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .control-row {
-      display: grid;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .list-head {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      align-items: flex-start;
-      margin-bottom: 8px;
-    }
-    .list-head h2 { font-size: 18px; }
-    .item-list { display: grid; gap: 8px; }
-    .material-card {
-      display: grid;
-      gap: 12px;
-      border-left: 3px solid transparent;
-    }
-    .material-card.high { border-left-color: var(--pc-green); }
-    .material-card.medium { border-left-color: var(--pc-yellow); }
-    .material-card.low { border-left-color: var(--text-mute); }
-    .material-main {
-      display: grid;
-      gap: 8px;
-      min-width: 0;
-    }
-    .item-title {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      align-items: flex-start;
-    }
-    .item-name { font-weight: 800; line-height: 1.22; }
-    .item-meta { color: var(--text-dim); font-size: 12px; margin-top: 3px; }
-    .badge-row { display: flex; flex-wrap: wrap; gap: 6px; }
-    .stat-strip {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .stat {
-      min-width: 0;
-      padding: 9px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: var(--pc-soft);
-    }
-    .stat .label { color: var(--text-mute); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
-    .stat .value { margin-top: 3px; font-size: 14px; font-weight: 800; overflow-wrap: anywhere; }
-    .item-actions {
-      display: grid;
-      gap: 8px;
-    }
-    .order-form {
-      display: grid;
-      grid-template-columns: minmax(88px, .8fr) minmax(0, 1.3fr);
-      gap: 8px;
-    }
-    .spec-form {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 8px;
-    }
-    .spec-form input,
-    .spec-form select {
-      font-size: 13px;
+      grid-template-columns: 1fr auto auto auto;
+      gap: 8px; align-items: center;
+      padding: 10px 0;
+      position: sticky; top: 62px; z-index: 20;
+      background: rgba(12,12,20,0.94);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--pc-line);
+      margin-bottom: 12px;
+    }
+    .filter-bar input[type="search"], .filter-bar select {
       min-height: 40px;
-      padding: 9px 10px;
-      border-radius: 8px;
-    }
-    .spec-line {
-      color: var(--text-dim);
-      font-size: 11px;
-      line-height: 1.35;
-    }
-    .tray {
-      position: sticky;
-      bottom: 0;
-      z-index: 25;
-      display: grid;
-      gap: 10px;
-      max-height: min(74vh, 820px);
-      overflow: auto;
-      box-shadow: 0 -18px 40px rgba(0,0,0,.2);
-    }
-    .tray-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 10px;
-    }
-    .tray-count {
-      min-width: 34px;
-      min-height: 34px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      background: var(--brand);
-      color: #0c0c14;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-    }
-    .cart-lines { display: grid; gap: 8px; }
-    .cart-line {
-      display: grid;
-      gap: 8px;
-      padding: 10px;
-      border-radius: 8px;
+      padding: 0 12px;
       border: 1px solid var(--pc-line);
       background: var(--pc-soft);
-    }
-    .cart-line-head {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-      align-items: start;
-    }
-    .cart-name { font-size: 13px; font-weight: 800; line-height: 1.25; }
-    .cart-meta { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
-    .icon-btn {
-      min-width: 44px;
-      min-height: 44px;
-      border-radius: 8px;
-      border: 1px solid var(--pc-line);
-      background: rgba(255,255,255,.035);
       color: var(--text);
-      font-weight: 800;
-      cursor: pointer;
+      border-radius: 8px; font-size: 13px; font-weight: 600;
     }
-    .checkout-block {
-      display: grid;
-      gap: 8px;
-      border-top: 1px solid var(--pc-line);
-      padding-top: 10px;
+    .filter-bar input[type="search"] { width: 100%; }
+    .filter-bar .stat {
+      font-size: 11px; color: var(--text-dim); white-space: nowrap;
+      padding: 0 10px;
     }
-    .source-group {
-      display: grid;
-      gap: 8px;
-      padding: 10px;
-      border-radius: 8px;
+    .btn-ghost-sm {
+      min-height: 40px; padding: 0 12px;
+      border: 1px solid var(--pc-line); background: var(--pc-soft);
+      color: var(--text); font-weight: 700; font-size: 12px;
+      border-radius: 8px; cursor: pointer;
+    }
+    .btn-ghost-sm:hover { background: var(--pc-soft-2); }
+
+    /* ━━━ Category section ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .cat-section { margin-bottom: 20px; }
+    .cat-head {
+      display: grid; grid-template-columns: 1fr auto; align-items: center;
+      gap: 8px; margin: 14px 0 8px;
+      padding-bottom: 6px; border-bottom: 1px solid var(--pc-line);
+    }
+    .cat-head h2 { margin: 0; font-size: 13px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-dim); }
+    .cat-head .cat-count { font-size: 11px; color: var(--text-dim); }
+
+    /* ━━━ Material row ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .mat-row {
       border: 1px solid var(--pc-line);
       background: rgba(255,255,255,.03);
-    }
-    .source-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      display: grid;
       gap: 8px;
     }
-    .source-name { font-weight: 800; }
-    .empty {
-      min-height: 180px;
+    .mat-row.has-best { border-color: rgba(52,211,153,.15); }
+    .mat-row.in-cart { border-color: rgba(96,165,250,.4); background: rgba(96,165,250,.05); }
+    .mat-row-head {
       display: grid;
-      place-items: center;
-      text-align: center;
-      color: var(--text-dim);
+      grid-template-columns: 24px 1fr auto;
+      gap: 10px; align-items: center;
     }
-    .pin-wrap {
-      min-height: calc(100vh - 62px);
+    .mat-row-name {
+      font-size: 14px; font-weight: 800; line-height: 1.2;
+    }
+    .mat-row-meta {
+      font-size: 11px; color: var(--text-dim); margin-top: 2px;
+    }
+    .mat-qty {
+      display: inline-flex; align-items: center; gap: 4px;
+      border: 1px solid var(--pc-line); border-radius: 6px;
+      background: var(--pc-soft); padding: 2px;
+    }
+    .mat-qty button {
+      width: 24px; height: 24px;
+      border: none; background: transparent; color: var(--text);
+      font-weight: 800; font-size: 14px; cursor: pointer;
+      border-radius: 4px;
+    }
+    .mat-qty button:hover { background: var(--pc-soft-2); }
+    .mat-qty input {
+      width: 48px; min-height: 24px;
+      border: none; background: transparent; color: var(--text);
+      text-align: center; font-weight: 800; font-size: 13px;
+    }
+    .mat-qty .uom { font-size: 10px; color: var(--text-dim); padding: 0 4px; }
+
+    /* Best deal card */
+    .best-deal {
       display: grid;
-      place-items: center;
-      padding: 18px;
-    }
-    .pin-card { width: min(380px, 100%); }
-    .pin-input {
-      text-align: center;
-      font-size: 24px;
-      font-weight: 800;
-      letter-spacing: .42em;
-      padding-left: 22px;
-      font-variant-numeric: tabular-nums;
-    }
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: 18px;
-      transform: translateX(-50%);
-      z-index: 80;
-      width: min(520px, calc(100% - 24px));
-      padding: 11px 14px;
+      grid-template-columns: 32px 1fr auto auto;
+      gap: 10px; align-items: center;
+      padding: 8px 10px;
       border-radius: 8px;
+      background: rgba(52,211,153,.08);
+      border: 1px solid rgba(52,211,153,.25);
+    }
+    .best-deal.no-best {
+      background: rgba(255,255,255,.04);
+      border-color: var(--pc-line);
+    }
+    .best-portal-logo {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 900; color: white;
+      text-shadow: 0 1px 1px rgba(0,0,0,.4);
+    }
+    .best-deal-body {
+      display: grid; gap: 1px; min-width: 0;
+    }
+    .best-deal-portal { font-size: 12px; font-weight: 800; line-height: 1.2; }
+    .best-deal-sku {
+      font-size: 11px; color: var(--text-dim); line-height: 1.25;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .best-deal-price {
+      font-size: 15px; font-weight: 900; text-align: right;
+    }
+    .best-deal-rate {
+      font-size: 10px; color: var(--text-dim); text-align: right;
+    }
+    .best-deal-actions {
+      display: flex; gap: 6px;
+    }
+    .action-btn {
+      min-height: 32px; padding: 0 10px;
+      border: 1px solid var(--pc-line); background: var(--pc-soft);
+      color: var(--text); font-weight: 800; font-size: 11px;
+      border-radius: 6px; cursor: pointer;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+      white-space: nowrap;
+    }
+    .action-btn:hover { background: var(--pc-soft-2); }
+    .action-btn.add { background: rgba(52,211,153,.15); border-color: rgba(52,211,153,.4); color: var(--pc-green); }
+    .action-btn.in-cart { background: rgba(96,165,250,.2); border-color: rgba(96,165,250,.5); color: var(--pc-blue); }
+
+    /* Alternatives row */
+    .alts-row {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      padding-left: 34px;
+    }
+    .alt-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 8px;
       border: 1px solid var(--pc-line);
-      background: var(--surface-2);
-      color: var(--text);
-      box-shadow: 0 20px 44px rgba(0,0,0,.35);
-      font-size: 13px;
-      text-align: center;
+      background: rgba(255,255,255,.025);
+      border-radius: 14px;
+      font-size: 11px;
+      cursor: pointer; text-decoration: none; color: var(--text);
     }
+    .alt-chip:hover { background: var(--pc-soft-2); }
+    .alt-chip.disabled { opacity: 0.4; cursor: default; }
+    .alt-chip-logo {
+      width: 16px; height: 16px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 8px; font-weight: 900; color: white;
+    }
+    .alt-chip-name { font-weight: 700; }
+    .alt-chip-price { color: var(--text-dim); font-weight: 600; }
+    .alt-chip.lv { background: rgba(255,255,255,.06); }
+
+    /* Baseline line */
+    .baseline-line {
+      font-size: 11px; color: var(--text-dim);
+      padding-left: 34px;
+    }
+    .baseline-line strong { color: var(--text); font-weight: 800; }
+
+    /* Refresh button per row */
+    .row-refresh {
+      width: 26px; height: 26px;
+      border: 1px solid var(--pc-line); background: var(--pc-soft);
+      color: var(--text); border-radius: 6px;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px;
+    }
+    .row-refresh:hover { background: var(--pc-soft-2); }
+    .row-refresh:disabled { opacity: 0.4; cursor: wait; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: 0.65; } }
+
+    /* Portal logos (CSS) */
+    .pl-hp { background: #dc2c2e; }
+    .pl-bb { background: #82bc18; }
+    .pl-bk { background: #ffcc28; color: #1a1300; text-shadow: none; }
+    .pl-jm { background: #0079c8; }
+    .pl-fm { background: #2874f0; }
+    .pl-zp { background: #c81e85; }
+    .pl-is { background: #fc8019; }
+    .pl-an { background: #ff9900; }
+    .pl-lv { background: rgba(255,255,255,.18); color: var(--text); text-shadow: none; }
+
+    /* ━━━ Sticky cart bar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .cart-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(12,12,20,0.98);
+      border-top: 1px solid var(--pc-line);
+      padding: 10px 12px;
+      display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+      z-index: 40;
+    }
+    .cart-bar.empty { background: rgba(12,12,20,0.9); }
+    .cart-summary {
+      font-size: 12px; font-weight: 700;
+      overflow-x: auto; white-space: nowrap;
+      scrollbar-width: none;
+    }
+    .cart-summary::-webkit-scrollbar { display: none; }
+    .cart-summary .empty-msg { color: var(--text-dim); font-weight: 600; }
+    .cart-summary .portal-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      margin-right: 6px; padding: 2px 8px;
+      border-radius: 12px;
+      background: rgba(96,165,250,.15); border: 1px solid rgba(96,165,250,.3);
+      font-size: 11px; font-weight: 800;
+    }
+    .cart-summary .pill-total { font-weight: 700; color: var(--text-dim); }
+    .btn-view-carts {
+      min-height: 36px; padding: 0 12px;
+      background: var(--pc-blue); border: none; color: #0c0c14;
+      font-weight: 900; font-size: 12px; border-radius: 6px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .btn-view-carts:disabled { opacity: 0.5; background: var(--pc-soft); color: var(--text-dim); cursor: not-allowed; }
+
+    /* ━━━ Cart modal ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.hide { display: none; }
+    .modal-card {
+      width: min(760px, 100%); max-height: 90vh; overflow-y: auto;
+      background: #14141f; border: 1px solid var(--pc-line); border-radius: 12px;
+      padding: 16px; display: grid; gap: 14px;
+    }
+    .modal-head {
+      display: grid; grid-template-columns: 1fr auto; align-items: center;
+    }
+    .modal-close {
+      width: 36px; height: 36px;
+      border: 1px solid var(--pc-line); background: var(--pc-soft);
+      color: var(--text); border-radius: 8px;
+      font-size: 16px; cursor: pointer;
+    }
+    .cart-portal-section {
+      border: 1px solid var(--pc-line); border-radius: 8px;
+      padding: 12px;
+    }
+    .cart-portal-head {
+      display: grid; grid-template-columns: 32px 1fr auto auto; gap: 10px;
+      align-items: center; margin-bottom: 8px;
+    }
+    .cart-portal-name { font-weight: 900; font-size: 14px; }
+    .cart-portal-total { font-weight: 900; font-size: 14px; }
+    .cart-portal-open {
+      min-height: 32px; padding: 0 12px;
+      background: var(--pc-blue); color: #0c0c14;
+      border: none; font-weight: 800; font-size: 12px; border-radius: 6px;
+      cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .cart-line {
+      display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px;
+      align-items: center; padding: 6px 0; font-size: 12px;
+      border-top: 1px dashed var(--pc-line);
+    }
+    .cart-line:first-of-type { border-top: none; }
+    .cart-line-name { font-weight: 700; }
+    .cart-line-meta { font-size: 10px; color: var(--text-dim); }
+    .cart-line-price { font-weight: 800; }
+    .cart-line-remove {
+      width: 26px; height: 26px;
+      border: 1px solid var(--pc-line); background: transparent;
+      color: var(--pc-red); border-radius: 6px;
+      cursor: pointer; font-size: 12px;
+    }
+    .empty-state {
+      text-align: center; padding: 28px 12px;
+      color: var(--text-dim); font-size: 13px;
+    }
+
+    /* ━━━ Custom SKU search results ━━━━━━━━━━━━━━━━━━━━ */
+    .custom-search-results {
+      padding: 12px; background: var(--pc-soft); border-radius: 8px;
+      border: 1px solid var(--pc-line); margin-bottom: 12px;
+    }
+    .custom-search-head {
+      display: grid; grid-template-columns: 1fr auto; align-items: center;
+      margin-bottom: 8px;
+    }
+    .custom-search-head h3 { margin: 0; font-size: 13px; }
+
+    @media (max-width: 720px) {
+      .filter-bar { grid-template-columns: 1fr; }
+      .filter-bar .stat { display: none; }
+      .best-deal { grid-template-columns: 28px 1fr; row-gap: 6px; }
+      .best-deal-price, .best-deal-rate { grid-column: 1 / -1; text-align: left; padding-left: 0; }
+      .best-deal-actions { grid-column: 1 / -1; }
+    }
+
     .hide { display: none !important; }
-    .nowrap { white-space: nowrap; }
-
-    @media (min-width: 760px) {
-      .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-      .run-grid { grid-template-columns: minmax(0, 1fr) 180px 190px 220px; }
-      .quote-head { grid-template-columns: minmax(0, 1fr) 250px; align-items: end; }
-      .workflow-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-      .quote-source-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-      .quote-cells { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-      .decision-row { grid-template-columns: 1.1fr 1fr 1fr 1fr; }
-      .session-head { grid-template-columns: minmax(0, 1fr) 180px; align-items: end; }
-      .session-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-      .control-row { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.4fr); align-items: center; }
-      .catalog-grid { grid-template-columns: 230px minmax(0, 1fr); }
-      .material-card { grid-template-columns: minmax(0, 1fr) 310px; align-items: start; }
-      .stat-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    }
-
-    @media (min-width: 1080px) {
-      .console-grid { grid-template-columns: minmax(0, 1fr) 380px; }
-      .tray {
-        top: 86px;
-        bottom: auto;
-        max-height: calc(100vh - 104px);
-        box-shadow: none;
-      }
+    .toast {
+      position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%);
+      background: var(--pc-blue); color: #0c0c14;
+      padding: 10px 16px; border-radius: 8px;
+      font-weight: 800; font-size: 12px;
+      z-index: 60; box-shadow: 0 6px 20px rgba(0,0,0,.4);
     }
   </style>
 </head>
-<body>
+<body class="bg">
   <header class="topbar">
-    <div class="bar-inner">
+    <div class="topbar-inner">
       <div class="title-block">
-        <h1>Purchase Control</h1>
-        <p id="subtitle">Raw materials, sources, and order tray</p>
+        <h1>Purchase Console</h1>
+        <p id="subtitle">Cheapest scout across 8 portals</p>
       </div>
-      <div class="bar-actions">
+      <div style="display:flex;gap:6px;align-items:center;">
         <a class="btn btn-ghost btn-sm" href="/ops/purchase/">PO ledger</a>
-        <a class="btn btn-ghost btn-sm" href="/ops/purchase-console/capture">Capture extension</a>
-        <button id="refreshBtn" class="btn btn-ghost btn-sm hide" type="button">Refresh</button>
       </div>
     </div>
   </header>
 
   <main>
+    <!-- PIN gate -->
     <section id="pinGate" class="pin-wrap">
       <div class="card pin-card">
         <h2>Enter PIN</h2>
@@ -895,2060 +377,791 @@
       </div>
     </section>
 
+    <!-- App -->
     <section id="app" class="hide">
       <div class="shell">
-        <div class="brand-strip" aria-label="Brand selector">
-          <button class="seg active" type="button" data-brand="HE">HE</button>
-          <button class="seg" type="button" data-brand="NCH">NCH</button>
-          <button class="seg" type="button" data-brand="BOTH">Both</button>
+
+        <div class="filter-bar">
+          <input id="searchInput" type="search" placeholder="🔎 Search material or SKU…" autocomplete="off">
+          <select id="categoryFilter" aria-label="Category"></select>
+          <span id="stat" class="stat">— materials</span>
+          <button id="reloadBtn" class="btn-ghost-sm" type="button">↻ Refresh data</button>
         </div>
 
-        <section class="card run-panel">
-          <div class="run-grid">
-            <div>
-              <h2 id="runTitle">No active purchase run</h2>
-              <p id="runMeta" class="sub" style="margin:4px 0 0;">Start a run before building today’s order.</p>
-            </div>
-            <select id="runTypeSelect" aria-label="Run type">
-              <option value="MORNING_PURCHASE">Morning purchase</option>
-              <option value="EVENING_TOPUP">Evening top-up</option>
-              <option value="URGENT_FILL">Urgent fill</option>
-            </select>
-            <select id="runStatusSelect" aria-label="Run status">
-              <option value="DRAFT">Draft</option>
-              <option value="QUOTING">Quoting</option>
-              <option value="REVIEW">Review</option>
-              <option value="CART_BUILDING">Cart building</option>
-              <option value="AWAITING_CHECKOUT">Awaiting checkout</option>
-              <option value="ORDERED">Ordered</option>
-              <option value="RECONCILED">Reconciled</option>
-            </select>
-            <div class="run-actions">
-              <button id="startRunBtn" class="btn btn-primary" type="button">Start run</button>
-              <button id="saveRunBtn" class="btn btn-ghost" type="button">Save run</button>
-            </div>
+        <div id="customSearchPanel" class="hide custom-search-results">
+          <div class="custom-search-head">
+            <h3 id="customSearchTitle">Custom SKU search</h3>
+            <button id="customSearchClose" class="btn-ghost-sm" type="button">✕ Close</button>
           </div>
-          <div id="runStatusBar" class="run-status-bar"></div>
-          <div id="recentRuns" class="recent-runs"></div>
-        </section>
-
-        <section class="card session-panel">
-          <div class="session-head">
-            <div>
-              <h2>Portal Sessions</h2>
-              <p id="portalMeta" class="sub" style="margin:4px 0 0;">Checking login health...</p>
-            </div>
-            <button id="validateSessionsBtn" class="btn btn-ghost" type="button">Check logins</button>
-          </div>
-          <div id="portalSessions" class="session-grid"></div>
-        </section>
-
-        <section class="card snapshot-board">
-          <div class="snapshot-head">
-            <div>
-              <h2>Today's Price Board</h2>
-              <p id="snapshotMeta" class="sub" style="margin:4px 0 0;">Loading daily snapshot...</p>
-            </div>
-            <div class="snapshot-actions">
-              <select id="snapshotCategory" aria-label="Category">
-                <option value="Fresh Vegetables &amp; Produce">Fresh Vegetables &amp; Produce</option>
-                <option value="">All categories</option>
-              </select>
-              <button id="snapshotReloadBtn" class="btn btn-ghost btn-sm" type="button">Reload</button>
-            </div>
-          </div>
-          <div id="snapshotGrid" class="snapshot-grid"></div>
-        </section>
-
-        <section class="card workflow-panel">
-          <div>
-            <h2>Purchase Flow</h2>
-            <p id="workflowMeta" class="sub" style="margin:4px 0 0;">Add raw materials, then run one live price comparison.</p>
-          </div>
-          <div id="workflowGrid" class="workflow-grid"></div>
-        </section>
-
-        <section class="card quote-panel">
-          <div class="quote-head">
-            <div>
-              <h2>Live Price Decisions</h2>
-              <p id="quoteMeta" class="sub" style="margin:4px 0 0;">Add items, then click Get live prices.</p>
-            </div>
-            <div class="quote-actions">
-              <button id="requestQuotesBtn" class="btn btn-primary" type="button">Get live prices</button>
-              <button id="refreshQuotesBtn" class="btn btn-ghost" type="button">Refresh prices</button>
-            </div>
-          </div>
-          <div id="extensionStatus" class="extension-status"></div>
-          <div id="quoteSourceStatus" class="quote-source-grid"></div>
-          <div id="quoteMatrix" class="quote-matrix"></div>
-        </section>
-
-        <div class="kpis" id="kpis"></div>
-
-        <div class="control-row">
-          <input id="searchInput" type="search" placeholder="Search raw material, category, vendor, code...">
-          <div class="source-strip" id="sourceStrip"></div>
+          <div id="customSearchGrid"></div>
         </div>
 
-        <div class="console-grid">
-          <section class="catalog-grid">
-            <aside class="category-panel" id="categoryPanel"></aside>
-            <div>
-              <div class="list-head">
-                <div>
-                  <h2 id="listTitle">Materials</h2>
-                  <p id="listMeta" class="sub" style="margin:4px 0 0;">Loading...</p>
-                </div>
-                <button id="copyVisibleBtn" class="btn btn-ghost btn-sm" type="button">Copy visible</button>
-              </div>
-              <div id="itemList" class="item-list"></div>
-            </div>
-          </section>
-
-          <aside class="card tray">
-            <div class="tray-head">
-              <div>
-                <h2>Order Tray</h2>
-                <p id="trayMeta" class="sub" style="margin:4px 0 0;">No cart lines</p>
-              </div>
-              <span class="tray-count" id="cartCount">0</span>
-            </div>
-            <button id="trayRequestQuotesBtn" class="btn btn-primary btn-full" type="button">Get live prices</button>
-            <div id="cartLines" class="cart-lines"></div>
-            <div class="checkout-block">
-              <button id="createPoBtn" class="btn btn-primary btn-full" type="button">Create Odoo PO</button>
-              <button id="clearCartBtn" class="btn btn-ghost btn-full" type="button">Clear tray</button>
-            </div>
-            <div id="sourceGroups" class="checkout-block"></div>
-          </aside>
-        </div>
+        <div id="listGrid"></div>
       </div>
     </section>
   </main>
 
+  <!-- Sticky cart bar -->
+  <div id="cartBar" class="cart-bar empty hide">
+    <div id="cartSummary" class="cart-summary"><span class="empty-msg">🛒 No items added yet</span></div>
+    <button id="viewCartsBtn" class="btn-view-carts" type="button" disabled>View carts</button>
+  </div>
+
+  <!-- Cart modal -->
+  <div id="cartModal" class="modal-backdrop hide">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <h2 style="margin:0;font-size:18px;">My Carts</h2>
+          <p class="sub" style="margin:4px 0 0;color:var(--text-dim);font-size:11px;">
+            Open each portal to add these items to its real cart. We track your selection here; the portals' cart API isn't public.
+          </p>
+        </div>
+        <button id="cartModalClose" class="modal-close" type="button">✕</button>
+      </div>
+      <div id="cartContent"></div>
+    </div>
+  </div>
+
   <script>
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Constants
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    const PORTAL_ORDER = ['LOCAL_VENDOR', 'HYPERPURE', 'BIGBASKET', 'BLINKIT', 'ZEPTO', 'FLIPKART_MINUTES', 'AMAZON_NOW', 'JIOMART', 'INSTAMART'];
+    const PORTAL_SOURCE_KEYS = PORTAL_ORDER.filter((k) => k !== 'LOCAL_VENDOR');
+
     const SOURCE_LABELS = {
-      AUTO_COMPARE: 'Auto compare',
       LOCAL_VENDOR: 'Local Vendor',
-      HYPERPURE: 'Hyperpure',
-      ZEPTO: 'Zepto',
-      FLIPKART_MINUTES: 'Flipkart Minutes',
-      INSTAMART: 'Instamart',
-      BLINKIT: 'Blinkit',
-      AMAZON_NOW: 'Amazon Now',
-      BIGBASKET: 'BigBasket',
-      JIOMART: 'JioMart',
+      HYPERPURE: 'Hyperpure', BIGBASKET: 'BigBasket', BLINKIT: 'Blinkit',
+      ZEPTO: 'Zepto', FLIPKART_MINUTES: 'Flipkart Minutes', AMAZON_NOW: 'Amazon Now',
+      JIOMART: 'JioMart', INSTAMART: 'Instamart',
+    };
+    const SOURCE_SHORT = {
+      LOCAL_VENDOR: 'LV', HYPERPURE: 'HP', BIGBASKET: 'BB', BLINKIT: 'BLK',
+      ZEPTO: 'ZPT', FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'AMZ',
+      JIOMART: 'JM', INSTAMART: 'IM',
+    };
+    const LOGO_CLASS = {
+      LOCAL_VENDOR: 'pl-lv', HYPERPURE: 'pl-hp', BIGBASKET: 'pl-bb', BLINKIT: 'pl-bk',
+      ZEPTO: 'pl-zp', FLIPKART_MINUTES: 'pl-fm', AMAZON_NOW: 'pl-an',
+      JIOMART: 'pl-jm', INSTAMART: 'pl-is',
+    };
+    const LOGO_LETTER = {
+      LOCAL_VENDOR: 'LV', HYPERPURE: 'H', BIGBASKET: 'BB', BLINKIT: 'B',
+      ZEPTO: 'Z', FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'A',
+      JIOMART: 'J', INSTAMART: 'I',
+    };
+    const PORTAL_SEARCH_URL = {
+      HYPERPURE: (q) => `https://www.hyperpure.com/in/search/${encodeURIComponent(String(q || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'search')}?type=SEARCH&query=${encodeURIComponent(q)}`,
+      BIGBASKET: (q) => `https://www.bigbasket.com/ps/?q=${encodeURIComponent(q)}`,
+      BLINKIT: (q) => `https://blinkit.com/s/?q=${encodeURIComponent(q)}`,
+      FLIPKART_MINUTES: (q) => `https://www.flipkart.com/search?q=${encodeURIComponent(q)}&marketplace=HYPERLOCAL`,
+      AMAZON_NOW: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}&i=nowstore`,
+      ZEPTO: (q) => `https://www.zepto.com/search?query=${encodeURIComponent(q)}`,
+      JIOMART: (q) => `https://www.jiomart.com/search?text=${encodeURIComponent(q)}`,
+      INSTAMART: (q) => `https://www.swiggy.com/instamart/search?custom_back=true&query=${encodeURIComponent(q)}`,
+    };
+    const PORTAL_CART_URL = {
+      HYPERPURE: 'https://www.hyperpure.com/in/cart',
+      BIGBASKET: 'https://www.bigbasket.com/basket/',
+      BLINKIT: 'https://blinkit.com/cart',
+      FLIPKART_MINUTES: 'https://www.flipkart.com/viewcart',
+      AMAZON_NOW: 'https://www.amazon.in/gp/cart/view.html',
+      ZEPTO: 'https://www.zepto.com/cart',
+      JIOMART: 'https://www.jiomart.com/cart',
+      INSTAMART: 'https://www.swiggy.com/instamart/checkout',
     };
 
-    const RUN_FLOW = ['DRAFT', 'QUOTING', 'REVIEW', 'CART_BUILDING', 'AWAITING_CHECKOUT', 'ORDERED', 'RECONCILED'];
-    const RUN_LABELS = {
-      DRAFT: 'Draft',
-      QUOTING: 'Quoting',
-      REVIEW: 'Review',
-      CART_BUILDING: 'Cart',
-      AWAITING_CHECKOUT: 'Checkout',
-      ORDERED: 'Ordered',
-      RECONCILED: 'Reconciled',
-    };
-    const RUN_TYPE_LABELS = {
-      MORNING_PURCHASE: 'Morning purchase',
-      EVENING_TOPUP: 'Evening top-up',
-      URGENT_FILL: 'Urgent fill',
-    };
-    const MATCH_LABELS = {
-      EXACT_ONLY: 'Exact SKU only',
-      EQUIVALENT_ALLOWED: 'Flexible equivalent',
-      COMMODITY_EQUIVALENT: 'Scout cheapest acceptable',
-      SUBSTITUTE_APPROVAL: 'Show substitutes for approval',
-      QUALITY_LOCKED: 'Quality/source locked',
-    };
-    const BUYING_RULES = {
-      EXACT_SKU: {
-        label: 'Exact SKU',
-        tone: 'exact',
-        match_rule: 'EXACT_ONLY',
-        description: 'Same brand, same pack, same use case.',
-      },
-      GENERIC_COMMODITY: {
-        label: 'Scout cheapest',
-        tone: 'generic',
-        match_rule: 'COMMODITY_EQUIVALENT',
-        description: 'Compare normalized unit rate across acceptable fresh stock.',
-      },
-      APPROVED_SUBSTITUTE: {
-        label: 'Substitute review',
-        tone: 'substitute',
-        match_rule: 'SUBSTITUTE_APPROVAL',
-        description: 'Show alternatives, but make the substitute visible before buying.',
-      },
-      QUALITY_LOCKED: {
-        label: 'Quality locked',
-        tone: 'quality',
-        match_rule: 'QUALITY_LOCKED',
-        description: 'Quality/source matters more than lowest price.',
-      },
-    };
-    const QUOTE_SOURCE_ORDER = ['LOCAL_VENDOR', 'HYPERPURE', 'ZEPTO', 'FLIPKART_MINUTES', 'INSTAMART', 'BLINKIT', 'AMAZON_NOW', 'BIGBASKET', 'JIOMART'];
-    const PORTAL_SOURCE_KEYS = QUOTE_SOURCE_ORDER.filter((key) => key !== 'LOCAL_VENDOR');
-    const STOCK_LABELS = {
-      QUOTED: 'Quoted',
-      PENDING_ADAPTER: 'Pending',
-      OUT_OF_STOCK: 'No stock',
-      UNAVAILABLE: 'Unavailable',
-      ERROR: 'Error',
-    };
-    const SESSION_LABELS = {
-      READY: 'Ready',
-      NOT_CONNECTED: 'Reconnect',
-      EXPIRED: 'Expired',
-      OTP_REQUIRED: 'OTP needed',
-      CAPTCHA_REQUIRED: 'Captcha',
-      LOCATION_MISMATCH: 'Location',
-      RATE_LIMITED: 'Rate limit',
-      BROKEN: 'Broken',
-    };
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // State
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     const state = {
-      pin: localStorage.getItem('purchaseControlPin') || '',
+      pin: localStorage.getItem('purchaseConsolePin') || '',
       user: null,
-      brand: localStorage.getItem('purchaseControlBrand') || 'HE',
-      run: null,
-      runs: [],
-      quote: {
-        batch: null,
-        batches: [],
-        quotes: [],
-        summary: null,
-        loading: false,
-      },
-      portalSessions: [],
-      portalLoading: false,
+      snapshot: { date: '', materials: [], loading: false },
+      materialsMeta: {},  // material_id -> { last_vendor_price, last_vendor_name, uom, category, vendors }
       query: '',
-      category: 'All',
-      source: 'ALL',
-      data: null,
-      cart: JSON.parse(localStorage.getItem('purchaseControlCart') || '[]'),
-      extension: {
-        ready: false,
-        version: '',
-        running: false,
-        currentRequestId: '',
-        sources: {},
-        lastSummary: null,
-        lastError: '',
-      },
-      snapshot: {
-        date: '',
-        category: localStorage.getItem('purchaseSnapshotCategory') || 'Fresh Vegetables & Produce',
-        materials: [],
-        loading: false,
-        refreshing: new Set(),
-      },
+      category: localStorage.getItem('purchaseConsoleCategory') || 'ALL',
+      refreshing: new Set(),
+      cart: JSON.parse(localStorage.getItem('purchaseConsoleCart') || '{}'),  // sourceKey -> [{material_id,name,qty,uom,price_paise,sku_url,sku_title,added_at}]
+      customSearchQuery: '',
+      customSearchResults: null,
+      customSearchRunning: false,
     };
 
     const els = {
       pinGate: document.getElementById('pinGate'),
-      app: document.getElementById('app'),
       pinInput: document.getElementById('pinInput'),
       pinError: document.getElementById('pinError'),
       unlockBtn: document.getElementById('unlockBtn'),
-      refreshBtn: document.getElementById('refreshBtn'),
+      app: document.getElementById('app'),
       subtitle: document.getElementById('subtitle'),
-      runTitle: document.getElementById('runTitle'),
-      runMeta: document.getElementById('runMeta'),
-      runTypeSelect: document.getElementById('runTypeSelect'),
-      runStatusSelect: document.getElementById('runStatusSelect'),
-      startRunBtn: document.getElementById('startRunBtn'),
-      saveRunBtn: document.getElementById('saveRunBtn'),
-      runStatusBar: document.getElementById('runStatusBar'),
-      recentRuns: document.getElementById('recentRuns'),
-      quoteMeta: document.getElementById('quoteMeta'),
-      requestQuotesBtn: document.getElementById('requestQuotesBtn'),
-      refreshQuotesBtn: document.getElementById('refreshQuotesBtn'),
-      quoteSourceStatus: document.getElementById('quoteSourceStatus'),
-      extensionStatus: document.getElementById('extensionStatus'),
-      quoteMatrix: document.getElementById('quoteMatrix'),
-      snapshotMeta: document.getElementById('snapshotMeta'),
-      snapshotGrid: document.getElementById('snapshotGrid'),
-      snapshotCategory: document.getElementById('snapshotCategory'),
-      snapshotReloadBtn: document.getElementById('snapshotReloadBtn'),
-      workflowMeta: document.getElementById('workflowMeta'),
-      workflowGrid: document.getElementById('workflowGrid'),
-      portalMeta: document.getElementById('portalMeta'),
-      portalSessions: document.getElementById('portalSessions'),
-      validateSessionsBtn: document.getElementById('validateSessionsBtn'),
-      kpis: document.getElementById('kpis'),
       searchInput: document.getElementById('searchInput'),
-      sourceStrip: document.getElementById('sourceStrip'),
-      categoryPanel: document.getElementById('categoryPanel'),
-      listTitle: document.getElementById('listTitle'),
-      listMeta: document.getElementById('listMeta'),
-      itemList: document.getElementById('itemList'),
-      copyVisibleBtn: document.getElementById('copyVisibleBtn'),
-      cartLines: document.getElementById('cartLines'),
-      trayMeta: document.getElementById('trayMeta'),
-      cartCount: document.getElementById('cartCount'),
-      trayRequestQuotesBtn: document.getElementById('trayRequestQuotesBtn'),
-      createPoBtn: document.getElementById('createPoBtn'),
-      clearCartBtn: document.getElementById('clearCartBtn'),
-      sourceGroups: document.getElementById('sourceGroups'),
+      categoryFilter: document.getElementById('categoryFilter'),
+      stat: document.getElementById('stat'),
+      reloadBtn: document.getElementById('reloadBtn'),
+      listGrid: document.getElementById('listGrid'),
+      cartBar: document.getElementById('cartBar'),
+      cartSummary: document.getElementById('cartSummary'),
+      viewCartsBtn: document.getElementById('viewCartsBtn'),
+      cartModal: document.getElementById('cartModal'),
+      cartModalClose: document.getElementById('cartModalClose'),
+      cartContent: document.getElementById('cartContent'),
+      customSearchPanel: document.getElementById('customSearchPanel'),
+      customSearchTitle: document.getElementById('customSearchTitle'),
+      customSearchClose: document.getElementById('customSearchClose'),
+      customSearchGrid: document.getElementById('customSearchGrid'),
     };
 
-    function escapeHtml(value) {
-      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;',
-      }[char]));
-    }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Helpers
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    function escapeAttr(value) {
-      return escapeHtml(value).replace(/`/g, '&#096;');
+    function escapeHtml(v) {
+      return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     }
-
-    function money(value) {
-      const n = Number(value);
-      if (!Number.isFinite(n) || n <= 0) return '-';
-      return new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        maximumFractionDigits: n >= 100 ? 0 : 2,
-      }).format(n);
+    function escapeAttr(v) { return escapeHtml(v).replace(/`/g, '&#096;'); }
+    function money(n) {
+      const v = Number(n);
+      if (!Number.isFinite(v) || v <= 0) return '—';
+      return '₹' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: v >= 100 ? 0 : 2, maximumFractionDigits: v >= 100 ? 0 : 2 }).format(v);
     }
-
-    function toast(text) {
-      const node = document.createElement('div');
-      node.className = 'toast';
-      node.textContent = text;
-      document.body.appendChild(node);
-      setTimeout(() => node.remove(), 2600);
+    function moneyPaise(p) { return money(Number(p || 0) / 100); }
+    function toast(msg, ms = 2200) {
+      const el = document.createElement('div');
+      el.className = 'toast'; el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), ms);
     }
-
-    async function fetchJson(path, options) {
-      const response = await fetch(path, options);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Request failed');
+    async function fetchJson(path, opts) {
+      const res = await fetch(path, opts);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
       return data;
     }
-
-    function saveCart() {
-      localStorage.setItem('purchaseControlCart', JSON.stringify(state.cart));
+    function persistCart() {
+      localStorage.setItem('purchaseConsoleCart', JSON.stringify(state.cart));
     }
+    function freshnessLabel(iso) {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        const ageMs = Date.now() - d.getTime();
+        if (ageMs < 60_000) return 'just now';
+        if (ageMs < 3_600_000) return `${Math.round(ageMs / 60_000)}m ago`;
+        if (ageMs < 86_400_000) return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+      } catch (_) { return ''; }
+    }
+    function portalSearchUrlFor(sourceKey, query) {
+      const fn = PORTAL_SEARCH_URL[sourceKey];
+      return fn ? fn(query || '') : '';
+    }
+    function bestUrlFor(source, materialQuery) {
+      const raw = source?.sku_url || source?.raw?.sku_url || '';
+      if (/^https?:\/\//i.test(raw)) return raw;
+      return portalSearchUrlFor(source?.source_key, materialQuery);
+    }
+    function isPortalSourceQuoted(s) {
+      return s && s.stock_status === 'QUOTED' && (Number(s.unit_price_paise) || Number(s.price_paise) || 0) > 0;
+    }
+    function sourcePrice(s) { return Number(s?.unit_price_paise || s?.price_paise || 0); }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Auth + data loading
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     async function verifyPin() {
       const pin = (els.pinInput.value || state.pin).trim();
-      if (!pin || pin.length !== 4) {
-        els.pinError.classList.remove('hide');
-        return;
-      }
-
+      if (!pin || pin.length !== 4) { els.pinError.classList.remove('hide'); return; }
       els.unlockBtn.disabled = true;
       try {
-        const data = await fetchJson(`/api/purchase-control?action=verify-pin&pin=${encodeURIComponent(pin)}`);
-        state.pin = pin;
-        state.user = data.user;
-        localStorage.setItem('purchaseControlPin', pin);
+        const d = await fetchJson(`/api/purchase-control?action=verify-pin&pin=${encodeURIComponent(pin)}`);
+        state.pin = pin; state.user = d.user;
+        localStorage.setItem('purchaseConsolePin', pin);
         els.pinGate.classList.add('hide');
         els.app.classList.remove('hide');
-        els.refreshBtn.classList.remove('hide');
-        els.subtitle.textContent = `${data.user.name} - ${data.user.role}`;
-        setBrand(state.brand, false);
-        await loadMaterials();
-        await loadRuns();
-        await loadPortalHealth();
-        loadDailySnapshot();
-      } catch (error) {
-        els.pinError.textContent = error.message || 'Invalid PIN.';
+        els.subtitle.textContent = `${d.user.name} · ${d.user.role}`;
+        await Promise.all([loadMaterialsMeta(), loadSnapshot()]);
+        renderCartBar();
+      } catch (e) {
+        els.pinError.textContent = e.message || 'Invalid PIN.';
         els.pinError.classList.remove('hide');
       } finally {
         els.unlockBtn.disabled = false;
       }
     }
 
-    // ━━━ Daily Price Board (Phase Y) ━━━━━━━━━━━━━━━━━━━━━━━
-    // Reads /api/purchase-control?action=daily-snapshot (today's morning cron
-    // output, last refresh per material × portal), renders one card per
-    // material with Local Vendor baseline + portal chips with delta-vs-baseline
-    // framing + a 🔄 button that POSTs refresh-material and re-renders inline.
-
-    const PORTAL_LOGO_CLASS = {
-      HYPERPURE: 'hp',
-      BIGBASKET: 'bb',
-      BLINKIT: 'bk',
-      JIOMART: 'jm',
-      FLIPKART_MINUTES: 'fm',
-      ZEPTO: 'zp',
-      INSTAMART: 'is',
-      AMAZON_NOW: 'an',
-      LOCAL_VENDOR: 'lv',
-    };
-    const PORTAL_LOGO_LETTER = {
-      HYPERPURE: 'H',
-      BIGBASKET: 'BB',
-      BLINKIT: 'B',
-      JIOMART: 'J',
-      FLIPKART_MINUTES: 'FM',
-      ZEPTO: 'Z',
-      INSTAMART: 'I',
-      AMAZON_NOW: 'A',
-      LOCAL_VENDOR: 'LV',
-    };
-
-    function findMaterialMeta(materialId) {
-      const items = state.data?.items || [];
-      return items.find((it) => {
-        const code = (it.product_code || '').toString();
-        if (code === materialId) return true;
-        if ((it.item_id || '').toString().replace(/^code:/, '') === materialId) return true;
-        return String(it.id || '') === materialId;
-      }) || null;
-    }
-
-    async function loadDailySnapshot() {
-      if (!state.pin) return;
-      state.snapshot.loading = true;
-      renderSnapshotBoard();
+    async function loadMaterialsMeta() {
       try {
-        const cat = state.snapshot.category || '';
-        const path = `/api/purchase-control?action=daily-snapshot&pin=${encodeURIComponent(state.pin)}&brand=BOTH${cat ? `&category=${encodeURIComponent(cat)}` : ''}`;
-        const data = await fetchJson(path);
-        state.snapshot.date = data.date;
-        state.snapshot.materials = data.materials || [];
-      } catch (err) {
-        state.snapshot.materials = [];
-        toast(err.message || 'Snapshot load failed');
-      } finally {
-        state.snapshot.loading = false;
-        renderSnapshotBoard();
-      }
-    }
-
-    async function refreshOneMaterial(materialId) {
-      if (!state.pin || state.snapshot.refreshing.has(materialId)) return;
-      state.snapshot.refreshing.add(materialId);
-      renderSnapshotBoard();
-      try {
-        const data = await fetchJson('/api/purchase-control?action=refresh-material', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            pin: state.pin,
-            material_id: materialId,
-            sources: PORTAL_SOURCE_KEYS,
-          }),
-        });
-        // Merge the returned snapshot rows into state.snapshot.materials.
-        const updated = data.snapshot || [];
-        const existing = state.snapshot.materials.find((m) => m.material_id === data.material_id);
-        if (existing) {
-          existing.sources = updated;
-        } else {
-          state.snapshot.materials.push({
-            material_id: data.material_id,
-            name: data.material_name,
-            uom: '',
-            category: state.snapshot.category,
-            brand: '',
-            sources: updated,
-          });
+        const d = await fetchJson(`/api/purchase-control?action=materials&pin=${encodeURIComponent(state.pin)}&brand=BOTH&days=30`);
+        const map = {};
+        for (const it of (d.items || [])) {
+          const id = (it.product_code || (it.item_id || '').replace(/^code:/, '') || '').toString();
+          if (!id) continue;
+          map[id] = {
+            name: it.name, uom: it.uom || 'unit', category: it.category || '—',
+            last_vendor_price: Number(it.last_vendor_price || 0),
+            last_vendor_name: it.last_vendor_name || (it.vendors || [])[0]?.name || '',
+          };
         }
-        const c = data.counts || {};
-        toast(`Refreshed ${data.material_name}: ${c.ok || 0} ok / ${c.error || 0} err of ${c.requested || 0}`);
-      } catch (err) {
-        toast(err.message || 'Refresh failed');
-      } finally {
-        state.snapshot.refreshing.delete(materialId);
-        renderSnapshotBoard();
-      }
-    }
-
-    function deltaVsBase(unitPaise, basePaise) {
-      const u = Number(unitPaise || 0);
-      const b = Number(basePaise || 0);
-      if (!u || !b) return null;
-      return Math.round(((u - b) / b) * 100);
-    }
-
-    function freshnessLabel(capturedAt) {
-      if (!capturedAt) return '';
-      try {
-        const d = new Date(capturedAt);
-        const now = new Date();
-        const ageMs = now - d;
-        if (ageMs < 60000) return 'just now';
-        if (ageMs < 3600000) return `${Math.round(ageMs / 60000)} min ago`;
-        if (ageMs < 86400000) return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-      } catch (_) { return ''; }
-    }
-
-    function portalChipHtml(source, basePaise) {
-      const key = source.source_key;
-      const logoCls = PORTAL_LOGO_CLASS[key] || 'lv';
-      const letter = PORTAL_LOGO_LETTER[key] || '?';
-      const label = source.source_label || SOURCE_LABELS[key] || key;
-      const status = String(source.stock_status || '').toUpperCase();
-      const price = Number(source.unit_price_paise || source.price_paise || 0);
-      const isQuoted = status === 'QUOTED' && price > 0;
-      const delta = isQuoted ? deltaVsBase(price, basePaise) : null;
-      const chipCls = isQuoted ? 'has-quote' : status === 'ERROR' ? 'error' : 'unavailable';
-      let deltaHtml = '';
-      if (delta !== null) {
-        const cls = delta > 2 ? 'up' : delta < -2 ? 'down' : 'flat';
-        const sign = delta > 0 ? '+' : '';
-        deltaHtml = `<div class="portal-chip-delta ${cls}">${sign}${delta}%</div>`;
-      }
-      const subText = isQuoted
-        ? escapeHtml((source.sku_title || '').slice(0, 40))
-        : status === 'ERROR'
-          ? 'error'
-          : status === 'NO_ADAPTER'
-            ? 'pending'
-            : 'no match';
-      const priceText = isQuoted ? quoteMoney(price) : '—';
-      return `
-        <div class="portal-chip ${chipCls}" title="${escapeAttr((source.match_notes || '').slice(0, 240))}">
-          <div class="portal-logo ${logoCls}">${escapeHtml(letter)}</div>
-          <div class="portal-chip-body">
-            <div class="portal-chip-name">${escapeHtml(label)}</div>
-            <div class="portal-chip-sub">${subText}</div>
-          </div>
-          <div>
-            <div class="portal-chip-price">${priceText}</div>
-            ${deltaHtml}
-          </div>
-        </div>
-      `;
-    }
-
-    function snapshotCardHtml(material) {
-      const sources = material.sources || [];
-      const local = sources.find((s) => s.source_key === 'LOCAL_VENDOR');
-      const meta = findMaterialMeta(material.material_id);
-      const basePaise = local
-        ? Number(local.unit_price_paise || local.price_paise || 0)
-        : Math.round(Number(meta?.last_vendor_price || 0) * 100);
-      const baselineName = local?.sku_title
-        || meta?.last_vendor_name
-        || (meta?.vendors || [])[0]?.name
-        || 'Local Vendor';
-      const uom = material.uom || meta?.uom || 'unit';
-      const baselineHtml = basePaise > 0
-        ? `<div class="snapshot-card-baseline"><span class="portal-logo lv">LV</span><span>${escapeHtml(baselineName)} <strong>${escapeHtml(quoteMoney(basePaise))}/${escapeHtml(uom)}</strong></span></div>`
-        : `<div class="snapshot-card-baseline"><span class="portal-logo lv">LV</span><span>No vendor baseline</span></div>`;
-      const portalOrder = PORTAL_SOURCE_KEYS;
-      const portalChips = portalOrder.map((key) => {
-        const src = sources.find((s) => s.source_key === key) || { source_key: key, stock_status: 'NO_ADAPTER' };
-        return portalChipHtml(src, basePaise);
-      }).join('');
-      const isRefreshing = state.snapshot.refreshing.has(material.material_id);
-      const lastCaptured = sources.map((s) => s.captured_at).filter(Boolean).sort().pop();
-      return `
-        <div class="snapshot-card" data-material-id="${escapeAttr(material.material_id)}">
-          <div class="snapshot-card-head">
-            <div class="snapshot-card-name">${escapeHtml(material.name)}</div>
-            <div class="snapshot-card-meta">${escapeHtml(material.category || '')} · ${escapeHtml(uom)}</div>
-          </div>
-          ${baselineHtml}
-          <div class="portal-chips">${portalChips}</div>
-          <div class="snapshot-card-actions">
-            <button class="btn-refresh-mat" data-refresh-mat="${escapeAttr(material.material_id)}" type="button" ${isRefreshing ? 'disabled' : ''}>
-              ${isRefreshing ? 'Refreshing…' : '🔄 Refresh'}
-            </button>
-            <div class="snapshot-card-fresh">${lastCaptured ? `Last priced ${escapeHtml(freshnessLabel(lastCaptured))}` : ''}</div>
-          </div>
-        </div>
-      `;
-    }
-
-    function renderSnapshotBoard() {
-      if (!els.snapshotGrid) return;
-      const mats = state.snapshot.materials || [];
-      if (state.snapshot.loading) {
-        els.snapshotMeta.textContent = 'Loading daily snapshot...';
-        els.snapshotGrid.innerHTML = `<div class="empty">Loading...</div>`;
-        return;
-      }
-      if (!mats.length) {
-        els.snapshotMeta.textContent = `No snapshot yet for ${state.snapshot.date || 'today'} in ${state.snapshot.category || 'all categories'}. Cron fires at 09:00 IST.`;
-        els.snapshotGrid.innerHTML = `<div class="empty">No daily snapshot yet — tomorrow 09:00 IST, or 🔄 Refresh on any tray item to populate now.</div>`;
-        return;
-      }
-      const totalSources = mats.reduce((sum, m) => sum + (m.sources?.length || 0), 0);
-      const quotedSources = mats.reduce((sum, m) => sum + (m.sources?.filter((s) => s.stock_status === 'QUOTED').length || 0), 0);
-      els.snapshotMeta.textContent = `${state.snapshot.date} · ${mats.length} materials · ${quotedSources}/${totalSources} portal quotes ready`;
-      els.snapshotGrid.innerHTML = mats
-        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-        .map(snapshotCardHtml)
-        .join('');
-    }
-
-    async function loadMaterials() {
-      els.itemList.innerHTML = loadingCard('Loading raw materials...');
-      try {
-        state.data = await fetchJson(`/api/purchase-control?action=materials&pin=${encodeURIComponent(state.pin)}&brand=${state.brand}&days=30`);
-      } catch (error) {
-        state.data = await fetchJson('/ops/purchase-console/live-rm-sample.json');
-        state.data.meta = { ...(state.data.meta || {}), sample: true, api_error: error.message };
-        toast('Loaded local sample data. Live PO creation needs deployed Odoo secrets.');
-      }
-      renderAll();
-    }
-
-    async function loadRuns() {
-      try {
-        const data = await fetchJson(`/api/purchase-control?action=list-runs&pin=${encodeURIComponent(state.pin)}&brand=${state.brand}&limit=12`);
-        state.runs = data.runs || [];
-        const savedId = localStorage.getItem('purchaseControlRunId');
-        const active = state.runs.find((run) => run.id === savedId)
-          || state.runs.find((run) => !['ORDERED', 'RECONCILED'].includes(run.status))
-          || null;
-        if (active && !state.run) applyRun(active);
-      } catch (_) {
-        state.runs = [];
-      }
-      renderRunPanel();
-    }
-
-    async function loadPortalHealth(validate = false) {
-      if (!state.pin) return;
-      state.portalLoading = true;
-      renderPortalSessions();
-      try {
-        const data = validate
-          ? await fetchJson('/api/purchase-control', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'validate-portal-sessions',
-              pin: state.pin,
-              sources: PORTAL_SOURCE_KEYS,
-            }),
-          })
-          : await fetchJson(`/api/purchase-control?action=portal-health&pin=${encodeURIComponent(state.pin)}`);
-        state.portalSessions = data.sessions || [];
-      } catch (error) {
-        toast(error.message || 'Portal health failed');
-      } finally {
-        state.portalLoading = false;
-        renderPortalSessions();
-      }
-    }
-
-    async function startRun() {
-      const runType = els.runTypeSelect.value || 'MORNING_PURCHASE';
-      const existingCart = [...state.cart];
-      els.startRunBtn.disabled = true;
-      try {
-        const data = await fetchJson('/api/purchase-control', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'create-run',
-            pin: state.pin,
-            brand: state.brand,
-            run_type: runType,
-          }),
-        });
-        applyRun(data.run);
-        if (existingCart.length) {
-          state.cart = existingCart;
-          saveCart();
-          await saveRun({ status: data.run.status || 'DRAFT', silent: true });
-        }
-        await loadRuns();
-        toast('Purchase run started');
-      } catch (error) {
-        const run = {
-          id: `LOCAL-${Date.now()}`,
-          brand: state.brand,
-          run_type: runType,
-          status: 'DRAFT',
-          buyer_name: state.user?.name || 'Local',
-          title: `${state.brand} ${RUN_TYPE_LABELS[runType] || 'purchase run'}`,
-          cart: state.cart,
-          items: state.cart,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          local_only: true,
-        };
-        applyRun(run);
-        if (existingCart.length) {
-          state.cart = existingCart;
-          saveCart();
-          renderAll();
-        }
-        toast('Local run started. Production D1 saves will work after deploy.');
-      } finally {
-        els.startRunBtn.disabled = false;
-        renderRunPanel();
-      }
-    }
-
-    function applyRun(run) {
-      const runChanged = state.run?.id !== run.id;
-      state.run = run;
-      localStorage.setItem('purchaseControlRunId', run.id);
-      const brandChanged = run.brand && run.brand !== state.brand;
-      if (brandChanged) setBrand(run.brand, false);
-      if (run.run_type) els.runTypeSelect.value = run.run_type;
-      if (run.status) els.runStatusSelect.value = run.status;
-      state.cart = Array.isArray(run.cart) ? run.cart : [];
-      saveCart();
-      if (runChanged) {
-        state.quote = { batch: null, batches: [], quotes: [], summary: null, loading: false };
-        if (!run.local_only && state.pin) loadQuoteSummary(run.id);
-      }
-      renderAll();
-      if (brandChanged && state.pin) loadMaterials();
-    }
-
-    function buildRunItems() {
-      return state.cart.map((line) => ({
-        ...line,
-        required_qty: line.qty,
-        status: line.status || 'NEEDED',
-      }));
-    }
-
-    async function saveRun(options = {}) {
-      if (!state.run) {
-        await startRun();
-      }
-      if (!state.run) return;
-
-      const status = options.status || els.runStatusSelect.value || state.run.status || 'DRAFT';
-      const payload = {
-        action: 'save-run',
-        pin: state.pin,
-        run_id: state.run.id,
-        brand: state.brand,
-        run_type: els.runTypeSelect.value || state.run.run_type,
-        status,
-        cart: state.cart,
-        items: buildRunItems(),
-      };
-
-      if (state.run.local_only) {
-        state.run = { ...state.run, ...payload, cart: state.cart, items: payload.items, updated_at: new Date().toISOString() };
-        renderRunPanel();
-        if (!options.silent) toast('Run saved locally');
-        return;
-      }
-
-      els.saveRunBtn.disabled = true;
-      try {
-        const data = await fetchJson('/api/purchase-control', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        applyRun(data.run);
-        await loadRuns();
-        if (!options.silent) toast('Run saved');
-      } catch (error) {
-        if (!options.silent) toast(error.message || 'Run save failed');
-      } finally {
-        els.saveRunBtn.disabled = false;
-      }
-    }
-
-    function applyQuoteData(data) {
-      state.quote = {
-        batch: data.batch || null,
-        batches: data.batches || [],
-        quotes: data.quotes || [],
-        summary: data.summary || null,
-        loading: false,
-      };
-      renderQuotePanel();
-      renderWorkflowPanel();
-      renderCart();
-    }
-
-    async function loadQuoteSummary(runId = state.run?.id) {
-      if (!runId || state.run?.local_only) {
-        state.quote = { batch: null, batches: [], quotes: [], summary: null, loading: false };
-        renderQuotePanel();
-        renderWorkflowPanel();
-        return;
-      }
-      state.quote.loading = true;
-      renderQuotePanel();
-      try {
-        const data = await fetchJson(`/api/purchase-control?action=quote-summary&pin=${encodeURIComponent(state.pin)}&run_id=${encodeURIComponent(runId)}`);
-        applyQuoteData(data);
-      } catch (error) {
-        state.quote.loading = false;
-        renderQuotePanel();
-        renderWorkflowPanel();
-        toast(error.message || 'Quote refresh failed');
-      }
-    }
-
-    async function requestQuotes() {
-      if (!state.run) await startRun();
-      if (!state.run) return;
-      if (!state.cart.length) {
-        toast('Add raw materials before getting live prices');
-        return;
-      }
-      await loadPortalHealth(true);
-      await saveRun({ status: 'QUOTING', silent: true });
-      els.requestQuotesBtn.disabled = true;
-      state.quote.loading = true;
-      state.extension.sources = {};
-      state.extension.lastError = '';
-      renderQuotePanel();
-      try {
-        const data = await fetchJson('/api/purchase-control', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'request-quotes',
-            pin: state.pin,
-            run_id: state.run.id,
-            include_local: true,
-            sources: PORTAL_SOURCE_KEYS,
-          }),
-        });
-        applyRun(data.run);
-        applyQuoteData(data);
-        await loadPortalHealth();
-        toast('Live price run created');
-        runLiveQuotesThroughExtension(data);
-      } catch (error) {
-        state.quote.loading = false;
-        renderQuotePanel();
-        renderWorkflowPanel();
-        toast(error.message || 'Quote request failed');
-      } finally {
-        els.requestQuotesBtn.disabled = false;
-      }
-    }
-
-    // ━━━ Chrome extension bridge ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // The dashboard talks to the HN Purchase Portal Capture extension via a
-    // content script (console-bridge.js). We send `RUN_LIVE_QUOTES` after a
-    // quote batch is created; the extension cycles through ready portal tabs
-    // and posts back STATUS / COMPLETE / ERROR. If the extension isn't loaded
-    // we leave the existing manual popup flow as the fallback.
-
-    function setExtensionStatus(next) {
-      state.extension = { ...state.extension, ...next };
-      renderQuotePanel();
-    }
-
-    function readyPortalSources() {
-      const ready = new Set(
-        (state.portalSessions || [])
-          .filter((session) => String(session.status || '').toUpperCase() === 'READY')
-          .map((session) => session.source_key)
-      );
-      return PORTAL_SOURCE_KEYS.filter((key) => ready.has(key));
-    }
-
-    function pingExtensionBridge() {
-      try {
-        window.postMessage(
-          { source: 'HN_PURCHASE_CONSOLE', type: 'PING', requestId: 'ping' },
-          window.location.origin,
-        );
+        state.materialsMeta = map;
       } catch (_) {}
     }
 
-    function runLiveQuotesThroughExtension(quoteData) {
-      const batchId = quoteData?.batch?.id || state.quote?.batch?.id;
-      if (!batchId) return;
-      if (!state.extension.ready) {
-        setExtensionStatus({
-          lastError: 'Chrome extension not detected. Reload "HN Purchase Portal Capture" and refresh this page, or use the per-portal popup as a fallback.',
-        });
-        return;
-      }
-      const sources = readyPortalSources();
-      if (!sources.length) {
-        setExtensionStatus({
-          lastError: 'No portal sessions are READY. Capture sessions before running live prices.',
-        });
-        return;
-      }
-      const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      const initialSources = sources.reduce((acc, key) => {
-        acc[key] = { state: 'queued', detail: 'Waiting in queue' };
-        return acc;
-      }, {});
-      setExtensionStatus({
-        running: true,
-        currentRequestId: requestId,
-        sources: initialSources,
-        lastError: '',
-        lastSummary: null,
-      });
+    async function loadSnapshot() {
+      if (!state.pin) return;
+      state.snapshot.loading = true;
+      els.listGrid.innerHTML = `<div class="empty-state">Loading today's snapshot…</div>`;
       try {
-        window.postMessage({
-          source: 'HN_PURCHASE_CONSOLE',
-          type: 'RUN_LIVE_QUOTES',
-          requestId,
-          payload: {
-            pin: state.pin,
-            batch_id: batchId,
-            run_id: state.run?.id || '',
-            sources,
-          },
-        }, window.location.origin);
-      } catch (error) {
-        setExtensionStatus({
-          running: false,
-          lastError: error?.message || 'Could not dispatch live-price run',
-        });
+        const d = await fetchJson(`/api/purchase-control?action=daily-snapshot&pin=${encodeURIComponent(state.pin)}&brand=BOTH`);
+        state.snapshot.date = d.date;
+        state.snapshot.materials = d.materials || [];
+        // Build category dropdown options based on the data we have
+        const cats = new Set(state.snapshot.materials.map((m) => m.category || '—').filter(Boolean));
+        const opts = ['<option value="ALL">All categories</option>',
+          ...[...cats].sort().map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`)];
+        els.categoryFilter.innerHTML = opts.join('');
+        if ([...cats].includes(state.category) || state.category === 'ALL') {
+          els.categoryFilter.value = state.category;
+        } else {
+          state.category = 'ALL'; els.categoryFilter.value = 'ALL';
+        }
+      } catch (err) {
+        toast(err.message || 'Snapshot load failed');
+      } finally {
+        state.snapshot.loading = false;
+        renderList();
       }
     }
 
-    window.addEventListener('message', (event) => {
-      if (event.source !== window) return;
-      const data = event.data;
-      if (!data || typeof data !== 'object') return;
-      if (data.source !== 'HN_PURCHASE_BRIDGE') return;
-      const payload = data.payload || {};
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Cart logic
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-      if (data.type === 'READY') {
-        setExtensionStatus({ ready: true, version: data.version || state.extension.version });
-        return;
-      }
+    function cartItemIndex(sourceKey, materialId) {
+      const lines = state.cart[sourceKey] || [];
+      return lines.findIndex((l) => l.material_id === materialId);
+    }
+    function isInCart(sourceKey, materialId) { return cartItemIndex(sourceKey, materialId) >= 0; }
+    function addToCart(material, source, qty) {
+      const sourceKey = source.source_key;
+      if (!state.cart[sourceKey]) state.cart[sourceKey] = [];
+      const line = {
+        material_id: material.material_id,
+        name: material.name,
+        qty: Number(qty) || 1,
+        uom: material.uom || state.materialsMeta[material.material_id]?.uom || 'unit',
+        price_paise: Number(source.unit_price_paise || source.price_paise || 0),
+        sku_url: bestUrlFor(source, material.name),
+        sku_title: source.sku_title || material.name,
+        portal_label: SOURCE_LABELS[sourceKey] || sourceKey,
+        added_at: new Date().toISOString(),
+      };
+      const idx = cartItemIndex(sourceKey, material.material_id);
+      if (idx >= 0) { state.cart[sourceKey][idx] = line; } else { state.cart[sourceKey].push(line); }
+      persistCart();
+      renderCartBar(); renderList();
+      toast(`Added ${material.name} · ${line.portal_label}`);
+    }
+    function removeFromCart(sourceKey, materialId) {
+      const lines = state.cart[sourceKey] || [];
+      state.cart[sourceKey] = lines.filter((l) => l.material_id !== materialId);
+      if (!state.cart[sourceKey].length) delete state.cart[sourceKey];
+      persistCart();
+      renderCartBar(); renderCartModal(); renderList();
+    }
+    function setCartQty(sourceKey, materialId, qty) {
+      const lines = state.cart[sourceKey] || [];
+      const line = lines.find((l) => l.material_id === materialId);
+      if (line) { line.qty = Math.max(0.01, Number(qty) || 1); persistCart(); renderCartBar(); renderCartModal(); }
+    }
 
-      if (data.type === 'STATUS') {
-        const key = payload.source_key;
-        if (!key) return;
-        if (state.extension.currentRequestId && payload.requestId && payload.requestId !== state.extension.currentRequestId) return;
-        const next = { ...state.extension.sources };
-        next[key] = {
-          state: payload.state || 'running',
-          detail: payload.detail || '',
-          source_label: payload.source_label || SOURCE_LABELS[key] || key,
-          summary: payload.summary || null,
-        };
-        setExtensionStatus({ sources: next });
-        if (payload.state === 'done' || payload.state === 'no_jobs') {
-          loadQuoteSummary().catch(() => {});
+    function cartTotals() {
+      const totals = {};
+      let grand = 0;
+      for (const [src, lines] of Object.entries(state.cart)) {
+        let portalTotal = 0; let portalCount = 0;
+        for (const l of lines) {
+          portalTotal += (l.price_paise / 100) * (l.qty || 1);
+          portalCount += 1;
         }
+        totals[src] = { count: portalCount, total: portalTotal };
+        grand += portalTotal;
+      }
+      return { byPortal: totals, grand };
+    }
+
+    function renderCartBar() {
+      const { byPortal, grand } = cartTotals();
+      const portalKeys = Object.keys(byPortal);
+      els.cartBar.classList.remove('hide');
+      if (!portalKeys.length) {
+        els.cartBar.classList.add('empty');
+        els.cartSummary.innerHTML = `<span class="empty-msg">🛒 No items added yet — tap [➕ Add] on any deal to start a cart</span>`;
+        els.viewCartsBtn.disabled = true;
+        return;
+      }
+      els.cartBar.classList.remove('empty');
+      const pills = portalKeys.sort().map((sk) => {
+        const t = byPortal[sk];
+        return `<span class="portal-pill" title="${escapeAttr(SOURCE_LABELS[sk] || sk)}">
+          <span class="alt-chip-logo ${LOGO_CLASS[sk] || ''}">${escapeHtml(LOGO_LETTER[sk] || '?')}</span>
+          ${escapeHtml(SOURCE_SHORT[sk] || sk)}·${t.count}
+          <span class="pill-total">${money(t.total)}</span>
+        </span>`;
+      }).join('');
+      els.cartSummary.innerHTML = `🛒 ${pills} <span class="pill-total" style="margin-left:8px;">Total ${money(grand)}</span>`;
+      els.viewCartsBtn.disabled = false;
+    }
+
+    function renderCartModal() {
+      const { byPortal, grand } = cartTotals();
+      const portalKeys = Object.keys(byPortal).sort();
+      if (!portalKeys.length) {
+        els.cartContent.innerHTML = `<div class="empty-state">Your carts are empty. Tap [➕ Add] on any best-deal card to start a cart.</div>`;
+        return;
+      }
+      const sections = portalKeys.map((sk) => {
+        const lines = state.cart[sk] || [];
+        const t = byPortal[sk];
+        const linesHtml = lines.map((l) => `
+          <div class="cart-line">
+            <div>
+              <div class="cart-line-name">${escapeHtml(l.name)}</div>
+              <div class="cart-line-meta">${escapeHtml(l.sku_title || '')}</div>
+            </div>
+            <div class="mat-qty" style="border:1px solid var(--pc-line);">
+              <button type="button" data-qty-dec="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">−</button>
+              <input type="number" min="0.01" step="0.25" value="${escapeAttr(l.qty)}" data-qty-input="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">
+              <span class="uom">${escapeHtml(l.uom)}</span>
+              <button type="button" data-qty-inc="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">+</button>
+            </div>
+            <div class="cart-line-price">${moneyPaise(l.price_paise * (l.qty || 1))}</div>
+            <button class="cart-line-remove" type="button" data-cart-remove="${escapeAttr(sk)}|${escapeAttr(l.material_id)}" title="Remove">✕</button>
+          </div>
+        `).join('');
+        const cartHref = PORTAL_CART_URL[sk] || portalSearchUrlFor(sk, '');
+        return `
+          <div class="cart-portal-section">
+            <div class="cart-portal-head">
+              <div class="best-portal-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</div>
+              <div>
+                <div class="cart-portal-name">${escapeHtml(SOURCE_LABELS[sk])}</div>
+                <div class="cart-line-meta">${t.count} item${t.count === 1 ? '' : 's'}</div>
+              </div>
+              <div class="cart-portal-total">${money(t.total)}</div>
+              <a class="cart-portal-open" href="${escapeAttr(cartHref)}" target="_blank" rel="noopener">Open ${escapeHtml(SOURCE_SHORT[sk])} cart ↗</a>
+            </div>
+            ${linesHtml}
+          </div>
+        `;
+      }).join('');
+      const grandHtml = `<div style="text-align:right;font-size:14px;font-weight:900;padding:8px;border-top:1px solid var(--pc-line);">Grand total: ${money(grand)}</div>`;
+      els.cartContent.innerHTML = sections + grandHtml;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Material list rendering
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    function bestSourceFor(material) {
+      const portals = (material.sources || []).filter((s) => s.source_key !== 'LOCAL_VENDOR' && isPortalSourceQuoted(s));
+      portals.sort((a, b) => sourcePrice(a) - sourcePrice(b));
+      return portals[0] || null;
+    }
+    function quotedSourcesSortedFor(material) {
+      const portals = (material.sources || []).filter((s) => s.source_key !== 'LOCAL_VENDOR' && isPortalSourceQuoted(s));
+      portals.sort((a, b) => sourcePrice(a) - sourcePrice(b));
+      return portals;
+    }
+    function baselineFor(material) {
+      const meta = state.materialsMeta[material.material_id] || {};
+      const lvSource = (material.sources || []).find((s) => s.source_key === 'LOCAL_VENDOR' && isPortalSourceQuoted(s));
+      if (lvSource) return { paise: sourcePrice(lvSource), name: lvSource.sku_title || meta.last_vendor_name || 'Local Vendor' };
+      if (meta.last_vendor_price > 0) return { paise: Math.round(meta.last_vendor_price * 100), name: meta.last_vendor_name || 'Local Vendor' };
+      return null;
+    }
+    function deltaVsBase(price, base) {
+      if (!base || !base.paise) return '';
+      const d = Math.round(((price - base.paise) / base.paise) * 100);
+      if (!Number.isFinite(d)) return '';
+      const sign = d > 0 ? '+' : '';
+      const cls = d > 2 ? 'up' : d < -2 ? 'down' : 'flat';
+      const color = cls === 'up' ? 'color:var(--pc-red);' : cls === 'down' ? 'color:var(--pc-green);' : 'color:var(--text-dim);';
+      return `<span style="${color}font-size:10px;font-weight:700;">${sign}${d}%</span>`;
+    }
+
+    function renderQuantityControl(material, currentQty) {
+      const uom = material.uom || state.materialsMeta[material.material_id]?.uom || 'unit';
+      return `
+        <div class="mat-qty">
+          <button type="button" data-mat-qty-dec="${escapeAttr(material.material_id)}">−</button>
+          <input type="number" min="0.01" step="0.25" value="${escapeAttr(currentQty)}" data-mat-qty-input="${escapeAttr(material.material_id)}">
+          <span class="uom">${escapeHtml(uom)}</span>
+          <button type="button" data-mat-qty-inc="${escapeAttr(material.material_id)}">+</button>
+        </div>
+      `;
+    }
+
+    function renderMaterialRow(material) {
+      const meta = state.materialsMeta[material.material_id] || {};
+      const uom = material.uom || meta.uom || 'unit';
+      const best = bestSourceFor(material);
+      const allQuoted = quotedSourcesSortedFor(material);
+      const baseline = baselineFor(material);
+      const qty = (material._qty == null ? 1 : material._qty);
+      const inCartSourceKey = best ? (isInCart(best.source_key, material.material_id) ? best.source_key : null) : null;
+      const inCartAnywhere = Object.entries(state.cart).some(([sk, lines]) => lines.some((l) => l.material_id === material.material_id));
+      const rowCls = `mat-row ${best ? 'has-best' : ''} ${inCartAnywhere ? 'in-cart' : ''}`;
+
+      let bestHtml = '';
+      if (best) {
+        const price = sourcePrice(best);
+        const sk = best.source_key;
+        const sku = (best.sku_title || '').slice(0, 60);
+        const delta = baseline ? deltaVsBase(price, baseline) : '';
+        const openHref = bestUrlFor(best, material.name);
+        const inCart = inCartSourceKey != null;
+        const actionLabel = inCart ? '✓ In cart' : '➕ Add';
+        const actionCls = inCart ? 'in-cart' : 'add';
+        const rateText = `${moneyPaise(price)}/${uom}`;
+        bestHtml = `
+          <div class="best-deal">
+            <div class="best-portal-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</div>
+            <div class="best-deal-body">
+              <div class="best-deal-portal">⭐ ${escapeHtml(SOURCE_LABELS[sk])} · 🏆 cheapest</div>
+              <div class="best-deal-sku" title="${escapeAttr(best.sku_title || '')}">${escapeHtml(sku)}</div>
+            </div>
+            <div>
+              <div class="best-deal-price">${moneyPaise(price)}</div>
+              <div class="best-deal-rate">${rateText} ${delta}</div>
+            </div>
+            <div class="best-deal-actions">
+              <a class="action-btn" href="${escapeAttr(openHref)}" target="_blank" rel="noopener" title="Open ${escapeAttr(SOURCE_LABELS[sk])}">Open ↗</a>
+              <button class="action-btn ${actionCls}" type="button" data-add-mat="${escapeAttr(material.material_id)}" data-add-source="${escapeAttr(sk)}">${actionLabel}</button>
+            </div>
+          </div>
+        `;
+      } else {
+        bestHtml = `
+          <div class="best-deal no-best">
+            <div class="best-portal-logo pl-lv">—</div>
+            <div class="best-deal-body">
+              <div class="best-deal-portal" style="color:var(--text-dim);">No portal price available</div>
+              <div class="best-deal-sku">Tap 🔄 to rescout, or use Local Vendor</div>
+            </div>
+            <div></div>
+            <div class="best-deal-actions"><button class="row-refresh" data-row-refresh="${escapeAttr(material.material_id)}" type="button" title="Rescout this material">🔄</button></div>
+          </div>
+        `;
+      }
+
+      // Alternatives chips — all non-best portals (sorted by price asc, unavailable last)
+      const altsHtml = PORTAL_SOURCE_KEYS.map((sk) => {
+        if (best && sk === best.source_key) return '';
+        const s = (material.sources || []).find((x) => x.source_key === sk);
+        if (!s) {
+          // No row — show as unavailable but still allow click → portal search
+          const url = portalSearchUrlFor(sk, material.name);
+          return url
+            ? `<a class="alt-chip disabled" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="Search on ${escapeAttr(SOURCE_LABELS[sk])}">
+              <span class="alt-chip-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</span>
+              <span class="alt-chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span>
+              <span class="alt-chip-price">—</span>
+            </a>` : '';
+        }
+        const quoted = isPortalSourceQuoted(s);
+        const url = bestUrlFor(s, material.name);
+        const price = quoted ? moneyPaise(sourcePrice(s)) : (s.stock_status === 'ERROR' ? 'err' : '—');
+        return `
+          <a class="alt-chip ${quoted ? '' : 'disabled'}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(s.sku_title || SOURCE_LABELS[sk])}">
+            <span class="alt-chip-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</span>
+            <span class="alt-chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span>
+            <span class="alt-chip-price">${escapeHtml(price)}</span>
+          </a>
+        `;
+      }).filter(Boolean).join('');
+
+      // Local-vendor baseline line
+      let baselineHtml = '';
+      if (baseline) {
+        baselineHtml = `<div class="baseline-line">📍 Local Vendor (${escapeHtml(baseline.name)}): <strong>${moneyPaise(baseline.paise)}/${escapeHtml(uom)}</strong></div>`;
+      }
+
+      const refreshDisabled = state.refreshing.has(material.material_id);
+
+      return `
+        <div class="${rowCls}" data-mat-id="${escapeAttr(material.material_id)}">
+          <div class="mat-row-head">
+            <div></div>
+            <div>
+              <div class="mat-row-name">${escapeHtml(material.name)}</div>
+              <div class="mat-row-meta">${escapeHtml(meta.category || material.category || '—')} · ${escapeHtml(uom)}</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              ${renderQuantityControl(material, qty)}
+              <button class="row-refresh" type="button" data-row-refresh="${escapeAttr(material.material_id)}" title="Rescout this material" ${refreshDisabled ? 'disabled' : ''}>${refreshDisabled ? '⟳' : '🔄'}</button>
+            </div>
+          </div>
+          ${bestHtml}
+          ${baselineHtml}
+          <div class="alts-row">${altsHtml}</div>
+        </div>
+      `;
+    }
+
+    function renderList() {
+      const mats = state.snapshot.materials || [];
+      const q = (state.query || '').trim().toLowerCase();
+      // Cross-reference materials meta to fill missing data
+      const filtered = mats.filter((m) => {
+        if (state.category !== 'ALL' && (m.category || '—') !== state.category) return false;
+        if (!q) return true;
+        const meta = state.materialsMeta[m.material_id] || {};
+        const hay = (m.name + ' ' + (meta.category || '') + ' ' + (m.material_id || '')).toLowerCase();
+        if (hay.includes(q)) return true;
+        // Also search inside SKU titles
+        for (const s of (m.sources || [])) {
+          if ((s.sku_title || '').toLowerCase().includes(q)) return true;
+        }
+        return false;
+      });
+
+      // Group by category
+      const groups = new Map();
+      for (const m of filtered) {
+        const c = m.category || '—';
+        if (!groups.has(c)) groups.set(c, []);
+        groups.get(c).push(m);
+      }
+
+      // Update stat
+      const totalQuotes = filtered.reduce((acc, m) => acc + (m.sources || []).filter((s) => isPortalSourceQuoted(s)).length, 0);
+      els.stat.textContent = `${filtered.length} materials · ${totalQuotes} live quotes`;
+
+      if (!filtered.length) {
+        els.listGrid.innerHTML = `<div class="empty-state">${q ? `No materials match "${escapeHtml(q)}"` : 'No materials available'}</div>`;
         return;
       }
 
-      if (data.type === 'COMPLETE') {
-        if (state.extension.currentRequestId && payload.requestId && payload.requestId !== state.extension.currentRequestId) return;
-        setExtensionStatus({
-          running: false,
-          lastSummary: payload.result || null,
-        });
-        loadQuoteSummary().catch(() => {});
-        return;
-      }
+      const ordered = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      const html = ordered.map(([cat, items]) => {
+        items.sort((a, b) => a.name.localeCompare(b.name));
+        const rows = items.map(renderMaterialRow).join('');
+        return `
+          <section class="cat-section">
+            <div class="cat-head">
+              <h2>${escapeHtml(cat)}</h2>
+              <span class="cat-count">${items.length} item${items.length === 1 ? '' : 's'}</span>
+            </div>
+            ${rows}
+          </section>
+        `;
+      }).join('');
+      els.listGrid.innerHTML = html;
+    }
 
-      if (data.type === 'ERROR') {
-        if (state.extension.currentRequestId && payload.requestId && payload.requestId !== state.extension.currentRequestId) return;
-        setExtensionStatus({
-          running: false,
-          lastError: payload.error || 'Live-price run failed',
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // On-demand refresh
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    async function refreshOneMaterial(materialId) {
+      if (!state.pin || state.refreshing.has(materialId)) return;
+      state.refreshing.add(materialId);
+      renderList();
+      try {
+        const d = await fetchJson('/api/purchase-control?action=refresh-material', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: state.pin, material_id: materialId, sources: PORTAL_SOURCE_KEYS }),
         });
-        return;
+        const updated = (d.snapshot || []);
+        const idx = state.snapshot.materials.findIndex((m) => m.material_id === d.material_id);
+        if (idx >= 0) state.snapshot.materials[idx].sources = updated;
+        const c = d.counts || {};
+        toast(`${d.material_name}: ${c.ok || 0} ok · ${c.error || 0} err`);
+      } catch (err) {
+        toast(err.message || 'Refresh failed');
+      } finally {
+        state.refreshing.delete(materialId);
+        renderList();
       }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Custom SKU search
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    async function runCustomSearch(rawQuery) {
+      const q = (rawQuery || '').trim();
+      if (!q) { els.customSearchPanel.classList.add('hide'); return; }
+      state.customSearchQuery = q;
+      state.customSearchRunning = true;
+      els.customSearchPanel.classList.remove('hide');
+      els.customSearchTitle.textContent = `Custom search: "${q}"`;
+      els.customSearchGrid.innerHTML = `<div class="empty-state">Scouting across 8 portals for "${escapeHtml(q)}"…</div>`;
+      // Use the first material's id as a placeholder; refresh-material requires a material_id.
+      // We fake a scoutable material by submitting via a special "search" path.
+      // We use the EXACT-SKU search via refresh-material on the first available material id, but custom query
+      // — actually we'll iterate through portal search URLs directly (open new tabs is the fallback).
+      // Simpler approach: present per-portal search links the user can open in new tabs.
+      const chips = PORTAL_SOURCE_KEYS.map((sk) => {
+        const url = portalSearchUrlFor(sk, q);
+        return `
+          <a class="alt-chip" href="${escapeAttr(url)}" target="_blank" rel="noopener" style="font-size:13px;padding:8px 12px;">
+            <span class="alt-chip-logo ${LOGO_CLASS[sk]}" style="width:22px;height:22px;font-size:10px;">${escapeHtml(LOGO_LETTER[sk])}</span>
+            <span class="alt-chip-name">${escapeHtml(SOURCE_LABELS[sk])} ↗</span>
+          </a>
+        `;
+      }).join('');
+      els.customSearchGrid.innerHTML = `
+        <div style="margin-bottom:8px;font-size:11px;color:var(--text-dim);">
+          Open this exact SKU on each portal. Compare manually — our scout works against materials in your purchase list, not arbitrary queries.
+        </div>
+        <div class="alts-row" style="padding-left:0;">${chips}</div>
+      `;
+      state.customSearchRunning = false;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Event wiring
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    els.unlockBtn.addEventListener('click', verifyPin);
+    els.pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyPin(); });
+    els.reloadBtn.addEventListener('click', loadSnapshot);
+    els.categoryFilter.addEventListener('change', (e) => {
+      state.category = e.target.value;
+      localStorage.setItem('purchaseConsoleCategory', state.category);
+      renderList();
     });
 
-    function renderExtensionStatus() {
-      const el = els.extensionStatus;
-      if (!el) return;
-      const ext = state.extension || {};
-      const fragments = [];
-      let cls = 'extension-status';
-      if (ext.ready) {
-        cls += ' show ready';
-        fragments.push(`Chrome extension ready${ext.version ? ` v${escapeHtml(ext.version)}` : ''}.`);
-      } else {
-        cls += ' show missing';
-        fragments.push('Chrome extension not detected. Load "HN Purchase Portal Capture" and refresh.');
-      }
-      if (ext.running) {
-        cls += ' running';
-        const inFlight = Object.entries(ext.sources || {})
-          .filter(([, value]) => value.state === 'running' || value.state === 'starting')
-          .map(([key]) => SOURCE_LABELS[key] || key);
-        fragments.push(inFlight.length ? `Searching ${inFlight.join(', ')}…` : 'Running portal tabs…');
-      } else if (ext.lastSummary) {
-        const sources = Array.isArray(ext.lastSummary.sources) ? ext.lastSummary.sources : [];
-        const done = sources.filter((entry) => entry.state === 'done').length;
-        const errors = sources.filter((entry) => entry.state === 'error').length;
-        if (sources.length) fragments.push(`Last run: ${done} portals returned prices, ${errors} errors.`);
-      }
-      if (ext.lastError) {
-        cls += ' error';
-        fragments.push(escapeHtml(ext.lastError));
-      }
-      el.className = cls;
-      el.innerHTML = fragments.map((line, idx) => `<div${idx ? ' style="margin-top:4px;"' : ''}>${line}</div>`).join('');
-    }
-
-    function loadingCard(text) {
-      return `<div class="card empty"><div>${escapeHtml(text)}</div></div>`;
-    }
-
-    function setBrand(brand, reload = true) {
-      state.brand = brand;
-      localStorage.setItem('purchaseControlBrand', brand);
-      document.querySelectorAll('[data-brand]').forEach((button) => {
-        button.classList.toggle('active', button.dataset.brand === brand);
-      });
-      if (reload && state.pin) {
-        loadMaterials();
-        loadRuns();
-      }
-    }
-
-    function setSource(source) {
-      state.source = source;
-      renderAll();
-    }
-
-    function setCategory(category) {
-      state.category = category;
-      renderAll();
-    }
-
-    function itemById(id) {
-      return (state.data?.items || []).find((item) => item.id === id);
-    }
-
-    function currentItems() {
-      const q = state.query.trim().toLowerCase();
-      return (state.data?.items || []).filter((item) => {
-        if (state.category !== 'All' && item.category !== state.category) return false;
-        if (state.source !== 'ALL' && !(item.source_keys || []).includes(state.source)) return false;
-        if (!q) return true;
-        const haystack = [
-          item.name,
-          item.product_code,
-          item.category,
-          item.uom,
-          item.last_vendor_name,
-          ...(item.vendors || []).map((vendor) => vendor.name),
-          ...(item.source_keys || []).map((key) => SOURCE_LABELS[key] || key),
-        ].join(' ').toLowerCase();
-        return haystack.includes(q);
-      });
-    }
-
-    function renderAll() {
-      if (!state.data) return;
-      renderRunPanel();
-      renderPortalSessions();
-      renderWorkflowPanel();
-      renderQuotePanel();
-      renderKpis();
-      renderSources();
-      renderCategories();
-      renderItems();
-      renderCart();
-    }
-
-    function renderRunPanel() {
-      const run = state.run;
-      if (!run) {
-        els.runTitle.textContent = 'No active purchase run';
-        els.runMeta.textContent = 'Start a run before building today’s order.';
-        els.runStatusSelect.value = 'DRAFT';
-        els.runStatusBar.innerHTML = RUN_FLOW.map((status) => `<span class="status-step">${escapeHtml(RUN_LABELS[status])}</span>`).join('');
-      } else {
-        const count = state.cart.length;
-        const updated = run.updated_at ? new Date(run.updated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'now';
-        els.runTitle.textContent = `${run.brand} ${RUN_TYPE_LABELS[run.run_type] || 'Purchase run'}`;
-        els.runMeta.textContent = `${run.id} - ${count} line${count === 1 ? '' : 's'} - updated ${updated}`;
-        els.runTypeSelect.value = run.run_type || 'MORNING_PURCHASE';
-        els.runStatusSelect.value = run.status || 'DRAFT';
-        const activeIndex = RUN_FLOW.indexOf(run.status || 'DRAFT');
-        els.runStatusBar.innerHTML = RUN_FLOW.map((status, index) => {
-          const cls = index === activeIndex ? 'active' : index < activeIndex ? 'done' : '';
-          return `<span class="status-step ${cls}">${escapeHtml(RUN_LABELS[status])}</span>`;
-        }).join('');
-      }
-
-      els.recentRuns.innerHTML = (state.runs || []).slice(0, 8).map((recent) => `
-        <button class="run-chip ${run?.id === recent.id ? 'active' : ''}" type="button" data-load-run="${escapeHtml(recent.id)}">
-          ${escapeHtml(recent.brand)} ${escapeHtml(RUN_LABELS[recent.status] || recent.status)}
-        </button>
-      `).join('');
-    }
-
-    function sessionStatusClass(status) {
-      if (status === 'READY') return 'ready';
-      if (status === 'BROKEN' || status === 'CAPTCHA_REQUIRED' || status === 'RATE_LIMITED') return 'bad';
-      return 'action';
-    }
-
-    function sessionSubtitle(session) {
-      if (session.status === 'READY') {
-        const expiry = session.expires_at ? `expires ${new Date(session.expires_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}` : 'expiry unknown';
-        return [session.account_label, session.pincode, expiry].filter(Boolean).join(' - ');
-      }
-      return session.issue_detail || 'Reconnect from Chrome capture';
-    }
-
-    function renderPortalSessions() {
-      if (!els.portalSessions) return;
-      const sessions = state.portalSessions || [];
-      const ready = sessions.filter((session) => session.status === 'READY').length;
-      const total = PORTAL_SOURCE_KEYS.length;
-      els.validateSessionsBtn.disabled = state.portalLoading;
-      els.portalMeta.textContent = state.portalLoading
-        ? 'Checking portal login health...'
-        : `${ready}/${total} portal logins ready`;
-
-      const rows = sessions.length
-        ? sessions
-        : PORTAL_SOURCE_KEYS.map((key) => ({
-          source_key: key,
-          source_label: SOURCE_LABELS[key],
-          status: 'NOT_CONNECTED',
-          issue_detail: 'No saved session',
-          url: '',
-        }));
-
-      els.portalSessions.innerHTML = rows.map((session) => `
-        <div class="session-card ${sessionStatusClass(session.status)}">
-          <div class="session-name">${escapeHtml(session.source_label || SOURCE_LABELS[session.source_key] || session.source_key)}</div>
-          <span class="quote-status ${session.status === 'READY' ? 'quoted' : session.status === 'NOT_CONNECTED' || session.status === 'EXPIRED' ? 'pending' : 'bad'}">${escapeHtml(SESSION_LABELS[session.status] || session.status)}</span>
-          <div class="session-meta">${escapeHtml(sessionSubtitle(session))}</div>
-          <div class="session-meta">${escapeHtml(session.cookie_count || 0)} cookies - ${escapeHtml(session.token_count || 0)} token refs</div>
-        </div>
-      `).join('');
-    }
-
-    function quoteCounts() {
-      const summary = state.quote?.summary || {};
-      const quotes = state.quote?.quotes || [];
-      return {
-        quoted: Number(summary.quoted_count || 0),
-        portalQuoted: quotes.filter((quote) => quote.source_key !== 'LOCAL_VENDOR' && quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0).length,
-        localQuoted: quotes.filter((quote) => quote.source_key === 'LOCAL_VENDOR' && quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0).length,
-        pending: Number(summary.pending_count || 0),
-        unavailable: Number(summary.unavailable_count || 0),
-        errors: Number(summary.error_count || 0),
-      };
-    }
-
-    function nextBuyerAction() {
-      if (!state.run) return 'Start a purchase run for HE, NCH, or Both.';
-      if (!state.cart.length) return 'Add today’s raw materials to the order tray.';
-      if (!state.quote?.batch) return 'Click Get live prices to create one comparison batch.';
-      const counts = quoteCounts();
-      if (counts.pending > 0) return 'Run the pending portal tabs so live SKU prices can come back.';
-      if (counts.portalQuoted > 0) return 'Review the recommended source for each raw material.';
-      return 'No live prices found yet. Refresh prices or adjust the buying spec.';
-    }
-
-    function renderWorkflowPanel() {
-      if (!els.workflowGrid) return;
-      const counts = quoteCounts();
-      const ready = (state.portalSessions || []).filter((session) => session.status === 'READY').length;
-      const hasRun = !!state.run;
-      const hasCart = state.cart.length > 0;
-      const hasBatch = !!state.quote?.batch;
-      const hasPending = counts.pending > 0;
-      const hasPrices = counts.portalQuoted > 0;
-      const steps = [
-        {
-          kicker: 'Step 1',
-          title: hasCart ? `${state.cart.length} items in tray` : 'Build purchase tray',
-          copy: hasCart ? 'Quantity can wait until pack size and price are visible.' : 'Add raw materials to scout.',
-          state: hasCart ? 'done' : hasRun ? 'active' : '',
-        },
-        {
-          kicker: 'Step 2',
-          title: hasBatch ? 'Live price run created' : 'Get live prices',
-          copy: hasBatch ? `${counts.portalQuoted} portal prices, ${counts.localQuoted} baselines, ${counts.pending} searches waiting.` : 'Creates one batch across all ready portals.',
-          state: hasBatch ? 'done' : hasCart ? 'active' : '',
-        },
-        {
-          kicker: 'Step 3',
-          title: hasPending ? 'Run portal tabs' : 'Portal scans',
-          copy: hasPending ? `${counts.pending} portal searches still need the extension.` : `${ready}/${PORTAL_SOURCE_KEYS.length} logins ready.`,
-          state: hasPending ? 'active' : hasBatch ? 'done' : '',
-        },
-        {
-          kicker: 'Step 4',
-          title: hasPrices ? 'Review source split' : 'Choose winners',
-          copy: hasPrices ? 'Use recommended source, cheapest, and fastest delivery per item.' : 'Recommendations appear after prices return.',
-          state: hasPrices && !hasPending ? 'active' : hasPrices ? 'done' : '',
-        },
-      ];
-      els.workflowMeta.textContent = nextBuyerAction();
-      els.workflowGrid.innerHTML = steps.map((step) => `
-        <div class="workflow-step ${step.state}">
-          <div class="workflow-kicker">${escapeHtml(step.kicker)}</div>
-          <div class="workflow-title">${escapeHtml(step.title)}</div>
-          <div class="workflow-copy">${escapeHtml(step.copy)}</div>
-        </div>
-      `).join('');
-    }
-
-    function quoteStatusClass(status) {
-      if (status === 'QUOTED') return 'quoted';
-      if (status === 'PENDING_ADAPTER') return 'pending';
-      return 'bad';
-    }
-
-    function quoteMoney(paise) {
-      const n = Number(paise);
-      if (!Number.isFinite(n) || n <= 0) return '-';
-      return money(n / 100);
-    }
-
-    function parsePackQuantity(packText, baseUnit) {
-      const text = String(packText || '').toLowerCase().replace(/,/g, ' ');
-      const match = text.match(/\b(\d+(?:\.\d+)?)\s?(kg|kgs|kilogram|kilograms|g|gm|gram|grams|ml|millilitre|milliliter|l|ltr|litre|liter|litres|liters|pc|pcs|piece|pieces|pack|packs|carton|tin|bottle|bottles|nos|unit|units)\b/);
-      if (!match) return 0;
-      const value = Number(match[1]);
-      if (!Number.isFinite(value) || value <= 0) return 0;
-      const unit = match[2];
-      const base = String(baseUnit || 'unit').toLowerCase();
-      if (base === 'kg') {
-        if (unit.startsWith('kg') || unit.startsWith('kilogram')) return value;
-        if (unit === 'g' || unit === 'gm' || unit.startsWith('gram')) return value / 1000;
-      }
-      if (base === 'gram') {
-        if (unit.startsWith('kg') || unit.startsWith('kilogram')) return value * 1000;
-        if (unit === 'g' || unit === 'gm' || unit.startsWith('gram')) return value;
-      }
-      if (base === 'litre') {
-        if (unit === 'l' || unit === 'ltr' || unit.startsWith('lit')) return value;
-        if (unit === 'ml' || unit.startsWith('milli')) return value / 1000;
-      }
-      if (['pc', 'pcs', 'piece', 'pieces', 'pack', 'packs', 'carton', 'tin', 'bottle', 'bottles', 'nos', 'unit', 'units'].includes(unit)) {
-        return value;
-      }
-      return 0;
-    }
-
-    function ruleFromMatchRule(matchRule) {
-      if (matchRule === 'QUALITY_LOCKED') return BUYING_RULES.QUALITY_LOCKED;
-      if (matchRule === 'EXACT_ONLY') return BUYING_RULES.EXACT_SKU;
-      if (matchRule === 'COMMODITY_EQUIVALENT') return BUYING_RULES.GENERIC_COMMODITY;
-      if (matchRule === 'SUBSTITUTE_APPROVAL') return BUYING_RULES.APPROVED_SUBSTITUTE;
-      return BUYING_RULES.APPROVED_SUBSTITUTE;
-    }
-
-    function buyingRuleForLine(line) {
-      return ruleFromMatchRule(line?.buying_spec?.match_rule || line?.match_rule || '');
-    }
-
-    function comparablePricePaise(quote, line) {
-      const price = Number(quote?.unit_price_paise || quote?.price_paise || 0);
-      if (!Number.isFinite(price) || price <= 0) return 0;
-      const rule = buyingRuleForLine(line);
-      if (rule === BUYING_RULES.EXACT_SKU) return price;
-      const baseUnit = line?.buying_spec?.base_unit || baseUnitFor(line || {});
-      const packQty = parsePackQuantity(`${quote?.pack_size || ''} ${quote?.sku_title || ''}`, baseUnit);
-      return packQty > 0 ? Math.round(price / packQty) : price;
-    }
-
-    function unitRateText(quote, line) {
-      const comparable = comparablePricePaise(quote, line);
-      const price = Number(quote?.unit_price_paise || quote?.price_paise || 0);
-      if (!comparable || comparable === price) return 'quoted pack';
-      return `${quoteMoney(comparable)}/${line?.buying_spec?.base_unit || baseUnitFor(line || {})}`;
-    }
-
-    function quotedForLine(line) {
-      return (state.quote.quotes || [])
-        .filter((quote) => quote.cart_id === line.cart_id && quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0);
-    }
-
-    function isScoutLine(line) {
-      return line?.source_key === 'AUTO_COMPARE' || buyingRuleForLine(line) === BUYING_RULES.GENERIC_COMMODITY;
-    }
-
-    function localBaselineForLine(line) {
-      return quotedForLine(line).find((quote) => quote.source_key === 'LOCAL_VENDOR') || null;
-    }
-
-    function portalQuotedForLine(line) {
-      return quotedForLine(line).filter((quote) => quote.source_key !== 'LOCAL_VENDOR');
-    }
-
-    function pendingPortalQuotesForLine(line) {
-      return (state.quote.quotes || [])
-        .filter((quote) => quote.cart_id === line.cart_id && quote.source_key !== 'LOCAL_VENDOR' && quote.stock_status === 'PENDING_ADAPTER');
-    }
-
-    function decisionQuotesForLine(line) {
-      const portalQuotes = portalQuotedForLine(line);
-      if (!isScoutLine(line)) return quotedForLine(line);
-      if (portalQuotes.length) return portalQuotes;
-      if (pendingPortalQuotesForLine(line).length) return [];
-      const local = localBaselineForLine(line);
-      return local ? [local] : [];
-    }
-
-    function quoteFor(line, sourceKey) {
-      return (state.quote.quotes || []).find((quote) => quote.cart_id === line.cart_id && quote.source_key === sourceKey) || null;
-    }
-
-    function bestQuoteFor(line) {
-      return decisionQuotesForLine(line)
-        .sort((a, b) => comparablePricePaise(a, line) - comparablePricePaise(b, line))[0] || null;
-    }
-
-    function fastestQuoteFor(line) {
-      return decisionQuotesForLine(line)
-        .filter((quote) => Number(quote.eta_minutes || 0) > 0)
-        .sort((a, b) => Number(a.eta_minutes || 0) - Number(b.eta_minutes || 0))[0] || null;
-    }
-
-    function recommendedQuoteFor(line) {
-      const best = bestQuoteFor(line);
-      const fastest = fastestQuoteFor(line);
-      const rule = buyingRuleForLine(line);
-      if (!best) return null;
-      if (state.run?.run_type === 'URGENT_FILL' && fastest) {
-        const bestComparable = comparablePricePaise(best, line);
-        const fastComparable = comparablePricePaise(fastest, line);
-        if (!bestComparable || !fastComparable || fastComparable <= bestComparable * 1.12) return fastest;
-      }
-      if (rule === BUYING_RULES.QUALITY_LOCKED) {
-        return decisionQuotesForLine(line)
-          .sort((a, b) => Number(b.match_confidence || 0) - Number(a.match_confidence || 0) || comparablePricePaise(a, line) - comparablePricePaise(b, line))[0] || best;
-      }
-      return best;
-    }
-
-    function recommendationNote(line, recommended) {
-      if (!recommended) {
-        if (!state.quote?.batch) return 'Click Get live prices';
-        if (pendingPortalQuotesForLine(line).length) return 'Waiting for portal prices';
-        if (localBaselineForLine(line)) return 'No portal price yet; local is baseline only';
-        return 'No buyable quote yet';
-      }
-      const rule = buyingRuleForLine(line);
-      if (rule === BUYING_RULES.EXACT_SKU && Number(recommended.match_confidence || 0) < 70) return 'Review exact SKU match';
-      if (rule === BUYING_RULES.QUALITY_LOCKED) return 'Check quality before ordering';
-      if (isScoutLine(line) && recommended.source_key === 'LOCAL_VENDOR') return 'No portal price found; local fallback';
-      return recommended.id === bestQuoteFor(line)?.id ? 'Lowest comparable rate' : 'Fastest acceptable option';
-    }
-
-    function renderQuotePanel() {
-      if (!els.quoteMeta) return;
-      const run = state.run;
-      const quote = state.quote || {};
-      els.requestQuotesBtn.disabled = !state.cart.length || quote.loading;
-      els.refreshQuotesBtn.disabled = !run || quote.loading;
-
-      if (!run) {
-        els.quoteMeta.textContent = 'Start a purchase run, then add raw materials.';
-        els.quoteSourceStatus.innerHTML = '';
-        els.quoteMatrix.innerHTML = `<div class="empty">Start a purchase run</div>`;
-        renderWorkflowPanel();
-        return;
-      }
-
-      if (quote.loading) {
-        els.quoteMeta.textContent = 'Preparing live price board...';
-      } else if (quote.batch) {
-        const updated = quote.batch.updated_at ? new Date(quote.batch.updated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'now';
-        const summary = quote.summary || {};
-        const counts = quoteCounts();
-        els.quoteMeta.textContent = `${quote.batch.id} - ${counts.portalQuoted} portal prices, ${counts.localQuoted} local baselines, ${summary.pending_count || 0} portal searches waiting, ${summary.unavailable_count || 0} unavailable - ${updated}`;
-      } else {
-        els.quoteMeta.textContent = state.cart.length
-          ? 'Click Get live prices to compare this tray across all ready portals.'
-          : 'Add raw materials to the tray before getting live prices.';
-      }
-
-      const statuses = quote.summary?.source_statuses?.length
-        ? quote.summary.source_statuses
-        : QUOTE_SOURCE_ORDER.map((key) => ({ key, label: SOURCE_LABELS[key], quoted_count: 0, pending_count: 0, unavailable_count: 0, error_count: 0 }));
-      const bridgeSources = state.extension?.sources || {};
-      els.quoteSourceStatus.innerHTML = statuses
-        .filter((source) => QUOTE_SOURCE_ORDER.includes(source.key))
-        .sort((a, b) => QUOTE_SOURCE_ORDER.indexOf(a.key) - QUOTE_SOURCE_ORDER.indexOf(b.key))
-        .map((source) => {
-          const bridge = bridgeSources[source.key];
-          const bridgeClass = bridge
-            ? (bridge.state === 'error' ? ' bridge-error'
-              : bridge.state === 'done' ? ' bridge-done'
-              : bridge.state === 'running' || bridge.state === 'starting' ? ' bridge-running' : '')
-            : '';
-          const bridgeLine = bridge?.detail ? `<div class="quote-source-meta">${escapeHtml(bridge.detail)}</div>` : '';
-          const stateText = source.quoted_count ? `${source.quoted_count} prices found`
-            : source.pending_count ? `${source.pending_count} searches waiting`
-              : source.error_count ? `${source.error_count} error`
-                : source.unavailable_count ? `${source.unavailable_count} unavailable`
-                  : 'Ready for price run';
-          return `
-            <div class="quote-source-card${bridgeClass}">
-              <div class="quote-source-name">${escapeHtml(source.label || SOURCE_LABELS[source.key] || source.key)}</div>
-              <div class="quote-source-meta">${escapeHtml(stateText)}</div>
-              ${bridgeLine}
-            </div>
-          `;
-        }).join('');
-      renderExtensionStatus();
-
-      if (!state.cart.length) {
-        els.quoteMatrix.innerHTML = `<div class="empty">Add raw materials to the tray</div>`;
-        renderWorkflowPanel();
-        return;
-      }
-
-      els.quoteMatrix.innerHTML = state.cart.map((line) => {
-        const best = bestQuoteFor(line);
-        const fastest = fastestQuoteFor(line);
-        const recommended = recommendedQuoteFor(line);
-        const localBaseline = localBaselineForLine(line);
-        const pendingPortals = pendingPortalQuotesForLine(line).length;
-        const rule = buyingRuleForLine(line);
-        const note = recommendationNote(line, recommended);
-        return `
-          <div class="quote-line">
-            <div class="quote-line-head">
-              <div class="quote-line-name">${escapeHtml(line.name)}</div>
-              <span class="rule-pill ${escapeHtml(rule.tone)}">${escapeHtml(rule.label)}</span>
-              <div class="quote-line-meta">
-                ${escapeHtml(line.qty)} ${escapeHtml(line.uom || 'unit')} - ${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)}
-              </div>
-              <div class="decision-row">
-                ${renderDecisionCard('Recommended', recommended ? `${recommended.source_label} ${quoteMoney(recommended.unit_price_paise)}` : note, true)}
-                ${renderDecisionCard('Baseline', localBaseline ? `Local Vendor ${quoteMoney(localBaseline.unit_price_paise)}/${line.uom || 'unit'}` : 'No local baseline')}
-                ${renderDecisionCard('Cheapest', best ? `${best.source_label} ${unitRateText(best, line)}` : pendingPortals ? 'Waiting for portals' : 'No portal price')}
-                ${renderDecisionCard('Fastest', fastest ? `${fastest.source_label} ${fastest.eta_label || `${fastest.eta_minutes} min`}` : pendingPortals ? 'Waiting for ETA' : 'No ETA yet')}
-              </div>
-            </div>
-            <div class="quote-cells">
-              ${QUOTE_SOURCE_ORDER.map((sourceKey) => renderQuoteCell(line, sourceKey, best, recommended)).join('')}
-            </div>
-          </div>
-        `;
-      }).join('');
-      renderWorkflowPanel();
-    }
-
-    function renderDecisionCard(label, value, primary = false) {
-      return `
-        <div class="decision-card ${primary ? 'primary' : ''}">
-          <div class="decision-label">${escapeHtml(label)}</div>
-          <div class="decision-value">${escapeHtml(value)}</div>
-        </div>
-      `;
-    }
-
-    function buyerStatusLabel(status, sourceKey) {
-      if (sourceKey === 'LOCAL_VENDOR' && status === 'QUOTED') return 'Baseline';
-      if (status === 'QUOTED') return 'Price found';
-      if (status === 'PENDING_ADAPTER') return 'Run portal tab';
-      if (status === 'OUT_OF_STOCK') return 'No stock';
-      if (status === 'UNAVAILABLE') return 'Not available';
-      if (status === 'ERROR') return 'Check portal';
-      return STOCK_LABELS[status] || status;
-    }
-
-    function renderQuoteCell(line, sourceKey, best, recommended) {
-      const quote = quoteFor(line, sourceKey);
-      const sourceLabel = SOURCE_LABELS[sourceKey] || sourceKey;
-      if (!quote) {
-        return `
-          <div class="quote-cell">
-            <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
-            <span class="quote-status pending">${state.quote?.batch ? 'Not selected' : 'Get prices'}</span>
-            <div class="quote-cell-meta">${state.quote?.batch ? 'This source was not in the batch' : 'Click Get live prices'}</div>
-          </div>
-        `;
-      }
-      const status = quote.stock_status || 'PENDING_ADAPTER';
-      const isBest = best && best.id === quote.id;
-      const isRecommended = recommended && recommended.id === quote.id;
-      const sku = quote.sku_title || (status === 'PENDING_ADAPTER' ? `Waiting for ${sourceLabel}` : 'No SKU');
-      const eta = quote.eta_label || (quote.eta_minutes ? `${quote.eta_minutes} min` : '');
-      const confidence = quote.match_confidence ? `${quote.match_confidence}% match` : '';
-      const imageUrl = quoteImageUrl(quote);
-      const rateText = sourceKey === 'LOCAL_VENDOR'
-        ? `baseline ${quoteMoney(quote.unit_price_paise || quote.price_paise)}/${line.uom || baseUnitFor(line || {})}`
-        : unitRateText(quote, line);
-      return `
-        <div class="quote-cell ${isRecommended ? 'recommended' : isBest ? 'best' : ''}">
-          <div class="quote-card-top">
-            ${imageUrl ? `<img class="quote-thumb" src="${escapeAttr(imageUrl)}" alt="">` : `<div class="quote-thumb placeholder">SKU</div>`}
-            <div>
-              <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
-              <span class="quote-status ${quoteStatusClass(status)}">${escapeHtml(buyerStatusLabel(status, sourceKey))}</span>
-            </div>
-          </div>
-          <div class="quote-price">${quoteMoney(quote.unit_price_paise || quote.price_paise)}</div>
-          <div class="quote-cell-meta">${escapeHtml(sku)}</div>
-          <div class="quote-cell-meta">${escapeHtml([rateText, eta, confidence].filter(Boolean).join(' - ') || quote.match_notes || '')}</div>
-        </div>
-      `;
-    }
-
-    function quoteImageUrl(quote) {
-      const raw = quote?.raw || {};
-      const url = raw.image_url || raw.imageUrl || raw.image || raw.product_image || raw.thumbnail || '';
-      return /^https?:\/\//i.test(String(url)) ? String(url) : '';
-    }
-
-    function renderKpis() {
-      const summary = state.data.summary || {};
-      const meta = state.data.meta || {};
-      const cards = [
-        ['Materials', summary.item_count || 0, 'unique live items'],
-        ['Categories', summary.category_count || 0, 'segregated groups'],
-        ['PO lines', summary.line_count || 0, `${summary.po_count || 0} POs`],
-        ['High priority', summary.high_priority_count || 0, 'frequent purchases'],
-        ['Mode', meta.sample ? 'Sample' : 'Live', meta.sample ? 'local preview' : 'Odoo-backed'],
-      ];
-      els.kpis.innerHTML = cards.map(([label, value, note]) => `
-        <div class="card kpi">
-          <div class="label">${escapeHtml(label)}</div>
-          <div class="value">${escapeHtml(value)}</div>
-          <div class="note">${escapeHtml(note)}</div>
-        </div>
-      `).join('');
-    }
-
-    function renderSources() {
-      const sources = [{ key: 'ALL', label: 'All sources' }, ...(state.data.sources || [])];
-      els.sourceStrip.innerHTML = sources.map((source) => `
-        <button class="mini-pill ${state.source === source.key ? 'active' : ''}" type="button" data-source="${escapeHtml(source.key)}">
-          ${escapeHtml(source.label)}
-        </button>
-      `).join('');
-    }
-
-    function renderCategories() {
-      const categories = [{ name: 'All', count: state.data.items.length }, ...(state.data.categories || [])];
-      els.categoryPanel.innerHTML = categories.map((category) => `
-        <button class="cat-btn ${state.category === category.name ? 'active' : ''}" type="button" data-category="${escapeHtml(category.name)}">
-          <span class="cat-name">${escapeHtml(category.name)}</span>
-          <span class="cat-count">${escapeHtml(category.count)}</span>
-        </button>
-      `).join('');
-    }
-
-    function renderItems() {
-      const items = currentItems();
-      els.listTitle.textContent = state.category === 'All' ? 'Materials' : state.category;
-      els.listMeta.textContent = `${items.length} visible from ${state.data.items.length} live-purchased materials`;
-
-      if (!items.length) {
-        els.itemList.innerHTML = loadingCard('No matching raw materials');
-        return;
-      }
-
-      els.itemList.innerHTML = items.map((item) => renderMaterialCard(item)).join('');
-    }
-
-    function sourceOptions(item) {
-      const sources = state.data.sources || [];
-      const recommended = item.source_keys || ['LOCAL_VENDOR'];
-      const orderedKeys = [...recommended, ...sources.map((source) => source.key).filter((key) => !recommended.includes(key))];
-      return orderedKeys.map((key) => {
-        const label = SOURCE_LABELS[key] || key;
-        const suffix = recommended.includes(key) ? ' recommended' : '';
-        return `<option value="${escapeHtml(key)}">${escapeHtml(label + suffix)}</option>`;
-      }).join('');
-    }
-
-    function vendorSummary(item) {
-      const vendor = item.last_vendor_name || item.vendors?.[0]?.name || '-';
-      return vendor.length > 28 ? `${vendor.slice(0, 27)}...` : vendor;
-    }
-
-    function baseUnitFor(item) {
-      const uom = String(item.uom || '').toLowerCase();
-      if (uom.includes('kg')) return 'kg';
-      if (uom.includes('litre') || uom.includes('liter') || uom === 'l') return 'litre';
-      if (uom.includes('gram') || uom === 'g') return 'gram';
-      return 'unit';
-    }
-
-    function matchRuleFor(item) {
-      const text = `${item.name || ''} ${item.search_query || ''}`.toLowerCase();
-      const branded = /\b(amul|nandini|heritage|president|maggi|veeba|golden crown|tata|bru|red label|taj mahal|aashirvaad|fortune|saffola|sunpure|parle|britannia|paper boat|bisleri|kinley|coca|pepsi|sprite|thums|lays|oreo)\b/i.test(text);
-      if (item.category === 'Meat & Poultry' || /\b(chicken|mutton|meat|keema|kheema|fish)\b/i.test(text)) {
-        return 'QUALITY_LOCKED';
-      }
-      if (branded || ['Dairy & Eggs', 'Oils & Fats', 'Packaging & Disposables', 'Beverage Inputs', 'Cleaning & Non-Food', 'Water'].includes(item.category)) {
-        return 'EXACT_ONLY';
-      }
-      if (['Fresh Vegetables & Produce'].includes(item.category)) {
-        return 'COMMODITY_EQUIVALENT';
-      }
-      if (['Sauces & Condiments', 'Spices & Masalas', 'Dry Groceries'].includes(item.category)) {
-        return 'SUBSTITUTE_APPROVAL';
-      }
-      return 'EQUIVALENT_ALLOWED';
-    }
-
-    function defaultBuyingSpec(item) {
-      return {
-        approved_name: item.search_query || item.name,
-        base_unit: baseUnitFor(item),
-        match_rule: matchRuleFor(item),
-        preferred_pack: '',
-        preferred_brand: '',
-      };
-    }
-
-    function matchOptions(selected) {
-      return Object.entries(MATCH_LABELS).map(([key, label]) => `
-        <option value="${escapeAttr(key)}" ${key === selected ? 'selected' : ''}>${escapeHtml(label)}</option>
-      `).join('');
-    }
-
-    function buyingSpecFromInputs(encodedId, item) {
-      const fallback = defaultBuyingSpec(item);
-      return {
-        approved_name: document.querySelector(`[data-spec-name="${encodedId}"]`)?.value.trim() || fallback.approved_name,
-        base_unit: document.querySelector(`[data-spec-unit="${encodedId}"]`)?.value.trim() || fallback.base_unit,
-        match_rule: document.querySelector(`[data-spec-match="${encodedId}"]`)?.value || fallback.match_rule,
-        preferred_pack: '',
-        preferred_brand: '',
-      };
-    }
-
-    function renderMaterialCard(item) {
-      const id = encodeURIComponent(item.id);
-      const productId = item.product_ids_by_brand?.[state.brand] || '';
-      const canPo = state.brand !== 'BOTH' && !!productId;
-      const spec = defaultBuyingSpec(item);
-      const rule = ruleFromMatchRule(spec.match_rule);
-      return `
-        <article class="card material-card ${escapeHtml(String(item.priority_hint || '').toLowerCase())}">
-          <div class="material-main">
-            <div class="item-title">
-              <div>
-                <div class="item-name">${escapeHtml(item.name)}</div>
-                <div class="item-meta">${escapeHtml(item.product_code || 'no code')} - ${escapeHtml(item.uom || 'unit')} - ${escapeHtml(item.category)}</div>
-              </div>
-              <div class="badge-row">
-                <span class="badge ${item.priority_hint === 'High' ? 'badge-success' : item.priority_hint === 'Medium' ? 'badge-warn' : 'badge-neutral'}">${escapeHtml(item.priority_hint || 'Low')}</span>
-                <span class="badge badge-info">${escapeHtml((item.brands_seen || []).join('+') || state.brand)}</span>
-              </div>
-            </div>
-            <div class="stat-strip">
-              <div class="stat"><div class="label">Last price</div><div class="value">${money(item.local_price)}</div></div>
-              <div class="stat"><div class="label">Vendor</div><div class="value">${escapeHtml(vendorSummary(item))}</div></div>
-              <div class="stat"><div class="label">Last bought</div><div class="value">${escapeHtml(item.last_purchase_date || '-')}</div></div>
-              <div class="stat"><div class="label">Frequency</div><div class="value">${escapeHtml(item.times_ordered || 0)}x</div></div>
-            </div>
-            <div class="badge-row">
-              <span class="rule-pill ${escapeHtml(rule.tone)}">${escapeHtml(rule.label)}</span>
-              ${(item.source_keys || []).slice(0, 8).map((key) => `<span class="badge badge-neutral">${escapeHtml(SOURCE_LABELS[key] || key)}</span>`).join('')}
-            </div>
-            <div class="spec-line">${escapeHtml(rule.description)}</div>
-          </div>
-          <div class="item-actions">
-            <div class="compare-banner">Compare all ready portals first</div>
-            <div class="spec-form">
-              <input data-spec-name="${id}" type="text" value="${escapeAttr(spec.approved_name)}" aria-label="Approved buying spec">
-              <input data-spec-unit="${id}" type="text" value="${escapeAttr(spec.base_unit)}" aria-label="Base unit">
-              <select data-spec-match="${id}" aria-label="Match rule">${matchOptions(spec.match_rule)}</select>
-            </div>
-            <button class="btn btn-primary btn-full" type="button" data-add-item="${id}" ${canPo ? '' : ''}>Add to price scout</button>
-            <p class="mute" style="margin:0;">Quantity is set after seeing live pack size, UOM, and price.</p>
-          </div>
-        </article>
-      `;
-    }
-
-    function addItem(encodedId) {
-      const id = decodeURIComponent(encodedId);
-      const item = itemById(id);
-      if (!item) return;
-
-      const qty = 1;
-      const sourceKey = 'AUTO_COMPARE';
-      const buyingSpec = buyingSpecFromInputs(encodedId, item);
-      const productId = state.brand !== 'BOTH' ? item.product_ids_by_brand?.[state.brand] : null;
-      const vendor = (item.vendors || []).find((row) => row.brand === state.brand && row.id === item.last_vendor_id)
-        || (item.vendors || []).find((row) => row.brand === state.brand)
-        || (item.vendors || [])[0]
-        || null;
-
-      state.cart.push({
-        cart_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        item_id: item.id,
-        name: item.name,
-        product_code: item.product_code,
-        category: item.category,
-        uom: item.uom,
-        qty,
-        qty_pending: true,
-        source_key: sourceKey,
-        source_label: SOURCE_LABELS[sourceKey] || sourceKey,
-        product_id: productId || null,
-        price_unit: item.local_price || item.avg_unit_price || 0,
-        vendor_id: null,
-        vendor_name: '',
-        search_query: item.search_query || item.name,
-        buying_spec: buyingSpec,
-        match_rule: buyingSpec.match_rule,
-      });
-      saveCart();
-      renderCart();
-      renderQuotePanel();
-      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
-      toast('Added to price scout');
-    }
-
-    function renderCart() {
-      els.cartCount.textContent = state.cart.length;
-      const plannedLines = plannedOrderLines();
-      const localLines = state.cart.filter((line) => line.source_key === 'LOCAL_VENDOR' && !line.qty_pending);
-      const undecidedLines = state.cart.filter((line) => !recommendedQuoteFor(line));
-      const count = state.cart.length;
-      els.trayMeta.textContent = state.cart.length
-        ? `${state.cart.length} scouting, ${undecidedLines.length} waiting`
-        : 'No cart lines';
-      els.trayRequestQuotesBtn.disabled = !count || state.quote.loading;
-      els.trayRequestQuotesBtn.textContent = state.quote.loading
-        ? 'Getting live prices...'
-        : count
-          ? `Get live prices for ${count} item${count === 1 ? '' : 's'}`
-          : 'Get live prices';
-
-      if (!state.cart.length) {
-        els.cartLines.innerHTML = `<div class="empty">Add materials from the catalogue</div>`;
-      } else {
-        els.cartLines.innerHTML = state.cart.map(renderCartLine).join('');
-      }
-
-      renderSourceGroups(plannedLines);
-      updateCreateButton(localLines);
-    }
-
-    function renderCartLine(line) {
-      const vendorChoices = vendorOptionsForLine(line);
-      const best = bestQuoteFor(line);
-      const recommended = recommendedQuoteFor(line);
-      const localBaseline = localBaselineForLine(line);
-      const pendingPortals = pendingPortalQuotesForLine(line).length;
-      const plannedSource = recommended?.source_key || line.source_key;
-      const qtyText = line.qty_pending ? 'Qty after price' : `${line.qty} ${line.uom || 'unit'}`;
-      const vendorSelect = plannedSource === 'LOCAL_VENDOR' && !line.qty_pending
-        ? `<select data-cart-vendor="${escapeHtml(line.cart_id)}" aria-label="Vendor">${vendorChoices}</select>`
-        : plannedSource && plannedSource !== 'AUTO_COMPARE'
-          ? `<button class="btn btn-ghost btn-full" type="button" data-open-source="${escapeHtml(plannedSource)}">Open ${escapeHtml(SOURCE_LABELS[plannedSource] || plannedSource)}</button>`
-          : `<div class="compare-banner">${pendingPortals ? 'Waiting for portal prices' : 'Run live prices to choose source'}</div>`;
-
-      return `
-        <div class="cart-line">
-          <div class="cart-line-head">
-            <div>
-              <div class="cart-name">${escapeHtml(line.name)}</div>
-              <div class="cart-meta">${escapeHtml(qtyText)} - ${escapeHtml(recommended?.source_label || 'compare portals')} - baseline ${money(line.price_unit)}</div>
-              <div class="spec-line">${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)} - ${escapeHtml(MATCH_LABELS[line.buying_spec?.match_rule] || line.buying_spec?.match_rule || 'Equivalent allowed')}</div>
-              ${recommended ? `<div class="spec-line">Recommended: ${escapeHtml(recommended.source_label)} ${quoteMoney(recommended.unit_price_paise)} (${escapeHtml(recommendationNote(line, recommended))})</div>` : localBaseline ? `<div class="spec-line">Local baseline: ${quoteMoney(localBaseline.unit_price_paise)}/${escapeHtml(line.uom || 'unit')} - ${escapeHtml(pendingPortals ? 'waiting for portal prices' : 'portal price not found')}</div>` : ''}
-            </div>
-            <button class="icon-btn" type="button" data-remove-line="${escapeHtml(line.cart_id)}" aria-label="Remove">X</button>
-          </div>
-          <div class="order-form">
-            <input data-cart-qty="${escapeHtml(line.cart_id)}" type="number" min="0.01" step="0.01" value="${escapeHtml(line.qty_pending ? '' : line.qty)}" placeholder="Qty after price" aria-label="Purchase quantity">
-            <div class="compare-banner">${escapeHtml(recommended ? `Chosen by prices: ${recommended.source_label}` : pendingPortals ? 'Waiting for portal prices' : 'Source will be chosen after live prices')}</div>
-          </div>
-          ${vendorSelect}
-        </div>
-      `;
-    }
-
-    function vendorOptionsForLine(line) {
-      const item = itemById(line.item_id);
-      const vendors = (item?.vendors || []).filter((vendor) => state.brand === 'BOTH' || vendor.brand === state.brand);
-      const merged = vendors.length ? vendors : [{ id: line.vendor_id, name: line.vendor_name, brand: state.brand }];
-      return merged.map((vendor) => {
-        const selected = String(vendor.id || '') === String(line.vendor_id || '') ? 'selected' : '';
-        const label = `${vendor.name || 'Unknown vendor'}${vendor.brand ? ` (${vendor.brand})` : ''}`;
-        return `<option value="${escapeHtml(vendor.id || '')}" ${selected}>${escapeHtml(label)}</option>`;
-      }).join('');
-    }
-
-    function plannedOrderLines() {
-      return state.cart.map((line) => {
-        const recommended = recommendedQuoteFor(line);
-        return {
-          ...line,
-          planned_source_key: recommended?.source_key || line.source_key,
-          planned_source_label: recommended?.source_label || line.source_label,
-          planned_quote: recommended || null,
-        };
-      });
-    }
-
-    function renderSourceGroups(lines) {
-      if (!lines.length) {
-        els.sourceGroups.innerHTML = state.cart.length
-          ? `<div class="source-group"><div class="mute">Portal-wise carts appear after live prices return.</div></div>`
-          : '';
-        return;
-      }
-
-      const bySource = new Map();
-      for (const line of lines) {
-        const key = line.planned_source_key;
-        if (!key || key === 'AUTO_COMPARE') continue;
-        if (!bySource.has(key)) bySource.set(key, []);
-        bySource.get(key).push(line);
-      }
-      if (!bySource.size) {
-        els.sourceGroups.innerHTML = state.cart.length
-          ? `<div class="source-group"><div class="mute">Get live prices to build portal-wise carts.</div></div>`
-          : '';
-        return;
-      }
-
-      els.sourceGroups.innerHTML = [...bySource.entries()].map(([key, group]) => {
-        const source = (state.data.sources || []).find((row) => row.key === key) || {};
-        return `
-          <div class="source-group">
-            <div class="source-head">
-              <div>
-                <div class="source-name">${escapeHtml(SOURCE_LABELS[key] || key)}</div>
-                <div class="mute">${escapeHtml(source.delivery_band || 'Check portal')}</div>
-              </div>
-              <span class="badge badge-info">${escapeHtml(group.length)} lines</span>
-            </div>
-            <button class="btn btn-ghost btn-full" type="button" data-copy-source="${escapeHtml(key)}">Copy ${escapeHtml(SOURCE_LABELS[key] || key)} cart</button>
-            <button class="btn btn-primary btn-full" type="button" data-open-source="${escapeHtml(key)}">Open ${escapeHtml(SOURCE_LABELS[key] || key)}</button>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function updateCreateButton(localLines) {
-      const sample = !!state.data?.meta?.sample;
-      const invalidBrand = state.brand === 'BOTH';
-      const missingVendor = localLines.some((line) => !line.vendor_id);
-      const missingProduct = localLines.some((line) => !line.product_id);
-      const disabled = !localLines.length || sample || invalidBrand || missingVendor || missingProduct || !state.user?.can_create_po;
-
-      els.createPoBtn.disabled = disabled;
-      if (!localLines.length) els.createPoBtn.textContent = 'Create Odoo PO';
-      else if (sample) els.createPoBtn.textContent = 'Live API required';
-      else if (invalidBrand) els.createPoBtn.textContent = 'Choose HE or NCH';
-      else if (missingVendor) els.createPoBtn.textContent = 'Select vendor';
-      else if (missingProduct) els.createPoBtn.textContent = 'Missing Odoo item';
-      else els.createPoBtn.textContent = `Create ${localLines.length} local line PO`;
-    }
-
-    function removeCartLine(cartId) {
-      state.cart = state.cart.filter((line) => line.cart_id !== cartId);
-      saveCart();
-      renderCart();
-      renderQuotePanel();
-      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
-    }
-
-    function updateCartVendor(cartId, vendorId) {
-      const line = state.cart.find((row) => row.cart_id === cartId);
-      if (!line) return;
-      const item = itemById(line.item_id);
-      const vendor = (item?.vendors || []).find((row) => String(row.id || '') === String(vendorId || ''));
-      line.vendor_id = vendorId ? Number(vendorId) : null;
-      line.vendor_name = vendor?.name || '';
-      saveCart();
-      renderCart();
-      renderQuotePanel();
-      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
-    }
-
-    function updateCartQty(cartId, value) {
-      const line = state.cart.find((row) => row.cart_id === cartId);
-      if (!line) return;
-      const qty = Number(value);
-      line.qty = Number.isFinite(qty) && qty > 0 ? qty : 1;
-      line.qty_pending = !(Number.isFinite(qty) && qty > 0);
-      saveCart();
-      renderCart();
-      renderQuotePanel();
-      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
-    }
-
-    async function createLocalPOs() {
-      const localLines = state.cart.filter((line) => line.source_key === 'LOCAL_VENDOR');
-      if (!localLines.length) return;
-
-      const byVendor = new Map();
-      for (const line of localLines) {
-        const key = String(line.vendor_id || '');
-        if (!key) continue;
-        if (!byVendor.has(key)) byVendor.set(key, []);
-        byVendor.get(key).push(line);
-      }
-
-      els.createPoBtn.disabled = true;
-      els.createPoBtn.textContent = 'Creating PO...';
-      const created = [];
-      try {
-        for (const [vendorId, lines] of byVendor.entries()) {
-          const data = await fetchJson('/api/purchase-control', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'create-local-po',
-              pin: state.pin,
-              run_id: state.run?.id || null,
-              brand: state.brand,
-              vendor_id: Number(vendorId),
-              lines: lines.map((line) => ({
-                product_id: line.product_id,
-                qty: line.qty,
-                price_unit: line.price_unit,
-                name: line.name,
-              })),
-            }),
-          });
-          created.push(data.po);
+    let searchTimer;
+    els.searchInput.addEventListener('input', (e) => {
+      state.query = e.target.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        renderList();
+        // If the query is 3+ chars and doesn't match anything, show custom search panel as a hint
+        const q = (state.query || '').trim();
+        if (q.length >= 3) {
+          const matches = (state.snapshot.materials || []).some((m) =>
+            (m.name || '').toLowerCase().includes(q.toLowerCase()) ||
+            (m.sources || []).some((s) => (s.sku_title || '').toLowerCase().includes(q.toLowerCase()))
+          );
+          if (!matches) runCustomSearch(q);
+          else els.customSearchPanel.classList.add('hide');
+        } else {
+          els.customSearchPanel.classList.add('hide');
         }
+      }, 250);
+    });
 
-        const createdIds = new Set(localLines.map((line) => line.cart_id));
-        state.cart = state.cart.filter((line) => !createdIds.has(line.cart_id));
-        saveCart();
-        renderCart();
-        if (state.run) await saveRun({ status: 'ORDERED', silent: true });
-        toast(`Created ${created.map((po) => po.name).join(', ')}`);
-        if (created[0]?.odoo_url) window.open(created[0].odoo_url, '_blank', 'noopener');
-      } catch (error) {
-        toast(error.message || 'PO creation failed');
-      } finally {
-        renderCart();
-      }
-    }
+    els.customSearchClose.addEventListener('click', () => {
+      els.customSearchPanel.classList.add('hide');
+    });
 
-    function lineText(line) {
-      const spec = line.buying_spec?.approved_name || line.search_query || line.name;
-      const quote = line.planned_quote || recommendedQuoteFor(line);
-      const qty = line.qty_pending ? 'qty after price' : `${line.qty} ${line.uom || 'unit'}`;
-      return `${line.name} | ${qty} | spec: ${spec} | ${line.planned_source_label || line.source_label} | ${quote ? quoteMoney(quote.unit_price_paise) : `last ${money(line.price_unit)}`}`;
-    }
+    els.viewCartsBtn.addEventListener('click', () => {
+      renderCartModal();
+      els.cartModal.classList.remove('hide');
+    });
+    els.cartModalClose.addEventListener('click', () => els.cartModal.classList.add('hide'));
+    els.cartModal.addEventListener('click', (e) => { if (e.target === els.cartModal) els.cartModal.classList.add('hide'); });
 
-    async function copyText(text) {
-      await navigator.clipboard.writeText(text);
-      toast('Copied');
-    }
-
-    function copyVisible() {
-      const lines = currentItems().slice(0, 80).map((item) => {
-        return `${item.name} | ${item.uom || 'unit'} | ${item.category} | last ${money(item.local_price)} | ${item.last_vendor_name || '-'}`;
-      });
-      copyText(lines.join('\n'));
-    }
-
-    function copySourceCart(sourceKey) {
-      const lines = plannedOrderLines().filter((line) => line.planned_source_key === sourceKey);
-      copyText([
-        SOURCE_LABELS[sourceKey] || sourceKey,
-        ...lines.map(lineText),
-      ].join('\n'));
-    }
-
-    function openSource(sourceKey) {
-      const source = (state.data?.sources || []).find((row) => row.key === sourceKey);
-      if (source?.url) window.open(source.url, '_blank', 'noopener');
-    }
-
+    // Delegated row actions
     document.addEventListener('click', (event) => {
-      const brand = event.target.closest('[data-brand]')?.dataset.brand;
-      if (brand) setBrand(brand);
-
-      const source = event.target.closest('[data-source]')?.dataset.source;
-      if (source) setSource(source);
-
-      const category = event.target.closest('[data-category]')?.dataset.category;
-      if (category) setCategory(category);
-
-      const addId = event.target.closest('[data-add-item]')?.dataset.addItem;
-      if (addId) addItem(addId);
-
-      const removeId = event.target.closest('[data-remove-line]')?.dataset.removeLine;
-      if (removeId) removeCartLine(removeId);
-
-      const copySource = event.target.closest('[data-copy-source]')?.dataset.copySource;
-      if (copySource) copySourceCart(copySource);
-
-      const open = event.target.closest('[data-open-source]')?.dataset.openSource;
-      if (open) openSource(open);
-
-      const runId = event.target.closest('[data-load-run]')?.dataset.loadRun;
-      if (runId) {
-        const run = state.runs.find((row) => row.id === runId);
-        if (run) {
-          applyRun(run);
-          toast('Run loaded');
+      const t = event.target;
+      const addBtn = t.closest('[data-add-mat]');
+      if (addBtn) {
+        const matId = addBtn.dataset.addMat;
+        const sourceKey = addBtn.dataset.addSource;
+        const material = state.snapshot.materials.find((m) => m.material_id === matId);
+        if (!material) return;
+        const source = (material.sources || []).find((s) => s.source_key === sourceKey);
+        if (!source) return;
+        const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${matId}"]`)?.value || '1') || 1;
+        // Toggle: if already in cart at this portal, remove
+        if (isInCart(sourceKey, matId)) {
+          removeFromCart(sourceKey, matId);
+          toast(`Removed ${material.name}`);
+        } else {
+          addToCart(material, source, qty);
         }
+        return;
       }
 
-      const refreshMat = event.target.closest('[data-refresh-mat]')?.dataset.refreshMat;
-      if (refreshMat) refreshOneMaterial(refreshMat);
+      const refBtn = t.closest('[data-row-refresh]');
+      if (refBtn) {
+        const matId = refBtn.dataset.rowRefresh;
+        refreshOneMaterial(matId);
+        return;
+      }
+
+      const inc = t.closest('[data-mat-qty-inc]');
+      if (inc) {
+        const id = inc.dataset.matQtyInc;
+        const input = document.querySelector(`[data-mat-qty-input="${id}"]`);
+        if (input) { input.value = (parseFloat(input.value) || 0) + 1; input.dispatchEvent(new Event('change', { bubbles: true })); }
+        return;
+      }
+      const dec = t.closest('[data-mat-qty-dec]');
+      if (dec) {
+        const id = dec.dataset.matQtyDec;
+        const input = document.querySelector(`[data-mat-qty-input="${id}"]`);
+        if (input) { input.value = Math.max(0.25, (parseFloat(input.value) || 0) - 1); input.dispatchEvent(new Event('change', { bubbles: true })); }
+        return;
+      }
+
+      // Cart modal quantity controls
+      const cInc = t.closest('[data-qty-inc]');
+      if (cInc) {
+        const [sk, mid] = cInc.dataset.qtyInc.split('|');
+        const input = document.querySelector(`[data-qty-input="${sk}|${mid}"]`);
+        if (input) { const v = (parseFloat(input.value) || 0) + 1; input.value = v; setCartQty(sk, mid, v); }
+        return;
+      }
+      const cDec = t.closest('[data-qty-dec]');
+      if (cDec) {
+        const [sk, mid] = cDec.dataset.qtyDec.split('|');
+        const input = document.querySelector(`[data-qty-input="${sk}|${mid}"]`);
+        if (input) { const v = Math.max(0.25, (parseFloat(input.value) || 0) - 1); input.value = v; setCartQty(sk, mid, v); }
+        return;
+      }
+      const cRm = t.closest('[data-cart-remove]');
+      if (cRm) {
+        const [sk, mid] = cRm.dataset.cartRemove.split('|');
+        removeFromCart(sk, mid);
+        return;
+      }
     });
 
     document.addEventListener('change', (event) => {
-      const vendorLine = event.target.closest('[data-cart-vendor]')?.dataset.cartVendor;
-      if (vendorLine) updateCartVendor(vendorLine, event.target.value);
-      const qtyLine = event.target.closest('[data-cart-qty]')?.dataset.cartQty;
-      if (qtyLine) updateCartQty(qtyLine, event.target.value);
+      const inp = event.target.closest('[data-mat-qty-input]');
+      if (inp) {
+        const id = inp.dataset.matQtyInput;
+        const v = Math.max(0.25, parseFloat(inp.value) || 1);
+        inp.value = v;
+        // Store qty on the material for next render
+        const mat = state.snapshot.materials.find((m) => m.material_id === id);
+        if (mat) mat._qty = v;
+        return;
+      }
+      const cInp = event.target.closest('[data-qty-input]');
+      if (cInp) {
+        const [sk, mid] = cInp.dataset.qtyInput.split('|');
+        const v = Math.max(0.25, parseFloat(cInp.value) || 1);
+        setCartQty(sk, mid, v);
+        return;
+      }
     });
 
-    els.unlockBtn.addEventListener('click', verifyPin);
-    els.pinInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') verifyPin();
-    });
-    els.refreshBtn.addEventListener('click', loadMaterials);
-    els.searchInput.addEventListener('input', (event) => {
-      state.query = event.target.value;
-      renderAll();
-    });
-    els.copyVisibleBtn.addEventListener('click', copyVisible);
-    els.startRunBtn.addEventListener('click', startRun);
-    els.saveRunBtn.addEventListener('click', () => saveRun());
-    els.requestQuotesBtn.addEventListener('click', requestQuotes);
-    els.trayRequestQuotesBtn.addEventListener('click', requestQuotes);
-    els.refreshQuotesBtn.addEventListener('click', () => loadQuoteSummary());
-    els.validateSessionsBtn.addEventListener('click', () => loadPortalHealth(true));
-    els.snapshotReloadBtn.addEventListener('click', () => loadDailySnapshot());
-    els.snapshotCategory.value = state.snapshot.category;
-    els.snapshotCategory.addEventListener('change', (event) => {
-      state.snapshot.category = event.target.value;
-      localStorage.setItem('purchaseSnapshotCategory', state.snapshot.category);
-      loadDailySnapshot();
-    });
-    els.runStatusSelect.addEventListener('change', () => {
-      if (state.run) saveRun({ status: els.runStatusSelect.value });
-    });
-    els.runTypeSelect.addEventListener('change', () => {
-      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
-    });
-    els.createPoBtn.addEventListener('click', createLocalPOs);
-    els.clearCartBtn.addEventListener('click', () => {
-      state.cart = [];
-      saveCart();
-      renderCart();
-      renderQuotePanel();
-      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
-    });
-
+    // Boot
     if (state.pin) {
       els.pinInput.value = state.pin;
       verifyPin();
-    } else {
-      renderCart();
     }
-
-    // Ask the extension bridge to announce itself. The content script also
-    // posts READY on injection, but pinging covers slow-loading cases and
-    // refreshes the status pill after the user reloads the extension.
-    pingExtensionBridge();
-    setTimeout(pingExtensionBridge, 800);
-    renderExtensionStatus();
   </script>
 </body>
 </html>
