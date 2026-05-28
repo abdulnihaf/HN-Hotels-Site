@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-28T19:27:47+0530",
-  "published_at": "2026-05-28T19:27:47+0530",
+  "updated_at": "2026-05-28T19:42:39+0530",
+  "published_at": "2026-05-28T19:42:39+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -130,17 +130,17 @@
       "subgroup": "Creative Surface",
       "risk": "print/vendor handoff",
       "status": "ready",
-      "last_task": "Resize 500ml NCH flask back phone text to match 250ml",
-      "last_summary": "Corrected the 500ml back phone number text node 226:150 on Figma page 226:2. It was Cinzel Bold 15.5 while the 250ml back phone number node 226:34 was Cinzel Bold 30. Copied exact typography/color/alignment/box from 250ml phone to 500ml phone; screenshot proof saved.",
-      "next_action": "Nihaf review the 500ml back phone number visually in Figma; do not export or mutate further unless explicitly requested.",
-      "mutation_status": "Existing Figma file mutation only; no export/vendor/live system mutation.",
+      "last_task": "Finalize current NCH flask Figma correction state after rejected export",
+      "last_summary": "Current execution state: temporary vendor export package was rejected and marked do-not-use; temporary Figma export page was removed; production master page 226:2 was unlocked and made editable again; 500ml back internal artwork was resized/repositioned to match the 250ml back design system while preserving the 500ml dieline frame size; 500ml phone number text node 226:150 was corrected from Cinzel Bold 15.5 to match 250ml phone node 226:34 at Cinzel Bold 30 with same fill/alignment/box. No further export performed.",
+      "next_action": "Nihaf review the editable Figma page Codex Production Master 250ml 500ml Consistent, then manually export PDF Print and SVG if approved. Codex should not export or mutate further unless exact source frame IDs and export instructions are explicitly confirmed.",
+      "mutation_status": "Existing Figma file mutation only for editability and 500ml back corrections; rejected local package renamed do-not-use; no POS/Odoo/ad/WABA/vendor live mutation; no accepted vendor final file generated.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-      "last_run_at": "2026-05-28T19:27:47+0530",
-      "proof": "Figma MCP before/after readback: 226:150 fontSize changed 15.5 to 30, Cinzel Bold, same fill/alignment as 226:34; screenshot /private/tmp/nch_500_back_phone_resized.png.",
-      "artifacts": "/private/tmp/nch_500_back_phone_resized.png",
-      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; 250 phone source 226:34; 500 phone corrected 226:150.",
-      "data_freshness": "2026-05-28 immediate Figma MCP correction after user report.",
-      "rollback": "Set 226:150 fontSize back to 15.5 only if user wants the previous smaller phone text."
+      "last_run_at": "2026-05-28T19:42:39+0530",
+      "proof": "Figma MCP readbacks: production master page 226:2 has zero locked nodes after unlock; 500ml back node 226:134 retained 136x246mm frame; 500ml phone node 226:150 now matches 250ml phone typography at Cinzel Bold 30. Screenshot proofs: /private/tmp/nch_500_back_matched_to_250_back.png and /private/tmp/nch_500_back_phone_resized.png.",
+      "artifacts": "/private/tmp/nch_500_back_matched_to_250_back.png; /private/tmp/nch_500_back_phone_resized.png; rejected package /Users/nihaf/Desktop/NCH_Chai_Flask_Vendor_Final_2026-05-28_REJECTED_DO_NOT_USE",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; production master page 226:2; 500ml back frame 226:134; 250 phone source 226:34; corrected 500 phone 226:150; temporary export page 276:2 removed.",
+      "data_freshness": "2026-05-28 immediate lane memory sync after user requested save.",
+      "rollback": "Use Figma version history for an exact pre-Codex visual state if needed; otherwise page 226:2 is the editable current master. Delete rejected Desktop package when no longer needed."
     },
     "reel-making": {
       "title": "11 Reel Making",
@@ -156,6 +156,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260528194239-packaging-design",
+      "at": "2026-05-28T19:42:39+0530",
+      "lane": "packaging-design",
+      "task": "Finalize current NCH flask Figma correction state after rejected export",
+      "status": "ready",
+      "summary": "Current execution state: temporary vendor export package was rejected and marked do-not-use; temporary Figma export page was removed; production master page 226:2 was unlocked and made editable again; 500ml back internal artwork was resized/repositioned to match the 250ml back design system while preserving the 500ml dieline frame size; 500ml phone number text node 226:150 was corrected from Cinzel Bold 15.5 to match 250ml phone node 226:34 at Cinzel Bold 30 with same fill/alignment/box. No further export performed.",
+      "next_action": "Nihaf review the editable Figma page Codex Production Master 250ml 500ml Consistent, then manually export PDF Print and SVG if approved. Codex should not export or mutate further unless exact source frame IDs and export instructions are explicitly confirmed.",
+      "mutation_status": "Existing Figma file mutation only for editability and 500ml back corrections; rejected local package renamed do-not-use; no POS/Odoo/ad/WABA/vendor live mutation; no accepted vendor final file generated.",
+      "proof": "Figma MCP readbacks: production master page 226:2 has zero locked nodes after unlock; 500ml back node 226:134 retained 136x246mm frame; 500ml phone node 226:150 now matches 250ml phone typography at Cinzel Bold 30. Screenshot proofs: /private/tmp/nch_500_back_matched_to_250_back.png and /private/tmp/nch_500_back_phone_resized.png.",
+      "artifacts": "/private/tmp/nch_500_back_matched_to_250_back.png; /private/tmp/nch_500_back_phone_resized.png; rejected package /Users/nihaf/Desktop/NCH_Chai_Flask_Vendor_Final_2026-05-28_REJECTED_DO_NOT_USE",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; production master page 226:2; 500ml back frame 226:134; 250 phone source 226:34; corrected 500 phone 226:150; temporary export page 276:2 removed.",
+      "rollback": "Use Figma version history for an exact pre-Codex visual state if needed; otherwise page 226:2 is the editable current master. Delete rejected Desktop package when no longer needed.",
+      "data_freshness": "2026-05-28 immediate lane memory sync after user requested save."
+    },
     {
       "id": "20260528192747-packaging-design",
       "at": "2026-05-28T19:27:47+0530",
@@ -1009,16 +1024,6 @@
       "status": "ready",
       "summary": "Updated text asset doc with positioning correction: Hamza Hotel searchers are warm/high-intent, not cold. Recommended ad frame is recognition -> food/offer -> directions: 'Hamza Hotel search kiya? Hamza Express, HKP Road - Ghee Rice, Kabab, Biryani. 10% dine-in, 20% takeaway. Tap directions.' Reframed Wahi Hamza naam as a trust bridge, not the main sale line. No live Ads/GBP/POS mutation.",
       "next_action": "Use the intent-conversion frame in mockup visuals after Nihaf confirms opening time and discount proof.",
-      "mutation_status": "none-copy-doc-only"
-    },
-    {
-      "id": "20260525080551-google-ads",
-      "at": "2026-05-25T08:05:51+0530",
-      "lane": "google-ads",
-      "task": "Add dine-in and takeaway offer copy to Hamza Hotel ad text assets",
-      "status": "ready",
-      "summary": "Updated GBP-verified Hamza Hotel text asset doc to include offer messaging: 10% off dine-in and 20% off takeaway across Afternoon/Late Lunch, Dinner, and Late Night variants. Added guardrail that POS/landing proof must be verified before the offer appears in live ads. No Google Ads, GBP, POS, or landing mutation made.",
-      "next_action": "Confirm real opening time and verify discount proof on POS/landing; then create three visual mockups for approval before live campaign creation.",
       "mutation_status": "none-copy-doc-only"
     }
   ]
