@@ -384,6 +384,21 @@ function productIdFromProduct(product) {
   ]), 96);
 }
 
+function availabilityFromProduct(product) {
+  const text = cleanText(deepFieldValue(product, [
+    'stockStatus',
+    'stock_status',
+    'availability',
+    'availabilityStatus',
+    'inventoryStatus',
+    'status',
+    'buttonText',
+    'cta',
+  ]), 140).toLowerCase();
+  if (/out\s*of\s*stock|notify|unavailable|sold\s*out/.test(text)) return 'OUT_OF_STOCK';
+  return 'AVAILABLE';
+}
+
 function productUrlFromProduct(product, query) {
   const raw = cleanText(deepFieldValue(product, ['productUrl', 'product_url', 'webUrl', 'web_url', 'url', 'deeplink']), 320);
   if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
@@ -548,6 +563,7 @@ function hyperpureQuoteFromProduct(line, product, query, expiresAt, responseStat
   const title = titleFromProduct(product);
   const price = priceFromProduct(product);
   const pack = packFromProduct(product);
+  const availability = availabilityFromProduct(product);
   const confidence = matchConfidence(query, title);
   return {
     sku_title: title,
@@ -557,7 +573,7 @@ function hyperpureQuoteFromProduct(line, product, query, expiresAt, responseStat
     unit_price_paise: price.paise,
     eta_minutes: 1440,
     eta_label: 'Hyperpure scheduled',
-    stock_status: price.paise > 0 ? 'QUOTED' : 'OUT_OF_STOCK',
+    stock_status: availability === 'OUT_OF_STOCK' ? 'OUT_OF_STOCK' : (price.paise > 0 ? 'QUOTED' : 'OUT_OF_STOCK'),
     match_rule: line.buying_spec?.match_rule || line.match_rule || '',
     match_confidence: confidence,
     match_notes: `Live Hyperpure search: ${query}`,
@@ -568,6 +584,7 @@ function hyperpureQuoteFromProduct(line, product, query, expiresAt, responseStat
       response_status: responseStatus,
       product_id: productIdFromProduct(product),
       price_field: price.field,
+      availability,
       title,
       pack,
     },
@@ -624,15 +641,16 @@ async function hyperpureLiveQuote(line, env, expiresAt) {
   }
 
   const products = extractProductsFromPayload(data)
-    .map((product) => ({ product, title: titleFromProduct(product), price: priceFromProduct(product).paise }))
+    .map((product) => ({ product, title: titleFromProduct(product), price: priceFromProduct(product).paise, available: availabilityFromProduct(product) !== 'OUT_OF_STOCK' }))
     .filter((item) => item.title)
     .sort((a, b) => {
+      if (a.available !== b.available) return a.available ? -1 : 1;
       const scoreDiff = matchConfidence(query, b.title) - matchConfidence(query, a.title);
       if (scoreDiff) return scoreDiff;
       return (a.price || 999999999) - (b.price || 999999999);
     });
 
-  const best = products.find((item) => item.price > 0) || products[0];
+  const best = products.find((item) => item.price > 0 && item.available) || products.find((item) => item.price > 0) || products[0];
   if (!best) {
     return {
       stock_status: 'UNAVAILABLE',
@@ -2027,15 +2045,16 @@ async function ingestBrowserSearchResults(body, user, DB) {
         });
       } else {
         const products = extractProductsFromPayload(result.data)
-          .map((product) => ({ product, title: titleFromProduct(product), price: priceFromProduct(product).paise }))
+          .map((product) => ({ product, title: titleFromProduct(product), price: priceFromProduct(product).paise, available: availabilityFromProduct(product) !== 'OUT_OF_STOCK' }))
           .filter((item) => item.title)
           .sort((a, b) => {
             const query = result.query || line.name;
+            if (a.available !== b.available) return a.available ? -1 : 1;
             const scoreDiff = matchConfidence(query, b.title) - matchConfidence(query, a.title);
             if (scoreDiff) return scoreDiff;
             return (a.price || 999999999) - (b.price || 999999999);
           });
-        const best = products.find((item) => item.price > 0) || products[0];
+        const best = products.find((item) => item.price > 0 && item.available) || products.find((item) => item.price > 0) || products[0];
         quote = best
           ? hyperpureQuoteFromProduct(line, best.product, result.query || line.name, expiresAt, status || 200)
           : {

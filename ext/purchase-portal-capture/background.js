@@ -387,7 +387,70 @@ async function runHyperpureSearch(tabId, query) {
     func: hyperpureNativeSearchInPage,
     args: [query],
   });
-  return result?.result || { error: 'No browser search result returned' };
+  if (hasUsableHyperpureResult(result?.result)) return result.result;
+
+  const fallback = await runHyperpureSearchPageFallback(tabId, query);
+  if (hasUsableHyperpureResult(fallback)) return fallback;
+  return fallback || result?.result || { error: 'No browser search result returned' };
+}
+
+function hasUsableHyperpureResult(result) {
+  if (!result || result.error) return false;
+  const status = parseInt(result.status || 0, 10) || 0;
+  if (status >= 400) return false;
+  return !!result.data;
+}
+
+async function runHyperpureSearchPageFallback(tabId, query) {
+  const targetUrl = hyperpureSearchUrl(query);
+  await chrome.tabs.update(tabId, { url: targetUrl });
+  await waitForTabLoad(tabId, 12000);
+  await sleep(2200);
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: hyperpureScrapeSearchResults,
+    args: [query],
+  });
+  return result?.result || { error: 'Hyperpure search page scrape returned no result' };
+}
+
+function hyperpureSearchUrl(query) {
+  const slug = String(query || 'search')
+    .trim()
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '') || 'search';
+  const url = new URL(`https://www.hyperpure.com/in/search/${encodeURIComponent(slug)}`);
+  url.searchParams.set('type', 'SEARCH');
+  url.searchParams.set('query', query);
+  url.searchParams.set('referenceType', 'autosuggest_enter_before_result');
+  url.searchParams.set('parent_reference_type', 'autosuggest_enter_before_result');
+  return url.toString();
+}
+
+function waitForTabLoad(tabId, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') done();
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) return;
+      if (tab?.status === 'complete') setTimeout(done, 500);
+    });
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function hyperpureNativeSearchInPage(query) {
@@ -567,4 +630,107 @@ async function hyperpureNativeSearchInPage(query) {
   } finally {
     restore();
   }
+}
+
+function hyperpureScrapeSearchResults(query) {
+  function cleanText(value, limit = 220) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    return text.length > limit ? `${text.slice(0, limit)}...[truncated:${text.length}]` : text;
+  }
+
+  function parseRupees(text) {
+    const match = String(text || '').replace(/,/g, '').match(/₹\s*(\d+(?:\.\d+)?)/);
+    if (!match) return 0;
+    const value = Number(match[1]);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  function normalizeTitle(lines, priceIndex) {
+    const blocked = /^(add|\+|notify me|view similar|out of stock|high in demand|\d+\+ recent buyers|rated|veg|non veg|brand|all)$/i;
+    const rating = /^[0-9.]+\s*\(?\d*\)?$/;
+    const candidates = lines
+      .slice(Math.max(0, priceIndex - 8), priceIndex)
+      .filter((line) => /[a-z]/i.test(line))
+      .filter((line) => !blocked.test(line))
+      .filter((line) => !rating.test(line))
+      .filter((line) => !/^₹/.test(line))
+      .filter((line) => !/off mrp|best rate|recent buyers/i.test(line));
+    return cleanText(candidates.slice(-3).join(' '), 180);
+  }
+
+  function packFromText(text) {
+    const match = cleanText(text, 600).match(/\b\d+(?:\.\d+)?\s?(?:kg|g|gm|ml|l|ltr|litre|pcs|pc|pack|carton|tin|bottle|nos)\b/i);
+    return match ? match[0] : '';
+  }
+
+  function productFromElement(el) {
+    const raw = el.innerText || '';
+    if (!raw.includes('₹')) return null;
+    if (raw.length < 20 || raw.length > 950) return null;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 120 || rect.height < 80) return null;
+
+    const lines = raw.split('\n').map((line) => line.trim()).filter(Boolean);
+    const priceIndex = lines.findIndex((line) => /₹\s*[\d,]+(?:\.\d+)?/.test(line));
+    if (priceIndex < 0) return null;
+    const price = parseRupees(lines[priceIndex]);
+    if (!price) return null;
+    const title = normalizeTitle(lines, priceIndex);
+    if (!title) return null;
+
+    const statusText = /out of stock|notify me|view similar/i.test(raw) ? 'OUT_OF_STOCK' : 'AVAILABLE';
+    return {
+      name: title,
+      productName: title,
+      title,
+      sellingPrice: price,
+      price,
+      packSize: packFromText(raw),
+      stockStatus: statusText,
+      availability: statusText,
+      buttonText: /add/i.test(raw) ? 'ADD' : '',
+      productUrl: location.href,
+      source: 'HYPERPURE_DOM_SEARCH',
+      rawText: cleanText(raw, 420),
+      cardArea: Math.round(rect.width * rect.height),
+    };
+  }
+
+  const candidates = Array.from(document.querySelectorAll('article, li, section, div'))
+    .map(productFromElement)
+    .filter(Boolean)
+    .sort((a, b) => a.cardArea - b.cardArea);
+
+  const seen = new Set();
+  const products = [];
+  for (const product of candidates) {
+    const key = `${product.title.toLowerCase()}|${product.price}|${product.stockStatus}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    products.push(product);
+    if (products.length >= 30) break;
+  }
+
+  if (!products.length) {
+    return {
+      status: 0,
+      error: 'Hyperpure search page loaded but no price cards were detected',
+      body_preview: cleanText(document.body?.innerText || '', 320),
+    };
+  }
+
+  return {
+    status: 200,
+    data: {
+      source: 'HYPERPURE_DOM_SEARCH',
+      query,
+      url: location.href,
+      products,
+    },
+    raw_observation: {
+      transport: 'dom',
+      url_path: location.pathname,
+      product_count: products.length,
+    },
+  };
 }
