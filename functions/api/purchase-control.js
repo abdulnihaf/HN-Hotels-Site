@@ -87,6 +87,9 @@ const SOURCES = [
   { key: 'JIOMART', label: 'JioMart', status: 'assisted', mode: 'grocery', delivery_band: 'Scheduled / same day', url: SOURCE_URLS.JIOMART },
 ];
 
+const RUN_STATUSES = ['DRAFT', 'QUOTING', 'REVIEW', 'CART_BUILDING', 'AWAITING_CHECKOUT', 'ORDERED', 'RECONCILED'];
+const RUN_TYPES = ['MORNING_PURCHASE', 'EVENING_TOPUP', 'URGENT_FILL'];
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -163,16 +166,33 @@ function safeNumber(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function safeJson(value, fallback) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch (_) {
+    return fallback;
+  }
+}
+
 function round(value, places = 2) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
   return Number(n.toFixed(places));
 }
 
-function maxDate(a, b) {
-  if (!a) return b || '';
-  if (!b) return a || '';
-  return String(a) > String(b) ? a : b;
+function makeId(prefix) {
+  const rand = crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(16).slice(2, 10);
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+  return `${prefix}-${stamp}-${rand}`;
+}
+
+function cleanRunStatus(value) {
+  return RUN_STATUSES.includes(value) ? value : 'DRAFT';
+}
+
+function cleanRunType(value) {
+  return RUN_TYPES.includes(value) ? value : 'MORNING_PURCHASE';
 }
 
 function categoryFor(name, code, odooCategory) {
@@ -231,6 +251,94 @@ function canCreate(user) {
   return user.role === 'admin' || user.role === 'purchase';
 }
 
+async function ensurePurchaseRunSchema(DB) {
+  if (!DB) throw new Error('D1 database is not configured');
+
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS purchase_control_runs (
+      id TEXT PRIMARY KEY,
+      brand TEXT NOT NULL,
+      run_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      buyer_name TEXT,
+      buyer_role TEXT,
+      title TEXT,
+      notes TEXT,
+      cart_json TEXT NOT NULL DEFAULT '[]',
+      items_json TEXT NOT NULL DEFAULT '[]',
+      orders_json TEXT NOT NULL DEFAULT '[]',
+      quote_expires_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `).run();
+
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS purchase_control_run_items (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      item_id TEXT,
+      product_code TEXT,
+      name TEXT NOT NULL,
+      category TEXT,
+      uom TEXT,
+      required_qty REAL DEFAULT 0,
+      source_key TEXT,
+      match_rule TEXT,
+      buying_spec_json TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'NEEDED',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `).run();
+
+  await DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_purchase_control_runs_updated
+    ON purchase_control_runs(updated_at)
+  `).run();
+
+  await DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_purchase_control_run_items_run
+    ON purchase_control_run_items(run_id)
+  `).run();
+
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS purchase_buying_specs (
+      key TEXT PRIMARY KEY,
+      product_code TEXT,
+      item_id TEXT,
+      approved_name TEXT NOT NULL,
+      base_unit TEXT,
+      match_rule TEXT NOT NULL DEFAULT 'EQUIVALENT_ALLOWED',
+      preferred_pack TEXT,
+      preferred_brand TEXT,
+      notes TEXT,
+      updated_by TEXT,
+      updated_at TEXT NOT NULL
+    )
+  `).run();
+}
+
+function publicRun(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    brand: row.brand,
+    run_type: row.run_type,
+    status: row.status,
+    buyer_name: row.buyer_name,
+    buyer_role: row.buyer_role,
+    title: row.title,
+    notes: row.notes || '',
+    cart: safeJson(row.cart_json, []),
+    items: safeJson(row.items_json, []),
+    orders: safeJson(row.orders_json, []),
+    quote_expires_at: row.quote_expires_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
 export async function onRequest(context) {
   if (context.request.method === 'OPTIONS') {
     return new Response(null, { headers: CORS });
@@ -265,19 +373,27 @@ async function handleGet(url, env) {
     return json({ success: true, sources: SOURCES });
   }
 
-  if (action !== 'materials') {
-    return json({ error: `Unknown GET action: ${action}` }, 400);
+  if (action === 'list-runs') {
+    return listRuns(url, user, env.DB);
   }
 
-  const brand = cleanBrand(url.searchParams.get('brand') || 'BOTH');
-  const days = Math.max(1, Math.min(90, parseInt(url.searchParams.get('days') || '30', 10)));
-  const creds = getOdooCredentials({ odoo: 'system' }, env);
-  const data = await loadMaterialUniverse(creds, brand, days);
-  return json({
-    success: true,
-    ...data,
-    user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
-  });
+  if (action === 'run-detail') {
+    return getRunDetail(url, user, env.DB);
+  }
+
+  if (action === 'materials') {
+    const brand = cleanBrand(url.searchParams.get('brand') || 'BOTH');
+    const days = Math.max(1, Math.min(90, parseInt(url.searchParams.get('days') || '30', 10)));
+    const creds = getOdooCredentials({ odoo: 'system' }, env);
+    const data = await loadMaterialUniverse(creds, brand, days);
+    return json({
+      success: true,
+      ...data,
+      user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
+    });
+  }
+
+  return json({ error: `Unknown GET action: ${action}` }, 400);
 }
 
 async function loadMaterialUniverse(creds, brand, days) {
@@ -498,11 +614,171 @@ async function handlePost(context, env) {
   const user = USERS[body.pin || ''];
   if (!user) return json({ error: 'Invalid PIN' }, 401);
 
-  if (action !== 'create-local-po') {
-    return json({ error: `Unknown POST action: ${action}` }, 400);
+  switch (action) {
+    case 'create-run':
+      return createRun(body, user, env.DB);
+    case 'save-run':
+      return saveRun(body, user, env.DB);
+    case 'update-run-status':
+      return updateRunStatus(body, user, env.DB);
+    case 'create-local-po':
+      return createLocalPO(body, user, env, context.env.DB);
+    default:
+      return json({ error: `Unknown POST action: ${action}` }, 400);
+  }
+}
+
+async function listRuns(url, user, DB) {
+  await ensurePurchaseRunSchema(DB);
+  const brand = cleanBrand(url.searchParams.get('brand') || 'BOTH');
+  const limit = Math.max(1, Math.min(40, parseInt(url.searchParams.get('limit') || '12', 10)));
+  const params = [];
+  let where = '1 = 1';
+  if (brand !== 'BOTH') {
+    where += ' AND brand IN (?, ?)';
+    params.push(brand, 'BOTH');
+  }
+  const rows = await DB.prepare(`
+    SELECT * FROM purchase_control_runs
+    WHERE ${where}
+    ORDER BY updated_at DESC
+    LIMIT ?
+  `).bind(...params, limit).all();
+
+  return json({
+    success: true,
+    runs: (rows.results || []).map(publicRun),
+    user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
+  });
+}
+
+async function getRunDetail(url, user, DB) {
+  await ensurePurchaseRunSchema(DB);
+  const runId = url.searchParams.get('run_id');
+  if (!runId) return json({ error: 'Missing run_id' }, 400);
+  const row = await DB.prepare('SELECT * FROM purchase_control_runs WHERE id = ?').bind(runId).first();
+  if (!row) return json({ error: 'Run not found' }, 404);
+  const items = await DB.prepare(`
+    SELECT * FROM purchase_control_run_items
+    WHERE run_id = ?
+    ORDER BY created_at ASC
+  `).bind(runId).all();
+  const run = publicRun(row);
+  run.item_rows = (items.results || []).map((item) => ({
+    ...item,
+    buying_spec: safeJson(item.buying_spec_json, {}),
+  }));
+  return json({
+    success: true,
+    run,
+    user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
+  });
+}
+
+async function createRun(body, user, DB) {
+  await ensurePurchaseRunSchema(DB);
+  const brand = cleanBrand(body.brand || 'HE');
+  const runType = cleanRunType(body.run_type || 'MORNING_PURCHASE');
+  const now = new Date().toISOString();
+  const id = makeId('PCR');
+  const title = body.title || `${brand} ${runType.replaceAll('_', ' ').toLowerCase()}`;
+
+  await DB.prepare(`
+    INSERT INTO purchase_control_runs
+      (id, brand, run_type, status, buyer_name, buyer_role, title, notes,
+       cart_json, items_json, orders_json, quote_expires_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id, brand, runType, 'DRAFT', user.name, user.role, title, body.notes || '',
+    '[]', '[]', '[]', null, now, now
+  ).run();
+
+  const row = await DB.prepare('SELECT * FROM purchase_control_runs WHERE id = ?').bind(id).first();
+  return json({ success: true, run: publicRun(row) });
+}
+
+async function saveRun(body, user, DB) {
+  await ensurePurchaseRunSchema(DB);
+  const runId = body.run_id;
+  if (!runId) return json({ error: 'Missing run_id' }, 400);
+
+  const existing = await DB.prepare('SELECT * FROM purchase_control_runs WHERE id = ?').bind(runId).first();
+  if (!existing) return json({ error: 'Run not found' }, 404);
+
+  const cart = Array.isArray(body.cart) ? body.cart : [];
+  const items = Array.isArray(body.items) ? body.items : cart;
+  const status = cleanRunStatus(body.status || existing.status);
+  const brand = cleanBrand(body.brand || existing.brand);
+  const runType = cleanRunType(body.run_type || existing.run_type);
+  const now = new Date().toISOString();
+  const quoteExpiresAt = body.quote_expires_at || existing.quote_expires_at || null;
+
+  await DB.prepare(`
+    UPDATE purchase_control_runs
+    SET brand = ?, run_type = ?, status = ?, title = ?, notes = ?,
+        cart_json = ?, items_json = ?, quote_expires_at = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(
+    brand,
+    runType,
+    status,
+    body.title || existing.title,
+    body.notes ?? existing.notes ?? '',
+    JSON.stringify(cart),
+    JSON.stringify(items),
+    quoteExpiresAt,
+    now,
+    runId
+  ).run();
+
+  await DB.prepare('DELETE FROM purchase_control_run_items WHERE run_id = ?').bind(runId).run();
+  for (const item of items) {
+    const spec = item.buying_spec || {};
+    await DB.prepare(`
+      INSERT INTO purchase_control_run_items
+        (id, run_id, item_id, product_code, name, category, uom, required_qty,
+         source_key, match_rule, buying_spec_json, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      makeId('PCRI'),
+      runId,
+      item.item_id || item.id || '',
+      item.product_code || '',
+      item.name || 'Raw material',
+      item.category || '',
+      item.uom || '',
+      safeNumber(item.qty || item.required_qty),
+      item.source_key || 'LOCAL_VENDOR',
+      spec.match_rule || item.match_rule || 'EQUIVALENT_ALLOWED',
+      JSON.stringify(spec),
+      item.status || 'NEEDED',
+      now,
+      now
+    ).run();
   }
 
-  return createLocalPO(body, user, env, context.env.DB);
+  const row = await DB.prepare('SELECT * FROM purchase_control_runs WHERE id = ?').bind(runId).first();
+  return json({ success: true, run: publicRun(row) });
+}
+
+async function updateRunStatus(body, user, DB) {
+  await ensurePurchaseRunSchema(DB);
+  const runId = body.run_id;
+  const status = cleanRunStatus(body.status);
+  if (!runId) return json({ error: 'Missing run_id' }, 400);
+  const now = new Date().toISOString();
+  await DB.prepare(`
+    UPDATE purchase_control_runs
+    SET status = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(status, now, runId).run();
+  const row = await DB.prepare('SELECT * FROM purchase_control_runs WHERE id = ?').bind(runId).first();
+  if (!row) return json({ error: 'Run not found' }, 404);
+  return json({
+    success: true,
+    run: publicRun(row),
+    user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
+  });
 }
 
 async function createLocalPO(body, user, env, DB) {
@@ -574,6 +850,32 @@ async function createLocalPO(body, user, env, DB) {
       }), now).run();
     } catch (_) {
       // D1 logging is useful, but PO creation must remain the blocking action.
+    }
+
+    if (body.run_id) {
+      try {
+        await ensurePurchaseRunSchema(DB);
+        const run = await DB.prepare('SELECT * FROM purchase_control_runs WHERE id = ?').bind(body.run_id).first();
+        if (run) {
+          const orders = safeJson(run.orders_json, []);
+          orders.push({
+            source_key: 'LOCAL_VENDOR',
+            brand,
+            po_id: created.id,
+            po_name: created.name,
+            amount_total: created.amount_total || 0,
+            vendor: created.partner_id?.[1] || '',
+            created_at: now,
+          });
+          await DB.prepare(`
+            UPDATE purchase_control_runs
+            SET orders_json = ?, status = ?, updated_at = ?
+            WHERE id = ?
+          `).bind(JSON.stringify(orders), 'ORDERED', now, body.run_id).run();
+        }
+      } catch (_) {
+        // Run linking is non-blocking after the Odoo PO is created.
+      }
     }
   }
 

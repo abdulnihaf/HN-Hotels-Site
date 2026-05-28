@@ -112,6 +112,74 @@
     .kpi .label { color: var(--text-dim); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
     .kpi .value { font-size: 24px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
     .kpi .note { color: var(--text-mute); font-size: 11px; }
+    .run-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .run-grid {
+      display: grid;
+      gap: 10px;
+      align-items: end;
+    }
+    .run-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .run-status-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .run-status-bar::-webkit-scrollbar { display: none; }
+    .status-step {
+      min-height: 30px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 9px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      color: var(--text-mute);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .status-step.active {
+      color: #0c0c14;
+      border-color: var(--brand);
+      background: var(--brand);
+    }
+    .status-step.done {
+      color: var(--pc-green);
+      border-color: rgba(52,211,153,.35);
+      background: rgba(52,211,153,.08);
+    }
+    .recent-runs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .recent-runs::-webkit-scrollbar { display: none; }
+    .run-chip {
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.035);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .run-chip.active { border-color: var(--brand-ring); background: var(--brand-soft); color: var(--brand-hover); }
     .console-grid {
       display: grid;
       gap: 12px;
@@ -203,6 +271,23 @@
       display: grid;
       grid-template-columns: minmax(88px, .8fr) minmax(0, 1.3fr);
       gap: 8px;
+    }
+    .spec-form {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .spec-form input,
+    .spec-form select {
+      font-size: 13px;
+      min-height: 40px;
+      padding: 9px 10px;
+      border-radius: 8px;
+    }
+    .spec-line {
+      color: var(--text-dim);
+      font-size: 11px;
+      line-height: 1.35;
     }
     .tray {
       position: sticky;
@@ -323,6 +408,7 @@
 
     @media (min-width: 760px) {
       .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .run-grid { grid-template-columns: minmax(0, 1fr) 180px 190px 220px; }
       .control-row { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.4fr); align-items: center; }
       .catalog-grid { grid-template-columns: 230px minmax(0, 1fr); }
       .material-card { grid-template-columns: minmax(0, 1fr) 310px; align-items: start; }
@@ -372,6 +458,35 @@
           <button class="seg" type="button" data-brand="NCH">NCH</button>
           <button class="seg" type="button" data-brand="BOTH">Both</button>
         </div>
+
+        <section class="card run-panel">
+          <div class="run-grid">
+            <div>
+              <h2 id="runTitle">No active purchase run</h2>
+              <p id="runMeta" class="sub" style="margin:4px 0 0;">Start a run before building today’s order.</p>
+            </div>
+            <select id="runTypeSelect" aria-label="Run type">
+              <option value="MORNING_PURCHASE">Morning purchase</option>
+              <option value="EVENING_TOPUP">Evening top-up</option>
+              <option value="URGENT_FILL">Urgent fill</option>
+            </select>
+            <select id="runStatusSelect" aria-label="Run status">
+              <option value="DRAFT">Draft</option>
+              <option value="QUOTING">Quoting</option>
+              <option value="REVIEW">Review</option>
+              <option value="CART_BUILDING">Cart building</option>
+              <option value="AWAITING_CHECKOUT">Awaiting checkout</option>
+              <option value="ORDERED">Ordered</option>
+              <option value="RECONCILED">Reconciled</option>
+            </select>
+            <div class="run-actions">
+              <button id="startRunBtn" class="btn btn-primary" type="button">Start run</button>
+              <button id="saveRunBtn" class="btn btn-ghost" type="button">Save run</button>
+            </div>
+          </div>
+          <div id="runStatusBar" class="run-status-bar"></div>
+          <div id="recentRuns" class="recent-runs"></div>
+        </section>
 
         <div class="kpis" id="kpis"></div>
 
@@ -428,10 +543,34 @@
       JIOMART: 'JioMart',
     };
 
+    const RUN_FLOW = ['DRAFT', 'QUOTING', 'REVIEW', 'CART_BUILDING', 'AWAITING_CHECKOUT', 'ORDERED', 'RECONCILED'];
+    const RUN_LABELS = {
+      DRAFT: 'Draft',
+      QUOTING: 'Quoting',
+      REVIEW: 'Review',
+      CART_BUILDING: 'Cart',
+      AWAITING_CHECKOUT: 'Checkout',
+      ORDERED: 'Ordered',
+      RECONCILED: 'Reconciled',
+    };
+    const RUN_TYPE_LABELS = {
+      MORNING_PURCHASE: 'Morning purchase',
+      EVENING_TOPUP: 'Evening top-up',
+      URGENT_FILL: 'Urgent fill',
+    };
+    const MATCH_LABELS = {
+      EXACT_ONLY: 'Exact only',
+      EQUIVALENT_ALLOWED: 'Equivalent allowed',
+      COMMODITY_EQUIVALENT: 'Commodity equivalent',
+      SUBSTITUTE_APPROVAL: 'Substitute needs approval',
+    };
+
     const state = {
       pin: localStorage.getItem('purchaseControlPin') || '',
       user: null,
       brand: localStorage.getItem('purchaseControlBrand') || 'HE',
+      run: null,
+      runs: [],
       query: '',
       category: 'All',
       source: 'ALL',
@@ -447,6 +586,14 @@
       unlockBtn: document.getElementById('unlockBtn'),
       refreshBtn: document.getElementById('refreshBtn'),
       subtitle: document.getElementById('subtitle'),
+      runTitle: document.getElementById('runTitle'),
+      runMeta: document.getElementById('runMeta'),
+      runTypeSelect: document.getElementById('runTypeSelect'),
+      runStatusSelect: document.getElementById('runStatusSelect'),
+      startRunBtn: document.getElementById('startRunBtn'),
+      saveRunBtn: document.getElementById('saveRunBtn'),
+      runStatusBar: document.getElementById('runStatusBar'),
+      recentRuns: document.getElementById('recentRuns'),
       kpis: document.getElementById('kpis'),
       searchInput: document.getElementById('searchInput'),
       sourceStrip: document.getElementById('sourceStrip'),
@@ -471,6 +618,10 @@
         '"': '&quot;',
         "'": '&#039;',
       }[char]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, '&#096;');
     }
 
     function money(value) {
@@ -521,6 +672,7 @@
         els.subtitle.textContent = `${data.user.name} - ${data.user.role}`;
         setBrand(state.brand, false);
         await loadMaterials();
+        await loadRuns();
       } catch (error) {
         els.pinError.textContent = error.message || 'Invalid PIN.';
         els.pinError.classList.remove('hide');
@@ -541,6 +693,134 @@
       renderAll();
     }
 
+    async function loadRuns() {
+      try {
+        const data = await fetchJson(`/api/purchase-control?action=list-runs&pin=${encodeURIComponent(state.pin)}&brand=${state.brand}&limit=12`);
+        state.runs = data.runs || [];
+        const savedId = localStorage.getItem('purchaseControlRunId');
+        const active = state.runs.find((run) => run.id === savedId)
+          || state.runs.find((run) => !['ORDERED', 'RECONCILED'].includes(run.status))
+          || null;
+        if (active && !state.run) applyRun(active);
+      } catch (_) {
+        state.runs = [];
+      }
+      renderRunPanel();
+    }
+
+    async function startRun() {
+      const runType = els.runTypeSelect.value || 'MORNING_PURCHASE';
+      const existingCart = [...state.cart];
+      els.startRunBtn.disabled = true;
+      try {
+        const data = await fetchJson('/api/purchase-control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create-run',
+            pin: state.pin,
+            brand: state.brand,
+            run_type: runType,
+          }),
+        });
+        applyRun(data.run);
+        if (existingCart.length) {
+          state.cart = existingCart;
+          saveCart();
+          await saveRun({ status: data.run.status || 'DRAFT', silent: true });
+        }
+        await loadRuns();
+        toast('Purchase run started');
+      } catch (error) {
+        const run = {
+          id: `LOCAL-${Date.now()}`,
+          brand: state.brand,
+          run_type: runType,
+          status: 'DRAFT',
+          buyer_name: state.user?.name || 'Local',
+          title: `${state.brand} ${RUN_TYPE_LABELS[runType] || 'purchase run'}`,
+          cart: state.cart,
+          items: state.cart,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          local_only: true,
+        };
+        applyRun(run);
+        if (existingCart.length) {
+          state.cart = existingCart;
+          saveCart();
+          renderAll();
+        }
+        toast('Local run started. Production D1 saves will work after deploy.');
+      } finally {
+        els.startRunBtn.disabled = false;
+        renderRunPanel();
+      }
+    }
+
+    function applyRun(run) {
+      state.run = run;
+      localStorage.setItem('purchaseControlRunId', run.id);
+      const brandChanged = run.brand && run.brand !== state.brand;
+      if (brandChanged) setBrand(run.brand, false);
+      if (run.run_type) els.runTypeSelect.value = run.run_type;
+      if (run.status) els.runStatusSelect.value = run.status;
+      state.cart = Array.isArray(run.cart) ? run.cart : [];
+      saveCart();
+      renderAll();
+      if (brandChanged && state.pin) loadMaterials();
+    }
+
+    function buildRunItems() {
+      return state.cart.map((line) => ({
+        ...line,
+        required_qty: line.qty,
+        status: line.status || 'NEEDED',
+      }));
+    }
+
+    async function saveRun(options = {}) {
+      if (!state.run) {
+        await startRun();
+      }
+      if (!state.run) return;
+
+      const status = options.status || els.runStatusSelect.value || state.run.status || 'DRAFT';
+      const payload = {
+        action: 'save-run',
+        pin: state.pin,
+        run_id: state.run.id,
+        brand: state.brand,
+        run_type: els.runTypeSelect.value || state.run.run_type,
+        status,
+        cart: state.cart,
+        items: buildRunItems(),
+      };
+
+      if (state.run.local_only) {
+        state.run = { ...state.run, ...payload, cart: state.cart, items: payload.items, updated_at: new Date().toISOString() };
+        renderRunPanel();
+        if (!options.silent) toast('Run saved locally');
+        return;
+      }
+
+      els.saveRunBtn.disabled = true;
+      try {
+        const data = await fetchJson('/api/purchase-control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        applyRun(data.run);
+        await loadRuns();
+        if (!options.silent) toast('Run saved');
+      } catch (error) {
+        if (!options.silent) toast(error.message || 'Run save failed');
+      } finally {
+        els.saveRunBtn.disabled = false;
+      }
+    }
+
     function loadingCard(text) {
       return `<div class="card empty"><div>${escapeHtml(text)}</div></div>`;
     }
@@ -551,7 +831,10 @@
       document.querySelectorAll('[data-brand]').forEach((button) => {
         button.classList.toggle('active', button.dataset.brand === brand);
       });
-      if (reload && state.pin) loadMaterials();
+      if (reload && state.pin) {
+        loadMaterials();
+        loadRuns();
+      }
     }
 
     function setSource(source) {
@@ -589,11 +872,40 @@
 
     function renderAll() {
       if (!state.data) return;
+      renderRunPanel();
       renderKpis();
       renderSources();
       renderCategories();
       renderItems();
       renderCart();
+    }
+
+    function renderRunPanel() {
+      const run = state.run;
+      if (!run) {
+        els.runTitle.textContent = 'No active purchase run';
+        els.runMeta.textContent = 'Start a run before building today’s order.';
+        els.runStatusSelect.value = 'DRAFT';
+        els.runStatusBar.innerHTML = RUN_FLOW.map((status) => `<span class="status-step">${escapeHtml(RUN_LABELS[status])}</span>`).join('');
+      } else {
+        const count = state.cart.length;
+        const updated = run.updated_at ? new Date(run.updated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'now';
+        els.runTitle.textContent = `${run.brand} ${RUN_TYPE_LABELS[run.run_type] || 'Purchase run'}`;
+        els.runMeta.textContent = `${run.id} - ${count} line${count === 1 ? '' : 's'} - updated ${updated}`;
+        els.runTypeSelect.value = run.run_type || 'MORNING_PURCHASE';
+        els.runStatusSelect.value = run.status || 'DRAFT';
+        const activeIndex = RUN_FLOW.indexOf(run.status || 'DRAFT');
+        els.runStatusBar.innerHTML = RUN_FLOW.map((status, index) => {
+          const cls = index === activeIndex ? 'active' : index < activeIndex ? 'done' : '';
+          return `<span class="status-step ${cls}">${escapeHtml(RUN_LABELS[status])}</span>`;
+        }).join('');
+      }
+
+      els.recentRuns.innerHTML = (state.runs || []).slice(0, 8).map((recent) => `
+        <button class="run-chip ${run?.id === recent.id ? 'active' : ''}" type="button" data-load-run="${escapeHtml(recent.id)}">
+          ${escapeHtml(recent.brand)} ${escapeHtml(RUN_LABELS[recent.status] || recent.status)}
+        </button>
+      `).join('');
     }
 
     function renderKpis() {
@@ -663,10 +975,56 @@
       return vendor.length > 28 ? `${vendor.slice(0, 27)}...` : vendor;
     }
 
+    function baseUnitFor(item) {
+      const uom = String(item.uom || '').toLowerCase();
+      if (uom.includes('kg')) return 'kg';
+      if (uom.includes('litre') || uom.includes('liter') || uom === 'l') return 'litre';
+      if (uom.includes('gram') || uom === 'g') return 'gram';
+      return 'unit';
+    }
+
+    function matchRuleFor(item) {
+      if (['Dairy & Eggs', 'Oils & Fats', 'Packaging & Disposables', 'Beverage Inputs', 'Sauces & Condiments', 'Cleaning & Non-Food', 'Water'].includes(item.category)) {
+        return 'EXACT_ONLY';
+      }
+      if (['Fresh Vegetables & Produce', 'Meat & Poultry'].includes(item.category)) {
+        return 'COMMODITY_EQUIVALENT';
+      }
+      return 'EQUIVALENT_ALLOWED';
+    }
+
+    function defaultBuyingSpec(item) {
+      return {
+        approved_name: item.search_query || item.name,
+        base_unit: baseUnitFor(item),
+        match_rule: matchRuleFor(item),
+        preferred_pack: '',
+        preferred_brand: '',
+      };
+    }
+
+    function matchOptions(selected) {
+      return Object.entries(MATCH_LABELS).map(([key, label]) => `
+        <option value="${escapeAttr(key)}" ${key === selected ? 'selected' : ''}>${escapeHtml(label)}</option>
+      `).join('');
+    }
+
+    function buyingSpecFromInputs(encodedId, item) {
+      const fallback = defaultBuyingSpec(item);
+      return {
+        approved_name: document.querySelector(`[data-spec-name="${encodedId}"]`)?.value.trim() || fallback.approved_name,
+        base_unit: document.querySelector(`[data-spec-unit="${encodedId}"]`)?.value.trim() || fallback.base_unit,
+        match_rule: document.querySelector(`[data-spec-match="${encodedId}"]`)?.value || fallback.match_rule,
+        preferred_pack: '',
+        preferred_brand: '',
+      };
+    }
+
     function renderMaterialCard(item) {
       const id = encodeURIComponent(item.id);
       const productId = item.product_ids_by_brand?.[state.brand] || '';
       const canPo = state.brand !== 'BOTH' && !!productId;
+      const spec = defaultBuyingSpec(item);
       return `
         <article class="card material-card ${escapeHtml(String(item.priority_hint || '').toLowerCase())}">
           <div class="material-main">
@@ -695,6 +1053,11 @@
               <input data-qty="${id}" type="number" min="0.01" step="0.01" value="${escapeHtml(item.suggested_qty || item.last_qty || 1)}" aria-label="Quantity">
               <select data-source-select="${id}" aria-label="Source">${sourceOptions(item)}</select>
             </div>
+            <div class="spec-form">
+              <input data-spec-name="${id}" type="text" value="${escapeAttr(spec.approved_name)}" aria-label="Approved buying spec">
+              <input data-spec-unit="${id}" type="text" value="${escapeAttr(spec.base_unit)}" aria-label="Base unit">
+              <select data-spec-match="${id}" aria-label="Match rule">${matchOptions(spec.match_rule)}</select>
+            </div>
             <button class="btn btn-primary btn-full" type="button" data-add-item="${id}" ${canPo ? '' : ''}>Add to tray</button>
             <p class="mute" style="margin:0;">${canPo ? 'Odoo item ready' : state.brand === 'BOTH' ? 'Choose HE or NCH to place local PO' : 'No Odoo item id for this brand'}</p>
           </div>
@@ -709,6 +1072,7 @@
 
       const qty = Number(document.querySelector(`[data-qty="${encodedId}"]`)?.value || item.suggested_qty || 1);
       const sourceKey = document.querySelector(`[data-source-select="${encodedId}"]`)?.value || 'LOCAL_VENDOR';
+      const buyingSpec = buyingSpecFromInputs(encodedId, item);
       const productId = state.brand !== 'BOTH' ? item.product_ids_by_brand?.[state.brand] : null;
       const vendor = (item.vendors || []).find((row) => row.brand === state.brand && row.id === item.last_vendor_id)
         || (item.vendors || []).find((row) => row.brand === state.brand)
@@ -730,9 +1094,12 @@
         vendor_id: sourceKey === 'LOCAL_VENDOR' ? vendor?.id || item.last_vendor_id || null : null,
         vendor_name: sourceKey === 'LOCAL_VENDOR' ? vendor?.name || item.last_vendor_name || '' : '',
         search_query: item.search_query || item.name,
+        buying_spec: buyingSpec,
+        match_rule: buyingSpec.match_rule,
       });
       saveCart();
       renderCart();
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
       toast('Added to order tray');
     }
 
@@ -766,6 +1133,7 @@
             <div>
               <div class="cart-name">${escapeHtml(line.name)}</div>
               <div class="cart-meta">${escapeHtml(line.qty)} ${escapeHtml(line.uom || 'unit')} - ${escapeHtml(line.source_label)} - ${money(line.price_unit)}</div>
+              <div class="spec-line">${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)} - ${escapeHtml(MATCH_LABELS[line.buying_spec?.match_rule] || line.buying_spec?.match_rule || 'Equivalent allowed')}</div>
             </div>
             <button class="icon-btn" type="button" data-remove-line="${escapeHtml(line.cart_id)}" aria-label="Remove">X</button>
           </div>
@@ -835,6 +1203,7 @@
       state.cart = state.cart.filter((line) => line.cart_id !== cartId);
       saveCart();
       renderCart();
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
     }
 
     function updateCartVendor(cartId, vendorId) {
@@ -846,6 +1215,7 @@
       line.vendor_name = vendor?.name || '';
       saveCart();
       renderCart();
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
     }
 
     async function createLocalPOs() {
@@ -871,6 +1241,7 @@
             body: JSON.stringify({
               action: 'create-local-po',
               pin: state.pin,
+              run_id: state.run?.id || null,
               brand: state.brand,
               vendor_id: Number(vendorId),
               lines: lines.map((line) => ({
@@ -888,6 +1259,7 @@
         state.cart = state.cart.filter((line) => !createdIds.has(line.cart_id));
         saveCart();
         renderCart();
+        if (state.run) await saveRun({ status: 'ORDERED', silent: true });
         toast(`Created ${created.map((po) => po.name).join(', ')}`);
         if (created[0]?.odoo_url) window.open(created[0].odoo_url, '_blank', 'noopener');
       } catch (error) {
@@ -898,7 +1270,8 @@
     }
 
     function lineText(line) {
-      return `${line.name} | ${line.qty} ${line.uom || 'unit'} | ${line.search_query || line.name} | local ${money(line.price_unit)}`;
+      const spec = line.buying_spec?.approved_name || line.search_query || line.name;
+      return `${line.name} | ${line.qty} ${line.uom || 'unit'} | spec: ${spec} | ${line.source_label} | local ${money(line.price_unit)}`;
     }
 
     async function copyText(text) {
@@ -947,6 +1320,15 @@
 
       const open = event.target.closest('[data-open-source]')?.dataset.openSource;
       if (open) openSource(open);
+
+      const runId = event.target.closest('[data-load-run]')?.dataset.loadRun;
+      if (runId) {
+        const run = state.runs.find((row) => row.id === runId);
+        if (run) {
+          applyRun(run);
+          toast('Run loaded');
+        }
+      }
     });
 
     document.addEventListener('change', (event) => {
@@ -964,11 +1346,20 @@
       renderAll();
     });
     els.copyVisibleBtn.addEventListener('click', copyVisible);
+    els.startRunBtn.addEventListener('click', startRun);
+    els.saveRunBtn.addEventListener('click', () => saveRun());
+    els.runStatusSelect.addEventListener('change', () => {
+      if (state.run) saveRun({ status: els.runStatusSelect.value });
+    });
+    els.runTypeSelect.addEventListener('change', () => {
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
+    });
     els.createPoBtn.addEventListener('click', createLocalPOs);
     els.clearCartBtn.addEventListener('click', () => {
       state.cart = [];
       saveCart();
       renderCart();
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
     });
 
     if (state.pin) {
