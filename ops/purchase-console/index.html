@@ -248,6 +248,24 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
     }
+    .extension-status {
+      margin: 6px 0 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.035);
+      font-size: 12px;
+      color: var(--text-dim);
+      display: none;
+    }
+    .extension-status.show { display: block; }
+    .extension-status.ready { border-color: rgba(52,211,153,.35); color: var(--pc-green); }
+    .extension-status.running { border-color: rgba(96,165,250,.35); color: var(--pc-blue); }
+    .extension-status.error { border-color: rgba(248,113,113,.35); color: var(--pc-red); }
+    .extension-status.missing { border-color: rgba(251,191,36,.35); color: var(--pc-yellow); }
+    .quote-source-card.bridge-running { border-color: rgba(96,165,250,.5); }
+    .quote-source-card.bridge-error { border-color: rgba(248,113,113,.45); }
+    .quote-source-card.bridge-done { border-color: rgba(52,211,153,.45); }
     .quote-source-card,
     .quote-line {
       border: 1px solid var(--pc-line);
@@ -788,6 +806,7 @@
               <button id="refreshQuotesBtn" class="btn btn-ghost" type="button">Refresh prices</button>
             </div>
           </div>
+          <div id="extensionStatus" class="extension-status"></div>
           <div id="quoteSourceStatus" class="quote-source-grid"></div>
           <div id="quoteMatrix" class="quote-matrix"></div>
         </section>
@@ -937,6 +956,15 @@
       source: 'ALL',
       data: null,
       cart: JSON.parse(localStorage.getItem('purchaseControlCart') || '[]'),
+      extension: {
+        ready: false,
+        version: '',
+        running: false,
+        currentRequestId: '',
+        sources: {},
+        lastSummary: null,
+        lastError: '',
+      },
     };
 
     const els = {
@@ -959,6 +987,7 @@
       requestQuotesBtn: document.getElementById('requestQuotesBtn'),
       refreshQuotesBtn: document.getElementById('refreshQuotesBtn'),
       quoteSourceStatus: document.getElementById('quoteSourceStatus'),
+      extensionStatus: document.getElementById('extensionStatus'),
       quoteMatrix: document.getElementById('quoteMatrix'),
       workflowMeta: document.getElementById('workflowMeta'),
       workflowGrid: document.getElementById('workflowGrid'),
@@ -1268,6 +1297,8 @@
       await saveRun({ status: 'QUOTING', silent: true });
       els.requestQuotesBtn.disabled = true;
       state.quote.loading = true;
+      state.extension.sources = {};
+      state.extension.lastError = '';
       renderQuotePanel();
       try {
         const data = await fetchJson('/api/purchase-control', {
@@ -1285,6 +1316,7 @@
         applyQuoteData(data);
         await loadPortalHealth();
         toast('Live price run created');
+        runLiveQuotesThroughExtension(data);
       } catch (error) {
         state.quote.loading = false;
         renderQuotePanel();
@@ -1293,6 +1325,167 @@
       } finally {
         els.requestQuotesBtn.disabled = false;
       }
+    }
+
+    // ━━━ Chrome extension bridge ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // The dashboard talks to the HN Purchase Portal Capture extension via a
+    // content script (console-bridge.js). We send `RUN_LIVE_QUOTES` after a
+    // quote batch is created; the extension cycles through ready portal tabs
+    // and posts back STATUS / COMPLETE / ERROR. If the extension isn't loaded
+    // we leave the existing manual popup flow as the fallback.
+
+    function setExtensionStatus(next) {
+      state.extension = { ...state.extension, ...next };
+      renderQuotePanel();
+    }
+
+    function readyPortalSources() {
+      const ready = new Set(
+        (state.portalSessions || [])
+          .filter((session) => String(session.status || '').toUpperCase() === 'READY')
+          .map((session) => session.source_key)
+      );
+      return PORTAL_SOURCE_KEYS.filter((key) => ready.has(key));
+    }
+
+    function pingExtensionBridge() {
+      try {
+        window.postMessage(
+          { source: 'HN_PURCHASE_CONSOLE', type: 'PING', requestId: 'ping' },
+          window.location.origin,
+        );
+      } catch (_) {}
+    }
+
+    function runLiveQuotesThroughExtension(quoteData) {
+      const batchId = quoteData?.batch?.id || state.quote?.batch?.id;
+      if (!batchId) return;
+      if (!state.extension.ready) {
+        setExtensionStatus({
+          lastError: 'Chrome extension not detected. Reload "HN Purchase Portal Capture" and refresh this page, or use the per-portal popup as a fallback.',
+        });
+        return;
+      }
+      const sources = readyPortalSources();
+      if (!sources.length) {
+        setExtensionStatus({
+          lastError: 'No portal sessions are READY. Capture sessions before running live prices.',
+        });
+        return;
+      }
+      const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const initialSources = sources.reduce((acc, key) => {
+        acc[key] = { state: 'queued', detail: 'Waiting in queue' };
+        return acc;
+      }, {});
+      setExtensionStatus({
+        running: true,
+        currentRequestId: requestId,
+        sources: initialSources,
+        lastError: '',
+        lastSummary: null,
+      });
+      try {
+        window.postMessage({
+          source: 'HN_PURCHASE_CONSOLE',
+          type: 'RUN_LIVE_QUOTES',
+          requestId,
+          payload: {
+            pin: state.pin,
+            batch_id: batchId,
+            run_id: state.run?.id || '',
+            sources,
+          },
+        }, window.location.origin);
+      } catch (error) {
+        setExtensionStatus({
+          running: false,
+          lastError: error?.message || 'Could not dispatch live-price run',
+        });
+      }
+    }
+
+    window.addEventListener('message', (event) => {
+      if (event.source !== window) return;
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.source !== 'HN_PURCHASE_BRIDGE') return;
+      const payload = data.payload || {};
+
+      if (data.type === 'READY') {
+        setExtensionStatus({ ready: true, version: data.version || state.extension.version });
+        return;
+      }
+
+      if (data.type === 'STATUS') {
+        const key = payload.source_key;
+        if (!key) return;
+        if (state.extension.currentRequestId && payload.requestId && payload.requestId !== state.extension.currentRequestId) return;
+        const next = { ...state.extension.sources };
+        next[key] = {
+          state: payload.state || 'running',
+          detail: payload.detail || '',
+          source_label: payload.source_label || SOURCE_LABELS[key] || key,
+          summary: payload.summary || null,
+        };
+        setExtensionStatus({ sources: next });
+        if (payload.state === 'done' || payload.state === 'no_jobs') {
+          loadQuoteSummary().catch(() => {});
+        }
+        return;
+      }
+
+      if (data.type === 'COMPLETE') {
+        if (state.extension.currentRequestId && payload.requestId && payload.requestId !== state.extension.currentRequestId) return;
+        setExtensionStatus({
+          running: false,
+          lastSummary: payload.result || null,
+        });
+        loadQuoteSummary().catch(() => {});
+        return;
+      }
+
+      if (data.type === 'ERROR') {
+        if (state.extension.currentRequestId && payload.requestId && payload.requestId !== state.extension.currentRequestId) return;
+        setExtensionStatus({
+          running: false,
+          lastError: payload.error || 'Live-price run failed',
+        });
+        return;
+      }
+    });
+
+    function renderExtensionStatus() {
+      const el = els.extensionStatus;
+      if (!el) return;
+      const ext = state.extension || {};
+      const fragments = [];
+      let cls = 'extension-status';
+      if (ext.ready) {
+        cls += ' show ready';
+        fragments.push(`Chrome extension ready${ext.version ? ` v${escapeHtml(ext.version)}` : ''}.`);
+      } else {
+        cls += ' show missing';
+        fragments.push('Chrome extension not detected. Load "HN Purchase Portal Capture" and refresh.');
+      }
+      if (ext.running) {
+        cls += ' running';
+        const inFlight = Object.entries(ext.sources || {})
+          .filter(([, value]) => value.state === 'running' || value.state === 'starting')
+          .map(([key]) => SOURCE_LABELS[key] || key);
+        fragments.push(inFlight.length ? `Searching ${inFlight.join(', ')}…` : 'Running portal tabs…');
+      } else if (ext.lastSummary) {
+        const sources = Array.isArray(ext.lastSummary.sources) ? ext.lastSummary.sources : [];
+        const done = sources.filter((entry) => entry.state === 'done').length;
+        const errors = sources.filter((entry) => entry.state === 'error').length;
+        if (sources.length) fragments.push(`Last run: ${done} portals returned prices, ${errors} errors.`);
+      }
+      if (ext.lastError) {
+        cls += ' error';
+        fragments.push(escapeHtml(ext.lastError));
+      }
+      el.className = cls;
+      el.innerHTML = fragments.map((line, idx) => `<div${idx ? ' style="margin-top:4px;"' : ''}>${line}</div>`).join('');
     }
 
     function loadingCard(text) {
@@ -1672,22 +1865,32 @@
       const statuses = quote.summary?.source_statuses?.length
         ? quote.summary.source_statuses
         : QUOTE_SOURCE_ORDER.map((key) => ({ key, label: SOURCE_LABELS[key], quoted_count: 0, pending_count: 0, unavailable_count: 0, error_count: 0 }));
+      const bridgeSources = state.extension?.sources || {};
       els.quoteSourceStatus.innerHTML = statuses
         .filter((source) => QUOTE_SOURCE_ORDER.includes(source.key))
         .sort((a, b) => QUOTE_SOURCE_ORDER.indexOf(a.key) - QUOTE_SOURCE_ORDER.indexOf(b.key))
         .map((source) => {
+          const bridge = bridgeSources[source.key];
+          const bridgeClass = bridge
+            ? (bridge.state === 'error' ? ' bridge-error'
+              : bridge.state === 'done' ? ' bridge-done'
+              : bridge.state === 'running' || bridge.state === 'starting' ? ' bridge-running' : '')
+            : '';
+          const bridgeLine = bridge?.detail ? `<div class="quote-source-meta">${escapeHtml(bridge.detail)}</div>` : '';
           const stateText = source.quoted_count ? `${source.quoted_count} prices found`
             : source.pending_count ? `${source.pending_count} searches waiting`
               : source.error_count ? `${source.error_count} error`
                 : source.unavailable_count ? `${source.unavailable_count} unavailable`
                   : 'Ready for price run';
           return `
-            <div class="quote-source-card">
+            <div class="quote-source-card${bridgeClass}">
               <div class="quote-source-name">${escapeHtml(source.label || SOURCE_LABELS[source.key] || source.key)}</div>
               <div class="quote-source-meta">${escapeHtml(stateText)}</div>
+              ${bridgeLine}
             </div>
           `;
         }).join('');
+      renderExtensionStatus();
 
       if (!state.cart.length) {
         els.quoteMatrix.innerHTML = `<div class="empty">Add raw materials to the tray</div>`;
@@ -2326,6 +2529,13 @@
     } else {
       renderCart();
     }
+
+    // Ask the extension bridge to announce itself. The content script also
+    // posts READY on injection, but pinging covers slow-loading cases and
+    // refreshes the status pill after the user reloads the extension.
+    pingExtensionBridge();
+    setTimeout(pingExtensionBridge, 800);
+    renderExtensionStatus();
   </script>
 </body>
 </html>
