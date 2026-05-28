@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-28T16:25:58+0530",
-  "published_at": "2026-05-28T16:25:58+0530",
+  "updated_at": "2026-05-28T16:45:41+0530",
+  "published_at": "2026-05-28T16:45:41+0530",
   "source": "github-main-static-json",
   "lane_slug": "meta-ads",
   "lane": {
@@ -169,16 +169,6 @@
       "summary": "Verified live Meta ad account, pixel, existing audiences, and B1 creative/video via access token. Attempted Custom Audience creation and confirmed hard Meta #2663 Custom Audience Terms blocker. Added executable after-TOS script for 7D/30D directions, FindLocation, and rt_voucher website audiences; no campaign/adset/ad/spend mutation performed.",
       "next_action": "Owner must accept Custom Audience Terms at https://www.facebook.com/customaudiences/app/tos/?act=634959029638544, then rerun the prepared audience creation script and verify audience IDs before any retargeting adset creation.",
       "mutation_status": "blocked by Meta Custom Audience Terms; read-only live verification plus local implementation script only"
-    },
-    {
-      "id": "20260525070410-meta-ads",
-      "at": "2026-05-25T07:04:10+0530",
-      "lane": "meta-ads",
-      "task": "Plan Meta to WABA voucher retargeting funnel and package creatives",
-      "status": "ready",
-      "summary": "Verified current deployed WABA voucher flow from GitHub main whatsapp.js SHA 166b38102d7d42f86baa517211c1f2169a687146: trigger phrase 'Hi Hamza, send my WhatsApp voucher' maps to source meta_rt_voucher, creates/reuses wa_voucher_claims code HE-xxxxx, then routes to Full Menu, Voucher Offers, Open Maps, Combos, Shawarma/Kathi, or Dine-in. Created funnel spec at _context/Meta_WABA_Voucher_Retargeting_2026-05-25/FUNNEL_SPEC.md and Desktop creative pack Hamza_Meta_WABA_Voucher_Final_2026-05-25 with final A voucher-first and B food-first 9:16/4:5 PNGs plus contact sheet. No Meta or WABA send mutation.",
-      "next_action": "Before launch, live-test owner/test-number WABA trigger phrase, verify voucher claim row creation/readout, then create Meta messages campaign HE_RT_WABA_VOUCHER_CLAIM_20260525 using WhatsApp destination and exact prefill text; do not route this campaign to /directions.",
-      "mutation_status": "creative/planning output only; money mutation still blocked until direct Meta campaign creation approval and live WABA test passes"
     }
   ]
 }
