@@ -481,6 +481,77 @@ function matchConfidence(query, title) {
   return Math.max(45, Math.min(92, Math.round(40 + (hits / tokens.length) * 52)));
 }
 
+// Fresh-commodity disqualifiers. Query-aware: if the user's query itself
+// contains the banned token (e.g. "Coriander Powder"), it's not banned for
+// that query.
+const COMMODITY_BLOCK_TOKENS = [
+  'powder', 'juice', 'sauce', 'puree', 'paste', 'concentrate',
+  'cubes', 'seasoning', 'pickle', 'chutney', 'ketchup',
+  'granules', 'sachet', 'syrup', 'dried', 'frozen',
+  'roasted', 'fried', 'instant', 'ready',
+];
+
+function commodityBlockedTitle(query, title) {
+  const titleText = cleanText(title, 240).toLowerCase();
+  if (!titleText) return false;
+  const queryText = cleanText(query, 240).toLowerCase();
+  return COMMODITY_BLOCK_TOKENS.some((token) => {
+    if (!titleText.includes(token)) return false;
+    if (queryText.includes(token)) return false;
+    return true;
+  });
+}
+
+const SCOUT_CONFIDENCE_FLOOR = 55;
+const EXACT_CONFIDENCE_FLOOR = 70;
+
+function pickBestPortalProduct(products, query, matchRule) {
+  const ranked = products
+    .map((product) => {
+      const title = titleFromProduct(product);
+      return {
+        product,
+        title,
+        price: priceFromProduct(product).paise,
+        available: availabilityFromProduct(product) !== 'OUT_OF_STOCK',
+        confidence: matchConfidence(query, title),
+      };
+    })
+    .filter((item) => item.title);
+
+  const rule = String(matchRule || '').toUpperCase();
+  const isScout = rule === 'COMMODITY_EQUIVALENT';
+  const isExact = rule === 'EXACT_ONLY';
+
+  const filtered = ranked.filter((item) => {
+    if (isScout && commodityBlockedTitle(query, item.title)) return false;
+    if (isScout && item.confidence < SCOUT_CONFIDENCE_FLOOR) return false;
+    if (isExact && item.confidence < EXACT_CONFIDENCE_FLOOR) return false;
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    if (a.available !== b.available) return a.available ? -1 : 1;
+    const confDiff = b.confidence - a.confidence;
+    if (confDiff) return confDiff;
+    return (a.price || 999999999) - (b.price || 999999999);
+  });
+
+  const best = filtered.find((item) => item.price > 0 && item.available)
+    || filtered.find((item) => item.price > 0)
+    || filtered[0]
+    || null;
+
+  return {
+    best,
+    rankedCount: ranked.length,
+    filteredCount: filtered.length,
+    droppedCount: ranked.length - filtered.length,
+    isScout,
+    isExact,
+  };
+}
+
 function extractProductsFromPayload(payload) {
   const products = [];
   const seen = new Set();
@@ -708,29 +779,32 @@ async function hyperpureLiveQuote(line, env, expiresAt) {
     });
   }
 
-  const products = extractProductsFromPayload(data)
-    .map((product) => ({ product, title: titleFromProduct(product), price: priceFromProduct(product).paise, available: availabilityFromProduct(product) !== 'OUT_OF_STOCK' }))
-    .filter((item) => item.title)
-    .sort((a, b) => {
-      if (a.available !== b.available) return a.available ? -1 : 1;
-      const scoreDiff = matchConfidence(query, b.title) - matchConfidence(query, a.title);
-      if (scoreDiff) return scoreDiff;
-      return (a.price || 999999999) - (b.price || 999999999);
-    });
-
-  const best = products.find((item) => item.price > 0 && item.available) || products.find((item) => item.price > 0) || products[0];
-  if (!best) {
+  const matchRule = line.buying_spec?.match_rule || line.match_rule || '';
+  const pick = pickBestPortalProduct(extractProductsFromPayload(data), query, matchRule);
+  if (!pick.best) {
+    const reason = pick.rankedCount === 0
+      ? `Hyperpure returned no SKU for ${query}`
+      : pick.isScout
+        ? `Hyperpure had ${pick.rankedCount} SKUs but ${pick.droppedCount} were processed forms or low-confidence — no fresh match for ${query}`
+        : pick.isExact
+          ? `Hyperpure had ${pick.rankedCount} SKUs but none matched the exact SKU for ${query} above the confidence floor`
+          : `Hyperpure returned no usable SKU for ${query}`;
     return {
       stock_status: 'UNAVAILABLE',
-      match_rule: line.buying_spec?.match_rule || line.match_rule || '',
+      match_rule: matchRule,
       match_confidence: 0,
-      match_notes: `Hyperpure returned no SKU for ${query}`,
+      match_notes: reason,
       expires_at: expiresAt,
-      raw: { source: 'HYPERPURE', response_status: response.status, product_count: 0 },
+      raw: {
+        source: 'HYPERPURE',
+        response_status: response.status,
+        product_count: pick.rankedCount,
+        dropped_count: pick.droppedCount,
+      },
     };
   }
 
-  return hyperpureQuoteFromProduct(line, best.product, query, expiresAt, response.status);
+  return hyperpureQuoteFromProduct(line, pick.best.product, query, expiresAt, response.status);
 }
 
 function categoryFor(name, code, odooCategory) {
@@ -2113,31 +2187,32 @@ async function ingestBrowserSearchResults(body, user, DB) {
       });
     } else {
       const query = result.query || line.name;
-      const products = extractProductsFromPayload(result.data)
-        .map((product) => ({
-          product,
-          title: titleFromProduct(product),
-          price: priceFromProduct(product).paise,
-          available: availabilityFromProduct(product) !== 'OUT_OF_STOCK',
-        }))
-        .filter((item) => item.title)
-        .sort((a, b) => {
-          if (a.available !== b.available) return a.available ? -1 : 1;
-          const scoreDiff = matchConfidence(query, b.title) - matchConfidence(query, a.title);
-          if (scoreDiff) return scoreDiff;
-          return (a.price || 999999999) - (b.price || 999999999);
-        });
-      const best = products.find((item) => item.price > 0 && item.available) || products.find((item) => item.price > 0) || products[0];
-      quote = best
-        ? portalQuoteFromProduct(line, best.product, query, expiresAt, sourceKey, status || 200)
-        : {
+      const matchRule = existing.match_rule || line.match_rule || '';
+      const pick = pickBestPortalProduct(extractProductsFromPayload(result.data), query, matchRule);
+      if (pick.best) {
+        quote = portalQuoteFromProduct(line, pick.best.product, query, expiresAt, sourceKey, status || 200);
+      } else {
+        const reason = pick.rankedCount === 0
+          ? `${source.label} returned no SKU for ${query}`
+          : pick.isScout
+            ? `${source.label} had ${pick.rankedCount} SKUs but ${pick.droppedCount} were processed forms or low-confidence — no fresh match for ${query}`
+            : pick.isExact
+              ? `${source.label} had ${pick.rankedCount} SKUs but none matched the exact SKU for ${query} above the confidence floor`
+              : `${source.label} returned no usable SKU for ${query}`;
+        quote = {
           stock_status: 'UNAVAILABLE',
-          match_rule: existing.match_rule || '',
+          match_rule: matchRule,
           match_confidence: 0,
-          match_notes: `${source.label} returned no SKU for ${query}`,
+          match_notes: reason,
           expires_at: expiresAt,
-          raw: { source: sourceKey, browser_status: status || 200, product_count: 0 },
+          raw: {
+            source: sourceKey,
+            browser_status: status || 200,
+            product_count: pick.rankedCount,
+            dropped_count: pick.droppedCount,
+          },
         };
+      }
     }
 
     await insertQuoteLine(DB, batchId, run.id, line, sourceKey, quote, now);
