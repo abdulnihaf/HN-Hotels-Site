@@ -20,10 +20,16 @@ HN_API_BASE = "https://hnhotels.in"
 # Empty scope = all categories. Cron covers every RM with an Odoo product_code.
 DEFAULT_SCOPE = ""
 DEFAULT_PIN = "0305"  # Nihaf admin — Worker-only call, not exposed externally.
-# Every portal with a live VPS adapter. INSTAMART adapter not yet built so
-# it's intentionally excluded — adding it before the adapter ships would
-# generate NO_ADAPTER rows that pollute the morning batch summary.
-DEFAULT_SOURCES = "HYPERPURE,BIGBASKET,BLINKIT,ZEPTO,FLIPKART_MINUTES,AMAZON_NOW,JIOMART"
+# Every portal with a live VPS adapter. AMAZON_FRESH added today
+# (2026-05-29); AMAZON_NOW + ZEPTO were already in this list but their
+# dispatcher rows were missing in portal-runner.js — wired in same PR.
+# Excluded portals:
+# - INSTAMART: no adapter yet
+# - AMAZON_BUSINESS: chip-only quick-launch (no scout — needs HN business
+#   account session cookies separately)
+# - METRO: chip-only quick-launch (no scout yet)
+# - DMART: chip-only quick-launch (no scout yet)
+DEFAULT_SOURCES = "HYPERPURE,BIGBASKET,BLINKIT,ZEPTO,FLIPKART_MINUTES,AMAZON_NOW,AMAZON_FRESH,JIOMART"
 # Concurrency 2: each refresh-material call internally spawns 7 parallel VPS
 # Playwright contexts (~100MB each). Concurrency 3 OOMed the VPS earlier;
 # 2 holds peak memory at ~750MB. ~220 materials at concurrency 2 take

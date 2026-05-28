@@ -71,6 +71,23 @@ const SOURCE_URLS = {
   INSTAMART: 'https://www.swiggy.com/stores/instamart/',
   BLINKIT: 'https://blinkit.com/',
   AMAZON_NOW: 'https://www.amazon.in/',
+  AMAZON_FRESH: 'https://www.amazon.in/',
+  // Amazon Business — same `amazon.in` domain (NOT business.amazon.in).
+  // Business context is established by the signed-in account, not the
+  // URL. So iOS UL handoff is the same Amazon Shopping app; the owner
+  // signs in with the HN HOTELS PVT LTD business account and sees B2B
+  // prices + GST invoicing automatically.
+  AMAZON_BUSINESS: 'https://www.amazon.in/b/',
+  // Metro Cash & Carry — German-origin B2B wholesale, now Reliance-
+  // owned (2023 acquisition). Pure B2B, GST-required, bulk packs.
+  // Strong fit for HN's procurement. No AASA on metro.co.in (verified
+  // 2026-05-29) so iOS handoff goes to Safari, not the Metro app — web
+  // search is the fallback UX.
+  METRO: 'https://www.metro.co.in/',
+  // DMart Ready — Avenue Supermarts online ordering. Consumer-tier,
+  // mostly regular packs, some larger value packs. dmart.in serves the
+  // web ordering flow. No AASA either — Safari fallback.
+  DMART: 'https://www.dmart.in/',
   BIGBASKET: 'https://www.bigbasket.com/',
   JIOMART: 'https://www.jiomart.com/',
 };
@@ -83,6 +100,22 @@ const SOURCES = [
   { key: 'INSTAMART', label: 'Instamart', status: 'assisted', mode: 'quick_commerce', delivery_band: 'Fast fill-in', url: SOURCE_URLS.INSTAMART },
   { key: 'BLINKIT', label: 'Blinkit', status: 'assisted', mode: 'quick_commerce', delivery_band: 'Fast fill-in', url: SOURCE_URLS.BLINKIT },
   { key: 'AMAZON_NOW', label: 'Amazon Now', status: 'assisted', mode: 'marketplace', delivery_band: 'Fast / scheduled', url: SOURCE_URLS.AMAZON_NOW },
+  // Amazon Fresh — same domain as Now, distinguished by the `i=amazonfresh`
+  // store filter on search. Medium pack sizes, scheduled delivery — sits
+  // between Q-commerce Now and bulk B2B (Amazon Business / IndiaMART).
+  { key: 'AMAZON_FRESH', label: 'Amazon Fresh', status: 'assisted', mode: 'grocery', delivery_band: 'Same-day / scheduled', url: SOURCE_URLS.AMAZON_FRESH },
+  // Amazon Business — quick-launch only (mode='b2b_directory'). No VPS
+  // scout yet; owner taps the chip, signs in to Amazon Shopping app with
+  // the HN business account, sees B2B prices + GST invoicing in the app.
+  // Full scout queued for Phase B (needs business-account cookies).
+  { key: 'AMAZON_BUSINESS', label: 'Amazon Business', status: 'launcher_only', mode: 'b2b_directory', delivery_band: 'B2B / GST invoice', url: SOURCE_URLS.AMAZON_BUSINESS },
+  // Metro Cash & Carry — B2B-only quick-launch. Same shape as
+  // Amazon Business (chip-only, eligibility-filtered, full scout
+  // queued).
+  { key: 'METRO', label: 'Metro', status: 'launcher_only', mode: 'b2b_directory', delivery_band: 'B2B wholesale / pickup', url: SOURCE_URLS.METRO },
+  // DMart — consumer-tier quick-launch. Shows on every material
+  // (not B2B-restricted). No AASA on dmart.in — Safari fallback.
+  { key: 'DMART', label: 'DMart', status: 'launcher_only', mode: 'grocery', delivery_band: 'Pickup / same-day', url: SOURCE_URLS.DMART },
   { key: 'BIGBASKET', label: 'BigBasket', status: 'assisted', mode: 'grocery', delivery_band: 'Scheduled / same day', url: SOURCE_URLS.BIGBASKET },
   { key: 'JIOMART', label: 'JioMart', status: 'assisted', mode: 'grocery', delivery_band: 'Scheduled / same day', url: SOURCE_URLS.JIOMART },
 ];
@@ -439,19 +472,70 @@ function decodeHtmlEntities(s) {
 // Reject footer/help/nav anchors that adapters sometimes pick up as the
 // "product URL" when the search-result card selector misses. Each portal has
 // its own valid path prefixes.
+// ============================================================
+// B2B channel eligibility (Amazon Business, IndiaMART when wired)
+// ============================================================
+// B2B channels are vendor/bulk-pack platforms. Showing them for fresh
+// produce, fresh chicken, fresh fish, eggs etc. is noise — those are
+// APMC / daily-procure relationships, wrong channel entirely. Showing
+// them for packaging, bulk dry goods, bulk dairy powders, bulk spices,
+// bulk oils is where the B2B win is.
+const B2B_ELIGIBLE_CATEGORIES = new Set([
+  'Packaging & Disposables',
+  'Dry Goods & Staples',
+  'Spices & Seasoning',
+  'Beverage Inputs',
+  'Oils & Fats',
+  'Lentils & Pulses',
+  'Dry Fruits & Nuts',
+  'Sauces & Condiments',
+  'Cleaning & Non-Food',
+  'Fuel & Production',
+]);
+// Eligible inside otherwise-mixed categories (Dairy, Bakery, Custom).
+const B2B_ELIGIBLE_NAME_PATTERNS = [
+  /\bmilkmaid\b/i, /\bcondensed\s*milk\b/i, /\bmilk\s*powder\b/i,
+  /\bskimmed\s*milk\b/i, /\bghee\b/i, /\b(buffalo|cow)\s*milk\b/i,
+  /\bbun(s)?\b/i, /\bpaav|pav|rumali\b/i, /\bosmania\b/i, /\bbiscuit\b/i,
+  /\bpaneer\b/i,
+];
+// Always-block: wrong channel for B2B even if a category match would pass.
+const B2B_BLOCK_NAME_PATTERNS = [
+  /\b(fresh|raw)\b/i,
+  /\bpalak|spinach|methi|coriander|kothimir|mint|pudina|curry\s*leaf\b/i,
+  /\btomato|onion|potato|carrot|capsicum|chili|chilli|garlic|ginger|lemon\b/i,
+  /\b(chicken|murgh|mutton|lamb|fish|egg|anda|prawn|seafood)\b/i,
+];
+function isB2BEligible(material) {
+  const name = String(material?.name || '');
+  if (B2B_BLOCK_NAME_PATTERNS.some((rx) => rx.test(name))) return false;
+  const cat = String(material?.category || '');
+  if (B2B_ELIGIBLE_CATEGORIES.has(cat)) return true;
+  if (B2B_ELIGIBLE_NAME_PATTERNS.some((rx) => rx.test(name))) return true;
+  return false;
+}
+
 const VALID_PRODUCT_PATH_PREFIXES = {
   HYPERPURE: ['/in/products/', '/products/', '/in/p/', '/in/category/'],
   BIGBASKET: ['/pd/', '/pc/', '/cl/'],
   BLINKIT: ['/prn/', '/cn/', '/s/'],
   ZEPTO: ['/pn/', '/cn/', '/p/'],
   FLIPKART_MINUTES: ['/p/', '/itm/'],
-  // Amazon Now URLs follow the Amazon canonical `<slug>/dp/<asin>` or
-  // `/gp/product/<asin>` shape, with `?almBrandId=ctnow` as the Now-store
-  // flag. The flag is a query param so it doesn't participate in the
-  // path-prefix match — but the dp / gp paths are correct for both Now
-  // and regular Amazon. iOS UL handoff routes on path, app handles the
-  // almBrandId once opened.
+  // Amazon Now / Fresh URLs follow the same Amazon canonical
+  // `<slug>/dp/<asin>` shape. Now-store products carry `almBrandId=ctnow`
+  // in query, Fresh products use the Fresh tile flag — both are query
+  // params that don't affect path-prefix matching. Path validates for
+  // both stores.
   AMAZON_NOW: ['/dp/', '/gp/product/'],
+  AMAZON_FRESH: ['/dp/', '/gp/product/'],
+  // Amazon Business uses `amazon.in/b/` storefront paths + standard
+  // `/dp/<asin>` product detail. Same domain, same validate-by-path.
+  AMAZON_BUSINESS: ['/dp/', '/gp/product/', '/b/'],
+  // Metro product page format unverified — leave permissive until a
+  // scout adapter is built and live URLs flow through.
+  METRO: ['/', '/products/', '/p/'],
+  // DMart product page format also unverified — permissive.
+  DMART: ['/', '/products/', '/p/'],
   JIOMART: ['/p/'],
   INSTAMART: ['/instamart/item/', '/instamart/'],
 };
@@ -1432,6 +1516,13 @@ async function handleGet(request, url, env) {
       }
     } catch (err) {
       // Schema/D1 hiccup — fall back to Odoo-only universe.
+    }
+    // Tag B2B eligibility so the UI knows whether to render Amazon
+    // Business + IndiaMART chips. Eligibility ≠ live quote — it just
+    // controls whether the chip exists for the material. A scout (when
+    // wired) would populate actual prices on top.
+    for (const item of (data.items || [])) {
+      item.b2b_eligible = isB2BEligible(item);
     }
     return json({
       success: true,
