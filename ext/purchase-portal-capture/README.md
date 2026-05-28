@@ -51,6 +51,8 @@ Hyperpure v1.3 adds a DOM fallback: if the network response is blocked or hidden
 
 Phase 7 v1.4 adds the same browser-driven live quote path for the other seven portals. For Zepto, Flipkart Minutes, Instamart, Blinkit, Amazon Now, BigBasket, and JioMart, the extension opens the logged-in portal search page for each queued item, reads visible product cards, and sends normalized SKU title, price, pack size, stock state, delivery text, and product URL back to the purchase console.
 
+Phase 9 v1.5 also captures visible product thumbnails when the portal exposes them. The purchase console uses those thumbnails only as visual confirmation beside the SKU title, price, pack size, UOM, and match confidence.
+
 ## When Login Expires
 
 If a portal shows `MISSING`, `EXPIRED`, or `ACTION_REQUIRED`, open that portal, log in again, and capture the current tab again.

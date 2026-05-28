@@ -302,6 +302,27 @@
       border: 1px solid var(--pc-line);
       background: rgba(0,0,0,.14);
     }
+    .quote-card-top {
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+    }
+    .quote-thumb {
+      width: 46px;
+      height: 46px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.04);
+      object-fit: contain;
+    }
+    .quote-thumb.placeholder {
+      display: grid;
+      place-items: center;
+      color: var(--text-mute);
+      font-size: 10px;
+      font-weight: 800;
+    }
     .quote-cell.best {
       border-color: rgba(52,211,153,.45);
       background: rgba(52,211,153,.08);
@@ -350,6 +371,18 @@
     .rule-pill.generic { color: var(--pc-green); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.07); }
     .rule-pill.substitute { color: var(--pc-yellow); border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
     .rule-pill.quality { color: #fda4af; border-color: rgba(251,113,133,.36); background: rgba(251,113,133,.08); }
+    .compare-banner {
+      min-height: 44px;
+      display: grid;
+      align-items: center;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(96,165,250,.36);
+      background: rgba(96,165,250,.08);
+      color: #bfdbfe;
+      font-size: 13px;
+      font-weight: 800;
+    }
     .decision-row {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -803,6 +836,7 @@
 
   <script>
     const SOURCE_LABELS = {
+      AUTO_COMPARE: 'Auto compare',
       LOCAL_VENDOR: 'Local Vendor',
       HYPERPURE: 'Hyperpure',
       ZEPTO: 'Zepto',
@@ -1693,15 +1727,27 @@
       const sku = quote.sku_title || (status === 'PENDING_ADAPTER' ? `Waiting for ${sourceLabel}` : 'No SKU');
       const eta = quote.eta_label || (quote.eta_minutes ? `${quote.eta_minutes} min` : '');
       const confidence = quote.match_confidence ? `${quote.match_confidence}% match` : '';
+      const imageUrl = quoteImageUrl(quote);
       return `
         <div class="quote-cell ${isRecommended ? 'recommended' : isBest ? 'best' : ''}">
-          <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
-          <span class="quote-status ${quoteStatusClass(status)}">${escapeHtml(buyerStatusLabel(status))}</span>
+          <div class="quote-card-top">
+            ${imageUrl ? `<img class="quote-thumb" src="${escapeAttr(imageUrl)}" alt="">` : `<div class="quote-thumb placeholder">SKU</div>`}
+            <div>
+              <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
+              <span class="quote-status ${quoteStatusClass(status)}">${escapeHtml(buyerStatusLabel(status))}</span>
+            </div>
+          </div>
           <div class="quote-price">${quoteMoney(quote.unit_price_paise || quote.price_paise)}</div>
           <div class="quote-cell-meta">${escapeHtml(sku)}</div>
           <div class="quote-cell-meta">${escapeHtml([unitRateText(quote, line), eta, confidence].filter(Boolean).join(' - ') || quote.match_notes || '')}</div>
         </div>
       `;
+    }
+
+    function quoteImageUrl(quote) {
+      const raw = quote?.raw || {};
+      const url = raw.image_url || raw.imageUrl || raw.image || raw.product_image || raw.thumbnail || '';
+      return /^https?:\/\//i.test(String(url)) ? String(url) : '';
     }
 
     function renderKpis() {
@@ -1856,17 +1902,14 @@
             <div class="spec-line">${escapeHtml(rule.description)}</div>
           </div>
           <div class="item-actions">
-            <div class="order-form">
-              <input data-qty="${id}" type="number" min="0.01" step="0.01" value="${escapeHtml(item.suggested_qty || item.last_qty || 1)}" aria-label="Quantity">
-              <select data-source-select="${id}" aria-label="Source">${sourceOptions(item)}</select>
-            </div>
+            <div class="compare-banner">Compare all ready portals first</div>
             <div class="spec-form">
               <input data-spec-name="${id}" type="text" value="${escapeAttr(spec.approved_name)}" aria-label="Approved buying spec">
               <input data-spec-unit="${id}" type="text" value="${escapeAttr(spec.base_unit)}" aria-label="Base unit">
               <select data-spec-match="${id}" aria-label="Match rule">${matchOptions(spec.match_rule)}</select>
             </div>
-            <button class="btn btn-primary btn-full" type="button" data-add-item="${id}" ${canPo ? '' : ''}>Add to tray</button>
-            <p class="mute" style="margin:0;">${canPo ? 'Odoo item ready' : state.brand === 'BOTH' ? 'Choose HE or NCH to place local PO' : 'No Odoo item id for this brand'}</p>
+            <button class="btn btn-primary btn-full" type="button" data-add-item="${id}" ${canPo ? '' : ''}>Add to price scout</button>
+            <p class="mute" style="margin:0;">Quantity is set after seeing live pack size, UOM, and price.</p>
           </div>
         </article>
       `;
@@ -1877,8 +1920,8 @@
       const item = itemById(id);
       if (!item) return;
 
-      const qty = Number(document.querySelector(`[data-qty="${encodedId}"]`)?.value || item.suggested_qty || 1);
-      const sourceKey = document.querySelector(`[data-source-select="${encodedId}"]`)?.value || 'LOCAL_VENDOR';
+      const qty = 1;
+      const sourceKey = 'AUTO_COMPARE';
       const buyingSpec = buyingSpecFromInputs(encodedId, item);
       const productId = state.brand !== 'BOTH' ? item.product_ids_by_brand?.[state.brand] : null;
       const vendor = (item.vendors || []).find((row) => row.brand === state.brand && row.id === item.last_vendor_id)
@@ -1893,13 +1936,14 @@
         product_code: item.product_code,
         category: item.category,
         uom: item.uom,
-        qty: qty > 0 ? qty : 1,
+        qty,
+        qty_pending: true,
         source_key: sourceKey,
         source_label: SOURCE_LABELS[sourceKey] || sourceKey,
         product_id: productId || null,
         price_unit: item.local_price || item.avg_unit_price || 0,
-        vendor_id: sourceKey === 'LOCAL_VENDOR' ? vendor?.id || item.last_vendor_id || null : null,
-        vendor_name: sourceKey === 'LOCAL_VENDOR' ? vendor?.name || item.last_vendor_name || '' : '',
+        vendor_id: null,
+        vendor_name: '',
         search_query: item.search_query || item.name,
         buying_spec: buyingSpec,
         match_rule: buyingSpec.match_rule,
@@ -1908,15 +1952,16 @@
       renderCart();
       renderQuotePanel();
       if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
-      toast('Added to order tray');
+      toast('Added to price scout');
     }
 
     function renderCart() {
       els.cartCount.textContent = state.cart.length;
-      const localLines = state.cart.filter((line) => line.source_key === 'LOCAL_VENDOR');
-      const externalLines = state.cart.filter((line) => line.source_key !== 'LOCAL_VENDOR');
+      const plannedLines = plannedOrderLines();
+      const localLines = state.cart.filter((line) => line.source_key === 'LOCAL_VENDOR' && !line.qty_pending);
+      const undecidedLines = state.cart.filter((line) => !recommendedQuoteFor(line));
       els.trayMeta.textContent = state.cart.length
-        ? `${localLines.length} local, ${externalLines.length} external`
+        ? `${state.cart.length} scouting, ${undecidedLines.length} waiting`
         : 'No cart lines';
 
       if (!state.cart.length) {
@@ -1925,7 +1970,7 @@
         els.cartLines.innerHTML = state.cart.map(renderCartLine).join('');
       }
 
-      renderSourceGroups(externalLines);
+      renderSourceGroups(plannedLines);
       updateCreateButton(localLines);
     }
 
@@ -1933,20 +1978,28 @@
       const vendorChoices = vendorOptionsForLine(line);
       const best = bestQuoteFor(line);
       const recommended = recommendedQuoteFor(line);
-      const vendorSelect = line.source_key === 'LOCAL_VENDOR'
+      const plannedSource = recommended?.source_key || line.source_key;
+      const qtyText = line.qty_pending ? 'Qty after price' : `${line.qty} ${line.uom || 'unit'}`;
+      const vendorSelect = plannedSource === 'LOCAL_VENDOR' && !line.qty_pending
         ? `<select data-cart-vendor="${escapeHtml(line.cart_id)}" aria-label="Vendor">${vendorChoices}</select>`
-        : `<button class="btn btn-ghost btn-full" type="button" data-open-source="${escapeHtml(line.source_key)}">Open ${escapeHtml(line.source_label)}</button>`;
+        : plannedSource && plannedSource !== 'AUTO_COMPARE'
+          ? `<button class="btn btn-ghost btn-full" type="button" data-open-source="${escapeHtml(plannedSource)}">Open ${escapeHtml(SOURCE_LABELS[plannedSource] || plannedSource)}</button>`
+          : `<div class="compare-banner">Run live prices to choose source</div>`;
 
       return `
         <div class="cart-line">
           <div class="cart-line-head">
             <div>
               <div class="cart-name">${escapeHtml(line.name)}</div>
-              <div class="cart-meta">${escapeHtml(line.qty)} ${escapeHtml(line.uom || 'unit')} - ${escapeHtml(line.source_label)} - ${money(line.price_unit)}</div>
+              <div class="cart-meta">${escapeHtml(qtyText)} - ${escapeHtml(recommended?.source_label || 'compare all portals')} - last ${money(line.price_unit)}</div>
               <div class="spec-line">${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)} - ${escapeHtml(MATCH_LABELS[line.buying_spec?.match_rule] || line.buying_spec?.match_rule || 'Equivalent allowed')}</div>
               ${recommended ? `<div class="spec-line">Recommended: ${escapeHtml(recommended.source_label)} ${quoteMoney(recommended.unit_price_paise)} (${escapeHtml(recommendationNote(line, recommended))})</div>` : best ? `<div class="spec-line">Cheapest quote: ${escapeHtml(best.source_label)} ${quoteMoney(best.unit_price_paise)}</div>` : ''}
             </div>
             <button class="icon-btn" type="button" data-remove-line="${escapeHtml(line.cart_id)}" aria-label="Remove">X</button>
+          </div>
+          <div class="order-form">
+            <input data-cart-qty="${escapeHtml(line.cart_id)}" type="number" min="0.01" step="0.01" value="${escapeHtml(line.qty_pending ? '' : line.qty)}" placeholder="Qty after price" aria-label="Purchase quantity">
+            <div class="compare-banner">${escapeHtml(recommended ? `Chosen by prices: ${recommended.source_label}` : 'Source will be chosen after live prices')}</div>
           </div>
           ${vendorSelect}
         </div>
@@ -1964,16 +2017,38 @@
       }).join('');
     }
 
+    function plannedOrderLines() {
+      return state.cart.map((line) => {
+        const recommended = recommendedQuoteFor(line);
+        return {
+          ...line,
+          planned_source_key: recommended?.source_key || line.source_key,
+          planned_source_label: recommended?.source_label || line.source_label,
+          planned_quote: recommended || null,
+        };
+      });
+    }
+
     function renderSourceGroups(lines) {
       if (!lines.length) {
-        els.sourceGroups.innerHTML = '';
+        els.sourceGroups.innerHTML = state.cart.length
+          ? `<div class="source-group"><div class="mute">Portal-wise carts appear after live prices return.</div></div>`
+          : '';
         return;
       }
 
       const bySource = new Map();
       for (const line of lines) {
-        if (!bySource.has(line.source_key)) bySource.set(line.source_key, []);
-        bySource.get(line.source_key).push(line);
+        const key = line.planned_source_key;
+        if (!key || key === 'AUTO_COMPARE') continue;
+        if (!bySource.has(key)) bySource.set(key, []);
+        bySource.get(key).push(line);
+      }
+      if (!bySource.size) {
+        els.sourceGroups.innerHTML = state.cart.length
+          ? `<div class="source-group"><div class="mute">Get live prices to build portal-wise carts.</div></div>`
+          : '';
+        return;
       }
 
       els.sourceGroups.innerHTML = [...bySource.entries()].map(([key, group]) => {
@@ -2025,6 +2100,18 @@
       const vendor = (item?.vendors || []).find((row) => String(row.id || '') === String(vendorId || ''));
       line.vendor_id = vendorId ? Number(vendorId) : null;
       line.vendor_name = vendor?.name || '';
+      saveCart();
+      renderCart();
+      renderQuotePanel();
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
+    }
+
+    function updateCartQty(cartId, value) {
+      const line = state.cart.find((row) => row.cart_id === cartId);
+      if (!line) return;
+      const qty = Number(value);
+      line.qty = Number.isFinite(qty) && qty > 0 ? qty : 1;
+      line.qty_pending = !(Number.isFinite(qty) && qty > 0);
       saveCart();
       renderCart();
       renderQuotePanel();
@@ -2084,7 +2171,9 @@
 
     function lineText(line) {
       const spec = line.buying_spec?.approved_name || line.search_query || line.name;
-      return `${line.name} | ${line.qty} ${line.uom || 'unit'} | spec: ${spec} | ${line.source_label} | local ${money(line.price_unit)}`;
+      const quote = line.planned_quote || recommendedQuoteFor(line);
+      const qty = line.qty_pending ? 'qty after price' : `${line.qty} ${line.uom || 'unit'}`;
+      return `${line.name} | ${qty} | spec: ${spec} | ${line.planned_source_label || line.source_label} | ${quote ? quoteMoney(quote.unit_price_paise) : `last ${money(line.price_unit)}`}`;
     }
 
     async function copyText(text) {
@@ -2100,7 +2189,7 @@
     }
 
     function copySourceCart(sourceKey) {
-      const lines = state.cart.filter((line) => line.source_key === sourceKey);
+      const lines = plannedOrderLines().filter((line) => line.planned_source_key === sourceKey);
       copyText([
         SOURCE_LABELS[sourceKey] || sourceKey,
         ...lines.map(lineText),
@@ -2147,6 +2236,8 @@
     document.addEventListener('change', (event) => {
       const vendorLine = event.target.closest('[data-cart-vendor]')?.dataset.cartVendor;
       if (vendorLine) updateCartVendor(vendorLine, event.target.value);
+      const qtyLine = event.target.closest('[data-cart-qty]')?.dataset.cartQty;
+      if (qtyLine) updateCartQty(qtyLine, event.target.value);
     });
 
     els.unlockBtn.addEventListener('click', verifyPin);

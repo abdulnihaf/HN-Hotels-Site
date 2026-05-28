@@ -384,6 +384,24 @@ function productIdFromProduct(product) {
   ]), 96);
 }
 
+function imageUrlFromProduct(product) {
+  const raw = cleanText(deepFieldValue(product, [
+    'imageUrl',
+    'image_url',
+    'image',
+    'image_url_string',
+    'productImage',
+    'product_image',
+    'thumbnail',
+    'thumbnailUrl',
+    'thumbnail_url',
+    'img',
+    'src',
+  ]), 520);
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return '';
+}
+
 function availabilityFromProduct(product) {
   const text = cleanText(deepFieldValue(product, [
     'stockStatus',
@@ -632,6 +650,7 @@ function portalQuoteFromProduct(line, product, query, expiresAt, sourceKey, resp
       availability,
       title,
       pack,
+      image_url: imageUrlFromProduct(product),
     },
   };
 }
