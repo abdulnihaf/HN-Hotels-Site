@@ -2577,7 +2577,7 @@ async function callVpsScoutForSource(material, sourceKey, env) {
 
 // Which portals have an adapter wired on the VPS. Kept in sync with
 // ADAPTERS in /home/hnscout/scout-service/src/portal-runner.js.
-const VPS_WIRED_SOURCES = new Set(['HYPERPURE', 'BIGBASKET', 'JIOMART', 'BLINKIT', 'FLIPKART_MINUTES', 'AMAZON_NOW']);
+const VPS_WIRED_SOURCES = new Set(['HYPERPURE', 'BIGBASKET', 'JIOMART', 'BLINKIT', 'FLIPKART_MINUTES', 'AMAZON_NOW', 'ZEPTO']);
 
 function adapterAvailable(sourceKey) {
   return VPS_WIRED_SOURCES.has(sourceKey);
