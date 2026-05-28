@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-28T17:37:44+0530",
-  "published_at": "2026-05-28T17:37:44+0530",
+  "updated_at": "2026-05-28T18:13:40+0530",
+  "published_at": "2026-05-28T18:13:40+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -130,17 +130,17 @@
       "subgroup": "Creative Surface",
       "risk": "print/vendor handoff",
       "status": "ready",
-      "last_task": "Correct 500ml visible frames to exact 250ml sizes",
-      "last_summary": "After user correction, replaced the visible 500ml production frames on Figma page 226:2 in file cNkjzNFs4Xb1bdJUBB0Xey with exact-size clones of the 250ml six-frame set. Visible 500ml frames now exactly match 250ml dimensions: front/back 385.5118x612.2834, left/right spines 215.4331x612.2834, front/back gables 385.5118x144.5669. Retained 500ml back statutory copy as NET QTY 500 mL e. Set 500ml grid to match 250ml: top row y=1330, x positions 80 / 525.5118 / 971.0236 / 1246.4567, 60-unit gaps, gables at y=1982.2834 with 40-unit gap. Hid the previous taller 500ml physical-size frames and old faded source/reference off-canvas for rollback only.",
-      "next_action": "Have Nihaf review page 226:2 and approve the exact-size 500ml visible set; then proceed to final visual/content refinement or vendor export/preflight only after approval.",
-      "mutation_status": "Existing Figma file mutation only; visible 500ml frames replaced with exact-size 250ml-style clones, old taller 500ml frames hidden off-canvas; no vendor files/live routes changed.",
+      "last_task": "Correct NCH flask master to exact Figma dieline cut specs",
+      "last_summary": "Updated existing Figma file cNkjzNFs4Xb1bdJUBB0Xey page Codex Production Master 250ml 500ml Consistent so visible 250ml and 500ml production frames follow the current Figma dieline cuts plus 3mm bleed. 250ml readback: front/back 136x216mm, spines 76x216mm, gables 136x51mm. 500ml readback: front/back 136x246mm, spines 76x246mm, gables 136x56mm; 500 gable trim guides corrected to 130x50mm. Also restored 500ml left spine wordmark visibility and kept hidden wrong exact-250-size 500ml backups hidden.",
+      "next_action": "Nihaf review the Figma page for final visual refinement; after approval export deterministic SVG/PDF and run QR, bleed, dieline, font, and PDF preflight checks before vendor handoff.",
+      "mutation_status": "Existing Figma file mutation only; no POS/Odoo/ad/WABA/vendor final file mutation; no bulk final dielines generated.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-      "last_run_at": "2026-05-28T17:37:44+0530",
-      "proof": "Figma readback confirmed all six visible 500ml frame sizes exactly match corresponding 250ml sizes, allExactSizeMatches true, 60-unit gaps, 40-unit gable gap, top row same y/bottom baseline, and 500ml back statutory text NET QTY 500 mL e. Screenshot downloaded to /private/tmp/nch_500_exact_250_size_final_clean.png.",
-      "artifacts": "/private/tmp/nch_500_exact_250_size_final_clean.png",
-      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; visible 500ml nodes 253:2, 253:5, 253:44, 253:65, 253:84, 253:102; hidden rollback old 500ml nodes 226:131, 226:134, 226:155, 226:174, 226:193, 226:211.",
-      "data_freshness": "2026-05-28 Figma MCP mutation, screenshot, and geometry readback verification.",
-      "rollback": "Unhide old 500ml nodes 226:131, 226:134, 226:155, 226:174, 226:193, 226:211 and hide/delete new visible nodes 253:2, 253:5, 253:44, 253:65, 253:84, 253:102 if reverting to previous taller 500ml sizing."
+      "last_run_at": "2026-05-28T18:13:40+0530",
+      "proof": "Figma MCP readback on 2026-05-28 confirmed visible frame sizes and 500ml gable trim guide sizes; final screenshot downloaded to /private/tmp/nch_dieline_exact_specs_final.png as 2050x2312 PNG.",
+      "artifacts": "/private/tmp/nch_dieline_exact_specs_final.png",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2 Codex Production Master 250ml 500ml Consistent; visible 250 nodes 226:15,226:18,226:39,226:58,226:77,226:95; visible 500 nodes 226:131,226:134,226:155,226:174,226:193,226:211; corrected 500 gable trim nodes 226:195,226:213; 500 left spine wordmark clone 267:2.",
+      "data_freshness": "2026-05-28 Figma MCP live metadata and screenshot verification.",
+      "rollback": "Use Figma version history or hidden backup nodes 253:2,253:5,253:44,253:65,253:84,253:102 only if intentionally reverting to the rejected exact-250-size 500ml draft; current canonical board follows Figma dieline sizes."
     },
     "reel-making": {
       "title": "11 Reel Making",
@@ -156,6 +156,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260528181340-packaging-design",
+      "at": "2026-05-28T18:13:40+0530",
+      "lane": "packaging-design",
+      "task": "Correct NCH flask master to exact Figma dieline cut specs",
+      "status": "ready",
+      "summary": "Updated existing Figma file cNkjzNFs4Xb1bdJUBB0Xey page Codex Production Master 250ml 500ml Consistent so visible 250ml and 500ml production frames follow the current Figma dieline cuts plus 3mm bleed. 250ml readback: front/back 136x216mm, spines 76x216mm, gables 136x51mm. 500ml readback: front/back 136x246mm, spines 76x246mm, gables 136x56mm; 500 gable trim guides corrected to 130x50mm. Also restored 500ml left spine wordmark visibility and kept hidden wrong exact-250-size 500ml backups hidden.",
+      "next_action": "Nihaf review the Figma page for final visual refinement; after approval export deterministic SVG/PDF and run QR, bleed, dieline, font, and PDF preflight checks before vendor handoff.",
+      "mutation_status": "Existing Figma file mutation only; no POS/Odoo/ad/WABA/vendor final file mutation; no bulk final dielines generated.",
+      "proof": "Figma MCP readback on 2026-05-28 confirmed visible frame sizes and 500ml gable trim guide sizes; final screenshot downloaded to /private/tmp/nch_dieline_exact_specs_final.png as 2050x2312 PNG.",
+      "artifacts": "/private/tmp/nch_dieline_exact_specs_final.png",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2 Codex Production Master 250ml 500ml Consistent; visible 250 nodes 226:15,226:18,226:39,226:58,226:77,226:95; visible 500 nodes 226:131,226:134,226:155,226:174,226:193,226:211; corrected 500 gable trim nodes 226:195,226:213; 500 left spine wordmark clone 267:2.",
+      "rollback": "Use Figma version history or hidden backup nodes 253:2,253:5,253:44,253:65,253:84,253:102 only if intentionally reverting to the rejected exact-250-size 500ml draft; current canonical board follows Figma dieline sizes.",
+      "data_freshness": "2026-05-28 Figma MCP live metadata and screenshot verification."
+    },
     {
       "id": "20260528173744-packaging-design",
       "at": "2026-05-28T17:37:44+0530",
@@ -980,16 +995,6 @@
       "summary": "Nihaf chose the Brand/Legacy message direction for Hamza Hotel searchers: Searching for Hamza Hotel? Come to Hamza Express on HKP Road. Wahi Hamza Naam, Naya Zaiqa, Naya Andaaz. Best Ghee Rice and Kabab. Recommended making this compact for Google Search visible copy with brand bridge + directions intent.",
       "next_action": "Before mutation, apply compact RSA copy to Brand/Legacy Hamza Search campaign with ₹500/day and 2km radius only after exact ad asset/budget/proximity write endpoints are verified.",
       "mutation_status": "none-copy-direction-only"
-    },
-    {
-      "id": "20260525071737-google-ads",
-      "at": "2026-05-25T07:17:37+0530",
-      "lane": "google-ads",
-      "task": "Google Ads 2km radius and Hamza Hotel keyword intent audit",
-      "status": "ready",
-      "summary": "Read-only keyword-volume audit found Hamza Hotel brand demand is meaningful in Bangalore: hamza hotel avg 6600 monthly searches, Apr 2026 bucket 5400; hamza hotel shivaji nagar avg 590, Apr 880; hamza express avg 110, Apr 590. High-intent food terms include biryani near me open now avg 1900/Apr 1900, kabab near me avg 1300/Apr 1600, late night food near me avg 320/Apr 480, midnight food near me avg 320/Apr 390, non veg restaurant near me open now avg 320/Apr 390. No mutations made.",
-      "next_action": "Use 2km radius for easy-conversion search campaigns; split Hamza Hotel brand capture from late-night non-brand; add lodging/OYO/international negatives before any budget shift.",
-      "mutation_status": "none-readonly"
     }
   ]
 }
