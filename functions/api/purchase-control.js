@@ -89,6 +89,9 @@ const SOURCES = [
 
 const RUN_STATUSES = ['DRAFT', 'QUOTING', 'REVIEW', 'CART_BUILDING', 'AWAITING_CHECKOUT', 'ORDERED', 'RECONCILED'];
 const RUN_TYPES = ['MORNING_PURCHASE', 'EVENING_TOPUP', 'URGENT_FILL'];
+const PORTAL_SOURCE_KEYS = SOURCES.map((source) => source.key).filter((key) => key !== 'LOCAL_VENDOR');
+const QUOTE_STOCK_STATUSES = ['QUOTED', 'PENDING_ADAPTER', 'OUT_OF_STOCK', 'UNAVAILABLE', 'ERROR'];
+const SOURCE_BY_KEY = Object.fromEntries(SOURCES.map((source) => [source.key, source]));
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -193,6 +196,27 @@ function cleanRunStatus(value) {
 
 function cleanRunType(value) {
   return RUN_TYPES.includes(value) ? value : 'MORNING_PURCHASE';
+}
+
+function cleanSourceKey(value) {
+  return SOURCE_BY_KEY[value] ? value : 'LOCAL_VENDOR';
+}
+
+function cleanQuoteStatus(value) {
+  return QUOTE_STOCK_STATUSES.includes(value) ? value : 'PENDING_ADAPTER';
+}
+
+function paiseFrom(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n * 100);
+}
+
+function quoteLineId(batchId, sourceKey, line) {
+  const basis = String(line.cart_id || line.item_id || line.product_code || line.name || 'line')
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 80);
+  return `PQL-${batchId}-${sourceKey}-${basis}`;
 }
 
 function categoryFor(name, code, odooCategory) {
@@ -317,6 +341,68 @@ async function ensurePurchaseRunSchema(DB) {
       updated_at TEXT NOT NULL
     )
   `).run();
+
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS purchase_quote_batches (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      brand TEXT NOT NULL,
+      status TEXT NOT NULL,
+      requested_sources_json TEXT NOT NULL DEFAULT '[]',
+      item_count INTEGER NOT NULL DEFAULT 0,
+      quoted_count INTEGER NOT NULL DEFAULT 0,
+      unavailable_count INTEGER NOT NULL DEFAULT 0,
+      error_count INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT,
+      summary_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `).run();
+
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS purchase_quote_lines (
+      id TEXT PRIMARY KEY,
+      batch_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      cart_id TEXT,
+      item_id TEXT,
+      product_code TEXT,
+      name TEXT NOT NULL,
+      category TEXT,
+      uom TEXT,
+      required_qty REAL DEFAULT 0,
+      source_key TEXT NOT NULL,
+      source_label TEXT,
+      sku_title TEXT,
+      sku_url TEXT,
+      pack_size TEXT,
+      price_paise INTEGER NOT NULL DEFAULT 0,
+      unit_price_paise INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'INR',
+      eta_minutes INTEGER DEFAULT 0,
+      eta_label TEXT,
+      stock_status TEXT NOT NULL DEFAULT 'PENDING_ADAPTER',
+      match_rule TEXT,
+      match_confidence INTEGER NOT NULL DEFAULT 0,
+      match_notes TEXT,
+      captured_at TEXT,
+      expires_at TEXT,
+      raw_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `).run();
+
+  await DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_purchase_quote_batches_run
+    ON purchase_quote_batches(run_id, updated_at)
+  `).run();
+
+  await DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_purchase_quote_lines_batch
+    ON purchase_quote_lines(batch_id, cart_id, source_key)
+  `).run();
 }
 
 function publicRun(row) {
@@ -334,6 +420,60 @@ function publicRun(row) {
     items: safeJson(row.items_json, []),
     orders: safeJson(row.orders_json, []),
     quote_expires_at: row.quote_expires_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function publicQuoteBatch(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    run_id: row.run_id,
+    brand: row.brand,
+    status: row.status,
+    requested_sources: safeJson(row.requested_sources_json, []),
+    item_count: row.item_count || 0,
+    quoted_count: row.quoted_count || 0,
+    unavailable_count: row.unavailable_count || 0,
+    error_count: row.error_count || 0,
+    created_by: row.created_by,
+    summary: safeJson(row.summary_json, {}),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function publicQuoteLine(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    batch_id: row.batch_id,
+    run_id: row.run_id,
+    cart_id: row.cart_id,
+    item_id: row.item_id,
+    product_code: row.product_code,
+    name: row.name,
+    category: row.category,
+    uom: row.uom,
+    required_qty: row.required_qty || 0,
+    source_key: row.source_key,
+    source_label: row.source_label || SOURCE_BY_KEY[row.source_key]?.label || row.source_key,
+    sku_title: row.sku_title || '',
+    sku_url: row.sku_url || '',
+    pack_size: row.pack_size || '',
+    price_paise: row.price_paise || 0,
+    unit_price_paise: row.unit_price_paise || 0,
+    currency: row.currency || 'INR',
+    eta_minutes: row.eta_minutes || 0,
+    eta_label: row.eta_label || '',
+    stock_status: row.stock_status || 'PENDING_ADAPTER',
+    match_rule: row.match_rule || '',
+    match_confidence: row.match_confidence || 0,
+    match_notes: row.match_notes || '',
+    captured_at: row.captured_at || '',
+    expires_at: row.expires_at || '',
+    raw: safeJson(row.raw_json, {}),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -379,6 +519,10 @@ async function handleGet(url, env) {
 
   if (action === 'run-detail') {
     return getRunDetail(url, user, env.DB);
+  }
+
+  if (action === 'quote-summary') {
+    return getQuoteSummary(url, user, env.DB);
   }
 
   if (action === 'materials') {
@@ -621,6 +765,10 @@ async function handlePost(context, env) {
       return saveRun(body, user, env.DB);
     case 'update-run-status':
       return updateRunStatus(body, user, env.DB);
+    case 'request-quotes':
+      return requestQuotes(body, user, env.DB);
+    case 'ingest-quotes':
+      return ingestQuotes(body, user, env.DB);
     case 'create-local-po':
       return createLocalPO(body, user, env, context.env.DB);
     default:
@@ -779,6 +927,294 @@ async function updateRunStatus(body, user, DB) {
     run: publicRun(row),
     user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
   });
+}
+
+async function latestQuoteBatch(DB, runId, batchId) {
+  if (batchId) {
+    return DB.prepare('SELECT * FROM purchase_quote_batches WHERE id = ? AND run_id = ?').bind(batchId, runId).first();
+  }
+  return DB.prepare(`
+    SELECT * FROM purchase_quote_batches
+    WHERE run_id = ?
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `).bind(runId).first();
+}
+
+function summarizeQuotes(run, quotes) {
+  const quoted = quotes.filter((quote) => quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0);
+  const pending = quotes.filter((quote) => quote.stock_status === 'PENDING_ADAPTER');
+  const unavailable = quotes.filter((quote) => quote.stock_status === 'OUT_OF_STOCK' || quote.stock_status === 'UNAVAILABLE');
+  const errors = quotes.filter((quote) => quote.stock_status === 'ERROR');
+  const cart = Array.isArray(run.cart) ? run.cart : [];
+  const byCart = cart.map((line) => {
+    const lineQuotes = quotes.filter((quote) => quote.cart_id === line.cart_id);
+    const valid = lineQuotes
+      .filter((quote) => quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0)
+      .sort((a, b) => a.unit_price_paise - b.unit_price_paise);
+    const fastest = lineQuotes
+      .filter((quote) => quote.stock_status === 'QUOTED' && quote.eta_minutes > 0)
+      .sort((a, b) => a.eta_minutes - b.eta_minutes)[0] || null;
+    return {
+      cart_id: line.cart_id,
+      name: line.name,
+      required_qty: line.qty || line.required_qty || 0,
+      best_price: valid[0] || null,
+      fastest,
+      quote_count: lineQuotes.length,
+      pending_count: lineQuotes.filter((quote) => quote.stock_status === 'PENDING_ADAPTER').length,
+    };
+  });
+  const source_statuses = SOURCES.map((source) => {
+    const sourceQuotes = quotes.filter((quote) => quote.source_key === source.key);
+    return {
+      key: source.key,
+      label: source.label,
+      quoted_count: sourceQuotes.filter((quote) => quote.stock_status === 'QUOTED').length,
+      pending_count: sourceQuotes.filter((quote) => quote.stock_status === 'PENDING_ADAPTER').length,
+      unavailable_count: sourceQuotes.filter((quote) => quote.stock_status === 'OUT_OF_STOCK' || quote.stock_status === 'UNAVAILABLE').length,
+      error_count: sourceQuotes.filter((quote) => quote.stock_status === 'ERROR').length,
+    };
+  });
+  return {
+    cart_count: cart.length,
+    quote_count: quotes.length,
+    quoted_count: quoted.length,
+    pending_count: pending.length,
+    unavailable_count: unavailable.length,
+    error_count: errors.length,
+    comparable_line_count: byCart.filter((line) => line.best_price).length,
+    by_cart: byCart,
+    source_statuses,
+  };
+}
+
+async function recomputeQuoteBatchCounts(DB, batchId, run) {
+  const rows = await DB.prepare(`
+    SELECT stock_status, COUNT(*) AS count
+    FROM purchase_quote_lines
+    WHERE batch_id = ?
+    GROUP BY stock_status
+  `).bind(batchId).all();
+  const counts = Object.fromEntries((rows.results || []).map((row) => [row.stock_status, row.count || 0]));
+  const pending = counts.PENDING_ADAPTER || 0;
+  const summary = {
+    quoted_count: counts.QUOTED || 0,
+    pending_count: pending,
+    unavailable_count: (counts.OUT_OF_STOCK || 0) + (counts.UNAVAILABLE || 0),
+    error_count: counts.ERROR || 0,
+  };
+  const now = new Date().toISOString();
+  const status = pending > 0 ? 'WAITING_FOR_ADAPTERS' : 'CAPTURED';
+  await DB.prepare(`
+    UPDATE purchase_quote_batches
+    SET status = ?, quoted_count = ?, unavailable_count = ?, error_count = ?, summary_json = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(
+    status,
+    summary.quoted_count,
+    summary.unavailable_count,
+    summary.error_count,
+    JSON.stringify({ ...summary, run_id: run.id }),
+    now,
+    batchId
+  ).run();
+}
+
+async function getQuoteSummary(url, user, DB) {
+  await ensurePurchaseRunSchema(DB);
+  const runId = url.searchParams.get('run_id');
+  const batchId = url.searchParams.get('batch_id');
+  if (!runId) return json({ error: 'Missing run_id' }, 400);
+
+  const runRow = await DB.prepare('SELECT * FROM purchase_control_runs WHERE id = ?').bind(runId).first();
+  if (!runRow) return json({ error: 'Run not found' }, 404);
+  const run = publicRun(runRow);
+  const batchRows = await DB.prepare(`
+    SELECT * FROM purchase_quote_batches
+    WHERE run_id = ?
+    ORDER BY updated_at DESC
+    LIMIT 8
+  `).bind(runId).all();
+  const batchRow = await latestQuoteBatch(DB, runId, batchId);
+  const quoteRows = batchRow
+    ? await DB.prepare(`
+      SELECT * FROM purchase_quote_lines
+      WHERE batch_id = ?
+      ORDER BY name ASC, source_key ASC
+    `).bind(batchRow.id).all()
+    : { results: [] };
+  const quotes = (quoteRows.results || []).map(publicQuoteLine);
+  return json({
+    success: true,
+    run,
+    batch: publicQuoteBatch(batchRow),
+    batches: (batchRows.results || []).map(publicQuoteBatch),
+    quotes,
+    summary: summarizeQuotes(run, quotes),
+    portal_sources: SOURCES.filter((source) => source.key !== 'LOCAL_VENDOR'),
+    user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
+  });
+}
+
+async function insertQuoteLine(DB, batchId, runId, line, sourceKey, quote, now) {
+  const source = SOURCE_BY_KEY[sourceKey] || { key: sourceKey, label: sourceKey };
+  const pricePaise = Number.isInteger(quote.price_paise) ? quote.price_paise : paiseFrom(quote.price || quote.price_rupees);
+  const unitPricePaise = Number.isInteger(quote.unit_price_paise)
+    ? quote.unit_price_paise
+    : paiseFrom(quote.unit_price || quote.unit_price_rupees) || pricePaise;
+  const status = cleanQuoteStatus(quote.stock_status || (pricePaise > 0 ? 'QUOTED' : 'PENDING_ADAPTER'));
+  const capturedAt = quote.captured_at || (status === 'PENDING_ADAPTER' ? '' : now);
+  const id = quote.id || quoteLineId(batchId, sourceKey, line);
+
+  await DB.prepare(`
+    INSERT OR REPLACE INTO purchase_quote_lines
+      (id, batch_id, run_id, cart_id, item_id, product_code, name, category, uom, required_qty,
+       source_key, source_label, sku_title, sku_url, pack_size, price_paise, unit_price_paise, currency,
+       eta_minutes, eta_label, stock_status, match_rule, match_confidence, match_notes, captured_at,
+       expires_at, raw_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id,
+    batchId,
+    runId,
+    line.cart_id || '',
+    line.item_id || line.id || '',
+    line.product_code || '',
+    line.name || quote.name || 'Raw material',
+    line.category || '',
+    line.uom || '',
+    safeNumber(line.qty || line.required_qty),
+    source.key,
+    quote.source_label || source.label,
+    quote.sku_title || quote.title || '',
+    quote.sku_url || quote.url || '',
+    quote.pack_size || '',
+    Math.max(0, pricePaise || 0),
+    Math.max(0, unitPricePaise || 0),
+    quote.currency || 'INR',
+    Math.max(0, parseInt(quote.eta_minutes || 0, 10) || 0),
+    quote.eta_label || '',
+    status,
+    quote.match_rule || line.buying_spec?.match_rule || line.match_rule || '',
+    Math.max(0, Math.min(100, parseInt(quote.match_confidence || 0, 10) || 0)),
+    quote.match_notes || '',
+    capturedAt,
+    quote.expires_at || '',
+    JSON.stringify(quote.raw || quote),
+    now,
+    now
+  ).run();
+}
+
+async function requestQuotes(body, user, DB) {
+  await ensurePurchaseRunSchema(DB);
+  const runId = body.run_id;
+  if (!runId) return json({ error: 'Missing run_id' }, 400);
+  const runRow = await DB.prepare('SELECT * FROM purchase_control_runs WHERE id = ?').bind(runId).first();
+  if (!runRow) return json({ error: 'Run not found' }, 404);
+  const run = publicRun(runRow);
+  const cart = Array.isArray(run.cart) ? run.cart : [];
+  if (!cart.length) return json({ error: 'Add items to the tray before requesting quotes' }, 400);
+
+  const requestedPortals = Array.isArray(body.sources) && body.sources.length
+    ? body.sources.map(cleanSourceKey).filter((key) => PORTAL_SOURCE_KEYS.includes(key))
+    : PORTAL_SOURCE_KEYS;
+  const sourceKeys = [...new Set([...(body.include_local === false ? [] : ['LOCAL_VENDOR']), ...requestedPortals])];
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 15 * 60000).toISOString();
+  const batchId = makeId('PQB');
+
+  await DB.prepare(`
+    INSERT INTO purchase_quote_batches
+      (id, run_id, brand, status, requested_sources_json, item_count, quoted_count,
+       unavailable_count, error_count, created_by, summary_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    batchId,
+    run.id,
+    run.brand,
+    'WAITING_FOR_ADAPTERS',
+    JSON.stringify(sourceKeys),
+    cart.length,
+    0,
+    0,
+    0,
+    user.name,
+    '{}',
+    now,
+    now
+  ).run();
+
+  for (const line of cart) {
+    for (const sourceKey of sourceKeys) {
+      if (sourceKey === 'LOCAL_VENDOR') {
+        const pricePaise = paiseFrom(line.price_unit);
+        await insertQuoteLine(DB, batchId, run.id, line, sourceKey, {
+          sku_title: line.vendor_name || 'Local vendor price',
+          price_paise: pricePaise,
+          unit_price_paise: pricePaise,
+          eta_label: 'Vendor route',
+          stock_status: pricePaise > 0 ? 'QUOTED' : 'UNAVAILABLE',
+          match_confidence: pricePaise > 0 ? 100 : 0,
+          match_notes: 'Last Odoo vendor price baseline',
+          expires_at: expiresAt,
+        }, now);
+      } else {
+        await insertQuoteLine(DB, batchId, run.id, line, sourceKey, {
+          stock_status: 'PENDING_ADAPTER',
+          match_rule: line.buying_spec?.match_rule || line.match_rule || '',
+          match_notes: 'Awaiting live capture adapter',
+          expires_at: expiresAt,
+        }, now);
+      }
+    }
+  }
+
+  await recomputeQuoteBatchCounts(DB, batchId, run);
+  await DB.prepare(`
+    UPDATE purchase_control_runs
+    SET status = ?, quote_expires_at = ?, updated_at = ?
+    WHERE id = ?
+  `).bind('QUOTING', expiresAt, now, run.id).run();
+
+  const fakeUrl = new URL(`https://internal.local/api/purchase-control?action=quote-summary&run_id=${encodeURIComponent(run.id)}&batch_id=${encodeURIComponent(batchId)}`);
+  return getQuoteSummary(fakeUrl, user, DB);
+}
+
+async function ingestQuotes(body, user, DB) {
+  if (!canCreate(user)) return json({ error: 'Only admin or purchase PINs can ingest quotes' }, 403);
+  await ensurePurchaseRunSchema(DB);
+  const runId = body.run_id;
+  if (!runId) return json({ error: 'Missing run_id' }, 400);
+  const batchRow = await latestQuoteBatch(DB, runId, body.batch_id);
+  if (!batchRow) return json({ error: 'No quote batch found for this run' }, 404);
+  const runRow = await DB.prepare('SELECT * FROM purchase_control_runs WHERE id = ?').bind(runId).first();
+  if (!runRow) return json({ error: 'Run not found' }, 404);
+  const run = publicRun(runRow);
+  const cartById = new Map((run.cart || []).map((line) => [line.cart_id, line]));
+  const quotes = Array.isArray(body.quotes) ? body.quotes : [];
+  if (!quotes.length) return json({ error: 'No quotes supplied' }, 400);
+  const now = new Date().toISOString();
+
+  for (const quote of quotes) {
+    const sourceKey = cleanSourceKey(quote.source_key);
+    const line = cartById.get(quote.cart_id) || {
+      cart_id: quote.cart_id || '',
+      item_id: quote.item_id || '',
+      product_code: quote.product_code || '',
+      name: quote.name || quote.sku_title || 'Raw material',
+      category: quote.category || '',
+      uom: quote.uom || '',
+      qty: quote.required_qty || 0,
+      buying_spec: { match_rule: quote.match_rule || '' },
+    };
+    await insertQuoteLine(DB, batchRow.id, run.id, line, sourceKey, quote, now);
+  }
+
+  await recomputeQuoteBatchCounts(DB, batchRow.id, run);
+  const fakeUrl = new URL(`https://internal.local/api/purchase-control?action=quote-summary&run_id=${encodeURIComponent(run.id)}&batch_id=${encodeURIComponent(batchRow.id)}`);
+  return getQuoteSummary(fakeUrl, user, DB);
 }
 
 async function createLocalPO(body, user, env, DB) {

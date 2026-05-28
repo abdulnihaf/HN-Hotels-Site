@@ -180,6 +180,104 @@
       cursor: pointer;
     }
     .run-chip.active { border-color: var(--brand-ring); background: var(--brand-soft); color: var(--brand-hover); }
+    .quote-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .quote-head {
+      display: grid;
+      gap: 10px;
+    }
+    .quote-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .quote-source-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .quote-source-card,
+    .quote-line {
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.035);
+      border-radius: 8px;
+    }
+    .quote-source-card {
+      min-height: 58px;
+      padding: 9px;
+      display: grid;
+      gap: 5px;
+    }
+    .quote-source-name,
+    .quote-line-name,
+    .quote-cell-source {
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .quote-source-meta,
+    .quote-line-meta,
+    .quote-cell-meta {
+      color: var(--text-dim);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .quote-matrix {
+      display: grid;
+      gap: 8px;
+    }
+    .quote-line {
+      padding: 10px;
+      display: grid;
+      gap: 9px;
+    }
+    .quote-line-head {
+      display: grid;
+      gap: 4px;
+    }
+    .quote-cells {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .quote-cell {
+      min-height: 104px;
+      display: grid;
+      align-content: start;
+      gap: 5px;
+      padding: 9px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(0,0,0,.14);
+    }
+    .quote-cell.best {
+      border-color: rgba(52,211,153,.45);
+      background: rgba(52,211,153,.08);
+    }
+    .quote-price {
+      font-size: 15px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .quote-status {
+      width: max-content;
+      min-height: 22px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 7px;
+      border-radius: 999px;
+      border: 1px solid var(--pc-line);
+      color: var(--text-dim);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .quote-status.quoted { color: var(--pc-green); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
+    .quote-status.pending { color: var(--pc-yellow); border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
+    .quote-status.bad { color: var(--pc-red); border-color: rgba(248,113,113,.34); background: rgba(248,113,113,.08); }
     .console-grid {
       display: grid;
       gap: 12px;
@@ -409,6 +507,9 @@
     @media (min-width: 760px) {
       .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .run-grid { grid-template-columns: minmax(0, 1fr) 180px 190px 220px; }
+      .quote-head { grid-template-columns: minmax(0, 1fr) 250px; align-items: end; }
+      .quote-source-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .quote-cells { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .control-row { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.4fr); align-items: center; }
       .catalog-grid { grid-template-columns: 230px minmax(0, 1fr); }
       .material-card { grid-template-columns: minmax(0, 1fr) 310px; align-items: start; }
@@ -488,6 +589,21 @@
           <div id="recentRuns" class="recent-runs"></div>
         </section>
 
+        <section class="card quote-panel">
+          <div class="quote-head">
+            <div>
+              <h2>Quote Engine</h2>
+              <p id="quoteMeta" class="sub" style="margin:4px 0 0;">No quote batch for this run.</p>
+            </div>
+            <div class="quote-actions">
+              <button id="requestQuotesBtn" class="btn btn-primary" type="button">Get quotes</button>
+              <button id="refreshQuotesBtn" class="btn btn-ghost" type="button">Refresh quotes</button>
+            </div>
+          </div>
+          <div id="quoteSourceStatus" class="quote-source-grid"></div>
+          <div id="quoteMatrix" class="quote-matrix"></div>
+        </section>
+
         <div class="kpis" id="kpis"></div>
 
         <div class="control-row">
@@ -564,6 +680,15 @@
       COMMODITY_EQUIVALENT: 'Commodity equivalent',
       SUBSTITUTE_APPROVAL: 'Substitute needs approval',
     };
+    const QUOTE_SOURCE_ORDER = ['LOCAL_VENDOR', 'HYPERPURE', 'ZEPTO', 'FLIPKART_MINUTES', 'INSTAMART', 'BLINKIT', 'AMAZON_NOW', 'BIGBASKET', 'JIOMART'];
+    const PORTAL_SOURCE_KEYS = QUOTE_SOURCE_ORDER.filter((key) => key !== 'LOCAL_VENDOR');
+    const STOCK_LABELS = {
+      QUOTED: 'Quoted',
+      PENDING_ADAPTER: 'Pending',
+      OUT_OF_STOCK: 'No stock',
+      UNAVAILABLE: 'Unavailable',
+      ERROR: 'Error',
+    };
 
     const state = {
       pin: localStorage.getItem('purchaseControlPin') || '',
@@ -571,6 +696,13 @@
       brand: localStorage.getItem('purchaseControlBrand') || 'HE',
       run: null,
       runs: [],
+      quote: {
+        batch: null,
+        batches: [],
+        quotes: [],
+        summary: null,
+        loading: false,
+      },
       query: '',
       category: 'All',
       source: 'ALL',
@@ -594,6 +726,11 @@
       saveRunBtn: document.getElementById('saveRunBtn'),
       runStatusBar: document.getElementById('runStatusBar'),
       recentRuns: document.getElementById('recentRuns'),
+      quoteMeta: document.getElementById('quoteMeta'),
+      requestQuotesBtn: document.getElementById('requestQuotesBtn'),
+      refreshQuotesBtn: document.getElementById('refreshQuotesBtn'),
+      quoteSourceStatus: document.getElementById('quoteSourceStatus'),
+      quoteMatrix: document.getElementById('quoteMatrix'),
       kpis: document.getElementById('kpis'),
       searchInput: document.getElementById('searchInput'),
       sourceStrip: document.getElementById('sourceStrip'),
@@ -759,6 +896,7 @@
     }
 
     function applyRun(run) {
+      const runChanged = state.run?.id !== run.id;
       state.run = run;
       localStorage.setItem('purchaseControlRunId', run.id);
       const brandChanged = run.brand && run.brand !== state.brand;
@@ -767,6 +905,10 @@
       if (run.status) els.runStatusSelect.value = run.status;
       state.cart = Array.isArray(run.cart) ? run.cart : [];
       saveCart();
+      if (runChanged) {
+        state.quote = { batch: null, batches: [], quotes: [], summary: null, loading: false };
+        if (!run.local_only && state.pin) loadQuoteSummary(run.id);
+      }
       renderAll();
       if (brandChanged && state.pin) loadMaterials();
     }
@@ -818,6 +960,71 @@
         if (!options.silent) toast(error.message || 'Run save failed');
       } finally {
         els.saveRunBtn.disabled = false;
+      }
+    }
+
+    function applyQuoteData(data) {
+      state.quote = {
+        batch: data.batch || null,
+        batches: data.batches || [],
+        quotes: data.quotes || [],
+        summary: data.summary || null,
+        loading: false,
+      };
+      renderQuotePanel();
+      renderCart();
+    }
+
+    async function loadQuoteSummary(runId = state.run?.id) {
+      if (!runId || state.run?.local_only) {
+        state.quote = { batch: null, batches: [], quotes: [], summary: null, loading: false };
+        renderQuotePanel();
+        return;
+      }
+      state.quote.loading = true;
+      renderQuotePanel();
+      try {
+        const data = await fetchJson(`/api/purchase-control?action=quote-summary&pin=${encodeURIComponent(state.pin)}&run_id=${encodeURIComponent(runId)}`);
+        applyQuoteData(data);
+      } catch (error) {
+        state.quote.loading = false;
+        renderQuotePanel();
+        toast(error.message || 'Quote refresh failed');
+      }
+    }
+
+    async function requestQuotes() {
+      if (!state.run) await startRun();
+      if (!state.run) return;
+      if (!state.cart.length) {
+        toast('Add items before requesting quotes');
+        return;
+      }
+      await saveRun({ status: 'QUOTING', silent: true });
+      els.requestQuotesBtn.disabled = true;
+      state.quote.loading = true;
+      renderQuotePanel();
+      try {
+        const data = await fetchJson('/api/purchase-control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'request-quotes',
+            pin: state.pin,
+            run_id: state.run.id,
+            include_local: true,
+            sources: PORTAL_SOURCE_KEYS,
+          }),
+        });
+        applyRun(data.run);
+        applyQuoteData(data);
+        toast('Quote batch created');
+      } catch (error) {
+        state.quote.loading = false;
+        renderQuotePanel();
+        toast(error.message || 'Quote request failed');
+      } finally {
+        els.requestQuotesBtn.disabled = false;
       }
     }
 
@@ -873,6 +1080,7 @@
     function renderAll() {
       if (!state.data) return;
       renderRunPanel();
+      renderQuotePanel();
       renderKpis();
       renderSources();
       renderCategories();
@@ -906,6 +1114,126 @@
           ${escapeHtml(recent.brand)} ${escapeHtml(RUN_LABELS[recent.status] || recent.status)}
         </button>
       `).join('');
+    }
+
+    function quoteStatusClass(status) {
+      if (status === 'QUOTED') return 'quoted';
+      if (status === 'PENDING_ADAPTER') return 'pending';
+      return 'bad';
+    }
+
+    function quoteMoney(paise) {
+      const n = Number(paise);
+      if (!Number.isFinite(n) || n <= 0) return '-';
+      return money(n / 100);
+    }
+
+    function quoteFor(line, sourceKey) {
+      return (state.quote.quotes || []).find((quote) => quote.cart_id === line.cart_id && quote.source_key === sourceKey) || null;
+    }
+
+    function bestQuoteFor(line) {
+      return (state.quote.quotes || [])
+        .filter((quote) => quote.cart_id === line.cart_id && quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0)
+        .sort((a, b) => a.unit_price_paise - b.unit_price_paise)[0] || null;
+    }
+
+    function renderQuotePanel() {
+      if (!els.quoteMeta) return;
+      const run = state.run;
+      const quote = state.quote || {};
+      els.requestQuotesBtn.disabled = !run || !state.cart.length || quote.loading;
+      els.refreshQuotesBtn.disabled = !run || quote.loading;
+
+      if (!run) {
+        els.quoteMeta.textContent = 'Start a purchase run first.';
+        els.quoteSourceStatus.innerHTML = '';
+        els.quoteMatrix.innerHTML = `<div class="empty">No active run</div>`;
+        return;
+      }
+
+      if (quote.loading) {
+        els.quoteMeta.textContent = 'Refreshing quote snapshot...';
+      } else if (quote.batch) {
+        const updated = quote.batch.updated_at ? new Date(quote.batch.updated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'now';
+        const summary = quote.summary || {};
+        els.quoteMeta.textContent = `${quote.batch.id} - ${summary.quoted_count || 0} quoted, ${summary.pending_count || 0} pending - ${updated}`;
+      } else {
+        els.quoteMeta.textContent = state.cart.length
+          ? 'No quote batch for this run.'
+          : 'Add items to the tray before requesting quotes.';
+      }
+
+      const statuses = quote.summary?.source_statuses?.length
+        ? quote.summary.source_statuses
+        : QUOTE_SOURCE_ORDER.map((key) => ({ key, label: SOURCE_LABELS[key], quoted_count: 0, pending_count: 0, unavailable_count: 0, error_count: 0 }));
+      els.quoteSourceStatus.innerHTML = statuses
+        .filter((source) => QUOTE_SOURCE_ORDER.includes(source.key))
+        .sort((a, b) => QUOTE_SOURCE_ORDER.indexOf(a.key) - QUOTE_SOURCE_ORDER.indexOf(b.key))
+        .map((source) => {
+          const stateText = source.quoted_count ? `${source.quoted_count} quoted`
+            : source.pending_count ? `${source.pending_count} pending`
+              : source.error_count ? `${source.error_count} error`
+                : source.unavailable_count ? `${source.unavailable_count} unavailable`
+                  : 'No batch';
+          return `
+            <div class="quote-source-card">
+              <div class="quote-source-name">${escapeHtml(source.label || SOURCE_LABELS[source.key] || source.key)}</div>
+              <div class="quote-source-meta">${escapeHtml(stateText)}</div>
+            </div>
+          `;
+        }).join('');
+
+      if (!state.cart.length) {
+        els.quoteMatrix.innerHTML = `<div class="empty">Add items to the tray</div>`;
+        return;
+      }
+
+      els.quoteMatrix.innerHTML = state.cart.map((line) => {
+        const best = bestQuoteFor(line);
+        return `
+          <div class="quote-line">
+            <div class="quote-line-head">
+              <div class="quote-line-name">${escapeHtml(line.name)}</div>
+              <div class="quote-line-meta">
+                ${escapeHtml(line.qty)} ${escapeHtml(line.uom || 'unit')} - ${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)}
+                ${best ? ` - best ${escapeHtml(best.source_label)} ${quoteMoney(best.unit_price_paise)}` : ''}
+              </div>
+            </div>
+            <div class="quote-cells">
+              ${QUOTE_SOURCE_ORDER.map((sourceKey) => renderQuoteCell(line, sourceKey, best)).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderQuoteCell(line, sourceKey, best) {
+      const quote = quoteFor(line, sourceKey);
+      const sourceLabel = SOURCE_LABELS[sourceKey] || sourceKey;
+      if (!quote) {
+        return `
+          <div class="quote-cell">
+            <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
+            <span class="quote-status pending">No batch</span>
+            <div class="quote-cell-meta">Request quote</div>
+          </div>
+        `;
+      }
+      const status = quote.stock_status || 'PENDING_ADAPTER';
+      const isBest = best && best.id === quote.id;
+      const sku = quote.sku_title || (status === 'PENDING_ADAPTER' ? 'Awaiting adapter' : 'No SKU');
+      const eta = quote.eta_label || (quote.eta_minutes ? `${quote.eta_minutes} min` : '');
+      const confidence = quote.match_confidence ? `${quote.match_confidence}% match` : '';
+      return `
+        <div class="quote-cell ${isBest ? 'best' : ''}">
+          <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
+          <span class="quote-status ${quoteStatusClass(status)}">${escapeHtml(STOCK_LABELS[status] || status)}</span>
+          <div class="quote-price">${quoteMoney(quote.unit_price_paise || quote.price_paise)}</div>
+          <div class="quote-cell-meta">${escapeHtml(sku)}</div>
+          <div class="quote-cell-meta">${escapeHtml([eta, confidence].filter(Boolean).join(' - ') || quote.match_notes || '')}</div>
+        </div>
+      `;
     }
 
     function renderKpis() {
@@ -1099,6 +1427,7 @@
       });
       saveCart();
       renderCart();
+      renderQuotePanel();
       if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
       toast('Added to order tray');
     }
@@ -1123,6 +1452,7 @@
 
     function renderCartLine(line) {
       const vendorChoices = vendorOptionsForLine(line);
+      const best = bestQuoteFor(line);
       const vendorSelect = line.source_key === 'LOCAL_VENDOR'
         ? `<select data-cart-vendor="${escapeHtml(line.cart_id)}" aria-label="Vendor">${vendorChoices}</select>`
         : `<button class="btn btn-ghost btn-full" type="button" data-open-source="${escapeHtml(line.source_key)}">Open ${escapeHtml(line.source_label)}</button>`;
@@ -1134,6 +1464,7 @@
               <div class="cart-name">${escapeHtml(line.name)}</div>
               <div class="cart-meta">${escapeHtml(line.qty)} ${escapeHtml(line.uom || 'unit')} - ${escapeHtml(line.source_label)} - ${money(line.price_unit)}</div>
               <div class="spec-line">${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)} - ${escapeHtml(MATCH_LABELS[line.buying_spec?.match_rule] || line.buying_spec?.match_rule || 'Equivalent allowed')}</div>
+              ${best ? `<div class="spec-line">Best quote: ${escapeHtml(best.source_label)} ${quoteMoney(best.unit_price_paise)}</div>` : ''}
             </div>
             <button class="icon-btn" type="button" data-remove-line="${escapeHtml(line.cart_id)}" aria-label="Remove">X</button>
           </div>
@@ -1203,6 +1534,7 @@
       state.cart = state.cart.filter((line) => line.cart_id !== cartId);
       saveCart();
       renderCart();
+      renderQuotePanel();
       if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
     }
 
@@ -1215,6 +1547,7 @@
       line.vendor_name = vendor?.name || '';
       saveCart();
       renderCart();
+      renderQuotePanel();
       if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
     }
 
@@ -1348,6 +1681,8 @@
     els.copyVisibleBtn.addEventListener('click', copyVisible);
     els.startRunBtn.addEventListener('click', startRun);
     els.saveRunBtn.addEventListener('click', () => saveRun());
+    els.requestQuotesBtn.addEventListener('click', requestQuotes);
+    els.refreshQuotesBtn.addEventListener('click', () => loadQuoteSummary());
     els.runStatusSelect.addEventListener('change', () => {
       if (state.run) saveRun({ status: els.runStatusSelect.value });
     });
@@ -1359,6 +1694,7 @@
       state.cart = [];
       saveCart();
       renderCart();
+      renderQuotePanel();
       if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
     });
 
