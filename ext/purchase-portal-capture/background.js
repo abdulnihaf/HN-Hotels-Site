@@ -82,6 +82,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse(await runBrowserQuotes(message));
       return;
     }
+    if (message.type === 'RUN_BROWSER_QUOTES_ALL') {
+      const consoleTabId = sender?.tab?.id || 0;
+      sendResponse(await runBrowserQuotesAll(message, consoleTabId));
+      return;
+    }
     sendResponse({ ok: false, error: 'Unknown message' });
   })().catch((error) => {
     sendResponse({ ok: false, error: error.message || 'Unknown extension error' });
@@ -343,10 +348,187 @@ async function runBrowserQuotes(message) {
   if (!portal) throw new Error('Choose one of the 8 purchase portals');
   if (detected !== sourceKey) throw new Error(`Open the logged-in ${portal.label} tab before running live quotes`);
 
-  const jobsUrl = `${ENDPOINT}?action=browser-quote-jobs&pin=${encodeURIComponent(pin)}&source_key=${encodeURIComponent(sourceKey)}`;
+  const result = await runQuotesForPortal({ pin, sourceKey, tab, portal, navigatedHere: true });
+  if (result.error) throw new Error(result.error);
+  return result;
+}
+
+async function runBrowserQuotesAll(message, consoleTabId) {
+  const payload = message.payload || {};
+  const pin = String(payload.pin || '').trim();
+  if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'Enter the purchase console PIN' };
+
+  const batchId = String(payload.batch_id || '').trim();
+  if (!batchId) return { ok: false, error: 'Missing batch_id from purchase console' };
+  const runId = String(payload.run_id || '').trim();
+
+  const requestedSources = Array.isArray(payload.sources) && payload.sources.length
+    ? payload.sources.filter((key) => PORTALS[key])
+    : Object.keys(PORTALS);
+  if (!requestedSources.length) return { ok: false, error: 'No portals requested' };
+
+  const consoleTab = consoleTabId ? await chrome.tabs.get(consoleTabId).catch(() => null) : null;
+  const targetWindowId = consoleTab?.windowId;
+
+  const perSource = [];
+  for (const sourceKey of requestedSources) {
+    const portal = PORTALS[sourceKey];
+    if (!portal) {
+      perSource.push({ source_key: sourceKey, state: 'skipped', detail: 'Unknown portal' });
+      sendConsoleStatus(consoleTabId, {
+        source_key: sourceKey,
+        state: 'skipped',
+        detail: 'Unknown portal',
+      });
+      continue;
+    }
+
+    sendConsoleStatus(consoleTabId, {
+      source_key: sourceKey,
+      source_label: portal.label,
+      state: 'starting',
+      detail: `Opening ${portal.label} tab`,
+    });
+
+    let tab;
+    try {
+      tab = await ensurePortalTab(sourceKey, targetWindowId);
+    } catch (error) {
+      const detail = error?.message || 'Could not open portal tab';
+      perSource.push({ source_key: sourceKey, state: 'error', detail });
+      sendConsoleStatus(consoleTabId, {
+        source_key: sourceKey,
+        source_label: portal.label,
+        state: 'error',
+        detail,
+      });
+      continue;
+    }
+
+    sendConsoleStatus(consoleTabId, {
+      source_key: sourceKey,
+      source_label: portal.label,
+      state: 'running',
+      detail: `Searching ${portal.label}`,
+    });
+
+    let result;
+    try {
+      result = await runQuotesForPortal({
+        pin,
+        sourceKey,
+        tab,
+        portal,
+        batchId,
+        runId,
+        navigatedHere: false,
+      });
+    } catch (error) {
+      result = { ok: false, error: error?.message || 'Portal quote run failed' };
+    }
+
+    if (!result.ok) {
+      const detail = result.error || 'Portal quote run failed';
+      perSource.push({ source_key: sourceKey, state: 'error', detail });
+      sendConsoleStatus(consoleTabId, {
+        source_key: sourceKey,
+        source_label: portal.label,
+        state: 'error',
+        detail,
+      });
+      continue;
+    }
+
+    const summary = result.summary || {};
+    const detail = result.jobCount
+      ? `${summary.quoted_count || 0} quoted / ${summary.error_count || 0} error of ${result.jobCount}`
+      : result.message || 'No portal jobs waiting';
+    perSource.push({
+      source_key: sourceKey,
+      state: result.jobCount ? 'done' : 'no_jobs',
+      detail,
+      job_count: result.jobCount,
+      updated_count: result.updatedCount,
+    });
+    sendConsoleStatus(consoleTabId, {
+      source_key: sourceKey,
+      source_label: portal.label,
+      state: result.jobCount ? 'done' : 'no_jobs',
+      detail,
+      summary,
+    });
+  }
+
+  if (consoleTabId) {
+    try { await chrome.tabs.update(consoleTabId, { active: true }); } catch (_) {}
+  }
+
+  const completed = perSource.filter((entry) => entry.state === 'done').length;
+  return {
+    ok: true,
+    batch_id: batchId,
+    run_id: runId,
+    sources: perSource,
+    completed,
+  };
+}
+
+function sendConsoleStatus(consoleTabId, payload) {
+  if (!consoleTabId) return;
+  try {
+    chrome.tabs.sendMessage(consoleTabId, {
+      target: 'HN_PURCHASE_CONSOLE_BRIDGE',
+      type: 'STATUS',
+      payload,
+    }, () => {
+      // swallow chrome.runtime.lastError — console tab may have been closed.
+      void chrome.runtime.lastError;
+    });
+  } catch (_) {}
+}
+
+async function ensurePortalTab(sourceKey, windowId) {
+  const portal = PORTALS[sourceKey];
+  if (!portal) throw new Error(`Unknown portal ${sourceKey}`);
+  const existing = await findPortalTab(sourceKey);
+  if (existing) return existing;
+  const createOptions = { url: portal.startUrl, active: false };
+  if (windowId) createOptions.windowId = windowId;
+  return chrome.tabs.create(createOptions);
+}
+
+async function findPortalTab(sourceKey) {
+  const portal = PORTALS[sourceKey];
+  if (!portal) return null;
+  const patterns = [];
+  for (const domain of portal.domains || []) {
+    patterns.push(`*://${domain}/*`, `*://*.${domain}/*`);
+  }
+  if (!patterns.length) return null;
+  try {
+    const tabs = await chrome.tabs.query({ url: patterns });
+    return tabs.find((tab) => tab.id) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function runQuotesForPortal({ pin, sourceKey, tab, portal, batchId, runId, navigatedHere }) {
+  if (!tab?.id) return { ok: false, error: `${portal.label} tab is not available` };
+
+  const params = new URLSearchParams({
+    action: 'browser-quote-jobs',
+    pin,
+    source_key: sourceKey,
+  });
+  if (batchId) params.set('batch_id', batchId);
+  if (runId) params.set('run_id', runId);
+  const jobsUrl = `${ENDPOINT}?${params.toString()}`;
   const jobsResponse = await fetch(jobsUrl);
   const jobsData = await jobsResponse.json().catch(() => ({}));
-  if (!jobsResponse.ok) throw new Error(jobsData.error || `Quote jobs failed (${jobsResponse.status})`);
+  if (!jobsResponse.ok) {
+    return { ok: false, error: jobsData.error || `Quote jobs failed (${jobsResponse.status})` };
+  }
 
   const jobs = jobsData.jobs || [];
   if (!jobs.length) {
@@ -360,16 +542,29 @@ async function runBrowserQuotes(message) {
     };
   }
 
+  // For Hyperpure native UI, the tab needs to actually be on a Hyperpure page.
+  // If we opened the tab ourselves, wait for the start page to be ready first.
+  if (!navigatedHere) {
+    try {
+      await waitForTabLoad(tab.id, 8000);
+    } catch (_) {}
+  }
+
   const results = [];
   for (const job of jobs.slice(0, 20)) {
     const query = job.query || job.name;
-    const result = sourceKey === 'HYPERPURE'
-      ? await runHyperpureSearch(tab.id, query)
-      : await runGenericPortalSearch(tab.id, sourceKey, query);
+    let runResult;
+    try {
+      runResult = sourceKey === 'HYPERPURE'
+        ? await runHyperpureSearch(tab.id, query)
+        : await runGenericPortalSearch(tab.id, sourceKey, query);
+    } catch (error) {
+      runResult = { error: error?.message || `${portal.label} portal search failed` };
+    }
     results.push({
       cart_id: job.cart_id,
       query,
-      ...result,
+      ...runResult,
     });
   }
 
@@ -380,12 +575,14 @@ async function runBrowserQuotes(message) {
       action: 'ingest-browser-search-results',
       pin,
       source_key: sourceKey,
-      batch_id: jobsData.batch?.id,
+      batch_id: batchId || jobsData.batch?.id,
       results,
     }),
   });
   const ingestData = await ingestResponse.json().catch(() => ({}));
-  if (!ingestResponse.ok) throw new Error(ingestData.error || `Quote ingest failed (${ingestResponse.status})`);
+  if (!ingestResponse.ok) {
+    return { ok: false, error: ingestData.error || `Quote ingest failed (${ingestResponse.status})` };
+  }
 
   return {
     ok: true,

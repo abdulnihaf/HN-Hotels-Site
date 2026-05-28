@@ -13,13 +13,12 @@ The popup never prints cookie values, tokens, or storage values. It only shows c
 1. Open `chrome://extensions`.
 2. Enable `Developer mode`.
 3. Click `Load unpacked`.
-4. Select this folder:
-
-`/tmp/hn-hotels-purchase-console/ext/purchase-portal-capture`
-
-After this phase is merged into the main repo, the permanent folder will be:
+4. Select the folder in your local HN Hotels checkout:
 
 `/Users/nihaf/Documents/Tech/HN-Hotels-Site/ext/purchase-portal-capture`
+
+If you previously loaded this extension from `/tmp/...`, remove that entry first
+and reload from the permanent path so updates to `manifest.json` take effect.
 
 ## Capture Flow
 
@@ -39,6 +38,20 @@ After this phase is merged into the main repo, the permanent folder will be:
 6. Open `/ops/purchase-console/` and check `Portal Sessions`.
 
 ## Live Quote Flow
+
+### Preferred — dashboard-driven (v1.6.0)
+
+1. In `/ops/purchase-console/`, create a run and add raw materials to the tray.
+2. Click `Get live prices`.
+3. The dashboard creates one quote batch in D1 and asks this extension to run
+   every ready portal for that batch. The extension opens (or reuses) one tab
+   per portal in the background, runs the search, ingests results, and reports
+   per-source progress back to the dashboard.
+
+This avoids opening the popup eight times per run. The popup flow below still
+works as a manual fallback for one portal at a time.
+
+### Fallback — per-portal popup
 
 1. In `/ops/purchase-console/`, create a run, add items, and click `Get quotes`.
 2. Open the matching logged-in portal tab.
