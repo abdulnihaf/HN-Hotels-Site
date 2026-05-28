@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Purchase Console - HN Hotels</title>
+  <title>Purchase Control - HN Hotels</title>
   <meta name="theme-color" content="#0c0c14">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,227 +11,332 @@
   <link rel="stylesheet" href="/assets/ops-ui.css">
   <style>
     :root {
-      --console-bg: #0c0c14;
-      --console-line: rgba(255,255,255,0.08);
-      --console-faint: rgba(255,255,255,0.04);
-      --console-green: #34d399;
-      --console-red: #f87171;
-      --console-blue: #60a5fa;
-      --console-yellow: #fbbf24;
+      --pc-line: rgba(255,255,255,0.08);
+      --pc-soft: rgba(255,255,255,0.04);
+      --pc-soft-2: rgba(255,255,255,0.07);
+      --pc-green: #34d399;
+      --pc-blue: #60a5fa;
+      --pc-yellow: #fbbf24;
+      --pc-red: #f87171;
     }
 
     body { min-height: 100vh; }
-    .shell { width: min(1180px, 100%); margin: 0 auto; padding: 14px; }
+    .shell {
+      width: min(1400px, 100%);
+      margin: 0 auto;
+      padding: 12px;
+    }
     .topbar {
       position: sticky;
       top: 0;
-      z-index: 20;
-      background: rgba(12,12,20,0.92);
-      border-bottom: 1px solid var(--console-line);
+      z-index: 30;
+      background: rgba(12,12,20,0.94);
+      border-bottom: 1px solid var(--pc-line);
       backdrop-filter: blur(18px);
       -webkit-backdrop-filter: blur(18px);
     }
     .bar-inner {
-      width: min(1180px, 100%);
+      width: min(1400px, 100%);
+      min-height: 62px;
       margin: 0 auto;
-      min-height: 58px;
-      padding: 10px 14px;
-      display: flex;
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
       align-items: center;
-      gap: 12px;
-      justify-content: space-between;
     }
     .title-block { min-width: 0; }
     .title-block h1 { font-size: 17px; letter-spacing: 0; }
     .title-block p { margin: 2px 0 0; color: var(--text-dim); font-size: 12px; }
-    .brand-row, .tab-row, .toolbar-row {
+    .bar-actions {
       display: flex;
       gap: 8px;
       overflow-x: auto;
       scrollbar-width: none;
     }
-    .brand-row::-webkit-scrollbar, .tab-row::-webkit-scrollbar, .toolbar-row::-webkit-scrollbar { display: none; }
+    .bar-actions::-webkit-scrollbar { display: none; }
+    .brand-strip,
+    .source-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .brand-strip::-webkit-scrollbar,
+    .source-strip::-webkit-scrollbar { display: none; }
     .seg {
       min-height: 44px;
-      border: 1px solid var(--console-line);
-      background: rgba(255,255,255,0.04);
-      color: var(--text-dim);
-      border-radius: 8px;
       padding: 0 14px;
-      font-weight: 700;
-      cursor: pointer;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--pc-soft);
+      color: var(--text-dim);
+      font-weight: 800;
       white-space: nowrap;
+      cursor: pointer;
     }
     .seg.active {
       color: #0c0c14;
       background: var(--brand);
       border-color: var(--brand);
     }
-    .tabs {
-      position: sticky;
-      top: 58px;
-      z-index: 15;
-      background: rgba(12,12,20,0.92);
-      border-bottom: 1px solid var(--console-line);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-    }
-    .tab-row { width: min(1180px, 100%); margin: 0 auto; padding: 10px 14px; }
-    .tab {
-      min-height: 44px;
-      padding: 0 14px;
+    .mini-pill {
+      min-height: 34px;
+      padding: 0 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
       border-radius: 8px;
-      border: 1px solid transparent;
-      background: transparent;
+      border: 1px solid var(--pc-line);
+      background: var(--pc-soft);
       color: var(--text-dim);
-      font-weight: 700;
-      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
       white-space: nowrap;
     }
-    .tab.active {
-      background: var(--brand-soft);
-      color: var(--brand-hover);
-      border-color: var(--brand-ring);
-    }
-    .grid { display: grid; gap: 10px; }
-    .kpis { grid-template-columns: repeat(2, minmax(0,1fr)); margin: 12px 0; }
-    .kpi {
-      min-height: 92px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-    .kpi .label { color: var(--text-dim); font-size: 12px; font-weight: 700; }
-    .kpi .value { font-size: 24px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .kpi .note { color: var(--text-mute); font-size: 11px; }
-    .split { display: grid; gap: 12px; }
-    .side-panel { display: grid; gap: 10px; align-content: start; }
-    .screen { display: none; }
-    .screen.active { display: block; }
-    .list { display: grid; gap: 8px; }
-    .decision {
+    .mini-pill.active { color: var(--brand-hover); border-color: var(--brand-ring); background: var(--brand-soft); }
+    .kpis {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
+      margin: 12px 0;
+    }
+    .kpi {
+      min-height: 82px;
+      display: grid;
+      align-content: space-between;
+      gap: 8px;
+    }
+    .kpi .label { color: var(--text-dim); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
+    .kpi .value { font-size: 24px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+    .kpi .note { color: var(--text-mute); font-size: 11px; }
+    .console-grid {
+      display: grid;
+      gap: 12px;
+      align-items: start;
+    }
+    .catalog-grid {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+    .category-panel {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+    .cat-btn {
+      min-height: 44px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      text-align: left;
+      padding: 9px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .cat-btn.active { border-color: var(--brand-ring); background: var(--brand-soft); color: var(--brand-hover); }
+    .cat-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 800; }
+    .cat-count { color: var(--text-mute); font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .control-row {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .list-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .list-head h2 { font-size: 18px; }
+    .item-list { display: grid; gap: 8px; }
+    .material-card {
+      display: grid;
+      gap: 12px;
       border-left: 3px solid transparent;
     }
-    .decision.switch { border-left-color: var(--console-green); }
-    .decision.watch { border-left-color: var(--console-blue); }
-    .decision.local { border-left-color: var(--brand); }
-    .decision.recheck { border-left-color: var(--console-red); }
-    .item-head {
+    .material-card.high { border-left-color: var(--pc-green); }
+    .material-card.medium { border-left-color: var(--pc-yellow); }
+    .material-card.low { border-left-color: var(--text-mute); }
+    .material-main {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .item-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .item-name { font-weight: 800; line-height: 1.22; }
+    .item-meta { color: var(--text-dim); font-size: 12px; margin-top: 3px; }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .stat-strip {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 9px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--pc-soft);
+    }
+    .stat .label { color: var(--text-mute); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
+    .stat .value { margin-top: 3px; font-size: 14px; font-weight: 800; overflow-wrap: anywhere; }
+    .item-actions {
+      display: grid;
+      gap: 8px;
+    }
+    .order-form {
+      display: grid;
+      grid-template-columns: minmax(88px, .8fr) minmax(0, 1.3fr);
+      gap: 8px;
+    }
+    .tray {
+      position: sticky;
+      bottom: 0;
+      z-index: 25;
+      display: grid;
+      gap: 10px;
+      max-height: min(74vh, 820px);
+      overflow: auto;
+      box-shadow: 0 -18px 40px rgba(0,0,0,.2);
+    }
+    .tray-head {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 10px;
     }
-    .item-name { font-weight: 800; line-height: 1.2; }
-    .item-meta { color: var(--text-dim); font-size: 12px; margin-top: 4px; }
-    .price-strip {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0,1fr));
-      gap: 8px;
-    }
-    .price-box {
-      background: rgba(255,255,255,0.035);
-      border: 1px solid var(--console-line);
+    .tray-count {
+      min-width: 34px;
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       border-radius: 8px;
+      background: var(--brand);
+      color: #0c0c14;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .cart-lines { display: grid; gap: 8px; }
+    .cart-line {
+      display: grid;
+      gap: 8px;
       padding: 10px;
-      min-width: 0;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--pc-soft);
     }
-    .price-box .label { color: var(--text-mute); font-size: 10px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.4px; }
-    .price-box .amount { margin-top: 3px; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .source-grid {
+    .cart-line-head {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0,1fr));
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: start;
+    }
+    .cart-name { font-size: 13px; font-weight: 800; line-height: 1.25; }
+    .cart-meta { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+    .icon-btn {
+      min-width: 44px;
+      min-height: 44px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.035);
+      color: var(--text);
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .checkout-block {
+      display: grid;
+      gap: 8px;
+      border-top: 1px solid var(--pc-line);
+      padding-top: 10px;
+    }
+    .source-group {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.03);
+    }
+    .source-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
       gap: 8px;
     }
-    .source-cell {
-      min-height: 58px;
-      border-radius: 8px;
-      border: 1px solid var(--console-line);
-      background: rgba(255,255,255,0.03);
-      padding: 9px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-    .source-cell.best { border-color: rgba(52,211,153,0.55); background: rgba(52,211,153,0.07); }
-    .source-cell.empty { opacity: 0.38; }
-    .source-cell .source-label { font-size: 10px; color: var(--text-mute); font-weight: 800; text-transform: uppercase; }
-    .source-cell .source-price { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .badge-row { display: flex; flex-wrap: wrap; gap: 6px; }
-    .confidence-high { background: rgba(16,185,129,0.15); color: #34d399; }
-    .confidence-medium { background: rgba(245,158,11,0.15); color: #fbbf24; }
-    .confidence-low { background: rgba(239,68,68,0.15); color: #f87171; }
-    .matrix-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--console-line); }
-    table { width: 100%; border-collapse: collapse; min-width: 1240px; }
-    th, td { padding: 10px; border-bottom: 1px solid var(--console-line); text-align: left; font-size: 12px; vertical-align: top; }
-    th { color: var(--text-mute); font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(255,255,255,0.025); }
-    td { color: var(--text); }
-    tr:last-child td { border-bottom: 0; }
-    .pack-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-    .pack-card { display: grid; gap: 10px; }
-    .pack-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-    .adapter-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-    .adapter {
-      display: grid;
-      gap: 10px;
-      min-height: 158px;
-    }
-    .adapter-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-    .tiny { font-size: 11px; color: var(--text-mute); }
-    .searchbar {
-      position: relative;
-      margin: 12px 0;
-    }
-    .searchbar input { padding-left: 14px; }
+    .source-name { font-weight: 800; }
     .empty {
-      min-height: 220px;
+      min-height: 180px;
       display: grid;
       place-items: center;
       text-align: center;
       color: var(--text-dim);
     }
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: 22px;
-      transform: translateX(-50%);
-      z-index: 50;
-      background: var(--surface-2);
-      border: 1px solid var(--console-line);
-      border-radius: 8px;
-      padding: 10px 14px;
-      color: var(--text);
-      font-size: 13px;
-      box-shadow: 0 16px 42px rgba(0,0,0,.35);
-    }
     .pin-wrap {
-      min-height: calc(100vh - 58px);
+      min-height: calc(100vh - 62px);
       display: grid;
       place-items: center;
       padding: 18px;
     }
-    .pin-card { width: min(360px, 100%); }
+    .pin-card { width: min(380px, 100%); }
     .pin-input {
       text-align: center;
       font-size: 24px;
       font-weight: 800;
-      letter-spacing: 0.42em;
+      letter-spacing: .42em;
       padding-left: 22px;
       font-variant-numeric: tabular-nums;
     }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 80;
+      width: min(520px, calc(100% - 24px));
+      padding: 11px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--surface-2);
+      color: var(--text);
+      box-shadow: 0 20px 44px rgba(0,0,0,.35);
+      font-size: 13px;
+      text-align: center;
+    }
     .hide { display: none !important; }
+    .nowrap { white-space: nowrap; }
 
     @media (min-width: 760px) {
-      .kpis { grid-template-columns: repeat(5, minmax(0,1fr)); }
-      .split { grid-template-columns: minmax(0, 1fr) 320px; }
-      .decision { grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); align-items: start; }
-      .price-strip { grid-template-columns: repeat(4, minmax(0,1fr)); }
-      .source-grid { grid-template-columns: repeat(5, minmax(0,1fr)); }
-      .pack-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
-      .adapter-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .control-row { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.4fr); align-items: center; }
+      .catalog-grid { grid-template-columns: 230px minmax(0, 1fr); }
+      .material-card { grid-template-columns: minmax(0, 1fr) 310px; align-items: start; }
+      .stat-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+
+    @media (min-width: 1080px) {
+      .console-grid { grid-template-columns: minmax(0, 1fr) 380px; }
+      .tray {
+        top: 86px;
+        bottom: auto;
+        max-height: calc(100vh - 104px);
+        box-shadow: none;
+      }
     }
   </style>
 </head>
@@ -239,13 +344,12 @@
   <header class="topbar">
     <div class="bar-inner">
       <div class="title-block">
-        <h1>Purchase Console</h1>
-        <p id="subtitle">One daily control panel for raw-material buying</p>
+        <h1>Purchase Control</h1>
+        <p id="subtitle">Raw materials, sources, and order tray</p>
       </div>
-      <div class="toolbar-row">
-        <a class="btn btn-ghost btn-sm" href="/ops/purchase/">PO entry</a>
-        <a class="btn btn-ghost btn-sm" href="/ops/is/">Price intel</a>
-        <button class="btn btn-ghost btn-sm hide" id="refreshBtn" type="button">Refresh</button>
+      <div class="bar-actions">
+        <a class="btn btn-ghost btn-sm" href="/ops/purchase/">PO ledger</a>
+        <button id="refreshBtn" class="btn btn-ghost btn-sm hide" type="button">Refresh</button>
       </div>
     </div>
   </header>
@@ -254,137 +358,85 @@
     <section id="pinGate" class="pin-wrap">
       <div class="card pin-card">
         <h2>Enter PIN</h2>
-        <p class="sub" style="margin:6px 0 16px;">Purchase, admin, and viewer PINs can open this console.</p>
+        <p class="sub" style="margin:6px 0 16px;">Purchase console access</p>
         <input id="pinInput" class="pin-input" type="password" maxlength="4" inputmode="numeric" autocomplete="one-time-code" placeholder="----">
-        <button id="unlockBtn" class="btn btn-primary btn-full" type="button" style="margin-top:12px;">Unlock console</button>
+        <button id="unlockBtn" class="btn btn-primary btn-full" type="button" style="margin-top:12px;">Unlock</button>
         <p id="pinError" class="mute hide" style="margin-top:10px;color:#f87171;">Invalid PIN.</p>
       </div>
     </section>
 
     <section id="app" class="hide">
-      <div class="tabs">
-        <div class="tab-row">
-          <button class="tab active" type="button" data-tab="today">Today</button>
-          <button class="tab" type="button" data-tab="matrix">Price matrix</button>
-          <button class="tab" type="button" data-tab="packs">Cart packs</button>
-          <button class="tab" type="button" data-tab="sources">Sources</button>
-        </div>
-      </div>
-
       <div class="shell">
-        <div class="brand-row">
-          <button class="seg active" type="button" data-brand="HE">Hamza Express</button>
-          <button class="seg" type="button" data-brand="NCH">Nawabi Chai House</button>
-          <button class="seg" type="button" data-brand="BOTH">Both brands</button>
+        <div class="brand-strip" aria-label="Brand selector">
+          <button class="seg active" type="button" data-brand="HE">HE</button>
+          <button class="seg" type="button" data-brand="NCH">NCH</button>
+          <button class="seg" type="button" data-brand="BOTH">Both</button>
         </div>
 
-        <div class="grid kpis" id="kpis"></div>
+        <div class="kpis" id="kpis"></div>
 
-        <div class="searchbar">
-          <input id="searchInput" type="search" placeholder="Search item, vendor, category, source...">
+        <div class="control-row">
+          <input id="searchInput" type="search" placeholder="Search raw material, category, vendor, code...">
+          <div class="source-strip" id="sourceStrip"></div>
         </div>
 
-        <section id="screen-today" class="screen active">
-          <div class="split">
+        <div class="console-grid">
+          <section class="catalog-grid">
+            <aside class="category-panel" id="categoryPanel"></aside>
             <div>
-              <div class="item-head" style="margin-bottom:8px;">
+              <div class="list-head">
                 <div>
-                  <h2>Daily buy decisions</h2>
-                  <p class="sub" id="todayHint">Loading purchase intelligence...</p>
+                  <h2 id="listTitle">Materials</h2>
+                  <p id="listMeta" class="sub" style="margin:4px 0 0;">Loading...</p>
                 </div>
-                <button class="btn btn-ghost btn-sm" type="button" id="copyTodayBtn">Copy top list</button>
+                <button id="copyVisibleBtn" class="btn btn-ghost btn-sm" type="button">Copy visible</button>
               </div>
-              <div id="todayList" class="list"></div>
+              <div id="itemList" class="item-list"></div>
             </div>
-            <aside class="side-panel">
-              <div class="card">
-                <h3>Simple objective</h3>
-      <p class="sub" style="margin:0;">Every raw material gets one clean decision: buy local, buy Hyperpure, compare quick-commerce, or recheck the unit.</p>
+          </section>
+
+          <aside class="card tray">
+            <div class="tray-head">
+              <div>
+                <h2>Order Tray</h2>
+                <p id="trayMeta" class="sub" style="margin:4px 0 0;">No cart lines</p>
               </div>
-              <div class="card">
-                <h3>Why confidence matters</h3>
-                <p class="sub" style="margin:0;">A cheap price is not always a real saving. Butter at kg vs pack price, stale vendor prices, and missing UOMs must be flagged before buying.</p>
-              </div>
-              <div class="card">
-                <h3>Next data layer</h3>
-                <p class="sub" style="margin:0;">Once quick-commerce adapters are connected, this same screen becomes cheapest-live-source selection for the full daily order.</p>
-              </div>
-            </aside>
-          </div>
-        </section>
-
-        <section id="screen-matrix" class="screen">
-          <div class="item-head" style="margin-bottom:8px;">
-            <div>
-              <h2>Source price matrix</h2>
-              <p class="sub">Local vendor, Hyperpure, and quick-commerce columns side by side.</p>
+              <span class="tray-count" id="cartCount">0</span>
             </div>
-          </div>
-          <div class="matrix-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Local</th>
-                  <th>Hyperpure</th>
-                <th>Zepto</th>
-                <th>Flipkart Minutes</th>
-                <th>Instamart</th>
-                <th>Blinkit</th>
-                <th>Amazon Now</th>
-                <th>BigBasket</th>
-                <th>JioMart</th>
-                <th>Decision</th>
-                <th>Confidence</th>
-                </tr>
-              </thead>
-              <tbody id="matrixRows"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section id="screen-packs" class="screen">
-          <div class="item-head" style="margin-bottom:8px;">
-            <div>
-              <h2>Daily cart packs</h2>
-              <p class="sub">Grouped into the place you should buy from first.</p>
+            <div id="cartLines" class="cart-lines"></div>
+            <div class="checkout-block">
+              <button id="createPoBtn" class="btn btn-primary btn-full" type="button">Create Odoo PO</button>
+              <button id="clearCartBtn" class="btn btn-ghost btn-full" type="button">Clear tray</button>
             </div>
-          </div>
-          <div id="packGrid" class="pack-grid"></div>
-        </section>
-
-        <section id="screen-sources" class="screen">
-          <div class="item-head" style="margin-bottom:8px;">
-            <div>
-              <h2>Source adapters</h2>
-              <p class="sub">The Swiggy/Zomato browser API pattern becomes this layer for Hyperpure and quick-commerce price capture.</p>
-            </div>
-          </div>
-          <div id="adapterGrid" class="adapter-grid"></div>
-          <div class="card" style="margin-top:10px;">
-            <h3>Adapter rule</h3>
-            <p class="sub" style="margin:0;">Each source must produce the same normalized output: item name, pack size, UOM, price in paise, stock status, captured time, and confidence. The console should never care which portal the data came from.</p>
-          </div>
-        </section>
-
-        <div id="emptyState" class="card empty hide">
-          <div>
-            <h2>No matching items</h2>
-            <p class="sub">Clear the search or refresh the dashboard.</p>
-          </div>
+            <div id="sourceGroups" class="checkout-block"></div>
+          </aside>
         </div>
       </div>
     </section>
   </main>
 
   <script>
+    const SOURCE_LABELS = {
+      LOCAL_VENDOR: 'Local Vendor',
+      HYPERPURE: 'Hyperpure',
+      ZEPTO: 'Zepto',
+      FLIPKART_MINUTES: 'Flipkart Minutes',
+      INSTAMART: 'Instamart',
+      BLINKIT: 'Blinkit',
+      AMAZON_NOW: 'Amazon Now',
+      BIGBASKET: 'BigBasket',
+      JIOMART: 'JioMart',
+    };
+
     const state = {
-      pin: localStorage.getItem('purchaseConsolePin') || '',
+      pin: localStorage.getItem('purchaseControlPin') || '',
       user: null,
-      brand: localStorage.getItem('purchaseConsoleBrand') || 'HE',
-      tab: 'today',
-      data: null,
+      brand: localStorage.getItem('purchaseControlBrand') || 'HE',
       query: '',
+      category: 'All',
+      source: 'ALL',
+      data: null,
+      cart: JSON.parse(localStorage.getItem('purchaseControlCart') || '[]'),
     };
 
     const els = {
@@ -396,31 +448,20 @@
       refreshBtn: document.getElementById('refreshBtn'),
       subtitle: document.getElementById('subtitle'),
       kpis: document.getElementById('kpis'),
-      todayList: document.getElementById('todayList'),
-      todayHint: document.getElementById('todayHint'),
-      matrixRows: document.getElementById('matrixRows'),
-      packGrid: document.getElementById('packGrid'),
-      adapterGrid: document.getElementById('adapterGrid'),
       searchInput: document.getElementById('searchInput'),
-      emptyState: document.getElementById('emptyState'),
-      copyTodayBtn: document.getElementById('copyTodayBtn'),
+      sourceStrip: document.getElementById('sourceStrip'),
+      categoryPanel: document.getElementById('categoryPanel'),
+      listTitle: document.getElementById('listTitle'),
+      listMeta: document.getElementById('listMeta'),
+      itemList: document.getElementById('itemList'),
+      copyVisibleBtn: document.getElementById('copyVisibleBtn'),
+      cartLines: document.getElementById('cartLines'),
+      trayMeta: document.getElementById('trayMeta'),
+      cartCount: document.getElementById('cartCount'),
+      createPoBtn: document.getElementById('createPoBtn'),
+      clearCartBtn: document.getElementById('clearCartBtn'),
+      sourceGroups: document.getElementById('sourceGroups'),
     };
-
-    function money(value) {
-      const n = Number(value);
-      if (!Number.isFinite(n) || n <= 0) return '-';
-      return new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        maximumFractionDigits: n >= 100 ? 0 : 2,
-      }).format(n);
-    }
-
-    function pct(value) {
-      const n = Number(value);
-      if (!Number.isFinite(n)) return '-';
-      return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
-    }
 
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -432,39 +473,54 @@
       }[char]));
     }
 
+    function money(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) return '-';
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: n >= 100 ? 0 : 2,
+      }).format(n);
+    }
+
     function toast(text) {
       const node = document.createElement('div');
       node.className = 'toast';
       node.textContent = text;
       document.body.appendChild(node);
-      setTimeout(() => node.remove(), 2200);
+      setTimeout(() => node.remove(), 2600);
     }
 
-    async function api(path) {
-      const res = await fetch(path);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Request failed');
+    async function fetchJson(path, options) {
+      const response = await fetch(path, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Request failed');
       return data;
     }
 
+    function saveCart() {
+      localStorage.setItem('purchaseControlCart', JSON.stringify(state.cart));
+    }
+
     async function verifyPin() {
-      const pin = els.pinInput.value.trim() || state.pin;
+      const pin = (els.pinInput.value || state.pin).trim();
       if (!pin || pin.length !== 4) {
         els.pinError.classList.remove('hide');
         return;
       }
+
       els.unlockBtn.disabled = true;
       try {
-        const data = await api(`/api/purchase-console?action=verify-pin&pin=${encodeURIComponent(pin)}`);
+        const data = await fetchJson(`/api/purchase-control?action=verify-pin&pin=${encodeURIComponent(pin)}`);
         state.pin = pin;
         state.user = data.user;
-        localStorage.setItem('purchaseConsolePin', pin);
+        localStorage.setItem('purchaseControlPin', pin);
         els.pinGate.classList.add('hide');
         els.app.classList.remove('hide');
         els.refreshBtn.classList.remove('hide');
         els.subtitle.textContent = `${data.user.name} - ${data.user.role}`;
         setBrand(state.brand, false);
-        await loadDashboard();
+        await loadMaterials();
       } catch (error) {
         els.pinError.textContent = error.message || 'Invalid PIN.';
         els.pinError.classList.remove('hide');
@@ -473,80 +529,82 @@
       }
     }
 
-    async function loadDashboard() {
-      els.todayList.innerHTML = loadingCard('Loading purchase decisions...');
-      els.matrixRows.innerHTML = '';
-      els.packGrid.innerHTML = loadingCard('Loading cart packs...');
-      els.adapterGrid.innerHTML = loadingCard('Loading source adapters...');
+    async function loadMaterials() {
+      els.itemList.innerHTML = loadingCard('Loading raw materials...');
       try {
-        state.data = await api(`/api/purchase-console?action=dashboard&pin=${encodeURIComponent(state.pin)}&brand=${encodeURIComponent(state.brand)}`);
-        render();
+        state.data = await fetchJson(`/api/purchase-control?action=materials&pin=${encodeURIComponent(state.pin)}&brand=${state.brand}&days=30`);
       } catch (error) {
-        els.todayList.innerHTML = `<div class="card"><h2>Could not load</h2><p class="sub">${escapeHtml(error.message)}</p></div>`;
+        state.data = await fetchJson('/ops/purchase-console/live-rm-sample.json');
+        state.data.meta = { ...(state.data.meta || {}), sample: true, api_error: error.message };
+        toast('Loaded local sample data. Live PO creation needs deployed Odoo secrets.');
       }
+      renderAll();
     }
 
     function loadingCard(text) {
-      return `<div class="card"><p class="sub" style="margin:0;">${escapeHtml(text)}</p></div>`;
+      return `<div class="card empty"><div>${escapeHtml(text)}</div></div>`;
     }
 
     function setBrand(brand, reload = true) {
       state.brand = brand;
-      localStorage.setItem('purchaseConsoleBrand', brand);
+      localStorage.setItem('purchaseControlBrand', brand);
       document.querySelectorAll('[data-brand]').forEach((button) => {
         button.classList.toggle('active', button.dataset.brand === brand);
       });
-      if (reload && state.pin) loadDashboard();
+      if (reload && state.pin) loadMaterials();
     }
 
-    function setTab(tab) {
-      state.tab = tab;
-      document.querySelectorAll('.tab').forEach((button) => {
-        button.classList.toggle('active', button.dataset.tab === tab);
-      });
-      document.querySelectorAll('.screen').forEach((screen) => {
-        screen.classList.toggle('active', screen.id === `screen-${tab}`);
-      });
-      render();
+    function setSource(source) {
+      state.source = source;
+      renderAll();
     }
 
-    function filteredItems() {
-      const data = state.data;
-      if (!data) return [];
+    function setCategory(category) {
+      state.category = category;
+      renderAll();
+    }
+
+    function itemById(id) {
+      return (state.data?.items || []).find((item) => item.id === id);
+    }
+
+    function currentItems() {
       const q = state.query.trim().toLowerCase();
-      if (!q) return data.items || [];
-      return (data.items || []).filter((item) => {
+      return (state.data?.items || []).filter((item) => {
+        if (state.category !== 'All' && item.category !== state.category) return false;
+        if (state.source !== 'ALL' && !(item.source_keys || []).includes(state.source)) return false;
+        if (!q) return true;
         const haystack = [
           item.name,
           item.product_code,
           item.category,
-          item.vendor_name,
-          item.cheapest_platform,
-          item.decision?.label,
+          item.uom,
+          item.last_vendor_name,
+          ...(item.vendors || []).map((vendor) => vendor.name),
+          ...(item.source_keys || []).map((key) => SOURCE_LABELS[key] || key),
         ].join(' ').toLowerCase();
         return haystack.includes(q);
       });
     }
 
-    function render() {
+    function renderAll() {
       if (!state.data) return;
-      const items = filteredItems();
-      renderKpis(state.data.summary);
-      renderToday(items);
-      renderMatrix(items);
-      renderPacks(state.data.packs || []);
-      renderAdapters(state.data.sources || []);
-      const hasItems = items.length > 0;
-      els.emptyState.classList.toggle('hide', hasItems || state.tab === 'sources' || state.tab === 'packs');
+      renderKpis();
+      renderSources();
+      renderCategories();
+      renderItems();
+      renderCart();
     }
 
-    function renderKpis(summary) {
+    function renderKpis() {
+      const summary = state.data.summary || {};
+      const meta = state.data.meta || {};
       const cards = [
-        ['Items', summary.item_count, 'Decision rows'],
-        ['Switch now', summary.switch_now, 'External source cheaper'],
-        ['Recheck', summary.recheck_count, 'Unit, stale, or missing price'],
-        ['Local gaps', summary.local_price_gaps, 'No reliable vendor price'],
-        ['Possible save', money(summary.possible_saving_rupees), 'Per unit, not quantity weighted'],
+        ['Materials', summary.item_count || 0, 'unique live items'],
+        ['Categories', summary.category_count || 0, 'segregated groups'],
+        ['PO lines', summary.line_count || 0, `${summary.po_count || 0} POs`],
+        ['High priority', summary.high_priority_count || 0, 'frequent purchases'],
+        ['Mode', meta.sample ? 'Sample' : 'Live', meta.sample ? 'local preview' : 'Odoo-backed'],
       ];
       els.kpis.innerHTML = cards.map(([label, value, note]) => `
         <div class="card kpi">
@@ -557,188 +615,290 @@
       `).join('');
     }
 
-    function decisionClass(item) {
-      const action = item.decision?.action;
-      if (action === 'SWITCH') return 'switch';
-      if (action === 'WATCH' || action === 'TRY_MARKET') return 'watch';
-      if (action === 'RECHECK') return 'recheck';
-      return 'local';
+    function renderSources() {
+      const sources = [{ key: 'ALL', label: 'All sources' }, ...(state.data.sources || [])];
+      els.sourceStrip.innerHTML = sources.map((source) => `
+        <button class="mini-pill ${state.source === source.key ? 'active' : ''}" type="button" data-source="${escapeHtml(source.key)}">
+          ${escapeHtml(source.label)}
+        </button>
+      `).join('');
     }
 
-    function decisionBadge(item) {
-      const cls = {
-        SWITCH: 'badge-success',
-        WATCH: 'badge-info',
-        TRY_MARKET: 'badge-info',
-        LOCAL: 'badge',
-        RECHECK: 'badge-danger',
-      }[item.decision?.action] || 'badge-neutral';
-      return `<span class="badge ${cls}">${escapeHtml(item.decision?.label || 'Review')}</span>`;
+    function renderCategories() {
+      const categories = [{ name: 'All', count: state.data.items.length }, ...(state.data.categories || [])];
+      els.categoryPanel.innerHTML = categories.map((category) => `
+        <button class="cat-btn ${state.category === category.name ? 'active' : ''}" type="button" data-category="${escapeHtml(category.name)}">
+          <span class="cat-name">${escapeHtml(category.name)}</span>
+          <span class="cat-count">${escapeHtml(category.count)}</span>
+        </button>
+      `).join('');
     }
 
-    function confidenceBadge(item) {
-      return `<span class="badge confidence-${escapeHtml(item.confidence || 'medium')}">${escapeHtml(item.confidence || 'medium')}</span>`;
-    }
+    function renderItems() {
+      const items = currentItems();
+      els.listTitle.textContent = state.category === 'All' ? 'Materials' : state.category;
+      els.listMeta.textContent = `${items.length} visible from ${state.data.items.length} live-purchased materials`;
 
-    function renderToday(items) {
-      const priority = items
-        .filter((item) => ['SWITCH', 'TRY_MARKET', 'RECHECK', 'WATCH'].includes(item.decision?.action))
-        .slice(0, 80);
-      els.todayHint.textContent = `${priority.length} priority rows from ${items.length} visible items`;
-      if (!priority.length) {
-        els.todayList.innerHTML = loadingCard('No priority rows match this search.');
+      if (!items.length) {
+        els.itemList.innerHTML = loadingCard('No matching raw materials');
         return;
       }
-      els.todayList.innerHTML = priority.map((item) => `
-        <article class="card decision ${decisionClass(item)}">
-          <div>
-            <div class="item-head">
+
+      els.itemList.innerHTML = items.map((item) => renderMaterialCard(item)).join('');
+    }
+
+    function sourceOptions(item) {
+      const sources = state.data.sources || [];
+      const recommended = item.source_keys || ['LOCAL_VENDOR'];
+      const orderedKeys = [...recommended, ...sources.map((source) => source.key).filter((key) => !recommended.includes(key))];
+      return orderedKeys.map((key) => {
+        const label = SOURCE_LABELS[key] || key;
+        const suffix = recommended.includes(key) ? ' recommended' : '';
+        return `<option value="${escapeHtml(key)}">${escapeHtml(label + suffix)}</option>`;
+      }).join('');
+    }
+
+    function vendorSummary(item) {
+      const vendor = item.last_vendor_name || item.vendors?.[0]?.name || '-';
+      return vendor.length > 28 ? `${vendor.slice(0, 27)}...` : vendor;
+    }
+
+    function renderMaterialCard(item) {
+      const id = encodeURIComponent(item.id);
+      const productId = item.product_ids_by_brand?.[state.brand] || '';
+      const canPo = state.brand !== 'BOTH' && !!productId;
+      return `
+        <article class="card material-card ${escapeHtml(String(item.priority_hint || '').toLowerCase())}">
+          <div class="material-main">
+            <div class="item-title">
               <div>
                 <div class="item-name">${escapeHtml(item.name)}</div>
-                <div class="item-meta">${escapeHtml(item.product_code)} - ${escapeHtml(item.category)} - ${escapeHtml(item.uom || 'unit')}</div>
+                <div class="item-meta">${escapeHtml(item.product_code || 'no code')} - ${escapeHtml(item.uom || 'unit')} - ${escapeHtml(item.category)}</div>
               </div>
-              <div class="badge-row">${decisionBadge(item)}${confidenceBadge(item)}</div>
+              <div class="badge-row">
+                <span class="badge ${item.priority_hint === 'High' ? 'badge-success' : item.priority_hint === 'Medium' ? 'badge-warn' : 'badge-neutral'}">${escapeHtml(item.priority_hint || 'Low')}</span>
+                <span class="badge badge-info">${escapeHtml((item.brands_seen || []).join('+') || state.brand)}</span>
+              </div>
             </div>
-            <div class="price-strip" style="margin-top:10px;">
-              <div class="price-box">
-                <div class="label">Local</div>
-                <div class="amount">${money(item.local_price)}</div>
-              </div>
-              <div class="price-box">
-                <div class="label">${escapeHtml(item.cheapest_platform || 'Market')}</div>
-                <div class="amount">${money(item.cheapest_price)}</div>
-              </div>
-              <div class="price-box">
-                <div class="label">Saving</div>
-                <div class="amount">${pct(item.savings_pct)}</div>
-              </div>
-              <div class="price-box">
-                <div class="label">Vendor</div>
-                <div class="amount" style="font-size:13px;">${escapeHtml(item.vendor_name || '-')}</div>
-              </div>
+            <div class="stat-strip">
+              <div class="stat"><div class="label">Last price</div><div class="value">${money(item.local_price)}</div></div>
+              <div class="stat"><div class="label">Vendor</div><div class="value">${escapeHtml(vendorSummary(item))}</div></div>
+              <div class="stat"><div class="label">Last bought</div><div class="value">${escapeHtml(item.last_purchase_date || '-')}</div></div>
+              <div class="stat"><div class="label">Frequency</div><div class="value">${escapeHtml(item.times_ordered || 0)}x</div></div>
+            </div>
+            <div class="badge-row">
+              ${(item.source_keys || []).slice(0, 8).map((key) => `<span class="badge badge-neutral">${escapeHtml(SOURCE_LABELS[key] || key)}</span>`).join('')}
             </div>
           </div>
-          <div>
-            <div class="source-grid">${sourceCells(item)}</div>
-            <div class="badge-row" style="margin-top:10px;">
-              ${(item.confidence_reasons || []).slice(0, 3).map((reason) => `<span class="badge badge-neutral">${escapeHtml(reason)}</span>`).join('')}
+          <div class="item-actions">
+            <div class="order-form">
+              <input data-qty="${id}" type="number" min="0.01" step="0.01" value="${escapeHtml(item.suggested_qty || item.last_qty || 1)}" aria-label="Quantity">
+              <select data-source-select="${id}" aria-label="Source">${sourceOptions(item)}</select>
             </div>
-            <div class="toolbar-row" style="margin-top:10px;">
-              <button class="btn btn-ghost btn-sm" type="button" data-copy-line="${escapeHtml(item.product_code)}">Copy line</button>
-              <a class="btn btn-ghost btn-sm" href="/ops/purchase/">Open PO</a>
-            </div>
+            <button class="btn btn-primary btn-full" type="button" data-add-item="${id}" ${canPo ? '' : ''}>Add to tray</button>
+            <p class="mute" style="margin:0;">${canPo ? 'Odoo item ready' : state.brand === 'BOTH' ? 'Choose HE or NCH to place local PO' : 'No Odoo item id for this brand'}</p>
           </div>
         </article>
-      `).join('');
+      `;
     }
 
-    function sourceCells(item) {
-      const sources = [
-        ['LOCAL_VENDOR', 'LOCAL', item.local_price],
-        ['HYPERPURE', 'HYPERPURE', item.price_hyperpure],
-        ['ZEPTO', 'ZEPTO', item.price_zepto],
-        ['FLIPKART_MINUTES', 'FLIPKART MIN', item.price_flipkart_minutes],
-        ['INSTAMART', 'INSTAMART', item.price_instamart],
-        ['BLINKIT', 'BLINKIT', item.price_blinkit],
-        ['AMAZON_NOW', 'AMAZON NOW', item.price_amazon_now],
-        ['BIGBASKET', 'BIGBASKET', item.price_bigbasket],
-        ['JIOMART', 'JIOMART', item.price_jiomart],
-      ];
-      return sources.map(([key, label, value]) => {
-        const isBest = item.cheapest_platform && key === String(item.cheapest_platform).toUpperCase();
-        const empty = !value || value <= 0;
-        return `
-          <div class="source-cell ${isBest ? 'best' : ''} ${empty ? 'empty' : ''}">
-            <div class="source-label">${escapeHtml(label)}</div>
-            <div class="source-price">${money(value)}</div>
-          </div>
-        `;
-      }).join('');
+    function addItem(encodedId) {
+      const id = decodeURIComponent(encodedId);
+      const item = itemById(id);
+      if (!item) return;
+
+      const qty = Number(document.querySelector(`[data-qty="${encodedId}"]`)?.value || item.suggested_qty || 1);
+      const sourceKey = document.querySelector(`[data-source-select="${encodedId}"]`)?.value || 'LOCAL_VENDOR';
+      const productId = state.brand !== 'BOTH' ? item.product_ids_by_brand?.[state.brand] : null;
+      const vendor = (item.vendors || []).find((row) => row.brand === state.brand && row.id === item.last_vendor_id)
+        || (item.vendors || []).find((row) => row.brand === state.brand)
+        || (item.vendors || [])[0]
+        || null;
+
+      state.cart.push({
+        cart_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        item_id: item.id,
+        name: item.name,
+        product_code: item.product_code,
+        category: item.category,
+        uom: item.uom,
+        qty: qty > 0 ? qty : 1,
+        source_key: sourceKey,
+        source_label: SOURCE_LABELS[sourceKey] || sourceKey,
+        product_id: productId || null,
+        price_unit: item.local_price || item.avg_unit_price || 0,
+        vendor_id: sourceKey === 'LOCAL_VENDOR' ? vendor?.id || item.last_vendor_id || null : null,
+        vendor_name: sourceKey === 'LOCAL_VENDOR' ? vendor?.name || item.last_vendor_name || '' : '',
+        search_query: item.search_query || item.name,
+      });
+      saveCart();
+      renderCart();
+      toast('Added to order tray');
     }
 
-    function renderMatrix(items) {
-      els.matrixRows.innerHTML = items.map((item) => `
-        <tr>
-          <td><strong>${escapeHtml(item.name)}</strong><br><span class="tiny">${escapeHtml(item.product_code)} - ${escapeHtml(item.uom || '')}</span></td>
-          <td>${money(item.local_price)}<br><span class="tiny">${escapeHtml(item.vendor_name || '')}</span></td>
-          <td>${money(item.price_hyperpure)}</td>
-          <td>${money(item.price_zepto)}</td>
-          <td>${money(item.price_flipkart_minutes)}</td>
-          <td>${money(item.price_instamart)}</td>
-          <td>${money(item.price_blinkit)}</td>
-          <td>${money(item.price_amazon_now)}</td>
-          <td>${money(item.price_bigbasket)}</td>
-          <td>${money(item.price_jiomart)}</td>
-          <td>${decisionBadge(item)}<br><span class="tiny">${pct(item.savings_pct)}</span></td>
-          <td>${confidenceBadge(item)}<br><span class="tiny">${escapeHtml((item.confidence_reasons || [])[0] || '')}</span></td>
-        </tr>
-      `).join('');
+    function renderCart() {
+      els.cartCount.textContent = state.cart.length;
+      const localLines = state.cart.filter((line) => line.source_key === 'LOCAL_VENDOR');
+      const externalLines = state.cart.filter((line) => line.source_key !== 'LOCAL_VENDOR');
+      els.trayMeta.textContent = state.cart.length
+        ? `${localLines.length} local, ${externalLines.length} external`
+        : 'No cart lines';
+
+      if (!state.cart.length) {
+        els.cartLines.innerHTML = `<div class="empty">Add materials from the catalogue</div>`;
+      } else {
+        els.cartLines.innerHTML = state.cart.map(renderCartLine).join('');
+      }
+
+      renderSourceGroups(externalLines);
+      updateCreateButton(localLines);
     }
 
-    function renderPacks(packs) {
-      els.packGrid.innerHTML = packs.map((pack) => `
-        <article class="card pack-card">
-          <div class="pack-title">
+    function renderCartLine(line) {
+      const vendorChoices = vendorOptionsForLine(line);
+      const vendorSelect = line.source_key === 'LOCAL_VENDOR'
+        ? `<select data-cart-vendor="${escapeHtml(line.cart_id)}" aria-label="Vendor">${vendorChoices}</select>`
+        : `<button class="btn btn-ghost btn-full" type="button" data-open-source="${escapeHtml(line.source_key)}">Open ${escapeHtml(line.source_label)}</button>`;
+
+      return `
+        <div class="cart-line">
+          <div class="cart-line-head">
             <div>
-              <h2>${escapeHtml(pack.label)}</h2>
-              <p class="sub" style="margin:4px 0 0;">${escapeHtml(pack.intent)}</p>
+              <div class="cart-name">${escapeHtml(line.name)}</div>
+              <div class="cart-meta">${escapeHtml(line.qty)} ${escapeHtml(line.uom || 'unit')} - ${escapeHtml(line.source_label)} - ${money(line.price_unit)}</div>
             </div>
-            <span class="badge">${escapeHtml(pack.count)} items</span>
+            <button class="icon-btn" type="button" data-remove-line="${escapeHtml(line.cart_id)}" aria-label="Remove">X</button>
           </div>
-          <div class="price-box">
-            <div class="label">Possible per-unit saving</div>
-            <div class="amount">${money((pack.possible_saving_paise || 0) / 100)}</div>
-          </div>
-          <div class="list">
-            ${(pack.top_items || []).slice(0, 8).map((item) => `
-              <div class="entry" style="margin-bottom:0;">
-                <div class="primary">
-                  <strong>${escapeHtml(item.name)}</strong>
-                  <div class="mute">${escapeHtml(item.uom || '')} - ${escapeHtml(item.vendor_name || item.cheapest_platform || '')}</div>
-                </div>
-                <div class="amount">${money(item.cheapest_price || item.local_price)}</div>
-              </div>
-            `).join('') || '<p class="sub" style="margin:0;">No items in this pack.</p>'}
-          </div>
-          <button class="btn btn-ghost btn-sm" type="button" data-copy-pack="${escapeHtml(pack.key)}">Copy pack</button>
-        </article>
-      `).join('');
+          ${vendorSelect}
+        </div>
+      `;
     }
 
-    function renderAdapters(sources) {
-      els.adapterGrid.innerHTML = sources.map((source) => {
-        const statusClass = source.status === 'live' ? 'badge-success' : source.status === 'error' ? 'badge-danger' : 'badge-warn';
-        const coverage = source.coverage ? `${source.coverage.count}/${source.coverage.total} items` : 'Not a price source yet';
+    function vendorOptionsForLine(line) {
+      const item = itemById(line.item_id);
+      const vendors = (item?.vendors || []).filter((vendor) => state.brand === 'BOTH' || vendor.brand === state.brand);
+      const merged = vendors.length ? vendors : [{ id: line.vendor_id, name: line.vendor_name, brand: state.brand }];
+      return merged.map((vendor) => {
+        const selected = String(vendor.id || '') === String(line.vendor_id || '') ? 'selected' : '';
+        const label = `${vendor.name || 'Unknown vendor'}${vendor.brand ? ` (${vendor.brand})` : ''}`;
+        return `<option value="${escapeHtml(vendor.id || '')}" ${selected}>${escapeHtml(label)}</option>`;
+      }).join('');
+    }
+
+    function renderSourceGroups(lines) {
+      if (!lines.length) {
+        els.sourceGroups.innerHTML = '';
+        return;
+      }
+
+      const bySource = new Map();
+      for (const line of lines) {
+        if (!bySource.has(line.source_key)) bySource.set(line.source_key, []);
+        bySource.get(line.source_key).push(line);
+      }
+
+      els.sourceGroups.innerHTML = [...bySource.entries()].map(([key, group]) => {
+        const source = (state.data.sources || []).find((row) => row.key === key) || {};
         return `
-          <article class="card adapter">
-            <div class="adapter-head">
+          <div class="source-group">
+            <div class="source-head">
               <div>
-                <h2>${escapeHtml(source.label)}</h2>
-                <p class="sub" style="margin:4px 0 0;">${escapeHtml(source.role || '')}</p>
+                <div class="source-name">${escapeHtml(SOURCE_LABELS[key] || key)}</div>
+                <div class="mute">${escapeHtml(source.delivery_band || 'Check portal')}</div>
               </div>
-              <span class="badge ${statusClass}">${escapeHtml(source.status)}</span>
+              <span class="badge badge-info">${escapeHtml(group.length)} lines</span>
             </div>
-            <div class="price-strip">
-              <div class="price-box">
-                <div class="label">Mode</div>
-                <div class="amount" style="font-size:13px;">${escapeHtml(source.authMode || source.auth_mode || '-')}</div>
-              </div>
-              <div class="price-box">
-                <div class="label">Coverage</div>
-                <div class="amount" style="font-size:13px;">${escapeHtml(coverage)}</div>
-              </div>
-            </div>
-            <p class="tiny" style="margin:0;">Last success: ${escapeHtml(source.last_success_at || 'not captured')}</p>
-          </article>
+            <button class="btn btn-ghost btn-full" type="button" data-copy-source="${escapeHtml(key)}">Copy ${escapeHtml(SOURCE_LABELS[key] || key)} cart</button>
+            <button class="btn btn-primary btn-full" type="button" data-open-source="${escapeHtml(key)}">Open ${escapeHtml(SOURCE_LABELS[key] || key)}</button>
+          </div>
         `;
       }).join('');
     }
 
-    function itemLine(item) {
-      const source = item.decision?.source_key === 'LOCAL_VENDOR'
-        ? (item.vendor_name || 'Local vendor')
-        : (item.cheapest_platform || item.decision?.source_key || 'Market');
-      return `${item.name} | ${item.uom || 'unit'} | ${source} | local ${money(item.local_price)} | target ${money(item.cheapest_price)} | ${pct(item.savings_pct)} | ${item.confidence}`;
+    function updateCreateButton(localLines) {
+      const sample = !!state.data?.meta?.sample;
+      const invalidBrand = state.brand === 'BOTH';
+      const missingVendor = localLines.some((line) => !line.vendor_id);
+      const missingProduct = localLines.some((line) => !line.product_id);
+      const disabled = !localLines.length || sample || invalidBrand || missingVendor || missingProduct || !state.user?.can_create_po;
+
+      els.createPoBtn.disabled = disabled;
+      if (!localLines.length) els.createPoBtn.textContent = 'Create Odoo PO';
+      else if (sample) els.createPoBtn.textContent = 'Live API required';
+      else if (invalidBrand) els.createPoBtn.textContent = 'Choose HE or NCH';
+      else if (missingVendor) els.createPoBtn.textContent = 'Select vendor';
+      else if (missingProduct) els.createPoBtn.textContent = 'Missing Odoo item';
+      else els.createPoBtn.textContent = `Create ${localLines.length} local line PO`;
+    }
+
+    function removeCartLine(cartId) {
+      state.cart = state.cart.filter((line) => line.cart_id !== cartId);
+      saveCart();
+      renderCart();
+    }
+
+    function updateCartVendor(cartId, vendorId) {
+      const line = state.cart.find((row) => row.cart_id === cartId);
+      if (!line) return;
+      const item = itemById(line.item_id);
+      const vendor = (item?.vendors || []).find((row) => String(row.id || '') === String(vendorId || ''));
+      line.vendor_id = vendorId ? Number(vendorId) : null;
+      line.vendor_name = vendor?.name || '';
+      saveCart();
+      renderCart();
+    }
+
+    async function createLocalPOs() {
+      const localLines = state.cart.filter((line) => line.source_key === 'LOCAL_VENDOR');
+      if (!localLines.length) return;
+
+      const byVendor = new Map();
+      for (const line of localLines) {
+        const key = String(line.vendor_id || '');
+        if (!key) continue;
+        if (!byVendor.has(key)) byVendor.set(key, []);
+        byVendor.get(key).push(line);
+      }
+
+      els.createPoBtn.disabled = true;
+      els.createPoBtn.textContent = 'Creating PO...';
+      const created = [];
+      try {
+        for (const [vendorId, lines] of byVendor.entries()) {
+          const data = await fetchJson('/api/purchase-control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'create-local-po',
+              pin: state.pin,
+              brand: state.brand,
+              vendor_id: Number(vendorId),
+              lines: lines.map((line) => ({
+                product_id: line.product_id,
+                qty: line.qty,
+                price_unit: line.price_unit,
+                name: line.name,
+              })),
+            }),
+          });
+          created.push(data.po);
+        }
+
+        const createdIds = new Set(localLines.map((line) => line.cart_id));
+        state.cart = state.cart.filter((line) => !createdIds.has(line.cart_id));
+        saveCart();
+        renderCart();
+        toast(`Created ${created.map((po) => po.name).join(', ')}`);
+        if (created[0]?.odoo_url) window.open(created[0].odoo_url, '_blank', 'noopener');
+      } catch (error) {
+        toast(error.message || 'PO creation failed');
+      } finally {
+        renderCart();
+      }
+    }
+
+    function lineText(line) {
+      return `${line.name} | ${line.qty} ${line.uom || 'unit'} | ${line.search_query || line.name} | local ${money(line.price_unit)}`;
     }
 
     async function copyText(text) {
@@ -746,47 +906,76 @@
       toast('Copied');
     }
 
+    function copyVisible() {
+      const lines = currentItems().slice(0, 80).map((item) => {
+        return `${item.name} | ${item.uom || 'unit'} | ${item.category} | last ${money(item.local_price)} | ${item.last_vendor_name || '-'}`;
+      });
+      copyText(lines.join('\n'));
+    }
+
+    function copySourceCart(sourceKey) {
+      const lines = state.cart.filter((line) => line.source_key === sourceKey);
+      copyText([
+        SOURCE_LABELS[sourceKey] || sourceKey,
+        ...lines.map(lineText),
+      ].join('\n'));
+    }
+
+    function openSource(sourceKey) {
+      const source = (state.data?.sources || []).find((row) => row.key === sourceKey);
+      if (source?.url) window.open(source.url, '_blank', 'noopener');
+    }
+
     document.addEventListener('click', (event) => {
       const brand = event.target.closest('[data-brand]')?.dataset.brand;
       if (brand) setBrand(brand);
 
-      const tab = event.target.closest('[data-tab]')?.dataset.tab;
-      if (tab) setTab(tab);
+      const source = event.target.closest('[data-source]')?.dataset.source;
+      if (source) setSource(source);
 
-      const productCode = event.target.closest('[data-copy-line]')?.dataset.copyLine;
-      if (productCode && state.data) {
-        const item = state.data.items.find((row) => row.product_code === productCode);
-        if (item) copyText(itemLine(item));
-      }
+      const category = event.target.closest('[data-category]')?.dataset.category;
+      if (category) setCategory(category);
 
-      const packKey = event.target.closest('[data-copy-pack]')?.dataset.copyPack;
-      if (packKey && state.data) {
-        const pack = (state.data.packs || []).find((row) => row.key === packKey);
-        const lines = (pack?.top_items || []).map(itemLine);
-        copyText([pack?.label || packKey, ...lines].join('\n'));
-      }
+      const addId = event.target.closest('[data-add-item]')?.dataset.addItem;
+      if (addId) addItem(addId);
+
+      const removeId = event.target.closest('[data-remove-line]')?.dataset.removeLine;
+      if (removeId) removeCartLine(removeId);
+
+      const copySource = event.target.closest('[data-copy-source]')?.dataset.copySource;
+      if (copySource) copySourceCart(copySource);
+
+      const open = event.target.closest('[data-open-source]')?.dataset.openSource;
+      if (open) openSource(open);
+    });
+
+    document.addEventListener('change', (event) => {
+      const vendorLine = event.target.closest('[data-cart-vendor]')?.dataset.cartVendor;
+      if (vendorLine) updateCartVendor(vendorLine, event.target.value);
     });
 
     els.unlockBtn.addEventListener('click', verifyPin);
     els.pinInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') verifyPin();
     });
-    els.refreshBtn.addEventListener('click', loadDashboard);
+    els.refreshBtn.addEventListener('click', loadMaterials);
     els.searchInput.addEventListener('input', (event) => {
       state.query = event.target.value;
-      render();
+      renderAll();
     });
-    els.copyTodayBtn.addEventListener('click', () => {
-      const lines = filteredItems()
-        .filter((item) => ['SWITCH', 'TRY_MARKET', 'RECHECK', 'WATCH'].includes(item.decision?.action))
-        .slice(0, 25)
-        .map(itemLine);
-      copyText(lines.join('\n'));
+    els.copyVisibleBtn.addEventListener('click', copyVisible);
+    els.createPoBtn.addEventListener('click', createLocalPOs);
+    els.clearCartBtn.addEventListener('click', () => {
+      state.cart = [];
+      saveCart();
+      renderCart();
     });
 
     if (state.pin) {
       els.pinInput.value = state.pin;
       verifyPin();
+    } else {
+      renderCart();
     }
   </script>
 </body>
