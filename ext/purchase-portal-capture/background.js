@@ -699,10 +699,23 @@ async function hyperpureNativeSearchInPage(query) {
     return text.length > limit ? `${text.slice(0, limit)}...[truncated:${text.length}]` : text;
   }
 
-  const queryKeywords = String(query || '')
+  // Generic adjectives that bleed-through to unrelated SKUs ("Fresh Coriander"
+  // matching "Fresh Noodles"). Kept in sync with MATCH_STOPWORDS server-side.
+  const MATCH_STOPWORDS = new Set([
+    'fresh', 'organic', 'premium', 'pure', 'natural', 'whole',
+    'select', 'best', 'quality', 'farm', 'pack', 'packs',
+    'big', 'small', 'mini', 'jumbo', 'value',
+    'special', 'classic', 'original', 'choice', 'extra',
+  ]);
+
+  const rawTokens = String(query || '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((part) => part && part.length > 3);
+  const filteredTokens = rawTokens.filter((part) => !MATCH_STOPWORDS.has(part));
+  // Fall back to raw tokens only if EVERY token was a stopword — otherwise
+  // any URL containing "fresh" would still be accepted as relevant.
+  const queryKeywords = filteredTokens.length ? filteredTokens : rawTokens;
 
   function isRelevant(url, body) {
     if (!queryKeywords.length) return false;

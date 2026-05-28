@@ -469,9 +469,35 @@ function searchableTokens(value) {
   return cleanText(value, 240).toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length > 2);
 }
 
+// Generic adjectives that should not contribute to match-confidence — they
+// appear in both grocery commodity queries and unrelated processed-food SKUs.
+// Root cause from 2026-05-28 run: "Fresh Coriander" matched "Fresh Noodles"
+// because the only shared token between the query and the title was "Fresh".
+// Strip these from match tokens so unrelated SKUs collapse to 25% confidence
+// instead of 57% and get rejected by the SCOUT_CONFIDENCE_FLOOR.
+const MATCH_STOPWORDS = new Set([
+  'fresh', 'organic', 'premium', 'pure', 'natural', 'whole',
+  'select', 'best', 'quality', 'farm', 'pack', 'packs',
+  'new', 'big', 'small', 'mini', 'jumbo', 'value',
+  'special', 'classic', 'original', 'choice', 'extra',
+]);
+
+function matchTokens(value) {
+  return searchableTokens(value).filter((token) => !MATCH_STOPWORDS.has(token));
+}
+
 function matchConfidence(query, title) {
-  const tokens = searchableTokens(query);
-  if (!tokens.length) return 50;
+  const tokens = matchTokens(query);
+  if (!tokens.length) {
+    // Query was entirely stopwords (e.g. "Fresh Pack") — fall back to the
+    // unfiltered tokens so we don't return 50 for everything.
+    const fallback = searchableTokens(query);
+    if (!fallback.length) return 50;
+    const titleText = cleanText(title, 240).toLowerCase();
+    if (!titleText) return 0;
+    const hits = fallback.filter((token) => titleText.includes(token)).length;
+    return hits ? Math.min(70, 40 + Math.round((hits / fallback.length) * 30)) : 25;
+  }
   const titleText = cleanText(title, 240).toLowerCase();
   if (!titleText) return 0;
   const cleanQuery = cleanText(query, 240).toLowerCase();
