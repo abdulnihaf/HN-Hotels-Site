@@ -1219,7 +1219,7 @@ export async function onRequest(context) {
   const env = context.env;
 
   try {
-    if (context.request.method === 'GET') return await handleGet(url, env);
+    if (context.request.method === 'GET') return await handleGet(context.request, url, env);
     if (context.request.method === 'POST') return await handlePost(context, env);
     return json({ error: 'Method not allowed' }, 405);
   } catch (error) {
@@ -1227,8 +1227,18 @@ export async function onRequest(context) {
   }
 }
 
-async function handleGet(url, env) {
+async function handleGet(request, url, env) {
   const action = url.searchParams.get('action') || 'materials';
+
+  // Bearer-protected machine-to-machine actions bypass the PIN gate.
+  if (action === 'portal-session-export') {
+    const auth = (request?.headers?.get('authorization') || '').trim();
+    if (!env.SCOUT_VPS_API_KEY || auth !== `Bearer ${env.SCOUT_VPS_API_KEY}`) {
+      return json({ error: 'unauthorized' }, 401);
+    }
+    return handleSessionExport(url, env);
+  }
+
   const pin = url.searchParams.get('pin') || '';
   const user = USERS[pin];
   if (!user) return json({ error: 'Invalid PIN' }, 401);
@@ -1281,6 +1291,66 @@ async function handleGet(url, env) {
   }
 
   return json({ error: `Unknown GET action: ${action}` }, 400);
+}
+
+// ━━━ portal-session-export ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Bearer-protected machine-to-machine read of captured portal sessions.
+// Called by the VPS scout service (Phase X.5) to inject logged-in cookies
+// into Playwright before scouting. NOT gated by PIN — gated by
+// env.SCOUT_VPS_API_KEY, which is set both here as a Pages secret and on
+// the VPS .env as HN_API_KEY.
+//
+// GET  /api/purchase-control?action=portal-session-export
+//   Authorization: Bearer ${SCOUT_VPS_API_KEY}
+//   ?source_key=HYPERPURE             -> { source_key, ready, session }
+//   ?source_key=ALL  (default)         -> { sources: { HYPERPURE: {...}, ... } }
+//
+// Never reads via PIN scope; never returns anything if the bearer is wrong.
+// Response includes only what Playwright needs: cookies array, local_storage,
+// session_storage, captured_url, user_agent. Drops admin/PII fields.
+
+async function handleSessionExport(url, env) {
+  if (!env.SCOUT_VPS_API_KEY) return json({ error: 'session export not configured' }, 503);
+  if (!env.SESSIONS) return json({ error: 'SESSIONS KV not bound' }, 500);
+
+  const requested = (url.searchParams.get('source_key') || 'ALL').toUpperCase();
+  const targets = requested === 'ALL' ? PORTAL_SOURCE_KEYS : [requested];
+  const out = {};
+  for (const sourceKey of targets) {
+    if (!PORTAL_SOURCE_KEYS.includes(sourceKey)) {
+      out[sourceKey] = { ready: false, error: 'unknown source' };
+      continue;
+    }
+    const raw = await env.SESSIONS.get(portalSessionKey(sourceKey));
+    if (!raw) {
+      out[sourceKey] = { ready: false, error: 'no session captured' };
+      continue;
+    }
+    const session = safeJson(raw, null);
+    if (!session || !session.payload) {
+      out[sourceKey] = { ready: false, error: 'session payload missing' };
+      continue;
+    }
+    const p = session.payload;
+    out[sourceKey] = {
+      ready: !!session.expires_at && !isPastIso(session.expires_at),
+      captured_at: session.captured_at || '',
+      expires_at: session.expires_at || '',
+      captured_url: p.captured_url || '',
+      user_agent: p.user_agent || session.user_agent || '',
+      pincode: session.pincode || '',
+      location_label: session.location_label || '',
+      cookies: Array.isArray(p.cookies) ? p.cookies : [],
+      local_storage: p.local_storage || {},
+      session_storage: p.session_storage || {},
+      visible_cookies: p.visible_cookies || {},
+    };
+  }
+  if (requested !== 'ALL') {
+    const single = out[requested];
+    return json({ success: true, source_key: requested, ...single });
+  }
+  return json({ success: true, sources: out });
 }
 
 async function loadMaterialUniverse(creds, brand, days) {
