@@ -144,7 +144,7 @@ async function captureCurrent(message) {
   const cookies = await readCookies(tab.url, portal.domains);
   const expiresAt = expiryFromCookies(cookies, Number(message.expiryHours || 6));
   const payload = {
-    capture_version: '1.4.0',
+    capture_version: '1.5.0',
     source_key: sourceKey,
     captured_url: tab.url,
     captured_title: tab.title || pageState.title || '',
@@ -848,6 +848,17 @@ function genericScrapeSearchResults(query, sourceKey, sourceLabel) {
     }
   }
 
+  function imageUrlFromElement(el) {
+    const img = el.querySelector?.('img[src], img[data-src], picture img') || el.closest?.('a')?.querySelector?.('img[src], img[data-src]');
+    const src = img?.getAttribute('src') || img?.getAttribute('data-src') || '';
+    if (!src || /^data:/i.test(src)) return '';
+    try {
+      return new URL(src, location.origin).toString();
+    } catch (_) {
+      return '';
+    }
+  }
+
   function productFromElement(el) {
     const raw = el.innerText || '';
     if (!raw.includes('₹')) return null;
@@ -882,6 +893,7 @@ function genericScrapeSearchResults(query, sourceKey, sourceLabel) {
       etaMinutes: delivery.etaMinutes,
       buttonText: /(^|\n|\s)(add|add item|buy now)(\s|\n|$)/i.test(raw) ? 'ADD' : '',
       productUrl: productUrlFromElement(el),
+      imageUrl: imageUrlFromElement(el),
       source: `${sourceKey}_DOM_SEARCH`,
       sourceLabel,
       rawText: cleanText(raw, 520),
