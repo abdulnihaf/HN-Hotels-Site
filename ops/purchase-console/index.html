@@ -122,6 +122,13 @@
       flex-shrink: 0;
     }
     .mat-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .mat-thumb .mat-thumb-emoji {
+      font-size: 30px; line-height: 1;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,.4));
+    }
+    .mat-thumb.with-bg-emoji {
+      background: linear-gradient(135deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
+    }
     .mat-thumb .mat-thumb-letter {
       font-size: 20px; font-weight: 900; letter-spacing: -0.5px;
       color: var(--text); opacity: 0.6;
@@ -171,11 +178,14 @@
       border-color: var(--pc-line);
     }
     .best-portal-logo {
-      width: 32px; height: 32px; border-radius: 50%;
+      width: 36px; height: 36px; border-radius: 9px;
       display: inline-flex; align-items: center; justify-content: center;
       font-size: 11px; font-weight: 900; color: white;
-      text-shadow: 0 1px 1px rgba(0,0,0,.4);
+      background: rgba(255,255,255,.06);
+      overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.3);
     }
+    .best-portal-logo img { width: 100%; height: 100%; object-fit: contain; padding: 4px; background: white; }
+    .best-portal-logo.empty { background: rgba(255,255,255,.05); }
     .best-deal-body { display: grid; gap: 1px; min-width: 0; }
     .best-deal-portal { font-size: 12px; font-weight: 800; line-height: 1.2; }
     .best-deal-sku {
@@ -210,10 +220,12 @@
     .alt-chip:hover { background: var(--pc-soft-2); }
     .alt-chip.disabled { opacity: 0.4; cursor: default; }
     .alt-chip-logo {
-      width: 16px; height: 16px; border-radius: 50%;
+      width: 18px; height: 18px; border-radius: 4px;
       display: inline-flex; align-items: center; justify-content: center;
       font-size: 8px; font-weight: 900; color: white;
+      overflow: hidden; background: white;
     }
+    .alt-chip-logo img { width: 100%; height: 100%; object-fit: contain; padding: 1px; }
     .alt-chip-name { font-weight: 700; }
     .alt-chip-price { color: var(--text-dim); font-weight: 600; }
 
@@ -478,6 +490,88 @@
       LOCAL_VENDOR: 'LV', HYPERPURE: 'H', BIGBASKET: 'BB', BLINKIT: 'B',
       ZEPTO: 'Z', FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'A', JIOMART: 'J', INSTAMART: 'I',
     };
+    // Real platform favicons via Google's favicon service — square brand
+    // marks the owner already recognises at a glance, no backend dep.
+    const PORTAL_DOMAIN = {
+      HYPERPURE: 'hyperpure.com', BIGBASKET: 'bigbasket.com', BLINKIT: 'blinkit.com',
+      ZEPTO: 'zepto.com', FLIPKART_MINUTES: 'flipkart.com', AMAZON_NOW: 'amazon.in',
+      JIOMART: 'jiomart.com', INSTAMART: 'swiggy.com',
+    };
+    function portalLogoImg(sk, size) {
+      const d = PORTAL_DOMAIN[sk]; const s = size || 64;
+      return d ? `<img src="https://www.google.com/s2/favicons?domain=${d}&sz=${s}" alt="${sk}" onerror="this.style.display='none'">` : '';
+    }
+
+    // Material name → emoji thumbnail. Long enough to cover the bulk of HE+NCH
+    // ordering history; falls back to category, then a generic 🛒.
+    const MAT_EMOJI = [
+      [/\b(boneless|tandoori|kebab|tangdi|drumstick|lollipop|wing|chicken|murgh)\b/i, '🍗'],
+      [/\b(mutton|lamb|goat|gravy cut|chops|brain|bheja|paya)\b/i, '🥩'],
+      [/\bfish\b/i, '🐟'],
+      [/\b(egg|omelette|anda)\b/i, '🥚'],
+      [/\b(butter|makkhan|ghee)\b/i, '🧈'],
+      [/\b(cheese|paneer|mozzarella)\b/i, '🧀'],
+      [/\b(milk|dahi|curd|yogurt|cream|condensed)\b/i, '🥛'],
+      [/\b(rice|basmati|biryani)\b/i, '🍚'],
+      [/\b(maida|atta|flour|wheat|besan|gram flour|sooji|rava|corn)\b/i, '🌾'],
+      [/\b(oil|tel|olive|sunflower|palm|sesame)\b/i, '🫗'],
+      [/\b(tomato|tamatar)\b/i, '🍅'],
+      [/\b(onion|pyaaz|kanda)\b/i, '🧅'],
+      [/\b(potato|aloo|batata)\b/i, '🥔'],
+      [/\b(carrot|gajar)\b/i, '🥕'],
+      [/\b(capsicum|bell pepper|shimla)\b/i, '🫑'],
+      [/\b(lemon|nimbu|lime)\b/i, '🍋'],
+      [/\b(chili|chilli|mirchi|mirch)\b/i, '🌶️'],
+      [/\b(ginger|adrak)\b/i, '🫚'],
+      [/\b(garlic|lasun|lehsun)\b/i, '🧄'],
+      [/\b(coriander|kothimir|dhania|mint|pudina|curry leaf|leaves)\b/i, '🌿'],
+      [/\b(beans|french|fava|peas|matar)\b/i, '🫛'],
+      [/\b(cucumber|kheera)\b/i, '🥒'],
+      [/\b(cauliflower|gobi|broccoli|cabbage|patta)\b/i, '🥬'],
+      [/\b(tea|chai)\b/i, '🍵'],
+      [/\b(coffee|cappuccino)\b/i, '☕'],
+      [/\b(sugar|jaggery|gud|gur|stevia)\b/i, '🍬'],
+      [/\b(salt|namak)\b/i, '🧂'],
+      [/\b(bread|bun|paav|pav|rumali|naan|roti|chapati)\b/i, '🍞'],
+      [/\b(biscuit|cookie|osmania|cake|muffin|brownie)\b/i, '🍪'],
+      [/\b(honey|shahad|jam)\b/i, '🍯'],
+      [/\b(water|jal|pani)\b/i, '💧'],
+      [/\b(ice)\b/i, '🧊'],
+      [/\b(cashew|kaju|almond|badam|nut|kismis|raisin|pistach)\b/i, '🥜'],
+      [/\b(spice|masala|powder|seed|saunf|jeera|cumin|kalonji|elaichi|cardamom|clove|laung|cinnamon|dalchini|tej patta|bay leaf|ajwain|mace|javitri|nutmeg|jaiphal)\b/i, '🫙'],
+      [/\b(lentil|dal|toor|moong|chana|urad|masoor|rajma|chickpea)\b/i, '🫘'],
+      [/\b(sauce|chutney|ketchup|mayo|vinegar)\b/i, '🥫'],
+      [/\b(tamarind|imli)\b/i, '🥥'],
+      [/\b(packaging|box|carton|bag|wrap|paper|cup|plate|spoon|fork|napkin|tissue|foil|cling|disposable)\b/i, '📦'],
+      [/\b(cleaning|detergent|soap|sanitizer|bleach|dishwash|broom|mop|brush|scrub)\b/i, '🧽'],
+      [/\b(gas|fuel|lpg|charcoal|coal)\b/i, '🔥'],
+      [/\b(food colour|color|essence|flavour|flavor|baking soda|baking powder|yeast|starch|gelatin)\b/i, '🍰'],
+      [/\b(haleem|biryani|kabab)\b/i, '🍛'],
+    ];
+    const CAT_EMOJI = {
+      'Meat & Poultry': '🥩',
+      'Dairy & Eggs': '🥛',
+      'Fresh Vegetables & Produce': '🥬',
+      'Dry Goods & Staples': '🌾',
+      'Spices & Seasoning': '🌶️',
+      'Oils & Fats': '🫗',
+      'Beverage Inputs': '☕',
+      'Lentils & Pulses': '🫘',
+      'Bakery': '🍞',
+      'Cleaning & Non-Food': '🧽',
+      'Packaging & Disposables': '📦',
+      'Dry Fruits & Nuts': '🥜',
+      'Ready-Made & Snacks': '🍿',
+      'Sauces & Condiments': '🥫',
+      'Water': '💧',
+      'Fuel & Production': '🔥',
+      'Custom': '🛒',
+    };
+    function materialEmoji(mat) {
+      const name = String(mat?.name || '');
+      for (const [rx, e] of MAT_EMOJI) if (rx.test(name)) return e;
+      return CAT_EMOJI[mat?.category] || '🛒';
+    }
     const PORTAL_SEARCH_URL = {
       HYPERPURE: (q) => `https://www.hyperpure.com/in/search/${encodeURIComponent(String(q || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'search')}?type=SEARCH&query=${encodeURIComponent(q)}`,
       BIGBASKET: (q) => `https://www.bigbasket.com/ps/?q=${encodeURIComponent(q)}`,
@@ -729,7 +823,7 @@
       els.cartBar.classList.remove('empty');
       const pills = keys.sort().map((sk) => {
         const t = byPortal[sk];
-        return `<span class="portal-pill"><span class="alt-chip-logo ${LOGO_CLASS[sk] || ''}">${escapeHtml(LOGO_LETTER[sk] || '?')}</span>${escapeHtml(SOURCE_SHORT[sk] || sk)}·${t.count}<span class="pill-total">${money(t.total)}</span></span>`;
+        return `<span class="portal-pill"><span class="alt-chip-logo">${portalLogoImg(sk, 32) || escapeHtml(LOGO_LETTER[sk] || '?')}</span>${escapeHtml(SOURCE_SHORT[sk] || sk)}·${t.count}<span class="pill-total">${money(t.total)}</span></span>`;
       }).join('');
       els.cartSummary.innerHTML = `🛒 ${pills} <span class="pill-total" style="margin-left:8px;">Total ${money(grand)}</span>`;
       els.viewCartsBtn.disabled = false;
@@ -745,10 +839,10 @@
         const lines = state.cart[sk] || [];
         const t = byPortal[sk];
         const linesHtml = lines.map((l) => {
-          const initial = escapeHtml((l.name || '?')[0]);
+          const emoji = materialEmoji({ name: l.name });
           const thumb = l.image_url
-            ? `<img src="${escapeAttr(l.image_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'mat-thumb-letter',textContent:'${initial}'}))">`
-            : `<span class="mat-thumb-letter">${initial}</span>`;
+            ? `<img src="${escapeAttr(l.image_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'mat-thumb-emoji',textContent:'${emoji}'}))">`
+            : `<span class="mat-thumb-emoji">${emoji}</span>`;
           return `
           <div class="cart-line">
             <div class="mat-thumb">${thumb}</div>
@@ -771,7 +865,7 @@
         return `
           <div class="cart-portal-section">
             <div class="cart-portal-head">
-              <div class="best-portal-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</div>
+              <div class="best-portal-logo">${portalLogoImg(sk, 64) || escapeHtml(LOGO_LETTER[sk])}</div>
               <div>
                 <div class="cart-portal-name">${escapeHtml(SOURCE_LABELS[sk])}</div>
                 <div class="cart-line-meta">${t.count} item${t.count === 1 ? '' : 's'} · tap [Open ↗] per item to add to the real cart on the portal</div>
@@ -798,10 +892,11 @@
       const rowCls = `mat-row ${best ? 'has-best' : ''} ${inCartAnywhere ? 'in-cart' : ''} ${mat.is_custom ? 'custom' : ''}`;
 
       const thumbImg = best?.image_url || mat.image_url || '';
-      const firstLetter = (mat.name || '?')[0];
+      const emoji = materialEmoji(mat);
       const thumbHtml = thumbImg
-        ? `<img src="${escapeAttr(thumbImg)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'mat-thumb-letter',textContent:'${escapeHtml(firstLetter)}'}))">`
-        : `<span class="mat-thumb-letter">${escapeHtml(firstLetter)}</span>`;
+        ? `<img src="${escapeAttr(thumbImg)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'mat-thumb-emoji',textContent:'${emoji}'}))">`
+        : `<span class="mat-thumb-emoji">${emoji}</span>`;
+      const thumbCls = thumbImg ? 'mat-thumb' : 'mat-thumb with-bg-emoji';
 
       let bestHtml = '';
       if (best) {
@@ -833,7 +928,7 @@
       } else {
         bestHtml = `
           <div class="best-deal no-best">
-            <div class="best-portal-logo pl-lv">—</div>
+            <div class="best-portal-logo empty" style="background:rgba(255,255,255,.05);">📍</div>
             <div class="best-deal-body">
               <div class="best-deal-portal" style="color:var(--text-dim);">No portal price yet</div>
               <div class="best-deal-sku">Tap 🔄 to scout, or use Local Vendor</div>
@@ -849,7 +944,7 @@
         const s = sources.find((x) => x.source_key === sk);
         if (!s) {
           const url = portalSearchUrlFor(sk, mat.name);
-          return url ? `<a class="alt-chip disabled" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="Search on ${escapeAttr(SOURCE_LABELS[sk])}"><span class="alt-chip-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</span><span class="alt-chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="alt-chip-price">—</span></a>` : '';
+          return url ? `<a class="alt-chip disabled" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="Search on ${escapeAttr(SOURCE_LABELS[sk])}"><span class="alt-chip-logo">${portalLogoImg(sk, 32) || escapeHtml(LOGO_LETTER[sk])}</span><span class="alt-chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="alt-chip-price">—</span></a>` : '';
         }
         const quoted = isPortalSourceQuoted(s);
         const sane = quoted && isSanePortalPrice(s, mat);
@@ -860,7 +955,7 @@
           ? `${s.sku_title || SOURCE_LABELS[sk]} — price looks wrong vs your local vendor; click to verify`
           : (s.sku_title || SOURCE_LABELS[sk]);
         const chipCls = quoted && !sane ? 'alt-chip' : (quoted ? 'alt-chip' : 'alt-chip disabled');
-        return `<a class="${chipCls}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(titleAttr)}"><span class="alt-chip-logo ${LOGO_CLASS[sk]}">${escapeHtml(LOGO_LETTER[sk])}</span><span class="alt-chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="alt-chip-price">${warn}${escapeHtml(priceTxt)}</span></a>`;
+        return `<a class="${chipCls}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(titleAttr)}"><span class="alt-chip-logo">${portalLogoImg(sk, 32) || escapeHtml(LOGO_LETTER[sk])}</span><span class="alt-chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="alt-chip-price">${warn}${escapeHtml(priceTxt)}</span></a>`;
       }).filter(Boolean).join('');
 
       const baselineHtml = baseline
@@ -874,7 +969,7 @@
       return `
         <div class="${rowCls}" data-mat-id="${escapeAttr(mid)}">
           <div class="mat-row-head">
-            <div class="mat-thumb">${thumbHtml}</div>
+            <div class="${thumbCls}">${thumbHtml}</div>
             <div>
               <div class="mat-row-name">${escapeHtml(mat.name)}${customPill}</div>
               <div class="mat-row-meta">${escapeHtml(mat.category || '—')} · ${escapeHtml(uom)} ${mat.times_ordered ? `· ${mat.times_ordered} POs` : ''}</div>
