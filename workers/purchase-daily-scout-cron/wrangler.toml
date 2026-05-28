@@ -3,11 +3,15 @@ main = "src/index.js"
 compatibility_date = "2024-09-01"
 compatibility_flags = ["nodejs_compat"]
 
-# 03:30 UTC = 09:00 IST every day. Fires the morning snapshot loop over
-# every RM with an Odoo product_code, one POST refresh-material per
-# material via a concurrency-2 worker pool.
+# 03:30 UTC = 09:00 IST every day (production schedule).
+# Plus a temporary "every 5 minutes" entry so we can validate the
+# scheduled() code path TODAY without waiting for 09:00 IST tomorrow.
+# Free-tier scheduled events have a 15-minute wall-clock budget — plenty
+# for the 76-material × concurrency-2 loop (~10 min). The /trigger fetch
+# handler hit a 30-second waitUntil ceiling earlier; scheduled() does not.
+# REMOVE the "*/5 * * * *" entry after validation.
 [triggers]
-crons = ["30 3 * * *"]
+crons = ["30 3 * * *", "*/5 * * * *"]
 
 [vars]
 HN_API_BASE = "https://hnhotels.in"
