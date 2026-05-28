@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-28T18:13:40+0530",
-  "published_at": "2026-05-28T18:13:40+0530",
+  "updated_at": "2026-05-28T18:58:56+0530",
+  "published_at": "2026-05-28T18:58:56+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -130,17 +130,17 @@
       "subgroup": "Creative Surface",
       "risk": "print/vendor handoff",
       "status": "ready",
-      "last_task": "Correct NCH flask master to exact Figma dieline cut specs",
-      "last_summary": "Updated existing Figma file cNkjzNFs4Xb1bdJUBB0Xey page Codex Production Master 250ml 500ml Consistent so visible 250ml and 500ml production frames follow the current Figma dieline cuts plus 3mm bleed. 250ml readback: front/back 136x216mm, spines 76x216mm, gables 136x51mm. 500ml readback: front/back 136x246mm, spines 76x246mm, gables 136x56mm; 500 gable trim guides corrected to 130x50mm. Also restored 500ml left spine wordmark visibility and kept hidden wrong exact-250-size 500ml backups hidden.",
-      "next_action": "Nihaf review the Figma page for final visual refinement; after approval export deterministic SVG/PDF and run QR, bleed, dieline, font, and PDF preflight checks before vendor handoff.",
-      "mutation_status": "Existing Figma file mutation only; no POS/Odoo/ad/WABA/vendor final file mutation; no bulk final dielines generated.",
+      "last_task": "Save NCH chai flask vendor handoff package",
+      "last_summary": "Generated and saved NCH chai flask vendor handoff package from current Figma file cNkjzNFs4Xb1bdJUBB0Xey. Created 5x scaled Figma export source page 276:2, downloaded high-res panel renders, cropped to exact cut-plus-bleed dimensions, and built exact-size 360dpi raster-backed PDFs for all 12 panels: 250ml front/back/spines/gables and 500ml front/back/spines/gables. Saved unzipped package plus zip on Desktop.",
+      "next_action": "If vendor requires editable vector PDFs rather than exact-size raster-backed PDFs, use Figma desktop/manual export or a working raw PDF byte path; otherwise send the Desktop zip with README and manifest.",
+      "mutation_status": "Existing Figma file mutation plus local vendor artifact generation only; no POS/Odoo/ad/WABA/live vendor system mutation.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-      "last_run_at": "2026-05-28T18:13:40+0530",
-      "proof": "Figma MCP readback on 2026-05-28 confirmed visible frame sizes and 500ml gable trim guide sizes; final screenshot downloaded to /private/tmp/nch_dieline_exact_specs_final.png as 2050x2312 PNG.",
-      "artifacts": "/private/tmp/nch_dieline_exact_specs_final.png",
-      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2 Codex Production Master 250ml 500ml Consistent; visible 250 nodes 226:15,226:18,226:39,226:58,226:77,226:95; visible 500 nodes 226:131,226:134,226:155,226:174,226:193,226:211; corrected 500 gable trim nodes 226:195,226:213; 500 left spine wordmark clone 267:2.",
-      "data_freshness": "2026-05-28 Figma MCP live metadata and screenshot verification.",
-      "rollback": "Use Figma version history or hidden backup nodes 253:2,253:5,253:44,253:65,253:84,253:102 only if intentionally reverting to the rejected exact-250-size 500ml draft; current canonical board follows Figma dieline sizes."
+      "last_run_at": "2026-05-28T18:58:56+0530",
+      "proof": "qpdf --check passed for all 12 panel PDFs; pdfinfo page sizes read back exact expected dimensions; zbarimg decoded both QR URLs from 250ml and 500ml back PNGs; unzip -t passed; SHA256 85372eda2ec5e0154fe98c567326a88474975f0ffbb6314587f9fa907430f60c.",
+      "artifacts": "/Users/nihaf/Desktop/NCH_Chai_Flask_Vendor_Final_2026-05-28/NCH_Chai_Flask_Vendor_Final_2026-05-28.zip; /Users/nihaf/Desktop/NCH_Chai_Flask_Vendor_Final_2026-05-28/package",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; approval page 226:2; scaled export page 276:2; export nodes 276:3,276:6,276:45,276:66,276:85,276:103,276:122,276:125,276:164,276:185,276:204,276:222.",
+      "data_freshness": "2026-05-28 Figma MCP export/render and local qpdf/pdfinfo/zbarimg/zip verification.",
+      "rollback": "Delete Desktop package and Figma export page 276:2 if the user wants to regenerate after further visual edits; approval page 226:2 remains the editable master."
     },
     "reel-making": {
       "title": "11 Reel Making",
@@ -156,6 +156,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260528185856-packaging-design",
+      "at": "2026-05-28T18:58:56+0530",
+      "lane": "packaging-design",
+      "task": "Save NCH chai flask vendor handoff package",
+      "status": "ready",
+      "summary": "Generated and saved NCH chai flask vendor handoff package from current Figma file cNkjzNFs4Xb1bdJUBB0Xey. Created 5x scaled Figma export source page 276:2, downloaded high-res panel renders, cropped to exact cut-plus-bleed dimensions, and built exact-size 360dpi raster-backed PDFs for all 12 panels: 250ml front/back/spines/gables and 500ml front/back/spines/gables. Saved unzipped package plus zip on Desktop.",
+      "next_action": "If vendor requires editable vector PDFs rather than exact-size raster-backed PDFs, use Figma desktop/manual export or a working raw PDF byte path; otherwise send the Desktop zip with README and manifest.",
+      "mutation_status": "Existing Figma file mutation plus local vendor artifact generation only; no POS/Odoo/ad/WABA/live vendor system mutation.",
+      "proof": "qpdf --check passed for all 12 panel PDFs; pdfinfo page sizes read back exact expected dimensions; zbarimg decoded both QR URLs from 250ml and 500ml back PNGs; unzip -t passed; SHA256 85372eda2ec5e0154fe98c567326a88474975f0ffbb6314587f9fa907430f60c.",
+      "artifacts": "/Users/nihaf/Desktop/NCH_Chai_Flask_Vendor_Final_2026-05-28/NCH_Chai_Flask_Vendor_Final_2026-05-28.zip; /Users/nihaf/Desktop/NCH_Chai_Flask_Vendor_Final_2026-05-28/package",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; approval page 226:2; scaled export page 276:2; export nodes 276:3,276:6,276:45,276:66,276:85,276:103,276:122,276:125,276:164,276:185,276:204,276:222.",
+      "rollback": "Delete Desktop package and Figma export page 276:2 if the user wants to regenerate after further visual edits; approval page 226:2 remains the editable master.",
+      "data_freshness": "2026-05-28 Figma MCP export/render and local qpdf/pdfinfo/zbarimg/zip verification."
+    },
     {
       "id": "20260528181340-packaging-design",
       "at": "2026-05-28T18:13:40+0530",
@@ -985,16 +1000,6 @@
       "summary": "Built local aggregator owner order-history focus: added direct Zomato history ingest path, owner-orders API with status/issue/discount/rating fields, direct-pull ingest wiring, and replaced cluttered ops/aggregator UI with order-history console. Verified saved Swiggy and Zomato cURLs both replay HTTP 200 in dry-run; no portal/POS/Odoo/ad mutation or live deploy.",
       "next_action": "Deploy API/UI after review, then run controlled ingest with current partner cURLs and verify hnhotels.in/ops/aggregator shows delivered/rejected/missed order rows before any price or offer execution.",
       "mutation_status": "local code/context only; no live platform, POS, Odoo, ad, WABA, or aggregator portal mutation"
-    },
-    {
-      "id": "20260525072518-google-ads",
-      "at": "2026-05-25T07:25:18+0530",
-      "lane": "google-ads",
-      "task": "Refine Hamza Hotel brand ad message",
-      "status": "ready",
-      "summary": "Nihaf chose the Brand/Legacy message direction for Hamza Hotel searchers: Searching for Hamza Hotel? Come to Hamza Express on HKP Road. Wahi Hamza Naam, Naya Zaiqa, Naya Andaaz. Best Ghee Rice and Kabab. Recommended making this compact for Google Search visible copy with brand bridge + directions intent.",
-      "next_action": "Before mutation, apply compact RSA copy to Brand/Legacy Hamza Search campaign with ₹500/day and 2km radius only after exact ad asset/budget/proximity write endpoints are verified.",
-      "mutation_status": "none-copy-direction-only"
     }
   ]
 }
