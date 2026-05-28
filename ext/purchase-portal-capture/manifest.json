@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "HN Purchase Portal Capture",
-  "version": "1.0.0",
-  "description": "Captures logged-in purchase portal sessions into the HN Hotels purchase-console vault.",
+  "version": "1.1.0",
+  "description": "Captures logged-in purchase portal sessions and runs live quote jobs for the HN Hotels purchase console.",
   "permissions": [
     "activeTab",
     "cookies",

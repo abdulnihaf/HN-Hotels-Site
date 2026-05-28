@@ -62,6 +62,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse(await getHealth(message.pin));
       return;
     }
+    if (message.type === 'RUN_BROWSER_QUOTES') {
+      sendResponse(await runBrowserQuotes(message));
+      return;
+    }
     sendResponse({ ok: false, error: 'Unknown message' });
   })().catch((error) => {
     sendResponse({ ok: false, error: error.message || 'Unknown extension error' });
@@ -310,4 +314,135 @@ async function getHealth(pin) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || `Health check failed (${response.status})`);
   return { ok: true, ...data };
+}
+
+async function runBrowserQuotes(message) {
+  const pin = String(message.pin || '').trim();
+  if (!/^\d{4}$/.test(pin)) throw new Error('Enter the purchase console PIN');
+
+  const tab = await getActiveTab();
+  const detected = detectSource(tab.url);
+  const sourceKey = message.sourceKey || detected;
+  const portal = PORTALS[sourceKey];
+  if (!portal) throw new Error('Choose one of the 8 purchase portals');
+  if (detected !== sourceKey) throw new Error(`Open the logged-in ${portal.label} tab before running live quotes`);
+  if (sourceKey !== 'HYPERPURE') throw new Error(`${portal.label} live quote runner is not wired yet`);
+
+  const jobsUrl = `${ENDPOINT}?action=browser-quote-jobs&pin=${encodeURIComponent(pin)}&source_key=${encodeURIComponent(sourceKey)}`;
+  const jobsResponse = await fetch(jobsUrl);
+  const jobsData = await jobsResponse.json().catch(() => ({}));
+  if (!jobsResponse.ok) throw new Error(jobsData.error || `Quote jobs failed (${jobsResponse.status})`);
+
+  const jobs = jobsData.jobs || [];
+  if (!jobs.length) {
+    return {
+      ok: true,
+      sourceKey,
+      sourceLabel: portal.label,
+      jobCount: 0,
+      updatedCount: 0,
+      message: jobsData.message || 'No quote jobs waiting',
+    };
+  }
+
+  const results = [];
+  for (const job of jobs.slice(0, 20)) {
+    const result = await runHyperpureSearch(tab.id, job.query || job.name);
+    results.push({
+      cart_id: job.cart_id,
+      query: job.query || job.name,
+      ...result,
+    });
+  }
+
+  const ingestResponse = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'ingest-browser-search-results',
+      pin,
+      source_key: sourceKey,
+      batch_id: jobsData.batch?.id,
+      results,
+    }),
+  });
+  const ingestData = await ingestResponse.json().catch(() => ({}));
+  if (!ingestResponse.ok) throw new Error(ingestData.error || `Quote ingest failed (${ingestResponse.status})`);
+
+  return {
+    ok: true,
+    sourceKey,
+    sourceLabel: portal.label,
+    jobCount: jobs.length,
+    updatedCount: results.length,
+    batch: ingestData.batch,
+    summary: ingestData.summary,
+  };
+}
+
+async function runHyperpureSearch(tabId, query) {
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: hyperpureSearchInPage,
+    args: [query],
+  });
+  return result?.result || { error: 'No browser search result returned' };
+}
+
+async function hyperpureSearchInPage(query) {
+  function cookieValue(name) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function storageValue(...keys) {
+    for (const key of keys) {
+      try {
+        const value = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
+        if (value) return value;
+      } catch (_) {}
+    }
+    return '';
+  }
+
+  const outletId = cookieValue('outletId') || storageValue('outletId', 'selectedOutletId');
+  const deviceId = cookieValue('deviceId') || storageValue('deviceId', 'device_id');
+  const token = cookieValue('token') || storageValue('token', 'authToken', 'accessToken');
+  const apiVersion = cookieValue('apiVersion') || storageValue('apiVersion') || '12.1';
+  const appMode = cookieValue('appMode') || storageValue('appMode') || 'partner_web';
+  const url = new URL('https://api.hyperpure.com/consumer/v2/search');
+  url.searchParams.set('query', query);
+  if (outletId) url.searchParams.set('outletId', outletId);
+  url.searchParams.set('pageNo', '1');
+  url.searchParams.set('fetchThroughV2', 'true');
+  url.searchParams.set('searchDebugFlag', 'false');
+
+  const headers = {
+    accept: 'application/json, text/plain, */*',
+    APIVersion: apiVersion,
+    AppType: 'HYPERPURE_WEB',
+    'X-client': 'partner_web',
+    'x-appmode': appMode,
+    DeviceName: 'Chrome',
+  };
+  if (deviceId) headers.DeviceId = deviceId;
+  if (outletId) headers['X-OutletId'] = outletId;
+  if (token) headers.Authorization = /^bearer\s/i.test(token) ? token : `Bearer ${token}`;
+
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
+    const text = await response.text();
+    try {
+      return { status: response.status, data: JSON.parse(text) };
+    } catch (_) {
+      return { status: response.status, body_preview: text.slice(0, 240) };
+    }
+  } catch (error) {
+    return { error: error.message || 'Browser fetch failed' };
+  }
 }

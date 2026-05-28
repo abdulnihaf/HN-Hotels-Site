@@ -1001,6 +1001,10 @@ async function handleGet(url, env) {
     return getQuoteSummary(url, user, env.DB);
   }
 
+  if (action === 'browser-quote-jobs') {
+    return getBrowserQuoteJobs(url, user, env.DB);
+  }
+
   if (action === 'portal-health') {
     return getPortalHealth(url, user, env);
   }
@@ -1249,6 +1253,8 @@ async function handlePost(context, env) {
       return requestQuotes(body, user, env);
     case 'ingest-quotes':
       return ingestQuotes(body, user, env.DB);
+    case 'ingest-browser-search-results':
+      return ingestBrowserSearchResults(body, user, env.DB);
     case 'upsert-portal-session':
       return upsertPortalSession(body, user, env);
     case 'validate-portal-sessions':
@@ -1702,6 +1708,98 @@ async function getQuoteSummary(url, user, DB) {
   });
 }
 
+async function getBrowserQuoteJobs(url, user, DB) {
+  await ensurePurchaseRunSchema(DB);
+  const sourceKey = cleanSourceKey(url.searchParams.get('source_key') || 'HYPERPURE');
+  if (!PORTAL_SOURCE_KEYS.includes(sourceKey)) return json({ error: 'Choose one of the 8 portal sources' }, 400);
+
+  const requestedRunId = url.searchParams.get('run_id') || '';
+  const requestedBatchId = url.searchParams.get('batch_id') || '';
+  let batchRow = null;
+  if (requestedBatchId) {
+    batchRow = await DB.prepare(`
+      SELECT b.*, r.status AS run_status
+      FROM purchase_quote_batches b
+      JOIN purchase_control_runs r ON r.id = b.run_id
+      WHERE b.id = ?
+      LIMIT 1
+    `).bind(requestedBatchId).first();
+  } else if (requestedRunId) {
+    batchRow = await DB.prepare(`
+      SELECT b.*, r.status AS run_status
+      FROM purchase_quote_batches b
+      JOIN purchase_control_runs r ON r.id = b.run_id
+      WHERE b.run_id = ?
+      ORDER BY b.updated_at DESC
+      LIMIT 1
+    `).bind(requestedRunId).first();
+  } else {
+    batchRow = await DB.prepare(`
+      SELECT b.*, r.status AS run_status
+      FROM purchase_quote_batches b
+      JOIN purchase_control_runs r ON r.id = b.run_id
+      WHERE r.status NOT IN ('ORDERED', 'RECONCILED')
+        AND EXISTS (
+          SELECT 1 FROM purchase_quote_lines q
+          WHERE q.batch_id = b.id
+            AND q.source_key = ?
+            AND q.stock_status IN ('PENDING_ADAPTER', 'ERROR')
+        )
+      ORDER BY b.updated_at DESC
+      LIMIT 1
+    `).bind(sourceKey).first();
+  }
+
+  if (!batchRow) {
+    return json({
+      success: true,
+      source_key: sourceKey,
+      batch: null,
+      jobs: [],
+      message: 'No browser quote jobs are waiting. Click Get quotes in the purchase console first.',
+      user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
+    });
+  }
+
+  const rows = await DB.prepare(`
+    SELECT *
+    FROM purchase_quote_lines
+    WHERE batch_id = ?
+      AND source_key = ?
+      AND stock_status IN ('PENDING_ADAPTER', 'ERROR')
+    ORDER BY name ASC
+    LIMIT 40
+  `).bind(batchRow.id, sourceKey).all();
+
+  const jobs = (rows.results || []).map((row) => {
+    const quote = publicQuoteLine(row);
+    return {
+      id: quote.id,
+      batch_id: quote.batch_id,
+      run_id: quote.run_id,
+      cart_id: quote.cart_id,
+      source_key: quote.source_key,
+      name: quote.name,
+      category: quote.category,
+      uom: quote.uom,
+      required_qty: quote.required_qty,
+      product_code: quote.product_code,
+      query: cleanText(quote.raw?.search_query || quote.name, 160),
+      match_rule: quote.match_rule || '',
+      previous_status: quote.stock_status,
+      previous_note: quote.match_notes || '',
+    };
+  });
+
+  return json({
+    success: true,
+    source_key: sourceKey,
+    batch: publicQuoteBatch(batchRow),
+    jobs,
+    user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
+  });
+}
+
 async function insertQuoteLine(DB, batchId, runId, line, sourceKey, quote, now) {
   const source = SOURCE_BY_KEY[sourceKey] || { key: sourceKey, label: sourceKey };
   const pricePaise = Number.isInteger(quote.price_paise) ? quote.price_paise : paiseFrom(quote.price || quote.price_rupees);
@@ -1870,6 +1968,99 @@ async function ingestQuotes(body, user, DB) {
 
   await recomputeQuoteBatchCounts(DB, batchRow.id, run);
   const fakeUrl = new URL(`https://internal.local/api/purchase-control?action=quote-summary&run_id=${encodeURIComponent(run.id)}&batch_id=${encodeURIComponent(batchRow.id)}`);
+  return getQuoteSummary(fakeUrl, user, DB);
+}
+
+async function ingestBrowserSearchResults(body, user, DB) {
+  if (!canCreate(user)) return json({ error: 'Only admin or purchase PINs can ingest browser quote results' }, 403);
+  await ensurePurchaseRunSchema(DB);
+  const sourceKey = cleanSourceKey(body.source_key || 'HYPERPURE');
+  if (!PORTAL_SOURCE_KEYS.includes(sourceKey)) return json({ error: 'Choose one of the 8 portal sources' }, 400);
+  const batchId = body.batch_id;
+  const results = Array.isArray(body.results) ? body.results : [];
+  if (!batchId) return json({ error: 'Missing batch_id' }, 400);
+  if (!results.length) return json({ error: 'No browser results supplied' }, 400);
+
+  const batchRow = await DB.prepare('SELECT * FROM purchase_quote_batches WHERE id = ?').bind(batchId).first();
+  if (!batchRow) return json({ error: 'Quote batch not found' }, 404);
+  const runRow = await DB.prepare('SELECT * FROM purchase_control_runs WHERE id = ?').bind(batchRow.run_id).first();
+  if (!runRow) return json({ error: 'Run not found' }, 404);
+  const run = publicRun(runRow);
+  const expiresAt = run.quote_expires_at || new Date(Date.now() + 15 * 60000).toISOString();
+  const now = new Date().toISOString();
+
+  for (const result of results) {
+    const cartId = String(result.cart_id || '').trim();
+    if (!cartId) continue;
+    const existing = await DB.prepare(`
+      SELECT *
+      FROM purchase_quote_lines
+      WHERE batch_id = ? AND source_key = ? AND cart_id = ?
+      LIMIT 1
+    `).bind(batchId, sourceKey, cartId).first();
+    if (!existing) continue;
+
+    const line = {
+      cart_id: existing.cart_id,
+      item_id: existing.item_id,
+      product_code: existing.product_code,
+      name: existing.name,
+      category: existing.category,
+      uom: existing.uom,
+      qty: existing.required_qty,
+      required_qty: existing.required_qty,
+      match_rule: existing.match_rule,
+      buying_spec: {
+        approved_name: cleanText(result.query || existing.name, 160),
+        match_rule: existing.match_rule,
+      },
+    };
+
+    let quote;
+    if (result.error) {
+      quote = hyperpureErrorQuote(line, cleanText(result.error, 240), expiresAt, {
+        source: sourceKey,
+        browser_status: result.status || 0,
+      });
+    } else if (sourceKey === 'HYPERPURE') {
+      const status = parseInt(result.status || 0, 10) || 0;
+      if (status && status >= 400) {
+        quote = hyperpureErrorQuote(line, `Hyperpure browser search rejected (${status})`, expiresAt, {
+          source: sourceKey,
+          browser_status: status,
+          body_preview: cleanText(result.body_preview || '', 180),
+        });
+      } else {
+        const products = extractProductsFromPayload(result.data)
+          .map((product) => ({ product, title: titleFromProduct(product), price: priceFromProduct(product).paise }))
+          .filter((item) => item.title)
+          .sort((a, b) => {
+            const query = result.query || line.name;
+            const scoreDiff = matchConfidence(query, b.title) - matchConfidence(query, a.title);
+            if (scoreDiff) return scoreDiff;
+            return (a.price || 999999999) - (b.price || 999999999);
+          });
+        const best = products.find((item) => item.price > 0) || products[0];
+        quote = best
+          ? hyperpureQuoteFromProduct(line, best.product, result.query || line.name, expiresAt, status || 200)
+          : {
+            stock_status: 'UNAVAILABLE',
+            match_rule: existing.match_rule || '',
+            match_confidence: 0,
+            match_notes: `Hyperpure returned no SKU for ${result.query || line.name}`,
+            expires_at: expiresAt,
+            raw: { source: sourceKey, browser_status: status || 200, product_count: 0 },
+          };
+      }
+    } else {
+      quote = hyperpureErrorQuote(line, `${sourceKey} browser adapter is not implemented yet`, expiresAt, { source: sourceKey });
+    }
+
+    await insertQuoteLine(DB, batchId, run.id, line, sourceKey, quote, now);
+  }
+
+  await recomputeQuoteBatchCounts(DB, batchId, run);
+  const fakeUrl = new URL(`https://internal.local/api/purchase-control?action=quote-summary&run_id=${encodeURIComponent(run.id)}&batch_id=${encodeURIComponent(batchId)}`);
   return getQuoteSummary(fakeUrl, user, DB);
 }
 

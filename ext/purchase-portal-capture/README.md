@@ -38,6 +38,13 @@ After this phase is merged into the main repo, the permanent folder will be:
    - JioMart
 6. Open `/ops/purchase-console/` and check `Portal Sessions`.
 
+## Live Quote Flow
+
+1. In `/ops/purchase-console/`, create a run, add items, and click `Get quotes`.
+2. Open the matching logged-in portal tab.
+3. Open this extension and click `Run live quotes from tab`.
+4. The extension runs waiting quote jobs inside the browser session and sends normalized results back to the purchase console.
+
 ## When Login Expires
 
 If a portal shows `MISSING`, `EXPIRED`, or `ACTION_REQUIRED`, open that portal, log in again, and capture the current tab again.

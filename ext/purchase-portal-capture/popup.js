@@ -7,6 +7,7 @@ const els = {
   locationLabel: document.getElementById('locationLabel'),
   pincode: document.getElementById('pincode'),
   captureBtn: document.getElementById('captureBtn'),
+  browserQuotesBtn: document.getElementById('browserQuotesBtn'),
   openBtn: document.getElementById('openBtn'),
   healthBtn: document.getElementById('healthBtn'),
   status: document.getElementById('status'),
@@ -127,6 +128,25 @@ async function captureCurrent() {
   }
 }
 
+async function runBrowserQuotes() {
+  const payload = formPayload();
+  els.browserQuotesBtn.disabled = true;
+  setStatus(`Running ${portalLabel(payload.sourceKey)} live quote jobs from this tab...`, 'warn');
+  try {
+    const data = await send({ type: 'RUN_BROWSER_QUOTES', ...payload });
+    if (!data.ok) throw new Error(data.error || 'Live quote runner failed');
+    const summary = data.summary || {};
+    const note = data.jobCount
+      ? `${data.updatedCount || 0}/${data.jobCount} jobs updated. ${summary.quoted_count || 0} quoted, ${summary.error_count || 0} errors.`
+      : data.message || 'No quote jobs waiting.';
+    setStatus(`${data.sourceLabel}: ${note}`, data.jobCount ? 'good' : 'warn');
+  } catch (error) {
+    setStatus(error.message || 'Live quote runner failed', 'bad');
+  } finally {
+    els.browserQuotesBtn.disabled = false;
+  }
+}
+
 async function openPortal() {
   const sourceKey = els.sourceKey.value;
   const data = await send({ type: 'OPEN_PORTAL', sourceKey });
@@ -154,6 +174,7 @@ async function checkHealth() {
 }
 
 els.captureBtn.addEventListener('click', captureCurrent);
+els.browserQuotesBtn.addEventListener('click', runBrowserQuotes);
 els.openBtn.addEventListener('click', openPortal);
 els.healthBtn.addEventListener('click', checkHealth);
 els.pin.addEventListener('keydown', (event) => {
