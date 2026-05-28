@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-28T16:45:41+0530",
-  "published_at": "2026-05-28T16:45:41+0530",
+  "updated_at": "2026-05-28T17:10:56+0530",
+  "published_at": "2026-05-28T17:10:56+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -130,17 +130,17 @@
       "subgroup": "Creative Surface",
       "risk": "print/vendor handoff",
       "status": "ready",
-      "last_task": "Refine NCH flask back typography and QR treatment",
-      "last_summary": "Updated latest Figma production master page 226:2 in file cNkjzNFs4Xb1bdJUBB0Xey after user correction. Back-panel typography for 250ml node 226:18 and 500ml node 226:134 now uses Cinzel Bold across headline, instructions, QR labels, phone, Instagram/website, statutory and legal text because Figma MCP exposes Cinzel Regular/Bold/Black only; exact Cinzel SemiBold load attempts failed. Replaced hard-edged QR treatment with newly generated rounded NCH branded QR PNGs using cream card, dark-brown dots, gold inset edge, and gift-center mark. Assigned new image hashes e797d35fd291ad293f349a4860aff19776224638 for WhatsApp /go/flask and 14306893f4c5e909b8d650d19fcd1a9bc242bf3b for Google review.",
-      "next_action": "If Nihaf requires exact Cinzel SemiBold rather than available Cinzel Bold, install/enable Cinzel SemiBold in Figma and rerun font pass; otherwise continue visual refinement on page 226:2, then export/preflight vendor PDFs after approval.",
-      "mutation_status": "Existing Figma file mutation only; generated temp QR assets in /private/tmp; no POS/Odoo/ad/WABA/vendor final files or live site routes changed.",
+      "last_task": "Align six 250ml NCH flask production master frames",
+      "last_summary": "On Figma page 226:2 in file cNkjzNFs4Xb1bdJUBB0Xey, normalized only the six 250ml production frame positions after user size refinements. Preserved frame sizes exactly: front/back 385.5118x612.2834, left/right spine 215.4331x612.2834, gable front/back 385.5118x144.5669. Set top row y=295 for front/back/left spine/right spine, exact 60-unit horizontal gaps, and gables y=947.2834 with 40-unit gap below panels; gable front x matches front x=80 and gable back x matches back x=525.5118. 500ml not refined in this pass.",
+      "next_action": "Have Nihaf review and approve the aligned 250ml set on page 226:2; after approval, repeat the same disciplined alignment/design pass for 500ml only.",
+      "mutation_status": "Existing Figma file mutation only; 250ml frame positions and labels adjusted, sizes/artwork dimensions preserved; no 500ml production refinement and no vendor files/live routes changed.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command packaging-design",
-      "last_run_at": "2026-05-28T16:45:41+0530",
-      "proof": "Figma readback confirmed all text layers in back nodes 226:18 and 226:134 use Cinzel Bold. QR readback confirmed four QR fills use new hashes e797d35fd291ad293f349a4860aff19776224638 and 14306893f4c5e909b8d650d19fcd1a9bc242bf3b at 116x116 with cornerRadius 11. zbarimg decoded final Figma back screenshots to https://nawabichaihouse.com/go/flask and https://g.page/r/CQozT6UxiKIGEBM/review.",
-      "artifacts": "/private/tmp/NCH_QR_whatsapp_flask_styled.png; /private/tmp/NCH_QR_google_review_styled.png; /private/tmp/nch_250_back_cinzel_qr_refined_final.png; /private/tmp/nch_500_back_cinzel_qr_refined_final.png; /private/tmp/nch_production_master_250_500_cinzel_qr_final_board.png.",
-      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; back nodes 226:18 and 226:134; QR nodes 226:28, 226:29, 226:144, 226:145.",
-      "data_freshness": "2026-05-28 Figma MCP mutation, screenshot, font readback, QR hash readback, and zbar decode verification.",
-      "rollback": "Reassign old QR hashes 7105de844090726950255cd8a0c76b26572c8d3a and 0dc8b57da6dd829c5e7b9df15b98e4dcd7cf4179 or revert by deleting page 226:2; original source pages remain intact."
+      "last_run_at": "2026-05-28T17:10:56+0530",
+      "proof": "Figma readback confirmed top row same y and same bottom baseline, front-to-back gap 60.0000, back-to-left-spine gap 60.0000, left-spine-to-right-spine gap 60.0000, gable gap 40, gablesSameY true, frontGableSameX true, backGableSameX true. Screenshot downloaded to /private/tmp/nch_250_alignment_after_grid.png.",
+      "artifacts": "/private/tmp/nch_250_alignment_after_grid.png",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; 250ml frame nodes 226:15, 226:18, 226:39, 226:58, 226:77, 226:95.",
+      "data_freshness": "2026-05-28 Figma MCP alignment mutation, screenshot, and geometry readback verification.",
+      "rollback": "Restore previous 250ml positions if needed: front 80,295; back 525,295; left spine 970,295; right spine 1225,295; gables 80,950 and 525,950. Original source pages remain intact."
     },
     "reel-making": {
       "title": "11 Reel Making",
@@ -156,6 +156,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260528171056-packaging-design",
+      "at": "2026-05-28T17:10:56+0530",
+      "lane": "packaging-design",
+      "task": "Align six 250ml NCH flask production master frames",
+      "status": "ready",
+      "summary": "On Figma page 226:2 in file cNkjzNFs4Xb1bdJUBB0Xey, normalized only the six 250ml production frame positions after user size refinements. Preserved frame sizes exactly: front/back 385.5118x612.2834, left/right spine 215.4331x612.2834, gable front/back 385.5118x144.5669. Set top row y=295 for front/back/left spine/right spine, exact 60-unit horizontal gaps, and gables y=947.2834 with 40-unit gap below panels; gable front x matches front x=80 and gable back x matches back x=525.5118. 500ml not refined in this pass.",
+      "next_action": "Have Nihaf review and approve the aligned 250ml set on page 226:2; after approval, repeat the same disciplined alignment/design pass for 500ml only.",
+      "mutation_status": "Existing Figma file mutation only; 250ml frame positions and labels adjusted, sizes/artwork dimensions preserved; no 500ml production refinement and no vendor files/live routes changed.",
+      "proof": "Figma readback confirmed top row same y and same bottom baseline, front-to-back gap 60.0000, back-to-left-spine gap 60.0000, left-spine-to-right-spine gap 60.0000, gable gap 40, gablesSameY true, frontGableSameX true, backGableSameX true. Screenshot downloaded to /private/tmp/nch_250_alignment_after_grid.png.",
+      "artifacts": "/private/tmp/nch_250_alignment_after_grid.png",
+      "live_ids": "Figma file cNkjzNFs4Xb1bdJUBB0Xey; page 226:2; 250ml frame nodes 226:15, 226:18, 226:39, 226:58, 226:77, 226:95.",
+      "rollback": "Restore previous 250ml positions if needed: front 80,295; back 525,295; left spine 970,295; right spine 1225,295; gables 80,950 and 525,950. Original source pages remain intact.",
+      "data_freshness": "2026-05-28 Figma MCP alignment mutation, screenshot, and geometry readback verification."
+    },
     {
       "id": "20260528164541-packaging-design",
       "at": "2026-05-28T16:45:41+0530",
@@ -965,16 +980,6 @@
       "summary": "Inspected the uploaded source zip drive-download-20260525T013325Z-3-001.zip: DATA.xlsx has 4,787 rows with 90,681 total order-count signal; MG Road rank-price workbook has 183 locality/cuisine/item rows. Re-read canonical FULL-INTELLIGENCE-MAPPING and MS35 final context/output. Core context confirmed: Swiggy DATA supplies actual demand-volume families; Zomato MG Road workbook supplies local rank-price perception corridors; HE menu workbook supplies executable SKU rows; playbook supplies offer mechanics only; proof/margin gates decide release. Highest demand families include biryani, dry starters, curries, rice, kebab, and breads. Final safe output remains 8 Zomato price-only rows; no offers/combo/Swiggy packet without proof.",
       "next_action": "If continuing, produce a compact CTO-facing one-page explanation of the micro-step chain and data logic, or build the clean direct-ingest deployment branch; keep offer/combo execution blocked until proof/margin gates close.",
       "mutation_status": "none - read-only workbook/context analysis and memory writeback only"
-    },
-    {
-      "id": "20260525070439-waba-outreach",
-      "at": "2026-05-25T07:04:39+0530",
-      "lane": "waba-outreach",
-      "task": "Verify deployed WABA voucher funnel for Meta retargeting",
-      "status": "ready",
-      "summary": "Read WABA lane memory and verified deployed HE GitHub main whatsapp.js voucher path. Trigger phrase 'Hi Hamza, send my WhatsApp voucher' and fallbacks like 'voucher' route to handleVoucherIntro, source meta_rt_voucher, VOUCHER_CAMPAIGN HE_RT_WABA_VOUCHER_ALL_20260523, wa_voucher_claims code generation HE-xxxxx, intro Claim Voucher button, post-claim Full Menu/Voucher Offers/Open Maps buttons, offer selection updates selected_offer and sends combo/roll product lists with text fallback. No customer send performed.",
-      "next_action": "Owner/test-number verification should send exact prefill phrase, claim voucher, click offers/maps/menu, then verify wa_voucher_claims row and staff redemption handling before any public Meta WABA launch.",
-      "mutation_status": "read-only code/deployment verification only; no WABA send/template/payment/Odoo mutation"
     }
   ]
 }
