@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Purchase Control - HN Hotels</title>
+  <meta name="theme-color" content="#0c0c14">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/ops-ui.css">
+  <style>
+    :root {
+      --pc-line: rgba(255,255,255,0.08);
+      --pc-soft: rgba(255,255,255,0.04);
+      --pc-soft-2: rgba(255,255,255,0.07);
+      --pc-green: #34d399;
+      --pc-blue: #60a5fa;
+      --pc-yellow: #fbbf24;
+      --pc-red: #f87171;
+    }
+
+    body { min-height: 100vh; }
+    .shell {
+      width: min(1400px, 100%);
+      margin: 0 auto;
+      padding: 12px;
+    }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: rgba(12,12,20,0.94);
+      border-bottom: 1px solid var(--pc-line);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+    .bar-inner {
+      width: min(1400px, 100%);
+      min-height: 62px;
+      margin: 0 auto;
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .title-block { min-width: 0; }
+    .title-block h1 { font-size: 17px; letter-spacing: 0; }
+    .title-block p { margin: 2px 0 0; color: var(--text-dim); font-size: 12px; }
+    .bar-actions {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .bar-actions::-webkit-scrollbar { display: none; }
+    .brand-strip,
+    .source-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .brand-strip::-webkit-scrollbar,
+    .source-strip::-webkit-scrollbar { display: none; }
+    .seg {
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--pc-soft);
+      color: var(--text-dim);
+      font-weight: 800;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .seg.active {
+      color: #0c0c14;
+      background: var(--brand);
+      border-color: var(--brand);
+    }
+    .mini-pill {
+      min-height: 34px;
+      padding: 0 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--pc-soft);
+      color: var(--text-dim);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .mini-pill.active { color: var(--brand-hover); border-color: var(--brand-ring); background: var(--brand-soft); }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .kpi {
+      min-height: 82px;
+      display: grid;
+      align-content: space-between;
+      gap: 8px;
+    }
+    .kpi .label { color: var(--text-dim); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
+    .kpi .value { font-size: 24px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+    .kpi .note { color: var(--text-mute); font-size: 11px; }
+    .run-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .run-grid {
+      display: grid;
+      gap: 10px;
+      align-items: end;
+    }
+    .run-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .run-status-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .run-status-bar::-webkit-scrollbar { display: none; }
+    .status-step {
+      min-height: 30px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 9px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      color: var(--text-mute);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .status-step.active {
+      color: #0c0c14;
+      border-color: var(--brand);
+      background: var(--brand);
+    }
+    .status-step.done {
+      color: var(--pc-green);
+      border-color: rgba(52,211,153,.35);
+      background: rgba(52,211,153,.08);
+    }
+    .recent-runs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .recent-runs::-webkit-scrollbar { display: none; }
+    .run-chip {
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.035);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .run-chip.active { border-color: var(--brand-ring); background: var(--brand-soft); color: var(--brand-hover); }
+    .quote-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .quote-head {
+      display: grid;
+      gap: 10px;
+    }
+    .quote-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .quote-source-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .quote-source-card,
+    .quote-line {
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.035);
+      border-radius: 8px;
+    }
+    .quote-source-card {
+      min-height: 58px;
+      padding: 9px;
+      display: grid;
+      gap: 5px;
+    }
+    .quote-source-name,
+    .quote-line-name,
+    .quote-cell-source {
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .quote-source-meta,
+    .quote-line-meta,
+    .quote-cell-meta {
+      color: var(--text-dim);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .quote-matrix {
+      display: grid;
+      gap: 8px;
+    }
+    .quote-line {
+      padding: 10px;
+      display: grid;
+      gap: 9px;
+    }
+    .quote-line-head {
+      display: grid;
+      gap: 4px;
+    }
+    .quote-cells {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .quote-cell {
+      min-height: 104px;
+      display: grid;
+      align-content: start;
+      gap: 5px;
+      padding: 9px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(0,0,0,.14);
+    }
+    .quote-cell.best {
+      border-color: rgba(52,211,153,.45);
+      background: rgba(52,211,153,.08);
+    }
+    .quote-price {
+      font-size: 15px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .quote-status {
+      width: max-content;
+      min-height: 22px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 7px;
+      border-radius: 999px;
+      border: 1px solid var(--pc-line);
+      color: var(--text-dim);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .quote-status.quoted { color: var(--pc-green); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
+    .quote-status.pending { color: var(--pc-yellow); border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
+    .quote-status.bad { color: var(--pc-red); border-color: rgba(248,113,113,.34); background: rgba(248,113,113,.08); }
+    .session-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .session-head {
+      display: grid;
+      gap: 10px;
+    }
+    .session-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .session-card {
+      min-height: 92px;
+      display: grid;
+      align-content: start;
+      gap: 6px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.035);
+    }
+    .session-card.ready { border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.06); }
+    .session-card.action { border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.06); }
+    .session-card.bad { border-color: rgba(248,113,113,.34); background: rgba(248,113,113,.06); }
+    .session-name { font-size: 12px; font-weight: 800; line-height: 1.25; }
+    .session-meta { color: var(--text-dim); font-size: 11px; line-height: 1.35; }
+    .console-grid {
+      display: grid;
+      gap: 12px;
+      align-items: start;
+    }
+    .catalog-grid {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+    .category-panel {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+    .cat-btn {
+      min-height: 44px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      text-align: left;
+      padding: 9px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .cat-btn.active { border-color: var(--brand-ring); background: var(--brand-soft); color: var(--brand-hover); }
+    .cat-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 800; }
+    .cat-count { color: var(--text-mute); font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .control-row {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .list-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .list-head h2 { font-size: 18px; }
+    .item-list { display: grid; gap: 8px; }
+    .material-card {
+      display: grid;
+      gap: 12px;
+      border-left: 3px solid transparent;
+    }
+    .material-card.high { border-left-color: var(--pc-green); }
+    .material-card.medium { border-left-color: var(--pc-yellow); }
+    .material-card.low { border-left-color: var(--text-mute); }
+    .material-main {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .item-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .item-name { font-weight: 800; line-height: 1.22; }
+    .item-meta { color: var(--text-dim); font-size: 12px; margin-top: 3px; }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .stat-strip {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 9px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--pc-soft);
+    }
+    .stat .label { color: var(--text-mute); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
+    .stat .value { margin-top: 3px; font-size: 14px; font-weight: 800; overflow-wrap: anywhere; }
+    .item-actions {
+      display: grid;
+      gap: 8px;
+    }
+    .order-form {
+      display: grid;
+      grid-template-columns: minmax(88px, .8fr) minmax(0, 1.3fr);
+      gap: 8px;
+    }
+    .spec-form {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .spec-form input,
+    .spec-form select {
+      font-size: 13px;
+      min-height: 40px;
+      padding: 9px 10px;
+      border-radius: 8px;
+    }
+    .spec-line {
+      color: var(--text-dim);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .tray {
+      position: sticky;
+      bottom: 0;
+      z-index: 25;
+      display: grid;
+      gap: 10px;
+      max-height: min(74vh, 820px);
+      overflow: auto;
+      box-shadow: 0 -18px 40px rgba(0,0,0,.2);
+    }
+    .tray-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .tray-count {
+      min-width: 34px;
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: var(--brand);
+      color: #0c0c14;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .cart-lines { display: grid; gap: 8px; }
+    .cart-line {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--pc-soft);
+    }
+    .cart-line-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: start;
+    }
+    .cart-name { font-size: 13px; font-weight: 800; line-height: 1.25; }
+    .cart-meta { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+    .icon-btn {
+      min-width: 44px;
+      min-height: 44px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.035);
+      color: var(--text);
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .checkout-block {
+      display: grid;
+      gap: 8px;
+      border-top: 1px solid var(--pc-line);
+      padding-top: 10px;
+    }
+    .source-group {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: rgba(255,255,255,.03);
+    }
+    .source-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .source-name { font-weight: 800; }
+    .empty {
+      min-height: 180px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--text-dim);
+    }
+    .pin-wrap {
+      min-height: calc(100vh - 62px);
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+    .pin-card { width: min(380px, 100%); }
+    .pin-input {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: .42em;
+      padding-left: 22px;
+      font-variant-numeric: tabular-nums;
+    }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 80;
+      width: min(520px, calc(100% - 24px));
+      padding: 11px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--pc-line);
+      background: var(--surface-2);
+      color: var(--text);
+      box-shadow: 0 20px 44px rgba(0,0,0,.35);
+      font-size: 13px;
+      text-align: center;
+    }
+    .hide { display: none !important; }
+    .nowrap { white-space: nowrap; }
+
+    @media (min-width: 760px) {
+      .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .run-grid { grid-template-columns: minmax(0, 1fr) 180px 190px 220px; }
+      .quote-head { grid-template-columns: minmax(0, 1fr) 250px; align-items: end; }
+      .quote-source-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .quote-cells { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .session-head { grid-template-columns: minmax(0, 1fr) 180px; align-items: end; }
+      .session-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .control-row { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.4fr); align-items: center; }
+      .catalog-grid { grid-template-columns: 230px minmax(0, 1fr); }
+      .material-card { grid-template-columns: minmax(0, 1fr) 310px; align-items: start; }
+      .stat-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+
+    @media (min-width: 1080px) {
+      .console-grid { grid-template-columns: minmax(0, 1fr) 380px; }
+      .tray {
+        top: 86px;
+        bottom: auto;
+        max-height: calc(100vh - 104px);
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="bar-inner">
+      <div class="title-block">
+        <h1>Purchase Control</h1>
+        <p id="subtitle">Raw materials, sources, and order tray</p>
+      </div>
+      <div class="bar-actions">
+        <a class="btn btn-ghost btn-sm" href="/ops/purchase/">PO ledger</a>
+        <a class="btn btn-ghost btn-sm" href="/ops/purchase-console/capture">Capture extension</a>
+        <button id="refreshBtn" class="btn btn-ghost btn-sm hide" type="button">Refresh</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="pinGate" class="pin-wrap">
+      <div class="card pin-card">
+        <h2>Enter PIN</h2>
+        <p class="sub" style="margin:6px 0 16px;">Purchase console access</p>
+        <input id="pinInput" class="pin-input" type="password" maxlength="4" inputmode="numeric" autocomplete="one-time-code" placeholder="----">
+        <button id="unlockBtn" class="btn btn-primary btn-full" type="button" style="margin-top:12px;">Unlock</button>
+        <p id="pinError" class="mute hide" style="margin-top:10px;color:#f87171;">Invalid PIN.</p>
+      </div>
+    </section>
+
+    <section id="app" class="hide">
+      <div class="shell">
+        <div class="brand-strip" aria-label="Brand selector">
+          <button class="seg active" type="button" data-brand="HE">HE</button>
+          <button class="seg" type="button" data-brand="NCH">NCH</button>
+          <button class="seg" type="button" data-brand="BOTH">Both</button>
+        </div>
+
+        <section class="card run-panel">
+          <div class="run-grid">
+            <div>
+              <h2 id="runTitle">No active purchase run</h2>
+              <p id="runMeta" class="sub" style="margin:4px 0 0;">Start a run before building today’s order.</p>
+            </div>
+            <select id="runTypeSelect" aria-label="Run type">
+              <option value="MORNING_PURCHASE">Morning purchase</option>
+              <option value="EVENING_TOPUP">Evening top-up</option>
+              <option value="URGENT_FILL">Urgent fill</option>
+            </select>
+            <select id="runStatusSelect" aria-label="Run status">
+              <option value="DRAFT">Draft</option>
+              <option value="QUOTING">Quoting</option>
+              <option value="REVIEW">Review</option>
+              <option value="CART_BUILDING">Cart building</option>
+              <option value="AWAITING_CHECKOUT">Awaiting checkout</option>
+              <option value="ORDERED">Ordered</option>
+              <option value="RECONCILED">Reconciled</option>
+            </select>
+            <div class="run-actions">
+              <button id="startRunBtn" class="btn btn-primary" type="button">Start run</button>
+              <button id="saveRunBtn" class="btn btn-ghost" type="button">Save run</button>
+            </div>
+          </div>
+          <div id="runStatusBar" class="run-status-bar"></div>
+          <div id="recentRuns" class="recent-runs"></div>
+        </section>
+
+        <section class="card session-panel">
+          <div class="session-head">
+            <div>
+              <h2>Portal Sessions</h2>
+              <p id="portalMeta" class="sub" style="margin:4px 0 0;">Checking login health...</p>
+            </div>
+            <button id="validateSessionsBtn" class="btn btn-ghost" type="button">Check logins</button>
+          </div>
+          <div id="portalSessions" class="session-grid"></div>
+        </section>
+
+        <section class="card quote-panel">
+          <div class="quote-head">
+            <div>
+              <h2>Quote Engine</h2>
+              <p id="quoteMeta" class="sub" style="margin:4px 0 0;">No quote batch for this run.</p>
+            </div>
+            <div class="quote-actions">
+              <button id="requestQuotesBtn" class="btn btn-primary" type="button">Get quotes</button>
+              <button id="refreshQuotesBtn" class="btn btn-ghost" type="button">Refresh quotes</button>
+            </div>
+          </div>
+          <div id="quoteSourceStatus" class="quote-source-grid"></div>
+          <div id="quoteMatrix" class="quote-matrix"></div>
+        </section>
+
+        <div class="kpis" id="kpis"></div>
+
+        <div class="control-row">
+          <input id="searchInput" type="search" placeholder="Search raw material, category, vendor, code...">
+          <div class="source-strip" id="sourceStrip"></div>
+        </div>
+
+        <div class="console-grid">
+          <section class="catalog-grid">
+            <aside class="category-panel" id="categoryPanel"></aside>
+            <div>
+              <div class="list-head">
+                <div>
+                  <h2 id="listTitle">Materials</h2>
+                  <p id="listMeta" class="sub" style="margin:4px 0 0;">Loading...</p>
+                </div>
+                <button id="copyVisibleBtn" class="btn btn-ghost btn-sm" type="button">Copy visible</button>
+              </div>
+              <div id="itemList" class="item-list"></div>
+            </div>
+          </section>
+
+          <aside class="card tray">
+            <div class="tray-head">
+              <div>
+                <h2>Order Tray</h2>
+                <p id="trayMeta" class="sub" style="margin:4px 0 0;">No cart lines</p>
+              </div>
+              <span class="tray-count" id="cartCount">0</span>
+            </div>
+            <div id="cartLines" class="cart-lines"></div>
+            <div class="checkout-block">
+              <button id="createPoBtn" class="btn btn-primary btn-full" type="button">Create Odoo PO</button>
+              <button id="clearCartBtn" class="btn btn-ghost btn-full" type="button">Clear tray</button>
+            </div>
+            <div id="sourceGroups" class="checkout-block"></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const SOURCE_LABELS = {
+      LOCAL_VENDOR: 'Local Vendor',
+      HYPERPURE: 'Hyperpure',
+      ZEPTO: 'Zepto',
+      FLIPKART_MINUTES: 'Flipkart Minutes',
+      INSTAMART: 'Instamart',
+      BLINKIT: 'Blinkit',
+      AMAZON_NOW: 'Amazon Now',
+      BIGBASKET: 'BigBasket',
+      JIOMART: 'JioMart',
+    };
+
+    const RUN_FLOW = ['DRAFT', 'QUOTING', 'REVIEW', 'CART_BUILDING', 'AWAITING_CHECKOUT', 'ORDERED', 'RECONCILED'];
+    const RUN_LABELS = {
+      DRAFT: 'Draft',
+      QUOTING: 'Quoting',
+      REVIEW: 'Review',
+      CART_BUILDING: 'Cart',
+      AWAITING_CHECKOUT: 'Checkout',
+      ORDERED: 'Ordered',
+      RECONCILED: 'Reconciled',
+    };
+    const RUN_TYPE_LABELS = {
+      MORNING_PURCHASE: 'Morning purchase',
+      EVENING_TOPUP: 'Evening top-up',
+      URGENT_FILL: 'Urgent fill',
+    };
+    const MATCH_LABELS = {
+      EXACT_ONLY: 'Exact only',
+      EQUIVALENT_ALLOWED: 'Equivalent allowed',
+      COMMODITY_EQUIVALENT: 'Commodity equivalent',
+      SUBSTITUTE_APPROVAL: 'Substitute needs approval',
+    };
+    const QUOTE_SOURCE_ORDER = ['LOCAL_VENDOR', 'HYPERPURE', 'ZEPTO', 'FLIPKART_MINUTES', 'INSTAMART', 'BLINKIT', 'AMAZON_NOW', 'BIGBASKET', 'JIOMART'];
+    const PORTAL_SOURCE_KEYS = QUOTE_SOURCE_ORDER.filter((key) => key !== 'LOCAL_VENDOR');
+    const STOCK_LABELS = {
+      QUOTED: 'Quoted',
+      PENDING_ADAPTER: 'Pending',
+      OUT_OF_STOCK: 'No stock',
+      UNAVAILABLE: 'Unavailable',
+      ERROR: 'Error',
+    };
+    const SESSION_LABELS = {
+      READY: 'Ready',
+      NOT_CONNECTED: 'Reconnect',
+      EXPIRED: 'Expired',
+      OTP_REQUIRED: 'OTP needed',
+      CAPTCHA_REQUIRED: 'Captcha',
+      LOCATION_MISMATCH: 'Location',
+      RATE_LIMITED: 'Rate limit',
+      BROKEN: 'Broken',
+    };
+
+    const state = {
+      pin: localStorage.getItem('purchaseControlPin') || '',
+      user: null,
+      brand: localStorage.getItem('purchaseControlBrand') || 'HE',
+      run: null,
+      runs: [],
+      quote: {
+        batch: null,
+        batches: [],
+        quotes: [],
+        summary: null,
+        loading: false,
+      },
+      portalSessions: [],
+      portalLoading: false,
+      query: '',
+      category: 'All',
+      source: 'ALL',
+      data: null,
+      cart: JSON.parse(localStorage.getItem('purchaseControlCart') || '[]'),
+    };
+
+    const els = {
+      pinGate: document.getElementById('pinGate'),
+      app: document.getElementById('app'),
+      pinInput: document.getElementById('pinInput'),
+      pinError: document.getElementById('pinError'),
+      unlockBtn: document.getElementById('unlockBtn'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      subtitle: document.getElementById('subtitle'),
+      runTitle: document.getElementById('runTitle'),
+      runMeta: document.getElementById('runMeta'),
+      runTypeSelect: document.getElementById('runTypeSelect'),
+      runStatusSelect: document.getElementById('runStatusSelect'),
+      startRunBtn: document.getElementById('startRunBtn'),
+      saveRunBtn: document.getElementById('saveRunBtn'),
+      runStatusBar: document.getElementById('runStatusBar'),
+      recentRuns: document.getElementById('recentRuns'),
+      quoteMeta: document.getElementById('quoteMeta'),
+      requestQuotesBtn: document.getElementById('requestQuotesBtn'),
+      refreshQuotesBtn: document.getElementById('refreshQuotesBtn'),
+      quoteSourceStatus: document.getElementById('quoteSourceStatus'),
+      quoteMatrix: document.getElementById('quoteMatrix'),
+      portalMeta: document.getElementById('portalMeta'),
+      portalSessions: document.getElementById('portalSessions'),
+      validateSessionsBtn: document.getElementById('validateSessionsBtn'),
+      kpis: document.getElementById('kpis'),
+      searchInput: document.getElementById('searchInput'),
+      sourceStrip: document.getElementById('sourceStrip'),
+      categoryPanel: document.getElementById('categoryPanel'),
+      listTitle: document.getElementById('listTitle'),
+      listMeta: document.getElementById('listMeta'),
+      itemList: document.getElementById('itemList'),
+      copyVisibleBtn: document.getElementById('copyVisibleBtn'),
+      cartLines: document.getElementById('cartLines'),
+      trayMeta: document.getElementById('trayMeta'),
+      cartCount: document.getElementById('cartCount'),
+      createPoBtn: document.getElementById('createPoBtn'),
+      clearCartBtn: document.getElementById('clearCartBtn'),
+      sourceGroups: document.getElementById('sourceGroups'),
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      }[char]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, '&#096;');
+    }
+
+    function money(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) return '-';
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: n >= 100 ? 0 : 2,
+      }).format(n);
+    }
+
+    function toast(text) {
+      const node = document.createElement('div');
+      node.className = 'toast';
+      node.textContent = text;
+      document.body.appendChild(node);
+      setTimeout(() => node.remove(), 2600);
+    }
+
+    async function fetchJson(path, options) {
+      const response = await fetch(path, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    function saveCart() {
+      localStorage.setItem('purchaseControlCart', JSON.stringify(state.cart));
+    }
+
+    async function verifyPin() {
+      const pin = (els.pinInput.value || state.pin).trim();
+      if (!pin || pin.length !== 4) {
+        els.pinError.classList.remove('hide');
+        return;
+      }
+
+      els.unlockBtn.disabled = true;
+      try {
+        const data = await fetchJson(`/api/purchase-control?action=verify-pin&pin=${encodeURIComponent(pin)}`);
+        state.pin = pin;
+        state.user = data.user;
+        localStorage.setItem('purchaseControlPin', pin);
+        els.pinGate.classList.add('hide');
+        els.app.classList.remove('hide');
+        els.refreshBtn.classList.remove('hide');
+        els.subtitle.textContent = `${data.user.name} - ${data.user.role}`;
+        setBrand(state.brand, false);
+        await loadMaterials();
+        await loadRuns();
+        await loadPortalHealth();
+      } catch (error) {
+        els.pinError.textContent = error.message || 'Invalid PIN.';
+        els.pinError.classList.remove('hide');
+      } finally {
+        els.unlockBtn.disabled = false;
+      }
+    }
+
+    async function loadMaterials() {
+      els.itemList.innerHTML = loadingCard('Loading raw materials...');
+      try {
+        state.data = await fetchJson(`/api/purchase-control?action=materials&pin=${encodeURIComponent(state.pin)}&brand=${state.brand}&days=30`);
+      } catch (error) {
+        state.data = await fetchJson('/ops/purchase-console/live-rm-sample.json');
+        state.data.meta = { ...(state.data.meta || {}), sample: true, api_error: error.message };
+        toast('Loaded local sample data. Live PO creation needs deployed Odoo secrets.');
+      }
+      renderAll();
+    }
+
+    async function loadRuns() {
+      try {
+        const data = await fetchJson(`/api/purchase-control?action=list-runs&pin=${encodeURIComponent(state.pin)}&brand=${state.brand}&limit=12`);
+        state.runs = data.runs || [];
+        const savedId = localStorage.getItem('purchaseControlRunId');
+        const active = state.runs.find((run) => run.id === savedId)
+          || state.runs.find((run) => !['ORDERED', 'RECONCILED'].includes(run.status))
+          || null;
+        if (active && !state.run) applyRun(active);
+      } catch (_) {
+        state.runs = [];
+      }
+      renderRunPanel();
+    }
+
+    async function loadPortalHealth(validate = false) {
+      if (!state.pin) return;
+      state.portalLoading = true;
+      renderPortalSessions();
+      try {
+        const data = validate
+          ? await fetchJson('/api/purchase-control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'validate-portal-sessions',
+              pin: state.pin,
+              sources: PORTAL_SOURCE_KEYS,
+            }),
+          })
+          : await fetchJson(`/api/purchase-control?action=portal-health&pin=${encodeURIComponent(state.pin)}`);
+        state.portalSessions = data.sessions || [];
+      } catch (error) {
+        toast(error.message || 'Portal health failed');
+      } finally {
+        state.portalLoading = false;
+        renderPortalSessions();
+      }
+    }
+
+    async function startRun() {
+      const runType = els.runTypeSelect.value || 'MORNING_PURCHASE';
+      const existingCart = [...state.cart];
+      els.startRunBtn.disabled = true;
+      try {
+        const data = await fetchJson('/api/purchase-control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create-run',
+            pin: state.pin,
+            brand: state.brand,
+            run_type: runType,
+          }),
+        });
+        applyRun(data.run);
+        if (existingCart.length) {
+          state.cart = existingCart;
+          saveCart();
+          await saveRun({ status: data.run.status || 'DRAFT', silent: true });
+        }
+        await loadRuns();
+        toast('Purchase run started');
+      } catch (error) {
+        const run = {
+          id: `LOCAL-${Date.now()}`,
+          brand: state.brand,
+          run_type: runType,
+          status: 'DRAFT',
+          buyer_name: state.user?.name || 'Local',
+          title: `${state.brand} ${RUN_TYPE_LABELS[runType] || 'purchase run'}`,
+          cart: state.cart,
+          items: state.cart,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          local_only: true,
+        };
+        applyRun(run);
+        if (existingCart.length) {
+          state.cart = existingCart;
+          saveCart();
+          renderAll();
+        }
+        toast('Local run started. Production D1 saves will work after deploy.');
+      } finally {
+        els.startRunBtn.disabled = false;
+        renderRunPanel();
+      }
+    }
+
+    function applyRun(run) {
+      const runChanged = state.run?.id !== run.id;
+      state.run = run;
+      localStorage.setItem('purchaseControlRunId', run.id);
+      const brandChanged = run.brand && run.brand !== state.brand;
+      if (brandChanged) setBrand(run.brand, false);
+      if (run.run_type) els.runTypeSelect.value = run.run_type;
+      if (run.status) els.runStatusSelect.value = run.status;
+      state.cart = Array.isArray(run.cart) ? run.cart : [];
+      saveCart();
+      if (runChanged) {
+        state.quote = { batch: null, batches: [], quotes: [], summary: null, loading: false };
+        if (!run.local_only && state.pin) loadQuoteSummary(run.id);
+      }
+      renderAll();
+      if (brandChanged && state.pin) loadMaterials();
+    }
+
+    function buildRunItems() {
+      return state.cart.map((line) => ({
+        ...line,
+        required_qty: line.qty,
+        status: line.status || 'NEEDED',
+      }));
+    }
+
+    async function saveRun(options = {}) {
+      if (!state.run) {
+        await startRun();
+      }
+      if (!state.run) return;
+
+      const status = options.status || els.runStatusSelect.value || state.run.status || 'DRAFT';
+      const payload = {
+        action: 'save-run',
+        pin: state.pin,
+        run_id: state.run.id,
+        brand: state.brand,
+        run_type: els.runTypeSelect.value || state.run.run_type,
+        status,
+        cart: state.cart,
+        items: buildRunItems(),
+      };
+
+      if (state.run.local_only) {
+        state.run = { ...state.run, ...payload, cart: state.cart, items: payload.items, updated_at: new Date().toISOString() };
+        renderRunPanel();
+        if (!options.silent) toast('Run saved locally');
+        return;
+      }
+
+      els.saveRunBtn.disabled = true;
+      try {
+        const data = await fetchJson('/api/purchase-control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        applyRun(data.run);
+        await loadRuns();
+        if (!options.silent) toast('Run saved');
+      } catch (error) {
+        if (!options.silent) toast(error.message || 'Run save failed');
+      } finally {
+        els.saveRunBtn.disabled = false;
+      }
+    }
+
+    function applyQuoteData(data) {
+      state.quote = {
+        batch: data.batch || null,
+        batches: data.batches || [],
+        quotes: data.quotes || [],
+        summary: data.summary || null,
+        loading: false,
+      };
+      renderQuotePanel();
+      renderCart();
+    }
+
+    async function loadQuoteSummary(runId = state.run?.id) {
+      if (!runId || state.run?.local_only) {
+        state.quote = { batch: null, batches: [], quotes: [], summary: null, loading: false };
+        renderQuotePanel();
+        return;
+      }
+      state.quote.loading = true;
+      renderQuotePanel();
+      try {
+        const data = await fetchJson(`/api/purchase-control?action=quote-summary&pin=${encodeURIComponent(state.pin)}&run_id=${encodeURIComponent(runId)}`);
+        applyQuoteData(data);
+      } catch (error) {
+        state.quote.loading = false;
+        renderQuotePanel();
+        toast(error.message || 'Quote refresh failed');
+      }
+    }
+
+    async function requestQuotes() {
+      if (!state.run) await startRun();
+      if (!state.run) return;
+      if (!state.cart.length) {
+        toast('Add items before requesting quotes');
+        return;
+      }
+      await loadPortalHealth(true);
+      await saveRun({ status: 'QUOTING', silent: true });
+      els.requestQuotesBtn.disabled = true;
+      state.quote.loading = true;
+      renderQuotePanel();
+      try {
+        const data = await fetchJson('/api/purchase-control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'request-quotes',
+            pin: state.pin,
+            run_id: state.run.id,
+            include_local: true,
+            sources: PORTAL_SOURCE_KEYS,
+          }),
+        });
+        applyRun(data.run);
+        applyQuoteData(data);
+        await loadPortalHealth();
+        toast('Quote batch created');
+      } catch (error) {
+        state.quote.loading = false;
+        renderQuotePanel();
+        toast(error.message || 'Quote request failed');
+      } finally {
+        els.requestQuotesBtn.disabled = false;
+      }
+    }
+
+    function loadingCard(text) {
+      return `<div class="card empty"><div>${escapeHtml(text)}</div></div>`;
+    }
+
+    function setBrand(brand, reload = true) {
+      state.brand = brand;
+      localStorage.setItem('purchaseControlBrand', brand);
+      document.querySelectorAll('[data-brand]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.brand === brand);
+      });
+      if (reload && state.pin) {
+        loadMaterials();
+        loadRuns();
+      }
+    }
+
+    function setSource(source) {
+      state.source = source;
+      renderAll();
+    }
+
+    function setCategory(category) {
+      state.category = category;
+      renderAll();
+    }
+
+    function itemById(id) {
+      return (state.data?.items || []).find((item) => item.id === id);
+    }
+
+    function currentItems() {
+      const q = state.query.trim().toLowerCase();
+      return (state.data?.items || []).filter((item) => {
+        if (state.category !== 'All' && item.category !== state.category) return false;
+        if (state.source !== 'ALL' && !(item.source_keys || []).includes(state.source)) return false;
+        if (!q) return true;
+        const haystack = [
+          item.name,
+          item.product_code,
+          item.category,
+          item.uom,
+          item.last_vendor_name,
+          ...(item.vendors || []).map((vendor) => vendor.name),
+          ...(item.source_keys || []).map((key) => SOURCE_LABELS[key] || key),
+        ].join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+
+    function renderAll() {
+      if (!state.data) return;
+      renderRunPanel();
+      renderPortalSessions();
+      renderQuotePanel();
+      renderKpis();
+      renderSources();
+      renderCategories();
+      renderItems();
+      renderCart();
+    }
+
+    function renderRunPanel() {
+      const run = state.run;
+      if (!run) {
+        els.runTitle.textContent = 'No active purchase run';
+        els.runMeta.textContent = 'Start a run before building today’s order.';
+        els.runStatusSelect.value = 'DRAFT';
+        els.runStatusBar.innerHTML = RUN_FLOW.map((status) => `<span class="status-step">${escapeHtml(RUN_LABELS[status])}</span>`).join('');
+      } else {
+        const count = state.cart.length;
+        const updated = run.updated_at ? new Date(run.updated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'now';
+        els.runTitle.textContent = `${run.brand} ${RUN_TYPE_LABELS[run.run_type] || 'Purchase run'}`;
+        els.runMeta.textContent = `${run.id} - ${count} line${count === 1 ? '' : 's'} - updated ${updated}`;
+        els.runTypeSelect.value = run.run_type || 'MORNING_PURCHASE';
+        els.runStatusSelect.value = run.status || 'DRAFT';
+        const activeIndex = RUN_FLOW.indexOf(run.status || 'DRAFT');
+        els.runStatusBar.innerHTML = RUN_FLOW.map((status, index) => {
+          const cls = index === activeIndex ? 'active' : index < activeIndex ? 'done' : '';
+          return `<span class="status-step ${cls}">${escapeHtml(RUN_LABELS[status])}</span>`;
+        }).join('');
+      }
+
+      els.recentRuns.innerHTML = (state.runs || []).slice(0, 8).map((recent) => `
+        <button class="run-chip ${run?.id === recent.id ? 'active' : ''}" type="button" data-load-run="${escapeHtml(recent.id)}">
+          ${escapeHtml(recent.brand)} ${escapeHtml(RUN_LABELS[recent.status] || recent.status)}
+        </button>
+      `).join('');
+    }
+
+    function sessionStatusClass(status) {
+      if (status === 'READY') return 'ready';
+      if (status === 'BROKEN' || status === 'CAPTCHA_REQUIRED' || status === 'RATE_LIMITED') return 'bad';
+      return 'action';
+    }
+
+    function sessionSubtitle(session) {
+      if (session.status === 'READY') {
+        const expiry = session.expires_at ? `expires ${new Date(session.expires_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}` : 'expiry unknown';
+        return [session.account_label, session.pincode, expiry].filter(Boolean).join(' - ');
+      }
+      return session.issue_detail || 'Reconnect from Chrome capture';
+    }
+
+    function renderPortalSessions() {
+      if (!els.portalSessions) return;
+      const sessions = state.portalSessions || [];
+      const ready = sessions.filter((session) => session.status === 'READY').length;
+      const total = PORTAL_SOURCE_KEYS.length;
+      els.validateSessionsBtn.disabled = state.portalLoading;
+      els.portalMeta.textContent = state.portalLoading
+        ? 'Checking portal login health...'
+        : `${ready}/${total} portal logins ready`;
+
+      const rows = sessions.length
+        ? sessions
+        : PORTAL_SOURCE_KEYS.map((key) => ({
+          source_key: key,
+          source_label: SOURCE_LABELS[key],
+          status: 'NOT_CONNECTED',
+          issue_detail: 'No saved session',
+          url: '',
+        }));
+
+      els.portalSessions.innerHTML = rows.map((session) => `
+        <div class="session-card ${sessionStatusClass(session.status)}">
+          <div class="session-name">${escapeHtml(session.source_label || SOURCE_LABELS[session.source_key] || session.source_key)}</div>
+          <span class="quote-status ${session.status === 'READY' ? 'quoted' : session.status === 'NOT_CONNECTED' || session.status === 'EXPIRED' ? 'pending' : 'bad'}">${escapeHtml(SESSION_LABELS[session.status] || session.status)}</span>
+          <div class="session-meta">${escapeHtml(sessionSubtitle(session))}</div>
+          <div class="session-meta">${escapeHtml(session.cookie_count || 0)} cookies - ${escapeHtml(session.token_count || 0)} token refs</div>
+        </div>
+      `).join('');
+    }
+
+    function quoteStatusClass(status) {
+      if (status === 'QUOTED') return 'quoted';
+      if (status === 'PENDING_ADAPTER') return 'pending';
+      return 'bad';
+    }
+
+    function quoteMoney(paise) {
+      const n = Number(paise);
+      if (!Number.isFinite(n) || n <= 0) return '-';
+      return money(n / 100);
+    }
+
+    function quoteFor(line, sourceKey) {
+      return (state.quote.quotes || []).find((quote) => quote.cart_id === line.cart_id && quote.source_key === sourceKey) || null;
+    }
+
+    function bestQuoteFor(line) {
+      return (state.quote.quotes || [])
+        .filter((quote) => quote.cart_id === line.cart_id && quote.stock_status === 'QUOTED' && quote.unit_price_paise > 0)
+        .sort((a, b) => a.unit_price_paise - b.unit_price_paise)[0] || null;
+    }
+
+    function renderQuotePanel() {
+      if (!els.quoteMeta) return;
+      const run = state.run;
+      const quote = state.quote || {};
+      els.requestQuotesBtn.disabled = !run || !state.cart.length || quote.loading;
+      els.refreshQuotesBtn.disabled = !run || quote.loading;
+
+      if (!run) {
+        els.quoteMeta.textContent = 'Start a purchase run first.';
+        els.quoteSourceStatus.innerHTML = '';
+        els.quoteMatrix.innerHTML = `<div class="empty">No active run</div>`;
+        return;
+      }
+
+      if (quote.loading) {
+        els.quoteMeta.textContent = 'Refreshing quote snapshot...';
+      } else if (quote.batch) {
+        const updated = quote.batch.updated_at ? new Date(quote.batch.updated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'now';
+        const summary = quote.summary || {};
+        els.quoteMeta.textContent = `${quote.batch.id} - ${summary.quoted_count || 0} quoted, ${summary.pending_count || 0} pending, ${summary.unavailable_count || 0} unavailable - ${updated}`;
+      } else {
+        els.quoteMeta.textContent = state.cart.length
+          ? 'No quote batch for this run.'
+          : 'Add items to the tray before requesting quotes.';
+      }
+
+      const statuses = quote.summary?.source_statuses?.length
+        ? quote.summary.source_statuses
+        : QUOTE_SOURCE_ORDER.map((key) => ({ key, label: SOURCE_LABELS[key], quoted_count: 0, pending_count: 0, unavailable_count: 0, error_count: 0 }));
+      els.quoteSourceStatus.innerHTML = statuses
+        .filter((source) => QUOTE_SOURCE_ORDER.includes(source.key))
+        .sort((a, b) => QUOTE_SOURCE_ORDER.indexOf(a.key) - QUOTE_SOURCE_ORDER.indexOf(b.key))
+        .map((source) => {
+          const stateText = source.quoted_count ? `${source.quoted_count} quoted`
+            : source.pending_count ? `${source.pending_count} pending`
+              : source.error_count ? `${source.error_count} error`
+                : source.unavailable_count ? `${source.unavailable_count} unavailable`
+                  : 'No batch';
+          return `
+            <div class="quote-source-card">
+              <div class="quote-source-name">${escapeHtml(source.label || SOURCE_LABELS[source.key] || source.key)}</div>
+              <div class="quote-source-meta">${escapeHtml(stateText)}</div>
+            </div>
+          `;
+        }).join('');
+
+      if (!state.cart.length) {
+        els.quoteMatrix.innerHTML = `<div class="empty">Add items to the tray</div>`;
+        return;
+      }
+
+      els.quoteMatrix.innerHTML = state.cart.map((line) => {
+        const best = bestQuoteFor(line);
+        return `
+          <div class="quote-line">
+            <div class="quote-line-head">
+              <div class="quote-line-name">${escapeHtml(line.name)}</div>
+              <div class="quote-line-meta">
+                ${escapeHtml(line.qty)} ${escapeHtml(line.uom || 'unit')} - ${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)}
+                ${best ? ` - best ${escapeHtml(best.source_label)} ${quoteMoney(best.unit_price_paise)}` : ''}
+              </div>
+            </div>
+            <div class="quote-cells">
+              ${QUOTE_SOURCE_ORDER.map((sourceKey) => renderQuoteCell(line, sourceKey, best)).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderQuoteCell(line, sourceKey, best) {
+      const quote = quoteFor(line, sourceKey);
+      const sourceLabel = SOURCE_LABELS[sourceKey] || sourceKey;
+      if (!quote) {
+        return `
+          <div class="quote-cell">
+            <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
+            <span class="quote-status pending">No batch</span>
+            <div class="quote-cell-meta">Request quote</div>
+          </div>
+        `;
+      }
+      const status = quote.stock_status || 'PENDING_ADAPTER';
+      const isBest = best && best.id === quote.id;
+      const sku = quote.sku_title || (status === 'PENDING_ADAPTER' ? 'Awaiting adapter' : 'No SKU');
+      const eta = quote.eta_label || (quote.eta_minutes ? `${quote.eta_minutes} min` : '');
+      const confidence = quote.match_confidence ? `${quote.match_confidence}% match` : '';
+      return `
+        <div class="quote-cell ${isBest ? 'best' : ''}">
+          <div class="quote-cell-source">${escapeHtml(sourceLabel)}</div>
+          <span class="quote-status ${quoteStatusClass(status)}">${escapeHtml(STOCK_LABELS[status] || status)}</span>
+          <div class="quote-price">${quoteMoney(quote.unit_price_paise || quote.price_paise)}</div>
+          <div class="quote-cell-meta">${escapeHtml(sku)}</div>
+          <div class="quote-cell-meta">${escapeHtml([eta, confidence].filter(Boolean).join(' - ') || quote.match_notes || '')}</div>
+        </div>
+      `;
+    }
+
+    function renderKpis() {
+      const summary = state.data.summary || {};
+      const meta = state.data.meta || {};
+      const cards = [
+        ['Materials', summary.item_count || 0, 'unique live items'],
+        ['Categories', summary.category_count || 0, 'segregated groups'],
+        ['PO lines', summary.line_count || 0, `${summary.po_count || 0} POs`],
+        ['High priority', summary.high_priority_count || 0, 'frequent purchases'],
+        ['Mode', meta.sample ? 'Sample' : 'Live', meta.sample ? 'local preview' : 'Odoo-backed'],
+      ];
+      els.kpis.innerHTML = cards.map(([label, value, note]) => `
+        <div class="card kpi">
+          <div class="label">${escapeHtml(label)}</div>
+          <div class="value">${escapeHtml(value)}</div>
+          <div class="note">${escapeHtml(note)}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderSources() {
+      const sources = [{ key: 'ALL', label: 'All sources' }, ...(state.data.sources || [])];
+      els.sourceStrip.innerHTML = sources.map((source) => `
+        <button class="mini-pill ${state.source === source.key ? 'active' : ''}" type="button" data-source="${escapeHtml(source.key)}">
+          ${escapeHtml(source.label)}
+        </button>
+      `).join('');
+    }
+
+    function renderCategories() {
+      const categories = [{ name: 'All', count: state.data.items.length }, ...(state.data.categories || [])];
+      els.categoryPanel.innerHTML = categories.map((category) => `
+        <button class="cat-btn ${state.category === category.name ? 'active' : ''}" type="button" data-category="${escapeHtml(category.name)}">
+          <span class="cat-name">${escapeHtml(category.name)}</span>
+          <span class="cat-count">${escapeHtml(category.count)}</span>
+        </button>
+      `).join('');
+    }
+
+    function renderItems() {
+      const items = currentItems();
+      els.listTitle.textContent = state.category === 'All' ? 'Materials' : state.category;
+      els.listMeta.textContent = `${items.length} visible from ${state.data.items.length} live-purchased materials`;
+
+      if (!items.length) {
+        els.itemList.innerHTML = loadingCard('No matching raw materials');
+        return;
+      }
+
+      els.itemList.innerHTML = items.map((item) => renderMaterialCard(item)).join('');
+    }
+
+    function sourceOptions(item) {
+      const sources = state.data.sources || [];
+      const recommended = item.source_keys || ['LOCAL_VENDOR'];
+      const orderedKeys = [...recommended, ...sources.map((source) => source.key).filter((key) => !recommended.includes(key))];
+      return orderedKeys.map((key) => {
+        const label = SOURCE_LABELS[key] || key;
+        const suffix = recommended.includes(key) ? ' recommended' : '';
+        return `<option value="${escapeHtml(key)}">${escapeHtml(label + suffix)}</option>`;
+      }).join('');
+    }
+
+    function vendorSummary(item) {
+      const vendor = item.last_vendor_name || item.vendors?.[0]?.name || '-';
+      return vendor.length > 28 ? `${vendor.slice(0, 27)}...` : vendor;
+    }
+
+    function baseUnitFor(item) {
+      const uom = String(item.uom || '').toLowerCase();
+      if (uom.includes('kg')) return 'kg';
+      if (uom.includes('litre') || uom.includes('liter') || uom === 'l') return 'litre';
+      if (uom.includes('gram') || uom === 'g') return 'gram';
+      return 'unit';
+    }
+
+    function matchRuleFor(item) {
+      if (['Dairy & Eggs', 'Oils & Fats', 'Packaging & Disposables', 'Beverage Inputs', 'Sauces & Condiments', 'Cleaning & Non-Food', 'Water'].includes(item.category)) {
+        return 'EXACT_ONLY';
+      }
+      if (['Fresh Vegetables & Produce', 'Meat & Poultry'].includes(item.category)) {
+        return 'COMMODITY_EQUIVALENT';
+      }
+      return 'EQUIVALENT_ALLOWED';
+    }
+
+    function defaultBuyingSpec(item) {
+      return {
+        approved_name: item.search_query || item.name,
+        base_unit: baseUnitFor(item),
+        match_rule: matchRuleFor(item),
+        preferred_pack: '',
+        preferred_brand: '',
+      };
+    }
+
+    function matchOptions(selected) {
+      return Object.entries(MATCH_LABELS).map(([key, label]) => `
+        <option value="${escapeAttr(key)}" ${key === selected ? 'selected' : ''}>${escapeHtml(label)}</option>
+      `).join('');
+    }
+
+    function buyingSpecFromInputs(encodedId, item) {
+      const fallback = defaultBuyingSpec(item);
+      return {
+        approved_name: document.querySelector(`[data-spec-name="${encodedId}"]`)?.value.trim() || fallback.approved_name,
+        base_unit: document.querySelector(`[data-spec-unit="${encodedId}"]`)?.value.trim() || fallback.base_unit,
+        match_rule: document.querySelector(`[data-spec-match="${encodedId}"]`)?.value || fallback.match_rule,
+        preferred_pack: '',
+        preferred_brand: '',
+      };
+    }
+
+    function renderMaterialCard(item) {
+      const id = encodeURIComponent(item.id);
+      const productId = item.product_ids_by_brand?.[state.brand] || '';
+      const canPo = state.brand !== 'BOTH' && !!productId;
+      const spec = defaultBuyingSpec(item);
+      return `
+        <article class="card material-card ${escapeHtml(String(item.priority_hint || '').toLowerCase())}">
+          <div class="material-main">
+            <div class="item-title">
+              <div>
+                <div class="item-name">${escapeHtml(item.name)}</div>
+                <div class="item-meta">${escapeHtml(item.product_code || 'no code')} - ${escapeHtml(item.uom || 'unit')} - ${escapeHtml(item.category)}</div>
+              </div>
+              <div class="badge-row">
+                <span class="badge ${item.priority_hint === 'High' ? 'badge-success' : item.priority_hint === 'Medium' ? 'badge-warn' : 'badge-neutral'}">${escapeHtml(item.priority_hint || 'Low')}</span>
+                <span class="badge badge-info">${escapeHtml((item.brands_seen || []).join('+') || state.brand)}</span>
+              </div>
+            </div>
+            <div class="stat-strip">
+              <div class="stat"><div class="label">Last price</div><div class="value">${money(item.local_price)}</div></div>
+              <div class="stat"><div class="label">Vendor</div><div class="value">${escapeHtml(vendorSummary(item))}</div></div>
+              <div class="stat"><div class="label">Last bought</div><div class="value">${escapeHtml(item.last_purchase_date || '-')}</div></div>
+              <div class="stat"><div class="label">Frequency</div><div class="value">${escapeHtml(item.times_ordered || 0)}x</div></div>
+            </div>
+            <div class="badge-row">
+              ${(item.source_keys || []).slice(0, 8).map((key) => `<span class="badge badge-neutral">${escapeHtml(SOURCE_LABELS[key] || key)}</span>`).join('')}
+            </div>
+          </div>
+          <div class="item-actions">
+            <div class="order-form">
+              <input data-qty="${id}" type="number" min="0.01" step="0.01" value="${escapeHtml(item.suggested_qty || item.last_qty || 1)}" aria-label="Quantity">
+              <select data-source-select="${id}" aria-label="Source">${sourceOptions(item)}</select>
+            </div>
+            <div class="spec-form">
+              <input data-spec-name="${id}" type="text" value="${escapeAttr(spec.approved_name)}" aria-label="Approved buying spec">
+              <input data-spec-unit="${id}" type="text" value="${escapeAttr(spec.base_unit)}" aria-label="Base unit">
+              <select data-spec-match="${id}" aria-label="Match rule">${matchOptions(spec.match_rule)}</select>
+            </div>
+            <button class="btn btn-primary btn-full" type="button" data-add-item="${id}" ${canPo ? '' : ''}>Add to tray</button>
+            <p class="mute" style="margin:0;">${canPo ? 'Odoo item ready' : state.brand === 'BOTH' ? 'Choose HE or NCH to place local PO' : 'No Odoo item id for this brand'}</p>
+          </div>
+        </article>
+      `;
+    }
+
+    function addItem(encodedId) {
+      const id = decodeURIComponent(encodedId);
+      const item = itemById(id);
+      if (!item) return;
+
+      const qty = Number(document.querySelector(`[data-qty="${encodedId}"]`)?.value || item.suggested_qty || 1);
+      const sourceKey = document.querySelector(`[data-source-select="${encodedId}"]`)?.value || 'LOCAL_VENDOR';
+      const buyingSpec = buyingSpecFromInputs(encodedId, item);
+      const productId = state.brand !== 'BOTH' ? item.product_ids_by_brand?.[state.brand] : null;
+      const vendor = (item.vendors || []).find((row) => row.brand === state.brand && row.id === item.last_vendor_id)
+        || (item.vendors || []).find((row) => row.brand === state.brand)
+        || (item.vendors || [])[0]
+        || null;
+
+      state.cart.push({
+        cart_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        item_id: item.id,
+        name: item.name,
+        product_code: item.product_code,
+        category: item.category,
+        uom: item.uom,
+        qty: qty > 0 ? qty : 1,
+        source_key: sourceKey,
+        source_label: SOURCE_LABELS[sourceKey] || sourceKey,
+        product_id: productId || null,
+        price_unit: item.local_price || item.avg_unit_price || 0,
+        vendor_id: sourceKey === 'LOCAL_VENDOR' ? vendor?.id || item.last_vendor_id || null : null,
+        vendor_name: sourceKey === 'LOCAL_VENDOR' ? vendor?.name || item.last_vendor_name || '' : '',
+        search_query: item.search_query || item.name,
+        buying_spec: buyingSpec,
+        match_rule: buyingSpec.match_rule,
+      });
+      saveCart();
+      renderCart();
+      renderQuotePanel();
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
+      toast('Added to order tray');
+    }
+
+    function renderCart() {
+      els.cartCount.textContent = state.cart.length;
+      const localLines = state.cart.filter((line) => line.source_key === 'LOCAL_VENDOR');
+      const externalLines = state.cart.filter((line) => line.source_key !== 'LOCAL_VENDOR');
+      els.trayMeta.textContent = state.cart.length
+        ? `${localLines.length} local, ${externalLines.length} external`
+        : 'No cart lines';
+
+      if (!state.cart.length) {
+        els.cartLines.innerHTML = `<div class="empty">Add materials from the catalogue</div>`;
+      } else {
+        els.cartLines.innerHTML = state.cart.map(renderCartLine).join('');
+      }
+
+      renderSourceGroups(externalLines);
+      updateCreateButton(localLines);
+    }
+
+    function renderCartLine(line) {
+      const vendorChoices = vendorOptionsForLine(line);
+      const best = bestQuoteFor(line);
+      const vendorSelect = line.source_key === 'LOCAL_VENDOR'
+        ? `<select data-cart-vendor="${escapeHtml(line.cart_id)}" aria-label="Vendor">${vendorChoices}</select>`
+        : `<button class="btn btn-ghost btn-full" type="button" data-open-source="${escapeHtml(line.source_key)}">Open ${escapeHtml(line.source_label)}</button>`;
+
+      return `
+        <div class="cart-line">
+          <div class="cart-line-head">
+            <div>
+              <div class="cart-name">${escapeHtml(line.name)}</div>
+              <div class="cart-meta">${escapeHtml(line.qty)} ${escapeHtml(line.uom || 'unit')} - ${escapeHtml(line.source_label)} - ${money(line.price_unit)}</div>
+              <div class="spec-line">${escapeHtml(line.buying_spec?.approved_name || line.search_query || line.name)} - ${escapeHtml(MATCH_LABELS[line.buying_spec?.match_rule] || line.buying_spec?.match_rule || 'Equivalent allowed')}</div>
+              ${best ? `<div class="spec-line">Best quote: ${escapeHtml(best.source_label)} ${quoteMoney(best.unit_price_paise)}</div>` : ''}
+            </div>
+            <button class="icon-btn" type="button" data-remove-line="${escapeHtml(line.cart_id)}" aria-label="Remove">X</button>
+          </div>
+          ${vendorSelect}
+        </div>
+      `;
+    }
+
+    function vendorOptionsForLine(line) {
+      const item = itemById(line.item_id);
+      const vendors = (item?.vendors || []).filter((vendor) => state.brand === 'BOTH' || vendor.brand === state.brand);
+      const merged = vendors.length ? vendors : [{ id: line.vendor_id, name: line.vendor_name, brand: state.brand }];
+      return merged.map((vendor) => {
+        const selected = String(vendor.id || '') === String(line.vendor_id || '') ? 'selected' : '';
+        const label = `${vendor.name || 'Unknown vendor'}${vendor.brand ? ` (${vendor.brand})` : ''}`;
+        return `<option value="${escapeHtml(vendor.id || '')}" ${selected}>${escapeHtml(label)}</option>`;
+      }).join('');
+    }
+
+    function renderSourceGroups(lines) {
+      if (!lines.length) {
+        els.sourceGroups.innerHTML = '';
+        return;
+      }
+
+      const bySource = new Map();
+      for (const line of lines) {
+        if (!bySource.has(line.source_key)) bySource.set(line.source_key, []);
+        bySource.get(line.source_key).push(line);
+      }
+
+      els.sourceGroups.innerHTML = [...bySource.entries()].map(([key, group]) => {
+        const source = (state.data.sources || []).find((row) => row.key === key) || {};
+        return `
+          <div class="source-group">
+            <div class="source-head">
+              <div>
+                <div class="source-name">${escapeHtml(SOURCE_LABELS[key] || key)}</div>
+                <div class="mute">${escapeHtml(source.delivery_band || 'Check portal')}</div>
+              </div>
+              <span class="badge badge-info">${escapeHtml(group.length)} lines</span>
+            </div>
+            <button class="btn btn-ghost btn-full" type="button" data-copy-source="${escapeHtml(key)}">Copy ${escapeHtml(SOURCE_LABELS[key] || key)} cart</button>
+            <button class="btn btn-primary btn-full" type="button" data-open-source="${escapeHtml(key)}">Open ${escapeHtml(SOURCE_LABELS[key] || key)}</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateCreateButton(localLines) {
+      const sample = !!state.data?.meta?.sample;
+      const invalidBrand = state.brand === 'BOTH';
+      const missingVendor = localLines.some((line) => !line.vendor_id);
+      const missingProduct = localLines.some((line) => !line.product_id);
+      const disabled = !localLines.length || sample || invalidBrand || missingVendor || missingProduct || !state.user?.can_create_po;
+
+      els.createPoBtn.disabled = disabled;
+      if (!localLines.length) els.createPoBtn.textContent = 'Create Odoo PO';
+      else if (sample) els.createPoBtn.textContent = 'Live API required';
+      else if (invalidBrand) els.createPoBtn.textContent = 'Choose HE or NCH';
+      else if (missingVendor) els.createPoBtn.textContent = 'Select vendor';
+      else if (missingProduct) els.createPoBtn.textContent = 'Missing Odoo item';
+      else els.createPoBtn.textContent = `Create ${localLines.length} local line PO`;
+    }
+
+    function removeCartLine(cartId) {
+      state.cart = state.cart.filter((line) => line.cart_id !== cartId);
+      saveCart();
+      renderCart();
+      renderQuotePanel();
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
+    }
+
+    function updateCartVendor(cartId, vendorId) {
+      const line = state.cart.find((row) => row.cart_id === cartId);
+      if (!line) return;
+      const item = itemById(line.item_id);
+      const vendor = (item?.vendors || []).find((row) => String(row.id || '') === String(vendorId || ''));
+      line.vendor_id = vendorId ? Number(vendorId) : null;
+      line.vendor_name = vendor?.name || '';
+      saveCart();
+      renderCart();
+      renderQuotePanel();
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
+    }
+
+    async function createLocalPOs() {
+      const localLines = state.cart.filter((line) => line.source_key === 'LOCAL_VENDOR');
+      if (!localLines.length) return;
+
+      const byVendor = new Map();
+      for (const line of localLines) {
+        const key = String(line.vendor_id || '');
+        if (!key) continue;
+        if (!byVendor.has(key)) byVendor.set(key, []);
+        byVendor.get(key).push(line);
+      }
+
+      els.createPoBtn.disabled = true;
+      els.createPoBtn.textContent = 'Creating PO...';
+      const created = [];
+      try {
+        for (const [vendorId, lines] of byVendor.entries()) {
+          const data = await fetchJson('/api/purchase-control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'create-local-po',
+              pin: state.pin,
+              run_id: state.run?.id || null,
+              brand: state.brand,
+              vendor_id: Number(vendorId),
+              lines: lines.map((line) => ({
+                product_id: line.product_id,
+                qty: line.qty,
+                price_unit: line.price_unit,
+                name: line.name,
+              })),
+            }),
+          });
+          created.push(data.po);
+        }
+
+        const createdIds = new Set(localLines.map((line) => line.cart_id));
+        state.cart = state.cart.filter((line) => !createdIds.has(line.cart_id));
+        saveCart();
+        renderCart();
+        if (state.run) await saveRun({ status: 'ORDERED', silent: true });
+        toast(`Created ${created.map((po) => po.name).join(', ')}`);
+        if (created[0]?.odoo_url) window.open(created[0].odoo_url, '_blank', 'noopener');
+      } catch (error) {
+        toast(error.message || 'PO creation failed');
+      } finally {
+        renderCart();
+      }
+    }
+
+    function lineText(line) {
+      const spec = line.buying_spec?.approved_name || line.search_query || line.name;
+      return `${line.name} | ${line.qty} ${line.uom || 'unit'} | spec: ${spec} | ${line.source_label} | local ${money(line.price_unit)}`;
+    }
+
+    async function copyText(text) {
+      await navigator.clipboard.writeText(text);
+      toast('Copied');
+    }
+
+    function copyVisible() {
+      const lines = currentItems().slice(0, 80).map((item) => {
+        return `${item.name} | ${item.uom || 'unit'} | ${item.category} | last ${money(item.local_price)} | ${item.last_vendor_name || '-'}`;
+      });
+      copyText(lines.join('\n'));
+    }
+
+    function copySourceCart(sourceKey) {
+      const lines = state.cart.filter((line) => line.source_key === sourceKey);
+      copyText([
+        SOURCE_LABELS[sourceKey] || sourceKey,
+        ...lines.map(lineText),
+      ].join('\n'));
+    }
+
+    function openSource(sourceKey) {
+      const source = (state.data?.sources || []).find((row) => row.key === sourceKey);
+      if (source?.url) window.open(source.url, '_blank', 'noopener');
+    }
+
+    document.addEventListener('click', (event) => {
+      const brand = event.target.closest('[data-brand]')?.dataset.brand;
+      if (brand) setBrand(brand);
+
+      const source = event.target.closest('[data-source]')?.dataset.source;
+      if (source) setSource(source);
+
+      const category = event.target.closest('[data-category]')?.dataset.category;
+      if (category) setCategory(category);
+
+      const addId = event.target.closest('[data-add-item]')?.dataset.addItem;
+      if (addId) addItem(addId);
+
+      const removeId = event.target.closest('[data-remove-line]')?.dataset.removeLine;
+      if (removeId) removeCartLine(removeId);
+
+      const copySource = event.target.closest('[data-copy-source]')?.dataset.copySource;
+      if (copySource) copySourceCart(copySource);
+
+      const open = event.target.closest('[data-open-source]')?.dataset.openSource;
+      if (open) openSource(open);
+
+      const runId = event.target.closest('[data-load-run]')?.dataset.loadRun;
+      if (runId) {
+        const run = state.runs.find((row) => row.id === runId);
+        if (run) {
+          applyRun(run);
+          toast('Run loaded');
+        }
+      }
+    });
+
+    document.addEventListener('change', (event) => {
+      const vendorLine = event.target.closest('[data-cart-vendor]')?.dataset.cartVendor;
+      if (vendorLine) updateCartVendor(vendorLine, event.target.value);
+    });
+
+    els.unlockBtn.addEventListener('click', verifyPin);
+    els.pinInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') verifyPin();
+    });
+    els.refreshBtn.addEventListener('click', loadMaterials);
+    els.searchInput.addEventListener('input', (event) => {
+      state.query = event.target.value;
+      renderAll();
+    });
+    els.copyVisibleBtn.addEventListener('click', copyVisible);
+    els.startRunBtn.addEventListener('click', startRun);
+    els.saveRunBtn.addEventListener('click', () => saveRun());
+    els.requestQuotesBtn.addEventListener('click', requestQuotes);
+    els.refreshQuotesBtn.addEventListener('click', () => loadQuoteSummary());
+    els.validateSessionsBtn.addEventListener('click', () => loadPortalHealth(true));
+    els.runStatusSelect.addEventListener('change', () => {
+      if (state.run) saveRun({ status: els.runStatusSelect.value });
+    });
+    els.runTypeSelect.addEventListener('change', () => {
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
+    });
+    els.createPoBtn.addEventListener('click', createLocalPOs);
+    els.clearCartBtn.addEventListener('click', () => {
+      state.cart = [];
+      saveCart();
+      renderCart();
+      renderQuotePanel();
+      if (state.run) saveRun({ status: state.run.status || 'DRAFT', silent: true });
+    });
+
+    if (state.pin) {
+      els.pinInput.value = state.pin;
+      verifyPin();
+    } else {
+      renderCart();
+    }
+  </script>
+</body>
+</html>

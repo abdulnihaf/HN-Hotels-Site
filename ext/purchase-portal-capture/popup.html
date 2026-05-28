@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HN Portal Capture</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0c0c14;
+      --surface: #171722;
+      --line: rgba(255,255,255,.11);
+      --muted: #a2a7b4;
+      --text: #f7f7fb;
+      --brand: #f4c542;
+      --green: #34d399;
+      --red: #f87171;
+      --yellow: #fbbf24;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      width: 374px;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+    }
+
+    main {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    header {
+      display: grid;
+      gap: 4px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .35px;
+    }
+
+    input,
+    select,
+    button {
+      font: inherit;
+    }
+
+    input,
+    select {
+      width: 100%;
+      min-height: 42px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.055);
+      color: var(--text);
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: rgba(244,197,66,.68);
+      box-shadow: 0 0 0 3px rgba(244,197,66,.12);
+    }
+
+    button {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.065);
+      color: var(--text);
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    button.primary {
+      border-color: var(--brand);
+      background: var(--brand);
+      color: #0c0c14;
+    }
+
+    button:disabled {
+      opacity: .58;
+      cursor: not-allowed;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .actions .primary { grid-column: 1 / -1; }
+
+    .status {
+      min-height: 38px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .status.good { color: var(--green); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
+    .status.bad { color: var(--red); border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.08); }
+    .status.warn { color: var(--yellow); border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
+
+    .health {
+      display: grid;
+      gap: 6px;
+      max-height: 186px;
+      overflow: auto;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 34px;
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.035);
+    }
+
+    .name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 800;
+    }
+
+    .pill {
+      min-width: 74px;
+      padding: 4px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .pill.ready { color: var(--green); border-color: rgba(52,211,153,.4); }
+    .pill.bad { color: var(--red); border-color: rgba(248,113,113,.4); }
+    .pill.warn { color: var(--yellow); border-color: rgba(251,191,36,.4); }
+
+    .foot {
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>HN Portal Capture</h1>
+      <p id="activeTabText">Detecting active purchase portal...</p>
+    </header>
+
+    <label>
+      Portal
+      <select id="sourceKey"></select>
+    </label>
+
+    <div class="grid">
+      <label>
+        PIN
+        <input id="pin" type="password" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="0000">
+      </label>
+      <label>
+        Expiry hours
+        <input id="expiryHours" type="number" min="1" max="48" step="1" value="6">
+      </label>
+    </div>
+
+    <label>
+      Account label
+      <input id="accountLabel" type="text" placeholder="HN Hotels">
+    </label>
+
+    <div class="grid">
+      <label>
+        Location
+        <input id="locationLabel" type="text" placeholder="Shivajinagar">
+      </label>
+      <label>
+        Pincode
+        <input id="pincode" type="text" inputmode="numeric" placeholder="560051">
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="captureBtn" class="primary" type="button">Capture current tab</button>
+      <button id="browserQuotesBtn" class="primary" type="button">Run live quotes from tab</button>
+      <button id="openBtn" type="button">Open portal</button>
+      <button id="healthBtn" type="button">Check vault</button>
+    </div>
+
+    <div id="status" class="status">Open a logged-in portal tab, select the matching source, then capture.</div>
+    <div id="health" class="health"></div>
+    <p class="foot">Cookie and token values are never printed here. They are sent directly to the purchase-console session vault.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
