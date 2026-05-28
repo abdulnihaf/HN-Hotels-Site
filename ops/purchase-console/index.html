@@ -2,432 +2,557 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="BuyList">
   <title>BuyList · HN Hotels</title>
   <meta name="theme-color" content="#0a0a10">
   <link rel="manifest" href="/ops/purchase-console/manifest.json">
+  <link rel="apple-touch-icon" href="/ops/purchase-console/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
+    /* ============================================================
+       iPhone-app-feel design tokens
+       ============================================================ */
     :root {
-      --bg: #0a0a10;
+      --bg: #000;
       --bg-elev-1: #14141c;
       --bg-elev-2: #1c1c26;
-      --line: rgba(255,255,255,0.08);
-      --line-soft: rgba(255,255,255,0.04);
-      --text: #f1f1f5;
-      --text-dim: #8a8a99;
-      --text-mute: #5c5c6e;
+      --bg-elev-3: #26262f;
+      --line: rgba(255,255,255,0.10);
+      --line-soft: rgba(255,255,255,0.05);
+      --text: #f8f8fa;
+      --text-dim: #98989f;
+      --text-mute: #5c5c66;
       --hn-gold: #d4a24c;
       --hn-gold-soft: rgba(212,162,76,0.18);
       --hn-gold-border: rgba(212,162,76,0.45);
       --hn-gold-deep: #b8893a;
       --pc-green: #34d399;
       --pc-green-soft: rgba(52,211,153,0.14);
-      --pc-blue: #60a5fa;
+      --pc-blue: #5e9eff;
       --pc-yellow: #fbbf24;
-      --pc-red: #f87171;
+      --pc-red: #ff5c5c;
       --pc-purple: #a78bfa;
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bot: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+      --tab-bar-h: 76px;
+      --nav-bar-h: 44px;
+      --spring: cubic-bezier(.34, 1.56, .64, 1);
+      --ease: cubic-bezier(.22, .61, .36, 1);
     }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body {
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+    html { background: var(--bg); -webkit-text-size-adjust: 100%; }
+    body {
       margin: 0; padding: 0;
       background: var(--bg);
       color: var(--text);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Inter', sans-serif;
       font-size: 15px;
       line-height: 1.4;
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
       overscroll-behavior-y: contain;
+      overflow: hidden;
+      width: 100vw; height: 100vh; height: 100dvh;
     }
-    body {
-      min-height: 100vh;
-      min-height: 100dvh;
-      padding-bottom: calc(96px + var(--safe-bot));
+    /* iOS large title typographic feel */
+    h1, h2, h3 { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, 'Inter', sans-serif; letter-spacing: -0.02em; }
+    button, input, select { font-family: inherit; color: inherit; }
+    button { background: none; border: none; cursor: pointer; padding: 0; font-size: inherit; }
+    input { -webkit-appearance: none; appearance: none; }
+    a { color: inherit; text-decoration: none; }
+
+    /* ============================================================
+       App shell — tab-based scaffold
+       ============================================================ */
+    #app {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      background: var(--bg);
+    }
+    .tab-pane {
+      flex: 1; min-height: 0;
+      overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+      padding-bottom: calc(var(--tab-bar-h) + var(--safe-bot) + 8px);
+    }
+    .tab-pane.hide { display: none; }
+
+    /* ============================================================
+       Status bar haze (iOS translucent under the notch)
+       ============================================================ */
+    .status-bar-haze {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: calc(var(--safe-top) + 4px);
+      background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
+      z-index: 60; pointer-events: none;
     }
 
-    /* ---------- Brand bar ---------- */
-    .brandbar {
-      position: sticky; top: 0; z-index: 40;
-      padding: calc(var(--safe-top) + 10px) 16px 10px;
-      background: linear-gradient(180deg, rgba(10,10,16,0.98) 0%, rgba(10,10,16,0.92) 70%, rgba(10,10,16,0.84) 100%);
-      backdrop-filter: blur(20px) saturate(140%);
-      -webkit-backdrop-filter: blur(20px) saturate(140%);
-      border-bottom: 1px solid var(--line);
-      display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
+    /* ============================================================
+       Top nav (compact title bar — appears when large title scrolls out)
+       ============================================================ */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      height: calc(var(--safe-top) + var(--nav-bar-h));
+      padding: var(--safe-top) 16px 0;
+      background: rgba(10,10,16,0.0);
+      backdrop-filter: blur(0px);
+      -webkit-backdrop-filter: blur(0px);
+      display: grid; grid-template-columns: 60px 1fr 60px; align-items: center;
+      transition: background .25s var(--ease), backdrop-filter .25s var(--ease);
+      border-bottom: 1px solid transparent;
     }
-    .brand-mark {
-      width: 38px; height: 38px; border-radius: 11px;
-      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
-      color: #1a1206;
+    .top-nav.condensed {
+      background: rgba(20,20,28,0.78);
+      backdrop-filter: saturate(180%) blur(22px);
+      -webkit-backdrop-filter: saturate(180%) blur(22px);
+      border-bottom-color: var(--line);
+    }
+    .top-nav .nav-title {
+      grid-column: 2;
+      text-align: center;
+      font: 700 17px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      opacity: 0;
+      transition: opacity .2s var(--ease);
+    }
+    .top-nav.condensed .nav-title { opacity: 1; }
+    .top-nav .nav-action {
+      width: 44px; height: 44px;
       display: grid; place-items: center;
-      font-family: 'Cormorant Garamond', serif;
-      font-weight: 700; font-size: 22px;
-      box-shadow: 0 4px 12px rgba(212,162,76,0.25);
-      letter-spacing: -0.5px;
-    }
-    .brand-title {
-      display: grid; gap: 0px; min-width: 0;
-    }
-    .brand-title h1 {
-      margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -0.3px;
-      color: var(--text);
-    }
-    .brand-title .sub {
-      font-size: 10.5px; color: var(--text-dim); font-weight: 500;
-      font-family: 'Cormorant Garamond', serif;
-      font-style: italic;
-      letter-spacing: 0.4px;
-    }
-    .brand-title .sub b { color: var(--hn-gold); font-weight: 600; font-style: normal; }
-    .brand-cart-chip {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 8px 12px;
-      background: var(--hn-gold-soft);
-      border: 1px solid var(--hn-gold-border);
       color: var(--hn-gold);
-      border-radius: 999px;
-      font-weight: 800; font-size: 12px;
-      cursor: pointer;
-      min-height: 38px;
+      font: 700 15px/1 sans-serif;
+      border-radius: 22px;
+      transition: transform .12s var(--ease), background .12s ease;
     }
-    .brand-cart-chip.empty { background: transparent; border-color: var(--line); color: var(--text-dim); }
-    .brand-cart-chip .cart-count { font-weight: 900; }
+    .top-nav .nav-action:active {
+      transform: scale(0.92);
+      background: rgba(212,162,76,0.12);
+    }
+    .top-nav .nav-action.right { grid-column: 3; justify-self: end; }
+    .top-nav .nav-action.left { grid-column: 1; }
 
-    /* ---------- Filter strip ---------- */
-    .filter-strip {
-      position: sticky; top: calc(var(--safe-top) + 58px); z-index: 35;
-      padding: 8px 16px 6px;
-      background: linear-gradient(180deg, rgba(10,10,16,0.96) 0%, rgba(10,10,16,0.88) 100%);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--line);
-      display: grid; gap: 8px;
+    /* ============================================================
+       Large title (iOS pattern)
+       ============================================================ */
+    .large-title-wrap {
+      padding: 0 16px 14px;
+      display: grid; gap: 4px;
     }
-    .search-wrap {
-      position: relative;
-    }
-    .search-wrap input {
-      width: 100%; height: 44px; padding: 0 14px 0 40px;
-      background: var(--bg-elev-1);
-      border: 1px solid var(--line);
+    .large-title {
+      margin: 0;
+      font: 800 34px/1.05 -apple-system, sans-serif;
+      letter-spacing: -0.025em;
       color: var(--text);
-      border-radius: 12px;
-      font-size: 14px; font-weight: 500;
-      font-family: inherit;
-      -webkit-appearance: none; appearance: none;
     }
-    .search-wrap input::placeholder { color: var(--text-mute); }
-    .search-wrap input:focus { outline: none; border-color: var(--hn-gold-border); background: var(--bg-elev-2); }
-    .search-wrap .icon {
-      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-      color: var(--text-dim); font-size: 16px; pointer-events: none;
+    .large-title .accent {
+      font-family: 'Cormorant Garamond', serif;
+      color: var(--hn-gold);
+      font-weight: 600;
+      font-style: italic;
+      letter-spacing: 0;
+      font-size: 22px;
+      vertical-align: 4px;
     }
-
-    .brand-toggle {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
-      padding: 3px; background: var(--bg-elev-1);
-      border: 1px solid var(--line); border-radius: 11px;
-    }
-    .brand-toggle button {
-      height: 34px; padding: 0 8px;
-      border: none; background: transparent;
+    .large-subtitle {
+      font: 500 13px/1.3 -apple-system, sans-serif;
       color: var(--text-dim);
-      font: 700 12px/1 'Inter', sans-serif;
-      border-radius: 8px; cursor: pointer;
-      transition: all .15s ease;
+      letter-spacing: -0.01em;
     }
-    .brand-toggle button.on {
-      background: var(--bg-elev-2);
-      color: var(--text);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    }
+    .large-subtitle b { color: var(--hn-gold); font-weight: 600; }
 
-    .cat-chips {
-      display: flex; gap: 6px; overflow-x: auto;
-      padding: 2px 0 4px;
+    /* ============================================================
+       Search bar (iOS spotlight feel)
+       ============================================================ */
+    .search-section { padding: 0 16px 12px; }
+    .search-pill {
+      position: relative;
+      background: var(--bg-elev-2);
+      border-radius: 12px;
+      transition: transform .15s var(--ease);
+    }
+    .search-pill input {
+      width: 100%; height: 40px;
+      border: none; background: transparent;
+      padding: 0 14px 0 38px;
+      color: var(--text);
+      font: 500 15px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      border-radius: 12px;
+    }
+    .search-pill input::placeholder { color: var(--text-mute); font-weight: 500; }
+    .search-pill input:focus { outline: none; }
+    .search-pill .icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-mute);
+      pointer-events: none;
+      width: 18px; height: 18px;
+    }
+    .search-pill:focus-within { transform: scale(1.005); background: var(--bg-elev-3); }
+
+    /* ============================================================
+       Brand segmented control (iOS UISegmentedControl)
+       ============================================================ */
+    .segmented {
+      margin: 0 16px 12px;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
+      padding: 2px;
+      background: var(--bg-elev-2);
+      border-radius: 10px;
+    }
+    .segmented button {
+      height: 32px;
+      color: var(--text-dim);
+      font: 600 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      border-radius: 8px;
+      transition: all .18s var(--ease);
+    }
+    .segmented button.on {
+      background: var(--bg-elev-3);
+      color: var(--text);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .segmented button:active { transform: scale(0.97); }
+
+    /* ============================================================
+       Category chip rail
+       ============================================================ */
+    .chip-rail-wrap {
+      padding: 0 0 12px;
+      mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+      -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+    }
+    .chip-rail {
+      display: flex; gap: 6px;
+      padding: 0 16px;
+      overflow-x: auto; overflow-y: hidden;
       scrollbar-width: none; -webkit-overflow-scrolling: touch;
     }
-    .cat-chips::-webkit-scrollbar { display: none; }
-    .cat-chip {
-      flex-shrink: 0; padding: 6px 12px;
-      background: var(--bg-elev-1);
-      border: 1px solid var(--line);
+    .chip-rail::-webkit-scrollbar { display: none; }
+    .chip {
+      flex-shrink: 0;
+      padding: 7px 14px; min-height: 32px;
+      background: var(--bg-elev-2);
       color: var(--text-dim);
       border-radius: 999px;
-      font: 700 11px/1 'Inter', sans-serif;
-      cursor: pointer;
+      font: 600 12.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      transition: transform .12s var(--ease);
       white-space: nowrap;
-      min-height: 30px;
       display: inline-flex; align-items: center;
     }
-    .cat-chip.on {
+    .chip.on {
       background: var(--hn-gold-soft);
-      border-color: var(--hn-gold-border);
       color: var(--hn-gold);
+      border: 1px solid var(--hn-gold-border);
     }
+    .chip:active { transform: scale(0.93); }
+
     .filter-meta {
+      padding: 4px 16px 14px;
       display: flex; justify-content: space-between; align-items: center;
-      font-size: 10.5px; color: var(--text-mute); font-weight: 600;
-      padding: 0 2px;
     }
-    .filter-meta button {
-      background: transparent; border: 1px solid var(--line);
-      color: var(--text-dim); padding: 4px 10px;
-      border-radius: 999px; font: 800 10.5px/1 'Inter', sans-serif;
-      cursor: pointer;
-    }
-    .filter-meta button:active { background: var(--bg-elev-1); }
-
-    /* ---------- Material card stream ---------- */
-    main { padding: 0; }
-    .stream { padding: 12px 12px 0; display: grid; gap: 10px; }
-    .empty-state {
-      text-align: center; padding: 40px 16px;
-      color: var(--text-dim); font-size: 13px;
-    }
-    .empty-state .big { font-size: 32px; margin-bottom: 6px; }
-
-    .cat-divider {
-      display: flex; align-items: center; gap: 8px;
-      padding: 12px 4px 6px;
-      font: 800 10.5px/1 'Inter', sans-serif;
+    .filter-stat {
+      font: 600 11.5px/1 -apple-system, sans-serif;
       color: var(--text-mute);
-      letter-spacing: 0.6px; text-transform: uppercase;
+      letter-spacing: -0.01em;
     }
-    .cat-divider::after {
-      content: ''; flex: 1; height: 1px;
-      background: linear-gradient(90deg, var(--line) 0%, transparent 100%);
+    .add-btn-small {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 6px 12px;
+      background: var(--bg-elev-2);
+      color: var(--hn-gold);
+      border-radius: 999px;
+      font: 700 11.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      transition: transform .12s var(--ease);
     }
-    .cat-divider .count {
-      color: var(--text-mute); font-weight: 600; text-transform: none; letter-spacing: 0;
+    .add-btn-small:active { transform: scale(0.94); }
+
+    /* ============================================================
+       Material list — iOS group table cell style
+       ============================================================ */
+    .stream { padding: 0 12px; display: grid; gap: 10px; }
+    .stream:last-child { padding-bottom: 24px; }
+
+    .section-header {
+      position: sticky;
+      top: calc(var(--safe-top) + var(--nav-bar-h));
+      z-index: 12;
+      margin: 14px 4px 6px;
+      padding: 4px 10px;
+      display: flex; justify-content: space-between; align-items: center;
+      font: 800 11px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 6px;
+    }
+    .section-header .count {
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--text-mute); font-weight: 600;
     }
 
     .mat-card {
       background: var(--bg-elev-1);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px;
-      display: grid; gap: 10px;
+      border-radius: 18px;
+      padding: 14px;
+      display: grid; gap: 12px;
+      transition: transform .12s var(--ease);
+      will-change: transform;
     }
-    .mat-card.has-best { border-color: rgba(212,162,76,0.22); }
-    .mat-card.in-plan {
-      border-color: rgba(96,165,250,0.4);
-      background: linear-gradient(180deg, rgba(96,165,250,0.04) 0%, var(--bg-elev-1) 100%);
-    }
-    .mat-card.custom { border-style: dashed; border-color: rgba(167,139,250,0.3); }
+    .mat-card:active { transform: scale(0.985); }
+    .mat-card.has-best { box-shadow: inset 0 0 0 1px rgba(212,162,76,0.20); }
+    .mat-card.in-plan { box-shadow: inset 0 0 0 1.5px rgba(94,158,255,0.40); }
+    .mat-card.custom { background: linear-gradient(180deg, rgba(167,139,250,0.07) 0%, var(--bg-elev-1) 100%); }
 
     .mat-head {
-      display: grid; grid-template-columns: 48px 1fr auto; gap: 10px; align-items: center;
+      display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: center;
     }
     .mat-thumb {
-      width: 48px; height: 48px;
-      border-radius: 12px;
+      width: 52px; height: 52px; border-radius: 14px;
       background: var(--bg-elev-2);
       display: grid; place-items: center;
       overflow: hidden;
-      border: 1px solid var(--line);
+      box-shadow: inset 0 0 0 1px var(--line-soft);
       flex-shrink: 0;
     }
     .mat-thumb img { width: 100%; height: 100%; object-fit: cover; }
-    .mat-thumb .emoji { font-size: 26px; line-height: 1; }
+    .mat-thumb .emoji { font-size: 30px; line-height: 1; }
+
     .mat-name {
-      font-size: 15px; font-weight: 800; line-height: 1.25;
+      font: 700 16px/1.2 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
       color: var(--text);
-      letter-spacing: -0.1px;
     }
     .mat-meta {
-      margin-top: 2px;
-      font-size: 11px; color: var(--text-dim); font-weight: 500;
+      margin-top: 3px;
       display: flex; align-items: center; gap: 6px;
+      font: 500 12px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
       flex-wrap: wrap;
     }
     .mat-meta .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-mute); }
-    .mat-meta .pill-custom {
-      padding: 1px 6px; border-radius: 4px;
+    .pill-custom {
+      padding: 2px 7px; border-radius: 5px;
       background: rgba(167,139,250,0.18); color: var(--pc-purple);
-      font-size: 9px; font-weight: 900; letter-spacing: 0.3px;
+      font: 800 9px/1 sans-serif; letter-spacing: 0.05em;
     }
-    .mat-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+
+    .mat-tools {
+      display: grid; grid-auto-flow: column; gap: 6px; align-items: center;
+    }
     .qty-stepper {
       display: inline-flex; align-items: center;
       background: var(--bg-elev-2);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 1px;
-      height: 30px;
+      border-radius: 10px;
+      padding: 2px;
+      height: 32px;
     }
     .qty-stepper button {
-      width: 26px; height: 26px;
-      border: none; background: transparent;
+      width: 28px; height: 28px; border-radius: 7px;
       color: var(--text);
-      font: 800 16px/1 'Inter', sans-serif;
-      cursor: pointer;
-      border-radius: 6px;
+      font: 800 17px/1 -apple-system, sans-serif;
+      transition: transform .1s var(--ease), background .1s ease;
     }
-    .qty-stepper button:active { background: var(--bg-elev-1); }
+    .qty-stepper button:active { transform: scale(0.92); background: var(--bg-elev-3); }
     .qty-stepper input {
-      width: 38px; height: 26px;
-      border: none; background: transparent; color: var(--text);
+      width: 40px; height: 28px;
+      background: transparent; border: none; color: var(--text);
       text-align: center;
-      font: 800 12px/1 'Inter', sans-serif;
+      font: 700 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
       font-variant-numeric: tabular-nums;
-      -webkit-appearance: none;
     }
     .qty-stepper input::-webkit-outer-spin-button,
     .qty-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    .qty-stepper .uom { font-size: 9px; color: var(--text-mute); padding-right: 6px; font-weight: 700; text-transform: lowercase; }
-    .row-tools { display: flex; gap: 4px; }
+    .qty-stepper .uom {
+      padding: 0 6px 0 2px;
+      font: 700 9.5px/1 -apple-system, sans-serif;
+      color: var(--text-mute);
+      text-transform: lowercase;
+      letter-spacing: 0.02em;
+    }
     .icon-btn {
-      width: 30px; height: 30px;
-      border: 1px solid var(--line);
+      width: 32px; height: 32px;
       background: var(--bg-elev-2);
       color: var(--text-dim);
-      border-radius: 8px;
+      border-radius: 9px;
       display: grid; place-items: center;
-      cursor: pointer;
-      font-size: 13px;
+      font-size: 14px;
+      transition: transform .1s var(--ease), background .1s ease;
     }
-    .icon-btn:active { background: var(--bg-elev-1); }
-    .icon-btn[disabled] { opacity: 0.4; animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .icon-btn:active { transform: scale(0.9); background: var(--bg-elev-3); }
+    .icon-btn[disabled] { opacity: 0.4; animation: rot 1s linear infinite; }
     .icon-btn.danger { color: var(--pc-red); }
+    @keyframes rot { to { transform: rotate(360deg); } }
 
     .baseline-strip {
-      display: flex; align-items: center; gap: 6px;
-      padding: 6px 10px;
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px;
       background: var(--bg-elev-2);
-      border-radius: 9px;
-      font-size: 11px; color: var(--text-dim);
+      border-radius: 11px;
+      font: 500 12px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
     }
-    .baseline-strip .price { font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
-    .baseline-strip .vendor { color: var(--text-mute); margin-left: auto; font-size: 10px; }
+    .baseline-strip .price {
+      font-weight: 800; color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .baseline-strip .vendor {
+      margin-left: auto; color: var(--text-mute); font-size: 10.5px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 50%;
+    }
 
+    /* ============================================================
+       Best-deal block — the hero of each card
+       ============================================================ */
     .best-deal {
       position: relative;
-      padding: 12px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, rgba(212,162,76,0.10) 0%, rgba(212,162,76,0.04) 100%);
-      border: 1px solid rgba(212,162,76,0.30);
-      display: grid; gap: 10px;
+      padding: 14px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(212,162,76,0.13) 0%, rgba(212,162,76,0.04) 60%, rgba(212,162,76,0.07) 100%);
+      box-shadow: inset 0 0 0 1px rgba(212,162,76,0.32);
+      display: grid; gap: 12px;
     }
     .best-deal.no-best {
       background: var(--bg-elev-2);
-      border-color: var(--line);
-      border-style: dashed;
+      box-shadow: inset 0 0 0 1px var(--line);
     }
     .best-row {
-      display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center;
+      display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center;
     }
     .portal-favicon {
-      width: 36px; height: 36px; border-radius: 9px;
+      width: 40px; height: 40px; border-radius: 11px;
       background: #fff;
       display: grid; place-items: center;
       overflow: hidden;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(0,0,0,0.04);
     }
-    .portal-favicon img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+    .portal-favicon img { width: 100%; height: 100%; object-fit: contain; padding: 5px; }
     .portal-favicon.letter {
-      background: var(--bg-elev-2);
+      background: var(--bg-elev-3);
       color: var(--text);
-      font: 900 13px/1 'Inter', sans-serif;
+      font: 800 14px/1 -apple-system, sans-serif;
     }
     .best-info { min-width: 0; }
     .best-portal-line {
       display: flex; align-items: center; gap: 6px;
-      font-size: 12px; font-weight: 800; color: var(--text);
+      font: 800 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
     }
-    .best-portal-line .cheap-tag {
-      font-size: 9px; font-weight: 900; letter-spacing: 0.5px;
-      background: var(--hn-gold); color: #1a1206;
-      padding: 2px 6px; border-radius: 4px;
+    .cheap-tag {
+      font: 800 9px/1 -apple-system, sans-serif;
+      letter-spacing: 0.06em;
+      background: var(--hn-gold);
+      color: #1a1206;
+      padding: 3px 7px;
+      border-radius: 4px;
     }
     .best-sku {
-      margin-top: 2px;
-      font-size: 11px; color: var(--text-dim);
-      line-height: 1.3;
-      overflow: hidden;
+      margin-top: 3px;
+      font: 500 12px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
+      overflow: hidden;
     }
     .best-eta {
-      display: inline-flex; align-items: center; gap: 4px;
-      margin-top: 4px;
-      font-size: 10px; color: var(--text-mute); font-weight: 600;
+      margin-top: 5px;
+      font: 600 10.5px/1 -apple-system, sans-serif;
+      color: var(--text-mute);
+      letter-spacing: -0.01em;
+      display: inline-flex; align-items: center; gap: 3px;
     }
     .best-price-block { text-align: right; }
     .best-price {
-      font: 900 19px/1 'Inter', sans-serif;
+      font: 800 20px/1 -apple-system, sans-serif;
+      letter-spacing: -0.03em;
       color: var(--text);
       font-variant-numeric: tabular-nums;
-      letter-spacing: -0.5px;
     }
     .best-rate {
-      font-size: 10px; color: var(--text-dim);
-      font-weight: 600;
-      margin-top: 3px;
+      margin-top: 4px;
+      font: 600 10.5px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
       font-variant-numeric: tabular-nums;
     }
     .best-delta {
       display: inline-block; margin-left: 4px;
-      font-size: 10px; font-weight: 800;
-      padding: 1px 5px; border-radius: 4px;
+      padding: 2px 6px; border-radius: 5px;
+      font: 800 10px/1 -apple-system, sans-serif; letter-spacing: 0;
     }
     .best-delta.down { background: var(--pc-green-soft); color: var(--pc-green); }
-    .best-delta.up { background: rgba(248,113,113,0.15); color: var(--pc-red); }
+    .best-delta.up { background: rgba(255,92,92,0.16); color: var(--pc-red); }
     .best-delta.flat { background: var(--line-soft); color: var(--text-mute); }
 
-    .cta-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .cta-row {
+      display: grid; grid-template-columns: 1fr auto; gap: 8px;
+    }
     .open-app-btn {
+      min-height: 46px;
       display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      min-height: 44px; padding: 0 14px;
+      padding: 0 16px;
       background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
       color: #1a1206;
-      border: none; border-radius: 10px;
-      font: 900 13px/1 'Inter', sans-serif;
-      letter-spacing: -0.1px;
-      text-decoration: none;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(212,162,76,0.25);
-      transition: transform .08s ease;
+      border-radius: 13px;
+      font: 800 14px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      box-shadow: 0 6px 16px rgba(212,162,76,0.22), inset 0 1px 0 rgba(255,255,255,0.25);
+      transition: transform .1s var(--ease), filter .1s ease;
     }
-    .open-app-btn:active { transform: scale(0.98); }
+    .open-app-btn:active { transform: scale(0.97); filter: brightness(0.92); }
     .open-app-btn .portal-favicon {
-      width: 20px; height: 20px; border-radius: 5px;
+      width: 22px; height: 22px; border-radius: 6px;
       box-shadow: none;
     }
     .open-app-btn .portal-favicon img { padding: 2px; }
-    .open-app-btn .arrow { opacity: 0.7; font-size: 11px; }
+    .open-app-btn .arrow { opacity: 0.75; font-size: 11px; }
     .add-plan-btn {
-      min-width: 50px; height: 44px; padding: 0 12px;
+      min-width: 56px; min-height: 46px; padding: 0 14px;
       background: var(--bg-elev-2);
-      border: 1px solid var(--line);
       color: var(--text);
-      border-radius: 10px;
-      font: 800 12px/1 'Inter', sans-serif;
-      cursor: pointer;
+      border-radius: 13px;
+      font: 800 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
       display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-      transition: transform .08s ease;
+      transition: transform .1s var(--ease), background .15s ease;
     }
-    .add-plan-btn:active { transform: scale(0.96); }
+    .add-plan-btn:active { transform: scale(0.95); }
     .add-plan-btn.in-plan {
-      background: rgba(96,165,250,0.15);
-      border-color: rgba(96,165,250,0.4);
+      background: rgba(94,158,255,0.16);
       color: var(--pc-blue);
+      box-shadow: inset 0 0 0 1px rgba(94,158,255,0.34);
     }
 
+    /* ============================================================
+       Alt portal chip strip
+       ============================================================ */
     .alt-strip {
       display: flex; gap: 6px; overflow-x: auto;
-      padding: 2px 0;
-      margin: 0 -12px -4px;
-      padding: 0 12px 4px;
+      margin: 0 -14px;
+      padding: 0 14px 2px;
       scrollbar-width: none; -webkit-overflow-scrolling: touch;
     }
     .alt-strip::-webkit-scrollbar { display: none; }
@@ -436,322 +561,445 @@
       display: inline-flex; align-items: center; gap: 6px;
       padding: 6px 10px 6px 6px;
       background: var(--bg-elev-2);
-      border: 1px solid var(--line);
       border-radius: 999px;
-      font-size: 11px; color: var(--text);
-      text-decoration: none;
-      min-height: 30px;
+      font: 600 11.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      min-height: 32px;
+      transition: transform .1s var(--ease);
     }
-    .alt-chip:active { background: var(--bg-elev-1); }
+    .alt-chip:active { transform: scale(0.93); }
     .alt-chip.disabled { opacity: 0.55; }
     .alt-chip .chip-favicon {
-      width: 18px; height: 18px; border-radius: 5px;
-      background: #fff; overflow: hidden;
+      width: 20px; height: 20px; border-radius: 6px;
+      background: #fff;
+      overflow: hidden;
       display: grid; place-items: center;
     }
-    .alt-chip .chip-favicon img { width: 100%; height: 100%; object-fit: contain; padding: 1.5px; }
-    .alt-chip .chip-favicon.letter { background: var(--bg-elev-1); color: var(--text); font: 900 8px/1 'Inter', sans-serif; }
+    .alt-chip .chip-favicon img { width: 100%; height: 100%; object-fit: contain; padding: 2px; }
+    .alt-chip .chip-favicon.letter { background: var(--bg-elev-3); color: var(--text); font: 800 8px/1 -apple-system, sans-serif; }
     .alt-chip .chip-name { font-weight: 700; }
-    .alt-chip .chip-price { color: var(--text-dim); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .alt-chip .chip-price {
+      color: var(--text-dim); font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
     .alt-chip .warn { color: var(--pc-yellow); margin-right: 1px; }
 
-    /* ---------- Empty / loading ---------- */
-    .skeleton-card {
+    /* ============================================================
+       Skeleton + empty
+       ============================================================ */
+    .skel-card {
       background: var(--bg-elev-1);
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      padding: 12px; margin-bottom: 10px;
+      border-radius: 18px;
+      padding: 14px;
       display: grid; gap: 10px;
     }
     .skel-line {
       height: 12px; border-radius: 6px;
-      background: linear-gradient(90deg, var(--bg-elev-2) 0%, var(--bg-elev-1) 50%, var(--bg-elev-2) 100%);
+      background: linear-gradient(90deg, var(--bg-elev-2) 0%, var(--bg-elev-3) 50%, var(--bg-elev-2) 100%);
       background-size: 200% 100%;
-      animation: shimmer 1.5s ease-in-out infinite;
+      animation: shimmer 1.4s ease-in-out infinite;
     }
-    .skel-line.short { width: 60%; }
-    .skel-line.med { width: 80%; }
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
+    .skel-line.short { width: 55%; }
+    .skel-line.med { width: 78%; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-    /* ---------- PIN gate ---------- */
-    .pin-gate {
-      min-height: 100vh; min-height: 100dvh;
-      display: grid; place-items: center;
-      padding: 24px;
-      background: radial-gradient(ellipse at top, rgba(212,162,76,0.08) 0%, transparent 60%);
+    .empty-state {
+      text-align: center; padding: 60px 24px;
+      color: var(--text-dim);
     }
-    .pin-card {
-      width: min(360px, 100%);
-      background: var(--bg-elev-1);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 28px 24px;
-      text-align: center;
+    .empty-state .big {
+      font-size: 56px; opacity: 0.4; margin-bottom: 12px;
     }
-    .pin-card .brand-mark-big {
-      width: 56px; height: 56px; border-radius: 14px;
-      margin: 0 auto 14px;
-      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
-      color: #1a1206;
-      display: grid; place-items: center;
-      font-family: 'Cormorant Garamond', serif;
-      font-weight: 700; font-size: 32px;
-      letter-spacing: -1px;
-      box-shadow: 0 8px 24px rgba(212,162,76,0.3);
-    }
-    .pin-card h2 { margin: 0 0 4px; font-size: 22px; font-weight: 800; }
-    .pin-card .heritage { font-size: 11px; color: var(--hn-gold); font-style: italic; letter-spacing: 0.5px; font-family: 'Cormorant Garamond', serif; margin-bottom: 18px; }
-    .pin-card .helper { font-size: 12px; color: var(--text-dim); margin-bottom: 18px; }
-    .pin-input {
-      width: 100%; height: 52px;
-      background: var(--bg-elev-2);
-      border: 1px solid var(--line);
+    .empty-state .title {
+      font: 700 18px/1.3 -apple-system, sans-serif;
       color: var(--text);
-      border-radius: 12px;
-      text-align: center;
-      font: 800 22px/1 'Inter', sans-serif;
-      letter-spacing: 8px;
-      -webkit-text-security: disc;
+      margin-bottom: 6px;
     }
-    .pin-input:focus { outline: none; border-color: var(--hn-gold-border); }
-    .pin-unlock {
-      width: 100%; height: 50px; margin-top: 12px;
-      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
-      color: #1a1206;
-      border: none; border-radius: 12px;
-      font: 900 14px/1 'Inter', sans-serif;
-      cursor: pointer;
-      letter-spacing: 0.3px;
+    .empty-state .body {
+      font-size: 13.5px; line-height: 1.5;
+      max-width: 280px; margin: 0 auto;
     }
-    .pin-unlock:disabled { opacity: 0.5; }
-    .pin-error { margin-top: 12px; color: var(--pc-red); font-size: 12px; font-weight: 700; }
 
-    /* ---------- Sticky bottom plan bar ---------- */
-    .plan-bar {
-      position: fixed; left: 0; right: 0; bottom: 0;
-      z-index: 45;
-      padding: 10px 12px calc(10px + var(--safe-bot));
-      background: linear-gradient(0deg, rgba(10,10,16,0.98) 0%, rgba(10,10,16,0.94) 70%, rgba(10,10,16,0.86) 100%);
-      backdrop-filter: blur(20px) saturate(140%);
-      -webkit-backdrop-filter: blur(20px) saturate(140%);
-      border-top: 1px solid var(--line);
+    /* ============================================================
+       Pull-to-refresh indicator
+       ============================================================ */
+    .ptr {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: height .2s var(--ease);
+      pointer-events: none;
     }
-    .plan-bar.empty .plan-cta { background: var(--bg-elev-1); color: var(--text-dim); border: 1px solid var(--line); box-shadow: none; }
-    .plan-cta {
-      width: 100%; min-height: 56px;
-      display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;
-      padding: 10px 18px;
-      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
-      color: #1a1206;
-      border: none; border-radius: 16px;
-      cursor: pointer;
-      box-shadow: 0 8px 24px rgba(212,162,76,0.25);
-      text-align: left;
+    .ptr-spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid var(--bg-elev-3);
+      border-top-color: var(--hn-gold);
+      border-radius: 50%;
+      animation: rot 0.8s linear infinite;
+      opacity: 0;
     }
-    .plan-cta .plan-summary { font: 900 14px/1.25 'Inter', sans-serif; }
-    .plan-cta .plan-detail { font: 700 11px/1.2 'Inter', sans-serif; opacity: 0.75; margin-top: 2px; }
-    .plan-cta .plan-total {
-      font: 900 17px/1 'Inter', sans-serif;
-      font-variant-numeric: tabular-nums;
-    }
-    .plan-cta .plan-arrow { font-size: 14px; opacity: 0.7; margin-left: 4px; }
+    .ptr.active .ptr-spinner { opacity: 1; }
 
-    /* ---------- Bottom sheet ---------- */
-    .sheet-backdrop {
-      position: fixed; inset: 0; z-index: 50;
-      background: rgba(0,0,0,0.6);
-      backdrop-filter: blur(6px);
-      opacity: 0; pointer-events: none;
-      transition: opacity .25s ease;
-    }
-    .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
-    .sheet {
+    /* ============================================================
+       Bottom tab bar (iOS UITabBar)
+       ============================================================ */
+    .tab-bar {
       position: fixed; left: 0; right: 0; bottom: 0;
-      z-index: 51;
-      max-height: 92vh; max-height: 92dvh;
-      background: var(--bg-elev-1);
-      border-top-left-radius: 24px;
-      border-top-right-radius: 24px;
-      border-top: 1px solid var(--line);
-      transform: translateY(100%);
-      transition: transform .3s cubic-bezier(.22,.61,.36,1);
-      display: flex; flex-direction: column;
-      overscroll-behavior: contain;
+      height: calc(var(--tab-bar-h) + var(--safe-bot));
+      padding-bottom: var(--safe-bot);
+      background: rgba(20,20,28,0.78);
+      backdrop-filter: saturate(180%) blur(28px);
+      -webkit-backdrop-filter: saturate(180%) blur(28px);
+      border-top: 0.5px solid var(--line);
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      z-index: 40;
     }
-    .sheet.open { transform: translateY(0); }
-    .sheet-handle {
-      width: 36px; height: 4px;
-      background: var(--text-mute);
-      border-radius: 2px;
-      margin: 8px auto 4px;
-      opacity: 0.5;
+    .tab-btn {
+      display: grid; place-items: center; gap: 3px;
+      padding: 8px 4px;
+      color: var(--text-mute);
+      transition: color .15s var(--ease);
+      position: relative;
     }
-    .sheet-head {
-      display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start;
-      padding: 12px 18px 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .sheet-head h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.3px; }
-    .sheet-head .sub { font-size: 11.5px; color: var(--text-dim); margin-top: 3px; line-height: 1.35; }
-    .sheet-close {
-      width: 36px; height: 36px;
-      background: var(--bg-elev-2); border: 1px solid var(--line);
-      color: var(--text); border-radius: 10px; cursor: pointer;
+    .tab-btn .glyph {
+      width: 28px; height: 28px;
       display: grid; place-items: center;
-      font-size: 18px;
     }
-    .sheet-body {
-      flex: 1; overflow-y: auto;
-      padding: 14px 14px calc(20px + var(--safe-bot));
-      display: grid; gap: 12px;
+    .tab-btn svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .tab-btn .label {
+      font: 700 10.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
     }
+    .tab-btn.on {
+      color: var(--hn-gold);
+    }
+    .tab-btn.on svg {
+      fill: var(--hn-gold-soft);
+      stroke: var(--hn-gold);
+      stroke-width: 2.1;
+    }
+    .tab-btn:active .glyph { transform: scale(0.86); transition: transform .1s var(--ease); }
+    .tab-btn .badge {
+      position: absolute;
+      top: 4px; left: 50%;
+      transform: translate(8px, 0);
+      min-width: 18px; height: 18px;
+      padding: 0 5px;
+      background: var(--pc-red);
+      color: #fff;
+      border-radius: 9px;
+      font: 800 11px/18px -apple-system, sans-serif;
+      text-align: center;
+      box-shadow: 0 0 0 2px rgba(20,20,28,1);
+    }
+    .tab-btn .badge.hide { display: none; }
+
+    /* ============================================================
+       Plan tab (shopping plan view)
+       ============================================================ */
+    .plan-honesty {
+      margin: 0 16px 16px;
+      padding: 12px 14px;
+      background: rgba(94,158,255,0.10);
+      border-radius: 13px;
+      font: 500 12.5px/1.45 -apple-system, sans-serif;
+      color: #b8d4f5;
+      letter-spacing: -0.01em;
+      box-shadow: inset 0 0 0 1px rgba(94,158,255,0.18);
+    }
+    .plan-honesty b { color: #d2e4fa; font-weight: 700; }
 
     .portal-block {
-      background: var(--bg-elev-2);
-      border: 1px solid var(--line);
-      border-radius: 14px;
+      margin: 0 12px 14px;
+      background: var(--bg-elev-1);
+      border-radius: 18px;
       overflow: hidden;
     }
     .portal-block-head {
-      display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center;
-      padding: 12px;
-      border-bottom: 1px solid var(--line);
+      display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center;
+      padding: 14px;
     }
-    .portal-block-head .portal-favicon { width: 36px; height: 36px; }
     .portal-block-title {
-      font-size: 14px; font-weight: 800; color: var(--text);
-      letter-spacing: -0.1px;
+      font: 800 15px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      color: var(--text);
     }
     .portal-block-meta {
-      font-size: 11px; color: var(--text-dim); margin-top: 1px;
+      margin-top: 3px;
+      font: 500 11.5px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
     }
     .portal-block-total {
-      font: 900 15px/1 'Inter', sans-serif;
-      font-variant-numeric: tabular-nums;
+      font: 800 17px/1 -apple-system, sans-serif;
+      letter-spacing: -0.03em;
       color: var(--text);
+      font-variant-numeric: tabular-nums;
       text-align: right;
     }
     .portal-cta-row {
       display: grid; grid-template-columns: 1fr auto; gap: 8px;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
+      padding: 0 14px 14px;
     }
-    .portal-open-app {
-      min-height: 42px;
-      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
-      color: #1a1206;
-      border: none; border-radius: 10px;
-      font: 900 13px/1 'Inter', sans-serif;
-      text-decoration: none; cursor: pointer;
-    }
-    .portal-share-btn {
-      min-height: 42px; padding: 0 14px;
-      background: var(--bg-elev-1);
-      border: 1px solid var(--line);
+    .portal-cta-row .portal-share-btn {
+      min-width: 50px; height: 46px; padding: 0 12px;
+      background: var(--bg-elev-2);
       color: var(--text);
-      border-radius: 10px;
-      font: 700 12px/1 'Inter', sans-serif;
-      cursor: pointer;
-      display: inline-flex; align-items: center; gap: 4px;
+      border-radius: 13px;
+      font: 700 12px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      display: inline-flex; align-items: center; gap: 4px; justify-content: center;
+      transition: transform .1s var(--ease);
     }
+    .portal-cta-row .portal-share-btn:active { transform: scale(0.95); }
 
-    .plan-line {
-      display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: start;
-      padding: 10px 12px;
-      border-bottom: 1px dashed var(--line);
+    .plan-line-wrap {
+      position: relative; overflow: hidden;
+      border-top: 0.5px solid var(--line);
     }
-    .plan-line:last-child { border-bottom: none; }
-    .plan-line .mat-thumb { width: 36px; height: 36px; border-radius: 8px; }
-    .plan-line .mat-thumb .emoji { font-size: 18px; }
+    .plan-line {
+      display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: start;
+      padding: 12px 14px;
+      background: var(--bg-elev-1);
+      transition: transform .2s var(--ease);
+      will-change: transform;
+    }
+    .plan-line .mat-thumb {
+      width: 40px; height: 40px; border-radius: 10px;
+    }
+    .plan-line .mat-thumb .emoji { font-size: 22px; }
     .plan-line-info { min-width: 0; }
     .plan-line-name {
-      font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.25;
+      font: 700 14px/1.25 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      color: var(--text);
     }
     .plan-line-sku {
-      font-size: 10.5px; color: var(--text-dim); margin-top: 2px;
+      margin-top: 2px;
+      font: 500 11px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .plan-line-controls {
-      display: flex; gap: 6px; align-items: center; margin-top: 6px;
-      flex-wrap: wrap;
+      margin-top: 8px;
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     }
-    .plan-line-controls .qty-stepper { height: 26px; }
-    .plan-line-controls .qty-stepper button { width: 22px; height: 22px; font-size: 14px; }
-    .plan-line-controls .qty-stepper input { width: 32px; height: 22px; font-size: 11px; }
+    .plan-line-controls .qty-stepper { height: 28px; padding: 1px; }
+    .plan-line-controls .qty-stepper button { width: 24px; height: 24px; font-size: 14px; }
+    .plan-line-controls .qty-stepper input { width: 36px; height: 24px; font-size: 12px; }
     .open-product-mini {
-      padding: 5px 10px; min-height: 26px;
-      background: var(--bg-elev-1);
-      border: 1px solid var(--line);
+      padding: 6px 10px; min-height: 28px;
+      background: var(--bg-elev-2);
       color: var(--text);
       border-radius: 8px;
-      font: 700 10.5px/1 'Inter', sans-serif;
-      text-decoration: none;
+      font: 700 11px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
       display: inline-flex; align-items: center; gap: 3px;
+      transition: transform .1s var(--ease);
     }
+    .open-product-mini:active { transform: scale(0.94); }
     .plan-line-price {
-      text-align: right;
-      font: 900 13px/1 'Inter', sans-serif;
-      font-variant-numeric: tabular-nums;
+      font: 800 14px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
       color: var(--text);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
     }
-    .plan-line-remove {
-      width: 24px; height: 24px;
-      background: transparent;
-      border: 1px solid var(--line);
-      color: var(--pc-red);
-      border-radius: 6px;
-      font-size: 11px; cursor: pointer;
-      margin-top: 4px;
+    /* Swipe-reveal Remove */
+    .plan-line-reveal {
+      position: absolute; top: 0; right: 0; bottom: 0;
+      width: 80px;
+      background: var(--pc-red);
+      display: grid; place-items: center;
+      color: #fff;
+      font: 800 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      transform: translateX(80px);
     }
+    .plan-line-wrap.revealed .plan-line { transform: translateX(-80px); }
+    .plan-line-wrap.revealed .plan-line-reveal { transform: translateX(0); }
 
-    .sheet-honesty {
-      padding: 10px 14px;
-      background: rgba(96,165,250,0.08);
-      border: 1px solid rgba(96,165,250,0.2);
-      border-radius: 10px;
-      font-size: 11.5px;
-      color: #b8d4f5;
-      line-height: 1.45;
-      margin-bottom: 4px;
-    }
-    .sheet-honesty b { color: #d2e4fa; }
-
-    .sheet-grand {
-      padding: 14px;
-      background: var(--bg-elev-2);
-      border: 1px solid var(--hn-gold-border);
-      border-radius: 12px;
+    .grand-card {
+      margin: 4px 12px 24px;
+      padding: 18px;
+      background: linear-gradient(135deg, rgba(212,162,76,0.10) 0%, rgba(212,162,76,0.03) 100%);
+      border-radius: 18px;
+      box-shadow: inset 0 0 0 1px rgba(212,162,76,0.30);
       display: flex; justify-content: space-between; align-items: center;
     }
-    .sheet-grand-label {
-      font: 700 13px/1 'Inter', sans-serif;
+    .grand-label {
+      font: 700 12px/1 -apple-system, sans-serif;
       color: var(--text-dim);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.08em;
     }
-    .sheet-grand-amount {
-      font: 900 22px/1 'Inter', sans-serif;
-      font-variant-numeric: tabular-nums;
+    .grand-value {
+      font: 800 28px/1 -apple-system, sans-serif;
       color: var(--hn-gold);
-      letter-spacing: -0.5px;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
     }
 
-    .sheet-empty {
-      text-align: center; padding: 60px 24px;
+    /* ============================================================
+       You tab (account / settings)
+       ============================================================ */
+    .you-row-group {
+      margin: 0 16px 16px;
+      background: var(--bg-elev-1);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .you-row {
+      display: grid; grid-template-columns: 30px 1fr auto; gap: 12px;
+      align-items: center;
+      padding: 14px 16px;
+      transition: background .15s ease;
+    }
+    .you-row + .you-row {
+      border-top: 0.5px solid var(--line);
+    }
+    .you-row:active { background: var(--bg-elev-2); }
+    .you-row .row-icon {
+      width: 28px; height: 28px;
+      border-radius: 7px;
+      display: grid; place-items: center;
+      font-size: 15px;
+    }
+    .you-row .row-label {
+      font: 600 14.5px/1.2 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .you-row .row-sub {
+      font: 500 12px/1.3 -apple-system, sans-serif;
       color: var(--text-dim);
+      letter-spacing: -0.01em;
+      margin-top: 2px;
     }
-    .sheet-empty .big { font-size: 44px; opacity: 0.6; margin-bottom: 8px; }
+    .you-row .row-value {
+      font: 600 13px/1.2 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    .you-row .row-value.ok { color: var(--pc-green); }
+    .you-row .row-value.bad { color: var(--pc-red); }
+    .you-row .row-value.warn { color: var(--pc-yellow); }
+    .you-row .row-value.dim { color: var(--text-dim); }
+    .you-row .row-chev { color: var(--text-mute); font-size: 12px; margin-left: 4px; }
 
-    /* ---------- Add material modal ---------- */
+    .you-group-title {
+      padding: 0 28px 8px;
+      font: 700 11.5px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+    .you-footer {
+      text-align: center; padding: 32px 24px 12px;
+      font: 500 11px/1.45 -apple-system, sans-serif;
+      color: var(--text-mute);
+    }
+    .you-footer .accent {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic; color: var(--hn-gold);
+    }
+
+    /* ============================================================
+       PIN gate (full-screen splash)
+       ============================================================ */
+    .pin-gate {
+      position: fixed; inset: 0;
+      display: grid; place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(ellipse at top, rgba(212,162,76,0.10) 0%, transparent 50%),
+        var(--bg);
+      z-index: 100;
+    }
+    .pin-card {
+      width: min(360px, 100%);
+      text-align: center;
+      animation: fadeUp .6s var(--spring);
+    }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .pin-mark {
+      width: 88px; height: 88px;
+      margin: 0 auto 18px;
+      border-radius: 22px;
+      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
+      color: #1a1206;
+      display: grid; place-items: center;
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 700; font-size: 52px;
+      letter-spacing: -2px;
+      box-shadow: 0 16px 40px rgba(212,162,76,0.32),
+                  inset 0 1px 0 rgba(255,255,255,0.25),
+                  inset 0 -1px 0 rgba(0,0,0,0.1);
+    }
+    .pin-card h1 {
+      margin: 0;
+      font: 800 28px/1 -apple-system, sans-serif;
+      letter-spacing: -0.03em;
+    }
+    .pin-card .heritage {
+      margin-top: 6px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 14px; font-style: italic;
+      color: var(--hn-gold);
+      letter-spacing: 0.04em;
+    }
+    .pin-card .helper {
+      margin: 22px 0 14px;
+      font: 500 13.5px/1.4 -apple-system, sans-serif;
+      color: var(--text-dim); letter-spacing: -0.01em;
+    }
+    .pin-input {
+      width: 100%; height: 56px;
+      background: var(--bg-elev-1);
+      border: 0.5px solid var(--line);
+      color: var(--text);
+      border-radius: 14px;
+      text-align: center;
+      font: 800 26px/1 -apple-system, sans-serif;
+      letter-spacing: 14px;
+      -webkit-text-security: disc;
+    }
+    .pin-input:focus {
+      outline: none;
+      border-color: var(--hn-gold-border);
+      box-shadow: 0 0 0 4px var(--hn-gold-soft);
+    }
+    .pin-unlock {
+      width: 100%; height: 54px;
+      margin-top: 14px;
+      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
+      color: #1a1206;
+      border-radius: 14px;
+      font: 800 15px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      box-shadow: 0 8px 24px rgba(212,162,76,0.28), inset 0 1px 0 rgba(255,255,255,0.25);
+      transition: transform .1s var(--ease), filter .1s ease;
+    }
+    .pin-unlock:active { transform: scale(0.97); filter: brightness(0.92); }
+    .pin-unlock:disabled { opacity: 0.55; transform: none; }
+    .pin-error {
+      margin-top: 14px;
+      color: var(--pc-red);
+      font: 700 12px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+    }
+
+    /* ============================================================
+       Modal (Add material — iOS sheet)
+       ============================================================ */
     .modal-backdrop {
-      position: fixed; inset: 0; z-index: 60;
-      background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
+      position: fixed; inset: 0; z-index: 70;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
       opacity: 0; pointer-events: none;
-      transition: opacity .2s ease;
+      transition: opacity .25s var(--ease);
       display: grid; place-items: end center;
     }
     .modal-backdrop.open { opacity: 1; pointer-events: auto; }
@@ -759,73 +1007,109 @@
       width: 100%; max-width: 480px;
       background: var(--bg-elev-1);
       border-top-left-radius: 22px; border-top-right-radius: 22px;
-      padding: 14px 18px calc(18px + var(--safe-bot));
+      padding: 14px 20px calc(20px + var(--safe-bot));
       transform: translateY(100%);
-      transition: transform .25s cubic-bezier(.22,.61,.36,1);
+      transition: transform .35s var(--spring);
       max-height: 88vh; overflow-y: auto;
     }
     .modal-backdrop.open .modal-card { transform: translateY(0); }
-    .modal-head { display: grid; grid-template-columns: 1fr auto; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
-    .modal-head h2 { margin: 0; font-size: 18px; font-weight: 800; }
-    .modal-form { display: grid; gap: 12px; }
+    .modal-handle {
+      width: 36px; height: 5px;
+      background: var(--text-mute);
+      border-radius: 3px;
+      margin: 0 auto 12px;
+      opacity: 0.4;
+    }
+    .modal-head {
+      display: grid; grid-template-columns: 1fr auto;
+      align-items: center; padding-bottom: 12px;
+      border-bottom: 0.5px solid var(--line);
+      margin-bottom: 16px;
+    }
+    .modal-head h2 {
+      margin: 0;
+      font: 800 19px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+    }
+    .modal-close {
+      width: 30px; height: 30px;
+      background: var(--bg-elev-3);
+      color: var(--text-dim);
+      border-radius: 15px;
+      display: grid; place-items: center;
+      font-size: 15px;
+    }
+    .modal-form { display: grid; gap: 14px; }
     .modal-form label {
       display: grid; gap: 6px;
-      font: 700 11px/1 'Inter', sans-serif; color: var(--text-dim);
-      text-transform: uppercase; letter-spacing: 0.4px;
+      font: 700 11px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
     .modal-form input, .modal-form select {
-      width: 100%; height: 46px;
+      width: 100%; height: 48px;
       background: var(--bg-elev-2);
-      border: 1px solid var(--line);
+      border: 0.5px solid var(--line);
       color: var(--text);
-      border-radius: 10px;
+      border-radius: 11px;
       padding: 0 14px;
-      font: 600 14px 'Inter', sans-serif;
-      -webkit-appearance: none;
+      font: 600 15px -apple-system, sans-serif;
+      letter-spacing: -0.01em;
     }
+    .modal-form input:focus, .modal-form select:focus { outline: none; border-color: var(--hn-gold-border); }
     .modal-form .submit {
-      height: 50px;
+      height: 52px;
       background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
-      color: #1a1206; border: none;
-      border-radius: 12px;
-      font: 900 14px/1 'Inter', sans-serif;
-      cursor: pointer; margin-top: 4px;
+      color: #1a1206;
+      border-radius: 13px;
+      font: 800 15px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      box-shadow: 0 6px 16px rgba(212,162,76,0.25);
+      margin-top: 4px;
+      transition: transform .1s var(--ease);
     }
+    .modal-form .submit:active { transform: scale(0.97); }
 
-    /* ---------- Toast ---------- */
+    /* ============================================================
+       Toast
+       ============================================================ */
     .toast {
       position: fixed; left: 50%; transform: translate(-50%, 0);
-      bottom: calc(110px + var(--safe-bot)); z-index: 70;
-      background: var(--bg-elev-2);
-      border: 1px solid var(--line);
+      bottom: calc(var(--tab-bar-h) + var(--safe-bot) + 16px);
+      z-index: 80;
+      padding: 12px 18px;
+      background: rgba(30,30,38,0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       color: var(--text);
-      padding: 11px 18px;
-      border-radius: 12px;
-      font: 700 12.5px/1.2 'Inter', sans-serif;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-      animation: toastIn .25s ease-out;
+      border-radius: 13px;
+      font: 700 13px/1.3 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 0 0.5px var(--line);
+      animation: toastIn .35s var(--spring);
       max-width: calc(100vw - 32px);
       text-align: center;
     }
-    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 18px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
     .hide { display: none !important; }
 
-    @media (min-width: 760px) {
-      body { padding-bottom: calc(80px + var(--safe-bot)); }
-      .brandbar, .filter-strip, .stream, .plan-bar { max-width: 760px; margin-left: auto; margin-right: auto; }
-      .plan-bar { left: auto; right: auto; }
-      .sheet { max-width: 760px; margin: 0 auto; border-radius: 24px 24px 0 0; }
+    @media (min-width: 720px) {
+      .tab-pane { max-width: 540px; margin: 0 auto; }
+      .tab-bar { max-width: 540px; margin: 0 auto; border-left: 0.5px solid var(--line); border-right: 0.5px solid var(--line); }
     }
   </style>
 </head>
 <body>
 
-  <!-- PIN gate -->
+  <!-- ============================================================
+       PIN gate
+       ============================================================ -->
   <section id="pinGate" class="pin-gate">
     <div class="pin-card">
-      <div class="brand-mark-big">H</div>
-      <h2>BuyList</h2>
+      <div class="pin-mark">H</div>
+      <h1>BuyList</h1>
       <div class="heritage">HN Hotels · since 1918</div>
       <div class="helper">Enter your 4-digit PIN to continue</div>
       <input id="pinInput" class="pin-input" type="tel" maxlength="4" inputmode="numeric" autocomplete="one-time-code" placeholder="••••">
@@ -834,78 +1118,156 @@
     </div>
   </section>
 
-  <!-- App shell -->
+  <!-- ============================================================
+       App
+       ============================================================ -->
   <div id="app" class="hide">
-    <!-- Brand bar -->
-    <header class="brandbar">
-      <div class="brand-mark">H</div>
-      <div class="brand-title">
-        <h1>BuyList</h1>
-        <div class="sub">HN Hotels · <b>since 1918</b></div>
-      </div>
-      <button id="brandCartChip" class="brand-cart-chip empty" type="button">
-        <span>🧾</span>
-        <span class="cart-count">0</span>
-      </button>
-    </header>
+    <div class="status-bar-haze"></div>
 
-    <!-- Filter strip -->
-    <div class="filter-strip">
-      <div class="search-wrap">
-        <span class="icon">🔍</span>
-        <input id="searchInput" type="search" placeholder="Search materials, SKUs, vendors…" autocomplete="off">
+    <!-- ─────── SHOP TAB ─────── -->
+    <main class="tab-pane" id="tab-shop" data-tab="shop">
+      <div class="ptr" id="ptrShop"><div class="ptr-spinner"></div></div>
+      <div class="top-nav" id="navShop">
+        <div></div>
+        <div class="nav-title">BuyList</div>
+        <button class="nav-action right" id="navAddBtn" type="button" title="Add material">+ Add</button>
       </div>
-      <div class="brand-toggle">
+      <div class="large-title-wrap">
+        <h1 class="large-title">BuyList <span class="accent">since 1918</span></h1>
+        <div class="large-subtitle" id="shopSubtitle">Loading materials…</div>
+      </div>
+      <div class="search-section">
+        <div class="search-pill">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input id="searchInput" type="search" placeholder="Search materials, SKUs, vendors" autocomplete="off">
+        </div>
+      </div>
+      <div class="segmented" id="brandToggle">
         <button data-brand="BOTH" class="on" type="button">HE + NCH</button>
         <button data-brand="HE" type="button">Hamza Express</button>
         <button data-brand="NCH" type="button">Nawabi Chai</button>
       </div>
-      <div class="cat-chips" id="catChips"></div>
-      <div class="filter-meta">
-        <span id="filterStat">— materials</span>
-        <button id="addMatBtn" type="button">+ Add material</button>
+      <div class="chip-rail-wrap">
+        <div class="chip-rail" id="catChips"></div>
       </div>
-    </div>
-
-    <main>
+      <div class="filter-meta">
+        <span class="filter-stat" id="filterStat">— materials</span>
+        <button class="add-btn-small" id="addMatBtn" type="button">+ Material</button>
+      </div>
       <div id="listGrid" class="stream"></div>
     </main>
 
-    <!-- Sticky plan bar -->
-    <div id="planBar" class="plan-bar empty">
-      <button id="planCta" class="plan-cta" type="button">
-        <div>
-          <div class="plan-summary">🧾 Shopping Plan</div>
-          <div class="plan-detail" id="planDetail">No items yet — tap any deal to start</div>
-        </div>
-        <div>
-          <span class="plan-total" id="planTotal">₹0</span>
-          <span class="plan-arrow">›</span>
-        </div>
-      </button>
-    </div>
-  </div>
-
-  <!-- Shopping Plan bottom sheet -->
-  <div id="sheetBackdrop" class="sheet-backdrop"></div>
-  <div id="planSheet" class="sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <div>
-        <h2>Shopping Plan</h2>
-        <div class="sub" id="sheetSub">Organised by portal — open each app and tap your items.</div>
+    <!-- ─────── PLAN TAB ─────── -->
+    <main class="tab-pane hide" id="tab-plan" data-tab="plan">
+      <div class="top-nav" id="navPlan">
+        <div></div>
+        <div class="nav-title">Shopping Plan</div>
+        <div></div>
       </div>
-      <button id="sheetClose" class="sheet-close" type="button">✕</button>
-    </div>
-    <div class="sheet-body" id="sheetBody"></div>
+      <div class="large-title-wrap">
+        <h1 class="large-title">Shopping Plan</h1>
+        <div class="large-subtitle" id="planSubtitle">Organised by portal. Tap a product to add it in the app.</div>
+      </div>
+      <div id="planBody"></div>
+    </main>
+
+    <!-- ─────── YOU TAB ─────── -->
+    <main class="tab-pane hide" id="tab-you" data-tab="you">
+      <div class="top-nav" id="navYou">
+        <div></div>
+        <div class="nav-title">Account</div>
+        <div></div>
+      </div>
+      <div class="large-title-wrap">
+        <h1 class="large-title">Account</h1>
+        <div class="large-subtitle" id="youSubtitle">PIN · session · portal health</div>
+      </div>
+
+      <div class="you-group-title">SIGNED IN AS</div>
+      <div class="you-row-group">
+        <div class="you-row">
+          <div class="row-icon" style="background:var(--hn-gold-soft); color:var(--hn-gold);">👤</div>
+          <div>
+            <div class="row-label" id="youName">—</div>
+            <div class="row-sub" id="youRole">—</div>
+          </div>
+          <button class="row-value dim" id="youSignOutBtn" type="button" style="background:var(--bg-elev-2); padding:8px 14px; border-radius:10px;">Sign out</button>
+        </div>
+      </div>
+
+      <div class="you-group-title">PORTAL HEALTH</div>
+      <div class="you-row-group" id="portalHealthGroup">
+        <div class="empty-state" style="padding:24px 12px;">
+          <div class="body">Tap refresh to check portal sessions.</div>
+        </div>
+      </div>
+
+      <div class="you-group-title">PREFERENCES</div>
+      <div class="you-row-group">
+        <a class="you-row" href="/ops/purchase/" id="poLedgerRow">
+          <div class="row-icon" style="background:rgba(94,158,255,0.18); color:var(--pc-blue);">📒</div>
+          <div>
+            <div class="row-label">PO Ledger</div>
+            <div class="row-sub">Last 30d Odoo purchase orders</div>
+          </div>
+          <div class="row-chev">›</div>
+        </a>
+        <button class="you-row" id="refreshHealthRow" type="button" style="text-align:left;">
+          <div class="row-icon" style="background:rgba(52,211,153,0.18); color:var(--pc-green);">🩺</div>
+          <div>
+            <div class="row-label">Check portal sessions</div>
+            <div class="row-sub">Hyperpure / BB / Blinkit / Zepto / FK / Amazon / JioMart</div>
+          </div>
+          <div class="row-chev">›</div>
+        </button>
+        <button class="you-row" id="installPwaRow" type="button" style="text-align:left;">
+          <div class="row-icon" style="background:rgba(167,139,250,0.18); color:var(--pc-purple);">📲</div>
+          <div>
+            <div class="row-label">Install on home screen</div>
+            <div class="row-sub">Add BuyList icon to your iPhone home screen</div>
+          </div>
+          <div class="row-chev">›</div>
+        </button>
+      </div>
+
+      <div class="you-footer">
+        BuyList · HN Hotels Pvt Ltd<br>
+        <span class="accent">Hamza family in Bangalore food trade since 1918</span><br>
+        v2.0 · 7 portals wired
+      </div>
+    </main>
+
+    <!-- ─────── TAB BAR ─────── -->
+    <nav class="tab-bar">
+      <button class="tab-btn on" data-tab-target="shop" type="button">
+        <span class="glyph">
+          <svg viewBox="0 0 24 24"><path d="M3 8.5l9-5 9 5v10l-9 5-9-5v-10z"/><path d="M3 8.5l9 5 9-5"/><path d="M12 13.5v10"/></svg>
+        </span>
+        <span class="label">Shop</span>
+      </button>
+      <button class="tab-btn" data-tab-target="plan" type="button">
+        <span class="glyph">
+          <svg viewBox="0 0 24 24"><path d="M6 3h12l1 4H5l1-4z"/><path d="M5 7v12c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V7"/><path d="M9 11v6M15 11v6M12 11v6"/></svg>
+        </span>
+        <span class="label">Plan</span>
+        <span class="badge hide" id="planBadge">0</span>
+      </button>
+      <button class="tab-btn" data-tab-target="you" type="button">
+        <span class="glyph">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+        </span>
+        <span class="label">You</span>
+      </button>
+    </nav>
   </div>
 
-  <!-- Add material modal -->
+  <!-- ─────── ADD MATERIAL MODAL ─────── -->
   <div id="addMatModal" class="modal-backdrop">
     <div class="modal-card">
+      <div class="modal-handle"></div>
       <div class="modal-head">
         <h2>Add material</h2>
-        <button id="addMatClose" class="sheet-close" type="button">✕</button>
+        <button id="addMatClose" class="modal-close" type="button">✕</button>
       </div>
       <form id="addMatForm" class="modal-form" autocomplete="off">
         <label>Name<input name="name" required placeholder="e.g. Whole Chicken with skin"></label>
@@ -923,19 +1285,17 @@
             <option value="NCH">Nawabi Chai House only</option>
           </select>
         </label>
-        <button type="submit" class="submit">Add to list</button>
+        <button type="submit" class="submit">Add to BuyList</button>
       </form>
     </div>
   </div>
 
   <script>
     // ============================================================
-    // BuyList · HN Hotels mobile shell
+    // Portals & URL handoff (lifted from PR #250 baseline)
     // ============================================================
-
     const PORTAL_ORDER = ['HYPERPURE', 'BIGBASKET', 'BLINKIT', 'ZEPTO', 'FLIPKART_MINUTES', 'AMAZON_NOW', 'JIOMART', 'INSTAMART'];
     const PORTAL_SOURCE_KEYS = PORTAL_ORDER.slice();
-
     const SOURCE_LABELS = {
       HYPERPURE: 'Hyperpure', BIGBASKET: 'BigBasket', BLINKIT: 'Blinkit',
       ZEPTO: 'Zepto', FLIPKART_MINUTES: 'Flipkart Minutes', AMAZON_NOW: 'Amazon Now',
@@ -960,57 +1320,25 @@
       if (!d) return `<div class="${cls} letter">${PORTAL_LETTER[sk] || '?'}</div>`;
       return `<div class="${cls}"><img src="https://www.google.com/s2/favicons?domain=${d}&sz=${size}" alt="${SOURCE_LABELS[sk] || sk}" onerror="this.parentNode.classList.add('letter');this.parentNode.textContent='${PORTAL_LETTER[sk] || '?'}'"></div>`;
     }
-
-    // ------------------------------------------------------------
-    // iOS app handoff — Universal Link friendly URLs
-    // ------------------------------------------------------------
-    // The premise: on iOS, tapping a web URL whose origin has an
-    // apple-app-site-association file with the matching path triggers
-    // the installed app instead of Safari. So we just need to make
-    // sure we hand iOS the CANONICAL Universal Link the portal expects.
-    // Wrong path / extra params / HTML-entity-encoded `&` all break the
-    // handoff.
-    //
-    // Each portal exposes a (productUrl, fallbackSearchUrl) pair. If
-    // the scout captured a product URL we use it (after sanitising);
-    // otherwise we fall back to the canonical search URL, which still
-    // opens the app and shows the in-app search result for the query.
     function cleanUrl(url) {
       if (!url) return '';
-      // Decode any HTML entities that survived the API boundary.
-      // Even though the API now decodes, defending here protects
-      // against any cached state or future regressions.
-      return String(url)
-        .replace(/&amp;/g, '&')
-        .replace(/&#38;/g, '&')
-        .trim();
+      return String(url).replace(/&amp;/g, '&').replace(/&#38;/g, '&').trim();
     }
     const PORTAL_SEARCH_URL = {
-      // Hyperpure consumer search. Path slug + query both needed; their
-      // SPA reads both. Universal Link support unconfirmed but the URL
-      // itself opens to the right search result either way.
-      HYPERPURE: (q) => {
-        const slug = String(q || 'search').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'search';
-        return `https://www.hyperpure.com/in/search/${encodeURIComponent(slug)}?type=SEARCH&query=${encodeURIComponent(q)}`;
-      },
-      // BigBasket Universal Link works on /ps/?q=. Tested: opens BB app.
+      HYPERPURE: (q) => { const s = String(q || 'search').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'search'; return `https://www.hyperpure.com/in/search/${encodeURIComponent(s)}?type=SEARCH&query=${encodeURIComponent(q)}`; },
       BIGBASKET: (q) => `https://www.bigbasket.com/ps/?q=${encodeURIComponent(q)}`,
-      // Blinkit Universal Link on /s/?q=. Opens app.
       BLINKIT: (q) => `https://blinkit.com/s/?q=${encodeURIComponent(q)}`,
-      // Flipkart UL on /search?q=. Strip marketplace=HYPERLOCAL because
-      // it forces a sub-store flow that often blocks app handoff.
-      // Once you're in the Flipkart app, Minutes is one tap from home.
       FLIPKART_MINUTES: (q) => `https://www.flipkart.com/search?q=${encodeURIComponent(q)}`,
-      // Amazon UL on amazon.in/s. Drop almBrandId — the Now store flag
-      // confuses iOS Universal-Link routing. App opens to search and
-      // user picks Now items there.
-      AMAZON_NOW: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}`,
-      // Zepto UL on /search.
+      // Amazon Now = `i=nowstore` filter on the search path. Without it
+      // you land in regular Amazon search, NOT the Now flow. iOS
+      // Universal-Link routing is path-based not query-based, so adding
+      // this param doesn't block the app handoff — I dropped it earlier
+      // on a wrong assumption. Captured product URLs already carry the
+      // sibling flag `almBrandId=ctnow` which routes inside the Amazon
+      // app to the Now product detail.
+      AMAZON_NOW: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}&i=nowstore`,
       ZEPTO: (q) => `https://www.zepto.com/search?query=${encodeURIComponent(q)}`,
-      // JioMart's actual search URL uses `q=`, not `text=`. The old
-      // `text=` route 404'd silently.
       JIOMART: (q) => `https://www.jiomart.com/search/${encodeURIComponent(q)}?q=${encodeURIComponent(q)}`,
-      // Swiggy Instamart UL.
       INSTAMART: (q) => `https://www.swiggy.com/instamart/search?custom_back=true&query=${encodeURIComponent(q)}`,
     };
     function portalSearchUrlFor(sk, q) {
@@ -1023,9 +1351,9 @@
       return portalSearchUrlFor(source?.source_key, materialQuery);
     }
 
-    // ------------------------------------------------------------
-    // Emoji thumbnail map
-    // ------------------------------------------------------------
+    // ============================================================
+    // Emoji thumbnail rules
+    // ============================================================
     const MAT_EMOJI = [
       [/\b(boneless|tandoori|kebab|tangdi|drumstick|lollipop|wing|chicken|murgh)\b/i, '🍗'],
       [/\b(mutton|lamb|goat|gravy cut|chops|brain|bheja|paya)\b/i, '🥩'],
@@ -1071,23 +1399,12 @@
       [/\b(haleem|biryani|kabab)\b/i, '🍛'],
     ];
     const CAT_EMOJI = {
-      'Meat & Poultry': '🥩',
-      'Dairy & Eggs': '🥛',
-      'Fresh Vegetables & Produce': '🥬',
-      'Dry Goods & Staples': '🌾',
-      'Spices & Seasoning': '🌶️',
-      'Oils & Fats': '🫗',
-      'Beverage Inputs': '☕',
-      'Lentils & Pulses': '🫘',
-      'Bakery': '🍞',
-      'Cleaning & Non-Food': '🧽',
-      'Packaging & Disposables': '📦',
-      'Dry Fruits & Nuts': '🥜',
-      'Ready-Made & Snacks': '🍿',
-      'Sauces & Condiments': '🥫',
-      'Water': '💧',
-      'Fuel & Production': '🔥',
-      'Custom': '🛒',
+      'Meat & Poultry': '🥩', 'Dairy & Eggs': '🥛', 'Fresh Vegetables & Produce': '🥬',
+      'Dry Goods & Staples': '🌾', 'Spices & Seasoning': '🌶️', 'Oils & Fats': '🫗',
+      'Beverage Inputs': '☕', 'Lentils & Pulses': '🫘', 'Bakery': '🍞',
+      'Cleaning & Non-Food': '🧽', 'Packaging & Disposables': '📦',
+      'Dry Fruits & Nuts': '🥜', 'Ready-Made & Snacks': '🍿',
+      'Sauces & Condiments': '🥫', 'Water': '💧', 'Fuel & Production': '🔥', 'Custom': '🛒',
     };
     function materialEmoji(mat) {
       const name = String(mat?.name || '');
@@ -1095,9 +1412,9 @@
       return CAT_EMOJI[mat?.category] || '🛒';
     }
 
-    // ------------------------------------------------------------
+    // ============================================================
     // State + DOM cache
-    // ------------------------------------------------------------
+    // ============================================================
     const state = {
       pin: localStorage.getItem('purchaseConsolePin') || '',
       user: null,
@@ -1108,7 +1425,10 @@
       brand: localStorage.getItem('purchaseConsoleBrand') || 'BOTH',
       refreshing: new Set(),
       cart: JSON.parse(localStorage.getItem('purchaseConsoleCart') || '{}'),
+      activeTab: 'shop',
+      portalHealth: [],
       loading: false,
+      deferredInstallPrompt: null,
     };
     const els = {
       pinGate: document.getElementById('pinGate'),
@@ -1116,21 +1436,31 @@
       pinError: document.getElementById('pinError'),
       unlockBtn: document.getElementById('unlockBtn'),
       app: document.getElementById('app'),
+      tabShop: document.getElementById('tab-shop'),
+      tabPlan: document.getElementById('tab-plan'),
+      tabYou: document.getElementById('tab-you'),
+      navShop: document.getElementById('navShop'),
+      navPlan: document.getElementById('navPlan'),
+      navYou: document.getElementById('navYou'),
+      navAddBtn: document.getElementById('navAddBtn'),
       searchInput: document.getElementById('searchInput'),
+      brandToggle: document.getElementById('brandToggle'),
       catChips: document.getElementById('catChips'),
       filterStat: document.getElementById('filterStat'),
       addMatBtn: document.getElementById('addMatBtn'),
       listGrid: document.getElementById('listGrid'),
-      brandCartChip: document.getElementById('brandCartChip'),
-      planBar: document.getElementById('planBar'),
-      planCta: document.getElementById('planCta'),
-      planDetail: document.getElementById('planDetail'),
-      planTotal: document.getElementById('planTotal'),
-      sheet: document.getElementById('planSheet'),
-      sheetBackdrop: document.getElementById('sheetBackdrop'),
-      sheetSub: document.getElementById('sheetSub'),
-      sheetClose: document.getElementById('sheetClose'),
-      sheetBody: document.getElementById('sheetBody'),
+      shopSubtitle: document.getElementById('shopSubtitle'),
+      planSubtitle: document.getElementById('planSubtitle'),
+      planBody: document.getElementById('planBody'),
+      planBadge: document.getElementById('planBadge'),
+      youSubtitle: document.getElementById('youSubtitle'),
+      youName: document.getElementById('youName'),
+      youRole: document.getElementById('youRole'),
+      youSignOutBtn: document.getElementById('youSignOutBtn'),
+      portalHealthGroup: document.getElementById('portalHealthGroup'),
+      refreshHealthRow: document.getElementById('refreshHealthRow'),
+      installPwaRow: document.getElementById('installPwaRow'),
+      ptrShop: document.getElementById('ptrShop'),
       addMatModal: document.getElementById('addMatModal'),
       addMatClose: document.getElementById('addMatClose'),
       addMatForm: document.getElementById('addMatForm'),
@@ -1139,9 +1469,9 @@
       addMatNewCat: document.getElementById('addMatNewCat'),
     };
 
-    // ------------------------------------------------------------
+    // ============================================================
     // Helpers
-    // ------------------------------------------------------------
+    // ============================================================
     function escapeHtml(v) {
       return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     }
@@ -1153,11 +1483,8 @@
     }
     function moneyPaise(p) { return money(Number(p || 0) / 100); }
     function toast(msg, ms = 2400) {
-      const el = document.createElement('div');
-      el.className = 'toast';
-      el.textContent = msg;
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), ms);
+      const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+      document.body.appendChild(el); setTimeout(() => el.remove(), ms);
     }
     async function fetchJson(path, opts) {
       const res = await fetch(path, opts);
@@ -1205,7 +1532,7 @@
       if (!Number.isFinite(d)) return '';
       const sign = d > 0 ? '+' : '';
       const cls = d > 2 ? 'up' : d < -2 ? 'down' : 'flat';
-      return `<span class="best-delta ${cls}">${sign}${d}% vs local</span>`;
+      return `<span class="best-delta ${cls}">${sign}${d}%</span>`;
     }
     function etaText(s) {
       const m = Number(s?.eta_minutes || 0);
@@ -1217,9 +1544,9 @@
       return '';
     }
 
-    // ------------------------------------------------------------
-    // Cart / plan
-    // ------------------------------------------------------------
+    // ============================================================
+    // Cart / Plan
+    // ============================================================
     function cartItemIndex(sk, mid) {
       const lines = state.cart[sk] || [];
       return lines.findIndex((l) => l.material_id === mid);
@@ -1230,10 +1557,7 @@
       if (!state.cart[sk]) state.cart[sk] = [];
       const mid = materialId(mat);
       const line = {
-        material_id: mid,
-        name: mat.name,
-        qty: Number(qty) || 1,
-        uom: mat.uom || 'unit',
+        material_id: mid, name: mat.name, qty: Number(qty) || 1, uom: mat.uom || 'unit',
         price_paise: Number(source.unit_price_paise || source.price_paise || 0),
         sku_url: bestUrlFor(source, mat.name),
         sku_title: source.sku_title || mat.name,
@@ -1244,157 +1568,43 @@
       const idx = cartItemIndex(sk, mid);
       if (idx >= 0) state.cart[sk][idx] = line; else state.cart[sk].push(line);
       persistCart();
-      renderPlanBar();
+      updatePlanBadge();
       renderList();
-      toast(`Added ${mat.name} · ${line.portal_label}`);
+      renderPlan();
+      toast(`Added · ${line.portal_label}`);
     }
     function removeFromCart(sk, mid) {
       const lines = state.cart[sk] || [];
       state.cart[sk] = lines.filter((l) => l.material_id !== mid);
       if (!state.cart[sk].length) delete state.cart[sk];
       persistCart();
-      renderPlanBar();
-      renderSheet();
+      updatePlanBadge();
       renderList();
+      renderPlan();
     }
     function setCartQty(sk, mid, qty) {
       const line = (state.cart[sk] || []).find((l) => l.material_id === mid);
-      if (line) {
-        line.qty = Math.max(0.01, Number(qty) || 1);
-        persistCart();
-        renderPlanBar();
-      }
+      if (line) { line.qty = Math.max(0.01, Number(qty) || 1); persistCart(); updatePlanBadge(); }
     }
     function cartTotals() {
-      const byPortal = {};
-      let grand = 0;
-      let totalCount = 0;
+      const byPortal = {}; let grand = 0; let totalCount = 0;
       for (const [sk, lines] of Object.entries(state.cart)) {
         let pt = 0;
         for (const l of lines) pt += (l.price_paise / 100) * (l.qty || 1);
         byPortal[sk] = { count: lines.length, total: pt };
-        grand += pt;
-        totalCount += lines.length;
+        grand += pt; totalCount += lines.length;
       }
       return { byPortal, grand, totalCount };
     }
-
-    function renderPlanBar() {
-      const { byPortal, grand, totalCount } = cartTotals();
-      els.brandCartChip.classList.toggle('empty', totalCount === 0);
-      els.brandCartChip.querySelector('.cart-count').textContent = String(totalCount);
-
-      if (totalCount === 0) {
-        els.planBar.classList.add('empty');
-        els.planDetail.textContent = 'No items yet — tap any deal to start';
-        els.planTotal.textContent = '₹0';
-        return;
-      }
-      els.planBar.classList.remove('empty');
-      const portals = Object.keys(byPortal).length;
-      els.planDetail.textContent = `${totalCount} item${totalCount === 1 ? '' : 's'} across ${portals} portal${portals === 1 ? '' : 's'}`;
-      els.planTotal.textContent = money(grand);
+    function updatePlanBadge() {
+      const { totalCount } = cartTotals();
+      els.planBadge.textContent = String(totalCount);
+      els.planBadge.classList.toggle('hide', totalCount === 0);
     }
 
-    // ------------------------------------------------------------
-    // Bottom sheet
-    // ------------------------------------------------------------
-    function openSheet() {
-      renderSheet();
-      els.sheetBackdrop.classList.add('open');
-      els.sheet.classList.add('open');
-      document.body.style.overflow = 'hidden';
-    }
-    function closeSheet() {
-      els.sheetBackdrop.classList.remove('open');
-      els.sheet.classList.remove('open');
-      document.body.style.overflow = '';
-    }
-    function renderSheet() {
-      const { byPortal, grand, totalCount } = cartTotals();
-      if (totalCount === 0) {
-        els.sheetSub.textContent = 'Your plan is empty. Tap any deal in the list to add it.';
-        els.sheetBody.innerHTML = `
-          <div class="sheet-empty">
-            <div class="big">🧾</div>
-            <div>Nothing here yet.</div>
-          </div>`;
-        return;
-      }
-      els.sheetSub.innerHTML = `Organised by portal. <b>Cart sync is not possible</b> — tap each product link to land on it inside the portal app, then add it there.`;
-
-      const honesty = `
-        <div class="sheet-honesty">
-          ⓘ The portals don't expose a public "add to cart" API. <b>Your plan</b> is the source of truth — tap a portal's <b>Open app ↗</b> to land in the app, then add each item there using the per-line <b>Product ↗</b> links.
-        </div>`;
-
-      const keys = Object.keys(byPortal).sort((a, b) => byPortal[b].total - byPortal[a].total);
-      const sections = keys.map((sk) => {
-        const lines = state.cart[sk] || [];
-        const t = byPortal[sk];
-        const appOpenHref = portalSearchUrlFor(sk, '');
-
-        const lineRows = lines.map((l) => {
-          const emoji = materialEmoji({ name: l.name });
-          const thumb = l.image_url
-            ? `<div class="mat-thumb"><img src="${escapeAttr(l.image_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'emoji',textContent:'${emoji}'}))"></div>`
-            : `<div class="mat-thumb"><span class="emoji">${emoji}</span></div>`;
-          return `
-          <div class="plan-line">
-            ${thumb}
-            <div class="plan-line-info">
-              <div class="plan-line-name">${escapeHtml(l.name)}</div>
-              <div class="plan-line-sku">${escapeHtml((l.sku_title || '').slice(0, 60))}</div>
-              <div class="plan-line-controls">
-                <div class="qty-stepper">
-                  <button type="button" data-qty-dec="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">−</button>
-                  <input type="number" min="0.01" step="0.25" value="${escapeAttr(l.qty)}" data-qty-input="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">
-                  <span class="uom">${escapeHtml(l.uom)}</span>
-                  <button type="button" data-qty-inc="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">+</button>
-                </div>
-                ${l.sku_url ? `<a class="open-product-mini" href="${escapeAttr(cleanUrl(l.sku_url))}" target="_blank" rel="noopener">Product ↗</a>` : ''}
-              </div>
-            </div>
-            <div>
-              <div class="plan-line-price">${moneyPaise(l.price_paise * (l.qty || 1))}</div>
-              <button class="plan-line-remove" type="button" data-cart-remove="${escapeAttr(sk)}|${escapeAttr(l.material_id)}" title="Remove">✕</button>
-            </div>
-          </div>`;
-        }).join('');
-
-        return `
-          <div class="portal-block">
-            <div class="portal-block-head">
-              ${portalFavicon(sk, 64)}
-              <div>
-                <div class="portal-block-title">${escapeHtml(SOURCE_LABELS[sk] || sk)}</div>
-                <div class="portal-block-meta">${t.count} item${t.count === 1 ? '' : 's'}</div>
-              </div>
-              <div class="portal-block-total">${money(t.total)}</div>
-            </div>
-            <div class="portal-cta-row">
-              <a class="portal-open-app" href="${escapeAttr(appOpenHref)}" target="_blank" rel="noopener">
-                ${portalFavicon(sk, 32, 'portal-favicon')}
-                <span>Open ${escapeHtml(SOURCE_LABELS[sk] || sk)} app ↗</span>
-              </a>
-              <button class="portal-share-btn" type="button" data-share-portal="${escapeAttr(sk)}">📤 Share</button>
-            </div>
-            ${lineRows}
-          </div>`;
-      }).join('');
-
-      const grandHtml = `
-        <div class="sheet-grand">
-          <span class="sheet-grand-label">Grand total</span>
-          <span class="sheet-grand-amount">${money(grand)}</span>
-        </div>`;
-
-      els.sheetBody.innerHTML = honesty + sections + grandHtml;
-    }
-
-    // ------------------------------------------------------------
-    // Material list rendering
-    // ------------------------------------------------------------
+    // ============================================================
+    // Shop tab — material list
+    // ============================================================
     function renderMaterialCard(mat) {
       const mid = materialId(mat);
       const sources = sourcesFor(mat);
@@ -1404,13 +1614,11 @@
       const uom = mat.uom || 'unit';
       const inCartAnywhere = Object.entries(state.cart).some(([sk, lines]) => lines.some((l) => l.material_id === mid));
       const cardCls = `mat-card ${best ? 'has-best' : ''} ${inCartAnywhere ? 'in-plan' : ''} ${mat.is_custom ? 'custom' : ''}`;
-
       const thumbImg = best?.image_url || mat.image_url || '';
       const emoji = materialEmoji(mat);
       const thumbHtml = thumbImg
         ? `<img src="${escapeAttr(thumbImg)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'emoji',textContent:'${emoji}'}))">`
         : `<span class="emoji">${emoji}</span>`;
-
       const customPill = mat.is_custom ? `<span class="pill-custom">CUSTOM</span>` : '';
       const refreshDisabled = state.refreshing.has(mid);
 
@@ -1418,7 +1626,7 @@
         <div class="baseline-strip">
           <span>📍 Local</span>
           <span class="price">${moneyPaise(baseline.paise)}/${escapeHtml(uom)}</span>
-          <span class="vendor">${escapeHtml(baseline.name || '')}${mat.last_purchase_date ? ' · ' + escapeHtml(mat.last_purchase_date) : ''}</span>
+          <span class="vendor">${escapeHtml(baseline.name || '')}</span>
         </div>` : '';
 
       let bestHtml;
@@ -1429,18 +1637,14 @@
         const delta = baseline ? deltaVsBase(price, baseline) : '';
         const openHref = bestUrlFor(best, mat.name);
         const inCart = isInCart(sk, mid);
-        const actionLabel = inCart ? '✓ In plan' : '+ Plan';
+        const actionLabel = inCart ? '✓' : '+';
         const eta = etaText(best);
-
         bestHtml = `
           <div class="best-deal">
             <div class="best-row">
-              ${portalFavicon(sk, 48)}
+              ${portalFavicon(sk, 64)}
               <div class="best-info">
-                <div class="best-portal-line">
-                  <span class="cheap-tag">CHEAPEST</span>
-                  ${escapeHtml(SOURCE_LABELS[sk] || sk)}
-                </div>
+                <div class="best-portal-line"><span class="cheap-tag">CHEAPEST</span>${escapeHtml(SOURCE_LABELS[sk] || sk)}</div>
                 <div class="best-sku">${escapeHtml(sku)}</div>
                 ${eta ? `<div class="best-eta">🕒 ${escapeHtml(eta)}</div>` : ''}
               </div>
@@ -1455,7 +1659,7 @@
                 <span>Open in ${escapeHtml(SOURCE_LABELS[sk] || sk)}</span>
                 <span class="arrow">↗</span>
               </a>
-              <button class="add-plan-btn ${inCart ? 'in-plan' : ''}" type="button" data-add-mat="${escapeAttr(mid)}" data-add-source="${escapeAttr(sk)}">${actionLabel}</button>
+              <button class="add-plan-btn ${inCart ? 'in-plan' : ''}" type="button" data-add-mat="${escapeAttr(mid)}" data-add-source="${escapeAttr(sk)}">${actionLabel} Plan</button>
             </div>
           </div>`;
       } else {
@@ -1465,14 +1669,13 @@
               <div class="portal-favicon letter">?</div>
               <div class="best-info">
                 <div class="best-portal-line" style="color:var(--text-dim);">No portal price yet</div>
-                <div class="best-sku">Tap 🔄 to scout this material, or use your local vendor.</div>
+                <div class="best-sku">Pull down to refresh, or tap 🔄 to scout this item.</div>
               </div>
               <div></div>
             </div>
           </div>`;
       }
 
-      // Alt-portal strip — show ALL portals (other than best) inline
       const altsHtml = PORTAL_SOURCE_KEYS.map((sk) => {
         if (best && sk === best.source_key) return '';
         const s = sources.find((x) => x.source_key === sk);
@@ -1502,17 +1705,15 @@
                 ${mat.times_ordered ? `<span class="dot"></span><span>${mat.times_ordered} POs</span>` : ''}
               </div>
             </div>
-            <div class="mat-actions">
+            <div class="mat-tools">
               <div class="qty-stepper">
                 <button type="button" data-mat-qty-dec="${escapeAttr(mid)}">−</button>
                 <input type="number" min="0.25" step="0.25" value="${escapeAttr(qty)}" data-mat-qty-input="${escapeAttr(mid)}">
                 <span class="uom">${escapeHtml(uom)}</span>
                 <button type="button" data-mat-qty-inc="${escapeAttr(mid)}">+</button>
               </div>
-              <div class="row-tools">
-                <button class="icon-btn" type="button" data-row-refresh="${escapeAttr(mid)}" title="Rescout" ${refreshDisabled ? 'disabled' : ''}>${refreshDisabled ? '⟳' : '🔄'}</button>
-                ${mat.is_custom ? `<button class="icon-btn danger" type="button" data-del-mat="${escapeAttr(mid)}" title="Delete">🗑️</button>` : ''}
-              </div>
+              <button class="icon-btn" type="button" data-row-refresh="${escapeAttr(mid)}" title="Rescout" ${refreshDisabled ? 'disabled' : ''}>${refreshDisabled ? '⟳' : '🔄'}</button>
+              ${mat.is_custom ? `<button class="icon-btn danger" type="button" data-del-mat="${escapeAttr(mid)}" title="Delete">🗑️</button>` : ''}
             </div>
           </div>
           ${baselineHtml}
@@ -1533,15 +1734,16 @@
         for (const s of sources) if ((s.sku_title || '').toLowerCase().includes(q)) return true;
         return false;
       });
-
       const totalQuotes = filtered.reduce((acc, m) => acc + sourcesFor(m).filter(isPortalSourceQuoted).length, 0);
-      els.filterStat.textContent = `${filtered.length} of ${mats.length} materials · ${totalQuotes} portal quotes today`;
+      els.filterStat.textContent = `${filtered.length} of ${mats.length} · ${totalQuotes} quotes today`;
+      els.shopSubtitle.textContent = mats.length
+        ? `${mats.length} materials · ${totalQuotes} live quotes`
+        : 'Loading materials…';
 
       if (!filtered.length) {
-        els.listGrid.innerHTML = `<div class="empty-state"><div class="big">🔍</div>${q ? `No materials match "${escapeHtml(q)}"` : 'No materials loaded yet'}</div>`;
+        els.listGrid.innerHTML = `<div class="empty-state"><div class="big">🔍</div><div class="title">${q ? 'No matches' : 'No materials yet'}</div><div class="body">${q ? `Nothing matches "${escapeHtml(q)}"` : 'Pull to refresh, or add a material.'}</div></div>`;
         return;
       }
-
       const groups = new Map();
       for (const m of filtered) {
         const c = m.category || '—';
@@ -1549,7 +1751,6 @@
         groups.get(c).push(m);
       }
       const ordered = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-
       els.listGrid.innerHTML = ordered.map(([cat, items]) => {
         items.sort((a, b) => {
           if ((a.is_custom ? 1 : 0) !== (b.is_custom ? 1 : 0)) return (b.is_custom ? 1 : 0) - (a.is_custom ? 1 : 0);
@@ -1557,32 +1758,252 @@
           return a.name.localeCompare(b.name);
         });
         const rows = items.map(renderMaterialCard).join('');
-        return `
-          <div class="cat-divider">
-            <span>${escapeHtml(cat)}</span>
-            <span class="count">${items.length}</span>
-          </div>
-          ${rows}`;
+        return `<div class="section-header"><span>${escapeHtml(cat)}</span><span class="count">${items.length}</span></div>${rows}`;
       }).join('');
     }
 
     function rebuildCategoryChips() {
       const cats = [...new Set(state.materials.map((m) => m.category || '—'))].sort();
-      const opts = [
-        `<button class="cat-chip ${state.category === 'ALL' ? 'on' : ''}" data-cat="ALL" type="button">All</button>`,
-        ...cats.map((c) => `<button class="cat-chip ${state.category === c ? 'on' : ''}" data-cat="${escapeAttr(c)}" type="button">${escapeHtml(c)}</button>`),
-      ];
-      els.catChips.innerHTML = opts.join('');
-      // Rebuild add-mat-modal category options
-      const modalOpts = ['<option value="">— choose or add new —</option>',
+      els.catChips.innerHTML = [
+        `<button class="chip ${state.category === 'ALL' ? 'on' : ''}" data-cat="ALL" type="button">All</button>`,
+        ...cats.map((c) => `<button class="chip ${state.category === c ? 'on' : ''}" data-cat="${escapeAttr(c)}" type="button">${escapeHtml(CAT_EMOJI[c] || '')} ${escapeHtml(c)}</button>`)
+      ].join('');
+      els.addMatCategorySelect.innerHTML = ['<option value="">— choose or add new —</option>',
         ...cats.map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`),
-        '<option value="__new__">+ Add new category</option>'];
-      els.addMatCategorySelect.innerHTML = modalOpts.join('');
+        '<option value="__new__">+ Add new category</option>'].join('');
     }
 
-    // ------------------------------------------------------------
+    // ============================================================
+    // Plan tab
+    // ============================================================
+    function renderPlan() {
+      const { byPortal, grand, totalCount } = cartTotals();
+      if (totalCount === 0) {
+        els.planSubtitle.textContent = 'Your plan is empty.';
+        els.planBody.innerHTML = `<div class="empty-state"><div class="big">🧾</div><div class="title">No items yet</div><div class="body">Tap any deal in Shop to start a per-portal shopping plan.</div></div>`;
+        return;
+      }
+      const portals = Object.keys(byPortal).length;
+      els.planSubtitle.textContent = `${totalCount} item${totalCount === 1 ? '' : 's'} across ${portals} portal${portals === 1 ? '' : 's'}`;
+
+      const honesty = `
+        <div class="plan-honesty">
+          ⓘ The portals don't expose a public "add to cart" API. <b>Your plan</b> is the source of truth — open each portal app, tap <b>Product ↗</b> per line to land on the product, then add it there.
+        </div>`;
+
+      const keys = Object.keys(byPortal).sort((a, b) => byPortal[b].total - byPortal[a].total);
+      const blocks = keys.map((sk) => {
+        const lines = state.cart[sk] || [];
+        const t = byPortal[sk];
+        const appHref = portalSearchUrlFor(sk, '');
+        const lineRows = lines.map((l) => {
+          const emoji = materialEmoji({ name: l.name });
+          const thumb = l.image_url
+            ? `<div class="mat-thumb"><img src="${escapeAttr(l.image_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'emoji',textContent:'${emoji}'}))"></div>`
+            : `<div class="mat-thumb"><span class="emoji">${emoji}</span></div>`;
+          return `
+          <div class="plan-line-wrap" data-line-wrap="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">
+            <div class="plan-line">
+              ${thumb}
+              <div class="plan-line-info">
+                <div class="plan-line-name">${escapeHtml(l.name)}</div>
+                <div class="plan-line-sku">${escapeHtml((l.sku_title || '').slice(0, 60))}</div>
+                <div class="plan-line-controls">
+                  <div class="qty-stepper">
+                    <button type="button" data-qty-dec="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">−</button>
+                    <input type="number" min="0.01" step="0.25" value="${escapeAttr(l.qty)}" data-qty-input="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">
+                    <span class="uom">${escapeHtml(l.uom)}</span>
+                    <button type="button" data-qty-inc="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">+</button>
+                  </div>
+                  ${l.sku_url ? `<a class="open-product-mini" href="${escapeAttr(cleanUrl(l.sku_url))}" target="_blank" rel="noopener">Product ↗</a>` : ''}
+                </div>
+              </div>
+              <div class="plan-line-price">${moneyPaise(l.price_paise * (l.qty || 1))}</div>
+            </div>
+            <div class="plan-line-reveal" data-cart-remove="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">Remove</div>
+          </div>`;
+        }).join('');
+        return `
+          <div class="portal-block">
+            <div class="portal-block-head">
+              ${portalFavicon(sk, 64)}
+              <div>
+                <div class="portal-block-title">${escapeHtml(SOURCE_LABELS[sk] || sk)}</div>
+                <div class="portal-block-meta">${t.count} item${t.count === 1 ? '' : 's'} · swipe left to remove</div>
+              </div>
+              <div class="portal-block-total">${money(t.total)}</div>
+            </div>
+            <div class="portal-cta-row">
+              <a class="open-app-btn" href="${escapeAttr(appHref)}" target="_blank" rel="noopener">
+                ${portalFavicon(sk, 32, 'portal-favicon')}
+                <span>Open ${escapeHtml(SOURCE_LABELS[sk] || sk)}</span>
+                <span class="arrow">↗</span>
+              </a>
+              <button class="portal-share-btn" type="button" data-share-portal="${escapeAttr(sk)}">📤</button>
+            </div>
+            ${lineRows}
+          </div>`;
+      }).join('');
+      const grandHtml = `<div class="grand-card"><span class="grand-label">Grand total</span><span class="grand-value">${money(grand)}</span></div>`;
+      els.planBody.innerHTML = honesty + blocks + grandHtml;
+      attachSwipeHandlers();
+    }
+
+    // ============================================================
+    // Swipe-to-reveal on plan lines
+    // ============================================================
+    function attachSwipeHandlers() {
+      const wraps = document.querySelectorAll('.plan-line-wrap');
+      wraps.forEach((w) => {
+        let startX = 0, currentX = 0, dragging = false;
+        const line = w.querySelector('.plan-line');
+        if (!line) return;
+        const onStart = (e) => {
+          const t = (e.touches && e.touches[0]) || e;
+          startX = t.clientX; currentX = startX; dragging = true;
+          line.style.transition = 'none';
+        };
+        const onMove = (e) => {
+          if (!dragging) return;
+          const t = (e.touches && e.touches[0]) || e;
+          currentX = t.clientX;
+          const delta = Math.min(0, currentX - startX);
+          if (delta < -8) {
+            line.style.transform = `translateX(${Math.max(-80, delta)}px)`;
+          }
+        };
+        const onEnd = () => {
+          if (!dragging) return; dragging = false;
+          line.style.transition = '';
+          const delta = currentX - startX;
+          if (delta < -40) w.classList.add('revealed');
+          else w.classList.remove('revealed');
+          line.style.transform = '';
+        };
+        line.addEventListener('touchstart', onStart, { passive: true });
+        line.addEventListener('touchmove', onMove, { passive: true });
+        line.addEventListener('touchend', onEnd);
+        line.addEventListener('touchcancel', onEnd);
+      });
+    }
+
+    // ============================================================
+    // You tab — portal health
+    // ============================================================
+    async function refreshPortalHealth() {
+      els.portalHealthGroup.innerHTML = `<div class="empty-state" style="padding:24px 12px;"><div class="body">Checking…</div></div>`;
+      try {
+        const d = await fetchJson(`/api/purchase-control?action=portal-health&pin=${encodeURIComponent(state.pin)}`);
+        state.portalHealth = d.sessions || d.portals || [];
+        renderPortalHealth();
+      } catch (e) {
+        els.portalHealthGroup.innerHTML = `<div class="empty-state" style="padding:24px 12px;"><div class="body">Couldn't fetch — ${escapeHtml(e.message)}</div></div>`;
+      }
+    }
+    function renderPortalHealth() {
+      const list = state.portalHealth.filter((s) => PORTAL_SOURCE_KEYS.includes(s.source_key || s.key));
+      if (!list.length) {
+        els.portalHealthGroup.innerHTML = `<div class="empty-state" style="padding:24px 12px;"><div class="body">No portal session rows yet.</div></div>`;
+        return;
+      }
+      els.portalHealthGroup.innerHTML = list.map((s) => {
+        const sk = s.source_key || s.key;
+        const status = (s.status || 'UNKNOWN').toUpperCase();
+        const cls = status === 'READY' ? 'ok' : status === 'EXPIRED' || status === 'NOT_CONNECTED' ? 'bad' : 'warn';
+        const last = s.last_validated_at ? new Date(s.last_validated_at).toLocaleString('en-IN', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }) : '—';
+        return `
+          <div class="you-row">
+            ${portalFavicon(sk, 48, 'row-icon')}
+            <div>
+              <div class="row-label">${escapeHtml(SOURCE_LABELS[sk] || sk)}</div>
+              <div class="row-sub">${escapeHtml(s.issue_detail || s.issue_code || last)}</div>
+            </div>
+            <div class="row-value ${cls}">${escapeHtml(status)}</div>
+          </div>`;
+      }).join('');
+    }
+
+    // ============================================================
+    // Tab navigation
+    // ============================================================
+    function switchTab(target) {
+      state.activeTab = target;
+      ['shop', 'plan', 'you'].forEach((t) => {
+        document.getElementById(`tab-${t}`).classList.toggle('hide', t !== target);
+      });
+      document.querySelectorAll('.tab-btn').forEach((b) => {
+        b.classList.toggle('on', b.dataset.tabTarget === target);
+      });
+      if (target === 'plan') renderPlan();
+      if (target === 'you') {
+        if (!state.portalHealth.length) refreshPortalHealth();
+      }
+      // Reset scroll to top of new tab pane (iOS app behaviour)
+      const pane = document.getElementById(`tab-${target}`);
+      pane.scrollTop = 0;
+      // Reset condensed nav state on switch
+      document.querySelectorAll('.top-nav').forEach((n) => n.classList.remove('condensed'));
+    }
+
+    // ============================================================
+    // Scroll-driven nav condense (large title → compact title)
+    // ============================================================
+    function attachScrollNav(paneId, navId) {
+      const pane = document.getElementById(paneId);
+      const nav = document.getElementById(navId);
+      pane.addEventListener('scroll', () => {
+        const condensed = pane.scrollTop > 30;
+        if (nav.classList.contains('condensed') !== condensed) {
+          nav.classList.toggle('condensed', condensed);
+        }
+      }, { passive: true });
+    }
+
+    // ============================================================
+    // Pull-to-refresh (Shop tab only)
+    // ============================================================
+    function attachPullToRefresh() {
+      const pane = els.tabShop;
+      const ptr = els.ptrShop;
+      let startY = 0, currentY = 0, pulling = false, triggered = false;
+      pane.addEventListener('touchstart', (e) => {
+        if (pane.scrollTop <= 0) {
+          startY = e.touches[0].clientY; pulling = true; triggered = false;
+        }
+      }, { passive: true });
+      pane.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        currentY = e.touches[0].clientY;
+        const delta = currentY - startY;
+        if (delta > 0) {
+          const h = Math.min(80, delta * 0.5);
+          ptr.style.height = h + 'px';
+          if (h > 50 && !triggered) {
+            ptr.classList.add('active');
+          }
+        }
+      }, { passive: true });
+      pane.addEventListener('touchend', async () => {
+        if (!pulling) return;
+        pulling = false;
+        const h = parseInt(ptr.style.height || '0', 10);
+        if (h > 50) {
+          triggered = true;
+          ptr.style.height = '50px';
+          ptr.classList.add('active');
+          try { await loadAll(); } catch (_) {}
+          ptr.classList.remove('active');
+          ptr.style.height = '0';
+        } else {
+          ptr.style.height = '0';
+          ptr.classList.remove('active');
+        }
+      });
+    }
+
+    // ============================================================
     // Data load + auth
-    // ------------------------------------------------------------
+    // ============================================================
     async function verifyPin() {
       const pin = (els.pinInput.value || state.pin).trim();
       if (!pin || pin.length !== 4) { els.pinError.classList.remove('hide'); return; }
@@ -1591,28 +2012,27 @@
         const d = await fetchJson(`/api/purchase-control?action=verify-pin&pin=${encodeURIComponent(pin)}`);
         state.pin = pin; state.user = d.user;
         localStorage.setItem('purchaseConsolePin', pin);
-        els.pinGate.classList.add('hide');
-        els.app.classList.remove('hide');
-        // Sync brand toggle UI to saved state
-        [...document.querySelectorAll('.brand-toggle button')].forEach((b) => b.classList.toggle('on', b.dataset.brand === state.brand));
+        els.pinGate.style.opacity = '0';
+        setTimeout(() => {
+          els.pinGate.classList.add('hide');
+          els.app.classList.remove('hide');
+        }, 300);
+        els.youName.textContent = d.user.name;
+        els.youRole.textContent = d.user.role + (d.user.can_create_po ? ' · can create POs' : '');
+        [...els.brandToggle.querySelectorAll('button')].forEach((b) => b.classList.toggle('on', b.dataset.brand === state.brand));
         await loadAll();
-        renderPlanBar();
+        updatePlanBadge();
       } catch (e) {
         els.pinError.textContent = e.message || 'Invalid PIN.';
         els.pinError.classList.remove('hide');
       } finally { els.unlockBtn.disabled = false; }
     }
     function skeletonRows(n) {
-      return Array.from({ length: n }, () => `
-        <div class="skeleton-card">
-          <div class="skel-line med"></div>
-          <div class="skel-line short"></div>
-          <div class="skel-line"></div>
-        </div>`).join('');
+      return Array.from({ length: n }, () => `<div class="skel-card"><div class="skel-line med"></div><div class="skel-line short"></div><div class="skel-line"></div></div>`).join('');
     }
     async function loadAll() {
       state.loading = true;
-      els.listGrid.innerHTML = skeletonRows(6);
+      if (!state.materials.length) els.listGrid.innerHTML = skeletonRows(6);
       try {
         const m = await fetchJson(`/api/purchase-control?action=materials&pin=${encodeURIComponent(state.pin)}&brand=${state.brand}&days=1095`);
         state.materials = m.items || [];
@@ -1624,14 +2044,9 @@
         }
         state.snapshotMap = snap;
         rebuildCategoryChips();
-      } catch (err) {
-        toast(err.message || 'Load failed');
-      } finally {
-        state.loading = false;
-        renderList();
-      }
+      } catch (err) { toast(err.message || 'Load failed'); }
+      finally { state.loading = false; renderList(); }
     }
-
     async function refreshOneMaterial(mid) {
       if (!state.pin || state.refreshing.has(mid)) return;
       const mat = state.materials.find((m) => materialId(m) === mid);
@@ -1652,16 +2067,11 @@
         state.snapshotMap[mid] = snapForMat;
         const c = d.counts || {};
         toast(`${d.material_name}: ${c.ok || 0} ok · ${c.error || 0} err`);
-      } catch (err) {
-        toast(err.message || 'Refresh failed');
-      } finally {
-        state.refreshing.delete(mid);
-        renderList();
-      }
+      } catch (err) { toast(err.message || 'Refresh failed'); }
+      finally { state.refreshing.delete(mid); renderList(); }
     }
-
     async function deleteCustomMaterial(mid) {
-      if (!confirm('Delete this custom material from the list?')) return;
+      if (!confirm('Delete this custom material?')) return;
       try {
         const slug = String(mid).replace(/^custom:/, '');
         await fetchJson('/api/purchase-control?action=delete-custom-material', {
@@ -1674,9 +2084,9 @@
       } catch (e) { toast(e.message || 'Delete failed'); }
     }
 
-    // ------------------------------------------------------------
-    // Share per-portal plan as text (WhatsApp/copy)
-    // ------------------------------------------------------------
+    // ============================================================
+    // Share per-portal plan
+    // ============================================================
     async function sharePortalPlan(sk) {
       const lines = state.cart[sk] || [];
       if (!lines.length) return;
@@ -1684,58 +2094,13 @@
       const title = `🛒 ${SOURCE_LABELS[sk] || sk} — HN Hotels BuyList`;
       const body = lines.map((l, i) => `${i + 1}. ${l.name} × ${l.qty}${l.uom} — ${moneyPaise(l.price_paise * (l.qty || 1))}`).join('\n');
       const text = `${title}\n\n${body}\n\nTotal: ${money(total)}`;
-      if (navigator.share) {
-        try { await navigator.share({ title, text }); return; } catch (_) {}
-      }
-      try {
-        await navigator.clipboard.writeText(text);
-        toast('Plan copied to clipboard');
-      } catch (_) { toast('Could not share'); }
+      if (navigator.share) { try { await navigator.share({ title, text }); return; } catch (_) {} }
+      try { await navigator.clipboard.writeText(text); toast('Plan copied'); } catch (_) { toast('Could not share'); }
     }
 
-    // ------------------------------------------------------------
-    // Wire-up
-    // ------------------------------------------------------------
-    els.unlockBtn.addEventListener('click', verifyPin);
-    els.pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyPin(); });
-
-    document.querySelector('.brand-toggle').addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-brand]');
-      if (!btn) return;
-      [...document.querySelectorAll('.brand-toggle button')].forEach((b) => b.classList.toggle('on', b === btn));
-      state.brand = btn.dataset.brand;
-      localStorage.setItem('purchaseConsoleBrand', state.brand);
-      loadAll();
-    });
-
-    els.catChips.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-cat]');
-      if (!btn) return;
-      state.category = btn.dataset.cat;
-      localStorage.setItem('purchaseConsoleCategory', state.category);
-      rebuildCategoryChips();
-      renderList();
-    });
-
-    let searchTimer;
-    els.searchInput.addEventListener('input', (e) => {
-      state.query = e.target.value;
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(renderList, 180);
-    });
-
-    els.addMatBtn.addEventListener('click', () => openAddMatModal());
-    els.addMatClose.addEventListener('click', closeAddMatModal);
-    els.addMatModal.addEventListener('click', (e) => { if (e.target === els.addMatModal) closeAddMatModal(); });
-    els.addMatCategorySelect.addEventListener('change', (e) => {
-      if (e.target.value === '__new__') {
-        els.addMatNewCatWrap.classList.remove('hide');
-        setTimeout(() => els.addMatNewCat.focus(), 50);
-      } else {
-        els.addMatNewCatWrap.classList.add('hide');
-      }
-    });
-
+    // ============================================================
+    // Add material modal
+    // ============================================================
     function openAddMatModal(prefillCategory) {
       els.addMatForm.reset();
       els.addMatNewCatWrap.classList.add('hide');
@@ -1744,19 +2109,72 @@
         if (opt) els.addMatCategorySelect.value = prefillCategory;
       }
       els.addMatModal.classList.add('open');
-      setTimeout(() => els.addMatForm.querySelector('[name="name"]').focus(), 100);
+      setTimeout(() => els.addMatForm.querySelector('[name="name"]').focus(), 200);
     }
     function closeAddMatModal() { els.addMatModal.classList.remove('open'); }
 
+    // ============================================================
+    // PWA install prompt
+    // ============================================================
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      state.deferredInstallPrompt = e;
+    });
+
+    // ============================================================
+    // Wire-up
+    // ============================================================
+    els.unlockBtn.addEventListener('click', verifyPin);
+    els.pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyPin(); });
+
+    els.brandToggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-brand]');
+      if (!btn) return;
+      [...els.brandToggle.querySelectorAll('button')].forEach((b) => b.classList.toggle('on', b === btn));
+      state.brand = btn.dataset.brand;
+      localStorage.setItem('purchaseConsoleBrand', state.brand);
+      loadAll();
+    });
+    els.catChips.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-cat]');
+      if (!btn) return;
+      state.category = btn.dataset.cat;
+      localStorage.setItem('purchaseConsoleCategory', state.category);
+      rebuildCategoryChips();
+      renderList();
+    });
+    let searchTimer;
+    els.searchInput.addEventListener('input', (e) => {
+      state.query = e.target.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(renderList, 180);
+    });
+
+    document.querySelectorAll('.tab-btn').forEach((b) => {
+      b.addEventListener('click', () => switchTab(b.dataset.tabTarget));
+    });
+    attachScrollNav('tab-shop', 'navShop');
+    attachScrollNav('tab-plan', 'navPlan');
+    attachScrollNav('tab-you', 'navYou');
+    attachPullToRefresh();
+
+    els.navAddBtn.addEventListener('click', () => openAddMatModal());
+    els.addMatBtn.addEventListener('click', () => openAddMatModal());
+    els.addMatClose.addEventListener('click', closeAddMatModal);
+    els.addMatModal.addEventListener('click', (e) => { if (e.target === els.addMatModal) closeAddMatModal(); });
+    els.addMatCategorySelect.addEventListener('change', (e) => {
+      if (e.target.value === '__new__') {
+        els.addMatNewCatWrap.classList.remove('hide');
+        setTimeout(() => els.addMatNewCat.focus(), 80);
+      } else { els.addMatNewCatWrap.classList.add('hide'); }
+    });
     els.addMatForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(els.addMatForm);
       let category = fd.get('category');
       if (category === '__new__') category = (fd.get('new_category') || '').trim();
       const payload = {
-        pin: state.pin,
-        name: (fd.get('name') || '').trim(),
-        category,
+        pin: state.pin, name: (fd.get('name') || '').trim(), category,
         uom: (fd.get('uom') || 'unit').trim() || 'unit',
         brand: fd.get('brand') || 'BOTH',
       };
@@ -1767,7 +2185,7 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
         });
         const m = d.material;
-        const newRow = {
+        state.materials.push({
           id: m.material_id, product_code: m.material_id, item_id: m.material_id,
           name: m.name, category: m.category, uom: m.uom,
           brands_seen: [m.brand || 'BOTH'], product_ids_by_brand: {}, vendors: [],
@@ -1776,24 +2194,33 @@
           priority_hint: 'Manual', source_keys: PORTAL_SOURCE_KEYS,
           last_vendor_id: null, last_vendor_name: '',
           is_custom: true, image_url: '', local_price: 0,
-        };
-        state.materials.push(newRow);
+        });
         rebuildCategoryChips();
         state.category = m.category;
-        renderList();
-        closeAddMatModal();
+        renderList(); closeAddMatModal();
         toast(`Added ${m.name} · scouting now`);
         refreshOneMaterial(m.material_id);
       } catch (err) { toast(err.message || 'Add failed'); }
     });
 
-    // Plan bar / sheet
-    els.planCta.addEventListener('click', openSheet);
-    els.brandCartChip.addEventListener('click', openSheet);
-    els.sheetClose.addEventListener('click', closeSheet);
-    els.sheetBackdrop.addEventListener('click', closeSheet);
+    els.youSignOutBtn.addEventListener('click', () => {
+      if (!confirm('Sign out of BuyList?')) return;
+      localStorage.removeItem('purchaseConsolePin');
+      location.reload();
+    });
+    els.refreshHealthRow.addEventListener('click', refreshPortalHealth);
+    els.installPwaRow.addEventListener('click', async () => {
+      if (state.deferredInstallPrompt) {
+        state.deferredInstallPrompt.prompt();
+        const c = await state.deferredInstallPrompt.userChoice;
+        toast(c.outcome === 'accepted' ? 'Installed' : 'Cancelled');
+        state.deferredInstallPrompt = null;
+      } else {
+        toast('On iPhone: tap Share → Add to Home Screen');
+      }
+    });
 
-    // Delegated handlers across list + sheet
+    // Delegated handlers (list + plan)
     document.addEventListener('click', (event) => {
       const t = event.target;
       const addBtn = t.closest('[data-add-mat]');
@@ -1804,19 +2231,14 @@
         const src = (sourcesFor(mat) || []).find((s) => s.source_key === sk);
         if (!mat || !src) return;
         const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${mid}"]`)?.value || '1') || 1;
-        if (isInCart(sk, mid)) {
-          removeFromCart(sk, mid);
-          toast(`Removed ${mat.name}`);
-        } else {
-          addToCart(mat, src, qty);
-        }
+        if (isInCart(sk, mid)) { removeFromCart(sk, mid); toast(`Removed ${mat.name}`); }
+        else addToCart(mat, src, qty);
         return;
       }
       const refBtn = t.closest('[data-row-refresh]');
       if (refBtn) { refreshOneMaterial(refBtn.dataset.rowRefresh); return; }
       const delBtn = t.closest('[data-del-mat]');
       if (delBtn) { deleteCustomMaterial(delBtn.dataset.delMat); return; }
-
       const inc = t.closest('[data-mat-qty-inc]');
       if (inc) {
         const id = inc.dataset.matQtyInc;
@@ -1831,28 +2253,25 @@
         if (input) { input.value = Math.max(0.25, (parseFloat(input.value) || 0) - 1); input.dispatchEvent(new Event('change', { bubbles: true })); }
         return;
       }
-
       const cInc = t.closest('[data-qty-inc]');
       if (cInc) {
         const [sk, mid] = cInc.dataset.qtyInc.split('|');
         const input = document.querySelector(`[data-qty-input="${sk}|${mid}"]`);
-        if (input) { const v = (parseFloat(input.value) || 0) + 1; input.value = v; setCartQty(sk, mid, v); }
+        if (input) { const v = (parseFloat(input.value) || 0) + 1; input.value = v; setCartQty(sk, mid, v); renderPlan(); }
         return;
       }
       const cDec = t.closest('[data-qty-dec]');
       if (cDec) {
         const [sk, mid] = cDec.dataset.qtyDec.split('|');
         const input = document.querySelector(`[data-qty-input="${sk}|${mid}"]`);
-        if (input) { const v = Math.max(0.25, (parseFloat(input.value) || 0) - 1); input.value = v; setCartQty(sk, mid, v); }
+        if (input) { const v = Math.max(0.25, (parseFloat(input.value) || 0) - 1); input.value = v; setCartQty(sk, mid, v); renderPlan(); }
         return;
       }
       const cRm = t.closest('[data-cart-remove]');
       if (cRm) { const [sk, mid] = cRm.dataset.cartRemove.split('|'); removeFromCart(sk, mid); return; }
-
       const shareBtn = t.closest('[data-share-portal]');
       if (shareBtn) { sharePortalPlan(shareBtn.dataset.sharePortal); return; }
     });
-
     document.addEventListener('change', (event) => {
       const inp = event.target.closest('[data-mat-qty-input]');
       if (inp) {

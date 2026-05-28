@@ -445,6 +445,12 @@ const VALID_PRODUCT_PATH_PREFIXES = {
   BLINKIT: ['/prn/', '/cn/', '/s/'],
   ZEPTO: ['/pn/', '/cn/', '/p/'],
   FLIPKART_MINUTES: ['/p/', '/itm/'],
+  // Amazon Now URLs follow the Amazon canonical `<slug>/dp/<asin>` or
+  // `/gp/product/<asin>` shape, with `?almBrandId=ctnow` as the Now-store
+  // flag. The flag is a query param so it doesn't participate in the
+  // path-prefix match — but the dp / gp paths are correct for both Now
+  // and regular Amazon. iOS UL handoff routes on path, app handles the
+  // almBrandId once opened.
   AMAZON_NOW: ['/dp/', '/gp/product/'],
   JIOMART: ['/p/'],
   INSTAMART: ['/instamart/item/', '/instamart/'],
