@@ -3205,6 +3205,28 @@ function packQtyInMaterialUom(packSizeStr, materialUom) {
   return pack.qty; // count → count
 }
 
+// Cross-family pack/material UOM mismatch detector (intelligence v3).
+// Returns true when the SKU is sold in a different family than the
+// material is measured in — e.g. Hyperpure Lemon SKU "500 gm" pack vs
+// material "Lemon" in Units. No objective per-Unit price can be derived
+// without a piece-mass ratio the scout doesn't have. Demote these rows
+// to UOM_MISMATCH so they're excluded from cheapest picks.
+function isUomFamilyMismatch(packSizeStr, materialUom) {
+  if (!packSizeStr || !materialUom) return false;
+  const pack = parsePackSize(packSizeStr);
+  if (!pack || pack.qty <= 0) return false;
+  const u = String(materialUom).toLowerCase();
+  const matFamily = /(kg|gm?|gram)/i.test(u) ? 'mass'
+                  : /(litre|liter|ml|l)/i.test(u) ? 'vol'
+                  : /(unit|pc|pcs?|piece|nos|count)/i.test(u) ? 'count'
+                  : null;
+  const packFamily = (pack.unit === 'kg' || pack.unit === 'g') ? 'mass'
+                   : (pack.unit === 'l' || pack.unit === 'ml') ? 'vol'
+                   : 'count';
+  if (!matFamily || !packFamily) return false;
+  return matFamily !== packFamily;
+}
+
 // --- SKU category detector ---
 // Reads sku_title and classifies it into a coarse category. Helps reject
 // "chicken masala" matching a "chicken" material.
@@ -3307,13 +3329,21 @@ function publicSnapshotRow(row) {
   const detectedCat = detectSkuCategory(row.sku_title);
   const isWrongCategory = isSkuCategoryMismatch(expectedCat, detectedCat);
 
-  // Apply: wrong-category rows get demoted, stock_status changes to flag
-  const finalPrice = isWrongCategory ? 0 : normalizedPrice;
-  const finalStatus = isWrongCategory ? 'WRONG_CATEGORY' : (row.stock_status || 'PENDING');
+  // 3. UOM family mismatch (v3) — material in Units / kg / litre but SKU
+  // pack is in a different family. Can't derive comparable per-Unit price.
+  // Caught Hyperpure Lemon "500 gm" pack vs Lemon-in-Units material.
+  const uomMismatch = !isWrongCategory && isUomFamilyMismatch(row.pack_size, row.uom);
+
+  // Apply: wrong rows get demoted, stock_status changes to flag
+  const finalPrice = (isWrongCategory || uomMismatch) ? 0 : normalizedPrice;
+  const finalStatus = isWrongCategory ? 'WRONG_CATEGORY'
+                     : uomMismatch ? 'UOM_MISMATCH'
+                     : (row.stock_status || 'PENDING');
   const noteParts = [];
   if (row.match_notes) noteParts.push(row.match_notes);
   if (wasRepriced) noteParts.push(`[pack-normalized ÷${packMultiplier.toFixed(3)} of ${row.uom}]`);
   if (isWrongCategory) noteParts.push(`[REJECTED] material expects ${expectedCat} but SKU is ${detectedCat}`);
+  if (uomMismatch) noteParts.push(`[UOM_MISMATCH] material is "${row.uom}" but SKU pack is "${row.pack_size}" — can't normalize across UOM families`);
 
   return {
     snapshot_date: row.snapshot_date,
