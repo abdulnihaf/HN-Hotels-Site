@@ -3211,14 +3211,24 @@ function packQtyInMaterialUom(packSizeStr, materialUom) {
 function detectSkuCategory(skuTitle) {
   if (!skuTitle) return 'unknown';
   const t = String(skuTitle).toLowerCase();
-  if (/\b(masala|seasoning|spice mix|spice blend|curry mix|recipe mix|tadka|garam|sambar mix|chaat masala)\b/.test(t)) return 'masala';
-  if (/\b(marinade|sauce|paste|gravy mix|cooking sauce|tikka paste|kebab paste|shawarma paste|seekh paste)\b/.test(t)) return 'sauce-paste';
+  // INTELLIGENCE v2: expanded keyword set after live wrong-matches escaped
+  // the v1 filter (Vim Dishwash Pudina, 7UP Lemon, Detoxie Capsicum Shampoo,
+  // Sleepy Owl Coffee → Beans, MAI RASOI Coriander Seeds → Coriander Leaves).
+  // Order matters — more-specific categories tested first.
+  if (/\b(dishwash|dish wash|dish-wash|detergent|soap|shampoo|cleaner|sanitizer|bleach|wipes?|toilet|disinfectant|bathroom|floor cleaner|harpic|colin|vim|rin|surf|tide|ariel|dettol|lifebuoy|lizol|patanjali soap)\b/.test(t)) return 'cleaning';
+  // Beverages — cola/soda/juice/tea-bag/coffee — wrong channel for fresh produce/dairy
+  if (/\b(coffee|tea bag|tea bags|teabag|soda|cola|pepsi|coke|sprite|fanta|7up|mountain dew|fizz|carbonated|juice|drink|beverage|energy drink|red bull|sting|gatorade|tropicana|real juice|appy|maaza|frooti|slice|nestle pure life|kinley|bisleri|aquafina|himalayan)\b/.test(t)) return 'beverage';
+  // Seeds explicitly — coriander/cumin/mustard SEEDS ≠ coriander/cumin LEAVES
+  if (/\b(seeds?|sabut|whole|sabu[dt]|saunf|jeera whole|kala jeera|kalonji)\b/.test(t)) return 'seeds-whole-spice';
+  if (/\b(masala|seasoning|spice mix|spice blend|curry mix|recipe mix|tadka|garam|sambar mix|chaat masala|pav bhaji masala|rasam powder)\b/.test(t)) return 'masala';
+  if (/\b(marinade|sauce|paste|gravy mix|cooking sauce|tikka paste|kebab paste|shawarma paste|seekh paste|ketchup|mayo|mayonnaise|salsa)\b/.test(t)) return 'sauce-paste';
   if (/\b(pickle|chutney|achaar|achar|murabba)\b/.test(t)) return 'pickle-chutney';
-  if (/\b(papad|namkeen|chips|wafer|bhujia|sev|mixture|farsan|snack)\b/.test(t)) return 'snack';
-  if (/\b(biscuit|cookie|cracker|rusks?|wafer|cake|brownie|muffin)\b/.test(t)) return 'biscuit-bakery';
-  if (/\b(ready to (eat|cook)|instant|mre|microwave meal|3 minute)\b/.test(t)) return 'ready-meal';
-  if (/\b(supplement|protein powder|whey|multivitamin|tablets?|capsules?|gummies)\b/.test(t)) return 'supplement';
-  if (/\b(detergent|soap|shampoo|cleaner|sanitizer|bleach|wipes?)\b/.test(t)) return 'cleaning';
+  if (/\b(papad|namkeen|chips|wafer|bhujia|sev|mixture|farsan|snack|chivda|haldiram)\b/.test(t)) return 'snack';
+  if (/\b(biscuit|cookie|cracker|rusks?|wafer|cake|brownie|muffin|parle|britannia|sunfeast)\b/.test(t)) return 'biscuit-bakery';
+  if (/\b(ready to (eat|cook)|instant|mre|microwave meal|3 minute|mtr|gits|knorr)\b/.test(t)) return 'ready-meal';
+  if (/\b(supplement|protein powder|whey|multivitamin|tablets?|capsules?|gummies|amway|herbalife|gnc|muscleblaze)\b/.test(t)) return 'supplement';
+  // Cosmetics / personal-care safety net
+  if (/\b(cream(?!.*(milk|dairy))|lotion|moisturizer|face wash|toothpaste|deodorant|perfume|fragrance|nivea|loreal|ponds|fair and lovely|himalaya wellness|nykaa|biotique)\b/.test(t)) return 'cosmetics';
   return 'unknown';
 }
 
@@ -3252,14 +3262,24 @@ function expectedSkuCategory(materialName, materialCategory) {
 function isSkuCategoryMismatch(expectedCat, detectedCat) {
   if (expectedCat === 'unknown' || detectedCat === 'unknown') return false;
   if (expectedCat === detectedCat) return false;
+  // Universal rejections — cleaning / beverage / cosmetics are NEVER a
+  // valid match for any food material. Added in v2 after Vim Dishwash,
+  // Detoxie Shampoo, 7UP, Sleepy Owl Coffee escaped v1.
+  const ALWAYS_WRONG_FOR_FOOD = ['cleaning', 'cosmetics'];
+  const FOOD_EXPECTED = ['meat-raw', 'fresh-produce', 'dairy', 'eggs', 'biscuit-bakery', 'snack', 'masala', 'sauce-paste', 'pickle-chutney', 'ready-meal'];
+  if (FOOD_EXPECTED.includes(expectedCat) && ALWAYS_WRONG_FOR_FOOD.includes(detectedCat)) return true;
   // Raw meat material × spice/masala/sauce/snack SKU = wrong channel
-  if (expectedCat === 'meat-raw' && ['masala', 'sauce-paste', 'snack', 'pickle-chutney', 'biscuit-bakery', 'ready-meal', 'supplement'].includes(detectedCat)) return true;
-  // Fresh produce × packaged/processed
-  if (expectedCat === 'fresh-produce' && ['snack', 'biscuit-bakery', 'pickle-chutney', 'masala', 'supplement'].includes(detectedCat)) return true;
-  // Dairy × non-dairy packaged
-  if (expectedCat === 'dairy' && ['masala', 'snack', 'biscuit-bakery', 'pickle-chutney', 'supplement', 'ready-meal'].includes(detectedCat)) return true;
+  if (expectedCat === 'meat-raw' && ['masala', 'sauce-paste', 'snack', 'pickle-chutney', 'biscuit-bakery', 'ready-meal', 'supplement', 'seeds-whole-spice', 'beverage'].includes(detectedCat)) return true;
+  // Fresh produce × packaged/processed (added beverage + seeds + sauce + ready-meal in v2)
+  if (expectedCat === 'fresh-produce' && ['snack', 'biscuit-bakery', 'pickle-chutney', 'masala', 'supplement', 'beverage', 'seeds-whole-spice', 'sauce-paste', 'ready-meal'].includes(detectedCat)) return true;
+  // Dairy × non-dairy packaged (added beverage)
+  if (expectedCat === 'dairy' && ['masala', 'snack', 'biscuit-bakery', 'pickle-chutney', 'supplement', 'ready-meal', 'beverage', 'seeds-whole-spice'].includes(detectedCat)) return true;
   // Eggs × processed
-  if (expectedCat === 'eggs' && ['snack', 'biscuit-bakery', 'masala'].includes(detectedCat)) return true;
+  if (expectedCat === 'eggs' && ['snack', 'biscuit-bakery', 'masala', 'beverage'].includes(detectedCat)) return true;
+  // Leaves vs seeds — if material is leaves-flavour fresh-produce (coriander
+  // leaves, mint leaves), seeds SKUs are wrong even though category matches
+  // "spice-ish". This is the Coriander Seeds → Coriander Leaves bug.
+  // Handled implicitly above (fresh-produce rejects seeds-whole-spice).
   return false;
 }
 
