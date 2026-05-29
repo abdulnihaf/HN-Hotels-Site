@@ -1,6 +1,6 @@
-# HN Purchase Portal Capture
+# HN Sauda Portal Capture
 
-Chrome extension for Phase 5 of the HN Hotels purchase console.
+Chrome extension for Sauda, the HN Hotels purchase console.
 
 It captures the currently logged-in browser session for one purchase portal and sends it to the existing purchase-console session vault through:
 
@@ -23,7 +23,7 @@ and reload from the permanent path so updates to `manifest.json` take effect.
 ## Capture Flow
 
 1. Open one portal in Chrome and make sure you are logged in.
-2. Click the `HN Purchase Portal Capture` extension.
+2. Click the `HN Sauda Portal Capture` extension.
 3. Select the portal, enter the purchase-console PIN, location, pincode, and expiry hours.
 4. Click `Capture current tab`.
 5. Repeat for all 8 portals:

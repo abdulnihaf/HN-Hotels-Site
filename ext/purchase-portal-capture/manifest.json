@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "HN Purchase Portal Capture",
-  "version": "1.7.0",
-  "description": "Captures logged-in purchase portal sessions and runs live quote jobs for the HN Hotels purchase console. v1.7 adds Amazon Business, Amazon Fresh, Metro, DMart, IndiaMART.",
+  "name": "HN Sauda Portal Capture",
+  "version": "1.8.0",
+  "description": "Captures logged-in purchase portal sessions and runs live quote jobs for Sauda, the HN Hotels purchase console. v1.8 adds explicit business.amazon.in host access for Amazon Business cookie capture.",
   "permissions": [
     "activeTab",
     "cookies",
@@ -26,6 +26,8 @@
     "https://*.blinkit.com/*",
     "https://amazon.in/*",
     "https://*.amazon.in/*",
+    "https://business.amazon.in/*",
+    "https://*.business.amazon.in/*",
     "https://bigbasket.com/*",
     "https://*.bigbasket.com/*",
     "https://jiomart.com/*",

@@ -6,10 +6,52 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="BuyList">
-  <title>BuyList · HN Hotels</title>
+  <meta name="apple-mobile-web-app-title" content="Sauda">
+  <title>Sauda · HN Hotels</title>
   <meta name="theme-color" content="#0a0a10">
   <link rel="manifest" href="/ops/purchase-console/manifest.json">
+  <style id="seed-styles">
+    /* Morning auto-seed — Sauda's pre-sectioned read of the day.
+       A read-only suggestion layer above the manual plan. */
+    .seed-wrap { margin: 0 0 18px; }
+    .seed-intro {
+      font-size: 12.5px; line-height: 1.45; color: #98989f;
+      background: rgba(212,162,76,0.10); border: 1px solid rgba(212,162,76,0.28);
+      border-radius: 12px; padding: 10px 12px; margin: 0 0 12px;
+    }
+    .seed-section {
+      background: #14141c; border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px; margin: 0 0 10px; overflow: hidden;
+    }
+    .seed-summary {
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+      padding: 13px 14px; min-height: 48px; list-style: none;
+      font-weight: 700; -webkit-user-select: none; user-select: none;
+    }
+    .seed-summary::-webkit-details-marker { display: none; }
+    .seed-summary-glyph { font-size: 19px; }
+    .seed-summary-title { flex: 1; font-size: 14.5px; color: #f8f8fa; letter-spacing: 0.2px; }
+    .seed-summary-meta { font-size: 11.5px; font-weight: 600; color: #98989f; white-space: nowrap; }
+    .seed-section[open] > .seed-summary { border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .seed-section-body { padding: 4px 0; }
+    .seed-nch_morning > .seed-summary { box-shadow: inset 3px 0 0 #34d399; }
+    .seed-he_evening > .seed-summary { box-shadow: inset 3px 0 0 #d4a24c; }
+    .seed-vendor_calls > .seed-summary { box-shadow: inset 3px 0 0 #a78bfa; }
+    .seed-other > .seed-summary { box-shadow: inset 3px 0 0 rgba(255,255,255,0.18); }
+    .seed-line {
+      display: flex; align-items: center; gap: 9px;
+      padding: 9px 14px; border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    .seed-line:first-child { border-top: none; }
+    .seed-emoji { font-size: 17px; width: 22px; text-align: center; flex: 0 0 auto; }
+    .seed-name { flex: 1; font-size: 13.5px; color: #f8f8fa; }
+    .seed-rec { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+    .seed-rec-src { font-size: 12px; font-weight: 600; color: #5e9eff; }
+    .seed-rec-price { font-size: 13px; font-weight: 700; color: #f8f8fa; }
+    .seed-rec-vendor .seed-rec-src { color: #a78bfa; }
+    .seed-rec-none { font-size: 11.5px; font-style: italic; color: #5c5c66; }
+    .seed-empty { padding: 14px; font-size: 12.5px; color: #98989f; font-style: italic; text-align: center; }
+  </style>
   <link rel="apple-touch-icon" sizes="180x180" href="/ops/purchase-console/icon-180.png">
   <link rel="apple-touch-icon" sizes="192x192" href="/ops/purchase-console/icon-192.png">
   <link rel="apple-touch-icon" sizes="512x512" href="/ops/purchase-console/icon-512.png">
@@ -694,6 +736,68 @@
       font-variant-numeric: tabular-nums;
     }
     .alt-chip .warn { color: var(--pc-yellow); margin-right: 1px; }
+    /* Passive session-health — per-chip badge + Shop banner */
+    .alt-chip { position: relative; }
+    .alt-chip .chip-health {
+      position: absolute; top: 3px; left: 3px;
+      width: 8px; height: 8px; border-radius: 50%;
+      box-shadow: 0 0 0 1.5px var(--bg-elev-2); pointer-events: none;
+    }
+    .alt-chip.health-good   .chip-health { background: #1a7f37; }
+    .alt-chip.health-warn   .chip-health { background: #d4a24c; }
+    .alt-chip.health-bad    .chip-health { background: #ff5c5c; }
+    .alt-chip.health-neutral .chip-health { background: #6e7781; }
+    .alt-chip.scrape-dead {
+      opacity: 0.5; cursor: not-allowed;
+      border: none; -webkit-appearance: none; appearance: none;
+      font: 600 11.5px/1 -apple-system, sans-serif;
+      text-decoration: line-through; text-decoration-color: rgba(255,92,92,0.55);
+    }
+    .alt-chip.scrape-dead .chip-price { color: #ff5c5c; }
+    .portal-banner {
+      display: flex; align-items: center; gap: 9px;
+      margin: 0 14px 10px; padding: 11px 13px; border-radius: 12px;
+      background: rgba(255,92,92,0.10); border: 1px solid rgba(255,92,92,0.32);
+      color: #ffb3b3; font: 600 12.5px/1.35 -apple-system, sans-serif; letter-spacing: -0.01em;
+    }
+    .portal-banner.tone-warn { background: rgba(212,162,76,0.10); border-color: rgba(212,162,76,0.34); color: #e9c989; }
+    .portal-banner .pb-text { flex: 1; min-width: 0; }
+    .portal-banner .pb-act {
+      flex: none; min-height: 34px; padding: 0 12px;
+      background: rgba(255,255,255,0.10); color: inherit; border-radius: 8px;
+      font: 800 12px/1 -apple-system, sans-serif; letter-spacing: -0.01em; cursor: pointer;
+    }
+    .portal-banner .pb-act:active { transform: scale(0.95); }
+    .portal-banner[hidden] { display: none; }
+    /* Vendors pane (You tab) */
+    .vendor-list { display: flex; flex-direction: column; }
+    .vendor-list-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 2px; border-bottom: 0.5px solid var(--line);
+      font: 600 13px/1.3 -apple-system, sans-serif;
+    }
+    .vendor-list-row .v-icon { font-size: 17px; flex: none; }
+    .vendor-list-row .v-main { flex: 1; min-width: 0; }
+    .vendor-list-row .v-name { color: var(--text); font-weight: 700; }
+    .vendor-list-row .v-meta { color: var(--text-dim); font: 600 11px/1.3 -apple-system, sans-serif; }
+    .vendor-list-row .v-count {
+      flex: none; font: 700 11px/1 -apple-system, sans-serif; color: var(--text-mute);
+      padding: 4px 8px; background: var(--bg-elev-2); border-radius: 999px;
+    }
+    .vendor-list .vendor-empty { color: var(--text-dim); font-size: 12.5px; padding: 10px 2px; }
+    .vendor-add { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .vendor-add input {
+      flex: 1; min-width: 120px; min-height: 44px; padding: 9px 12px;
+      border: 1px solid var(--line); border-radius: 10px; background: var(--bg-elev-1);
+      color: var(--text); font: 600 14px/1 -apple-system, sans-serif;
+    }
+    .vendor-add input::placeholder { color: var(--text-mute); }
+    .btn-vendor-add {
+      flex: none; min-height: 44px; padding: 0 18px;
+      background: linear-gradient(135deg, #25d366 0%, #1da851 100%); color: #fff;
+      border-radius: 10px; font: 800 13px/1 -apple-system, sans-serif; letter-spacing: -0.01em; cursor: pointer;
+    }
+    .btn-vendor-add:active { transform: scale(0.96); }
     /* ============================================================
        Handoff expectation indicators (step 2)
        ============================================================ */
@@ -1406,7 +1510,7 @@
   <section id="pinGate" class="pin-gate">
     <div class="pin-card">
       <div class="pin-mark">H</div>
-      <h1>BuyList</h1>
+      <h1>Sauda</h1>
       <div class="heritage">HN Hotels · since 1918</div>
       <div class="helper">Enter your 4-digit PIN to continue</div>
       <input id="pinInput" class="pin-input" type="tel" maxlength="4" inputmode="numeric" autocomplete="one-time-code" placeholder="••••">
@@ -1426,13 +1530,14 @@
       <div class="ptr" id="ptrShop"><div class="ptr-spinner"></div></div>
       <div class="top-nav" id="navShop">
         <button class="nav-action left" id="navRefreshBtn" type="button" title="Refresh data">↻</button>
-        <div class="nav-title">BuyList</div>
+        <div class="nav-title">Sauda</div>
         <button class="nav-action right" id="navAddBtn" type="button" title="Add material">+ Add</button>
       </div>
       <div class="large-title-wrap">
-        <h1 class="large-title">BuyList <span class="accent">since 1918</span></h1>
+        <h1 class="large-title">Sauda <span class="accent">since 1918</span></h1>
         <div class="large-subtitle" id="shopSubtitle">Loading materials…</div>
       </div>
+      <div class="portal-banner" id="portalHealthBanner" hidden></div>
       <div class="search-section">
         <div class="search-pill">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -1533,6 +1638,17 @@
         </div>
       </div>
 
+      <div class="you-group-title">VENDORS</div>
+      <div class="you-row-group" style="padding:12px;">
+        <div class="row-sub" style="margin-bottom:8px;">Your direct suppliers. Link one to a material and its VENDOR DIRECT card lights up on Shop — glance, tap, WhatsApp.</div>
+        <div class="vendor-list" id="vendorList"></div>
+        <div class="vendor-add">
+          <input id="vendorNameInput" type="text" inputmode="text" placeholder="Vendor name" autocomplete="off" />
+          <input id="vendorPhoneInput" type="tel" inputmode="tel" placeholder="WhatsApp number" autocomplete="off" />
+          <button type="button" class="btn-vendor-add" id="vendorAddBtn">Add vendor</button>
+        </div>
+      </div>
+
       <div class="you-group-title">PREFERENCES</div>
       <div class="you-row-group">
         <a class="you-row" href="/ops/purchase/" id="poLedgerRow">
@@ -1555,7 +1671,7 @@
           <div class="row-icon" style="background:rgba(252,165,165,0.18); color:var(--pc-red);">🔄</div>
           <div>
             <div class="row-label">Hard reload (clear cache)</div>
-            <div class="row-sub">Force download latest BuyList code. Use after a deploy when soft refresh doesn't pick up changes.</div>
+            <div class="row-sub">Force download latest Sauda code. Use after a deploy when soft refresh doesn't pick up changes.</div>
           </div>
           <div class="row-chev">›</div>
         </button>
@@ -1563,14 +1679,14 @@
           <div class="row-icon" style="background:rgba(167,139,250,0.18); color:var(--pc-purple);">📲</div>
           <div>
             <div class="row-label">Install on home screen</div>
-            <div class="row-sub">Add BuyList icon to your iPhone home screen</div>
+            <div class="row-sub">Add Sauda icon to your iPhone home screen</div>
           </div>
           <div class="row-chev">›</div>
         </button>
       </div>
 
       <div class="you-footer">
-        BuyList · HN Hotels Pvt Ltd<br>
+        Sauda · HN Hotels Pvt Ltd<br>
         <span class="accent">Hamza family in Bangalore food trade since 1918</span><br>
         v2.0 · 7 portals wired
       </div>
@@ -1624,7 +1740,7 @@
             <option value="NCH">Nawabi Chai House only</option>
           </select>
         </label>
-        <button type="submit" class="submit">Add to BuyList</button>
+        <button type="submit" class="submit">Add to Sauda</button>
       </form>
     </div>
   </div>
@@ -1636,13 +1752,15 @@
     const PORTAL_ORDER = [
       'HYPERPURE', 'BIGBASKET', 'BLINKIT', 'ZEPTO', 'FLIPKART_MINUTES',
       'AMAZON_NOW', 'AMAZON_FRESH', 'AMAZON_BUSINESS',
-      'JIOMART', 'INSTAMART', 'METRO', 'DMART',
+      'JIOMART', 'INSTAMART', 'METRO', 'INDIAMART', 'DMART',
     ];
     const PORTAL_SOURCE_KEYS = PORTAL_ORDER.slice();
     // Portals shown only when material is B2B-eligible (server-tagged
     // `mat.b2b_eligible`). For non-eligible materials (fresh produce,
     // poultry, eggs) these chips are hidden — wrong channel entirely.
-    const B2B_ONLY_PORTALS = new Set(['AMAZON_BUSINESS', 'METRO']);
+    // IndiaMART is a B2B directory/RFQ marketplace — launcher-only, never
+    // scouted, never feeds the cheapest-source engine (indicative prices).
+    const B2B_ONLY_PORTALS = new Set(['AMAZON_BUSINESS', 'METRO', 'INDIAMART']);
 
     // ============================================================
     // Tier architecture — three procurement modes
@@ -1659,7 +1777,7 @@
       AMAZON_NOW: 'qcomm', INSTAMART: 'qcomm',
       BIGBASKET: 'retail', JIOMART: 'retail',
       AMAZON_FRESH: 'retail', DMART: 'retail',
-      HYPERPURE: 'b2b', AMAZON_BUSINESS: 'b2b', METRO: 'b2b',
+      HYPERPURE: 'b2b', AMAZON_BUSINESS: 'b2b', METRO: 'b2b', INDIAMART: 'b2b',
     };
     const TIER_ORDER = ['vendor', 'manual', 'qcomm', 'retail', 'b2b'];
     const TIER_LABELS = {
@@ -1681,6 +1799,89 @@
       if (sk === 'manual') return 'manual';
       return PORTAL_TIER[sk] || 'retail';
     }
+
+    // ============================================================
+    // Order windows — the morning auto-seed coordinate
+    // ============================================================
+    // Every material is placed in exactly one ORDER WINDOW: the
+    // session in which Sauda expects it to be bought. This is a closed,
+    // finite dimension (COA: a coordinate, not free text). It is DERIVED
+    // at read-time from existing material fields (brand · category ·
+    // name · vendor link) — no schema change, no Odoo write — exactly
+    // like the price-trust ladder. A material that fits none of the
+    // clock windows still lands somewhere ('OTHER') so nothing is ever
+    // silently dropped from the morning view.
+    //
+    //   NCH_MORNING   NCH chai/snacks inputs consumed at 7am open
+    //                 (milk, tea/dust, butter, buns, badam, sugar …)
+    //   HE_EVENING    HE hero-dish inputs prepped for the dinner rush
+    //                 (ghee, rice, chicken, mutton, kabab masala, oil …)
+    //   VENDOR_CALLS  anything with an established vendor relationship —
+    //                 bought off-platform by phone/WhatsApp, needs a
+    //                 day's lead (call today → arrives tomorrow)
+    //   OTHER         everything else — a quiet catch-all, still shown
+    const ORDER_WINDOWS = ['NCH_MORNING', 'HE_EVENING', 'VENDOR_CALLS', 'OTHER'];
+    const ORDER_WINDOW_LABELS = {
+      NCH_MORNING: 'Today · NCH morning order',
+      HE_EVENING: 'Today · HE evening order',
+      VENDOR_CALLS: 'Tomorrow · vendor-direct calls',
+      OTHER: 'Also on the list',
+    };
+    const ORDER_WINDOW_GLYPH = {
+      NCH_MORNING: '🍵',
+      HE_EVENING: '🍚',
+      VENDOR_CALLS: '📲',
+      OTHER: '🛒',
+    };
+    const ORDER_WINDOW_EMPTY = {
+      NCH_MORNING: 'Mandi quiet — no fresh chai-counter prices yet.',
+      HE_EVENING: 'Mandi quiet — no fresh kitchen prices yet.',
+      VENDOR_CALLS: 'No vendor relationships linked yet — link a vendor to a material to fill this call list.',
+      OTHER: 'Mandi quiet — no fresh prices yet.',
+    };
+    // Name-pattern signals for the two clock windows. Anchored on the
+    // verified top-sellers (NCH = 58.7% chai + 18% haleem · HE heroes =
+    // ghee-rice/chicken-kabab/mutton-biryani) — never invented dishes.
+    const NCH_MORNING_NAME = /\b(milk|dahi|curd|tea|chai|dust|butter|makkhan|bun|paav|pav|badam|almond|sugar|osmania|biscuit|rusk|khari|coffee|malai|maska|haleem|wheat|gandum|dalia)\b/i;
+    const HE_EVENING_NAME = /\b(ghee|rice|basmati|biryani|chicken|murgh|kebab|kabab|tandoori|tangdi|mutton|lamb|goat|gravy cut|brain|bheja|masala|oil|tel)\b/i;
+    function materialBrand(mat) {
+      return String(mat?.brand || mat?.brand_scope || '').toUpperCase();
+    }
+    function hasVendorLink(mat) {
+      if (mat?.primary_vendor) return true;
+      const links = mat?.vendor_links;
+      return Array.isArray(links) && links.length > 0;
+    }
+    // Pure derivation — checked vendor-first, then brand+name, then a
+    // category lean, then the catch-all. Never throws.
+    function deriveOrderWindow(mat) {
+      try {
+        if (!mat) return 'OTHER';
+        if (hasVendorLink(mat)) return 'VENDOR_CALLS';
+        const brand = materialBrand(mat);
+        const name = String(mat.name || '');
+        const cat = String(mat.category || '');
+        const isNchName = NCH_MORNING_NAME.test(name);
+        const isHeName = HE_EVENING_NAME.test(name);
+        // Brand scope is the strongest signal when present.
+        if (brand.includes('NCH')) {
+          if (isHeName && !isNchName) return 'HE_EVENING';
+          return 'NCH_MORNING';
+        }
+        if (brand.includes('HE') || brand.includes('HAMZA')) {
+          if (isNchName && !isHeName) return 'NCH_MORNING';
+          return 'HE_EVENING';
+        }
+        // No brand (HQ / shared) — fall back to the name signal.
+        if (isNchName && !isHeName) return 'NCH_MORNING';
+        if (isHeName && !isNchName) return 'HE_EVENING';
+        // Last lean on category for unbranded staples.
+        if (/beverage|chai|snack|bakery|dairy/i.test(cat)) return 'NCH_MORNING';
+        if (/meat|poultry|staple|spice|oil|fat/i.test(cat)) return 'HE_EVENING';
+        return 'OTHER';
+      } catch (_) { return 'OTHER'; }
+    }
+
     // Vendor-direct support — materials with an established vendor
     // relationship (chicken → MN Broilers, buns → Ganga Bakery, etc.)
     // bypass the portal flow. Cart key for these is `vendor:<slug>`
@@ -1703,7 +1904,7 @@
       const outlet = vendor?.outlet_label || 'Hamza Express';
       const itemsList = lines.map((l) => `- ${l.name} × ${l.qty}${l.uom || ''}`).join('\n');
       const template = vendor?.message_template ||
-        'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via BuyList';
+        'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via Sauda';
       return template
         .replace(/\{date\}/g, date)
         .replace(/\{outlet\}/g, outlet)
@@ -1745,6 +1946,7 @@
       JIOMART: 'app',
       INSTAMART: 'app',
       METRO: 'safari',
+      INDIAMART: 'app-search-unverified',
       DMART: 'safari',
     };
     const HANDOFF_GLYPH = {
@@ -1763,26 +1965,26 @@
       ZEPTO: 'Zepto', FLIPKART_MINUTES: 'Flipkart Minutes',
       AMAZON_NOW: 'Amazon Now', AMAZON_FRESH: 'Amazon Fresh', AMAZON_BUSINESS: 'Amazon Business',
       JIOMART: 'JioMart', INSTAMART: 'Instamart',
-      METRO: 'Metro', DMART: 'DMart',
+      METRO: 'Metro', INDIAMART: 'IndiaMART', DMART: 'DMart',
     };
     const SOURCE_SHORT = {
       HYPERPURE: 'HP', BIGBASKET: 'BB', BLINKIT: 'Blinkit',
       ZEPTO: 'Zepto', FLIPKART_MINUTES: 'FK',
       AMAZON_NOW: 'Amazon Now', AMAZON_FRESH: 'Amazon Fresh', AMAZON_BUSINESS: 'Amz Business',
       JIOMART: 'JioMart', INSTAMART: 'Instamart',
-      METRO: 'Metro', DMART: 'DMart',
+      METRO: 'Metro', INDIAMART: 'IndiaMART', DMART: 'DMart',
     };
     const PORTAL_DOMAIN = {
       HYPERPURE: 'hyperpure.com', BIGBASKET: 'bigbasket.com', BLINKIT: 'blinkit.com',
       ZEPTO: 'zepto.com', FLIPKART_MINUTES: 'flipkart.com',
       AMAZON_NOW: 'amazon.in', AMAZON_FRESH: 'amazon.in', AMAZON_BUSINESS: 'amazon.in',
       JIOMART: 'jiomart.com', INSTAMART: 'swiggy.com',
-      METRO: 'metro.co.in', DMART: 'dmart.in',
+      METRO: 'metro.co.in', INDIAMART: 'indiamart.com', DMART: 'dmart.in',
     };
     const PORTAL_LETTER = {
       HYPERPURE: 'H', BIGBASKET: 'BB', BLINKIT: 'B', ZEPTO: 'Z',
       FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'A', AMAZON_FRESH: 'AF', AMAZON_BUSINESS: 'AB',
-      JIOMART: 'JM', INSTAMART: 'IM', METRO: 'M', DMART: 'D',
+      JIOMART: 'JM', INSTAMART: 'IM', METRO: 'M', INDIAMART: 'IMt', DMART: 'D',
     };
     function portalFavicon(sk, size = 48, cls = 'portal-favicon') {
       const d = PORTAL_DOMAIN[sk];
@@ -1848,6 +2050,9 @@
       // page. Owner can browse on web or manually switch to the Metro
       // India app.
       METRO: (q) => `https://www.metro.co.in/search?q=${encodeURIComponent(q)}`,
+      // IndiaMART — B2B directory search. `?ss=` is the IndiaMART search
+      // param (NOT ?q=); byte-identical to the extension's searchUrl.
+      INDIAMART: (q) => `https://dir.indiamart.com/search.mp?ss=${encodeURIComponent(q)}`,
       // DMart — Avenue Supermarts retail. Also no AASA → Safari
       // fallback. Search URL verified to return 200.
       DMART: (q) => `https://www.dmart.in/search?q=${encodeURIComponent(q)}`,
@@ -1953,6 +2158,8 @@
       cart: JSON.parse(localStorage.getItem('purchaseConsoleCart') || '{}'),
       activeTab: 'shop',
       portalHealth: [],
+      portalHealthMap: {},
+      vendors: [],
       loading: false,
       deferredInstallPrompt: null,
     };
@@ -1978,6 +2185,11 @@
       filterStat: document.getElementById('filterStat'),
       addMatBtn: document.getElementById('addMatBtn'),
       listGrid: document.getElementById('listGrid'),
+      portalHealthBanner: document.getElementById('portalHealthBanner'),
+      vendorList: document.getElementById('vendorList'),
+      vendorNameInput: document.getElementById('vendorNameInput'),
+      vendorPhoneInput: document.getElementById('vendorPhoneInput'),
+      vendorAddBtn: document.getElementById('vendorAddBtn'),
       shopSubtitle: document.getElementById('shopSubtitle'),
       planSubtitle: document.getElementById('planSubtitle'),
       planBody: document.getElementById('planBody'),
@@ -2283,14 +2495,19 @@
         const hoGlyph = HANDOFF_GLYPH[ho] ? `<span class="chip-handoff" aria-hidden="true">${HANDOFF_GLYPH[ho]}</span>` : '';
         const hoTitle = HANDOFF_TITLE[ho];
         const s = sources.find((x) => x.source_key === sk);
+        const effStatus = effectivePortalStatus(sk);
+        const healthCls = ` health-${portalHealthTone(effStatus)}`;
+        const healthDot = portalHealthDot();
+        const healthTitle = ` · ${portalHealthLabel(effStatus)}`;
+        const dead = isScrapeDead(sk, effStatus);
         if (!s) {
           const url = portalSearchUrlFor(sk, mat.name);
-          // B2B chips with no scout yet: show as active (chip itself is
-          // the value-add — tap launches portal search in app).
+          // B2B/launcher chips with no scout: chip itself is the value-add
+          // (tap launches portal search in app). Never dead — no session.
           const isB2B = tierFor(sk) === 'b2b';
           const chipCls = isB2B ? 'alt-chip' : 'alt-chip disabled';
           const priceTxt = isB2B ? '↗' : '—';
-          return url ? `<a class="${chipCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span>${hoGlyph}</a>` : '';
+          return url ? `<a class="${chipCls}${healthCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle + healthTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${healthDot}${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span>${hoGlyph}</a>` : '';
         }
         const quoted = isPortalSourceQuoted(s);
         const sane = quoted && isSanePortalPrice(s, mat);
@@ -2298,7 +2515,10 @@
         const priceTxt = quoted ? moneyPaise(sourcePrice(s)) : (s.stock_status === 'ERROR' ? 'err' : '—');
         const warn = quoted && !sane ? '<span class="warn">⚠️</span>' : '';
         const chipCls = quoted ? 'alt-chip' : 'alt-chip disabled';
-        return `<a class="${chipCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${warn}${escapeHtml(priceTxt)}</span>${hoGlyph}</a>`;
+        if (dead) {
+          return `<button type="button" class="${chipCls}${healthCls} scrape-dead" title="${escapeAttr((SOURCE_LABELS[sk] || sk) + healthTitle + ' — re-login to price')}" data-dead-portal="${escapeAttr(sk)}">${healthDot}${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span></button>`;
+        }
+        return `<a class="${chipCls}${healthCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle + healthTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${healthDot}${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${warn}${escapeHtml(priceTxt)}</span>${hoGlyph}</a>`;
       }
       const tiersToRender = state.tier === 'all'
         ? TIER_ORDER
@@ -2400,11 +2620,138 @@
     // ============================================================
     // Plan tab
     // ============================================================
+    // ============================================================
+    // Morning auto-seed — Sauda's pre-sectioned suggestion view
+    // ============================================================
+    // A READ-ONLY layer that sits ATOP the manual plan/cart. It groups
+    // the day's materials into the three order windows and, per item,
+    // names the recommended source (cheapest verified, live-session
+    // price). It NEVER mutates state.cart — the owner still builds and
+    // edits his plan below as before. Brand toggle composes: NCH mode
+    // hides HE_EVENING, HE mode hides NCH_MORNING; VENDOR_CALLS + OTHER
+    // always show. Empty sections render a quiet state, never a throw.
+    function brandShowsWindow(win) {
+      const b = String(state.brand || 'BOTH').toUpperCase();
+      if (b === 'NCH' && win === 'HE_EVENING') return false;
+      if ((b === 'HE' || b === 'HAMZA') && win === 'NCH_MORNING') return false;
+      return true;
+    }
+    // For a material, find the recommended (cheapest verified) source
+    // for the morning view. Reuses bestSourceFor (already ladder-aware,
+    // excludes price=0 sentinels + insane prices). Returns null when no
+    // trustable live price exists yet.
+    function seedRecommendation(mat) {
+      try {
+        const best = bestSourceFor(mat);
+        if (best && isPortalSourceQuoted(best)) {
+          return {
+            kind: 'portal',
+            sk: best.source_key,
+            label: SOURCE_LABELS[best.source_key] || best.source_key,
+            price_paise: sourcePrice(best),
+            uom: mat.uom || 'unit',
+          };
+        }
+        // Vendor-direct materials show their vendor as the recommendation
+        // even without a portal quote — the call list is the point.
+        if (hasVendorLink(mat)) {
+          const v = mat.primary_vendor || (mat.vendor_links || [])[0] || null;
+          if (v) {
+            return {
+              kind: 'vendor',
+              label: String(v.name || 'Vendor').split('(')[0].trim(),
+              price_paise: 0,
+              uom: mat.uom || 'unit',
+            };
+          }
+        }
+      } catch (_) { /* fall through to no-recommendation */ }
+      return null;
+    }
+    function renderMorningSeed() {
+      const mats = Array.isArray(state.materials) ? state.materials : [];
+      // Bucket every in-scope material into exactly one window so the
+      // count reconciles (COA: no data missed).
+      const buckets = { NCH_MORNING: [], HE_EVENING: [], VENDOR_CALLS: [], OTHER: [] };
+      for (const mat of mats) {
+        const win = deriveOrderWindow(mat);
+        (buckets[win] || buckets.OTHER).push(mat);
+      }
+      const sectionFor = (win) => {
+        if (!brandShowsWindow(win)) return '';
+        const items = buckets[win] || [];
+        // Sort: items with a live recommendation first (cheapest
+        // verified up top), then the rest by name — so it's literally
+        // top-to-bottom tap order.
+        const rows = items
+          .map((mat) => ({ mat, rec: seedRecommendation(mat) }))
+          .sort((a, b) => {
+            const aHas = a.rec && a.rec.kind === 'portal' ? 0 : 1;
+            const bHas = b.rec && b.rec.kind === 'portal' ? 0 : 1;
+            if (aHas !== bHas) return aHas - bHas;
+            if (aHas === 0) {
+              const ap = a.rec.price_paise || 0; const bp = b.rec.price_paise || 0;
+              if (ap !== bp) return ap - bp;
+            }
+            return String(a.mat.name || '').localeCompare(String(b.mat.name || ''));
+          });
+        const priced = rows.filter((r) => r.rec && r.rec.kind === 'portal').length;
+        const lineHtml = rows.map(({ mat, rec }) => {
+          const emoji = materialEmoji(mat);
+          let recHtml;
+          if (rec && rec.kind === 'portal') {
+            recHtml = `<span class="seed-rec"><span class="seed-rec-src">${escapeHtml(rec.label)}</span><span class="seed-rec-price">${moneyPaise(rec.price_paise)}/${escapeHtml(rec.uom)}</span></span>`;
+          } else if (rec && rec.kind === 'vendor') {
+            recHtml = `<span class="seed-rec seed-rec-vendor"><span class="seed-rec-src">📲 ${escapeHtml(rec.label)}</span></span>`;
+          } else {
+            recHtml = `<span class="seed-rec seed-rec-none">awaiting price</span>`;
+          }
+          return `
+            <div class="seed-line">
+              <span class="seed-emoji">${emoji}</span>
+              <span class="seed-name">${escapeHtml(mat.name || '')}</span>
+              ${recHtml}
+            </div>`;
+        }).join('');
+        const visibleCount = rows.length;
+        const body = visibleCount > 0
+          ? lineHtml
+          : `<div class="seed-empty">${escapeHtml(ORDER_WINDOW_EMPTY[win] || ORDER_WINDOW_EMPTY.OTHER)}</div>`;
+        const meta = visibleCount > 0
+          ? `${visibleCount} item${visibleCount === 1 ? '' : 's'}${priced > 0 ? ` · ${priced} priced` : ''}`
+          : 'quiet';
+        // OTHER opens collapsed by default to keep the head clean; the
+        // two clock windows + vendor calls open expanded so the morning
+        // list is glanceable at a tap.
+        const openAttr = win === 'OTHER' ? '' : ' open';
+        return `
+          <details class="seed-section seed-${win.toLowerCase()}"${openAttr}>
+            <summary class="seed-summary">
+              <span class="seed-summary-glyph">${ORDER_WINDOW_GLYPH[win] || '🛒'}</span>
+              <span class="seed-summary-title">${escapeHtml(ORDER_WINDOW_LABELS[win] || win)}</span>
+              <span class="seed-summary-meta">${escapeHtml(meta)}</span>
+            </summary>
+            <div class="seed-section-body">${body}</div>
+          </details>`;
+      };
+      const sections = ORDER_WINDOWS.map(sectionFor).join('');
+      return `
+        <div class="seed-wrap">
+          <div class="seed-intro">ⓘ Sauda's read of the day — sourced by order window, cheapest verified source per item. Your plan below stays yours to build.</div>
+          ${sections}
+        </div>`;
+    }
+
     function renderPlan() {
       const { byPortal, grand, grandDone, totalCount, doneCount } = cartTotals();
+      // Sauda's morning auto-seed — a read-only suggestion layer rendered
+      // ABOVE the manual plan. Computed even when the cart is empty so the
+      // owner opens to a pre-sectioned view, not a blank slate.
+      let seedHtml = '';
+      try { seedHtml = renderMorningSeed(); } catch (_) { seedHtml = ''; }
       if (totalCount === 0) {
-        els.planSubtitle.textContent = 'Your plan is empty.';
-        els.planBody.innerHTML = `<div class="empty-state"><div class="big">🧾</div><div class="title">No items yet</div><div class="body">Tap any deal in Shop to start a per-portal procurement plan.</div></div>`;
+        els.planSubtitle.textContent = 'Sauda struck — your read of the day is below.';
+        els.planBody.innerHTML = seedHtml + `<div class="empty-state"><div class="big">🧾</div><div class="title">Plan not built yet</div><div class="body">Tap any deal in Shop to add it to today's plan — or use Sauda's read above as your guide.</div></div>`;
         return;
       }
       const portals = Object.keys(byPortal).length;
@@ -2562,7 +2909,7 @@
           </div>
           <span class="grand-value">${money(grand)}</span>
         </div>`;
-      els.planBody.innerHTML = honesty + toggleBar + blocks + grandHtml;
+      els.planBody.innerHTML = seedHtml + honesty + toggleBar + blocks + grandHtml;
       attachSwipeHandlers();
 
       // Wire hide-done toggle
@@ -2613,6 +2960,136 @@
     }
 
     // ============================================================
+    // Passive session-health derivation (shared by chips + You pane)
+    // ============================================================
+    // The portal-health payload knows READY / EXPIRED / NOT_CONNECTED /
+    // BROKEN / LAUNCHER_ONLY. The amber "stale" tier is computed
+    // client-side from last_captured_at (when cookies were grabbed), so a
+    // working-but-not-recently-recaptured portal reads amber, not red.
+    // Launcher-only portals (Amazon Business, Metro, IndiaMART, DMart)
+    // have no session lifecycle, so they are always neutral.
+    const PORTAL_HEALTH_STALE_MS = 24 * 60 * 60 * 1000;
+    const LAUNCHER_ONLY_PORTALS = new Set(['AMAZON_BUSINESS', 'METRO', 'INDIAMART', 'DMART']);
+    function derivePortalStatus(row) {
+      if (!row) return 'NOT_CONNECTED';
+      const s = (row.status || 'NOT_CONNECTED').toUpperCase();
+      if (s === 'LAUNCHER_ONLY') return 'LAUNCHER_ONLY';
+      if (s === 'READY') {
+        const cap = row.last_captured_at ? Date.parse(row.last_captured_at) : NaN;
+        if (!isNaN(cap) && (Date.now() - cap) > PORTAL_HEALTH_STALE_MS) return 'READY_STALE';
+        return 'READY';
+      }
+      return s;
+    }
+    function effectivePortalStatus(sk) {
+      const map = state.portalHealthMap || {};
+      if (map[sk]) return map[sk];
+      if (LAUNCHER_ONLY_PORTALS.has(sk)) return 'LAUNCHER_ONLY';
+      return 'UNKNOWN';
+    }
+    function portalHealthTone(status) {
+      if (status === 'READY') return 'good';
+      if (status === 'READY_STALE') return 'warn';
+      if (status === 'EXPIRED' || status === 'NOT_CONNECTED' || status === 'BROKEN') return 'bad';
+      return 'neutral';
+    }
+    function portalHealthLabel(status) {
+      return ({ READY: 'Ready', READY_STALE: 'Stale (24h+)', EXPIRED: 'Expired', NOT_CONNECTED: 'Not connected', BROKEN: 'Broken', LAUNCHER_ONLY: 'Launcher', UNKNOWN: 'Checking…' })[status] || status;
+    }
+    function portalHealthDot() { return '<span class="chip-health" aria-hidden="true"></span>'; }
+    function isScrapeDead(sk, status) {
+      return portalHealthTone(status) === 'bad' && !LAUNCHER_ONLY_PORTALS.has(sk) && sk !== 'manual';
+    }
+    function onPortalChipDead(sk) {
+      const name = SOURCE_LABELS[sk] || sk;
+      toast(`${name} session needs a re-login — sign in on the ${name} desktop / winpc Chrome, then re-capture.`, 3200);
+    }
+    function renderPortalHealthBanner() {
+      const el = els.portalHealthBanner;
+      if (!el) return;
+      const rows = state.portalHealth || [];
+      const scored = rows
+        .filter((r) => { const sk = r.source_key || r.key; return !LAUNCHER_ONLY_PORTALS.has(sk); })
+        .map((r) => ({ sk: r.source_key || r.key, st: derivePortalStatus(r) }));
+      const rank = { NOT_CONNECTED: 3, EXPIRED: 3, BROKEN: 3, READY_STALE: 2, READY: 0, LAUNCHER_ONLY: 0, UNKNOWN: 0 };
+      let worst = null;
+      for (const it of scored) {
+        const sc = rank[it.st] || 0;
+        if (sc > 0 && (!worst || sc > worst.sc)) worst = { ...it, sc };
+      }
+      if (!worst) { el.hidden = true; el.innerHTML = ''; return; }
+      const name = SOURCE_LABELS[worst.sk] || worst.sk;
+      const isBad = worst.sc >= 3;
+      el.classList.toggle('tone-warn', !isBad);
+      const msg = isBad
+        ? `⚠️ ${name} session ${worst.st === 'EXPIRED' ? 'expired' : 'down'} — re-login to price it.`
+        : `⏳ ${name} session is stale (24h+) — re-login for fresh prices.`;
+      el.innerHTML = `<span class="pb-text">${escapeHtml(msg)}</span><button type="button" class="pb-act" data-fix-portal="${escapeAttr(worst.sk)}">Fix</button>`;
+      el.hidden = false;
+    }
+    // ============================================================
+    // Vendors (You tab) — manage the direct-supplier surface
+    // ============================================================
+    async function loadVendors() {
+      if (!els.vendorList) return;
+      try {
+        const d = await fetchJson(`/api/purchase-control?action=list-vendors&brand=${state.brand}&pin=${encodeURIComponent(state.pin)}`);
+        state.vendors = d.vendors || d.results || [];
+        renderVendorList();
+      } catch (e) {
+        els.vendorList.innerHTML = `<div class="vendor-empty">Couldn't load vendors — ${escapeHtml(e.message || 'error')}</div>`;
+      }
+    }
+    function renderVendorList() {
+      if (!els.vendorList) return;
+      const rows = state.vendors || [];
+      if (!rows.length) {
+        els.vendorList.innerHTML = `<div class="vendor-empty">No vendors yet. Add one below — then link it to a material to light up its VENDOR DIRECT card.</div>`;
+        return;
+      }
+      els.vendorList.innerHTML = rows.map((v) => {
+        const name = String(v.name || '').split('(')[0].trim() || v.slug || 'Vendor';
+        const phone = v.whatsapp_phone || v.phone || 'no number';
+        const n = Number(v.material_count || 0);
+        const countTxt = n ? `${n} linked` : 'unlinked';
+        return `
+          <div class="vendor-list-row">
+            <div class="v-icon">📲</div>
+            <div class="v-main">
+              <div class="v-name">${escapeHtml(name)}</div>
+              <div class="v-meta">${escapeHtml(phone)}</div>
+            </div>
+            <div class="v-count">${escapeHtml(countTxt)}</div>
+          </div>`;
+      }).join('');
+    }
+    async function addVendor() {
+      const nameEl = els.vendorNameInput;
+      const phoneEl = els.vendorPhoneInput;
+      const name = (nameEl ? nameEl.value : '').trim();
+      const phone = (phoneEl ? phoneEl.value : '').replace(/[^0-9]/g, '');
+      if (!name) { toast('Name the vendor first.'); return; }
+      if (phone && phone.length < 10) { toast('Enter a full WhatsApp number.'); return; }
+      try {
+        const d = await fetchJson(`/api/purchase-control?action=upsert-vendor&pin=${encodeURIComponent(state.pin)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: state.pin, name, phone, whatsapp_phone: phone, brand: state.brand }),
+        });
+        if (d && (d.success || d.slug || d.id)) {
+          if (nameEl) nameEl.value = '';
+          if (phoneEl) phoneEl.value = '';
+          toast('Vendor saved.');
+          loadVendors();
+        } else {
+          toast('Could not save vendor — try again.');
+        }
+      } catch (e) {
+        toast('Save failed: ' + (e.message || 'error'), 3000);
+      }
+    }
+
+    // ============================================================
     // You tab — portal health
     // ============================================================
     async function refreshPortalHealth() {
@@ -2620,7 +3097,12 @@
       try {
         const d = await fetchJson(`/api/purchase-control?action=portal-health&pin=${encodeURIComponent(state.pin)}`);
         state.portalHealth = d.sessions || d.portals || [];
+        const map = {};
+        for (const row of state.portalHealth) { map[row.source_key || row.key] = derivePortalStatus(row); }
+        state.portalHealthMap = map;
         renderPortalHealth();
+        renderPortalHealthBanner();
+        if (state.activeTab === 'shop') renderList();
       } catch (e) {
         els.portalHealthGroup.innerHTML = `<div class="empty-state" style="padding:24px 12px;"><div class="body">Couldn't fetch — ${escapeHtml(e.message)}</div></div>`;
       }
@@ -2633,8 +3115,10 @@
       }
       els.portalHealthGroup.innerHTML = list.map((s) => {
         const sk = s.source_key || s.key;
-        const status = (s.status || 'UNKNOWN').toUpperCase();
-        const cls = status === 'READY' ? 'ok' : status === 'EXPIRED' || status === 'NOT_CONNECTED' ? 'bad' : 'warn';
+        const eff = derivePortalStatus(s);
+        const tone = portalHealthTone(eff);
+        const cls = tone === 'good' ? 'ok' : tone === 'bad' ? 'bad' : 'warn';
+        const status = portalHealthLabel(eff);
         const last = s.last_validated_at ? new Date(s.last_validated_at).toLocaleString('en-IN', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }) : '—';
         return `
           <div class="you-row">
@@ -2662,6 +3146,7 @@
       if (target === 'plan') renderPlan();
       if (target === 'you') {
         if (!state.portalHealth.length) refreshPortalHealth();
+        loadVendors();
       }
       // Reset scroll to top of new tab pane (iOS app behaviour)
       const pane = document.getElementById(`tab-${target}`);
@@ -2771,7 +3256,7 @@
         state.snapshotMap = snap;
         rebuildCategoryChips();
       } catch (err) { toast(err.message || 'Load failed'); }
-      finally { state.loading = false; renderList(); }
+      finally { state.loading = false; renderList(); refreshPortalHealth(); }
     }
     async function refreshOneMaterial(mid) {
       if (!state.pin || state.refreshing.has(mid)) return;
@@ -2817,7 +3302,7 @@
       const lines = state.cart[sk] || [];
       if (!lines.length) return;
       const total = lines.reduce((a, l) => a + (l.price_paise / 100) * (l.qty || 1), 0);
-      const title = `🛒 ${SOURCE_LABELS[sk] || sk} — HN Hotels BuyList`;
+      const title = `🛒 ${SOURCE_LABELS[sk] || sk} — HN Hotels Sauda`;
       const body = lines.map((l, i) => `${i + 1}. ${l.name} × ${l.qty}${l.uom} — ${moneyPaise(l.price_paise * (l.qty || 1))}`).join('\n');
       const text = `${title}\n\n${body}\n\nTotal: ${money(total)}`;
       if (navigator.share) { try { await navigator.share({ title, text }); return; } catch (_) {} }
@@ -2914,7 +3399,7 @@
 
     // Hard reload — unregister service workers + clear caches + reload
     // with a cache-busting query param. For when the PWA holds onto a
-    // stale HTML/JS snapshot after I ship a new BuyList version.
+    // stale HTML/JS snapshot after I ship a new Sauda version.
     els.hardReloadRow.addEventListener('click', async () => {
       if (!confirm('Hard reload?\\n\\nThis clears the cached app version and downloads the latest from server. Your Plan + PIN survive (they live in localStorage, not cache).')) return;
       toast('Clearing cache + reloading…', 2000);
@@ -2976,11 +3461,17 @@
     });
 
     els.youSignOutBtn.addEventListener('click', () => {
-      if (!confirm('Sign out of BuyList?')) return;
+      if (!confirm('Sign out of Sauda?')) return;
       localStorage.removeItem('purchaseConsolePin');
       location.reload();
     });
     els.refreshHealthRow.addEventListener('click', refreshPortalHealth);
+    if (els.vendorAddBtn) els.vendorAddBtn.addEventListener('click', addVendor);
+    if (els.vendorPhoneInput) els.vendorPhoneInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addVendor(); });
+    if (els.portalHealthBanner) els.portalHealthBanner.addEventListener('click', (e) => {
+      const fix = e.target.closest('[data-fix-portal]');
+      if (fix) onPortalChipDead(fix.dataset.fixPortal);
+    });
     els.installPwaRow.addEventListener('click', async () => {
       if (state.deferredInstallPrompt) {
         state.deferredInstallPrompt.prompt();
@@ -3042,6 +3533,8 @@
     // Delegated handlers (list + plan)
     document.addEventListener('click', (event) => {
       const t = event.target;
+      const deadChip = t.closest('[data-dead-portal]');
+      if (deadChip) { event.preventDefault(); onPortalChipDead(deadChip.dataset.deadPortal); return; }
       const addBtn = t.closest('[data-add-mat]');
       if (addBtn) {
         const mid = addBtn.dataset.addMat;

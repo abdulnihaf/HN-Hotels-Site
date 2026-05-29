@@ -88,6 +88,7 @@ const SOURCE_URLS = {
   // mostly regular packs, some larger value packs. dmart.in serves the
   // web ordering flow. No AASA either — Safari fallback.
   DMART: 'https://www.dmart.in/',
+  INDIAMART: 'https://www.indiamart.com/',
   BIGBASKET: 'https://www.bigbasket.com/',
   JIOMART: 'https://www.jiomart.com/',
 };
@@ -113,6 +114,11 @@ const SOURCES = [
   // Amazon Business (chip-only, eligibility-filtered, full scout
   // queued).
   { key: 'METRO', label: 'Metro', status: 'launcher_only', mode: 'b2b_directory', delivery_band: 'B2B wholesale / pickup', url: SOURCE_URLS.METRO },
+  // IndiaMART — B2B directory / RFQ marketplace, quick-launch only. No VPS
+  // adapter and NEVER scouted: listings are supplier+indicative-price+MOQ,
+  // not transactable cart prices, so feeding them into the cheapest engine
+  // would corrupt the "cheapest verified source" ranking. Launcher only.
+  { key: 'INDIAMART', label: 'IndiaMART', status: 'launcher_only', mode: 'b2b_directory', delivery_band: 'B2B / RFQ quote', url: SOURCE_URLS.INDIAMART },
   // DMart — consumer-tier quick-launch. Shows on every material
   // (not B2B-restricted). No AASA on dmart.in — Safari fallback.
   { key: 'DMART', label: 'DMart', status: 'launcher_only', mode: 'grocery', delivery_band: 'Pickup / same-day', url: SOURCE_URLS.DMART },
@@ -1257,7 +1263,7 @@ async function ensurePurchaseRunSchema(DB) {
   // ─── Vendor-direct workflow (added 2026-05-29) ───
   // Materials with established vendor relationships (chicken → MN
   // Broilers, buns → Ganga Bakery, buffalo milk → local dairy) bypass
-  // the portal-scout flow. Instead, BuyList Plan tab groups these as
+  // the portal-scout flow. Instead, Sauda Plan tab groups these as
   // a "VENDOR DIRECT" tier with a "📲 Send via WhatsApp" button that
   // generates a templated message and opens wa.me/<phone>?text=<encoded>.
   await DB.prepare(`
@@ -1490,7 +1496,7 @@ async function handleGet(request, url, env) {
     const days = Math.max(1, Math.min(1095, parseInt(url.searchParams.get('days') || '90', 10)));
     const creds = getOdooCredentials({ odoo: 'system' }, env);
     const data = await loadMaterialUniverse(creds, brand, days);
-    // Layer in user-defined custom materials so the BuyList can show items the
+    // Layer in user-defined custom materials so the Sauda can show items the
     // owner hasn't purchased via Odoo yet (e.g. tonight's chicken-cut tracker).
     try {
       await ensurePurchaseRunSchema(env.DB);
@@ -2016,7 +2022,7 @@ async function upsertPurchaseVendor(body, user, env) {
   const outlet_label = String(body.outlet_label || 'Hamza Express').trim();
   // Default template uses placeholders: {date}, {outlet}, {items_list}
   const message_template = String(body.message_template || '').trim() ||
-    'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via BuyList';
+    'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via Sauda';
   const notes = String(body.notes || '').trim();
   const odoo_partner_id = body.odoo_partner_id ? Number(body.odoo_partner_id) : null;
   const existing = await env.DB.prepare('SELECT id FROM purchase_vendors WHERE slug = ?').bind(slug).first();
@@ -2344,7 +2350,30 @@ async function upsertPortalSession(body, user, env) {
   const hasPayload = payload && typeof payload === 'object' && Object.keys(payload).length > 0;
   const expiresAt = body.expires_at || payload?.expires_at || payload?.expiry || '';
   const now = new Date().toISOString();
-  const status = cleanPortalSessionStatus(body.status || (hasPayload ? (isPastIso(expiresAt) ? 'EXPIRED' : 'READY') : 'NOT_CONNECTED'));
+  // READY truth-gate: a session is only READY when it carries real auth
+  // material (cookies and/or tokens) AND is not past expiry. "Payload
+  // non-empty" alone is too coarse — a logged-out portal with junk
+  // localStorage and a far-future analytics cookie would otherwise be
+  // stamped READY, sending the 06:30 scout against a dead page.
+  const cookieCount = countCookies(payload);
+  const tokenCount = countTokens(payload);
+  const hasAuthMaterial = cookieCount > 0 || tokenCount > 0;
+  const expired = isPastIso(expiresAt);
+  let derivedStatus;
+  if (!hasPayload || !hasAuthMaterial) {
+    derivedStatus = 'NOT_CONNECTED';
+  } else if (expired) {
+    derivedStatus = 'EXPIRED';
+  } else {
+    derivedStatus = 'READY';
+  }
+  // A caller-supplied status is honoured EXCEPT it can never lift a session
+  // to READY when the truth-gate says it is not — that would re-open the
+  // exact stale-positive this gate closes.
+  let status = cleanPortalSessionStatus(body.status || derivedStatus);
+  if (status === 'READY' && derivedStatus !== 'READY') {
+    status = derivedStatus;
+  }
   const kvValue = {
     source_key: sourceKey,
     captured_at: now,
@@ -2394,8 +2423,8 @@ async function upsertPortalSession(body, user, env) {
     body.location_label || '',
     body.pincode || '',
     browserHint(body.user_agent || payload?.user_agent),
-    countCookies(payload),
-    countTokens(payload),
+    cookieCount,
+    tokenCount,
     expiresAt || '',
     hasPayload ? now : body.last_captured_at || '',
     now,
@@ -3116,7 +3145,7 @@ async function callVpsScoutForSource(material, sourceKey, env) {
 
 // Which portals have an adapter wired on the VPS. Kept in sync with
 // ADAPTERS in /home/hnscout/scout-service/src/portal-runner.js.
-const VPS_WIRED_SOURCES = new Set(['HYPERPURE', 'BIGBASKET', 'JIOMART', 'BLINKIT', 'FLIPKART_MINUTES', 'AMAZON_NOW', 'ZEPTO']);
+const VPS_WIRED_SOURCES = new Set(['HYPERPURE', 'BIGBASKET', 'JIOMART', 'BLINKIT', 'FLIPKART_MINUTES', 'AMAZON_NOW', 'AMAZON_FRESH', 'ZEPTO']);
 
 function adapterAvailable(sourceKey) {
   return VPS_WIRED_SOURCES.has(sourceKey);
@@ -3182,7 +3211,7 @@ async function upsertDailySnapshot(DB, row) {
 }
 
 // ============================================================
-// BuyList intelligence layer (added 2026-05-29)
+// Sauda intelligence layer (added 2026-05-29)
 // ============================================================
 // Two systematic accuracy fixes applied at API-read time so historical
 // daily_price_snapshots rows auto-correct without re-scouting:
@@ -3208,10 +3237,23 @@ async function upsertDailySnapshot(DB, row) {
 // Returns { qty, unit: 'kg'|'g'|'l'|'ml'|'unit' } or null.
 function parsePackSize(s) {
   if (!s) return null;
-  const txt = String(s).toLowerCase().trim();
+  // Normalise: lowercase, trim, strip thousands-commas ("1,000 ml" → "1000 ml")
+  // so Number() doesn't parse "1,000" as 1.
+  const txt = String(s).toLowerCase().trim().replace(/(\d),(?=\d{3}\b)/g, '$1');
   // "Pack of 4" → 4 units
   const packOf = txt.match(/pack\s*of\s*(\d+)/);
   if (packOf) return { qty: Number(packOf[1]), unit: 'unit' };
+  // Multiplier packs: "6 x 100 g", "6x100g", "12 x 1 L" → total = 6*100g.
+  // Capture a leading "N x" so per-kg / per-L is not N× overstated.
+  const multMatch = txt.match(/^\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(kgs?|gms?|grams?|g|ltrs?|litres?|liters?|ml|l)\b/);
+  if (multMatch) {
+    const mult = Number(multMatch[1]);
+    const each = Number(multMatch[2]);
+    const u = multMatch[3];
+    const isMass = /^(kg|g|gm|gms|gram|grams)/.test(u);
+    const unit = isMass ? (u.startsWith('kg') ? 'kg' : 'g') : (u === 'ml' ? 'ml' : 'l');
+    return { qty: mult * each, unit };
+  }
   // Mass: "400 g", "2.5 kg", "100gm"
   const mass = txt.match(/(\d+(?:\.\d+)?)\s*(kgs?|gms?|grams?|g)\b/);
   if (mass) {
@@ -3228,7 +3270,8 @@ function parsePackSize(s) {
     const unit = u === 'ml' ? 'ml' : 'l';
     return { qty, unit };
   }
-  // Count: "4 pc", "12 pcs", "50 nos", "100 count"
+  // Count: "4 pc", "12 pcs", "50 nos", "100 count" — also a leading bare
+  // multiplier with a count unit ("6 x 1 pc").
   const pcs = txt.match(/(\d+)\s*(pcs?|pieces?|nos|units?|count|tablets?|caps?)\b/);
   if (pcs) return { qty: Number(pcs[1]), unit: 'unit' };
   return null;
@@ -3320,6 +3363,23 @@ function packQtyInMaterialUom(packSizeStr, materialUom, materialName) {
     return pack.qty;
   }
 
+  // Cross-family vol↔mass — bridge via food density, but ONLY when the
+  // material name is a known liquid (oil/ghee/milk/honey...). Otherwise we
+  // fall through and keep the existing conservative behaviour (return null
+  // → UOM_MISMATCH → price 0).
+  if ((packFamily === 'vol' && matFamily === 'mass') || (packFamily === 'mass' && matFamily === 'vol')) {
+    const d = densityGPerMl(materialName); // g per ml
+    if (!d || d <= 0) return null;
+    if (packFamily === 'vol' && matFamily === 'mass') {
+      // pack is L/ml, material canonical is kg → grams = ml * density
+      const packMl = pack.unit === 'l' ? pack.qty * 1000 : pack.qty;
+      return (packMl * d) / 1000; // kg
+    }
+    // pack is kg/g, material canonical is L → ml = grams / density
+    const packG = pack.unit === 'kg' ? pack.qty * 1000 : pack.qty;
+    return (packG / d) / 1000; // litres
+  }
+
   // Cross-family — use mass-per-unit constant if available
   const m = massPerUnitG(materialName);
   if (!m || m <= 0) return null;
@@ -3336,6 +3396,33 @@ function packQtyInMaterialUom(packSizeStr, materialUom, materialName) {
   }
   // Vol↔count not handled (rare for grocery)
   return null;
+}
+
+// Food densities (g per ml). Oil/ghee/milk are sold per-litre on some
+// portals and per-kg on others (and Odoo may hold either), so a perfectly
+// good quote in the "other" unit was being hard-zeroed by the UOM gate.
+// Conservative: we only bridge vol↔mass when the material NAME matches one
+// of these known liquids — never blanket-assume 1ml=1g (that is ~9% wrong
+// on oil and would turn a silent-missing into a silent-wrong number).
+const DENSITY_G_PER_ML = {
+  oil: 0.92, ghee: 0.92, 'vanaspati': 0.92, dalda: 0.92,
+  butter: 0.91,
+  milk: 1.03, curd: 1.03, dahi: 1.03, 'butter milk': 1.01, buttermilk: 1.01, lassi: 1.03,
+  cream: 0.99, malai: 0.99,
+  water: 1.0,
+  honey: 1.42, syrup: 1.33,
+  vinegar: 1.01,
+};
+
+// Returns density (g/ml) for a material if its name names a known liquid,
+// else null. Longest-key match so "butter milk" beats "butter".
+function densityGPerMl(materialName) {
+  const n = String(materialName || '').toLowerCase();
+  let best = null; let bestLen = 0;
+  for (const [k, v] of Object.entries(DENSITY_G_PER_ML)) {
+    if (n.includes(k) && k.length > bestLen) { best = v; bestLen = k.length; }
+  }
+  return best;
 }
 
 // Kept for backward compatibility — true ONLY when conversion is
