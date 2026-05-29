@@ -102,7 +102,7 @@ const DARBAR_TEMPLATES = [
     name: 'darbar_ghost_pin_v1', language: 'en', category: 'UTILITY',
     components: [{
       type: 'BODY',
-      text: 'HN Hotels: PIN {{1}} {{2}} baar punch kar raha hai ({{3}} din) par roster me naam nahi hai. Owner please naam dein.',
+      text: 'HN Hotels: PIN {{1}} ne {{2}} baar punch kiya hai, {{3}} din se — par roster me naam nahi hai. Owner please naam dein.',
       example: { body_text: [['46', '12', '5']] },
     }],
   },
@@ -193,10 +193,21 @@ async function ensureAggregatorDailyReportTemplate(env, brand) {
 async function ensureWabaTemplate(env, brand, tpl) {
   const existing = await getWabaTemplate(env, brand, tpl.name);
   if (!existing.ok) return { name: tpl.name, ok: false, error: existing.error || 'lookup_failed', response: existing.response };
-  if (existing.template) {
-    return { name: tpl.name, ok: true, created: false, status: existing.template.status, id: existing.template.id, category: existing.template.category };
-  }
   const cfg = wabaConfigForBrand(env, brand);
+  if (existing.template) {
+    const t = existing.template;
+    // A rejected template can be resubmitted in place (edit by id) with corrected
+    // components — avoids delete/recreate, which would hit Meta's name-deletion lock.
+    if (t.status === 'REJECTED') {
+      const editUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/${t.id}`;
+      const edited = await graphJson(editUrl, cfg.token, {
+        method: 'POST',
+        body: JSON.stringify({ category: tpl.category, components: tpl.components }),
+      });
+      return { name: tpl.name, ok: edited.ok, edited: edited.ok, was: 'REJECTED', rejected_reason: t.rejected_reason, status: edited.ok ? 'PENDING' : t.status, id: t.id, response: edited.ok ? undefined : edited.body };
+    }
+    return { name: tpl.name, ok: true, created: false, status: t.status, id: t.id, category: t.category, rejected_reason: t.rejected_reason };
+  }
   const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${cfg.wabaId}/message_templates`;
   const created = await graphJson(url, cfg.token, { method: 'POST', body: JSON.stringify(tpl) });
   return {
