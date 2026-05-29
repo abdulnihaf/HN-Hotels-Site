@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-29T20:16:11+0530",
-  "published_at": "2026-05-29T20:16:11+0530",
+  "updated_at": "2026-05-29T20:30:01+0530",
+  "published_at": "2026-05-29T20:30:01+0530",
   "source": "github-main-static-json",
   "lane_slug": "meta-ads",
   "lane": {
@@ -159,16 +159,6 @@
       "summary": "Created four HE website Custom Audiences via Meta access token: HE_DIR_VISIT_7D_20260525=120246563761410505, HE_DIR_VISIT_30D_20260525=120246563767670505, HE_FIND_LOCATION_30D_20260525=120246563775240505, HE_RT_VOUCHER_VISIT_30D_20260525=120246563783970505. Verified first three are delivery-ready; voucher-return pool is created but still too small. Attempted B1 50/75/95 video audiences; Meta rejected video API rule/event schema, so no video audience created.",
       "next_action": "Use ready website pools plus existing page-engaged 7D/30D for first WABA voucher retargeting adset. Create B1 50/75/95 video-view audiences through Ads Manager UI or continue API schema discovery before using video-view retargeting.",
       "mutation_status": "created four Meta website Custom Audiences only; no campaign, adset, ad, WhatsApp send, or spend mutation"
-    },
-    {
-      "id": "20260525081837-meta-ads",
-      "at": "2026-05-25T08:18:37+0530",
-      "lane": "meta-ads",
-      "task": "Implement Meta retargeting audience setup via access token",
-      "status": "ready",
-      "summary": "Verified live Meta ad account, pixel, existing audiences, and B1 creative/video via access token. Attempted Custom Audience creation and confirmed hard Meta #2663 Custom Audience Terms blocker. Added executable after-TOS script for 7D/30D directions, FindLocation, and rt_voucher website audiences; no campaign/adset/ad/spend mutation performed.",
-      "next_action": "Owner must accept Custom Audience Terms at https://www.facebook.com/customaudiences/app/tos/?act=634959029638544, then rerun the prepared audience creation script and verify audience IDs before any retargeting adset creation.",
-      "mutation_status": "blocked by Meta Custom Audience Terms; read-only live verification plus local implementation script only"
     }
   ]
 }

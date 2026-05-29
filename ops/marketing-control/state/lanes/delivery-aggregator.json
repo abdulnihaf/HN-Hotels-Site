@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-29T20:16:11+0530",
-  "published_at": "2026-05-29T20:16:11+0530",
+  "updated_at": "2026-05-29T20:30:01+0530",
+  "published_at": "2026-05-29T20:30:01+0530",
   "source": "github-main-static-json",
   "lane_slug": "delivery-aggregator",
   "lane": {
@@ -9,17 +9,32 @@
     "subgroup": "Aggregators",
     "risk": "platform and margin mutation",
     "status": "ready",
-    "last_task": "Aggregator-specific Biryani Rice SKU portal discount config",
-    "last_summary": "Analysed saved Swiggy/Zomato owner-app offer grammar and HE aggregator playbook. Recommended Zomato native Percentage Dish Discount on Biryani Rice SKU only; Swiggy selected-item flat/percent discount only if available, otherwise no cart-wide discount. No portal mutation executed.",
-    "next_action": "Owner to configure Biryani Rice SKU-only discount in partner portals, verify only one SKU is selected, disable stacking/auto-renewal, and monitor first 60 minutes for clearance volume.",
-    "mutation_status": "Recommendation only; no Swiggy/Zomato/POS/Odoo/WABA mutation executed by Codex.",
+    "last_task": "Guide Zomato Biryani Rice ₹30 item discount setup",
+    "last_summary": "Screenshot verified Zomato web offers page only exposes Promo Code and Freebies and explicitly says fixed/percentage/BOGO offers require the Zomato Restaurant Partner Android app. Guidance: do not use web promo code because it is not SKU-specific; use Android app item/fixed dish discount for Biryani Rice only.",
+    "next_action": "Owner to open Zomato Restaurant Partner Android app and create a ₹30 fixed item discount on Biryani Rice only, then verify preview before saving.",
+    "mutation_status": "Guidance only; no Zomato/POS/Odoo mutation executed by Codex.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-    "last_run_at": "2026-05-29T20:16:11+0530"
+    "last_run_at": "2026-05-29T20:30:01+0530"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/03-delivery-aggregator.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/delivery-aggregator.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260529203001-delivery-aggregator",
+      "at": "2026-05-29T20:30:01+0530",
+      "lane": "delivery-aggregator",
+      "task": "Guide Zomato Biryani Rice ₹30 item discount setup",
+      "status": "ready",
+      "summary": "Screenshot verified Zomato web offers page only exposes Promo Code and Freebies and explicitly says fixed/percentage/BOGO offers require the Zomato Restaurant Partner Android app. Guidance: do not use web promo code because it is not SKU-specific; use Android app item/fixed dish discount for Biryani Rice only.",
+      "next_action": "Owner to open Zomato Restaurant Partner Android app and create a ₹30 fixed item discount on Biryani Rice only, then verify preview before saving.",
+      "mutation_status": "Guidance only; no Zomato/POS/Odoo mutation executed by Codex.",
+      "proof": "",
+      "artifacts": "",
+      "live_ids": "",
+      "rollback": "",
+      "data_freshness": ""
+    },
     {
       "id": "20260529201611-delivery-aggregator",
       "at": "2026-05-29T20:16:11+0530",
@@ -224,16 +239,6 @@
       "summary": "Redesigned HE/NCH aggregator dashboards to separate Swiggy and Zomato clearly. Added first-screen platform control lanes with Zomato customer/offer lens and Swiggy ops/fee lens; each lane shows orders, delivered revenue, AOV, exceptions, offer proof, top items, and needs-control rows. Updated revenue control and data coverage copy to reflect May 1-25 coverage for both platforms. Deployed cache-busted assets to /ops/he/aggregator/ and /ops/nch/aggregator/ and verified live HTML/JS contain platformBoard and v2 asset URLs.",
       "next_action": "Use separated lanes to build exception/revenue action queue for price positioning and offer placement; keep mutation blocked until margin proof is mapped.",
       "mutation_status": "dashboard UI deploy only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
-    },
-    {
-      "id": "20260525101451-delivery-aggregator",
-      "at": "2026-05-25T10:14:51+0530",
-      "lane": "delivery-aggregator",
-      "task": "Aggregator data coverage confirmation",
-      "status": "ready",
-      "summary": "Verified live owner-orders coverage for May 1-25 across both outlets and platforms. HE: 152 orders = 132 Zomato + 20 Swiggy; delivered revenue 50459; discount-known 28. NCH: 55 orders = 35 Zomato + 20 Swiggy; delivered revenue 10357.11; discount-known 9. Normalized dashboard emits 24 fields per order; consistently populated core fields include platform, brand, order id, status/status_group, date/time, items, order value, captured_at. Swiggy history adds fee/discount/food-ready/handover signals but no customer name; Zomato history adds customer name and some detail/discount proof when order-detail captures exist.",
-      "next_action": "Design next dashboard layer around exception control, revenue leakage, offer proof, and demand-to-price decisions before any platform/POS offer mutation.",
-      "mutation_status": "verification/read-only analysis only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
     }
   ]
 }

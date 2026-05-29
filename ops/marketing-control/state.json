@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-29T20:16:11+0530",
-  "published_at": "2026-05-29T20:16:11+0530",
+  "updated_at": "2026-05-29T20:30:01+0530",
+  "published_at": "2026-05-29T20:30:01+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Aggregator-specific Biryani Rice SKU portal discount config",
-      "last_summary": "Analysed saved Swiggy/Zomato owner-app offer grammar and HE aggregator playbook. Recommended Zomato native Percentage Dish Discount on Biryani Rice SKU only; Swiggy selected-item flat/percent discount only if available, otherwise no cart-wide discount. No portal mutation executed.",
-      "next_action": "Owner to configure Biryani Rice SKU-only discount in partner portals, verify only one SKU is selected, disable stacking/auto-renewal, and monitor first 60 minutes for clearance volume.",
-      "mutation_status": "Recommendation only; no Swiggy/Zomato/POS/Odoo/WABA mutation executed by Codex.",
+      "last_task": "Guide Zomato Biryani Rice ₹30 item discount setup",
+      "last_summary": "Screenshot verified Zomato web offers page only exposes Promo Code and Freebies and explicitly says fixed/percentage/BOGO offers require the Zomato Restaurant Partner Android app. Guidance: do not use web promo code because it is not SKU-specific; use Android app item/fixed dish discount for Biryani Rice only.",
+      "next_action": "Owner to open Zomato Restaurant Partner Android app and create a ₹30 fixed item discount on Biryani Rice only, then verify preview before saving.",
+      "mutation_status": "Guidance only; no Zomato/POS/Odoo mutation executed by Codex.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-29T20:16:11+0530"
+      "last_run_at": "2026-05-29T20:30:01+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -156,6 +156,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260529203001-delivery-aggregator",
+      "at": "2026-05-29T20:30:01+0530",
+      "lane": "delivery-aggregator",
+      "task": "Guide Zomato Biryani Rice ₹30 item discount setup",
+      "status": "ready",
+      "summary": "Screenshot verified Zomato web offers page only exposes Promo Code and Freebies and explicitly says fixed/percentage/BOGO offers require the Zomato Restaurant Partner Android app. Guidance: do not use web promo code because it is not SKU-specific; use Android app item/fixed dish discount for Biryani Rice only.",
+      "next_action": "Owner to open Zomato Restaurant Partner Android app and create a ₹30 fixed item discount on Biryani Rice only, then verify preview before saving.",
+      "mutation_status": "Guidance only; no Zomato/POS/Odoo mutation executed by Codex.",
+      "proof": "",
+      "artifacts": "",
+      "live_ids": "",
+      "rollback": "",
+      "data_freshness": ""
+    },
     {
       "id": "20260529201611-delivery-aggregator",
       "at": "2026-05-29T20:16:11+0530",
@@ -1030,16 +1045,6 @@
       "summary": "Deployed /ops/aggregator owner order-history dashboard and aggregator-pulse owner-orders API to Cloudflare production via GitHub main commits d57d552/19a2f20 after direct Pages deploy was overwritten by GitHub auto-deploy. Ran one controlled direct partner cURL ingest: Swiggy HTTP 200 upserted 5, Zomato history HTTP 200 upserted 10, saved Zomato detail upserted 1. Verified hnhotels.in/ops/aggregator serves Aggregator Orders and owner-orders API returns today total 8 with delivered/rejected/cancelled rows plus week rejected/missed filters.",
       "next_action": "Turn this into a scheduled refresh path: refresh authenticated partner cURLs/session safely, run ingest periodically, and add brand/outlet correction for Zomato list rows where only detail payload can prove resId before using the data for price/offer execution.",
       "mutation_status": "production Cloudflare Pages/API deploy plus D1 order-history ingest only; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
-    },
-    {
-      "id": "20260525081837-meta-ads",
-      "at": "2026-05-25T08:18:37+0530",
-      "lane": "meta-ads",
-      "task": "Implement Meta retargeting audience setup via access token",
-      "status": "ready",
-      "summary": "Verified live Meta ad account, pixel, existing audiences, and B1 creative/video via access token. Attempted Custom Audience creation and confirmed hard Meta #2663 Custom Audience Terms blocker. Added executable after-TOS script for 7D/30D directions, FindLocation, and rt_voucher website audiences; no campaign/adset/ad/spend mutation performed.",
-      "next_action": "Owner must accept Custom Audience Terms at https://www.facebook.com/customaudiences/app/tos/?act=634959029638544, then rerun the prepared audience creation script and verify audience IDs before any retargeting adset creation.",
-      "mutation_status": "blocked by Meta Custom Audience Terms; read-only live verification plus local implementation script only"
     }
   ]
 }
