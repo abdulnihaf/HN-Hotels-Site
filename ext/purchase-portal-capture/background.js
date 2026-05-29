@@ -43,18 +43,70 @@ const PORTALS = {
     searchUrl: (query) => `https://www.amazon.in/s?k=${encodeURIComponent(query)}&i=nowstore`,
     searchDelayMs: 3400,
   },
+  // Amazon Fresh lives at the same amazon.in domain as Amazon Now —
+  // same cookies cover both. We list it as a separate portal so the
+  // owner can verify Fresh-mode works at capture time, but the
+  // captured session is interchangeable with Amazon Now's.
+  AMAZON_FRESH: {
+    label: 'Amazon Fresh',
+    startUrl: 'https://www.amazon.in/',
+    domains: ['amazon.in'],
+    searchUrl: (query) => `https://www.amazon.in/s?k=${encodeURIComponent(query)}&i=amazonfresh`,
+    searchDelayMs: 3400,
+  },
+  // Amazon Business — DIFFERENT subdomain (business.amazon.in) with its
+  // own login + cookies. Owner has the HN HOTELS PVT LTD business
+  // account registered there. Captures B2B prices + GST invoicing.
+  AMAZON_BUSINESS: {
+    label: 'Amazon Business',
+    startUrl: 'https://business.amazon.in/',
+    domains: ['business.amazon.in', 'amazon.in'],
+    searchUrl: (query) => `https://www.amazon.in/s?k=${encodeURIComponent(query)}`,
+    searchDelayMs: 3400,
+  },
   BIGBASKET: {
     label: 'BigBasket',
     startUrl: 'https://www.bigbasket.com/',
     domains: ['bigbasket.com'],
-    searchUrl: (query) => `https://www.bigbasket.com/ps/?q=${encodeURIComponent(query)}`,
+    // AASA-correct path /cl/* (was /ps/ which iOS doesn't UL-claim).
+    searchUrl: (query) => `https://www.bigbasket.com/cl/${encodeURIComponent(query)}`,
     searchDelayMs: 3200,
   },
   JIOMART: {
     label: 'JioMart',
     startUrl: 'https://www.jiomart.com/',
     domains: ['jiomart.com'],
-    searchUrl: (query) => `https://www.jiomart.com/search/${encodeURIComponent(query)}`,
+    // AASA-correct /catalogsearch/* (was /search/ which JM app
+    // doesn't claim).
+    searchUrl: (query) => `https://www.jiomart.com/catalogsearch/result?q=${encodeURIComponent(query)}`,
+    searchDelayMs: 3600,
+  },
+  // ─── B2B / wholesale chip-launchers (added 2026-05-29) ───
+  // These don't have iOS Universal Links configured on their web
+  // domains (DMart, Metro — verified via AASA probe). Session capture
+  // still works for future VPS scout adapters that pull B2B prices.
+  METRO: {
+    label: 'Metro Wholesale',
+    startUrl: 'https://www.metro-india.com/',
+    domains: ['metro-india.com', 'metro.co.in'],
+    searchUrl: (query) => `https://www.metro-india.com/search?q=${encodeURIComponent(query)}`,
+    searchDelayMs: 3600,
+  },
+  DMART: {
+    label: 'DMart Ready',
+    startUrl: 'https://www.dmart.in/',
+    domains: ['dmart.in', 'dmartready.in'],
+    searchUrl: (query) => `https://www.dmart.in/search?q=${encodeURIComponent(query)}`,
+    searchDelayMs: 3600,
+  },
+  // IndiaMART — m.indiamart.com is the mobile subdomain with the AASA
+  // claim; capture happens on whatever subdomain the owner is signed
+  // into in Chrome (usually the desktop www subdomain).
+  INDIAMART: {
+    label: 'IndiaMART',
+    startUrl: 'https://www.indiamart.com/',
+    domains: ['indiamart.com', 'm.indiamart.com', 'dir.indiamart.com'],
+    searchUrl: (query) => `https://dir.indiamart.com/search.mp?ss=${encodeURIComponent(query)}`,
     searchDelayMs: 3600,
   },
 };
@@ -141,8 +193,8 @@ async function captureCurrent(message) {
   const detected = detectSource(tab.url);
   const sourceKey = message.sourceKey || detected;
   const portal = PORTALS[sourceKey];
-  if (!portal) throw new Error('Open one of the 8 purchase portals before capturing');
-  if (!detected) throw new Error('Current tab is not one of the 8 purchase portals');
+  if (!portal) throw new Error('Open one of the wired purchase portals before capturing');
+  if (!detected) throw new Error('Current tab is not a wired purchase portal');
   if (detected !== sourceKey) throw new Error(`Current tab is ${PORTALS[detected].label}, not ${portal.label}`);
 
   const pageState = await readPageState(tab.id);
@@ -345,7 +397,7 @@ async function runBrowserQuotes(message) {
   const detected = detectSource(tab.url);
   const sourceKey = message.sourceKey || detected;
   const portal = PORTALS[sourceKey];
-  if (!portal) throw new Error('Choose one of the 8 purchase portals');
+  if (!portal) throw new Error('Choose a wired purchase portal');
   if (detected !== sourceKey) throw new Error(`Open the logged-in ${portal.label} tab before running live quotes`);
 
   const result = await runQuotesForPortal({ pin, sourceKey, tab, portal, navigatedHere: true });
