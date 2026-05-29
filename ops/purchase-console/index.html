@@ -958,6 +958,70 @@
       font-variant-numeric: tabular-nums;
     }
     .grand-progress-line b { color: var(--text); font-weight: 800; }
+    /* Plan-tab tier sections */
+    .plan-tier-section {
+      margin: 0 0 18px;
+    }
+    .plan-tier-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 14px 18px 8px;
+    }
+    .plan-tier-title {
+      font: 800 11px/1 -apple-system, sans-serif;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+    }
+    .plan-tier-section.tier-b2b .plan-tier-title { color: var(--hn-gold); }
+    .plan-tier-section.tier-qcomm .plan-tier-title::before { content: '⚡ '; opacity: 0.7; }
+    .plan-tier-section.tier-retail .plan-tier-title::before { content: '🛒 '; opacity: 0.7; }
+    .plan-tier-stats {
+      font: 600 11px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .plan-tier-stats b { color: var(--text); font-weight: 800; }
+    /* Return-from-app prompt (visibility change) */
+    .return-prompt {
+      position: fixed; left: 12px; right: 12px;
+      bottom: calc(var(--tab-bar-h) + var(--safe-bot) + 14px);
+      z-index: 65;
+      padding: 12px 14px;
+      background: linear-gradient(135deg, rgba(212,162,76,0.92) 0%, rgba(184,137,58,0.92) 100%);
+      color: #1a1206;
+      border-radius: 14px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.18);
+      display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+      animation: returnPromptIn .3s var(--spring);
+      max-width: 540px; margin: 0 auto;
+    }
+    .return-prompt-text {
+      font: 700 13px/1.3 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    .return-prompt-text small {
+      display: block;
+      font: 600 11px/1.2 -apple-system, sans-serif;
+      opacity: 0.7;
+      margin-top: 2px;
+    }
+    .return-prompt button {
+      height: 32px; padding: 0 12px;
+      background: rgba(26,18,6,0.18);
+      color: #1a1206;
+      border-radius: 8px;
+      font: 800 11.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+    }
+    .return-prompt button.dismiss {
+      background: transparent;
+      color: rgba(26,18,6,0.6);
+    }
+    @keyframes returnPromptIn {
+      from { opacity: 0; transform: translateY(20px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
     /* Swipe-reveal Remove */
     .plan-line-reveal {
       position: absolute; top: 0; right: 0; bottom: 0;
@@ -2193,14 +2257,23 @@
           </button>
         </div>` : '';
 
-      const keys = Object.keys(byPortal).sort((a, b) => {
-        // Pending portals first (most-pending bubble up); within same status, by total desc
+      const allKeys = Object.keys(byPortal);
+      // Group portal blocks by tier so the Plan tab mirrors the Shop
+      // tab's tier-based decision tree (Q-Comm / Retail / B2B). Within
+      // a tier, pending portals bubble up; ties broken by total desc.
+      const sortInsideTier = (a, b) => {
         const aDone = byPortal[a].doneCount === byPortal[a].count ? 1 : 0;
         const bDone = byPortal[b].doneCount === byPortal[b].count ? 1 : 0;
         if (aDone !== bDone) return aDone - bDone;
         return byPortal[b].total - byPortal[a].total;
-      });
-      const blocks = keys.map((sk) => {
+      };
+      const tierKeyGroups = TIER_ORDER
+        .map((tier) => ({
+          tier,
+          keys: allKeys.filter((k) => tierFor(k) === tier).sort(sortInsideTier),
+        }))
+        .filter((g) => g.keys.length > 0);
+      const renderPortalBlock = (sk) => {
         const lines = state.cart[sk] || [];
         const t = byPortal[sk];
         const portalAllDone = t.doneCount === t.count;
@@ -2254,7 +2327,7 @@
               <div class="portal-progress-fill" style="width:${progressPct}%"></div>
             </div>
             <div class="portal-cta-row">
-              <a class="open-app-btn handoff-${handoffStatusFor(sk)}" href="${escapeAttr(appHref)}" target="_blank" rel="noopener" title="${escapeAttr(HANDOFF_TITLE[handoffStatusFor(sk)])}" data-handoff="${handoffStatusFor(sk)}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="">
+              <a class="open-app-btn handoff-${handoffStatusFor(sk)}" href="${escapeAttr(appHref)}" target="_blank" rel="noopener" title="${escapeAttr(HANDOFF_TITLE[handoffStatusFor(sk)])}" data-handoff="${handoffStatusFor(sk)}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-plan-portal="${escapeAttr(sk)}">
                 ${portalFavicon(sk, 32, 'portal-favicon')}
                 <span>Open ${escapeHtml(SOURCE_LABELS[sk] || sk)}${HANDOFF_GLYPH[handoffStatusFor(sk)] ? ' ' + HANDOFF_GLYPH[handoffStatusFor(sk)] : ''}</span>
                 <span class="arrow">↗</span>
@@ -2263,6 +2336,27 @@
             </div>
             ${lineRows}
             ${hiddenLine}
+          </div>`;
+      };
+      const blocks = tierKeyGroups.map(({ tier, keys: tierKeys }) => {
+        // Per-tier subtotal across the keys in this group
+        let tierTotal = 0; let tierDone = 0; let tierItemCount = 0; let tierDoneCount = 0;
+        for (const k of tierKeys) {
+          tierTotal += byPortal[k].total;
+          tierDone += byPortal[k].doneTotal;
+          tierItemCount += byPortal[k].count;
+          tierDoneCount += byPortal[k].doneCount;
+        }
+        const portalBlocks = tierKeys.map(renderPortalBlock).join('');
+        return `
+          <div class="plan-tier-section tier-${tier}">
+            <div class="plan-tier-header">
+              <div class="plan-tier-title">${escapeHtml(TIER_LABELS[tier])}</div>
+              <div class="plan-tier-stats">
+                <span><b>${tierDoneCount} of ${tierItemCount}</b> · ${money(tierDone)} of ${money(tierTotal)}</span>
+              </div>
+            </div>
+            ${portalBlocks}
           </div>`;
       }).join('');
       const grandHtml = `
@@ -2677,21 +2771,39 @@
     // to the URL — clipboard writes in the click handler often arrive
     // too late on iOS.
     document.addEventListener('pointerdown', (event) => {
-      const link = event.target.closest('a[data-handoff][data-material-name]');
+      const link = event.target.closest('a[data-handoff]');
       if (!link) return;
       const handoff = link.dataset.handoff;
+      const portalName = link.dataset.portalName || 'portal';
+      const planPortalKey = link.dataset.planPortal;
+
+      // Plan-tab "Open [Portal]" — copy the entire portal plan as text
+      // so the owner can paste it into a portal app's chat / paste
+      // each line into search, or share via WhatsApp.
+      if (planPortalKey) {
+        const lines = state.cart[planPortalKey] || [];
+        if (lines.length) {
+          const total = lines.reduce((a, l) => a + (l.price_paise / 100) * (l.qty || 1), 0);
+          const body = lines.map((l, i) => `${i + 1}. ${l.name} × ${l.qty}${l.uom}`).join('\n');
+          const text = `${SOURCE_LABELS[planPortalKey] || planPortalKey} plan (${lines.length} items, est ${money(total)}):\n${body}`;
+          try {
+            navigator.clipboard.writeText(text);
+            toast(`📋 ${lines.length}-item plan copied — paste in ${portalName}`, 3000);
+          } catch (_) {}
+        }
+        return;
+      }
+
+      // Shop-tab single chip/CTA — copy the single material name for
+      // portals whose URL handoff lands wrong (Hyperpure) or where
+      // there's no app handoff (Metro, DMart, Safari fallback).
       if (handoff !== 'app-search-unverified' && handoff !== 'safari') return;
       const matName = link.dataset.materialName;
-      const portalName = link.dataset.portalName || 'portal';
       if (!matName) return;
       try {
         navigator.clipboard.writeText(matName);
-        // Brief toast — non-blocking, doesn't prevent the tap.
         toast(`📋 "${matName}" copied — paste in ${portalName} search`, 3000);
-      } catch (_) {
-        // Clipboard write can fail without user activation on some
-        // platforms; silently degrade — link still opens.
-      }
+      } catch (_) {}
     });
 
     // Delegated handlers (list + plan)
@@ -2772,6 +2884,84 @@
         setCartQty(sk, mid, v);
         return;
       }
+    });
+
+    // ============================================================
+    // Return-from-portal-app prompt
+    // ============================================================
+    // When user taps a portal CTA we record (portal, ts). When the
+    // page becomes visible again (user has switched back from the
+    // portal app or Safari), if the gap is reasonable and there's a
+    // recent tap, show a banner: "Just visited X? Tap ✓ on items
+    // you added." Auto-dismisses after 10s or on tab switch.
+    let lastPortalTap = null; // { portalKey, portalName, planMode, at }
+    document.addEventListener('pointerdown', (event) => {
+      const link = event.target.closest('a[data-portal-name]');
+      if (!link) return;
+      lastPortalTap = {
+        portalKey: link.dataset.planPortal || '',
+        portalName: link.dataset.portalName,
+        planMode: !!link.dataset.planPortal,
+        at: Date.now(),
+      };
+    }, { capture: true });
+
+    function dismissReturnPrompt() {
+      const el = document.getElementById('returnPrompt');
+      if (el) el.remove();
+    }
+    function showReturnPrompt() {
+      dismissReturnPrompt();
+      if (!lastPortalTap) return;
+      const { portalKey, portalName, planMode } = lastPortalTap;
+      // Auto-jump to Plan tab if we came from a Plan-tab Open and have
+      // items pending — owner needs to check them off.
+      if (planMode && state.activeTab !== 'plan') {
+        switchTab('plan');
+      }
+      const el = document.createElement('div');
+      el.id = 'returnPrompt';
+      el.className = 'return-prompt';
+      const portalLabel = portalName || 'the portal';
+      const pendingForPortal = portalKey ? (state.cart[portalKey] || []).filter((l) => !l.done_at).length : 0;
+      const msg = planMode
+        ? (pendingForPortal > 0
+            ? `Back from ${portalLabel}?<small>${pendingForPortal} item${pendingForPortal === 1 ? '' : 's'} pending — tap ✓ on each you added</small>`
+            : `Back from ${portalLabel}?<small>All items already checked off ✓</small>`)
+        : `Back from ${portalLabel}?<small>Tap + Plan on items you actually want to buy</small>`;
+      el.innerHTML = `
+        <div class="return-prompt-text">${msg}</div>
+        ${planMode && pendingForPortal > 0 ? `<button type="button" id="returnAllDoneBtn">All added</button>` : ''}
+        <button type="button" class="dismiss" id="returnDismissBtn">✕</button>`;
+      document.body.appendChild(el);
+      document.getElementById('returnDismissBtn').addEventListener('click', dismissReturnPrompt);
+      const allBtn = document.getElementById('returnAllDoneBtn');
+      if (allBtn) allBtn.addEventListener('click', () => {
+        // One-tap mark-all-added for the portal that was just opened
+        const lines = state.cart[portalKey] || [];
+        const now = new Date().toISOString();
+        for (const l of lines) if (!l.done_at) l.done_at = now;
+        persistCart();
+        updatePlanBadge();
+        renderPlan();
+        renderList();
+        toast(`✓ Marked all ${portalLabel} items added`);
+        dismissReturnPrompt();
+      });
+      // Auto-dismiss after 12s
+      setTimeout(dismissReturnPrompt, 12000);
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') {
+        dismissReturnPrompt();
+        return;
+      }
+      // Only prompt if the last portal tap was 3s-30min ago — too soon
+      // = browser jitter, too long = unrelated return.
+      if (!lastPortalTap) return;
+      const gap = Date.now() - lastPortalTap.at;
+      if (gap < 3000 || gap > 30 * 60 * 1000) return;
+      setTimeout(showReturnPrompt, 250);
     });
 
     // Auto-unlock if PIN cached
