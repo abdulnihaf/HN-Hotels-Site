@@ -612,6 +612,33 @@
       font-variant-numeric: tabular-nums;
     }
     .alt-chip .warn { color: var(--pc-yellow); margin-right: 1px; }
+    /* ============================================================
+       Handoff expectation indicators (step 2)
+       ============================================================ */
+    .chip-handoff {
+      font-size: 10px;
+      line-height: 1;
+      margin-left: 3px;
+      opacity: 0.85;
+    }
+    .alt-chip.handoff-safari {
+      background: rgba(94,158,255,0.06);
+      box-shadow: inset 0 0 0 0.5px rgba(94,158,255,0.18);
+    }
+    .alt-chip.handoff-safari .chip-handoff { opacity: 0.7; }
+    .alt-chip.handoff-app-search-unverified {
+      background: rgba(251,191,36,0.06);
+      box-shadow: inset 0 0 0 0.5px rgba(251,191,36,0.18);
+    }
+    .open-app-btn.handoff-safari {
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+      color: #f9fafb;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+    .open-app-btn.handoff-app-search-unverified {
+      background: linear-gradient(135deg, #d4a24c 0%, #a07320 100%);
+      box-shadow: 0 6px 14px rgba(212,162,76,0.18), inset 0 1px 0 rgba(255,255,255,0.18);
+    }
 
     /* ============================================================
        Skeleton + empty
@@ -1229,6 +1256,34 @@
         </div>
       </div>
 
+      <div class="you-group-title">CHIP INDICATORS</div>
+      <div class="you-row-group">
+        <div class="you-row">
+          <div class="row-icon" style="background:transparent; color:var(--text); font-size:14px;">·</div>
+          <div>
+            <div class="row-label">No glyph</div>
+            <div class="row-sub">Tap opens the portal app to search results</div>
+          </div>
+          <div></div>
+        </div>
+        <div class="you-row">
+          <div class="row-icon" style="background:rgba(251,191,36,0.18); color:var(--pc-yellow); font-size:14px;">⚠️</div>
+          <div>
+            <div class="row-label">App opens, search unverified</div>
+            <div class="row-sub">App opens but may not auto-search. Paste the material name in the app's search bar after it opens.</div>
+          </div>
+          <div></div>
+        </div>
+        <div class="you-row">
+          <div class="row-icon" style="background:rgba(94,158,255,0.18); color:var(--pc-blue); font-size:14px;">🌐</div>
+          <div>
+            <div class="row-label">Safari only</div>
+            <div class="row-sub">No app handoff configured by the portal. Opens Safari with the web search page.</div>
+          </div>
+          <div></div>
+        </div>
+      </div>
+
       <div class="you-group-title">PORTAL HEALTH</div>
       <div class="you-row-group" id="portalHealthGroup">
         <div class="empty-state" style="padding:24px 12px;">
@@ -1368,6 +1423,49 @@
       b2b: 'Bulk packs · GST input credit',
     };
     function tierFor(sk) { return PORTAL_TIER[sk] || 'retail'; }
+
+    // ============================================================
+    // Handoff status — what happens when you tap a portal chip
+    // ============================================================
+    // Backed by empirical AASA probe 2026-05-29 + owner-reported in-app
+    // behaviour. Three states:
+    //   'app'                       Universal Link configured + verified
+    //                               app opens to search results
+    //   'app-search-unverified'     UL configured, app opens, but URL-
+    //                               to-search behaviour not yet
+    //                               confirmed (owner has to paste the
+    //                               material name in the app's search
+    //                               bar). Hyperpure case.
+    //   'safari'                    No AASA anywhere → always Safari
+    const HANDOFF_STATUS = {
+      HYPERPURE: 'app-search-unverified',
+      BIGBASKET: 'app',
+      BLINKIT: 'app',
+      ZEPTO: 'app',
+      FLIPKART_MINUTES: 'app',
+      AMAZON_NOW: 'app',
+      AMAZON_FRESH: 'app',
+      // amazon.in AASA lists both Amazon Shopping AND Amazon Business
+      // app bundles. iOS picks one based on install order — we cannot
+      // guarantee Business app opens vs regular Amazon. Until we wire
+      // business.amazon.in/abredir/* URLs, this is best-effort.
+      AMAZON_BUSINESS: 'app-search-unverified',
+      JIOMART: 'app',
+      INSTAMART: 'app',
+      METRO: 'safari',
+      DMART: 'safari',
+    };
+    const HANDOFF_GLYPH = {
+      app: '',
+      'app-search-unverified': '⚠️',
+      safari: '🌐',
+    };
+    const HANDOFF_TITLE = {
+      app: 'Opens the portal app to search results',
+      'app-search-unverified': 'App opens but may not auto-search — paste the material name in the app\'s search bar',
+      safari: 'No app handoff configured — opens Safari with the search page',
+    };
+    function handoffStatusFor(sk) { return HANDOFF_STATUS[sk] || 'app'; }
     const SOURCE_LABELS = {
       HYPERPURE: 'Hyperpure', BIGBASKET: 'BigBasket', BLINKIT: 'Blinkit',
       ZEPTO: 'Zepto', FLIPKART_MINUTES: 'Flipkart Minutes',
@@ -1783,9 +1881,9 @@
               </div>
             </div>
             <div class="cta-row">
-              <a class="open-app-btn" href="${escapeAttr(openHref)}" target="_blank" rel="noopener">
+              <a class="open-app-btn handoff-${handoffStatusFor(sk)}" href="${escapeAttr(openHref)}" target="_blank" rel="noopener" title="${escapeAttr(HANDOFF_TITLE[handoffStatusFor(sk)])}" data-handoff="${handoffStatusFor(sk)}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">
                 ${portalFavicon(sk, 32, 'portal-favicon')}
-                <span>Open in ${escapeHtml(SOURCE_LABELS[sk] || sk)}</span>
+                <span>Open in ${escapeHtml(SOURCE_LABELS[sk] || sk)}${HANDOFF_GLYPH[handoffStatusFor(sk)] ? ' ' + HANDOFF_GLYPH[handoffStatusFor(sk)] : ''}</span>
                 <span class="arrow">↗</span>
               </a>
               <button class="add-plan-btn ${inCart ? 'in-plan' : ''}" type="button" data-add-mat="${escapeAttr(mid)}" data-add-source="${escapeAttr(sk)}">${actionLabel} Plan</button>
@@ -1819,6 +1917,9 @@
       function renderOneChip(sk) {
         if (best && sk === best.source_key) return '';
         if (B2B_ONLY_PORTALS.has(sk) && !mat.b2b_eligible) return '';
+        const ho = handoffStatusFor(sk);
+        const hoGlyph = HANDOFF_GLYPH[ho] ? `<span class="chip-handoff" aria-hidden="true">${HANDOFF_GLYPH[ho]}</span>` : '';
+        const hoTitle = HANDOFF_TITLE[ho];
         const s = sources.find((x) => x.source_key === sk);
         if (!s) {
           const url = portalSearchUrlFor(sk, mat.name);
@@ -1827,7 +1928,7 @@
           const isB2B = tierFor(sk) === 'b2b';
           const chipCls = isB2B ? 'alt-chip' : 'alt-chip disabled';
           const priceTxt = isB2B ? '↗' : '—';
-          return url ? `<a class="${chipCls}" href="${escapeAttr(url)}" target="_blank" rel="noopener">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span></a>` : '';
+          return url ? `<a class="${chipCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span>${hoGlyph}</a>` : '';
         }
         const quoted = isPortalSourceQuoted(s);
         const sane = quoted && isSanePortalPrice(s, mat);
@@ -1835,7 +1936,7 @@
         const priceTxt = quoted ? moneyPaise(sourcePrice(s)) : (s.stock_status === 'ERROR' ? 'err' : '—');
         const warn = quoted && !sane ? '<span class="warn">⚠️</span>' : '';
         const chipCls = quoted ? 'alt-chip' : 'alt-chip disabled';
-        return `<a class="${chipCls}" href="${escapeAttr(url)}" target="_blank" rel="noopener">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${warn}${escapeHtml(priceTxt)}</span></a>`;
+        return `<a class="${chipCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${warn}${escapeHtml(priceTxt)}</span>${hoGlyph}</a>`;
       }
       const tiersToRender = state.tier === 'all'
         ? TIER_ORDER
