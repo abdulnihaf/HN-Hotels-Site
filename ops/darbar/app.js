@@ -15,8 +15,7 @@ const USERS = {
 };
 
 const S = {
-  pin: null, user: null, role: null, fin: false,
-  dkey: localStorage.getItem('darbar_dk') || '',
+  token: null, user: null, role: null, fin: false,
   tab: 'today',
   home: null,
   attendDate: null, attendBrand: 'all', attendRows: [],
@@ -42,20 +41,36 @@ function pinKey(k) {
   pinEntry += k; renderDots();
   if (pinEntry.length === 4) setTimeout(submitPin, 140);   // brief beat so the 4th dot shows
 }
-function submitPin() {
-  const u = USERS[pinEntry];
-  if (!u) {
-    $('gate').classList.add('shake');
-    $('pinErr').textContent = 'Not recognised at this court.';
-    setTimeout(() => { $('gate').classList.remove('shake'); pinEntry = ''; renderDots(); }, 460);
-    if (navigator.vibrate) navigator.vibrate(60);
-    return;
+async function submitPin() {
+  // Server-side PIN verification — the local USERS map is ONLY used for the UX
+  // anticipation (instant dot fill). The actual auth happens on the server; the
+  // server returns a signed HMAC token that goes out on every subsequent request.
+  // The raw PIN / DASHBOARD_KEY never leaves the server.
+  const u = USERS[pinEntry];  // optimistic UI only; server is the real gate
+  try {
+    const r = await fetch('/api/darbar?action=auth', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pin: pinEntry }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.token) {
+      $('gate').classList.add('shake');
+      $('pinErr').textContent = d.error === 'invalid PIN' ? 'Not recognised at this court.' : 'Could not reach the court.';
+      setTimeout(() => { $('gate').classList.remove('shake'); pinEntry = ''; renderDots(); }, 460);
+      if (navigator.vibrate) navigator.vibrate(60);
+      return;
+    }
+    enterCourt(d.token, { name: d.user, role: d.role, fin: !!d.fin });
+  } catch {
+    $('pinErr').textContent = 'Connection error — try again.';
+    setTimeout(() => { pinEntry = ''; renderDots(); $('pinErr').textContent = ''; }, 1200);
   }
-  enterCourt(pinEntry, u);
 }
-function enterCourt(pin, u) {
-  S.pin = pin; S.user = u.name; S.role = u.role; S.fin = u.fin;
-  sessionStorage.setItem('darbar_pin', pin);
+function enterCourt(token, u) {
+  S.token = token; S.user = u.name; S.role = u.role; S.fin = u.fin;
+  sessionStorage.setItem('darbar_token', token);
+  sessionStorage.setItem('darbar_user', JSON.stringify({ name: u.name, role: u.role, fin: u.fin }));
   $('gate').classList.add('hide');
   $('app').classList.remove('hide');
   S.attendDate = bizDayIST();
@@ -72,26 +87,38 @@ document.addEventListener('keydown', e => {
   if (/^[0-9]$/.test(e.key)) pinKey(e.key);
   else if (e.key === 'Backspace') pinKey('del');
 });
-(function auto() { const p = sessionStorage.getItem('darbar_pin'); if (p && USERS[p]) enterCourt(p, USERS[p]); })();
+(function auto() {
+  const tok = sessionStorage.getItem('darbar_token');
+  const usr = sessionStorage.getItem('darbar_user');
+  if (tok && usr) {
+    try { enterCourt(tok, JSON.parse(usr)); } catch {}
+  }
+})();
 
-/* ━━━ API ━━━ */
-async function api(path) { const r = await fetch(path); return r.json(); }
+/* ━━━ API — all requests carry the server-issued HMAC token ━━━ */
+function authHeaders() {
+  return S.token
+    ? { 'x-darbar-token': S.token }
+    : {};
+}
+async function api(path) {
+  const r = await fetch(path, { headers: authHeaders() });
+  if (r.status === 401) { signOut(); throw new Error('session expired'); }
+  return r.json();
+}
 async function post(path, body) {
   const r = await fetch(path, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-dashboard-key': S.dkey },
+    headers: { 'content-type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body || {}),
   });
   const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { signOut(); throw new Error('session expired'); }
   if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
   return j;
 }
-function needKey() {
-  if (S.dkey) return true;
-  toast('Set your dashboard key in ⚙ first', 'err');
-  openAccount();
-  return false;
-}
+
+function needToken() { if (!S.token) { toast('Session expired — re-enter PIN', 'err'); signOut(); return true; } return false; }
 
 /* ━━━ Tabs + nav condense ━━━ */
 function setTab(t) {
@@ -189,7 +216,7 @@ function cardFor(x) {
 
 /* ━━━ inbox actions ━━━ */
 function confirmExit(id, name) {
-  if (!needKey()) return;
+  if (!needToken()) return;
   sheet(`<h2>Mark ${esc(name)} as left</h2>
     <div class="sd">Stops counting them, archives the roster row, drafts a final settlement. The roster self-corrects.</div>
     <div class="fld"><label>Reason (optional)</label><input id="exReason" placeholder="stopped coming / found other work"></div>
@@ -206,7 +233,7 @@ async function doExit(id) {
   } catch (e) { toast(e.message, 'err'); }
 }
 function leaveSheet(id, name) {
-  if (!needKey()) return;
+  if (!needToken()) return;
   const t = todayIST();
   sheet(`<h2>${esc(name)} — on leave</h2><div class="sd">Suppresses the alerts and feeds payroll. Not gone, just away.</div>
     <div class="fld"><label>From</label><input id="lvFrom" type="date" value="${t}"></div>
@@ -223,7 +250,7 @@ async function doLeave(id) {
 function keepActive() { toast('Kept active — will re-ask if still silent', 'info'); }
 
 function nameGhost(pin) {
-  if (!needKey()) return;
+  if (!needToken()) return;
   sheet(`<h2>Name PIN ${esc(pin)}</h2><div class="sd">Turn this working ghost into a real roster member. Attendance starts counting immediately.</div>
     <div class="fld"><label>Name</label><input id="obName" placeholder="full name"></div>
     <div class="fld"><label>Brand</label><select id="obBrand"><option value="NCH">Nawabi Chai House</option><option value="HE">Hamza Express</option><option value="HQ">HQ</option></select></div>
@@ -244,7 +271,7 @@ async function doOnboard(pin) {
   } catch (e) { toast(e.message, 'err'); }
 }
 async function dismissGhost(pin) {
-  if (!needKey()) return;
+  if (!needToken()) return;
   try { await post('/api/darbar?action=dismiss-ghost', { pin }); toast('Ghost dismissed'); loadHome(); }
   catch (e) { toast(e.message, 'err'); }
 }
@@ -314,7 +341,7 @@ function sessionLine(r) {
   return `${t(r.first_in_at)} → ${r.last_out_at ? t(r.last_out_at) : '<span style="color:var(--blue)">open</span>'}${hrs}${br} · ${pc}`;
 }
 async function fixPunch(empId, date) {
-  if (!needKey()) return;
+  if (!needToken()) return;
   try { await post('/api/darbar?action=fix-punch', { employee_id: empId, date }); toast('Checkout imputed'); loadAttend(); }
   catch (e) { toast(e.message, 'err'); }
 }
@@ -329,10 +356,10 @@ async function loadPay() {
     : `<div class="card"><b style="color:var(--dim)">🔒 Settlement opens on the 7th</b><div class="xc-meta" style="margin-top:4px">Salary is settled on the 7th of next month — never mid-month (it would over-deduct). Advances can be paid any day.</div></div>`;
   const month = todayIST().slice(0, 7);
   $('advMonth').textContent = monthLbl;
-  if (!S.dkey) { $('advList').innerHTML = '<div class="empty">Enter your dashboard key in ⚙ to load advances.</div>'; return; }
+  if (!S.token) { $('advList').innerHTML = '<div class="empty">Enter your PIN to load advances.</div>'; return; }
   $('advList').innerHTML = '<div class="skel"></div>';
   try {
-    const r = await fetch(`/api/hr-payroll?action=list-advances&month=${month}`, { headers: { 'x-dashboard-key': S.dkey } }).then(x => x.json());
+    const r = await fetch(`/api/hr-payroll?action=list-advances&month=${month}`, { headers: authHeaders() }).then(x => x.json());
     const adv = r.advances || r.rows || [];
     if (!adv.length) { $('advList').innerHTML = `<div class="empty">No advances in ${esc(monthLbl)} yet. Tap ＋ to pay one.</div>`; return; }
     $('advList').innerHTML = adv.map(a => `<div class="card"><div class="xc-top">
@@ -342,7 +369,7 @@ async function loadPay() {
   } catch (e) { $('advList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 async function openAdvance() {
-  if (!needKey()) return;
+  if (!needToken()) return;
   if (!S.employees.length) { try { S.employees = (await api(`/api/hr-admin?action=employees&active=1`)).employees || []; } catch {} }
   const opts = S.employees.filter(e => e.is_active).map(e => `<option value="${e.id}">${esc(e.known_as || e.name)} · ${esc(e.brand_label)}</option>`).join('');
   sheet(`<h2>Pay advance</h2><div class="sd">Records the cash event + fires a WhatsApp confirmation to the worker immediately.</div>
@@ -357,7 +384,7 @@ async function doAdvance() {
   if (!amt) return toast('Enter an amount', 'err');
   try {
     await fetch('/api/hr-payroll?action=record-advance', {
-      method: 'POST', headers: { 'content-type': 'application/json', 'x-dashboard-key': S.dkey },
+      method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ employee_id: Number($('advEmp').value), amount: amt, advance_date: todayIST(), paid_via: $('advVia').value, reason: $('advNote').value || null }),
     }).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed'); });
     closeSheet(); toast('Advance recorded · WhatsApp fired'); loadPay();
@@ -391,7 +418,7 @@ function renderRoster() {
 }
 function overrideSheet(id, name) {
   if (!S.fin) return toast('Pay is owner-only', 'info');
-  if (!needKey()) return;
+  if (!needToken()) return;
   const period = todayIST().slice(0, 7);
   sheet(`<h2>${esc(name)} — over-write pay</h2><div class="sd">Set the final payable yourself when attendance is gappy. Recorded alongside the computed figure, never silently replacing it.</div>
     <div class="fld"><label>Pay period</label><input id="ovPeriod" type="month" value="${period}"></div>
@@ -417,16 +444,13 @@ function openAccount() {
     <div class="yrow"><div class="ic" style="background:var(--green-soft);color:var(--green)">💬</div><div><div class="yl">WhatsApp · HE</div><div class="ys">staff nudges + receipts</div></div><div class="yv"><span class="pill green">live</span></div></div>
     <div class="yrow"><div class="ic" style="background:var(--red-soft);color:var(--red)">💬</div><div><div class="yl">WhatsApp · NCH</div><div class="ys">token blocked → SMS fallback</div></div><div class="yv"><span class="pill red">blocked</span></div></div>
     <div class="yrow"><div class="ic" style="background:var(--purple-soft);color:var(--purple)">👻</div><div><div class="yl">Ghost PINs</div><div class="ys">working, unnamed</div></div><div class="yv">${h.ghost_count || 0}</div></div>
-    <div class="fld" style="margin-top:16px"><label>Dashboard key (stored on this device)</label><input id="dkIn" type="password" value="${esc(S.dkey)}" placeholder="paste once — unlocks pay + actions"></div>
     <div class="acts">
-      <button class="btn primary" onclick="saveKey()">Save key</button>
       <button class="btn dark" onclick="installPWA()">Add to Home Screen</button>
     </div>
     <div class="acts"><button class="btn ghost-b" onclick="signOut()">Sign out</button></div>
     <div style="text-align:center;color:var(--mute);font-size:11px;margin-top:16px;font-family:'Cormorant Garamond',serif;font-style:italic">Darbar · the full retinue serving the realm</div>`);
 }
-function saveKey() { S.dkey = $('dkIn').value.trim(); localStorage.setItem('darbar_dk', S.dkey); toast('Key saved'); closeSheet(); if (S.tab === 'pay') loadPay(); }
-function signOut() { sessionStorage.removeItem('darbar_pin'); location.reload(); }
+function signOut() { sessionStorage.clear(); location.reload(); }
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; });
 async function installPWA() {
