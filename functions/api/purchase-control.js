@@ -1972,13 +1972,13 @@ async function setMaterialUomInOdoo(body, user, env) {
   const products = await odooCall(creds.uid, creds.key,
     'product.template', 'search_read',
     [[['default_code', 'in', productCodes]]],
-    { fields: ['id', 'name', 'default_code', 'uom_id', 'uom_po_id'] }
+    { fields: ['id', 'name', 'default_code', 'uom_id'] }
   );
   const updated = [];
   for (const p of products) {
     await odooCall(creds.uid, creds.key,
       'product.template', 'write',
-      [[p.id], { uom_id: uomId, uom_po_id: uomId }],
+      [[p.id], { uom_id: uomId }],
       {}
     );
     updated.push({ id: p.id, code: p.default_code, name: p.name, old_uom: p.uom_id });
