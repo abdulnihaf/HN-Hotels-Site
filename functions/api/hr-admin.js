@@ -24,7 +24,8 @@ const CORS = {
 
 const ODOO_URL  = 'https://ops.hamzahotel.com/jsonrpc';
 const ODOO_DB   = 'main';
-const ODOO_USER = 'yash@gmail.com';
+const ODOO_USER = 'yash@gmail.com';   // legacy login (retired — see odooAuth; uid=2 + ODOO_API_KEY now)
+const ODOO_ADMIN_UID = 2;             // ops.hamzahotel.com admin uid (HE co_id=1, NCH co_id=10)
 
 // CAMS F38+ biometric device config (mirrors live dashboard)
 const CAMS_API_BASE = 'https://www.camsbiometrics.com/api3.0';
@@ -156,12 +157,15 @@ async function rpc(service, method, args) {
   return d.result;
 }
 
-async function odooAuth(apiKey) {
+// Admin-only API policy (canonical across hnhotels.in Functions): authenticate as the
+// Odoo admin user uid=2 with ODOO_API_KEY directly — an API key works as the password in
+// execute_kw given a known uid, so no common.authenticate login round-trip is needed.
+// The old path logged in as ODOO_USER (yash@gmail.com); when that user's key went stale the
+// whole roster-sync died silently. uid=2 + ODOO_API_KEY is the stable path. Override via ODOO_UID.
+async function odooAuth(apiKey, env) {
   if (_uid) return _uid;
-  const uid = await rpc('common', 'authenticate', [ODOO_DB, ODOO_USER, apiKey, {}]);
-  if (!uid) throw new Error('Odoo auth failed — check ODOO_API_KEY');
-  _uid = uid;
-  return uid;
+  _uid = parseInt(env?.ODOO_UID, 10) || ODOO_ADMIN_UID;
+  return _uid;
 }
 
 async function odoo(apiKey, model, method, args = [], kwargs = {}) {
@@ -1772,7 +1776,7 @@ async function pullAttendance(apiKey, db, from, to, userName) {
        FROM hr_employees e
        LEFT JOIN hr_shift_rules r
          ON r.brand_label = e.brand_label AND r.pay_type = e.pay_type
-      WHERE e.is_active = 1 AND e.odoo_employee_id IS NOT NULL
+      WHERE e.is_active = 1
         AND e.pin IS NOT NULL AND e.pin != ''`
   ).all();
   const byPin = new Map();
@@ -1790,120 +1794,85 @@ async function pullAttendance(apiKey, db, from, to, userName) {
        ORDER BY pin, punch_time`
   ).bind(fetchFrom, fetchTo).all();
 
-  // Session-based pairing (Apr 20 refactor per Nihaf):
+  // Punch pairing — BUSINESS-DAY-BUCKET-FIRST (May 2026 rewrite, COA/Darbar).
   //
-  //   Old approach bucketed taps per shift-day then paired within-bucket.
-  //   That broke NCH night shifts that span past 06:00 next day (Aadil
-  //   22:33 → 09:24 = one shift, but OUT was in next bucket).
+  //   The CAMS F38+ sends every face-tap as punch_type="CheckIn" — the feed has
+  //   NO direction. So IN/OUT is assigned purely by chronological ORDER, and
+  //   completeness is judged by PARITY (even taps = every IN has an OUT).
   //
-  //   New approach: group by pin only, pair taps chronologically across
-  //   days, assign each completed PAIR to the shift-day of its IN.
+  //   Previous engine paired a pin's taps across ALL days with an 18h session
+  //   cap, then assigned each pair to the shift-day of its IN. That cross-day
+  //   pairing wrongly fused a prior day's checkout (e.g. 01:00) with the next
+  //   day's checkin (e.g. 15:09, ~14h gap < 18h) into one bogus "session",
+  //   corrupting the tap count for BOTH days (observed: Bikash 05-27 read 3
+  //   when he had 4 valid taps). With a correct shift_day_start_hour boundary
+  //   (HE=4am) the overnight checkout already lands on the right business day,
+  //   so we bucket by business-day FIRST and pair WITHIN the bucket by ordinal
+  //   index — simpler, and free of cross-day bleed.
   //
-  // CAMS F38+ sends every face-tap as punch_type="CheckIn" — no direction
-  // tag. Pairing rules:
-  //   1. Double-tap dedup: consecutive taps <10 min = duplicate device
-  //      reads or staff hesitation. Drop the 2nd.
-  //   2. Alternate-pair: 1st tap = IN, 2nd = OUT, 3rd = IN, 4th = OUT…
-  //   3. Max-session cap: if gap IN→next > brand's max, previous IN
-  //      becomes orphan (worker left without tapping) and current tap
-  //      opens a new session.
-  //
-  // Per-brand MAX session (calibrated Apr 20 per real outlet hours):
-  //   HE  18h — staff can arrive 9 AM, OUT up to ~2-3 AM next day
-  //   NCH 14h — 24h operation but one shift rarely exceeds 12-14h
-  //             (Aadil's 22:33 → 09:24 = 10h 51m = within cap ✓)
-  //   HQ  14h — office flex, late-night GM tapping (Tanveer case) included
-  //
-  // PAIR ASSIGNMENT: each pair goes to shift-day of its IN. So Aadil's
-  // (22:33 Apr 19, 09:24 Apr 20) lives in Apr 19 shift-day even though
-  // OUT is in calendar-Apr 20. Ramjan's (10:40 Apr 19, 15:03 Apr 19)
-  // stays in Apr 19. Works for all patterns.
-  const MAX_SESSION_H = { HE: 18, NCH: 14, HQ: 14 };
-  const MIN_SESSION_MINUTES = 10;
+  //   Per (pin, business-day): dedup re-scans (<15 min from previous kept tap),
+  //   then pair (0,1)=shift, (2,3)=break, … A trailing unpaired tap (odd count)
+  //   is an open edge {in, out:null} → MISSING_PUNCH. Even count → complete.
+  const MIN_SESSION_MINUTES = 15;
 
-  // Group punches by pin only, keeping chronological order
-  const byPinAll = new Map();  // pin → [raw rows, sorted]
+  // Group raw taps by pin (chronological)
+  const byPinAll = new Map();
   let punchCount = 0;
   for (const r of rawPunches.results || []) {
     const pin = String(r.pin);
-    if (!byPin.has(pin)) continue;  // skip archived/unmapped
+    if (!byPin.has(pin)) continue;  // skip archived / unmapped pins
     if (!byPinAll.has(pin)) byPinAll.set(pin, []);
     byPinAll.get(pin).push(r);
     punchCount++;
   }
 
-  // For each person, build pairs across all days, then assign each pair
-  // to the shift-day of its IN timestamp.
-  const buckets = new Map();  // `${odoo_id}|${shiftDay}` → { punches, hours, firstIn, lastOut }
+  // tapCount semantics (parity is the validity discriminator):
+  //   2 taps  → EVEN, valid straight shift (IN, OUT)
+  //   4 taps  → EVEN, valid shift with one break (IN, break-out, break-in, OUT)
+  //   1/3/5   → ODD, a punch is missing somewhere → MISSING_PUNCH
+  const buckets = new Map();  // `${odoo_id}|${shiftDay}` → { punches:[{in,out}], hours, firstIn, lastOut, tapCount }
   for (const [pin, rows] of byPinAll.entries()) {
     const emp = byPin.get(pin);
-    const maxSessionH = MAX_SESSION_H[emp.brand_label] || 14;
     const startHour = emp.shift_day_start_hour ?? 0;
-
     rows.sort((a, b) => String(a.punch_time).localeCompare(String(b.punch_time)));
 
-    // Step 1: dedup double-taps (<10 min apart)
-    const clean = [];
+    // Bucket taps into business-days (4am boundary rolls an overnight end back
+    // onto the day the shift started).
+    const dayTaps = new Map();  // shiftDay → [punch_time, …]
     for (const r of rows) {
-      const last = clean[clean.length - 1];
-      if (last) {
-        const gapMin = (parseIstWall(r.punch_time) - parseIstWall(last.punch_time)) / 60000;
-        if (gapMin < MIN_SESSION_MINUTES) continue;
-      }
-      clean.push(r);
+      const sd = shiftDayFor(r.punch_time, startHour);
+      if (!sd || sd < from || sd > to) continue;  // outside recompute window
+      if (!dayTaps.has(sd)) dayTaps.set(sd, []);
+      dayTaps.get(sd).push(r.punch_time);
     }
 
-    // Step 2: alternate-pair with max-session cap
-    const pairs = [];  // { in, out }
-    let openIn = null;
-    for (const r of clean) {
-      if (!openIn) {
-        openIn = r.punch_time;
-        continue;
+    for (const [sd, taps] of dayTaps.entries()) {
+      // Dedup re-scans within the day before counting parity.
+      const clean = [];
+      for (const t of taps) {
+        const last = clean[clean.length - 1];
+        if (last && (parseIstWall(t) - parseIstWall(last)) / 60000 < MIN_SESSION_MINUTES) continue;
+        clean.push(t);
       }
-      const gapH = (parseIstWall(r.punch_time) - parseIstWall(openIn)) / 3600000;
-      if (gapH <= maxSessionH) {
-        pairs.push({ in: openIn, out: r.punch_time });
-        openIn = null;
-      } else {
-        pairs.push({ in: openIn, out: null });
-        openIn = r.punch_time;
-      }
-    }
-    if (openIn) pairs.push({ in: openIn, out: null });
+      const n = clean.length;
+      if (!n) continue;
 
-    // Step 3: assign each pair to the shift-day of its IN (or OUT if no IN)
-    const byShiftDay = new Map();  // shiftDay → [pairs]
-    for (const p of pairs) {
-      const anchor = p.in || p.out;
-      if (!anchor) continue;
-      const sd = shiftDayFor(anchor, startHour);
-      if (!sd) continue;
-      if (sd < from || sd > to) continue;  // outside recompute window
-      if (!byShiftDay.has(sd)) byShiftDay.set(sd, []);
-      byShiftDay.get(sd).push(p);
-    }
+      // Pair by ordinal index; trailing unpaired tap (odd n) → open edge.
+      const pairs = [];
+      for (let i = 0; i < n; i += 2) pairs.push({ in: clean[i], out: clean[i + 1] ?? null });
 
-    // Step 4: aggregate per shift-day into buckets
-    // tapCount = actual TAP count (every in/out is 1 tap), NOT pair count.
-    //   2 pairs fully closed = 4 taps (IN, OUT, IN, OUT) — EVEN, valid
-    //   1 pair + 1 orphan IN  = 3 taps — ODD, missed a break punch
-    //   1 full pair           = 2 taps — EVEN, valid straight shift
-    //   1 orphan IN           = 1 tap  — ODD, missing OUT
-    for (const [sd, pairsInDay] of byShiftDay.entries()) {
-      let hours = 0, firstIn = null, lastOut = null, tapCount = 0;
-      for (const p of pairsInDay) {
-        if (p.in)  tapCount++;
-        if (p.out) tapCount++;
-        if (p.in && p.out) {
-          const ms = parseIstWall(p.out) - parseIstWall(p.in);
-          if (ms > 0) hours += ms / 3600000;
-        }
-        if (p.in  && (!firstIn || p.in  < firstIn)) firstIn = p.in;
-        if (p.out && (!lastOut || p.out > lastOut)) lastOut = p.out;
+      // Worked hours = (last − first) − Σ interior break gaps, only when even.
+      const firstIn = clean[0];
+      let lastOut = null, hours = 0;
+      if (n % 2 === 0) {
+        lastOut = clean[n - 1];
+        let breakMs = 0;
+        for (let i = 1; i < n - 1; i += 2) breakMs += parseIstWall(clean[i + 1]) - parseIstWall(clean[i]);
+        hours = Math.max(0, (parseIstWall(lastOut) - parseIstWall(firstIn) - breakMs) / 3600000);
       }
-      buckets.set(`${emp.odoo_employee_id}|${sd}`, {
-        punches: pairsInDay, hours, firstIn, lastOut, tapCount,
+
+      buckets.set(`${emp.id}|${sd}`, {
+        punches: pairs, hours, firstIn, lastOut, tapCount: n,
       });
     }
   }
@@ -1921,7 +1890,7 @@ async function pullAttendance(apiKey, db, from, to, userName) {
     const startHour = emp.shift_day_start_hour ?? 0;
     const missingCheckoutH = emp.missing_checkout_hours ?? 18;
     for (const shiftDay of days) {
-      const key = `${emp.odoo_employee_id}|${shiftDay}`;
+      const key = `${emp.id}|${shiftDay}`;
       const b = buckets.get(key);
       const hours = b?.hours || 0;
       // Per-employee week_off_day takes precedence over brand shift rule.

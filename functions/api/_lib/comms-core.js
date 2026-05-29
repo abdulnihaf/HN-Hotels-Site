@@ -169,15 +169,22 @@ async function sendFast2SmsSms(env, { phone, message, route = 'q', sender_id, me
   const to = normalizePhone(phone).replace(/^91/, '');
   const url = new URL(FAST2SMS_BASE);
   url.searchParams.set('authorization', env.FAST2SMS_API_KEY);
-  url.searchParams.set('route', route);
   url.searchParams.set('numbers', to);
   url.searchParams.set('message', message);
   url.searchParams.set('flash', '0');
-  if (route === 'dlt') {
+  if (route === 'dlt' || route === 'dlt_manual') {
+    // PROVEN Fast2SMS DLT path (verified live 2026-05-27, request_ids SpRV8lZgwplwEWQ / S1M1ZfVcRhUOjSU):
+    //   route=dlt_manual · sender_id=HNHTLS · entity_id=<PE 19-digit> · template_id=<DLT content id> · message=<rendered, fixed parts MUST match approved template incl \n\n>
+    // The inbound param is named `message_id` (carries the DLT content template id from lookupDltTemplate);
+    // Fast2SMS dlt_manual expects it as `template_id`. No Fast2SMS-side template add is needed for dlt_manual.
     if (!sender_id) return { ok: false, status: 400, response: { error: 'sender_id required for DLT route' } };
+    if (!message_id) return { ok: false, status: 400, response: { error: 'template_id (message_id) required for DLT route' } };
+    url.searchParams.set('route', 'dlt_manual');
     url.searchParams.set('sender_id', sender_id);
-    url.searchParams.set('language', 'english');
-    if (message_id) url.searchParams.set('message_id', message_id);
+    url.searchParams.set('entity_id', env.FAST2SMS_ENTITY_ID || '1401667060000079296');
+    url.searchParams.set('template_id', message_id);
+  } else {
+    url.searchParams.set('route', route);
   }
 
   const res = await fetch(url.toString(), { method: 'GET' });
@@ -206,7 +213,7 @@ async function sendBsnlDltSms(env, { phone, message, sender_id, message_id }) {
     method: 'POST',
     headers: { authorization: `Bearer ${env.BSNL_DLT_TOKEN}`, 'content-type': 'application/json' },
     body: JSON.stringify({
-      entity_id: env.BSNL_DLT_ENTITY_ID || 'BL-1400079296',
+      entity_id: env.BSNL_DLT_ENTITY_ID || '1401667060000079296',
       header: sender_id,
       template_id: message_id,
       to,
