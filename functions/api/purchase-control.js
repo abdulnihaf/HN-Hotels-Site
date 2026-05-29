@@ -299,6 +299,22 @@ function isPastIso(value) {
   return Number.isFinite(time) && time <= Date.now();
 }
 
+// Default lifetime for a captured session that arrives WITHOUT a usable
+// expiry timestamp. Bounds two failure modes at once: (1) the KV blob would
+// otherwise be written with no TTL and linger forever (orphan leak); (2) the
+// scout would treat a no-expiry session as live indefinitely. 6h mirrors the
+// Chrome-extension fallback and is short enough that a dead portal self-clears
+// by the next morning scout.
+const SESSION_DEFAULT_TTL_S = 6 * 3600;
+
+// Single source of truth for "is this captured session safe to scrape with?"
+// Routed through by every consumer (scout export, portal-health badge, write
+// gate) so the readiness rule can never drift between them. A session is
+// usable only when it carries an expiry that is still in the future.
+function sessionUsable(session) {
+  return !!session && !!session.expires_at && !isPastIso(session.expires_at);
+}
+
 function countCookies(payload) {
   const storedCount = Array.isArray(payload?.cookies) ? payload.cookies.length : 0;
   const visibleCount = payload?.visible_cookies && typeof payload.visible_cookies === 'object'
@@ -1687,7 +1703,7 @@ async function handleSessionExport(url, env) {
     }
     const p = session.payload;
     out[sourceKey] = {
-      ready: !!session.expires_at && !isPastIso(session.expires_at),
+      ready: sessionUsable(session),
       captured_at: session.captured_at || '',
       expires_at: session.expires_at || '',
       captured_url: p.captured_url || '',
@@ -2386,8 +2402,16 @@ async function upsertPortalSession(body, user, env) {
 
   const payload = body.session || body.payload || body.storage_state || null;
   const hasPayload = payload && typeof payload === 'object' && Object.keys(payload).length > 0;
-  const expiresAt = body.expires_at || payload?.expires_at || payload?.expiry || '';
+  const suppliedExpiry = body.expires_at || payload?.expires_at || payload?.expiry || '';
   const now = new Date().toISOString();
+  // A capture that carries auth material but no usable expiry is stamped with a
+  // bounded default (SESSION_DEFAULT_TTL_S) rather than left blank. Blank meant
+  // a permanent KV write (orphan leak) AND a session the scout-export refused
+  // to serve (sessionUsable === false). Bounding it makes the entry self-clean
+  // and keeps the stored expiry consistent across every consumer.
+  const expiresAt = (suppliedExpiry && !isPastIso(suppliedExpiry))
+    ? suppliedExpiry
+    : (hasPayload ? new Date(Date.now() + SESSION_DEFAULT_TTL_S * 1000).toISOString() : '');
   // READY truth-gate: a session is only READY when it carries real auth
   // material (cookies and/or tokens) AND is not past expiry. "Payload
   // non-empty" alone is too coarse — a logged-out portal with junk
@@ -2425,12 +2449,14 @@ async function upsertPortalSession(body, user, env) {
   };
 
   if (hasPayload) {
-    const ttl = expiresAt ? Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000) : 0;
-    if (ttl > 60) {
-      await env.SESSIONS.put(portalSessionKey(sourceKey), JSON.stringify(kvValue), { expirationTtl: ttl });
-    } else {
-      await env.SESSIONS.put(portalSessionKey(sourceKey), JSON.stringify(kvValue));
-    }
+    // expiresAt is now always a future ISO when hasPayload (see above), so the
+    // TTL is always bounded — KV self-evicts at expiry and no entry is ever
+    // written permanently. Floor at 60s as a final guard against a supplied
+    // expiry that is future-but-imminent.
+    const ttl = expiresAt ? Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000) : SESSION_DEFAULT_TTL_S;
+    await env.SESSIONS.put(portalSessionKey(sourceKey), JSON.stringify(kvValue), {
+      expirationTtl: Math.max(60, ttl),
+    });
   }
 
   await env.DB.prepare(`
