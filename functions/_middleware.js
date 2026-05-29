@@ -18,6 +18,19 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const host = url.hostname;
 
+  // ── darbar.hnhotels.in — serve the Darbar app at the bare subdomain root ──
+  // The app lives at /ops/darbar/ and uses absolute asset/api paths, so we only
+  // rewrite the bare root (clean URL, no redirect); everything else resolves
+  // normally on this host. (CF Pages _redirects can't host-route — hence here.)
+  if (host === 'darbar.hnhotels.in') {
+    if (url.pathname === '/' || url.pathname === '') {
+      const target = new URL('/ops/darbar/index.html', url);
+      target.search = url.search;
+      return rewriteTo(request, target);
+    }
+    return next();
+  }
+
   // Only intervene for the trade subdomain
   if (host !== 'trade.hnhotels.in') {
     return next();
