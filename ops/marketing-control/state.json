@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-29T20:14:11+0530",
-  "published_at": "2026-05-29T20:14:11+0530",
+  "updated_at": "2026-05-29T20:16:11+0530",
+  "published_at": "2026-05-29T20:16:11+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Narrow Biryani Rice clearance recommendation to single SKU only",
-      "last_summary": "Owner clarified the offer must be only around the Biryani Rice SKU. Revised recommendation: item-level Biryani Rice SKU ad/discount only; no combo-led offer, no cart-wide discount, no other promoted SKUs.",
-      "next_action": "Owner to configure Swiggy/Zomato ads against only the Biryani Rice SKU and stop manually once excess rice clears.",
-      "mutation_status": "Recommendation only; no platform, POS, Odoo, WABA, or ad portal mutation executed by Codex.",
+      "last_task": "Aggregator-specific Biryani Rice SKU portal discount config",
+      "last_summary": "Analysed saved Swiggy/Zomato owner-app offer grammar and HE aggregator playbook. Recommended Zomato native Percentage Dish Discount on Biryani Rice SKU only; Swiggy selected-item flat/percent discount only if available, otherwise no cart-wide discount. No portal mutation executed.",
+      "next_action": "Owner to configure Biryani Rice SKU-only discount in partner portals, verify only one SKU is selected, disable stacking/auto-renewal, and monitor first 60 minutes for clearance volume.",
+      "mutation_status": "Recommendation only; no Swiggy/Zomato/POS/Odoo/WABA mutation executed by Codex.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-29T20:14:11+0530"
+      "last_run_at": "2026-05-29T20:16:11+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -156,6 +156,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260529201611-delivery-aggregator",
+      "at": "2026-05-29T20:16:11+0530",
+      "lane": "delivery-aggregator",
+      "task": "Aggregator-specific Biryani Rice SKU portal discount config",
+      "status": "ready",
+      "summary": "Analysed saved Swiggy/Zomato owner-app offer grammar and HE aggregator playbook. Recommended Zomato native Percentage Dish Discount on Biryani Rice SKU only; Swiggy selected-item flat/percent discount only if available, otherwise no cart-wide discount. No portal mutation executed.",
+      "next_action": "Owner to configure Biryani Rice SKU-only discount in partner portals, verify only one SKU is selected, disable stacking/auto-renewal, and monitor first 60 minutes for clearance volume.",
+      "mutation_status": "Recommendation only; no Swiggy/Zomato/POS/Odoo/WABA mutation executed by Codex.",
+      "proof": "",
+      "artifacts": "",
+      "live_ids": "",
+      "rollback": "",
+      "data_freshness": ""
+    },
     {
       "id": "20260529201411-delivery-aggregator",
       "at": "2026-05-29T20:14:11+0530",
@@ -1025,16 +1040,6 @@
       "summary": "Verified live Meta ad account, pixel, existing audiences, and B1 creative/video via access token. Attempted Custom Audience creation and confirmed hard Meta #2663 Custom Audience Terms blocker. Added executable after-TOS script for 7D/30D directions, FindLocation, and rt_voucher website audiences; no campaign/adset/ad/spend mutation performed.",
       "next_action": "Owner must accept Custom Audience Terms at https://www.facebook.com/customaudiences/app/tos/?act=634959029638544, then rerun the prepared audience creation script and verify audience IDs before any retargeting adset creation.",
       "mutation_status": "blocked by Meta Custom Audience Terms; read-only live verification plus local implementation script only"
-    },
-    {
-      "id": "20260525081747-google-ads",
-      "at": "2026-05-25T08:17:47+0530",
-      "lane": "google-ads",
-      "task": "Late-night Hamza Hotel brand-capture ad setup",
-      "status": "ready",
-      "summary": "Set local Google Ads lane docs/mockup for late-night Hamza Hotel search capture: Rs 500/day proposed for 5km brand campaign, 2km biryani/ghee-rice fallback kept paused, late-night copy uses Open Till 3 AM, Bangalore's best Ghee Rice/Kabab, 10% dine-in only.",
-      "next_action": "Confirm late-night mockup/copy, verify 10% dine-in proof and landing/site hours, then live-verify Google Ads account before any campaign or budget mutation.",
-      "mutation_status": "No live Google Ads/GBP/POS mutation. Local _context docs and HTML mockup updated only."
     }
   ]
 }
