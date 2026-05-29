@@ -63,6 +63,51 @@ const AGGREGATOR_DAILY_REPORT_TEMPLATE = {
   ],
 };
 
+// Darbar staff-nudge templates. Live on the sparksol (HR) WABA — NOT the customer
+// HE/NCH lines. Names must match what darbar.js notify-run sends (brand 'sparksol').
+const DARBAR_TEMPLATES = [
+  {
+    name: 'darbar_missed_exit_v1', language: 'en', category: 'UTILITY',
+    components: [{
+      type: 'BODY',
+      text: 'Hi {{1}}, aapne aaj kaam khatam hone par punch nahi kiya. Ye missed-punch ke roop me darj hai. Kal punch out yaad rakhna. - HN Hotels',
+      example: { body_text: [['Sabir']] },
+    }],
+  },
+  {
+    name: 'darbar_absent_v1', language: 'en', category: 'UTILITY',
+    components: [{
+      type: 'BODY',
+      text: 'Hi {{1}}, abhi tak aapka punch nahi dikha. Kaam pe ho ya aaj chhutti? - HN Hotels',
+      example: { body_text: [['Sabir']] },
+    }],
+  },
+  {
+    name: 'darbar_break_open_v1', language: 'en', category: 'UTILITY',
+    components: [{
+      type: 'BODY',
+      text: 'Hi {{1}}, aapka break-return punch nahi mila. Wapas aane par punch karna yaad rakhein. - HN Hotels',
+      example: { body_text: [['Sabir']] },
+    }],
+  },
+  {
+    name: 'darbar_departed_confirm_v1', language: 'en', category: 'UTILITY',
+    components: [{
+      type: 'BODY',
+      text: 'HN Hotels: {{1}} ne {{2}} din se punch nahi kiya ({{3}}). Owner please confirm exit ya leave.',
+      example: { body_text: [['Mainuddin', '9', 'HE']] },
+    }],
+  },
+  {
+    name: 'darbar_ghost_pin_v1', language: 'en', category: 'UTILITY',
+    components: [{
+      type: 'BODY',
+      text: 'HN Hotels: PIN {{1}} {{2}} baar punch kar raha hai ({{3}} din) par roster me naam nahi hai. Owner please naam dein.',
+      example: { body_text: [['46', '12', '5']] },
+    }],
+  },
+];
+
 function authOk(request, env, body) {
   const key = request.headers.get('x-dashboard-key') || body?.dashboard_key;
   return key && key === env.DASHBOARD_KEY;
@@ -141,6 +186,26 @@ async function ensureAggregatorDailyReportTemplate(env, brand) {
     created: created.ok,
     status: created.status,
     response: created.body,
+  };
+}
+
+// Generic: ensure a WABA template exists on a brand's WABA (create if absent). Idempotent.
+async function ensureWabaTemplate(env, brand, tpl) {
+  const existing = await getWabaTemplate(env, brand, tpl.name);
+  if (!existing.ok) return { name: tpl.name, ok: false, error: existing.error || 'lookup_failed', response: existing.response };
+  if (existing.template) {
+    return { name: tpl.name, ok: true, created: false, status: existing.template.status, id: existing.template.id, category: existing.template.category };
+  }
+  const cfg = wabaConfigForBrand(env, brand);
+  const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${cfg.wabaId}/message_templates`;
+  const created = await graphJson(url, cfg.token, { method: 'POST', body: JSON.stringify(tpl) });
+  return {
+    name: tpl.name,
+    ok: created.ok,
+    created: created.ok,
+    status: created.body?.status,
+    id: created.body?.id,
+    response: created.ok ? undefined : created.body,
   };
 }
 
@@ -385,6 +450,14 @@ export async function onRequest(context) {
       FROM comms_optin ORDER BY brand, status, phone
     `).all();
     return json(rs.results || []);
+  }
+
+  if (action === 'ensure-darbar-templates') {
+    // Create the 5 Darbar staff-nudge templates on the sparksol (HR) WABA. Idempotent.
+    const brand = body.brand || 'sparksol';
+    const results = [];
+    for (const tpl of DARBAR_TEMPLATES) results.push(await ensureWabaTemplate(env, brand, tpl));
+    return json({ ok: results.every(r => r.ok), brand, results }, results.every(r => r.ok) ? 200 : 500);
   }
 
   return json({ error: `unknown action: ${action}` }, 400);
