@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "HN Purchase Portal Capture",
-  "version": "1.6.2",
-  "description": "Captures logged-in purchase portal sessions and runs live quote jobs for the HN Hotels purchase console.",
+  "version": "1.7.0",
+  "description": "Captures logged-in purchase portal sessions and runs live quote jobs for the HN Hotels purchase console. v1.7 adds Amazon Business, Amazon Fresh, Metro, DMart, IndiaMART.",
   "permissions": [
     "activeTab",
     "cookies",
@@ -29,7 +29,17 @@
     "https://bigbasket.com/*",
     "https://*.bigbasket.com/*",
     "https://jiomart.com/*",
-    "https://*.jiomart.com/*"
+    "https://*.jiomart.com/*",
+    "https://dmart.in/*",
+    "https://*.dmart.in/*",
+    "https://dmartready.in/*",
+    "https://*.dmartready.in/*",
+    "https://metro-india.com/*",
+    "https://*.metro-india.com/*",
+    "https://metro.co.in/*",
+    "https://*.metro.co.in/*",
+    "https://indiamart.com/*",
+    "https://*.indiamart.com/*"
   ],
   "background": {
     "service_worker": "background.js"

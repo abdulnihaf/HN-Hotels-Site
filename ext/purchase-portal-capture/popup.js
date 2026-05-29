@@ -104,7 +104,7 @@ async function loadContext() {
     els.activeTabText.textContent = `Active tab: ${portalLabel(data.detectedSource)}`;
     setStatus(`Ready to capture ${portalLabel(data.detectedSource)} from this tab.`, 'warn');
   } else {
-    els.activeTabText.textContent = 'Active tab is not one of the 8 purchase portals.';
+    els.activeTabText.textContent = 'Active tab is not one of the wired purchase portals.';
   }
 }
 
