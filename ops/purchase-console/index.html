@@ -224,6 +224,17 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
     .segmented button:active { transform: scale(0.97); }
+    /* Tier segmented control — 4 columns, slightly smaller text */
+    .tier-segmented {
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .tier-segmented button { font-size: 12px; }
+    .tier-segmented button[data-tier="b2b"] .b2b-star {
+      color: var(--hn-gold);
+      margin-left: 2px;
+      font-size: 11px;
+    }
+    .tier-segmented button[data-tier="b2b"].on { box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 0 0 1px var(--hn-gold-border); }
 
     /* ============================================================
        Category chip rail
@@ -549,6 +560,23 @@
     /* ============================================================
        Alt portal chip strip
        ============================================================ */
+    .tier-stack {
+      display: grid; gap: 6px;
+      margin-top: 2px;
+    }
+    .tier-row {
+      display: grid; gap: 4px;
+    }
+    .tier-row-label {
+      font: 800 9px/1 -apple-system, sans-serif;
+      letter-spacing: 0.09em;
+      color: var(--text-mute);
+      text-transform: uppercase;
+      padding: 2px 4px 0;
+    }
+    .tier-row.tier-b2b .tier-row-label { color: var(--hn-gold); }
+    .tier-row.tier-qcomm .tier-row-label::before { content: '⚡ '; opacity: 0.7; }
+    .tier-row.tier-retail .tier-row-label::before { content: '🛒 '; opacity: 0.7; }
     .alt-strip {
       display: flex; gap: 6px; overflow-x: auto;
       margin: 0 -14px;
@@ -1147,6 +1175,12 @@
         <button data-brand="HE" type="button">Hamza Express</button>
         <button data-brand="NCH" type="button">Nawabi Chai</button>
       </div>
+      <div class="segmented tier-segmented" id="tierToggle">
+        <button data-tier="all" class="on" type="button">All</button>
+        <button data-tier="qcomm" type="button">Q-Comm</button>
+        <button data-tier="retail" type="button">Retail</button>
+        <button data-tier="b2b" type="button">B2B <span class="b2b-star">★</span></button>
+      </div>
       <div class="chip-rail-wrap">
         <div class="chip-rail" id="catChips"></div>
       </div>
@@ -1304,6 +1338,36 @@
     // `mat.b2b_eligible`). For non-eligible materials (fresh produce,
     // poultry, eggs) these chips are hidden — wrong channel entirely.
     const B2B_ONLY_PORTALS = new Set(['AMAZON_BUSINESS', 'METRO']);
+
+    // ============================================================
+    // Tier architecture — three procurement modes
+    // ============================================================
+    // Q-Commerce = fast delivery, small consumer packs (Blinkit, Zepto...)
+    // Retail = scheduled / same-day, consumer grocery pricing (BB, JM...)
+    // B2B = bulk packs + GST input credit + restaurant supply (Hyperpure,
+    //       Amazon Business, Metro). Hyperpure sits in B2B not retail
+    //       because it IS Zomato's restaurant supply arm — bulk packs,
+    //       B2B pricing, GST invoice — even though it feels like a
+    //       grocery app in UX.
+    const PORTAL_TIER = {
+      BLINKIT: 'qcomm', ZEPTO: 'qcomm', FLIPKART_MINUTES: 'qcomm',
+      AMAZON_NOW: 'qcomm', INSTAMART: 'qcomm',
+      BIGBASKET: 'retail', JIOMART: 'retail',
+      AMAZON_FRESH: 'retail', DMART: 'retail',
+      HYPERPURE: 'b2b', AMAZON_BUSINESS: 'b2b', METRO: 'b2b',
+    };
+    const TIER_ORDER = ['qcomm', 'retail', 'b2b'];
+    const TIER_LABELS = {
+      qcomm: 'Q-COMMERCE',
+      retail: 'RETAIL',
+      b2b: 'B2B BULK ★ GST',
+    };
+    const TIER_SUBTITLES = {
+      qcomm: 'Fast delivery · small packs',
+      retail: 'Scheduled · consumer packs',
+      b2b: 'Bulk packs · GST input credit',
+    };
+    function tierFor(sk) { return PORTAL_TIER[sk] || 'retail'; }
     const SOURCE_LABELS = {
       HYPERPURE: 'Hyperpure', BIGBASKET: 'BigBasket', BLINKIT: 'Blinkit',
       ZEPTO: 'Zepto', FLIPKART_MINUTES: 'Flipkart Minutes',
@@ -1477,6 +1541,7 @@
       query: '',
       category: localStorage.getItem('purchaseConsoleCategory') || 'ALL',
       brand: localStorage.getItem('purchaseConsoleBrand') || 'BOTH',
+      tier: localStorage.getItem('purchaseConsoleTier') || 'all',
       refreshing: new Set(),
       cart: JSON.parse(localStorage.getItem('purchaseConsoleCart') || '{}'),
       activeTab: 'shop',
@@ -1499,6 +1564,7 @@
       navAddBtn: document.getElementById('navAddBtn'),
       searchInput: document.getElementById('searchInput'),
       brandToggle: document.getElementById('brandToggle'),
+      tierToggle: document.getElementById('tierToggle'),
       catChips: document.getElementById('catChips'),
       filterStat: document.getElementById('filterStat'),
       addMatBtn: document.getElementById('addMatBtn'),
@@ -1575,8 +1641,17 @@
       if (price > baseline.paise * 8) return false;
       return true;
     }
+    function portalMatchesActiveTier(sk) {
+      if (state.tier === 'all') return true;
+      return tierFor(sk) === state.tier;
+    }
     function bestSourceFor(mat) {
-      const portals = sourcesFor(mat).filter((s) => isPortalSourceQuoted(s) && isSanePortalPrice(s, mat));
+      const portals = sourcesFor(mat)
+        .filter((s) => isPortalSourceQuoted(s) && isSanePortalPrice(s, mat))
+        // Tier filter: when a tier is active, cheapest is computed
+        // WITHIN that tier so the headline best-deal block shows the
+        // best option for the owner's current procurement intent.
+        .filter((s) => portalMatchesActiveTier(s.source_key));
       portals.sort((a, b) => sourcePrice(a) - sourcePrice(b));
       return portals[0] || null;
     }
@@ -1717,33 +1792,41 @@
             </div>
           </div>`;
       } else {
+        // Tier-aware fallback message: when a tier filter is active and
+        // no scout has captured a price in that tier yet, tell the
+        // owner to tap any chip below to search the portal app directly.
+        const tierTxt = state.tier === 'all' ? 'any portal' : TIER_LABELS[state.tier].split(' ')[0].toLowerCase();
+        const noBody = state.tier === 'all'
+          ? 'Pull down to refresh, or tap 🔄 to scout this item.'
+          : `No ${tierTxt} price scouted yet. Tap any chip below to open the portal app directly.`;
         bestHtml = `
           <div class="best-deal no-best">
             <div class="best-row">
               <div class="portal-favicon letter">?</div>
               <div class="best-info">
-                <div class="best-portal-line" style="color:var(--text-dim);">No portal price yet</div>
-                <div class="best-sku">Pull down to refresh, or tap 🔄 to scout this item.</div>
+                <div class="best-portal-line" style="color:var(--text-dim);">No ${escapeHtml(tierTxt)} price yet</div>
+                <div class="best-sku">${escapeHtml(noBody)}</div>
               </div>
               <div></div>
             </div>
           </div>`;
       }
 
-      const altsHtml = PORTAL_SOURCE_KEYS.map((sk) => {
+      // ─── Tier-grouped alt-chip rendering ───
+      // Build one chip per portal, then group by tier and emit a
+      // labelled micro-row per tier. If state.tier !== 'all', collapse
+      // to just that tier.
+      function renderOneChip(sk) {
         if (best && sk === best.source_key) return '';
-        // B2B-only portals (Amazon Business, IndiaMART when wired) only
-        // show for materials tagged b2b_eligible by the API. For fresh
-        // produce / poultry / eggs this hides the chip — wrong channel.
         if (B2B_ONLY_PORTALS.has(sk) && !mat.b2b_eligible) return '';
         const s = sources.find((x) => x.source_key === sk);
         if (!s) {
           const url = portalSearchUrlFor(sk, mat.name);
-          // For B2B chips with no quote yet, show as active (not
-          // disabled) — the chip itself is the value-add, taps land in
-          // the app's B2B catalog for the material.
-          const chipCls = B2B_ONLY_PORTALS.has(sk) ? 'alt-chip' : 'alt-chip disabled';
-          const priceTxt = B2B_ONLY_PORTALS.has(sk) ? 'B2B ↗' : '—';
+          // B2B chips with no scout yet: show as active (chip itself is
+          // the value-add — tap launches portal search in app).
+          const isB2B = tierFor(sk) === 'b2b';
+          const chipCls = isB2B ? 'alt-chip' : 'alt-chip disabled';
+          const priceTxt = isB2B ? '↗' : '—';
           return url ? `<a class="${chipCls}" href="${escapeAttr(url)}" target="_blank" rel="noopener">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span></a>` : '';
         }
         const quoted = isPortalSourceQuoted(s);
@@ -1753,6 +1836,19 @@
         const warn = quoted && !sane ? '<span class="warn">⚠️</span>' : '';
         const chipCls = quoted ? 'alt-chip' : 'alt-chip disabled';
         return `<a class="${chipCls}" href="${escapeAttr(url)}" target="_blank" rel="noopener">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${warn}${escapeHtml(priceTxt)}</span></a>`;
+      }
+      const tiersToRender = state.tier === 'all'
+        ? TIER_ORDER
+        : TIER_ORDER.filter((t) => t === state.tier);
+      const altsHtml = tiersToRender.map((tier) => {
+        const tierPortals = PORTAL_SOURCE_KEYS.filter((sk) => tierFor(sk) === tier);
+        const chips = tierPortals.map(renderOneChip).filter(Boolean).join('');
+        if (!chips) return '';
+        return `
+          <div class="tier-row tier-${tier}">
+            <div class="tier-row-label">${escapeHtml(TIER_LABELS[tier])}</div>
+            <div class="alt-strip">${chips}</div>
+          </div>`;
       }).filter(Boolean).join('');
 
       return `
@@ -1781,7 +1877,7 @@
           </div>
           ${baselineHtml}
           ${bestHtml}
-          ${altsHtml ? `<div class="alt-strip">${altsHtml}</div>` : ''}
+          ${altsHtml ? `<div class="tier-stack">${altsHtml}</div>` : ''}
         </div>`;
     }
 
@@ -1798,9 +1894,10 @@
         return false;
       });
       const totalQuotes = filtered.reduce((acc, m) => acc + sourcesFor(m).filter(isPortalSourceQuoted).length, 0);
-      els.filterStat.textContent = `${filtered.length} of ${mats.length} · ${totalQuotes} quotes today`;
+      const tierTxt = state.tier === 'all' ? '' : ` · ${TIER_LABELS[state.tier].split(' ')[0]} only`;
+      els.filterStat.textContent = `${filtered.length} of ${mats.length} · ${totalQuotes} quotes today${tierTxt}`;
       els.shopSubtitle.textContent = mats.length
-        ? `${mats.length} materials · ${totalQuotes} live quotes`
+        ? `${mats.length} materials · ${totalQuotes} live quotes${state.tier !== 'all' ? ' · filtered to ' + TIER_LABELS[state.tier].split(' ')[0].toLowerCase() : ''}`
         : 'Loading materials…';
 
       if (!filtered.length) {
@@ -2083,6 +2180,7 @@
         els.youName.textContent = d.user.name;
         els.youRole.textContent = d.user.role + (d.user.can_create_po ? ' · can create POs' : '');
         [...els.brandToggle.querySelectorAll('button')].forEach((b) => b.classList.toggle('on', b.dataset.brand === state.brand));
+        [...els.tierToggle.querySelectorAll('button')].forEach((b) => b.classList.toggle('on', b.dataset.tier === state.tier));
         await loadAll();
         updatePlanBadge();
       } catch (e) {
@@ -2197,6 +2295,14 @@
       state.brand = btn.dataset.brand;
       localStorage.setItem('purchaseConsoleBrand', state.brand);
       loadAll();
+    });
+    els.tierToggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-tier]');
+      if (!btn) return;
+      [...els.tierToggle.querySelectorAll('button')].forEach((b) => b.classList.toggle('on', b === btn));
+      state.tier = btn.dataset.tier;
+      localStorage.setItem('purchaseConsoleTier', state.tier);
+      renderList();
     });
     els.catChips.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-cat]');
