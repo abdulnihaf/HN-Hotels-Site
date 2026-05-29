@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-29T20:13:01+0530",
-  "published_at": "2026-05-29T20:13:01+0530",
+  "updated_at": "2026-05-29T20:14:11+0530",
+  "published_at": "2026-05-29T20:14:11+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -43,12 +43,12 @@
       "subgroup": "Aggregators",
       "risk": "platform and margin mutation",
       "status": "ready",
-      "last_task": "Biryani Rice same-day clearance offer recommendation",
-      "last_summary": "Analysed HE delivery/dine-in aggregator playbooks and current delivery intelligence. Recommendation only: use a short-window item-level Swiggy/Zomato ad for Biryani Rice + Chicken Kabab or rice bowl, not a broad menu discount; keep restaurant-funded discount within margin guardrail and stop once excess rice clears.",
-      "next_action": "Owner to run manual item-level ads on Swiggy/Zomato and monitor first 60-90 minutes for orders, CAC, and stock clearance; avoid blanket discounts and auto-renewal.",
-      "mutation_status": "Ad/POS/portal recommendation only; no platform, POS, Odoo, or WABA mutation executed by Codex.",
+      "last_task": "Narrow Biryani Rice clearance recommendation to single SKU only",
+      "last_summary": "Owner clarified the offer must be only around the Biryani Rice SKU. Revised recommendation: item-level Biryani Rice SKU ad/discount only; no combo-led offer, no cart-wide discount, no other promoted SKUs.",
+      "next_action": "Owner to configure Swiggy/Zomato ads against only the Biryani Rice SKU and stop manually once excess rice clears.",
+      "mutation_status": "Recommendation only; no platform, POS, Odoo, WABA, or ad portal mutation executed by Codex.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command delivery-aggregator",
-      "last_run_at": "2026-05-29T20:13:01+0530"
+      "last_run_at": "2026-05-29T20:14:11+0530"
     },
     "dine-in-aggregator": {
       "title": "04 Dine-In Aggregator",
@@ -156,6 +156,21 @@
     }
   },
   "events": [
+    {
+      "id": "20260529201411-delivery-aggregator",
+      "at": "2026-05-29T20:14:11+0530",
+      "lane": "delivery-aggregator",
+      "task": "Narrow Biryani Rice clearance recommendation to single SKU only",
+      "status": "ready",
+      "summary": "Owner clarified the offer must be only around the Biryani Rice SKU. Revised recommendation: item-level Biryani Rice SKU ad/discount only; no combo-led offer, no cart-wide discount, no other promoted SKUs.",
+      "next_action": "Owner to configure Swiggy/Zomato ads against only the Biryani Rice SKU and stop manually once excess rice clears.",
+      "mutation_status": "Recommendation only; no platform, POS, Odoo, WABA, or ad portal mutation executed by Codex.",
+      "proof": "",
+      "artifacts": "",
+      "live_ids": "",
+      "rollback": "",
+      "data_freshness": ""
+    },
     {
       "id": "20260529201301-delivery-aggregator",
       "at": "2026-05-29T20:13:01+0530",
@@ -1020,16 +1035,6 @@
       "summary": "Set local Google Ads lane docs/mockup for late-night Hamza Hotel search capture: Rs 500/day proposed for 5km brand campaign, 2km biryani/ghee-rice fallback kept paused, late-night copy uses Open Till 3 AM, Bangalore's best Ghee Rice/Kabab, 10% dine-in only.",
       "next_action": "Confirm late-night mockup/copy, verify 10% dine-in proof and landing/site hours, then live-verify Google Ads account before any campaign or budget mutation.",
       "mutation_status": "No live Google Ads/GBP/POS mutation. Local _context docs and HTML mockup updated only."
-    },
-    {
-      "id": "20260525081136-google-ads",
-      "at": "2026-05-25T08:11:36+0530",
-      "lane": "google-ads",
-      "task": "Add 12 PM lunch Hamza Hotel copy candidate",
-      "status": "ready",
-      "summary": "Added Nihaf's proposed lunch copy as a 12 PM candidate in the GBP-verified text asset doc. Flagged that live GBP currently says 2 PM-3 AM, so Open From 12 PM should only go live after GBP/site/landing hours are changed and verified. Recommended RSA headline split: Lunch At Hamza Hotel? / Come To Hamza Express / Open From 12 PM / Wahi Hamza Naam / Naya Zaiqa Naya Andaaz / Ghee Rice & Kabab / 10% Dine-In Offer / 20% Takeaway Offer / Get Directions. Suggested safer description uses Famous Ghee Rice and Kabab unless owner wants the stronger Bangalore's best claim.",
-      "next_action": "Confirm whether real opening is 12 PM or 2 PM; then update GBP/site/landing hours consistently before creating mockup visuals or live ads.",
-      "mutation_status": "none-copy-doc-only"
     }
   ]
 }
