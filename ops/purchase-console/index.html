@@ -1502,7 +1502,15 @@
       return String(url).replace(/&amp;/g, '&').replace(/&#38;/g, '&').trim();
     }
     const PORTAL_SEARCH_URL = {
-      HYPERPURE: (q) => { const s = String(q || 'search').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'search'; return `https://www.hyperpure.com/in/search/${encodeURIComponent(s)}?type=SEARCH&query=${encodeURIComponent(q)}`; },
+      // Hyperpure — owner screenshot 2026-05-29 showed `/in/search/<slug>?
+      // type=SEARCH&query=<q>` opens the Hyperpure iOS app to a BROKEN
+      // add-to-cart prompt (qty=100, "ADD" button, no product context).
+      // The app's URL handler misinterprets our search URL as a product
+      // deeplink. Falling back to plain `/in/` home which still matches
+      // the `/in/*` AASA claim → app opens to home with search bar
+      // visible top-right. Material name is then copy-on-tap'd to the
+      // clipboard so owner pastes in app's search.
+      HYPERPURE: (q) => `https://www.hyperpure.com/in/`,
       // BigBasket — empirical AASA probe 2026-05-29: `/ps/` is NOT in
       // the BB iOS app's path-claim list (which includes /sh/*, /sp/*,
       // /pd/*, /cl/*, /store/c/*). `/ps/?q=` returns 200 on web but iOS
@@ -2487,6 +2495,35 @@
         state.deferredInstallPrompt = null;
       } else {
         toast('On iPhone: tap Share → Add to Home Screen');
+      }
+    });
+
+    // ============================================================
+    // Copy-on-tap fallback for handoff=app-search-unverified / safari
+    // ============================================================
+    // For portals where (a) the app opens but doesn't auto-search
+    // (Hyperpure case — verified broken on iPhone 2026-05-29) or
+    // (b) there's no app handoff at all (Metro, DMart — Safari only),
+    // copy the material name to the clipboard at tap-time so the
+    // owner only has to tap-paste in the app's search bar.
+    // Touches `pointerdown` so the copy completes before iOS hands off
+    // to the URL — clipboard writes in the click handler often arrive
+    // too late on iOS.
+    document.addEventListener('pointerdown', (event) => {
+      const link = event.target.closest('a[data-handoff][data-material-name]');
+      if (!link) return;
+      const handoff = link.dataset.handoff;
+      if (handoff !== 'app-search-unverified' && handoff !== 'safari') return;
+      const matName = link.dataset.materialName;
+      const portalName = link.dataset.portalName || 'portal';
+      if (!matName) return;
+      try {
+        navigator.clipboard.writeText(matName);
+        // Brief toast — non-blocking, doesn't prevent the tap.
+        toast(`📋 "${matName}" copied — paste in ${portalName} search`, 3000);
+      } catch (_) {
+        // Clipboard write can fail without user activation on some
+        // platforms; silently degrade — link still opens.
       }
     });
 
