@@ -1927,9 +1927,77 @@ async function handlePost(context, env) {
       return unlinkMaterialVendor(body, user, env);
     case 'bulk-link-vendor':
       return bulkLinkMaterialsToVendor(body, user, env);
+    case 'set-material-uom':
+      return setMaterialUomInOdoo(body, user, env);
     default:
       return json({ error: `Unknown POST action: ${action}` }, 400);
   }
+}
+
+// ============================================================
+// Set material UOM in Odoo (one-shot, multi-product)
+// ============================================================
+// Owner clarifies materials by HOW they think about them — Lemon in
+// pieces, Coriander/Mint/Curry Leaves in bunch — even when portals sell
+// by mass. Intelligence v4 cross-converts at compare time, but the
+// material UOM should reflect business semantics in Odoo too.
+//
+// Body: { product_codes: ['HN-RM-066','HN-RM-067','HN-RM-016'],
+//         uom_name: 'bunch' }
+// Auto-creates the uom.uom record if missing.
+async function setMaterialUomInOdoo(body, user, env) {
+  if (!canCreate(user)) return json({ error: 'admin/purchase only' }, 403);
+  const creds = getOdooCredentials({ odoo: 'system' }, env);
+  if (!creds?.key) return json({ error: 'Odoo creds not configured' }, 500);
+  const productCodes = Array.isArray(body.product_codes) ? body.product_codes : [];
+  const uomName = String(body.uom_name || '').trim();
+  if (!productCodes.length || !uomName) {
+    return json({ error: 'product_codes[] and uom_name required' }, 400);
+  }
+  // Find or create the UOM
+  let uomRows = await odooCall(creds.uid, creds.key,
+    'uom.uom', 'search_read',
+    [[['name', '=ilike', uomName]]],
+    { fields: ['id', 'name', 'category_id', 'factor'], limit: 1 }
+  );
+  let uomId;
+  if (uomRows.length) {
+    uomId = uomRows[0].id;
+  } else {
+    // Create UOM under "Unit" category (UoM category for count-based)
+    const cats = await odooCall(creds.uid, creds.key,
+      'uom.category', 'search_read',
+      [[['name', '=ilike', 'unit']]],
+      { fields: ['id'], limit: 1 }
+    );
+    if (!cats.length) return json({ error: 'Cannot find Unit UoM category to create new UoM under' }, 500);
+    uomId = await odooCall(creds.uid, creds.key,
+      'uom.uom', 'create',
+      [{
+        name: uomName.charAt(0).toUpperCase() + uomName.slice(1),
+        category_id: cats[0].id,
+        uom_type: 'reference',
+        factor: 1.0,
+      }],
+      {}
+    );
+  }
+  // Look up product templates by default_code
+  const products = await odooCall(creds.uid, creds.key,
+    'product.template', 'search_read',
+    [[['default_code', 'in', productCodes]]],
+    { fields: ['id', 'name', 'default_code', 'uom_id', 'uom_po_id'] }
+  );
+  const updated = [];
+  for (const p of products) {
+    await odooCall(creds.uid, creds.key,
+      'product.template', 'write',
+      [[p.id], { uom_id: uomId, uom_po_id: uomId }],
+      {}
+    );
+    updated.push({ id: p.id, code: p.default_code, name: p.name, old_uom: p.uom_id });
+  }
+  return json({ success: true, uom_id: uomId, uom_name: uomName, updated });
 }
 
 // ============================================================
