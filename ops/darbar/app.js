@@ -30,22 +30,49 @@ const todayIST = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0
 // HE business day = IST now shifted back 4h
 const bizDayIST = () => new Date(Date.now() + 5.5 * 3600e3 - 4 * 3600e3).toISOString().slice(0, 10);
 
-/* ━━━ PIN gate ━━━ */
-function unlock() {
-  const v = $('pin').value.trim();
-  const u = USERS[v];
-  if (!u) { $('pinErr').textContent = 'Not recognised at this court.'; return; }
-  S.pin = v; S.user = u.name; S.role = u.role; S.fin = u.fin;
-  sessionStorage.setItem('darbar_pin', v);
+/* ━━━ PIN gate — locked shell: 4 dots + 3×4 keypad, auto-submit on 4th digit ━━━ */
+let pinEntry = '';
+function renderDots() {
+  const dots = $('pinDots').children;
+  for (let i = 0; i < 4; i++) dots[i].classList.toggle('on', i < pinEntry.length);
+}
+function pinKey(k) {
+  if (k === 'del') { pinEntry = pinEntry.slice(0, -1); $('pinErr').textContent = ''; renderDots(); return; }
+  if (pinEntry.length >= 4) return;
+  pinEntry += k; renderDots();
+  if (pinEntry.length === 4) setTimeout(submitPin, 140);   // brief beat so the 4th dot shows
+}
+function submitPin() {
+  const u = USERS[pinEntry];
+  if (!u) {
+    $('gate').classList.add('shake');
+    $('pinErr').textContent = 'Not recognised at this court.';
+    setTimeout(() => { $('gate').classList.remove('shake'); pinEntry = ''; renderDots(); }, 460);
+    if (navigator.vibrate) navigator.vibrate(60);
+    return;
+  }
+  enterCourt(pinEntry, u);
+}
+function enterCourt(pin, u) {
+  S.pin = pin; S.user = u.name; S.role = u.role; S.fin = u.fin;
+  sessionStorage.setItem('darbar_pin', pin);
   $('gate').classList.add('hide');
   $('app').classList.remove('hide');
   S.attendDate = bizDayIST();
   setupNavCondense();
   loadHome();
 }
-$('pinGo').addEventListener('click', unlock);
-$('pin').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
-(function auto() { const p = sessionStorage.getItem('darbar_pin'); if (p && USERS[p]) { $('pin').value = p; unlock(); } })();
+$('keypad').addEventListener('click', e => {
+  const b = e.target.closest('button[data-k]');
+  if (b) pinKey(b.dataset.k);
+});
+// hardware keyboard (desktop testing) — digits + backspace
+document.addEventListener('keydown', e => {
+  if ($('gate').classList.contains('hide')) return;
+  if (/^[0-9]$/.test(e.key)) pinKey(e.key);
+  else if (e.key === 'Backspace') pinKey('del');
+});
+(function auto() { const p = sessionStorage.getItem('darbar_pin'); if (p && USERS[p]) enterCourt(p, USERS[p]); })();
 
 /* ━━━ API ━━━ */
 async function api(path) { const r = await fetch(path); return r.json(); }
