@@ -466,6 +466,29 @@ async function handlePost(request, env) {
     return json({ success: true, key });
   }
 
+  // Write vendor contact info directly to Odoo res.partner. Mirrors the
+  // local D1 update-vendor action but persists to the canonical source-
+  // of-truth (odoo.hnhotels.in). Used to keep vendor phone/email fresh
+  // for WhatsApp-template generation in BuyList.
+  if (action === 'update-odoo-vendor') {
+    const apiKey = env.ODOO_API_KEY;
+    if (!apiKey) return json({ error: 'ODOO_API_KEY not configured' }, 500);
+    const { partner_id, phone, mobile, email, name: newName, notes } = body;
+    if (!partner_id) return json({ error: 'Required: partner_id' }, 400);
+    const writeVals = {};
+    if (phone !== undefined) writeVals.phone = String(phone || '');
+    if (mobile !== undefined) writeVals.mobile = String(mobile || '');
+    if (email !== undefined) writeVals.email = String(email || '');
+    if (newName !== undefined) writeVals.name = String(newName || '');
+    if (notes !== undefined) writeVals.comment = String(notes || '');
+    if (Object.keys(writeVals).length === 0) {
+      return json({ error: 'No writeable fields provided (phone/mobile/email/name/notes)' }, 400);
+    }
+    await odoo(apiKey, 'res.partner', 'write', [[Number(partner_id)], writeVals]);
+    const read = await odoo(apiKey, 'res.partner', 'read', [[Number(partner_id)], ['id', 'name', 'phone', 'mobile', 'email']]);
+    return json({ success: true, partner: (read && read[0]) || null });
+  }
+
   /* --- Odoo operations --- */
 
   if (action === 'extract') {
