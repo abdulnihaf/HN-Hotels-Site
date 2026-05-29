@@ -1,0 +1,4 @@
+name = "sauda-proxy"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+routes = [{ pattern = "sauda.hnhotels.in", custom_domain = true }]
