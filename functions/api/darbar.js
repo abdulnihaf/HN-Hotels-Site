@@ -26,6 +26,8 @@
  *   POST ?action=notify-run   (Phase 4)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
+import { sendWithFallback } from './_lib/comms-core.js';
+
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), {
     status,
@@ -66,6 +68,7 @@ export async function onRequest(context) {
       if (action === 'salary-override') return await salaryOverride(db, body);
       if (action === 'dismiss-ghost')   return await dismissGhost(db, body);
       if (action === 'onboard')         return await onboard(db, body);
+      if (action === 'notify-run')      return await notifyRun(db, env, body);
       return json({ error: `unknown POST action: ${action}` }, 400);
     }
     if (request.method === 'OPTIONS') {
@@ -373,6 +376,59 @@ async function onboard(db, body) {
     .bind(res.id, String(pin)).run();
   await logSync(db, 'darbar_onboard', res.id, `${name} (pin ${pin}, ${brand})`, by);
   return json({ ok: true, employee_id: res.id, pin, needs_odoo_sync: true });
+}
+
+// Staff punch-nudge engine. DORMANT by default: dry-run unless body.arm===true.
+// Do NOT arm in cron until the WABA templates (§ owner submit batch) are approved —
+// otherwise it queues sends that fail. SMS leg auto-arms when each DLT id lands
+// (lookupDltTemplate returns ready:false meanwhile → skipped gracefully).
+// Owner exceptions (departed/ghost) are surfaced IN-APP (the Today inbox), not here.
+async function notifyRun(db, env, body) {
+  const arm = body.arm === true;
+  const day = body.day || (await db.prepare(`SELECT ${HE_DAY} AS d FROM hr_cams_punches`).first()).d;
+  const cur = (await db.prepare(`SELECT ${HE_DAY} AS d FROM hr_cams_punches`).first()).d;
+
+  // Departed pins are owner exceptions — never staff-nudge them about absence.
+  const dep = await db.prepare(
+    `SELECT e.pin FROM hr_employees e LEFT JOIN hr_cams_punches p ON p.pin=e.pin
+      WHERE e.is_active=1 AND e.track_attendance=1
+      GROUP BY e.id HAVING CAST(julianday('now','+330 minutes')-julianday(MAX(p.punch_time)) AS INT) >= 7`
+  ).all();
+  const departed = new Set((dep.results || []).map(r => String(r.pin)));
+
+  const rows = await db.prepare(
+    `SELECT ad.punch_count, ad.status, e.pin, e.phone, COALESCE(e.known_as,e.name) AS nm
+       FROM hr_attendance_daily ad
+       JOIN hr_employees e ON e.id=ad.employee_id AND e.is_active=1 AND e.track_attendance=1
+      WHERE ad.date=?`
+  ).bind(day).all();
+
+  const planned = [];
+  for (const r of rows.results || []) {
+    const pc = r.punch_count || 0;
+    let state = null, template = null;
+    if (pc > 0 && pc % 2 === 1) { state = 'missed_exit'; template = 'darbar_missed_exit_v1'; }
+    else if (pc === 0 && r.status !== 'leave' && r.status !== 'week_off' && day === cur && !departed.has(String(r.pin))) { state = 'absent'; template = 'darbar_absent_v1'; }
+    if (!state) continue;
+    const rec = { pin: r.pin, name: r.nm, state };
+    if (!r.phone) { rec.skipped = 'no_phone'; planned.push(rec); continue; }
+    const alert_id = `darbar_${state}:${r.pin}:${day}`;
+    const dup = await db.prepare(`SELECT 1 FROM comms_outbox WHERE alert_id=? LIMIT 1`).bind(alert_id).first();
+    if (dup) { rec.skipped = 'already_sent'; planned.push(rec); continue; }
+    rec.phone = r.phone; rec.template = template;
+    if (arm) {
+      try {
+        await sendWithFallback(env, {
+          brand: 'sparksol', tier: 'info', alert_id, phone: r.phone,
+          template, language: 'en', vars: [r.nm],
+          chain: ['waba', 'sms'], gap_minutes: { waba: 30, sms: 60 },
+        });
+        rec.sent = true;
+      } catch (e) { rec.error = String(e.message || e); }
+    }
+    planned.push(rec);
+  }
+  return json({ day, armed: arm, count: planned.length, planned });
 }
 
 async function logSync(db, action, targetId, reference, by) {
