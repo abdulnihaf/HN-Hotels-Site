@@ -2931,6 +2931,142 @@ async function upsertDailySnapshot(DB, row) {
   ).run();
 }
 
+// ============================================================
+// BuyList intelligence layer (added 2026-05-29)
+// ============================================================
+// Two systematic accuracy fixes applied at API-read time so historical
+// daily_price_snapshots rows auto-correct without re-scouting:
+//
+// 1. PACK-SIZE NORMALIZATION
+//    Scout adapters store the raw displayed price in `unit_price_paise`
+//    even when the SKU is sold in a pack (`pack_size = "400 g"`,
+//    "Pack of 4", "2 kg"). Result: Meatigo 400g pack at ₹239 reads as
+//    ₹239/kg when it's actually ₹597/kg. Parse pack_size, divide raw
+//    price by pack quantity expressed in the material's UOM.
+//
+// 2. CATEGORY MISMATCH REJECTION
+//    Scout's keyword-overlap matcher matches "Catch Chicken Masala 100g"
+//    to a "Shawarma Chicken" material because both contain "chicken".
+//    Detect SKU category from sku_title keywords (masala / sauce /
+//    snack / biscuit / pickle) and the material's expected category
+//    from its name + Odoo category. If the SKU is the wrong category
+//    for the material (e.g. material expects raw meat, SKU is a spice
+//    mix), demote the row to stock_status='WRONG_CATEGORY' with
+//    price=0 so it's excluded from cheapest-source picks.
+
+// --- Pack-size parser ---
+// Returns { qty, unit: 'kg'|'g'|'l'|'ml'|'unit' } or null.
+function parsePackSize(s) {
+  if (!s) return null;
+  const txt = String(s).toLowerCase().trim();
+  // "Pack of 4" → 4 units
+  const packOf = txt.match(/pack\s*of\s*(\d+)/);
+  if (packOf) return { qty: Number(packOf[1]), unit: 'unit' };
+  // Mass: "400 g", "2.5 kg", "100gm"
+  const mass = txt.match(/(\d+(?:\.\d+)?)\s*(kgs?|gms?|grams?|g)\b/);
+  if (mass) {
+    const qty = Number(mass[1]);
+    const u = mass[2];
+    const unit = u.startsWith('kg') ? 'kg' : 'g';
+    return { qty, unit };
+  }
+  // Volume: "1.5 l", "100 ml", "1ltr", "1 litre"
+  const vol = txt.match(/(\d+(?:\.\d+)?)\s*(ltrs?|litres?|liters?|ml|l)\b/);
+  if (vol) {
+    const qty = Number(vol[1]);
+    const u = vol[2];
+    const unit = u === 'ml' ? 'ml' : 'l';
+    return { qty, unit };
+  }
+  // Count: "4 pc", "12 pcs", "50 nos", "100 count"
+  const pcs = txt.match(/(\d+)\s*(pcs?|pieces?|nos|units?|count|tablets?|caps?)\b/);
+  if (pcs) return { qty: Number(pcs[1]), unit: 'unit' };
+  return null;
+}
+
+// Convert pack quantity to material's UOM (kg / l / unit family). Returns
+// the multiplier to divide the raw stored price by, or null if families
+// don't align (e.g. material in kg but pack is ml — can't normalize).
+function packQtyInMaterialUom(packSizeStr, materialUom) {
+  const pack = parsePackSize(packSizeStr);
+  if (!pack || pack.qty <= 0) return null;
+  const u = String(materialUom || '').toLowerCase();
+  const matFamily = /(kg|gm?|gram)/i.test(u) ? 'mass'
+                  : /(litre|liter|ml|l)/i.test(u) ? 'vol'
+                  : /(unit|pc|pcs?|piece|nos|count)/i.test(u) ? 'count'
+                  : null;
+  const packFamily = (pack.unit === 'kg' || pack.unit === 'g') ? 'mass'
+                   : (pack.unit === 'l' || pack.unit === 'ml') ? 'vol'
+                   : 'count';
+  if (!matFamily || matFamily !== packFamily) return null;
+  // Express pack qty in the material's canonical unit (kg / l / unit)
+  if (matFamily === 'mass') {
+    return pack.unit === 'g' ? pack.qty / 1000 : pack.qty;
+  }
+  if (matFamily === 'vol') {
+    return pack.unit === 'ml' ? pack.qty / 1000 : pack.qty;
+  }
+  return pack.qty; // count → count
+}
+
+// --- SKU category detector ---
+// Reads sku_title and classifies it into a coarse category. Helps reject
+// "chicken masala" matching a "chicken" material.
+function detectSkuCategory(skuTitle) {
+  if (!skuTitle) return 'unknown';
+  const t = String(skuTitle).toLowerCase();
+  if (/\b(masala|seasoning|spice mix|spice blend|curry mix|recipe mix|tadka|garam|sambar mix|chaat masala)\b/.test(t)) return 'masala';
+  if (/\b(marinade|sauce|paste|gravy mix|cooking sauce|tikka paste|kebab paste|shawarma paste|seekh paste)\b/.test(t)) return 'sauce-paste';
+  if (/\b(pickle|chutney|achaar|achar|murabba)\b/.test(t)) return 'pickle-chutney';
+  if (/\b(papad|namkeen|chips|wafer|bhujia|sev|mixture|farsan|snack)\b/.test(t)) return 'snack';
+  if (/\b(biscuit|cookie|cracker|rusks?|wafer|cake|brownie|muffin)\b/.test(t)) return 'biscuit-bakery';
+  if (/\b(ready to (eat|cook)|instant|mre|microwave meal|3 minute)\b/.test(t)) return 'ready-meal';
+  if (/\b(supplement|protein powder|whey|multivitamin|tablets?|capsules?|gummies)\b/.test(t)) return 'supplement';
+  if (/\b(detergent|soap|shampoo|cleaner|sanitizer|bleach|wipes?)\b/.test(t)) return 'cleaning';
+  return 'unknown';
+}
+
+// --- Material expected category ---
+// Reads the material name + Odoo category and infers what kind of SKU we
+// expect to match against. Materials that ARE themselves a masala / paste
+// pass through to the right category (so "Chicken Masala" material does
+// NOT reject "MDH Chicken Masala" SKU).
+function expectedSkuCategory(materialName, materialCategory) {
+  const n = String(materialName || '').toLowerCase();
+  const c = String(materialCategory || '').toLowerCase();
+  // If the material itself is a masala/spice/powder, it expects masala SKUs
+  if (/\b(masala|powder|seasoning|spice|tadka|garam)\b/.test(n)) return 'masala';
+  if (/\b(marinade|paste|sauce|chutney|pickle|gravy)\b/.test(n)) return 'sauce-paste';
+  if (/\b(biscuit|cookie|cake|rusk|muffin|brownie)\b/.test(n)) return 'biscuit-bakery';
+  if (/\b(namkeen|chips|papad|snack|wafer|sev|bhujia)\b/.test(n)) return 'snack';
+  // Raw meat materials (no masala/paste qualifier) expect raw meat SKUs
+  if (/\b(chicken|murgh|mutton|lamb|goat|fish|prawn|seafood|brain|paya|kabab|tikka|tandoori|drumstick|wing|tangdi|lollipop|shawarma|shawarama|boneless|grill|kheema|keema)\b/.test(n)) return 'meat-raw';
+  // Eggs — exclude egg-noodle / egg-biscuit mismatches
+  if (/\begg|anda\b/.test(n)) return 'eggs';
+  // Fresh produce
+  if (/\b(palak|spinach|methi|coriander|kothmir|kothimir|dhaniya|mint|pudina|curry leaf|leaves|patta|bunch)\b/.test(n)) return 'fresh-produce';
+  if (/^(tomato|onion|potato|aloo|carrot|cabbage|cauliflower|cucumber|capsicum|chilli|chili|lemon|ginger|garlic|cabbage|beans|peas|matar|brinjal|baingan|lauki|gobi|kheera|nimbu|adrak|lehsun|gajar|kanda)\b/.test(n)) return 'fresh-produce';
+  // Dairy
+  if (/\b(milk|paneer|cream|butter(?!.*paper)|cheese|ghee|curd|dahi|yogurt|condensed milk|milkmaid)\b/.test(n)) return 'dairy';
+  // Default — unknown means don't reject
+  return 'unknown';
+}
+
+// --- Mismatch decision ---
+function isSkuCategoryMismatch(expectedCat, detectedCat) {
+  if (expectedCat === 'unknown' || detectedCat === 'unknown') return false;
+  if (expectedCat === detectedCat) return false;
+  // Raw meat material × spice/masala/sauce/snack SKU = wrong channel
+  if (expectedCat === 'meat-raw' && ['masala', 'sauce-paste', 'snack', 'pickle-chutney', 'biscuit-bakery', 'ready-meal', 'supplement'].includes(detectedCat)) return true;
+  // Fresh produce × packaged/processed
+  if (expectedCat === 'fresh-produce' && ['snack', 'biscuit-bakery', 'pickle-chutney', 'masala', 'supplement'].includes(detectedCat)) return true;
+  // Dairy × non-dairy packaged
+  if (expectedCat === 'dairy' && ['masala', 'snack', 'biscuit-bakery', 'pickle-chutney', 'supplement', 'ready-meal'].includes(detectedCat)) return true;
+  // Eggs × processed
+  if (expectedCat === 'eggs' && ['snack', 'biscuit-bakery', 'masala'].includes(detectedCat)) return true;
+  return false;
+}
+
 function publicSnapshotRow(row) {
   if (!row) return null;
   // Decode HTML entities in stored sku_url so the UI receives a canonical
@@ -2940,6 +3076,29 @@ function publicSnapshotRow(row) {
   // allowlist so old garbage rows (mailto:, #how-it-works) get dropped.
   const decodedUrl = decodeHtmlEntities(row.sku_url || '');
   const cleanUrl = isPlausibleProductUrl(decodedUrl, row.source_key) ? decodedUrl : '';
+
+  // ─── Intelligence layer ───
+  // 1. Pack-size normalization
+  const rawPrice = row.unit_price_paise || row.price_paise || 0;
+  const packMultiplier = packQtyInMaterialUom(row.pack_size, row.uom);
+  const normalizedPrice = (packMultiplier && packMultiplier > 0)
+    ? Math.round(rawPrice / packMultiplier)
+    : rawPrice;
+  const wasRepriced = packMultiplier && Math.abs(normalizedPrice - rawPrice) > 1;
+
+  // 2. Category mismatch detection
+  const expectedCat = expectedSkuCategory(row.name, row.category);
+  const detectedCat = detectSkuCategory(row.sku_title);
+  const isWrongCategory = isSkuCategoryMismatch(expectedCat, detectedCat);
+
+  // Apply: wrong-category rows get demoted, stock_status changes to flag
+  const finalPrice = isWrongCategory ? 0 : normalizedPrice;
+  const finalStatus = isWrongCategory ? 'WRONG_CATEGORY' : (row.stock_status || 'PENDING');
+  const noteParts = [];
+  if (row.match_notes) noteParts.push(row.match_notes);
+  if (wasRepriced) noteParts.push(`[pack-normalized ÷${packMultiplier.toFixed(3)} of ${row.uom}]`);
+  if (isWrongCategory) noteParts.push(`[REJECTED] material expects ${expectedCat} but SKU is ${detectedCat}`);
+
   return {
     snapshot_date: row.snapshot_date,
     material_id: row.material_id,
@@ -2952,15 +3111,15 @@ function publicSnapshotRow(row) {
     sku_title: row.sku_title || '',
     sku_url: cleanUrl,
     pack_size: row.pack_size || '',
-    price_paise: row.price_paise || 0,
-    unit_price_paise: row.unit_price_paise || 0,
+    price_paise: finalPrice,
+    unit_price_paise: finalPrice,
     currency: row.currency || 'INR',
     eta_minutes: row.eta_minutes || 0,
     eta_label: row.eta_label || '',
-    stock_status: row.stock_status || 'PENDING',
+    stock_status: finalStatus,
     match_rule: row.match_rule || '',
     match_confidence: row.match_confidence || 0,
-    match_notes: row.match_notes || '',
+    match_notes: noteParts.join(' '),
     captured_at: row.captured_at || '',
     source: row.source || '',
     batch_id: row.batch_id || '',
