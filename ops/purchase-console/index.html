@@ -10,6 +10,48 @@
   <title>Sauda · HN Hotels</title>
   <meta name="theme-color" content="#0a0a10">
   <link rel="manifest" href="/ops/purchase-console/manifest.json">
+  <style id="seed-styles">
+    /* Morning auto-seed — Sauda's pre-sectioned read of the day.
+       A read-only suggestion layer above the manual plan. */
+    .seed-wrap { margin: 0 0 18px; }
+    .seed-intro {
+      font-size: 12.5px; line-height: 1.45; color: #98989f;
+      background: rgba(212,162,76,0.10); border: 1px solid rgba(212,162,76,0.28);
+      border-radius: 12px; padding: 10px 12px; margin: 0 0 12px;
+    }
+    .seed-section {
+      background: #14141c; border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px; margin: 0 0 10px; overflow: hidden;
+    }
+    .seed-summary {
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+      padding: 13px 14px; min-height: 48px; list-style: none;
+      font-weight: 700; -webkit-user-select: none; user-select: none;
+    }
+    .seed-summary::-webkit-details-marker { display: none; }
+    .seed-summary-glyph { font-size: 19px; }
+    .seed-summary-title { flex: 1; font-size: 14.5px; color: #f8f8fa; letter-spacing: 0.2px; }
+    .seed-summary-meta { font-size: 11.5px; font-weight: 600; color: #98989f; white-space: nowrap; }
+    .seed-section[open] > .seed-summary { border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .seed-section-body { padding: 4px 0; }
+    .seed-nch_morning > .seed-summary { box-shadow: inset 3px 0 0 #34d399; }
+    .seed-he_evening > .seed-summary { box-shadow: inset 3px 0 0 #d4a24c; }
+    .seed-vendor_calls > .seed-summary { box-shadow: inset 3px 0 0 #a78bfa; }
+    .seed-other > .seed-summary { box-shadow: inset 3px 0 0 rgba(255,255,255,0.18); }
+    .seed-line {
+      display: flex; align-items: center; gap: 9px;
+      padding: 9px 14px; border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    .seed-line:first-child { border-top: none; }
+    .seed-emoji { font-size: 17px; width: 22px; text-align: center; flex: 0 0 auto; }
+    .seed-name { flex: 1; font-size: 13.5px; color: #f8f8fa; }
+    .seed-rec { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+    .seed-rec-src { font-size: 12px; font-weight: 600; color: #5e9eff; }
+    .seed-rec-price { font-size: 13px; font-weight: 700; color: #f8f8fa; }
+    .seed-rec-vendor .seed-rec-src { color: #a78bfa; }
+    .seed-rec-none { font-size: 11.5px; font-style: italic; color: #5c5c66; }
+    .seed-empty { padding: 14px; font-size: 12.5px; color: #98989f; font-style: italic; text-align: center; }
+  </style>
   <link rel="apple-touch-icon" sizes="180x180" href="/ops/purchase-console/icon-180.png">
   <link rel="apple-touch-icon" sizes="192x192" href="/ops/purchase-console/icon-192.png">
   <link rel="apple-touch-icon" sizes="512x512" href="/ops/purchase-console/icon-512.png">
@@ -1757,6 +1799,89 @@
       if (sk === 'manual') return 'manual';
       return PORTAL_TIER[sk] || 'retail';
     }
+
+    // ============================================================
+    // Order windows — the morning auto-seed coordinate
+    // ============================================================
+    // Every material is placed in exactly one ORDER WINDOW: the
+    // session in which Sauda expects it to be bought. This is a closed,
+    // finite dimension (COA: a coordinate, not free text). It is DERIVED
+    // at read-time from existing material fields (brand · category ·
+    // name · vendor link) — no schema change, no Odoo write — exactly
+    // like the price-trust ladder. A material that fits none of the
+    // clock windows still lands somewhere ('OTHER') so nothing is ever
+    // silently dropped from the morning view.
+    //
+    //   NCH_MORNING   NCH chai/snacks inputs consumed at 7am open
+    //                 (milk, tea/dust, butter, buns, badam, sugar …)
+    //   HE_EVENING    HE hero-dish inputs prepped for the dinner rush
+    //                 (ghee, rice, chicken, mutton, kabab masala, oil …)
+    //   VENDOR_CALLS  anything with an established vendor relationship —
+    //                 bought off-platform by phone/WhatsApp, needs a
+    //                 day's lead (call today → arrives tomorrow)
+    //   OTHER         everything else — a quiet catch-all, still shown
+    const ORDER_WINDOWS = ['NCH_MORNING', 'HE_EVENING', 'VENDOR_CALLS', 'OTHER'];
+    const ORDER_WINDOW_LABELS = {
+      NCH_MORNING: 'Today · NCH morning order',
+      HE_EVENING: 'Today · HE evening order',
+      VENDOR_CALLS: 'Tomorrow · vendor-direct calls',
+      OTHER: 'Also on the list',
+    };
+    const ORDER_WINDOW_GLYPH = {
+      NCH_MORNING: '🍵',
+      HE_EVENING: '🍚',
+      VENDOR_CALLS: '📲',
+      OTHER: '🛒',
+    };
+    const ORDER_WINDOW_EMPTY = {
+      NCH_MORNING: 'Mandi quiet — no fresh chai-counter prices yet.',
+      HE_EVENING: 'Mandi quiet — no fresh kitchen prices yet.',
+      VENDOR_CALLS: 'No vendor relationships linked yet — link a vendor to a material to fill this call list.',
+      OTHER: 'Mandi quiet — no fresh prices yet.',
+    };
+    // Name-pattern signals for the two clock windows. Anchored on the
+    // verified top-sellers (NCH = 58.7% chai + 18% haleem · HE heroes =
+    // ghee-rice/chicken-kabab/mutton-biryani) — never invented dishes.
+    const NCH_MORNING_NAME = /\b(milk|dahi|curd|tea|chai|dust|butter|makkhan|bun|paav|pav|badam|almond|sugar|osmania|biscuit|rusk|khari|coffee|malai|maska|haleem|wheat|gandum|dalia)\b/i;
+    const HE_EVENING_NAME = /\b(ghee|rice|basmati|biryani|chicken|murgh|kebab|kabab|tandoori|tangdi|mutton|lamb|goat|gravy cut|brain|bheja|masala|oil|tel)\b/i;
+    function materialBrand(mat) {
+      return String(mat?.brand || mat?.brand_scope || '').toUpperCase();
+    }
+    function hasVendorLink(mat) {
+      if (mat?.primary_vendor) return true;
+      const links = mat?.vendor_links;
+      return Array.isArray(links) && links.length > 0;
+    }
+    // Pure derivation — checked vendor-first, then brand+name, then a
+    // category lean, then the catch-all. Never throws.
+    function deriveOrderWindow(mat) {
+      try {
+        if (!mat) return 'OTHER';
+        if (hasVendorLink(mat)) return 'VENDOR_CALLS';
+        const brand = materialBrand(mat);
+        const name = String(mat.name || '');
+        const cat = String(mat.category || '');
+        const isNchName = NCH_MORNING_NAME.test(name);
+        const isHeName = HE_EVENING_NAME.test(name);
+        // Brand scope is the strongest signal when present.
+        if (brand.includes('NCH')) {
+          if (isHeName && !isNchName) return 'HE_EVENING';
+          return 'NCH_MORNING';
+        }
+        if (brand.includes('HE') || brand.includes('HAMZA')) {
+          if (isNchName && !isHeName) return 'NCH_MORNING';
+          return 'HE_EVENING';
+        }
+        // No brand (HQ / shared) — fall back to the name signal.
+        if (isNchName && !isHeName) return 'NCH_MORNING';
+        if (isHeName && !isNchName) return 'HE_EVENING';
+        // Last lean on category for unbranded staples.
+        if (/beverage|chai|snack|bakery|dairy/i.test(cat)) return 'NCH_MORNING';
+        if (/meat|poultry|staple|spice|oil|fat/i.test(cat)) return 'HE_EVENING';
+        return 'OTHER';
+      } catch (_) { return 'OTHER'; }
+    }
+
     // Vendor-direct support — materials with an established vendor
     // relationship (chicken → MN Broilers, buns → Ganga Bakery, etc.)
     // bypass the portal flow. Cart key for these is `vendor:<slug>`
@@ -2495,11 +2620,138 @@
     // ============================================================
     // Plan tab
     // ============================================================
+    // ============================================================
+    // Morning auto-seed — Sauda's pre-sectioned suggestion view
+    // ============================================================
+    // A READ-ONLY layer that sits ATOP the manual plan/cart. It groups
+    // the day's materials into the three order windows and, per item,
+    // names the recommended source (cheapest verified, live-session
+    // price). It NEVER mutates state.cart — the owner still builds and
+    // edits his plan below as before. Brand toggle composes: NCH mode
+    // hides HE_EVENING, HE mode hides NCH_MORNING; VENDOR_CALLS + OTHER
+    // always show. Empty sections render a quiet state, never a throw.
+    function brandShowsWindow(win) {
+      const b = String(state.brand || 'BOTH').toUpperCase();
+      if (b === 'NCH' && win === 'HE_EVENING') return false;
+      if ((b === 'HE' || b === 'HAMZA') && win === 'NCH_MORNING') return false;
+      return true;
+    }
+    // For a material, find the recommended (cheapest verified) source
+    // for the morning view. Reuses bestSourceFor (already ladder-aware,
+    // excludes price=0 sentinels + insane prices). Returns null when no
+    // trustable live price exists yet.
+    function seedRecommendation(mat) {
+      try {
+        const best = bestSourceFor(mat);
+        if (best && isPortalSourceQuoted(best)) {
+          return {
+            kind: 'portal',
+            sk: best.source_key,
+            label: SOURCE_LABELS[best.source_key] || best.source_key,
+            price_paise: sourcePrice(best),
+            uom: mat.uom || 'unit',
+          };
+        }
+        // Vendor-direct materials show their vendor as the recommendation
+        // even without a portal quote — the call list is the point.
+        if (hasVendorLink(mat)) {
+          const v = mat.primary_vendor || (mat.vendor_links || [])[0] || null;
+          if (v) {
+            return {
+              kind: 'vendor',
+              label: String(v.name || 'Vendor').split('(')[0].trim(),
+              price_paise: 0,
+              uom: mat.uom || 'unit',
+            };
+          }
+        }
+      } catch (_) { /* fall through to no-recommendation */ }
+      return null;
+    }
+    function renderMorningSeed() {
+      const mats = Array.isArray(state.materials) ? state.materials : [];
+      // Bucket every in-scope material into exactly one window so the
+      // count reconciles (COA: no data missed).
+      const buckets = { NCH_MORNING: [], HE_EVENING: [], VENDOR_CALLS: [], OTHER: [] };
+      for (const mat of mats) {
+        const win = deriveOrderWindow(mat);
+        (buckets[win] || buckets.OTHER).push(mat);
+      }
+      const sectionFor = (win) => {
+        if (!brandShowsWindow(win)) return '';
+        const items = buckets[win] || [];
+        // Sort: items with a live recommendation first (cheapest
+        // verified up top), then the rest by name — so it's literally
+        // top-to-bottom tap order.
+        const rows = items
+          .map((mat) => ({ mat, rec: seedRecommendation(mat) }))
+          .sort((a, b) => {
+            const aHas = a.rec && a.rec.kind === 'portal' ? 0 : 1;
+            const bHas = b.rec && b.rec.kind === 'portal' ? 0 : 1;
+            if (aHas !== bHas) return aHas - bHas;
+            if (aHas === 0) {
+              const ap = a.rec.price_paise || 0; const bp = b.rec.price_paise || 0;
+              if (ap !== bp) return ap - bp;
+            }
+            return String(a.mat.name || '').localeCompare(String(b.mat.name || ''));
+          });
+        const priced = rows.filter((r) => r.rec && r.rec.kind === 'portal').length;
+        const lineHtml = rows.map(({ mat, rec }) => {
+          const emoji = materialEmoji(mat);
+          let recHtml;
+          if (rec && rec.kind === 'portal') {
+            recHtml = `<span class="seed-rec"><span class="seed-rec-src">${escapeHtml(rec.label)}</span><span class="seed-rec-price">${moneyPaise(rec.price_paise)}/${escapeHtml(rec.uom)}</span></span>`;
+          } else if (rec && rec.kind === 'vendor') {
+            recHtml = `<span class="seed-rec seed-rec-vendor"><span class="seed-rec-src">📲 ${escapeHtml(rec.label)}</span></span>`;
+          } else {
+            recHtml = `<span class="seed-rec seed-rec-none">awaiting price</span>`;
+          }
+          return `
+            <div class="seed-line">
+              <span class="seed-emoji">${emoji}</span>
+              <span class="seed-name">${escapeHtml(mat.name || '')}</span>
+              ${recHtml}
+            </div>`;
+        }).join('');
+        const visibleCount = rows.length;
+        const body = visibleCount > 0
+          ? lineHtml
+          : `<div class="seed-empty">${escapeHtml(ORDER_WINDOW_EMPTY[win] || ORDER_WINDOW_EMPTY.OTHER)}</div>`;
+        const meta = visibleCount > 0
+          ? `${visibleCount} item${visibleCount === 1 ? '' : 's'}${priced > 0 ? ` · ${priced} priced` : ''}`
+          : 'quiet';
+        // OTHER opens collapsed by default to keep the head clean; the
+        // two clock windows + vendor calls open expanded so the morning
+        // list is glanceable at a tap.
+        const openAttr = win === 'OTHER' ? '' : ' open';
+        return `
+          <details class="seed-section seed-${win.toLowerCase()}"${openAttr}>
+            <summary class="seed-summary">
+              <span class="seed-summary-glyph">${ORDER_WINDOW_GLYPH[win] || '🛒'}</span>
+              <span class="seed-summary-title">${escapeHtml(ORDER_WINDOW_LABELS[win] || win)}</span>
+              <span class="seed-summary-meta">${escapeHtml(meta)}</span>
+            </summary>
+            <div class="seed-section-body">${body}</div>
+          </details>`;
+      };
+      const sections = ORDER_WINDOWS.map(sectionFor).join('');
+      return `
+        <div class="seed-wrap">
+          <div class="seed-intro">ⓘ Sauda's read of the day — sourced by order window, cheapest verified source per item. Your plan below stays yours to build.</div>
+          ${sections}
+        </div>`;
+    }
+
     function renderPlan() {
       const { byPortal, grand, grandDone, totalCount, doneCount } = cartTotals();
+      // Sauda's morning auto-seed — a read-only suggestion layer rendered
+      // ABOVE the manual plan. Computed even when the cart is empty so the
+      // owner opens to a pre-sectioned view, not a blank slate.
+      let seedHtml = '';
+      try { seedHtml = renderMorningSeed(); } catch (_) { seedHtml = ''; }
       if (totalCount === 0) {
-        els.planSubtitle.textContent = 'Your plan is empty.';
-        els.planBody.innerHTML = `<div class="empty-state"><div class="big">🧾</div><div class="title">No items yet</div><div class="body">Tap any deal in Shop to start a per-portal procurement plan.</div></div>`;
+        els.planSubtitle.textContent = 'Sauda struck — your read of the day is below.';
+        els.planBody.innerHTML = seedHtml + `<div class="empty-state"><div class="big">🧾</div><div class="title">Plan not built yet</div><div class="body">Tap any deal in Shop to add it to today's plan — or use Sauda's read above as your guide.</div></div>`;
         return;
       }
       const portals = Object.keys(byPortal).length;
@@ -2657,7 +2909,7 @@
           </div>
           <span class="grand-value">${money(grand)}</span>
         </div>`;
-      els.planBody.innerHTML = honesty + toggleBar + blocks + grandHtml;
+      els.planBody.innerHTML = seedHtml + honesty + toggleBar + blocks + grandHtml;
       attachSwipeHandlers();
 
       // Wire hide-done toggle
