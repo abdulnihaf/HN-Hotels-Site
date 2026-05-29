@@ -1776,7 +1776,7 @@ async function pullAttendance(apiKey, db, from, to, userName) {
        FROM hr_employees e
        LEFT JOIN hr_shift_rules r
          ON r.brand_label = e.brand_label AND r.pay_type = e.pay_type
-      WHERE e.is_active = 1 AND e.odoo_employee_id IS NOT NULL
+      WHERE e.is_active = 1
         AND e.pin IS NOT NULL AND e.pin != ''`
   ).all();
   const byPin = new Map();
@@ -1871,7 +1871,7 @@ async function pullAttendance(apiKey, db, from, to, userName) {
         hours = Math.max(0, (parseIstWall(lastOut) - parseIstWall(firstIn) - breakMs) / 3600000);
       }
 
-      buckets.set(`${emp.odoo_employee_id}|${sd}`, {
+      buckets.set(`${emp.id}|${sd}`, {
         punches: pairs, hours, firstIn, lastOut, tapCount: n,
       });
     }
@@ -1890,7 +1890,7 @@ async function pullAttendance(apiKey, db, from, to, userName) {
     const startHour = emp.shift_day_start_hour ?? 0;
     const missingCheckoutH = emp.missing_checkout_hours ?? 18;
     for (const shiftDay of days) {
-      const key = `${emp.odoo_employee_id}|${shiftDay}`;
+      const key = `${emp.id}|${shiftDay}`;
       const b = buckets.get(key);
       const hours = b?.hours || 0;
       // Per-employee week_off_day takes precedence over brand shift rule.
