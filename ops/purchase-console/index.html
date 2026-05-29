@@ -10,7 +10,10 @@
   <title>BuyList · HN Hotels</title>
   <meta name="theme-color" content="#0a0a10">
   <link rel="manifest" href="/ops/purchase-console/manifest.json">
-  <link rel="apple-touch-icon" href="/ops/purchase-console/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/ops/purchase-console/icon-180.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/ops/purchase-console/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="/ops/purchase-console/icon-512.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/ops/purchase-console/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
@@ -365,6 +368,83 @@
       background: rgba(167,139,250,0.18); color: var(--pc-purple);
       font: 800 9px/1 sans-serif; letter-spacing: 0.05em;
     }
+    .pill-vendor {
+      padding: 2px 7px; border-radius: 5px;
+      background: rgba(37,211,102,0.18); color: #25d366;
+      font: 800 9px/1 sans-serif; letter-spacing: 0.04em;
+    }
+    /* Vendor-direct block on material cards (green WhatsApp accent) */
+    .vendor-deal {
+      padding: 12px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(37,211,102,0.12) 0%, rgba(37,211,102,0.04) 100%);
+      box-shadow: inset 0 0 0 1px rgba(37,211,102,0.30);
+      margin-bottom: 8px;
+    }
+    .vendor-row {
+      display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center;
+    }
+    .vendor-icon {
+      font-size: 24px;
+      width: 36px; height: 36px;
+      display: grid; place-items: center;
+      background: #25d366;
+      border-radius: 9px;
+      box-shadow: 0 4px 10px rgba(37,211,102,0.32);
+    }
+    .vendor-info { min-width: 0; }
+    .vendor-line {
+      display: flex; align-items: center; gap: 6px;
+      font: 800 13px/1 -apple-system, sans-serif; letter-spacing: -0.01em; color: var(--text);
+    }
+    .vendor-tag {
+      font: 800 9px/1 -apple-system, sans-serif;
+      letter-spacing: 0.06em;
+      background: #25d366; color: #0a0a10;
+      padding: 3px 7px; border-radius: 4px;
+    }
+    .vendor-sub {
+      margin-top: 3px;
+      font: 600 11px/1 -apple-system, sans-serif;
+      color: var(--text-dim); letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+    }
+    .add-vendor-btn {
+      min-height: 40px; padding: 0 14px;
+      background: #25d366;
+      color: #0a0a10;
+      border-radius: 11px;
+      font: 800 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      box-shadow: 0 4px 12px rgba(37,211,102,0.28);
+      transition: transform .1s var(--ease);
+    }
+    .add-vendor-btn:active { transform: scale(0.96); }
+    .add-vendor-btn.in-plan {
+      background: rgba(37,211,102,0.18);
+      color: #25d366;
+      box-shadow: inset 0 0 0 1px rgba(37,211,102,0.45);
+    }
+    /* Plan-tab vendor block — green WhatsApp accent variant */
+    .portal-block.vendor-block {
+      box-shadow: inset 0 0 0 1px rgba(37,211,102,0.32);
+    }
+    .portal-block.vendor-block .portal-block-title { color: #25d366; }
+    .whatsapp-send-btn {
+      min-height: 46px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 0 16px;
+      background: #25d366;
+      color: #0a0a10;
+      border-radius: 13px;
+      font: 800 14px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      text-decoration: none;
+      box-shadow: 0 6px 14px rgba(37,211,102,0.28), inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+    .whatsapp-send-btn:active { transform: scale(0.97); }
+    .plan-tier-section.tier-vendor .plan-tier-title { color: #25d366; }
+    .plan-tier-section.tier-vendor .plan-tier-title::before { content: '📲 '; opacity: 0.9; }
 
     .mat-tools {
       display: grid; grid-auto-flow: column; gap: 6px; align-items: center;
@@ -1571,18 +1651,57 @@
       AMAZON_FRESH: 'retail', DMART: 'retail',
       HYPERPURE: 'b2b', AMAZON_BUSINESS: 'b2b', METRO: 'b2b',
     };
-    const TIER_ORDER = ['qcomm', 'retail', 'b2b'];
+    const TIER_ORDER = ['vendor', 'qcomm', 'retail', 'b2b'];
     const TIER_LABELS = {
+      vendor: 'VENDOR DIRECT',
       qcomm: 'Q-COMMERCE',
       retail: 'RETAIL',
       b2b: 'B2B BULK ★ GST',
     };
     const TIER_SUBTITLES = {
+      vendor: 'Direct vendor WhatsApp · established relationship',
       qcomm: 'Fast delivery · small packs',
       retail: 'Scheduled · consumer packs',
       b2b: 'Bulk packs · GST input credit',
     };
-    function tierFor(sk) { return PORTAL_TIER[sk] || 'retail'; }
+    function tierFor(sk) {
+      if (String(sk).startsWith('vendor:')) return 'vendor';
+      return PORTAL_TIER[sk] || 'retail';
+    }
+    // Vendor-direct support — materials with an established vendor
+    // relationship (chicken → MN Broilers, buns → Ganga Bakery, etc.)
+    // bypass the portal flow. Cart key for these is `vendor:<slug>`
+    // and Plan tab renders a dedicated VENDOR DIRECT section above the
+    // portal tiers with a "📲 Send via WhatsApp" CTA per vendor.
+    function vendorCartKey(vendor) { return `vendor:${vendor?.slug || vendor?.vendor_id || 'unknown'}`; }
+    function vendorFromCartKey(sk) {
+      if (!sk || !String(sk).startsWith('vendor:')) return null;
+      const slug = String(sk).slice('vendor:'.length);
+      // Look up the vendor metadata from the linked materials in state
+      for (const m of state.materials) {
+        const links = m.vendor_links || [];
+        const found = links.find((v) => v.slug === slug);
+        if (found) return found;
+      }
+      return null;
+    }
+    function formatWhatsAppMessage(vendor, lines) {
+      const date = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+      const outlet = vendor?.outlet_label || 'Hamza Express';
+      const itemsList = lines.map((l) => `- ${l.name} × ${l.qty}${l.uom || ''}`).join('\n');
+      const template = vendor?.message_template ||
+        'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via BuyList';
+      return template
+        .replace(/\{date\}/g, date)
+        .replace(/\{outlet\}/g, outlet)
+        .replace(/\{items_list\}/g, itemsList);
+    }
+    function whatsAppLinkFor(vendor, lines) {
+      const phone = (vendor?.whatsapp_phone || vendor?.phone || '').replace(/[^\d]/g, '');
+      if (!phone) return '';
+      const msg = formatWhatsAppMessage(vendor, lines);
+      return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    }
 
     // ============================================================
     // Handoff status — what happens when you tap a portal chip
@@ -2032,13 +2151,38 @@
       const qty = (mat._qty == null ? Math.max(1, Number(mat.suggested_qty || 1)) : mat._qty);
       const uom = mat.uom || 'unit';
       const inCartAnywhere = Object.entries(state.cart).some(([sk, lines]) => lines.some((l) => l.material_id === mid));
-      const cardCls = `mat-card ${best ? 'has-best' : ''} ${inCartAnywhere ? 'in-plan' : ''} ${mat.is_custom ? 'custom' : ''}`;
+      const cardCls = `mat-card ${best ? 'has-best' : ''} ${inCartAnywhere ? 'in-plan' : ''} ${mat.is_custom ? 'custom' : ''} ${mat.primary_vendor ? 'has-vendor' : ''}`;
       const thumbImg = best?.image_url || mat.image_url || '';
       const emoji = materialEmoji(mat);
       const thumbHtml = thumbImg
         ? `<img src="${escapeAttr(thumbImg)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'emoji',textContent:'${emoji}'}))">`
         : `<span class="emoji">${emoji}</span>`;
       const customPill = mat.is_custom ? `<span class="pill-custom">CUSTOM</span>` : '';
+      const vendorPill = mat.primary_vendor ? `<span class="pill-vendor">📲 ${escapeHtml(mat.primary_vendor.name.split('(')[0].trim())}</span>` : '';
+
+      // Vendor-direct block — renders ABOVE the portal best-deal when
+      // this material has an established vendor. Owner can either:
+      // (a) tap "+ <Vendor>" to add under vendor:<slug> cart key, OR
+      // (b) tap "+ Plan" on the portal best-deal to add under portal key
+      //     (for compare / scout-cycle confirmation).
+      let vendorHtml = '';
+      if (mat.primary_vendor) {
+        const v = mat.primary_vendor;
+        const vKey = `vendor:${v.slug}`;
+        const inVendorCart = isInCart(vKey, mid);
+        const vendorName = v.name.split('(')[0].trim();
+        vendorHtml = `
+          <div class="vendor-deal">
+            <div class="vendor-row">
+              <div class="vendor-icon">📲</div>
+              <div class="vendor-info">
+                <div class="vendor-line"><span class="vendor-tag">VENDOR DIRECT</span>${escapeHtml(vendorName)}</div>
+                <div class="vendor-sub">${escapeHtml(v.whatsapp_phone || v.phone || 'no phone')}</div>
+              </div>
+              <button class="add-vendor-btn ${inVendorCart ? 'in-plan' : ''}" type="button" data-add-vendor="${escapeAttr(mid)}" data-vendor-slug="${escapeAttr(v.slug)}">${inVendorCart ? '✓ In Plan' : '+ ' + escapeHtml(vendorName)}</button>
+            </div>
+          </div>`;
+      }
       const refreshDisabled = state.refreshing.has(mid);
 
       const baselineHtml = baseline ? `
@@ -2169,6 +2313,7 @@
             </div>
           </div>
           ${baselineHtml}
+          ${vendorHtml}
           ${bestHtml}
           ${altsHtml ? `<div class="tier-stack">${altsHtml}</div>` : ''}
         </div>`;
@@ -2277,7 +2422,11 @@
         const lines = state.cart[sk] || [];
         const t = byPortal[sk];
         const portalAllDone = t.doneCount === t.count;
-        const appHref = portalSearchUrlFor(sk, '');
+        const isVendorBlock = String(sk).startsWith('vendor:');
+        const vendor = isVendorBlock ? vendorFromCartKey(sk) : null;
+        const appHref = isVendorBlock
+          ? (vendor ? whatsAppLinkFor(vendor, lines) : '#')
+          : portalSearchUrlFor(sk, '');
         const progressPct = t.count > 0 ? Math.round((t.doneCount / t.count) * 100) : 0;
         const visibleLines = hideDoneOn ? lines.filter((l) => !l.done_at) : lines;
         const lineRows = visibleLines.map((l) => {
@@ -2313,13 +2462,37 @@
         }).join('');
         const hiddenCount = hideDoneOn ? t.doneCount : 0;
         const hiddenLine = hiddenCount > 0 ? `<div class="plan-hidden-line">${hiddenCount} added item${hiddenCount === 1 ? '' : 's'} hidden</div>` : '';
+        // Vendor blocks render with a WhatsApp accent + Send button. The
+        // wa.me URL embeds today's order template; tap opens WhatsApp
+        // with the message pre-filled to the vendor's number.
+        const blockClasses = `portal-block ${portalAllDone ? 'portal-all-done' : ''} ${isVendorBlock ? 'vendor-block' : ''}`;
+        const blockHeadIcon = isVendorBlock
+          ? `<div class="vendor-icon" style="width:48px;height:48px;border-radius:11px;font-size:28px;">📲</div>`
+          : portalFavicon(sk, 64);
+        const blockTitle = isVendorBlock && vendor
+          ? `${escapeHtml(vendor.name.split('(')[0].trim())}${portalAllDone ? ' ✓' : ''}`
+          : `${escapeHtml(SOURCE_LABELS[sk] || sk)}${portalAllDone ? ' ✓' : ''}`;
+        const blockMeta = isVendorBlock && vendor
+          ? `<b>${t.doneCount} of ${t.count}</b> items · ${escapeHtml(vendor.whatsapp_phone || vendor.phone || '')}`
+          : `<b>${t.doneCount} of ${t.count}</b> added · ${money(t.doneTotal)} of ${money(t.total)}`;
+        const ctaButton = isVendorBlock
+          ? `<a class="whatsapp-send-btn" href="${escapeAttr(appHref)}" target="_blank" rel="noopener">
+               <span style="font-size:18px;">📲</span>
+               <span>Send via WhatsApp</span>
+               <span class="arrow">↗</span>
+             </a>`
+          : `<a class="open-app-btn handoff-${handoffStatusFor(sk)}" href="${escapeAttr(appHref)}" target="_blank" rel="noopener" title="${escapeAttr(HANDOFF_TITLE[handoffStatusFor(sk)])}" data-handoff="${handoffStatusFor(sk)}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-plan-portal="${escapeAttr(sk)}">
+               ${portalFavicon(sk, 32, 'portal-favicon')}
+               <span>Open ${escapeHtml(SOURCE_LABELS[sk] || sk)}${HANDOFF_GLYPH[handoffStatusFor(sk)] ? ' ' + HANDOFF_GLYPH[handoffStatusFor(sk)] : ''}</span>
+               <span class="arrow">↗</span>
+             </a>`;
         return `
-          <div class="portal-block ${portalAllDone ? 'portal-all-done' : ''}">
+          <div class="${blockClasses}">
             <div class="portal-block-head">
-              ${portalFavicon(sk, 64)}
+              ${blockHeadIcon}
               <div>
-                <div class="portal-block-title">${escapeHtml(SOURCE_LABELS[sk] || sk)}${portalAllDone ? ' ✓' : ''}</div>
-                <div class="portal-block-meta"><b>${t.doneCount} of ${t.count}</b> added · ${money(t.doneTotal)} of ${money(t.total)}</div>
+                <div class="portal-block-title">${blockTitle}</div>
+                <div class="portal-block-meta">${blockMeta}</div>
               </div>
               <div class="portal-block-total">${money(t.total)}</div>
             </div>
@@ -2327,12 +2500,8 @@
               <div class="portal-progress-fill" style="width:${progressPct}%"></div>
             </div>
             <div class="portal-cta-row">
-              <a class="open-app-btn handoff-${handoffStatusFor(sk)}" href="${escapeAttr(appHref)}" target="_blank" rel="noopener" title="${escapeAttr(HANDOFF_TITLE[handoffStatusFor(sk)])}" data-handoff="${handoffStatusFor(sk)}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-plan-portal="${escapeAttr(sk)}">
-                ${portalFavicon(sk, 32, 'portal-favicon')}
-                <span>Open ${escapeHtml(SOURCE_LABELS[sk] || sk)}${HANDOFF_GLYPH[handoffStatusFor(sk)] ? ' ' + HANDOFF_GLYPH[handoffStatusFor(sk)] : ''}</span>
-                <span class="arrow">↗</span>
-              </a>
-              <button class="portal-share-btn" type="button" data-share-portal="${escapeAttr(sk)}" title="Copy plan as text">📤</button>
+              ${ctaButton}
+              <button class="portal-share-btn" type="button" data-share-portal="${escapeAttr(sk)}" title="Copy as text">📤</button>
             </div>
             ${lineRows}
             ${hiddenLine}
@@ -2819,6 +2988,39 @@
         const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${mid}"]`)?.value || '1') || 1;
         if (isInCart(sk, mid)) { removeFromCart(sk, mid); toast(`Removed ${mat.name}`); }
         else addToCart(mat, src, qty);
+        return;
+      }
+      // Vendor-direct add — stores under cart key `vendor:<slug>` instead
+      // of a portal source key. baseline (local Odoo) price is used as the
+      // line price since vendors don't have a portal scout.
+      const addVendorBtn = t.closest('[data-add-vendor]');
+      if (addVendorBtn) {
+        const mid = addVendorBtn.dataset.addVendor;
+        const slug = addVendorBtn.dataset.vendorSlug;
+        const mat = state.materials.find((m) => materialId(m) === mid);
+        const vendor = mat && (mat.vendor_links || []).find((v) => v.slug === slug);
+        if (!mat || !vendor) return;
+        const vKey = `vendor:${slug}`;
+        const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${mid}"]`)?.value || '1') || 1;
+        if (isInCart(vKey, mid)) {
+          removeFromCart(vKey, mid);
+          toast(`Removed ${mat.name}`);
+        } else {
+          // Synthesise a "source" object for addToCart with vendor metadata
+          const baseline = baselineFor(mat);
+          const pricePaise = baseline?.paise || 0;
+          const vSource = {
+            source_key: vKey,
+            unit_price_paise: pricePaise,
+            price_paise: pricePaise,
+            sku_title: `Vendor direct: ${vendor.name}`,
+            sku_url: '',
+            image_url: mat.image_url || '',
+          };
+          // Temporarily override SOURCE_LABELS for toast clarity
+          if (!SOURCE_LABELS[vKey]) SOURCE_LABELS[vKey] = vendor.name.split('(')[0].trim();
+          addToCart(mat, vSource, qty);
+        }
         return;
       }
       const refBtn = t.closest('[data-row-refresh]');
