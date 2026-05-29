@@ -862,6 +862,102 @@
       font-variant-numeric: tabular-nums;
       text-align: right;
     }
+    .plan-line-right {
+      display: grid; gap: 8px; align-items: center; justify-items: end;
+    }
+    /* iOS Reminders-style checkbox circle */
+    .plan-line-check {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: transparent;
+      box-shadow: inset 0 0 0 2px var(--text-mute);
+      color: transparent;
+      font: 800 16px/1 -apple-system, sans-serif;
+      display: grid; place-items: center;
+      cursor: pointer;
+      transition: all .2s var(--ease);
+    }
+    .plan-line-check:active { transform: scale(0.88); }
+    .plan-line-check.is-checked {
+      background: var(--pc-green);
+      box-shadow: inset 0 0 0 2px var(--pc-green), 0 4px 12px rgba(52,211,153,0.28);
+      color: #0a0a10;
+    }
+    .plan-line-wrap.is-done .plan-line-name {
+      text-decoration: line-through;
+      color: var(--text-mute);
+    }
+    .plan-line-wrap.is-done .plan-line-sku,
+    .plan-line-wrap.is-done .plan-line-price,
+    .plan-line-wrap.is-done .mat-thumb {
+      opacity: 0.45;
+    }
+    /* Portal progress bar */
+    .portal-progress {
+      height: 3px;
+      background: var(--bg-elev-3);
+      margin: 0 14px;
+    }
+    .portal-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--pc-green) 0%, var(--hn-gold) 100%);
+      transition: width .35s var(--ease);
+    }
+    .portal-block.portal-all-done {
+      box-shadow: inset 0 0 0 1px rgba(52,211,153,0.32);
+    }
+    .portal-block.portal-all-done .portal-block-title { color: var(--pc-green); }
+    .portal-block.portal-all-done .portal-progress-fill { background: var(--pc-green); }
+    .plan-hidden-line {
+      padding: 8px 14px;
+      font: 600 11.5px/1 -apple-system, sans-serif;
+      color: var(--text-mute);
+      text-align: center;
+      font-style: italic;
+      border-top: 0.5px dashed var(--line);
+    }
+    /* Hide-done toggle bar */
+    .plan-toggle-bar {
+      padding: 0 16px 8px;
+    }
+    .plan-toggle {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 14px; min-height: 36px;
+      background: var(--bg-elev-1);
+      color: var(--text-dim);
+      border-radius: 999px;
+      font: 700 12px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      transition: all .15s var(--ease);
+    }
+    .plan-toggle .plan-toggle-glyph {
+      font-size: 14px; line-height: 1;
+    }
+    .plan-toggle.on {
+      background: var(--hn-gold-soft);
+      color: var(--hn-gold);
+      box-shadow: inset 0 0 0 0.5px var(--hn-gold-border);
+    }
+    /* "All done" celebration banner */
+    .all-done-banner {
+      display: inline-block;
+      padding: 5px 12px;
+      background: rgba(52,211,153,0.16);
+      color: var(--pc-green);
+      border-radius: 999px;
+      font: 800 12.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    /* Grand card layout extension (2-col now: label+progress | value) */
+    .grand-progress-line {
+      margin-top: 4px;
+      font: 600 11.5px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+    }
+    .grand-progress-line b { color: var(--text); font-weight: 800; }
     /* Swipe-reveal Remove */
     .plan-line-reveal {
       position: absolute; top: 0; right: 0; bottom: 0;
@@ -1656,6 +1752,7 @@
       category: localStorage.getItem('purchaseConsoleCategory') || 'ALL',
       brand: localStorage.getItem('purchaseConsoleBrand') || 'BOTH',
       tier: localStorage.getItem('purchaseConsoleTier') || 'all',
+      hideDone: localStorage.getItem('purchaseConsoleHideDone') === '1',
       refreshing: new Set(),
       cart: JSON.parse(localStorage.getItem('purchaseConsoleCart') || '{}'),
       activeTab: 'shop',
@@ -1830,14 +1927,29 @@
       if (line) { line.qty = Math.max(0.01, Number(qty) || 1); persistCart(); updatePlanBadge(); }
     }
     function cartTotals() {
-      const byPortal = {}; let grand = 0; let totalCount = 0;
+      const byPortal = {}; let grand = 0; let grandDone = 0;
+      let totalCount = 0; let doneCount = 0;
       for (const [sk, lines] of Object.entries(state.cart)) {
-        let pt = 0;
-        for (const l of lines) pt += (l.price_paise / 100) * (l.qty || 1);
-        byPortal[sk] = { count: lines.length, total: pt };
-        grand += pt; totalCount += lines.length;
+        let pt = 0; let ptDone = 0; let doneN = 0;
+        for (const l of lines) {
+          const lineTotal = (l.price_paise / 100) * (l.qty || 1);
+          pt += lineTotal;
+          if (l.done_at) { ptDone += lineTotal; doneN += 1; }
+        }
+        byPortal[sk] = { count: lines.length, total: pt, doneCount: doneN, doneTotal: ptDone };
+        grand += pt; grandDone += ptDone;
+        totalCount += lines.length; doneCount += doneN;
       }
-      return { byPortal, grand, totalCount };
+      return { byPortal, grand, grandDone, totalCount, doneCount };
+    }
+    function toggleLineDone(sk, mid) {
+      const line = (state.cart[sk] || []).find((l) => l.material_id === mid);
+      if (!line) return;
+      line.done_at = line.done_at ? null : new Date().toISOString();
+      persistCart();
+      updatePlanBadge();
+      renderPlan();
+      renderList();
     }
     function updatePlanBadge() {
       const { totalCount } = cartTotals();
@@ -2054,32 +2166,55 @@
     // Plan tab
     // ============================================================
     function renderPlan() {
-      const { byPortal, grand, totalCount } = cartTotals();
+      const { byPortal, grand, grandDone, totalCount, doneCount } = cartTotals();
       if (totalCount === 0) {
         els.planSubtitle.textContent = 'Your plan is empty.';
-        els.planBody.innerHTML = `<div class="empty-state"><div class="big">🧾</div><div class="title">No items yet</div><div class="body">Tap any deal in Shop to start a per-portal shopping plan.</div></div>`;
+        els.planBody.innerHTML = `<div class="empty-state"><div class="big">🧾</div><div class="title">No items yet</div><div class="body">Tap any deal in Shop to start a per-portal procurement plan.</div></div>`;
         return;
       }
       const portals = Object.keys(byPortal).length;
-      els.planSubtitle.textContent = `${totalCount} item${totalCount === 1 ? '' : 's'} across ${portals} portal${portals === 1 ? '' : 's'}`;
+      const allDone = doneCount === totalCount;
+      els.planSubtitle.innerHTML = allDone
+        ? `<span class="all-done-banner">✓ All ${totalCount} items added · ${money(grandDone)}</span>`
+        : `<b>${doneCount} of ${totalCount}</b> added · ${money(grandDone)} of ${money(grand)} · ${portals} portal${portals === 1 ? '' : 's'}`;
 
       const honesty = `
         <div class="plan-honesty">
-          ⓘ The portals don't expose a public "add to cart" API. <b>Your plan</b> is the source of truth — open each portal app, tap <b>Product ↗</b> per line to land on the product, then add it there.
+          ⓘ For each portal: tap <b>Open</b>, find each material in the portal app, add to that portal's cart, then come back and ✓ check each one off as you go.
         </div>`;
 
-      const keys = Object.keys(byPortal).sort((a, b) => byPortal[b].total - byPortal[a].total);
+      // Hide-done toggle bar
+      const hideDoneOn = state.hideDone;
+      const toggleBar = doneCount > 0 ? `
+        <div class="plan-toggle-bar">
+          <button class="plan-toggle ${hideDoneOn ? 'on' : ''}" type="button" id="hideDoneToggle">
+            <span class="plan-toggle-glyph">${hideDoneOn ? '☑' : '☐'}</span>
+            <span>Hide ${doneCount} added</span>
+          </button>
+        </div>` : '';
+
+      const keys = Object.keys(byPortal).sort((a, b) => {
+        // Pending portals first (most-pending bubble up); within same status, by total desc
+        const aDone = byPortal[a].doneCount === byPortal[a].count ? 1 : 0;
+        const bDone = byPortal[b].doneCount === byPortal[b].count ? 1 : 0;
+        if (aDone !== bDone) return aDone - bDone;
+        return byPortal[b].total - byPortal[a].total;
+      });
       const blocks = keys.map((sk) => {
         const lines = state.cart[sk] || [];
         const t = byPortal[sk];
+        const portalAllDone = t.doneCount === t.count;
         const appHref = portalSearchUrlFor(sk, '');
-        const lineRows = lines.map((l) => {
+        const progressPct = t.count > 0 ? Math.round((t.doneCount / t.count) * 100) : 0;
+        const visibleLines = hideDoneOn ? lines.filter((l) => !l.done_at) : lines;
+        const lineRows = visibleLines.map((l) => {
           const emoji = materialEmoji({ name: l.name });
           const thumb = l.image_url
             ? `<div class="mat-thumb"><img src="${escapeAttr(l.image_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'emoji',textContent:'${emoji}'}))"></div>`
             : `<div class="mat-thumb"><span class="emoji">${emoji}</span></div>`;
+          const isDone = !!l.done_at;
           return `
-          <div class="plan-line-wrap" data-line-wrap="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">
+          <div class="plan-line-wrap ${isDone ? 'is-done' : ''}" data-line-wrap="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">
             <div class="plan-line">
               ${thumb}
               <div class="plan-line-info">
@@ -2095,35 +2230,59 @@
                   ${l.sku_url ? `<a class="open-product-mini" href="${escapeAttr(cleanUrl(l.sku_url))}" target="_blank" rel="noopener">Product ↗</a>` : ''}
                 </div>
               </div>
-              <div class="plan-line-price">${moneyPaise(l.price_paise * (l.qty || 1))}</div>
+              <div class="plan-line-right">
+                <div class="plan-line-price">${moneyPaise(l.price_paise * (l.qty || 1))}</div>
+                <button class="plan-line-check ${isDone ? 'is-checked' : ''}" type="button" data-line-done="${escapeAttr(sk)}|${escapeAttr(l.material_id)}" title="${isDone ? 'Mark not added' : 'Mark as added in app'}" aria-label="${isDone ? 'Mark not added' : 'Mark as added in app'}">${isDone ? '✓' : ''}</button>
+              </div>
             </div>
             <div class="plan-line-reveal" data-cart-remove="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">Remove</div>
           </div>`;
         }).join('');
+        const hiddenCount = hideDoneOn ? t.doneCount : 0;
+        const hiddenLine = hiddenCount > 0 ? `<div class="plan-hidden-line">${hiddenCount} added item${hiddenCount === 1 ? '' : 's'} hidden</div>` : '';
         return `
-          <div class="portal-block">
+          <div class="portal-block ${portalAllDone ? 'portal-all-done' : ''}">
             <div class="portal-block-head">
               ${portalFavicon(sk, 64)}
               <div>
-                <div class="portal-block-title">${escapeHtml(SOURCE_LABELS[sk] || sk)}</div>
-                <div class="portal-block-meta">${t.count} item${t.count === 1 ? '' : 's'} · swipe left to remove</div>
+                <div class="portal-block-title">${escapeHtml(SOURCE_LABELS[sk] || sk)}${portalAllDone ? ' ✓' : ''}</div>
+                <div class="portal-block-meta"><b>${t.doneCount} of ${t.count}</b> added · ${money(t.doneTotal)} of ${money(t.total)}</div>
               </div>
               <div class="portal-block-total">${money(t.total)}</div>
             </div>
+            <div class="portal-progress">
+              <div class="portal-progress-fill" style="width:${progressPct}%"></div>
+            </div>
             <div class="portal-cta-row">
-              <a class="open-app-btn" href="${escapeAttr(appHref)}" target="_blank" rel="noopener">
+              <a class="open-app-btn handoff-${handoffStatusFor(sk)}" href="${escapeAttr(appHref)}" target="_blank" rel="noopener" title="${escapeAttr(HANDOFF_TITLE[handoffStatusFor(sk)])}" data-handoff="${handoffStatusFor(sk)}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="">
                 ${portalFavicon(sk, 32, 'portal-favicon')}
-                <span>Open ${escapeHtml(SOURCE_LABELS[sk] || sk)}</span>
+                <span>Open ${escapeHtml(SOURCE_LABELS[sk] || sk)}${HANDOFF_GLYPH[handoffStatusFor(sk)] ? ' ' + HANDOFF_GLYPH[handoffStatusFor(sk)] : ''}</span>
                 <span class="arrow">↗</span>
               </a>
-              <button class="portal-share-btn" type="button" data-share-portal="${escapeAttr(sk)}">📤</button>
+              <button class="portal-share-btn" type="button" data-share-portal="${escapeAttr(sk)}" title="Copy plan as text">📤</button>
             </div>
             ${lineRows}
+            ${hiddenLine}
           </div>`;
       }).join('');
-      const grandHtml = `<div class="grand-card"><span class="grand-label">Grand total</span><span class="grand-value">${money(grand)}</span></div>`;
-      els.planBody.innerHTML = honesty + blocks + grandHtml;
+      const grandHtml = `
+        <div class="grand-card">
+          <div>
+            <div class="grand-label">Grand total</div>
+            <div class="grand-progress-line"><b>${doneCount} of ${totalCount}</b> items · ${money(grandDone)} of ${money(grand)} done</div>
+          </div>
+          <span class="grand-value">${money(grand)}</span>
+        </div>`;
+      els.planBody.innerHTML = honesty + toggleBar + blocks + grandHtml;
       attachSwipeHandlers();
+
+      // Wire hide-done toggle
+      const tBtn = document.getElementById('hideDoneToggle');
+      if (tBtn) tBtn.addEventListener('click', () => {
+        state.hideDone = !state.hideDone;
+        localStorage.setItem('purchaseConsoleHideDone', state.hideDone ? '1' : '');
+        renderPlan();
+      });
     }
 
     // ============================================================
@@ -2586,6 +2745,15 @@
       if (cRm) { const [sk, mid] = cRm.dataset.cartRemove.split('|'); removeFromCart(sk, mid); return; }
       const shareBtn = t.closest('[data-share-portal]');
       if (shareBtn) { sharePortalPlan(shareBtn.dataset.sharePortal); return; }
+      const doneBtn = t.closest('[data-line-done]');
+      if (doneBtn) {
+        const [sk, mid] = doneBtn.dataset.lineDone.split('|');
+        toggleLineDone(sk, mid);
+        // Brief haptic-feel toast confirms the action
+        const line = (state.cart[sk] || []).find((l) => l.material_id === mid);
+        if (line) toast(line.done_at ? `✓ Added: ${line.name}` : `Pending: ${line.name}`, 1400);
+        return;
+      }
     });
     document.addEventListener('change', (event) => {
       const inp = event.target.closest('[data-mat-qty-input]');
