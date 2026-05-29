@@ -55,7 +55,7 @@ async function runDailyScout(env) {
   const sources = (env.DEFAULT_SOURCES || '').split(',').map((s) => s.trim()).filter(Boolean);
   const concurrency = Math.max(1, Math.min(4, Number(env.DEFAULT_CONCURRENCY || 2)));
   const cap = Number(env.MAX_MATERIALS || 300);
-  // Mirror the BuyList UI's 1095d window so the morning scout covers the
+  // Mirror the Sauda UI's 1095d window so the morning scout covers the
   // same materials universe the owner browses.
   const matsDays = Math.max(30, Math.min(1095, Number(env.MATERIALS_DAYS || 1095)));
 
