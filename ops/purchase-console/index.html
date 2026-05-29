@@ -6,8 +6,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="BuyList">
-  <title>BuyList · HN Hotels</title>
+  <meta name="apple-mobile-web-app-title" content="Sauda">
+  <title>Sauda · HN Hotels</title>
   <meta name="theme-color" content="#0a0a10">
   <link rel="manifest" href="/ops/purchase-console/manifest.json">
   <link rel="apple-touch-icon" sizes="180x180" href="/ops/purchase-console/icon-180.png">
@@ -1406,7 +1406,7 @@
   <section id="pinGate" class="pin-gate">
     <div class="pin-card">
       <div class="pin-mark">H</div>
-      <h1>BuyList</h1>
+      <h1>Sauda</h1>
       <div class="heritage">HN Hotels · since 1918</div>
       <div class="helper">Enter your 4-digit PIN to continue</div>
       <input id="pinInput" class="pin-input" type="tel" maxlength="4" inputmode="numeric" autocomplete="one-time-code" placeholder="••••">
@@ -1426,11 +1426,11 @@
       <div class="ptr" id="ptrShop"><div class="ptr-spinner"></div></div>
       <div class="top-nav" id="navShop">
         <button class="nav-action left" id="navRefreshBtn" type="button" title="Refresh data">↻</button>
-        <div class="nav-title">BuyList</div>
+        <div class="nav-title">Sauda</div>
         <button class="nav-action right" id="navAddBtn" type="button" title="Add material">+ Add</button>
       </div>
       <div class="large-title-wrap">
-        <h1 class="large-title">BuyList <span class="accent">since 1918</span></h1>
+        <h1 class="large-title">Sauda <span class="accent">since 1918</span></h1>
         <div class="large-subtitle" id="shopSubtitle">Loading materials…</div>
       </div>
       <div class="search-section">
@@ -1555,7 +1555,7 @@
           <div class="row-icon" style="background:rgba(252,165,165,0.18); color:var(--pc-red);">🔄</div>
           <div>
             <div class="row-label">Hard reload (clear cache)</div>
-            <div class="row-sub">Force download latest BuyList code. Use after a deploy when soft refresh doesn't pick up changes.</div>
+            <div class="row-sub">Force download latest Sauda code. Use after a deploy when soft refresh doesn't pick up changes.</div>
           </div>
           <div class="row-chev">›</div>
         </button>
@@ -1563,14 +1563,14 @@
           <div class="row-icon" style="background:rgba(167,139,250,0.18); color:var(--pc-purple);">📲</div>
           <div>
             <div class="row-label">Install on home screen</div>
-            <div class="row-sub">Add BuyList icon to your iPhone home screen</div>
+            <div class="row-sub">Add Sauda icon to your iPhone home screen</div>
           </div>
           <div class="row-chev">›</div>
         </button>
       </div>
 
       <div class="you-footer">
-        BuyList · HN Hotels Pvt Ltd<br>
+        Sauda · HN Hotels Pvt Ltd<br>
         <span class="accent">Hamza family in Bangalore food trade since 1918</span><br>
         v2.0 · 7 portals wired
       </div>
@@ -1624,7 +1624,7 @@
             <option value="NCH">Nawabi Chai House only</option>
           </select>
         </label>
-        <button type="submit" class="submit">Add to BuyList</button>
+        <button type="submit" class="submit">Add to Sauda</button>
       </form>
     </div>
   </div>
@@ -1703,7 +1703,7 @@
       const outlet = vendor?.outlet_label || 'Hamza Express';
       const itemsList = lines.map((l) => `- ${l.name} × ${l.qty}${l.uom || ''}`).join('\n');
       const template = vendor?.message_template ||
-        'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via BuyList';
+        'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via Sauda';
       return template
         .replace(/\{date\}/g, date)
         .replace(/\{outlet\}/g, outlet)
@@ -2817,7 +2817,7 @@
       const lines = state.cart[sk] || [];
       if (!lines.length) return;
       const total = lines.reduce((a, l) => a + (l.price_paise / 100) * (l.qty || 1), 0);
-      const title = `🛒 ${SOURCE_LABELS[sk] || sk} — HN Hotels BuyList`;
+      const title = `🛒 ${SOURCE_LABELS[sk] || sk} — HN Hotels Sauda`;
       const body = lines.map((l, i) => `${i + 1}. ${l.name} × ${l.qty}${l.uom} — ${moneyPaise(l.price_paise * (l.qty || 1))}`).join('\n');
       const text = `${title}\n\n${body}\n\nTotal: ${money(total)}`;
       if (navigator.share) { try { await navigator.share({ title, text }); return; } catch (_) {} }
@@ -2914,7 +2914,7 @@
 
     // Hard reload — unregister service workers + clear caches + reload
     // with a cache-busting query param. For when the PWA holds onto a
-    // stale HTML/JS snapshot after I ship a new BuyList version.
+    // stale HTML/JS snapshot after I ship a new Sauda version.
     els.hardReloadRow.addEventListener('click', async () => {
       if (!confirm('Hard reload?\\n\\nThis clears the cached app version and downloads the latest from server. Your Plan + PIN survive (they live in localStorage, not cache).')) return;
       toast('Clearing cache + reloading…', 2000);
@@ -2976,7 +2976,7 @@
     });
 
     els.youSignOutBtn.addEventListener('click', () => {
-      if (!confirm('Sign out of BuyList?')) return;
+      if (!confirm('Sign out of Sauda?')) return;
       localStorage.removeItem('purchaseConsolePin');
       location.reload();
     });

@@ -1257,7 +1257,7 @@ async function ensurePurchaseRunSchema(DB) {
   // ─── Vendor-direct workflow (added 2026-05-29) ───
   // Materials with established vendor relationships (chicken → MN
   // Broilers, buns → Ganga Bakery, buffalo milk → local dairy) bypass
-  // the portal-scout flow. Instead, BuyList Plan tab groups these as
+  // the portal-scout flow. Instead, Sauda Plan tab groups these as
   // a "VENDOR DIRECT" tier with a "📲 Send via WhatsApp" button that
   // generates a templated message and opens wa.me/<phone>?text=<encoded>.
   await DB.prepare(`
@@ -1490,7 +1490,7 @@ async function handleGet(request, url, env) {
     const days = Math.max(1, Math.min(1095, parseInt(url.searchParams.get('days') || '90', 10)));
     const creds = getOdooCredentials({ odoo: 'system' }, env);
     const data = await loadMaterialUniverse(creds, brand, days);
-    // Layer in user-defined custom materials so the BuyList can show items the
+    // Layer in user-defined custom materials so the Sauda can show items the
     // owner hasn't purchased via Odoo yet (e.g. tonight's chicken-cut tracker).
     try {
       await ensurePurchaseRunSchema(env.DB);
@@ -3182,7 +3182,7 @@ async function upsertDailySnapshot(DB, row) {
 }
 
 // ============================================================
-// BuyList intelligence layer (added 2026-05-29)
+// Sauda intelligence layer (added 2026-05-29)
 // ============================================================
 // Two systematic accuracy fixes applied at API-read time so historical
 // daily_price_snapshots rows auto-correct without re-scouting:

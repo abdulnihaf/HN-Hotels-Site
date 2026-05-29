@@ -1,7 +1,7 @@
 {
-  "name": "BuyList · HN Hotels",
-  "short_name": "BuyList",
-  "description": "Cross-portal raw material price intelligence for HN Hotels — find the cheapest source across Hyperpure, BigBasket, Blinkit, Zepto, Flipkart Minutes, Amazon Now and JioMart.",
+  "name": "Sauda · HN Hotels",
+  "short_name": "Sauda",
+  "description": "Sauda — every deal struck to source what HN Hotels needs. The cheapest verified source across every portal, ready before dawn.",
   "start_url": "/ops/purchase-console/",
   "scope": "/ops/purchase-console/",
   "display": "standalone",

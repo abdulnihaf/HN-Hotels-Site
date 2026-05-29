@@ -7,7 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 # overnight (Chrome extension on hn-winpc) so they're live before this fires.
 # The full scout pass runs at 06:30 IST and the result (entire materials
 # universe × every wired portal) lands in daily_price_snapshots by ~07:00 IST,
-# ready for the morning BuyList run on iPhone.
+# ready for the morning Sauda run on iPhone.
 #
 # Single fire only — the */5 test trigger from PR #242 was reverted after
 # overlapping fires crushed the VPS (5-min interval < 9-min loop length
@@ -38,6 +38,6 @@ DEFAULT_CONCURRENCY = "2"
 STAGGER_MS = "0"
 # Cap to the full 365d-purchased universe + headroom for custom materials.
 MAX_MATERIALS = "300"
-# Window for the materials query. 1095 days = 3 years — mirrors the BuyList
+# Window for the materials query. 1095 days = 3 years — mirrors the Sauda
 # UI so the morning scout covers the same universe the owner browses.
 MATERIALS_DAYS = "1095"
