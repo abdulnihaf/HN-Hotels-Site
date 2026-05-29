@@ -190,12 +190,19 @@ async function captureCurrent(message) {
   if (!/^\d{4}$/.test(pin)) throw new Error('Enter the purchase console PIN');
 
   const tab = await getActiveTab();
-  const detected = detectSource(tab.url);
-  const sourceKey = message.sourceKey || detected;
+  const sourceKey = message.sourceKey || detectSource(tab.url);
   const portal = PORTALS[sourceKey];
-  if (!portal) throw new Error('Open one of the wired purchase portals before capturing');
-  if (!detected) throw new Error('Current tab is not a wired purchase portal');
-  if (detected !== sourceKey) throw new Error(`Current tab is ${PORTALS[detected].label}, not ${portal.label}`);
+  if (!portal) throw new Error('Choose a wired purchase portal');
+  // Loose domain check — multiple portals can share a domain (Amazon
+  // Now / Fresh / Business all live on amazon.in; the differentiation
+  // is which account is signed in, not the URL). Trust the dropdown
+  // selection as long as the active tab is on one of the portal's
+  // claimed domains.
+  const tabHost = new URL(tab.url).hostname.replace(/^www\./, '').toLowerCase();
+  const matchesPortalDomain = portal.domains.some((d) => tabHost === d || tabHost.endsWith(`.${d}`));
+  if (!matchesPortalDomain) {
+    throw new Error(`Active tab (${tabHost}) isn't on a ${portal.label} domain (${portal.domains.join(', ')})`);
+  }
 
   const pageState = await readPageState(tab.id);
   const cookies = await readCookies(tab.url, portal.domains);
