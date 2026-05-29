@@ -445,6 +445,8 @@
     .whatsapp-send-btn:active { transform: scale(0.97); }
     .plan-tier-section.tier-vendor .plan-tier-title { color: #25d366; }
     .plan-tier-section.tier-vendor .plan-tier-title::before { content: '📲 '; opacity: 0.9; }
+    .plan-tier-section.tier-manual .plan-tier-title { color: var(--text-dim); }
+    .plan-tier-section.tier-manual .plan-tier-title::before { content: '🔍 '; opacity: 0.9; }
 
     .mat-tools {
       display: grid; grid-auto-flow: column; gap: 6px; align-items: center;
@@ -1651,21 +1653,24 @@
       AMAZON_FRESH: 'retail', DMART: 'retail',
       HYPERPURE: 'b2b', AMAZON_BUSINESS: 'b2b', METRO: 'b2b',
     };
-    const TIER_ORDER = ['vendor', 'qcomm', 'retail', 'b2b'];
+    const TIER_ORDER = ['vendor', 'manual', 'qcomm', 'retail', 'b2b'];
     const TIER_LABELS = {
       vendor: 'VENDOR DIRECT',
+      manual: 'NO SCOUT YET',
       qcomm: 'Q-COMMERCE',
       retail: 'RETAIL',
       b2b: 'B2B BULK ★ GST',
     };
     const TIER_SUBTITLES = {
       vendor: 'Direct vendor WhatsApp · established relationship',
+      manual: 'No portal quote yet · search in any portal app',
       qcomm: 'Fast delivery · small packs',
       retail: 'Scheduled · consumer packs',
       b2b: 'Bulk packs · GST input credit',
     };
     function tierFor(sk) {
       if (String(sk).startsWith('vendor:')) return 'vendor';
+      if (sk === 'manual') return 'manual';
       return PORTAL_TIER[sk] || 'retail';
     }
     // Vendor-direct support — materials with an established vendor
@@ -2233,15 +2238,26 @@
         const noBody = state.tier === 'all'
           ? 'Pull down to refresh, or tap 🔄 to scout this item.'
           : `No ${tierTxt} price scouted yet. Tap any chip below to open the portal app directly.`;
+        // CRITICAL UX FIX 2026-05-29: even without a portal quote, the
+        // owner can still ADD TO PLAN — Lemon-not-on-quick-commerce
+        // shouldn't strip his ability to put it in today's list. He'll
+        // search the portal app directly or use a vendor relationship.
+        // Cart slot for these items: source_key='manual' so they end up
+        // in a "Manual / no scout" Plan section instead of being lost.
+        const inManualCart = isInCart('manual', mid);
+        const manualActionLabel = inManualCart ? '✓ In Plan' : '+ Add to Plan';
         bestHtml = `
           <div class="best-deal no-best">
             <div class="best-row">
               <div class="portal-favicon letter">?</div>
               <div class="best-info">
                 <div class="best-portal-line" style="color:var(--text-dim);">No ${escapeHtml(tierTxt)} price yet</div>
-                <div class="best-sku">${escapeHtml(noBody)}</div>
+                <div class="best-sku">${escapeHtml(noBody)} Add to Plan and search in any portal app below.</div>
               </div>
               <div></div>
+            </div>
+            <div class="cta-row" style="grid-template-columns: 1fr;">
+              <button class="add-plan-btn ${inManualCart ? 'in-plan' : ''}" type="button" data-add-manual="${escapeAttr(mid)}" style="min-height:46px;font-size:14px;">${manualActionLabel}</button>
             </div>
           </div>`;
       }
@@ -2988,6 +3004,36 @@
         const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${mid}"]`)?.value || '1') || 1;
         if (isInCart(sk, mid)) { removeFromCart(sk, mid); toast(`Removed ${mat.name}`); }
         else addToCart(mat, src, qty);
+        return;
+      }
+      // Manual add — material has no scout quote yet, but owner still
+      // wants it in today's Plan. Stores under cart key 'manual' with
+      // local Odoo price as line estimate. Owner searches in any portal
+      // app to actually buy it.
+      const addManualBtn = t.closest('[data-add-manual]');
+      if (addManualBtn) {
+        const mid = addManualBtn.dataset.addManual;
+        const mat = state.materials.find((m) => materialId(m) === mid);
+        if (!mat) return;
+        const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${mid}"]`)?.value || '1') || 1;
+        const sk = 'manual';
+        if (isInCart(sk, mid)) {
+          removeFromCart(sk, mid);
+          toast(`Removed ${mat.name}`);
+        } else {
+          const baseline = baselineFor(mat);
+          const pricePaise = baseline?.paise || 0;
+          const manualSource = {
+            source_key: sk,
+            unit_price_paise: pricePaise,
+            price_paise: pricePaise,
+            sku_title: 'No scout quote yet — search in portal app',
+            sku_url: '',
+            image_url: mat.image_url || '',
+          };
+          if (!SOURCE_LABELS[sk]) SOURCE_LABELS[sk] = 'No scout yet';
+          addToCart(mat, manualSource, qty);
+        }
         return;
       }
       // Vendor-direct add — stores under cart key `vendor:<slug>` instead

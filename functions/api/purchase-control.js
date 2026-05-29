@@ -1954,34 +1954,20 @@ async function setMaterialUomInOdoo(body, user, env) {
   if (!productCodes.length || !uomName) {
     return json({ error: 'product_codes[] and uom_name required' }, 400);
   }
-  // Find or create the UOM
-  let uomRows = await odooCall(creds.uid, creds.key,
+  // Find UOM by name — Odoo 17 dropped category_id from uom.uom (moved
+  // to a different model). Just look up by name and require the owner
+  // to pre-create the UoM if missing.
+  const uomRows = await odooCall(creds.uid, creds.key,
     'uom.uom', 'search_read',
     [[['name', '=ilike', uomName]]],
-    { fields: ['id', 'name', 'category_id', 'factor'], limit: 1 }
+    { fields: ['id', 'name'], limit: 1 }
   );
-  let uomId;
-  if (uomRows.length) {
-    uomId = uomRows[0].id;
-  } else {
-    // Create UOM under "Unit" category (UoM category for count-based)
-    const cats = await odooCall(creds.uid, creds.key,
-      'uom.category', 'search_read',
-      [[['name', '=ilike', 'unit']]],
-      { fields: ['id'], limit: 1 }
-    );
-    if (!cats.length) return json({ error: 'Cannot find Unit UoM category to create new UoM under' }, 500);
-    uomId = await odooCall(creds.uid, creds.key,
-      'uom.uom', 'create',
-      [{
-        name: uomName.charAt(0).toUpperCase() + uomName.slice(1),
-        category_id: cats[0].id,
-        uom_type: 'reference',
-        factor: 1.0,
-      }],
-      {}
-    );
+  if (!uomRows.length) {
+    return json({
+      error: `UoM "${uomName}" not found in Odoo. Create it manually at odoo.hnhotels.in → Settings → Technical → Unit of Measures, then re-run. Or use an existing UoM name like "Units" or "Pack".`,
+    }, 400);
   }
+  const uomId = uomRows[0].id;
   // Look up product templates by default_code
   const products = await odooCall(creds.uid, creds.key,
     'product.template', 'search_read',
