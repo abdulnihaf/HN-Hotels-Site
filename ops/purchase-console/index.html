@@ -1309,86 +1309,120 @@
     /* ============================================================
        PIN gate (full-screen splash)
        ============================================================ */
+    /* ---- LOCKED PIN SHELL (mirrors Figma "Sauda — PIN Shell") ----
+       8 elements, top→bottom: icon tile · name (white serif) · tagline
+       (gold italic) · 4 dots · 3×4 keypad · auto-submit · footer · frame.
+       Per-chamber vars: --chamber-accent (Sauda = HN gold). */
     .pin-gate {
+      --chamber-accent: var(--hn-gold);
       position: fixed; inset: 0;
-      display: grid; place-items: center;
-      padding: 24px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center;
+      padding: calc(28px + var(--safe-top)) 24px calc(20px + var(--safe-bot));
+      /* base #020205, centre vignette to #0e0e16 */
       background:
-        radial-gradient(ellipse at top, rgba(212,162,76,0.10) 0%, transparent 50%),
-        var(--bg);
+        radial-gradient(ellipse 80% 60% at 50% 38%, #0e0e16 0%, #020205 78%);
       z-index: 100;
     }
+    /* hairline gold inset frame */
+    .pin-gate::before {
+      content: ''; position: absolute;
+      inset: calc(8px + var(--safe-top)) 8px calc(8px + var(--safe-bot));
+      border: 1px solid rgba(212,162,76,0.18);
+      border-radius: 22px; pointer-events: none;
+    }
     .pin-card {
-      width: min(360px, 100%);
-      text-align: center;
+      width: min(340px, 100%);
+      display: flex; flex-direction: column; align-items: center;
       animation: fadeUp .6s var(--spring);
+      margin-top: auto;
     }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    /* 1. icon tile — 72×72, r16, dark fill, accent border @50%, gold serif glyph */
     .pin-mark {
-      width: 88px; height: 88px;
-      margin: 0 auto 18px;
-      border-radius: 22px;
-      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
-      color: #1a1206;
+      width: 72px; height: 72px;
+      border-radius: 16px;
+      background: #1c1c26;
+      border: 1px solid rgba(212,162,76,0.5);
       display: grid; place-items: center;
       font-family: 'Cormorant Garamond', serif;
-      font-weight: 700; font-size: 52px;
-      letter-spacing: -2px;
-      box-shadow: 0 16px 40px rgba(212,162,76,0.32),
-                  inset 0 1px 0 rgba(255,255,255,0.25),
-                  inset 0 -1px 0 rgba(0,0,0,0.1);
+      font-weight: 700; font-size: 38px;
+      color: var(--chamber-accent);
+      line-height: 1;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
     }
+    /* 2. chamber name — Cormorant Bold 56, WHITE */
     .pin-card h1 {
-      margin: 0;
-      font: 800 28px/1 -apple-system, sans-serif;
-      letter-spacing: -0.03em;
-    }
-    .pin-card .heritage {
-      margin-top: 6px;
+      margin: 26px 0 0;
       font-family: 'Cormorant Garamond', serif;
-      font-size: 14px; font-style: italic;
+      font-weight: 700; font-size: 56px; line-height: 1;
+      color: #f8f8fa;
+      letter-spacing: 0.01em;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+    /* 3. tagline — Cormorant Italic 15, gold, one line */
+    .pin-card .tagline {
+      margin-top: 8px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 15px; font-style: italic; font-weight: 500;
       color: var(--hn-gold);
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
     }
-    .pin-card .helper {
-      margin: 22px 0 14px;
-      font: 500 13.5px/1.4 -apple-system, sans-serif;
-      color: var(--text-dim); letter-spacing: -0.01em;
+    /* 4. PIN dots — 4 × 12px, gold outline @60%, fill accent on entry */
+    .pin-dots {
+      display: flex; gap: 18px;
+      margin-top: 30px;
     }
-    .pin-input {
-      width: 100%; height: 56px;
-      background: var(--bg-elev-1);
-      border: 0.5px solid var(--line);
-      color: var(--text);
-      border-radius: 14px;
-      text-align: center;
-      font: 800 26px/1 -apple-system, sans-serif;
-      letter-spacing: 14px;
-      -webkit-text-security: disc;
+    .pin-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      border: 1.5px solid rgba(212,162,76,0.6);
+      background: transparent;
+      transition: background .15s var(--ease), transform .15s var(--spring);
     }
-    .pin-input:focus {
-      outline: none;
-      border-color: var(--hn-gold-border);
-      box-shadow: 0 0 0 4px var(--hn-gold-soft);
+    .pin-dot.filled {
+      background: var(--chamber-accent);
+      border-color: var(--chamber-accent);
+      transform: scale(1.05);
     }
-    .pin-unlock {
-      width: 100%; height: 54px;
-      margin-top: 14px;
-      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
-      color: #1a1206;
-      border-radius: 14px;
-      font: 800 15px/1 -apple-system, sans-serif;
-      letter-spacing: -0.01em;
-      box-shadow: 0 8px 24px rgba(212,162,76,0.28), inset 0 1px 0 rgba(255,255,255,0.25);
-      transition: transform .1s var(--ease), filter .1s ease;
+    .pin-gate.error .pin-dot {
+      border-color: var(--pc-red);
+      animation: pinShake .4s var(--ease);
     }
-    .pin-unlock:active { transform: scale(0.97); filter: brightness(0.92); }
-    .pin-unlock:disabled { opacity: 0.55; transform: none; }
-    .pin-error {
-      margin-top: 14px;
-      color: var(--pc-red);
-      font: 700 12px/1 -apple-system, sans-serif;
-      letter-spacing: -0.01em;
+    @keyframes pinShake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-7px); }
+      40%,80% { transform: translateX(7px); }
+    }
+    /* 5. numeric keypad — 3×4, 68px circles, fill #1c1c26, white digits 28 Inter */
+    .pin-keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 68px);
+      gap: 22px;
+      margin-top: 34px;
+    }
+    .pin-key {
+      width: 68px; height: 68px; border-radius: 50%;
+      background: #1c1c26;
+      color: #f8f8fa;
+      font: 400 28px/1 'Inter', -apple-system, sans-serif;
+      display: grid; place-items: center;
+      transition: background .12s ease, transform .1s var(--ease);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pin-key:active { background: #2a2a36; transform: scale(0.94); }
+    .pin-key.empty { background: transparent; pointer-events: none; }
+    .pin-key.back {
+      background: transparent; color: var(--text-dim); font-size: 24px;
+    }
+    .pin-key.back:active { background: rgba(255,255,255,0.04); }
+    /* 7. footer — Cormorant Italic 11, gold @50%, bottom-safe */
+    .pin-footer {
+      margin-top: auto;
+      padding-top: 28px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 11px; font-style: italic;
+      color: rgba(212,162,76,0.5);
+      letter-spacing: 0.06em;
     }
 
     /* ============================================================
@@ -1509,14 +1543,35 @@
        ============================================================ -->
   <section id="pinGate" class="pin-gate">
     <div class="pin-card">
-      <div class="pin-mark">H</div>
+      <div class="pin-mark">s</div>
       <h1>Sauda</h1>
-      <div class="heritage">HN Hotels · since 1918</div>
-      <div class="helper">Enter your 4-digit PIN to continue</div>
-      <input id="pinInput" class="pin-input" type="tel" maxlength="4" inputmode="numeric" autocomplete="one-time-code" placeholder="••••">
-      <button id="unlockBtn" class="pin-unlock" type="button">Unlock</button>
-      <div id="pinError" class="pin-error hide">Invalid PIN.</div>
+      <div class="tagline">every deal struck to source the realm</div>
+      <div class="pin-dots" id="pinDots">
+        <div class="pin-dot"></div>
+        <div class="pin-dot"></div>
+        <div class="pin-dot"></div>
+        <div class="pin-dot"></div>
+      </div>
+      <div class="pin-keypad" id="pinKeypad">
+        <button class="pin-key" type="button" data-d="1">1</button>
+        <button class="pin-key" type="button" data-d="2">2</button>
+        <button class="pin-key" type="button" data-d="3">3</button>
+        <button class="pin-key" type="button" data-d="4">4</button>
+        <button class="pin-key" type="button" data-d="5">5</button>
+        <button class="pin-key" type="button" data-d="6">6</button>
+        <button class="pin-key" type="button" data-d="7">7</button>
+        <button class="pin-key" type="button" data-d="8">8</button>
+        <button class="pin-key" type="button" data-d="9">9</button>
+        <span class="pin-key empty"></span>
+        <button class="pin-key" type="button" data-d="0">0</button>
+        <button class="pin-key back" type="button" data-back="1" aria-label="Delete">⌫</button>
+      </div>
     </div>
+    <div class="pin-footer">HN Hotels · since 1918</div>
+    <!-- hidden input retained as the PIN value store for verifyPin() -->
+    <input id="pinInput" type="hidden" value="">
+    <button id="unlockBtn" type="button" hidden></button>
+    <div id="pinError" class="hide" hidden></div>
   </section>
 
   <!-- ============================================================
@@ -2168,6 +2223,8 @@
       pinInput: document.getElementById('pinInput'),
       pinError: document.getElementById('pinError'),
       unlockBtn: document.getElementById('unlockBtn'),
+      pinDots: document.getElementById('pinDots'),
+      pinKeypad: document.getElementById('pinKeypad'),
       app: document.getElementById('app'),
       tabShop: document.getElementById('tab-shop'),
       tabPlan: document.getElementById('tab-plan'),
@@ -3214,10 +3271,38 @@
     // ============================================================
     // Data load + auth
     // ============================================================
+    // ---- LOCKED PIN SHELL keypad: append/backspace, fill dots, auto-submit on 4th ----
+    let pinEntry = '';
+    let pinBusy = false;
+    function renderPinDots() {
+      const dots = els.pinDots ? els.pinDots.querySelectorAll('.pin-dot') : [];
+      dots.forEach((d, i) => d.classList.toggle('filled', i < pinEntry.length));
+    }
+    function pinPush(digit) {
+      if (pinBusy || pinEntry.length >= 4) return;
+      els.pinGate.classList.remove('error');
+      pinEntry += digit;
+      renderPinDots();
+      if (pinEntry.length === 4) {
+        els.pinInput.value = pinEntry;
+        verifyPin(); // auto-submit — no Enter button
+      }
+    }
+    function pinBack() {
+      if (pinBusy || !pinEntry.length) return;
+      els.pinGate.classList.remove('error');
+      pinEntry = pinEntry.slice(0, -1);
+      renderPinDots();
+    }
+    function pinReject() {
+      els.pinGate.classList.add('error');
+      setTimeout(() => { pinEntry = ''; renderPinDots(); els.pinGate.classList.remove('error'); }, 600);
+    }
+
     async function verifyPin() {
-      const pin = (els.pinInput.value || state.pin).trim();
-      if (!pin || pin.length !== 4) { els.pinError.classList.remove('hide'); return; }
-      els.unlockBtn.disabled = true;
+      const pin = (els.pinInput.value || pinEntry || state.pin).trim();
+      if (!pin || pin.length !== 4) { pinReject(); return; }
+      pinBusy = true;
       try {
         const d = await fetchJson(`/api/purchase-control?action=verify-pin&pin=${encodeURIComponent(pin)}`);
         state.pin = pin; state.user = d.user;
@@ -3234,9 +3319,8 @@
         await loadAll();
         updatePlanBadge();
       } catch (e) {
-        els.pinError.textContent = e.message || 'Invalid PIN.';
-        els.pinError.classList.remove('hide');
-      } finally { els.unlockBtn.disabled = false; }
+        pinReject();
+      } finally { pinBusy = false; }
     }
     function skeletonRows(n) {
       return Array.from({ length: n }, () => `<div class="skel-card"><div class="skel-line med"></div><div class="skel-line short"></div><div class="skel-line"></div></div>`).join('');
@@ -3335,8 +3419,18 @@
     // ============================================================
     // Wire-up
     // ============================================================
-    els.unlockBtn.addEventListener('click', verifyPin);
-    els.pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyPin(); });
+    // Locked PIN shell — keypad taps + hardware-keyboard fallback (desktop)
+    els.pinKeypad.addEventListener('click', (e) => {
+      const key = e.target.closest('.pin-key');
+      if (!key) return;
+      if (key.dataset.back) { pinBack(); return; }
+      if (key.dataset.d) pinPush(key.dataset.d);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (els.pinGate.classList.contains('hide')) return;
+      if (e.key >= '0' && e.key <= '9') { pinPush(e.key); }
+      else if (e.key === 'Backspace') { pinBack(); }
+    });
 
     els.brandToggle.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-brand]');
@@ -3754,7 +3848,7 @@
     });
 
     // Auto-unlock if PIN cached
-    if (state.pin) { els.pinInput.value = state.pin; verifyPin(); }
+    if (state.pin) { pinEntry = state.pin; els.pinInput.value = state.pin; renderPinDots(); verifyPin(); }
   </script>
 </body>
 </html>
