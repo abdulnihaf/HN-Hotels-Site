@@ -3405,6 +3405,15 @@ function detectFamily(unitLike) {
   if (/(kg|gm?|gram)/i.test(u)) return 'mass';
   if (/(litre|liter|ml|^l$|\bl\b)/i.test(u)) return 'vol';
   if (/(unit|pc|pcs?|piece|nos|count|bunch)/i.test(u)) return 'count';
+  // 'pack' family — the material's UOM IS the pack/container itself
+  // (box / packet / pouch / bundle / can / bottle / jar / tin / sachet /
+  // roll / strip). For these the natural comparison is ₹/pack, NOT a
+  // normalisation to kg/L. Treating them as a recognised family (rather
+  // than returning null) is what stops the silent-zero cascade: 40 of 221
+  // live materials carry these UOMs and were being hard-zeroed to
+  // UOM_MISMATCH no matter how good the portal quote was. We map 'pack' to
+  // behave like 'count' downstream (each pack = 1 countable unit).
+  if (/(box|packet|pkt|pouch|bundle|\bcan\b|bottle|jar|tin|sachet|roll|strip|carton|crate|bag|pack)/i.test(u)) return 'pack';
   return null;
 }
 
@@ -3412,13 +3421,35 @@ function detectFamily(unitLike) {
 // where qty is the pack's quantity expressed in the MATERIAL's UOM.
 // Returns null when conversion is impossible.
 function packQtyInMaterialUom(packSizeStr, materialUom, materialName) {
+  const matFamily = detectFamily(materialUom);
+  if (!matFamily) return null;
+
+  // 'pack' material (box/packet/pouch/...): the material's UOM IS the pack/
+  // container, so the quote is compared per-pack. We must count PACKS, not
+  // read an embedded gram/ml figure — otherwise "Amul Cheese Block 400 g"
+  // (a box material) would parse as 400 and divide the price by 400, turning
+  // a silent-zero into a silent-WRONG (near-free). So: look only for an
+  // explicit pack multiplicity ("Pack of 6", "6 x", a combo "Buns x12"),
+  // and DEFAULT TO 1 when none is stated (a single pack, clean ₹/pack). This
+  // also rescues sizeless titles ("Surf Excel") that parsePackSize can't read.
+  // (Genuinely mis-coded liquids like "Sunflower Oil (1 Liter)" tagged
+  // 'packet' should be UOM-corrected to L in Odoo for true per-litre maths —
+  // flagged in the Nihaf-only block; here we at least stop the hard zero.)
+  if (matFamily === 'pack') {
+    const txt = String(packSizeStr || '').toLowerCase();
+    let count = 1;
+    const packOf = txt.match(/pack\s*of\s*(\d+)/);
+    const times = txt.match(/(?:^|\b)(\d+)\s*[x×*]\b/) || txt.match(/[x×*]\s*(\d+)\b/);
+    if (packOf) count = Number(packOf[1]);
+    else if (times) count = Number(times[1]);
+    return count > 0 ? count : 1;
+  }
+
   const pack = parsePackSize(packSizeStr);
   if (!pack || pack.qty <= 0) return null;
-  const matFamily = detectFamily(materialUom);
   const packFamily = (pack.unit === 'kg' || pack.unit === 'g') ? 'mass'
                    : (pack.unit === 'l' || pack.unit === 'ml') ? 'vol'
                    : 'count';
-  if (!matFamily) return null;
 
   // Same family — direct conversion (kg/g/l/ml/unit normalisation)
   if (matFamily === packFamily) {
