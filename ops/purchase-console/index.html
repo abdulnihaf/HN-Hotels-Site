@@ -694,6 +694,68 @@
       font-variant-numeric: tabular-nums;
     }
     .alt-chip .warn { color: var(--pc-yellow); margin-right: 1px; }
+    /* Passive session-health — per-chip badge + Shop banner */
+    .alt-chip { position: relative; }
+    .alt-chip .chip-health {
+      position: absolute; top: 3px; left: 3px;
+      width: 8px; height: 8px; border-radius: 50%;
+      box-shadow: 0 0 0 1.5px var(--bg-elev-2); pointer-events: none;
+    }
+    .alt-chip.health-good   .chip-health { background: #1a7f37; }
+    .alt-chip.health-warn   .chip-health { background: #d4a24c; }
+    .alt-chip.health-bad    .chip-health { background: #ff5c5c; }
+    .alt-chip.health-neutral .chip-health { background: #6e7781; }
+    .alt-chip.scrape-dead {
+      opacity: 0.5; cursor: not-allowed;
+      border: none; -webkit-appearance: none; appearance: none;
+      font: 600 11.5px/1 -apple-system, sans-serif;
+      text-decoration: line-through; text-decoration-color: rgba(255,92,92,0.55);
+    }
+    .alt-chip.scrape-dead .chip-price { color: #ff5c5c; }
+    .portal-banner {
+      display: flex; align-items: center; gap: 9px;
+      margin: 0 14px 10px; padding: 11px 13px; border-radius: 12px;
+      background: rgba(255,92,92,0.10); border: 1px solid rgba(255,92,92,0.32);
+      color: #ffb3b3; font: 600 12.5px/1.35 -apple-system, sans-serif; letter-spacing: -0.01em;
+    }
+    .portal-banner.tone-warn { background: rgba(212,162,76,0.10); border-color: rgba(212,162,76,0.34); color: #e9c989; }
+    .portal-banner .pb-text { flex: 1; min-width: 0; }
+    .portal-banner .pb-act {
+      flex: none; min-height: 34px; padding: 0 12px;
+      background: rgba(255,255,255,0.10); color: inherit; border-radius: 8px;
+      font: 800 12px/1 -apple-system, sans-serif; letter-spacing: -0.01em; cursor: pointer;
+    }
+    .portal-banner .pb-act:active { transform: scale(0.95); }
+    .portal-banner[hidden] { display: none; }
+    /* Vendors pane (You tab) */
+    .vendor-list { display: flex; flex-direction: column; }
+    .vendor-list-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 2px; border-bottom: 0.5px solid var(--line);
+      font: 600 13px/1.3 -apple-system, sans-serif;
+    }
+    .vendor-list-row .v-icon { font-size: 17px; flex: none; }
+    .vendor-list-row .v-main { flex: 1; min-width: 0; }
+    .vendor-list-row .v-name { color: var(--text); font-weight: 700; }
+    .vendor-list-row .v-meta { color: var(--text-dim); font: 600 11px/1.3 -apple-system, sans-serif; }
+    .vendor-list-row .v-count {
+      flex: none; font: 700 11px/1 -apple-system, sans-serif; color: var(--text-mute);
+      padding: 4px 8px; background: var(--bg-elev-2); border-radius: 999px;
+    }
+    .vendor-list .vendor-empty { color: var(--text-dim); font-size: 12.5px; padding: 10px 2px; }
+    .vendor-add { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .vendor-add input {
+      flex: 1; min-width: 120px; min-height: 44px; padding: 9px 12px;
+      border: 1px solid var(--line); border-radius: 10px; background: var(--bg-elev-1);
+      color: var(--text); font: 600 14px/1 -apple-system, sans-serif;
+    }
+    .vendor-add input::placeholder { color: var(--text-mute); }
+    .btn-vendor-add {
+      flex: none; min-height: 44px; padding: 0 18px;
+      background: linear-gradient(135deg, #25d366 0%, #1da851 100%); color: #fff;
+      border-radius: 10px; font: 800 13px/1 -apple-system, sans-serif; letter-spacing: -0.01em; cursor: pointer;
+    }
+    .btn-vendor-add:active { transform: scale(0.96); }
     /* ============================================================
        Handoff expectation indicators (step 2)
        ============================================================ */
@@ -1433,6 +1495,7 @@
         <h1 class="large-title">Sauda <span class="accent">since 1918</span></h1>
         <div class="large-subtitle" id="shopSubtitle">Loading materials…</div>
       </div>
+      <div class="portal-banner" id="portalHealthBanner" hidden></div>
       <div class="search-section">
         <div class="search-pill">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -1530,6 +1593,17 @@
       <div class="you-row-group" id="portalHealthGroup">
         <div class="empty-state" style="padding:24px 12px;">
           <div class="body">Tap refresh to check portal sessions.</div>
+        </div>
+      </div>
+
+      <div class="you-group-title">VENDORS</div>
+      <div class="you-row-group" style="padding:12px;">
+        <div class="row-sub" style="margin-bottom:8px;">Your direct suppliers. Link one to a material and its VENDOR DIRECT card lights up on Shop — glance, tap, WhatsApp.</div>
+        <div class="vendor-list" id="vendorList"></div>
+        <div class="vendor-add">
+          <input id="vendorNameInput" type="text" inputmode="text" placeholder="Vendor name" autocomplete="off" />
+          <input id="vendorPhoneInput" type="tel" inputmode="tel" placeholder="WhatsApp number" autocomplete="off" />
+          <button type="button" class="btn-vendor-add" id="vendorAddBtn">Add vendor</button>
         </div>
       </div>
 
@@ -1636,13 +1710,15 @@
     const PORTAL_ORDER = [
       'HYPERPURE', 'BIGBASKET', 'BLINKIT', 'ZEPTO', 'FLIPKART_MINUTES',
       'AMAZON_NOW', 'AMAZON_FRESH', 'AMAZON_BUSINESS',
-      'JIOMART', 'INSTAMART', 'METRO', 'DMART',
+      'JIOMART', 'INSTAMART', 'METRO', 'INDIAMART', 'DMART',
     ];
     const PORTAL_SOURCE_KEYS = PORTAL_ORDER.slice();
     // Portals shown only when material is B2B-eligible (server-tagged
     // `mat.b2b_eligible`). For non-eligible materials (fresh produce,
     // poultry, eggs) these chips are hidden — wrong channel entirely.
-    const B2B_ONLY_PORTALS = new Set(['AMAZON_BUSINESS', 'METRO']);
+    // IndiaMART is a B2B directory/RFQ marketplace — launcher-only, never
+    // scouted, never feeds the cheapest-source engine (indicative prices).
+    const B2B_ONLY_PORTALS = new Set(['AMAZON_BUSINESS', 'METRO', 'INDIAMART']);
 
     // ============================================================
     // Tier architecture — three procurement modes
@@ -1659,7 +1735,7 @@
       AMAZON_NOW: 'qcomm', INSTAMART: 'qcomm',
       BIGBASKET: 'retail', JIOMART: 'retail',
       AMAZON_FRESH: 'retail', DMART: 'retail',
-      HYPERPURE: 'b2b', AMAZON_BUSINESS: 'b2b', METRO: 'b2b',
+      HYPERPURE: 'b2b', AMAZON_BUSINESS: 'b2b', METRO: 'b2b', INDIAMART: 'b2b',
     };
     const TIER_ORDER = ['vendor', 'manual', 'qcomm', 'retail', 'b2b'];
     const TIER_LABELS = {
@@ -1745,6 +1821,7 @@
       JIOMART: 'app',
       INSTAMART: 'app',
       METRO: 'safari',
+      INDIAMART: 'app-search-unverified',
       DMART: 'safari',
     };
     const HANDOFF_GLYPH = {
@@ -1763,26 +1840,26 @@
       ZEPTO: 'Zepto', FLIPKART_MINUTES: 'Flipkart Minutes',
       AMAZON_NOW: 'Amazon Now', AMAZON_FRESH: 'Amazon Fresh', AMAZON_BUSINESS: 'Amazon Business',
       JIOMART: 'JioMart', INSTAMART: 'Instamart',
-      METRO: 'Metro', DMART: 'DMart',
+      METRO: 'Metro', INDIAMART: 'IndiaMART', DMART: 'DMart',
     };
     const SOURCE_SHORT = {
       HYPERPURE: 'HP', BIGBASKET: 'BB', BLINKIT: 'Blinkit',
       ZEPTO: 'Zepto', FLIPKART_MINUTES: 'FK',
       AMAZON_NOW: 'Amazon Now', AMAZON_FRESH: 'Amazon Fresh', AMAZON_BUSINESS: 'Amz Business',
       JIOMART: 'JioMart', INSTAMART: 'Instamart',
-      METRO: 'Metro', DMART: 'DMart',
+      METRO: 'Metro', INDIAMART: 'IndiaMART', DMART: 'DMart',
     };
     const PORTAL_DOMAIN = {
       HYPERPURE: 'hyperpure.com', BIGBASKET: 'bigbasket.com', BLINKIT: 'blinkit.com',
       ZEPTO: 'zepto.com', FLIPKART_MINUTES: 'flipkart.com',
       AMAZON_NOW: 'amazon.in', AMAZON_FRESH: 'amazon.in', AMAZON_BUSINESS: 'amazon.in',
       JIOMART: 'jiomart.com', INSTAMART: 'swiggy.com',
-      METRO: 'metro.co.in', DMART: 'dmart.in',
+      METRO: 'metro.co.in', INDIAMART: 'indiamart.com', DMART: 'dmart.in',
     };
     const PORTAL_LETTER = {
       HYPERPURE: 'H', BIGBASKET: 'BB', BLINKIT: 'B', ZEPTO: 'Z',
       FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'A', AMAZON_FRESH: 'AF', AMAZON_BUSINESS: 'AB',
-      JIOMART: 'JM', INSTAMART: 'IM', METRO: 'M', DMART: 'D',
+      JIOMART: 'JM', INSTAMART: 'IM', METRO: 'M', INDIAMART: 'IMt', DMART: 'D',
     };
     function portalFavicon(sk, size = 48, cls = 'portal-favicon') {
       const d = PORTAL_DOMAIN[sk];
@@ -1848,6 +1925,9 @@
       // page. Owner can browse on web or manually switch to the Metro
       // India app.
       METRO: (q) => `https://www.metro.co.in/search?q=${encodeURIComponent(q)}`,
+      // IndiaMART — B2B directory search. `?ss=` is the IndiaMART search
+      // param (NOT ?q=); byte-identical to the extension's searchUrl.
+      INDIAMART: (q) => `https://dir.indiamart.com/search.mp?ss=${encodeURIComponent(q)}`,
       // DMart — Avenue Supermarts retail. Also no AASA → Safari
       // fallback. Search URL verified to return 200.
       DMART: (q) => `https://www.dmart.in/search?q=${encodeURIComponent(q)}`,
@@ -1953,6 +2033,8 @@
       cart: JSON.parse(localStorage.getItem('purchaseConsoleCart') || '{}'),
       activeTab: 'shop',
       portalHealth: [],
+      portalHealthMap: {},
+      vendors: [],
       loading: false,
       deferredInstallPrompt: null,
     };
@@ -1978,6 +2060,11 @@
       filterStat: document.getElementById('filterStat'),
       addMatBtn: document.getElementById('addMatBtn'),
       listGrid: document.getElementById('listGrid'),
+      portalHealthBanner: document.getElementById('portalHealthBanner'),
+      vendorList: document.getElementById('vendorList'),
+      vendorNameInput: document.getElementById('vendorNameInput'),
+      vendorPhoneInput: document.getElementById('vendorPhoneInput'),
+      vendorAddBtn: document.getElementById('vendorAddBtn'),
       shopSubtitle: document.getElementById('shopSubtitle'),
       planSubtitle: document.getElementById('planSubtitle'),
       planBody: document.getElementById('planBody'),
@@ -2283,14 +2370,19 @@
         const hoGlyph = HANDOFF_GLYPH[ho] ? `<span class="chip-handoff" aria-hidden="true">${HANDOFF_GLYPH[ho]}</span>` : '';
         const hoTitle = HANDOFF_TITLE[ho];
         const s = sources.find((x) => x.source_key === sk);
+        const effStatus = effectivePortalStatus(sk);
+        const healthCls = ` health-${portalHealthTone(effStatus)}`;
+        const healthDot = portalHealthDot();
+        const healthTitle = ` · ${portalHealthLabel(effStatus)}`;
+        const dead = isScrapeDead(sk, effStatus);
         if (!s) {
           const url = portalSearchUrlFor(sk, mat.name);
-          // B2B chips with no scout yet: show as active (chip itself is
-          // the value-add — tap launches portal search in app).
+          // B2B/launcher chips with no scout: chip itself is the value-add
+          // (tap launches portal search in app). Never dead — no session.
           const isB2B = tierFor(sk) === 'b2b';
           const chipCls = isB2B ? 'alt-chip' : 'alt-chip disabled';
           const priceTxt = isB2B ? '↗' : '—';
-          return url ? `<a class="${chipCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span>${hoGlyph}</a>` : '';
+          return url ? `<a class="${chipCls}${healthCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle + healthTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${healthDot}${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span>${hoGlyph}</a>` : '';
         }
         const quoted = isPortalSourceQuoted(s);
         const sane = quoted && isSanePortalPrice(s, mat);
@@ -2298,7 +2390,10 @@
         const priceTxt = quoted ? moneyPaise(sourcePrice(s)) : (s.stock_status === 'ERROR' ? 'err' : '—');
         const warn = quoted && !sane ? '<span class="warn">⚠️</span>' : '';
         const chipCls = quoted ? 'alt-chip' : 'alt-chip disabled';
-        return `<a class="${chipCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${warn}${escapeHtml(priceTxt)}</span>${hoGlyph}</a>`;
+        if (dead) {
+          return `<button type="button" class="${chipCls}${healthCls} scrape-dead" title="${escapeAttr((SOURCE_LABELS[sk] || sk) + healthTitle + ' — re-login to price')}" data-dead-portal="${escapeAttr(sk)}">${healthDot}${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span></button>`;
+        }
+        return `<a class="${chipCls}${healthCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle + healthTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${healthDot}${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${warn}${escapeHtml(priceTxt)}</span>${hoGlyph}</a>`;
       }
       const tiersToRender = state.tier === 'all'
         ? TIER_ORDER
@@ -2613,6 +2708,136 @@
     }
 
     // ============================================================
+    // Passive session-health derivation (shared by chips + You pane)
+    // ============================================================
+    // The portal-health payload knows READY / EXPIRED / NOT_CONNECTED /
+    // BROKEN / LAUNCHER_ONLY. The amber "stale" tier is computed
+    // client-side from last_captured_at (when cookies were grabbed), so a
+    // working-but-not-recently-recaptured portal reads amber, not red.
+    // Launcher-only portals (Amazon Business, Metro, IndiaMART, DMart)
+    // have no session lifecycle, so they are always neutral.
+    const PORTAL_HEALTH_STALE_MS = 24 * 60 * 60 * 1000;
+    const LAUNCHER_ONLY_PORTALS = new Set(['AMAZON_BUSINESS', 'METRO', 'INDIAMART', 'DMART']);
+    function derivePortalStatus(row) {
+      if (!row) return 'NOT_CONNECTED';
+      const s = (row.status || 'NOT_CONNECTED').toUpperCase();
+      if (s === 'LAUNCHER_ONLY') return 'LAUNCHER_ONLY';
+      if (s === 'READY') {
+        const cap = row.last_captured_at ? Date.parse(row.last_captured_at) : NaN;
+        if (!isNaN(cap) && (Date.now() - cap) > PORTAL_HEALTH_STALE_MS) return 'READY_STALE';
+        return 'READY';
+      }
+      return s;
+    }
+    function effectivePortalStatus(sk) {
+      const map = state.portalHealthMap || {};
+      if (map[sk]) return map[sk];
+      if (LAUNCHER_ONLY_PORTALS.has(sk)) return 'LAUNCHER_ONLY';
+      return 'UNKNOWN';
+    }
+    function portalHealthTone(status) {
+      if (status === 'READY') return 'good';
+      if (status === 'READY_STALE') return 'warn';
+      if (status === 'EXPIRED' || status === 'NOT_CONNECTED' || status === 'BROKEN') return 'bad';
+      return 'neutral';
+    }
+    function portalHealthLabel(status) {
+      return ({ READY: 'Ready', READY_STALE: 'Stale (24h+)', EXPIRED: 'Expired', NOT_CONNECTED: 'Not connected', BROKEN: 'Broken', LAUNCHER_ONLY: 'Launcher', UNKNOWN: 'Checking…' })[status] || status;
+    }
+    function portalHealthDot() { return '<span class="chip-health" aria-hidden="true"></span>'; }
+    function isScrapeDead(sk, status) {
+      return portalHealthTone(status) === 'bad' && !LAUNCHER_ONLY_PORTALS.has(sk) && sk !== 'manual';
+    }
+    function onPortalChipDead(sk) {
+      const name = SOURCE_LABELS[sk] || sk;
+      toast(`${name} session needs a re-login — sign in on the ${name} desktop / winpc Chrome, then re-capture.`, 3200);
+    }
+    function renderPortalHealthBanner() {
+      const el = els.portalHealthBanner;
+      if (!el) return;
+      const rows = state.portalHealth || [];
+      const scored = rows
+        .filter((r) => { const sk = r.source_key || r.key; return !LAUNCHER_ONLY_PORTALS.has(sk); })
+        .map((r) => ({ sk: r.source_key || r.key, st: derivePortalStatus(r) }));
+      const rank = { NOT_CONNECTED: 3, EXPIRED: 3, BROKEN: 3, READY_STALE: 2, READY: 0, LAUNCHER_ONLY: 0, UNKNOWN: 0 };
+      let worst = null;
+      for (const it of scored) {
+        const sc = rank[it.st] || 0;
+        if (sc > 0 && (!worst || sc > worst.sc)) worst = { ...it, sc };
+      }
+      if (!worst) { el.hidden = true; el.innerHTML = ''; return; }
+      const name = SOURCE_LABELS[worst.sk] || worst.sk;
+      const isBad = worst.sc >= 3;
+      el.classList.toggle('tone-warn', !isBad);
+      const msg = isBad
+        ? `⚠️ ${name} session ${worst.st === 'EXPIRED' ? 'expired' : 'down'} — re-login to price it.`
+        : `⏳ ${name} session is stale (24h+) — re-login for fresh prices.`;
+      el.innerHTML = `<span class="pb-text">${escapeHtml(msg)}</span><button type="button" class="pb-act" data-fix-portal="${escapeAttr(worst.sk)}">Fix</button>`;
+      el.hidden = false;
+    }
+    // ============================================================
+    // Vendors (You tab) — manage the direct-supplier surface
+    // ============================================================
+    async function loadVendors() {
+      if (!els.vendorList) return;
+      try {
+        const d = await fetchJson(`/api/purchase-control?action=list-vendors&brand=${state.brand}&pin=${encodeURIComponent(state.pin)}`);
+        state.vendors = d.vendors || d.results || [];
+        renderVendorList();
+      } catch (e) {
+        els.vendorList.innerHTML = `<div class="vendor-empty">Couldn't load vendors — ${escapeHtml(e.message || 'error')}</div>`;
+      }
+    }
+    function renderVendorList() {
+      if (!els.vendorList) return;
+      const rows = state.vendors || [];
+      if (!rows.length) {
+        els.vendorList.innerHTML = `<div class="vendor-empty">No vendors yet. Add one below — then link it to a material to light up its VENDOR DIRECT card.</div>`;
+        return;
+      }
+      els.vendorList.innerHTML = rows.map((v) => {
+        const name = String(v.name || '').split('(')[0].trim() || v.slug || 'Vendor';
+        const phone = v.whatsapp_phone || v.phone || 'no number';
+        const n = Number(v.material_count || 0);
+        const countTxt = n ? `${n} linked` : 'unlinked';
+        return `
+          <div class="vendor-list-row">
+            <div class="v-icon">📲</div>
+            <div class="v-main">
+              <div class="v-name">${escapeHtml(name)}</div>
+              <div class="v-meta">${escapeHtml(phone)}</div>
+            </div>
+            <div class="v-count">${escapeHtml(countTxt)}</div>
+          </div>`;
+      }).join('');
+    }
+    async function addVendor() {
+      const nameEl = els.vendorNameInput;
+      const phoneEl = els.vendorPhoneInput;
+      const name = (nameEl ? nameEl.value : '').trim();
+      const phone = (phoneEl ? phoneEl.value : '').replace(/[^0-9]/g, '');
+      if (!name) { toast('Name the vendor first.'); return; }
+      if (phone && phone.length < 10) { toast('Enter a full WhatsApp number.'); return; }
+      try {
+        const d = await fetchJson(`/api/purchase-control?action=upsert-vendor&pin=${encodeURIComponent(state.pin)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: state.pin, name, phone, whatsapp_phone: phone, brand: state.brand }),
+        });
+        if (d && (d.success || d.slug || d.id)) {
+          if (nameEl) nameEl.value = '';
+          if (phoneEl) phoneEl.value = '';
+          toast('Vendor saved.');
+          loadVendors();
+        } else {
+          toast('Could not save vendor — try again.');
+        }
+      } catch (e) {
+        toast('Save failed: ' + (e.message || 'error'), 3000);
+      }
+    }
+
+    // ============================================================
     // You tab — portal health
     // ============================================================
     async function refreshPortalHealth() {
@@ -2620,7 +2845,12 @@
       try {
         const d = await fetchJson(`/api/purchase-control?action=portal-health&pin=${encodeURIComponent(state.pin)}`);
         state.portalHealth = d.sessions || d.portals || [];
+        const map = {};
+        for (const row of state.portalHealth) { map[row.source_key || row.key] = derivePortalStatus(row); }
+        state.portalHealthMap = map;
         renderPortalHealth();
+        renderPortalHealthBanner();
+        if (state.activeTab === 'shop') renderList();
       } catch (e) {
         els.portalHealthGroup.innerHTML = `<div class="empty-state" style="padding:24px 12px;"><div class="body">Couldn't fetch — ${escapeHtml(e.message)}</div></div>`;
       }
@@ -2633,8 +2863,10 @@
       }
       els.portalHealthGroup.innerHTML = list.map((s) => {
         const sk = s.source_key || s.key;
-        const status = (s.status || 'UNKNOWN').toUpperCase();
-        const cls = status === 'READY' ? 'ok' : status === 'EXPIRED' || status === 'NOT_CONNECTED' ? 'bad' : 'warn';
+        const eff = derivePortalStatus(s);
+        const tone = portalHealthTone(eff);
+        const cls = tone === 'good' ? 'ok' : tone === 'bad' ? 'bad' : 'warn';
+        const status = portalHealthLabel(eff);
         const last = s.last_validated_at ? new Date(s.last_validated_at).toLocaleString('en-IN', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }) : '—';
         return `
           <div class="you-row">
@@ -2662,6 +2894,7 @@
       if (target === 'plan') renderPlan();
       if (target === 'you') {
         if (!state.portalHealth.length) refreshPortalHealth();
+        loadVendors();
       }
       // Reset scroll to top of new tab pane (iOS app behaviour)
       const pane = document.getElementById(`tab-${target}`);
@@ -2771,7 +3004,7 @@
         state.snapshotMap = snap;
         rebuildCategoryChips();
       } catch (err) { toast(err.message || 'Load failed'); }
-      finally { state.loading = false; renderList(); }
+      finally { state.loading = false; renderList(); refreshPortalHealth(); }
     }
     async function refreshOneMaterial(mid) {
       if (!state.pin || state.refreshing.has(mid)) return;
@@ -2981,6 +3214,12 @@
       location.reload();
     });
     els.refreshHealthRow.addEventListener('click', refreshPortalHealth);
+    if (els.vendorAddBtn) els.vendorAddBtn.addEventListener('click', addVendor);
+    if (els.vendorPhoneInput) els.vendorPhoneInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addVendor(); });
+    if (els.portalHealthBanner) els.portalHealthBanner.addEventListener('click', (e) => {
+      const fix = e.target.closest('[data-fix-portal]');
+      if (fix) onPortalChipDead(fix.dataset.fixPortal);
+    });
     els.installPwaRow.addEventListener('click', async () => {
       if (state.deferredInstallPrompt) {
         state.deferredInstallPrompt.prompt();
@@ -3042,6 +3281,8 @@
     // Delegated handlers (list + plan)
     document.addEventListener('click', (event) => {
       const t = event.target;
+      const deadChip = t.closest('[data-dead-portal]');
+      if (deadChip) { event.preventDefault(); onPortalChipDead(deadChip.dataset.deadPortal); return; }
       const addBtn = t.closest('[data-add-mat]');
       if (addBtn) {
         const mid = addBtn.dataset.addMat;

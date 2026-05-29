@@ -88,6 +88,7 @@ const SOURCE_URLS = {
   // mostly regular packs, some larger value packs. dmart.in serves the
   // web ordering flow. No AASA either — Safari fallback.
   DMART: 'https://www.dmart.in/',
+  INDIAMART: 'https://www.indiamart.com/',
   BIGBASKET: 'https://www.bigbasket.com/',
   JIOMART: 'https://www.jiomart.com/',
 };
@@ -113,6 +114,11 @@ const SOURCES = [
   // Amazon Business (chip-only, eligibility-filtered, full scout
   // queued).
   { key: 'METRO', label: 'Metro', status: 'launcher_only', mode: 'b2b_directory', delivery_band: 'B2B wholesale / pickup', url: SOURCE_URLS.METRO },
+  // IndiaMART — B2B directory / RFQ marketplace, quick-launch only. No VPS
+  // adapter and NEVER scouted: listings are supplier+indicative-price+MOQ,
+  // not transactable cart prices, so feeding them into the cheapest engine
+  // would corrupt the "cheapest verified source" ranking. Launcher only.
+  { key: 'INDIAMART', label: 'IndiaMART', status: 'launcher_only', mode: 'b2b_directory', delivery_band: 'B2B / RFQ quote', url: SOURCE_URLS.INDIAMART },
   // DMart — consumer-tier quick-launch. Shows on every material
   // (not B2B-restricted). No AASA on dmart.in — Safari fallback.
   { key: 'DMART', label: 'DMart', status: 'launcher_only', mode: 'grocery', delivery_band: 'Pickup / same-day', url: SOURCE_URLS.DMART },
