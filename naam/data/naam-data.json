@@ -1,0 +1,544 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-29T15:30:00+05:30",
+  "as_of_note": "Seeded from marketing-memory.json (published 2026-05-28T19:42 IST) + live cockpit readbacks captured 2026-05-25 to 05-28. Refresh with: node scripts/naam-snapshot.js",
+  "today": "2026-05-29",
+  "targets": { "month": "May 2026", "HE_paise": 150000000, "NCH_paise": 120000000, "note": "HE 2.3x / NCH 1.1x vs March actuals (HE 6.6L / NCH 10.8L)" },
+  "standing_direction": "De-prioritise WABA as order destination. Push: Meta Ads, Influencer, Google Ads, Swiggy/Zomato organic + inorganic. WABA = retention/CRM only.",
+  "brands": {
+    "HE": { "label": "Hamza Express", "short": "HE", "tagline": "Dakhni biryari & kabab · since 1918", "place_id": "ChIJ-QQjtHEXrjsR-Z1RIEm2arg", "counter_qr": "qr_SFifkGfaapvPPX", "counter_origin": "https://nawabichaihouse.com" },
+    "NCH": { "label": "Nawabi Chai House", "short": "NCH", "tagline": "Irani chai & haleem · Shivajinagar", "counter_qr": "qr_SBdtUCLSHVfRtT", "counter_origin": "https://nawabichaihouse.com" }
+  },
+  "lane_order": ["meta","influencer","google","delivery-aggregator","dine-aggregator","gbp","organic-social","pisignage","reel","packaging","flyers","pos-write","waba-outreach"],
+  "lanes": [
+    {
+      "id": "meta",
+      "title": "Meta Ads",
+      "subtitle": "CTWA · video + retargeting",
+      "group": "Acquisition",
+      "risk": "money",
+      "priority": 1,
+      "cockpit_url": "https://hamzaexpress.in/ops/ctwa-cockpit/",
+      "live_api": "https://hamzaexpress.in/api/ctwa-analytics?period=all",
+      "related_creative_lane": "meta",
+      "brands": {
+        "HE": {
+          "status": "live",
+          "last_run": "2026-05-28",
+          "freshness_days": 1,
+          "summary": "Read-only analytics extract of live Meta/CTWA cockpit (2026-05-28 16:25). Food-first retargeting creatives rebuilt in Figma; audiences created; not yet launched.",
+          "glance": [
+            { "label": "Video Maps campaign spend", "value": "₹2,986", "sub": "168,350 impr · 126,689 reach", "tone": "neutral" },
+            { "label": "CTR", "value": "3.78%", "sub": "CPC ₹0.47 · CPM ₹17.74", "tone": "good" },
+            { "label": "Link / outbound clicks", "value": "5,369", "sub": "2,630 landing-page views", "tone": "good" },
+            { "label": "Map opens (directions bridge)", "value": "1,647", "sub": "3,790 views · 2,856 unique", "tone": "good" }
+          ],
+          "next_action": {
+            "text": "10 food-first retargeting creatives are BUILT in Figma but NOT launched. Audiences are ready. Export the frames and launch the static retargeting campaign.",
+            "urgency": "high",
+            "where": "Claude → Meta lane"
+          },
+          "deep": {
+            "Video Maps campaign (primary)": { "id": "120246002668360505", "impressions": 168350, "reach": 126689, "spend_inr": 2985.86, "clicks": 5369, "lpv": 2630, "ctr": 3.78, "cpc_inr": 0.469, "cpm_inr": 17.74, "video_25": 31217, "video_50": 16385, "video_75": 9679, "video_95": 5863, "thruplays": 15114 },
+            "Static retargeting campaign": { "id": "120246050386040505", "impressions": 43917, "reach": 36228, "spend_inr": 492.60, "clicks": 523, "ctr": 1.53, "cpc_inr": 0.733, "cpm_inr": 11.22, "note": "Fatigue: CTR 1.53% vs primary 3.78% — food-first refresh waiting to launch" }
+          },
+          "live_ids": {
+            "primary_campaign": "120246002668360505",
+            "primary_adset": "120246002762660505",
+            "primary_ad": "120246003033080505",
+            "retargeting_campaign": "120246050386040505",
+            "retargeting_adsets": ["120246051099560505","120246052671060505","120246052814420505","120246054839720505","120246054881370505"],
+            "audiences": { "HE_DIR_VISIT_7D": "120246563761410505", "HE_DIR_VISIT_30D": "120246563767670505", "HE_FIND_LOCATION_30D": "120246563775240505", "HE_RT_VOUCHER_VISIT_30D": "120246563783970505" },
+            "figma_file": "RlpVhTqTghVyfp7vWt1Isz",
+            "figma_page": "06 Meta + WABA Ads (node 1:7, frames A1-A5 in 9:16 + 4:5)"
+          },
+          "links": [
+            { "label": "CTWA cockpit", "url": "https://hamzaexpress.in/ops/ctwa-cockpit/" },
+            { "label": "Campaign context brief", "url": "https://hamzaexpress.in/ops/campaign-context/" },
+            { "label": "Figma creatives", "url": "https://www.figma.com/design/RlpVhTqTghVyfp7vWt1Isz" }
+          ]
+        },
+        "NCH": null
+      }
+    },
+    {
+      "id": "influencer",
+      "title": "Influencer",
+      "subtitle": "Barter outreach T1–T4",
+      "group": "Acquisition",
+      "risk": "comms",
+      "priority": 4,
+      "cockpit_url": "https://hnhotels.in/ops/influencer-bookings/",
+      "live_api": "https://hnhotels.in/api/influencer-bio-pulse?action=stats",
+      "related_creative_lane": "other",
+      "brands": {
+        "HE": {
+          "status": "idle",
+          "last_run": null,
+          "freshness_days": null,
+          "summary": "Surfaces are built (605-profile enriched DB, bookings, applications, 3-channel outreach) but no discovery/outreach has been run through the execution memory yet.",
+          "glance": [
+            { "label": "Enriched creator DB", "value": "—", "sub": "live: bio-pulse stats", "tone": "neutral" },
+            { "label": "Pending applications", "value": "—", "sub": "live: creator-application", "tone": "neutral" },
+            { "label": "Bookings to confirm", "value": "—", "sub": "live: influencer-bookings", "tone": "neutral" }
+          ],
+          "next_action": {
+            "text": "Cold lane — no outreach run yet. When ready: discover → enrich → approve T1–T4 (1K–60K) shortlist → approve POS-backed offer copy. Never cold-pitch barter above T4.",
+            "urgency": "low",
+            "where": "Claude → Influencer lane"
+          },
+          "deep": {},
+          "live_ids": {},
+          "links": [
+            { "label": "Bookings (owner)", "url": "https://hnhotels.in/ops/influencer-bookings/" },
+            { "label": "Applications", "url": "https://hnhotels.in/ops/influencer-applications/" },
+            { "label": "Creator database", "url": "https://hnhotels.in/marketing/Influencer/database/" },
+            { "label": "Outreach (HE)", "url": "https://hamzaexpress.in/ops/creator-outreach/" }
+          ]
+        },
+        "NCH": null
+      }
+    },
+    {
+      "id": "google",
+      "title": "Google Ads",
+      "subtitle": "Late-night Search · 2km proximity",
+      "group": "Acquisition",
+      "risk": "money",
+      "priority": 3,
+      "cockpit_url": "https://hamzaexpress.in/ops/google-cockpit/",
+      "live_api": "https://hamzaexpress.in/api/google-cockpit?period=7d",
+      "related_creative_lane": "other",
+      "brands": {
+        "HE": {
+          "status": "live",
+          "last_run": "2026-05-25",
+          "freshness_days": 4,
+          "summary": "Two late-night Search campaigns live at ₹250+₹250/day (23:00–02:00). PMax paused. Built the COA 4 AM daily-report spec; report generator not yet built.",
+          "glance": [
+            { "label": "Live daily budget", "value": "₹500/day", "sub": "2 campaigns · ₹250 + ₹250", "tone": "neutral" },
+            { "label": "Schedule", "value": "23:00–02:00", "sub": "late-night only", "tone": "neutral" },
+            { "label": "Brand Capture v2", "value": "5km presence", "sub": "campaign 23877692297 · ENABLED", "tone": "good" },
+            { "label": "Dish 2km Search v1", "value": "2km presence", "sub": "23882183242 · 7 negatives added · under review", "tone": "warn" }
+          ],
+          "next_action": {
+            "text": "Build the automated 4 AM PDF report generator (fills the defined layout with live spend/radius/schedule + landing-action events) and wire WABA delivery once the PDF path is confirmed.",
+            "urgency": "medium",
+            "where": "Claude → Google Ads lane"
+          },
+          "deep": {
+            "Live campaigns": { "Brand Capture v2": "23877692297 · ₹250/d · 5km · 23:00-02:00", "Dish Late Night 2km v1": "23882183242 · ₹250/d · 2km · 23:00-02:00" },
+            "Paused": { "Brand v1": "23845870050", "Late Night v1": "23854158442", "Dinner v1": "23855561197", "PMax Store Goals": "23834053403" },
+            "Targeting note": "Single-store = PROXIMITY around 12.98475,77.60291, NOT a city LOCATION. Geo constant 1007765=Gurugram (do not use)."
+          },
+          "live_ids": { "customer": "3681710084", "mcc": "510-456-1813", "landing": "/go/google-night" },
+          "links": [
+            { "label": "Google cockpit", "url": "https://hamzaexpress.in/ops/google-cockpit/" },
+            { "label": "Keyword demand (HE)", "url": "https://hnhotels.in/marketing/he/keywords/" }
+          ]
+        },
+        "NCH": null
+      }
+    },
+    {
+      "id": "delivery-aggregator",
+      "title": "Delivery Aggregators",
+      "subtitle": "Swiggy + Zomato online ordering",
+      "group": "Aggregators",
+      "risk": "money",
+      "priority": 2,
+      "cockpit_url": "https://hnhotels.in/ops/aggregator/",
+      "live_api": null,
+      "related_creative_lane": "other",
+      "brands": {
+        "HE": {
+          "status": "live",
+          "last_run": "2026-05-25",
+          "freshness_days": 4,
+          "summary": "3 AM Claude WABA owner-report pipeline finalized (template approved). Capture appliance on hn-winpc. Price/offer mutation deliberately blocked until margin proof is mapped.",
+          "glance": [
+            { "label": "May 1–25 orders", "value": "152", "sub": "132 Zomato · 20 Swiggy", "tone": "neutral" },
+            { "label": "Delivered revenue", "value": "₹50,459", "sub": "May 1–25", "tone": "good" },
+            { "label": "Commission drag", "value": "Swiggy 24.6% · Zomato 23.4%", "sub": "margin-gate every offer", "tone": "warn" },
+            { "label": "Capture health", "value": "appliance", "sub": "extension on hn-winpc · watch silence", "tone": "neutral" }
+          ],
+          "next_action": {
+            "text": "Let the 3 AM IST cron run automatically, then add owner-report UI rendering to the aggregator dashboards. Any offer must clear its margin gate first (Swiggy 24.6% / Zomato 23.4%).",
+            "urgency": "medium",
+            "where": "Claude → Delivery-aggregator lane"
+          },
+          "deep": {
+            "Swiggy restaurant_id": "1342888",
+            "WABA owner report": "aggregator_daily_owner_report_v1 — APPROVED (03:00–03:14 IST cron)",
+            "Coverage May 1-25": "152 orders · ₹50,459 delivered · discount-known 28"
+          },
+          "live_ids": { "swiggy_id": "1342888", "report_template": "aggregator_daily_owner_report_v1" },
+          "links": [
+            { "label": "Aggregator dashboard", "url": "https://hnhotels.in/ops/aggregator/" },
+            { "label": "HE Swiggy detail", "url": "https://hnhotels.in/ops/aggregator/he/swiggy/" },
+            { "label": "HE Zomato detail", "url": "https://hnhotels.in/ops/aggregator/he/zomato/" },
+            { "label": "Delivery playbook", "url": "https://hnhotels.in/ops/intelligence/aggregator-playbook/" }
+          ]
+        },
+        "NCH": {
+          "status": "live",
+          "last_run": "2026-05-25",
+          "freshness_days": 4,
+          "summary": "NCH Swiggy + Zomato live; same 3 AM owner-report pipeline. Lower volume than HE.",
+          "glance": [
+            { "label": "May 1–25 orders", "value": "55", "sub": "35 Zomato · 20 Swiggy", "tone": "neutral" },
+            { "label": "Delivered revenue", "value": "₹10,357", "sub": "May 1–25", "tone": "neutral" },
+            { "label": "Commission drag", "value": "Swiggy 24.6% · Zomato 23.4%", "sub": "margin-gate every offer", "tone": "warn" }
+          ],
+          "next_action": {
+            "text": "Same as HE: 3 AM cron auto-runs; margin-gate offers. NCH delivery volume is low — chai/haleem travel poorly; weigh whether delivery push is worth the commission drag vs dine-in.",
+            "urgency": "low",
+            "where": "Claude → Delivery-aggregator lane"
+          },
+          "deep": { "Swiggy restaurant_id": "1342887", "Coverage May 1-25": "55 orders · ₹10,357 delivered · discount-known 9" },
+          "live_ids": { "swiggy_id": "1342887" },
+          "links": [ { "label": "Aggregator dashboard", "url": "https://hnhotels.in/ops/aggregator/" } ]
+        }
+      }
+    },
+    {
+      "id": "dine-aggregator",
+      "title": "Dine-in Aggregators",
+      "subtitle": "Zomato Dining · EazyDiner",
+      "group": "Aggregators",
+      "risk": "none",
+      "priority": 9,
+      "cockpit_url": "https://hnhotels.in/ops/intelligence/dine-in-aggregator-playbook/",
+      "live_api": null,
+      "related_creative_lane": "other",
+      "brands": {
+        "HE": {
+          "status": "idle",
+          "last_run": null,
+          "freshness_days": null,
+          "summary": "Cold lane in execution memory. Folded into the aggregator appliance (dine tenant on winpc). GBP + ambience proof + KAM talk-tracks exist.",
+          "glance": [
+            { "label": "Status", "value": "folded into delivery appliance", "sub": "low recurring touch", "tone": "neutral" }
+          ],
+          "next_action": {
+            "text": "Keep GBP / ambience proof current and verify dine attribution. Partner sessions can't be isolated — runs through the shared aggregator login.",
+            "urgency": "low",
+            "where": "Claude → Dine-aggregator lane"
+          },
+          "deep": {},
+          "live_ids": {},
+          "links": [ { "label": "Dine playbook", "url": "https://hnhotels.in/ops/intelligence/dine-in-aggregator-playbook/" }, { "label": "Dine-in ambience", "url": "https://hamzaexpress.in/marketing/photos/dine-in-ambience/" } ]
+        },
+        "NCH": null
+      }
+    },
+    {
+      "id": "gbp",
+      "title": "Google Business Profile",
+      "subtitle": "Maps presence · reviews · actions",
+      "group": "Organic",
+      "risk": "none",
+      "priority": 6,
+      "cockpit_url": "https://hnhotels.in/marketing/he/gbp/",
+      "live_api": "https://hnhotels.in/api/gbp-cockpit?brand=he",
+      "related_creative_lane": "other",
+      "brands": {
+        "HE": {
+          "status": "live",
+          "last_run": null,
+          "freshness_days": null,
+          "summary": "Dual-brand GBP cockpit. Impressions, customer actions (calls/directions/website), reviews, profile health, media freshness, action queue. Performance API has T-2 day lag.",
+          "glance": [
+            { "label": "Impressions / actions", "value": "live", "sub": "gbp-cockpit?brand=he", "tone": "neutral" },
+            { "label": "Hours", "value": "12pm–1am → 2pm–3am", "sub": "don't apply generic peak heuristic", "tone": "neutral" }
+          ],
+          "next_action": {
+            "text": "Watch the action queue (calls/directions trend) and respond to new reviews. Keep media fresh — falling photo cadence drags rank.",
+            "urgency": "low",
+            "where": "Claude → GBP / Dine lane"
+          },
+          "deep": { "location": "locations/9588185230705816056", "account": "accounts/112047111046090890635", "note": "Always resolve by Place ID — stale 'Hamza Hotel' listing shares the account. Q&A API retired." },
+          "live_ids": { "location": "locations/9588185230705816056" },
+          "links": [ { "label": "GBP cockpit (HE)", "url": "https://hnhotels.in/marketing/he/gbp/" } ]
+        },
+        "NCH": {
+          "status": "live",
+          "last_run": null,
+          "freshness_days": null,
+          "summary": "NCH GBP listing (not at HE parity). 5.0★. Irani chai / Osmania / bun maska positioning.",
+          "glance": [
+            { "label": "Rating", "value": "5.0★", "sub": "gbp-cockpit?brand=nch", "tone": "good" },
+            { "label": "Impressions / actions", "value": "live", "sub": "Maps presence", "tone": "neutral" }
+          ],
+          "next_action": {
+            "text": "Bring NCH GBP to HE parity — keep photos fresh, respond to reviews, watch directions trend.",
+            "urgency": "low",
+            "where": "Claude → GBP lane"
+          },
+          "deep": { "location": "locations/16572235710389279793", "place_id": "ChIJq-hENv8XrjsRCjNPpTGIogY" },
+          "live_ids": { "location": "locations/16572235710389279793" },
+          "links": [ { "label": "GBP cockpit (NCH)", "url": "https://hnhotels.in/marketing/nch/gbp/" } ]
+        }
+      }
+    },
+    {
+      "id": "organic-social",
+      "title": "Organic & Social",
+      "subtitle": "Instagram · Facebook · posts calendar",
+      "group": "Organic",
+      "risk": "none",
+      "priority": 7,
+      "cockpit_url": "https://nawabichaihouse.com/ops/marketing/organic/",
+      "live_api": "https://nawabichaihouse.com/api/marketing?action=gmb-performance",
+      "related_creative_lane": "brand",
+      "brands": {
+        "HE": {
+          "status": "live",
+          "last_run": null,
+          "freshness_days": null,
+          "summary": "HE organic post planner + GMB publish. GSC + GBP organic insights.",
+          "glance": [ { "label": "Organic insights", "value": "live", "sub": "GSC impressions/clicks + GBP", "tone": "neutral" } ],
+          "next_action": { "text": "Keep the weekly post grid filled; publish to GMB. Pull dish names from live POS top-sellers — never invent menu items.", "urgency": "low", "where": "Claude → Organic lane" },
+          "deep": {},
+          "live_ids": {},
+          "links": [ { "label": "Marketing hub (HE)", "url": "https://hamzaexpress.in/ops/marketing/organic/" } ]
+        },
+        "NCH": {
+          "status": "live",
+          "last_run": null,
+          "freshness_days": null,
+          "summary": "NCH organic cockpit — weekly IG/FB/Google-Business posts. Reviews snapshot. #NawabiChaiHouse #IraniChai #Shivajinagar.",
+          "glance": [
+            { "label": "IG / FB insights", "value": "live", "sub": "reach · interactions · follows", "tone": "neutral" },
+            { "label": "Reviews", "value": "live", "sub": "rating · new today · this week", "tone": "neutral" }
+          ],
+          "next_action": { "text": "Fill the weekly post grid; publish IG/FB/GMB. Chai/haleem/Osmania heritage angle.", "urgency": "low", "where": "Claude → Organic lane" },
+          "deep": {},
+          "live_ids": {},
+          "links": [ { "label": "Organic cockpit (NCH)", "url": "https://nawabichaihouse.com/ops/marketing/organic/" }, { "label": "Analytics", "url": "https://nawabichaihouse.com/ops/marketing/organic/analytics/" } ]
+        }
+      }
+    },
+    {
+      "id": "pisignage",
+      "title": "In-store TV",
+      "subtitle": "PiSignage screens · choreography",
+      "group": "Creative surface",
+      "risk": "creative",
+      "priority": 8,
+      "cockpit_url": "https://hamzaexpress.in/ops/tv-mission-control/",
+      "live_api": null,
+      "related_creative_lane": "tv",
+      "brands": {
+        "HE": {
+          "status": "ready",
+          "last_run": "2026-05-25",
+          "freshness_days": 4,
+          "summary": "HE TV choreography verified: 7 groups, 28 playlists, 113 assets, 28 contact sheets. 100/100 sampled assets = 1920×1080. 13 PNGs failed image probe and need re-export before upload.",
+          "glance": [
+            { "label": "Choreography", "value": "7 groups · 28 playlists", "sub": "113 assets · 28 contact sheets", "tone": "neutral" },
+            { "label": "Blocking issue", "value": "13 PNGs failed probe", "sub": "re-export before upload", "tone": "warn" }
+          ],
+          "next_action": {
+            "text": "Repair / re-export the 13 probe-failing PNGs, confirm the outdoor facade H2 screen assignment, prepare rollback, then upload to PiSignage.",
+            "urgency": "medium",
+            "where": "Claude → PiSignage lane"
+          },
+          "deep": { "source": "tv-mission-control/choreography/preview-data.json (2026-05-18)", "groups": 7, "playlists": 28, "assets": 113 },
+          "live_ids": { "facade_screen": "H2" },
+          "links": [ { "label": "TV mission control", "url": "https://hamzaexpress.in/ops/tv-mission-control/" }, { "label": "Choreography", "url": "https://hamzaexpress.in/ops/tv-mission-control/choreography/" } ]
+        },
+        "NCH": null
+      }
+    },
+    {
+      "id": "reel",
+      "title": "Reels",
+      "subtitle": "Clip intelligence · dish-safe footage",
+      "group": "Creative surface",
+      "risk": "creative",
+      "priority": 8,
+      "cockpit_url": null,
+      "live_api": null,
+      "related_creative_lane": "reel",
+      "brands": {
+        "HE": {
+          "status": "ready",
+          "last_run": "2026-05-25",
+          "freshness_days": 4,
+          "summary": "38-clip 'Hanin' batch classified. Safe-to-claim: tandoori chicken, red chicken tikka, table-spread, roti/rumali, venue/counter, takeaway. Ghee-rice candidates need confirmation.",
+          "glance": [
+            { "label": "Latest batch", "value": "38 clips", "sub": "classified 5-axis", "tone": "neutral" },
+            { "label": "Unsafe for exact claims", "value": "9 dishes", "sub": "Butter Chicken, Mutton Biryani, Brain Dry…", "tone": "warn" }
+          ],
+          "next_action": {
+            "text": "Confirm whether IMG_0435, IMG_0449, IMG_0476 are ghee rice before using them in any ghee-rice offer reel. No exact dish claim without verified footage.",
+            "urgency": "medium",
+            "where": "Claude → Reel lane"
+          },
+          "deep": {
+            "safe_dishes": ["Tandoori chicken (plated)","Red chicken tikka","Table spread","Roti / rumali roti","Venue / counter","Takeaway packaging"],
+            "unsafe_dishes": ["Butter Chicken","Dal Fry","Butter Naan","Brain Dry","Mutton Biryani","Chicken Lollipop","Shawarma","Fried Rice","Noodles"],
+            "ghee_rice_candidates": ["IMG_0435","IMG_0449","IMG_0476"]
+          },
+          "live_ids": {},
+          "links": []
+        },
+        "NCH": null
+      }
+    },
+    {
+      "id": "packaging",
+      "title": "Packaging",
+      "subtitle": "NCH chai flask · tuck box",
+      "group": "Creative surface",
+      "risk": "creative",
+      "priority": 5,
+      "cockpit_url": null,
+      "live_api": null,
+      "related_creative_lane": "packaging",
+      "brands": {
+        "HE": {
+          "status": "idle",
+          "last_run": null,
+          "freshness_days": null,
+          "summary": "HE packaging assets exist (84 in library) but no active HE packaging job.",
+          "glance": [ { "label": "Library assets", "value": "84", "sub": "no active job", "tone": "neutral" } ],
+          "next_action": { "text": "No active HE packaging work.", "urgency": "low", "where": "Claude → Packaging lane" },
+          "deep": {},
+          "live_ids": {},
+          "links": []
+        },
+        "NCH": {
+          "status": "ready",
+          "last_run": "2026-05-28",
+          "freshness_days": 1,
+          "summary": "NCH chai flask. Auto-generated vendor pack REJECTED by you (do-not-use). Figma production master 226:2 now editable; 500ml back matched to 250ml system; 500ml phone text corrected to Cinzel Bold 30.",
+          "glance": [
+            { "label": "Vendor pack", "value": "REJECTED", "sub": "do-not-use folder", "tone": "bad" },
+            { "label": "Figma master", "value": "editable · 226:2", "sub": "250+500ml consistent", "tone": "neutral" },
+            { "label": "Open data bug", "value": "phone mismatch", "sub": "print 74832 70215 vs site 8008002045", "tone": "warn" }
+          ],
+          "next_action": {
+            "text": "Review the editable Figma page and manually export PDF Print + SVG if approved. FIX FIRST: /go/flask returns the NCH homepage (no flask redirect), and the print phone (+91 74832 70215) doesn't match the site's wa.me/918008002045.",
+            "urgency": "high",
+            "where": "Claude → Packaging lane / Figma export"
+          },
+          "deep": {
+            "figma_file": "cNkjzNFs4Xb1bdJUBB0Xey",
+            "master_page": "226:2 (Codex Production Master 250ml 500ml Consistent)",
+            "dieline": "250ml 136×216mm · 500ml 136×246mm",
+            "rejected_pack": "~/Desktop/NCH_Chai_Flask_Vendor_Final_2026-05-28_REJECTED_DO_NOT_USE",
+            "qr_targets": "/go/flask (WhatsApp) + g.page review"
+          },
+          "live_ids": { "figma_file": "cNkjzNFs4Xb1bdJUBB0Xey", "master_page": "226:2" },
+          "links": [ { "label": "Figma master", "url": "https://www.figma.com/design/cNkjzNFs4Xb1bdJUBB0Xey" } ]
+        }
+      }
+    },
+    {
+      "id": "flyers",
+      "title": "Flyers & Print",
+      "subtitle": "A4 · menu sheets · QR · facade",
+      "group": "Creative surface",
+      "risk": "creative",
+      "priority": 11,
+      "cockpit_url": null,
+      "live_api": null,
+      "related_creative_lane": "flyers",
+      "brands": {
+        "HE": {
+          "status": "stale",
+          "last_run": "2026-03-06",
+          "freshness_days": 84,
+          "summary": "Event-driven lane, no live dashboard. Last real activity early March (hiring poster). 7 flyer assets in library.",
+          "glance": [ { "label": "Last touched", "value": "84 days ago", "sub": "event-driven only", "tone": "neutral" } ],
+          "next_action": { "text": "Fire only when a physical print is needed: produce → QC dimensions/QR-decode/copy → hand to print.", "urgency": "low", "where": "Claude → Flyers lane" },
+          "deep": {},
+          "live_ids": {},
+          "links": [ { "label": "HKP Road flyer landing", "url": "https://hamzaexpress.in/marketing/flyer/hkp-road-new-hamza-experience/" } ]
+        },
+        "NCH": null
+      }
+    },
+    {
+      "id": "pos-write",
+      "title": "POS · Pricing & Menu",
+      "subtitle": "Odoo writes · offers · pricelists",
+      "group": "POS / Pricing",
+      "risk": "production",
+      "priority": 5,
+      "cockpit_url": "https://hamzaexpress.in/ops/sales-control/",
+      "live_api": null,
+      "related_creative_lane": "other",
+      "brands": {
+        "HE": {
+          "status": "completed",
+          "last_run": "2026-05-25",
+          "freshness_days": 4,
+          "summary": "HE cold-drink SKU universe + Captain MRP protection executed on test.hamzahotel.com (POS company 1). 4 new SKUs created, 6 re-categorised, MRP-protection rules added on pricelists 40/45. Only lane marked completed.",
+          "glance": [
+            { "label": "Status", "value": "completed", "sub": "production Odoo write done", "tone": "good" },
+            { "label": "New SKUs", "value": "4", "sub": "Bisleri 1442 · Kinley 1443 · Coke 1444 · Thums 1445", "tone": "neutral" },
+            { "label": "Pending handoff", "value": "staff POS reload", "sub": "configs 5 · 6 · 10 · 32", "tone": "warn" }
+          ],
+          "next_action": {
+            "text": "Staff must hard-refresh/reopen Captain, Cash, Ground, WABA POS sessions so cache reloads. Then a follow-up settlement PR adds DIRECT_ITEMS aliases. Keep MRP-protected drinks out of discount rules. Refund order 8059 must NOT be touched.",
+            "urgency": "medium",
+            "where": "Claude → POS-write lane"
+          },
+          "deep": {
+            "new_skus": { "Bisleri 1L": 1442, "Kinley 1L": 1443, "Coke 200ml Glass": 1444, "Thums Up 200ml Glass": 1445 },
+            "pricelists": { "Captain base": 40, "Captain V2 offer": 45, "Cash 20%": 42, "Ground 10%": 43 },
+            "odoo": "test.hamzahotel.com (HE POS company 1)"
+          },
+          "live_ids": { "pos_company": "1", "captain_config": "6" },
+          "links": [ { "label": "Sales control (HE)", "url": "https://hamzaexpress.in/ops/sales-control/" } ]
+        },
+        "NCH": {
+          "status": "idle",
+          "last_run": null,
+          "freshness_days": null,
+          "summary": "NCH POS catalog on ops.hamzahotel.com (company 10). No active pricing job.",
+          "glance": [ { "label": "Status", "value": "no active job", "sub": "company 10", "tone": "neutral" } ],
+          "next_action": { "text": "No active NCH pricing/menu write.", "urgency": "low", "where": "Claude → POS-write lane" },
+          "deep": { "odoo": "ops.hamzahotel.com (NCH company 10)" },
+          "live_ids": {},
+          "links": []
+        }
+      }
+    },
+    {
+      "id": "waba-outreach",
+      "title": "WABA Retention",
+      "subtitle": "Voucher funnel · CRM (not acquisition)",
+      "group": "Owned conversion",
+      "risk": "comms",
+      "priority": 10,
+      "cockpit_url": "https://hamzaexpress.in/ops/waba-dashboard/",
+      "live_api": "https://hamzaexpress.in/api/waba-analytics",
+      "related_creative_lane": "meta",
+      "brands": {
+        "HE": {
+          "status": "ready",
+          "last_run": "2026-05-25",
+          "freshness_days": 4,
+          "summary": "Verified the deployed voucher funnel (whatsapp.js). Trigger phrase 'Hi Hamza, send my WhatsApp voucher' → handleVoucherIntro → wa_voucher_claims (HE-xxxxx). No customer send performed. WABA is retention/CRM only, not first-order acquisition.",
+          "glance": [
+            { "label": "Voucher campaign", "value": "armed", "sub": "HE_RT_WABA_VOUCHER_ALL_20260523", "tone": "neutral" },
+            { "label": "Gate", "value": "owner test-claim", "sub": "before any public launch", "tone": "warn" }
+          ],
+          "next_action": {
+            "text": "Send the exact prefill 'Hi Hamza, send my WhatsApp voucher', claim it, click offers/maps/menu, then verify the wa_voucher_claims D1 row + staff redemption — BEFORE any public Meta→WABA launch.",
+            "urgency": "medium",
+            "where": "Claude → WABA-outreach lane"
+          },
+          "deep": { "campaign": "HE_RT_WABA_VOUCHER_ALL_20260523", "claim_table": "wa_voucher_claims (HE-xxxxx)", "trigger": "Hi Hamza, send my WhatsApp voucher" },
+          "live_ids": { "campaign": "HE_RT_WABA_VOUCHER_ALL_20260523" },
+          "links": [ { "label": "WABA dashboard", "url": "https://hamzaexpress.in/ops/waba-dashboard/" }, { "label": "Leads CRM", "url": "https://hamzaexpress.in/ops/leads/" }, { "label": "Live inbox", "url": "https://hamzaexpress.in/ops/inbox/" } ]
+        },
+        "NCH": null
+      }
+    }
+  ]
+}
