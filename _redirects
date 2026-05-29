@@ -1,8 +1,0 @@
-# ── darbar.hnhotels.in ───────────────────────────────────────────────────────
-# Darbar lives at /ops/darbar/ in this Pages project. The custom domain
-# darbar.hnhotels.in is attached to the same project. Cloudflare Pages does NOT
-# support host-scoped 200 rewrites (only path-scoped), so we 302 the bare
-# subdomain root to the app. The home-screen PWA opens start_url /ops/darbar/
-# directly, so the redirect is only seen on a cold type-in. Rule is host-scoped,
-# so hnhotels.in and every other custom domain are untouched.
-https://darbar.hnhotels.in/  /ops/darbar/  302
