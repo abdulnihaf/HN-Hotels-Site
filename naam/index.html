@@ -2,11 +2,11 @@
 <html lang="en-IN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0">
 <title>Naam · HN Hotels</title>
 <meta name="description" content="Naam — how the world comes to know I exist. View-only marketing surface for HN Hotels.">
 <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#0a0a10">
+<meta name="theme-color" content="#020205">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Naam">
@@ -18,7 +18,7 @@
 <style>
 :root{
   --bg:#000; --bg-elev-1:#14141c; --bg-elev-2:#1c1c26; --bg-elev-3:#26262f;
-  --text:#f8f8fa; --text-dim:#98989f; --text-mute:#5c5c66;
+  --text:#f8f8fa; --text-dim:#a8a8b2; --text-mute:#868690;
   --line:rgba(255,255,255,.10); --line-soft:rgba(255,255,255,.05);
   --hn-gold:#d4a24c; --hn-gold-soft:rgba(212,162,76,.18); --hn-gold-border:rgba(212,162,76,.45); --hn-gold-deep:#b8893a;
   --green:#34d399; --blue:#5e9eff; --yellow:#fbbf24; --red:#ff5c5c; --purple:#a78bfa;
@@ -211,6 +211,35 @@ a{color:inherit;text-decoration:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .skel{background:linear-gradient(90deg,var(--bg-elev-1),var(--bg-elev-2),var(--bg-elev-1));background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:14px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ===== Phase-1 hardening ===== */
+/* boot loader + offline screen */
+#bootLoader{position:fixed;inset:0;z-index:55;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px;text-align:center;background:#020205;background-image:radial-gradient(120% 78% at 50% 40%,#0e0e16,#020205 72%)}
+#bootLoader .bl-mark{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:44px;color:var(--naam);text-shadow:0 6px 20px rgba(0,0,0,.55)}
+#bootLoader .bl-msg{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:15px;color:var(--hn-gold);max-width:280px;line-height:1.5}
+#bootLoader .bl-retry{margin-top:8px;background:var(--bg-elev-2);border:.5px solid var(--hn-gold-border);color:var(--hn-gold);border-radius:12px;padding:13px 24px;font-size:14px;min-height:44px}
+#bootLoader .bl-retry:active{transform:scale(.95)}
+.spinner{width:22px;height:22px;border:2px solid var(--bg-elev-3);border-top-color:var(--naam);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* the ONE structural detail carrying the chamber hue past the gate */
+.tab-btn.on{color:var(--naam)}
+/* staleness banner (snapshot not refreshed) */
+.stale-banner{margin:2px 14px 12px;background:rgba(251,191,36,.10);border:.5px solid rgba(251,191,36,.30);border-radius:12px;padding:10px 13px;font-size:12px;color:var(--yellow);display:flex;gap:8px;align-items:flex-start;line-height:1.4}
+/* Mughal-court empty state */
+.empty{padding:54px 30px;text-align:center;color:var(--text-dim)}
+.empty .em-mark{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:19px;color:var(--hn-gold);margin-bottom:8px;line-height:1.4}
+.empty .em-sub{font-size:13px;color:var(--text-mute);line-height:1.55}
+/* tap targets ≥44px on filter chips */
+.chip{min-height:40px;display:inline-flex;align-items:center}
+/* keyboard focus ring (VoiceOver / external kbd) */
+.lane-card:focus-visible,.ctile:focus-visible,.tab-btn:focus-visible,.chip:focus-visible,.pin-key:focus-visible,.you-row:focus-visible,.link-row:focus-visible{outline:2px solid var(--naam);outline-offset:2px}
+/* iPad / large screens — Naam is iPhone-first; cap to a phone column, centred */
+@media (min-width:600px){
+  #app,#bootLoader{left:50%;right:auto;width:560px;transform:translateX(-50%)}
+  .tab-bar{left:50%;right:auto;width:560px;transform:translateX(-50%)}
+  .sheet-card{max-width:560px;margin-left:auto;margin-right:auto}
+}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
@@ -228,6 +257,7 @@ a{color:inherit;text-decoration:none}
 <!-- APP -->
 <div id="app" class="hide">
   <div class="status-bar-haze"></div>
+  <div id="bootLoader" class="hide" role="status" aria-live="polite"></div>
 
   <!-- TODAY -->
   <main class="tab-pane" id="tab-today">
@@ -269,15 +299,15 @@ a{color:inherit;text-decoration:none}
   </main>
 
   <!-- TAB BAR -->
-  <nav class="tab-bar" id="tabBar">
-    <button class="tab-btn on" data-tab="today">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg><span class="tl">Today</span></button>
-    <button class="tab-btn" data-tab="lanes">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg><span class="tl">Lanes</span></button>
-    <button class="tab-btn" data-tab="creative">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="tl">Creative</span></button>
-    <button class="tab-btn" data-tab="you">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span class="tl">You</span></button>
+  <nav class="tab-bar" id="tabBar" role="tablist" aria-label="Naam sections">
+    <button class="tab-btn on" data-tab="today" role="tab" aria-label="Today" aria-selected="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg><span class="tl">Today</span></button>
+    <button class="tab-btn" data-tab="lanes" role="tab" aria-label="Lanes" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg><span class="tl">Lanes</span></button>
+    <button class="tab-btn" data-tab="creative" role="tab" aria-label="Creative library" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="tl">Creative</span></button>
+    <button class="tab-btn" data-tab="you" role="tab" aria-label="You — settings and health" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span class="tl">You</span></button>
   </nav>
 </div>
 
@@ -307,7 +337,8 @@ function renderPin(){
   $('#pinDots').innerHTML=[0,1,2,3].map(i=>`<div class="pin-dot ${i<pinBuf.length?'filled':''}"></div>`).join('');
   if(!$('#pinPad').children.length){
     const keys=['1','2','3','4','5','6','7','8','9','','0','⌫'];
-    $('#pinPad').innerHTML=keys.map(k=>k===''?'<div class="pin-key blank"></div>':`<button class="pin-key${k==='⌫'?' back':''}" data-k="${k}">${k}</button>`).join('');
+    $('#pinPad').setAttribute('role','group');$('#pinPad').setAttribute('aria-label','PIN keypad');
+    $('#pinPad').innerHTML=keys.map(k=>k===''?'<div class="pin-key blank" aria-hidden="true"></div>':`<button class="pin-key${k==='⌫'?' back':''}" data-k="${k}" aria-label="${k==='⌫'?'Delete':k}">${k}</button>`).join('');
     $('#pinPad').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(!b)return;const k=b.dataset.k;
       if(k==='⌫'){pinBuf=pinBuf.slice(0,-1);} else if(pinBuf.length<4){pinBuf+=k;}
       renderPin();
@@ -323,7 +354,7 @@ function unlock(){ $('#pinGate').style.opacity='0'; setTimeout(()=>{$('#pinGate'
 /* ---------- BRAND ---------- */
 function brandSegHTML(){
   const b=state.data.brands;
-  return ['HE','NCH'].map(k=>`<button data-brand="${k}" class="${state.brand===k?'on':''}">${esc(b[k].label)}<span class="em">${esc(b[k].short)} · ${esc(b[k].tagline)}</span></button>`).join('');
+  return ['HE','NCH'].map(k=>`<button data-brand="${k}" class="${state.brand===k?'on':''}" aria-pressed="${state.brand===k}" aria-label="Show ${esc(b[k].label)}">${esc(b[k].label)}<span class="em">${esc(b[k].short)} · ${esc(b[k].tagline)}</span></button>`).join('');
 }
 function wireBrandSegs(){
   ['#brandSeg1','#brandSeg2'].forEach(sel=>{const el=$(sel);el.innerHTML=brandSegHTML();
@@ -345,7 +376,13 @@ async function renderToday(){
     return (a.b.freshness_days??999)-(b.b.freshness_days??999);
   });
   $('#todaySub').textContent=`${state.data.brands[state.brand].label} · marketing pulse`;
-  $('#todayCards').innerHTML=items.map(x=>laneCard(x.lane,x.b,true)).join('') || '<div class="empty">No lanes for this brand yet.</div>';
+  let banner='';
+  const gen=state.data.generated_at?new Date(state.data.generated_at):null;
+  if(gen&&!isNaN(gen)){const days=Math.floor((Date.now()-gen.getTime())/86400000);
+    if(days>2)banner=`<div class="stale-banner"><span>⚠</span><span>This snapshot is ${days} days old. Run <b>naam-snapshot.js</b> on the laptop for fresh counts.</span></div>`;}
+  const body=items.map(x=>laneCard(x.lane,x.b,true)).join('')
+    || '<div class="empty"><div class="em-mark">This house keeps no marketing lanes.</div><div class="em-sub">Switch the seal above to the other brand.</div></div>';
+  $('#todayCards').innerHTML=banner+body;
   renderPulse();
 }
 function laneCard(lane,b,showAction){
@@ -354,7 +391,7 @@ function laneCard(lane,b,showAction){
   const u=na?na.urgency:'low';
   const action= showAction&&na ? `<div class="lc-action u-${u}"><div class="lc-action-icon">${u==='high'?'!':u==='medium'?'→':'·'}</div><div class="lc-action-body"><div class="lc-action-text">${esc(na.text)}</div>${na.where?`<div class="lc-action-where">↳ ${esc(na.where)}</div>`:''}</div></div>`:'';
   const fresh = b.freshness_days!=null ? `<div class="lc-freshness">Updated ${b.freshness_days===0?'today':b.freshness_days+'d ago'}</div>` : (b.status==='idle'?'<div class="lc-freshness">Not run yet</div>':'');
-  return `<div class="lane-card risk-${lane.risk}" data-lane="${lane.id}">
+  return `<div class="lane-card risk-${lane.risk}" data-lane="${lane.id}" role="button" tabindex="0" aria-label="${esc(lane.title)}, ${esc(b.status)}${na?'. Next action: '+esc(na.text):''}">
     <div class="lc-head"><div><div class="lc-title">${esc(lane.title)}</div><div class="lc-subtitle">${esc(lane.subtitle)}</div></div><div class="lc-pill ${pillClass(b.status)}">${esc(b.status)}</div></div>
     ${g?`<div class="lc-glance">${g}</div>`:''}
     ${action}${fresh}
@@ -369,10 +406,12 @@ async function renderPulse(){
   $('#pulseRow').innerHTML=html;
   // live counter fetch
   try{
-    const r=await fetch(`${bd.counter_origin}/api/counter-recent?qr=${bd.counter_qr}&limit=1`,{cache:'no-store'});
+    const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),6000);
+    const r=await fetch(`${bd.counter_origin}/api/counter-recent?qr=${bd.counter_qr}&limit=1`,{cache:'no-store',signal:ctrl.signal});
+    clearTimeout(t);
     const j=await r.json();
     if(j&&j.success){const c=$('#pulseCounter');if(c)c.querySelector('.pv').textContent='₹'+Math.round(j.total_amount||0).toLocaleString('en-IN');if(c)c.querySelector('.ps').textContent=(j.count||0)+' payments · live';}
-  }catch(e){const c=$('#pulseCounter');if(c){c.querySelector('.pv').textContent='—';c.querySelector('.ps').textContent='offline';}}
+  }catch(e){const c=$('#pulseCounter');if(c){c.querySelector('.pv').textContent='—';c.querySelector('.ps').textContent=e.name==='AbortError'?'timed out':'offline';}}
 }
 
 /* ---------- LANES ---------- */
@@ -385,7 +424,7 @@ function renderLanes(){
     html+=`<div class="section-header">${esc(gk)}</div>`;
     html+=groups[gk].map(x=>laneCard(x.lane,x.b,false)).join('');
   });
-  $('#lanesList').innerHTML=html||'<div class="empty">No lanes for this brand.</div>';
+  $('#lanesList').innerHTML=html||'<div class="empty"><div class="em-mark">No lanes under this house.</div><div class="em-sub">Switch the seal above to the other brand.</div></div>';
 }
 
 /* ---------- LANE DETAIL ---------- */
@@ -423,7 +462,7 @@ function renderCreativeFilters(){
 }
 function renderCreative(){
   $('#creativeSub').textContent=`${state.data.brands[state.brand].label} · library`;
-  if(!state.creative){$('#creativeGrid').innerHTML='<div class="empty" style="grid-column:1/-1">Creative manifest not built yet. Run<br><code>python3 scripts/build-creative-manifest.py</code></div>';$('#cvCount').textContent='';return;}
+  if(!state.creative){$('#creativeGrid').innerHTML='<div class="empty" style="grid-column:1/-1"><div class="em-mark">The library is not yet drawn.</div><div class="em-sub">Run build-creative-manifest.py on the laptop.</div></div>';$('#cvCount').textContent='';return;}
   renderCreativeFilters();
   let list=state.creative.assets.filter(a=>a.brand===state.brand);
   if(state.cLane!=='all') list=list.filter(a=>a.lane===state.cLane);
@@ -431,10 +470,10 @@ function renderCreative(){
   if(state.cSearch){const q=state.cSearch.toLowerCase();list=list.filter(a=>(a.title||'').toLowerCase().includes(q)||(a.tags||[]).join(' ').toLowerCase().includes(q));}
   $('#cvCount').textContent=`${list.length} creatives`;
   $('#creativeGrid').innerHTML=list.slice(0,300).map((a,i)=>{
-    const img=a.thumb_url?`<img loading="lazy" src="${esc(a.thumb_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:'';
-    const badge=`<div class="badge" ${a.thumb_url?'style="display:none"':''}><div class="bt">${LANE_ICON[a.lane]||'◆'}</div><div>${esc(a.title||a.lane)}</div></div>`;
-    return `<div class="ctile" data-cid="${esc(a.id)}">${img}${badge}<div class="st st-${a.status}">${a.status[0].toUpperCase()}</div>${a.aspect_ratio?`<div class="tp">${esc(a.aspect_ratio)}</div>`:''}</div>`;
-  }).join('') || '<div class="empty" style="grid-column:1/-1">No creatives match.</div>';
+    const img=a.thumb_url?`<img loading="lazy" decoding="async" alt="${esc(a.title||a.lane)}" src="${esc(a.thumb_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:'';
+    const badge=`<div class="badge" ${a.thumb_url?'style="display:none"':''}><div class="bt" aria-hidden="true">${LANE_ICON[a.lane]||'◆'}</div><div>${esc(a.title||a.lane)}</div></div>`;
+    return `<div class="ctile" data-cid="${esc(a.id)}" role="button" tabindex="0" aria-label="${esc(a.title||a.lane)}, ${esc(a.lane)}, ${esc(a.status)}">${img}${badge}<div class="st st-${a.status}">${a.status[0].toUpperCase()}</div>${a.aspect_ratio?`<div class="tp">${esc(a.aspect_ratio)}</div>`:''}</div>`;
+  }).join('') || '<div class="empty" style="grid-column:1/-1"><div class="em-mark">The world has not yet seen us in this voice.</div><div class="em-sub">No creatives in this category yet.</div></div>';
 }
 function openCreative(id){
   const a=state.creative.assets.find(x=>x.id===id);if(!a)return;
@@ -488,7 +527,7 @@ function renderYou(){
     <div style="text-align:center;padding:24px;color:var(--text-mute);font-size:12px">Naam · view-only · execute in Claude on laptop<br>${esc(state.data.standing_direction)}</div>`;
   const seg=$('#brandSegYou');seg.innerHTML=brandSegHTML();seg.onclick=e=>{const b=e.target.closest('[data-brand]');if(b)setBrand(b.dataset.brand);};
   $('#signOut').onclick=()=>{localStorage.removeItem(LS.pin);location.reload();};
-  $('#refreshRow').onclick=async()=>{toast('Refreshing…');await loadData(true);renderAll();toast('Refreshed');};
+  $('#refreshRow').onclick=async()=>{toast('Summoning fresh counsel…');await loadData(true);state.creative=null;renderAll();if(state.tab==='creative')loadCreative();toast('Refreshed');};
   $('#installRow').onclick=()=>{if(window._deferredPrompt){window._deferredPrompt.prompt();}else{toast('Tap Share → Add to Home Screen');}};
 }
 
@@ -497,10 +536,12 @@ function switchTab(t){
   state.tab=t;
   $$('.tab-pane').forEach(p=>p.classList.add('hide'));
   $('#tab-'+t).classList.remove('hide');
-  $$('.tab-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+  $$('.tab-btn').forEach(b=>{const on=b.dataset.tab===t;b.classList.toggle('on',on);b.setAttribute('aria-selected',on?'true':'false');});
   if(t==='creative'&&!state.creative)loadCreative();
 }
 $('#tabBar').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)switchTab(b.dataset.tab);};
+// keyboard / VoiceOver activation for non-native buttons
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('[role="button"][tabindex]')){e.preventDefault();e.target.click();}});
 // lane card taps
 document.addEventListener('click',e=>{
   const lc=e.target.closest('.lane-card[data-lane]');if(lc&&!e.target.closest('a')){openLane(lc.dataset.lane);return;}
@@ -524,16 +565,26 @@ async function loadCreative(){
   catch(e){/* manifest may not exist yet */}
 }
 function renderAll(){ renderToday(); renderLanes(); if(state.tab==='creative')renderCreative(); if(state.tab==='you')renderYou(); }
+function showBoot(msg){const el=$('#bootLoader');el.innerHTML=`<div class="bl-mark">Naam</div><div class="spinner"></div><div class="bl-msg">${esc(msg)}</div>`;el.classList.remove('hide');}
+function bootError(){const el=$('#bootLoader');el.innerHTML=`<div class="bl-mark">Naam</div><div class="bl-msg">The court is beyond reach.<br>No signal to the realm.</div><button class="bl-retry" id="blRetry">Try again</button>`;el.classList.remove('hide');$('#blRetry').onclick=()=>{el.classList.add('hide');boot();};}
+function hideBoot(){$('#bootLoader').classList.add('hide');}
+let _booted=false;
 async function boot(){
-  if(!state.data)await loadData();
+  if(!state.data){
+    showBoot('Summoning the court…');
+    try{ await loadData(); }
+    catch(e){ bootError(); return; }   // offline cold-start: no data, no SW cache — fail loudly, not blank
+  }
+  hideBoot();
   $$('.nav-brand-pill span:last-child').forEach(s=>s.textContent=state.brand);
   wireBrandSegs();
   renderAll();
   loadCreative();
-  // refresh counter periodically while on Today
-  setInterval(()=>{if(state.tab==='today'&&!$('#detailPane').classList.contains('open'))renderPulse();},45000);
-  // re-render you on tab open
-  $('[data-tab="you"]').addEventListener('click',()=>setTimeout(renderYou,0));
+  if(!_booted){
+    _booted=true;
+    setInterval(()=>{if(state.tab==='today'&&!$('#detailPane').classList.contains('open'))renderPulse();},45000);
+    $('[data-tab="you"]').addEventListener('click',()=>setTimeout(renderYou,0));
+  }
 }
 
 /* ---------- PWA ---------- */
