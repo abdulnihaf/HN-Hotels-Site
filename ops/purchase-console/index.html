@@ -1341,7 +1341,13 @@
     }
     const PORTAL_SEARCH_URL = {
       HYPERPURE: (q) => { const s = String(q || 'search').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'search'; return `https://www.hyperpure.com/in/search/${encodeURIComponent(s)}?type=SEARCH&query=${encodeURIComponent(q)}`; },
-      BIGBASKET: (q) => `https://www.bigbasket.com/ps/?q=${encodeURIComponent(q)}`,
+      // BigBasket — empirical AASA probe 2026-05-29: `/ps/` is NOT in
+      // the BB iOS app's path-claim list (which includes /sh/*, /sp/*,
+      // /pd/*, /cl/*, /store/c/*). `/ps/?q=` returns 200 on web but iOS
+      // UL handoff won't fire → falls to Safari. `/cl/<query>` IS in
+      // the claim list and returns 200. Final shape pending iPhone
+      // share-URL ground truth from owner.
+      BIGBASKET: (q) => `https://www.bigbasket.com/cl/${encodeURIComponent(q)}`,
       BLINKIT: (q) => `https://blinkit.com/s/?q=${encodeURIComponent(q)}`,
       // Flipkart Minutes = `marketplace=HYPERLOCAL` filter on search.
       // Without it the app deeplink lands in regular Flipkart search,
@@ -1376,7 +1382,12 @@
       // fallback. Search URL verified to return 200.
       DMART: (q) => `https://www.dmart.in/search?q=${encodeURIComponent(q)}`,
       ZEPTO: (q) => `https://www.zepto.com/search?query=${encodeURIComponent(q)}`,
-      JIOMART: (q) => `https://www.jiomart.com/search/${encodeURIComponent(q)}?q=${encodeURIComponent(q)}`,
+      // JioMart — empirical AASA probe 2026-05-29: `/search/` is NOT in
+      // the JM iOS app's path-claim list (which includes /catalogsearch/*,
+      // /c/*, /cn/*). Switched to `/catalogsearch/result?q=` which
+      // matches `/catalogsearch/*` claim. Final shape pending iPhone
+      // share-URL ground truth.
+      JIOMART: (q) => `https://www.jiomart.com/catalogsearch/result?q=${encodeURIComponent(q)}`,
       INSTAMART: (q) => `https://www.swiggy.com/instamart/search?custom_back=true&query=${encodeURIComponent(q)}`,
     };
     function portalSearchUrlFor(sk, q) {
