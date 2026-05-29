@@ -1502,26 +1502,23 @@
       return String(url).replace(/&amp;/g, '&').replace(/&#38;/g, '&').trim();
     }
     const PORTAL_SEARCH_URL = {
-      // Hyperpure — iterative URL fix history:
-      //  v1 /in/search/<slug>?type=SEARCH&query=<q>
-      //     → BROKEN: app misinterpreted slug as a product id, opened
-      //       qty=100 ADD prompt (owner screenshot 2026-05-29 05:59)
-      //  v2 /in/                       → lands on Spotlight Offers, OK
-      //  v3 /in/search                 → trying search screen direct
-      //  v4 (this) Branch.io deeplink — REVERSE-ENGINEERED
-      //     Discovered hyperpure.app.link has AASA claiming `*` for app
-      //     ID HE763KK4DM.com.wotu.app. Branch.io's smart link protocol
-      //     uses `$deeplink_path` param — the Hyperpure app's Branch
-      //     SDK extracts this from the URL and navigates the app to
-      //     that internal path on cold-open. URL pattern:
-      //       https://hyperpure.app.link/?$deeplink_path=/in/search?query=<q>
-      //     This is the canonical Hyperpure deeplink format used by
-      //     their own marketing / share flows.
-      HYPERPURE: (q) => {
-        const targetPath = `/in/search?query=${encodeURIComponent(q)}`;
-        const fallback = `https://www.hyperpure.com${targetPath}`;
-        return `https://hyperpure.app.link/?$deeplink_path=${encodeURIComponent(targetPath)}&$fallback_url=${encodeURIComponent(fallback)}`;
-      },
+      // Hyperpure — iterative URL fix history (owner-verified):
+      //  v1 /in/search/<slug>?type=SEARCH&query=<q>  → BROKEN qty=100 prompt
+      //  v2 /in/                                     → Spotlight Offers ✓
+      //  v3 /in/search                               → Spotlight Offers
+      //  v4 hyperpure.app.link?$deeplink_path=...    → Spotlight Offers
+      //
+      // All non-broken variants land on the same Spotlight Offers screen.
+      // The Hyperpure iOS app's URL handler ignores path/query/Branch
+      // params — only pre-registered Branch link keys (which only
+      // Hyperpure can generate from their Branch dashboard) deeplink to
+      // specific in-app destinations.
+      //
+      // Settled state: `/in/` (simplest URL that opens app cleanly).
+      // Copy-on-tap (PR #259) puts material name in clipboard so the
+      // owner's flow is: tap chip → app opens → tap 🔍 → long-press
+      // search field → Paste.
+      HYPERPURE: (q) => `https://www.hyperpure.com/in/`,
       // BigBasket — empirical AASA probe 2026-05-29: `/ps/` is NOT in
       // the BB iOS app's path-claim list (which includes /sh/*, /sp/*,
       // /pd/*, /cl/*, /store/c/*). `/ps/?q=` returns 200 on web but iOS
