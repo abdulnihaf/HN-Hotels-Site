@@ -263,6 +263,32 @@ function portalSessionKey(sourceKey) {
   return `purchase:portal-session:${sourceKey}`;
 }
 
+// Some portals share the SAME amazon.in consumer account/cookies and differ
+// only by storefront filter (Amazon Now i=nowstore vs Amazon Fresh
+// i=amazonfresh). The Chrome extension only ever captures one session
+// (AMAZON_NOW). So a source with no captured session of its own falls back to
+// its alias's session. NOTE: AMAZON_BUSINESS is deliberately NOT aliased — it
+// needs a separate business-account login; consumer cookies would surface the
+// wrong (consumer) prices.
+const SESSION_SOURCE_ALIAS = {
+  AMAZON_FRESH: 'AMAZON_NOW',
+};
+
+// Read a portal's session JSON from KV, falling back to its alias's session
+// when the source itself has none captured. Returns { raw, resolvedKey } or
+// null when neither the source nor its alias has a session.
+async function readPortalSessionRaw(env, sourceKey) {
+  if (!env.SESSIONS) return null;
+  let raw = await env.SESSIONS.get(portalSessionKey(sourceKey));
+  if (raw) return { raw, resolvedKey: sourceKey };
+  const alias = SESSION_SOURCE_ALIAS[sourceKey];
+  if (alias) {
+    raw = await env.SESSIONS.get(portalSessionKey(alias));
+    if (raw) return { raw, resolvedKey: alias };
+  }
+  return null;
+}
+
 function cleanPortalSessionStatus(value) {
   return PORTAL_SESSION_STATUSES.includes(value) ? value : 'NOT_CONNECTED';
 }
@@ -808,8 +834,8 @@ function cookieHeader(cookieMap, extra = {}) {
 
 async function getPortalSessionSecret(env, sourceKey) {
   if (!env.SESSIONS) return null;
-  const raw = await env.SESSIONS.get(portalSessionKey(sourceKey));
-  return raw ? safeJson(raw, null) : null;
+  const hit = await readPortalSessionRaw(env, sourceKey); // alias-aware (e.g. AMAZON_FRESH -> AMAZON_NOW)
+  return hit ? safeJson(hit.raw, null) : null;
 }
 
 function hyperpureAuth(session) {
@@ -1647,12 +1673,14 @@ async function handleSessionExport(url, env) {
       out[sourceKey] = { ready: false, error: 'unknown source' };
       continue;
     }
-    const raw = await env.SESSIONS.get(portalSessionKey(sourceKey));
-    if (!raw) {
+    // Alias-aware: AMAZON_FRESH borrows the AMAZON_NOW amazon.in session
+    // (same account, different storefront filter) when it has none of its own.
+    const hit = await readPortalSessionRaw(env, sourceKey);
+    if (!hit) {
       out[sourceKey] = { ready: false, error: 'no session captured' };
       continue;
     }
-    const session = safeJson(raw, null);
+    const session = safeJson(hit.raw, null);
     if (!session || !session.payload) {
       out[sourceKey] = { ready: false, error: 'session payload missing' };
       continue;
@@ -2303,11 +2331,21 @@ async function getPortalHealthRows(env) {
   for (const source of SOURCES.filter((item) => item.key !== 'LOCAL_VENDOR')) {
     let hasSecret = false;
     try {
-      hasSecret = !!(env.SESSIONS && await env.SESSIONS.get(portalSessionKey(source.key)));
+      // Alias-aware (AMAZON_FRESH -> AMAZON_NOW): a source with no session of
+      // its own is "connected" when its alias has one, so the UI badge reflects
+      // the borrowed amazon.in session rather than being permanently red.
+      hasSecret = !!(env.SESSIONS && await readPortalSessionRaw(env, source.key));
     } catch (_) {
       hasSecret = false;
     }
-    let session = publicPortalSession(rowBySource.get(source.key), source, hasSecret);
+    // When borrowing an alias's session, also borrow its D1 status row so the
+    // badge derives READY/EXPIRED from the alias's captured session.
+    let healthRow = rowBySource.get(source.key);
+    const alias = SESSION_SOURCE_ALIAS[source.key];
+    if (alias && (!healthRow || healthRow.status !== 'READY') && rowBySource.get(alias)) {
+      healthRow = rowBySource.get(alias);
+    }
+    let session = publicPortalSession(healthRow, source, hasSecret);
     if (!env.SESSIONS) {
       session = {
         ...session,
