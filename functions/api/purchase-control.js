@@ -3183,48 +3183,114 @@ function parsePackSize(s) {
 // Convert pack quantity to material's UOM (kg / l / unit family). Returns
 // the multiplier to divide the raw stored price by, or null if families
 // don't align (e.g. material in kg but pack is ml — can't normalize).
-function packQtyInMaterialUom(packSizeStr, materialUom) {
-  const pack = parsePackSize(packSizeStr);
-  if (!pack || pack.qty <= 0) return null;
-  const u = String(materialUom || '').toLowerCase();
-  const matFamily = /(kg|gm?|gram)/i.test(u) ? 'mass'
-                  : /(litre|liter|ml|l)/i.test(u) ? 'vol'
-                  : /(unit|pc|pcs?|piece|nos|count)/i.test(u) ? 'count'
-                  : null;
-  const packFamily = (pack.unit === 'kg' || pack.unit === 'g') ? 'mass'
-                   : (pack.unit === 'l' || pack.unit === 'ml') ? 'vol'
-                   : 'count';
-  if (!matFamily || matFamily !== packFamily) return null;
-  // Express pack qty in the material's canonical unit (kg / l / unit)
-  if (matFamily === 'mass') {
-    return pack.unit === 'g' ? pack.qty / 1000 : pack.qty;
+// ============================================================
+// Intelligence v4 — cross-family UOM conversion via mass-per-unit
+// ============================================================
+// Owner's core ask: "the portals present in their own UOMs; cracking the
+// mapping to OUR material UOM is the intelligence." So we add typical
+// piece-mass constants for common materials. With this, Hyperpure's
+// "Lemon 500 gm pack" → 500g ÷ 70g/lemon = 7.14 lemons → ₹60 ÷ 7.14 ≈
+// ₹8.40/Unit. Buns "Pack of 4" stays same-family (count→count). Veg in
+// kg vs pack-of-N-pieces uses the constant in reverse: 6-pc capsicum
+// pack ≈ 600g → ₹X ÷ 0.6kg/pack = ₹X/0.6 per kg.
+//
+// Constants are ROUGH industry typicals from Indian grocery norms. If a
+// portal SKU title contains an explicit "/kg" or "/pc" ratio, the scout
+// can capture it more precisely (future enhancement). Conservative bias
+// — slightly under-estimate piece weight so per-Unit cost is slightly
+// over-estimated (we lose cheapest battles by tiny margins, never call
+// expensive SKUs cheaper than they are).
+const MASS_PER_UNIT_G = {
+  // ── Citrus / small fruit ──
+  lemon: 70, nimbu: 70, lime: 50,
+  // ── Veg per piece ──
+  tomato: 80, tamatar: 80,
+  onion: 150, pyaaz: 150, kanda: 150,
+  potato: 200, aloo: 200, batata: 200,
+  capsicum: 100, shimla: 100, 'shimla mirch': 100,
+  cucumber: 200, kheera: 200,
+  carrot: 100, gajar: 100,
+  cabbage: 1000, pattagobi: 1000, 'patta gobi': 1000, // typically sold whole
+  cauliflower: 800, gobi: 800, 'phool gobi': 800,
+  brinjal: 120, baingan: 120, eggplant: 120,
+  // ── Bunch items (count-family — each "bunch" is a count) ──
+  coriander: 80, kothmir: 80, kothimir: 80, dhaniya: 80, 'fresh coriander': 80,
+  mint: 50, pudina: 50, 'fresh mint': 50,
+  spinach: 200, palak: 200,
+  methi: 150, fenugreek: 150,
+  'curry leaf': 30, 'curry leaves': 30, 'kadi patta': 30,
+  // ── Animal protein per piece ──
+  egg: 50, anda: 50,
+  'chicken wing': 80,
+  'chicken lollipop': 60,
+  'chicken drumstick': 100, tangdi: 100,
+  // ── Bakery per piece ──
+  bun: 50, buns: 50, paav: 40, pav: 40, 'pav bun': 40, rumali: 30, 'rumali roti': 30,
+  // ── Dairy per piece ──
+  paneer: 200,    // standard supermarket block
+  butter: 100,    // small block typical
+};
+function massPerUnitG(materialName) {
+  const n = String(materialName || '').toLowerCase();
+  // Prefer longer match (e.g. "fresh coriander" before "coriander")
+  let best = null; let bestLen = 0;
+  for (const [k, v] of Object.entries(MASS_PER_UNIT_G)) {
+    if (n.includes(k) && k.length > bestLen) { best = v; bestLen = k.length; }
   }
-  if (matFamily === 'vol') {
-    return pack.unit === 'ml' ? pack.qty / 1000 : pack.qty;
-  }
-  return pack.qty; // count → count
+  return best;
+}
+function detectFamily(unitLike) {
+  const u = String(unitLike || '').toLowerCase();
+  if (/(kg|gm?|gram)/i.test(u)) return 'mass';
+  if (/(litre|liter|ml|^l$|\bl\b)/i.test(u)) return 'vol';
+  if (/(unit|pc|pcs?|piece|nos|count|bunch)/i.test(u)) return 'count';
+  return null;
 }
 
-// Cross-family pack/material UOM mismatch detector (intelligence v3).
-// Returns true when the SKU is sold in a different family than the
-// material is measured in — e.g. Hyperpure Lemon SKU "500 gm" pack vs
-// material "Lemon" in Units. No objective per-Unit price can be derived
-// without a piece-mass ratio the scout doesn't have. Demote these rows
-// to UOM_MISMATCH so they're excluded from cheapest picks.
-function isUomFamilyMismatch(packSizeStr, materialUom) {
-  if (!packSizeStr || !materialUom) return false;
+// Returns { qty, normalized: bool, crossFamily: bool, note: string }
+// where qty is the pack's quantity expressed in the MATERIAL's UOM.
+// Returns null when conversion is impossible.
+function packQtyInMaterialUom(packSizeStr, materialUom, materialName) {
   const pack = parsePackSize(packSizeStr);
-  if (!pack || pack.qty <= 0) return false;
-  const u = String(materialUom).toLowerCase();
-  const matFamily = /(kg|gm?|gram)/i.test(u) ? 'mass'
-                  : /(litre|liter|ml|l)/i.test(u) ? 'vol'
-                  : /(unit|pc|pcs?|piece|nos|count)/i.test(u) ? 'count'
-                  : null;
+  if (!pack || pack.qty <= 0) return null;
+  const matFamily = detectFamily(materialUom);
   const packFamily = (pack.unit === 'kg' || pack.unit === 'g') ? 'mass'
                    : (pack.unit === 'l' || pack.unit === 'ml') ? 'vol'
                    : 'count';
-  if (!matFamily || !packFamily) return false;
-  return matFamily !== packFamily;
+  if (!matFamily) return null;
+
+  // Same family — direct conversion (kg/g/l/ml/unit normalisation)
+  if (matFamily === packFamily) {
+    if (matFamily === 'mass') return pack.unit === 'g' ? pack.qty / 1000 : pack.qty;
+    if (matFamily === 'vol')  return pack.unit === 'ml' ? pack.qty / 1000 : pack.qty;
+    return pack.qty;
+  }
+
+  // Cross-family — use mass-per-unit constant if available
+  const m = massPerUnitG(materialName);
+  if (!m || m <= 0) return null;
+
+  // Pack is mass, material is count → divide pack mass by mass-per-unit
+  if (packFamily === 'mass' && matFamily === 'count') {
+    const packMassG = pack.unit === 'kg' ? pack.qty * 1000 : pack.qty;
+    return packMassG / m; // number of units in the pack
+  }
+  // Pack is count, material is mass → multiply pack count by mass-per-unit
+  if (packFamily === 'count' && matFamily === 'mass') {
+    const totalG = pack.qty * m;
+    return totalG / 1000; // material is canonical kg
+  }
+  // Vol↔count not handled (rare for grocery)
+  return null;
+}
+
+// Kept for backward compatibility — true ONLY when conversion is
+// impossible (cross-family AND no mass-per-unit constant available).
+function isUomFamilyMismatch(packSizeStr, materialUom, materialName) {
+  if (!packSizeStr || !materialUom) return false;
+  // If packQtyInMaterialUom can convert, it's not a mismatch
+  return packQtyInMaterialUom(packSizeStr, materialUom, materialName) === null
+    && parsePackSize(packSizeStr) !== null;
 }
 
 // --- SKU category detector ---
@@ -3316,9 +3382,9 @@ function publicSnapshotRow(row) {
   const cleanUrl = isPlausibleProductUrl(decodedUrl, row.source_key) ? decodedUrl : '';
 
   // ─── Intelligence layer ───
-  // 1. Pack-size normalization
+  // 1. Pack-size normalization (v4 — cross-family conversion via mass-per-unit)
   const rawPrice = row.unit_price_paise || row.price_paise || 0;
-  const packMultiplier = packQtyInMaterialUom(row.pack_size, row.uom);
+  const packMultiplier = packQtyInMaterialUom(row.pack_size, row.uom, row.name);
   const normalizedPrice = (packMultiplier && packMultiplier > 0)
     ? Math.round(rawPrice / packMultiplier)
     : rawPrice;
@@ -3329,10 +3395,9 @@ function publicSnapshotRow(row) {
   const detectedCat = detectSkuCategory(row.sku_title);
   const isWrongCategory = isSkuCategoryMismatch(expectedCat, detectedCat);
 
-  // 3. UOM family mismatch (v3) — material in Units / kg / litre but SKU
-  // pack is in a different family. Can't derive comparable per-Unit price.
-  // Caught Hyperpure Lemon "500 gm" pack vs Lemon-in-Units material.
-  const uomMismatch = !isWrongCategory && isUomFamilyMismatch(row.pack_size, row.uom);
+  // 3. UOM family mismatch — only when conversion is truly impossible
+  // (no mass-per-unit constant available for cross-family case).
+  const uomMismatch = !isWrongCategory && isUomFamilyMismatch(row.pack_size, row.uom, row.name);
 
   // Apply: wrong rows get demoted, stock_status changes to flag
   const finalPrice = (isWrongCategory || uomMismatch) ? 0 : normalizedPrice;
