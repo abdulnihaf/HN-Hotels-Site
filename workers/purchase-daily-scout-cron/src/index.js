@@ -1,8 +1,8 @@
 // HN Purchase Daily Scout Cron
-// Runs at 09:00 IST daily. Loops materials in scope, POSTs refresh-material
+// Runs at 06:30 IST daily. Loops materials in scope, POSTs refresh-material
 // per material so each material × portal lands in daily_price_snapshots.
 // Worker-pool internal concurrency (default 2) so the full 76-material pass
-// completes inside CF's 15-min scheduled-event budget.
+// completes inside CF's 30-min scheduled-event budget.
 
 const MAX_INFLIGHT_LOG_TAIL = 5;
 
@@ -44,7 +44,7 @@ export default {
         note: 'Running in background via ctx.waitUntil. Poll /api/purchase-control?action=daily-snapshot to see rows land.',
       }, null, 2), { headers: { 'Content-Type': 'application/json' } });
     }
-    return new Response('hn-purchase-daily-scout-cron — scheduled 03:30 UTC / 09:00 IST. /trigger?key=<PIN> for manual fire.', { status: 200 });
+    return new Response('hn-purchase-daily-scout-cron — scheduled 01:00 UTC / 06:30 IST. /trigger?key=<PIN> for manual fire.', { status: 200 });
   },
 };
 
