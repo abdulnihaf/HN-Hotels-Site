@@ -1425,7 +1425,7 @@
     <main class="tab-pane" id="tab-shop" data-tab="shop">
       <div class="ptr" id="ptrShop"><div class="ptr-spinner"></div></div>
       <div class="top-nav" id="navShop">
-        <div></div>
+        <button class="nav-action left" id="navRefreshBtn" type="button" title="Refresh data">↻</button>
         <div class="nav-title">BuyList</div>
         <button class="nav-action right" id="navAddBtn" type="button" title="Add material">+ Add</button>
       </div>
@@ -1548,6 +1548,14 @@
           <div>
             <div class="row-label">Check portal sessions</div>
             <div class="row-sub">Hyperpure / BB / Blinkit / Zepto / FK / Amazon / JioMart</div>
+          </div>
+          <div class="row-chev">›</div>
+        </button>
+        <button class="you-row" id="hardReloadRow" type="button" style="text-align:left;">
+          <div class="row-icon" style="background:rgba(252,165,165,0.18); color:var(--pc-red);">🔄</div>
+          <div>
+            <div class="row-label">Hard reload (clear cache)</div>
+            <div class="row-sub">Force download latest BuyList code. Use after a deploy when soft refresh doesn't pick up changes.</div>
           </div>
           <div class="row-chev">›</div>
         </button>
@@ -1961,6 +1969,8 @@
       navPlan: document.getElementById('navPlan'),
       navYou: document.getElementById('navYou'),
       navAddBtn: document.getElementById('navAddBtn'),
+      navRefreshBtn: document.getElementById('navRefreshBtn'),
+      hardReloadRow: document.getElementById('hardReloadRow'),
       searchInput: document.getElementById('searchInput'),
       brandToggle: document.getElementById('brandToggle'),
       tierToggle: document.getElementById('tierToggle'),
@@ -2883,6 +2893,44 @@
     attachPullToRefresh();
 
     els.navAddBtn.addEventListener('click', () => openAddMatModal());
+
+    // Soft refresh — re-fetch materials + snapshot + portal health.
+    // Visible in the PWA standalone mode where there's no browser
+    // address bar reload icon.
+    els.navRefreshBtn.addEventListener('click', async () => {
+      const btn = els.navRefreshBtn;
+      btn.style.animation = 'rot 0.8s linear infinite';
+      try {
+        await loadAll();
+        try { await refreshPortalHealth(); } catch (_) {}
+        renderList(); renderPlan(); updatePlanBadge();
+        toast('Refreshed ✓', 1500);
+      } catch (e) {
+        toast('Refresh failed: ' + (e.message || 'unknown'), 3000);
+      } finally {
+        btn.style.animation = '';
+      }
+    });
+
+    // Hard reload — unregister service workers + clear caches + reload
+    // with a cache-busting query param. For when the PWA holds onto a
+    // stale HTML/JS snapshot after I ship a new BuyList version.
+    els.hardReloadRow.addEventListener('click', async () => {
+      if (!confirm('Hard reload?\\n\\nThis clears the cached app version and downloads the latest from server. Your Plan + PIN survive (they live in localStorage, not cache).')) return;
+      toast('Clearing cache + reloading…', 2000);
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const r of regs) { try { await r.unregister(); } catch (_) {} }
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (const k of keys) { try { await caches.delete(k); } catch (_) {} }
+        }
+      } catch (_) {}
+      const u = location.origin + location.pathname + '?_v=' + Date.now();
+      location.replace(u);
+    });
     els.addMatBtn.addEventListener('click', () => openAddMatModal());
     els.addMatClose.addEventListener('click', closeAddMatModal);
     els.addMatModal.addEventListener('click', (e) => { if (e.target === els.addMatModal) closeAddMatModal(); });
