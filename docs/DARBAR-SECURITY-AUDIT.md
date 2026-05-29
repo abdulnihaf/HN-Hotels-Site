@@ -280,20 +280,20 @@ Full runbook: `docs/DARBAR-NOTIFY-ACTIVATION.md`.
 | P1-2 | DASHBOARD_KEY lived in browser localStorage | app.js, hr-payroll.js | P1 | CLOSED (PR #289) |
 | P1-3 | Unauthenticated POST reconcile write | darbar.js | P1 | CLOSED (PR #289) |
 | P2-4 | 4-digit hardcoded PINs in client JS, guessable | app.js, hr-admin.js | P2 | MITIGATED — server-side verify active; throttling tracked |
-| P1-5 | CORS_LEGACY `*` dead-code in hr-admin.js | hr-admin.js:18 | P1 | OPEN — delete constant + fix json() helper |
+| P1-5 | CORS_LEGACY wildcard dead-code removed | P1 | CLOSED (PR #290) — delete constant + fix json() helper |
 | P2-6 | comms_outbox stores phone + body plaintext | comms-core.js | P2 | TRACKED — retention cron future work |
 | P2-7 | Aadhaar full number in hr_employees D1 plaintext | hr-automation.js | P2 | TRACKED — move to KV future work |
 | P2-8 | staffToken falls back to DASHBOARD_KEY signing | hr-admin.js:93 | P2 | TRACKED — add STAFF_LINK_SECRET CF secret |
-| P1-9 | Exotel TTS endpoint accepts unauthenticated arbitrary `text` | comms-webhook.js:350 | P1 | OPEN — add HMAC sig to TTS URL |
+| P1-9 | Exotel TTS HMAC sig required (no sig = silent ExoML) | P1 | CLOSED (PR #291) — add HMAC sig to TTS URL |
 | P2-10 | sendWabaText bypasses opt-in/phone_verification_pending guard | comms-core.js:116 | P2 | TRACKED — scope limited to healthGuard today |
 | P2-11 | Absence-respond webhook token has no TTL or single-use enforcement | hr-automation.js:369 | P2 | TRACKED — add token_used_at + 48h expiry |
-| P1-12 | salaryOverride and markExit accept unvalidated negative/NaN amounts | darbar.js:353 | P1 | OPEN — add Number.isFinite + range guard |
+| P1-12 | Amount range validation (isFinite, 0-999999) | P1 | CLOSED (PR #290) — add Number.isFinite + range guard |
 | P2-13 | compute-payable mid-month over-deducts (operational constraint) | hr-payroll.js | P2 | TRACKED — add mid_month_warning field |
 | P2-14 | hr_advances: no dedup guard; double-tap creates double deduction | hr-payroll.js | P2 | TRACKED — add idempotency key |
-| P1-15 | Absence cron fires unlimited WABA sends; includes PIN in template | hr-automation.js:208 | P1 | OPEN — add N=10 cap; remove PIN from body |
+| P1-15 | Blast cap N=10; PIN removed from WABA vars | P1 | CLOSED (PR #290) — add N=10 cap; remove PIN from body |
 | P2-16 | OWNER_PHONE hardcoded in source | hr-automation.js:569 | P2 | TRACKED — read from env.OWNER_PHONE |
 | P2-17 | cron-token comparison is not timing-safe | hr-automation.js:56 | P2 | TRACKED — use timingSafeEq |
-| P1-18 | CORS_LEGACY deletion (same as P1-5, different framing) | hr-admin.js:18 | P1 | OPEN — same fix as P1-5 |
+| P1-18 | Same fix as P1-5 | P1 | CLOSED (PR #290) — same fix as P1-5 |
 | P2-19 | STAFF_LINK_SECRET not provisioned; shares DASHBOARD_KEY signing | hr-admin.js:93 | P2 | TRACKED — wrangler pages secret put |
 | P2-20 | Fast2SMS API key in GET query params (visible in logs) | comms-core.js:171 | P2 | TRACKED — provider API constraint; quarterly rotation |
 | Bug A | Ghost-onboard sync_status='pending' casing → 500 | hr-automation.js:495 | fix | CLOSED (b744d16) |
@@ -301,7 +301,7 @@ Full runbook: `docs/DARBAR-NOTIFY-ACTIVATION.md`.
 
 **Open P0:** None.
 
-**Open P1:** P1-5 (CORS_LEGACY dead-code), P1-9 (TTS HMAC), P1-12 (amount validation), P1-15 (absence blast cap). These four must ship before Darbar is considered production-hardened.
+**Open P1:** None. All four fixed. Darbar is production-hardened (no open P0 or P1).
 
 **Open P2:** 8 tracked items, none blocking.
 
