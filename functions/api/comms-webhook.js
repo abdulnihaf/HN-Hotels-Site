@@ -353,18 +353,19 @@ export async function onRequest(context) {
     // Without a valid sig, serve silent ExoML so Exotel doesn't speak attacker text.
     const messageText = url.searchParams.get('text') || 'HN Hotels alert.';
     const alertId = url.searchParams.get('alert_id') || '';
-    const sig = url.searchParams.get('sig') || '';
-    if (env.DASHBOARD_KEY && sig) {
-      // Verify HMAC-SHA256(DASHBOARD_KEY, 'exotel-tts:<text>:<alert_id>')
+    // P1-9: when DASHBOARD_KEY is configured, a valid HMAC sig is REQUIRED.
+    // No sig (or wrong sig) = silent ExoML, never speak attacker-controlled text.
+    // Degrades gracefully only when DASHBOARD_KEY is not configured (not the case in prod).
+    if (env.DASHBOARD_KEY) {
+      const sig = url.searchParams.get('sig') || '';
+      const SILENT = new Response(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { headers: { 'content-type': 'application/xml' } });
+      if (!sig) return SILENT;
       const enc = new TextEncoder();
       const k = await crypto.subtle.importKey('raw', enc.encode(env.DASHBOARD_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
       const expected = new Uint8Array(await crypto.subtle.sign('HMAC', k, enc.encode(`exotel-tts:${messageText}:${alertId}`)));
       let expB64 = ''; for (const b of expected) expB64 += String.fromCharCode(b);
       expB64 = btoa(expB64).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      if (sig !== expB64) {
-        // Invalid sig — return silent ExoML, do not speak the text.
-        return new Response(`<?xml version="1.0"?><Response></Response>`, { headers: { 'content-type': 'application/xml' } });
-      }
+      if (sig !== expB64) return SILENT;
     }
     return exoMlResponse(messageText, alertId);
   }
