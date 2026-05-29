@@ -12,10 +12,9 @@
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 import { verifyToken, corsHeaders } from './_lib/darbar-auth.js';
 
-// CORS is now request-aware (reflected origin, Darbar-only). Defined lazily
-// because we need the request object. Legacy constant kept for the one HTML
-// response (settlement sheet, rendered server-side, same-origin only).
-const CORS_LEGACY = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
+// CORS is handled exclusively in the onRequest boundary via corsHeaders(request)
+// which reflects only the Darbar origin. No CORS headers are applied to internal
+// helpers — the gate in onRequest wraps every response before it leaves.
 
 const ODOO_URL  = 'https://ops.hamzahotel.com/jsonrpc';
 const ODOO_DB   = 'main';
@@ -53,7 +52,7 @@ const MAX_RUNTIME_MS = 25000;
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -518,7 +517,7 @@ async function handleGet(url, env, auth = null) {
 </p>
 </body></html>`;
 
-    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', ...CORS } });
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
 
   // --- Deductions for a month (YYYY-MM) ---

@@ -284,6 +284,11 @@ async function reconcile(db, persist) {
 async function markExit(db, body) {
   const { employee_id, exit_kind = 'departed_silent', reason, recorded_by = 'owner', fnf_amount, fnf_note } = body;
   if (!employee_id) return json({ error: 'employee_id required' }, 400);
+  // P1-12: validate F&F amount when provided
+  if (fnf_amount != null) {
+    const fnfNum = Number(fnf_amount);
+    if (!Number.isFinite(fnfNum) || fnfNum < 0 || fnfNum > 999999) return json({ error: 'fnf_amount must be a finite number between 0 and 999999 (rupees)' }, 400);
+  }
   const emp = await db.prepare(`SELECT id, pin, name, known_as, brand_label FROM hr_employees WHERE id=?`).bind(employee_id).first();
   if (!emp) return json({ error: 'employee not found' }, 404);
   const last = await db.prepare(`SELECT MAX(punch_time) AS lp FROM hr_cams_punches WHERE pin=?`).bind(emp.pin).first();
@@ -350,6 +355,9 @@ async function fixPunch(db, body) {
 async function salaryOverride(db, body) {
   const { employee_id, pay_period, amount, note, by = 'owner' } = body;
   if (!employee_id || !pay_period || amount == null) return json({ error: 'employee_id, pay_period, amount required' }, 400);
+  // P1-12: validate amount is a finite non-negative rupee figure (max ₹9,99,999)
+  const amtNum = Number(amount);
+  if (!Number.isFinite(amtNum) || amtNum < 0 || amtNum > 999999) return json({ error: 'amount must be a finite number between 0 and 999999 (rupees)' }, 400);
   const emp = await db.prepare(`SELECT id, pay_type, monthly_salary, daily_rate FROM hr_employees WHERE id=?`).bind(employee_id).first();
   if (!emp) return json({ error: 'employee not found' }, 404);
   const existing = await db.prepare(`SELECT id FROM hr_payroll_snapshots WHERE employee_id=? AND pay_period=?`).bind(employee_id, pay_period).first();

@@ -22,6 +22,9 @@ export default {
     } else if (cron === '30 16 * * *') {
       // Daily summary (10 PM IST)
       promises.push(callPages(env, 'cron-daily-summary'));
+    } else if (cron === '30 0 * * *') {
+      // Health guard (6 AM IST): Odoo key + Fast2SMS balance + WABA token expiry
+      promises.push(callPages(env, 'cron-health-guard'));
     } else {
       // Unknown cron: run safe defaults
       promises.push(callPages(env, 'cron-detect-absences'));
@@ -40,7 +43,7 @@ export default {
     }
 
     const action = url.searchParams.get('action');
-    const validHrActions = ['cron-detect-absences', 'cron-detect-ghosts', 'cron-daily-summary'];
+    const validHrActions = ['cron-detect-absences', 'cron-detect-ghosts', 'cron-daily-summary', 'cron-health-guard'];
     const validCommsActions = ['cron-escalate'];
     if (validHrActions.includes(action)) {
       const result = await callPages(env, action);
