@@ -2016,7 +2016,7 @@ async function upsertPurchaseVendor(body, user, env) {
   const outlet_label = String(body.outlet_label || 'Hamza Express').trim();
   // Default template uses placeholders: {date}, {outlet}, {items_list}
   const message_template = String(body.message_template || '').trim() ||
-    'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via BuyList';
+    'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via Sauda';
   const notes = String(body.notes || '').trim();
   const odoo_partner_id = body.odoo_partner_id ? Number(body.odoo_partner_id) : null;
   const existing = await env.DB.prepare('SELECT id FROM purchase_vendors WHERE slug = ?').bind(slug).first();
