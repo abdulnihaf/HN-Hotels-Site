@@ -1502,15 +1502,24 @@
       return String(url).replace(/&amp;/g, '&').replace(/&#38;/g, '&').trim();
     }
     const PORTAL_SEARCH_URL = {
-      // Hyperpure — owner screenshot 2026-05-29 showed `/in/search/<slug>?
-      // type=SEARCH&query=<q>` opens the Hyperpure iOS app to a BROKEN
-      // add-to-cart prompt (qty=100, "ADD" button, no product context).
-      // The app's URL handler misinterprets our search URL as a product
-      // deeplink. Falling back to plain `/in/` home which still matches
-      // the `/in/*` AASA claim → app opens to home with search bar
-      // visible top-right. Material name is then copy-on-tap'd to the
-      // clipboard so owner pastes in app's search.
-      HYPERPURE: (q) => `https://www.hyperpure.com/in/`,
+      // Hyperpure — iterative URL fix history:
+      //  v1: /in/search/<slug>?type=SEARCH&query=<q>
+      //      → BROKEN: app misinterpreted slug as a product id, opened
+      //        a qty=100 ADD prompt for an unknown product (owner
+      //        screenshot 2026-05-29 05:59)
+      //  v2: /in/
+      //      → OK but suboptimal: opens to Spotlight Offers, owner has
+      //        to tap search icon + paste material name (screenshot
+      //        06:04)
+      //  v3 (this): /in/search
+      //      → Trying: plain search path with NO slug and NO query.
+      //        Hypothesis: the broken v1 was the slug-in-path; dropping
+      //        the slug should land the app on its search screen with
+      //        the input focused, so owner only taps paste once.
+      //
+      // If v3 also opens broken → revert to /in/ (v2). Copy-on-tap
+      // (PR #259) keeps material name in clipboard either way.
+      HYPERPURE: (q) => `https://www.hyperpure.com/in/search`,
       // BigBasket — empirical AASA probe 2026-05-29: `/ps/` is NOT in
       // the BB iOS app's path-claim list (which includes /sh/*, /sp/*,
       // /pd/*, /cl/*, /store/c/*). `/ps/?q=` returns 200 on web but iOS
