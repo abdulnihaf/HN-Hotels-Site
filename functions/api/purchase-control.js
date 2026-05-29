@@ -1254,6 +1254,44 @@ async function ensurePurchaseRunSchema(DB) {
     )
   `).run();
 
+  // ─── Vendor-direct workflow (added 2026-05-29) ───
+  // Materials with established vendor relationships (chicken → MN
+  // Broilers, buns → Ganga Bakery, buffalo milk → local dairy) bypass
+  // the portal-scout flow. Instead, BuyList Plan tab groups these as
+  // a "VENDOR DIRECT" tier with a "📲 Send via WhatsApp" button that
+  // generates a templated message and opens wa.me/<phone>?text=<encoded>.
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS purchase_vendors (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug            TEXT NOT NULL UNIQUE,
+      name            TEXT NOT NULL,
+      whatsapp_phone  TEXT NOT NULL DEFAULT '',
+      phone           TEXT NOT NULL DEFAULT '',
+      email           TEXT NOT NULL DEFAULT '',
+      brand           TEXT NOT NULL DEFAULT 'BOTH',
+      outlet_label    TEXT NOT NULL DEFAULT 'Hamza Express',
+      message_template TEXT NOT NULL DEFAULT '',
+      notes           TEXT NOT NULL DEFAULT '',
+      odoo_partner_id INTEGER,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `).run();
+  await DB.prepare(`
+    CREATE TABLE IF NOT EXISTS purchase_material_vendor_links (
+      material_id   TEXT NOT NULL,
+      vendor_id     INTEGER NOT NULL,
+      is_primary    INTEGER NOT NULL DEFAULT 1,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (material_id, vendor_id),
+      FOREIGN KEY (vendor_id) REFERENCES purchase_vendors(id) ON DELETE CASCADE
+    )
+  `).run();
+  await DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_pmvl_material
+    ON purchase_material_vendor_links(material_id)
+  `).run();
+
   // Meta-row per cron / refresh batch. portal_results_json holds per-source
   // counts so observability ('Hyperpure 28 ok / 2 err') is one query away.
   await DB.prepare(`
@@ -1524,6 +1562,37 @@ async function handleGet(request, url, env) {
     for (const item of (data.items || [])) {
       item.b2b_eligible = isB2BEligible(item);
     }
+    // Tag vendor links so the UI knows which materials route to a
+    // vendor-direct flow (chicken → MN Broilers) vs portal scouts.
+    try {
+      await ensurePurchaseRunSchema(env.DB);
+      const vRows = await env.DB.prepare(`
+        SELECT l.material_id, v.id AS vendor_id, v.slug, v.name, v.whatsapp_phone,
+               v.phone, v.email, v.brand, v.outlet_label, v.message_template, l.is_primary
+        FROM purchase_material_vendor_links l
+        JOIN purchase_vendors v ON v.id = l.vendor_id
+        ORDER BY l.is_primary DESC, v.name ASC
+      `).all();
+      const byMaterial = new Map();
+      for (const r of (vRows.results || [])) {
+        if (!byMaterial.has(r.material_id)) byMaterial.set(r.material_id, []);
+        byMaterial.get(r.material_id).push({
+          vendor_id: r.vendor_id, slug: r.slug, name: r.name,
+          whatsapp_phone: r.whatsapp_phone, phone: r.phone,
+          email: r.email, brand: r.brand, outlet_label: r.outlet_label,
+          message_template: r.message_template,
+          is_primary: !!r.is_primary,
+        });
+      }
+      for (const item of (data.items || [])) {
+        const code = String(item.product_code || item.id || '');
+        const vendors = byMaterial.get(code) || [];
+        item.vendor_links = vendors;
+        item.primary_vendor = vendors.find((v) => v.is_primary) || vendors[0] || null;
+      }
+    } catch (_) {
+      // schema/D1 hiccup — pass through without vendor tags
+    }
     return json({
       success: true,
       ...data,
@@ -1533,6 +1602,12 @@ async function handleGet(request, url, env) {
 
   if (action === 'daily-snapshot') {
     return getDailySnapshot(url, user, env);
+  }
+
+  // List configured vendors with material-count (used by /ops/purchase-
+  // console/ to render the vendor-management settings section).
+  if (action === 'list-vendors') {
+    return listPurchaseVendors({}, user, env);
   }
 
   return json({ error: `Unknown GET action: ${action}` }, 400);
@@ -1841,9 +1916,130 @@ async function handlePost(context, env) {
       return addCustomMaterial(body, user, env);
     case 'delete-custom-material':
       return deleteCustomMaterial(body, user, env);
+    // ─── Vendor-direct workflow ───
+    case 'upsert-vendor':
+      return upsertPurchaseVendor(body, user, env);
+    case 'list-vendors':
+      return listPurchaseVendors(body, user, env);
+    case 'link-material-vendor':
+      return linkMaterialVendor(body, user, env);
+    case 'unlink-material-vendor':
+      return unlinkMaterialVendor(body, user, env);
+    case 'bulk-link-vendor':
+      return bulkLinkMaterialsToVendor(body, user, env);
     default:
       return json({ error: `Unknown POST action: ${action}` }, 400);
   }
+}
+
+// ============================================================
+// Vendor-direct workflow helpers
+// ============================================================
+function slugify(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+}
+function cleanPhone(s) {
+  // Normalise to +91XXXXXXXXXX (digits only, leading +)
+  const digits = String(s || '').replace(/[^\d]/g, '');
+  if (!digits) return '';
+  // Strip leading 0 / 91 prefix duplication, then prefix +91 if 10-digit
+  if (digits.length === 10) return '+91' + digits;
+  if (digits.length === 12 && digits.startsWith('91')) return '+' + digits;
+  if (digits.length === 13 && digits.startsWith('091')) return '+' + digits.slice(1);
+  return '+' + digits;
+}
+
+async function upsertPurchaseVendor(body, user, env) {
+  if (!canCreate(user)) return json({ error: 'Only admin/purchase PINs can manage vendors' }, 403);
+  await ensurePurchaseRunSchema(env.DB);
+  const name = String(body.name || '').trim();
+  if (!name) return json({ error: 'name required' }, 400);
+  const slug = body.slug ? slugify(body.slug) : slugify(name);
+  const whatsapp_phone = cleanPhone(body.whatsapp_phone || body.phone || '');
+  const phone = cleanPhone(body.phone || body.whatsapp_phone || '');
+  const email = String(body.email || '').trim();
+  const brand = cleanBrand(body.brand || 'BOTH');
+  const outlet_label = String(body.outlet_label || 'Hamza Express').trim();
+  // Default template uses placeholders: {date}, {outlet}, {items_list}
+  const message_template = String(body.message_template || '').trim() ||
+    'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via BuyList';
+  const notes = String(body.notes || '').trim();
+  const odoo_partner_id = body.odoo_partner_id ? Number(body.odoo_partner_id) : null;
+  const existing = await env.DB.prepare('SELECT id FROM purchase_vendors WHERE slug = ?').bind(slug).first();
+  if (existing) {
+    await env.DB.prepare(`
+      UPDATE purchase_vendors
+      SET name=?, whatsapp_phone=?, phone=?, email=?, brand=?, outlet_label=?,
+          message_template=?, notes=?, odoo_partner_id=?, updated_at=datetime('now')
+      WHERE id=?
+    `).bind(name, whatsapp_phone, phone, email, brand, outlet_label, message_template, notes, odoo_partner_id, existing.id).run();
+    return json({ success: true, id: existing.id, slug, action: 'updated' });
+  }
+  const r = await env.DB.prepare(`
+    INSERT INTO purchase_vendors
+      (slug, name, whatsapp_phone, phone, email, brand, outlet_label, message_template, notes, odoo_partner_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(slug, name, whatsapp_phone, phone, email, brand, outlet_label, message_template, notes, odoo_partner_id).run();
+  return json({ success: true, id: r.meta?.last_row_id, slug, action: 'created' });
+}
+
+async function listPurchaseVendors(body, user, env) {
+  await ensurePurchaseRunSchema(env.DB);
+  const rows = await env.DB.prepare(`
+    SELECT v.*, COUNT(DISTINCT l.material_id) AS material_count
+    FROM purchase_vendors v
+    LEFT JOIN purchase_material_vendor_links l ON l.vendor_id = v.id
+    GROUP BY v.id
+    ORDER BY v.name ASC
+  `).all();
+  return json({ success: true, vendors: rows.results || [] });
+}
+
+async function linkMaterialVendor(body, user, env) {
+  if (!canCreate(user)) return json({ error: 'Only admin/purchase PINs can link vendors' }, 403);
+  await ensurePurchaseRunSchema(env.DB);
+  const material_id = String(body.material_id || '').trim();
+  const vendor_id = Number(body.vendor_id || 0);
+  if (!material_id || !vendor_id) return json({ error: 'material_id + vendor_id required' }, 400);
+  const is_primary = body.is_primary === false ? 0 : 1;
+  await env.DB.prepare(`
+    INSERT INTO purchase_material_vendor_links (material_id, vendor_id, is_primary)
+    VALUES (?, ?, ?)
+    ON CONFLICT(material_id, vendor_id) DO UPDATE SET is_primary=excluded.is_primary
+  `).bind(material_id, vendor_id, is_primary).run();
+  return json({ success: true, material_id, vendor_id });
+}
+
+async function unlinkMaterialVendor(body, user, env) {
+  if (!canCreate(user)) return json({ error: 'Only admin/purchase PINs can manage vendor links' }, 403);
+  await ensurePurchaseRunSchema(env.DB);
+  const material_id = String(body.material_id || '').trim();
+  const vendor_id = Number(body.vendor_id || 0);
+  if (!material_id || !vendor_id) return json({ error: 'material_id + vendor_id required' }, 400);
+  await env.DB.prepare(`
+    DELETE FROM purchase_material_vendor_links WHERE material_id=? AND vendor_id=?
+  `).bind(material_id, vendor_id).run();
+  return json({ success: true });
+}
+
+// Bulk-link many materials to one vendor — used to seed all chicken
+// cuts → MN Broilers in one POST so the owner doesn't have to manage
+// 7+ individual links by hand.
+async function bulkLinkMaterialsToVendor(body, user, env) {
+  if (!canCreate(user)) return json({ error: 'Only admin/purchase PINs can bulk-link' }, 403);
+  await ensurePurchaseRunSchema(env.DB);
+  const vendor_id = Number(body.vendor_id || 0);
+  const material_ids = Array.isArray(body.material_ids) ? body.material_ids : [];
+  if (!vendor_id || !material_ids.length) return json({ error: 'vendor_id + material_ids[] required' }, 400);
+  const stmts = material_ids.map((mid) =>
+    env.DB.prepare(`
+      INSERT INTO purchase_material_vendor_links (material_id, vendor_id, is_primary)
+      VALUES (?, ?, 1)
+      ON CONFLICT(material_id, vendor_id) DO UPDATE SET is_primary=1
+    `).bind(String(mid), vendor_id)
+  );
+  await env.DB.batch(stmts);
+  return json({ success: true, vendor_id, linked_count: material_ids.length });
 }
 
 async function addCustomMaterial(body, user, env) {
