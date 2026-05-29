@@ -411,7 +411,7 @@ export async function sendAndLog(env, opts) {
     // waba
     template, vars = [], language = 'en', buttons = [],
     // sms
-    message, route = 'q',
+    message, route = 'q', sender_id, message_id,
     // voice
     message_text,
   } = opts;
@@ -461,7 +461,7 @@ export async function sendAndLog(env, opts) {
       result = await sendWaba(env, { brand, phone: recipient, template, vars, language, buttons });
     } else if (channel === 'sms') {
       if (!message) return { ok: false, error: 'message required for sms' };
-      result = await sendSms(env, { phone: recipient, message, route });
+      result = await sendSms(env, { phone: recipient, message, route, sender_id, message_id });
     } else if (channel === 'voice') {
       if (!message_text) return { ok: false, error: 'message_text required for voice' };
       result = await sendVoice(env, { phone: recipient, message_text, alert_id });
