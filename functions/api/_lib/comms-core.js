@@ -8,6 +8,20 @@
 
 const META_GRAPH_VERSION = 'v24.0';
 const FAST2SMS_BASE = 'https://www.fast2sms.com/dev/bulkV2';
+const _enc = new TextEncoder();
+async function hmac256(key, msg) {
+  const k = await crypto.subtle.importKey('raw', _enc.encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', k, _enc.encode(msg)));
+}
+function b64url(bytes) {
+  let s = ''; for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function timingSafeEq(a, b) {
+  if (a.length !== b.length) return false;
+  let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
 
 // ─── Phone helpers ──────────────────────────────────────────────────────────
 
@@ -289,6 +303,13 @@ export async function sendVoice(env, { phone, message_text, alert_id = '' }) {
   ttsUrl.searchParams.set('action', 'exotel-tts');
   ttsUrl.searchParams.set('text', message_text || 'HN Hotels alert.');
   if (alert_id) ttsUrl.searchParams.set('alert_id', alert_id);
+  // HMAC sig so comms-webhook can reject forged/spoofed TTS requests (P1-9 fix).
+  // Signed over: action + text + alert_id (all the URL params an attacker can craft).
+  if (env.DASHBOARD_KEY) {
+    const sigPayload = `exotel-tts:${message_text || 'HN Hotels alert.'}:${alert_id}`;
+    const sigBytes = await hmac256(env.DASHBOARD_KEY, sigPayload);
+    ttsUrl.searchParams.set('sig', b64url(sigBytes));
+  }
 
   const statusUrl = new URL(`${base}/api/comms-webhook`);
   statusUrl.searchParams.set('action', 'exotel-status');
@@ -399,6 +420,39 @@ export async function sendAndLog(env, opts) {
     return { ok: false, error: 'channel and phone required' };
   }
   const recipient = normalizePhone(phone);
+
+  // ── Phone-verification guard ──────────────────────────────────────────────
+  // If the resolved employee has phone_verification_pending=1, refuse the send.
+  // This prevents a message from firing on an unconfirmed/wrong number.
+  // We still log a 'skipped' row to comms_outbox so the no-send is auditable.
+  if (env.DB) {
+    try {
+      const guardRow = await env.DB.prepare(
+        `SELECT phone_verification_pending FROM hr_employees WHERE phone = ? AND phone_verification_pending = 1 LIMIT 1`
+      ).bind(recipient).first();
+      if (guardRow) {
+        await logOutbox(env, {
+          alert_id: opts.alert_id || null,
+          tier: opts.tier || 'info',
+          brand: opts.brand || 'sparksol',
+          channel,
+          recipient_phone: recipient,
+          template_name: opts.template || null,
+          template_vars: channel === 'waba' ? opts.vars : null,
+          body_text: opts.message || opts.message_text || null,
+          status: 'skipped',
+          provider_msg_id: null,
+          provider_response: { skipped: 'phone_verification_pending' },
+          error_text: 'phone_verification_pending=1 — confirm number with employee first',
+        });
+        return { ok: false, skipped: 'phone_verification_pending', status: 'skipped' };
+      }
+    } catch (guardErr) {
+      // Guard query failure must never block a legitimate send — log and continue.
+      console.error('phone_verification_pending guard query failed:', guardErr?.message || guardErr);
+    }
+  }
+  // ── End phone-verification guard ──────────────────────────────────────────
 
   let result, errText = null, status = 'pending';
   try {

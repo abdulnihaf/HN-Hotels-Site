@@ -70,6 +70,10 @@ export async function onRequest({ request, env }) {
     return await dailySummary(env);
   }
 
+  if (action === 'cron-health-guard' && method === 'POST') {
+    return await healthGuard(env);
+  }
+
   if (action === 'hr-absence-respond' && method === 'GET') {
     return await respondToAbsence(env, url.searchParams);
   }
@@ -94,7 +98,7 @@ export async function onRequest({ request, env }) {
   }
 
   return json({ error: 'Unknown action', valid: [
-    'cron-detect-absences', 'cron-detect-ghosts', 'cron-daily-summary',
+    'cron-detect-absences', 'cron-detect-ghosts', 'cron-daily-summary', 'cron-health-guard',
     'hr-absence-respond', 'hr-ghost-onboard-start', 'hr-ghost-onboard-submit'
   ]}, 400);
 }
@@ -160,9 +164,13 @@ async function detectAbsences(env) {
     newAlerts.push({ ...c, alert_token: token, days_absent: daysAbsent });
   }
 
-  // Send WABA messages — group by brand to route to correct manager
+  // Send WABA messages — group by brand to route to correct manager.
+  // P1-15 blast cap: max 10 sends per cron run to prevent flooding the manager
+  // if a CAMS sync gap inflates the absent list. Remaining alerts stay in hr_absence_alerts
+  // as status='pending' and will be picked up by the next cron run.
+  const SEND_CAP = 10;
   const sentResults = [];
-  for (const alert of newAlerts) {
+  for (const alert of newAlerts.slice(0, SEND_CAP)) {
     const manager = await db.prepare(
       `SELECT * FROM hr_managers WHERE brand_label=? AND is_active=1 LIMIT 1`
     ).bind(alert.brand_label).first();
@@ -210,7 +218,7 @@ async function sendAbsenceWaba(env, manager, alert) {
     language: 'en',
     vars: [
       `${empName} absent ${alert.days_absent}d`,                              // {{1}}
-      `${alert.brand_label || ''} (PIN ${alert.pin || '—'}) ${role}`.trim(),  // {{2}}
+      `${alert.brand_label || ''} — ${role}`.trim(),                          // {{2}} — P1-15: PIN removed from WABA body (biometric ID in Meta infra is unnecessary)
       `Last punch ${alert.last_working_date || 'unknown'}. Confirm reason`,   // {{3}}
       respondUrl,                                                             // {{4}}
     ],
@@ -550,4 +558,154 @@ async function ghostOnboardSubmit(env, body, aadhaarFile = null) {
       'Send to Leegality for eSign',
     ].filter(Boolean),
   });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 6. Health Guard  (daily 06:00 IST)
+//    Checks three live dependencies and fires a WABA text to owner if any fail.
+//    Three guards:
+//      (a) Odoo API key — read res.users; AccessDenied = key is stale
+//      (b) Fast2SMS wallet balance < 50 credits
+//      (c) Meta WABA token — expires_in < 7 days (only triggered when expiry is imminent)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async function healthGuard(env) {
+  const OWNER_PHONE = '917010426808';
+  const META_GRAPH_VERSION = 'v24.0';
+  const alerts = [];
+
+  // ── (a) Odoo API key guard ─────────────────────────────────────────────────
+  // Call the HN Hotels Odoo instance with uid=2 + ODOO_API_KEY.
+  // A stale key returns {"error": {"message": "Access Denied"}} at the JSON-RPC level.
+  try {
+    const odooUrl = env.ODOO_BASE_URL || 'https://odoo.hnhotels.in';
+    const odooPayload = {
+      jsonrpc: '2.0',
+      method: 'call',
+      id: 1,
+      params: {
+        service: 'object',
+        method: 'execute_kw',
+        args: [
+          env.ODOO_DB || 'main',
+          2,                         // uid=2 (admin)
+          env.ODOO_API_KEY,
+          'res.users',
+          'read',
+          [[2]],
+          { fields: ['name'] },
+        ],
+      },
+    };
+    const r = await fetch(`${odooUrl}/jsonrpc`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(odooPayload),
+    });
+    const data = await r.json().catch(() => null);
+    // Odoo returns HTTP 200 even on auth failure; check for error block
+    const isAccessDenied =
+      !data ||
+      (data.error && /access denied/i.test(JSON.stringify(data.error))) ||
+      (Array.isArray(data.result) && data.result.length === 0 && !data.error === false);
+    if (!r.ok || isAccessDenied) {
+      alerts.push('Odoo API key may be stale — Darbar sync is dead. Rotate secret ODOO_API_KEY in Cloudflare (darbar.hnhotels.in).');
+      console.error('[health-guard] Odoo check failed', r.status, JSON.stringify(data).slice(0, 200));
+    } else {
+      console.log('[health-guard] Odoo OK — user:', data?.result?.[0]?.name);
+    }
+  } catch (e) {
+    alerts.push('Odoo health check threw an error: ' + e.message);
+    console.error('[health-guard] Odoo error:', e.message);
+  }
+
+  // ── (b) Fast2SMS wallet balance guard ─────────────────────────────────────
+  // GET https://www.fast2sms.com/dev/wallet  (Authorization header)
+  // Response: { "wallet": "135.00", "return": true, "request_id": "..." }
+  try {
+    if (env.FAST2SMS_API_KEY) {
+      const r = await fetch('https://www.fast2sms.com/dev/wallet', {
+        headers: { authorization: env.FAST2SMS_API_KEY },
+      });
+      const data = await r.json().catch(() => null);
+      const balance = parseFloat(data?.wallet ?? 'NaN');
+      if (isNaN(balance)) {
+        alerts.push('Fast2SMS wallet check failed — could not parse balance. Verify FAST2SMS_API_KEY.');
+        console.error('[health-guard] Fast2SMS wallet parse failed:', JSON.stringify(data).slice(0, 200));
+      } else if (balance < 50) {
+        alerts.push(`Fast2SMS balance is low: ${balance} credits remaining (threshold: 50). Recharge at fast2sms.com.`);
+        console.warn('[health-guard] Fast2SMS low balance:', balance);
+      } else {
+        console.log('[health-guard] Fast2SMS balance OK:', balance);
+      }
+    } else {
+      console.warn('[health-guard] FAST2SMS_API_KEY not set — skipping wallet check');
+    }
+  } catch (e) {
+    alerts.push('Fast2SMS wallet check threw an error: ' + e.message);
+    console.error('[health-guard] Fast2SMS error:', e.message);
+  }
+
+  // ── (c) WABA token expiry guard ────────────────────────────────────────────
+  // Use the sparksol token (primary HR brand). Meta's debug_token endpoint returns
+  // expires_at (Unix seconds, 0 = never-expiring long-lived token).
+  // data_access_expires_at ticks every 90 days; that IS the one to watch.
+  try {
+    const waToken = env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN;
+    const metaAppId = env.META_APP_ID;
+    const metaAppSecret = env.META_APP_SECRET;
+    if (waToken && metaAppId && metaAppSecret) {
+      const debugUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/debug_token?input_token=${waToken}&access_token=${metaAppId}|${metaAppSecret}`;
+      const r = await fetch(debugUrl);
+      const data = await r.json().catch(() => null);
+      const tokenData = data?.data;
+      if (!tokenData || tokenData.is_valid === false) {
+        alerts.push('WABA access token is invalid or expired. Check META_USER_TOKEN / WA_SPARKSOL_TOKEN and reissue.');
+        console.error('[health-guard] WABA token invalid:', JSON.stringify(tokenData).slice(0, 300));
+      } else {
+        // expires_at: 0 means never (long-lived system user token) — safe to skip
+        const expiresAt = tokenData.expires_at || 0;
+        const sevenDaysMs = 7 * 24 * 60 * 60;
+        const nowSecs = Math.floor(Date.now() / 1000);
+        if (expiresAt > 0 && (expiresAt - nowSecs) < sevenDaysMs) {
+          const daysLeft = Math.ceil((expiresAt - nowSecs) / 86400);
+          alerts.push(`WABA token expires in ${daysLeft} day(s). Rotate META_USER_TOKEN / WA_SPARKSOL_TOKEN before expiry.`);
+          console.warn('[health-guard] WABA token expiring soon, days left:', daysLeft);
+        }
+        // data_access_expires_at auto-renews on use; only alert if it has stopped renewing
+        const dataAccess = tokenData.data_access_expires_at || 0;
+        if (dataAccess > 0 && (dataAccess - nowSecs) < sevenDaysMs) {
+          const daysLeft = Math.ceil((dataAccess - nowSecs) / 86400);
+          alerts.push(`WABA data_access window expires in ${daysLeft} day(s) — use the token (send a message) to renew it.`);
+          console.warn('[health-guard] WABA data_access expiring, days left:', daysLeft);
+        }
+        if (expiresAt === 0 || (expiresAt - nowSecs) >= sevenDaysMs) {
+          console.log('[health-guard] WABA token OK, valid:', tokenData.is_valid);
+        }
+      }
+    } else {
+      console.warn('[health-guard] WABA token check skipped — WA_SPARKSOL_TOKEN or META_APP_ID/META_APP_SECRET not set');
+    }
+  } catch (e) {
+    alerts.push('WABA token check threw an error: ' + e.message);
+    console.error('[health-guard] WABA error:', e.message);
+  }
+
+  // ── Send consolidated alert if any guard tripped ───────────────────────────
+  // Use sendWabaText (free-form text, 24h window assumed because owner is active).
+  // If WABA fails (not in 24h window), fall through to console — next day's cron retries.
+  if (alerts.length > 0) {
+    const msgBody = `*Darbar Health Alert*\n\n` + alerts.map((a, i) => `${i + 1}. ${a}`).join('\n\n');
+    try {
+      const { sendWabaText: _sendWabaText } = await import('./_lib/comms-core.js');
+      const r = await _sendWabaText(env, { brand: 'sparksol', phone: OWNER_PHONE, body: msgBody });
+      console.log('[health-guard] Alert sent to owner:', r.ok, r.status, r.provider_msg_id);
+      return json({ ok: true, alerts, waba_sent: r.ok, waba_status: r.status });
+    } catch (e) {
+      console.error('[health-guard] Failed to send WABA alert:', e.message, '— alerts were:', alerts);
+      return json({ ok: false, alerts, waba_sent: false, error: e.message });
+    }
+  }
+
+  return json({ ok: true, alerts: [], message: 'All health checks passed' });
 }
