@@ -488,7 +488,7 @@ async function ghostOnboardSubmit(env, body, aadhaarFile = null) {
       (pin, name, known_as, phone, job_name, brand_label, pay_type,
        monthly_salary, daily_rate, aadhaar_full, aadhaar_last4, dob,
        start_date, notes, is_active, track_attendance, sync_status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 'pending')
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 'Pending')
     RETURNING id
   `).bind(
     ghost.pin, name, known_as || null, phone || null, role || null,

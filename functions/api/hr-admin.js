@@ -24,7 +24,8 @@ const CORS = {
 
 const ODOO_URL  = 'https://ops.hamzahotel.com/jsonrpc';
 const ODOO_DB   = 'main';
-const ODOO_USER = 'yash@gmail.com';
+const ODOO_USER = 'yash@gmail.com';   // legacy login (retired — see odooAuth; uid=2 + ODOO_API_KEY now)
+const ODOO_ADMIN_UID = 2;             // ops.hamzahotel.com admin uid (HE co_id=1, NCH co_id=10)
 
 // CAMS F38+ biometric device config (mirrors live dashboard)
 const CAMS_API_BASE = 'https://www.camsbiometrics.com/api3.0';
@@ -156,12 +157,15 @@ async function rpc(service, method, args) {
   return d.result;
 }
 
-async function odooAuth(apiKey) {
+// Admin-only API policy (canonical across hnhotels.in Functions): authenticate as the
+// Odoo admin user uid=2 with ODOO_API_KEY directly — an API key works as the password in
+// execute_kw given a known uid, so no common.authenticate login round-trip is needed.
+// The old path logged in as ODOO_USER (yash@gmail.com); when that user's key went stale the
+// whole roster-sync died silently. uid=2 + ODOO_API_KEY is the stable path. Override via ODOO_UID.
+async function odooAuth(apiKey, env) {
   if (_uid) return _uid;
-  const uid = await rpc('common', 'authenticate', [ODOO_DB, ODOO_USER, apiKey, {}]);
-  if (!uid) throw new Error('Odoo auth failed — check ODOO_API_KEY');
-  _uid = uid;
-  return uid;
+  _uid = parseInt(env?.ODOO_UID, 10) || ODOO_ADMIN_UID;
+  return _uid;
 }
 
 async function odoo(apiKey, model, method, args = [], kwargs = {}) {
