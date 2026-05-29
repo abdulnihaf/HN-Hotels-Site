@@ -1,0 +1,7 @@
+# ── darbar.hnhotels.in ───────────────────────────────────────────────────────
+# Darbar lives at /ops/darbar/ in this Pages project. The custom domain
+# darbar.hnhotels.in is attached to the same project, so we rewrite ONLY the bare
+# subdomain root to the app's index (200 = rewrite, the URL stays darbar.hnhotels.in/).
+# All asset/api requests use absolute paths (/ops/darbar/*, /api/*) that resolve
+# normally on the project. The host-scoped rule leaves hnhotels.in untouched.
+https://darbar.hnhotels.in/  /ops/darbar/index.html  200
